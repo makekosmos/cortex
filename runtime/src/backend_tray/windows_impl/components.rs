@@ -1,6 +1,7 @@
-//! Descriptors for the packaged GPUI companion apps that the tray can launch
-//! (Manager, Agenda, Memoria, Dictation). Each one ships next to the Engine
-//! install as `resources/components/<dir_name>/<exe_name>`.
+//! Descriptors for the GPUI apps the tray can launch. Only Manager is still
+//! bundled next to the Engine (`resources/components/manager`); Agenda,
+//! Memoria and Dictation are store-installed native apps listed only when an
+//! install record exists under `Apps/<id>`.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Component {
@@ -18,7 +19,17 @@ impl Component {
         Component::Dictation,
     ];
 
-    /// Folder name under `resources/components/`.
+    /// Signed-catalog id for store-installed apps; Manager is bundled.
+    pub fn app_id(self) -> Option<&'static str> {
+        match self {
+            Component::Manager => None,
+            Component::Agenda => Some("com.kosmos.agenda"),
+            Component::Memoria => Some("com.kosmos.memoria"),
+            Component::Dictation => Some("com.kosmos.dictation"),
+        }
+    }
+
+    /// Folder name under `resources/components/` (bundled Manager only).
     pub fn dir_name(self) -> &'static str {
         match self {
             Component::Manager => "manager",

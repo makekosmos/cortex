@@ -9,7 +9,7 @@
   "publisher": "kosmos",
   "permissions": [],
   "targets": [
-    { "runtime": "kosmos-host", "os": ["windows", "macos", "linux"] },
+    { "runtime": "standalone", "os": ["windows", "macos", "linux"] },
     {
       "runtime": "worker",
       "os": ["windows", "macos", "linux"],

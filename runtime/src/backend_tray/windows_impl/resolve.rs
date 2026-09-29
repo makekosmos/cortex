@@ -21,13 +21,23 @@ fn install_roots() -> Vec<PathBuf> {
     install_root_candidates(exe_parent.as_deref(), &env_roots)
 }
 
-/// Resolves a packaged GPUI component executable (Manager/Agenda/Memoria/Dictation),
-/// honouring its dedicated env override before falling back to the
-/// `resources/components/<name>/...` layout shipped next to the Engine.
+/// Resolves a launchable executable for a component. Manager is the bundled
+/// `resources/components/manager` layout shipped next to the Engine;
+/// Agenda/Memoria/Dictation are store-installed native apps resolved from
+/// their install record under `Apps/<id>/<version>` — an app that isn't
+/// installed simply isn't listed. Dev env overrides win in both paths.
 pub fn resolve_component_executable(component: Component) -> Option<PathBuf> {
     let mut candidates = Vec::new();
     if let Some(path) = env::var_os(component.env_override()) {
         candidates.push(PathBuf::from(path));
+    }
+    if let Some(app_id) = component.app_id() {
+        if let Ok(store) = engine::native_apps::default_store() {
+            if let Some(path) = store.executable_path(app_id) {
+                candidates.push(path);
+            }
+        }
+        return candidates.into_iter().find(|path| path.is_file());
     }
     candidates.extend(component_executable_candidates(&install_roots(), component));
     candidates.into_iter().find(|path| path.is_file())

@@ -155,6 +155,8 @@ pub(super) async fn dispatch_standard(
         handle_store_op(rest, params, &package_service, store_catalog.as_deref()).await
     } else if let Some(rest) = operation.strip_prefix("packages.") {
         handle_package_op(rest, params, &package_service).await
+    } else if let Some(rest) = operation.strip_prefix("apps.") {
+        handle_apps_op(rest, params, &package_service).await
     } else if matches!(
         operation.as_str(),
         "engine.settings.get"

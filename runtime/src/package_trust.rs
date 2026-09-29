@@ -111,6 +111,81 @@ pub struct CatalogEntry {
     pub archive_url: String,
     pub sha256: String,
     pub size: u64,
+    /// Present exactly when this entry is a native GPUI app: `archive_url`
+    /// points at the app's own repository release zip (not a `.kspkg`), and
+    /// the executable inside the zip is what the store launches.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native: Option<NativeArtifact>,
+}
+
+/// Provenance + layout descriptor for a native app catalog entry. The signed
+/// catalog is the only authority for the archive sha256/size — the release's
+/// own `SHA256SUMS.txt` is never consulted at install time.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct NativeArtifact {
+    /// Source repository in `org/name` form, e.g. `makekosmos/agenda-gpui`.
+    pub repository: String,
+    /// Immutable release tag, e.g. `v0.1.1`; must equal `v{manifest.version}`.
+    pub release_tag: String,
+    /// Target triple the archive was built for, e.g. `x86_64-pc-windows-msvc`.
+    pub target: String,
+    /// Entry executable path inside the zip, e.g. `agenda-gpui.exe`. Must
+    /// equal `manifest.entrypoint`.
+    pub executable: String,
+}
+
+/// Target triples the Engine can install a native app for.
+pub const NATIVE_TARGETS: &[&str] = &["x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc"];
+
+/// The host's native-app target triple, or `None` when this platform cannot
+/// run store-native apps at all.
+pub fn host_native_target() -> Option<&'static str> {
+    if cfg!(windows) && cfg!(target_arch = "x86_64") {
+        Some("x86_64-pc-windows-msvc")
+    } else if cfg!(windows) && cfg!(target_arch = "aarch64") {
+        Some("aarch64-pc-windows-msvc")
+    } else {
+        None
+    }
+}
+
+fn valid_native_target(value: &str) -> bool {
+    NATIVE_TARGETS.contains(&value)
+}
+
+fn valid_repository(value: &str) -> bool {
+    let mut parts = value.split('/');
+    let (Some(org), Some(name), None) = (parts.next(), parts.next(), parts.next()) else {
+        return false;
+    };
+    let segment = |part: &str| {
+        !part.is_empty()
+            && part.len() <= 64
+            && part
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+    };
+    segment(org) && segment(name)
+}
+
+fn valid_executable(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 256
+        && !value.starts_with('/')
+        && !value.contains('\\')
+        && !value.contains('\0')
+        && !value.contains('%')
+        && value.to_ascii_lowercase().ends_with(".exe")
+        && value.split('/').all(|part| {
+            !part.is_empty()
+                && part != "."
+                && part != ".."
+                && !part.contains(':')
+                && !part.ends_with('.')
+                && !part.ends_with(' ')
+                && !crate::package_store::is_reserved_name(part)
+        })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -556,8 +631,13 @@ fn validate_catalog(catalog: &CatalogDocument) -> Result<(), TrustError> {
     for entry in &catalog.packages {
         entry.manifest.validate()?;
         let archive_url = reqwest::Url::parse(&entry.archive_url).ok();
-        if !archive_url.is_some_and(|url| url.scheme() == "https" && url.host_str().is_some())
-            || !valid_sha256(&entry.sha256)
+        // Debug/test builds additionally accept `file://` archive URLs so
+        // fixture catalogs can point at a zip on disk; the signed sha256/size
+        // still gates the bytes. Release builds require HTTPS.
+        if !archive_url.is_some_and(|url| {
+            (url.scheme() == "https" && url.host_str().is_some())
+                || (cfg!(debug_assertions) && url.scheme() == "file")
+        }) || !valid_sha256(&entry.sha256)
             || entry.size == 0
             || !packages.insert((
                 entry.manifest.id().to_owned(),
@@ -566,6 +646,30 @@ fn validate_catalog(catalog: &CatalogDocument) -> Result<(), TrustError> {
         {
             return Err(TrustError::Invalid("catalog entry"));
         }
+        if let Some(native) = &entry.native {
+            validate_native_entry(entry, native)?;
+        }
+    }
+    Ok(())
+}
+
+/// A native catalog entry is still a normal `kind: "app"` package entry — the
+/// existing trust/revocation plumbing applies unchanged — plus a `native`
+/// descriptor that must agree with the signed manifest on every field that
+/// would otherwise be ambiguous at install time.
+fn validate_native_entry(entry: &CatalogEntry, native: &NativeArtifact) -> Result<(), TrustError> {
+    let valid = matches!(&entry.manifest, VersionedManifest::V2(manifest) if
+    manifest.targets.iter().any(|target| {
+        target.runtime == crate::package_manifest::TargetRuntime::Standalone
+            && target.os.contains(&crate::package_manifest::TargetOs::Windows)
+    })) && entry.manifest.kind() == &crate::package_manifest::PackageKind::App
+        && native.executable == entry.manifest.entrypoint()
+        && valid_executable(&native.executable)
+        && valid_native_target(&native.target)
+        && valid_repository(&native.repository)
+        && native.release_tag == format!("v{}", entry.manifest.version());
+    if !valid {
+        return Err(TrustError::Invalid("native catalog entry"));
     }
     Ok(())
 }
@@ -683,6 +787,7 @@ mod tests {
                 archive_url: "https://packages.kosmos.dev/demo.kspkg".into(),
                 sha256: "a".repeat(64),
                 size: 1,
+                native: None,
             }],
         }
     }
@@ -757,7 +862,7 @@ mod tests {
                     "entrypoint": "dist/index.html",
                     "publisher": "kosmos",
                     "permissions": [],
-                    "targets": [{"runtime": "kosmos-host", "os": ["windows"]}],
+                    "targets": [{"runtime": "standalone", "os": ["windows"]}],
                     "data": {"access": [], "defines": [], "mappings": []}
                 },
                 "archive_url": "https://packages.kosmos.dev/v2-demo.kspkg",
@@ -785,6 +890,120 @@ mod tests {
             verified.document.packages[1].manifest,
             VersionedManifest::V2(_)
         ));
+    }
+
+    /// A signed catalog carrying a `native` descriptor round-trips through
+    /// verify → apply → parse with the field intact.
+    fn signed_native_document() -> serde_json::Value {
+        serde_json::json!({
+            "schema_version": 1,
+            "sequence": 2,
+            "issued_at": "2029-01-01T00:00:00Z",
+            "expires_at": "2030-01-01T00:00:00Z",
+            "packages": [{
+                "manifest": {
+                    "schema_version": 2,
+                    "id": "com.kosmos.agenda",
+                    "name": "Agenda",
+                    "version": "0.1.1",
+                    "kind": "app",
+                    "engine_api": ">=1.0.0",
+                    "entrypoint": "agenda-gpui.exe",
+                    "publisher": "kosmos",
+                    "permissions": [],
+                    "targets": [{"runtime": "standalone", "os": ["windows"], "arch": ["x86_64"]}],
+                    "data": {"access": [], "defines": [], "mappings": []}
+                },
+                "archive_url": "https://github.com/makekosmos/agenda-gpui/releases/download/v0.1.1/agenda-gpui-0.1.1-x86_64-pc-windows-msvc.zip",
+                "sha256": "c".repeat(64),
+                "size": 9549390,
+                "native": {
+                    "repository": "makekosmos/agenda-gpui",
+                    "release_tag": "v0.1.1",
+                    "target": "x86_64-pc-windows-msvc",
+                    "executable": "agenda-gpui.exe"
+                }
+            }]
+        })
+    }
+
+    #[test]
+    fn accepts_native_app_catalog_entries() {
+        let (store, _, release) = store();
+        let document = signed_native_document();
+        let (bytes, signatures) = signed(&document, "release-1", &release);
+        let verified = store
+            .verify_catalog_at(
+                &bytes,
+                signatures,
+                DateTime::parse_from_rfc3339("2029-02-01T00:00:00Z")
+                    .unwrap()
+                    .with_timezone(&Utc),
+            )
+            .unwrap();
+        let entry = &verified.document.packages[0];
+        let native = entry.native.as_ref().expect("native descriptor");
+        assert_eq!(native.repository, "makekosmos/agenda-gpui");
+        assert_eq!(native.release_tag, "v0.1.1");
+        assert_eq!(native.target, "x86_64-pc-windows-msvc");
+        assert_eq!(native.executable, "agenda-gpui.exe");
+        assert_eq!(entry.manifest.id(), "com.kosmos.agenda");
+        // Round-trip: serialize the parsed entry, parse back, identical.
+        let reserialized = serde_json::to_value(entry).unwrap();
+        let reparsed: CatalogEntry = serde_json::from_value(reserialized).unwrap();
+        assert_eq!(&reparsed, entry);
+    }
+
+    #[test]
+    fn rejects_malformed_native_catalog_entries() {
+        let (store, _, release) = store();
+        let cases: [(&str, fn(&mut serde_json::Value)); 8] = [
+            ("traversal executable", |doc| {
+                doc["packages"][0]["native"]["executable"] =
+                    serde_json::json!("../agenda-gpui.exe");
+            }),
+            ("non-exe executable", |doc| {
+                doc["packages"][0]["native"]["executable"] = serde_json::json!("agenda-gpui.dll");
+            }),
+            ("unknown target", |doc| {
+                doc["packages"][0]["native"]["target"] =
+                    serde_json::json!("x86_64-unknown-linux-gnu");
+            }),
+            ("tag mismatch", |doc| {
+                doc["packages"][0]["native"]["release_tag"] = serde_json::json!("v9.9.9");
+            }),
+            ("bad repository", |doc| {
+                doc["packages"][0]["native"]["repository"] = serde_json::json!("not-a-repo");
+            }),
+            ("not an app", |doc| {
+                doc["packages"][0]["manifest"]["kind"] = serde_json::json!("source");
+            }),
+            ("entrypoint mismatch", |doc| {
+                doc["packages"][0]["manifest"]["entrypoint"] = serde_json::json!("dist/index.html");
+            }),
+            ("no standalone target", |doc| {
+                doc["packages"][0]["manifest"]["targets"] = serde_json::json!([
+                    {"runtime": "worker", "os": ["windows"], "entrypoint": "w.exe"}
+                ]);
+            }),
+        ];
+        for (label, mutate) in cases {
+            let mut document = signed_native_document();
+            mutate(&mut document);
+            let (bytes, signatures) = signed(&document, "release-1", &release);
+            assert!(
+                store
+                    .verify_catalog_at(
+                        &bytes,
+                        signatures,
+                        DateTime::parse_from_rfc3339("2029-02-01T00:00:00Z")
+                            .unwrap()
+                            .with_timezone(&Utc),
+                    )
+                    .is_err(),
+                "{label}"
+            );
+        }
     }
 
     #[test]

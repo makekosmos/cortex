@@ -22,7 +22,9 @@ pub use crate::package_manifest::{
 };
 use crate::{
     grant_authority::GrantAuthorityRegistry,
-    lock_file::{ensure_owner_only_directory, retry_io, write_owner_only_json},
+    lock_file::{
+        ensure_owner_only_directory, read_owner_only_json, retry_io, write_owner_only_json,
+    },
     package_registration::PackageRegistrationRegistry,
     package_store::{InstalledPackage, PackageStore, StoreError},
     package_trust::{
@@ -228,6 +230,9 @@ struct State {
 pub struct PackageService {
     root: PathBuf,
     store: std::sync::Arc<PackageStore>,
+    /// Native GPUI apps (release zips, records under `Apps/<id>`); `None`
+    /// when no product-local data root exists.
+    native_apps: Option<crate::native_apps::NativeAppStore>,
     state: Mutex<State>,
     // Serializes all mutations spanning trust, catalog cache and package state.
     mutation: Mutex<()>,
@@ -249,6 +254,9 @@ struct WorkerRuntime {
 }
 
 include!("package_service/core.rs");
+include!("package_service/native.rs");
+include!("package_service/native_install.rs");
+include!("package_service/native_migration.rs");
 include!("package_service/operations.rs");
 include!("package_service/helpers.rs");
 include!("package_service/disclosure.rs");
@@ -256,41 +264,4 @@ include!("package_service/integrations.rs");
 #[cfg(test)]
 include!("package_service/tests.rs");
 
-impl PackageService {
-    /// Start the migration-owned grant transaction. Only the opaque token and
-    /// count cross the package RPC boundary; record snapshots stay in runtime.
-    pub fn revoke_legacy_grants_transaction(
-        &self,
-        source_ids: &[String],
-    ) -> Result<crate::grant_authority::LegacyGrantRevocation, PackageError> {
-        let source_ids = source_ids.iter().map(String::as_str).collect::<Vec<_>>();
-        self.grants
-            .revoke_legacy_records_transaction(&source_ids)
-            .map_err(map_legacy_grant_error)
-    }
-
-    pub fn restore_migration_snapshot(
-        &self,
-        source_ids: &[String],
-        transaction_token: Option<&str>,
-    ) -> Result<crate::grant_authority::MigrationGrantRestoration, PackageError> {
-        let source_ids = source_ids.iter().map(String::as_str).collect::<Vec<_>>();
-        self.grants
-            .restore_migration_snapshot(&source_ids, transaction_token)
-            .map_err(map_legacy_grant_error)
-    }
-
-    pub fn commit_legacy_grants(&self, token: &str) -> Result<(), PackageError> {
-        self.grants
-            .commit_legacy_records(token)
-            .map_err(map_legacy_grant_error)
-    }
-}
-
-fn map_legacy_grant_error(error: crate::grant_authority::GrantError) -> PackageError {
-    match error {
-        crate::grant_authority::GrantError::Invalid
-        | crate::grant_authority::GrantError::NotFound => PackageError::Invalid,
-        _ => PackageError::Persistence,
-    }
-}
+include!("package_service/legacy_grants.rs");

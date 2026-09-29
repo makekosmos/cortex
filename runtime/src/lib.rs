@@ -64,6 +64,7 @@ pub mod integrations;
 pub mod lock_file;
 pub mod manager_api;
 pub mod markdown_vault;
+pub mod native_apps;
 pub mod observability;
 pub mod package_manifest;
 pub mod package_registration;

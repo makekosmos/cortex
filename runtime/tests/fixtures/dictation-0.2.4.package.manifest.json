@@ -18,6 +18,6 @@
       "scopes": ["dictation.update_config", "dictation.start_recording", "dictation.cancel"]
     }
   ],
-  "targets": [{ "runtime": "kosmos-host", "os": ["windows"] }],
+  "targets": [{ "runtime": "standalone", "os": ["windows"] }],
   "data": { "access": [], "defines": [], "mappings": [] }
 }

@@ -17,9 +17,9 @@ use std::{
 use thiserror::Error;
 use zip::ZipArchive;
 
-const MAX_ARCHIVE: u64 = 128 * 1024 * 1024;
-const MAX_EXPANDED: u64 = 512 * 1024 * 1024;
-const MAX_ENTRIES: usize = 512;
+pub(crate) const MAX_ARCHIVE: u64 = 128 * 1024 * 1024;
+pub(crate) const MAX_EXPANDED: u64 = 512 * 1024 * 1024;
+pub(crate) const MAX_ENTRIES: usize = 512;
 pub(crate) const MAX_ASSET_BYTES: u64 = 16 * 1024 * 1024;
 const STATE_FORMAT_VERSION: u32 = 1;
 static STAGING_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -653,7 +653,7 @@ impl PackageStore {
     }
 }
 
-fn normalize_path(path: &Path) -> Option<String> {
+pub(crate) fn normalize_path(path: &Path) -> Option<String> {
     let value = path.to_string_lossy().replace('\\', "/");
     let value = value.trim_end_matches('/');
     let mut components = Vec::new();
@@ -690,7 +690,7 @@ fn safe_asset_path(value: &str) -> bool {
         })
 }
 
-fn is_reserved_name(component: &str) -> bool {
+pub(crate) fn is_reserved_name(component: &str) -> bool {
     let component = component.split('.').next().unwrap_or(component);
     matches!(
         component
@@ -722,7 +722,7 @@ fn is_reserved_name(component: &str) -> bool {
     )
 }
 
-fn hex_hash(bytes: &[u8]) -> String {
+pub(crate) fn hex_hash(bytes: &[u8]) -> String {
     let mut h = Sha256::new();
     h.update(bytes);
     h.finalize().iter().map(|b| format!("{b:02x}")).collect()
@@ -751,7 +751,7 @@ fn open_immutable_read(path: &Path) -> io::Result<fs::File> {
         retry_io(|| fs::File::open(path))
     }
 }
-fn eq_hash(a: &str, b: &str) -> bool {
+pub(crate) fn eq_hash(a: &str, b: &str) -> bool {
     a.eq_ignore_ascii_case(b) && b.len() == 64 && b.bytes().all(|c| c.is_ascii_hexdigit())
 }
 fn is_hash(value: &str) -> bool {
@@ -794,7 +794,7 @@ mod tests {
     }
     fn manifest_v2() -> VersionedManifest {
         PackageManifest::parse(
-            r#"{"schema_version":2,"id":"com.kosmos.v2-demo","name":"V2 Demo","version":"2.0.0","kind":"app","engine_api":">=1.0.0","entrypoint":"index.html","publisher":"kosmos","permissions":[],"targets":[{"runtime":"kosmos-host","os":["windows"]}],"data":{"access":[],"defines":[],"mappings":[]}}"#,
+            r#"{"schema_version":2,"id":"com.kosmos.v2-demo","name":"V2 Demo","version":"2.0.0","kind":"app","engine_api":">=1.0.0","entrypoint":"index.html","publisher":"kosmos","permissions":[],"targets":[{"runtime":"standalone","os":["windows"]}],"data":{"access":[],"defines":[],"mappings":[]}}"#,
         )
         .unwrap()
     }

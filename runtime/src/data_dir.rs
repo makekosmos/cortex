@@ -115,6 +115,20 @@ pub fn mundus_local_dir() -> Option<PathBuf> {
     local_root().map(|root| root.join(brand::LOCAL_DIR_NAME))
 }
 
+/// Product-local base for installer-owned payloads (native apps live under
+/// `<dir>/Apps`): env override first, then the Mundus local dir — or the
+/// legacy local dir while roaming stayed on legacy this session.
+pub fn mundus_local_data_dir() -> Option<PathBuf> {
+    if let Some(dir) = env_data_dir_override() {
+        return Some(dir);
+    }
+    if last_report().is_some_and(|report| report.fell_back_to_legacy) {
+        legacy_local_dir()
+    } else {
+        mundus_local_dir()
+    }
+}
+
 /// Legacy local dir (`%LOCALAPPDATA%\Kosmos`). Still inspected for migration.
 // MIGRATION(KOS-267): remove after 2026-11-01.
 pub fn legacy_local_dir() -> Option<PathBuf> {

@@ -47,7 +47,7 @@ pub(crate) mod tests {
             publisher: "kosmos".into(),
             permissions: vec![],
             targets: vec![crate::package_manifest::ManifestTarget {
-                runtime: crate::package_manifest::TargetRuntime::KosmosHost,
+                runtime: crate::package_manifest::TargetRuntime::Standalone,
                 os: vec![
                     crate::package_manifest::TargetOs::Windows,
                     crate::package_manifest::TargetOs::Macos,
@@ -93,7 +93,7 @@ pub(crate) mod tests {
             publisher: "kosmos".into(),
             permissions: vec![],
             targets: vec![crate::package_manifest::ManifestTarget {
-                runtime: crate::package_manifest::TargetRuntime::KosmosHost,
+                runtime: crate::package_manifest::TargetRuntime::Standalone,
                 os: vec![
                     crate::package_manifest::TargetOs::Windows,
                     crate::package_manifest::TargetOs::Macos,
@@ -134,6 +134,7 @@ pub(crate) mod tests {
                 archive_url: "https://packages.kosmos.dev/demo.kspkg".into(),
                 sha256: hash,
                 size,
+                native: None,
             }],
         }
     }
@@ -406,7 +407,7 @@ pub(crate) mod tests {
     fn missing_compile_time_trust_fails_closed_without_blocking_engine() {
         let dir = tempdir().expect("tempdir");
         let service =
-            PackageService::from_parts(dir.path().join("packages"), None).expect("service");
+            PackageService::from_parts(dir.path().join("packages"), None, Some(dir.path().join("apps"))).expect("service");
         assert!(!service.trust_summary().configured);
         assert_eq!(
             service.trust_summary().fault_code.as_deref(),
@@ -766,6 +767,7 @@ pub(crate) mod tests {
                 archive_url: "https://packages.kosmos.dev/demo-v2.kspkg".into(),
                 sha256: hash,
                 size,
+                native: None,
             }],
         };
         let (bytes, signatures) = signed(&catalog, "release-1", &release);
@@ -878,6 +880,7 @@ pub(crate) mod tests {
                 archive_url: "https://packages.kosmos.dev/defined.kspkg".into(),
                 sha256: hash,
                 size,
+                native: None,
             }],
         };
         let (bytes, signatures) = signed(&catalog, "release-1", &release);
@@ -999,6 +1002,7 @@ pub(crate) mod tests {
                 archive_url: "https://packages.kosmos.dev/prior.kspkg".into(),
                 sha256: prior_hash.clone(),
                 size: prior_size,
+                native: None,
             }],
         };
         let (bytes, signatures) = signed(&initial, "release-1", &release);
@@ -1046,6 +1050,7 @@ pub(crate) mod tests {
                 archive_url: "https://packages.kosmos.dev/update.kspkg".into(),
                 sha256: hash,
                 size,
+                native: None,
             }],
         };
         let (bytes, signatures) = signed(&update, "release-1", &release);
@@ -1103,6 +1108,7 @@ pub(crate) mod tests {
                 archive_url: "https://packages.kosmos.dev/prior.kspkg".into(),
                 sha256: prior_hash.clone(),
                 size: prior_size,
+                native: None,
             }],
         };
         let (bytes, signatures) = signed(&initial, "release-1", &release);
@@ -1142,6 +1148,7 @@ pub(crate) mod tests {
                 archive_url: "https://packages.kosmos.dev/replacement.kspkg".into(),
                 sha256: replacement_hash,
                 size: replacement_size,
+                native: None,
             }],
         };
         let (bytes, signatures) = signed(&update, "release-1", &release);
@@ -1218,6 +1225,7 @@ pub(crate) mod tests {
                 archive_url: format!("https://packages.kosmos.dev/{package}.kspkg"),
                 sha256: hash,
                 size,
+                native: None,
             });
             archives.push((manifest.id, manifest.version, archive));
         }
@@ -1350,6 +1358,7 @@ pub(crate) mod tests {
                 archive_url: "https://packages.kosmos.dev/demo.kspkg".into(),
                 sha256: hash.clone(),
                 size,
+                native: None,
             }],
         };
         let (bytes, signatures) = signed(&legacy_catalog, "release-1", &release);
@@ -1480,6 +1489,7 @@ pub(crate) mod tests {
                 archive_url: "https://packages.kosmos.dev/bridge.kspkg".into(),
                 sha256: hash,
                 size,
+                native: None,
             }],
         };
         let (bytes, signatures) = signed(&catalog, "release-1", &release);
@@ -1602,6 +1612,7 @@ pub(crate) mod tests {
                 archive_url: "https://packages.kosmos.dev/bridge-update.kspkg".into(),
                 sha256: replacement_hash,
                 size: replacement_size,
+                native: None,
             }],
         };
         let (bytes, signatures) = signed(&update, "release-1", &release);
@@ -1645,6 +1656,7 @@ pub(crate) mod tests {
                 archive_url: "https://packages.kosmos.dev/bridge-broken.kspkg".into(),
                 sha256: broken_hash,
                 size: broken_size,
+                native: None,
             }],
         };
         let (bytes, signatures) = signed(&broken_update, "release-1", &release);
@@ -1686,5 +1698,288 @@ pub(crate) mod tests {
             supervisor.health(&manifest.id, &manifest.version).state,
             WorkerState::Stopped
         );
+    }
+
+    // --- Native apps (KOS-265): catalog-gated install/update/uninstall. ---
+
+    fn native_manifest(version: &str) -> ManifestV2 {
+        ManifestV2 {
+            schema_version: 2,
+            id: "com.kosmos.agenda".into(),
+            name: "Agenda".into(),
+            description: None,
+            version: version.into(),
+            kind: PackageKind::App,
+            engine_api: ">=1.0.0".into(),
+            entrypoint: "agenda-gpui.exe".into(),
+            icon: None,
+            publisher: "kosmos".into(),
+            permissions: vec![],
+            targets: vec![crate::package_manifest::ManifestTarget {
+                runtime: crate::package_manifest::TargetRuntime::Standalone,
+                os: vec![crate::package_manifest::TargetOs::Windows],
+                arch: Some(vec![crate::package_manifest::TargetArch::X86_64]),
+                entrypoint: None,
+            }],
+            data: crate::package_manifest::ManifestData {
+                access: vec![],
+                defines: vec![],
+                mappings: vec![],
+            },
+            integration: None,
+        }
+    }
+
+    fn native_zip(root: &Path, name: &str, exe: &str) -> (PathBuf, String, u64) {
+        let path = root.join(name);
+        let file = File::create(&path).expect("zip file");
+        let mut zip = zip::ZipWriter::new(file);
+        zip.start_file(exe, FileOptions::default())
+            .expect("exe entry");
+        zip.write_all(b"MZ test fixture").expect("exe write");
+        zip.start_file("LICENSE.txt", FileOptions::default())
+            .expect("license entry");
+        zip.write_all(b"license").expect("license write");
+        zip.finish().expect("zip finish");
+        let bytes = fs::read(&path).expect("zip bytes");
+        (
+            path,
+            format!("{:x}", Sha256::digest(&bytes)),
+            bytes.len() as u64,
+        )
+    }
+
+    /// Catalog document carrying one `native` entry per (version, archive)
+    /// pair — the fixture catalog this suite signs with the test release key.
+    /// `archive_url` is `file://` (debug/test only) so `install_native_app`
+    /// exercises the download path without network.
+    fn native_catalog(
+        sequence: u64,
+        entries: &[(&str, &Path)],
+        expires_at: &str,
+    ) -> CatalogDocument {
+        CatalogDocument {
+            schema_version: 1,
+            sequence,
+            issued_at: "2029-01-01T00:00:00Z".into(),
+            expires_at: expires_at.into(),
+            packages: entries
+                .iter()
+                .map(|(version, archive)| {
+                    let bytes = fs::read(archive).expect("zip bytes");
+                    let file_url = format!(
+                        "file:///{}",
+                        archive.to_string_lossy().replace('\\', "/")
+                    );
+                    CatalogEntry {
+                        manifest: VersionedManifest::V2(native_manifest(version)),
+                        archive_url: file_url,
+                        sha256: format!("{:x}", Sha256::digest(&bytes)),
+                        size: bytes.len() as u64,
+                        native: Some(crate::package_trust::NativeArtifact {
+                            repository: "makekosmos/agenda-gpui".into(),
+                            release_tag: format!("v{version}"),
+                            target: "x86_64-pc-windows-msvc".into(),
+                            executable: "agenda-gpui.exe".into(),
+                        }),
+                    }
+                })
+                .collect(),
+        }
+    }
+
+    fn native_service(dir: &tempfile::TempDir, catalog: &CatalogDocument) -> PackageService {
+        let (trust_store, _, release) = trust();
+        let service =
+            PackageService::open_with_trust(dir.path(), trust_store).expect("service");
+        let (bytes, signatures) = signed(catalog, "release-1", &release);
+        service.apply_catalog(bytes, signatures).expect("catalog");
+        service
+    }
+
+    #[tokio::test]
+    async fn native_install_resolves_launch_and_uninstalls() {
+        let dir = tempdir().expect("temp dir");
+        let (zip, _, _) = native_zip(dir.path(), "agenda.zip", "agenda-gpui.exe");
+        let catalog = native_catalog(1, &[("0.1.1", &zip)], "2030-01-01T00:00:00Z");
+        let service = native_service(&dir, &catalog);
+
+        let summary = service
+            .install_native_app("com.kosmos.agenda", None)
+            .await
+            .expect("native install");
+        assert!(summary.installed);
+        assert_eq!(summary.installed_version.as_deref(), Some("0.1.1"));
+        assert_eq!(summary.name, "Agenda");
+
+        let exe = service
+            .native_app_executable("com.kosmos.agenda")
+            .expect("executable resolves");
+        assert!(exe.is_file());
+        assert!(exe.ends_with("agenda-gpui.exe"));
+        // Install layout: <root>/apps/<id>/<version>/<exe>.
+        let expected = dir
+            .path()
+            .join("apps")
+            .join("com.kosmos.agenda")
+            .join("0.1.1")
+            .join("agenda-gpui.exe");
+        assert_eq!(exe, expected);
+
+        // Same-version reinstall is a no-op.
+        let again = service
+            .install_native_app("com.kosmos.agenda", None)
+            .await
+            .expect("idempotent reinstall");
+        assert_eq!(again.installed_version.as_deref(), Some("0.1.1"));
+
+        service
+            .uninstall_native_app("com.kosmos.agenda")
+            .expect("uninstall");
+        assert!(service.native_app_executable("com.kosmos.agenda").is_err());
+        assert!(!dir.path().join("apps").join("com.kosmos.agenda").exists());
+    }
+
+    #[tokio::test]
+    async fn native_update_keeps_previous_on_bad_sha() {
+        let dir = tempdir().expect("temp dir");
+        let (v1, _, _) = native_zip(dir.path(), "agenda-1.zip", "agenda-gpui.exe");
+        let (v2, _, _) = native_zip(dir.path(), "agenda-2.zip", "agenda-gpui.exe");
+        let service = native_service(
+            &dir,
+            &native_catalog(1, &[("0.1.0", &v1)], "2030-01-01T00:00:00Z"),
+        );
+        service
+            .install_native_app("com.kosmos.agenda", None)
+            .await
+            .expect("install v1");
+
+        // Catalog seq 2 offers 0.2.0 but with a corrupted sha.
+        let mut update = native_catalog(2, &[("0.2.0", &v2)], "2030-01-01T00:00:00Z");
+        update.packages[0].sha256 = "0".repeat(64);
+        let (bytes, signatures) = signed(&update, "release-1", &trust().2);
+        service.apply_catalog(bytes, signatures).expect("catalog v2");
+
+        let err = service
+            .install_native_app("com.kosmos.agenda", None)
+            .await
+            .expect_err("bad sha must fail");
+        assert!(matches!(err, PackageError::Invalid));
+        let apps = service.native_apps().expect("list");
+        assert_eq!(apps[0].installed_version.as_deref(), Some("0.1.0"));
+        assert!(dir
+            .path()
+            .join("apps")
+            .join("com.kosmos.agenda")
+            .join("0.1.0")
+            .join("agenda-gpui.exe")
+            .is_file());
+    }
+
+    #[tokio::test]
+    async fn native_update_rolls_back_on_bad_archive() {
+        let dir = tempdir().expect("temp dir");
+        let (v1, _, _) = native_zip(dir.path(), "agenda-1.zip", "agenda-gpui.exe");
+        let service = native_service(
+            &dir,
+            &native_catalog(1, &[("0.1.0", &v1)], "2030-01-01T00:00:00Z"),
+        );
+        service
+            .install_native_app("com.kosmos.agenda", None)
+            .await
+            .expect("install v1");
+
+        // A zip whose content is valid but lacks the declared executable —
+        // hash/size still match the catalog.
+        let (v2, _, _) = native_zip(dir.path(), "agenda-2.zip", "other.exe");
+        let update = native_catalog(2, &[("0.2.0", &v2)], "2030-01-01T00:00:00Z");
+        let (bytes, signatures) = signed(&update, "release-1", &trust().2);
+        service.apply_catalog(bytes, signatures).expect("catalog v2");
+
+        assert!(service
+            .install_native_app("com.kosmos.agenda", None)
+            .await
+            .is_err());
+        let apps = service.native_apps().expect("list");
+        assert_eq!(apps[0].installed_version.as_deref(), Some("0.1.0"));
+        assert_eq!(apps[0].update_version.as_deref(), Some("0.2.0"));
+        assert!(service.native_app_executable("com.kosmos.agenda").is_ok());
+    }
+
+    #[tokio::test]
+    async fn native_update_replaces_old_version() {
+        let dir = tempdir().expect("temp dir");
+        let (v1, _, _) = native_zip(dir.path(), "agenda-1.zip", "agenda-gpui.exe");
+        let (v2, _, _) = native_zip(dir.path(), "agenda-2.zip", "agenda-gpui.exe");
+        let service = native_service(
+            &dir,
+            &native_catalog(1, &[("0.1.0", &v1), ("0.2.0", &v2)], "2030-01-01T00:00:00Z"),
+        );
+        service
+            .install_native_app("com.kosmos.agenda", None)
+            .await
+            .expect("install latest");
+        let apps = service.native_apps().expect("list");
+        assert_eq!(apps[0].installed_version.as_deref(), Some("0.2.0"));
+        assert!(apps[0].update_version.is_none());
+        assert!(!dir
+            .path()
+            .join("apps")
+            .join("com.kosmos.agenda")
+            .join("0.1.0")
+            .exists());
+    }
+
+    // MIGRATION(KOS-267): remove after 2026-11-01
+    #[tokio::test]
+    async fn legacy_package_record_triggers_native_migration_once() {
+        let dir = tempdir().expect("temp dir");
+        let (zip, _, _) = native_zip(dir.path(), "agenda.zip", "agenda-gpui.exe");
+        let service = native_service(
+            &dir,
+            &native_catalog(1, &[("0.1.1", &zip)], "2030-01-01T00:00:00Z"),
+        );
+        // Seed a legacy 0.9.x package-store record for com.kosmos.agenda.
+        let mut legacy = manifest();
+        legacy.id = "com.kosmos.agenda".into();
+        let legacy_versioned = VersionedManifest::V2(legacy);
+        let (kspkg, kspkg_hash, kspkg_size) =
+            archive_with_versioned_manifest(dir.path(), &legacy_versioned);
+        service
+            .store
+            .install_versioned(&kspkg, kspkg_size, &kspkg_hash, &legacy_versioned, 1)
+            .expect("legacy package install");
+
+        service.migrate_legacy_native_apps().await;
+        assert!(service.native_app_executable("com.kosmos.agenda").is_ok());
+        // The legacy kspkg record is removed once the native app is live.
+        assert!(service
+            .store
+            .list()
+            .unwrap()
+            .iter()
+            .all(|package| package.id != "com.kosmos.agenda"));
+        let marker = dir.path().join("packages").join("native-apps-migration.json");
+        assert!(marker.is_file());
+
+        // Idempotent: a second run changes nothing.
+        service.migrate_legacy_native_apps().await;
+        let apps = service.native_apps().expect("list");
+        assert_eq!(apps.len(), 1);
+        assert_eq!(apps[0].installed_version.as_deref(), Some("0.1.1"));
+    }
+
+    #[tokio::test]
+    async fn migration_without_legacy_records_is_a_noop() {
+        let dir = tempdir().expect("temp dir");
+        let (zip, _, _) = native_zip(dir.path(), "agenda.zip", "agenda-gpui.exe");
+        let service = native_service(
+            &dir,
+            &native_catalog(1, &[("0.1.1", &zip)], "2030-01-01T00:00:00Z"),
+        );
+        service.migrate_legacy_native_apps().await;
+        // No legacy record and no bundled component dir → nothing installed.
+        let apps = service.native_apps().expect("list");
+        assert!(!apps[0].installed);
     }
 }

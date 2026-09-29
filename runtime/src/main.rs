@@ -518,6 +518,18 @@ async fn setup() -> Result<SetupState, DynError> {
     }
     let package_service = Arc::new(package_service);
 
+    // MIGRATION(KOS-267): remove after 2026-11-01
+    // 0.9.x → 0.10.0: users who had Agenda/Memoria/Dictation in the old
+    // package store (or as bundled components) get the native GPUI build
+    // installed from the signed catalog. Runs in the background — failures
+    // are logged and retried next start; Engine startup never waits on it.
+    {
+        let migration_service = package_service.clone();
+        tokio::spawn(async move {
+            migration_service.migrate_legacy_native_apps().await;
+        });
+    }
+
     // Hotkey hooks are Engine-owned; forward their normalized trigger to the
     // installed Dictation worker so Desktop is never part of the control path.
     let mut dictation_events = dictation_host.subscribe();
