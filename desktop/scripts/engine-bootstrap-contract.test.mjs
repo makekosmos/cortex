@@ -11,7 +11,8 @@ test("Desktop installs the Engine it was built with, from local resources", () =
   // KOS-233: no separate publish/download step. The zip and manifest are the
   // same ones build-backend.mjs staged from this tree into .tmp/engine.next.
   assert.match(installer, /install-engine\.ps1/);
-  assert.match(installer, /-Archive "\$INSTDIR\\resources\\Mundus Engine\.zip"/);
+  assert.match(installer, /!define ENGINE_ARCHIVE "Mundus Engine\.zip"/);
+  assert.match(installer, /-Archive "\$INSTDIR\\resources\\\$\{ENGINE_ARCHIVE\}"/);
   assert.match(installer, /-Manifest "\$INSTDIR\\resources\\engine-manifest\.json"/);
   assert.doesNotMatch(
     bootstrap,
@@ -20,18 +21,20 @@ test("Desktop installs the Engine it was built with, from local resources", () =
   assert.match(bootstrap, /Compare-EngineVersion/);
 });
 
-test("install never downgrades an equal-or-newer verified Engine", () => {
+test("install keeps a newer or identical verified Engine, replaces a same-version rebuild", () => {
   assert.match(bootstrap, /Test-InstalledEngine \$TargetRoot/);
+  assert.match(bootstrap, /Compare-EngineVersion \$installedVersion \$expected\.version/);
+  assert.match(bootstrap, /\$installedOrder -gt 0 -or/);
   assert.match(
     bootstrap,
-    /\$installedVersion -and \(Compare-EngineVersion \$installedVersion \$expected\.version\) -ge 0/,
+    /\$installedOrder -eq 0 -and \(Test-SameEngineBuild \$TargetRoot \$installedVersion \$expected\)/,
   );
 });
 
 test("install takes over an existing standalone Mundus Engine registration", () => {
   assert.match(bootstrap, /function Invoke-EngineMigration/);
   assert.match(bootstrap, /Uninstall\\KosmosEngine/);
-  assert.match(bootstrap, /Mundus Engine\.lnk/);
+  assert.match(bootstrap, /Kosmos Engine\.lnk/); // MIGRATION(KOS-267): remove after 2026-11-01
   // Snapshot before changing anything, restore it if the takeover fails —
   // never leave a half-migrated registration (KOS-134 pattern).
   assert.ok(bootstrap.indexOf("$snapshot") < bootstrap.indexOf("Remove-Item -LiteralPath $key"));

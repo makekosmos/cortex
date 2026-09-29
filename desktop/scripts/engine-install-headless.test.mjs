@@ -66,7 +66,7 @@ test("install is idempotent and repairs a corrupted installation from the bundle
   assert.equal(readFileSync(backend, "utf8"), "fixture:mundus-engine.exe");
 });
 
-test("install never downgrades an equal-or-newer, already-verified Engine", () => {
+test("install never downgrades a newer, already-verified Engine", () => {
   const newer = fixture("2.0.0");
   assert.equal(runInstall(newer).status, 0);
   const olderManifestPath = path.join(newer.root, "older-manifest.json");
@@ -93,6 +93,30 @@ test("install never downgrades an equal-or-newer, already-verified Engine", () =
     existsSync(path.join(newer.root, "installed", "versions", "1.0.0")),
     false,
     "an older build is not even staged once a newer Engine is installed",
+  );
+});
+
+test("a same-version rebuild replaces the installed Engine", () => {
+  const f = fixture();
+  assert.equal(runInstall(f).status, 0);
+  const backend = path.join(f.root, "installed", "versions", "1.2.3", "mundus-engine.exe");
+  const rebuild = path.join(f.root, "rebuild");
+  mkdirSync(rebuild, { recursive: true });
+  for (const name of names) writeFileSync(path.join(rebuild, name), `rebuild:${name}`);
+  const archive = path.join(f.root, "rebuild.zip");
+  const manifestPath = path.join(f.root, "rebuild-manifest.json");
+  writeFileSync(
+    manifestPath,
+    JSON.stringify(
+      buildEngineArchive(rebuild, archive, { version: "1.2.3", sourceCommit: SOURCE_COMMIT }),
+    ),
+  );
+  const result = runInstall({ root: f.root, archive, manifestPath });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(readFileSync(backend, "utf8"), "rebuild:mundus-engine.exe");
+  assert.equal(
+    JSON.parse(readFileSync(path.join(f.root, "installed", "current.json"), "utf8")).version,
+    "1.2.3",
   );
 });
 
