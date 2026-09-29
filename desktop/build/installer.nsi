@@ -24,7 +24,10 @@
 !define ENGINE_ARCHIVE "Mundus Engine.zip"
 !define ENGINE_ROOT "$LOCALAPPDATA\Mundus\Engine"
 !define APPS_ROOT "$LOCALAPPDATA\Mundus\Apps"
-!define MANAGER_EXE "Mundus Manager.exe"
+; MANAGER_EXE is supplied by the build script via /DMANAGER_EXE (see
+; desktop/scripts/brand.mjs) so the packaged executable name has a single
+; source of truth. The build fails closed if the staged payload does not
+; contain exactly this file.
 ; Privileged Engine service (one-time UAC grant). The name mirrors
 ; brand::SYSTEM_SERVICE_NAME in the Engine — keep in sync.
 !define PRIVILEGED_SVC_NAME "MundusSystemSvc"

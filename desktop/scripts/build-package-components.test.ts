@@ -1,6 +1,7 @@
 import { expect, test } from "../test-support/node-test.mjs";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { MANAGER_EXE } from "./brand.mjs";
 
 const source = readFileSync(path.join(import.meta.dirname, "build-package-components.mjs"), "utf8");
 const desktopBuild = readFileSync(path.join(import.meta.dirname, "build-desktop.mjs"), "utf8");
@@ -27,9 +28,17 @@ test("the component build produces exactly a manager stage", () => {
   expect(source).toContain('"cargo"');
   expect(source).toContain('"--locked"');
   expect(source).toContain("x86_64-pc-windows-msvc");
-  expect(source).toContain('"Mundus Manager.exe"');
+  expect(source).toContain("MANAGER_EXE");
+  expect(MANAGER_EXE).toBe("Mundus Manager.exe");
   // A missing build product fails the script instead of shipping nothing.
   expect(source).toMatch(/missing \$\{?managerExe|missing.*manager-gpui\.exe/i);
+});
+
+test("build-desktop fails closed when the staged manager payload is stale or incomplete", () => {
+  const stage = desktopBuild.slice(desktopBuild.indexOf("function stageInstaller"));
+  expect(stage).toContain("MANAGER_EXE");
+  expect(stage).toContain("staged manager payload must contain exactly");
+  expect(stage).toContain('name.toLowerCase().endsWith(".exe")');
 });
 
 test("the installer stage requires the manager component", () => {

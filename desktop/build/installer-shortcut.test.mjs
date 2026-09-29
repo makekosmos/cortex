@@ -2,6 +2,7 @@ import { expect, test } from "../test-support/node-test.mjs";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { MANAGER_EXE } from "../scripts/brand.mjs";
 
 const buildDir = path.dirname(fileURLToPath(import.meta.url));
 const installer = readFileSync(path.join(buildDir, "installer.nsi"), "utf8");
@@ -10,7 +11,7 @@ const installSection =
 
 test("Mundus Start Menu shortcut opens the packaged Manager GPUI", () => {
   const manager = "$INSTDIR\\resources\\components\\manager\\${MANAGER_EXE}";
-  expect(installer).toContain('!define MANAGER_EXE "Mundus Manager.exe"');
+  expect(MANAGER_EXE).toBe("Mundus Manager.exe");
   expect(installer).toContain(`CreateShortCut "$SMPROGRAMS\\Mundus.lnk" "${manager}"`);
   expect(installer).toContain('Delete "$DESKTOP\\Mundus.lnk"');
   expect(installer).toContain('Delete "$SMPROGRAMS\\Mundus.lnk"');

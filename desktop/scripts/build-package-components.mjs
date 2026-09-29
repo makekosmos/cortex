@@ -4,7 +4,7 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:f
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { env } from "./brand.mjs";
+import { env, MANAGER_EXE } from "./brand.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 // Release preflight demands a clean worktree and a BOM; local staging (for
@@ -57,7 +57,7 @@ const componentsRoot = path.join(root, "desktop", ".tmp", "components");
 rmSync(componentsRoot, { recursive: true, force: true });
 const managerStage = path.join(componentsRoot, "manager", "win-unpacked");
 mkdirSync(managerStage, { recursive: true });
-copyFileSync(managerExe, path.join(managerStage, "Mundus Manager.exe"));
+copyFileSync(managerExe, path.join(managerStage, MANAGER_EXE));
 for (const entry of readdirSync(managerRelease)) {
   if (entry.toLowerCase().endsWith(".dll"))
     copyFileSync(path.join(managerRelease, entry), path.join(managerStage, entry));
