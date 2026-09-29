@@ -77,6 +77,17 @@ function Test-InstalledEngine([string]$Root) {
   } catch { return $null }
 }
 
+# True when the verified installation at $Version is byte-for-byte the build
+# described by $Expected (same file names and hashes). A same-version rebuild
+# (local builds, a re-cut release) differs here and must replace it.
+function Test-SameEngineBuild([string]$Root, [string]$Version, [object]$Expected) {
+  try {
+    $installed = Get-Content -Raw -LiteralPath (Join-Path (Join-Path (Join-Path $Root 'versions') $Version) 'engine-manifest.json') | ConvertFrom-Json
+    $key = { param($files) (@($files) | ForEach-Object { "$($_.name)=$($_.sha256.ToLowerInvariant())" } | Sort-Object) -join ';' }
+    return (& $key $installed.files) -eq (& $key $Expected.files)
+  } catch { return $false }
+}
+
 function Test-EngineProcess([string]$Path) {
   $fullPath = [IO.Path]::GetFullPath($Path)
   # MIGRATION(KOS-267): the running pre-upgrade Engine is still the old binary
@@ -167,8 +178,11 @@ if ($expected.archive_sha256 -and (Get-EngineSha256 $Archive) -ne $expected.arch
 }
 
 $installedVersion = Test-InstalledEngine $TargetRoot
-if ($installedVersion -and (Compare-EngineVersion $installedVersion $expected.version) -ge 0) {
-  # Monotonic: never replace an equal-or-newer, already-verified Engine.
+$installedOrder = if ($installedVersion) { Compare-EngineVersion $installedVersion $expected.version } else { $null }
+if ($installedVersion -and ($installedOrder -gt 0 -or
+    ($installedOrder -eq 0 -and (Test-SameEngineBuild $TargetRoot $installedVersion $expected)))) {
+  # Monotonic: never replace a newer, already-verified Engine, nor the very
+  # same build. An equal version with different bytes is replaced below.
   Update-EngineAutostart (Join-Path (Join-Path $TargetRoot 'versions') $installedVersion)
 } else {
   $currentFile = Join-Path $TargetRoot 'current.json'
