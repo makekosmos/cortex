@@ -200,9 +200,11 @@ FunctionEnd
 ; MIGRATION(KOS-267): remove after 2026-11-01. Before any old payload is
 ; deleted, record which bundled components (agenda/memoria/dictation) the
 ; previous generation shipped — the Engine reads this marker on first start
-; to auto-install them as store apps. Written unconditionally (all-false on
-; a fresh install): an absent marker and "nothing recorded" mean the same.
-; A write failure only skips the auto-install — the wipe still proceeds.
+; to auto-install them as store apps. Written only when a component was
+; found: re-running the installer before the Engine's first start must not
+; overwrite a recorded "true" with an all-false marker. An absent marker and
+; "nothing recorded" mean the same. A write failure only skips the
+; auto-install — the wipe still proceeds.
 Function RecordLegacyComponents
   ; $R4/$R5/$R6 = "true"/"false" per component; presence in EITHER the 0.9.x
   ; Programs\Kosmos layout or this installer's previous bundled layout counts.
@@ -221,7 +223,9 @@ Function RecordLegacyComponents
     StrCpy $R6 "true"
   IfFileExists "$INSTDIR\resources\components\dictation\*.*" 0 +2                       ; MIGRATION(KOS-267)
     StrCpy $R6 "true"
+  StrCmp "$R4$R5$R6" "falsefalsefalse" record_done
   CreateDirectory "$LOCALAPPDATA\Mundus"
+  ClearErrors
   FileOpen $R7 "$LOCALAPPDATA\Mundus\legacy-components.json" w
   IfErrors record_failed
   FileWrite $R7 '{"schema_version":1,"components":{"agenda":$R4,"memoria":$R5,"dictation":$R6}}'

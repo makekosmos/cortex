@@ -142,6 +142,11 @@ test("records bundled components before wiping the old payloads", () => {
     expect(marker).toContain(`components\\${component}`);
     expect(marker).toContain(`"${component}":$`);
   }
+  // An all-false result must leave an earlier marker alone (installer re-run
+  // before the Engine's first start).
+  const skipAt = marker.indexOf('"falsefalsefalse" record_done');
+  expect(skipAt >= 0).toBeTruthy();
+  expect(skipAt).toBeLessThan(marker.indexOf("FileOpen"));
   const recordAt = installSection.indexOf("Call RecordLegacyComponents");
   const kosmosWipeAt = installSection.indexOf('RMDir /r "$LOCALAPPDATA\\Programs\\Kosmos"');
   const resourcesWipeAt = installSection.indexOf('RMDir /r "$INSTDIR\\resources"');
