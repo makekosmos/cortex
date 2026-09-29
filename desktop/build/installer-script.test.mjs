@@ -227,8 +227,8 @@ test("no NSIS single-quoted string contains '' (NSIS has no doubled-quote escape
   expect(installer).not.toContain("''");
 });
 
-test("detects previous installs and migrates autostart via dedicated functions", () => {
-  expect(installer).toContain("Function DetectPreviousInstall");
+test("migrates autostart and starts the Engine via dedicated functions", () => {
+  expect(installer).not.toContain("DetectPreviousInstall");
   expect(installer).toContain("Function SeedOrMigrateAutostart");
   expect(installer).toContain("Function StartEngine");
 });

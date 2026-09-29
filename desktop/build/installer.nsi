@@ -126,13 +126,6 @@ select_russian:
 select_done:
 FunctionEnd
 
-; MIGRATION(KOS-267): detects whether a previous-generation install exists
-; so future UI can warn the user before overwriting. It no longer gates
-; autostart — the Engine must autostart after every install/upgrade unless
-; a persisted opt-out is found by engine-post-install.ps1.
-Function DetectPreviousInstall
-FunctionEnd
-
 ; Seeds or migrates Engine autostart unconditionally. The script checks
 ; StartupApproved\Run for a disabled marker under the current and all legacy
 ; product names; only an explicit opt-out skips writing the Run value. Uses
@@ -203,10 +196,6 @@ FunctionEnd
 Section "Install"
   SetShellVarContext current
 
-  ; Determine whether this is a fresh install or a migration/upgrade before we
-  ; remove any state.
-  Call DetectPreviousInstall
-
   ; MIGRATION(KOS-267): must run before the Programs\Kosmos and
   ; $INSTDIR\resources wipes below — it records which bundled
   ; components existed so the Engine's first-start migration reads a marker,
@@ -222,9 +211,9 @@ Section "Install"
   !insertmacro KillProductProcesses
 
   ; MIGRATION(KOS-267): remove after 2026-11-01. Old autostart values are
-  ; stale regardless of whether the legacy payload survived; remove them
-  ; unconditionally now that DetectPreviousInstall has read them for the
-  ; migration decision.
+  ; stale regardless of whether the legacy payload survived; the user's
+  ; preference is carried by StartupApproved markers, which
+  ; engine-post-install.ps1 -MigrateAutostart reads.
   !insertmacro DeleteOldRunValues
 
   ; MIGRATION(KOS-267): upgrade from Electron or Kosmos-era installs: remove the old program
