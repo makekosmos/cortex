@@ -58,6 +58,10 @@ pub struct ManagerApp {
     pub hotkey_capturing: bool,
     worker_dead: bool,
     next_updater_poll: Instant,
+    next_store_poll: Instant,
+    /// Slots whose replies came from a background `refresh` — they must not
+    /// clear a visible error banner (that's for the user's own clicks).
+    background_slots: std::collections::HashSet<String>,
 }
 
 impl ManagerApp {
@@ -91,6 +95,8 @@ impl ManagerApp {
             hotkey_capturing: false,
             worker_dead: false,
             next_updater_poll: Instant::now(),
+            next_store_poll: Instant::now(),
+            background_slots: std::collections::HashSet::new(),
         };
         this.load_current();
         cx.spawn(async move |this, cx| loop {
@@ -181,6 +187,23 @@ impl ManagerApp {
             .worker
             .commands
             .send(Command::Get { slot, path })
+            .is_err()
+        {
+            self.worker_dead = true;
+            self.error = Some("Соединение с Engine завершено. Перезапустите приложение.".into());
+        }
+    }
+
+    /// Like `call`, but keeps the current slot contents visible — for
+    /// background polls and fire-and-refresh mutations whose reply IS the
+    /// refreshed surface (e.g. `apps.install` returns the updated list).
+    pub fn refresh(&mut self, slot: impl Into<String>, op: &'static str, params: Value) {
+        let slot = slot.into();
+        self.background_slots.insert(slot.clone());
+        if self
+            .worker
+            .commands
+            .send(Command::Rpc { slot, op, params })
             .is_err()
         {
             self.worker_dead = true;
@@ -287,6 +310,14 @@ impl ManagerApp {
                     }
                     Err(e) => self.error = Some(e),
                 }
+            } else if reply.slot == "apps.op" {
+                // A background app install/update just started (or failed to
+                // start) — pull the fresh row set so progress or the typed
+                // failure shows immediately.
+                match reply.result {
+                    Ok(_) => self.refresh("store.apps", "apps.list", json!({})),
+                    Err(e) => self.error = Some(e),
+                }
             } else if reply.slot == "disclosure" {
                 // packages.disclosure → consent overlay before install.
                 match reply.result {
@@ -311,11 +342,12 @@ impl ManagerApp {
                     Err(e) => self.error = Some(e),
                 }
             } else {
+                let background = self.background_slots.remove(&reply.slot);
                 self.slots.insert(
                     reply.slot,
                     match reply.result {
                         Ok(v) => {
-                            if self.error.is_some() {
+                            if !background && self.error.is_some() {
                                 self.error = None;
                             }
                             Slot::Ready(v)
@@ -339,6 +371,23 @@ impl ManagerApp {
             };
             self.handle_engine_event(event, cx);
             cx.notify();
+        }
+        // Native app installs run as Engine-side background jobs — poll
+        // apps.list while the Store shows an in-flight row so progress and
+        // the settled state appear without a full reload.
+        if self.view == View::Packages && Instant::now() >= self.next_store_poll {
+            self.next_store_poll = Instant::now() + std::time::Duration::from_secs(1);
+            let installing = self
+                .data("store.apps")
+                .get("apps")
+                .and_then(Value::as_array)
+                .is_some_and(|apps| {
+                    apps.iter()
+                        .any(|a| a.get("state").and_then(Value::as_str) == Some("installing"))
+                });
+            if installing {
+                self.refresh("store.apps", "apps.list", json!({}));
+            }
         }
         if self.view == View::Updates && Instant::now() >= self.next_updater_poll {
             self.next_updater_poll = Instant::now() + std::time::Duration::from_secs(1);

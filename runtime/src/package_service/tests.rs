@@ -47,7 +47,7 @@ pub(crate) mod tests {
             publisher: "kosmos".into(),
             permissions: vec![],
             targets: vec![crate::package_manifest::ManifestTarget {
-                runtime: crate::package_manifest::TargetRuntime::KosmosHost,
+                runtime: crate::package_manifest::TargetRuntime::Standalone,
                 os: vec![
                     crate::package_manifest::TargetOs::Windows,
                     crate::package_manifest::TargetOs::Macos,
@@ -93,7 +93,7 @@ pub(crate) mod tests {
             publisher: "kosmos".into(),
             permissions: vec![],
             targets: vec![crate::package_manifest::ManifestTarget {
-                runtime: crate::package_manifest::TargetRuntime::KosmosHost,
+                runtime: crate::package_manifest::TargetRuntime::Standalone,
                 os: vec![
                     crate::package_manifest::TargetOs::Windows,
                     crate::package_manifest::TargetOs::Macos,
@@ -406,7 +406,7 @@ pub(crate) mod tests {
     fn missing_compile_time_trust_fails_closed_without_blocking_engine() {
         let dir = tempdir().expect("tempdir");
         let service =
-            PackageService::from_parts(dir.path().join("packages"), None).expect("service");
+            PackageService::from_parts(dir.path().join("packages"), None, Some(dir.path().join("apps"))).expect("service");
         assert!(!service.trust_summary().configured);
         assert_eq!(
             service.trust_summary().fault_code.as_deref(),
@@ -1687,4 +1687,11 @@ pub(crate) mod tests {
             WorkerState::Stopped
         );
     }
+
+    // Native-app tests live in package_service/native_tests.rs (KOS-265) —
+    // gated on the host target they exercise so nothing passes vacuously.
+    #[cfg(all(windows, target_arch = "x86_64"))]
+    include!("native_tests.rs");
+    #[cfg(all(windows, target_arch = "x86_64"))]
+    include!("native_migration_tests.rs");
 }

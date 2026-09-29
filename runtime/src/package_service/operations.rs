@@ -528,11 +528,26 @@ pub async fn invoke_worker_operation(
             .unwrap_or_else(|_| PRODUCTION_CATALOG_URL.to_string());
         let parsed = reqwest::Url::parse(&url).map_err(|_| PackageError::Invalid)?;
         if parsed.scheme() != "https"
+            && !(cfg!(debug_assertions) && parsed.scheme() == "file")
             || parsed.username() != ""
             || parsed.password().is_some()
             || parsed.fragment().is_some()
         {
             return Err(PackageError::Invalid);
+        }
+        // Debug/test builds accept file:// catalog URLs for signed fixtures.
+        if cfg!(debug_assertions) && parsed.scheme() == "file" {
+            let path = parsed.to_file_path().map_err(|_| PackageError::Invalid)?;
+            let body = fs::read(path).map_err(|_| PackageError::Invalid)?;
+            if body.len() > MAX_ENVELOPE as usize {
+                return Err(PackageError::Invalid);
+            }
+            let envelope: Envelope =
+                serde_json::from_slice(&body).map_err(|_| PackageError::Invalid)?;
+            let bytes = STANDARD
+                .decode(envelope.bytes)
+                .map_err(|_| PackageError::Invalid)?;
+            return self.apply_catalog(bytes, envelope.signatures);
         }
         let response = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(30))

@@ -49,7 +49,9 @@ function commandsFor(plan) {
       commands.push({
         name: check,
         command: process.execPath,
-        args: [toolBin("oxlint"), ...files],
+        // Changed files can all sit under oxlint ignore patterns (e.g.
+        // desktop/build); that is "nothing to lint", not a failure.
+        args: [toolBin("oxlint"), "--no-error-on-unmatched-pattern", ...files],
       });
     else if (check === "format" && formatFiles.length)
       commands.push({

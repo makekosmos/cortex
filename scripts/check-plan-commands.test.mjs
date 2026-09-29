@@ -70,7 +70,10 @@ test("lint and format run Node tool entrypoints with verbatim file arguments", a
   assert.equal(lint.command, process.execPath);
   assert.match(lint.args[0], /bin[/\\]oxlint$/);
   assert.ok(existsSync(lint.args[0]), lint.args[0]);
-  assert.deepEqual(lint.args.slice(1), ["desktop/scripts/with space/script.mjs"]);
+  assert.deepEqual(lint.args.slice(1), [
+    "--no-error-on-unmatched-pattern",
+    "desktop/scripts/with space/script.mjs",
+  ]);
   assert.equal(format.command, process.execPath);
   assert.match(format.args[0], /bin[/\\]oxfmt$/);
   assert.ok(existsSync(format.args[0]), format.args[0]);

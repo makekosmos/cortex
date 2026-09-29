@@ -556,8 +556,13 @@ fn validate_catalog(catalog: &CatalogDocument) -> Result<(), TrustError> {
     for entry in &catalog.packages {
         entry.manifest.validate()?;
         let archive_url = reqwest::Url::parse(&entry.archive_url).ok();
-        if !archive_url.is_some_and(|url| url.scheme() == "https" && url.host_str().is_some())
-            || !valid_sha256(&entry.sha256)
+        // Debug/test builds additionally accept `file://` archive URLs so
+        // fixture catalogs can point at a zip on disk; the signed sha256/size
+        // still gates the bytes. Release builds require HTTPS.
+        if !archive_url.is_some_and(|url| {
+            (url.scheme() == "https" && url.host_str().is_some())
+                || (cfg!(debug_assertions) && url.scheme() == "file")
+        }) || !valid_sha256(&entry.sha256)
             || entry.size == 0
             || !packages.insert((
                 entry.manifest.id().to_owned(),
@@ -757,7 +762,7 @@ mod tests {
                     "entrypoint": "dist/index.html",
                     "publisher": "kosmos",
                     "permissions": [],
-                    "targets": [{"runtime": "kosmos-host", "os": ["windows"]}],
+                    "targets": [{"runtime": "standalone", "os": ["windows"]}],
                     "data": {"access": [], "defines": [], "mappings": []}
                 },
                 "archive_url": "https://packages.kosmos.dev/v2-demo.kspkg",

@@ -42,8 +42,8 @@ The three KOS-131 blockers are resolved or rescoped:
   `app_index.*`), Data object browser, Secrets, Sync, Connections, Dev,
   About. Packaged as `components/manager/Mundus Manager.exe`.
 - `agenda-gpui` — packaged as `components/agenda/Agenda.exe`.
-- `memoria-gpui` — packaged as `components/memoria/Memoria.exe`,
-  pinned via `desktop/component-pins.json` (`memoria_gpui`) and launched
+- `memoria-gpui` — store-installed by the Engine from the repo's GitHub
+  Releases (KOS-265) and launched
   through the shell command «Открыть Memoria (GPUI)», the Start Menu
   «Memoria» shortcut, or the GPUI Manager About view; the Vue
   Memoria package (`com.kosmos.memoria` .kspkg) stays installable as

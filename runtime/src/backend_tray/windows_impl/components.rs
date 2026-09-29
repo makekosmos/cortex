@@ -1,50 +1,54 @@
-//! Descriptors for the packaged GPUI companion apps that the tray can launch
-//! (Manager, Agenda, Memoria, Dictation). Each one ships next to the Engine
-//! install as `resources/components/<dir_name>/<exe_name>`.
+//! Which launch targets the tray can offer. Only Manager is still bundled
+//! next to the Engine (`resources/components/manager`); Agenda, Memoria and
+//! Dictation are store-installed native apps — their ids, executable names
+//! and env overrides come straight from `native_apps::NATIVE_APPS`, so this
+//! file holds no second copy of that table.
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+use engine::native_apps::NativeAppDescriptor;
+
+#[derive(Debug, Clone, Copy)]
 pub enum Component {
     Manager,
-    Agenda,
-    Memoria,
-    Dictation,
+    App(&'static NativeAppDescriptor),
 }
 
 impl Component {
-    pub const ALL: [Component; 4] = [
-        Component::Manager,
-        Component::Agenda,
-        Component::Memoria,
-        Component::Dictation,
-    ];
+    /// Manager first, then every store app in descriptor order.
+    pub fn all() -> impl Iterator<Item = Component> {
+        std::iter::once(Component::Manager)
+            .chain(engine::native_apps::NATIVE_APPS.iter().map(Component::App))
+    }
 
-    /// Folder name under `resources/components/`.
-    pub fn dir_name(self) -> &'static str {
+    /// The store descriptor for apps; `None` for the bundled Manager.
+    pub fn app_descriptor(self) -> Option<&'static NativeAppDescriptor> {
         match self {
-            Component::Manager => "manager",
-            Component::Agenda => "agenda",
-            Component::Memoria => "memoria",
-            Component::Dictation => "dictation",
+            Component::Manager => None,
+            Component::App(desc) => Some(desc),
         }
     }
 
-    /// Packaged executable file name inside its component folder.
-    pub fn exe_name(self) -> &'static str {
+    /// Folder name under `resources/components/` — bundled Manager only.
+    pub fn dir_name(self) -> Option<&'static str> {
         match self {
-            Component::Manager => "Mundus Manager.exe",
-            Component::Agenda => "Agenda.exe",
-            Component::Memoria => "Memoria.exe",
-            Component::Dictation => "Dictation.exe",
+            Component::Manager => Some("manager"),
+            Component::App(_) => None,
         }
     }
 
-    /// Environment variable that overrides the resolved path for dev/local runs.
+    /// Packaged executable file name inside the component folder.
+    pub fn exe_name(self) -> Option<&'static str> {
+        match self {
+            Component::Manager => Some("Mundus Manager.exe"),
+            Component::App(_) => None,
+        }
+    }
+
+    /// `brand::env` suffix for the dev override (`MUNDUS_*_EXECUTABLE`, with
+    /// legacy-name fallback) — the same source the service uses.
     pub fn env_override(self) -> &'static str {
         match self {
-            Component::Manager => "MUNDUS_MANAGER_EXECUTABLE",
-            Component::Agenda => "MUNDUS_AGENDA_EXECUTABLE",
-            Component::Memoria => "MUNDUS_MEMORIA_EXECUTABLE",
-            Component::Dictation => "MUNDUS_DICTATION_EXECUTABLE",
+            Component::Manager => "MANAGER_EXECUTABLE",
+            Component::App(desc) => desc.env_override,
         }
     }
 
@@ -52,34 +56,27 @@ impl Component {
     pub fn menu_label(self) -> &'static str {
         match self {
             Component::Manager => "Manager",
-            Component::Agenda => "Agenda",
-            Component::Memoria => "Memoria",
-            Component::Dictation => "Диктовка",
+            Component::App(desc) => match desc.id {
+                "com.kosmos.dictation" => "Диктовка",
+                _ => desc.name,
+            },
         }
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::Component;
-
-    #[test]
-    fn every_component_has_distinct_dir_and_exe_names() {
-        let mut dirs: Vec<&str> = Component::ALL.iter().map(|c| c.dir_name()).collect();
-        let mut exes: Vec<&str> = Component::ALL.iter().map(|c| c.exe_name()).collect();
-        dirs.sort_unstable();
-        dirs.dedup();
-        exes.sort_unstable();
-        exes.dedup();
-        assert_eq!(dirs.len(), Component::ALL.len());
-        assert_eq!(exes.len(), Component::ALL.len());
+impl PartialEq for Component {
+    fn eq(&self, other: &Self) -> bool {
+        self.command_key() == other.command_key()
     }
+}
+impl Eq for Component {}
 
-    #[test]
-    fn every_component_has_a_dedicated_env_override() {
-        let mut vars: Vec<&str> = Component::ALL.iter().map(|c| c.env_override()).collect();
-        vars.sort_unstable();
-        vars.dedup();
-        assert_eq!(vars.len(), Component::ALL.len());
+impl Component {
+    /// Identity for menu bookkeeping — the descriptor id for apps.
+    pub fn command_key(self) -> &'static str {
+        match self {
+            Component::Manager => "manager",
+            Component::App(desc) => desc.id,
+        }
     }
 }

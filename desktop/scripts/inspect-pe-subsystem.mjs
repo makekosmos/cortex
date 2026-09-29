@@ -84,17 +84,15 @@ export function inspectInstall(installRoot, expectedVersion) {
   );
   console.log(`PROVENANCE InstallLocation=${provenance.InstallLocation}`);
   console.log(`PROVENANCE UninstallString=${provenance.UninstallString}`);
-  for (const name of [
-    "components/manager/Mundus Manager.exe",
-    "components/agenda/Agenda.exe",
-    "components/memoria/Memoria.exe",
-    "components/dictation/Dictation.exe",
-  ]) {
-    const file = path.join(installRoot, "resources", name);
-    if (!existsSync(file)) continue;
-    const hash = createHash("sha256").update(readFileSync(file)).digest("hex");
-    console.log(`FILE ${name} SHA256=${hash} SUBSYSTEM ${readPeSubsystem(file)}`);
-  }
+  // Only Manager ships in resources\components — absent means the install
+  // is broken, not "nothing to inspect".
+  const managerName = "components/manager/Mundus Manager.exe";
+  const managerFile = path.join(installRoot, "resources", managerName);
+  if (!existsSync(managerFile)) throw new Error(`missing manager component: ${managerFile}`);
+  const managerHash = createHash("sha256").update(readFileSync(managerFile)).digest("hex");
+  console.log(
+    `FILE ${managerName} SHA256=${managerHash} SUBSYSTEM ${readPeSubsystem(managerFile)}`,
+  );
 }
 
 if (

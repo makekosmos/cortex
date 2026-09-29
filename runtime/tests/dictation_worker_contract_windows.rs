@@ -90,7 +90,7 @@ fn app_manifest() -> VersionedManifest {
         ],
         targets: vec![
             ManifestTarget {
-                runtime: TargetRuntime::KosmosHost,
+                runtime: TargetRuntime::Standalone,
                 os: vec![TargetOs::Windows],
                 arch: Some(vec![TargetArch::X86_64]),
                 entrypoint: None,

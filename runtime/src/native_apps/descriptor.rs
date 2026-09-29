@@ -1,0 +1,123 @@
+// The hardcoded store table: one descriptor per shipped native app plus the
+// naming rules that tie GitHub Releases assets to install records.
+
+/// One hardcoded store row: everything needed to name, locate and verify a
+/// release asset without a catalog service. Ids are persisted identifiers
+/// (`Apps/<id>`, `install.json`, dev env overrides) — never reuse them.
+#[derive(Debug)]
+pub struct NativeAppDescriptor {
+    pub id: &'static str,
+    /// Display name for the Manager store row.
+    pub name: &'static str,
+    /// GitHub `org/name` that publishes the releases.
+    pub repository: &'static str,
+    /// Release tag prefix before the bare semver: `v` or `gpui-v`.
+    pub tag_prefix: &'static str,
+    /// Asset filename stem: `<stem>-<version>-<target>.<ext>`, and the
+    /// executable inside the archive (`<stem>.exe` on Windows targets).
+    pub asset_stem: &'static str,
+    /// Dev-only env override naming an executable to launch instead of the
+    /// installed one (`MUNDUS_AGENDA_EXECUTABLE` etc., via `brand::env`).
+    pub env_override: &'static str,
+    /// 0.9.x bundled-component dir name (`resources/components/<name>`) —
+    /// what the installer records in the legacy-components marker for the
+    /// migration to read.
+    pub legacy_component: &'static str,
+}
+
+/// The store's app list — the whole catalog, hardcoded.
+pub const NATIVE_APPS: &[NativeAppDescriptor] = &[
+    NativeAppDescriptor {
+        id: "com.kosmos.agenda",
+        name: "Agenda",
+        repository: "makekosmos/agenda-gpui",
+        tag_prefix: "v",
+        asset_stem: "agenda-gpui",
+        env_override: "AGENDA_EXECUTABLE",
+        legacy_component: "agenda",
+    },
+    NativeAppDescriptor {
+        id: "com.kosmos.memoria",
+        name: "Memoria",
+        repository: "makekosmos/memoria-gpui",
+        tag_prefix: "v",
+        asset_stem: "memoria-gpui",
+        env_override: "MEMORIA_EXECUTABLE",
+        legacy_component: "memoria",
+    },
+    NativeAppDescriptor {
+        id: "com.kosmos.dictation",
+        name: "Dictation",
+        repository: "makekosmos/dictation",
+        tag_prefix: "gpui-v",
+        asset_stem: "dictation-gpui",
+        env_override: "DICTATION_EXECUTABLE",
+        legacy_component: "dictation",
+    },
+];
+
+fn is_windows_target(target: &str) -> bool {
+    target.ends_with("-pc-windows-msvc")
+}
+
+/// The host's app-release target triple, or `None` when this platform has no
+/// published asset. Install/uninstall stays Windows-only for now — the
+/// archive layout on unix targets is a tar.gz, which `install_archive` does
+/// not extract.
+pub fn host_app_target() -> Option<&'static str> {
+    if cfg!(windows) && cfg!(target_arch = "x86_64") {
+        Some("x86_64-pc-windows-msvc")
+    } else if cfg!(windows) && cfg!(target_arch = "aarch64") {
+        Some("aarch64-pc-windows-msvc")
+    } else {
+        None
+    }
+}
+
+impl NativeAppDescriptor {
+    /// `v1.2.3` / `gpui-v1.2.3` release tag for a bare semver.
+    pub fn release_tag(&self, version: &str) -> String {
+        format!("{}{}", self.tag_prefix, version)
+    }
+
+    /// Strip the tag prefix back to a bare semver, if `tag` is one of ours.
+    pub fn version_from_tag(&self, tag: &str) -> Option<String> {
+        let version = tag.strip_prefix(self.tag_prefix)?;
+        semver::Version::parse(version)
+            .ok()
+            .map(|_| version.to_owned())
+    }
+
+    /// Archive extension for a target: zip on Windows, tar.gz elsewhere.
+    pub fn asset_extension(target: &str) -> &'static str {
+        if is_windows_target(target) {
+            "zip"
+        } else {
+            "tar.gz"
+        }
+    }
+
+    /// Expected asset filename, e.g. `agenda-gpui-0.3.0-x86_64-pc-windows-msvc.zip`.
+    pub fn asset_name(&self, version: &str, target: &str) -> String {
+        format!(
+            "{}-{}-{}.{}",
+            self.asset_stem,
+            version,
+            target,
+            Self::asset_extension(target)
+        )
+    }
+
+    /// Executable path inside the archive for `target`.
+    pub fn executable(&self, target: &str) -> String {
+        if is_windows_target(target) {
+            format!("{}.exe", self.asset_stem)
+        } else {
+            self.asset_stem.to_owned()
+        }
+    }
+}
+
+pub fn app_descriptor(id: &str) -> Option<&'static NativeAppDescriptor> {
+    NATIVE_APPS.iter().find(|app| app.id == id)
+}

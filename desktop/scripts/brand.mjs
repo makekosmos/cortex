@@ -24,14 +24,6 @@ export const ENGINE_MANIFEST_PRODUCT = "mundus-engine";
 export const AUTOSTART_RUN_VALUE = "Mundus Engine";
 export const UNINSTALL_KEY_NAME = "Mundus";
 
-/** Packaged component executable names (staged under resources/components/*). */
-export const COMPONENT_EXES = {
-  manager: "Mundus Manager.exe",
-  agenda: "Agenda.exe",
-  memoria: "Memoria.exe",
-  dictation: "Dictation.exe",
-};
-
 /** Read env var `MUNDUS_<suffix>` with legacy `KOSMOS_`/`KEPLER_` fallback. */
 // MIGRATION(KOS-267): remove the legacy-prefix fallbacks after 2026-11-01.
 export function env(suffix, env = process.env) {

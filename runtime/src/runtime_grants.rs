@@ -1523,7 +1523,7 @@ mod tests {
                 {"capability": "ark.read", "scopes": ["dictation.get_state", "dictation.start_recording"]},
                 {"capability": "ark.write", "scopes": ["dictation.cancel", "dictation.get_config"]}
             ],
-            "targets": [{"runtime": "kosmos-host", "os": ["windows"]}],
+            "targets": [{"runtime": "standalone", "os": ["windows"]}],
             "data": {"access": [], "defines": [], "mappings": []}
         }"#;
         let crate::package_manifest::VersionedManifest::V2(manifest) =
@@ -1579,7 +1579,7 @@ mod tests {
             "version": "0.6.9", "kind": "app", "engine_api": ">=1.0.0",
             "entrypoint": "dist/index.html", "publisher": "kosmos",
             "permissions": [{"capability": "network", "scopes": ["bookMetadata", "images"]}],
-            "targets": [{"runtime": "kosmos-host", "os": ["windows"]}],
+            "targets": [{"runtime": "standalone", "os": ["windows"]}],
             "data": {"access": [], "defines": [], "mappings": []}
         }"#;
         let crate::package_manifest::VersionedManifest::V2(manifest) =
@@ -1611,7 +1611,7 @@ mod tests {
             "version": "1.0.0", "kind": "app", "engine_api": ">=1.0.0",
             "entrypoint": "dist/index.html", "publisher": "kosmos",
             "permissions": [{"capability": "network", "scopes": ["https://api.example.com"]}],
-            "targets": [{"runtime": "kosmos-host", "os": ["windows"]}],
+            "targets": [{"runtime": "standalone", "os": ["windows"]}],
             "data": {"access": [], "defines": [], "mappings": []}
         }"#;
         let crate::package_manifest::VersionedManifest::V2(manifest) =
@@ -1632,7 +1632,7 @@ mod tests {
             "version": "0.1.0", "kind": "app", "engine_api": ">=1.0.0",
             "entrypoint": "dist/index.html", "publisher": "kosmos",
             "permissions": [{"capability": "worker.invoke", "scopes": ["games.*"]}],
-            "targets": [{"runtime": "kosmos-host", "os": ["windows"]}],
+            "targets": [{"runtime": "standalone", "os": ["windows"]}],
             "data": {"access": [], "defines": [], "mappings": []}
         }"#;
         let crate::package_manifest::VersionedManifest::V2(manifest) =
@@ -1658,7 +1658,7 @@ mod tests {
                 {"capability": "ark.read", "scopes": ["pomodoro.get_state"]},
                 {"capability": "ark.write", "scopes": ["pomodoro.start", "focus.set_active_state"]}
             ],
-            "targets": [{"runtime": "kosmos-host", "os": ["windows"]}],
+            "targets": [{"runtime": "standalone", "os": ["windows"]}],
             "data": {"access": [], "defines": [], "mappings": []}
         }"#;
         let crate::package_manifest::VersionedManifest::V2(manifest) =
@@ -1686,7 +1686,7 @@ mod tests {
                 {"capability": "ark.read", "scopes": ["agents.projects.list", "agents.models.list", "agents.sessions.create", "agents.unknown"]},
                 {"capability": "ark.write", "scopes": ["agents.sessions.create", "agents.editors.open", "agents.projects.list"]}
             ],
-            "targets": [{"runtime": "kosmos-host", "os": ["windows"]}],
+            "targets": [{"runtime": "standalone", "os": ["windows"]}],
             "data": {"access": [], "defines": [], "mappings": []}
         }"#;
         let crate::package_manifest::VersionedManifest::V2(manifest) =

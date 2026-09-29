@@ -336,7 +336,7 @@ mod tests {
     use tempfile::tempdir;
 
     fn manifest() -> ManifestV2 {
-        let raw = r#"{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.0.0","kind":"app","engine_api":"*","entrypoint":"index.html","publisher":"kosmos","targets":[{"runtime":"kosmos-host","os":["linux"]}],"data":{"access":[],"defines":[{"type":"com.kosmos.demo.note","version":"1.0.0","schema":"schema.json","content_contract":"content.json","relations":"relations.json"}],"mappings":[]}}"#;
+        let raw = r#"{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.0.0","kind":"app","engine_api":"*","entrypoint":"index.html","publisher":"kosmos","targets":[{"runtime":"standalone","os":["linux"]}],"data":{"access":[],"defines":[{"type":"com.kosmos.demo.note","version":"1.0.0","schema":"schema.json","content_contract":"content.json","relations":"relations.json"}],"mappings":[]}}"#;
         let crate::package_manifest::VersionedManifest::V2(m) =
             PackageManifest::parse(raw).unwrap()
         else {
@@ -462,7 +462,7 @@ mod tests {
     fn absent_optional_contracts_remain_valid_and_legacy_records_deserialize() {
         let dir = tempdir().unwrap();
         let registry = PackageRegistrationRegistry::open(dir.path()).unwrap();
-        let raw = r#"{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.0.0","kind":"app","engine_api":"*","entrypoint":"index.html","publisher":"kosmos","targets":[{"runtime":"kosmos-host","os":["linux"]}],"data":{"access":[],"defines":[{"type":"com.kosmos.demo.note","version":"1.0.0","schema":"schema.json"}],"mappings":[]}}"#;
+        let raw = r#"{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.0.0","kind":"app","engine_api":"*","entrypoint":"index.html","publisher":"kosmos","targets":[{"runtime":"standalone","os":["linux"]}],"data":{"access":[],"defines":[{"type":"com.kosmos.demo.note","version":"1.0.0","schema":"schema.json"}],"mappings":[]}}"#;
         let crate::package_manifest::VersionedManifest::V2(manifest) =
             PackageManifest::parse(raw).unwrap()
         else {

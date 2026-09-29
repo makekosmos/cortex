@@ -70,6 +70,13 @@ pub(in crate::ws_server) fn package_error_code(error: &PackageError) -> &'static
         PackageError::Trust(TrustError::RevokedKey | TrustError::RevokedPackage) => "revoked",
         PackageError::Trust(_) => "trust-rejected",
         PackageError::Store(_) => "store-rejected",
+        // apps.* outcomes — unreachable via packages.*, mapped for totality.
+        PackageError::NotFound => "not-found",
+        PackageError::Busy => "conflict",
+        PackageError::AppRunning => "app-running",
+        PackageError::Offline => "unavailable",
+        PackageError::Integrity => "invalid-request",
+        PackageError::Unsupported => "unavailable",
     }
 }
 

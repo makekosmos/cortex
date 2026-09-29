@@ -9,7 +9,13 @@ impl PackageService {
         release_keys: Vec<TrustedKey>,
     ) -> Result<Self, PackageError> {
         let trust = TrustStore::new(root_key, release_keys).map_err(PackageError::Trust)?;
-        Self::from_parts(data_dir.as_ref().join("packages"), Some(trust))
+        // Test/fixture constructors scope every product root — including the
+        // Apps dir — to the passed data_dir so nothing touches real user dirs.
+        Self::from_parts(
+            data_dir.as_ref().join("packages"),
+            Some(trust),
+            Some(data_dir.as_ref().join("apps")),
+        )
     }
 
     pub fn open(data_dir: impl AsRef<Path>) -> Result<Self, PackageError> {
@@ -28,17 +34,29 @@ impl PackageService {
                 }),
             _ => production_trust(),
         };
-        Self::from_parts(root, trust)
+        // Apps root — single source: `native_apps::native_apps_root()` (the
+        // product-local Mundus dir, honoring the env override).
+        Self::from_parts(root, trust, crate::native_apps::native_apps_root().ok())
     }
     #[cfg(test)]
     pub fn open_with_trust(
         data_dir: impl AsRef<Path>,
         trust: TrustStore,
     ) -> Result<Self, PackageError> {
-        Self::from_parts(data_dir.as_ref().join("packages"), Some(trust))
+        Self::from_parts(
+            data_dir.as_ref().join("packages"),
+            Some(trust),
+            Some(data_dir.as_ref().join("apps")),
+        )
     }
 
-    fn from_parts(root: PathBuf, trust: Option<TrustStore>) -> Result<Self, PackageError> {
+    /// Crate-internal constructor — the dispatcher tests and the native
+    /// tests build minimal services without a trust store.
+    pub(crate) fn from_parts(
+        root: PathBuf,
+        trust: Option<TrustStore>,
+        apps_root: Option<PathBuf>,
+    ) -> Result<Self, PackageError> {
         let unavailable = trust.is_none();
         let data_dir = root
             .parent()
@@ -76,9 +94,16 @@ impl PackageService {
                 .registered_types()
                 .map_err(|_| PackageError::Persistence)?,
         );
+        let native_apps = apps_root
+            .and_then(|root| crate::native_apps::NativeAppStore::new(root).ok())
+            .map(std::sync::Arc::new);
         let service = Self {
             store,
             root,
+            native_apps,
+            release_cache: Mutex::new(HashMap::new()),
+            release_failures: Mutex::new(HashMap::new()),
+            native_jobs: Mutex::new(HashMap::new()),
             state: Mutex::new(State {
                 trust,
                 fault: unavailable.then(|| "package_trust_unavailable".into()),

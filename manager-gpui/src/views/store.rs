@@ -12,6 +12,8 @@ pub fn load(app: &mut ManagerApp) {
     app.call("store.catalog", "store.catalog", json!({}));
     app.call("store.installed", "packages.list", json!({}));
     app.call("store.trust", "packages.trust_status", json!({}));
+    // KOS-265 native GPUI apps — separate install path from .kspkg packages.
+    app.call("store.apps", "apps.list", json!({}));
 }
 
 pub fn render(
@@ -71,6 +73,10 @@ pub fn render(
             |this, _| {
                 this.action("store.refresh", json!({}));
                 this.action("packages.refresh_catalog", json!({}));
+                // Native app rows re-check GitHub Releases past the TTL —
+                // as a background refresh, so a successful reply can't clear
+                // the catalog-refresh error banner.
+                this.refresh("store.apps", "apps.list", json!({ "refresh": true }));
             },
         ));
     col = col.child(tabs);
@@ -95,8 +101,16 @@ pub fn render(
     }));
 
     match app.store_tab {
-        StoreTab::Catalog => col = col.child(render_catalog(app, cx)),
-        StoreTab::Installed => col = col.child(render_installed(app, cx)),
+        StoreTab::Catalog => {
+            col = col.child(render_catalog(app, cx));
+            col = col.child(super::store_apps::render_native_apps(app, cx, false));
+        }
+        // Native apps belong on both tabs — Installed shows just the live
+        // ones, alongside the .kspkg package list.
+        StoreTab::Installed => {
+            col = col.child(super::store_apps::render_native_apps(app, cx, true));
+            col = col.child(render_installed(app, cx));
+        }
     }
     col.into_any_element()
 }

@@ -2,18 +2,16 @@
 
 This repository owns the Mundus desktop application and its host-side services:
 
-- `desktop/` — packaging scripts and resources (no Electron; the shipped Windows package is Engine + GPUI components);
+- `desktop/` — packaging scripts and resources (no Electron; the shipped
+  Windows package is the Engine + the GPUI Manager);
 - `manager-gpui/` — the Mundus Manager shipped in the Windows package as
   `resources/components/manager/Mundus Manager.exe`;
-- `agenda-gpui` (sibling repo `makekosmos/agenda-gpui`, pinned in
-  `desktop/component-pins.json`) — the Agenda shipped in the Windows
-  package as `resources/components/agenda/Agenda.exe`;
-- `memoria-gpui` (sibling repo `makekosmos/memoria-gpui`, pinned in
-  `desktop/component-pins.json`) — the Memoria shipped in the
-  Windows package as `resources/components/memoria/Memoria.exe`;
-- `dictation` (sibling repo `makekosmos/dictation`, pinned in
-  `desktop/component-pins.json`) — the Dictation shipped in the
-  Windows package as `resources/components/dictation/Dictation.exe`;
+- `agenda-gpui` (sibling repo `makekosmos/agenda-gpui`),
+  `memoria-gpui` (sibling repo `makekosmos/memoria-gpui`) and
+  `dictation` (sibling repo `makekosmos/dictation`) — the native apps the
+  Engine's Store installs from their GitHub Releases under
+  `%LOCALAPPDATA%\Mundus\Apps`; they are not bundled in the installer
+  (KOS-265);
 - `runtime/` — the Rust Engine, including privileged operations
   (`mundus-engine privileged …` — managed hosts blocks and fast NTFS
   indexing behind a one-time UAC grant).
