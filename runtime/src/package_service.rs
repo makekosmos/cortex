@@ -233,6 +233,9 @@ pub struct PackageService {
     /// Native GPUI apps (release zips, records under `Apps/<id>`); `None`
     /// when no product-local data root exists.
     native_apps: Option<crate::native_apps::NativeAppStore>,
+    /// Per-app latest-release cache for the GitHub Releases probe
+    /// (`apps.list`); TTL + ETag revalidation in `native.rs`.
+    release_cache: Mutex<HashMap<String, CachedRelease>>,
     state: Mutex<State>,
     // Serializes all mutations spanning trust, catalog cache and package state.
     mutation: Mutex<()>,

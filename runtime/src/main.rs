@@ -521,7 +521,7 @@ async fn setup() -> Result<SetupState, DynError> {
     // MIGRATION(KOS-267): remove after 2026-11-01
     // 0.9.x → 0.10.0: users who had Agenda/Memoria/Dictation in the old
     // package store (or as bundled components) get the native GPUI build
-    // installed from the signed catalog. Runs in the background — failures
+    // installed from its GitHub release. Runs in the background — failures
     // are logged and retried next start; Engine startup never waits on it.
     {
         let migration_service = package_service.clone();

@@ -100,6 +100,7 @@ impl PackageService {
             store,
             root,
             native_apps,
+            release_cache: Mutex::new(HashMap::new()),
             state: Mutex::new(State {
                 trust,
                 fault: unavailable.then(|| "package_trust_unavailable".into()),

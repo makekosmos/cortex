@@ -1,8 +1,9 @@
 //! Installed native GPUI apps live in `<product-local>/Apps/<id>/<version>` —
 //! outside the package store because the artifacts are plain release zips
-//! (an executable at the archive root), not `.kspkg` manifests. Installs are
-//! gated by the signed package-index catalog (`package_trust`); the catalog's
-//! sha256/size — never the release's `SHA256SUMS.txt` — authenticates bytes.
+//! (an executable at the archive root), not `.kspkg` manifests. The app list
+//! is hardcoded (`NATIVE_APPS`); the Engine asks each app's own GitHub
+//! Releases for the latest tag and verifies downloaded bytes against the
+//! release's `SHA256SUMS.txt` (`native_apps::releases`).
 //!
 //! `install.json` inside each `<id>` dir is the `current` pointer (a small
 //! JSON record, not a symlink): a new version extracts and verifies in
@@ -50,8 +51,10 @@ pub enum NativeAppError {
 
 pub type Result<T> = std::result::Result<T, NativeAppError>;
 
-/// Everything the install flow needs to place a version on disk. Built from
-/// the signed catalog entry — never from the archive itself.
+include!("native_apps/descriptor.rs");
+
+/// Everything the install flow needs to place a version on disk. The sha256
+/// comes from the release's `SHA256SUMS.txt` — never from the archive itself.
 pub struct NativeInstallSpec {
     pub id: String,
     pub version: String,
@@ -60,7 +63,6 @@ pub struct NativeInstallSpec {
     pub size: u64,
     pub repository: String,
     pub release_tag: String,
-    pub catalog_sequence: u64,
 }
 
 /// The `current` pointer + audit record: `<root>/<id>/install.json`.
@@ -71,7 +73,7 @@ pub struct NativeAppInstall {
     pub id: String,
     /// Installed (and current) version.
     pub version: String,
-    /// Executable path inside the version dir, copied from the catalog.
+    /// Executable path inside the version dir, copied from the descriptor.
     pub executable: String,
     /// sha256/size of the archive that produced this install.
     pub sha256: String,
@@ -79,7 +81,6 @@ pub struct NativeAppInstall {
     pub repository: String,
     pub release_tag: String,
     pub installed_at: u64,
-    pub catalog_sequence: u64,
 }
 
 impl NativeAppInstall {
@@ -122,15 +123,10 @@ fn valid_record_executable(value: &str) -> bool {
 }
 
 /// Dev override env var *suffix* for launching an app outside the store
-/// layout (read via `brand::env` — `MUNDUS_AGENDA_EXECUTABLE` etc., with the
-/// legacy `KOSMOS_*` fallback), shared by the tray and `apps.open`.
+/// layout (read via `brand::env` — `MUNDUS_AGENDA_EXECUTABLE` etc., with
+/// legacy-name fallback), shared by the tray and `apps.open`.
 pub fn executable_env_override(id: &str) -> Option<&'static str> {
-    match id {
-        "com.kosmos.agenda" => Some("AGENDA_EXECUTABLE"),
-        "com.kosmos.memoria" => Some("MEMORIA_EXECUTABLE"),
-        "com.kosmos.dictation" => Some("DICTATION_EXECUTABLE"),
-        _ => None,
-    }
+    app_descriptor(id).map(|app| app.env_override)
 }
 
 /// `%LOCALAPPDATA%\Mundus\Apps` — the single product-local root every native
@@ -257,6 +253,8 @@ impl NativeAppStore {
             .join(&record.executable)
     }
 }
+
+pub mod releases;
 
 include!("native_apps/install.rs");
 

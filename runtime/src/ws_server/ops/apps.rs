@@ -32,7 +32,15 @@ pub(in crate::ws_server) async fn handle_apps_op(
         "list" => ok_or_err(
             subop,
             service
-                .native_apps()
+                // `{"refresh": true}` skips the release-check TTL so a manual
+                // Store refresh re-asks GitHub (ETag still applies).
+                .native_apps_refresh(
+                    params
+                        .get("refresh")
+                        .and_then(serde_json::Value::as_bool)
+                        .unwrap_or(false),
+                )
+                .await
                 .map(|apps| serde_json::json!({ "apps": apps })),
         ),
         // Update is install-at-latest: a new version dir, pointer flip, old

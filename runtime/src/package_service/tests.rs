@@ -134,7 +134,6 @@ pub(crate) mod tests {
                 archive_url: "https://packages.kosmos.dev/demo.kspkg".into(),
                 sha256: hash,
                 size,
-                native: None,
             }],
         }
     }
@@ -767,7 +766,6 @@ pub(crate) mod tests {
                 archive_url: "https://packages.kosmos.dev/demo-v2.kspkg".into(),
                 sha256: hash,
                 size,
-                native: None,
             }],
         };
         let (bytes, signatures) = signed(&catalog, "release-1", &release);
@@ -880,7 +878,6 @@ pub(crate) mod tests {
                 archive_url: "https://packages.kosmos.dev/defined.kspkg".into(),
                 sha256: hash,
                 size,
-                native: None,
             }],
         };
         let (bytes, signatures) = signed(&catalog, "release-1", &release);
@@ -1002,7 +999,6 @@ pub(crate) mod tests {
                 archive_url: "https://packages.kosmos.dev/prior.kspkg".into(),
                 sha256: prior_hash.clone(),
                 size: prior_size,
-                native: None,
             }],
         };
         let (bytes, signatures) = signed(&initial, "release-1", &release);
@@ -1050,7 +1046,6 @@ pub(crate) mod tests {
                 archive_url: "https://packages.kosmos.dev/update.kspkg".into(),
                 sha256: hash,
                 size,
-                native: None,
             }],
         };
         let (bytes, signatures) = signed(&update, "release-1", &release);
@@ -1108,7 +1103,6 @@ pub(crate) mod tests {
                 archive_url: "https://packages.kosmos.dev/prior.kspkg".into(),
                 sha256: prior_hash.clone(),
                 size: prior_size,
-                native: None,
             }],
         };
         let (bytes, signatures) = signed(&initial, "release-1", &release);
@@ -1148,7 +1142,6 @@ pub(crate) mod tests {
                 archive_url: "https://packages.kosmos.dev/replacement.kspkg".into(),
                 sha256: replacement_hash,
                 size: replacement_size,
-                native: None,
             }],
         };
         let (bytes, signatures) = signed(&update, "release-1", &release);
@@ -1225,7 +1218,6 @@ pub(crate) mod tests {
                 archive_url: format!("https://packages.kosmos.dev/{package}.kspkg"),
                 sha256: hash,
                 size,
-                native: None,
             });
             archives.push((manifest.id, manifest.version, archive));
         }
@@ -1358,7 +1350,6 @@ pub(crate) mod tests {
                 archive_url: "https://packages.kosmos.dev/demo.kspkg".into(),
                 sha256: hash.clone(),
                 size,
-                native: None,
             }],
         };
         let (bytes, signatures) = signed(&legacy_catalog, "release-1", &release);
@@ -1489,7 +1480,6 @@ pub(crate) mod tests {
                 archive_url: "https://packages.kosmos.dev/bridge.kspkg".into(),
                 sha256: hash,
                 size,
-                native: None,
             }],
         };
         let (bytes, signatures) = signed(&catalog, "release-1", &release);
@@ -1612,7 +1602,6 @@ pub(crate) mod tests {
                 archive_url: "https://packages.kosmos.dev/bridge-update.kspkg".into(),
                 sha256: replacement_hash,
                 size: replacement_size,
-                native: None,
             }],
         };
         let (bytes, signatures) = signed(&update, "release-1", &release);
@@ -1656,7 +1645,6 @@ pub(crate) mod tests {
                 archive_url: "https://packages.kosmos.dev/bridge-broken.kspkg".into(),
                 sha256: broken_hash,
                 size: broken_size,
-                native: None,
             }],
         };
         let (bytes, signatures) = signed(&broken_update, "release-1", &release);
@@ -1700,34 +1688,14 @@ pub(crate) mod tests {
         );
     }
 
-    // --- Native apps (KOS-265): catalog-gated install/update/uninstall. ---
+    // --- Native apps (KOS-265): GitHub Releases install/update/uninstall.
+    // A local stub stands in for github.com — no network in tests.
 
-    fn native_manifest(version: &str) -> ManifestV2 {
-        ManifestV2 {
-            schema_version: 2,
-            id: "com.kosmos.agenda".into(),
-            name: "Agenda".into(),
-            description: None,
-            version: version.into(),
-            kind: PackageKind::App,
-            engine_api: ">=1.0.0".into(),
-            entrypoint: "agenda-gpui.exe".into(),
-            icon: None,
-            publisher: "kosmos".into(),
-            permissions: vec![],
-            targets: vec![crate::package_manifest::ManifestTarget {
-                runtime: crate::package_manifest::TargetRuntime::Standalone,
-                os: vec![crate::package_manifest::TargetOs::Windows],
-                arch: Some(vec![crate::package_manifest::TargetArch::X86_64]),
-                entrypoint: None,
-            }],
-            data: crate::package_manifest::ManifestData {
-                access: vec![],
-                defines: vec![],
-                mappings: vec![],
-            },
-            integration: None,
-        }
+    use crate::native_apps::releases::ReleaseProbe;
+    use httpmock::Method::GET;
+
+    fn test_target() -> Option<&'static str> {
+        crate::native_apps::host_app_target()
     }
 
     fn native_zip(root: &Path, name: &str, exe: &str) -> (PathBuf, String, u64) {
@@ -1749,86 +1717,143 @@ pub(crate) mod tests {
         )
     }
 
-    /// Catalog document carrying one `native` entry per (version, archive)
-    /// pair — the fixture catalog this suite signs with the test release key.
-    /// `archive_url` is `file://` (debug/test only) so `install_native_app`
-    /// exercises the download path without network.
-    fn native_catalog(
-        sequence: u64,
-        entries: &[(&str, &Path)],
-        expires_at: &str,
-    ) -> CatalogDocument {
-        CatalogDocument {
-            schema_version: 1,
-            sequence,
-            issued_at: "2029-01-01T00:00:00Z".into(),
-            expires_at: expires_at.into(),
-            packages: entries
-                .iter()
-                .map(|(version, archive)| {
-                    let bytes = fs::read(archive).expect("zip bytes");
-                    let file_url = format!(
-                        "file:///{}",
-                        archive.to_string_lossy().replace('\\', "/")
-                    );
-                    CatalogEntry {
-                        manifest: VersionedManifest::V2(native_manifest(version)),
-                        archive_url: file_url,
-                        sha256: format!("{:x}", Sha256::digest(&bytes)),
-                        size: bytes.len() as u64,
-                        native: Some(crate::package_trust::NativeArtifact {
-                            repository: "makekosmos/agenda-gpui".into(),
-                            release_tag: format!("v{version}"),
-                            target: "x86_64-pc-windows-msvc".into(),
-                            executable: "agenda-gpui.exe".into(),
-                        }),
-                    }
-                })
-                .collect(),
-        }
+    /// Mock a tagged release: the sums file lists the real asset for the
+    /// host target, and the asset serves `archive`'s bytes. `sha_override`
+    /// publishes a corrupted sums line. No `latest` redirect — use
+    /// `stub_latest` for that (duplicate `latest` mocks are ambiguous).
+    async fn stub_tagged(
+        server: &httpmock::MockServer,
+        desc: &'static crate::native_apps::NativeAppDescriptor,
+        version: &str,
+        archive: &Path,
+        sha_override: Option<String>,
+    ) {
+        let target = test_target().expect("host target");
+        let bytes = fs::read(archive).expect("archive bytes");
+        let sha = sha_override.unwrap_or_else(|| format!("{:x}", Sha256::digest(&bytes)));
+        let tag = desc.release_tag(version);
+        let asset = desc.asset_name(version, target);
+        let sums = format!("{sha}  {asset}\n");
+        server
+            .mock_async(|when, then| {
+                when.method(GET).path(format!(
+                    "/{}/releases/download/{tag}/SHA256SUMS.txt",
+                    desc.repository
+                ));
+                then.status(200)
+                    .header("ETag", format!("\"sums-{tag}\""))
+                    .body(sums);
+            })
+            .await;
+        server
+            .mock_async(|when, then| {
+                when.method(GET).path(format!(
+                    "/{}/releases/download/{tag}/{asset}",
+                    desc.repository
+                ));
+                then.status(200).body(bytes);
+            })
+            .await;
     }
 
-    fn native_service(dir: &tempfile::TempDir, catalog: &CatalogDocument) -> PackageService {
-        let (trust_store, _, release) = trust();
-        let service =
-            PackageService::open_with_trust(dir.path(), trust_store).expect("service");
-        let (bytes, signatures) = signed(catalog, "release-1", &release);
-        service.apply_catalog(bytes, signatures).expect("catalog");
-        service
+    /// `releases/latest/download/SHA256SUMS.txt` 302s to `tag`'s sums URL —
+    /// the hop that carries the latest tag, like github.com does.
+    async fn stub_latest(
+        server: &httpmock::MockServer,
+        desc: &'static crate::native_apps::NativeAppDescriptor,
+        version: &str,
+    ) {
+        let tag = desc.release_tag(version);
+        server
+            .mock_async(|when, then| {
+                when.method(GET).path(format!(
+                    "/{}/releases/latest/download/SHA256SUMS.txt",
+                    desc.repository
+                ));
+                then.status(302).header(
+                    "Location",
+                    format!(
+                        "{}/{}/releases/download/{tag}/SHA256SUMS.txt",
+                        server.base_url(),
+                        desc.repository
+                    ),
+                );
+            })
+            .await;
+    }
+
+    /// Full release mock: latest redirect + tagged sums + asset.
+    async fn stub_release(
+        server: &httpmock::MockServer,
+        desc: &'static crate::native_apps::NativeAppDescriptor,
+        version: &str,
+        archive: &Path,
+        sha_override: Option<String>,
+    ) {
+        stub_latest(server, desc, version).await;
+        stub_tagged(server, desc, version, archive, sha_override).await;
+    }
+
+    fn native_service(dir: &tempfile::TempDir) -> PackageService {
+        PackageService::from_parts(
+            dir.path().join("packages"),
+            None,
+            Some(dir.path().join("apps")),
+        )
+        .expect("service")
+    }
+
+    fn probe(server: &httpmock::MockServer) -> ReleaseProbe {
+        ReleaseProbe::with_base(server.base_url()).expect("probe")
+    }
+
+    fn dead_probe() -> ReleaseProbe {
+        // Port 9 (discard) — nothing answers; every check fails fast.
+        ReleaseProbe::with_base("http://127.0.0.1:9".into()).expect("probe")
+    }
+
+    fn agenda() -> &'static crate::native_apps::NativeAppDescriptor {
+        crate::native_apps::app_descriptor("com.kosmos.agenda").unwrap()
     }
 
     #[tokio::test]
     async fn native_install_resolves_launch_and_uninstalls() {
+        let Some(target) = test_target() else {
+            return;
+        };
         let dir = tempdir().expect("temp dir");
-        let (zip, _, _) = native_zip(dir.path(), "agenda.zip", "agenda-gpui.exe");
-        let catalog = native_catalog(1, &[("0.1.1", &zip)], "2030-01-01T00:00:00Z");
-        let service = native_service(&dir, &catalog);
+        let exe = agenda().executable(target);
+        let (zip, _, _) = native_zip(dir.path(), "agenda.zip", &exe);
+        let server = httpmock::MockServer::start_async().await;
+        stub_release(&server, agenda(), "0.1.1", &zip, None).await;
+        let service = native_service(&dir);
+        let probe = probe(&server);
 
         let summary = service
-            .install_native_app("com.kosmos.agenda", None)
+            .install_native_app_with(&probe, "com.kosmos.agenda", None)
             .await
             .expect("native install");
         assert!(summary.installed);
         assert_eq!(summary.installed_version.as_deref(), Some("0.1.1"));
         assert_eq!(summary.name, "Agenda");
 
-        let exe = service
+        let exe_path = service
             .native_app_executable("com.kosmos.agenda")
             .expect("executable resolves");
-        assert!(exe.is_file());
-        assert!(exe.ends_with("agenda-gpui.exe"));
+        assert!(exe_path.is_file());
+        assert_eq!(exe_path.file_name().unwrap().to_str().unwrap(), exe);
         // Install layout: <root>/apps/<id>/<version>/<exe>.
         let expected = dir
             .path()
             .join("apps")
             .join("com.kosmos.agenda")
             .join("0.1.1")
-            .join("agenda-gpui.exe");
-        assert_eq!(exe, expected);
+            .join(&exe);
+        assert_eq!(exe_path, expected);
 
         // Same-version reinstall is a no-op.
         let again = service
-            .install_native_app("com.kosmos.agenda", None)
+            .install_native_app_with(&probe, "com.kosmos.agenda", None)
             .await
             .expect("idempotent reinstall");
         assert_eq!(again.installed_version.as_deref(), Some("0.1.1"));
@@ -1841,87 +1866,161 @@ pub(crate) mod tests {
     }
 
     #[tokio::test]
-    async fn native_update_keeps_previous_on_bad_sha() {
+    async fn native_list_reports_hardcoded_rows_and_update() {
+        let Some(target) = test_target() else {
+            return;
+        };
         let dir = tempdir().expect("temp dir");
-        let (v1, _, _) = native_zip(dir.path(), "agenda-1.zip", "agenda-gpui.exe");
-        let (v2, _, _) = native_zip(dir.path(), "agenda-2.zip", "agenda-gpui.exe");
-        let service = native_service(
-            &dir,
-            &native_catalog(1, &[("0.1.0", &v1)], "2030-01-01T00:00:00Z"),
-        );
+        // Agenda installs pinned 0.1.0 while latest is 0.2.0; the other apps
+        // are not installed and report their latest.
+        let agenda_zip = dir.path().join("agenda.zip");
+        native_zip_at(&agenda_zip, &agenda().executable(target));
+        let old_zip = dir.path().join("agenda-old.zip");
+        native_zip_at(&old_zip, &agenda().executable(target));
+        let memoria = crate::native_apps::app_descriptor("com.kosmos.memoria").unwrap();
+        let dictation = crate::native_apps::app_descriptor("com.kosmos.dictation").unwrap();
+        let memoria_zip = dir.path().join("memoria.zip");
+        native_zip_at(&memoria_zip, &memoria.executable(target));
+        let dictation_zip = dir.path().join("dictation.zip");
+        native_zip_at(&dictation_zip, &dictation.executable(target));
+        // One stub serves the pinned install (tagged sums + asset only); a
+        // second serves `latest` → 0.2.0 plus the other apps' rows.
+        let old_server = httpmock::MockServer::start_async().await;
+        stub_tagged(&old_server, agenda(), "0.1.0", &old_zip, None).await;
+        let server = httpmock::MockServer::start_async().await;
+        stub_release(&server, agenda(), "0.2.0", &agenda_zip, None).await;
+        stub_release(&server, memoria, "0.7.0", &memoria_zip, None).await;
+        stub_release(&server, dictation, "0.3.0", &dictation_zip, None).await;
+        let service = native_service(&dir);
         service
-            .install_native_app("com.kosmos.agenda", None)
+            .install_native_app_with(&probe(&old_server), "com.kosmos.agenda", Some("0.1.0"))
+            .await
+            .expect("install pinned");
+
+        let apps = service
+            .native_apps_with(&probe(&server), false)
+            .await
+            .expect("list");
+        assert_eq!(apps.len(), crate::native_apps::NATIVE_APPS.len());
+        let agenda_row = apps
+            .iter()
+            .find(|row| row.id == "com.kosmos.agenda")
+            .expect("agenda row");
+        assert_eq!(agenda_row.installed_version.as_deref(), Some("0.1.0"));
+        assert_eq!(agenda_row.state, "update-available");
+        let memoria_row = apps
+            .iter()
+            .find(|row| row.id == "com.kosmos.memoria")
+            .expect("memoria row");
+        assert!(!memoria_row.installed);
+        assert_eq!(memoria_row.latest_version.as_deref(), Some("0.7.0"));
+        assert_eq!(memoria_row.state, "not-installed");
+    }
+
+    #[tokio::test]
+    async fn native_update_keeps_previous_on_bad_sha() {
+        let Some(target) = test_target() else {
+            return;
+        };
+        let dir = tempdir().expect("temp dir");
+        let exe = agenda().executable(target);
+        let (v1, _, _) = native_zip(dir.path(), "agenda-1.zip", &exe);
+        let server = httpmock::MockServer::start_async().await;
+        stub_release(&server, agenda(), "0.1.0", &v1, None).await;
+        let service = native_service(&dir);
+        service
+            .install_native_app_with(&probe(&server), "com.kosmos.agenda", None)
             .await
             .expect("install v1");
 
-        // Catalog seq 2 offers 0.2.0 but with a corrupted sha.
-        let mut update = native_catalog(2, &[("0.2.0", &v2)], "2030-01-01T00:00:00Z");
-        update.packages[0].sha256 = "0".repeat(64);
-        let (bytes, signatures) = signed(&update, "release-1", &trust().2);
-        service.apply_catalog(bytes, signatures).expect("catalog v2");
-
+        // A fresh stub offers 0.2.0 but with a corrupted sums line.
+        let (v2, _, _) = native_zip(dir.path(), "agenda-2.zip", &exe);
+        let server2 = httpmock::MockServer::start_async().await;
+        stub_release(&server2, agenda(), "0.2.0", &v2, Some("0".repeat(64))).await;
         let err = service
-            .install_native_app("com.kosmos.agenda", None)
+            .install_native_app_with(&probe(&server2), "com.kosmos.agenda", None)
             .await
             .expect_err("bad sha must fail");
         assert!(matches!(err, PackageError::Invalid));
-        let apps = service.native_apps().expect("list");
-        assert_eq!(apps[0].installed_version.as_deref(), Some("0.1.0"));
+        let apps = service.native_apps_with(&dead_probe(), false).await.expect("list");
+        let row = apps
+            .iter()
+            .find(|row| row.id == "com.kosmos.agenda")
+            .unwrap();
+        assert_eq!(row.installed_version.as_deref(), Some("0.1.0"));
         assert!(dir
             .path()
             .join("apps")
             .join("com.kosmos.agenda")
             .join("0.1.0")
-            .join("agenda-gpui.exe")
+            .join(&exe)
             .is_file());
     }
 
     #[tokio::test]
     async fn native_update_rolls_back_on_bad_archive() {
+        let Some(target) = test_target() else {
+            return;
+        };
         let dir = tempdir().expect("temp dir");
-        let (v1, _, _) = native_zip(dir.path(), "agenda-1.zip", "agenda-gpui.exe");
-        let service = native_service(
-            &dir,
-            &native_catalog(1, &[("0.1.0", &v1)], "2030-01-01T00:00:00Z"),
-        );
+        let exe = agenda().executable(target);
+        let (v1, _, _) = native_zip(dir.path(), "agenda-1.zip", &exe);
+        let server = httpmock::MockServer::start_async().await;
+        stub_release(&server, agenda(), "0.1.0", &v1, None).await;
+        let service = native_service(&dir);
         service
-            .install_native_app("com.kosmos.agenda", None)
+            .install_native_app_with(&probe(&server), "com.kosmos.agenda", None)
             .await
             .expect("install v1");
 
-        // A zip whose content is valid but lacks the declared executable —
-        // hash/size still match the catalog.
+        // Sums sha256 matches the offered zip, but the zip lacks the
+        // descriptor's executable — extraction fails after the hash passes.
         let (v2, _, _) = native_zip(dir.path(), "agenda-2.zip", "other.exe");
-        let update = native_catalog(2, &[("0.2.0", &v2)], "2030-01-01T00:00:00Z");
-        let (bytes, signatures) = signed(&update, "release-1", &trust().2);
-        service.apply_catalog(bytes, signatures).expect("catalog v2");
-
+        let server2 = httpmock::MockServer::start_async().await;
+        stub_release(&server2, agenda(), "0.2.0", &v2, None).await;
         assert!(service
-            .install_native_app("com.kosmos.agenda", None)
+            .install_native_app_with(&probe(&server2), "com.kosmos.agenda", None)
             .await
             .is_err());
-        let apps = service.native_apps().expect("list");
-        assert_eq!(apps[0].installed_version.as_deref(), Some("0.1.0"));
-        assert_eq!(apps[0].update_version.as_deref(), Some("0.2.0"));
+        let apps = service.native_apps_with(&dead_probe(), false).await.expect("list");
+        let row = apps
+            .iter()
+            .find(|row| row.id == "com.kosmos.agenda")
+            .unwrap();
+        assert_eq!(row.installed_version.as_deref(), Some("0.1.0"));
         assert!(service.native_app_executable("com.kosmos.agenda").is_ok());
     }
 
     #[tokio::test]
     async fn native_update_replaces_old_version() {
+        let Some(target) = test_target() else {
+            return;
+        };
         let dir = tempdir().expect("temp dir");
-        let (v1, _, _) = native_zip(dir.path(), "agenda-1.zip", "agenda-gpui.exe");
-        let (v2, _, _) = native_zip(dir.path(), "agenda-2.zip", "agenda-gpui.exe");
-        let service = native_service(
-            &dir,
-            &native_catalog(1, &[("0.1.0", &v1), ("0.2.0", &v2)], "2030-01-01T00:00:00Z"),
-        );
+        let exe = agenda().executable(target);
+        let (v1, _, _) = native_zip(dir.path(), "agenda-1.zip", &exe);
+        let (v2, _, _) = native_zip(dir.path(), "agenda-2.zip", &exe);
+        let server = httpmock::MockServer::start_async().await;
+        stub_release(&server, agenda(), "0.2.0", &v2, None).await;
+        let service = native_service(&dir);
+        // Pin the older version through a second stub so `latest` stays 0.2.0.
+        let server1 = httpmock::MockServer::start_async().await;
+        stub_release(&server1, agenda(), "0.1.0", &v1, None).await;
         service
-            .install_native_app("com.kosmos.agenda", None)
+            .install_native_app_with(&probe(&server1), "com.kosmos.agenda", Some("0.1.0"))
+            .await
+            .expect("install 0.1.0");
+        service
+            .install_native_app_with(&probe(&server), "com.kosmos.agenda", None)
             .await
             .expect("install latest");
-        let apps = service.native_apps().expect("list");
-        assert_eq!(apps[0].installed_version.as_deref(), Some("0.2.0"));
-        assert!(apps[0].update_version.is_none());
+        let apps = service.native_apps_with(&probe(&server), false).await.expect("list");
+        let row = apps
+            .iter()
+            .find(|row| row.id == "com.kosmos.agenda")
+            .unwrap();
+        assert_eq!(row.installed_version.as_deref(), Some("0.2.0"));
+        assert!(row.update_version.is_none());
         assert!(!dir
             .path()
             .join("apps")
@@ -1930,15 +2029,61 @@ pub(crate) mod tests {
             .exists());
     }
 
+    #[tokio::test]
+    async fn native_list_offline_keeps_installed_state() {
+        let Some(_target) = test_target() else {
+            return;
+        };
+        let dir = tempdir().expect("temp dir");
+        let service = native_service(&dir);
+        // Nothing installed, probe dead → every row reports offline.
+        let apps = service.native_apps_with(&dead_probe(), false).await.expect("list");
+        assert_eq!(apps.len(), crate::native_apps::NATIVE_APPS.len());
+        assert!(apps.iter().all(|row| !row.installed));
+        assert!(apps
+            .iter()
+            .all(|row| row.latest_version.is_none() && row.state == "offline"));
+
+        // An installed app keeps its installed row offline.
+        let store = crate::native_apps::NativeAppStore::new(dir.path().join("apps")).unwrap();
+        let archive = dir.path().join("agenda.zip");
+        native_zip_at(&archive, "agenda-gpui.exe");
+        let bytes = fs::read(&archive).unwrap();
+        store
+            .install_archive(
+                &crate::native_apps::NativeInstallSpec {
+                    id: "com.kosmos.agenda".into(),
+                    version: "0.1.0".into(),
+                    executable: "agenda-gpui.exe".into(),
+                    sha256: format!("{:x}", Sha256::digest(&bytes)),
+                    size: bytes.len() as u64,
+                    repository: "makekosmos/agenda-gpui".into(),
+                    release_tag: "v0.1.0".into(),
+                },
+                &archive,
+            )
+            .unwrap();
+        let apps = service.native_apps_with(&dead_probe(), false).await.expect("list");
+        let row = apps
+            .iter()
+            .find(|row| row.id == "com.kosmos.agenda")
+            .unwrap();
+        assert!(row.installed);
+        assert_eq!(row.installed_version.as_deref(), Some("0.1.0"));
+        assert_eq!(row.state, "installed");
+    }
+
     // MIGRATION(KOS-267): remove after 2026-11-01
     #[tokio::test]
     async fn legacy_package_record_triggers_native_migration_once() {
+        let Some(target) = test_target() else {
+            return;
+        };
         let dir = tempdir().expect("temp dir");
-        let (zip, _, _) = native_zip(dir.path(), "agenda.zip", "agenda-gpui.exe");
-        let service = native_service(
-            &dir,
-            &native_catalog(1, &[("0.1.1", &zip)], "2030-01-01T00:00:00Z"),
-        );
+        let (zip, _, _) = native_zip(dir.path(), "agenda.zip", &agenda().executable(target));
+        let server = httpmock::MockServer::start_async().await;
+        stub_release(&server, agenda(), "0.1.1", &zip, None).await;
+        let service = native_service(&dir);
         // Seed a legacy 0.9.x package-store record for com.kosmos.agenda.
         let mut legacy = manifest();
         legacy.id = "com.kosmos.agenda".into();
@@ -1950,7 +2095,9 @@ pub(crate) mod tests {
             .install_versioned(&kspkg, kspkg_size, &kspkg_hash, &legacy_versioned, 1)
             .expect("legacy package install");
 
-        service.migrate_legacy_native_apps().await;
+        service
+            .migrate_legacy_native_apps_with(&probe(&server))
+            .await;
         assert!(service.native_app_executable("com.kosmos.agenda").is_ok());
         // The legacy kspkg record is removed once the native app is live.
         assert!(service
@@ -1963,23 +2110,33 @@ pub(crate) mod tests {
         assert!(marker.is_file());
 
         // Idempotent: a second run changes nothing.
-        service.migrate_legacy_native_apps().await;
-        let apps = service.native_apps().expect("list");
-        assert_eq!(apps.len(), 1);
-        assert_eq!(apps[0].installed_version.as_deref(), Some("0.1.1"));
+        service
+            .migrate_legacy_native_apps_with(&probe(&server))
+            .await;
+        let apps = service.native_apps_with(&probe(&server), false).await.expect("list");
+        let row = apps
+            .iter()
+            .find(|row| row.id == "com.kosmos.agenda")
+            .unwrap();
+        assert_eq!(row.installed_version.as_deref(), Some("0.1.1"));
     }
 
     #[tokio::test]
     async fn migration_without_legacy_records_is_a_noop() {
         let dir = tempdir().expect("temp dir");
-        let (zip, _, _) = native_zip(dir.path(), "agenda.zip", "agenda-gpui.exe");
-        let service = native_service(
-            &dir,
-            &native_catalog(1, &[("0.1.1", &zip)], "2030-01-01T00:00:00Z"),
-        );
-        service.migrate_legacy_native_apps().await;
+        let service = native_service(&dir);
+        service.migrate_legacy_native_apps_with(&dead_probe()).await;
         // No legacy record and no bundled component dir → nothing installed.
-        let apps = service.native_apps().expect("list");
-        assert!(!apps[0].installed);
+        let apps = service.native_apps_with(&dead_probe(), false).await.expect("list");
+        assert!(apps.iter().all(|row| !row.installed));
+    }
+
+    fn native_zip_at(path: &Path, exe: &str) {
+        let file = File::create(path).expect("zip file");
+        let mut zip = zip::ZipWriter::new(file);
+        zip.start_file(exe, FileOptions::default())
+            .expect("exe entry");
+        zip.write_all(b"MZ test fixture").expect("exe write");
+        zip.finish().expect("zip finish");
     }
 }

@@ -28,7 +28,7 @@ if (icons.status !== 0) process.exit(icons.status ?? 1);
 // exe staged under the packaged name the Engine tray resolves. The target
 // triple is the toolchain.target the release BOM records for Windows builds.
 // KOS-265: Agenda/Memoria/Dictation are no longer bundled — the Engine
-// installs them as native apps from the signed package catalog.
+// installs them as native apps from GitHub Releases.
 const MANAGER_TARGET = "x86_64-pc-windows-msvc";
 const managerRelease = path.join(root, "manager-gpui", "target", MANAGER_TARGET, "release");
 const managerBuild = spawnSync(

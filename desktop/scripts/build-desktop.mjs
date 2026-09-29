@@ -109,7 +109,7 @@ function stageInstaller() {
 
   const componentsDir = path.join(resources, "components");
   // KOS-265: only Manager is bundled — Agenda/Memoria/Dictation install as
-  // native apps from the signed package catalog.
+  // native apps from GitHub Releases.
   for (const component of ["manager"]) {
     const source = path.join(SHELL_ROOT, ".tmp", "components", component, "win-unpacked");
     const target = path.join(componentsDir, component);

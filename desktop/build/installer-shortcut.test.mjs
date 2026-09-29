@@ -22,6 +22,7 @@ for (const app of ["Agenda", "Memoria", "Dictation"]) {
   test(`${app} has no installer-created shortcut; stale shortcut is removed`, () => {
     expect(installer).not.toContain(`CreateShortCut "$SMPROGRAMS\\${app}.lnk"`);
     expect(installer).not.toContain(`components\\${app.toLowerCase()}\\`);
-    expect(installer).toContain(`Delete "$SMPROGRAMS\\Kosmos ${app}.lnk"`);
+    // The stale 0.9.x-era shortcut name stays removable.
+    expect(installer).toContain(`Delete "$SMPROGRAMS\\Kosmos ${app}.lnk"`); // MIGRATION(KOS-267)
   });
 }

@@ -741,11 +741,6 @@ pub async fn invoke_worker_operation(
         }
         let mut state = Self::lock(&self.state);
         let entry = Self::current_entry(&mut state, id, version)?;
-        // Native app entries install through `install_native_app`, not the
-        // `.kspkg` archive path — a zip has no manifest.json to verify.
-        if entry.native.is_some() {
-            return Err(PackageError::Invalid);
-        }
         let sequence = state
             .catalog
             .as_ref()
@@ -1005,9 +1000,6 @@ pub async fn invoke_worker_operation(
         let (url, expected_size) = {
             let mut state = Self::lock(&self.state);
             let entry = Self::current_entry(&mut state, id, version)?;
-            if entry.native.is_some() {
-                return Err(PackageError::Invalid);
-            }
             (entry.archive_url, entry.size)
         };
         let parsed = reqwest::Url::parse(&url).map_err(|_| PackageError::Invalid)?;

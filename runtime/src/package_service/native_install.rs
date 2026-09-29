@@ -1,124 +1,124 @@
-// Native app install/update/uninstall — download + verified extraction
-// through the signed catalog.
+// Native app install/update/uninstall — download from the app's own GitHub
+// Releases, verify the archive against its `SHA256SUMS.txt` line, then the
+// atomic extract/pointer-flip path in `native_apps`.
+
+use crate::native_apps::releases;
+use crate::native_apps::NativeInstallSpec;
+use crate::package_store::eq_hash;
 
 impl PackageService {
-    /// Catalog-facing install/update: downloads the archive to a temp file
-    /// inside the app dir (same volume as the install target), verifies it
-    /// against the signed catalog, then flips the pointer.
+    /// Resolve the release for `id` (`version` pins a tag; `None` asks for
+    /// the latest), stream the asset into the app dir, hash-check it against
+    /// the sums line, and flip the install pointer.
     pub async fn install_native_app(
         &self,
         id: &str,
         version: Option<&str>,
     ) -> Result<NativeAppSummary, PackageError> {
+        let probe = ReleaseProbe::new().map_err(|_| PackageError::Invalid)?;
+        self.install_native_app_with(&probe, id, version).await
+    }
+
+    pub(crate) async fn install_native_app_with(
+        &self,
+        probe: &ReleaseProbe,
+        id: &str,
+        version: Option<&str>,
+    ) -> Result<NativeAppSummary, PackageError> {
+        let desc = crate::native_apps::app_descriptor(id).ok_or(PackageError::Invalid)?;
+        let target = crate::native_apps::host_app_target().ok_or(PackageError::Invalid)?;
         let apps_root = self.native_store()?.root().to_path_buf();
-        let (entry, native) = {
-            let mut state = Self::lock(&self.state);
-            Self::native_entry(&mut state, id, version)?
-        };
-        if host_native_target() != Some(native.target.as_str()) {
-            return Err(PackageError::Invalid);
+        let info = match version {
+            Some(version) => {
+                if semver::Version::parse(version).is_err() {
+                    return Err(PackageError::Invalid);
+                }
+                releases::fetch_tagged(probe, desc, &desc.release_tag(version), target).await
+            }
+            None => match releases::fetch_latest(probe, desc, target, None).await {
+                Ok(releases::ReleaseCheck::Fresh { info, etag }) => {
+                    Self::lock(&self.release_cache).insert(
+                        desc.id.to_owned(),
+                        CachedRelease {
+                            info: info.clone(),
+                            etag,
+                            checked_at: std::time::Instant::now(),
+                        },
+                    );
+                    Ok(info)
+                }
+                Ok(releases::ReleaseCheck::NotModified) => self
+                    .cached_release(desc.id)
+                    .ok_or(releases::ReleaseError::Unavailable),
+                Err(error) => Err(error),
+            },
         }
+        .map_err(|_| PackageError::Invalid)?;
+
         // Same-version reinstall is a no-op — the pointer already agrees.
         if self
             .native_store()?
-            .current(entry.manifest.id())
-            .is_some_and(|record| record.version == *entry.manifest.version())
+            .current(desc.id)
+            .is_some_and(|record| record.version == info.version)
         {
-            let state = Self::lock(&self.state);
-            let record = self.native_store()?.current(entry.manifest.id());
-            return Ok(self.native_summary(&state, record.as_ref(), entry.manifest.id()));
+            let record = self.native_store()?.current(desc.id);
+            return Ok(Self::native_summary(
+                desc,
+                record.as_ref(),
+                Some(&info),
+                false,
+                true,
+            ));
         }
 
-        let app_dir = apps_root.join(entry.manifest.id());
+        let app_dir = apps_root.join(desc.id);
         retry_io(|| fs::create_dir_all(&app_dir)).map_err(|_| PackageError::Persistence)?;
-        let download = app_dir.join(format!(
+        let download_path = app_dir.join(format!(
             ".download-{}-{}",
             std::process::id(),
-            entry.manifest.version()
+            info.tag
         ));
-
-        let parsed = reqwest::Url::parse(&entry.archive_url).map_err(|_| PackageError::Invalid)?;
-        let fetched: Vec<u8> = if parsed.scheme() == "file" && cfg!(debug_assertions) {
-            // file:// archive URLs exist only in debug/test catalogs.
-            let path = parsed
-                .to_file_path()
-                .map_err(|_| PackageError::Invalid)?;
-            fs::read(path).map_err(|_| PackageError::Invalid)?
-        } else {
-            if parsed.scheme() != "https"
-                || parsed.username() != ""
-                || parsed.password().is_some()
-                || parsed.fragment().is_some()
-            {
-                return Err(PackageError::Invalid);
+        let url = releases::asset_url(&probe.base, desc.repository, &info.tag, &info.asset);
+        let downloaded = releases::download(probe, &url, &download_path).await;
+        let result = match downloaded {
+            Ok((sha256, size)) if eq_hash(&sha256, &info.sha256) => {
+                let spec = NativeInstallSpec {
+                    id: desc.id.to_owned(),
+                    version: info.version.clone(),
+                    executable: desc.executable(target),
+                    sha256: info.sha256.clone(),
+                    size,
+                    repository: desc.repository.to_owned(),
+                    release_tag: info.tag.clone(),
+                };
+                self.install_native_verified(desc, &spec, &download_path)
             }
-            let response = reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(60))
-                .build()
-                .map_err(|_| PackageError::Invalid)?
-                .get(parsed)
-                .send()
-                .await
-                .map_err(|_| PackageError::Invalid)?;
-            if !response.status().is_success() {
-                return Err(PackageError::Invalid);
-            }
-            if response
-                .content_length()
-                .is_some_and(|size| size != entry.size)
-            {
-                return Err(PackageError::Invalid);
-            }
-            let bytes = response.bytes().await.map_err(|_| PackageError::Invalid)?;
-            if bytes.len() as u64 != entry.size {
-                return Err(PackageError::Invalid);
-            }
-            bytes.to_vec()
+            // Hash mismatch or fetch failure — drop the partial download.
+            _ => Err(PackageError::Invalid),
         };
-        fs::write(&download, &fetched).map_err(|_| PackageError::Persistence)?;
-        let result =
-            self.install_native_from_path(entry.manifest.id(), entry.manifest.version(), &download);
-        let _ = fs::remove_file(&download);
+        let _ = fs::remove_file(&download_path);
         result
     }
 
-    /// Shared core for `install_native_app` and fixture tests: the archive is
-    /// already a local path; the signed catalog entry still gates id, version,
-    /// sha256, size and the zip layout.
-    pub fn install_native_from_path(
+    /// Shared core once the archive is a local file: the spec carries the
+    /// sums-verified sha256/size and the descriptor-owned executable.
+    fn install_native_verified(
         &self,
-        id: &str,
-        version: &str,
+        desc: &'static crate::native_apps::NativeAppDescriptor,
+        spec: &NativeInstallSpec,
         archive: &Path,
     ) -> Result<NativeAppSummary, PackageError> {
-        let store = self.native_store()?;
-        let (entry, native) = {
-            let mut state = Self::lock(&self.state);
-            Self::native_entry(&mut state, id, Some(version))?
-        };
-        if host_native_target() != Some(native.target.as_str()) {
-            return Err(PackageError::Invalid);
-        }
-        let sequence = Self::lock(&self.state)
-            .catalog
-            .as_ref()
-            .map(|catalog| catalog.document.sequence)
-            .unwrap_or(0);
-        let spec = NativeInstallSpec {
-            id: id.to_owned(),
-            version: version.to_owned(),
-            executable: native.executable.clone(),
-            sha256: entry.sha256.clone(),
-            size: entry.size,
-            repository: native.repository.clone(),
-            release_tag: native.release_tag.clone(),
-            catalog_sequence: sequence,
-        };
-        let record = store
-            .install_archive(&spec, archive)
+        let record = self
+            .native_store()?
+            .install_archive(spec, archive)
             .map_err(native_store_error)?;
-        let state = Self::lock(&self.state);
-        Ok(self.native_summary(&state, Some(&record), id))
+        Ok(Self::native_summary(
+            desc,
+            Some(&record),
+            self.cached_release(desc.id).as_ref(),
+            false,
+            true,
+        ))
     }
 
     /// Uninstall removes the whole `<id>` dir — record and every version —
@@ -142,18 +142,14 @@ impl PackageService {
             .ok_or(PackageError::Invalid)
     }
 
-    /// Launch the installed app. Refuses when the record is revoked by the
-    /// signed revocation feed.
+    /// Launch the installed app.
     pub fn open_native_app(&self, id: &str) -> Result<(), PackageError> {
-        let record = self.native_store()?.current(id).ok_or(PackageError::Invalid)?;
-        {
-            let state = Self::lock(&self.state);
-            if state.trust.as_ref().is_some_and(|trust| {
-                trust.is_package_revoked(&record.id, &record.version, &record.sha256)
-            }) {
-                return Err(PackageError::Invalid);
-            }
+        if crate::native_apps::app_descriptor(id).is_none() {
+            return Err(PackageError::Invalid);
         }
+        self.native_store()?
+            .current(id)
+            .ok_or(PackageError::Invalid)?;
         let executable = self.native_app_executable(id)?;
         #[cfg(windows)]
         let mut command = {

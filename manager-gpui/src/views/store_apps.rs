@@ -1,11 +1,12 @@
-//! Native GPUI app rows for the Store view (KOS-265) — catalog-gated
+//! Native GPUI app rows for the Store view (KOS-265) — the Engine hardcodes
+//! the app list and checks each app's GitHub Releases for updates.
 //! Установить / Обновить / Открыть / Удалить.
 use ::gpui::{prelude::*, *};
 use serde_json::json;
 
 use crate::app::ManagerApp;
 use crate::widgets::*;
-use kosmos_gpui_kit::theme::*;
+use mundus_gpui_kit::theme::*;
 
 /// Row actions for a native app entry — the state machine behind
 /// Установить/Обновить/Открыть/Удалить. Kept pure so row states are unit-testable.
@@ -33,7 +34,7 @@ fn native_actions(item: &serde_json::Value) -> Vec<NativeAction> {
     }
 }
 
-/// Native GPUI apps (KOS-265): catalog-gated rows with
+/// Native GPUI apps (KOS-265): GitHub Releases rows with
 /// Установить / Обновить / Открыть / Удалить.
 pub(super) fn render_native_apps(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {
     slot_or(app, "store.apps", |v| {
@@ -52,6 +53,7 @@ pub(super) fn render_native_apps(app: &mut ManagerApp, cx: &mut Context<ManagerA
             let id = vstr(item, "id");
             let name = vopt(item, "name").unwrap_or_else(|| id.clone());
             let installed = vbool(item, "installed");
+            let state = vstr(item, "state");
             let status = if vopt(item, "update_version").is_some_and(|v| !v.is_empty()) {
                 format!(
                     "Обновление v{}",
@@ -59,13 +61,22 @@ pub(super) fn render_native_apps(app: &mut ManagerApp, cx: &mut Context<ManagerA
                 )
             } else if installed {
                 format!("Установлено v{}", vstr(item, "installed_version"))
+            } else if state == "offline" {
+                "Нет сети".to_string()
+            } else if state == "unsupported" {
+                "Недоступно".to_string()
             } else {
-                format!("v{}", vstr(item, "catalog_version"))
+                format!("v{}", vstr(item, "latest_version"))
             };
             let mut r = row(name.clone(), id.clone()).child(badge(
                 status,
                 if installed { SUCCESS() } else { MUTED_FG() },
             ));
+            // Offline/unsupported rows offer no network actions.
+            if matches!(state.as_str(), "offline" | "unsupported") && !installed {
+                el = el.child(r);
+                continue;
+            }
             for action_kind in native_actions(item) {
                 let aid = id.clone();
                 let aname = name.clone();
@@ -125,7 +136,7 @@ mod tests {
             "name": "Agenda",
             "installed": false,
             "installed_version": null,
-            "catalog_version": "0.1.1",
+            "latest_version": "0.1.1",
             "update_available": false,
         });
         assert_eq!(native_actions(&item), vec![NativeAction::Install]);
@@ -137,7 +148,7 @@ mod tests {
             "id": "com.kosmos.agenda",
             "installed": true,
             "installed_version": "0.1.1",
-            "catalog_version": "0.1.1",
+            "latest_version": "0.1.1",
             "update_available": false,
         });
         assert_eq!(
@@ -152,7 +163,7 @@ mod tests {
             "id": "com.kosmos.agenda",
             "installed": true,
             "installed_version": "0.1.0",
-            "catalog_version": "0.1.1",
+            "latest_version": "0.1.1",
             "update_version": "0.1.1",
         });
         assert_eq!(

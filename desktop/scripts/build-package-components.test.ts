@@ -17,13 +17,15 @@ test("components/manager is the manager-gpui exe staged under the packaged name"
   expect(source).toContain('"Mundus Manager.exe"');
 });
 
-// KOS-265: Agenda/Memoria/Dictation install from the signed package catalog
+// KOS-265: Agenda/Memoria/Dictation install from GitHub Releases
 // as native apps — they must never again be bundled into the installer stage.
 test("the installer builds no bundled components besides Manager", () => {
   for (const component of ["agenda", "memoria", "dictation"]) {
     expect(source).not.toContain(`components\\${component}`);
     expect(source).not.toContain(`"components", "${component}"`);
   }
+  // component-pins.json is deleted — the build must not reference it.
+  expect(source).not.toContain("component-pins.json");
   for (const pin of ["agenda_gpui", "memoria_gpui", "dictation_gpui"]) {
     expect(source).not.toContain(pin);
   }

@@ -85,7 +85,7 @@ export function inspectInstall(installRoot, expectedVersion) {
   console.log(`PROVENANCE InstallLocation=${provenance.InstallLocation}`);
   console.log(`PROVENANCE UninstallString=${provenance.UninstallString}`);
   // KOS-265: only Manager ships in resources\components — the other GPUI
-  // apps install under %LOCALAPPDATA%\Mundus\Apps via the signed catalog.
+  // apps install under %LOCALAPPDATA%\Mundus\Apps via GitHub Releases.
   for (const name of ["components/manager/Mundus Manager.exe"]) {
     const file = path.join(installRoot, "resources", name);
     if (!existsSync(file)) continue;

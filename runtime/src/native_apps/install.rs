@@ -30,8 +30,8 @@ impl NativeAppStore {
         }
 
         // Same-volume temp file contract: the caller downloads into the app
-        // dir; verify archive size + sha256 against the signed catalog before
-        // touching the zip.
+        // dir; verify archive size + sha256 against the release's
+        // SHA256SUMS.txt line before touching the zip.
         let metadata = fs::metadata(archive)?;
         if metadata.len() != spec.size {
             return Err(NativeAppError::SizeMismatch);
@@ -96,7 +96,6 @@ impl NativeAppStore {
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_secs())
                 .unwrap_or(0),
-            catalog_sequence: spec.catalog_sequence,
         };
         // Atomic pointer flip: install.json is the single source of truth.
         write_owner_only_json(&self.state_path(&spec.id), &record)
@@ -133,7 +132,7 @@ impl NativeAppStore {
     /// Extract `archive` into `staging` under the package-store safety rules:
     /// entry-count and expanded-size limits, enclosed paths only, no
     /// traversal, no duplicates, no symlinks or reparse points, no reserved
-    /// device names. The catalog-declared executable must exist as a file.
+    /// device names. The descriptor-declared executable must exist as a file.
     fn extract_verified(
         &self,
         archive: &Path,

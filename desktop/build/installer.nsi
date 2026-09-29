@@ -1,6 +1,6 @@
 ; Mundus Desktop installer (Engine + Manager component) — no Electron.
 ; Agenda, Memoria and Dictation are native apps installed by the Engine from
-; the signed package catalog (KOS-265); only components\manager ships here.
+; their GitHub releases (KOS-265); only components\manager ships here.
 ;
 ; Usage:
 ;   makensis.exe /DVERSION=1.2.3 /DSTAGE_DIR=C:\...\installer-stage /DOUT_FILE=C:\...\Mundus-Setup-1.2.3.exe installer.nsi

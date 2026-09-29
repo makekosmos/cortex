@@ -150,7 +150,6 @@ pub fn signed_catalog(
             archive_url: "https://test.invalid/hpke-replication.kspkg".into(),
             sha256: hash.into(),
             size,
-            native: None,
         }],
     };
     let bytes = serde_json::to_vec(&document).unwrap();

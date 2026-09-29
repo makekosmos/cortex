@@ -14,7 +14,6 @@ fn spec(version: &str, archive: &Path) -> NativeInstallSpec {
         size: bytes.len() as u64,
         repository: "makekosmos/agenda-gpui".into(),
         release_tag: format!("v{version}"),
-        catalog_sequence: 1,
     }
 }
 
@@ -156,3 +155,8 @@ fn corrupt_record_reads_as_absent() {
     store.uninstall("com.kosmos.agenda").unwrap();
     assert!(!app_dir.exists());
 }
+
+// --- Release metadata (KOS-265): sums parsing, tag/version agreement, ---
+// --- target line selection, redirect Location → tag extraction.        ---
+
+include!("releases_tests.rs");

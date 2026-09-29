@@ -73,6 +73,9 @@ pub fn render(
             |this, _| {
                 this.action("store.refresh", json!({}));
                 this.action("packages.refresh_catalog", json!({}));
+                // Native app rows re-check GitHub Releases past the TTL;
+                // `call` lands the reply straight into the store.apps slot.
+                this.call("store.apps", "apps.list", json!({ "refresh": true }));
             },
         ));
     col = col.child(tabs);
