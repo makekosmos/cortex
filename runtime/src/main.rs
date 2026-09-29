@@ -530,6 +530,15 @@ async fn setup() -> Result<SetupState, DynError> {
         });
     }
 
+    // The Engine owns the Start-menu entries for store-installed apps:
+    // reconcile on every start so installs made before this existed, a
+    // user's manual delete and update repoints all self-heal without
+    // waiting for an install event. Blocking COM/fs work off the runtime.
+    {
+        let shortcut_service = package_service.clone();
+        tokio::task::spawn_blocking(move || shortcut_service.reconcile_native_shortcuts());
+    }
+
     // Hotkey hooks are Engine-owned; forward their normalized trigger to the
     // installed Dictation worker so Desktop is never part of the control path.
     let mut dictation_events = dictation_host.subscribe();

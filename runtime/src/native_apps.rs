@@ -319,6 +319,7 @@ impl NativeAppStore {
 pub mod releases;
 
 include!("native_apps/install.rs");
+include!("native_apps/shortcuts.rs");
 
 impl NativeAppStore {
     /// Remove the whole `<root>/<id>` tree: record + every version dir. User
@@ -374,3 +375,7 @@ impl NativeAppStore {
 #[cfg(test)]
 #[path = "native_apps/tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "native_apps/shortcuts_tests.rs"]
+mod shortcuts_tests;

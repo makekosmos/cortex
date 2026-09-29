@@ -280,7 +280,8 @@ Section "Install"
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\KosmosEngine" ; MIGRATION(KOS-267)
 
   ; Bundled-era component shortcuts — the apps are store-installed now,
-  ; so these point at files the upgrade deletes.
+  ; so these point at files the upgrade deletes. Engine-owned links live
+  ; under "$SMPROGRAMS\Mundus\" — flat-name deletes can never reach them.
   Delete "$SMPROGRAMS\Agenda.lnk"
   Delete "$SMPROGRAMS\Memoria.lnk"
   Delete "$SMPROGRAMS\Dictation.lnk"
@@ -378,6 +379,9 @@ Section "Uninstall"
 
   Delete "$DESKTOP\Mundus.lnk"
   Delete "$SMPROGRAMS\Mundus.lnk"
+  ; Engine-owned store-app links (`Mundus\<Name>.lnk`, written by
+  ; native_apps::shortcuts) — the whole product folder goes.
+  RMDir /r "$SMPROGRAMS\Mundus"
   Delete "$SMPROGRAMS\Agenda.lnk"
   Delete "$SMPROGRAMS\Memoria.lnk"
   Delete "$SMPROGRAMS\Dictation.lnk"

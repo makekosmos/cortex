@@ -147,12 +147,14 @@ impl PackageService {
     }
 
     /// The ready row after a successful install — a fresh read, not a
-    /// hand-assembled copy of the spec.
+    /// hand-assembled copy of the spec. Every path that lands here proves
+    /// the app is installed, so the Start-menu link is synced too.
     fn native_ok_summary(
         &self,
         desc: &'static NativeAppDescriptor,
         latest: Option<&releases::ReleaseInfo>,
     ) -> Result<NativeAppSummary, PackageError> {
+        self.sync_native_shortcut(desc);
         let record = self
             .native_store()?
             .current(desc.id)
@@ -167,11 +169,46 @@ impl PackageService {
     }
 
     /// Uninstall removes the whole `<id>` dir — record and every version —
-    /// refusing while the app is running. User data is never touched.
+    /// refusing while the app is running. User data is never touched. The
+    /// Start-menu link goes with it.
     pub fn uninstall_native_app(&self, desc: &NativeAppDescriptor) -> Result<(), PackageError> {
         self.native_store()?
             .uninstall(desc.id)
-            .map_err(native_store_error)
+            .map_err(native_store_error)?;
+        self.sync_native_shortcut(desc);
+        Ok(())
+    }
+
+    /// The Engine owns store-app Start-menu links: `install`/`uninstall`
+    /// keep one app's link in step, and `reconcile` — run on every Engine
+    /// start — converges the whole table (pre-existing installs, manual
+    /// deletes, update repoints). Best-effort: failures are logged, never
+    /// surfaced to the caller's operation.
+    fn sync_native_shortcut(&self, desc: &NativeAppDescriptor) {
+        let (Some(store), Some(programs)) = (
+            self.native_apps.as_deref(),
+            crate::native_apps::start_menu_dir(),
+        ) else {
+            return;
+        };
+        if let Err(error) = crate::native_apps::sync_shortcut(store, &programs, desc) {
+            tracing::warn!(
+                target: "native_apps",
+                id = desc.id,
+                %error,
+                "start-menu shortcut sync failed"
+            );
+        }
+    }
+
+    pub fn reconcile_native_shortcuts(&self) {
+        let (Some(store), Some(programs)) = (
+            self.native_apps.as_deref(),
+            crate::native_apps::start_menu_dir(),
+        ) else {
+            return;
+        };
+        crate::native_apps::reconcile_shortcuts(store, &programs);
     }
 
     /// Absolute executable path for the installed app (env override first —

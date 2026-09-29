@@ -27,3 +27,20 @@ for (const app of ["Agenda", "Memoria", "Dictation"]) {
     expect(installSection).toContain(`Delete "$SMPROGRAMS\\Kosmos ${app}.lnk"`); // MIGRATION(KOS-267)
   });
 }
+
+// Engine-owned store-app links live in the "$SMPROGRAMS\Mundus\" product
+// folder (runtime/src/native_apps/shortcuts.rs) — the flat-name cleanup
+// above must never be able to delete them: different location, and the
+// uninstaller removes the folder wholesale.
+test("engine-owned app links live under a product folder the cleanup cannot hit", () => {
+  const deletes = [...installer.matchAll(/Delete "\$SMPROGRAMS\\([^"]+)"/g)].map(
+    (match) => match[1],
+  );
+  for (const target of deletes) {
+    expect(target.startsWith("Mundus\\")).toBeFalsy();
+  }
+  const uninstallSection = installer.split('Section "Uninstall"')[1] ?? "";
+  expect(uninstallSection).toContain('RMDir /r "$SMPROGRAMS\\Mundus"');
+  // The installer itself never writes into the Engine-owned folder.
+  expect(installer).not.toContain('CreateShortCut "$SMPROGRAMS\\Mundus\\');
+});
