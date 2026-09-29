@@ -1,6 +1,6 @@
 //! Engine-side (user-mode) API for the privileged service.
 //!
-//! `status` never elevates. `enable` runs `kepler-backend privileged install`
+//! `status` never elevates. `enable` runs `mundus-engine privileged install`
 //! through `ShellExecuteExW` with the `runas` verb — the one and only UAC
 //! prompt; afterwards the registered service is a stable copy the Engine
 //! talks to over a versioned, backward-compatible pipe protocol, so Engine

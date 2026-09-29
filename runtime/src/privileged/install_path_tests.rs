@@ -22,7 +22,7 @@ const STANDARD_ENV: &[(&str, &str)] = &[
 #[test]
 fn install_dir_lives_under_program_files() {
     let dir = install_dir(&fake_env(STANDARD_ENV)).unwrap();
-    assert_eq!(dir, PathBuf::from(r"C:\Program Files\Kosmos\Service"));
+    assert_eq!(dir, PathBuf::from(r"C:\Program Files\Mundus\Service"));
 }
 
 #[test]
@@ -47,7 +47,7 @@ fn install_dir_without_program_files_fails() {
 fn user_writable_detection_catches_profile_locations() {
     let env = fake_env(STANDARD_ENV);
     for bad in [
-        r"C:\Users\Kirill\AppData\Local\Kosmos\Service",
+        r"C:\Users\Kirill\AppData\Local\Mundus\Service",
         r"C:\Users\Kirill\AppData\Roaming\svc",
         r"C:\Users\Kirill\svc",
         r"C:\Users\Public\svc",
@@ -58,7 +58,7 @@ fn user_writable_detection_catches_profile_locations() {
         );
     }
     assert!(!is_user_writable_location(
-        Path::new(r"C:\Program Files\Kosmos\Service"),
+        Path::new(r"C:\Program Files\Mundus\Service"),
         &env
     ));
     // Case-insensitive, separator-insensitive.

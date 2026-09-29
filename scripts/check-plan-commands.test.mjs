@@ -45,7 +45,7 @@ test("selective checks emit pnpm run commands and Rust stays on cargo", async ()
     "test:rust",
     "runtime-staging",
   ]);
-  assert.deepEqual(run(["manager-gpui/src/app.rs"]), ["manager-gpui"]);
+  assert.deepEqual(run(["manager-gpui/src/app.rs"]), ["brand", "manager-gpui"]);
 });
 
 test("pre-commit emits the source-size safeguard through pnpm", async () => {

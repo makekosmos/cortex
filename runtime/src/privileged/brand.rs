@@ -1,43 +1,37 @@
 //! Product-facing names for the privileged Engine service.
 //!
-//! Every product-derived string for the service lives here so the KOS-266
-//! Kosmos → Mundus rename is a one-line change in this file when the parallel
-//! branch lands. Code outside this module must not embed product names.
-
-/// Display brand shown to the user (service description, install dir).
-pub const PRODUCT_NAME: &str = "Kosmos";
+//! Every product-derived string for the service is sourced from
+//! `crate::brand` (the single source of product identity). Code outside this
+//! module must not embed product names.
 
 /// Windows service name. Stable across product releases — renaming this
-/// orphan the registered service, so only change it together with an
+/// orphans the registered service, so only change it together with an
 /// explicit service migration.
-pub const SERVICE_NAME: &str = "KosmosPrivilegedSvc";
+pub const SERVICE_NAME: &str = crate::brand::SYSTEM_SERVICE_NAME;
+
+/// Named pipe the service listens on.
+pub const PIPE_NAME: &str = crate::brand::SYSTEM_SERVICE_PIPE;
 
 /// Service display name shown in services.msc.
-pub const SERVICE_DISPLAY_NAME: &str = "Kosmos Privileged Service";
+pub const SERVICE_DISPLAY_NAME: &str = "Mundus Privileged Service";
 
 /// Service description shown in services.msc.
 pub const SERVICE_DESCRIPTION: &str =
-    "Privileged operations for the Kosmos Engine: managed hosts-file blocks and fast NTFS \
+    "Privileged operations for the Mundus Engine: managed hosts-file blocks and fast NTFS \
      indexing. Granted once via UAC; runs only fixed operations requested over a restricted \
      local named pipe.";
 
-/// Directory under %ProgramFiles% holding the stable service binary copy.
-/// Admin-only writable — the service binary must never live under a
-/// user-writable root (%LOCALAPPDATA% etc.) or it becomes a privilege
-/// escalation vector.
-pub const SERVICE_DIR: &str = "Kosmos\\Service";
+/// Display brand shown to the user (service description, install dir).
+pub const PRODUCT_NAME: &str = crate::brand::PRODUCT_NAME;
 
 /// File name of the service binary copy. Deliberately different from
-/// `kepler-backend.exe` so `taskkill /IM kepler-backend.exe` in the
+/// `mundus-engine.exe` so `taskkill /IM mundus-engine.exe` in the
 /// installer/uninstaller never kills the running service.
-pub const SERVICE_BINARY_NAME: &str = "kosmos-privileged-service.exe";
-
-/// Named pipe the service listens on.
-pub const PIPE_NAME: &str = r"\\.\pipe\kosmos-privileged-service";
+pub const SERVICE_BINARY_NAME: &str = "mundus-privileged-service.exe";
 
 /// Services from previous releases that `privileged install`/`uninstall`
-/// removes. `KosmosSystemSvc` = the old kepler-focus-svc service;
-/// `KeplerFocusSvc` = its pre-rename name.
+/// removes. `KosmosSystemSvc` = the old focus-svc service; `KeplerFocusSvc` =
+/// its pre-rename name.
 // MIGRATION(KOS-267): remove after 2026-11-01.
 pub const LEGACY_SERVICE_NAMES: &[&str] = &["KosmosSystemSvc", "KeplerFocusSvc"];
 
@@ -48,6 +42,6 @@ pub const LEGACY_SERVICE_NAMES: &[&str] = &["KosmosSystemSvc", "KeplerFocusSvc"]
 /// field).
 // MIGRATION(KOS-267): remove after 2026-11-01.
 pub const LEGACY_PIPES: &[(&str, &str)] = &[
-    (r"\\.\pipe\kosmos-system-service", "KosmosSystemSvc"),
-    (r"\\.\pipe\kepler-focus-svc", "KeplerFocusSvc"),
+    (r"\\.\pipe\kosmos-system-service", "KosmosSystemSvc"), // MIGRATION(KOS-267)
+    (r"\\.\pipe\kepler-focus-svc", "KeplerFocusSvc"),       // MIGRATION(KOS-267)
 ];

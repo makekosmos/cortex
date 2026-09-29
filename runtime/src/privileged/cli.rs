@@ -1,4 +1,4 @@
-//! `kepler-backend privileged <subcommand>` — the single exe carrying all
+//! `mundus-engine privileged <subcommand>` — the single exe carrying all
 //! privileged modes:
 //!
 //!   privileged install      — elevated one-time setup (copies the exe to
@@ -68,7 +68,10 @@ fn dispatch(args: &[String]) -> ExitCode {
             service::run_service_entry(sid)
         }
         _ => {
-            println!("usage: kepler-backend privileged <install|uninstall|status|run-service>");
+            println!(
+                "usage: {} privileged <install|uninstall|status|run-service>",
+                crate::brand::ENGINE_BINARY_STEM
+            );
             ExitCode::from(2)
         }
     }

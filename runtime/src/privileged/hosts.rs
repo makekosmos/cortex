@@ -207,10 +207,10 @@ pub fn reset(hosts: &Path) -> Result<()> {
     Ok(())
 }
 
-/// The hosts file the service edits. `KOSMOS_PRIVILEGED_HOSTS_PATH` overrides
+/// The hosts file the service edits. `MUNDUS_PRIVILEGED_HOSTS_PATH` overrides
 /// it for headless tests and smoke tooling — never in production installs.
 pub fn default_hosts_path() -> PathBuf {
-    if let Ok(p) = std::env::var("KOSMOS_PRIVILEGED_HOSTS_PATH") {
+    if let Some(p) = crate::brand::env("PRIVILEGED_HOSTS_PATH") {
         return PathBuf::from(p);
     }
     let sysroot = std::env::var("SystemRoot").unwrap_or_else(|_| "C:\\Windows".into());

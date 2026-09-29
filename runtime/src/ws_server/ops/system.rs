@@ -4,7 +4,7 @@ use super::*;
 ///
 /// `system.privileged.status` — service + pipe state, user-mode.
 /// `system.privileged.enable` — the one-time grant: spawns
-/// `kepler-backend privileged install` via the `runas` verb (one UAC prompt),
+/// `mundus-engine privileged install` via the `runas` verb (one UAC prompt),
 /// waits for the elevated process, then reports the resulting status.
 /// Requires `desktop_authorized` — it can trigger a UAC prompt and a machine
 /// state change.

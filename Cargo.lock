@@ -1532,12 +1532,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "252afb9ae5eaa683babdc6a068b3f5726eb19e05070c731f9b2a23a7c3e8ed34"
 
 [[package]]
-name = "embed-manifest"
-version = "1.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94cdc65b1cf9e871453ce2f86f5aaec24ff2eaa36a1fa3e02e441dddc3613b99"
-
-[[package]]
 name = "embedded-io"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1611,6 +1605,7 @@ dependencies = [
  "uuid",
  "walkdir",
  "windows 0.58.0",
+ "windows-service",
  "zip",
 ]
 
@@ -1786,30 +1781,6 @@ name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
-
-[[package]]
-name = "focus-helper"
-version = "0.1.0"
-dependencies = [
- "embed-manifest",
- "serde",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "focus-svc"
-version = "0.1.0"
-dependencies = [
- "embed-manifest",
- "focus-helper",
- "ntfs-reader",
- "serde",
- "serde_json",
- "tempfile",
- "windows-service",
- "windows-sys 0.59.0",
-]
 
 [[package]]
 name = "foldhash"
@@ -6545,10 +6516,6 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
 ]
-
-[[package]]
-name = "watcher"
-version = "0.1.0"
 
 [[package]]
 name = "web-sys"
