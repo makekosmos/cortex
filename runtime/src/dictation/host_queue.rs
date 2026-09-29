@@ -207,7 +207,7 @@ async fn process_one_attempt_with_injector(
                 local_model = ?cfg.local_model,
                 "dictation: local model became unavailable before transcribe"
             );
-            let _ = clear_unready_local_config(host).await;
+            let _ = reconcile_unready_local_config(host).await;
             let _ = super::pending::bump_attempt(&host.data_dir, uuid, LOCAL_MODEL_NOT_READY_MSG);
             host.emit_pending_changed();
             host.fail_session(uuid, LOCAL_MODEL_NOT_READY_MSG, false)

@@ -88,7 +88,9 @@ impl DictationHost {
         if local_models::refresh_managed_command_path(&data_dir, &mut cfg) {
             config_changed = true;
         }
-        if !local_config_is_ready(&data_dir, &cfg) {
+        if autoselect_local_model(&data_dir, &mut cfg) {
+            config_changed = true;
+        } else if !local_config_is_ready(&data_dir, &cfg) {
             clear_local_selection(&mut cfg);
             config_changed = true;
         }
@@ -384,8 +386,11 @@ fn effective_model_for_submit(cfg: &DictationConfig) -> String {
 const LOCAL_MODEL_NOT_READY_MSG: &str =
     "Локальная модель не подготовлена. Скачайте модель заново в Settings -> AI.";
 
-fn local_config_is_ready(_data_dir: &std::path::Path, cfg: &DictationConfig) -> bool {
-    if !cfg.provider_enabled || !provider_uses_local_runtime(&cfg.provider) {
+/// Is the *selected* local model usable on disk — independent of
+/// `provider_enabled`. A disabled provider with a surviving selection is
+/// the user's own off-switch, not a broken config.
+fn local_selection_valid(cfg: &DictationConfig) -> bool {
+    if !provider_uses_local_runtime(&cfg.provider) {
         return true;
     }
     let model_ok = cfg.local_model_path.as_deref().is_some_and(|path| {
@@ -402,6 +407,12 @@ fn local_config_is_ready(_data_dir: &std::path::Path, cfg: &DictationConfig) -> 
     model_ok && command_ok
 }
 
+fn local_config_is_ready(_data_dir: &std::path::Path, cfg: &DictationConfig) -> bool {
+    !cfg.provider_enabled
+        || !provider_uses_local_runtime(&cfg.provider)
+        || local_selection_valid(cfg)
+}
+
 fn clear_local_selection(cfg: &mut DictationConfig) {
     cfg.provider_enabled = false;
     cfg.local_model = None;
@@ -409,12 +420,17 @@ fn clear_local_selection(cfg: &mut DictationConfig) {
     cfg.local_command_path = None;
 }
 
-async fn clear_unready_local_config(host: &DictationHost) -> bool {
+/// Runtime reconcile for a broken local selection: prefer auto-selecting a
+/// downloaded model (a deleted file is recoverable when another model is
+/// on disk); only with nothing downloaded does the provider get disabled.
+async fn reconcile_unready_local_config(host: &DictationHost) -> bool {
     let mut cfg = host.config.lock().await;
     if local_config_is_ready(&host.data_dir, &cfg) {
         return false;
     }
-    clear_local_selection(&mut cfg);
+    if !autoselect_local_model(&host.data_dir, &mut cfg) {
+        clear_local_selection(&mut cfg);
+    }
     if let Err(e) = save_config_in(&host.data_dir, &cfg) {
         tracing::warn!(error = %e, "failed to save cleared dictation local config");
     }

@@ -106,8 +106,67 @@ fn normalize_platform_local_engine(cfg: &mut DictationConfig) -> bool {
     true
 }
 
+/// The best already-downloaded model for the local provider: the catalog's
+/// `recommended` entry first, then catalog order. Models that need the
+/// whisper.cpp runtime count only while it is installed.
+fn autoselect_local_model_spec(
+    data_dir: &std::path::Path,
+) -> Option<(
+    &'static local_models::ModelSpec,
+    std::path::PathBuf,
+    Option<std::path::PathBuf>,
+)> {
+    let mut first = None;
+    for spec in local_models::MODEL_CATALOG {
+        if !spec.transcription_supported || !local_models::model_is_installed(data_dir, spec) {
+            continue;
+        }
+        let command_path = if local_engine_for_model(spec.id) == DEFAULT_LOCAL_ENGINE {
+            match local_models::command_path(data_dir) {
+                Some(path) if path.is_file() => Some(path),
+                _ => continue,
+            }
+        } else {
+            None
+        };
+        let candidate = (spec, local_models::model_path(data_dir, spec), command_path);
+        if spec.recommended {
+            return Some(candidate);
+        }
+        if first.is_none() {
+            first = Some(candidate);
+        }
+    }
+    first
+}
+
+/// Local provider without a usable selection: auto-select a downloaded
+/// model instead of silently disabling — "installed ⇒ working".
+/// `provider_enabled == false` with a surviving `local_model` is the user's
+/// own off-switch and is respected; `local_model == None` is the cleared
+/// state a migration/reset leaves behind, not a choice.
+/// Returns true when a model was selected and `cfg` was updated.
+fn autoselect_local_model(data_dir: &std::path::Path, cfg: &mut DictationConfig) -> bool {
+    if !provider_uses_local_runtime(&cfg.provider)
+        || (!cfg.provider_enabled && cfg.local_model.is_some())
+        || local_selection_valid(cfg)
+    {
+        return false;
+    }
+    let Some((spec, model_path, command_path)) = autoselect_local_model_spec(data_dir) else {
+        return false;
+    };
+    cfg.provider_enabled = true;
+    cfg.local_engine = local_engine_for_model(spec.id).into();
+    cfg.local_model = Some(spec.id.to_owned());
+    cfg.local_model_path = Some(model_path.to_string_lossy().into_owned());
+    cfg.local_command_path = command_path.map(|p| p.to_string_lossy().into_owned());
+    tracing::info!(model = spec.id, "dictation: auto-selected downloaded local model");
+    true
+}
+
 async fn op_list_local_models(host: &DictationHost) -> DictationResponse {
-    let _ = clear_unready_local_config(host).await;
+    let _ = reconcile_unready_local_config(host).await;
     let cfg = host.snapshot_config().await;
     DictationResponse::ok(json!(local_models::snapshot(&host.data_dir, &cfg)))
 }
@@ -537,7 +596,8 @@ async fn op_update_config(params: Value, host: &DictationHost) -> DictationRespo
         };
     }
     normalize_platform_local_engine(&mut cfg);
-    if !local_config_is_ready(&host.data_dir, &cfg) {
+    if !local_config_is_ready(&host.data_dir, &cfg) && !autoselect_local_model(&host.data_dir, &mut cfg)
+    {
         clear_local_selection(&mut cfg);
     }
     if let Err(e) = save_config_in(&host.data_dir, &cfg) {

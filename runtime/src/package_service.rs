@@ -282,6 +282,9 @@ include!("package_service/core.rs");
 include!("package_service/native.rs");
 include!("package_service/native_install.rs");
 include!("package_service/native_migration.rs");
+include!("package_service/dictation_app.rs");
+#[cfg(test)]
+include!("package_service/dictation_app_tests.rs");
 include!("package_service/operations.rs");
 include!("package_service/helpers.rs");
 include!("package_service/disclosure.rs");

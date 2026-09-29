@@ -464,7 +464,7 @@ async fn op_submit_audio(params: Value, host: &Arc<DictationHost>) -> DictationR
             local_model = ?cfg.local_model,
             "dictation: local model is not ready"
         );
-        let _ = clear_unready_local_config(host).await;
+        let _ = reconcile_unready_local_config(host).await;
         host.fail_session(&uuid, LOCAL_MODEL_NOT_READY_MSG, false)
             .await;
         host.emit_pending_changed();
