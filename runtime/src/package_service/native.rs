@@ -56,6 +56,61 @@ pub(crate) enum NativeJob {
     Failed(&'static str),
 }
 
+/// RAII handle for the per-app job claim: the holder must call [`finish`]
+/// with the outcome. Dropping it unfinished — a panicked or aborted install
+/// task — records `Failed` so `apps.list` can never show `installing`
+/// forever.
+pub(crate) struct NativeJobGuard {
+    jobs: std::sync::Arc<Mutex<HashMap<&'static str, NativeJob>>>,
+    id: &'static str,
+    finished: bool,
+}
+
+impl NativeJobGuard {
+    /// Record the outcome and release the claim: success clears the job,
+    /// failure stores the wire code for the Store's failed-row badge.
+    pub(crate) fn finish(mut self, result: &Result<NativeAppSummary, PackageError>) {
+        self.finished = true;
+        finish_native_job(&self.jobs, self.id, result);
+    }
+}
+
+impl Drop for NativeJobGuard {
+    fn drop(&mut self) {
+        if self.finished {
+            return;
+        }
+        tracing::warn!(
+            target: "native_apps",
+            id = self.id,
+            "native install job dropped unfinished — recording failure"
+        );
+        PackageService::lock(&self.jobs).insert(self.id, NativeJob::Failed("unavailable"));
+    }
+}
+
+fn finish_native_job(
+    jobs: &Mutex<HashMap<&'static str, NativeJob>>,
+    id: &'static str,
+    result: &Result<NativeAppSummary, PackageError>,
+) {
+    let mut jobs = PackageService::lock(jobs);
+    match result {
+        Ok(_) => {
+            jobs.remove(id);
+        }
+        Err(error) => {
+            tracing::warn!(
+                target: "native_apps",
+                %id,
+                %error,
+                "native app install failed"
+            );
+            jobs.insert(id, NativeJob::Failed(native_error_code(error)));
+        }
+    }
+}
+
 /// The `apps.*` wire code for a service-layer failure — the mapping the
 /// dispatcher and the Store's failed-row badge share.
 pub(crate) fn native_error_code(error: &PackageError) -> &'static str {
@@ -85,6 +140,31 @@ pub(crate) struct CachedRelease {
     pub checked_at: Instant,
 }
 
+/// What the release check concluded for this app on this pass — the single
+/// availability axis callers declare; it replaced the old positional
+/// `offline`/`supported` bool pair which could describe impossible states.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum NativeAvailability {
+    /// This host has a target and the check answered (fresh or stale cache).
+    Ready,
+    /// This host has a target but the check failed; the row may still show
+    /// a stale cached latest version.
+    Offline,
+    /// No published asset exists for this host target.
+    Unsupported,
+}
+
+/// Everything `native_summary` needs to render one Store row — named
+/// fields so call sites cannot pass the flags in the wrong order.
+pub(crate) struct NativeRowInput<'a> {
+    pub desc: &'static native_apps::NativeAppDescriptor,
+    pub record: Option<&'a NativeAppInstall>,
+    pub latest: Option<&'a ReleaseInfo>,
+    pub availability: NativeAvailability,
+    /// Live job snapshot — overrides the derived state.
+    pub job: Option<NativeJob>,
+}
+
 impl PackageService {
     fn native_store(&self) -> Result<std::sync::Arc<crate::native_apps::NativeAppStore>, PackageError> {
         self.native_apps.clone().ok_or(PackageError::Unsupported)
@@ -95,13 +175,14 @@ impl PackageService {
         Self::lock(&self.native_jobs).get(id).cloned()
     }
 
-    /// Claim the per-app in-flight slot. `false` while a job runs — install,
-    /// update and the startup migration all funnel through this, so a user
-    /// click can never race the migration's download.
-    pub(crate) fn claim_native_job(&self, id: &'static str) -> bool {
+    /// Claim the per-app in-flight slot, returning the guard that owns it.
+    /// `None` while a job runs — install, update and the startup migration
+    /// all funnel through this, so a user click can never race the
+    /// migration's download.
+    pub(crate) fn claim_native_job(&self, id: &'static str) -> Option<NativeJobGuard> {
         let mut jobs = Self::lock(&self.native_jobs);
         if matches!(jobs.get(id), Some(NativeJob::Installing { .. })) {
-            return false;
+            return None;
         }
         jobs.insert(
             id,
@@ -110,31 +191,11 @@ impl PackageService {
                 total: None,
             },
         );
-        true
-    }
-
-    /// Record a finished job: success clears the row's job state, failure
-    /// leaves the reason for the Store to show until the next attempt.
-    pub(crate) fn finish_native_job(
-        &self,
-        id: &'static str,
-        result: &Result<NativeAppSummary, PackageError>,
-    ) {
-        let mut jobs = Self::lock(&self.native_jobs);
-        match result {
-            Ok(_) => {
-                jobs.remove(id);
-            }
-            Err(error) => {
-                tracing::warn!(
-                    target: "native_apps",
-                    %id,
-                    %error,
-                    "native app install failed"
-                );
-                jobs.insert(id, NativeJob::Failed(native_error_code(error)));
-            }
-        }
+        Some(NativeJobGuard {
+            jobs: std::sync::Arc::clone(&self.native_jobs),
+            id,
+            finished: false,
+        })
     }
 
     /// Publish download progress for the running job — cheap enough to do
@@ -219,15 +280,14 @@ impl PackageService {
 
     /// `job` overrides the derived state — `apps.list` passes the live job
     /// snapshot, install paths pass the outcome they just produced.
-    fn native_summary(
-        &self,
-        desc: &'static native_apps::NativeAppDescriptor,
-        record: Option<&NativeAppInstall>,
-        latest: Option<&ReleaseInfo>,
-        offline: bool,
-        supported: bool,
-        job: Option<NativeJob>,
-    ) -> NativeAppSummary {
+    fn native_summary(&self, input: NativeRowInput<'_>) -> NativeAppSummary {
+        let NativeRowInput {
+            desc,
+            record,
+            latest,
+            availability,
+            job,
+        } = input;
         let installed_version = record.map(|record| record.version.clone());
         let latest_version = latest.map(|info| info.version.clone());
         let update_version = match (&installed_version, &latest_version) {
@@ -251,19 +311,15 @@ impl PackageService {
         };
         let state = match job_state {
             Some(state) => state,
-            None => {
-                if !supported {
-                    NativeAppState::Unsupported
-                } else if update_version.is_some() {
-                    NativeAppState::UpdateAvailable
-                } else if record.is_some() {
-                    NativeAppState::Installed
-                } else if offline && latest_version.is_none() {
+            None => match availability {
+                NativeAvailability::Unsupported => NativeAppState::Unsupported,
+                _ if update_version.is_some() => NativeAppState::UpdateAvailable,
+                _ if record.is_some() => NativeAppState::Installed,
+                NativeAvailability::Offline if latest_version.is_none() => {
                     NativeAppState::Offline
-                } else {
-                    NativeAppState::NotInstalled
                 }
-            }
+                _ => NativeAppState::NotInstalled,
+            },
         };
         NativeAppSummary {
             id: desc.id.to_owned(),
@@ -323,14 +379,19 @@ impl PackageService {
                 // version when one exists, else report no latest.
                 _ => (self.cached_release(desc.id), true),
             };
-            rows.push(self.native_summary(
+            rows.push(self.native_summary(NativeRowInput {
                 desc,
-                record.as_ref(),
-                latest.as_ref(),
-                offline,
-                target.is_some(),
-                self.current_job(desc.id),
-            ));
+                record: record.as_ref(),
+                latest: latest.as_ref(),
+                availability: if target.is_none() {
+                    NativeAvailability::Unsupported
+                } else if offline {
+                    NativeAvailability::Offline
+                } else {
+                    NativeAvailability::Ready
+                },
+                job: self.current_job(desc.id),
+            }));
         }
         Ok(rows)
     }

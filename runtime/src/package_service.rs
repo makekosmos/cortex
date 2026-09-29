@@ -255,8 +255,9 @@ pub struct PackageService {
     /// out the probe timeout on every refresh.
     release_failures: Mutex<HashMap<String, Instant>>,
     /// Per-app in-flight/failed background install (`apps.install`, update,
-    /// startup migration) — one job per id, ever.
-    native_jobs: Mutex<HashMap<&'static str, NativeJob>>,
+    /// startup migration) — one job per id, ever. `Arc` so the RAII claim
+    /// guard in `native.rs` can own a handle into the spawned task.
+    native_jobs: std::sync::Arc<Mutex<HashMap<&'static str, NativeJob>>>,
     state: Mutex<State>,
     // Serializes all mutations spanning trust, catalog cache and package state.
     mutation: Mutex<()>,
