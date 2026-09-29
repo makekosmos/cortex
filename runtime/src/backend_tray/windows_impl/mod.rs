@@ -141,19 +141,19 @@ fn open_component(component: Component) {
 }
 
 fn current_presence() -> MenuPresence {
-    MenuPresence {
-        manager: resolve_component_executable(Component::Manager).is_some(),
-        agenda: resolve_component_executable(Component::Agenda).is_some(),
-        memoria: resolve_component_executable(Component::Memoria).is_some(),
-        dictation: resolve_component_executable(Component::Dictation).is_some(),
-    }
+    MenuPresence(
+        Component::all()
+            .filter(|component| resolve_component_executable(*component).is_some())
+            .map(|component| component.command_key())
+            .collect(),
+    )
 }
 
 fn show_context_menu(window: HWND) {
     let Ok(menu) = (unsafe { CreatePopupMenu() }) else {
         return;
     };
-    let entries = build_menu(current_presence());
+    let entries = build_menu(&current_presence());
     let labels: Vec<Vec<u16>> = entries
         .iter()
         .map(|entry| wide(entry.action.label()))

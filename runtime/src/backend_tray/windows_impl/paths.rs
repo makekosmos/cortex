@@ -1,18 +1,17 @@
-//! Pure path-building logic for locating the packaged GPUI components
+//! Pure path-building logic for locating the packaged Manager component
 //! alongside the Engine install. Kept free of `std::env` and filesystem
 //! access so the candidate lists can be tested without touching a real
 //! machine; [`super::resolve`] does the impure env/filesystem work.
 
-use super::components::Component;
 use std::path::{Path, PathBuf};
 
-/// Directories that may hold the packaged application (`Mundus.exe` / Engine
-/// runtime) and, alongside it, `resources/components/<name>/...`. Mirrors the
-/// NSIS per-user install under `%LOCALAPPDATA%\Programs\Mundus`, or a plain
-/// `<root>\Mundus` layout under any of `LOCALAPPDATA` / `ProgramFiles` /
-/// `ProgramFiles(x86)`. `exe_parent` (the running Engine binary's own
-/// directory) and its parent are included too, so dev/test fixtures that
-/// co-locate everything in one folder still resolve.
+/// Directories that may hold the packaged application (Manager under
+/// `resources/components/manager`). Mirrors the NSIS per-user install under
+/// `%LOCALAPPDATA%\Programs\Mundus`, or a plain `<root>\Mundus` layout under
+/// any of `LOCALAPPDATA` / `ProgramFiles` / `ProgramFiles(x86)`.
+/// `exe_parent` (the running Engine binary's own directory) and its parent
+/// are included too, so dev/test fixtures that co-locate everything in one
+/// folder still resolve.
 pub fn install_root_candidates(exe_parent: Option<&Path>, env_roots: &[PathBuf]) -> Vec<PathBuf> {
     let mut roots = Vec::new();
     if let Some(parent) = exe_parent {
@@ -28,16 +27,16 @@ pub fn install_root_candidates(exe_parent: Option<&Path>, env_roots: &[PathBuf])
     roots
 }
 
-/// `<root>\resources\components\<name>\Mundus <Name>.exe` for every candidate
-/// root.
-pub fn component_executable_candidates(roots: &[PathBuf], component: Component) -> Vec<PathBuf> {
+/// `<root>\resources\components\manager\Mundus Manager.exe` for every
+/// candidate root — Manager is the only bundled component left.
+pub fn manager_executable_candidates(roots: &[PathBuf]) -> Vec<PathBuf> {
     roots
         .iter()
         .map(|root| {
             root.join("resources")
                 .join("components")
-                .join(component.dir_name())
-                .join(component.exe_name())
+                .join("manager")
+                .join("Mundus Manager.exe")
         })
         .collect()
 }
@@ -73,26 +72,14 @@ mod tests {
     }
 
     #[test]
-    fn component_candidates_use_the_resources_components_layout() {
+    fn manager_candidates_use_the_resources_components_layout() {
         let roots = vec![PathBuf::from(r"C:\Mundus")];
-        let candidates = component_executable_candidates(&roots, Component::Manager);
+        let candidates = manager_executable_candidates(&roots);
         assert_eq!(
             candidates,
             vec![PathBuf::from(
                 r"C:\Mundus\resources\components\manager\Mundus Manager.exe"
             )]
         );
-    }
-
-    #[test]
-    fn every_component_resolves_to_a_distinct_relative_path() {
-        let roots = vec![PathBuf::from(r"C:\Mundus")];
-        let mut relative: Vec<PathBuf> = Component::ALL
-            .iter()
-            .flat_map(|component| component_executable_candidates(&roots, *component))
-            .collect();
-        relative.sort();
-        relative.dedup();
-        assert_eq!(relative.len(), Component::ALL.len());
     }
 }
