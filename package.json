@@ -4,7 +4,7 @@
   "scripts": {
     "workspace": "node scripts/workspace.mjs",
     "build:desktop": "node desktop/scripts/build-desktop.mjs --platform win",
-    "build:installer:local": "pnpm --dir desktop run build:backend && pnpm --dir desktop run build:package-components && pnpm run build:desktop -- --local",
+    "build:installer:local": "pnpm --dir desktop run build:backend && pnpm --dir desktop run build:package-components -- --local && pnpm run build:desktop -- --local",
     "prepare": "lefthook install",
     "check:plan": "node scripts/check-plan.mjs --mode worktree",
     "check:affected": "node scripts/check-plan.mjs --mode worktree --run",

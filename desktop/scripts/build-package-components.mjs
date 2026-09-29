@@ -8,8 +8,9 @@ import { env, MANAGER_EXE } from "./brand.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 // Release preflight demands a clean worktree and a BOM; local staging (for
-// `build:desktop -- --local`) skips it.
-if (env("RELEASE_LOCAL") !== "1") {
+// `pnpm run build:installer:local`) skips it.
+const local = process.argv.includes("--local") || env("RELEASE_LOCAL") === "1";
+if (!local) {
   const preflight = spawnSync(
     process.execPath,
     [path.join(root, "desktop", "scripts", "release-preflight.mjs"), "--platform", "win"],
