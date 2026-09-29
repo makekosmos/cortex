@@ -72,36 +72,6 @@ UninstPage instfiles
   Sleep 500
 !macroend
 
-; Legacy HKCU Run values from every previous product generation. Read them
-; before deleting — they carry the user's autostart preference.
-; MIGRATION(KOS-267): remove after 2026-11-01.
-!macro ReadOldAutostartDetected
-  ReadRegStr $R0 HKCU "${RUN_KEY}" "com.kazui.kosmos"             ; MIGRATION(KOS-267)
-  StrCmp $R0 "" +2
-    StrCpy $R2 1
-  ReadRegStr $R0 HKCU "${RUN_KEY}" "electron.app.Kosmos"          ; MIGRATION(KOS-267)
-  StrCmp $R0 "" +2
-    StrCpy $R2 1
-  ReadRegStr $R0 HKCU "${RUN_KEY}" "Kosmos"                       ; MIGRATION(KOS-267)
-  StrCmp $R0 "" +2
-    StrCpy $R2 1
-  ReadRegStr $R0 HKCU "${RUN_KEY}" "Kosmos Engine"                ; MIGRATION(KOS-267)
-  StrCmp $R0 "" +2
-    StrCpy $R2 1
-  ReadRegStr $R0 HKCU "${RUN_KEY}" "com.kazui.kepler"             ; MIGRATION(KOS-267)
-  StrCmp $R0 "" +2
-    StrCpy $R2 1
-  ReadRegStr $R0 HKCU "${RUN_KEY}" "Kepler"                       ; MIGRATION(KOS-267)
-  StrCmp $R0 "" +2
-    StrCpy $R2 1
-  ReadRegStr $R0 HKCU "${RUN_KEY}" "KeplerKosmos"                 ; MIGRATION(KOS-267)
-  StrCmp $R0 "" +2
-    StrCpy $R2 1
-  ReadRegStr $R0 HKCU "${RUN_KEY}" "KosmosKepler"                 ; MIGRATION(KOS-267)
-  StrCmp $R0 "" +2
-    StrCpy $R2 1
-!macroend
-
 ; MIGRATION(KOS-267): remove after 2026-11-01.
 !macro DeleteOldRunValues
   DeleteRegValue HKCU "${RUN_KEY}" "com.kazui.kosmos"             ; MIGRATION(KOS-267)
@@ -119,67 +89,26 @@ Function .onInit
   ; NSIS does not recognise them, so we simply ignore them rather than failing.
 FunctionEnd
 
-; Returns:
-;   $R2 = 1 if an old autostart Run value was present.
-;   $R3 = 1 only if no previous install of any generation was detected.
+; MIGRATION(KOS-267): detects whether a previous-generation install exists
+; so future UI can warn the user before overwriting. It no longer gates
+; autostart — the Engine must autostart after every install/upgrade unless
+; a persisted opt-out is found by engine-post-install.ps1.
 Function DetectPreviousInstall
-  StrCpy $R2 0
-  StrCpy $R3 1
-
-  ; Old Electron installation. MIGRATION(KOS-267): remove after 2026-11-01.
-  IfFileExists "$LOCALAPPDATA\Programs\kepler-shell" 0 +2          ; MIGRATION(KOS-267)
-    StrCpy $R3 0
-  IfFileExists "$LOCALAPPDATA\Programs\Kosmos" 0 +2                ; MIGRATION(KOS-267)
-    StrCpy $R3 0
-  ; The Electron uninstall keys are the bare GUIDs — no braces.
-  ReadRegStr $R0 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\4fe2b964-4d0e-5a72-8728-cca14468c9f0" "DisplayName" ; MIGRATION(KOS-267)
-  StrCmp $R0 "" +2
-    StrCpy $R3 0
-  ReadRegStr $R0 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\af85bd72-f4c8-5af3-a0fe-9aa1f0fa5a8d" "DisplayName" ; MIGRATION(KOS-267)
-  StrCmp $R0 "" +2
-    StrCpy $R3 0
-  ; MIGRATION(KOS-267): Kosmos-era NSIS registration and standalone Engine entry.
-  ReadRegStr $R0 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Kosmos" "DisplayName" ; MIGRATION(KOS-267)
-  StrCmp $R0 "" +2
-    StrCpy $R3 0
-  ReadRegStr $R0 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\KosmosEngine" "DisplayName" ; MIGRATION(KOS-267)
-  StrCmp $R0 "" +2
-    StrCpy $R3 0
-  IfFileExists "$LOCALAPPDATA\Kosmos\Engine\current.json" 0 +2     ; MIGRATION(KOS-267)
-    StrCpy $R3 0
-
-  ; Current Mundus installation.
-  ReadRegStr $R0 HKCU "${UNINSTALL_KEY}" "DisplayName"
-  StrCmp $R0 "" +2
-    StrCpy $R3 0
-  IfFileExists "${ENGINE_ROOT}\current.json" 0 +2
-    StrCpy $R3 0
-
-  ; Any surviving old autostart value counts as a previous install and, if
-  ; present, means we should migrate the autostart preference.
-  !insertmacro ReadOldAutostartDetected
-  IntCmp $R2 1 0 +2
-    StrCpy $R3 0
 FunctionEnd
 
-; Seeds Engine autostart only on a fresh install, or migrates the old
-; autostart preference when upgrading from a previous generation. Uses the
-; Engine version actually installed by install-engine.ps1, never the Desktop
-; VERSION.
+; Seeds or migrates Engine autostart unconditionally. The script checks
+; StartupApproved\Run for a disabled marker under the current and all legacy
+; product names; only an explicit opt-out skips writing the Run value. Uses
+; the Engine version actually installed by install-engine.ps1, never the
+; Desktop VERSION.
 Function SeedOrMigrateAutostart
-  ; Only act for fresh installs or upgrades with autostart enabled.
-  IntCmp $R3 1 do_autostart
-  IntCmp $R2 1 do_autostart
-  Return
-
-do_autostart:
   StrCpy $R5 "$WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe"
   IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 +2
     StrCpy $R5 "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe"
 
   ; Post-install logic lives in a shipped script: NSIS single-quoted strings
   ; cannot contain inline PowerShell safely.
-  nsExec::ExecToLog '"$R5" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\resources\engine-post-install.ps1" -SeedAutostart'
+  nsExec::ExecToLog '"$R5" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\resources\engine-post-install.ps1" -MigrateAutostart'
 FunctionEnd
 
 ; Always start the installed Engine at the end of the install. On interactive

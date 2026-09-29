@@ -164,15 +164,18 @@ test("uninstall removes the store payload dir but never user data", () => {
   expect(uninstallSection).not.toContain('RMDir /r "$LOCALAPPDATA\\Mundus"');
 });
 
-test("seeds autostart only conditionally and never using the Desktop VERSION", () => {
+test("migrates autostart via shipped script and never using the Desktop VERSION", () => {
   expect(installer).not.toContain("versions\\${VERSION}\\mundus-engine.exe");
   expect(installSection).not.toContain('WriteRegStr HKCU "${RUN_KEY}" "Mundus Engine"');
+  expect(installer).toContain(
+    '-File "$INSTDIR\\resources\\engine-post-install.ps1" -MigrateAutostart',
+  );
 });
 
 test("post-install logic ships as a script file, never inline -Command", () => {
   expect(installer).not.toContain("-Command");
   expect(installer).toContain(
-    '-File "$INSTDIR\\resources\\engine-post-install.ps1" -SeedAutostart',
+    '-File "$INSTDIR\\resources\\engine-post-install.ps1" -MigrateAutostart',
   );
   expect(installer).toContain('-File "$INSTDIR\\resources\\engine-post-install.ps1" -StartEngine');
 });
