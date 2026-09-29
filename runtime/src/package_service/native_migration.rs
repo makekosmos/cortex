@@ -1,15 +1,48 @@
 // MIGRATION(KOS-267): remove after 2026-11-01 — legacy package-store and
 // bundled-component detection plus the native install hand-off.
 
+/// Per-app migration outcome, persisted in `native-apps-migration.json`.
+/// `resolved` gates everything: an entry is written only once the app is
+/// installed or proven absent from the upgrade — transient failures (store
+/// read errors, an unreadable marker, a failed download) are never settled.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MigrationOutcome {
+    resolved: bool,
+    /// already-installed | installed | not-present
+    reason: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MigrationMarker {
+    schema_version: u32,
+    #[serde(default)]
+    apps: HashMap<String, MigrationOutcome>,
+}
+
+/// What the installer recorded about the previous generation's bundled
+/// components, written to `<Mundus local>/legacy-components.json` *before*
+/// the old payload dirs are wiped — the Engine reads the marker because
+/// probing `resources/components` after the wipe would answer "absent"
+/// for components that were installed.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LegacyComponentsMarker {
+    schema_version: u32,
+    components: HashMap<String, bool>,
+}
+
 impl PackageService {
     // MIGRATION(KOS-267): remove after 2026-11-01
     //
-    // First-start migration for users upgrading from 0.9.x: if the package
-    // store still has an installed record for a legacy bundled/kspkg app, or
-    // the bundled component dir survived the installer wipe, auto-install the
-    // native app from its GitHub release. Idempotent (the marker records
-    // per-id outcomes), never blocks Engine startup, failures are logged and
-    // retried on the next start.
+    // First-start migration for users upgrading from 0.9.x: when the upgrade
+    // evidence (a legacy kspkg record, or the installer's
+    // `legacy-components.json` marker) says a bundled app existed, install
+    // the native app from its GitHub release. Idempotent — resolved ids are
+    // never revisited — and undecidable evidence defers the app to the next
+    // start instead of being recorded as "not-present". Runs in a background
+    // task; never blocks Engine startup.
     pub async fn migrate_legacy_native_apps(&self) {
         let probe = match crate::native_apps::releases::ReleaseProbe::new() {
             Ok(probe) => probe,
@@ -26,64 +59,105 @@ impl PackageService {
         probe: &crate::native_apps::releases::ReleaseProbe,
     ) {
         let marker_path = self.root.join("native-apps-migration.json");
-        let mut marker = read_owner_only_json::<serde_json::Value>(&marker_path)
+        let mut marker = read_owner_only_json::<MigrationMarker>(&marker_path)
             .ok()
-            .filter(|value| value["schema_version"].as_u64() == Some(1))
-            .unwrap_or_else(|| serde_json::json!({"schema_version": 1, "apps": {}}));
-        let done = marker["apps"].clone();
+            .filter(|marker| marker.schema_version == 1)
+            .unwrap_or(MigrationMarker {
+                schema_version: 1,
+                apps: HashMap::new(),
+            });
+        // The installer writes `legacy-components.json` next to the Apps dir
+        // — under the Mundus local dir in production, under the test root in
+        // unit tests.
+        let Some(apps_root) = self.native_apps.as_ref().map(|store| store.root().to_path_buf())
+        else {
+            tracing::debug!(target: "native_apps", "legacy app migration: no apps root");
+            return;
+        };
         for desc in crate::native_apps::NATIVE_APPS {
             let id = desc.id;
-            if done[id]["installed"].as_bool().unwrap_or(false) {
+            if marker
+                .apps
+                .get(id)
+                .is_some_and(|outcome| outcome.resolved)
+            {
+                self.cleanup_legacy_records(id).await;
                 continue;
             }
+            // A live native install settles the app regardless of evidence.
             if self
-                .native_apps
-                .as_ref()
-                .and_then(|store| store.current(id))
+                .native_app_record(id)
                 .is_some()
             {
-                marker["apps"][id] = serde_json::json!({"installed": true, "reason": "already-installed"});
-                let _ = write_owner_only_json(&marker_path, &marker);
+                marker.apps.insert(
+                    id.to_owned(),
+                    MigrationOutcome {
+                        resolved: true,
+                        reason: "already-installed".into(),
+                    },
+                );
+                self.write_marker(&marker_path, &marker);
+                self.cleanup_legacy_records(id).await;
                 continue;
             }
-            let had_package = self
-                .store
-                .list()
-                .unwrap_or_default()
-                .iter()
-                .any(|package| package.id == id);
-            let had_component = legacy_component_dirs(desc.legacy_component)
-                .iter()
-                .any(|path| path.is_dir());
+            // Undecidable evidence defers the app: a store.list() failure or
+            // an unreadable marker must never settle as "not-present".
+            let had_package = match self.store.list() {
+                Ok(packages) => packages.iter().any(|package| package.id == id),
+                Err(error) => {
+                    tracing::warn!(
+                        target: "native_apps",
+                        %id,
+                        %error,
+                        "legacy package list failed; deferring migration decision"
+                    );
+                    continue;
+                }
+            };
+            let Some(had_component) =
+                bundled_component_present(&apps_root, desc.legacy_component)
+            else {
+                tracing::warn!(
+                    target: "native_apps",
+                    %id,
+                    "legacy-components marker unreadable; deferring migration decision"
+                );
+                continue;
+            };
             if !had_package && !had_component {
-                marker["apps"][id] = serde_json::json!({"installed": true, "reason": "not-present"});
-                let _ = write_owner_only_json(&marker_path, &marker);
+                marker.apps.insert(
+                    id.to_owned(),
+                    MigrationOutcome {
+                        resolved: true,
+                        reason: "not-present".into(),
+                    },
+                );
+                self.write_marker(&marker_path, &marker);
                 continue;
             }
-            match self.install_native_app_with(probe, id, None).await {
+            // Same per-app claim a Store click takes — a user-triggered
+            // install racing the migration wins the slot.
+            if !self.claim_native_job(id) {
+                tracing::info!(
+                    target: "native_apps",
+                    %id,
+                    "legacy migration deferred: install already in flight"
+                );
+                continue;
+            }
+            let result = self.run_native_install_with(probe, desc, None).await;
+            self.finish_native_job(id, &result);
+            match result {
                 Ok(_) => {
-                    // Remove the legacy package-store records now that the
-                    // native install is live; worker stop is handled inside.
-                    for package in self
-                        .store
-                        .list()
-                        .unwrap_or_default()
-                        .into_iter()
-                        .filter(|package| package.id == id)
-                    {
-                        if let Err(error) = self
-                            .uninstall_with_worker_stop(&package.id, &package.version)
-                            .await
-                        {
-                            tracing::warn!(
-                                target: "native_apps",
-                                %error,
-                                "legacy package uninstall failed"
-                            );
-                        }
-                    }
-                    marker["apps"][id] = serde_json::json!({"installed": true});
-                    let _ = write_owner_only_json(&marker_path, &marker);
+                    marker.apps.insert(
+                        id.to_owned(),
+                        MigrationOutcome {
+                            resolved: true,
+                            reason: "installed".into(),
+                        },
+                    );
+                    self.write_marker(&marker_path, &marker);
+                    self.cleanup_legacy_records(id).await;
                     tracing::info!(target: "native_apps", %id, "migrated legacy app to native install");
                 }
                 Err(error) => {
@@ -97,32 +171,79 @@ impl PackageService {
             }
         }
     }
+
+    /// The app's live `install.json`, or `None` — read errors only log:
+    /// a corrupt record must not make the migration claim "not present".
+    fn native_app_record(&self, id: &str) -> Option<crate::native_apps::NativeAppInstall> {
+        match self.native_apps.as_ref()?.current(id) {
+            Ok(record) => record,
+            Err(error) => {
+                tracing::warn!(target: "native_apps", %id, %error, "native app record unreadable");
+                None
+            }
+        }
+    }
+
+    /// Remove the app's legacy kspkg records once the native install is
+    /// live. Called on every migration pass, so a failed uninstall is
+    /// retried on the next start rather than orphaned forever.
+    async fn cleanup_legacy_records(&self, id: &str) {
+        let Ok(packages) = self.store.list() else {
+            return;
+        };
+        for package in packages.iter().filter(|package| package.id == id) {
+            if let Err(error) = self
+                .uninstall_with_worker_stop(&package.id, &package.version)
+                .await
+            {
+                tracing::warn!(
+                    target: "native_apps",
+                    %error,
+                    "legacy package uninstall failed"
+                );
+            }
+        }
+    }
+
+    fn write_marker(&self, path: &Path, marker: &MigrationMarker) {
+        if let Err(error) = write_owner_only_json(path, marker) {
+            tracing::warn!(
+                target: "native_apps",
+                %error,
+                "native-apps migration marker write failed; decision will repeat next start"
+            );
+        }
+    }
 }
 
 // MIGRATION(KOS-267): remove after 2026-11-01
 //
-// Bundled-component dirs from 0.9.x installs: `$INSTDIR\resources\components`.
-/// `$INSTDIR` was `%LOCALAPPDATA%\Programs\Kosmos`; test-only env override
-/// `MUNDUS_LEGACY_COMPONENTS_DIR` supplies a direct `components/` dir.
-fn legacy_component_dirs(name: &str) -> Vec<PathBuf> {
-    let mut roots = Vec::new();
-    if let Some(dir) = crate::brand::env("LEGACY_COMPONENTS_DIR") {
-        if !dir.is_empty() {
-            roots.push(PathBuf::from(dir));
+/// Whether the app's bundled component was present at upgrade time, per the
+/// installer's `legacy-components.json` marker. `None` = the marker exists
+/// but is unreadable — undecidable this run, defer; an absent marker (fresh
+/// installs, old installers) answers `Some(false)`.
+fn bundled_component_present(apps_root: &Path, component: &str) -> Option<bool> {
+    // Dev/test escape hatch: `MUNDUS_LEGACY_COMPONENTS_DIR` points at a
+    // `components/` dir to emulate what the installer would have recorded.
+    // Release builds read only the installer marker.
+    if cfg!(debug_assertions) {
+        if let Some(dir) = crate::brand::env("LEGACY_COMPONENTS_DIR") {
+            if !dir.is_empty() {
+                return Some(PathBuf::from(dir).join(component).is_dir());
+            }
         }
     }
-    // Unit-test builds never probe real product dirs — a dev machine with a
-    // real 0.9.x install must not flip the migration branch.
-    if !cfg!(test) {
-        if let Ok(local) = std::env::var("LOCALAPPDATA") {
-            roots.push(
-                PathBuf::from(local)
-                    .join("Programs")
-                    .join("Kosmos")
-                    .join("resources")
-                    .join("components"),
-            );
-        }
+    // The installer writes the marker next to `Apps/` — the Mundus local
+    // dir is the Apps root's parent.
+    let marker_path = apps_root.parent()?.join("legacy-components.json");
+    match fs::read(&marker_path) {
+        Ok(bytes) => match serde_json::from_slice::<LegacyComponentsMarker>(&bytes) {
+            Ok(marker) if marker.schema_version == 1 => {
+                Some(marker.components.get(component).copied().unwrap_or(false))
+            }
+            _ => None,
+        },
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Some(false),
+        Err(_) => None,
     }
-    roots.into_iter().map(|root| root.join(name)).collect()
 }

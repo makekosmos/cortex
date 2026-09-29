@@ -12,22 +12,44 @@
 
 use std::collections::HashSet;
 use std::fs;
-use std::io;
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use thiserror::Error;
 use zip::ZipArchive;
 
 use crate::lock_file::{retry_io, write_owner_only_json};
 use crate::package_store::{
-    eq_hash, hex_hash, is_reserved_name, normalize_path, MAX_ARCHIVE, MAX_ENTRIES, MAX_EXPANDED,
+    eq_hash, is_reserved_name, normalize_path, MAX_ARCHIVE, MAX_ENTRIES, MAX_EXPANDED,
 };
 
 const STATE_FORMAT_VERSION: u32 = 1;
 const INSTALL_FILE: &str = "install.json";
-static STAGING_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static TEMP_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Unique temp name inside an app dir: pid + monotonic counter + nanos, so
+/// a pid-reused second process can never collide with (or merge into) a
+/// leftover sibling.
+pub(crate) fn unique_temp_name(prefix: &str) -> String {
+    let counter = TEMP_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos())
+        .unwrap_or(0);
+    format!("{prefix}{}{counter}-{nanos:x}", std::process::id())
+}
+
+/// Streamed sha256 — reads the archive in chunks instead of buffering it
+/// whole.
+fn file_sha256(path: &Path) -> Result<String> {
+    let mut file = retry_io(|| fs::File::open(path))?;
+    let mut hasher = Sha256::new();
+    io::copy(&mut file, &mut hasher)?;
+    Ok(format!("{:x}", hasher.finalize()))
+}
 
 #[derive(Debug, Error)]
 pub enum NativeAppError {
@@ -95,9 +117,15 @@ impl NativeAppInstall {
     }
 }
 
+/// Record-hygiene check for ids read back from `install.json`. Anything not
+/// in the descriptor table is rejected earlier at the `apps.*` boundary; this
+/// guard keeps a tampered or malformed record from ever naming a path —
+/// including the `.`/`..` segments that would escape the app dir.
 fn valid_app_id(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 128
+        && !value.starts_with('.')
+        && value.bytes().any(|byte| byte != b'.')
         && value.bytes().all(|byte| {
             byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'.' | b'_' | b'-')
         })
@@ -122,13 +150,6 @@ fn valid_record_executable(value: &str) -> bool {
         })
 }
 
-/// Dev override env var *suffix* for launching an app outside the store
-/// layout (read via `brand::env` — `MUNDUS_AGENDA_EXECUTABLE` etc., with
-/// legacy-name fallback), shared by the tray and `apps.open`.
-pub fn executable_env_override(id: &str) -> Option<&'static str> {
-    app_descriptor(id).map(|app| app.env_override)
-}
-
 /// `%LOCALAPPDATA%\Mundus\Apps` — the single product-local root every native
 /// app installs under.
 pub fn native_apps_root() -> Result<PathBuf> {
@@ -145,6 +166,11 @@ pub fn default_store() -> Result<NativeAppStore> {
 /// A running executable cannot be opened for write on Windows — the loader
 /// maps the image with sharing that denies it. Anything else (including a
 /// missing file) is not treated as "in use".
+/// Public for the service's early (pre-download) running check.
+pub(crate) fn executable_in_use(path: &Path) -> bool {
+    exe_in_use(path)
+}
+
 #[cfg(windows)]
 fn exe_in_use(path: &Path) -> bool {
     use std::os::windows::fs::OpenOptionsExt;
@@ -171,12 +197,22 @@ pub struct NativeAppStore {
 }
 
 impl NativeAppStore {
+    /// Open (creating) the store root — the write-path constructor.
     pub fn new(root: PathBuf) -> Result<Self> {
         fs::create_dir_all(&root)?;
         Ok(Self {
             root,
             mutation: Mutex::new(()),
         })
+    }
+
+    /// Open the store root without creating it — the read-path constructor
+    /// for lookups (tray menu) that must not materialize the Apps dir.
+    pub fn at(root: PathBuf) -> Self {
+        Self {
+            root,
+            mutation: Mutex::new(()),
+        }
     }
 
     pub fn root(&self) -> &Path {
@@ -205,9 +241,11 @@ impl NativeAppStore {
         }
     }
 
-    /// Current record for `id` — the `current` pointer.
-    pub fn current(&self, id: &str) -> Option<NativeAppInstall> {
-        self.read_record(id).ok().flatten()
+    /// Current record for `id` — the `current` pointer. I/O errors
+    /// propagate: the running-app probes in `install_archive`/`uninstall`
+    /// must not mistake an unreadable record for "not installed".
+    pub fn current(&self, id: &str) -> Result<Option<NativeAppInstall>> {
+        self.read_record(id)
     }
 
     /// All records with a well-formed install.json, sorted by id.
@@ -234,7 +272,7 @@ impl NativeAppStore {
 
     /// Absolute path of the current executable, if the record and file agree.
     pub fn executable_path(&self, id: &str) -> Option<PathBuf> {
-        let record = self.current(id)?;
+        let record = self.current(id).ok().flatten()?;
         let exe = self
             .app_dir(id)
             .join(&record.version)
@@ -252,6 +290,30 @@ impl NativeAppStore {
             .join(&record.version)
             .join(&record.executable)
     }
+
+    /// True while the recorded current executable is a live process image.
+    /// Record read errors propagate — callers must not treat "cannot read"
+    /// as "not running".
+    pub fn app_is_running(&self, id: &str) -> Result<bool> {
+        let Some(record) = self.current(id)? else {
+            return Ok(false);
+        };
+        let exe = self.record_executable_path(&record);
+        Ok(exe.is_file() && exe_in_use(&exe))
+    }
+
+    /// The launchable executable for `desc`: the dev `MUNDUS_*_EXECUTABLE`
+    /// override wins (unit tests never honor it), else the recorded install
+    /// path. Shared by `apps.launch` and the tray so both agree.
+    pub fn executable_for(&self, desc: &NativeAppDescriptor) -> Option<PathBuf> {
+        #[cfg(not(test))]
+        if let Some(path) = crate::brand::env_os(desc.env_override).map(PathBuf::from) {
+            if path.is_file() {
+                return Some(path);
+            }
+        }
+        self.executable_path(desc.id)
+    }
 }
 
 pub mod releases;
@@ -262,23 +324,43 @@ impl NativeAppStore {
     /// Remove the whole `<root>/<id>` tree: record + every version dir. User
     /// data lives elsewhere and is never touched. Refuses while the recorded
     /// executable is running.
+    ///
+    /// The dir is renamed to a tombstone first: if a running exe (or a busy
+    /// handle) blocks the move, nothing was deleted and the app stays
+    /// installed; once renamed, the record is already unlinked from the live
+    /// tree so a partial sweep cannot leave a half-installed `<id>` visible.
     pub fn uninstall(&self, id: &str) -> Result<()> {
         let _guard = self.mutation.lock().unwrap_or_else(|e| e.into_inner());
         if !valid_app_id(id) {
-            return Err(NativeAppError::Invalid("package id"));
+            return Err(NativeAppError::Invalid("app id"));
         }
         let app_dir = self.app_dir(id);
-        if let Some(record) = self.current(id) {
-            let exe = self.record_executable_path(&record);
-            if exe.is_file() && exe_in_use(&exe) {
-                return Err(NativeAppError::Running);
-            }
+        // A validated id is a plain relative name — the join can never escape
+        // the store root. Assert the invariant the `..` guard is about.
+        if app_dir.parent() != Some(self.root.as_path()) {
+            return Err(NativeAppError::Invalid("app id"));
+        }
+        if self.app_is_running(id)? {
+            return Err(NativeAppError::Running);
         }
         if !app_dir.exists() {
             return Ok(());
         }
-        match fs::remove_dir_all(&app_dir) {
-            Ok(()) => Ok(()),
+        let tombstone = self.root.join(unique_temp_name(".tombstone-"));
+        match retry_io(|| fs::rename(&app_dir, &tombstone)) {
+            Ok(()) => {
+                // Already detached — a lingering locked file inside only
+                // delays reclamation, never leaves a live-looking install.
+                if let Err(error) = fs::remove_dir_all(&tombstone) {
+                    tracing::warn!(
+                        target: "native_apps",
+                        %id,
+                        %error,
+                        "app dir tombstoned; deferred sweep will reclaim it"
+                    );
+                }
+                Ok(())
+            }
             // A live exe deep in the tree surfaces as PermissionDenied —
             // report it as a running-app refusal, not a bare io error.
             Err(error) if error.kind() == io::ErrorKind::PermissionDenied => {

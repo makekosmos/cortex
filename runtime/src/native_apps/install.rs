@@ -10,7 +10,7 @@ impl NativeAppStore {
     ) -> Result<NativeAppInstall> {
         let _guard = self.mutation.lock().unwrap_or_else(|e| e.into_inner());
         if !valid_app_id(&spec.id) {
-            return Err(NativeAppError::Invalid("package id"));
+            return Err(NativeAppError::Invalid("app id"));
         }
         if semver::Version::parse(&spec.version).is_err() {
             return Err(NativeAppError::Invalid("version"));
@@ -18,15 +18,12 @@ impl NativeAppStore {
         if !valid_record_executable(&spec.executable) {
             return Err(NativeAppError::Invalid("executable"));
         }
-        // Refuse to update an app that is running — never delete files of a
-        // live exe; the caller surfaces "close the app first".
-        if let Some(current) = self.current(&spec.id) {
-            if current.version != spec.version {
-                let exe = self.record_executable_path(&current);
-                if exe.is_file() && exe_in_use(&exe) {
-                    return Err(NativeAppError::Running);
-                }
-            }
+        // Refuse to touch an app that is running — the old tree is deleted
+        // before the rename lands, so a live exe must stop every install
+        // shape (upgrade, downgrade, same-version repair). The pointer read
+        // fails closed: an unreadable record is an error, not a free pass.
+        if self.app_is_running(&spec.id)? {
+            return Err(NativeAppError::Running);
         }
 
         // Same-volume temp file contract: the caller downloads into the app
@@ -39,14 +36,13 @@ impl NativeAppStore {
         if metadata.len() > MAX_ARCHIVE {
             return Err(NativeAppError::Archive("archive too large"));
         }
-        if !eq_hash(&hex_hash(&fs::read(archive)?), &spec.sha256) {
+        if !eq_hash(&file_sha256(archive)?, &spec.sha256) {
             return Err(NativeAppError::HashMismatch);
         }
 
         let app_dir = self.app_dir(&spec.id);
         fs::create_dir_all(&app_dir)?;
-        let counter = STAGING_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        let staging = app_dir.join(format!(".staging-{}-{counter}", std::process::id()));
+        let staging = app_dir.join(unique_temp_name(".staging-"));
         let target = app_dir.join(&spec.version);
 
         let extracted = self.extract_verified(archive, &staging, spec);
@@ -60,27 +56,9 @@ impl NativeAppStore {
             let _ = fs::remove_dir_all(&staging);
             return Err(NativeAppError::Archive("cannot replace existing version"));
         }
-        // Antivirus/indexers can transiently hold handles under a fresh dir;
-        // mirror the package-store retry loop before giving up.
-        let mut renamed = false;
-        for attempt in 0..24 {
-            match fs::rename(&staging, &target) {
-                Ok(()) => {
-                    renamed = true;
-                    break;
-                }
-                Err(error) if error.kind() == io::ErrorKind::PermissionDenied && attempt < 23 => {
-                    std::thread::sleep(std::time::Duration::from_millis(50 * (attempt + 1)));
-                }
-                Err(error) => {
-                    let _ = fs::remove_dir_all(&staging);
-                    return Err(error.into());
-                }
-            }
-        }
-        if !renamed {
+        if let Err(error) = retry_io(|| fs::rename(&staging, &target)) {
             let _ = fs::remove_dir_all(&staging);
-            return Err(NativeAppError::Archive("staging rename timed out"));
+            return Err(error.into());
         }
 
         let record = NativeAppInstall {
@@ -100,13 +78,20 @@ impl NativeAppStore {
         // Atomic pointer flip: install.json is the single source of truth.
         write_owner_only_json(&self.state_path(&spec.id), &record)
             .map_err(|error| NativeAppError::State(error.to_string()))?;
-        // Remove superseded versions + stale staging dirs — only after the
+        // Remove superseded versions + stale temp dirs — only after the
         // pointer moved, so a failed cleanup never strands the install.
-        self.cleanup_stale(&spec.id, &spec.version);
+        self.cleanup_stale(&spec.id, &spec.version, &spec.executable);
         Ok(record)
     }
 
-    fn cleanup_stale(&self, id: &str, keep_version: &str) {
+    /// Sweep everything that is not the live `<keep_version>` dir or the
+    /// pointer: superseded version dirs, interrupted `.staging-*` /
+    /// `.download-*` temp names (files AND dirs — a crashed download leaves
+    /// a file) and `.tombstone-*` leftovers from uninstalls. A version dir
+    /// whose executable is still mapped by a running process is kept —
+    /// Windows denies the delete, and a half-deleted running tree is worse
+    /// than a stale one.
+    fn cleanup_stale(&self, id: &str, keep_version: &str, executable: &str) {
         let app_dir = self.app_dir(id);
         let Ok(entries) = fs::read_dir(&app_dir) else {
             return;
@@ -119,13 +104,24 @@ impl NativeAppStore {
             if name == INSTALL_FILE || name == keep_version {
                 continue;
             }
-            if path.is_dir()
-                && (name.starts_with(".staging-")
-                    || name.starts_with(".download-")
-                    || semver::Version::parse(name).is_ok())
-            {
-                let _ = fs::remove_dir_all(&path);
+            if path.is_file() && name.starts_with(".download-") {
+                let _ = fs::remove_file(&path);
+                continue;
             }
+            if !path.is_dir() {
+                continue;
+            }
+            if !(name.starts_with(".staging-")
+                || name.starts_with(".tombstone-")
+                || semver::Version::parse(name).is_ok())
+            {
+                continue;
+            }
+            let exe = path.join(executable);
+            if exe.is_file() && exe_in_use(&exe) {
+                continue;
+            }
+            let _ = fs::remove_dir_all(&path);
         }
     }
 
@@ -148,7 +144,7 @@ impl NativeAppStore {
         let mut total: u64 = 0;
         let mut executable_found = false;
         for index in 0..zip.len() {
-            let mut file = zip.by_index(index)?;
+            let file = zip.by_index(index)?;
             let Some(enclosed) = file.enclosed_name() else {
                 return Err(NativeAppError::Archive("unsafe path"));
             };
@@ -181,8 +177,14 @@ impl NativeAppStore {
             if let Some(parent) = target.parent() {
                 fs::create_dir_all(parent)?;
             }
+            // Bound the write by the entry's declared size — a lying header
+            // must not inflate past it (same rule as the package store).
+            let declared = file.size();
             let mut out = fs::File::create(&target)?;
-            io::copy(&mut file, &mut out)?;
+            let copied = io::copy(&mut file.take(declared.saturating_add(1)), &mut out)?;
+            if copied != declared {
+                return Err(NativeAppError::Archive("entry size mismatch"));
+            }
             if normalized == spec.executable {
                 executable_found = true;
             }

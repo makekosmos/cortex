@@ -34,11 +34,9 @@ impl PackageService {
                 }),
             _ => production_trust(),
         };
-        Self::from_parts(
-            root,
-            trust,
-            crate::data_dir::mundus_local_data_dir().map(|dir| dir.join("Apps")),
-        )
+        // Apps root — single source: `native_apps::native_apps_root()` (the
+        // product-local Mundus dir, honoring the env override).
+        Self::from_parts(root, trust, crate::native_apps::native_apps_root().ok())
     }
     #[cfg(test)]
     pub fn open_with_trust(
@@ -52,7 +50,9 @@ impl PackageService {
         )
     }
 
-    fn from_parts(
+    /// Crate-internal constructor — the dispatcher tests and the native
+    /// tests build minimal services without a trust store.
+    pub(crate) fn from_parts(
         root: PathBuf,
         trust: Option<TrustStore>,
         apps_root: Option<PathBuf>,
@@ -94,13 +94,16 @@ impl PackageService {
                 .registered_types()
                 .map_err(|_| PackageError::Persistence)?,
         );
-        let native_apps =
-            apps_root.and_then(|root| crate::native_apps::NativeAppStore::new(root).ok());
+        let native_apps = apps_root
+            .and_then(|root| crate::native_apps::NativeAppStore::new(root).ok())
+            .map(std::sync::Arc::new);
         let service = Self {
             store,
             root,
             native_apps,
             release_cache: Mutex::new(HashMap::new()),
+            release_failures: Mutex::new(HashMap::new()),
+            native_jobs: Mutex::new(HashMap::new()),
             state: Mutex::new(State {
                 trust,
                 fault: unavailable.then(|| "package_trust_unavailable".into()),

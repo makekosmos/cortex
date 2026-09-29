@@ -12,6 +12,7 @@ use std::{
     io::Read,
     path::{Path, PathBuf},
     sync::{Mutex, MutexGuard},
+    time::Instant,
 };
 use thiserror::Error;
 use zip::ZipArchive;
@@ -75,6 +76,19 @@ pub enum PackageError {
     Persistence,
     #[error("package worker: {0}")]
     Worker(&'static str),
+    // Native-app (`apps.*`) outcomes — produced only by the apps paths.
+    #[error("app not installed")]
+    NotFound,
+    #[error("another install is already running for this app")]
+    Busy,
+    #[error("app is running")]
+    AppRunning,
+    #[error("release endpoint unreachable")]
+    Offline,
+    #[error("release archive failed verification")]
+    Integrity,
+    #[error("no published asset for this platform")]
+    Unsupported,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -231,11 +245,18 @@ pub struct PackageService {
     root: PathBuf,
     store: std::sync::Arc<PackageStore>,
     /// Native GPUI apps (release zips, records under `Apps/<id>`); `None`
-    /// when no product-local data root exists.
-    native_apps: Option<crate::native_apps::NativeAppStore>,
+    /// when no product-local data root exists. `Arc` so a background install
+    /// can move the handle into `spawn_blocking`.
+    native_apps: Option<std::sync::Arc<crate::native_apps::NativeAppStore>>,
     /// Per-app latest-release cache for the GitHub Releases probe
     /// (`apps.list`); TTL + ETag revalidation in `native.rs`.
     release_cache: Mutex<HashMap<String, CachedRelease>>,
+    /// Brief per-app negative cache so an offline Store open does not wait
+    /// out the probe timeout on every refresh.
+    release_failures: Mutex<HashMap<String, Instant>>,
+    /// Per-app in-flight/failed background install (`apps.install`, update,
+    /// startup migration) — one job per id, ever.
+    native_jobs: Mutex<HashMap<&'static str, NativeJob>>,
     state: Mutex<State>,
     // Serializes all mutations spanning trust, catalog cache and package state.
     mutation: Mutex<()>,

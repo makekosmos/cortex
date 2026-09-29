@@ -40,7 +40,10 @@ fn install_flips_pointer_and_cleans_old_versions() {
         .install_archive(&spec("0.1.0", &archive), &archive)
         .unwrap();
     assert_eq!(first.version, "0.1.0");
-    assert_eq!(store.current("com.kosmos.agenda").unwrap().version, "0.1.0");
+    assert_eq!(
+        store.current("com.kosmos.agenda").unwrap().unwrap().version,
+        "0.1.0"
+    );
     assert!(store
         .executable_path("com.kosmos.agenda")
         .unwrap()
@@ -79,7 +82,7 @@ fn bad_sha_leaves_previous_version_current() {
         Err(NativeAppError::HashMismatch)
     ));
     let current = store.current("com.kosmos.agenda").unwrap();
-    assert_eq!(current.version, "0.1.0");
+    assert_eq!(current.expect("record").version, "0.1.0");
     assert!(store
         .executable_path("com.kosmos.agenda")
         .unwrap()
@@ -109,7 +112,10 @@ fn bad_archive_leaves_previous_version_current() {
     let bad = spec("0.2.0", &evil);
     let result = store.install_archive(&bad, &evil);
     assert!(result.is_err());
-    assert_eq!(store.current("com.kosmos.agenda").unwrap().version, "0.1.0");
+    assert_eq!(
+        store.current("com.kosmos.agenda").unwrap().unwrap().version,
+        "0.1.0"
+    );
     assert!(store
         .root()
         .join("com.kosmos.agenda")
@@ -123,7 +129,10 @@ fn bad_archive_leaves_previous_version_current() {
     write_zip(&missing, &[("other.exe", b"exe")]);
     let spec_missing = spec("0.2.0", &missing);
     assert!(store.install_archive(&spec_missing, &missing).is_err());
-    assert_eq!(store.current("com.kosmos.agenda").unwrap().version, "0.1.0");
+    assert_eq!(
+        store.current("com.kosmos.agenda").unwrap().unwrap().version,
+        "0.1.0"
+    );
 }
 
 #[test]
@@ -138,7 +147,7 @@ fn uninstall_removes_everything() {
     assert_eq!(store.list().len(), 1);
     store.uninstall("com.kosmos.agenda").unwrap();
     assert!(store.list().is_empty());
-    assert!(store.current("com.kosmos.agenda").is_none());
+    assert!(store.current("com.kosmos.agenda").unwrap().is_none());
     assert!(!dir.path().join("Apps").join("com.kosmos.agenda").exists());
     // Uninstall is idempotent.
     store.uninstall("com.kosmos.agenda").unwrap();
@@ -151,7 +160,7 @@ fn corrupt_record_reads_as_absent() {
     let app_dir = dir.path().join("Apps").join("com.kosmos.agenda");
     fs::create_dir_all(&app_dir).unwrap();
     fs::write(app_dir.join(INSTALL_FILE), b"not json").unwrap();
-    assert!(store.current("com.kosmos.agenda").is_none());
+    assert!(store.current("com.kosmos.agenda").unwrap().is_none());
     store.uninstall("com.kosmos.agenda").unwrap();
     assert!(!app_dir.exists());
 }

@@ -4,6 +4,7 @@
 /// One hardcoded store row: everything needed to name, locate and verify a
 /// release asset without a catalog service. Ids are persisted identifiers
 /// (`Apps/<id>`, `install.json`, dev env overrides) — never reuse them.
+#[derive(Debug)]
 pub struct NativeAppDescriptor {
     pub id: &'static str,
     /// Display name for the Manager store row.
@@ -18,11 +19,10 @@ pub struct NativeAppDescriptor {
     /// Dev-only env override naming an executable to launch instead of the
     /// installed one (`MUNDUS_AGENDA_EXECUTABLE` etc., via `brand::env`).
     pub env_override: &'static str,
-    /// 0.9.x bundled-component dir name (`resources/components/<name>`) the
-    /// legacy migration probes for.
+    /// 0.9.x bundled-component dir name (`resources/components/<name>`) —
+    /// what the installer records in the legacy-components marker for the
+    /// migration to read.
     pub legacy_component: &'static str,
-    /// Optional icon asset shipped with Manager/Engine for the row.
-    pub icon: Option<&'static str>,
 }
 
 /// The store's app list — the whole catalog, hardcoded.
@@ -35,7 +35,6 @@ pub const NATIVE_APPS: &[NativeAppDescriptor] = &[
         asset_stem: "agenda-gpui",
         env_override: "AGENDA_EXECUTABLE",
         legacy_component: "agenda",
-        icon: None,
     },
     NativeAppDescriptor {
         id: "com.kosmos.memoria",
@@ -45,7 +44,6 @@ pub const NATIVE_APPS: &[NativeAppDescriptor] = &[
         asset_stem: "memoria-gpui",
         env_override: "MEMORIA_EXECUTABLE",
         legacy_component: "memoria",
-        icon: None,
     },
     NativeAppDescriptor {
         id: "com.kosmos.dictation",
@@ -55,16 +53,7 @@ pub const NATIVE_APPS: &[NativeAppDescriptor] = &[
         asset_stem: "dictation-gpui",
         env_override: "DICTATION_EXECUTABLE",
         legacy_component: "dictation",
-        icon: None,
     },
-];
-
-/// Release target triples every app release publishes assets for.
-pub const APP_TARGETS: &[&str] = &[
-    "x86_64-pc-windows-msvc",
-    "aarch64-pc-windows-msvc",
-    "aarch64-apple-darwin",
-    "x86_64-unknown-linux-gnu",
 ];
 
 fn is_windows_target(target: &str) -> bool {
