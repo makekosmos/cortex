@@ -18,7 +18,7 @@ import { verifyLocalReleaseChannel } from "./release-channel-local.mjs";
 import { bytes, documentHash, writeAtomic } from "./package-release-utils.mjs";
 import { createReceipt, writeReceipt } from "./release-receipt.mjs";
 import { ensureNsis } from "./ensure-nsis.mjs";
-import { env } from "./brand.mjs";
+import { env, MANAGER_EXE } from "./brand.mjs";
 import {
   currentCommit,
   runReleasePreflight,
@@ -106,6 +106,9 @@ function stageInstaller() {
   }
   copyFileSync(path.join(SHELL_ROOT, "build", "icon.ico"), path.join(resources, "icon.ico"));
   copyFileSync(path.join(SHELL_ROOT, "build", "tray.ico"), path.join(resources, "tray.ico"));
+  cpSync(path.join(SHELL_ROOT, "build", "installer-assets"), path.join(stage, "installer-assets"), {
+    recursive: true,
+  });
 
   const componentsDir = path.join(resources, "components");
   // Manager is the only bundled component — a missing stage is a build
@@ -113,6 +116,17 @@ function stageInstaller() {
   const managerSource = path.join(SHELL_ROOT, ".tmp", "components", "manager", "win-unpacked");
   if (!existsSync(managerSource)) die(`missing manager component: ${managerSource}`);
   cpSync(managerSource, path.join(componentsDir, "manager"), { recursive: true });
+
+  // Fail closed: the only bundled component must be present under exactly the
+  // packaged executable name, and no stale sibling exe can be left behind after
+  // the rmSync above.
+  const managerDir = path.join(componentsDir, "manager");
+  const exeFiles = readdirSync(managerDir).filter((name) => name.toLowerCase().endsWith(".exe"));
+  if (exeFiles.length !== 1 || exeFiles[0].toLowerCase() !== MANAGER_EXE.toLowerCase()) {
+    die(
+      `staged manager payload must contain exactly ${MANAGER_EXE}; found: ${exeFiles.join(", ")}`,
+    );
+  }
   return stage;
 }
 
@@ -133,6 +147,7 @@ async function buildWindows(version) {
     `/DVERSION=${version}`,
     `/DSTAGE_DIR=${stage}`,
     `/DOUT_FILE=${outFile}`,
+    `/DMANAGER_EXE=${MANAGER_EXE}`,
     path.join(SHELL_ROOT, "build", "installer.nsi"),
   ];
   log(`makensis: ${makensis}`);

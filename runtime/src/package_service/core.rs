@@ -103,7 +103,7 @@ impl PackageService {
             native_apps,
             release_cache: Mutex::new(HashMap::new()),
             release_failures: Mutex::new(HashMap::new()),
-            native_jobs: Mutex::new(HashMap::new()),
+            native_jobs: std::sync::Arc::new(Mutex::new(HashMap::new())),
             state: Mutex::new(State {
                 trust,
                 fault: unavailable.then(|| "package_trust_unavailable".into()),

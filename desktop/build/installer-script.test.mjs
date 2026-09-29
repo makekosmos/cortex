@@ -13,8 +13,45 @@ const macroSection = installer.split("!macro KillProductProcesses")[1] ?? "";
 
 const runKey = "${RUN_KEY}";
 
-test("uses a fixed install directory and never lets the user choose", () => {
+test("uses MUI2 pages: welcome, progress, finish; no directory or license page", () => {
+  expect(installer).toContain("!include MUI2.nsh");
+  expect(installer).toContain("!insertmacro MUI_PAGE_WELCOME");
+  expect(installer).toContain("!insertmacro MUI_PAGE_INSTFILES");
+  expect(installer).toContain("!insertmacro MUI_PAGE_FINISH");
+  expect(installer).toContain("!insertmacro MUI_UNPAGE_CONFIRM");
+  expect(installer).toContain("!insertmacro MUI_UNPAGE_INSTFILES");
   expect(installer).not.toContain("Page directory");
+  expect(installer).not.toContain("Page license");
+});
+
+test("brands MUI with generated Mundus bitmaps, not placeholders", () => {
+  expect(installer).toContain(
+    'MUI_HEADERIMAGE_BITMAP "${STAGE_DIR}\\installer-assets\\header.bmp"',
+  );
+  expect(installer).toContain(
+    'MUI_WELCOMEFINISH_BITMAP "${STAGE_DIR}\\installer-assets\\welcome.bmp"',
+  );
+});
+
+test("auto-selects English or Russian from the system UI language", () => {
+  expect(installer).toContain('!insertmacro MUI_LANGUAGE "English"');
+  expect(installer).toContain('!insertmacro MUI_LANGUAGE "Russian"');
+  expect(installer).toContain("GetUserDefaultUILanguage");
+  expect(installer).toContain("IntCmp $0 1049");
+  expect(installer).toContain("StrCpy $LANGUAGE ${LANG_ENGLISH}");
+  expect(installer).toContain("StrCpy $LANGUAGE ${LANG_RUSSIAN}");
+});
+
+test("finish page offers a checked 'Launch Mundus' checkbox for the Manager", () => {
+  expect(installer).toContain("MUI_FINISHPAGE_RUN");
+  expect(installer).toContain("resources\\components\\manager\\${MANAGER_EXE}");
+  expect(installer).toContain('MUI_FINISHPAGE_RUN_TEXT "$(FINISHPAGE_RUN_TEXT)"');
+  expect(installer).toContain(
+    'LangString FINISHPAGE_RUN_TEXT ${LANG_ENGLISH} "Launch ${APP_NAME}"',
+  );
+  expect(installer).toContain(
+    'LangString FINISHPAGE_RUN_TEXT ${LANG_RUSSIAN} "Запустить ${APP_NAME}"',
+  );
 });
 
 test("only removes the shipped payload, not the whole $INSTDIR recursively", () => {
@@ -112,11 +149,17 @@ test("always starts the Engine at the end of install", () => {
   expect(installer).toContain("engine-post-install.ps1");
 });
 
-test("only opens the Manager on interactive installs", () => {
+test("starts the Engine unconditionally at end of install; Manager only via finish page", () => {
+  expect(installer).toContain("Function StartEngine");
+  expect(installSection).toContain("Call StartEngine");
   expect(installer).toContain(
+    'nsExec::ExecToLog \'"$R5" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\\resources\\engine-post-install.ps1" -StartEngine\'',
+  );
+  // The Manager is launched only by the MUI finish-page checkbox, not by a
+  // silent Exec in the install section.
+  expect(installSection).not.toContain(
     "Exec '\"$INSTDIR\\resources\\components\\manager\\${MANAGER_EXE}\"'",
   );
-  expect(installer).toContain("IfSilent");
 });
 
 // KOS-265: the install payload ships Manager only — `File` ships whatever
@@ -164,15 +207,18 @@ test("uninstall removes the store payload dir but never user data", () => {
   expect(uninstallSection).not.toContain('RMDir /r "$LOCALAPPDATA\\Mundus"');
 });
 
-test("seeds autostart only conditionally and never using the Desktop VERSION", () => {
+test("migrates autostart via shipped script and never using the Desktop VERSION", () => {
   expect(installer).not.toContain("versions\\${VERSION}\\mundus-engine.exe");
   expect(installSection).not.toContain('WriteRegStr HKCU "${RUN_KEY}" "Mundus Engine"');
+  expect(installer).toContain(
+    '-File "$INSTDIR\\resources\\engine-post-install.ps1" -MigrateAutostart',
+  );
 });
 
 test("post-install logic ships as a script file, never inline -Command", () => {
   expect(installer).not.toContain("-Command");
   expect(installer).toContain(
-    '-File "$INSTDIR\\resources\\engine-post-install.ps1" -SeedAutostart',
+    '-File "$INSTDIR\\resources\\engine-post-install.ps1" -MigrateAutostart',
   );
   expect(installer).toContain('-File "$INSTDIR\\resources\\engine-post-install.ps1" -StartEngine');
 });
@@ -181,10 +227,10 @@ test("no NSIS single-quoted string contains '' (NSIS has no doubled-quote escape
   expect(installer).not.toContain("''");
 });
 
-test("detects previous installs and migrates autostart via dedicated functions", () => {
-  expect(installer).toContain("Function DetectPreviousInstall");
+test("migrates autostart and starts the Engine via dedicated functions", () => {
+  expect(installer).not.toContain("DetectPreviousInstall");
   expect(installer).toContain("Function SeedOrMigrateAutostart");
-  expect(installer).toContain("Function StartEngineAndManager");
+  expect(installer).toContain("Function StartEngine");
 });
 
 test("ignores legacy electron-updater arguments", () => {

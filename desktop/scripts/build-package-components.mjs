@@ -4,12 +4,13 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:f
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { env } from "./brand.mjs";
+import { env, MANAGER_EXE } from "./brand.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 // Release preflight demands a clean worktree and a BOM; local staging (for
-// `build:desktop -- --local`) skips it.
-if (env("RELEASE_LOCAL") !== "1") {
+// `pnpm run build:installer:local`) skips it.
+const local = process.argv.includes("--local") || env("RELEASE_LOCAL") === "1";
+if (!local) {
   const preflight = spawnSync(
     process.execPath,
     [path.join(root, "desktop", "scripts", "release-preflight.mjs"), "--platform", "win"],
@@ -57,7 +58,7 @@ const componentsRoot = path.join(root, "desktop", ".tmp", "components");
 rmSync(componentsRoot, { recursive: true, force: true });
 const managerStage = path.join(componentsRoot, "manager", "win-unpacked");
 mkdirSync(managerStage, { recursive: true });
-copyFileSync(managerExe, path.join(managerStage, "Mundus Manager.exe"));
+copyFileSync(managerExe, path.join(managerStage, MANAGER_EXE));
 for (const entry of readdirSync(managerRelease)) {
   if (entry.toLowerCase().endsWith(".dll"))
     copyFileSync(path.join(managerRelease, entry), path.join(managerStage, entry));

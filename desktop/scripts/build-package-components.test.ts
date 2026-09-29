@@ -1,6 +1,7 @@
 import { expect, test } from "../test-support/node-test.mjs";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { MANAGER_EXE } from "./brand.mjs";
 
 const source = readFileSync(path.join(import.meta.dirname, "build-package-components.mjs"), "utf8");
 const desktopBuild = readFileSync(path.join(import.meta.dirname, "build-desktop.mjs"), "utf8");
@@ -8,6 +9,9 @@ const desktopBuild = readFileSync(path.join(import.meta.dirname, "build-desktop.
 test("the icon pipeline runs before component staging", () => {
   const icons = readFileSync(path.join(import.meta.dirname, "build-app-icons.mjs"), "utf8");
   expect(icons).toContain("png-to-ico");
+  expect(icons).toContain("installer-assets");
+  expect(icons).toContain("header.bmp");
+  expect(icons).toContain("welcome.bmp");
   const iconsStep = source.indexOf("build-app-icons.mjs");
   const managerStage = source.indexOf('"manager", "win-unpacked"');
   expect(iconsStep >= 0 && iconsStep < managerStage).toBeTruthy();
@@ -27,9 +31,22 @@ test("the component build produces exactly a manager stage", () => {
   expect(source).toContain('"cargo"');
   expect(source).toContain('"--locked"');
   expect(source).toContain("x86_64-pc-windows-msvc");
-  expect(source).toContain('"Mundus Manager.exe"');
+  expect(source).toContain("MANAGER_EXE");
+  expect(MANAGER_EXE).toBe("Mundus Manager.exe");
   // A missing build product fails the script instead of shipping nothing.
   expect(source).toMatch(/missing \$\{?managerExe|missing.*manager-gpui\.exe/i);
+});
+
+test("build-desktop fails closed when the staged manager payload is stale or incomplete", () => {
+  const stage = desktopBuild.slice(desktopBuild.indexOf("function stageInstaller"));
+  expect(stage).toContain("MANAGER_EXE");
+  expect(stage).toContain("staged manager payload must contain exactly");
+  expect(stage).toContain('name.toLowerCase().endsWith(".exe")');
+});
+
+test("build-desktop stages the generated MUI2 bitmaps alongside the payload", () => {
+  const stage = desktopBuild.slice(desktopBuild.indexOf("function stageInstaller"));
+  expect(stage).toContain("installer-assets");
 });
 
 test("the installer stage requires the manager component", () => {

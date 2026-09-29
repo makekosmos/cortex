@@ -5,7 +5,7 @@
 
 use crate::native_apps::releases::ReleaseProbe;
 use crate::native_apps::{NativeAppDescriptor, NativeAppStore, NativeInstallSpec};
-use crate::package_service::{native_error_code, NativeAppState};
+use crate::package_service::{native_error_code, NativeAppState, NativeJob};
 use httpmock::Method::GET;
 use std::sync::Arc;
 
@@ -133,9 +133,9 @@ async fn install_now(
     desc: &'static NativeAppDescriptor,
     version: Option<&str>,
 ) -> Result<NativeAppSummary, PackageError> {
-    assert!(service.claim_native_job(desc.id));
+    let job = service.claim_native_job(desc.id).expect("claim");
     let result = service.run_native_install_with(probe, desc, version).await;
-    service.finish_native_job(desc.id, &result);
+    job.finish(&result);
     result
 }
 
@@ -417,5 +417,32 @@ async fn failed_install_leaves_typed_row_state() {
         .unwrap();
     assert_eq!(row.state, NativeAppState::Failed);
     assert_eq!(row.failure, Some("offline"));
+}
+
+#[test]
+fn dropped_job_claim_records_failure_and_frees_the_slot() {
+    // The claim is an RAII guard: an install task that dies without
+    // finishing (panic, abort) must still settle the row — a bare claim
+    // used to leave `installing` forever.
+    let dir = tempdir().expect("temp dir");
+    let service = native_service(&dir);
+    {
+        let _job = service
+            .claim_native_job("com.kosmos.agenda")
+            .expect("claim");
+        // A second claim while the guard is held reports busy.
+        assert!(service.claim_native_job("com.kosmos.agenda").is_none());
+    }
+    assert!(matches!(
+        service.current_job("com.kosmos.agenda"),
+        Some(NativeJob::Failed("unavailable"))
+    ));
+    // The slot is free again for the next attempt.
+    let job = service.claim_native_job("com.kosmos.agenda").expect("re-claim");
+    job.finish(&Err(PackageError::Offline));
+    assert!(matches!(
+        service.current_job("com.kosmos.agenda"),
+        Some(NativeJob::Failed("offline"))
+    ));
 }
 

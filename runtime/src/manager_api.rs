@@ -557,26 +557,11 @@ fn directory_bytes(path: &Path) -> u64 {
 }
 
 #[cfg(windows)]
-fn windows_registry_command() -> std::process::Command {
-    use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x08000000;
-    let mut command = std::process::Command::new("reg.exe");
-    command.creation_flags(CREATE_NO_WINDOW);
-    command
-}
+mod windows_autostart;
 
 #[cfg(windows)]
 fn windows_autostart_enabled() -> bool {
-    windows_registry_command()
-        .args([
-            "query",
-            r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
-            "/v",
-            crate::brand::AUTOSTART_RUN_VALUE,
-        ])
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false)
+    windows_autostart::enabled()
 }
 
 #[cfg(not(windows))]
@@ -586,45 +571,7 @@ fn windows_autostart_enabled() -> bool {
 
 #[cfg(windows)]
 fn set_windows_autostart(enabled: bool) -> Result<(), String> {
-    let key = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
-    let mut command = windows_registry_command();
-    if enabled {
-        let executable = std::env::current_exe().map_err(|e| e.to_string())?;
-        let startup_command = format!("\"{}\" --start", executable.display());
-        command
-            .args([
-                "add",
-                key,
-                "/v",
-                crate::brand::AUTOSTART_RUN_VALUE,
-                "/t",
-                "REG_SZ",
-                "/d",
-            ])
-            .arg(startup_command)
-            .args(["/f"]);
-    } else {
-        command.args(["delete", key, "/v", crate::brand::AUTOSTART_RUN_VALUE, "/f"]);
-    }
-    let result = command.output();
-    // MIGRATION(KOS-267): remove after 2026-11-01. A stale legacy Run value
-    // would resurrect the old engine binary; drop the known old names whenever
-    // the autostart preference is touched.
-    if result.as_ref().map(|o| o.status.success()).unwrap_or(false) {
-        for legacy in ["Kosmos Engine", "Kosmos"] {
-            // MIGRATION(KOS-267)
-            let _ = windows_registry_command()
-                .args(["delete", key, "/v", legacy, "/f"])
-                .output();
-        }
-    }
-    result.map_err(|e| e.to_string()).and_then(|output| {
-        if output.status.success() || !enabled {
-            Ok(())
-        } else {
-            Err("autostart-registration-failed".into())
-        }
-    })
+    windows_autostart::set(enabled)
 }
 
 #[cfg(not(windows))]
@@ -638,14 +585,30 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
-    fn autostart_registry_commands_share_the_no_console_guard() {
+    fn autostart_marker_matches_the_os_layout() {
+        // StartupApproved\Run marker: state byte, three zero bytes, FILETIME.
+        let disabled = windows_autostart::approved_marker(true);
+        assert_eq!(disabled.len(), 12);
+        assert_eq!(disabled[0], 3);
+        assert_eq!(&disabled[1..4], &[0, 0, 0]);
+        assert!(u64::from_le_bytes(disabled[4..].try_into().unwrap()) > 0);
+        assert_eq!(windows_autostart::approved_marker(false)[0], 2);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn autostart_uses_the_registry_api_not_a_child_process() {
+        // A spawned reg.exe needed CREATE_NO_WINDOW babysitting and text
+        // parsing; the Win32 calls have neither surface.
         let production = include_str!("manager_api.rs")
             .split("#[cfg(test)]")
             .next()
             .unwrap();
-        assert_eq!(production.matches("windows_registry_command()").count(), 4);
-        assert_eq!(production.matches("Command::new(\"reg.exe\")").count(), 1);
-        assert!(production.contains("command.creation_flags(CREATE_NO_WINDOW)"));
+        let autostart = include_str!("manager_api/windows_autostart.rs");
+        assert!(!production.contains("Command::new"));
+        assert!(!autostart.contains("Command::new"));
+        assert!(autostart.contains("RegSetKeyValueW"));
+        assert!(autostart.contains("Explorer\\StartupApproved\\Run"));
     }
 
     #[test]

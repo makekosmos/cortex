@@ -137,16 +137,16 @@ impl PackageService {
             }
             // Same per-app claim a Store click takes — a user-triggered
             // install racing the migration wins the slot.
-            if !self.claim_native_job(id) {
+            let Some(job) = self.claim_native_job(id) else {
                 tracing::info!(
                     target: "native_apps",
                     %id,
                     "legacy migration deferred: install already in flight"
                 );
                 continue;
-            }
+            };
             let result = self.run_native_install_with(probe, desc, None).await;
-            self.finish_native_job(id, &result);
+            job.finish(&result);
             match result {
                 Ok(_) => {
                     marker.apps.insert(

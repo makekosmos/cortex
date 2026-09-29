@@ -9,6 +9,15 @@ packaging scripts and build resources only.
 
 ## Building locally
 
+One command builds a complete local installer (Engine + GPUI Manager + NSIS):
+
+```text
+pnpm run build:installer:local
+```
+
+This runs the same three stages as a release build, but without the BOM and
+publish gates:
+
 ```text
 pnpm --dir desktop run build:backend        # cargo release build + engine archive
 pnpm --dir desktop run build:package-components   # GPUI component staging

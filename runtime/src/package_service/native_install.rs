@@ -32,31 +32,32 @@ impl PackageService {
     ) -> Result<NativeAppSummary, PackageError> {
         let store = self.native_store()?;
         crate::native_apps::host_app_target().ok_or(PackageError::Unsupported)?;
-        if !self.claim_native_job(desc.id) {
+        let Some(job) = self.claim_native_job(desc.id) else {
             return Err(PackageError::Busy);
-        }
+        };
         let service = Arc::clone(self);
+        // `job` moves into the task: a panic unwinds through its Drop and the
+        // row still settles — `installing` can never outlive the install.
         tokio::spawn(async move {
             let result = service.run_native_install_with(&probe, desc, None).await;
-            service.finish_native_job(desc.id, &result);
+            job.finish(&result);
         });
         // The claim is already held — the row reports Installing directly.
-        Ok(self.native_summary(
+        Ok(self.native_summary(NativeRowInput {
             desc,
-            store.current(desc.id).map_err(native_store_error)?.as_ref(),
-            self.cached_release(desc.id).as_ref(),
-            false,
-            true,
-            Some(NativeJob::Installing {
+            record: store.current(desc.id).map_err(native_store_error)?.as_ref(),
+            latest: self.cached_release(desc.id).as_ref(),
+            availability: NativeAvailability::Ready,
+            job: Some(NativeJob::Installing {
                 downloaded: 0,
                 total: None,
             }),
-        ))
+        }))
     }
 
     /// The job body — also the inline path for tests and the startup
     /// migration (`version` pins a tag; `None` installs the latest release).
-    /// Callers must hold the per-id claim via `claim_native_job` first.
+    /// Callers must hold the per-id `NativeJobGuard` first.
     pub(crate) async fn run_native_install_with(
         &self,
         probe: &ReleaseProbe,
@@ -146,25 +147,68 @@ impl PackageService {
     }
 
     /// The ready row after a successful install — a fresh read, not a
-    /// hand-assembled copy of the spec.
+    /// hand-assembled copy of the spec. Every path that lands here proves
+    /// the app is installed, so the Start-menu link is synced too.
     fn native_ok_summary(
         &self,
         desc: &'static NativeAppDescriptor,
         latest: Option<&releases::ReleaseInfo>,
     ) -> Result<NativeAppSummary, PackageError> {
+        self.sync_native_shortcut(desc);
         let record = self
             .native_store()?
             .current(desc.id)
             .map_err(native_store_error)?;
-        Ok(self.native_summary(desc, record.as_ref(), latest, false, true, None))
+        Ok(self.native_summary(NativeRowInput {
+            desc,
+            record: record.as_ref(),
+            latest,
+            availability: NativeAvailability::Ready,
+            job: None,
+        }))
     }
 
     /// Uninstall removes the whole `<id>` dir — record and every version —
-    /// refusing while the app is running. User data is never touched.
+    /// refusing while the app is running. User data is never touched. The
+    /// Start-menu link goes with it.
     pub fn uninstall_native_app(&self, desc: &NativeAppDescriptor) -> Result<(), PackageError> {
         self.native_store()?
             .uninstall(desc.id)
-            .map_err(native_store_error)
+            .map_err(native_store_error)?;
+        self.sync_native_shortcut(desc);
+        Ok(())
+    }
+
+    /// The Engine owns store-app Start-menu links: `install`/`uninstall`
+    /// keep one app's link in step, and `reconcile` — run on every Engine
+    /// start — converges the whole table (pre-existing installs, manual
+    /// deletes, update repoints). Best-effort: failures are logged, never
+    /// surfaced to the caller's operation.
+    fn sync_native_shortcut(&self, desc: &NativeAppDescriptor) {
+        let (Some(store), Some(programs)) = (
+            self.native_apps.as_deref(),
+            crate::native_apps::start_menu_dir(),
+        ) else {
+            return;
+        };
+        if let Err(error) = crate::native_apps::sync_shortcut(store, &programs, desc) {
+            tracing::warn!(
+                target: "native_apps",
+                id = desc.id,
+                %error,
+                "start-menu shortcut sync failed"
+            );
+        }
+    }
+
+    pub fn reconcile_native_shortcuts(&self) {
+        let (Some(store), Some(programs)) = (
+            self.native_apps.as_deref(),
+            crate::native_apps::start_menu_dir(),
+        ) else {
+            return;
+        };
+        crate::native_apps::reconcile_shortcuts(store, &programs);
     }
 
     /// Absolute executable path for the installed app (env override first —
