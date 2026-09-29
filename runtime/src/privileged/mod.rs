@@ -36,6 +36,8 @@ pub mod pipe_server;
 #[cfg(windows)]
 pub mod scm;
 #[cfg(windows)]
+pub mod scm_status;
+#[cfg(windows)]
 pub mod service;
 #[cfg(windows)]
 pub mod token;

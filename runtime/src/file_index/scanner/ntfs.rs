@@ -38,9 +38,9 @@ fn scan_via_service(root: &Path, exclude_noisy: bool) -> Result<Vec<IndexedFile>
         exclude_noisy,
     };
     let mut errors = Vec::new();
-    for pipe_name in
-        std::iter::once(brand::PIPE_NAME).chain(brand::LEGACY_PIPE_NAMES.iter().copied())
-    {
+    let pipe_names =
+        std::iter::once(brand::PIPE_NAME).chain(brand::LEGACY_PIPES.iter().map(|(name, _)| *name));
+    for pipe_name in pipe_names {
         match pipe::request_on(pipe_name, &req) {
             Ok(resp) => {
                 if !resp.ok {

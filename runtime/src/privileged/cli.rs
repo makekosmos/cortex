@@ -53,11 +53,16 @@ pub fn run_if_privileged(args: &[String]) -> Option<ExitCode> {
 
 #[cfg(windows)]
 fn dispatch(args: &[String]) -> ExitCode {
-    use crate::privileged::{scm, service};
+    use crate::privileged::{scm, scm_status, service};
     match args.first().map(String::as_str) {
-        Some("install") => scm::install().print(),
+        // `install --grant-sid <sid>` — the SID of the *unelevated* user the
+        // Engine runs as. Never derived from the elevated token (OTS UAC
+        // would produce the admin's SID and lock the user out of the pipe).
+        Some("install") => {
+            scm::install(&flag_value(args, "--grant-sid").unwrap_or_default()).print()
+        }
         Some("uninstall") => scm::uninstall().print(),
-        Some("status") => scm::status_cli().print(),
+        Some("status") => scm_status::status_cli().print(),
         Some("run-service") => {
             let sid = flag_value(args, "--grant-sid").unwrap_or_default();
             service::run_service_entry(sid)
@@ -70,7 +75,7 @@ fn dispatch(args: &[String]) -> ExitCode {
 }
 
 #[cfg(windows)]
-fn flag_value(args: &[String], flag: &str) -> Option<String> {
+pub(crate) fn flag_value(args: &[String], flag: &str) -> Option<String> {
     args.iter()
         .position(|a| a == flag)
         .and_then(|i| args.get(i + 1).cloned())
@@ -91,5 +96,35 @@ mod tests {
         assert!(run_if_privileged(&[]).is_none());
         assert!(run_if_privileged(&["--start".to_string()]).is_none());
         assert!(run_if_privileged(&["--core-worker".to_string()]).is_none());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn grant_sid_flag_parsing() {
+        let args = vec![
+            "install".into(),
+            "--grant-sid".into(),
+            "S-1-5-21-1-2-3-1001".into(),
+        ];
+        assert_eq!(
+            flag_value(&args, "--grant-sid").as_deref(),
+            Some("S-1-5-21-1-2-3-1001")
+        );
+        assert_eq!(flag_value(&args, "--missing"), None);
+        assert_eq!(
+            flag_value(&["install".into(), "--grant-sid".into()], "--grant-sid"),
+            None
+        );
+    }
+
+    /// `install` without/invalid `--grant-sid` fails before touching the SCM.
+    #[cfg(windows)]
+    #[test]
+    fn install_rejects_bad_grant_sid_without_elevation() {
+        for bad in ["", "garbage", "S-1-5-21-1;)(A;;GA;;;WD", "S-1-5-18 "] {
+            let out = crate::privileged::scm::install(bad);
+            assert!(!out.ok, "accepted {bad:?}");
+            assert!(out.error.unwrap_or_default().contains("--grant-sid"));
+        }
     }
 }

@@ -23,16 +23,9 @@ use windows_service::service_manager::{ServiceManager, ServiceManagerAccess};
 use crate::privileged::brand;
 use crate::privileged::cli::Outcome;
 use crate::privileged::install_path::{env_get, install_dir};
-use crate::privileged::token::current_user_sid;
+use crate::privileged::token::validate_grant_sid;
 
-#[derive(Debug, Clone, Default)]
-pub struct ServiceStatus {
-    pub installed: bool,
-    pub running: bool,
-    pub binary_path: Option<String>,
-}
-
-fn err_outcome(msg: impl Into<String>) -> Outcome {
+pub(crate) fn err_outcome(msg: impl Into<String>) -> Outcome {
     Outcome {
         ok: false,
         error: Some(msg.into()),
@@ -89,7 +82,20 @@ fn stop_and_delete_service(svc: &Service, service_name: &str) -> Result<(), Stri
 
 /// Elevated install: copy the Engine exe to `%ProgramFiles%\<Brand>\Service`,
 /// remove legacy services, register + start `SERVICE_NAME` as LocalSystem.
-pub fn install() -> Outcome {
+///
+/// `grant_sid` is the SID of the *unelevated* user that ran the Engine — the
+/// only account allowed on the pipe. It must come from the client via
+/// `--grant-sid`; under over-the-shoulder UAC the elevated process token is
+/// the *admin's*, so deriving it locally here would lock out the real user.
+pub fn install(grant_sid: &str) -> Outcome {
+    // Validate before any SCM/filesystem work: missing or malformed is an
+    // error, never a silent fallback to the (admin) process SID.
+    if !validate_grant_sid(grant_sid) {
+        return err_outcome(format!(
+            "invalid or missing --grant-sid ({grant_sid:?}) — refusing to install"
+        ));
+    }
+
     let scm = match open_scm(true) {
         Ok(s) => s,
         Err(o) => return o,
@@ -104,10 +110,6 @@ pub fn install() -> Outcome {
         Err(e) => return err_outcome(e),
     };
     let service_exe = dir.join(brand::SERVICE_BINARY_NAME);
-    let grant_sid = match current_user_sid() {
-        Ok(s) => s,
-        Err(e) => return err_outcome(e),
-    };
 
     // MIGRATION(KOS-267): remove after 2026-11-01 — drop pre-Engine services.
     for legacy in brand::LEGACY_SERVICE_NAMES {
@@ -154,7 +156,7 @@ pub fn install() -> Outcome {
             OsString::from("privileged"),
             OsString::from("run-service"),
             OsString::from("--grant-sid"),
-            OsString::from(&grant_sid),
+            OsString::from(grant_sid),
         ],
         dependencies: vec![],
         // LocalSystem: MFT raw-volume reads and hosts writes both require
@@ -252,48 +254,5 @@ pub fn uninstall() -> Outcome {
         running: Some(false).filter(|_| deleted_any),
         service_dir: Some(dir.to_string_lossy().into_owned()),
         ..Outcome::default()
-    }
-}
-
-/// User-mode status query — never elevates.
-pub fn query_status() -> Result<ServiceStatus, String> {
-    let scm = ServiceManager::local_computer(None::<&str>, ServiceManagerAccess::CONNECT)
-        .map_err(|e| format!("open SCM failed: {e}"))?;
-    match scm.open_service(
-        brand::SERVICE_NAME,
-        ServiceAccess::QUERY_STATUS | ServiceAccess::QUERY_CONFIG,
-    ) {
-        Ok(svc) => {
-            let running = svc
-                .query_status()
-                .map(|s| s.current_state == ServiceState::Running)
-                .unwrap_or(false);
-            let binary_path = svc
-                .query_config()
-                .ok()
-                .map(|c| c.executable_path.to_string_lossy().into_owned());
-            Ok(ServiceStatus {
-                installed: true,
-                running,
-                binary_path,
-            })
-        }
-        Err(e) if is_missing_service_error(&e) => Ok(ServiceStatus::default()),
-        Err(e) => Err(format!("open_service failed: {e}")),
-    }
-}
-
-/// CLI `privileged status` — JSON, user-mode.
-pub fn status_cli() -> Outcome {
-    match query_status() {
-        Ok(status) => Outcome {
-            ok: true,
-            service_name: Some(brand::SERVICE_NAME.into()),
-            installed: Some(status.installed),
-            running: Some(status.running),
-            service_dir: status.binary_path,
-            ..Outcome::default()
-        },
-        Err(e) => err_outcome(e),
     }
 }

@@ -41,11 +41,13 @@ pub const PIPE_NAME: &str = r"\\.\pipe\kosmos-privileged-service";
 // MIGRATION(KOS-267): remove after 2026-11-01.
 pub const LEGACY_SERVICE_NAMES: &[&str] = &["KosmosSystemSvc", "KeplerFocusSvc"];
 
-/// Pipe names the client still probes after the primary pipe, for talking to
-/// a not-yet-migrated legacy service. Legacy services speak a subset of the
-/// current protocol (they ignore the extra `protocol_version` field).
+/// Pipe names the client still probes after the primary pipe, paired with the
+/// service name expected to own each (for server-PID verification), for
+/// talking to a not-yet-migrated legacy service. Legacy services speak a
+/// subset of the current protocol (they ignore the extra `protocol_version`
+/// field).
 // MIGRATION(KOS-267): remove after 2026-11-01.
-pub const LEGACY_PIPE_NAMES: &[&str] = &[
-    r"\\.\pipe\kosmos-system-service",
-    r"\\.\pipe\kepler-focus-svc",
+pub const LEGACY_PIPES: &[(&str, &str)] = &[
+    (r"\\.\pipe\kosmos-system-service", "KosmosSystemSvc"),
+    (r"\\.\pipe\kepler-focus-svc", "KeplerFocusSvc"),
 ];

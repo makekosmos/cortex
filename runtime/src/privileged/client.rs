@@ -42,7 +42,7 @@ pub struct PrivilegedStatus {
 pub fn status() -> PrivilegedStatus {
     use crate::privileged::{brand, pipe, protocol};
 
-    let installed = crate::privileged::scm::query_status();
+    let installed = crate::privileged::scm_status::query_status();
     let (installed, running, binary_path) = match installed {
         Ok(s) => (s.installed, s.running, s.binary_path),
         Err(_) => (false, false, None),
@@ -82,12 +82,19 @@ pub fn enable() -> Result<PrivilegedStatus, String> {
     use windows::Win32::UI::WindowsAndMessaging::SW_NORMAL;
 
     let exe = std::env::current_exe().map_err(|e| format!("current_exe failed: {e}"))?;
+    // The SID of THIS (unelevated) Engine process's user — handed to the
+    // elevated install as `--grant-sid`. Under over-the-shoulder UAC the
+    // installer's own token is the admin's, so the SID must come from here.
+    let grant_sid = crate::privileged::token::current_user_sid()
+        .map_err(|e| format!("resolve caller SID failed: {e}"))?;
     let exe_w: Vec<u16> = std::ffi::OsStr::new(&exe)
         .encode_wide()
         .chain(std::iter::once(0))
         .collect();
     let verb: Vec<u16> = "runas\0".encode_utf16().collect();
-    let params: Vec<u16> = "privileged install\0".encode_utf16().collect();
+    let params: Vec<u16> = format!("privileged install --grant-sid {grant_sid}\0")
+        .encode_utf16()
+        .collect();
 
     unsafe {
         let mut info = SHELLEXECUTEINFOW {

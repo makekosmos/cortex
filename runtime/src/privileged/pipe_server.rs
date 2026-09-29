@@ -23,14 +23,16 @@ use std::thread;
 
 use windows::core::{HRESULT, PCWSTR};
 use windows::Win32::Foundation::{
-    CloseHandle, GetLastError, LocalFree, BOOL, ERROR_PIPE_CONNECTED, HANDLE, HLOCAL,
-    INVALID_HANDLE_VALUE,
+    CloseHandle, GetLastError, LocalFree, BOOL, ERROR_PIPE_BUSY, ERROR_PIPE_CONNECTED, HANDLE,
+    HLOCAL, INVALID_HANDLE_VALUE,
 };
 use windows::Win32::Security::Authorization::{
     ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
 };
 use windows::Win32::Security::{PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES};
-use windows::Win32::Storage::FileSystem::PIPE_ACCESS_DUPLEX;
+use windows::Win32::Storage::FileSystem::{
+    FILE_FLAGS_AND_ATTRIBUTES, FILE_FLAG_FIRST_PIPE_INSTANCE, PIPE_ACCESS_DUPLEX,
+};
 use windows::Win32::System::Pipes::{
     ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, NAMED_PIPE_MODE, PIPE_READMODE_BYTE,
     PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_UNLIMITED_INSTANCES, PIPE_WAIT,
@@ -42,6 +44,7 @@ use crate::privileged::impersonate;
 use crate::privileged::ntfs_scan;
 use crate::privileged::protocol::{self, Request, Response};
 use crate::privileged::request_io;
+use crate::privileged::token::is_sid_literal;
 
 const BUF_SIZE: u32 = 64 * 1024;
 
@@ -54,19 +57,6 @@ pub fn pipe_sddl(grant_sid: &str) -> Option<String> {
         return None;
     }
     Some(format!("D:(A;;GA;;;SY)(A;;GA;;;{grant_sid})"))
-}
-
-/// Well-formed SID literal: `S-<digits>(-<digits>)*`.
-fn is_sid_literal(sid: &str) -> bool {
-    let rest = match sid.strip_prefix("S-") {
-        Some(r) => r,
-        None => return false,
-    };
-    !rest.is_empty()
-        && rest.len() <= 64
-        && rest
-            .split('-')
-            .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
 }
 
 fn wide(s: &str) -> Vec<u16> {
@@ -99,11 +89,20 @@ unsafe fn build_security_attributes(
     Some((sa, sd))
 }
 
-unsafe fn create_pipe_instance(sa: *const SECURITY_ATTRIBUTES) -> HANDLE {
+unsafe fn create_pipe_instance(sa: *const SECURITY_ATTRIBUTES, first: bool) -> HANDLE {
     let name = wide(brand::PIPE_NAME);
+    // FILE_FLAG_FIRST_PIPE_INSTANCE makes creation fail (ERROR_PIPE_BUSY)
+    // when the name is already taken — without it any local user could create
+    // the pipe first while the service is down and squat on it, receiving
+    // the enabled user's requests or feeding fake scan results.
+    let open_mode = if first {
+        FILE_FLAGS_AND_ATTRIBUTES(PIPE_ACCESS_DUPLEX.0 | FILE_FLAG_FIRST_PIPE_INSTANCE.0)
+    } else {
+        PIPE_ACCESS_DUPLEX
+    };
     CreateNamedPipeW(
         PCWSTR(name.as_ptr()),
-        PIPE_ACCESS_DUPLEX,
+        open_mode,
         NAMED_PIPE_MODE(
             PIPE_TYPE_BYTE.0 | PIPE_READMODE_BYTE.0 | PIPE_WAIT.0 | PIPE_REJECT_REMOTE_CLIENTS.0,
         ),
@@ -130,14 +129,27 @@ pub fn accept_loop(stop_flag: Arc<AtomicBool>, grant_sid: &str) {
         None => std::ptr::null(),
     };
 
+    // The first instance must own the name — a pre-existing pipe means a
+    // squatter got there first; fail loudly and keep retrying (fail closed:
+    // no connections are served until we own the name).
+    let mut first = true;
     while !stop_flag.load(Ordering::SeqCst) {
-        let pipe = unsafe { create_pipe_instance(sa_ptr) };
+        let pipe = unsafe { create_pipe_instance(sa_ptr, first) };
         if pipe == INVALID_HANDLE_VALUE {
             let err = unsafe { GetLastError() };
-            eprintln!("CreateNamedPipeW failed: {}", err.0);
+            if first && err == ERROR_PIPE_BUSY {
+                eprintln!(
+                    "pipe {} is already owned by another process — refusing to serve \
+                     (possible squatting); retrying",
+                    brand::PIPE_NAME
+                );
+            } else {
+                eprintln!("CreateNamedPipeW failed: {}", err.0);
+            }
             thread::sleep(std::time::Duration::from_millis(500));
             continue;
         }
+        first = false;
 
         let connected = unsafe { ConnectNamedPipe(pipe, None) };
         if let Err(e) = connected {
