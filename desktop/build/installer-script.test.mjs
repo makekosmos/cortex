@@ -45,7 +45,13 @@ test("auto-selects English or Russian from the system UI language", () => {
 test("finish page offers a checked 'Launch Mundus' checkbox for the Manager", () => {
   expect(installer).toContain("MUI_FINISHPAGE_RUN");
   expect(installer).toContain("resources\\components\\manager\\${MANAGER_EXE}");
-  expect(installer).toContain("Launch ${APP_NAME}");
+  expect(installer).toContain('MUI_FINISHPAGE_RUN_TEXT "$(FINISHPAGE_RUN_TEXT)"');
+  expect(installer).toContain(
+    'LangString FINISHPAGE_RUN_TEXT ${LANG_ENGLISH} "Launch ${APP_NAME}"',
+  );
+  expect(installer).toContain(
+    'LangString FINISHPAGE_RUN_TEXT ${LANG_RUSSIAN} "Запустить ${APP_NAME}"',
+  );
 });
 
 test("only removes the shipped payload, not the whole $INSTDIR recursively", () => {
@@ -143,11 +149,17 @@ test("always starts the Engine at the end of install", () => {
   expect(installer).toContain("engine-post-install.ps1");
 });
 
-test("only opens the Manager on interactive installs", () => {
+test("starts the Engine unconditionally at end of install; Manager only via finish page", () => {
+  expect(installer).toContain("Function StartEngine");
+  expect(installSection).toContain("Call StartEngine");
   expect(installer).toContain(
+    'nsExec::ExecToLog \'"$R5" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\\resources\\engine-post-install.ps1" -StartEngine\'',
+  );
+  // The Manager is launched only by the MUI finish-page checkbox, not by a
+  // silent Exec in the install section.
+  expect(installSection).not.toContain(
     "Exec '\"$INSTDIR\\resources\\components\\manager\\${MANAGER_EXE}\"'",
   );
-  expect(installer).toContain("IfSilent");
 });
 
 // KOS-265: the install payload ships Manager only — `File` ships whatever
@@ -218,7 +230,7 @@ test("no NSIS single-quoted string contains '' (NSIS has no doubled-quote escape
 test("detects previous installs and migrates autostart via dedicated functions", () => {
   expect(installer).toContain("Function DetectPreviousInstall");
   expect(installer).toContain("Function SeedOrMigrateAutostart");
-  expect(installer).toContain("Function StartEngineAndManager");
+  expect(installer).toContain("Function StartEngine");
 });
 
 test("ignores legacy electron-updater arguments", () => {

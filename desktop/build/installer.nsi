@@ -57,9 +57,7 @@ ShowUninstDetails show
 
 ; Finish page: checked "Launch Mundus" runs the Manager on interactive installs.
 !define MUI_FINISHPAGE_RUN "$INSTDIR\resources\components\manager\${MANAGER_EXE}"
-LangString MUI_FINISHPAGE_RUN_TEXT ${LANG_ENGLISH} "Launch ${APP_NAME}"
-LangString MUI_FINISHPAGE_RUN_TEXT ${LANG_RUSSIAN} "Запустить ${APP_NAME}"
-!define MUI_FINISHPAGE_RUN_TEXT "$(MUI_FINISHPAGE_RUN_TEXT)"
+!define MUI_FINISHPAGE_RUN_TEXT "$(FINISHPAGE_RUN_TEXT)"
 
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_INSTFILES
@@ -70,6 +68,11 @@ LangString MUI_FINISHPAGE_RUN_TEXT ${LANG_RUSSIAN} "Запустить ${APP_NAM
 
 !insertmacro MUI_LANGUAGE "English"
 !insertmacro MUI_LANGUAGE "Russian"
+
+; The checkbox text is a LangString so it follows the selected language;
+; these constants exist only after the MUI_LANGUAGE inserts.
+LangString FINISHPAGE_RUN_TEXT ${LANG_ENGLISH} "Launch ${APP_NAME}"
+LangString FINISHPAGE_RUN_TEXT ${LANG_RUSSIAN} "Запустить ${APP_NAME}"
 
 ; Current process names plus the ones a 0.9.x/Electron-era install may have
 ; left running. MIGRATION(KOS-267): remove the legacy names after 2026-11-01.
@@ -145,18 +148,15 @@ Function SeedOrMigrateAutostart
   nsExec::ExecToLog '"$R5" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\resources\engine-post-install.ps1" -MigrateAutostart'
 FunctionEnd
 
-; Always start the installed Engine at the end of the install. On interactive
-; installs also open the Manager so the user lands in the app.
-Function StartEngineAndManager
+; Always start the installed Engine at the end of the install. The Manager
+; launch lives on the MUI finish page instead — the checked "Launch Mundus"
+; checkbox runs it only on interactive installs.
+Function StartEngine
   StrCpy $R5 "$WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe"
   IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 +2
     StrCpy $R5 "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe"
 
   nsExec::ExecToLog '"$R5" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\resources\engine-post-install.ps1" -StartEngine'
-
-  IfSilent manager_done
-  Exec '"$INSTDIR\resources\components\manager\${MANAGER_EXE}"'
-manager_done:
 FunctionEnd
 
 
@@ -304,7 +304,7 @@ Section "Install"
   WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayIcon" "$INSTDIR\resources\icon.ico"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
-  Call StartEngineAndManager
+  Call StartEngine
 SectionEnd
 
 ; If the privileged service is registered, offer one elevated uninstall via

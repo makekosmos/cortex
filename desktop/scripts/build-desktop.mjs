@@ -147,7 +147,7 @@ async function buildWindows(version) {
     `/DVERSION=${version}`,
     `/DSTAGE_DIR=${stage}`,
     `/DOUT_FILE=${outFile}`,
-    `/DMANAGER_EXE="${MANAGER_EXE}"`,
+    `/DMANAGER_EXE=${MANAGER_EXE}`,
     path.join(SHELL_ROOT, "build", "installer.nsi"),
   ];
   log(`makensis: ${makensis}`);
