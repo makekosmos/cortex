@@ -68,12 +68,38 @@ pub(crate) fn is_sid_literal(sid: &str) -> bool {
             .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
 }
 
-/// Validate a `--grant-sid` argument: literal shape AND a real SID per the
+/// `true` iff `sid` names an *individual user account* — the only identity
+/// allowed on the pipe DACL. Anything else would grant a group or a shared
+/// identity access to the SYSTEM service (`--grant-sid S-1-1-0` would open
+/// the pipe to Everyone).
+///
+/// Accepted shapes:
+/// * `S-1-5-21-<a>-<b>-<c>-<rid>` — local/domain user accounts;
+/// * `S-1-12-1-<…>` — Entra ID accounts.
+///
+/// Rejected: every well-known/group/builtin SID (`S-1-1-0`, `S-1-5-11`,
+/// `S-1-5-32-*`, `S-1-5-18/19/20`, `S-1-5-4`, `S-1-2-0`, …) and machine SIDs
+/// (`S-1-5-21-a-b-c` — no RID component).
+pub(crate) fn is_user_account_sid(sid: &str) -> bool {
+    let parts: Vec<&str> = sid.split('-').collect();
+    let digits = |p: &&str| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit());
+    match parts.as_slice() {
+        // S-1-5-21-<a>-<b>-<c>-<rid> — exactly 4 numeric parts after "21".
+        ["S", "1", "5", "21", a, b, c, rid] => [a, b, c, rid].iter().all(|p| digits(*p)),
+        // S-1-12-1-<subauthorities…> — Entra ID, at least one numeric part.
+        ["S", "1", "12", "1", rest @ ..] => !rest.is_empty() && rest.iter().all(digits),
+        _ => false,
+    }
+}
+
+/// Validate a `--grant-sid` argument: literal shape AND an individual
+/// user-account SID AND a real SID per the
 /// `ConvertStringSidToSidW`/`ConvertSidToStringSidW` round-trip — the string
 /// lands in a service launch argument and gates the pipe DACL, so anything
-/// malformed or non-canonical is refused outright.
+/// malformed, non-canonical, or naming a non-user principal is refused
+/// outright.
 pub fn validate_grant_sid(sid: &str) -> bool {
-    if !is_sid_literal(sid) {
+    if !is_sid_literal(sid) || !is_user_account_sid(sid) {
         return false;
     }
     unsafe {
@@ -116,9 +142,8 @@ mod tests {
             assert!(!validate_grant_sid(bad), "validated {bad:?}");
         }
         for good in [
-            "S-1-5-18",
-            "S-1-5-32-544",
             "S-1-5-21-3623811015-3361044348-30300820-1013",
+            "S-1-12-1-1234567890-1234567890-1234567890-1234",
         ] {
             assert!(is_sid_literal(good));
             assert!(validate_grant_sid(good));
@@ -126,9 +151,41 @@ mod tests {
     }
 
     #[test]
+    fn well_known_and_group_sids_are_rejected() {
+        // Syntactically valid SIDs that are NOT individual user accounts —
+        // granting any of these would open the SYSTEM pipe to a group or a
+        // shared identity.
+        for bad in [
+            "S-1-1-0",              // Everyone
+            "S-1-2-0",              // Local
+            "S-1-5-4",              // Interactive
+            "S-1-5-11",             // Authenticated Users
+            "S-1-5-18",             // LocalSystem
+            "S-1-5-19",             // LocalService
+            "S-1-5-20",             // NetworkService
+            "S-1-5-32-544",         // Administrators
+            "S-1-5-32-545",         // Users
+            "S-1-5-32-547",         // Power Users
+            "S-1-5-21-1-2-3",       // machine SID — no RID component
+            "S-1-5-21-1-2-3-500-4", // extra component — not a user SID
+            "S-1-5-21",             // bare domain prefix
+            "S-1-12-1",             // bare Entra prefix
+            "S-1-12-2-123",         // Entra non-user class
+        ] {
+            assert!(is_sid_literal(bad), "{bad:?} is not even a SID literal");
+            assert!(!validate_grant_sid(bad), "validated {bad:?}");
+        }
+    }
+
+    #[test]
     fn non_canonical_sids_are_rejected() {
         // Round-trip catches structurally-invalid and non-canonical forms.
-        for bad in ["S-1-5-18 ", "s-1-5-18", "S-1-5-018", "S-01-5-18"] {
+        for bad in [
+            "S-1-5-21-1-2-3-1001 ",
+            "s-1-5-21-1-2-3-1001",
+            "S-1-5-21-1-2-3-01001",
+            "S-1-5-021-1-2-3-1001",
+        ] {
             assert!(!validate_grant_sid(bad), "validated {bad:?}");
         }
     }

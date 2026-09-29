@@ -17,7 +17,7 @@ use std::ffi::OsStr;
 use std::io::Write;
 use std::os::windows::ffi::OsStrExt;
 use std::os::windows::io::FromRawHandle;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
 
@@ -44,16 +44,17 @@ use crate::privileged::impersonate;
 use crate::privileged::ntfs_scan;
 use crate::privileged::protocol::{self, Request, Response};
 use crate::privileged::request_io;
-use crate::privileged::token::is_sid_literal;
+use crate::privileged::token::is_user_account_sid;
 
 const BUF_SIZE: u32 = 64 * 1024;
 
 /// SDDL for the pipe DACL: full access for SYSTEM and the enabling user only.
 /// The SID comes from the service's `--grant-sid` launch argument (written by
-/// `privileged install`). Returns None for malformed SIDs — a garbage string
-/// must never be pasted into a security descriptor.
+/// `privileged install`). Only an individual user-account SID is accepted —
+/// a group/well-known SID (`S-1-1-0`, `S-1-5-32-*`, …) would grant the whole
+/// group access, so anything else returns None (SYSTEM-only, fail closed).
 pub fn pipe_sddl(grant_sid: &str) -> Option<String> {
-    if !is_sid_literal(grant_sid) {
+    if !is_user_account_sid(grant_sid) {
         return None;
     }
     Some(format!("D:(A;;GA;;;SY)(A;;GA;;;{grant_sid})"))
@@ -129,50 +130,65 @@ pub fn accept_loop(stop_flag: Arc<AtomicBool>, grant_sid: &str) {
         None => std::ptr::null(),
     };
 
-    // The first instance must own the name — a pre-existing pipe means a
-    // squatter got there first; fail loudly and keep retrying (fail closed:
-    // no connections are served until we own the name).
-    let mut first = true;
+    // Ownership invariant: the pipe name must never go completely unowned —
+    // during a gap any local process could create the name first and squat on
+    // it. The next instance is created BEFORE the connected one goes to a
+    // worker, and `open_workers` counts workers still holding an instance
+    // open; when it reaches zero with no listener the name may be squatted,
+    // so it must be reclaimed with FILE_FLAG_FIRST_PIPE_INSTANCE.
+    let open_workers = Arc::new(AtomicUsize::new(0));
+    let mut listener = INVALID_HANDLE_VALUE;
     while !stop_flag.load(Ordering::SeqCst) {
-        let pipe = unsafe { create_pipe_instance(sa_ptr, first) };
-        if pipe == INVALID_HANDLE_VALUE {
-            let err = unsafe { GetLastError() };
-            if first && err == ERROR_PIPE_BUSY {
-                eprintln!(
-                    "pipe {} is already owned by another process — refusing to serve \
-                     (possible squatting); retrying",
-                    brand::PIPE_NAME
-                );
-            } else {
-                eprintln!("CreateNamedPipeW failed: {}", err.0);
+        if listener == INVALID_HANDLE_VALUE {
+            let first = must_reclaim_name(open_workers.load(Ordering::SeqCst));
+            listener = unsafe { create_pipe_instance(sa_ptr, first) };
+            if listener == INVALID_HANDLE_VALUE {
+                let err = unsafe { GetLastError() };
+                if first && err == ERROR_PIPE_BUSY {
+                    eprintln!(
+                        "pipe {} is already owned by another process — refusing to serve \
+                         (possible squatting); retrying",
+                        brand::PIPE_NAME
+                    );
+                } else {
+                    eprintln!("CreateNamedPipeW failed: {}", err.0);
+                }
+                thread::sleep(std::time::Duration::from_millis(500));
+                continue;
             }
-            thread::sleep(std::time::Duration::from_millis(500));
-            continue;
         }
-        first = false;
 
-        let connected = unsafe { ConnectNamedPipe(pipe, None) };
+        let connected = unsafe { ConnectNamedPipe(listener, None) };
         if let Err(e) = connected {
             if e.code() != HRESULT::from_win32(ERROR_PIPE_CONNECTED.0) {
                 eprintln!("ConnectNamedPipe failed: {e}");
-                unsafe { CloseHandle(pipe) }.ok();
+                unsafe { CloseHandle(listener) }.ok();
+                listener = INVALID_HANDLE_VALUE;
                 continue;
             }
         }
 
         if stop_flag.load(Ordering::SeqCst) {
             unsafe {
-                let _ = DisconnectNamedPipe(pipe);
-                CloseHandle(pipe).ok();
+                let _ = DisconnectNamedPipe(listener);
+                CloseHandle(listener).ok();
             }
             break;
         }
 
-        // Raw handle into the worker thread.
-        let h = PipeHandle(pipe);
-        thread::spawn(move || {
-            handle_connection(h);
-        });
+        // Open the next listener BEFORE the connected handle leaves this
+        // thread, so the name stays owned even if the worker exits instantly.
+        let next = unsafe { create_pipe_instance(sa_ptr, false) };
+        if next == INVALID_HANDLE_VALUE {
+            let err = unsafe { GetLastError() };
+            eprintln!("CreateNamedPipeW (next instance) failed: {}", err.0);
+        }
+
+        open_workers.fetch_add(1, Ordering::SeqCst);
+        let counter = open_workers.clone();
+        let h = PipeHandle(listener);
+        thread::spawn(move || serve_worker(h, counter));
+        listener = next;
     }
 
     if let Some((_, sd)) = sa_pair {
@@ -180,26 +196,43 @@ pub fn accept_loop(stop_flag: Arc<AtomicBool>, grant_sid: &str) {
     }
 }
 
+/// Decide whether the next `CreateNamedPipeW` must reclaim the name with
+/// `FILE_FLAG_FIRST_PIPE_INSTANCE` (i.e. possibly race a squatter): true iff
+/// no instance of ours is open anywhere — no listener handle and no worker
+/// still serving a connected instance.
+fn must_reclaim_name(open_workers: usize) -> bool {
+    open_workers == 0
+}
+
 struct PipeHandle(HANDLE);
 unsafe impl Send for PipeHandle {}
 
-fn handle_connection(pipe: PipeHandle) {
+fn serve_worker(pipe: PipeHandle, counter: Arc<AtomicUsize>) {
     let mut file = unsafe { std::fs::File::from_raw_handle(pipe.0 .0) };
-    let raw = request_io::read_request_line(&mut file).unwrap_or_default();
+    serve_connection(pipe.0, &mut file);
+    // Decrement while this instance is still open — `open_workers > 0` must
+    // always imply a live instance of ours.
+    counter.fetch_sub(1, Ordering::SeqCst);
+}
+
+/// Serve one connected pipe instance; `file` wraps `pipe` and is closed by
+/// the caller after this returns.
+fn serve_connection(pipe: HANDLE, file: &mut std::fs::File) {
+    let raw = request_io::read_request_line(file).unwrap_or_default();
 
     // Parse first — impersonation requires a client message to have been
     // read before ImpersonateNamedPipeClient succeeds.
     let value: serde_json::Value = match serde_json::from_str(raw.trim()) {
         Ok(v) => v,
         Err(e) => {
-            write_response(&mut file, &Response::err(format!("invalid request: {e}")));
+            write_response(file, &Response::err(format!("invalid request: {e}")));
             return;
         }
     };
     let version = protocol::wire_version(&value);
     if version > protocol::PROTOCOL_VERSION {
         write_response(
-            &mut file,
+            file,
             &Response::err(format!(
                 "unsupported protocol version {version} (max {})",
                 protocol::PROTOCOL_VERSION
@@ -210,7 +243,7 @@ fn handle_connection(pipe: PipeHandle) {
     let req: Request = match serde_json::from_value(value) {
         Ok(r) => r,
         Err(e) => {
-            write_response(&mut file, &Response::err(format!("invalid request: {e}")));
+            write_response(file, &Response::err(format!("invalid request: {e}")));
             return;
         }
     };
@@ -219,10 +252,10 @@ fn handle_connection(pipe: PipeHandle) {
         Request::NtfsScan {
             root,
             exclude_noisy,
-        } => handle_ntfs_scan(pipe.0, &root, exclude_noisy),
+        } => handle_ntfs_scan(pipe, &root, exclude_noisy),
         other => protocol::dispatch(other, &hosts::default_hosts_path()),
     };
-    write_response(&mut file, &resp);
+    write_response(file, &resp);
 }
 
 fn write_response(file: &mut std::fs::File, resp: &Response) {

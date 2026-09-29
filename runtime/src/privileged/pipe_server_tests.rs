@@ -24,8 +24,25 @@ fn sddl_rejects_malformed_sids() {
     ] {
         assert!(pipe_sddl(bad).is_none(), "accepted {bad:?}");
     }
-    assert!(pipe_sddl("S-1-5-18").is_some());
-    assert!(pipe_sddl("S-1-5-32-544").is_some());
+}
+
+#[test]
+fn sddl_rejects_group_and_well_known_sids() {
+    // Well-formed SIDs that name groups/shared identities must fall back to
+    // SYSTEM-only — granting them would open the pipe to a whole group.
+    for group in ["S-1-1-0", "S-1-5-11", "S-1-5-32-544", "S-1-5-18"] {
+        assert!(pipe_sddl(group).is_none(), "granted {group:?}");
+    }
+}
+
+#[test]
+fn reclaim_decision_requires_first_instance_flag() {
+    // No open instance (no listener, no workers) → must reclaim with
+    // FILE_FLAG_FIRST_PIPE_INSTANCE; ≥1 live worker means the name is still
+    // ours and a normal instance join is safe.
+    assert!(must_reclaim_name(0));
+    assert!(!must_reclaim_name(1));
+    assert!(!must_reclaim_name(64));
 }
 
 #[test]
