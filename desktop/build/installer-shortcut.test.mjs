@@ -15,23 +15,13 @@ test("Mundus Start Menu shortcut opens the packaged Manager GPUI", () => {
   expect(installer).toContain(`CreateShortCut "$SMPROGRAMS\\Mundus.lnk" "${manager}"`);
 });
 
-test("Agenda GPUI component gets a guarded Start Menu shortcut with cleanup", () => {
-  const agenda = "$INSTDIR\\resources\\components\\agenda\\Agenda.exe";
-  expect(installer).toContain(`IfFileExists "${agenda}"`);
-  expect(installer).toContain(`CreateShortCut "$SMPROGRAMS\\Agenda.lnk" "${agenda}"`);
-  expect(installer).toContain('Delete "$SMPROGRAMS\\Agenda.lnk"');
-});
-
-test("Memoria GPUI component gets a guarded Start Menu shortcut with cleanup", () => {
-  const memoria = "$INSTDIR\\resources\\components\\memoria\\Memoria.exe";
-  expect(installer).toContain(`IfFileExists "${memoria}"`);
-  expect(installer).toContain(`CreateShortCut "$SMPROGRAMS\\Memoria.lnk" "${memoria}"`);
-  expect(installer).toContain('Delete "$SMPROGRAMS\\Memoria.lnk"');
-});
-
-test("Dictation GPUI component gets a guarded Start Menu shortcut with cleanup", () => {
-  const dictation = "$INSTDIR\\resources\\components\\dictation\\Dictation.exe";
-  expect(installer).toContain(`IfFileExists "${dictation}"`);
-  expect(installer).toContain(`CreateShortCut "$SMPROGRAMS\\Dictation.lnk" "${dictation}"`);
-  expect(installer).toContain('Delete "$SMPROGRAMS\\Dictation.lnk"');
-});
+// KOS-265: the GPUI apps are store-installed native apps — the installer must
+// never create component shortcuts, but it cleans up stale ones left by a
+// bundled 0.9.x install (legacy Kosmos shortcut names — MIGRATION(KOS-267)).
+for (const app of ["Agenda", "Memoria", "Dictation"]) {
+  test(`${app} has no installer-created shortcut; stale shortcut is removed`, () => {
+    expect(installer).not.toContain(`CreateShortCut "$SMPROGRAMS\\${app}.lnk"`);
+    expect(installer).not.toContain(`components\\${app.toLowerCase()}\\`);
+    expect(installer).toContain(`Delete "$SMPROGRAMS\\Kosmos ${app}.lnk"`);
+  });
+}

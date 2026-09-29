@@ -74,6 +74,7 @@ pub struct PackageManifest {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "kebab-case")]
 pub enum TargetRuntime {
+    KosmosHost,
     Worker,
     Standalone,
     Web,
@@ -824,7 +825,7 @@ mod tests {
     }
     #[test]
     fn v2_strict_contract_and_dependencies() {
-        let s = r#"{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.2.3","kind":"app","engine_api":"*","entrypoint":"index.html","icon":"icon.ico","publisher":"kosmos","targets":[{"runtime":"standalone","os":["linux"]}],"data":{"access":[],"defines":[],"mappings":[]}}"#;
+        let s = r#"{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.2.3","kind":"app","engine_api":"*","entrypoint":"index.html","icon":"icon.ico","publisher":"kosmos","targets":[{"runtime":"kosmos-host","os":["linux"]}],"data":{"access":[],"defines":[],"mappings":[]}}"#;
         let VersionedManifest::V2(m) = PackageManifest::parse(s).unwrap() else {
             panic!()
         };
@@ -838,7 +839,7 @@ mod tests {
     fn v2_rejects_unsafe_or_non_windows_icon_paths() {
         for icon in ["../icon.ico", "icon.svg", "icon.ico/extra"] {
             let input = format!(
-                r#"{{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.2.3","kind":"app","engine_api":"*","entrypoint":"index.html","icon":"{icon}","publisher":"kosmos","targets":[{{"runtime":"standalone","os":["linux"]}}],"data":{{"access":[],"defines":[],"mappings":[]}}}}"#
+                r#"{{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.2.3","kind":"app","engine_api":"*","entrypoint":"index.html","icon":"{icon}","publisher":"kosmos","targets":[{{"runtime":"kosmos-host","os":["linux"]}}],"data":{{"access":[],"defines":[],"mappings":[]}}}}"#
             );
             assert!(PackageManifest::parse(&input).is_err(), "{icon}");
         }
@@ -846,7 +847,7 @@ mod tests {
 
     #[test]
     fn v2_rejects_duplicate_targets_and_overlong_requirements() {
-        let base = r#"{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.2.3","kind":"app","engine_api":"*","entrypoint":"index.html","publisher":"kosmos","targets":[{"runtime":"standalone","os":["linux"]},{"runtime":"standalone","os":["linux"]}],"data":{"access":[],"defines":[],"mappings":[]}}"#;
+        let base = r#"{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.2.3","kind":"app","engine_api":"*","entrypoint":"index.html","publisher":"kosmos","targets":[{"runtime":"kosmos-host","os":["linux"]},{"runtime":"kosmos-host","os":["linux"]}],"data":{"access":[],"defines":[],"mappings":[]}}"#;
         assert!(PackageManifest::parse(base).is_err());
         let long = base.replace("\"access\":[]", &format!("\"access\":[{{\"type\":\"com.kosmos.note\",\"versions\":\"{}\",\"actions\":[\"read\"],\"fields\":{{\"read\":[],\"write\":[]}}}}]", "x".repeat(129)));
         assert!(PackageManifest::parse(&long).is_err());
@@ -854,7 +855,7 @@ mod tests {
 
     #[test]
     fn v2_rejects_duplicate_mappings_and_long_namespace_suffix() {
-        let s = r#"{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.2.3","kind":"app","engine_api":"*","entrypoint":"index.html","publisher":"kosmos","targets":[{"runtime":"standalone","os":["linux"]}],"data":{"access":[],"defines":[],"mappings":[{"type":"com.kosmos.note","versions":"*","direction":"import","fidelity":"native"},{"type":"com.kosmos.note","versions":"*","direction":"export","fidelity":"native"}]}}"#;
+        let s = r#"{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.2.3","kind":"app","engine_api":"*","entrypoint":"index.html","publisher":"kosmos","targets":[{"runtime":"kosmos-host","os":["linux"]}],"data":{"access":[],"defines":[],"mappings":[{"type":"com.kosmos.note","versions":"*","direction":"import","fidelity":"native"},{"type":"com.kosmos.note","versions":"*","direction":"export","fidelity":"native"}]}}"#;
         assert!(PackageManifest::parse(s).is_err());
         let long = s.replace("\"mappings\":[", &format!("\"defines\":[{{\"type\":\"com.kosmos.demo.{}\",\"version\":\"1.0.0\",\"schema\":\"schema.json\"}}],\"mappings\":[", "x".repeat(65)));
         assert!(PackageManifest::parse(&long).is_err());
@@ -883,7 +884,7 @@ mod tests {
 
     #[test]
     fn worker_entrypoint_selects_the_current_target_only() {
-        let input = r#"{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.2.3","kind":"app","engine_api":"*","entrypoint":"index.html","publisher":"kosmos","targets":[{"runtime":"standalone","os":["windows"]},{"runtime":"worker","os":["windows"],"arch":["x86_64"],"entrypoint":"worker-windows.exe"},{"runtime":"worker","os":["linux"],"arch":["x86_64"],"entrypoint":"worker-linux.exe"}],"data":{"access":[],"defines":[],"mappings":[]}}"#;
+        let input = r#"{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.2.3","kind":"app","engine_api":"*","entrypoint":"index.html","publisher":"kosmos","targets":[{"runtime":"kosmos-host","os":["windows"]},{"runtime":"worker","os":["windows"],"arch":["x86_64"],"entrypoint":"worker-windows.exe"},{"runtime":"worker","os":["linux"],"arch":["x86_64"],"entrypoint":"worker-linux.exe"}],"data":{"access":[],"defines":[],"mappings":[]}}"#;
         let manifest = PackageManifest::parse(input).unwrap();
         let expected = if cfg!(windows) {
             Some("worker-windows.exe")

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -31,24 +31,10 @@ const cleanWorktree =
 // installed pnpm dependencies.
 const dependenciesReady = existsSync(path.join(desktop, "node_modules"));
 
-function componentReady(pinKey, envVar, sibling) {
-  const pin = JSON.parse(readFileSync(path.join(desktop, "component-pins.json"), "utf8"))[pinKey];
-  const source = path.resolve(process.env[envVar]?.trim() || path.join(root, "..", sibling));
-  return (
-    !!pin?.commit &&
-    existsSync(path.join(source, "Cargo.toml")) &&
-    spawnSync("git", ["rev-parse", "HEAD"], { cwd: source, encoding: "utf8" }).stdout?.trim() ===
-      pin.commit
-  );
-}
-
 const prerequisites =
   process.platform === "win32" &&
   cleanWorktree &&
   dependenciesReady &&
-  componentReady("agenda_gpui", "MUNDUS_AGENDA_GPUI_SRC", "agenda-gpui") &&
-  componentReady("memoria_gpui", "MUNDUS_MEMORIA_GPUI_SRC", "memoria-gpui") &&
-  componentReady("dictation_gpui", "MUNDUS_DICTATION_GPUI_SRC", "dictation") &&
   spawnSync("cargo", ["--version"], { encoding: "utf8" }).status === 0 &&
   git(["rev-parse", "HEAD"]);
 
@@ -146,12 +132,13 @@ test(
 
     for (const name of ["mundus", "memoria", "agenda", "dictation"])
       assert.ok(existsSync(path.join(desktop, "build", "app-icons", `${name}.ico`)), name);
-    for (const [component, exe] of [
-      ["manager", "Mundus Manager.exe"],
-      ["agenda", "Agenda.exe"],
-      ["memoria", "Memoria.exe"],
-      ["dictation", "Dictation.exe"],
-    ]) {
+    // KOS-265: only Manager is staged as a bundled component.
+    for (const component of ["agenda", "memoria", "dictation"])
+      assert.ok(
+        !existsSync(path.join(desktop, ".tmp", "components", component)),
+        `${component} must not be staged`,
+      );
+    for (const [component, exe] of [["manager", "Mundus Manager.exe"]]) {
       const out = path.join(desktop, ".tmp", "components", component, "win-unpacked");
       assert.ok(existsSync(path.join(out, exe)), `${component} unpackaged output`);
       assert.ok(

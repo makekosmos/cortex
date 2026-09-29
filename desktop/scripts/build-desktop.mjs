@@ -108,7 +108,9 @@ function stageInstaller() {
   copyFileSync(path.join(SHELL_ROOT, "build", "tray.ico"), path.join(resources, "tray.ico"));
 
   const componentsDir = path.join(resources, "components");
-  for (const component of ["manager", "agenda", "memoria", "dictation"]) {
+  // KOS-265: only Manager is bundled — Agenda/Memoria/Dictation install as
+  // native apps from the signed package catalog.
+  for (const component of ["manager"]) {
     const source = path.join(SHELL_ROOT, ".tmp", "components", component, "win-unpacked");
     const target = path.join(componentsDir, component);
     if (!existsSync(source)) continue;

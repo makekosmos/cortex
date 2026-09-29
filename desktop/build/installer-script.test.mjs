@@ -33,6 +33,20 @@ test("cleans up the old Electron install under kepler-shell and its GUID keys", 
   expect(installer).not.toContain("{af85bd72");
 });
 
+test("deletes the brace-less Electron uninstall keys even without kepler-shell", () => {
+  // KOS-265: the GUID keys were previously deleted only inside the
+  // kepler-shell payload branch — a stale Apps & Features entry outlived the
+  // upgrade. MIGRATION(KOS-267): the legacy keys must keep being deleted.
+  for (const guid of [
+    "4fe2b964-4d0e-5a72-8728-cca14468c9f0",
+    "af85bd72-f4c8-5af3-a0fe-9aa1f0fa5a8d",
+  ]) {
+    expect(installSection).toContain(
+      `DeleteRegKey HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${guid}"`,
+    );
+  }
+});
+
 test("removes old autostart Run values unconditionally on install", () => {
   // MIGRATION(KOS-267): the legacy names must keep being deleted.
   const names = [
@@ -97,6 +111,17 @@ test("only opens the Manager on interactive installs", () => {
     "Exec '\"$INSTDIR\\resources\\components\\manager\\${MANAGER_EXE}\"'",
   );
   expect(installer).toContain("IfSilent");
+});
+
+// KOS-265: Agenda/Memoria/Dictation are store-installed native apps — the
+// 0.9.x→0.10.0 upgrade wipe of $INSTDIR\resources removes their bundled
+// payloads, and no component dir other than manager may be referenced.
+test("bundles only Manager and removes legacy bundled component dirs on upgrade", () => {
+  for (const component of ["agenda", "memoria", "dictation"]) {
+    expect(installer).not.toContain(`components\\${component}\\`);
+  }
+  // The upgrade wipe covers resources\components\{agenda,memoria,dictation}.
+  expect(installSection).toContain('RMDir /r "$INSTDIR\\resources"');
 });
 
 test("seeds autostart only conditionally and never using the Desktop VERSION", () => {

@@ -1,4 +1,6 @@
-; Mundus Desktop installer (Engine + GPUI components) — no Electron.
+; Mundus Desktop installer (Engine + Manager component) — no Electron.
+; Agenda, Memoria and Dictation are native apps installed by the Engine from
+; the signed package catalog (KOS-265); only components\manager ships here.
 ;
 ; Usage:
 ;   makensis.exe /DVERSION=1.2.3 /DSTAGE_DIR=C:\...\installer-stage /DOUT_FILE=C:\...\Mundus-Setup-1.2.3.exe installer.nsi
@@ -265,16 +267,9 @@ Section "Install"
   CreateShortCut "$SMPROGRAMS\Mundus.lnk" "$INSTDIR\resources\components\manager\${MANAGER_EXE}" "" "$INSTDIR\resources\icon.ico" 0
   CreateShortCut "$DESKTOP\Mundus.lnk" "$INSTDIR\resources\components\manager\${MANAGER_EXE}" "" "$INSTDIR\resources\icon.ico" 0
 
-  ; GPUI components get their own Start Menu shortcuts.
-  IfFileExists "$INSTDIR\resources\components\agenda\Agenda.exe" 0 agenda_shortcut_done
-    CreateShortCut "$SMPROGRAMS\Agenda.lnk" "$INSTDIR\resources\components\agenda\Agenda.exe" "" "$INSTDIR\resources\icon.ico" 0
-  agenda_shortcut_done:
-  IfFileExists "$INSTDIR\resources\components\memoria\Memoria.exe" 0 memoria_shortcut_done
-    CreateShortCut "$SMPROGRAMS\Memoria.lnk" "$INSTDIR\resources\components\memoria\Memoria.exe" "" "$INSTDIR\resources\icon.ico" 0
-  memoria_shortcut_done:
-  IfFileExists "$INSTDIR\resources\components\dictation\Dictation.exe" 0 dictation_shortcut_done
-    CreateShortCut "$SMPROGRAMS\Dictation.lnk" "$INSTDIR\resources\components\dictation\Dictation.exe" "" "$INSTDIR\resources\icon.ico" 0
-  dictation_shortcut_done:
+  ; KOS-265: Agenda/Memoria/Dictation are store-installed native apps — no
+  ; bundled-component Start Menu shortcuts. Stale shortcuts from a bundled
+  ; 0.9.x install are removed in the legacy cleanup above.
 
   Call SeedOrMigrateAutostart
 
