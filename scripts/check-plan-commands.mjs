@@ -14,10 +14,6 @@ const COMMANDS_BY_CHECK = {
   "test:rust": ["pnpm", ["run", "test:rust"]],
   "runtime-staging": ["pnpm", ["--dir", "desktop", "run", "test:runtime-staging"]],
   "manager-gpui": ["pnpm", ["run", "check:manager-gpui"]],
-  "native-services": [
-    "cargo",
-    ["build", "--locked", "-p", "watcher", "-p", "focus-helper", "-p", "focus-svc", "--bins"],
-  ],
 };
 
 const FULL_CONTRACT_CHECKS = [];

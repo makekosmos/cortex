@@ -14,8 +14,9 @@ This repository owns the Mundus desktop application and its host-side services:
 - `dictation` (sibling repo `makekosmos/dictation`, pinned in
   `desktop/component-pins.json`) — the Dictation shipped in the
   Windows package as `resources/components/dictation/Dictation.exe`;
-- `runtime/` — the Rust backend process supervised by the Engine;
-- `native-services/` — Windows focus/watcher services used by the Engine.
+- `runtime/` — the Rust Engine, including privileged operations
+  (`mundus-engine privileged …` — managed hosts blocks and fast NTFS
+  indexing behind a one-time UAC grant).
 
 ## Current boundary
 

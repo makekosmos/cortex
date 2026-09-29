@@ -147,6 +147,8 @@ pub(super) async fn dispatch_standard(
             .unwrap_or_else(LocalResponse::err)
     } else if let Some(rest) = operation.strip_prefix("file_index.") {
         handle_file_index_op(rest, params, &file_index).await
+    } else if let Some(rest) = operation.strip_prefix("system.") {
+        handle_system_op(rest, params, &client).await
     } else if let Some(rest) = operation.strip_prefix("commands.") {
         handle_command_op(rest, params, &command_bus, connection_id).await
     } else if let Some(rest) = operation.strip_prefix("store.") {

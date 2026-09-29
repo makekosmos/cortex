@@ -16,12 +16,7 @@ test("engine archive is independently verifiable and installable", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "mundus-engine-distribution-"));
   const release = path.join(root, "release");
   const archive = path.join(root, "Mundus-Engine-1.2.3.zip");
-  for (const name of [
-    "mundus-engine.exe",
-    "focus-helper.exe",
-    "focus-svc.exe",
-    "tray.ico",
-  ]) {
+  for (const name of ["mundus-engine.exe", "tray.ico"]) {
     mkdirSync(release, { recursive: true });
     writeFileSync(path.join(release, name), name);
   }
@@ -42,12 +37,7 @@ test("buildEngineArchive accepts any semver product version", () => {
   const release = path.join(root, "release");
   const archive = path.join(root, "Mundus-Engine-0.1.0.zip");
   mkdirSync(release, { recursive: true });
-  for (const name of [
-    "mundus-engine.exe",
-    "focus-helper.exe",
-    "focus-svc.exe",
-    "tray.ico",
-  ])
+  for (const name of ["mundus-engine.exe", "tray.ico"])
     writeFileSync(path.join(release, name), name);
   const manifest = buildEngineArchive(release, archive, {
     version: "0.1.0",
@@ -62,12 +52,7 @@ test("engine archive rejects tampering", () => {
   const release = path.join(root, "release");
   const archive = path.join(root, "engine.zip");
   mkdirSync(release, { recursive: true });
-  for (const name of [
-    "mundus-engine.exe",
-    "focus-helper.exe",
-    "focus-svc.exe",
-    "tray.ico",
-  ])
+  for (const name of ["mundus-engine.exe", "tray.ico"])
     writeFileSync(path.join(release, name), "ok");
   const manifest = buildEngineArchive(release, archive, {
     version: "1.2.3",
@@ -82,12 +67,7 @@ test("a valid installed engine is preserved", () => {
   const release = path.join(root, "release");
   const archive = path.join(root, "engine.zip");
   mkdirSync(release, { recursive: true });
-  for (const name of [
-    "mundus-engine.exe",
-    "focus-helper.exe",
-    "focus-svc.exe",
-    "tray.ico",
-  ])
+  for (const name of ["mundus-engine.exe", "tray.ico"])
     writeFileSync(path.join(release, name), "new");
   const manifest = buildEngineArchive(release, archive, {
     version: "1.2.3",
@@ -108,12 +88,7 @@ test("installed Engine resolution follows current.json and verifies canonical fi
   const release = path.join(root, "release");
   const archive = path.join(root, "engine.zip");
   mkdirSync(release, { recursive: true });
-  for (const name of [
-    "mundus-engine.exe",
-    "focus-helper.exe",
-    "focus-svc.exe",
-    "tray.ico",
-  ])
+  for (const name of ["mundus-engine.exe", "tray.ico"])
     writeFileSync(path.join(release, name), name);
   const manifest = buildEngineArchive(release, archive, {
     version: "1.2.3",

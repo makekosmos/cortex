@@ -10,7 +10,9 @@ mod diagnostics;
 mod estimate;
 mod risk;
 mod scan;
-mod scanner;
+// pub(crate): privileged::ntfs_scan reuses `path_contains_noisy_folder` so the
+// service-side pre-filter matches the user-mode scanner exactly.
+pub(crate) mod scanner;
 mod search;
 mod settings;
 mod storage;

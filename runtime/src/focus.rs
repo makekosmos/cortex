@@ -7,8 +7,10 @@
 //   - Active state — `sync_kv` под key `focus.active_state`, JSON-encoded
 //     `{ active, blocklist_id?, started_at? }`.
 //
-// Применение блокировки (hosts file write) делает shell — этот модуль
-// **только** хранит state. Никаких helper bin / privileged ops.
+// Применение блокировки (hosts file write) делает privileged Engine service —
+// этот модуль хранит state и после set_active_state дёргает
+// `privileged::client::sync_managed_block` (best-effort: без service'а
+// блокировка просто не применяется, state всё равно сохраняется).
 //
 // WS-операции (см. dispatch в ws_server.rs):
 //   - `focus.list_blocklists`
@@ -25,6 +27,9 @@ use crate::ark_host::ArkHost;
 
 pub const BLOCKLIST_OBJ_TYPE_ID: &str = "blocklist_obj";
 pub const FOCUS_ACTIVE_STATE_KEY: &str = "focus.active_state";
+
+/// Managed hosts-block name owned by the focus feature.
+pub const FOCUS_HOSTS_BLOCK: &str = "site-block";
 
 /// Минимальный async-trait для ARK операций, нужных focus-модулю.
 ///
@@ -662,8 +667,38 @@ pub async fn handle_focus_op(subop: &str, params: Value, ark: &ArkHost) -> Focus
                     return FocusResponse::err(format!("focus.set_active_state: params: {e}"))
                 }
             };
+            // Desired hosts rows = the resolved blocklist when activating;
+            // empty otherwise (clears the managed block). `None` = resolution
+            // failed — skip the sync rather than clearing a live block.
+            let desired_domains: Option<Vec<String>> = if p.active {
+                match p.blocklist_id.as_deref() {
+                    Some(id) => resolve_blocklist_domains(ark, id).await.ok(),
+                    None => Some(Vec::new()),
+                }
+            } else {
+                Some(Vec::new())
+            };
             match set_active_state(ark, p).await {
-                Ok(()) => FocusResponse::ok(json!({ "ok": true })),
+                Ok(()) => match desired_domains {
+                    Some(domains) => match crate::privileged::client::sync_managed_block(
+                        FOCUS_HOSTS_BLOCK,
+                        &domains,
+                    ) {
+                        Ok(()) => FocusResponse::ok(json!({ "ok": true, "hosts_applied": true })),
+                        Err(e) => {
+                            tracing::warn!(
+                                target: "focus",
+                                error = %e,
+                                "privileged hosts sync skipped"
+                            );
+                            FocusResponse::ok(json!({ "ok": true, "hosts_applied": false }))
+                        }
+                    },
+                    None => {
+                        tracing::warn!(target: "focus", "blocklist resolve failed; hosts sync skipped");
+                        FocusResponse::ok(json!({ "ok": true, "hosts_applied": false }))
+                    }
+                },
                 Err(e) => FocusResponse::err(format!("focus.set_active_state: {e}")),
             }
         }

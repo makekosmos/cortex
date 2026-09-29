@@ -118,9 +118,19 @@ fn startup_delay_ms(env_key: &str, default_ms: u64) -> u64 {
         .unwrap_or(default_ms)
 }
 
+fn main() -> ExitCode {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    // `privileged <install|uninstall|status|run-service>` — dedicated
+    // one-shot / SCM modes that never start the Engine runtime.
+    if let Some(code) = engine::privileged::cli::run_if_privileged(&args) {
+        return code;
+    }
+    run(args)
+}
+
 #[tokio::main(flavor = "multi_thread", worker_threads = 4)]
-async fn main() -> ExitCode {
-    match engine_supervisor::process_mode(std::env::args().skip(1)) {
+async fn run(args: Vec<String>) -> ExitCode {
+    match engine_supervisor::process_mode(args) {
         ProcessMode::Supervisor => return engine_supervisor::run_supervisor().await,
         ProcessMode::RestartCore => return engine_supervisor::restart_core(),
         ProcessMode::Shutdown => return engine_supervisor::shutdown(),

@@ -22,6 +22,10 @@
 !define ENGINE_ARCHIVE "Mundus Engine.zip"
 !define ENGINE_ROOT "$LOCALAPPDATA\Mundus\Engine"
 !define MANAGER_EXE "Mundus Manager.exe"
+; Privileged Engine service (one-time UAC grant). The name mirrors
+; brand::SYSTEM_SERVICE_NAME in the Engine — keep in sync.
+!define PRIVILEGED_SVC_NAME "MundusSystemSvc"
+!define PRIVILEGED_SVC_EXE "$PROGRAMFILES64\Mundus\Service\mundus-privileged-service.exe"
 
 Name "${APP_NAME} ${VERSION}"
 OutFile "${OUT_FILE}"
@@ -289,12 +293,38 @@ Section "Install"
   Call StartEngineAndManager
 SectionEnd
 
+; If the privileged service is registered, offer one elevated uninstall via
+; the stable service copy (the Engine tree under %LOCALAPPDATA% may already
+; be gone). Declining the UAC prompt leaves the service installed but inert
+; — the pipe accepts nobody until re-enabled.
+Function un.RemovePrivilegedService
+  ; `sc query` runs unelevated — skip the UAC round-trip entirely when no
+  ; service is registered.
+  nsExec::ExecToStack 'sc.exe query "${PRIVILEGED_SVC_NAME}"'
+  Pop $R0
+  Pop $R1
+  StrCmp $R0 "0" 0 done
+    IfFileExists "${PRIVILEGED_SVC_EXE}" 0 done
+      ExecShell "runas" "${PRIVILEGED_SVC_EXE}" "privileged uninstall"
+      Pop $R0
+      ; ExecShell reports "error" when the user declines the UAC prompt or the
+      ; launch fails — either way the service stays; say so and move on.
+      StrCmp $R0 "error" 0 done
+        DetailPrint "Privileged service left installed (elevation declined)"
+        IfSilent +2
+          MessageBox MB_ICONEXCLAMATION|MB_OK "The Mundus privileged service is still installed. To remove it later, run as administrator: $\r$\n${PRIVILEGED_SVC_EXE} privileged uninstall"
+  done:
+FunctionEnd
+
 Section "Uninstall"
   SetShellVarContext current
 
   ; Stop processes (current and legacy names) before deleting files so
   ; nothing is locked.
   !insertmacro KillProductProcesses
+
+  ; One UAC prompt to remove the service before files are cleaned.
+  Call un.RemovePrivilegedService
 
   Delete "$DESKTOP\Mundus.lnk"
   Delete "$SMPROGRAMS\Mundus.lnk"

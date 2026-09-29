@@ -18,8 +18,6 @@ const GRANDFATHERED = new Set([
   // intentional review; drop an entry once its file is back under the limit.
   "desktop/scripts/verify-release-channel.mjs",
   "manager-gpui/src/app.rs",
-  "native-services/focus-helper/src/hosts.rs",
-  "native-services/focus-svc/src/cli.rs",
   "runtime/src/agents/app_server.rs",
   "runtime/src/agents/definitions.rs",
   "runtime/src/agents/tests.rs",

@@ -4,12 +4,10 @@ import path from "node:path";
 import { ENGINE_BINARY, ENGINE_MANIFEST_PRODUCT } from "./brand.mjs";
 import { extractZip, readZip, safeEntryName, writeZip } from "./zip-utils.mjs";
 
-export const ENGINE_FILES = [
-  ENGINE_BINARY,
-  "focus-helper.exe",
-  "focus-svc.exe",
-  "tray.ico",
-];
+// Engine privileged ops live inside mundus-engine.exe itself
+// (`mundus-engine privileged install|uninstall|run-service`) — no separate
+// helper exes ship in the distribution.
+export const ENGINE_FILES = [ENGINE_BINARY, "tray.ico"];
 
 // MIGRATION(KOS-267): 'kosmos-engine' manifests exist in installed Engine
 // roots written by 0.9.x installers; accept both until cleanup.

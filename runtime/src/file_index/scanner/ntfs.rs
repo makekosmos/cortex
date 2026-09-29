@@ -2,18 +2,12 @@ use super::{path_contains_noisy_folder, IndexedFile};
 use ntfs_reader::file_info::{FileInfo, VecCache};
 use ntfs_reader::mft::Mft;
 use ntfs_reader::volume::Volume;
-use serde::Deserialize;
-use std::fs::OpenOptions;
-use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
-const SYSTEM_SERVICE_PIPE: &str = crate::brand::SYSTEM_SERVICE_PIPE;
-// MIGRATION(KOS-267): remove after 2026-11-01. Pipes listened on by system
-// services installed by older product generations.
-const LEGACY_PIPES: [&str; 2] = [
-    r"\\.\pipe\kosmos-system-service", // MIGRATION(KOS-267)
-    r"\\.\pipe\kepler-focus-svc",      // MIGRATION(KOS-267)
-];
+use crate::privileged::brand;
+use crate::privileged::ntfs_scan::NtfsScanEntry;
+use crate::privileged::pipe;
+use crate::privileged::protocol::Request;
 
 pub fn scan_drive_root(root: &Path, exclude_noisy: bool) -> Result<Vec<IndexedFile>, String> {
     let drive = drive_letter(root)?;
@@ -34,93 +28,42 @@ pub fn scan_drive_root(root: &Path, exclude_noisy: bool) -> Result<Vec<IndexedFi
     Ok(mft_to_files(&mft, drive, exclude_noisy))
 }
 
-#[derive(Debug, Deserialize)]
-struct ServiceResponse {
-    ok: bool,
-    error: Option<String>,
-    files: Option<Vec<IndexedFileWire>>,
-}
-
-#[derive(Debug, Deserialize)]
-struct IndexedFileWire {
-    path: String,
-    name: String,
-    mtime: i64,
-}
-
+/// Service fast path: primary pipe first, then the legacy pipe names so a
+/// not-yet-migrated service still works. The versioned request wire format
+/// parses identically on older services (unknown fields are ignored).
+// MIGRATION(KOS-267): drop the legacy pipe names after 2026-11-01.
 fn scan_via_service(root: &Path, exclude_noisy: bool) -> Result<Vec<IndexedFile>, String> {
-    match scan_via_service_pipe(SYSTEM_SERVICE_PIPE, root, exclude_noisy) {
-        Ok(files) => return Ok(files),
-        Err(error) => tracing::debug!(
-            target: "file_index",
-            error,
-            "primary service pipe unavailable; trying legacy pipes"
-        ),
-    }
-    let mut last_error = String::from("no legacy pipes configured");
-    for pipe in LEGACY_PIPES {
-        match scan_via_service_pipe(pipe, root, exclude_noisy) {
-            Ok(files) => return Ok(files),
-            Err(error) => last_error = error,
+    let req = Request::NtfsScan {
+        root: root.to_string_lossy().into_owned(),
+        exclude_noisy,
+    };
+    let mut errors = Vec::new();
+    let pipe_names =
+        std::iter::once(brand::PIPE_NAME).chain(brand::LEGACY_PIPES.iter().map(|(name, _)| *name));
+    for pipe_name in pipe_names {
+        match pipe::request_on(pipe_name, &req) {
+            Ok(resp) => {
+                if !resp.ok {
+                    errors.push(format!("{pipe_name}: {}", resp.error.unwrap_or_default()));
+                    continue;
+                }
+                let files = resp
+                    .files
+                    .ok_or_else(|| "service response missing files".to_string())?;
+                return Ok(files.into_iter().map(wire_to_indexed).collect());
+            }
+            Err(e) => errors.push(format!("{pipe_name}: {e}")),
         }
     }
-    Err(last_error)
+    Err(errors.join("; "))
 }
 
-fn scan_via_service_pipe(
-    pipe_path: &str,
-    root: &Path,
-    exclude_noisy: bool,
-) -> Result<Vec<IndexedFile>, String> {
-    let mut pipe = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .open(pipe_path)
-        .map_err(|e| format!("connect service pipe failed: {e}"))?;
-
-    let request = serde_json::json!({
-        "op": "ntfs_scan",
-        "root": root.to_string_lossy(),
-        "exclude_noisy": exclude_noisy,
-    });
-    writeln!(pipe, "{request}").map_err(|e| format!("write service request failed: {e}"))?;
-    pipe.flush()
-        .map_err(|e| format!("flush service request failed: {e}"))?;
-
-    // Regression L4 (2026-05-24): single-line read_line was brittle — service
-    // could legitimately return multi-line JSON or a payload bigger than the
-    // BufReader's line buffer. Slurp the whole pipe until EOF — but bound it:
-    // the pipe name is well known and the server is not authenticated, so a
-    // squatter (anything holding the name while the real service is down)
-    // could stream a never-ending response and grow Engine memory without
-    // limit. 1 GiB exceeds a legitimate whole-drive MFT listing by a wide
-    // margin (millions of entries at ~150 B each).
-    const MAX_SERVICE_RESPONSE_BYTES: u64 = 1 << 30;
-    let mut raw = String::new();
-    std::io::Read::take(&pipe, MAX_SERVICE_RESPONSE_BYTES + 1)
-        .read_to_string(&mut raw)
-        .map_err(|e| format!("read service response failed: {e}"))?;
-    if raw.len() as u64 > MAX_SERVICE_RESPONSE_BYTES {
-        return Err("service response exceeds 1 GiB".to_string());
+fn wire_to_indexed(file: NtfsScanEntry) -> IndexedFile {
+    IndexedFile {
+        path: file.path,
+        name: file.name,
+        mtime: file.mtime,
     }
-    let response: ServiceResponse = serde_json::from_str(raw.trim())
-        .map_err(|e| format!("parse service response failed: {e}"))?;
-    if !response.ok {
-        return Err(response
-            .error
-            .unwrap_or_else(|| "service returned error".to_string()));
-    }
-    let files = response
-        .files
-        .ok_or_else(|| "service response missing files".to_string())?;
-    Ok(files
-        .into_iter()
-        .map(|file| IndexedFile {
-            path: file.path,
-            name: file.name,
-            mtime: file.mtime,
-        })
-        .collect())
 }
 
 fn mft_to_files(mft: &Mft, drive: char, exclude_noisy: bool) -> Vec<IndexedFile> {

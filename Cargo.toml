@@ -3,9 +3,6 @@ resolver = "2"
 members = [
   "runtime",
   "runtime/crates/package-protocol",
-  "native-services/watcher",
-  "native-services/focus-helper",
-  "native-services/focus-svc",
   "core/crates/ark-core",
 ]
 # Pinned sibling component checkouts cloned under desktop/.tmp (local builds)

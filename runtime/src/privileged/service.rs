@@ -1,5 +1,13 @@
-//! ServiceMain entry — регистрируется в SCM, поднимает pipe accept loop в
-//! отдельном thread, ждёт ServiceControl::Stop, выставляет Stopped.
+//! ServiceMain entry — registers with the SCM, runs the pipe accept loop on
+//! a worker thread, waits for ServiceControl::Stop/Shutdown, reports Stopped.
+//!
+//! The service process is the copied Engine binary running
+//! `privileged run-service --grant-sid <SID>`. It never executes anything
+//! from a user-writable path: the binary itself lives under
+//! `%ProgramFiles%\<Brand>\Service` and every op it serves is a fixed
+//! `protocol::Request` variant.
+
+#![cfg(windows)]
 
 use std::ffi::OsString;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -16,47 +24,36 @@ use windows_service::service::{
 use windows_service::service_control_handler::{self, ServiceControlHandlerResult};
 use windows_service::service_dispatcher;
 
-use crate::pipe;
-use focus_svc::{service_names, SERVICE_NAME};
+use crate::privileged::brand;
+use crate::privileged::pipe_server;
 
 define_windows_service!(ffi_service_main, service_main);
 
-static ACTIVE_SERVICE_NAME: Mutex<&'static str> = Mutex::new(SERVICE_NAME);
+/// The enabling user's SID — captured by `run_service_entry` from the
+/// `--grant-sid` launch argument and read by the accept loop for the pipe DACL.
+static GRANT_SID: Mutex<Option<String>> = Mutex::new(None);
 
-/// User-mode entry. Передаёт control SCM который вызовет `service_main`.
-/// Возвращает только когда SCM решит завершить процесс.
-///
-/// MIGRATION(KOS-267): remove after 2026-11-01. A legacy registration
-/// (KosmosSystemSvc / KeplerFocusSvc) may point at this binary path until
-/// the next elevated install — keep answering under those names too.
-pub fn run_as_service_entry() -> ! {
-    let mut primary = None;
-    for name in service_names() {
-        set_active_service_name(name);
-        match service_dispatcher::start(name, ffi_service_main) {
-            Ok(()) => std::process::exit(0),
-            Err(error) => {
-                if primary.is_none() {
-                    primary = Some(error);
-                }
-            }
+/// User-mode entry — hands control to the SCM, which calls `service_main`.
+/// Returns only when the SCM decides to terminate the process.
+pub fn run_service_entry(grant_sid: String) -> ! {
+    if let Ok(mut guard) = GRANT_SID.lock() {
+        *guard = Some(grant_sid);
+    }
+    match service_dispatcher::start(brand::SERVICE_NAME, ffi_service_main) {
+        Ok(()) => std::process::exit(0),
+        Err(e) => {
+            eprintln!("service_dispatcher::start failed: {e}");
+            std::process::exit(1);
         }
     }
-    eprintln!("service_dispatcher::start failed: primary={:?}", primary);
-    std::process::exit(1);
 }
 
-fn set_active_service_name(name: &'static str) {
-    if let Ok(mut guard) = ACTIVE_SERVICE_NAME.lock() {
-        *guard = name;
-    }
-}
-
-fn active_service_name() -> &'static str {
-    ACTIVE_SERVICE_NAME
+fn grant_sid() -> String {
+    GRANT_SID
         .lock()
-        .map(|guard| *guard)
-        .unwrap_or(SERVICE_NAME)
+        .ok()
+        .and_then(|guard| guard.clone())
+        .unwrap_or_default()
 }
 
 fn service_main(_args: Vec<OsString>) {
@@ -82,7 +79,7 @@ fn run_service() -> windows_service::Result<()> {
         }
     };
 
-    let status_handle = service_control_handler::register(active_service_name(), event_handler)?;
+    let status_handle = service_control_handler::register(brand::SERVICE_NAME, event_handler)?;
 
     status_handle.set_service_status(ServiceStatus {
         service_type: ServiceType::OWN_PROCESS,
@@ -96,15 +93,13 @@ fn run_service() -> windows_service::Result<()> {
 
     let stop_flag_pipe = Arc::clone(&stop_flag);
     let _pipe_thread = thread::spawn(move || {
-        pipe::accept_loop(stop_flag_pipe);
+        pipe_server::accept_loop(stop_flag_pipe, &grant_sid());
     });
 
-    // Ждём команду stop. recv блокирует до Stop/Shutdown.
+    // Block until Stop/Shutdown. The pipe worker may sit in ConnectNamedPipe
+    // when we exit — process teardown closes the handle.
     let _ = shutdown_rx.recv();
     stop_flag.store(true, Ordering::SeqCst);
-
-    // Pipe thread may be blocked in ConnectNamedPipe. Do not join it during
-    // SCM stop; process exit closes the pipe handle.
 
     status_handle.set_service_status(ServiceStatus {
         service_type: ServiceType::OWN_PROCESS,

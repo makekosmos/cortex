@@ -16,7 +16,6 @@ const CHECK_ORDER = [
   "clippy",
   "test:rust",
   "runtime-staging",
-  "native-services",
   "manager-gpui",
   "lint",
   "format",
@@ -149,7 +148,6 @@ function classify(file) {
   if (isDocumentation(path) || ASSET_EXTENSIONS.test(path)) return [];
   if (/^desktop\//.test(path)) return ["lint", "format"];
   if (/^runtime\//.test(path)) return ["rustfmt", "clippy", "test:rust", "runtime-staging"];
-  if (/^native-services\//.test(path)) return ["native-services"];
   // core/ is the vendored upstream subtree: crate sources join the workspace
   // gates, everything else (docs, the generated TS package, tooling) is not
   // built by Cortex checks. Manifests/lockfiles under core/ already failed
