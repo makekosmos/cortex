@@ -1722,3 +1722,172 @@
                 && model["transcriptionSupported"] == true));
 
     }
+
+    // ---- autoselect_local_model ----
+
+    fn fake_model(data_dir: &std::path::Path, id: &str) -> std::path::PathBuf {
+        let spec = local_models::MODEL_CATALOG
+            .iter()
+            .find(|model| model.id == id)
+            .expect("catalog model");
+        let path = local_models::model_path(data_dir, spec);
+        if spec.directory {
+            std::fs::create_dir_all(&path).expect("model dir");
+        } else {
+            std::fs::create_dir_all(path.parent().unwrap()).expect("models dir");
+            std::fs::write(&path, b"fake model").expect("model file");
+        }
+        path
+    }
+
+    #[cfg(windows)]
+    fn fake_whisper_command(data_dir: &std::path::Path) -> std::path::PathBuf {
+        let path = local_models::command_path(data_dir).expect("command path");
+        std::fs::create_dir_all(path.parent().unwrap()).expect("command dir");
+        std::fs::write(&path, b"fake exe").expect("command file");
+        path
+    }
+
+    fn local_cfg() -> DictationConfig {
+        let mut cfg = test_cfg();
+        cfg.provider = "local".into();
+        cfg.provider_enabled = true;
+        cfg
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn autoselect_picks_recommended_downloaded_model() {
+        let td = tempfile::TempDir::new().unwrap();
+        let small = fake_model(td.path(), "small");
+        fake_model(td.path(), "turbo");
+        let command = fake_whisper_command(td.path());
+        let mut cfg = local_cfg(); // enabled, nothing selected
+        assert!(autoselect_local_model(td.path(), &mut cfg));
+        assert!(cfg.provider_enabled);
+        assert_eq!(cfg.local_model.as_deref(), Some("small"));
+        assert_eq!(cfg.local_engine, DEFAULT_LOCAL_ENGINE);
+        assert_eq!(
+            cfg.local_model_path.as_deref(),
+            Some(small.to_string_lossy().as_ref())
+        );
+        assert_eq!(
+            cfg.local_command_path.as_deref(),
+            Some(command.to_string_lossy().as_ref())
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn autoselect_recovers_deleted_selection() {
+        let td = tempfile::TempDir::new().unwrap();
+        let small = fake_model(td.path(), "small");
+        fake_whisper_command(td.path());
+        let mut cfg = local_cfg();
+        cfg.local_model = Some("turbo".into());
+        cfg.local_model_path = Some(td.path().join("gone.bin").to_string_lossy().into_owned());
+        assert!(autoselect_local_model(td.path(), &mut cfg));
+        assert_eq!(cfg.local_model.as_deref(), Some("small"));
+        assert_eq!(
+            cfg.local_model_path.as_deref(),
+            Some(small.to_string_lossy().as_ref())
+        );
+    }
+
+    #[test]
+    fn autoselect_does_nothing_when_nothing_is_downloaded() {
+        let td = tempfile::TempDir::new().unwrap();
+        let mut cfg = local_cfg();
+        let before = cfg.clone();
+        assert!(!autoselect_local_model(td.path(), &mut cfg));
+        assert_eq!(cfg.provider, before.provider);
+        assert_eq!(cfg.provider_enabled, before.provider_enabled);
+        assert_eq!(cfg.local_model, before.local_model);
+        // The caller's fallback still applies: no downloaded model → the
+        // provider is disabled and the UI reports the download-required
+        // message (LOCAL_MODEL_NOT_READY_MSG), not a silent dead end.
+        assert!(!local_config_is_ready(td.path(), &cfg));
+        clear_local_selection(&mut cfg);
+        assert!(!cfg.provider_enabled);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn autoselect_falls_back_to_catalog_order() {
+        let td = tempfile::TempDir::new().unwrap();
+        // No recommended model ("small") downloaded — catalog order wins.
+        fake_model(td.path(), "turbo");
+        let tiny = fake_model(td.path(), "tiny-q5_1");
+        fake_whisper_command(td.path());
+        let mut cfg = local_cfg();
+        assert!(autoselect_local_model(td.path(), &mut cfg));
+        assert_eq!(cfg.local_model.as_deref(), Some("tiny-q5_1"));
+        assert_eq!(
+            cfg.local_model_path.as_deref(),
+            Some(tiny.to_string_lossy().as_ref())
+        );
+    }
+
+    #[test]
+    fn autoselect_picks_parakeet_without_whisper_runtime() {
+        let td = tempfile::TempDir::new().unwrap();
+        // Whisper models are unusable without the runtime — a directory
+        // model with its own engine is picked instead.
+        fake_model(td.path(), "turbo");
+        fake_model(td.path(), "parakeet-tdt-0.6b-v3");
+        let mut cfg = local_cfg();
+        assert!(autoselect_local_model(td.path(), &mut cfg));
+        assert_eq!(cfg.local_model.as_deref(), Some("parakeet-tdt-0.6b-v3"));
+        assert_eq!(cfg.local_engine, "parakeet");
+        assert_eq!(cfg.local_command_path, None);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn autoselect_respects_explicitly_disabled_provider() {
+        let td = tempfile::TempDir::new().unwrap();
+        fake_model(td.path(), "small");
+        fake_whisper_command(td.path());
+        // providerEnabled=false with a surviving local_model is the user's
+        // own off-switch — auto-select must not re-enable it.
+        let mut cfg = local_cfg();
+        cfg.provider_enabled = false;
+        cfg.local_model = Some("small".into());
+        cfg.local_model_path = Some(td.path().join("gone.bin").to_string_lossy().into_owned());
+        let before = cfg.clone();
+        assert!(!autoselect_local_model(td.path(), &mut cfg));
+        assert!(!cfg.provider_enabled);
+        assert_eq!(cfg.local_model, before.local_model);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn autoselect_recovers_cleared_selection() {
+        let td = tempfile::TempDir::new().unwrap();
+        fake_model(td.path(), "small");
+        fake_whisper_command(td.path());
+        // The post-clear/migration state the smoke report hit:
+        // providerEnabled=false AND localModel=null is not a user choice.
+        let mut cfg = local_cfg();
+        cfg.provider_enabled = false;
+        cfg.local_model = None;
+        assert!(autoselect_local_model(td.path(), &mut cfg));
+        assert!(cfg.provider_enabled);
+        assert_eq!(cfg.local_model.as_deref(), Some("small"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn autoselect_ignores_non_local_provider() {
+        let td = tempfile::TempDir::new().unwrap();
+        fake_model(td.path(), "small");
+        fake_whisper_command(td.path());
+        let mut cfg = local_cfg();
+        cfg.provider = "groq".into();
+        cfg.local_model = Some("missing".into());
+        cfg.local_model_path = Some(td.path().join("gone.bin").to_string_lossy().into_owned());
+        let before = cfg.clone();
+        assert!(!autoselect_local_model(td.path(), &mut cfg));
+        assert_eq!(cfg.provider, before.provider);
+        assert_eq!(cfg.local_model, before.local_model);
+    }
