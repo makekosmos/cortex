@@ -618,7 +618,7 @@ async fn setup() -> Result<SetupState, DynError> {
         port,
         protocol_usage,
         correlation_id.clone(),
-        package_service,
+        package_service.clone(),
         dispatcher,
     )
     .await?;
@@ -644,6 +644,20 @@ async fn setup() -> Result<SetupState, DynError> {
     // `%APPDATA%\Kosmos\engine.lock.json`; mirror the lock until repin.
     engine::data_dir::write_legacy_lock_shim(&engine_lock);
     tracing::info!(path = ?engine_lock_path, "Engine lock-file written");
+
+    // Dictation is Engine-managed: an installed com.kosmos.dictation runs in
+    // background mode while the Engine runs — started here (the lock file
+    // exists, so the app can discover a ready Engine) and after every
+    // install/update (see dictation_app.rs). The legacy HKCU Run value the
+    // app's own autostart wrote is deleted once. Best-effort, off the async
+    // path — a missing app or a failed spawn must not gate startup.
+    {
+        let lifecycle = package_service.clone();
+        tokio::task::spawn_blocking(move || {
+            engine::package_service::cleanup_legacy_dictation_autostart();
+            lifecycle.ensure_dictation_running();
+        });
+    }
 
     // LAN sync must not gate local readiness. If its fixed discovery port is
     // busy or slow, Eden/launcher still need immediate local ARK access.

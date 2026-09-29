@@ -97,6 +97,10 @@ impl PackageService {
                     },
                 );
                 self.write_marker(&marker_path, &marker);
+                if id == DICTATION_APP_ID {
+                    // Already-installed still means Engine-managed running.
+                    self.ensure_dictation_running();
+                }
                 self.cleanup_legacy_records(id).await;
                 continue;
             }

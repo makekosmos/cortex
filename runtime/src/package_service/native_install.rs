@@ -58,7 +58,21 @@ impl PackageService {
     /// The job body — also the inline path for tests and the startup
     /// migration (`version` pins a tag; `None` installs the latest release).
     /// Callers must hold the per-id `NativeJobGuard` first.
+    /// Dictation is Engine-managed, so its install goes through the
+    /// stop → install → relaunch wrapper in `dictation_app.rs`.
     pub(crate) async fn run_native_install_with(
+        &self,
+        probe: &ReleaseProbe,
+        desc: &'static NativeAppDescriptor,
+        version: Option<&str>,
+    ) -> Result<NativeAppSummary, PackageError> {
+        if desc.id == DICTATION_APP_ID {
+            return self.run_dictation_native_install(probe, desc, version).await;
+        }
+        self.run_native_install_inner(probe, desc, version).await
+    }
+
+    async fn run_native_install_inner(
         &self,
         probe: &ReleaseProbe,
         desc: &'static NativeAppDescriptor,
@@ -170,8 +184,13 @@ impl PackageService {
 
     /// Uninstall removes the whole `<id>` dir — record and every version —
     /// refusing while the app is running. User data is never touched. The
-    /// Start-menu link goes with it.
+    /// Start-menu link goes with it. Dictation is Engine-managed: the Engine
+    /// stops the background process itself instead of making the Store
+    /// refuse the uninstall.
     pub fn uninstall_native_app(&self, desc: &NativeAppDescriptor) -> Result<(), PackageError> {
+        if desc.id == DICTATION_APP_ID && !self.stop_dictation_app() {
+            return Err(PackageError::AppRunning);
+        }
         self.native_store()?
             .uninstall(desc.id)
             .map_err(native_store_error)?;
