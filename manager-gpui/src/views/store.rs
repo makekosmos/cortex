@@ -12,6 +12,8 @@ pub fn load(app: &mut ManagerApp) {
     app.call("store.catalog", "store.catalog", json!({}));
     app.call("store.installed", "packages.list", json!({}));
     app.call("store.trust", "packages.trust_status", json!({}));
+    // KOS-265 native GPUI apps — separate install path from .kspkg packages.
+    app.call("store.apps", "apps.list", json!({}));
 }
 
 pub fn render(
@@ -95,7 +97,10 @@ pub fn render(
     }));
 
     match app.store_tab {
-        StoreTab::Catalog => col = col.child(render_catalog(app, cx)),
+        StoreTab::Catalog => {
+            col = col.child(render_catalog(app, cx));
+            col = col.child(super::store_apps::render_native_apps(app, cx));
+        }
         StoreTab::Installed => col = col.child(render_installed(app, cx)),
     }
     col.into_any_element()

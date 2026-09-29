@@ -16,6 +16,7 @@ pub mod engine_settings;
 pub mod secrets;
 pub mod settings;
 pub mod store;
+pub mod store_apps;
 pub mod sync;
 pub mod updates;
 pub mod usage;
