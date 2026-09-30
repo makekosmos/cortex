@@ -965,10 +965,18 @@ fn open_parent_dir(
         let dir = OpenOptions::new()
             .read(true)
             .write(true)
-            // Keep the directory identity open through the replace. Rename is
-            // still allowed for the atomic commit itself.
+            // Minimal directory access for the handle-relative operations:
+            // GENERIC_READ lets us query the dir identity and list entries,
+            // GENERIC_WRITE covers FILE_ADD_FILE/FILE_ADD_SUBDIRECTORY for
+            // creating the temp file and for the atomic handle-relative
+            // rename. DELETE and FILE_DELETE_CHILD are NOT requested: nothing
+            // here deletes the directory itself or one of its children —
+            // delete permission for the replace target is carried by the
+            // temp/target file handles. A user's Modify grant (no
+            // FILE_DELETE_CHILD) must suffice — Full Control is not required
+            // (KOS-270).
             .share_mode(0x00000001 | 0x00000002 | 0x00000004)
-            .access_mode(0x80000000 | 0x40000000 | 0x00000040 | 0x00010000)
+            .access_mode(0x80000000 | 0x40000000)
             .custom_flags(0x00200000 | 0x02000000) // OPEN_REPARSE_POINT | BACKUP_SEMANTICS
             .open(path)?;
         let metadata = dir.metadata()?;
@@ -1727,5 +1735,35 @@ mod tests {
         drop(temp);
         assert!(moved.join(&name).is_file());
         assert!(!original.join(&name).exists());
+    }
+
+    // KOS-270: opening the parent dir used to request FILE_DELETE_CHILD +
+    // DELETE, which a plain "Modify" grant does not include — writes into a
+    // real user folder denied by `open_parent_dir`. The broker must work with
+    // Modify: this test locks the fixture dir down to Modify only.
+    #[cfg(windows)]
+    #[test]
+    fn broker_file_ops_succeed_under_modify_only_acl() {
+        let td = tempfile::tempdir().unwrap();
+        let guarded = td.path().join("guarded");
+        fs::create_dir(&guarded).unwrap();
+        let user = std::env::var("USERNAME").expect("USERNAME");
+        let status = std::process::Command::new("icacls")
+            .arg(&guarded)
+            .args(["/inheritance:r", "/grant:r"])
+            .arg(format!("{user}:(OI)(CI)M"))
+            .status()
+            .expect("icacls");
+        assert!(status.success(), "icacls failed");
+        let cfg = BrokerConfig::new(std::iter::empty::<&str>(), vec![guarded.clone()]).unwrap();
+        let nested = guarded.join("nested/deep");
+        create_directory(&cfg, &nested).unwrap();
+        let file = nested.join("note.txt");
+        write_file(&cfg, &file, b"one").unwrap();
+        assert_eq!(read_file(&cfg, &file).unwrap(), b"one");
+        write_file(&cfg, &file, b"two").unwrap();
+        assert_eq!(read_file(&cfg, &file).unwrap(), b"two");
+        delete_file(&cfg, &file).unwrap();
+        assert!(read_file(&cfg, &file).is_err());
     }
 }
