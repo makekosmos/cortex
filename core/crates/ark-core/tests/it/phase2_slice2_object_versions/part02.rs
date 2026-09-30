@@ -102,7 +102,8 @@ fn load_all_clear_and_raw_backup_preserve_phase2_registry_contract() {
             .unwrap_or(()),
         ()
     );
-    std::fs::remove_file(path).ok();
+    drop(reopened);
+    std::fs::remove_file(&path).expect("backup db must be released after close");
     clear_all(&conn).unwrap();
     assert_eq!(
         conn.query_row("SELECT COUNT(*) FROM objects", [], |r| r.get::<_, i64>(0))

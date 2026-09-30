@@ -159,8 +159,8 @@ async fn fetch_page_flags_browser_challenges() {
 
 #[tokio::test]
 async fn store_cover_copies_dropped_file_into_app_data() {
-    let dir = std::env::temp_dir().join(format!("app-net-{}", uuid::Uuid::new_v4()));
-    let source_dir = dir.join("inbox");
+    let dir = tempfile::tempdir().unwrap();
+    let source_dir = dir.path().join("inbox");
     std::fs::create_dir_all(&source_dir).unwrap();
     let png = {
         let image = image::RgbaImage::from_pixel(8, 8, image::Rgba([136, 86, 41, 255]));
@@ -170,7 +170,7 @@ async fn store_cover_copies_dropped_file_into_app_data() {
     };
     let source = source_dir.join("cover.png");
     std::fs::write(&source, &png).unwrap();
-    let ctx = ctx(dir.clone(), None);
+    let ctx = ctx(dir.path().to_path_buf(), None);
     let stored =
         image_ops::store_cover(source.to_str().unwrap(), "b-1", "com.kosmos.memoria", &ctx)
             .await
@@ -215,12 +215,12 @@ fn browser_challenge_probe_truncates_on_char_boundary() {
 
 #[tokio::test]
 async fn store_cover_rejects_oversized_source_without_reading() {
-    let dir = std::env::temp_dir().join(format!("app-net-{}", uuid::Uuid::new_v4()));
-    let source_dir = dir.join("inbox");
+    let dir = tempfile::tempdir().unwrap();
+    let source_dir = dir.path().join("inbox");
     std::fs::create_dir_all(&source_dir).unwrap();
     let big = source_dir.join("big.png");
     std::fs::write(&big, vec![0u8; 10 * 1024 * 1024 + 1]).unwrap();
-    let ctx = ctx(dir, None);
+    let ctx = ctx(dir.path().to_path_buf(), None);
     assert_eq!(
         image_ops::store_cover(big.to_str().unwrap(), "b-1", "com.kosmos.memoria", &ctx).await,
         Err("unavailable")
@@ -248,8 +248,8 @@ async fn images_fetch_stores_remote_and_returns_color() {
             .unwrap()
     }))
     .await;
-    let dir = std::env::temp_dir().join(format!("app-net-{}", uuid::Uuid::new_v4()));
-    let ctx = ctx(dir.clone(), None);
+    let dir = tempfile::tempdir().unwrap();
+    let ctx = ctx(dir.path().to_path_buf(), None);
     let fetched =
         image_ops::fetch_remote(&format!("{origin}/cover.png"), "com.kosmos.memoria", &ctx)
             .await
