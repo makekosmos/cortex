@@ -192,20 +192,17 @@ fn object_write(command: &GameUpsertCommand) -> ArkObjectWrite {
     }
 }
 
-fn read_game_props(
-    object: &ArkObject,
-) -> Result<
-    (
-        Option<String>,
-        Option<f64>,
-        Vec<String>,
-        Vec<String>,
-        Option<String>,
-        Option<String>,
-        Value,
-    ),
-    String,
-> {
+type GameProps = (
+    Option<String>,
+    Option<f64>,
+    Vec<String>,
+    Vec<String>,
+    Option<String>,
+    Option<String>,
+    Value,
+);
+
+fn read_game_props(object: &ArkObject) -> Result<GameProps, String> {
     let props = object.props_json.as_object().ok_or("invalid_game_props")?;
     let registration = crate::canonical_types::definitions::canonical_type_registrations()
         .map_err(|_| "definition_invariant:game".to_string())?

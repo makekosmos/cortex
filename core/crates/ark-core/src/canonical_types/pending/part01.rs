@@ -116,7 +116,10 @@ fn validate_row(row: &(String, String, String, String, String)) -> Result<(), St
     validate_entity_tuple(&entity, &row.0, &row.2, &row.3)
 }
 
-fn rows(conn: &Connection) -> Result<Vec<(String, String, String, String, String)>, String> {
+// Mirrors the `sync_pending_objects` column order in the SELECT below.
+type PendingRow = (String, String, String, String, String);
+
+fn rows(conn: &Connection) -> Result<Vec<PendingRow>, String> {
     let mut stmt = conn
         .prepare("SELECT id,payload,awaited_type_id,awaited_type_version,received_at FROM sync_pending_objects ORDER BY id,awaited_type_id,awaited_type_version")
         .map_err(|e| e.to_string())?;

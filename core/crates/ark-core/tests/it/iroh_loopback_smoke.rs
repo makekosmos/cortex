@@ -1,6 +1,5 @@
 #![allow(clippy::unwrap_used)]
 #![cfg(feature = "iroh-spike")]
-#![allow(clippy::unwrap_used)]
 
 //! Изолированный де-риск spike (НЕ интеграция с `iroh_transport.rs`): доказать,
 //! что два `iroh::Endpoint` в одном процессе соединяются офлайн напрямую

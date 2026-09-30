@@ -22,7 +22,15 @@ function run(cwd, args) {
 // These are integration-test fixtures, not production dependencies. Build
 // them explicitly so `cargo test -p engine --lib` has the same
 // prerequisites in the standalone Makekosmos layout as in CI.
-run(cortex, ["build", "-p", "engine", "--bin", "ark-markdown-bridge"]);
+run(cortex, [
+  "build",
+  "-p",
+  "engine",
+  "--bin",
+  "ark-markdown-bridge",
+  "--features",
+  "markdown-bridge-fixture",
+]);
 
 if (!existsSync(bridge)) {
   throw new Error(`ark-markdown-bridge fixture was not produced: ${bridge}`);
@@ -36,6 +44,8 @@ if (workspace) {
   // in-process ARK service's iroh transport (previously provided by the
   // separately-built ark-core-rpc fixture binary). ark-core runs on its own
   // below, with its default features, as upstream does.
+  // engine/markdown-bridge-fixture: builds the bridge fixture bin so the
+  // integration tests get CARGO_BIN_EXE_ark-markdown-bridge.
   run(cortex, [
     "test",
     "--workspace",
@@ -45,9 +55,11 @@ if (workspace) {
     "*",
     "--features",
     "engine/iroh-spike",
+    "--features",
+    "engine/markdown-bridge-fixture",
   ]);
   run(cortex, ["test", "-p", "ark-core"]);
-  run(cortex, ["test", "-p", "engine", "--bins"]);
+  run(cortex, ["test", "-p", "engine", "--bins", "--features", "markdown-bridge-fixture"]);
 } else {
   run(cortex, ["test", "-p", "engine", "--lib", ...process.argv.slice(2)]);
 }

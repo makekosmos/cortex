@@ -246,7 +246,10 @@ async fn worker_loop(
     use futures_util::FutureExt;
     while let Some(job) = rx.recv().await {
         let outcome = std::panic::AssertUnwindSafe(async {
+            // Test-only fault injection: proves the worker recovers from a
+            // panicking request instead of dying silently.
             #[cfg(test)]
+            #[allow(clippy::panic)]
             if let Request::TestPanic = job.request {
                 panic!("ark-service test panic injection");
             }

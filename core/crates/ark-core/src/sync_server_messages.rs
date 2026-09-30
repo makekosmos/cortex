@@ -1,5 +1,8 @@
 use super::*;
 
+// Message dispatch context: every argument is shared mutable state owned by
+// different subsystems; a context struct would only group unrelated owners.
+#[allow(clippy::too_many_arguments)]
 pub(super) async fn handle_message(
     peer_id: usize,
     msg: LanSyncMessage,

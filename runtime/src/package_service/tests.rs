@@ -300,8 +300,19 @@ pub(crate) mod tests {
         package_manifest: &VersionedManifest,
     ) -> (PathBuf, String, u64) {
         let path = root.join("bridge.kspkg");
-        let binary = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../target/debug/ark-markdown-bridge.exe");
+        // Set when the fixture feature built the bin in this test run;
+        // `cargo test --lib` skips bins, so fall back to the artifact
+        // test-lib.mjs builds beforehand (honouring CARGO_TARGET_DIR).
+        let binary = option_env!("CARGO_BIN_EXE_ark-markdown-bridge")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                std::env::var_os("CARGO_TARGET_DIR")
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|| {
+                        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../target")
+                    })
+                    .join("debug/ark-markdown-bridge.exe")
+            });
         assert!(
             binary.is_file(),
             "build ark-markdown-bridge before this test: {binary:?}"

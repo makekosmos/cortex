@@ -5,16 +5,8 @@ use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
-#[cfg(feature = "ts-rs")]
-use ts_rs::TS;
-
 pub const LEGACY_VERSION: &str = "0.0.0-legacy";
 
-#[cfg_attr(feature = "ts-rs", derive(TS))]
-#[cfg_attr(
-    feature = "ts-rs",
-    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
-)]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TypeSummary {
@@ -26,11 +18,6 @@ pub struct TypeSummary {
     pub base_type_id: Option<String>,
 }
 
-#[cfg_attr(feature = "ts-rs", derive(TS))]
-#[cfg_attr(
-    feature = "ts-rs",
-    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
-)]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TypeVersion {
@@ -45,11 +32,6 @@ pub struct TypeVersion {
     pub created_at: String,
 }
 
-#[cfg_attr(feature = "ts-rs", derive(TS))]
-#[cfg_attr(
-    feature = "ts-rs",
-    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
-)]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct AliasRecord {

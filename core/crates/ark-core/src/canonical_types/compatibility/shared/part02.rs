@@ -1,4 +1,7 @@
 ﻿
+// Relation mappers share one accumulator set with the sibling mappers in
+// this file; each argument is a distinct channel, not a cluster.
+#[allow(clippy::too_many_arguments)]
 pub fn relation_with_aliases(
     m: &Map<String, Value>,
     key: &str,
@@ -46,6 +49,8 @@ pub fn relation_with_aliases(
     }
     Ok(())
 }
+// Same accumulator-set contract as `relation_with_aliases`.
+#[allow(clippy::too_many_arguments)]
 pub fn relation_single_with_aliases(
     m: &Map<String, Value>,
     key: &str,

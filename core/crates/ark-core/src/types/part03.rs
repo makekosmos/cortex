@@ -1,11 +1,6 @@
 ﻿
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "ts-rs", derive(TS))]
-#[cfg_attr(
-    feature = "ts-rs",
-    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
-)]
 pub struct UsageGameRangeTotal {
     pub game_id: String,
     pub game_name: String,
@@ -14,11 +9,6 @@ pub struct UsageGameRangeTotal {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "ts-rs", derive(TS))]
-#[cfg_attr(
-    feature = "ts-rs",
-    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
-)]
 pub struct UsageGamePlaytimeSummary {
     pub aggregates: Vec<UsageGamePlaytimeAggregate>,
     pub daily_totals: Vec<UsageGameDailyTotal>,
@@ -30,19 +20,12 @@ pub struct UsageGamePlaytimeSummary {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[cfg_attr(feature = "ts-rs", derive(TS))]
-#[cfg_attr(
-    feature = "ts-rs",
-    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
-)]
 pub struct SyncEntity {
     /// Entity type: "todo", "project", "area", "tag", "heading",
     /// "tracked_app", "usage_session", or "usage_event".
     #[serde(rename = "type")]
-    #[cfg_attr(feature = "ts-rs", ts(rename = "type"))]
     pub entity_type: String,
     pub id: String,
-    #[cfg_attr(feature = "ts-rs", ts(type = "Record<string, unknown>"))]
     pub data: serde_json::Map<String, Value>,
     pub hlc: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -64,11 +47,6 @@ pub type VersionVector = std::collections::HashMap<String, String>;
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[cfg_attr(feature = "ts-rs", derive(TS))]
-#[cfg_attr(
-    feature = "ts-rs",
-    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
-)]
 pub struct PeerRecord {
     pub device_id: String,
     pub device_name: String,

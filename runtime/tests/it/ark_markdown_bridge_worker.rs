@@ -1,4 +1,7 @@
 #![allow(clippy::unwrap_used)]
+// Spawns the bridge binary itself, so it only exists when the fixture
+// feature built it (CARGO_BIN_EXE_ark-markdown-bridge).
+#![cfg(feature = "markdown-bridge-fixture")]
 
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde_json::{json, Value};

@@ -1,6 +1,9 @@
 use super::*;
 use crate::service::runtime::get_shared_conn;
 
+// Mirrors the StartSync request fields one-to-one; the request struct is the
+// params object already, this fn just destructures it for the sync stack.
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn handle_start_sync(
     state: &Arc<ServiceState>,
     space_id: String,

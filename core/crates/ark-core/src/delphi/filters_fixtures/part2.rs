@@ -1,5 +1,5 @@
 pub fn fixtures() -> Vec<TodoItem> {
-    let specs = [
+    [
         Spec {
             id: "inbox-1",
             status: "todo",
@@ -214,7 +214,6 @@ pub fn fixtures() -> Vec<TodoItem> {
         let (object, links) = canonical(&spec);
         project_task_to_delphi(&object, &links).expect("canonical fixture must project")
     })
-    .collect();
-    specs
+    .collect()
 }
 

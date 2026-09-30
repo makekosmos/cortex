@@ -1,6 +1,5 @@
 #![allow(clippy::unwrap_used)]
 #![cfg(feature = "iroh-spike")]
-#![allow(clippy::unwrap_used)]
 
 //! Integration test (GREEN stage, шаг 3): ticket-based pairing.
 //!
@@ -175,15 +174,13 @@ async fn iroh_ticket_pairing_round_trip() {
         live_change_from, "device-A",
         "registry must resolve real CRDT device_id, not empty/fallback"
     );
-    match received {
-        LanSyncMessage::LiveChange { entity, .. } => {
-            assert_eq!(
-                entity.id, "test-entity-iroh-ticket-001",
-                "entity id mismatch"
-            );
-        }
-        other => panic!("expected LiveChange, got {:?}", other),
-    }
+    assert!(
+        matches!(
+            &received,
+            LanSyncMessage::LiveChange { entity, .. } if entity.id == "test-entity-iroh-ticket-001"
+        ),
+        "expected LiveChange for test-entity-iroh-ticket-001, got {received:?}"
+    );
 
     transport_a.stop();
     transport_b.stop();

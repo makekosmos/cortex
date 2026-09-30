@@ -123,8 +123,7 @@ fn extension_bool(
 ) -> Result<bool, CompatibilityError> {
     parent
         .get(key)
-        .map(Value::as_bool)
-        .flatten()
+        .and_then(Value::as_bool)
         .or_else(|| {
             if parent.contains_key(key) {
                 None

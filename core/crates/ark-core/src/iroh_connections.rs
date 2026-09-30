@@ -1,4 +1,7 @@
 /// Runs one long-lived Iroh connection with separate reader and writer tasks.
+// Each parameter is an independently-owned channel/endpoint the connection
+// pumps between; merging them would hide which side owns each half.
+#[allow(clippy::too_many_arguments)]
 async fn handle_connection(
     conn: iroh::endpoint::Connection,
     is_dialer: bool,

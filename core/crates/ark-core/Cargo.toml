@@ -3,20 +3,13 @@ name = "ark-core"
 version = "0.1.0"
 edition.workspace = true
 description = "Unified DB + sync engine for Mundus/Delphi"
+# No binaries ship from this crate; keep Cargo from auto-discovering any
+# src/bin leftovers so test-target counts stay explicit.
+autobins = false
 
 [lib]
 name = "ark_core"
 path = "src/lib.rs"
-crate-type = ["cdylib", "lib"]
-
-[[bin]]
-name = "uniffi-bindgen"
-path = "src/bin/uniffi-bindgen.rs"
-
-[[bin]]
-name = "ark-sync-node"
-path = "src/bin/ark-sync-node.rs"
-required-features = ["iroh-spike"]
 
 [dependencies]
 rusqlite.workspace = true
@@ -40,15 +33,9 @@ semver.workspace = true
 chrono.workspace = true
 rand.workspace = true
 async-trait = "0.1"
-uniffi = { version = "0.28", features = ["cli"] }
 if-addrs = "0.13"
 hostname.workspace = true
 thiserror.workspace = true
-# Phase 5 bug-detection: ts-rs codegen для wire-protocol типов.
-# Derive opt-in через #[cfg_attr(feature = "ts-rs", derive(TS))] — production
-# build не подтягивает ts-rs runtime (он только для тестов которые экспортят
-# bindings).
-ts-rs = { version = "10", optional = true, features = ["import-esm"] }
 # Фаза 0 spike: iroh p2p QUIC-транспорт, за feature-флагом `iroh-spike`.
 # Production build (без флагов) не подтягивает этот крейт — см.
 # .agent/tasks/2026-06-16-iroh-transport/spec.md §3.1.
@@ -74,8 +61,6 @@ proptest = "1.5"
 
 [features]
 bench-fixtures = []
-# Phase 5: opt-in для cargo test --features ts-rs (генерирует bindings/*.ts).
-ts-rs = ["dep:ts-rs"]
 # Фаза 0 iroh-spike: см. .agent/tasks/2026-06-16-iroh-transport/spec.md.
 iroh-spike = ["dep:iroh", "dep:iroh-tickets"]
 
@@ -84,26 +69,5 @@ name = "delphi_filters"
 harness = false
 required-features = ["bench-fixtures"]
 
-# Explicit table (not workspace = true): ark-core is a member of both the
-# core/ workspace and the Cortex workspace after the KOS-129 subtree merge,
-# and needs identical lint policy under either root. Mirrors the upstream
-# workspace lints plus the upstream clippy allow-list.
-[lints.clippy]
-unwrap_used = "deny"
-panic = "allow"
-todo = "warn"
-unimplemented = "warn"
-too_many_arguments = "allow"
-option_map_unit_fn = "allow"
-map_flatten = "allow"
-nonminimal_bool = "allow"
-type_complexity = "allow"
-collapsible_if = "allow"
-let_and_return = "allow"
-result_large_err = "allow"
-duplicated_attributes = "allow"
-useless_conversion = "allow"
-assertions_on_constants = "allow"
-
-[lints.rust]
-unused_must_use = "deny"
+[lints]
+workspace = true

@@ -89,6 +89,9 @@ pub(crate) fn compact(value: &Value) -> Result<Vec<u8>, String> {
     serde_json::to_vec(&canonical_json(value)).map_err(|e| e.to_string())
 }
 
+// Serialises one preflight record field-by-field; the parameters are the
+// record's own columns, so a wrapper struct would only rename them.
+#[allow(clippy::too_many_arguments)]
 fn envelope(
     id: String,
     source_kind: &str,

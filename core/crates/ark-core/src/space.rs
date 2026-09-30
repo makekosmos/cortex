@@ -16,7 +16,6 @@ fn is_crockford_char(c: u8) -> bool {
 // ---------------------------------------------------------------------------
 
 /// Generate a random 12-character Base32-Crockford code.
-#[uniffi::export]
 pub fn generate_space_code() -> String {
     use rand::Rng;
     let mut rng = rand::thread_rng();
@@ -137,7 +136,6 @@ pub fn parse_space_code(input: &str) -> Option<String> {
 // ---------------------------------------------------------------------------
 
 /// Derive a stable space ID from a code: SHA-256(uppercase raw) -> first 16 hex chars.
-#[uniffi::export]
 pub fn derive_space_id(code: &str) -> String {
     let raw: String = code.replace(['-', ' '], "").to_uppercase();
     let mut hasher = Sha256::new();
@@ -201,28 +199,6 @@ pub fn parse_qr_payload(payload: &str) -> Option<(String, Vec<String>)> {
     // Bare code
     let code = parse_space_code(payload)?;
     Some((code, vec![]))
-}
-
-// ---------------------------------------------------------------------------
-// UniFFI-exported wrappers
-// ---------------------------------------------------------------------------
-
-/// Normalize user input to a raw uppercase code. Accepts 7-char and 12-char codes.
-#[uniffi::export]
-pub fn normalize_code(input: &str) -> Option<String> {
-    parse_space_code(input)
-}
-
-/// Format a raw code with dashes for display.
-#[uniffi::export]
-pub fn format_code(code: &str) -> String {
-    format_space_code(code)
-}
-
-/// Check whether the input is a valid space code.
-#[uniffi::export]
-pub fn is_valid_code(input: &str) -> bool {
-    parse_space_code(input).is_some()
 }
 
 // ---------------------------------------------------------------------------
