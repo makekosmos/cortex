@@ -144,6 +144,9 @@ async function buildWindows(version) {
 
   const { makensis, env } = await ensureNsis();
   const args = [
+    // installer.nsi is UTF-8 without a BOM (it carries Russian strings).
+    "/INPUTCHARSET",
+    "UTF8",
     `/DVERSION=${version}`,
     `/DSTAGE_DIR=${stage}`,
     `/DOUT_FILE=${outFile}`,
