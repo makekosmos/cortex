@@ -1,6 +1,6 @@
 {
   "provenance": {
-    "generator": "phase3-compatibility-corpus",
+    "generator": "phase3_compatibility::regenerate_phase3_compatibility_corpus (--ignored)",
     "mapper": "ark_core::canonical_types::compatibility::map_legacy_source",
     "mode": "rust-production-mapper"
   },
