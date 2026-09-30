@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { env, MANAGER_EXE } from "./brand.mjs";
+import { getVersion } from "./release-version.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 // Release preflight demands a clean worktree on main; local staging (for
@@ -44,7 +45,14 @@ const managerBuild = spawnSync(
     "--target-dir",
     path.join(root, "manager-gpui", "target"),
   ],
-  { cwd: path.join(root, "manager-gpui"), stdio: "inherit", windowsHide: true },
+  {
+    cwd: path.join(root, "manager-gpui"),
+    stdio: "inherit",
+    windowsHide: true,
+    // Same product version the Engine bakes in (build-backend.mjs), so the
+    // About page shows the Mundus version rather than the crate's 0.1.0.
+    env: { ...process.env, MUNDUS_PRODUCT_VERSION: getVersion("win") },
+  },
 );
 if (managerBuild.status !== 0) process.exit(managerBuild.status ?? 1);
 const managerExe = path.join(managerRelease, "manager-gpui.exe");

@@ -5,14 +5,13 @@
 use semver::Version;
 
 /// Running Engine version, compared against the update feed to decide
-/// whether a newer build is available. KOS-233 will make this equal the
-/// Mundus Desktop product version via a build-time env var; until that
-/// lands this falls back to the crate version. This function is the single
-/// call site to flip when KOS-233 ships.
+/// whether a newer build is available. It is the Mundus product version
+/// that `build-backend.mjs` bakes in (`build_info`, KOS-233), the same
+/// value the About page shows. Reading any other source made a released
+/// 0.10.0 Engine report the crate's 0.1.0 and offer 0.10.0 as an update
+/// forever (KOS-278).
 pub(crate) fn current_version() -> String {
-    option_env!("MUNDUS_PRODUCT_VERSION")
-        .unwrap_or(env!("CARGO_PKG_VERSION"))
-        .to_string()
+    crate::build_info::display_version().to_string()
 }
 
 /// True when `candidate` is strictly newer than `current` — the updater's
@@ -35,11 +34,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn current_version_uses_product_version_with_crate_fallback() {
-        assert_eq!(
-            current_version(),
-            option_env!("MUNDUS_PRODUCT_VERSION").unwrap_or(env!("CARGO_PKG_VERSION"))
-        );
+    fn current_version_is_the_product_version_the_build_injects() {
+        assert_eq!(current_version(), crate::build_info::display_version());
     }
 
     #[test]
