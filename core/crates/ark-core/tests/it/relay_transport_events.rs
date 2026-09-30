@@ -74,7 +74,7 @@ async fn wait_for_peer(relay: &RelaySync) {
         }
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
-    panic!("peer never registered");
+    unreachable!("peer never registered");
 }
 
 fn send_hello(tx: &mpsc::UnboundedSender<TransportEvent>) {

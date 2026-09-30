@@ -128,7 +128,7 @@ pub(super) mod reject_tests {
             .expect("send hello");
         match tokio::time::timeout(Duration::from_secs(2), ws.next()).await {
             Ok(Some(Ok(Message::Close(_)))) => {}
-            other => panic!("expected Close frame for rejected hello, got {other:?}"),
+            other => unreachable!("expected Close frame for rejected hello, got {other:?}"),
         }
     }
 
