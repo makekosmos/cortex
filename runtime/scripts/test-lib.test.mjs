@@ -10,7 +10,7 @@ test("openGateTmp creates a fresh empty dir under <target>/gate-tmp", () => {
   const dir = openGateTmp(target, 1234);
   assert.equal(dir, resolve(target, "gate-tmp", "run-1234"));
   assert.ok(existsSync(dir));
-  assert.equal(sweepGateTmp(target, dir), 0);
+  assert.deepEqual(sweepGateTmp(target, dir), []);
   assert.ok(!existsSync(dir));
 });
 
@@ -20,7 +20,7 @@ test("sweepGateTmp removes leftover test dirs and reports the count", () => {
   mkdirSync(join(dir, ".tmpLeaked"));
   writeFileSync(join(dir, ".tmpLeaked", "ark.db"), "x");
   writeFileSync(join(dir, ".tmpOther"), "y");
-  assert.equal(sweepGateTmp(target, dir), 2);
+  assert.deepEqual(sweepGateTmp(target, dir), [".tmpLeaked", ".tmpOther"]);
   assert.ok(!existsSync(dir));
 });
 

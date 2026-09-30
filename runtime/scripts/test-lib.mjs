@@ -17,8 +17,11 @@ const gateTmp = openGateTmp(target, process.pid);
 process.on("exit", () => {
   const removed = sweepGateTmp(target, gateTmp);
   console.log(
-    `gate tmp: swept ${removed} leftover entr${removed === 1 ? "y" : "ies"} under ${gateTmp}`,
+    `gate tmp: swept ${removed.length} leftover entr${removed.length === 1 ? "y" : "ies"} under ${gateTmp}`,
   );
+  for (const name of removed.slice(0, 20)) {
+    console.log(`gate tmp:   leftover ${name}`);
+  }
 });
 const gateEnv = { ...process.env, TMP: gateTmp, TEMP: gateTmp, TMPDIR: gateTmp };
 // Cargo's default job count is used: a cold `--workspace` run took 1474 s with

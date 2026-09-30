@@ -15,15 +15,16 @@ export function openGateTmp(targetDir, runId) {
   return dir;
 }
 
-// Returns the number of leftover entries removed. `dir` must live under
-// `targetDir`: this function deletes recursively, and refusing anything
-// outside the build tree is the only guard against a bad caller.
+// Returns the leftover entry names (empty list when the tests cleaned up
+// after themselves). `dir` must live under `targetDir`: this function
+// deletes recursively, and refusing anything outside the build tree is the
+// only guard against a bad caller.
 export function sweepGateTmp(targetDir, dir) {
   const root = resolve(targetDir, "gate-tmp") + sep;
   if (!resolve(dir).startsWith(root)) {
     throw new Error(`refusing to sweep ${dir}: not under ${root}`);
   }
-  const leftover = readdirSync(dir).length;
+  const leftover = readdirSync(dir);
   rmSync(dir, { recursive: true, force: true });
   return leftover;
 }
