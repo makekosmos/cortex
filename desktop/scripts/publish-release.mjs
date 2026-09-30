@@ -4,8 +4,9 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { documentHash, requireArgs } from "./package-release-utils.mjs";
+import { documentHash, requireArgs } from "./release-utils.mjs";
 import { verifyLocalReleaseChannel } from "./release-channel-local.mjs";
+import { RELEASE_BOM_FILE } from "./release-bom.mjs";
 import { runReleasePreflight } from "./release-preflight.mjs";
 import {
   assertExactArtifactSet,
@@ -42,11 +43,10 @@ export async function main() {
     ["platform", "receipt"],
   );
   const platform = args.platform;
-  if (!["win", "mac"].includes(platform)) die(`Unknown platform "${platform}"`);
+  if (platform !== "win") die(`Unknown platform "${platform}"`);
   const receiptPath = path.resolve(args.receipt);
   const receipt = await readReceipt(receiptPath);
-  const bomPath = receipt.inputs.bom.path;
-  const preflight = await runReleasePreflight({ platform, bomPath });
+  const preflight = await runReleasePreflight({ platform });
   const { bom, currentCommit: commit, version } = preflight;
   assertReceiptMatchesBom(receipt, {
     platform,
@@ -66,23 +66,24 @@ export async function main() {
     !Array.isArray(provenance.artifacts)
   )
     die("release provenance does not match current publish inputs");
-  const bomCopy = path.join(outputDir, "release-bom.v1.json");
+  const bomCopy = path.join(outputDir, RELEASE_BOM_FILE);
   if (documentHash(readFileSync(bomCopy)) !== bom.digest)
-    die("release BOM copy does not match the reviewed BOM");
+    die("release BOM copy does not match the BOM derived from HEAD");
   verifyLocalReleaseChannel(outputDir, platform, version);
   assertExactArtifactSet(receipt, [
     ...provenance.artifacts.map(({ name }) => name),
-    "release-bom.v1.json",
+    RELEASE_BOM_FILE,
     "release-provenance.json",
   ]);
   const artifacts = await verifyReceiptArtifacts(receipt, outputDir);
-  const repository = platform === "win" ? "makekosmos/desktop" : "makekosmos/desktop-mac";
+  const repository = "makekosmos/desktop";
   const files = artifacts.map(({ file }) => file).concat(receiptPath);
   console.log(`[publish-release] verified ${artifacts.length} immutable artifacts`);
   console.log(`[publish-release] plan: gh release create v${version} --repo ${repository}`);
   if (dryRun) return;
 
-  if (!process.env.GH_TOKEN) die("GH_TOKEN is required to publish a verified release");
+  // gh brings its own auth (keyring or GH_TOKEN); the duplicate-release probe
+  // fails closed on any auth error before anything is created.
   duplicateRelease(repository, version);
   const result = spawnSync(
     "gh",

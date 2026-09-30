@@ -5,7 +5,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getVersion } from "./release-version.mjs";
-import { loadReleaseBom } from "./release-bom.mjs";
+import { deriveReleaseBom } from "./release-bom.mjs";
 
 export const SHELL_ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -104,10 +104,8 @@ export function assertBuildingFromMain(
     );
 }
 
-export async function runReleasePreflight({ platform, bomPath, local = false }) {
-  if (!["win", "mac"].includes(platform)) throw new Error(`Unknown platform "${platform}"`);
-  if (!bomPath)
-    throw new Error("--bom <path> or MUNDUS_RELEASE_BOM is required for release builds");
+export async function runReleasePreflight({ platform, local = false }) {
+  if (platform !== "win") throw new Error(`Unknown platform "${platform}"`);
   const version = getVersion(platform);
   ensureCleanSource();
   const commit = currentCommit();
@@ -115,35 +113,22 @@ export async function runReleasePreflight({ platform, bomPath, local = false }) 
     assertBuildingFromMain(path.resolve(SHELL_ROOT, ".."));
     await assertVersionIsPublishable({ platform, version });
   }
-  const bom = await loadReleaseBom(bomPath, {
-    root: path.resolve(SHELL_ROOT, ".."),
-    platform,
-    currentCommit: commit,
-  });
-  if (platform === "win") verifyEngineArtifact(version, commit);
-  return {
-    platform,
-    version,
-    currentCommit: commit,
-    bom,
-  };
+  const bom = await deriveReleaseBom(path.resolve(SHELL_ROOT, ".."), platform, commit);
+  verifyEngineArtifact(version, commit);
+  return { platform, version, currentCommit: commit, bom };
 }
 
 export function resolvePreflightArgs(args, env = process.env) {
-  const flagValue = (flag) => {
-    const index = args.indexOf(flag);
-    return index === -1 ? undefined : args[index + 1];
-  };
+  const index = args.indexOf("--platform");
   return {
-    platform: flagValue("--platform"),
-    bomPath: flagValue("--bom") ?? env.MUNDUS_RELEASE_BOM,
+    platform: index === -1 ? undefined : args[index + 1],
     local: args.includes("--local") || env.MUNDUS_RELEASE_LOCAL === "1",
   };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const { platform, bomPath, local } = resolvePreflightArgs(process.argv.slice(2));
-  runReleasePreflight({ platform, bomPath, local })
+  const { platform, local } = resolvePreflightArgs(process.argv.slice(2));
+  runReleasePreflight({ platform, local })
     .then(({ platform: checkedPlatform, version, bom }) =>
       console.log(`[release-preflight] PASS ${checkedPlatform} v${version} BOM ${bom.value.id}`),
     )

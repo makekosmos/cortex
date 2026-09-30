@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { env, MANAGER_EXE } from "./brand.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-// Release preflight demands a clean worktree and a BOM; local staging (for
+// Release preflight demands a clean worktree on main; local staging (for
 // `pnpm run build:installer:local`) skips it.
 const local = process.argv.includes("--local") || env("RELEASE_LOCAL") === "1";
 if (!local) {

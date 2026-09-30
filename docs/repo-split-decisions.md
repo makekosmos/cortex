@@ -274,7 +274,7 @@ private, `main` @ `80ced30`, локально `C:\Users\kirill\Coding\makekosmos
 ### Известные follow-up долги
 
 - `publish-package-v1.yml` workflow: для fetch из private integrations нужен `gh auth setup-git`/токен (workflows не трогаем — отдельная задача).
-- `publish-catalog.mjs` пока использует cortex-скрипты `package-sign`/`package-envelope`/`package-catalog` — следующий шаг расцепления.
+- ~~`publish-catalog.mjs` пока использует cortex-скрипты `package-sign`/`package-envelope`/`package-catalog`~~ — закрыто: package-index подписывает каталог своими скриптами, мёртвые cortex `package-*` удалены в KOS-274.
 - ark-markdown-bridge: pin `git+rev` на cortex активируется после мержа `chore/worker-protocol-crate` в kos-137 и пуша.
 - Junction `C:\mk\cortex` → `cortex-rm-vue-manager` — нужен host e2e; снять после интеграции (может перенаправить чужие тесты).
 - E2E-фикстуры `C:\mk\{agenda,arcadia,dictation,memoria,ordo}` — detached worktrees для тестов; держать пока идёт ветка.
