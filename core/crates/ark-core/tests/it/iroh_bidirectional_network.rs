@@ -95,17 +95,15 @@ async fn iroh_bidirectional_hello_and_reverse_send() {
         a_got_from, "device-B",
         "from_device_id должен быть device-B (резолвится через реестр или Hello)"
     );
-    match a_msg {
-        LanSyncMessage::LiveChange {
-            change_id: cid,
-            entity: ent,
-            ..
-        } => {
-            assert_eq!(cid, change_id, "change_id mismatch");
-            assert_eq!(ent.id, entity.id, "entity.id mismatch");
-        }
-        other => unreachable!("expected LiveChange, got {other:?}"),
-    }
+    assert!(
+        matches!(
+            &a_msg,
+            LanSyncMessage::LiveChange { change_id: cid, entity: ent, .. }
+                if *cid == change_id && ent.id == entity.id
+        ),
+        "expected LiveChange {change_id} for {}, got {a_msg:?}",
+        entity.id
+    );
     let (backend, conn) = authorized_storage();
     let recipient_transport = transport_a.endpoint_id().unwrap().to_string();
     set_recipient_transport_key(&conn, &recipient_transport, NodeStatus::Active, 1);

@@ -68,13 +68,13 @@ async fn relay_with_stub() -> (Arc<RelaySync>, mpsc::UnboundedSender<TransportEv
 }
 
 async fn wait_for_peer(relay: &RelaySync) {
-    for _ in 0..50 {
-        if !relay.get_connected_peer_entries().await.is_empty() {
-            return;
+    tokio::time::timeout(Duration::from_secs(1), async {
+        while relay.get_connected_peer_entries().await.is_empty() {
+            tokio::time::sleep(Duration::from_millis(20)).await;
         }
-        tokio::time::sleep(Duration::from_millis(20)).await;
-    }
-    unreachable!("peer never registered");
+    })
+    .await
+    .expect("peer never registered within 1 s");
 }
 
 fn send_hello(tx: &mpsc::UnboundedSender<TransportEvent>) {

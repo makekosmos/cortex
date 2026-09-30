@@ -161,13 +161,14 @@ async fn iroh_round_trip() {
     .expect("timed out waiting for iroh LiveChange on B");
 
     assert_eq!(from_device_id, "device-A");
-    match received {
-        LanSyncMessage::LiveChange { entity, .. } => {
-            assert_eq!(entity.id, "test-entity-iroh-001", "entity id mismatch");
-            assert_eq!(entity.entity_type, "todo", "entity type mismatch");
-        }
-        other => unreachable!("expected LiveChange, got {other:?}"),
-    }
+    assert!(
+        matches!(
+            &received,
+            LanSyncMessage::LiveChange { entity, .. }
+                if entity.id == "test-entity-iroh-001" && entity.entity_type == "todo"
+        ),
+        "expected LiveChange for todo test-entity-iroh-001, got {received:?}"
+    );
 
     transport_a.stop();
     transport_b.stop();

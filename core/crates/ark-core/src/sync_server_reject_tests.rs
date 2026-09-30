@@ -126,10 +126,11 @@ pub(super) mod reject_tests {
         ws.send(Message::Text(serialize_message(&hello)))
             .await
             .expect("send hello");
-        match tokio::time::timeout(Duration::from_secs(2), ws.next()).await {
-            Ok(Some(Ok(Message::Close(_)))) => {}
-            other => unreachable!("expected Close frame for rejected hello, got {other:?}"),
-        }
+        let frame = tokio::time::timeout(Duration::from_secs(2), ws.next()).await;
+        assert!(
+            matches!(frame, Ok(Some(Ok(Message::Close(_))))),
+            "expected Close frame for rejected hello, got {frame:?}"
+        );
     }
 
     #[tokio::test]
