@@ -108,7 +108,7 @@ pub(super) async fn dispatch(
         return Err("forbidden");
     }
     match call.operation {
-        WorkerMethod::FilesystemRootOpen => unreachable!("handled above"),
+        WorkerMethod::FilesystemRootOpen => handle_relative::open_root(inner, grant, call),
         WorkerMethod::ArkRead | WorkerMethod::ArkWrite => {
             let operation = scope.ok_or("invalid-request")?;
             let params = call

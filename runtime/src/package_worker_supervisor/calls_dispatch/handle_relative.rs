@@ -42,7 +42,7 @@ fn owner(grant: &Grant, generation: u64) -> GrantOwner {
     }
 }
 
-fn open_root(
+pub(super) fn open_root(
     inner: &SupervisorInner,
     grant: &Grant,
     call: &CallMessage,

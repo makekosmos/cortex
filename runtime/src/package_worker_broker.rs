@@ -272,7 +272,8 @@ pub(crate) async fn fetch_with_secret_json_limit(
     let injected_body = inject_json_body(body, secret.as_ref())?;
     let body = request_body(method, injected_body.as_ref().or(body))?;
     let mut url = validate_url(config, raw_url)?;
-    for redirect_count in 0..=3 {
+    let mut redirect_count = 0;
+    loop {
         let host = url
             .host_str()
             .ok_or_else(|| BrokerError::Invalid("missing host".into()))?;
@@ -324,6 +325,7 @@ pub(crate) async fn fetch_with_secret_json_limit(
             if redirect_count == 3 {
                 return Err(BrokerError::Invalid("too many redirects".into()));
             }
+            redirect_count += 1;
             let location = response
                 .headers()
                 .get(reqwest::header::LOCATION)
@@ -356,7 +358,6 @@ pub(crate) async fn fetch_with_secret_json_limit(
         }
         return Ok(out);
     }
-    unreachable!()
 }
 
 fn request_body(

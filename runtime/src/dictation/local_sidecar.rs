@@ -385,10 +385,10 @@ pub async fn run_stdio_service() -> io::Result<()> {
         let request_id = envelope.request_id;
         match envelope.request {
             LocalSttRequest::Preload { .. } | LocalSttRequest::Transcribe { .. } => {
-                let kind = match envelope.request {
-                    LocalSttRequest::Preload { .. } => ActiveSidecarRequestKind::Preload,
-                    LocalSttRequest::Transcribe { .. } => ActiveSidecarRequestKind::Transcribe,
-                    _ => unreachable!(),
+                let kind = if matches!(envelope.request, LocalSttRequest::Preload { .. }) {
+                    ActiveSidecarRequestKind::Preload
+                } else {
+                    ActiveSidecarRequestKind::Transcribe
                 };
                 let service = Arc::clone(&service);
                 let tx_task = tx.clone();

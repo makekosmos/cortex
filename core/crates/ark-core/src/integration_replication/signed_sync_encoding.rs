@@ -54,8 +54,8 @@ pub(super) fn decode_fixed<const N: usize>(
     let mut output = [0; N];
     for (index, byte) in output.iter_mut().enumerate() {
         let offset = index * 2;
-        *byte =
-            (hex_digit(value.as_bytes()[offset]) << 4) | hex_digit(value.as_bytes()[offset + 1]);
+        *byte = (hex_digit(value.as_bytes()[offset], field)? << 4)
+            | hex_digit(value.as_bytes()[offset + 1], field)?;
     }
     Ok(output)
 }
@@ -65,12 +65,11 @@ fn append_bytes(output: &mut Vec<u8>, value: &[u8]) {
     output.extend_from_slice(value);
 }
 
-fn hex_digit(value: u8) -> u8 {
-    match value {
-        b'0'..=b'9' => value - b'0',
-        b'a'..=b'f' => value - b'a' + 10,
-        _ => unreachable!("validated lowercase hexadecimal"),
-    }
+fn hex_digit(value: u8, field: &'static str) -> Result<u8, SignedSyncError> {
+    (value as char)
+        .to_digit(16)
+        .map(|digit| digit as u8)
+        .ok_or(SignedSyncError::InvalidEncoding { field })
 }
 
 fn canonical_json(value: &Value) -> String {
