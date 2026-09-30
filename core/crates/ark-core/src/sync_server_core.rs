@@ -64,6 +64,7 @@ impl SyncServer {
             peers: Arc::new(Mutex::new(HashMap::new())),
             known_peer_records: Arc::new(Mutex::new(Vec::new())),
             shutdown_tx: Arc::new(Mutex::new(None)),
+            accept_task: Arc::new(Mutex::new(None)),
             on_change: Arc::new(Mutex::new(None)),
             on_peer_connect: Arc::new(Mutex::new(None)),
             on_peer_disconnect: Arc::new(Mutex::new(None)),
@@ -300,7 +301,7 @@ impl SyncServer {
 
         // Ping ticker shares the accept task: a separate ping task had no
         // shutdown path and leaked (plus duplicated pings) on every restart.
-        tokio::spawn(async move {
+        let accept_task = tokio::spawn(async move {
             let mut ticker = interval(Duration::from_millis(PING_INTERVAL_MS));
             loop {
                 tokio::select! {
@@ -442,6 +443,7 @@ impl SyncServer {
                 }
             }
         });
+        *self.accept_task.lock().await = Some(accept_task);
 
         Ok(())
     }

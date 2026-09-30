@@ -6,6 +6,11 @@ impl SyncServer {
         if let Some(tx) = self.shutdown_tx.lock().await.take() {
             let _ = tx.send(()).await;
         }
+        // Join the accept/ticker task: until it exits it holds a clone of
+        // `storage`, keeping the test db connection open past teardown.
+        if let Some(task) = self.accept_task.lock().await.take() {
+            let _ = task.await;
+        }
         let mut peers = self.peers.lock().await;
         peers.clear();
         eprintln!("{TAG} Server stopped");

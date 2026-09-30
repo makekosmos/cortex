@@ -50,4 +50,8 @@ pub struct RelaySync {
     on_change: Arc<Mutex<Option<OnChangeCallback>>>,
     on_peer_connect: Arc<Mutex<Option<OnPeerConnectCallback>>>,
     on_peer_disconnect: Arc<Mutex<Option<OnPeerDisconnectCallback>>>,
+    /// Background tasks spawned by `start()` — aborted and joined by
+    /// `stop()` so a task holding `storage` (the shared db connection)
+    /// cannot outlive teardown (KOS-270).
+    tasks: Mutex<Vec<tokio::task::JoinHandle<()>>>,
 }

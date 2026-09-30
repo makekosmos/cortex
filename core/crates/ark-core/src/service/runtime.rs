@@ -221,6 +221,31 @@ fn make_sync_entity(
 /// outbound clients + relay/iroh). Не применяет entity к storage и не
 /// перебивает HLC — данные уже записаны через `record_local_*`.
 /// Если sync не запущен — тихий no-op.
+/// Spawns the live-change broadcast only when a sync runtime is running —
+/// without one the detached task is a no-op anyway, and the captured
+/// `Arc<ServiceState>` would keep the db connection alive past teardown
+/// (KOS-270). A sync runtime that starts between the check and the spawn
+/// misses nothing: it loads current state on startup.
+pub(super) async fn maybe_broadcast_local_change(state: &Arc<ServiceState>, entity: SyncEntity) {
+    maybe_broadcast_local_changes(state, vec![entity]).await;
+}
+
+/// Same guard for a batch of entities (one spawned task fanning out all).
+pub(super) async fn maybe_broadcast_local_changes(
+    state: &Arc<ServiceState>,
+    entities: Vec<SyncEntity>,
+) {
+    if entities.is_empty() || state.sync.lock().await.is_none() {
+        return;
+    }
+    let state = Arc::clone(state);
+    tokio::spawn(async move {
+        for entity in entities {
+            broadcast_local_change(&state, entity).await;
+        }
+    });
+}
+
 pub(super) async fn broadcast_local_change(state: &ServiceState, entity: SyncEntity) {
     let runtime = {
         let guard = state.sync.lock().await;

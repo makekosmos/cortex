@@ -55,8 +55,9 @@ fn remote_entity(object: &ArkObject, title: &str, hlc: &str, deleted: bool) -> S
 
 #[tokio::test]
 async fn guarded_object_upsert_rejects_every_stale_identity_or_revision() {
-    let state = test_state();
-    let dir = tempfile::tempdir().unwrap();
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let dir = &fixture.dir;
     handle_request(
         &state,
         Request::Init {
@@ -196,8 +197,9 @@ async fn guarded_object_upsert_rejects_every_stale_identity_or_revision() {
 
 #[tokio::test]
 async fn local_object_revision_blocks_older_remote_upsert_and_delete() {
-    let state = test_state();
-    let dir = tempfile::tempdir().unwrap();
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let dir = &fixture.dir;
     handle_request(
         &state,
         Request::Init {
@@ -275,8 +277,9 @@ async fn local_object_revision_blocks_older_remote_upsert_and_delete() {
 
 #[tokio::test]
 async fn newer_remote_upsert_and_delete_invalidate_guarded_writes() {
-    let state = test_state();
-    let dir = tempfile::tempdir().unwrap();
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let dir = &fixture.dir;
     handle_request(
         &state,
         Request::Init {

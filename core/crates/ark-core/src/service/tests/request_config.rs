@@ -116,8 +116,9 @@ fn pairing_restart_params_force_iroh_and_replace_ticket() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn start_sync_with_use_iroh_selects_iroh_transport_and_exposes_ticket() {
-    let state = test_state();
-    let dir = tempfile::tempdir().unwrap();
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
     handle_request(
         &state,

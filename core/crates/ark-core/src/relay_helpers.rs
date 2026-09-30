@@ -221,8 +221,8 @@ mod tests {
             "relay peer should receive existing entity; got {:?}",
             loaded_b.iter().map(|entity| &entity.id).collect::<Vec<_>>()
         );
-        relay_a.stop();
-        relay_b.stop();
+        relay_a.stop().await;
+        relay_b.stop().await;
     }
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn relay_propagates_live_change() {
@@ -244,8 +244,8 @@ mod tests {
             loaded_b.iter().any(|entity| entity.id == "relay-live"),
             "relay peer should receive live entity"
         );
-        relay_a.stop();
-        relay_b.stop();
+        relay_a.stop().await;
+        relay_b.stop().await;
     }
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn relay_rejects_wrong_hmac_secret() {
@@ -283,7 +283,7 @@ mod tests {
             !loaded_b.iter().any(|entity| entity.id == "relay-denied"),
             "wrong-secret relay peer must not receive existing entity"
         );
-        relay_a.stop();
-        relay_b.stop();
+        relay_a.stop().await;
+        relay_b.stop().await;
     }
 }

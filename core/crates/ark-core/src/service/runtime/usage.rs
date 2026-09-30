@@ -17,10 +17,7 @@ pub(super) async fn upsert_usage_session(
             None,
         ))
     })?;
-    let state = Arc::clone(state);
-    tokio::spawn(async move {
-        broadcast_local_change(&state, entity).await;
-    });
+    maybe_broadcast_local_change(state, entity).await;
     Ok(json!(true))
 }
 
@@ -41,10 +38,7 @@ pub(super) async fn delete_usage_session(
             Some(true),
         ))
     })?;
-    let state = Arc::clone(state);
-    tokio::spawn(async move {
-        broadcast_local_change(&state, entity).await;
-    });
+    maybe_broadcast_local_change(state, entity).await;
     Ok(json!(true))
 }
 
@@ -65,10 +59,7 @@ pub(super) async fn upsert_usage_event(
             None,
         ))
     })?;
-    let state = Arc::clone(state);
-    tokio::spawn(async move {
-        broadcast_local_change(&state, entity).await;
-    });
+    maybe_broadcast_local_change(state, entity).await;
     Ok(json!(true))
 }
 
@@ -89,10 +80,7 @@ pub(super) async fn delete_usage_event(
             Some(true),
         ))
     })?;
-    let state = Arc::clone(state);
-    tokio::spawn(async move {
-        broadcast_local_change(&state, entity).await;
-    });
+    maybe_broadcast_local_change(state, entity).await;
     Ok(json!(true))
 }
 
@@ -125,12 +113,7 @@ pub(super) async fn upsert_usage_span(
         .iter()
         .map(|entity| entity.id.clone())
         .collect::<Vec<_>>();
-    let state = Arc::clone(state);
-    tokio::spawn(async move {
-        for entity in entities {
-            broadcast_local_change(&state, entity).await;
-        }
-    });
+    maybe_broadcast_local_changes(state, entities).await;
     Ok(json!({ "usageDayIds": ids }))
 }
 

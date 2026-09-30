@@ -2,8 +2,9 @@ use super::*;
 
 #[tokio::test]
 async fn disconnect_peer_stops_matching_outbound_client_and_emits_events() {
-    let state = test_state();
-    let dir = tempfile::tempdir().unwrap();
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
     handle_request(
         &state,
@@ -109,8 +110,9 @@ async fn disconnect_peer_stops_matching_outbound_client_and_emits_events() {
 
 #[tokio::test]
 async fn upsert_object_broadcasts_live_change_to_peers() {
-    let state = test_state();
-    let dir = tempfile::tempdir().unwrap();
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
     handle_request(
         &state,
@@ -185,8 +187,9 @@ async fn upsert_object_broadcasts_live_change_to_peers() {
 
 #[tokio::test]
 async fn delete_object_broadcasts_live_change_with_deleted_flag() {
-    let state = test_state();
-    let dir = tempfile::tempdir().unwrap();
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
     handle_request(
         &state,

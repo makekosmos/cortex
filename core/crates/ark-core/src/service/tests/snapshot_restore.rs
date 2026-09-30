@@ -2,19 +2,19 @@
 
 use super::*;
 
-async fn init_snapshot_db(state: &Arc<ServiceState>) -> (tempfile::TempDir, String) {
-    let dir = tempfile::tempdir().unwrap();
-    let db_path = dir.path().join("ark.db");
-    let db_str = db_path.to_string_lossy().to_string();
+/// The fixture owns both the state and the TempDir: `state` drops first,
+/// closing the connection before the directory is removed (KOS-270).
+async fn init_snapshot_db(fixture: &ServiceFixture) -> String {
+    let db_str = fixture.db_path().to_string_lossy().to_string();
     handle_request(
-        state,
+        &fixture.state,
         Request::Init {
             db_path: db_str.clone(),
         },
     )
     .await
     .unwrap();
-    (dir, db_str)
+    db_str
 }
 
 async fn seed_rpc_object(state: &Arc<ServiceState>, id: &str, title: &str) {
@@ -80,8 +80,9 @@ fn live_object_ids(state: &Arc<ServiceState>) -> Vec<String> {
 /// restart-equivalent (re-Init → reopen того же файла).
 #[tokio::test]
 async fn db_backup_restore_roundtrip_survives_reinit() {
-    let state = test_state();
-    let (_dir, db_path) = init_snapshot_db(&state).await;
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let db_path = init_snapshot_db(&fixture).await;
     seed_rpc_object(&state, "obj-before", "before").await;
     write_snapshot(&state, &db_path, "ark.db.backup-rt");
 
@@ -128,8 +129,9 @@ async fn db_backup_restore_roundtrip_survives_reinit() {
 /// AC3: невалидные id, отсутствующие, garbage и чужие схемы не трогают live DB.
 #[tokio::test]
 async fn db_backup_restore_rejects_invalid_sources_without_touching_live() {
-    let state = test_state();
-    let (_dir, db_path) = init_snapshot_db(&state).await;
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let db_path = init_snapshot_db(&fixture).await;
     seed_rpc_object(&state, "obj-live", "alive").await;
     write_snapshot(&state, &db_path, "ark.db.backup-good");
 
@@ -174,8 +176,9 @@ async fn db_backup_restore_rejects_invalid_sources_without_touching_live() {
 /// per-check typed verdict.
 #[tokio::test]
 async fn db_backup_list_and_validate_contract() {
-    let state = test_state();
-    let (_dir, db_path) = init_snapshot_db(&state).await;
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let db_path = init_snapshot_db(&fixture).await;
     seed_rpc_object(&state, "obj-l", "l").await;
     write_snapshot(&state, &db_path, "ark.db.backup-listed");
 
@@ -232,12 +235,13 @@ async fn db_backup_list_and_validate_contract() {
 /// завершиться только после release.
 #[test]
 fn db_backup_restore_waits_for_backup_gate() {
-    let state = test_state();
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
     let runtime = tokio::runtime::Runtime::new().unwrap();
-    let (_dir, db_path) = runtime.block_on(async {
-        let pair = init_snapshot_db(&state).await;
-        seed_rpc_object(&state, "obj-g", "g").await;
-        pair
+    let db_path = runtime.block_on(async {
+        let path = init_snapshot_db(&fixture).await;
+        seed_rpc_object(&fixture.state, "obj-g", "g").await;
+        path
     });
     write_snapshot(&state, &db_path, "ark.db.backup-gated");
 

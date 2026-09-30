@@ -27,8 +27,9 @@ fn remote_entity(object: &ArkObject, title: &str) -> SyncEntity {
 
 #[tokio::test]
 async fn pre_version_table_revisions_reject_stale_remote_resurrection() {
-    let state = test_state();
-    let dir = tempfile::tempdir().unwrap();
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let dir = &fixture.dir;
     handle_request(
         &state,
         Request::Init {
@@ -94,8 +95,9 @@ async fn pre_version_table_revisions_reject_stale_remote_resurrection() {
 
 #[tokio::test]
 async fn max_remote_hlc_counter_rolls_back_local_write() {
-    let state = test_state();
-    let dir = tempfile::tempdir().unwrap();
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let dir = &fixture.dir;
     handle_request(
         &state,
         Request::Init {

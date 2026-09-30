@@ -2,8 +2,9 @@ use super::*;
 
 #[tokio::test]
 async fn local_object_and_usage_writes_record_sync_state() {
-    let state = test_state();
-    let dir = tempfile::tempdir().unwrap();
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
     handle_request(
         &state,
@@ -165,8 +166,9 @@ async fn local_object_and_usage_writes_record_sync_state() {
 
 #[tokio::test]
 async fn local_object_type_and_link_writes_record_sync_state() {
-    let state = test_state();
-    let dir = tempfile::tempdir().unwrap();
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
     handle_request(
         &state,

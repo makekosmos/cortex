@@ -158,6 +158,10 @@ pub struct SyncServer {
     peers: Arc<Mutex<HashMap<usize, PeerState>>>,
     known_peer_records: Arc<Mutex<Vec<PeerRecord>>>,
     shutdown_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
+    /// Accept/ticker task, joined by `stop()` so its `storage` Arc (the
+    /// shared db connection) is released deterministically on shutdown
+    /// rather than whenever the task happens to exit (KOS-270).
+    accept_task: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
     on_change: Arc<Mutex<Option<OnChangeCallback>>>,
     on_peer_connect: Arc<Mutex<Option<OnPeerConnectCallback>>>,
     on_peer_disconnect: Arc<Mutex<Option<OnPeerDisconnectCallback>>>,

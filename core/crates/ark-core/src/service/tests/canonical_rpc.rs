@@ -213,8 +213,9 @@ fn dotted_type_operations_are_exact_and_underscore_aliases_rejected() {
 
 #[tokio::test]
 async fn canonical_upsert_object_rpc_persists_registered_identity() {
-    let state = test_state();
-    let dir = tempfile::tempdir().unwrap();
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
     handle_request(
         &state,
@@ -246,8 +247,9 @@ async fn canonical_upsert_object_rpc_persists_registered_identity() {
 
 #[tokio::test]
 async fn canonical_upsert_object_rpc_rejects_omitted_version_without_side_effects() {
-    let state = test_state();
-    let dir = tempfile::tempdir().unwrap();
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
     handle_request(
         &state,
@@ -282,8 +284,9 @@ async fn canonical_upsert_object_rpc_rejects_omitted_version_without_side_effect
 
 #[tokio::test]
 async fn canonical_upsert_object_rpc_rejects_invalid_payload_without_sync_mutation() {
-    let state = test_state();
-    let dir = tempfile::tempdir().unwrap();
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
     handle_request(
         &state,
@@ -330,8 +333,9 @@ async fn canonical_upsert_object_rpc_rejects_invalid_payload_without_sync_mutati
 
 #[tokio::test]
 async fn canonical_upsert_object_rpc_rejects_legacy_alias_as_new_write() {
-    let state = test_state();
-    let dir = tempfile::tempdir().unwrap();
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
     handle_request(
         &state,

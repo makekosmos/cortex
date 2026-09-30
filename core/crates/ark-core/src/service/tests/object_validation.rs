@@ -2,8 +2,9 @@ use super::*;
 
 #[tokio::test]
 async fn legacy_alias_object_write_read_and_filter_is_canonical() {
-    let state = test_state();
-    let dir = tempfile::tempdir().unwrap();
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let dir = &fixture.dir;
     handle_request(
         &state,
         Request::Init {
@@ -62,8 +63,9 @@ async fn legacy_alias_object_write_read_and_filter_is_canonical() {
 /// Текущий код проглатывает ошибку и возвращает Ok(true) → RED.
 #[tokio::test]
 async fn upsert_object_with_invalid_type_id_is_err() {
-    let state = test_state();
-    let dir = tempfile::tempdir().unwrap();
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
     handle_request(
         &state,
@@ -109,8 +111,9 @@ async fn upsert_object_with_invalid_type_id_is_err() {
 /// version-vector для этого id (атомарность, дефект №2).
 #[tokio::test]
 async fn failed_upsert_object_persists_nothing() {
-    let state = test_state();
-    let dir = tempfile::tempdir().unwrap();
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
     handle_request(
         &state,
