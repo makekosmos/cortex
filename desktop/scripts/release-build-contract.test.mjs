@@ -24,6 +24,10 @@ test("release build verifies locally and leaves publishing to the receipt consum
   assert.match(preflight, /release builds require a clean tracked and source worktree/);
 });
 
+test("makensis reads installer.nsi as UTF-8, so its Russian strings survive any code page", () => {
+  assert.match(script, /"\/INPUTCHARSET",\s*"UTF8",/);
+});
+
 test("Engine ships from the same build and version as the GUI (KOS-233)", () => {
   // There is exactly one version source: desktop/release-versions.json.
   // desktop/engine-version.json must not exist, and nothing downloads a

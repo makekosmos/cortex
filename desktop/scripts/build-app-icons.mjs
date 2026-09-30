@@ -33,8 +33,12 @@ const toIco = async (sourceFile, outFile) => {
   writeFileSync(outFile, await pngToIco(variants));
 };
 
-// 24-bit BMP from a top-to-bottom RGB buffer (Sharp's raw() layout).
+// 24-bit BMP from a top-to-bottom RGB buffer (Sharp's raw() layout). BMP
+// stores rows bottom-up and pixels as BGR.
 function writeBmp(file, width, height, rgb) {
+  if (rgb.length !== width * height * 3) {
+    throw new Error(`${file}: expected ${width}x${height} RGB, got ${rgb.length} bytes`);
+  }
   const rowSize = Math.ceil((width * 3) / 4) * 4;
   const padding = rowSize - width * 3;
   const pixelDataSize = rowSize * height;
@@ -57,45 +61,56 @@ function writeBmp(file, width, height, rgb) {
   header.writeUInt32LE(0, 50);
   const parts = [header];
   for (let y = height - 1; y >= 0; y--) {
-    parts.push(rgb.subarray(y * width * 3, (y + 1) * width * 3));
+    const row = Buffer.from(rgb.subarray(y * width * 3, (y + 1) * width * 3));
+    for (let x = 0; x < row.length; x += 3) [row[x], row[x + 2]] = [row[x + 2], row[x]];
+    parts.push(row);
     if (padding > 0) parts.push(Buffer.alloc(padding));
   }
   writeFileSync(file, Buffer.concat(parts));
 }
 
-async function renderInstallerBitmap(width, height, iconSize) {
-  const background = { r: 22, g: 20, b: 30 }; // matches the Mundus icon backdrop
-  const iconSource = sharp(path.join(sources, "mundus.png"))
-    .resize(iconSize, iconSize, { fit: "contain", background })
-    .raw()
-    .toBuffer({ resolveWithObject: true });
-  const base = sharp({
-    create: { width, height, channels: 3, background },
-  }).raw();
-  const { data, info } = await iconSource;
-  // Composite only if the icon rendered to the expected size; otherwise fall
-  // back to the plain background (should never happen with a valid source).
-  if (info.width === iconSize && info.height === iconSize) {
-    const composite = await base
-      .composite([
-        { input: data, raw: { width: iconSize, height: iconSize, channels: 3 }, gravity: "center" },
-      ])
-      .raw()
-      .toBuffer();
-    return composite;
-  }
-  return base.raw().toBuffer();
+const ICON_BACKDROP = { r: 22, g: 20, b: 30 }; // matches the Mundus icon backdrop
+const WIZARD_HEADER = { r: 255, g: 255, b: 255 }; // MUI2 header strip is COLOR_WINDOW
+
+// Writes installer-assets/<file>: the icon (with its alpha edge) on a
+// solid background at (left, top). The flatten runs as a second pipeline
+// because Sharp applies composite last.
+async function installerBitmap(file, { width, height, background, iconSize, left, top }) {
+  const iconPng = await sharp(path.join(sources, "mundus.png"))
+    .resize(iconSize, iconSize, { fit: "contain", background: { ...background, alpha: 0 } })
+    .png()
+    .toBuffer();
+  const composed = await sharp({ create: { width, height, channels: 3, background } })
+    .composite([{ input: iconPng, left, top }])
+    .png()
+    .toBuffer();
+  const rgb = await sharp(composed).flatten({ background }).raw().toBuffer();
+  writeBmp(path.join(root, "build", "installer-assets", file), width, height, rgb);
 }
 
+// Rendered at 2x the MUI2 control size (150x57 header, 164x314 welcome) and
+// scaled down to fit by the installer, so they stay sharp at 200% scaling.
 async function installerAssets() {
-  const assetsDir = path.join(root, "build", "installer-assets");
-  mkdirSync(assetsDir, { recursive: true });
-  // MUI2 header image is shown at the top-right of interior pages.
-  const header = await renderInstallerBitmap(150, 57, 40);
-  writeBmp(path.join(assetsDir, "header.bmp"), 150, 57, header);
-  // Welcome/finish sidebar bitmap.
-  const welcome = await renderInstallerBitmap(164, 314, 128);
-  writeBmp(path.join(assetsDir, "welcome.bmp"), 164, 314, welcome);
+  mkdirSync(path.join(root, "build", "installer-assets"), { recursive: true });
+  // Header strip of interior pages: a small icon near the right edge, as in
+  // native Windows wizards (MUI_HEADERIMAGE_RIGHT).
+  await installerBitmap("header.bmp", {
+    width: 300,
+    height: 114,
+    background: WIZARD_HEADER,
+    iconSize: 72,
+    left: 300 - 72 - 24,
+    top: 21,
+  });
+  // Welcome/finish sidebar in the icon's own backdrop colour.
+  await installerBitmap("welcome.bmp", {
+    width: 328,
+    height: 628,
+    background: ICON_BACKDROP,
+    iconSize: 224,
+    left: 52,
+    top: 202,
+  });
 }
 
 await Promise.all([

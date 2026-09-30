@@ -25,12 +25,58 @@ test("uses MUI2 pages: welcome, progress, finish; no directory or license page",
 });
 
 test("brands MUI with generated Mundus bitmaps, not placeholders", () => {
+  // Exact MUI2 define names: a misspelt one is silently ignored and MUI2
+  // falls back to its stock win.bmp.
   expect(installer).toContain(
     'MUI_HEADERIMAGE_BITMAP "${STAGE_DIR}\\installer-assets\\header.bmp"',
   );
   expect(installer).toContain(
-    'MUI_WELCOMEFINISH_BITMAP "${STAGE_DIR}\\installer-assets\\welcome.bmp"',
+    'MUI_WELCOMEFINISHPAGE_BITMAP "${STAGE_DIR}\\installer-assets\\welcome.bmp"',
   );
+  expect(installer).toContain(
+    'MUI_UNWELCOMEFINISHPAGE_BITMAP "${STAGE_DIR}\\installer-assets\\welcome.bmp"',
+  );
+  expect(installer).toContain("!define MUI_HEADERIMAGE_RIGHT");
+  // 2x bitmaps are scaled to the control, so no NOSTRETCH override.
+  expect(installer).not.toContain("NOSTRETCH");
+});
+
+// Reads a 24-bit BMP's size and the bottom-left pixel as RGB (BMP rows are
+// stored bottom-up, pixels as BGR).
+function readBmp(name) {
+  const bmp = readFileSync(path.join(buildDir, "installer-assets", name));
+  const offset = bmp.readUInt32LE(10);
+  return {
+    width: bmp.readInt32LE(18),
+    height: bmp.readInt32LE(22),
+    bitsPerPixel: bmp.readUInt16LE(28),
+    cornerRgb: [bmp[offset + 2], bmp[offset + 1], bmp[offset]],
+  };
+}
+
+test("installer bitmaps are 2x, 24-bit and stored as BGR", () => {
+  expect(readBmp("header.bmp")).toEqual({
+    width: 300,
+    height: 114,
+    bitsPerPixel: 24,
+    cornerRgb: [255, 255, 255],
+  });
+  expect(readBmp("welcome.bmp")).toEqual({
+    width: 328,
+    height: 628,
+    bitsPerPixel: 24,
+    cornerRgb: [22, 20, 30],
+  });
+});
+
+test("looks native: Unicode, per-monitor DPI, system font, own branding", () => {
+  expect(installer).toContain("Unicode true");
+  expect(installer).toContain("ManifestDPIAware true");
+  expect(installer).toContain("ManifestDPIAwareness PerMonitorV2,System");
+  expect(installer).toContain('SetFont "Segoe UI" 9');
+  expect(installer).toContain('BrandingText "${APP_NAME} ${VERSION}"');
+  expect(installer).toContain("ShowInstDetails hide");
+  expect(installer).toContain("ShowUninstDetails hide");
 });
 
 test("auto-selects English or Russian from the system UI language", () => {
