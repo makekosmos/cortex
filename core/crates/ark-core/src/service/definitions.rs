@@ -294,23 +294,7 @@ pub(crate) enum Request {
         value: String,
     },
     #[serde(rename = "external_refs.upsert")]
-    ExternalRefsUpsert {
-        #[serde(rename = "connectorId")]
-        connector_id: String,
-        #[serde(rename = "accountId")]
-        account_id: String,
-        #[serde(rename = "externalType")]
-        external_type: String,
-        #[serde(rename = "externalId")]
-        external_id: String,
-        #[serde(rename = "objectId")]
-        object_id: String,
-        #[serde(default)]
-        revision: Option<String>,
-        #[serde(default)]
-        hash: Option<String>,
-        state: String,
-    },
+    ExternalRefsUpsert(ExternalRefsUpsertParams),
     ClearAll,
     DeleteTrashed,
 
@@ -336,42 +320,7 @@ pub(crate) enum Request {
     },
 
     // --- Sync ops (new) ---
-    StartSync {
-        space_id: String,
-        device_id: String,
-        #[serde(default)]
-        device_name: Option<String>,
-        #[serde(default)]
-        port: Option<u16>,
-        #[serde(default)]
-        seed_addresses: Option<Vec<String>>,
-        /// Optional relay server WebSocket URL (e.g. "wss://relay.example.com").
-        #[serde(default)]
-        relay_url: Option<String>,
-        /// API key for the relay server.
-        #[serde(default)]
-        relay_api_key: Option<String>,
-        /// Optional shared secret for LAN/P2P hello HMAC authentication.
-        #[serde(default)]
-        auth_secret: Option<String>,
-        /// Step 4a: select the iroh p2p transport instead of relay. Field
-        /// exists regardless of build (stable wire schema); only acted on
-        /// behind `#[cfg(feature = "iroh-spike")]` — see `select_transport`.
-        #[serde(default)]
-        use_iroh: bool,
-        /// Pairing ticket string for the iroh peer (see
-        /// `iroh_transport::IrohTransport::our_ticket`/`from_ticket`).
-        #[serde(default)]
-        iroh_peer_ticket: Option<String>,
-        /// Whether to start LAN beacon discovery. Defaults to true for compatibility.
-        #[serde(default = "default_discovery_enabled")]
-        discovery_enabled: bool,
-        /// Where the sync stack binds its listeners. `loopback` binds every
-        /// socket to 127.0.0.1 / ::1 (tests, single-machine pairing);
-        /// `all_interfaces` (default) keeps LAN behaviour.
-        #[serde(default)]
-        bind: SyncBind,
-    },
+    StartSync(StartSyncParams),
     StopSync,
     BroadcastChange {
         entity: SyncEntity,
@@ -431,15 +380,7 @@ pub(crate) enum Request {
         frame: SignedSyncEnvelope,
     },
     #[serde(rename = "integration.acquire_refresh_lease")]
-    IntegrationAcquireRefreshLease {
-        integration_id: String,
-        holder_node_id: String,
-        credential_generation: u64,
-        now_ms: u64,
-        ttl_ms: u64,
-        expected_fencing_token: u64,
-        device_id: String,
-    },
+    IntegrationAcquireRefreshLease(AcquireRefreshLeaseParams),
     #[serde(rename = "integration.publish_credential_envelope")]
     IntegrationPublishCredentialEnvelope {
         envelope: IntegrationCredentialEnvelope,
@@ -480,4 +421,77 @@ pub(crate) enum Request {
     #[cfg(test)]
     #[serde(rename = "test.panic")]
     TestPanic,
+}
+
+/// Params of `start_sync`. The variant is a newtype over this struct so the
+/// handler receives the request params object directly.
+#[derive(Debug, Deserialize)]
+pub(crate) struct StartSyncParams {
+    pub(crate) space_id: String,
+    pub(crate) device_id: String,
+    #[serde(default)]
+    pub(crate) device_name: Option<String>,
+    #[serde(default)]
+    pub(crate) port: Option<u16>,
+    #[serde(default)]
+    pub(crate) seed_addresses: Option<Vec<String>>,
+    /// Optional relay server WebSocket URL (e.g. "wss://relay.example.com").
+    #[serde(default)]
+    pub(crate) relay_url: Option<String>,
+    /// API key for the relay server.
+    #[serde(default)]
+    pub(crate) relay_api_key: Option<String>,
+    /// Optional shared secret for LAN/P2P hello HMAC authentication.
+    #[serde(default)]
+    pub(crate) auth_secret: Option<String>,
+    /// Step 4a: select the iroh p2p transport instead of relay. Field
+    /// exists regardless of build (stable wire schema); only acted on
+    /// behind `#[cfg(feature = "iroh-spike")]` — see `select_transport`.
+    #[serde(default)]
+    pub(crate) use_iroh: bool,
+    /// Pairing ticket string for the iroh peer (see
+    /// `iroh_transport::IrohTransport::our_ticket`/`from_ticket`).
+    #[serde(default)]
+    pub(crate) iroh_peer_ticket: Option<String>,
+    /// Whether to start LAN beacon discovery. Defaults to true for compatibility.
+    #[serde(default = "default_discovery_enabled")]
+    pub(crate) discovery_enabled: bool,
+    /// Where the sync stack binds its listeners. `loopback` binds every
+    /// socket to 127.0.0.1 / ::1 (tests, single-machine pairing);
+    /// `all_interfaces` (default) keeps LAN behaviour.
+    #[serde(default)]
+    pub(crate) bind: SyncBind,
+}
+
+/// Params of `external_refs.upsert`; newtype-wrapped for the same reason as
+/// `StartSyncParams`.
+#[derive(Debug, Deserialize)]
+pub(crate) struct ExternalRefsUpsertParams {
+    #[serde(rename = "connectorId")]
+    pub(crate) connector_id: String,
+    #[serde(rename = "accountId")]
+    pub(crate) account_id: String,
+    #[serde(rename = "externalType")]
+    pub(crate) external_type: String,
+    #[serde(rename = "externalId")]
+    pub(crate) external_id: String,
+    #[serde(rename = "objectId")]
+    pub(crate) object_id: String,
+    #[serde(default)]
+    pub(crate) revision: Option<String>,
+    #[serde(default)]
+    pub(crate) hash: Option<String>,
+    pub(crate) state: String,
+}
+
+/// Params of `integration.acquire_refresh_lease`.
+#[derive(Debug, Deserialize)]
+pub(crate) struct AcquireRefreshLeaseParams {
+    pub(crate) integration_id: String,
+    pub(crate) holder_node_id: String,
+    pub(crate) credential_generation: u64,
+    pub(crate) now_ms: u64,
+    pub(crate) ttl_ms: u64,
+    pub(crate) expected_fencing_token: u64,
+    pub(crate) device_id: String,
 }

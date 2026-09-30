@@ -155,18 +155,20 @@ pub(super) async fn handle_start_sync_with_params(
 ) -> Result<Value, String> {
     handle_start_sync(
         state,
-        params.space_id,
-        params.device_id,
-        Some(params.device_name),
-        params.port,
-        params.seed_addresses,
-        params.relay_url,
-        params.relay_api_key,
-        params.auth_secret,
-        params.use_iroh,
-        params.iroh_peer_ticket,
-        params.discovery_enabled,
-        params.bind,
+        StartSyncParams {
+            space_id: params.space_id,
+            device_id: params.device_id,
+            device_name: Some(params.device_name),
+            port: params.port,
+            seed_addresses: params.seed_addresses,
+            relay_url: params.relay_url,
+            relay_api_key: params.relay_api_key,
+            auth_secret: params.auth_secret,
+            use_iroh: params.use_iroh,
+            iroh_peer_ticket: params.iroh_peer_ticket,
+            discovery_enabled: params.discovery_enabled,
+            bind: params.bind,
+        },
     )
     .await
 }

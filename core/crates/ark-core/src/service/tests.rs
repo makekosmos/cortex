@@ -548,14 +548,16 @@ async fn integration_rpc_rejects_stale_refresh_lease_fence() {
     .unwrap();
     handle_request(&state, node).await.unwrap();
 
-    let acquire = |expected_fencing_token| Request::IntegrationAcquireRefreshLease {
-        integration_id: "refresh-integration".into(),
-        holder_node_id: "refresh-node".into(),
-        credential_generation: 1,
-        now_ms: 1_000,
-        ttl_ms: 100,
-        expected_fencing_token,
-        device_id: "refresh-node".into(),
+    let acquire = |expected_fencing_token| {
+        Request::IntegrationAcquireRefreshLease(AcquireRefreshLeaseParams {
+            integration_id: "refresh-integration".into(),
+            holder_node_id: "refresh-node".into(),
+            credential_generation: 1,
+            now_ms: 1_000,
+            ttl_ms: 100,
+            expected_fencing_token,
+            device_id: "refresh-node".into(),
+        })
     };
     let lease = handle_request(&state, acquire(0)).await.unwrap();
     assert_eq!(lease["fencing_token"], 1);

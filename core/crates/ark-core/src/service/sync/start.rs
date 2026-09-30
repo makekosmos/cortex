@@ -1,24 +1,24 @@
 use super::*;
 use crate::service::runtime::get_shared_conn;
 
-// Mirrors the StartSync request fields one-to-one; the request struct is the
-// params object already, this fn just destructures it for the sync stack.
-#[allow(clippy::too_many_arguments)]
 pub(crate) async fn handle_start_sync(
     state: &Arc<ServiceState>,
-    space_id: String,
-    device_id: String,
-    device_name: Option<String>,
-    port: Option<u16>,
-    seed_addresses: Option<Vec<String>>,
-    relay_url: Option<String>,
-    relay_api_key: Option<String>,
-    auth_secret: Option<String>,
-    use_iroh: bool,
-    iroh_peer_ticket: Option<String>,
-    discovery_enabled: bool,
-    bind: SyncBind,
+    params: StartSyncParams,
 ) -> Result<Value, String> {
+    let StartSyncParams {
+        space_id,
+        device_id,
+        device_name,
+        port,
+        seed_addresses,
+        relay_url,
+        relay_api_key,
+        auth_secret,
+        use_iroh,
+        iroh_peer_ticket,
+        discovery_enabled,
+        bind,
+    } = params;
     // Idempotency: tear down any running runtime first.
     handle_stop_sync(state).await;
 

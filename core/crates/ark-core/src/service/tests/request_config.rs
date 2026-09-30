@@ -26,18 +26,15 @@ fn request_deserialization_accepts_iroh_config() {
     }))
     .expect("iroh config should be accepted by the request schema");
 
-    let Request::StartSync {
-        use_iroh,
-        iroh_peer_ticket,
-        discovery_enabled,
-        ..
-    } = request
-    else {
+    let Request::StartSync(params) = request else {
         panic!("expected start_sync, got {request:?}");
     };
-    assert!(use_iroh);
-    assert_eq!(iroh_peer_ticket.as_deref(), Some("endpointsometicketvalue"));
-    assert!(discovery_enabled);
+    assert!(params.use_iroh);
+    assert_eq!(
+        params.iroh_peer_ticket.as_deref(),
+        Some("endpointsometicketvalue")
+    );
+    assert!(params.discovery_enabled);
 }
 
 #[test]
@@ -148,7 +145,7 @@ async fn start_sync_with_use_iroh_selects_iroh_transport_and_exposes_ticket() {
 
     let start_result = handle_request(
         &state,
-        Request::StartSync {
+        Request::StartSync(StartSyncParams {
             space_id: "iroh-space".to_string(),
             device_id: "device-iroh".to_string(),
             device_name: Some("Iroh Device".to_string()),
@@ -161,7 +158,7 @@ async fn start_sync_with_use_iroh_selects_iroh_transport_and_exposes_ticket() {
             iroh_peer_ticket: None,
             discovery_enabled: false,
             bind: SyncBind::Loopback,
-        },
+        }),
     )
     .await;
 
@@ -198,7 +195,7 @@ async fn start_sync_with_use_iroh_fails_gracefully_without_iroh_spike_feature() 
 
     let result = handle_request(
         &state,
-        Request::StartSync {
+        Request::StartSync(StartSyncParams {
             space_id: "iroh-space".to_string(),
             device_id: "device-iroh".to_string(),
             device_name: Some("Iroh Device".to_string()),
@@ -211,7 +208,7 @@ async fn start_sync_with_use_iroh_fails_gracefully_without_iroh_spike_feature() 
             iroh_peer_ticket: None,
             discovery_enabled: false,
             bind: SyncBind::Loopback,
-        },
+        }),
     )
     .await;
 
@@ -232,20 +229,13 @@ fn request_deserialization_defaults_iroh_fields_when_absent() {
     }))
     .expect("start_sync without iroh fields should still deserialize");
 
-    let Request::StartSync {
-        use_iroh,
-        iroh_peer_ticket,
-        discovery_enabled,
-        bind,
-        ..
-    } = request
-    else {
+    let Request::StartSync(params) = request else {
         panic!("expected start_sync, got {request:?}");
     };
-    assert!(!use_iroh);
-    assert_eq!(iroh_peer_ticket, None);
-    assert!(discovery_enabled);
-    assert_eq!(bind, SyncBind::AllInterfaces);
+    assert!(!params.use_iroh);
+    assert_eq!(params.iroh_peer_ticket, None);
+    assert!(params.discovery_enabled);
+    assert_eq!(params.bind, SyncBind::AllInterfaces);
 }
 
 #[test]
@@ -258,13 +248,10 @@ fn request_deserialization_accepts_discovery_opt_out() {
     }))
     .expect("discovery opt-out should deserialize");
 
-    let Request::StartSync {
-        discovery_enabled, ..
-    } = request
-    else {
+    let Request::StartSync(params) = request else {
         panic!("expected start_sync, got {request:?}");
     };
-    assert!(!discovery_enabled);
+    assert!(!params.discovery_enabled);
 }
 
 #[test]
@@ -279,16 +266,96 @@ fn request_deserialization_accepts_relay_and_auth_config() {
     }))
     .expect("relay config should be accepted by the request schema");
 
-    let Request::StartSync {
-        relay_url,
-        relay_api_key,
-        auth_secret,
-        ..
-    } = request
-    else {
+    let Request::StartSync(params) = request else {
         panic!("expected start_sync, got {request:?}");
     };
-    assert_eq!(relay_url.as_deref(), Some("ws://127.0.0.1:8765"));
-    assert_eq!(relay_api_key.as_deref(), Some("key"));
-    assert_eq!(auth_secret.as_deref(), Some("secret"));
+    assert_eq!(params.relay_url.as_deref(), Some("ws://127.0.0.1:8765"));
+    assert_eq!(params.relay_api_key.as_deref(), Some("key"));
+    assert_eq!(params.auth_secret.as_deref(), Some("secret"));
+}
+
+// The newtype-over-params-struct variants must keep the exact wire format:
+// the params struct fields are the same JSON keys the inline fields had.
+#[test]
+fn params_struct_variants_keep_their_wire_format() {
+    let request = serde_json::from_value::<Request>(json!({
+        "operation": "start_sync",
+        "space_id": "space",
+        "device_id": "device",
+        "device_name": "Laptop",
+        "port": 21531,
+        "seed_addresses": ["10.0.0.1:21531"],
+        "relay_url": "wss://relay.example",
+        "relay_api_key": "key",
+        "auth_secret": "secret",
+        "use_iroh": true,
+        "iroh_peer_ticket": "ticket",
+        "discovery_enabled": false,
+        "bind": "loopback"
+    }))
+    .expect("start_sync params must deserialize through the newtype variant");
+    let Request::StartSync(params) = request else {
+        panic!("expected start_sync, got {request:?}");
+    };
+    assert_eq!(params.space_id, "space");
+    assert_eq!(params.device_id, "device");
+    assert_eq!(params.device_name.as_deref(), Some("Laptop"));
+    assert_eq!(params.port, Some(21531));
+    assert_eq!(
+        params.seed_addresses,
+        Some(vec!["10.0.0.1:21531".to_string()])
+    );
+    assert_eq!(params.relay_url.as_deref(), Some("wss://relay.example"));
+    assert_eq!(params.relay_api_key.as_deref(), Some("key"));
+    assert_eq!(params.auth_secret.as_deref(), Some("secret"));
+    assert!(params.use_iroh);
+    assert_eq!(params.iroh_peer_ticket.as_deref(), Some("ticket"));
+    assert!(!params.discovery_enabled);
+    assert_eq!(params.bind, SyncBind::Loopback);
+
+    let request = serde_json::from_value::<Request>(json!({
+        "operation": "external_refs.upsert",
+        "connectorId": "connector",
+        "accountId": "account",
+        "externalType": "issue",
+        "externalId": "ext-1",
+        "objectId": "obj-1",
+        "revision": "rev-1",
+        "hash": "hash-1",
+        "state": "linked"
+    }))
+    .expect("external_refs.upsert params must deserialize through the newtype variant");
+    let Request::ExternalRefsUpsert(params) = request else {
+        panic!("expected external_refs.upsert, got {request:?}");
+    };
+    assert_eq!(params.connector_id, "connector");
+    assert_eq!(params.account_id, "account");
+    assert_eq!(params.external_type, "issue");
+    assert_eq!(params.external_id, "ext-1");
+    assert_eq!(params.object_id, "obj-1");
+    assert_eq!(params.revision.as_deref(), Some("rev-1"));
+    assert_eq!(params.hash.as_deref(), Some("hash-1"));
+    assert_eq!(params.state, "linked");
+
+    let request = serde_json::from_value::<Request>(json!({
+        "operation": "integration.acquire_refresh_lease",
+        "integration_id": "integration",
+        "holder_node_id": "node",
+        "credential_generation": 3,
+        "now_ms": 1000,
+        "ttl_ms": 100,
+        "expected_fencing_token": 2,
+        "device_id": "node"
+    }))
+    .expect("acquire_refresh_lease params must deserialize through the newtype variant");
+    let Request::IntegrationAcquireRefreshLease(params) = request else {
+        panic!("expected integration.acquire_refresh_lease, got {request:?}");
+    };
+    assert_eq!(params.integration_id, "integration");
+    assert_eq!(params.holder_node_id, "node");
+    assert_eq!(params.credential_generation, 3);
+    assert_eq!(params.now_ms, 1000);
+    assert_eq!(params.ttl_ms, 100);
+    assert_eq!(params.expected_fencing_token, 2);
+    assert_eq!(params.device_id, "node");
 }

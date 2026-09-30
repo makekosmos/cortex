@@ -448,29 +448,7 @@ pub(crate) async fn handle_request(
 
         Request::GetSyncKv { key } => system::get_sync_kv(state, key).await,
         Request::SetSyncKv { key, value } => system::set_sync_kv(state, key, value).await,
-        Request::ExternalRefsUpsert {
-            connector_id,
-            account_id,
-            external_type,
-            external_id,
-            object_id,
-            revision,
-            hash,
-            state: ref_state,
-        } => {
-            system::external_refs_upsert(
-                state,
-                connector_id,
-                account_id,
-                external_type,
-                external_id,
-                object_id,
-                revision,
-                hash,
-                ref_state,
-            )
-            .await
-        }
+        Request::ExternalRefsUpsert(params) => system::external_refs_upsert(state, params).await,
         Request::ClearAll => system::clear_all(state).await,
         Request::DeleteTrashed => system::delete_trashed(state).await,
         Request::DbBackup { dest_path } => system::db_backup(state, dest_path).await,
@@ -479,37 +457,7 @@ pub(crate) async fn handle_request(
             system::db_backup_validate(state, backup_id).await
         }
         Request::DbBackupRestore { backup_id } => system::db_backup_restore(state, backup_id).await,
-        Request::StartSync {
-            space_id,
-            device_id,
-            device_name,
-            port,
-            seed_addresses,
-            relay_url,
-            relay_api_key,
-            auth_secret,
-            use_iroh,
-            iroh_peer_ticket,
-            discovery_enabled,
-            bind,
-        } => {
-            system::start_sync(
-                state,
-                space_id,
-                device_id,
-                device_name,
-                port,
-                seed_addresses,
-                relay_url,
-                relay_api_key,
-                auth_secret,
-                use_iroh,
-                iroh_peer_ticket,
-                discovery_enabled,
-                bind,
-            )
-            .await
-        }
+        Request::StartSync(params) => system::start_sync(state, params).await,
         Request::StopSync => system::stop_sync(state).await,
         Request::BroadcastChange { entity } => system::broadcast_change(state, entity).await,
         Request::GetConnectedPeers => system::get_connected_peers(state).await,
@@ -575,26 +523,8 @@ pub(crate) async fn handle_request(
         Request::IntegrationSendSignedSync { frame } => {
             integration::integration_send_signed_sync(state, frame).await
         }
-        Request::IntegrationAcquireRefreshLease {
-            integration_id,
-            holder_node_id,
-            credential_generation,
-            now_ms,
-            ttl_ms,
-            expected_fencing_token,
-            device_id,
-        } => {
-            integration::integration_acquire_refresh_lease(
-                state,
-                integration_id,
-                holder_node_id,
-                credential_generation,
-                now_ms,
-                ttl_ms,
-                expected_fencing_token,
-                device_id,
-            )
-            .await
+        Request::IntegrationAcquireRefreshLease(params) => {
+            integration::integration_acquire_refresh_lease(state, params).await
         }
         Request::IntegrationPublishCredentialEnvelope {
             envelope,

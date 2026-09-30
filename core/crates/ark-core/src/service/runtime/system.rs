@@ -18,32 +18,22 @@ pub(super) async fn set_sync_kv(
     })
 }
 
-// Mirrors the ExternalRefsUpsert request fields one-to-one; the request
-// struct is the params object already.
-#[allow(clippy::too_many_arguments)]
 pub(super) async fn external_refs_upsert(
     state: &Arc<ServiceState>,
-    connector_id: String,
-    account_id: String,
-    external_type: String,
-    external_id: String,
-    object_id: String,
-    revision: Option<String>,
-    hash: Option<String>,
-    ref_state: String,
+    params: ExternalRefsUpsertParams,
 ) -> Result<Value, String> {
     with_write_tx(state, |conn| {
         crate::data_platform::ensure_schema(conn)?;
         crate::data_platform::upsert_external_ref(
             conn,
-            &connector_id,
-            &account_id,
-            &external_type,
-            &external_id,
-            &object_id,
-            revision.as_deref(),
-            hash.as_deref(),
-            &ref_state,
+            &params.connector_id,
+            &params.account_id,
+            &params.external_type,
+            &params.external_id,
+            &params.object_id,
+            params.revision.as_deref(),
+            params.hash.as_deref(),
+            &params.state,
         )?;
         Ok(json!(true))
     })
@@ -143,40 +133,11 @@ pub(super) async fn db_backup_restore(
     })
 }
 
-// Mirrors the StartSync request fields one-to-one; the request struct is the
-// params object already.
-#[allow(clippy::too_many_arguments)]
 pub(super) async fn start_sync(
     state: &Arc<ServiceState>,
-    space_id: String,
-    device_id: String,
-    device_name: Option<String>,
-    port: Option<u16>,
-    seed_addresses: Option<Vec<String>>,
-    relay_url: Option<String>,
-    relay_api_key: Option<String>,
-    auth_secret: Option<String>,
-    use_iroh: bool,
-    iroh_peer_ticket: Option<String>,
-    discovery_enabled: bool,
-    bind: SyncBind,
+    params: StartSyncParams,
 ) -> Result<Value, String> {
-    handle_start_sync(
-        state,
-        space_id,
-        device_id,
-        device_name,
-        port,
-        seed_addresses,
-        relay_url,
-        relay_api_key,
-        auth_secret,
-        use_iroh,
-        iroh_peer_ticket,
-        discovery_enabled,
-        bind,
-    )
-    .await
+    handle_start_sync(state, params).await
 }
 
 pub(super) async fn stop_sync(state: &Arc<ServiceState>) -> Result<Value, String> {

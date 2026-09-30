@@ -63,7 +63,10 @@ mod sync;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use self::definitions::{ObjectWriteSnapshot, Request, SyncRuntime, SyncStartParams};
+pub(crate) use self::definitions::{
+    AcquireRefreshLeaseParams, ExternalRefsUpsertParams, ObjectWriteSnapshot, Request,
+    StartSyncParams, SyncRuntime, SyncStartParams,
+};
 use self::runtime::handle_request;
 // The runtime::system handlers reach the sync handlers through the shared
 // `use super::*` chain, so the whole set is imported at this scope.

@@ -123,29 +123,20 @@ pub(super) async fn integration_send_signed_sync(
     Err("target peer has no authenticated addressed route".into())
 }
 
-// Mirrors the IntegrationAcquireRefreshLease request fields one-to-one; the
-// request struct is the params object already.
-#[allow(clippy::too_many_arguments)]
 pub(super) async fn integration_acquire_refresh_lease(
     state: &Arc<ServiceState>,
-    integration_id: String,
-    holder_node_id: String,
-    credential_generation: u64,
-    now_ms: u64,
-    ttl_ms: u64,
-    expected_fencing_token: u64,
-    device_id: String,
+    params: AcquireRefreshLeaseParams,
 ) -> Result<Value, String> {
     with_conn(state, |conn| {
         let lease = crate::db::try_acquire_integration_refresh_lease(
             conn,
-            &integration_id,
-            &holder_node_id,
-            credential_generation,
-            now_ms,
-            ttl_ms,
-            expected_fencing_token,
-            &device_id,
+            &params.integration_id,
+            &params.holder_node_id,
+            params.credential_generation,
+            params.now_ms,
+            params.ttl_ms,
+            params.expected_fencing_token,
+            &params.device_id,
         )?;
         serde_json::to_value(lease).map_err(|error| error.to_string())
     })
