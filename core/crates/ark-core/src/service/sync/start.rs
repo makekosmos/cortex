@@ -14,6 +14,7 @@ pub(crate) async fn handle_start_sync(
     use_iroh: bool,
     iroh_peer_ticket: Option<String>,
     discovery_enabled: bool,
+    bind: SyncBind,
 ) -> Result<Value, String> {
     // Idempotency: tear down any running runtime first.
     handle_stop_sync(state).await;
@@ -63,10 +64,9 @@ pub(crate) async fn handle_start_sync(
             .await;
     }
 
-    let own_addresses: Vec<String> = get_own_addresses(ws_port)
-        .into_iter()
-        .filter(|a| is_address_routable(a))
-        .collect();
+    // The bind choice resolves every address the stack opens and advertises:
+    // loopback mode must not claim LAN addresses it is not listening on.
+    let own_addresses: Vec<String> = bind.own_addresses(ws_port);
     let own_addresses_shared = Arc::new(TokioMutex::new(own_addresses.clone()));
 
     server
@@ -75,7 +75,7 @@ pub(crate) async fn handle_start_sync(
             &device_id,
             Some(&device_name),
             Some(own_addresses.clone()),
-            &format!("0.0.0.0:{ws_port}"),
+            &bind.ws_bind_addr(ws_port),
         )
         .await?;
 
@@ -101,6 +101,7 @@ pub(crate) async fn handle_start_sync(
         use_iroh,
         iroh_peer_ticket: iroh_peer_ticket.clone(),
         discovery_enabled,
+        bind,
     };
     let relay = if transport_choice == TransportChoice::Relay {
         let relay_url = relay_url.clone().expect("Relay choice implies relay_url");
@@ -149,8 +150,15 @@ pub(crate) async fn handle_start_sync(
                     secret_key: Some(secret_key),
                     peer_addr,
                     peer_ticket: iroh_peer_ticket.clone(),
-                    relay_mode: None,
+                    // A loopback-bound endpoint cannot be reached through a
+                    // relay anyway, and tests must stay offline; RelayMode::Disabled
+                    // also makes `our_ticket()` advertise the loopback socket.
+                    relay_mode: match bind {
+                        SyncBind::Loopback => Some(iroh::RelayMode::Disabled),
+                        SyncBind::AllInterfaces => None,
+                    },
                     auth_secret: auth_secret.clone(),
+                    bind,
                 },
             ));
             // RelaySyncConfig.relay_url is unused by `with_transport` (only
@@ -244,15 +252,18 @@ pub(crate) async fn handle_start_sync(
                 space_id.clone(),
                 own_addresses.clone(),
                 auth_secret.clone(),
+                bind,
             )
             .await;
         }
     }
 
     // Start beacon discovery unless explicitly disabled for a ticket-paired
-    // transport that must not bind the shared LAN beacon port.
+    // transport that must not bind the shared LAN beacon port. Loopback mode
+    // never binds the beacon: UDP broadcasts do not traverse loopback, so the
+    // socket could only trigger a firewall prompt without ever seeing a peer.
     let beacon = Arc::new(BroadcastDiscovery::new());
-    if discovery_enabled {
+    if discovery_enabled && bind.discovery_supported() {
         let beacon_clone = beacon.clone();
         let server_for_beacon = server.clone();
         let clients_for_beacon = clients.clone();

@@ -19,6 +19,7 @@ pub(crate) struct SyncStartParams {
     pub(crate) use_iroh: bool,
     pub(crate) iroh_peer_ticket: Option<String>,
     pub(crate) discovery_enabled: bool,
+    pub(crate) bind: SyncBind,
 }
 
 fn default_discovery_enabled() -> bool {
@@ -365,6 +366,11 @@ pub(crate) enum Request {
         /// Whether to start LAN beacon discovery. Defaults to true for compatibility.
         #[serde(default = "default_discovery_enabled")]
         discovery_enabled: bool,
+        /// Where the sync stack binds its listeners. `loopback` binds every
+        /// socket to 127.0.0.1 / ::1 (tests, single-machine pairing);
+        /// `all_interfaces` (default) keeps LAN behaviour.
+        #[serde(default)]
+        bind: SyncBind,
     },
     StopSync,
     BroadcastChange {

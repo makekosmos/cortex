@@ -136,6 +136,32 @@ pub fn is_address_routable(addr: &str) -> bool {
     is_routable_v4(host)
 }
 
+/// Return `true` if a `host:port` / `[ipv6]:port` string names a loopback
+/// address. Unlike `is_address_routable`, the host must parse as an IP —
+/// garbage input is rejected, not waved through. Used by
+/// `SyncBind::Loopback` to keep peer candidates on-host.
+pub fn is_loopback_address(addr: &str) -> bool {
+    let trimmed = addr.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+    let host = if let Some(rest) = trimmed.strip_prefix('[') {
+        match rest.find(']') {
+            Some(end) => &rest[..end],
+            None => return false,
+        }
+    } else {
+        match trimmed.rfind(':') {
+            Some(idx) => &trimmed[..idx],
+            None => trimmed,
+        }
+    };
+    let host = host.split('%').next().unwrap_or(host);
+    host.parse::<std::net::IpAddr>()
+        .map(|ip| ip.is_loopback())
+        .unwrap_or(false)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -194,6 +220,20 @@ mod tests {
                 "[2001:db8::1]:21531".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn detects_loopback_addresses() {
+        assert!(is_loopback_address("127.0.0.1:21531"));
+        assert!(is_loopback_address("[::1]:21531"));
+        assert!(is_loopback_address("127.0.0.1"));
+        assert!(!is_loopback_address("192.168.1.70:21531"));
+        assert!(!is_loopback_address("[2001:db8::1]:21531"));
+        assert!(!is_loopback_address("0.0.0.0:21531"));
+        assert!(!is_loopback_address("[::]:21531"));
+        assert!(!is_loopback_address("garbage"));
+        assert!(!is_loopback_address(""));
+        assert!(!is_loopback_address("[fe80::1%en0]:21531"));
     }
 
     #[test]

@@ -24,6 +24,7 @@ pub mod relay_transport;
 pub mod schema;
 pub mod service;
 pub mod space;
+pub mod sync_bind;
 pub mod sync_client;
 pub mod sync_server;
 pub mod sync_transport;
@@ -46,6 +47,7 @@ pub use protocol::{
     merge_peer_records, serialize_message, split_into_batches, LanSyncMessage, LAN_SYNC_PORT,
     MAX_BATCH_BYTES, MAX_BATCH_SIZE, PROTOCOL_VERSION,
 };
+pub use sync_bind::SyncBind;
 pub use sync_server::StorageBackend;
 pub use types::{
     Area, ArkObject, ArkObjectSummary, ArkObjectWrite, Heading, LoadAllData, ObjectLink,

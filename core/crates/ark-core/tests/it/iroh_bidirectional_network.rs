@@ -14,6 +14,7 @@ async fn iroh_bidirectional_hello_and_reverse_send() {
         peer_ticket: None,
         relay_mode: Some(RelayMode::Disabled),
         auth_secret: None,
+        bind: SyncBind::Loopback,
     }));
     transport_b
         .start(b_events_tx)
@@ -33,6 +34,7 @@ async fn iroh_bidirectional_hello_and_reverse_send() {
         peer_ticket: Some(ticket_b),
         relay_mode: Some(RelayMode::Disabled),
         auth_secret: None,
+        bind: SyncBind::Loopback,
     });
     transport_a
         .start(a_events_tx)

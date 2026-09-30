@@ -184,6 +184,7 @@ pub async fn start_sync(host: &ArkHost, device: &str, port: u16, ticket: Option<
                 "use_iroh": true,
                 "iroh_peer_ticket": ticket,
                 "discovery_enabled": false,
+                "bind": "loopback",
             }),
         )
         .await

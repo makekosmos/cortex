@@ -63,7 +63,7 @@ use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use iroh::endpoint::presets;
+use iroh::endpoint::{presets, BindOpts};
 use iroh::{Endpoint, EndpointAddr, EndpointId, RelayMode};
 use iroh_tickets::endpoint::EndpointTicket;
 use iroh_tickets::Ticket;
@@ -71,6 +71,7 @@ use rusqlite::Connection;
 use tokio::sync::{broadcast, mpsc, watch, Notify};
 
 use crate::db::{get_sync_kv, set_sync_kv};
+use crate::sync_bind::SyncBind;
 use crate::protocol::{
     compute_hello_auth_hmac, deserialize_message, generate_auth_nonce, message_origin_device_id,
     normalize_auth_secret, serialize_message, LanSyncMessage, PROTOCOL_VERSION,

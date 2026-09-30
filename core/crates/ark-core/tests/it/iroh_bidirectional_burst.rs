@@ -29,6 +29,7 @@ use tokio::sync::mpsc;
 
 use ark_core::iroh_transport::{IrohConfig, IrohTransport};
 use ark_core::protocol::{generate_id, LanSyncMessage};
+use ark_core::sync_bind::SyncBind;
 use ark_core::sync_transport::{SyncTransport, TransportEvent};
 use ark_core::types::SyncEntity;
 use iroh::RelayMode;
@@ -123,6 +124,7 @@ async fn iroh_bidirectional_burst_no_desync() {
         peer_ticket: None,
         relay_mode: Some(RelayMode::Disabled),
         auth_secret: None,
+        bind: SyncBind::Loopback,
     });
 
     transport_b
@@ -147,6 +149,7 @@ async fn iroh_bidirectional_burst_no_desync() {
         peer_ticket: Some(ticket_b),
         relay_mode: Some(RelayMode::Disabled),
         auth_secret: None,
+        bind: SyncBind::Loopback,
     });
 
     transport_a

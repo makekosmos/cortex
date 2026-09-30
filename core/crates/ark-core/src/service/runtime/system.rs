@@ -131,6 +131,7 @@ pub(super) async fn handle(state: &Arc<ServiceState>, request: Request) -> Resul
             use_iroh,
             iroh_peer_ticket,
             discovery_enabled,
+            bind,
         } => {
             handle_start_sync(
                 state,
@@ -145,6 +146,7 @@ pub(super) async fn handle(state: &Arc<ServiceState>, request: Request) -> Resul
                 use_iroh,
                 iroh_peer_ticket,
                 discovery_enabled,
+                bind,
             )
             .await
         }

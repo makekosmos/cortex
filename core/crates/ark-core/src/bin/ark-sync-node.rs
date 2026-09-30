@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 use ark_core::db::{init_schema, open_db, SqliteStorageBackend};
 use ark_core::iroh_transport::{load_or_generate_secret_key, IrohConfig, IrohTransport};
 use ark_core::relay_sync::{trim_process_heap, RelaySync, RelaySyncConfig};
+use ark_core::sync_bind::SyncBind;
 use ark_core::sync_server::StorageBackend;
 use ark_core::sync_transport::SyncTransport;
 use serde_json::json;
@@ -85,6 +86,7 @@ async fn serve() -> Result<(), String> {
         peer_ticket,
         relay_mode: None,
         auth_secret: auth_secret.clone(),
+        bind: SyncBind::AllInterfaces,
     }));
     let sync = RelaySync::with_transport(
         storage as Arc<dyn StorageBackend>,

@@ -58,6 +58,7 @@ async fn disconnect_peer_stops_matching_outbound_client_and_emits_events() {
             use_iroh: false,
             iroh_peer_ticket: None,
             discovery_enabled: true,
+            bind: SyncBind::AllInterfaces,
         },
         iroh_our_ticket: None,
         beacon: Arc::new(crate::beacon::BroadcastDiscovery::new()),

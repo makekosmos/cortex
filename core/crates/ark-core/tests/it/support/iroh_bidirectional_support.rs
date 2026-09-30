@@ -9,6 +9,7 @@ use ark_core::integration_replication::{
     IntegrationReplicationChange, IntegrationReplicationEntity, NodeStatus, SignedSyncEnvelope,
 };
 use ark_core::iroh_transport::{IrohConfig, IrohTransport};
+use ark_core::sync_bind::SyncBind;
 use ark_core::protocol::{generate_id, LanSyncMessage};
 use ark_core::sync_server::StorageBackend;
 use ark_core::sync_transport::{SyncTransport, TransportEvent};

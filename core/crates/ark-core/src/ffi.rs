@@ -37,9 +37,9 @@ use crate::db::{
     upsert_usage_session as db_upsert_usage_session, SqliteStorageBackend,
 };
 use crate::host::{get_host_device_name, get_own_addresses};
-use crate::net::is_address_routable;
 use crate::protocol::LAN_SYNC_PORT;
 use crate::relay_sync::{RelaySync, RelaySyncConfig};
+use crate::sync_bind::SyncBind;
 use crate::sync_client::SyncClient;
 use crate::sync_server::{StorageBackend, SyncServer};
 use crate::types::{
@@ -154,6 +154,11 @@ pub struct FfiSyncConfig {
     /// `iroh_transport::IrohTransport::our_ticket`/`from_ticket`).
     #[uniffi(default = None)]
     pub iroh_peer_ticket: Option<String>,
+    /// Where the sync stack binds its listeners. `None` resolves to
+    /// `SyncBind::AllInterfaces` (production LAN behaviour); `Loopback`
+    /// binds every socket to loopback for single-machine tests.
+    #[uniffi(default = None)]
+    pub bind: Option<SyncBind>,
 }
 
 // ---------------------------------------------------------------------------
@@ -204,6 +209,10 @@ struct SyncRuntime {
     space_id: String,
     auth_secret: Option<String>,
     own_addresses: Vec<String>,
+    /// Resolved bind choice for this runtime (`FfiSyncConfig.bind` or the
+    /// `AllInterfaces` default) — needed by `add_seed_peer` to keep peer
+    /// filtering consistent with the live bind mode.
+    bind: SyncBind,
 }
 
 #[path = "ffi_callbacks.rs"]
@@ -235,6 +244,7 @@ struct CloneSyncRuntime {
     space_id: String,
     auth_secret: Option<String>,
     own_addresses: Vec<String>,
+    bind: SyncBind,
 }
 
 // Silence unused warnings: the same CloneSyncRuntime is used only for the
