@@ -9,6 +9,16 @@ members = [
 # are standalone crates, never workspace members.
 exclude = ["desktop/.tmp"]
 
+# Local builds: full debuginfo made link.exe write ~20 GB of PDBs and dominated
+# rebuild time. Line tables keep panic backtraces with file:line; dependencies
+# rarely need stepping. Measured in docs/experiments/2026-09-30-build-speed.md.
+# Release builds are unaffected.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
 [profile.test]
 debug = 0
 
