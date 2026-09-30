@@ -80,19 +80,26 @@ async fn background_task_registry_reaps_finished_handles() {
     let data = tempdir().unwrap();
     let index = std::sync::Arc::new(FileIndex::new_disabled(data.path()).unwrap());
     index.bind_self();
-    let pending = |index: &FileIndex| {
-        index
+    let tracked = |index: &FileIndex| {
+        let tasks = index
             .background_tasks
             .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .len()
+            .unwrap_or_else(|e| e.into_inner());
+        (tasks.len(), tasks.iter().all(|t| t.is_finished()))
     };
-    // Sequential cleanups without draining: each spawn reaps the finished
-    // handle, so the registry stays bounded while the app runs.
+    // Sequential cleanups without draining, as in the running app: once the
+    // previous task has finished, the next spawn reaps it, so the registry
+    // holds exactly the one task just spawned instead of growing per spawn.
     for _ in 0..50 {
         index.spawn_removed_root_cleanup("gone".into());
-        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-        assert!(pending(&index) <= 2, "registry must stay bounded");
+        assert_eq!(tracked(&index).0, 1, "registry must not accumulate");
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            while !tracked(&index).1 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("cleanup task must finish");
     }
     index.spawn_rescan();
     index.drain_background().await;

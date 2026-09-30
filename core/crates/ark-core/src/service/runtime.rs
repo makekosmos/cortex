@@ -217,10 +217,6 @@ fn make_sync_entity(
     }
 }
 
-/// Fan-out локального изменения всем подключённым пирам (server sessions +
-/// outbound clients + relay/iroh). Не применяет entity к storage и не
-/// перебивает HLC — данные уже записаны через `record_local_*`.
-/// Если sync не запущен — тихий no-op.
 /// Spawns the live-change broadcast only when a sync runtime is running —
 /// without one the detached task is a no-op anyway, and the captured
 /// `Arc<ServiceState>` would keep the db connection alive past teardown
@@ -246,6 +242,10 @@ pub(super) async fn maybe_broadcast_local_changes(
     });
 }
 
+/// Fan-out локального изменения всем подключённым пирам (server sessions +
+/// outbound clients + relay/iroh). Не применяет entity к storage и не
+/// перебивает HLC — данные уже записаны через `record_local_*`.
+/// Если sync не запущен — тихий no-op.
 pub(super) async fn broadcast_local_change(state: &ServiceState, entity: SyncEntity) {
     let runtime = {
         let guard = state.sync.lock().await;

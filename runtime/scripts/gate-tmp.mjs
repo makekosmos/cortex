@@ -6,8 +6,8 @@ import { join, resolve, sep } from "node:path";
 // target dir; the gate injects it as TMP/TEMP/TMPDIR for every cargo
 // invocation so tempfile::tempdir() and friends land there. After the test
 // processes have exited — when every leaked handle is closed — the gate
-// sweeps the directory and reports how many entries had to be removed, so a
-// leaked fixture stays visible in the log instead of accumulating silently.
+// sweeps the directory. Any leftover entry is a leaked fixture and fails the
+// gate, so a leak is a red gate instead of silent accumulation.
 
 export function openGateTmp(targetDir, runId) {
   const dir = resolve(targetDir, "gate-tmp", `run-${runId}`);
@@ -15,44 +15,39 @@ export function openGateTmp(targetDir, runId) {
   return dir;
 }
 
-// Returns the leftover entry names (empty list when the tests cleaned up
-// after themselves). `dir` must live under `targetDir`: this function
-// deletes recursively, and refusing anything outside the build tree is the
-// only guard against a bad caller.
+// Removes `dir` and returns its leftover entries as `{ name, contents }`
+// (empty list when the tests cleaned up after themselves). Contents are
+// captured before removal so a leak stays attributable to its test.
+// `dir` must live under `targetDir`: this function deletes recursively, and
+// refusing anything outside the build tree is the only guard against a bad
+// caller.
 export function sweepGateTmp(targetDir, dir) {
   const root = resolve(targetDir, "gate-tmp") + sep;
   if (!resolve(dir).startsWith(root)) {
     throw new Error(`refusing to sweep ${dir}: not under ${root}`);
   }
-  const leftover = readdirSync(dir);
+  const leftover = readdirSync(dir).map((name) => {
+    let contents;
+    try {
+      contents = readdirSync(join(dir, name));
+    } catch {
+      contents = [];
+    }
+    return { name, contents };
+  });
   rmSync(dir, { recursive: true, force: true });
   return leftover;
 }
 
-// Reports what the sweep removed. Returns true when leftovers existed —
-// the gate treats that as a leak and fails: a leftover entry means a test
-// finished with its fixture still on disk (KOS-270).
+// Sweeps and logs the result. Returns true when leftovers existed — the gate
+// treats that as a leak and fails.
 export function reportGateTmpSweep(targetDir, dir, log = console.log) {
-  const root = resolve(targetDir, "gate-tmp") + sep;
-  if (!resolve(dir).startsWith(root)) {
-    throw new Error(`refusing to sweep ${dir}: not under ${root}`);
-  }
-  const removed = readdirSync(dir);
-  // Capture entry contents before removal so leaks stay attributable.
-  const contents = removed.map((name) => {
-    try {
-      return readdirSync(join(dir, name)).join(",");
-    } catch {
-      return "-";
-    }
-  });
-  rmSync(dir, { recursive: true, force: true });
+  const leftover = sweepGateTmp(targetDir, dir);
   log(
-    `gate tmp: swept ${removed.length} leftover entr${removed.length === 1 ? "y" : "ies"} under ${dir}`,
+    `gate tmp: swept ${leftover.length} leftover entr${leftover.length === 1 ? "y" : "ies"} under ${dir}`,
   );
-  for (const [i, name] of removed.slice(0, 20).entries()) {
-    log(`gate tmp:   leftover ${name} (${contents[i]})`);
+  for (const { name, contents } of leftover.slice(0, 20)) {
+    log(`gate tmp:   leftover ${name} (${contents.join(",") || "-"})`);
   }
-  return removed.length > 0;
-
+  return leftover.length > 0;
 }

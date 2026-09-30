@@ -9,7 +9,9 @@ impl SyncServer {
         // Join the accept/ticker task: until it exits it holds a clone of
         // `storage`, keeping the test db connection open past teardown.
         if let Some(task) = self.accept_task.lock().await.take() {
-            let _ = task.await;
+            if let Err(error) = task.await {
+                eprintln!("{TAG} accept task ended abnormally: {error}");
+            }
         }
         let mut peers = self.peers.lock().await;
         peers.clear();
