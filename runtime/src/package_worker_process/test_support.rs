@@ -213,8 +213,16 @@ pub mod test_support {
 
     impl CapturedProcess {
         pub fn wait_object_0(self) -> bool {
+            self.wait_object_0_within(Duration::from_secs(10))
+        }
+
+        /// Bounded wait for tests that assert a process did NOT exit: a
+        /// terminated child is reaped by the kernel within milliseconds, so a
+        /// short timeout already proves non-termination without a 10 s sleep.
+        pub fn wait_object_0_within(self, timeout: Duration) -> bool {
+            let millis = u32::try_from(timeout.as_millis()).unwrap_or(u32::MAX);
             let result = unsafe {
-                windows::Win32::System::Threading::WaitForSingleObject(self.handle, 10_000)
+                windows::Win32::System::Threading::WaitForSingleObject(self.handle, millis)
             } == WAIT_OBJECT_0;
             unsafe {
                 let _ = CloseHandle(self.handle);

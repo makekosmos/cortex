@@ -368,9 +368,12 @@ async fn expired_deadline_does_not_invoke_termination() {
         .expect("launch");
     let result = process.stop_until(Instant::now()).await;
     assert!(matches!(result, Err(WorkerProcessError::Cleanup)));
+    // The expired deadline must have skipped TerminateJobObject entirely; a
+    // terminated child is reaped in milliseconds, so a 1 s negative wait is
+    // already conclusive.
     assert!(!test_support::take_captured_process()
         .expect("captured process")
-        .wait_object_0());
+        .wait_object_0_within(Duration::from_secs(1)));
     process
         .stop_until(Instant::now() + Duration::from_secs(10))
         .await
