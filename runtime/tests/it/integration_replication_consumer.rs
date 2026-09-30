@@ -227,10 +227,11 @@ async fn cortex_consumer_runs_signed_replication_over_two_core_nodes() {
     .await
     .unwrap();
     let mut tampered = sign_prepared(&prepared_tamper, &setup.origin.signing_key);
-    tampered["signature"] = json!(format!(
-        "00{}",
-        &tampered["signature"].as_str().unwrap()[2..]
-    ));
+    // Flip every bit of the first byte: overwriting it with a constant is a
+    // no-op whenever the real signature already starts with that byte.
+    let mut signature = support::decode_hex(tampered["signature"].as_str().unwrap());
+    signature[0] ^= 0xff;
+    tampered["signature"] = json!(support::hex(&signature));
     assert!(handle_operation(
         "replication_validate_outbound_signed_sync",
         json!({"space_id": space_id, "origin_node_id": setup.origin.node_id, "frame": tampered}),
