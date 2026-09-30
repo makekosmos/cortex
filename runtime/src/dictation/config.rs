@@ -11,9 +11,7 @@ use std::path::{Path, PathBuf};
 /// Keyring service name (общий для всего Mundus) + key для Groq API ключа.
 /// При добавлении других AI-провайдеров — новый username (service остаётся).
 #[cfg(not(test))]
-// Persisted keyring service name — holds user API keys; renaming it would
-// orphan stored credentials. See docs/brand-legacy-identifiers.md.
-const KEYRING_SERVICE: &str = "kosmos-kepler";
+use crate::brand::KEYRING_SERVICE;
 #[cfg(not(test))]
 const KEYRING_USER_GROQ: &str = "groq-api-key";
 

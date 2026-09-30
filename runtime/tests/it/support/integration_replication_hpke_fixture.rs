@@ -27,7 +27,7 @@ impl Drop for Cleanup {
         // `secret_store::package_integration_entry` uses. Cleanup must target
         // that namespace or a real credential is left behind.
         let _ = keyring::Entry::new(
-            "kosmos-kepler",
+            engine::brand::KEYRING_SERVICE,
             &format!("package-integration:{PACKAGE_ID}:{PACKAGE_VERSION}:{SETTING}"),
         )
         .and_then(|entry| entry.delete_credential());

@@ -47,6 +47,11 @@ pub const SYSTEM_SERVICE_NAME: &str = "MundusSystemSvc";
 /// Named pipe the privileged system service listens on.
 pub const SYSTEM_SERVICE_PIPE: &str = r"\\.\pipe\mundus-system-service";
 
+/// OS keyring (Windows Credential Manager) service holding user API keys
+/// and package integration secrets. Persisted legacy identifier: renaming it
+/// orphans every stored credential. See docs/brand-legacy-identifiers.md.
+pub const KEYRING_SERVICE: &str = "kosmos-kepler";
+
 /// New environment-variable prefix for everything the product reads.
 pub const ENV_PREFIX: &str = "MUNDUS_";
 

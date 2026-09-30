@@ -3,9 +3,7 @@ use super::PackageError;
 #[cfg(not(test))]
 fn package_integration_entry(id: &str, version: &str, setting: &str) -> Option<keyring::Entry> {
     keyring::Entry::new(
-        // Persisted keyring service name — renaming orphans stored secrets.
-        // See docs/brand-legacy-identifiers.md.
-        "kosmos-kepler",
+        crate::brand::KEYRING_SERVICE,
         &format!("package-integration:{id}:{version}:{setting}"),
     )
     .ok()
