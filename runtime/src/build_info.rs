@@ -9,13 +9,13 @@
 // This is distinct from `protocol_version::API_VERSION`, which is the
 // Engine↔shell wire contract and does not move with the product version.
 
-const ENGINE_VERSION: Option<&str> = option_env!("MUNDUS_ENGINE_VERSION");
+const PRODUCT_VERSION: Option<&str> = option_env!("MUNDUS_PRODUCT_VERSION");
 const ENGINE_SOURCE_COMMIT: Option<&str> = option_env!("MUNDUS_ENGINE_SOURCE_COMMIT");
 
 /// Product version this Engine binary was built as part of (e.g. `"0.9.39"`),
 /// or `""` for a build that did not go through `build-backend.mjs`.
 pub fn engine_version() -> &'static str {
-    ENGINE_VERSION.unwrap_or("")
+    PRODUCT_VERSION.unwrap_or("")
 }
 
 /// 40-character git commit this Engine binary was built from, or `""` for a
@@ -41,7 +41,7 @@ mod tests {
 
     #[test]
     fn falls_back_to_empty_string_without_injected_env() {
-        // This crate's own test build never sets MUNDUS_ENGINE_VERSION /
+        // This crate's own test build never sets MUNDUS_PRODUCT_VERSION /
         // MUNDUS_ENGINE_SOURCE_COMMIT, so the fallback path is what actually
         // runs here — assert it stays a valid (empty) string, never panics.
         assert!(engine_version().is_empty() || engine_version().is_ascii());

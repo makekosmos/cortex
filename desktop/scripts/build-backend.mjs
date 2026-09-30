@@ -42,7 +42,7 @@ const sourceCommit = execFileSync("git", ["rev-parse", "HEAD"], {
 }).trim();
 const cargoEnv = {
   ...process.env,
-  MUNDUS_ENGINE_VERSION: productVersion,
+  MUNDUS_PRODUCT_VERSION: productVersion,
   MUNDUS_ENGINE_SOURCE_COMMIT: sourceCommit,
 };
 

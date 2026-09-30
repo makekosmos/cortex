@@ -28,7 +28,12 @@ pub fn render(
     col = col.child(section("О приложении", "Версия и сведения о Mundus"));
 
     let mut el = card();
-    el = el.child(kv("Manager (GPUI)", env!("CARGO_PKG_VERSION")));
+    // The Mundus product version injected by build-package-components.mjs;
+    // a bare `cargo build` falls back to the crate version.
+    el = el.child(kv(
+        "Mundus",
+        option_env!("MUNDUS_PRODUCT_VERSION").unwrap_or(env!("CARGO_PKG_VERSION")),
+    ));
     col = col.child(el);
 
     // KOS-137: sibling component entry point — Agenda GPUI launches on the
