@@ -108,7 +108,7 @@ fn phase3_pending_rebuild_failures_restore_phase2_table_and_rows() {
                     "DROP INDEX idx_sync_pending_awaited_type_version; CREATE TABLE index_name_owner(value TEXT); CREATE INDEX idx_sync_pending_awaited_type_version ON index_name_owner(value)",
                 )
                 .unwrap(),
-            _ => unreachable!(),
+            other => panic!("unknown failure stage {other}"),
         }
 
         assert!(

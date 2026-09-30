@@ -33,7 +33,7 @@ fn request_deserialization_accepts_iroh_config() {
         ..
     } = request
     else {
-        unreachable!("expected start_sync");
+        panic!("expected start_sync, got {request:?}");
     };
     assert!(use_iroh);
     assert_eq!(iroh_peer_ticket.as_deref(), Some("endpointsometicketvalue"));
@@ -49,7 +49,7 @@ fn request_deserialization_accepts_code_alias_for_pairing() {
     .expect("code alias should deserialize for pairing requests");
 
     let Request::ConnectWithPairingCode { pairing_code } = request else {
-        unreachable!("expected connect_with_pairing_code");
+        panic!("expected connect_with_pairing_code, got {request:?}");
     };
     assert_eq!(pairing_code, "endpointdemo123");
 }
@@ -240,7 +240,7 @@ fn request_deserialization_defaults_iroh_fields_when_absent() {
         ..
     } = request
     else {
-        unreachable!("expected start_sync");
+        panic!("expected start_sync, got {request:?}");
     };
     assert!(!use_iroh);
     assert_eq!(iroh_peer_ticket, None);
@@ -262,7 +262,7 @@ fn request_deserialization_accepts_discovery_opt_out() {
         discovery_enabled, ..
     } = request
     else {
-        unreachable!("expected start_sync");
+        panic!("expected start_sync, got {request:?}");
     };
     assert!(!discovery_enabled);
 }
@@ -286,7 +286,7 @@ fn request_deserialization_accepts_relay_and_auth_config() {
         ..
     } = request
     else {
-        unreachable!("expected start_sync");
+        panic!("expected start_sync, got {request:?}");
     };
     assert_eq!(relay_url.as_deref(), Some("ws://127.0.0.1:8765"));
     assert_eq!(relay_api_key.as_deref(), Some("key"));

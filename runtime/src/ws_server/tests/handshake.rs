@@ -22,22 +22,14 @@ fn baseline_hello() -> HelloMessage {
 
 fn accepted_compat(outcome: HelloOutcome) -> Compatibility {
     let HelloOutcome::Accept { compatibility, .. } = outcome else {
-        assert!(
-            matches!(outcome, HelloOutcome::Accept { .. }),
-            "expected accept"
-        );
-        unreachable!();
+        panic!("expected accept, got {outcome:?}")
     };
     compatibility
 }
 
 fn rejected_code(outcome: HelloOutcome) -> &'static str {
     let HelloOutcome::Reject { code, .. } = outcome else {
-        assert!(
-            matches!(outcome, HelloOutcome::Reject { .. }),
-            "expected reject"
-        );
-        unreachable!();
+        panic!("expected reject, got {outcome:?}")
     };
     code
 }

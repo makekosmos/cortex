@@ -116,10 +116,10 @@ pub fn decode_hex(value: &str) -> Vec<u8> {
         .0
         .iter()
         .map(|pair| {
-            let digit = |byte: u8| match byte {
-                b'0'..=b'9' => byte - b'0',
-                b'a'..=b'f' => byte - b'a' + 10,
-                _ => unreachable!("canonical bytes must be lowercase hexadecimal"),
+            let digit = |byte: u8| {
+                (byte as char)
+                    .to_digit(16)
+                    .expect("canonical bytes must be lowercase hexadecimal") as u8
             };
             (digit(pair[0]) << 4) | digit(pair[1])
         })

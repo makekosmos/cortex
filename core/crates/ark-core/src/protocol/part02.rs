@@ -210,7 +210,7 @@ mod tests {
                 assert_eq!(auth_nonce, None);
                 assert_eq!(auth_hmac, None);
             }
-            _ => unreachable!("Expected Hello"),
+            other => panic!("expected Hello, got {other:?}"),
         }
     }
 

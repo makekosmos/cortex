@@ -896,7 +896,7 @@ mod tests {
         let store = PackageStore::new(dir.path().join("store")).unwrap();
         for version in ["2.0.0", "2.1.0"] {
             let VersionedManifest::V2(mut manifest) = manifest_v2() else {
-                unreachable!();
+                panic!("expected v2 manifest");
             };
             manifest.version = version.into();
             let expected = VersionedManifest::V2(manifest);
@@ -929,7 +929,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let archive_path = dir.path().join("icon.kspkg");
         let VersionedManifest::V2(mut manifest) = manifest_v2() else {
-            unreachable!();
+            panic!("expected v2 manifest");
         };
         manifest.icon = Some("icon.ico".into());
         let expected = VersionedManifest::V2(manifest);
@@ -1014,7 +1014,7 @@ mod tests {
         let d = tempdir().unwrap();
         let p = d.path().join("source.kspkg");
         let VersionedManifest::V2(mut m) = manifest_v2() else {
-            unreachable!()
+            panic!("expected v2 manifest")
         };
         m.kind = PackageKind::Source;
         m.entrypoint = "worker.exe".into();
@@ -1055,7 +1055,7 @@ mod tests {
         let store = PackageStore::new(d.path().join("store")).unwrap();
         for version in ["1.0.0", "2.0.0"] {
             let VersionedManifest::V2(mut manifest) = manifest_v2() else {
-                unreachable!();
+                panic!("expected v2 manifest");
             };
             manifest.kind = PackageKind::Source;
             manifest.version = version.into();
@@ -1108,7 +1108,7 @@ mod tests {
         let d = tempdir().unwrap();
         let p = d.path().join("source.kspkg");
         let VersionedManifest::V2(mut m) = manifest_v2() else {
-            unreachable!()
+            panic!("expected v2 manifest")
         };
         m.kind = PackageKind::Source;
         m.entrypoint = "worker.exe".into();

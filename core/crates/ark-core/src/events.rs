@@ -62,7 +62,7 @@ mod tests {
                     std::thread::sleep(std::time::Duration::from_millis(5));
                 }
                 Err(broadcast::error::TryRecvError::Closed) => {
-                    unreachable!("event bus is process-wide and never closes")
+                    panic!("event bus is process-wide and never closes")
                 }
             }
         }

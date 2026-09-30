@@ -539,7 +539,7 @@ mod tests {
 
         let LocalSttResponse::Status(status) = response.response.expect("expected status response")
         else {
-            unreachable!("expected status response");
+            panic!("expected status response");
         };
         assert!(status.warm);
         assert_eq!(status.accelerator, LocalSttAccelerator::Gpu);
@@ -560,7 +560,7 @@ mod tests {
             .await;
 
         let LocalSttResponse::Ack(ack) = response.response.expect("expected ack response") else {
-            unreachable!("expected ack response");
+            panic!("expected ack response");
         };
         assert!(ack.accepted);
         assert!(!service.status().warm);
@@ -600,7 +600,7 @@ mod tests {
 
         let LocalSttResponse::Status(status) = response.response.expect("expected status response")
         else {
-            unreachable!("expected status response");
+            panic!("expected status response");
         };
         assert!(!status.warm);
         assert!(status.loaded_model.is_none());

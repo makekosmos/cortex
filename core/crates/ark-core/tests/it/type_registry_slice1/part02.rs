@@ -77,7 +77,7 @@ fn registry_contract_shapes_are_rejected_in_migration_and_insert() {
             "content_contract_json" => candidate.content_contract_json = value.into(),
             "sync_policy_json" => candidate.sync_policy_json = value.into(),
             "relations_json" => candidate.relations_json = value.into(),
-            _ => unreachable!(),
+            other => panic!("unknown field {other}"),
         }
         let error = insert_type_version(&conn, &candidate, "caller-time").unwrap_err();
         assert!(error.contains(field), "{field}: {error}");

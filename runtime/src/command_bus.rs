@@ -269,7 +269,7 @@ mod tests {
 
         let evt = rx.recv().await.expect("event must arrive");
         let CommandBusEvent::Changed(list) = evt else {
-            unreachable!("expected Changed event");
+            panic!("expected Changed event, got {evt:?}");
         };
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].id, "x");
@@ -286,7 +286,7 @@ mod tests {
 
         let evt = rx.recv().await.expect("event must arrive");
         let CommandBusEvent::Invoked { id, params } = evt else {
-            unreachable!("expected Invoked event");
+            panic!("expected Invoked event, got {evt:?}");
         };
         assert_eq!(id, "eden.new");
         assert_eq!(params, serde_json::json!({ "title": "draft" }));
