@@ -251,7 +251,7 @@ pub fn uninstall() -> Outcome {
         ok: true,
         service_name: Some(brand::SERVICE_NAME.into()),
         installed: Some(false),
-        running: Some(false).filter(|_| deleted_any),
+        running: deleted_any.then_some(false),
         service_dir: Some(dir.to_string_lossy().into_owned()),
         ..Outcome::default()
     }
