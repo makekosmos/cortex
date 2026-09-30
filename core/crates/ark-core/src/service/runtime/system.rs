@@ -180,8 +180,15 @@ pub(super) async fn handle(state: &Arc<ServiceState>, request: Request) -> Resul
         Request::AddSeedPeer { addresses } => handle_add_seed_peer(state, addresses).await,
 
         Request::GetOwnAddresses { port } => {
+            // Port 0 is not a usable listen port; report no addresses rather
+            // than bogus ":0" targets.
             let port = port.unwrap_or(LAN_SYNC_PORT);
-            Ok(json!(get_own_addresses(port)))
+            let addrs = if port == 0 {
+                Vec::new()
+            } else {
+                get_own_addresses(port)
+            };
+            Ok(json!(addrs))
         }
 
         Request::GetHostDeviceName => Ok(json!(get_host_device_name())),

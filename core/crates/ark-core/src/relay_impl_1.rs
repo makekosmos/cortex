@@ -111,68 +111,6 @@ impl RelaySync {
             .collect()
     }
 
-    async fn handle_event(&self, event: TransportEvent) {
-        match event {
-            TransportEvent::MessageReceived {
-                from_device_id,
-                msg,
-            } => {
-                let from = if from_device_id.is_empty() {
-                    message_origin_device_id(&msg).unwrap_or_default()
-                } else {
-                    from_device_id
-                };
-                if from == self.config.device_id {
-                    return;
-                }
-                self.handle_message(from, msg, None).await;
-            }
-            TransportEvent::MessageReceivedFromTransport {
-                from_device_id,
-                transport_public_key,
-                msg,
-            } => {
-                if matches!(&msg, LanSyncMessage::Hello { .. }) {
-                    let trusted = self
-                        .storage
-                        .authorized_transport_public_key(&from_device_id)
-                        .await
-                        .is_some_and(|key| key == transport_public_key);
-                    if trusted {
-                        self.handle_message(from_device_id.clone(), msg, None).await;
-                        if self.is_authenticated_peer(&from_device_id).await {
-                            let _ = self
-                                .transport
-                                .bind_authenticated_peer(&from_device_id, &transport_public_key);
-                            self.transport_keys
-                                .lock()
-                                .await
-                                .insert(from_device_id, transport_public_key);
-                        }
-                    }
-                } else if self
-                    .transport_keys
-                    .lock()
-                    .await
-                    .get(&from_device_id)
-                    .is_some_and(|key| key == &transport_public_key)
-                {
-                    self.handle_message(from_device_id, msg, Some(transport_public_key))
-                        .await;
-                }
-            }
-            TransportEvent::Connected { .. } => {}
-            TransportEvent::Disconnected { device_id } => {
-                self.peers.lock().await.remove(&device_id);
-                self.transport_keys.lock().await.remove(&device_id);
-                if let Some(handler) = self.on_peer_disconnect.lock().await.as_ref() {
-                    handler(device_id, self.peers.lock().await.len());
-                }
-            }
-        }
-        trim_process_heap();
-    }
-
     async fn handle_message(
         &self,
         from_device_id: String,
