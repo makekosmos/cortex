@@ -1,4 +1,10 @@
-#![cfg(all(windows, feature = "package-worker-fixture"))]
+// Spawns both fixture binaries (worker + markdown bridge), so it needs
+// both fixture features enabled to have CARGO_BIN_EXE_* defined.
+#![cfg(all(
+    windows,
+    feature = "package-worker-fixture",
+    feature = "markdown-bridge-fixture"
+))]
 #![allow(clippy::panic, clippy::unwrap_used)]
 
 use std::{

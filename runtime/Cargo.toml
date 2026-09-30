@@ -12,6 +12,9 @@ windows-gui-subsystem = []
 # Forwarded to ark-core: opt-in iroh transport for start_sync (`use_iroh`).
 iroh-spike = ["ark-core/iroh-spike"]
 package-worker-fixture = []
+# Test-only feature: builds the ark-markdown-bridge integration-test
+# fixture bin. Plain `cargo build`/`cargo test --lib` skip it.
+markdown-bridge-fixture = []
 
 [lib]
 name = "engine"
@@ -29,6 +32,7 @@ required-features = ["package-worker-fixture"]
 [[bin]]
 name = "ark-markdown-bridge"
 path = "src/bin/ark-markdown-bridge.rs"
+required-features = ["markdown-bridge-fixture"]
 
 [dependencies]
 ark-core = { path = "../core/crates/ark-core", package = "ark-core" }
