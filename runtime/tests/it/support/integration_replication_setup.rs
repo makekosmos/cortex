@@ -23,9 +23,12 @@ use tempfile::TempDir;
 
 /// Host HPKE identities live in the OS keyring under fixed node ids
 /// ("origin-node", "recipient-node", "foreign-node"), and the HPKE test deletes
-/// them when it finishes. Every test that creates or reads them holds this lock:
-/// all integration tests share one process. A tokio mutex, because the holders
-/// are async tests, and it does not poison, so one failure does not cascade.
+/// them when it finishes. Every test that creates or reads them holds this lock,
+/// which serializes them under a plain `cargo test` (one process). The gate runs
+/// each test in its own process, where the nextest `os-keyring` group in
+/// .config/nextest.toml serializes them instead. A tokio mutex, because the
+/// holders are async tests, and it does not poison, so one failure does not
+/// cascade.
 pub static HOST_IDENTITIES: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 pub const INTEGRATION_ID: &str = "synthetic-provider";

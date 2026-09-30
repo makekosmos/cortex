@@ -15,5 +15,5 @@ the Rust runtime (`runtime/`). Техническая документация:
 
 - `pnpm run check` — полный локальный гейт; `pnpm run check:affected` — по изменённым файлам.
 - `pnpm run check:brand` — brand gate (KOS-266): `kosmos`/`kepler` references must be `MIGRATION(KOS-267)`-marked or in `scripts/brand-allowlist.json` (see `docs/brand-legacy-identifiers.md`).
-- Хуки: `pnpm exec lefthook install`; pre-commit/pre-push гоняют `check:plan --run`.
+- Хуки: `pnpm exec lefthook install`; pre-commit/pre-push гоняют `check:plan --run`. Pre-commit — только быстрые проверки (секунды), clippy/Rust-тесты/staging/Manager откладываются до pre-push. Rust-тесты идут через `cargo nextest` (нужен `cargo install cargo-nextest --locked`).
 - `node scripts/check-core-pin.mjs` — консистентность пина ark-core.

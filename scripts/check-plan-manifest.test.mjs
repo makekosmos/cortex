@@ -44,12 +44,16 @@ test("worktree and pre-commit modes read package.json revisions from git", (t) =
   // Nothing is staged yet, so the staged diff is empty.
   assert.deepEqual(planIn(dir, "pre-commit").checks, []);
   git(dir, "add", "package.json");
-  assert.deepEqual(planIn(dir, "pre-commit").checks, ["package-manager", "clippy", "format"]);
+  // The commit defers clippy to pre-push (check-plan-commit.mjs) and says so.
+  const staged = planIn(dir, "pre-commit");
+  assert.deepEqual(staged.checks, ["package-manager", "format"]);
+  assert.match(staged.reasons.at(-1), /deferred to pre-push: clippy/);
 
   write({ scripts: { clippy: "cargo clippy -D warnings" }, devDependencies: { oxlint: "2.0.0" } });
   assert.equal(planIn(dir, "worktree").full, true);
-  // The staged blob, not the dirtier worktree file, decides pre-commit.
-  assert.equal(planIn(dir, "pre-commit").full, false);
+  // The staged blob, not the dirtier worktree file, decides pre-commit: a
+  // full plan would become the fast gate at commit time.
+  assert.deepEqual(planIn(dir, "pre-commit").checks, ["package-manager", "format"]);
 });
 
 // Every quoted .md/.mdx/.txt literal in a test that names a tracked document

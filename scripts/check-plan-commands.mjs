@@ -8,6 +8,7 @@ const FORMAT_EXTENSIONS = /\.(?:[cm]?[jt]sx?|vue|json|ya?ml)$/i;
 const requireFromRoot = createRequire(new URL("../package.json", import.meta.url));
 
 const COMMANDS_BY_CHECK = {
+  fast: ["pnpm", ["run", "check:fast"]],
   "core-pin": ["pnpm", ["run", "check:core-pin"]],
   "package-manager": ["pnpm", ["run", "test:package-manager"]],
   "release-bom": ["pnpm", ["run", "test:release-bom"]],
@@ -39,6 +40,8 @@ function commandsFor(plan) {
       { name: "full", command: "pnpm", args: ["run", "check"] },
       ...FULL_CONTRACT_CHECKS.map(commandFor),
     ];
+  // The fast gate already includes the brand and source-size scans.
+  if (plan.checks.includes("fast")) return [commandFor("fast")];
   const commands = [];
   // The brand-rename gate is a fast git-grep scan; a stray legacy name can
   // appear in any file, so it runs on every hook invocation.

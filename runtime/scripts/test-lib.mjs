@@ -43,8 +43,8 @@ const GATE_FEATURES = [
 ];
 
 // These are integration-test fixtures, not production dependencies. Build
-// them explicitly with the same feature set so `cargo test` reuses the
-// artifacts instead of recompiling, and so `cargo test -p engine` has the
+// them explicitly with the same feature set so the test run reuses the
+// artifacts instead of recompiling, and so `-p engine` alone has the
 // same prerequisites in the standalone Makekosmos layout as in CI.
 run(cortex, ["build", "-p", "engine", "--bins", ...GATE_FEATURES]);
 
@@ -52,11 +52,31 @@ if (!existsSync(bridge)) {
   throw new Error(`ark-markdown-bridge fixture was not produced: ${bridge}`);
 }
 
+// Tests run through cargo-nextest, one process per test, in parallel across
+// every test binary: `cargo test` runs the binaries one after another, so the
+// gate waited on the slowest binary's tail (157 s against 77 s, see
+// docs/experiments/2026-09-30-build-speed.md). The pinned version and the test
+// groups for state shared across processes live in .config/nextest.toml.
+const nextest = spawnSync("cargo", ["nextest", "--version"], { env: gateEnv, encoding: "utf8" });
+if (nextest.status !== 0) {
+  console.error("cargo-nextest is required: cargo install cargo-nextest --locked");
+  process.exit(1);
+}
+
 const workspace = process.argv[2] === "--workspace";
 if (workspace) {
-  // A single cargo invocation: lib tests, bin tests and the per-crate `it`
-  // integration binaries all share one compilation of each crate.
-  run(cortex, ["test", "--workspace", ...GATE_FEATURES]);
+  // One compilation of each crate serves lib, bin and `it` tests. nextest does
+  // not run doc-tests, so they get their own pass.
+  run(cortex, ["nextest", "run", "--workspace", ...GATE_FEATURES]);
+  run(cortex, ["test", "--doc", "--workspace", ...GATE_FEATURES]);
 } else {
-  run(cortex, ["test", "-p", "engine", "--lib", ...GATE_FEATURES, ...process.argv.slice(2)]);
+  run(cortex, [
+    "nextest",
+    "run",
+    "-p",
+    "engine",
+    "--lib",
+    ...GATE_FEATURES,
+    ...process.argv.slice(2),
+  ]);
 }
