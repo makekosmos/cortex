@@ -20,9 +20,14 @@ pub enum TransportEvent {
     Connected {
         device_id: String,
     },
+    /// A single remote peer disconnected. `device_id` is the REMOTE peer.
     Disconnected {
         device_id: String,
     },
+    /// The whole transport connection dropped (e.g. the relay WebSocket was
+    /// lost). Every remote peer reached through it is now unreachable; no
+    /// single peer identity applies.
+    TransportDropped,
     MessageReceived {
         from_device_id: String,
         msg: LanSyncMessage,

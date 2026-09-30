@@ -298,25 +298,20 @@ impl SyncServer {
         let on_new_peer_discovered = self.on_new_peer_discovered.clone();
         let next_peer_id = self.next_peer_id.clone();
 
-        // Ping task
-        let peers_ping = peers.clone();
+        // Ping ticker shares the accept task: a separate ping task had no
+        // shutdown path and leaked (plus duplicated pings) on every restart.
         tokio::spawn(async move {
             let mut ticker = interval(Duration::from_millis(PING_INTERVAL_MS));
             loop {
-                ticker.tick().await;
-                let peers_guard = peers_ping.lock().await;
-                for peer in peers_guard.values() {
-                    if peer.authenticated {
-                        let _ = peer.tx.send(Message::Ping(vec![]));
-                    }
-                }
-            }
-        });
-
-        // Accept loop
-        tokio::spawn(async move {
-            loop {
                 tokio::select! {
+                    _ = ticker.tick() => {
+                        let peers_guard = peers.lock().await;
+                        for peer in peers_guard.values() {
+                            if peer.authenticated {
+                                let _ = peer.tx.send(Message::Ping(vec![]));
+                            }
+                        }
+                    }
                     result = listener.accept() => {
                         match result {
                             Ok((stream, _)) => {

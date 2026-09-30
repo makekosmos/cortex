@@ -117,8 +117,15 @@ fn load_usage_sequence_page(
                 _ => None,
             }
         };
-        let Some(data) = data else {
-            continue;
+        // A ref whose entity row is gone with no tombstone is a dead ref
+        // (e.g. clear_all residue or a delete that bypassed bookkeeping).
+        // Skipping it here would make ref positions diverge from the entity
+        // offset callers page by — later entities get re-emitted — and it
+        // leaves a gap in the receiver's contiguous usage cursor. Emit a
+        // tombstone instead: the row is gone, so the entity is deleted.
+        let (data, deleted) = match data {
+            Some(data) => (data, deleted),
+            None => (serde_json::Map::new(), true),
         };
         entities.push(SyncEntity {
             entity_type,

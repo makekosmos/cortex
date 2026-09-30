@@ -20,7 +20,12 @@ pub(crate) async fn handle_start_sync(
     handle_stop_sync(state).await;
 
     let device_name = device_name.unwrap_or_else(get_host_device_name);
-    let ws_port = port.unwrap_or(LAN_SYNC_PORT);
+    // Port 0 would bind an ephemeral port while advertising ":0" to peers.
+    let ws_port = match port {
+        Some(0) => return Err("invalid sync port 0; expected 1..=65535".to_string()),
+        Some(p) => p,
+        None => LAN_SYNC_PORT,
+    };
 
     let shared_conn = get_shared_conn(state)?;
     let storage = Arc::new(SqliteStorageBackend::new(shared_conn.clone()));

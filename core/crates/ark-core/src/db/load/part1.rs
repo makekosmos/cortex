@@ -39,6 +39,8 @@ pub fn clear_all(conn: &Connection) -> Result<(), String> {
          DELETE FROM usage_days;
          DELETE FROM usage_events;
          DELETE FROM usage_sessions;
+         DELETE FROM usage_sync_log;
+         DELETE FROM usage_sync_versions;
          DELETE FROM tracked_apps;
          DELETE FROM todos;
          DELETE FROM projects;
@@ -49,9 +51,44 @@ pub fn clear_all(conn: &Connection) -> Result<(), String> {
     .map_err(|e| e.to_string())
 }
 
-pub fn delete_trashed(conn: &Connection) -> Result<usize, String> {
-    conn.execute("DELETE FROM todos WHERE is_trashed = 1", [])
-        .map_err(|e| e.to_string())
+pub fn delete_trashed(conn: &Connection, device_id: &str) -> Result<usize, String> {
+    let mut stmt = conn
+        .prepare("SELECT id FROM todos WHERE is_trashed = 1")
+        .map_err(|e| e.to_string())?;
+    let ids = stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    drop(stmt);
+
+    // Hard-deleted rows must leave sync tombstones + version-vector bumps,
+    // otherwise peers keep their copies and resurrect them on the next
+    // sync round.
+    conn.execute_batch("SAVEPOINT ark_delete_trashed")
+        .map_err(|e| e.to_string())?;
+    let result = (|| -> Result<usize, String> {
+        let deleted = conn
+            .execute("DELETE FROM todos WHERE is_trashed = 1", [])
+            .map_err(|e| e.to_string())?;
+        for id in &ids {
+            let hlc = bump_sync_version_vector(conn, "todo", id, device_id, true)?;
+            record_sync_tombstone(conn, "todo", id, &hlc)?;
+        }
+        Ok(deleted)
+    })();
+    match result {
+        Ok(count) => {
+            conn.execute_batch("RELEASE SAVEPOINT ark_delete_trashed")
+                .map_err(|e| e.to_string())?;
+            Ok(count)
+        }
+        Err(error) => {
+            let _ =
+                conn.execute_batch("ROLLBACK TO ark_delete_trashed; RELEASE ark_delete_trashed");
+            Err(error)
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

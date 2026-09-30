@@ -28,7 +28,24 @@ impl SyncClient {
                 }
 
                 let peer_record = peer.read().await.clone();
-                let addresses = peer_record.addresses.clone();
+                let mut addresses = peer_record.addresses.clone();
+
+                // Never dial our own listener: a stale record can carry an
+                // address that now belongs to us (e.g. the peer's old DHCP
+                // lease). Prune it from the stored record — a pure
+                // self-reference still ends the client.
+                if addresses.iter().any(|a| own_addresses.contains(a)) {
+                    addresses.retain(|a| !own_addresses.contains(a));
+                    peer.write().await.addresses = addresses.clone();
+                    if addresses.is_empty() {
+                        eprintln!(
+                            "{TAG} All addresses for {} are ours — evicting self-record",
+                            peer_record.device_name
+                        );
+                        stopped.store(true, std::sync::atomic::Ordering::Relaxed);
+                        break;
+                    }
+                }
 
                 if addresses.is_empty() {
                     eprintln!(
@@ -54,7 +71,7 @@ impl SyncClient {
                         // Update last_address
                         {
                             let mut p = peer.write().await;
-                            p.last_address = Some(winning_addr);
+                            p.last_address = Some(winning_addr.clone());
                         }
 
                         reconnect_delay = RECONNECT_BASE_MS;
@@ -169,17 +186,31 @@ impl SyncClient {
                                                 // Reject self-connect: if the server's hello
                                                 // claims our own device_id, we accidentally
                                                 // connected to our own SyncServer (stale phantom
-                                                // peer record pointing at our own LAN IP). Close
-                                                // and stop retrying — this peer record is a
-                                                // self-reference and should be evicted.
+                                                // peer record pointing at our own LAN IP). Close;
+                                                // retrying stops only when no other addresses
+                                                // remain — a pure self-reference is evicted.
                                                 if !server_device_id.is_empty()
                                                     && server_device_id == device_id
                                                 {
                                                     eprintln!("{TAG} Rejecting self-connect to {server_device_name} ({server_device_id})");
-                                                    stopped.store(
-                                                        true,
-                                                        std::sync::atomic::Ordering::Relaxed,
-                                                    );
+                                                    // The winning address
+                                                    // looped back to us — drop
+                                                    // just that address and
+                                                    // only give up when no
+                                                    // others remain (a pure
+                                                    // self-record).
+                                                    let remaining = {
+                                                        let mut p = peer.write().await;
+                                                        p.addresses.retain(|a| a != &winning_addr);
+                                                        p.last_address = None;
+                                                        p.addresses.len()
+                                                    };
+                                                    if remaining == 0 {
+                                                        stopped.store(
+                                                            true,
+                                                            std::sync::atomic::Ordering::Relaxed,
+                                                        );
+                                                    }
                                                     break;
                                                 }
 
@@ -187,6 +218,17 @@ impl SyncClient {
                                                 peer_device_id_actual = server_device_id.clone();
                                                 *authenticated_tx.lock().await =
                                                     Some((server_device_id.clone(), tx.clone()));
+                                                // Adopt the authenticated
+                                                // identity — bootstrap records
+                                                // carry a "seed-*" placeholder
+                                                // device_id, and DisconnectPeer /
+                                                // peer listings key off the
+                                                // stored record.
+                                                {
+                                                    let mut p = peer.write().await;
+                                                    p.device_id = server_device_id.clone();
+                                                    p.device_name = server_device_name.clone();
+                                                }
                                                 eprintln!("{TAG} Authenticated with {server_device_name} ({server_device_id})");
                                                 if let Some(handler) =
                                                     on_connected.lock().await.as_ref()

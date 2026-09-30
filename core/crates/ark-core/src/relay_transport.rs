@@ -198,9 +198,11 @@ impl SyncTransport for RelayTransport {
                             }
                         }
 
-                        let _ = event_tx.send(TransportEvent::Disconnected {
-                            device_id: device_id.clone(),
-                        });
+                        // The whole relay socket dropped — every peer seen
+                        // through it is unreachable, not just one. Emitting
+                        // `Disconnected{our own id}` used to evict nothing,
+                        // leaving stale authenticated peers behind.
+                        let _ = event_tx.send(TransportEvent::TransportDropped);
                     }
                 }
 

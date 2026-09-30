@@ -189,7 +189,10 @@ impl ArkCore {
 
     pub fn delete_trashed(&self) -> Result<u32> {
         self.with_conn(|conn| {
-            let n = db_delete_trashed(conn).map_err(ArkCoreError::from)?;
+            // Tombstones are stamped under the FFI surface's device label so
+            // peers can attribute the delete (mirrors "ark-core-ffi" used by
+            // the canonical facades for FFI legacy writes).
+            let n = db_delete_trashed(conn, "ark-core-ffi").map_err(ArkCoreError::from)?;
             Ok(n as u32)
         })
     }

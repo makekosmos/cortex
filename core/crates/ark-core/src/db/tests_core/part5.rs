@@ -273,7 +273,7 @@
         todo.is_trashed = true;
         upsert_todo(&conn, &todo).unwrap();
 
-        let count = delete_trashed(&conn).unwrap();
+        let count = delete_trashed(&conn, "device-under-test").unwrap();
         assert_eq!(count, 1);
         let data = load_all(&conn).unwrap();
         assert_eq!(data.todos.len(), 1);

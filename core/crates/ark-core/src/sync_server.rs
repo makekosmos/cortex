@@ -19,6 +19,9 @@ mod sync_server_core;
 #[path = "sync_server_messages.rs"]
 mod sync_server_messages;
 #[cfg(test)]
+#[path = "sync_server_reject_tests.rs"]
+mod sync_server_reject_tests;
+#[cfg(test)]
 #[path = "sync_server_route_tests.rs"]
 mod sync_server_route_tests;
 #[cfg(test)]
@@ -190,6 +193,15 @@ async fn save_removed_peer_ids(storage: &Arc<dyn StorageBackend>, peer_ids: &[St
 fn send_msg(tx: &mpsc::UnboundedSender<Message>, msg: &LanSyncMessage) {
     let json = serialize_message(msg);
     let _ = tx.send(Message::Text(json));
+}
+
+/// Drops a rejected hello's session and closes its socket. A bare return would
+/// leave a phantom unauthenticated peer and a half-open connection the dialer
+/// waits on forever.
+async fn reject_hello(peers: &Mutex<HashMap<usize, PeerState>>, peer_id: usize) {
+    if let Some(peer) = peers.lock().await.remove(&peer_id) {
+        let _ = peer.tx.send(Message::Close(None));
+    }
 }
 
 // ---------------------------------------------------------------------------

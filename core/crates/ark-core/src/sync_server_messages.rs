@@ -25,23 +25,21 @@ pub(super) async fn handle_message(
             auth_nonce,
             auth_hmac,
         } => {
-            {
-                let mut peers_guard = peers.lock().await;
-                if peers_guard
-                    .get(&peer_id)
-                    .is_some_and(|peer| peer.authenticated)
-                {
-                    eprintln!("{TAG} Rejecting repeated hello on an authenticated connection");
-                    if let Some(peer) = peers_guard.remove(&peer_id) {
-                        let _ = peer.tx.send(Message::Close(None));
-                    }
-                    return;
-                }
+            let repeated = peers
+                .lock()
+                .await
+                .get(&peer_id)
+                .is_some_and(|peer| peer.authenticated);
+            if repeated {
+                eprintln!("{TAG} Rejecting repeated hello on an authenticated connection");
+                reject_hello(peers, peer_id).await;
+                return;
             }
             if protocol_version != PROTOCOL_VERSION {
                 eprintln!(
                     "{TAG} Protocol version mismatch: {protocol_version} vs {PROTOCOL_VERSION}"
                 );
+                reject_hello(peers, peer_id).await;
                 return;
             }
 
@@ -52,10 +50,7 @@ pub(super) async fn handle_message(
 
             if peer_space_id != my_space_id {
                 eprintln!("{TAG} Rejecting peer hello from a different space");
-                let mut peers_guard = peers.lock().await;
-                if let Some(peer) = peers_guard.remove(&peer_id) {
-                    let _ = peer.tx.send(Message::Close(None));
-                }
+                reject_hello(peers, peer_id).await;
                 return;
             }
 
@@ -68,10 +63,7 @@ pub(super) async fn handle_message(
                 };
                 if !valid {
                     eprintln!("{TAG} Rejecting peer hello with invalid HMAC");
-                    let mut peers_guard = peers.lock().await;
-                    if let Some(peer) = peers_guard.remove(&peer_id) {
-                        let _ = peer.tx.send(Message::Close(None));
-                    }
+                    reject_hello(peers, peer_id).await;
                     return;
                 }
             }
@@ -82,15 +74,13 @@ pub(super) async fn handle_message(
                 eprintln!(
                     "{TAG} Rejecting self-connect: client claims our device_id {peer_device_id}"
                 );
-                let mut peers_guard = peers.lock().await;
-                peers_guard.remove(&peer_id);
+                reject_hello(peers, peer_id).await;
                 return;
             }
             let removed = load_removed_peer_ids(storage).await;
             if !peer_device_id.is_empty() && removed.iter().any(|id| id == &peer_device_id) {
                 eprintln!("{TAG} Rejecting blocked peer: {peer_device_id}");
-                let mut peers_guard = peers.lock().await;
-                peers_guard.remove(&peer_id);
+                reject_hello(peers, peer_id).await;
                 return;
             }
 
@@ -481,12 +471,19 @@ pub(super) async fn handle_message(
 
             let my_device_id = device_id.read().await.clone();
             let my_addresses = own_addresses.read().await.clone();
+            // Blocked peers must not re-enter through gossiped peer lists —
+            // otherwise a removed device resurrects in known_peers and gets
+            // re-gossiped to the rest of the mesh.
+            let removed = load_removed_peer_ids(storage).await;
             // Filter self-references: our own device_id, or any record whose
             // addresses are all ours (stale phantom from prior runs).
             let filtered: Vec<PeerRecord> = incoming_peers
                 .into_iter()
                 .filter(|p| {
                     if p.device_id == my_device_id {
+                        return false;
+                    }
+                    if removed.iter().any(|id| id == &p.device_id) {
                         return false;
                     }
                     if !p.addresses.is_empty()

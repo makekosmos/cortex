@@ -57,35 +57,40 @@ pub fn is_virtual_interface(name: &str) -> bool {
 }
 
 /// Check whether an IPv4 string is routable on the LAN.
-/// Rejects link-local (169.254/16) and loopback (127/8).
+/// Rejects link-local (169.254/16), loopback (127/8), unspecified, broadcast,
+/// multicast — and any input that isn't a parseable IPv4 literal (hostnames,
+/// empty strings, malformed quads all fail the filter).
 pub fn is_routable_v4(addr: &str) -> bool {
-    if addr.starts_with("169.254.") {
+    let Ok(ip) = addr.parse::<std::net::Ipv4Addr>() else {
+        return false;
+    };
+    if ip.is_unspecified() || ip.is_loopback() || ip.is_broadcast() || ip.is_multicast() {
         return false;
     }
-    if addr.starts_with("127.") {
+    let [a, b, ..] = ip.octets();
+    if a == 169 && b == 254 {
         return false;
     }
     true
 }
 
 /// Check whether an IPv6 string is routable on the LAN.
-/// Rejects link-local (fe80::/10), unique-local (fc00::/7), loopback (::1).
+/// Rejects link-local (fe80::/10), unique-local (fc00::/7), loopback (::1),
+/// unspecified (::) — and any input that isn't a parseable IPv6 literal.
 pub fn is_routable_v6(addr: &str) -> bool {
-    let lower = addr.to_lowercase();
+    let Ok(ip) = addr.parse::<std::net::Ipv6Addr>() else {
+        return false;
+    };
+    if ip.is_unspecified() || ip.is_loopback() || ip.is_multicast() {
+        return false;
+    }
+    let seg0 = ip.segments()[0];
     // Link-local fe80::/10
-    if lower.starts_with("fe8")
-        || lower.starts_with("fe9")
-        || lower.starts_with("fea")
-        || lower.starts_with("feb")
-    {
+    if seg0 & 0xffc0 == 0xfe80 {
         return false;
     }
     // Unique-local fc00::/7
-    if lower.starts_with("fc") || lower.starts_with("fd") {
-        return false;
-    }
-    // Loopback
-    if lower == "::1" {
+    if seg0 & 0xfe00 == 0xfc00 {
         return false;
     }
     true
@@ -100,6 +105,18 @@ pub fn filter_routable_addresses(addresses: &[String]) -> Vec<String> {
         .filter(|addr| is_address_routable(addr))
         .cloned()
         .collect()
+}
+
+/// `":<digits>"` suffix where `<digits>` is a usable (non-zero) port.
+fn is_port_suffix(suffix: &str) -> bool {
+    match suffix.strip_prefix(':') {
+        Some(port) => is_port_str(port),
+        None => false,
+    }
+}
+
+fn is_port_str(port: &str) -> bool {
+    matches!(port.parse::<u16>(), Ok(p) if p != 0)
 }
 
 /// Return `true` if a single `host:port` (or `[ipv6]:port`) string is routable.
@@ -118,17 +135,36 @@ pub fn is_address_routable(addr: &str) -> bool {
         let host = &inner[..end];
         // Strip zone id if present (interface suffix for link-local)
         let host = host.split('%').next().unwrap_or(host);
+        // Whatever follows ']' must be empty or ":port".
+        let rest = &inner[end + 1..];
+        if !rest.is_empty() && !is_port_suffix(rest) {
+            return false;
+        }
         return is_routable_v6(host);
     }
 
-    // IPv4: host:port — take everything before the last colon.
-    let host = match trimmed.rfind(':') {
-        Some(idx) => &trimmed[..idx],
-        None => trimmed,
-    };
+    // Bare IPv6 without brackets or port: at least two colons and the whole
+    // string (zone id stripped) must parse as an address. Checking this before
+    // the host:port split keeps "2001:db8::1" routable while "fe80::1" and
+    // malformed strings still fail.
+    let zoneless = trimmed.split('%').next().unwrap_or(trimmed);
+    if zoneless.matches(':').count() >= 2 && zoneless.parse::<std::net::Ipv6Addr>().is_ok() {
+        return is_routable_v6(zoneless);
+    }
 
-    // Could still be a bare IPv6 (no brackets) — distinguish by colon count.
-    if host.chars().filter(|c| *c == ':').count() >= 1 {
+    // host:port — split at the last colon; a port segment must be a valid
+    // non-zero u16 (":notaport" / ":0" are not dialable).
+    let (host, port_ok) = match trimmed.rfind(':') {
+        Some(idx) => (&trimmed[..idx], is_port_str(&trimmed[idx + 1..])),
+        None => (trimmed, true),
+    };
+    if !port_ok {
+        return false;
+    }
+
+    // A remaining colon means an unbracketed IPv6-ish host with a port suffix
+    // that didn't parse as a full bare address above.
+    if host.contains(':') {
         let host = host.split('%').next().unwrap_or(host);
         return is_routable_v6(host);
     }
@@ -201,6 +237,39 @@ mod tests {
     fn accepts_global_v6() {
         assert!(is_routable_v6("2001:db8::1"));
         assert!(is_address_routable("[2001:db8::1]:21531"));
+    }
+
+    #[test]
+    fn rejects_non_ip_strings() {
+        // Regression: the string-prefix checks used to return `true` for any
+        // input not on the reject list, so garbage hosts (hostnames, empty,
+        // malformed quads) passed the routable filter straight into dial lists.
+        assert!(!is_routable_v4("not-an-ip"));
+        assert!(!is_routable_v4("example.com"));
+        assert!(!is_routable_v4("999.999.999.999"));
+        assert!(!is_routable_v4(""));
+        assert!(!is_routable_v6("not-an-ip"));
+        assert!(!is_address_routable("garbage:1234"));
+        assert!(!is_address_routable("localhost:21531"));
+        assert!(!is_address_routable("[garbage]:21531"));
+        assert!(!is_address_routable("999.999.999.999:1"));
+        assert!(!is_address_routable("10.0.0.1:notaport"));
+        assert!(!is_address_routable("10.0.0.1:0"));
+        assert!(!is_address_routable("10.0.0.1:99999"));
+        assert!(!is_address_routable("[2001:db8::1]:junk"));
+        assert!(!is_address_routable("0.0.0.0:21531"));
+        assert!(!is_address_routable("255.255.255.255:21531"));
+    }
+
+    #[test]
+    fn handles_bare_ipv6() {
+        // Unbracketed IPv6 (no port): evaluate the whole address instead of
+        // slicing off the last segment like a port.
+        assert!(is_address_routable("2001:db8::1"));
+        assert!(!is_address_routable("fe80::1"));
+        assert!(!is_address_routable("fd00::1"));
+        assert!(!is_address_routable("::1"));
+        assert!(is_address_routable("2001:db8::1%eth0"));
     }
 
     #[test]

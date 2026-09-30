@@ -137,10 +137,14 @@ impl SyncClient {
         *self.on_peer_list.lock().await = Some(handler);
     }
 
+    /// The device_id of the peer this client dials — the authenticated id
+    /// once Hello completes (seed/bootstrap records carry a `seed-*`
+    /// placeholder until then).
     pub fn peer_device_id(&self) -> String {
-        // We can't async here, but peer is set at construction
-        // Return from initial peer record
-        self.device_id.clone() // placeholder
+        self.peer
+            .try_read()
+            .map(|peer| peer.device_id.clone())
+            .unwrap_or_default()
     }
 
     /// Stop the client and don't reconnect.
