@@ -3,7 +3,9 @@ use super::*;
 
 #[tokio::test]
 async fn terminate_and_wait_is_idempotent() {
+    let dir = tempfile::tempdir().unwrap();
     let mut command = long_running_command();
+    isolate_temp(&mut command, dir.path());
     let mut tree = ProcessTree::spawn(&mut command).await.unwrap();
 
     tree.terminate_and_wait(Duration::from_secs(2))
@@ -29,6 +31,7 @@ async fn terminate_kills_grandchild() {
     );
     let mut command = Command::new("powershell");
     command.args(["-NoProfile", "-Command", &parent_script]);
+    isolate_temp(&mut command, dir.path());
     let mut tree = ProcessTree::spawn(&mut command).await.unwrap();
 
     tokio::time::sleep(Duration::from_millis(500)).await;
@@ -42,6 +45,16 @@ async fn terminate_kills_grandchild() {
         !marker.exists(),
         "grandchild escaped the Windows Job Object"
     );
+}
+
+/// On Windows `ProcessTree` runs every command behind a PowerShell gate, and
+/// PowerShell writes `__PSScriptPolicyTest_*` probe files to %TEMP% at
+/// startup. These tests kill the tree while PowerShell may still be starting,
+/// which leaves the probes behind, so each test gives the tree a TEMP inside
+/// its own tempdir: the gate and any nested PowerShell inherit it, and the
+/// tempdir cleanup removes whatever the killed processes left there.
+fn isolate_temp(command: &mut Command, dir: &std::path::Path) {
+    command.env("TEMP", dir).env("TMP", dir);
 }
 
 #[cfg(unix)]

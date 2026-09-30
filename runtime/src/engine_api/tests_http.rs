@@ -23,8 +23,12 @@
         let server_shutdown_handle = server.shutdown_handle();
         let task = tokio::spawn(server.run());
         let mut child_command = if cfg!(windows) {
-            let mut command = std::process::Command::new("powershell.exe");
-            command.args(["-NoProfile", "-Command", "Start-Sleep -Seconds 5"]);
+            // Not PowerShell: killed mid-startup it leaves its
+            // __PSScriptPolicyTest_* probe files in %TEMP%.
+            let mut command = std::process::Command::new("ping.exe");
+            command
+                .args(["-n", "6", "127.0.0.1"])
+                .stdout(std::process::Stdio::null());
             #[cfg(windows)]
             std::os::windows::process::CommandExt::creation_flags(&mut command, 0x0800_0000);
             command
