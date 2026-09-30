@@ -19,7 +19,10 @@ impl PackageWorkerSupervisor {
             }) {
                 return Err("worker-unavailable");
             }
-            if let Some(delay) = (attempt > 0).then(|| restart_delay(attempt)).flatten() {
+            if let Some(delay) = (attempt > 0)
+                .then(|| restart_delay(&self.inner.restart_delays, attempt))
+                .flatten()
+            {
                 time::sleep(delay).await;
             }
             self.inner.startups.reap_completed().await;

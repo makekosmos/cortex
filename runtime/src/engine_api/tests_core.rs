@@ -947,7 +947,9 @@
         let _ = task.await;
     }
 
-    #[tokio::test]
+    // Multi-threaded: the server task and the hammering clients must not
+    // serialize on one runtime thread — fs reads and pid-auth syscalls block.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn loopback_http_launch_lease_lifecycle_uses_signed_installed_package() {
         let dir = tempfile::tempdir().expect("tempdir");
         let token = "a".repeat(64);
@@ -1054,20 +1056,38 @@
         .await
         .starts_with("HTTP/1.1 200"));
 
-        for _ in 0..10_000 {
-            let resolved = response_json(
-                &raw_http(
-                    port,
-                    &request(
-                        &token,
-                        "POST",
-                        "/v1/apps/resolve",
-                        r#"{"id":"com.kosmos.demo"}"#,
-                    ),
-                )
-                .await,
-            );
-            assert!(resolved["data"].get("launch_id").is_none());
+        // Hammer resolve to prove it never mints a lease. One connection per
+        // request cost ~30 s of wall time in accept/teardown overhead, so the
+        // workers keep their sockets alive (what a real desktop client does)
+        // and read framed responses instead of waiting for close.
+        let resolve_request = std::sync::Arc::new(
+            request(&token, "POST", "/v1/apps/resolve", r#"{"id":"com.kosmos.demo"}"#)
+                .replace("Connection: close\r\n", ""),
+        );
+        const RESOLVE_TOTAL: usize = 10_000;
+        const RESOLVE_WORKERS: usize = 128;
+        let mut resolve_workers = tokio::task::JoinSet::new();
+        for worker in 0..RESOLVE_WORKERS {
+            let resolve_request = resolve_request.clone();
+            let share = RESOLVE_TOTAL / RESOLVE_WORKERS
+                + usize::from(worker < RESOLVE_TOTAL % RESOLVE_WORKERS);
+            resolve_workers.spawn(async move {
+                use tokio::io::AsyncWriteExt;
+                let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", port))
+                    .await
+                    .expect("resolve connection");
+                for _ in 0..share {
+                    stream
+                        .write_all(resolve_request.as_bytes())
+                        .await
+                        .expect("resolve write");
+                    let resolved = response_json(&read_http_response(&mut stream).await);
+                    assert!(resolved["data"].get("launch_id").is_none());
+                }
+            });
+        }
+        while let Some(worker) = resolve_workers.join_next().await {
+            worker.expect("resolve worker");
         }
         assert!(raw_http(
             port,

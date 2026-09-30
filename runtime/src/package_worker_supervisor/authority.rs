@@ -24,6 +24,13 @@ pub(super) struct SupervisorInner {
     pub(super) network_responses: package_worker_broker::SnapshotRegistry,
     pub(super) network_slots: tokio::sync::Semaphore,
     pub(super) grants: Mutex<Option<Arc<GrantAuthorityRegistry>>>,
+    /// Backoff schedule between automatic worker restarts. Production
+    /// supervisors use [`RESTART_DELAYS`]; tests inject a shorter schedule via
+    /// [`PackageWorkerSupervisor::with_restart_delays`] so retry exhaustion
+    /// does not wait on real backoff. Read only by the Windows retry path —
+    /// package workers do not launch on other targets.
+    #[cfg(windows)]
+    pub(super) restart_delays: Vec<Duration>,
     #[cfg(test)]
     pub(super) fail_next_start: std::sync::atomic::AtomicBool,
 }
@@ -153,7 +160,16 @@ impl PackageWorkerSupervisor {
             .fail_next_start
             .store(true, std::sync::atomic::Ordering::Release);
     }
-    pub fn new(api_major: u32) -> Self {
+    fn build(
+        api_major: u32,
+        ark: Option<Arc<ArkHost>>,
+        ark_executor: Arc<dyn ArkRequestExecutor>,
+        restart_delays: Vec<Duration>,
+    ) -> Self {
+        // The schedule only feeds Windows retry paths; elsewhere the
+        // parameter keeps the constructor signature uniform.
+        #[cfg(not(windows))]
+        let _ = restart_delays;
         Self {
             inner: Arc::new(SupervisorInner {
                 workers: Mutex::new(HashMap::new()),
@@ -162,8 +178,8 @@ impl PackageWorkerSupervisor {
                 startups: TaskRegistry::owned(256),
                 lifecycles: TaskRegistry::owned(256),
                 api_major,
-                ark: None,
-                ark_executor: Arc::new(UnavailableArk),
+                ark,
+                ark_executor,
                 typed_launches: Mutex::new(HashMap::new()),
                 store: Mutex::new(None),
                 retry_tasks: TaskRegistry::owned(256),
@@ -172,59 +188,35 @@ impl PackageWorkerSupervisor {
                 network_responses: package_worker_broker::SnapshotRegistry::network_responses(),
                 network_slots: tokio::sync::Semaphore::new(4),
                 grants: Mutex::new(None),
+                #[cfg(windows)]
+                restart_delays,
                 #[cfg(test)]
                 fail_next_start: std::sync::atomic::AtomicBool::new(false),
             }),
         }
+    }
+    pub fn new(api_major: u32) -> Self {
+        Self::build(
+            api_major,
+            None,
+            Arc::new(UnavailableArk),
+            RESTART_DELAYS.to_vec(),
+        )
+    }
+    /// Same as [`Self::new`], with a caller-provided retry backoff schedule.
+    /// Integration tests inject short delays so exhaust-retry cases finish
+    /// without sleeping through the production backoff. Test-only surface —
+    /// `package-worker-fixture` refuses to compile into a release build.
+    #[cfg(feature = "package-worker-fixture")]
+    pub fn with_restart_delays(api_major: u32, restart_delays: Vec<Duration>) -> Self {
+        Self::build(api_major, None, Arc::new(UnavailableArk), restart_delays)
     }
     pub fn with_ark(api_major: u32, ark: Arc<ArkHost>) -> Self {
         let executor: Arc<dyn ArkRequestExecutor> = ark.clone();
-        Self {
-            inner: Arc::new(SupervisorInner {
-                workers: Mutex::new(HashMap::new()),
-                calls: TaskRegistry::owned(MAX_IN_FLIGHT as usize * 256),
-                invocations: Mutex::new(HashMap::new()),
-                startups: TaskRegistry::owned(256),
-                lifecycles: TaskRegistry::owned(256),
-                api_major,
-                ark: Some(ark),
-                ark_executor: executor,
-                typed_launches: Mutex::new(HashMap::new()),
-                store: Mutex::new(None),
-                retry_tasks: TaskRegistry::owned(256),
-                worker_io: TaskRegistry::owned(256 * 3),
-                secrets: PackageWorkerSecretRegistry::new(),
-                network_responses: package_worker_broker::SnapshotRegistry::network_responses(),
-                network_slots: tokio::sync::Semaphore::new(4),
-                grants: Mutex::new(None),
-                #[cfg(test)]
-                fail_next_start: std::sync::atomic::AtomicBool::new(false),
-            }),
-        }
+        Self::build(api_major, Some(ark), executor, RESTART_DELAYS.to_vec())
     }
     pub fn with_ark_executor(api_major: u32, executor: Arc<dyn ArkRequestExecutor>) -> Self {
-        Self {
-            inner: Arc::new(SupervisorInner {
-                workers: Mutex::new(HashMap::new()),
-                calls: TaskRegistry::owned(MAX_IN_FLIGHT as usize * 256),
-                invocations: Mutex::new(HashMap::new()),
-                startups: TaskRegistry::owned(256),
-                lifecycles: TaskRegistry::owned(256),
-                api_major,
-                ark: None,
-                ark_executor: executor,
-                typed_launches: Mutex::new(HashMap::new()),
-                store: Mutex::new(None),
-                retry_tasks: TaskRegistry::owned(256),
-                worker_io: TaskRegistry::owned(256 * 3),
-                secrets: PackageWorkerSecretRegistry::new(),
-                network_responses: package_worker_broker::SnapshotRegistry::network_responses(),
-                network_slots: tokio::sync::Semaphore::new(4),
-                grants: Mutex::new(None),
-                #[cfg(test)]
-                fail_next_start: std::sync::atomic::AtomicBool::new(false),
-            }),
-        }
+        Self::build(api_major, None, executor, RESTART_DELAYS.to_vec())
     }
 
     /// Binds the host-compiled typed grant to one authenticated launch.

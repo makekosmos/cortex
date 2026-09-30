@@ -221,8 +221,14 @@ fn install_binary(
     archive
         .write_all(&serde_json::to_vec(&versioned).expect("manifest json"))
         .expect("manifest bytes");
+    // Store the worker binary uncompressed: deflate costs seconds for the
+    // multi-megabyte bridge fixture and the store re-inflates it on every
+    // install and pre-launch integrity check.
     archive
-        .start_file(versioned.entrypoint(), FileOptions::default())
+        .start_file(
+            versioned.entrypoint(),
+            FileOptions::default().compression_method(zip::CompressionMethod::Stored),
+        )
         .expect("worker entry");
     archive
         .write_all(&std::fs::read(binary).expect("fixture bytes"))
@@ -247,7 +253,17 @@ fn install_binary(
 async fn fixture_workers_validate_protocol_and_fail_closed() {
     let directory = tempfile::tempdir().expect("fixture marker directory");
     let markers = fixture_env(&directory);
-    let supervisor = PackageWorkerSupervisor::new(1);
+    // Short injected backoff: the production schedule (1s/5s/30s, see
+    // restart_policy_uses_bounded_backoff) is exercised shape-for-shape here,
+    // including the assertion that retries are spaced, without spending 36 s
+    // of wall time on sleeps.
+    let restart_delays = vec![
+        Duration::from_millis(250),
+        Duration::from_millis(500),
+        Duration::from_millis(750),
+    ];
+    let min_retry_wait: Duration = restart_delays.iter().sum();
+    let supervisor = PackageWorkerSupervisor::with_restart_delays(1, restart_delays);
     let state = tempfile::tempdir().expect("worker state directory");
     let roots = [std::env::temp_dir()];
     let normal = manifest("fixture.normal");
@@ -319,7 +335,7 @@ async fn fixture_workers_validate_protocol_and_fail_closed() {
     let m = manifest("fixture.wrong-token");
     let started = Instant::now();
     let result = tokio::time::timeout(
-        Duration::from_secs(45),
+        Duration::from_secs(10),
         supervisor.start(
             &m,
             fixture(),
@@ -334,7 +350,11 @@ async fn fixture_workers_validate_protocol_and_fail_closed() {
     .await
     .expect("fixture timeout");
     assert_eq!(result, Err("worker-unavailable"));
-    assert!(started.elapsed() >= Duration::from_secs(36));
+    assert!(
+        started.elapsed() >= min_retry_wait,
+        "retries must wait out the injected backoff schedule, elapsed {:?}",
+        started.elapsed()
+    );
     assert_eq!(
         supervisor.health(&m.id, &m.version).state,
         WorkerState::Failed
@@ -356,7 +376,12 @@ async fn fixture_workers_validate_protocol_and_fail_closed() {
 #[tokio::test]
 async fn stop_suppresses_initial_failure_retries() {
     let _lock = test_support::serialized();
-    let supervisor = PackageWorkerSupervisor::new(1);
+    // Short first backoff lets one retry run fast; the long second delay is
+    // what `stop` must cancel before the third generation ever launches.
+    let supervisor = PackageWorkerSupervisor::with_restart_delays(
+        1,
+        vec![Duration::from_millis(400), Duration::from_secs(3)],
+    );
     let m = manifest("fixture.initial-fail");
     let state = tempfile::tempdir().expect("worker state directory");
     let start_manifest = m.clone();
@@ -375,7 +400,7 @@ async fn stop_suppresses_initial_failure_retries() {
             )
             .await
     });
-    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(1200)).await;
     supervisor
         .stop(&m.id, &m.version)
         .await

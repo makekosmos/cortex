@@ -201,10 +201,19 @@ async fn typed_binding_rebinds_after_restart_and_revocation() {
 
 #[test]
 fn restart_policy_uses_bounded_backoff() {
-    assert_eq!(restart_delay(1), Some(Duration::from_secs(1)));
-    assert_eq!(restart_delay(2), Some(Duration::from_secs(5)));
-    assert_eq!(restart_delay(3), Some(Duration::from_secs(30)));
-    assert_eq!(restart_delay(4), None);
+    assert_eq!(
+        restart_delay(&RESTART_DELAYS, 1),
+        Some(Duration::from_secs(1))
+    );
+    assert_eq!(
+        restart_delay(&RESTART_DELAYS, 2),
+        Some(Duration::from_secs(5))
+    );
+    assert_eq!(
+        restart_delay(&RESTART_DELAYS, 3),
+        Some(Duration::from_secs(30))
+    );
+    assert_eq!(restart_delay(&RESTART_DELAYS, 4), None);
 }
 
 #[cfg(not(windows))]

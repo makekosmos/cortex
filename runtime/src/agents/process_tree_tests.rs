@@ -20,7 +20,7 @@ async fn terminate_kills_grandchild() {
     let dir = tempfile::tempdir().unwrap();
     let marker = dir.path().join("grandchild-survived");
     let child_script = format!(
-        "Start-Sleep 2; Set-Content -LiteralPath '{}' leaked",
+        "Start-Sleep 0.5; Set-Content -LiteralPath '{}' leaked",
         marker.display()
     );
     let parent_script = format!(
@@ -35,7 +35,9 @@ async fn terminate_kills_grandchild() {
     tree.terminate_and_wait(Duration::from_secs(5))
         .await
         .unwrap();
-    tokio::time::sleep(Duration::from_secs(3)).await;
+    // A surviving grandchild would write the marker ~0.8 s after spawn; 1.5 s
+    // of silence is conclusive without a multi-second wait.
+    tokio::time::sleep(Duration::from_millis(1500)).await;
     assert!(
         !marker.exists(),
         "grandchild escaped the Windows Job Object"

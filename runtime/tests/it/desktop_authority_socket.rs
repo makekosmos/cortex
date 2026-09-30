@@ -1,4 +1,4 @@
-#![allow(clippy::unwrap_used, clippy::zombie_processes)]
+#![allow(clippy::unwrap_used)]
 
 use engine::{
     app_index::AppIndex, ark_host::ArkHost, file_index::FileIndex, package_service::PackageService,
@@ -250,9 +250,14 @@ async fn real_socket_wrong_pid_is_denied_at_bind_and_has_no_authority() {
     let server = fixture.server.take().unwrap();
     let shutdown = server.shutdown_handle();
     fixture.authority.revoke_generation(SESSION, GENERATION);
+    // A direct child, not a shell wrapper: nextest flags this test as LEAK
+    // when a process the test spawned outlives it. `cmd /C ping` left ping.exe
+    // orphaned, and kill() alone leaves the child handle unreaped — kill +
+    // wait is deterministic teardown.
     #[cfg(windows)]
-    let mut child = Command::new("cmd")
-        .args(["/C", "ping -n 6 127.0.0.1 >NUL"])
+    let mut child = Command::new("ping")
+        .args(["-n", "30", "127.0.0.1"])
+        .stdout(std::process::Stdio::null())
         .spawn()
         .unwrap();
     #[cfg(not(windows))]
@@ -275,6 +280,7 @@ async fn real_socket_wrong_pid_is_denied_at_bind_and_has_no_authority() {
     drop(socket);
     fixture.authority.revoke_generation(SESSION, GENERATION);
     let _ = child.kill();
+    let _ = child.wait();
     wait_for_empty(&fixture).await;
     let _ = shutdown.shutdown().await;
     let _ = task.await;
