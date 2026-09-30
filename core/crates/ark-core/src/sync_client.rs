@@ -31,6 +31,10 @@ pub type ClientOnConnectedCallback = Arc<dyn Fn(String, String) + Send + Sync>;
 pub type ClientOnDisconnectedCallback = Arc<dyn Fn(String) + Send + Sync>;
 pub type ClientOnPeerListCallback = Arc<dyn Fn(Vec<PeerRecord>) + Send + Sync>;
 
+// Authenticated peer channel: (peer device_id, outbound sender) behind the
+// shared mutex so `peer_authenticated` can publish it once the handshake lands.
+type AuthenticatedTx = Arc<Mutex<Option<(String, mpsc::UnboundedSender<Message>)>>>;
+
 // ---------------------------------------------------------------------------
 // SyncClient
 // ---------------------------------------------------------------------------
@@ -44,7 +48,7 @@ pub struct SyncClient {
     own_addresses: Vec<String>,
     auth_secret: Option<String>,
     stopped: Arc<std::sync::atomic::AtomicBool>,
-    authenticated_tx: Arc<Mutex<Option<(String, mpsc::UnboundedSender<Message>)>>>,
+    authenticated_tx: AuthenticatedTx,
     on_change: Arc<Mutex<Option<ClientOnChangeCallback>>>,
     on_connected: Arc<Mutex<Option<ClientOnConnectedCallback>>>,
     on_disconnected: Arc<Mutex<Option<ClientOnDisconnectedCallback>>>,

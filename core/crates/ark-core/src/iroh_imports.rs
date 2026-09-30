@@ -94,11 +94,16 @@ pub const ARK_SYNC_ALPN: &[u8] = b"ark-sync/1";
 /// при следующем (ре)коннекте (см. модульный doc).
 const OUTGOING_BROADCAST_CAPACITY: usize = 256;
 
+// Shared slot for the caller-side oneshot that resolves when a queued
+// message has actually been written to the peer.
+type SharedCompletion =
+    Option<Arc<std::sync::Mutex<Option<tokio::sync::oneshot::Sender<Result<(), String>>>>>>;
+
 #[derive(Clone)]
 struct OutgoingMessage {
     target: Option<EndpointId>,
     msg: LanSyncMessage,
-    completion: Option<Arc<std::sync::Mutex<Option<tokio::sync::oneshot::Sender<Result<(), String>>>>>>,
+    completion: SharedCompletion,
 }
 
 #[derive(Clone)]

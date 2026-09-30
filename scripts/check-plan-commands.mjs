@@ -8,6 +8,7 @@ const FORMAT_EXTENSIONS = /\.(?:[cm]?[jt]sx?|vue|json|ya?ml)$/i;
 const requireFromRoot = createRequire(new URL("../package.json", import.meta.url));
 
 const COMMANDS_BY_CHECK = {
+  "core-pin": ["pnpm", ["run", "check:core-pin"]],
   "package-manager": ["pnpm", ["run", "test:package-manager"]],
   "release-bom": ["pnpm", ["run", "test:release-bom"]],
   "desktop-contracts": ["pnpm", ["run", "test:desktop-contracts"]],

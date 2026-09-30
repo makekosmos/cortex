@@ -208,6 +208,9 @@ impl Drop for ChildSavepoint<'_> {
     }
 }
 
+// Applies one ledger row: the parameters are the row's columns plus the
+// write connection; grouping them into a struct would restate the schema.
+#[allow(clippy::too_many_arguments)]
 pub fn transition_item(
     conn: &Connection,
     contract: &str,

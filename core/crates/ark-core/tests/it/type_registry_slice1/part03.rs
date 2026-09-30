@@ -1,6 +1,10 @@
 
-#[test]
+type ObjectTypeRow = (
+    String, String, String, String, String, String, i64, String, Option<String>, String, String,
+    Option<String>,
+);
 
+#[test]
 fn production_registration_rejects_mismatched_alias_target_before_mutation() {
     let conn = Connection::open_in_memory().unwrap();
     init_schema(&conn).unwrap();
@@ -114,20 +118,7 @@ fn production_registration_rejects_mismatched_alias_target_before_mutation() {
 fn production_registration_rejects_existing_canonical_without_any_changes() {
     let conn = Connection::open_in_memory().unwrap();
     init_schema(&conn).unwrap();
-    let before: Vec<(
-        String,
-        String,
-        String,
-        String,
-        String,
-        String,
-        i64,
-        String,
-        Option<String>,
-        String,
-        String,
-        Option<String>,
-    )> = conn
+    let before: Vec<ObjectTypeRow> = conn
         .prepare("SELECT id, name, schema_json, ui_schema_json, created_at, updated_at, system_locked, owner_kind, owner_id, current_version, status, base_type_id FROM object_types ORDER BY id")
         .unwrap()
         .query_map([], |row| {
@@ -191,20 +182,7 @@ fn production_registration_rejects_existing_canonical_without_any_changes() {
     .unwrap_err();
     assert_eq!(error, "canonical type already exists");
 
-    let after: Vec<(
-        String,
-        String,
-        String,
-        String,
-        String,
-        String,
-        i64,
-        String,
-        Option<String>,
-        String,
-        String,
-        Option<String>,
-    )> = conn
+    let after: Vec<ObjectTypeRow> = conn
         .prepare("SELECT id, name, schema_json, ui_schema_json, created_at, updated_at, system_locked, owner_kind, owner_id, current_version, status, base_type_id FROM object_types ORDER BY id")
         .unwrap()
         .query_map([], |row| {

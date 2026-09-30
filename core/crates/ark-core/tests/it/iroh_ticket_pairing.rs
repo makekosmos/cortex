@@ -1,6 +1,5 @@
 #![allow(clippy::unwrap_used)]
 #![cfg(feature = "iroh-spike")]
-#![allow(clippy::unwrap_used)]
 
 //! Integration test (GREEN stage, шаг 3): ticket-based pairing.
 //!
@@ -182,7 +181,7 @@ async fn iroh_ticket_pairing_round_trip() {
                 "entity id mismatch"
             );
         }
-        other => panic!("expected LiveChange, got {:?}", other),
+        other => unreachable!("expected LiveChange, got {other:?}"),
     }
 
     transport_a.stop();

@@ -36,7 +36,7 @@
 
 ## Commands
 
-- `cargo test --manifest-path crates/ark-core/Cargo.toml` — core tests.
+- `cargo test -p ark-core` — core tests (the crate builds only through the root workspace).
 - `bun run ark:guard:writes` — after data-layer/write-boundary changes.
 - `bun run ark:smoke` — after substantial runtime changes.
 

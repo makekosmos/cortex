@@ -1,6 +1,5 @@
 #![allow(clippy::unwrap_used)]
 #![cfg(feature = "iroh-spike")]
-#![allow(clippy::unwrap_used)]
 
 //! Regression test for tokio::select! cancellation desync bug.
 //!

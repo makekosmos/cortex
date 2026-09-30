@@ -1,6 +1,5 @@
 #![allow(clippy::unwrap_used)]
 #![cfg(feature = "iroh-spike")]
-#![allow(clippy::unwrap_used)]
 
 //! Integration test (GREEN stage): iroh p2p round-trip.
 //!
@@ -167,7 +166,7 @@ async fn iroh_round_trip() {
             assert_eq!(entity.id, "test-entity-iroh-001", "entity id mismatch");
             assert_eq!(entity.entity_type, "todo", "entity type mismatch");
         }
-        other => panic!("expected LiveChange, got {:?}", other),
+        other => unreachable!("expected LiveChange, got {other:?}"),
     }
 
     transport_a.stop();

@@ -33,6 +33,11 @@ mod tests {
     use crate::db::{init_schema, SqliteStorageBackend};
     type Room = HashMap<String, mpsc::UnboundedSender<Message>>;
     type Rooms = Arc<StdMutex<HashMap<String, Room>>>;
+    // The accept_hdr_async callback must return tungstenite's
+    // `Result<Response, ErrorResponse>` — Err is the HTTP error response
+    // itself, which the lint counts as oversized. Boxing is not an option:
+    // the signature is fixed by the library.
+    #[allow(clippy::result_large_err)]
     async fn start_test_relay(rooms: Rooms, listener: TcpListener) {
         loop {
             let (stream, _) = match listener.accept().await {

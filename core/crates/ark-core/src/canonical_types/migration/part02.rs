@@ -30,7 +30,18 @@ fn validate_canonical_state(
     item: &migration_objects::PlannedItem,
 ) -> Result<(), MigrationError> {
     let object = &item.mapped.object;
-    let actual: Option<(String, String, String, String, String, String, String, Option<String>)> = conn
+    // Mirrors the `objects` column order in the SELECT below.
+    type ObjectRow = (
+        String,
+        String,
+        String,
+        String,
+        String,
+        String,
+        String,
+        Option<String>,
+    );
+    let actual: Option<ObjectRow> = conn
         .query_row(
             "SELECT type_id,type_version,title,content_json,props_json,created_at,updated_at,deleted_at FROM objects WHERE id=?1",
             [object.id.as_str()],

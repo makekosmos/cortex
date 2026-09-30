@@ -52,6 +52,10 @@ pub fn time_entry(
     }
     Ok(())
 }
+// Field-by-field mapper: each parameter is a distinct output accumulator the
+// caller threads through every mapper, so a params struct would just rename
+// the same list at every call site.
+#[allow(clippy::too_many_arguments)]
 pub fn game(
     m: &Map<String, Value>,
     o: &mut Map<String, Value>,
@@ -132,17 +136,19 @@ pub fn game(
             if !valid {
                 return Err(invalid(&format!("/props/{c}")));
             }
-            local
+            if let Some(nested) = local
                 .entry("game")
                 .or_insert_with(|| json!({}))
                 .as_object_mut()
-                .map(|nested| {
-                    nested
-                        .entry("legacyAggregates")
-                        .or_insert_with(|| json!({}))
-                        .as_object_mut()
-                        .map(|aggregate| aggregate.insert(c.into(), v.clone()));
-                });
+            {
+                if let Some(aggregate) = nested
+                    .entry("legacyAggregates")
+                    .or_insert_with(|| json!({}))
+                    .as_object_mut()
+                {
+                    aggregate.insert(c.into(), v.clone());
+                }
+            }
         }
     }
     for (c, a) in [

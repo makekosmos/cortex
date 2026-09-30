@@ -26,6 +26,10 @@ use ark_core::protocol::{deserialize_message, serialize_message, LanSyncMessage}
 type Room = HashMap<String, mpsc::UnboundedSender<Message>>;
 type Rooms = Arc<Mutex<HashMap<String, Room>>>;
 
+// Same tungstenite constraint as the in-crate test relay: accept_hdr_async's
+// callback must return `Result<Response, ErrorResponse>` whose Err variant is
+// the full HTTP error response.
+#[allow(clippy::result_large_err)]
 async fn start_relay(rooms: Rooms, listener: TcpListener) {
     loop {
         let (stream, _peer) = match listener.accept().await {
@@ -185,7 +189,7 @@ async fn relay_round_trip() {
         origin_device_id: Some("device-A".to_string()),
     };
     let text = serialize_message(&msg);
-    ws_a_tx.send(Message::Text(text.into())).await.unwrap();
+    ws_a_tx.send(Message::Text(text)).await.unwrap();
 
     // 6. Assert B receives the message within 5 seconds.
     let received = tokio::time::timeout(Duration::from_secs(5), received_rx.recv())
@@ -198,6 +202,6 @@ async fn relay_round_trip() {
             assert_eq!(entity.id, "test-entity-relay-001", "entity id mismatch");
             assert_eq!(entity.entity_type, "todo", "entity type mismatch");
         }
-        other => panic!("expected LiveChange, got {:?}", other),
+        other => unreachable!("expected LiveChange, got {other:?}"),
     }
 }

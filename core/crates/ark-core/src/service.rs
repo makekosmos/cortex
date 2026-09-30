@@ -237,6 +237,9 @@ fn spawn_worker(
     Ok((tx, worker))
 }
 
+// The panic! below is a test-only fault injection (Request::TestPanic, behind
+// cfg(test)) that proves the worker recovers instead of dying silently.
+#[allow(clippy::panic)]
 async fn worker_loop(
     state: Arc<ServiceState>,
     db_path: String,

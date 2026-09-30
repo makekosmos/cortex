@@ -76,7 +76,7 @@ fn phase3_pending_migrates_phase2_key_losslessly_and_preserves_five_columns() {
         row,
         (
             "o1".into(),
-            payload.into(),
+            payload,
             "future".into(),
             "1.0.0".into(),
             "received".into()

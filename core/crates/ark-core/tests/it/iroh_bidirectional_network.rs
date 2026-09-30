@@ -104,7 +104,7 @@ async fn iroh_bidirectional_hello_and_reverse_send() {
             assert_eq!(cid, change_id, "change_id mismatch");
             assert_eq!(ent.id, entity.id, "entity.id mismatch");
         }
-        other => panic!("expected LiveChange, got {:?}", other),
+        other => unreachable!("expected LiveChange, got {other:?}"),
     }
     let (backend, conn) = authorized_storage();
     let recipient_transport = transport_a.endpoint_id().unwrap().to_string();

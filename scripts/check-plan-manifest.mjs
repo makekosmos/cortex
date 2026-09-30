@@ -16,6 +16,7 @@ const MANIFEST_CONTRACT = ["package-manager", "format"];
 const SCRIPT_CHECKS = {
   "package.json": {
     "check:brand": ["brand"],
+    "check:core-pin": ["core-pin"],
     rustfmt: ["rustfmt"],
     clippy: ["clippy"],
     "test:rust": ["test:rust"],

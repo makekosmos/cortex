@@ -12,6 +12,7 @@ export { parseNameStatus } from "./check-plan-git.mjs";
 
 const CHECK_ORDER = [
   "brand",
+  "core-pin",
   "package-manager",
   "release-bom",
   "desktop-contracts",
