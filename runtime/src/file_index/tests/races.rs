@@ -80,13 +80,19 @@ async fn background_task_registry_reaps_finished_handles() {
     let data = tempdir().unwrap();
     let index = std::sync::Arc::new(FileIndex::new_disabled(data.path()).unwrap());
     index.bind_self();
-    for _ in 0..20 {
+    let pending = |index: &FileIndex| {
+        index
+            .background_tasks
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .len()
+    };
+    // Sequential cleanups without draining: each spawn reaps the finished
+    // handle, so the registry stays bounded while the app runs.
+    for _ in 0..50 {
         index.spawn_removed_root_cleanup("gone".into());
-        index.drain_background().await;
-        // The drain leaves the registry empty; a subsequent spawn then
-        // reaps rather than accumulates.
-        index.spawn_removed_root_cleanup("gone".into());
-        index.drain_background().await;
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        assert!(pending(&index) <= 2, "registry must stay bounded");
     }
     index.spawn_rescan();
     index.drain_background().await;

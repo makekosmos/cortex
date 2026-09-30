@@ -3,7 +3,7 @@ import test from "node:test";
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { openGateTmp, sweepGateTmp } from "./gate-tmp.mjs";
+import { openGateTmp, reportGateTmpSweep, sweepGateTmp } from "./gate-tmp.mjs";
 
 test("openGateTmp creates a fresh empty dir under <target>/gate-tmp", () => {
   const target = mkdtempSync(join(tmpdir(), "gate-tmp-target-"));
@@ -22,6 +22,19 @@ test("sweepGateTmp removes leftover test dirs and reports the count", () => {
   writeFileSync(join(dir, ".tmpOther"), "y");
   assert.deepEqual(sweepGateTmp(target, dir), [".tmpLeaked", ".tmpOther"]);
   assert.ok(!existsSync(dir));
+});
+
+test("non-zero leftovers are reported as a gate failure", () => {
+  // KOS-270: leftover entries after the test processes exit are a leak, and
+  // a leak must be a red gate, not a log line. reportGateTmpSweep returns
+  // true when it had to remove anything — the exit handler turns that into
+  // a non-zero exit code.
+  const target = mkdtempSync(join(tmpdir(), "gate-tmp-target-"));
+  const clean = openGateTmp(target, 1);
+  assert.equal(reportGateTmpSweep(target, clean), false);
+  const dirty = openGateTmp(target, 2);
+  mkdirSync(join(dirty, ".tmpLeaked"));
+  assert.equal(reportGateTmpSweep(target, dirty), true);
 });
 
 test("sweepGateTmp refuses to delete anything outside <target>/gate-tmp", () => {

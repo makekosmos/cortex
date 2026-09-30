@@ -1,5 +1,5 @@
 import { mkdirSync, readdirSync, rmSync } from "node:fs";
-import { resolve, sep } from "node:path";
+import { join, resolve, sep } from "node:path";
 
 // KOS-270: engine/ark-core tests must never write to the user's %TEMP%.
 // `openGateTmp` creates a fresh per-run scratch directory inside the cargo
@@ -27,4 +27,32 @@ export function sweepGateTmp(targetDir, dir) {
   const leftover = readdirSync(dir);
   rmSync(dir, { recursive: true, force: true });
   return leftover;
+}
+
+// Reports what the sweep removed. Returns true when leftovers existed —
+// the gate treats that as a leak and fails: a leftover entry means a test
+// finished with its fixture still on disk (KOS-270).
+export function reportGateTmpSweep(targetDir, dir, log = console.log) {
+  const root = resolve(targetDir, "gate-tmp") + sep;
+  if (!resolve(dir).startsWith(root)) {
+    throw new Error(`refusing to sweep ${dir}: not under ${root}`);
+  }
+  const removed = readdirSync(dir);
+  // Capture entry contents before removal so leaks stay attributable.
+  const contents = removed.map((name) => {
+    try {
+      return readdirSync(join(dir, name)).join(",");
+    } catch {
+      return "-";
+    }
+  });
+  rmSync(dir, { recursive: true, force: true });
+  log(
+    `gate tmp: swept ${removed.length} leftover entr${removed.length === 1 ? "y" : "ies"} under ${dir}`,
+  );
+  for (const [i, name] of removed.slice(0, 20).entries()) {
+    log(`gate tmp:   leftover ${name} (${contents[i]})`);
+  }
+  return removed.length > 0;
+
 }

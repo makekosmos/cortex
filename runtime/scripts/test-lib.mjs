@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
-import { openGateTmp, sweepGateTmp } from "./gate-tmp.mjs";
+import { openGateTmp, reportGateTmpSweep } from "./gate-tmp.mjs";
 
 const cortex = resolve(import.meta.dirname, "..", "..");
 const target = process.env.CARGO_TARGET_DIR
@@ -14,13 +14,10 @@ const bridge = executable("ark-markdown-bridge");
 // invocation gets a fresh per-run scratch dir as TMP/TEMP/TMPDIR, swept and
 // reported once the test processes have exited and released their handles.
 const gateTmp = openGateTmp(target, process.pid);
-process.on("exit", () => {
-  const removed = sweepGateTmp(target, gateTmp);
-  console.log(
-    `gate tmp: swept ${removed.length} leftover entr${removed.length === 1 ? "y" : "ies"} under ${gateTmp}`,
-  );
-  for (const name of removed.slice(0, 20)) {
-    console.log(`gate tmp:   leftover ${name}`);
+process.on("exit", (code) => {
+  if (reportGateTmpSweep(target, gateTmp) && code === 0) {
+    console.error("gate tmp: leftover entries are a leak — the gate fails");
+    process.exitCode = 1;
   }
 });
 const gateEnv = { ...process.env, TMP: gateTmp, TEMP: gateTmp, TMPDIR: gateTmp };
