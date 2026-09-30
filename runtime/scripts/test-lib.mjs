@@ -19,18 +19,22 @@ function run(cwd, args) {
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
-// These are integration-test fixtures, not production dependencies. Build
-// them explicitly so `cargo test -p engine --lib` has the same
-// prerequisites in the standalone Makekosmos layout as in CI.
-run(cortex, [
-  "build",
-  "-p",
-  "engine",
-  "--bin",
-  "ark-markdown-bridge",
+// One feature set for the whole gate (KOS-270): the gate must test exactly
+// what ships, so every crate is compiled once with the same flags.
+// The engine features below enable the two test-only fixture binaries and
+// the loopback-origin broker path the engine integration tests exercise;
+// the compile_error in runtime/src/lib.rs keeps them out of release builds.
+// ark-core needs no feature flags: iroh is a regular dependency now.
+const GATE_FEATURES = [
   "--features",
-  "markdown-bridge-fixture",
-]);
+  "engine/package-worker-fixture,engine/markdown-bridge-fixture",
+];
+
+// These are integration-test fixtures, not production dependencies. Build
+// them explicitly with the same feature set so `cargo test` reuses the
+// artifacts instead of recompiling, and so `cargo test -p engine` has the
+// same prerequisites in the standalone Makekosmos layout as in CI.
+run(cortex, ["build", "-p", "engine", "--bins", ...GATE_FEATURES]);
 
 if (!existsSync(bridge)) {
   throw new Error(`ark-markdown-bridge fixture was not produced: ${bridge}`);
@@ -38,28 +42,9 @@ if (!existsSync(bridge)) {
 
 const workspace = process.argv[2] === "--workspace";
 if (workspace) {
-  run(cortex, ["test", "--workspace", "--lib"]);
-  // Integration tests: one `it` binary per crate (tests/it/main.rs).
-  // engine/iroh-spike: the integration replication tests exercise the
-  // in-process ARK service's iroh transport (previously provided by the
-  // separately-built ark-core-rpc fixture binary). ark-core runs on its own
-  // below, with its default features, as upstream does.
-  // engine/markdown-bridge-fixture: builds the bridge fixture bin so the
-  // integration tests get CARGO_BIN_EXE_ark-markdown-bridge.
-  run(cortex, [
-    "test",
-    "--workspace",
-    "--exclude",
-    "ark-core",
-    "--test",
-    "*",
-    "--features",
-    "engine/iroh-spike",
-    "--features",
-    "engine/markdown-bridge-fixture",
-  ]);
-  run(cortex, ["test", "-p", "ark-core"]);
-  run(cortex, ["test", "-p", "engine", "--bins", "--features", "markdown-bridge-fixture"]);
+  // A single cargo invocation: lib tests, bin tests and the per-crate `it`
+  // integration binaries all share one compilation of each crate.
+  run(cortex, ["test", "--workspace", ...GATE_FEATURES]);
 } else {
-  run(cortex, ["test", "-p", "engine", "--lib", ...process.argv.slice(2)]);
+  run(cortex, ["test", "-p", "engine", "--lib", ...GATE_FEATURES, ...process.argv.slice(2)]);
 }

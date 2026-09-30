@@ -249,4 +249,11 @@ async fn signed_hpke_replication_reaches_offline_provider_and_rejects_stale_inpu
         &mut recipient_packages,
     )
     .await;
+    // The origin's provider worker was launched by the replicated credential;
+    // disable the package so the supervisor stops it before the fixture's
+    // tempdir is removed (KOS-270).
+    origin_packages
+        .set_enabled(PACKAGE_ID, PACKAGE_VERSION, false)
+        .await
+        .unwrap();
 }

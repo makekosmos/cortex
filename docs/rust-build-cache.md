@@ -3,8 +3,10 @@
 **Status: historical.** The `ark-core-rpc` sidecar and its cache machinery
 (`desktop/scripts/ark-core-rpc.mjs`, `desktop/.tmp/ark-core-rpc`,
 `KOSMOS_ARK_TARGET_DIR`, `ARK_CORE_RPC_PREBUILT`, `ARK_CORE_RPC_PATH`) were
-removed when the Engine started hosting `ark-core` in-process. The sections
-below are kept as the design/measurement record.
+removed when the Engine started hosting `ark-core` in-process, and the
+`iroh-spike` cargo feature was removed in KOS-270 when iroh became a regular
+ark-core dependency. The sections below are kept as the design/measurement
+record.
 
 ## Baseline
 

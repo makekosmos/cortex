@@ -114,7 +114,6 @@ fn pairing_restart_params_force_iroh_and_replace_ticket() {
     assert_eq!(params.device_id, "device-a");
 }
 
-#[cfg(feature = "iroh-spike")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn start_sync_with_use_iroh_selects_iroh_transport_and_exposes_ticket() {
     let state = test_state();
@@ -170,53 +169,6 @@ async fn start_sync_with_use_iroh_selects_iroh_transport_and_exposes_ticket() {
         ticket.as_str().is_some_and(|s| !s.is_empty()),
         "expected a non-empty iroh ticket string, got {ticket:?}"
     );
-    handle_request(&state, Request::StopSync).await.unwrap();
-}
-
-#[cfg(not(feature = "iroh-spike"))]
-#[tokio::test]
-async fn start_sync_with_use_iroh_fails_gracefully_without_iroh_spike_feature() {
-    let state = test_state();
-    let dir = tempfile::tempdir().unwrap();
-    let db_path = dir.path().join("ark.db");
-    handle_request(
-        &state,
-        Request::Init {
-            db_path: db_path.to_string_lossy().to_string(),
-        },
-    )
-    .await
-    .unwrap();
-
-    let port = {
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        listener.local_addr().unwrap().port()
-    };
-
-    let result = handle_request(
-        &state,
-        Request::StartSync(StartSyncParams {
-            space_id: "iroh-space".to_string(),
-            device_id: "device-iroh".to_string(),
-            device_name: Some("Iroh Device".to_string()),
-            port: Some(port),
-            seed_addresses: None,
-            relay_url: None,
-            relay_api_key: None,
-            auth_secret: None,
-            use_iroh: true,
-            iroh_peer_ticket: None,
-            discovery_enabled: false,
-            bind: SyncBind::Loopback,
-        }),
-    )
-    .await;
-
-    assert!(
-        result.is_err(),
-        "use_iroh must fail with a clear error when built without iroh-spike, not silently no-op"
-    );
-
     handle_request(&state, Request::StopSync).await.unwrap();
 }
 

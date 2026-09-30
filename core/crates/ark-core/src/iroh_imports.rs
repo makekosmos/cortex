@@ -55,8 +55,8 @@
 // соединиться. Тест `iroh_round_trip.rs` явно передаёт
 // `Some(RelayMode::Disabled)`, чтобы остаться offline в CI.
 //
-// Доступен только под feature `iroh-spike` — production build (`cargo build`
-// без флагов) не подтягивает крейт `iroh` и не компилирует этот файл.
+// iroh — штатная зависимость ark-core: release Engine собирает этот
+// транспорт, поэтому feature-гейта больше нет (KOS-270).
 
 use std::collections::HashMap;
 use std::net::{Ipv4Addr, SocketAddr};

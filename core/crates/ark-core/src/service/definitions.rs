@@ -38,8 +38,7 @@ pub(crate) struct SyncRuntime {
     /// object directly — `RelaySync` only exposes `Arc<dyn SyncTransport>`,
     /// which is not downcastable — so we snapshot the ticket string instead
     /// of threading a concrete `IrohTransport` handle through `SyncRuntime`).
-    /// `None` when iroh wasn't selected, or (in a no-`iroh-spike` build)
-    /// always `None`.
+    /// `None` when iroh wasn't selected.
     pub(crate) iroh_our_ticket: Option<String>,
     pub(crate) beacon: Arc<BroadcastDiscovery>,
     pub(crate) space_id: String,
@@ -345,7 +344,7 @@ pub(crate) enum Request {
     GetHostDeviceName,
     /// Step 4a: fetch our iroh pairing ticket, if the running sync runtime
     /// selected the iroh transport. `null`/error otherwise (e.g. relay
-    /// selected, sync not running, or build without `iroh-spike`).
+    /// selected or sync not running).
     GetOwnIrohTicket,
 
     #[serde(rename = "integration.persist_node_authorization")]
@@ -401,6 +400,20 @@ pub(crate) enum Request {
         credential_generation: u64,
         expected_issuer_key_id: String,
     },
+    /// Storage-time fence check for a received credential envelope: the
+    /// issuer binding is revalidated and the fence the envelope was minted
+    /// under must still be the current refresh lease (see
+    /// `db::check_integration_credential_fence`).
+    #[serde(rename = "integration.check_credential_fence")]
+    IntegrationCheckCredentialFence {
+        space_id: String,
+        integration_id: String,
+        recipient_node_id: String,
+        issuer_node_id: String,
+        credential_generation: u64,
+        refresh_fencing_token: u64,
+        expected_issuer_key_id: String,
+    },
     #[serde(rename = "integration.lookup_issuer_encryption_key_for_publish")]
     IntegrationLookupIssuerEncryptionKeyForPublish {
         space_id: String,
@@ -444,9 +457,8 @@ pub(crate) struct StartSyncParams {
     /// Optional shared secret for LAN/P2P hello HMAC authentication.
     #[serde(default)]
     pub(crate) auth_secret: Option<String>,
-    /// Step 4a: select the iroh p2p transport instead of relay. Field
-    /// exists regardless of build (stable wire schema); only acted on
-    /// behind `#[cfg(feature = "iroh-spike")]` — see `select_transport`.
+    /// Step 4a: select the iroh p2p transport instead of relay — see
+    /// `select_transport`.
     #[serde(default)]
     pub(crate) use_iroh: bool,
     /// Pairing ticket string for the iroh peer (see

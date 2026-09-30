@@ -7,7 +7,6 @@
 //! on a non-loopback address, so test runs must bind loopback on every
 //! socket — not just the ones that happen to collide today.
 
-#[cfg(feature = "iroh-spike")]
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
 /// Where `start_sync` binds the sockets it opens.
@@ -76,7 +75,6 @@ impl SyncBind {
     /// IPv6 is always optional (port 0, not required): hosts without an
     /// IPv6 stack must still start. Callers feed these into
     /// `Endpoint::builder().bind_addr(...)` / `bind_addr_with_opts(...)`.
-    #[cfg(feature = "iroh-spike")]
     pub fn iroh_bind_addrs(self) -> (SocketAddr, SocketAddr) {
         match self {
             Self::AllInterfaces => (
@@ -118,12 +116,9 @@ mod tests {
         assert!(!bind.accepts_peer_address("[2001:db8::1]:21531"));
         assert!(!bind.accepts_peer_address("0.0.0.0:21531"));
 
-        #[cfg(feature = "iroh-spike")]
-        {
-            let (v4, v6) = bind.iroh_bind_addrs();
-            assert_eq!(v4.ip(), IpAddr::V4(Ipv4Addr::LOCALHOST));
-            assert_eq!(v6.ip(), IpAddr::V6(Ipv6Addr::LOCALHOST));
-        }
+        let (v4, v6) = bind.iroh_bind_addrs();
+        assert_eq!(v4.ip(), IpAddr::V4(Ipv4Addr::LOCALHOST));
+        assert_eq!(v6.ip(), IpAddr::V6(Ipv6Addr::LOCALHOST));
     }
 
     #[test]
@@ -134,12 +129,9 @@ mod tests {
         assert!(bind.accepts_peer_address("192.168.1.70:21531"));
         assert!(!bind.accepts_peer_address("127.0.0.1:21531"));
 
-        #[cfg(feature = "iroh-spike")]
-        {
-            let (v4, v6) = bind.iroh_bind_addrs();
-            assert_eq!(v4.ip(), IpAddr::V4(Ipv4Addr::UNSPECIFIED));
-            assert_eq!(v6.ip(), IpAddr::V6(Ipv6Addr::UNSPECIFIED));
-        }
+        let (v4, v6) = bind.iroh_bind_addrs();
+        assert_eq!(v4.ip(), IpAddr::V4(Ipv4Addr::UNSPECIFIED));
+        assert_eq!(v6.ip(), IpAddr::V6(Ipv6Addr::UNSPECIFIED));
     }
 
     #[test]

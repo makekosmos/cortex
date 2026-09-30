@@ -48,6 +48,12 @@ pub struct IssuerEncryptionKey {
     pub grant_status: GrantStatus,
     pub grant_epoch: u64,
     pub credential_generation: u64,
+    /// Fencing token the published envelope was minted under. The consumer
+    /// compares it against the current refresh lease before storing the
+    /// credential (`integration.check_credential_fence`), so a superseded
+    /// publication cannot be accepted. Carried on the lookup result because
+    /// it is authorization state, not ciphertext.
+    pub refresh_fencing_token: u64,
 }
 
 /// Trusted issuer key material for an addressed credential before its first

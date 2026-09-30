@@ -15,7 +15,7 @@ impl RelaySync {
     /// Generalized constructor: build `RelaySync` over an already-constructed
     /// transport. Lets callers (e.g. `handle_start_sync`) drive the same CRDT
     /// orchestration with `RelayTransport`, `IrohTransport` (behind
-    /// `iroh-spike`), or any other `SyncTransport` impl, instead of always
+    /// `IrohTransport`), or any other `SyncTransport` impl, instead of always
     /// constructing a `RelayTransport` internally from `config.relay_url`.
     pub fn with_transport(
         storage: Arc<dyn StorageBackend>,

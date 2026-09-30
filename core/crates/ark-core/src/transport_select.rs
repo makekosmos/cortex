@@ -1,7 +1,7 @@
 //! Step 4a: pure transport-selection rule used by the in-process service
 //! JSON-RPC binary (`main.rs`) and the UniFFI facade (`ffi.rs`), so both
 //! start-sync entry points pick `RelaySync`'s underlying `SyncTransport`
-//! (relay WebSocket vs. iroh p2p QUIC, behind `iroh-spike`) the same way.
+//! (relay WebSocket vs. iroh p2p QUIC) the same way.
 //!
 //! Deliberately free of any transport/network types — this is a sync,
 //! side-effect-free decision function so it's unit-testable without
