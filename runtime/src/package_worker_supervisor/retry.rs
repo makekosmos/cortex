@@ -16,7 +16,7 @@ pub(super) async fn schedule_retry(
     }
     #[cfg(windows)]
     {
-        if restart_delay(failures).is_some() {
+        if restart_delay(&inner.restart_delays, failures).is_some() {
             let retry_inner = inner.clone();
             let retry_key = key.clone();
             let old_lifecycle_key = TaskKey::Lifecycle {
@@ -52,7 +52,7 @@ pub(super) async fn schedule_retry(
                 }
                 let inner = retry_inner;
                 let key = retry_key;
-                let delay = restart_delay(failures).expect("retry delay");
+                let delay = restart_delay(&inner.restart_delays, failures).expect("retry delay");
                 let next_generation = generation.saturating_add(1);
                 tokio::select! {
                     _ = &mut retry_cancel => return,

@@ -79,10 +79,8 @@ impl Drop for IntegrationLaunchConfig {
     }
 }
 
-pub(super) fn restart_delay(failures: u8) -> Option<Duration> {
-    RESTART_DELAYS
-        .get(failures.saturating_sub(1) as usize)
-        .copied()
+pub(super) fn restart_delay(delays: &[Duration], failures: u8) -> Option<Duration> {
+    delays.get(failures.saturating_sub(1) as usize).copied()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
