@@ -7,11 +7,6 @@ description = "Unified DB + sync engine for Mundus/Delphi"
 [lib]
 name = "ark_core"
 path = "src/lib.rs"
-crate-type = ["cdylib", "lib"]
-
-[[bin]]
-name = "uniffi-bindgen"
-path = "src/bin/uniffi-bindgen.rs"
 
 [[bin]]
 name = "ark-sync-node"
@@ -40,7 +35,6 @@ semver.workspace = true
 chrono.workspace = true
 rand.workspace = true
 async-trait = "0.1"
-uniffi = { version = "0.28", features = ["cli"] }
 if-addrs = "0.13"
 hostname.workspace = true
 thiserror.workspace = true

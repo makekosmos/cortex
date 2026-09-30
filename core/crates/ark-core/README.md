@@ -109,7 +109,7 @@ Delete propagation depends on durable tombstones in `sync_tombstones`. Apply err
 
 ## Current Limitations
 
-- Relay sync is wired into both the in-process service and the UniFFI `ArkCore::start_sync` facade.
+- Relay sync is wired into the in-process service (`ark_core::service::ArkService`).
 - LAN sync supports optional HMAC peer authentication, but traffic is not encrypted yet.
 - Generic object search uses SQLite FTS5 when available and falls back to safe in-memory matching when FTS is unavailable or a query cannot be parsed.
 - Some historical docs/scripts remain as migration aids and should not be treated as the current integration contract.

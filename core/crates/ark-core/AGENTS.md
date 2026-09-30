@@ -16,7 +16,7 @@
 ## Scope
 
 - `crates/ark-core/` is the shared Rust + SQLite runtime; the Engine hosts it in-process via `ark_core::service::ArkService`.
-- Electron callers use newline-delimited JSON-RPC; Android/Swift integration goes through UniFFI surfaces.
+- Electron callers use newline-delimited JSON-RPC.
 - Full RPC/entity reference lives in `https://github.com/makekosmos/docs/blob/main/packages/ark-core.md`; do not inline it here.
 
 ## Must Read

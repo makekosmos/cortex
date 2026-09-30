@@ -12,12 +12,10 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
 /// Where `start_sync` binds the sockets it opens.
 ///
-/// Carried typed through `Request::StartSync` / `FfiSyncConfig` /
-/// `SyncStartParams` — never a string flag — so every bind site resolves its
-/// address from the same value instead of re-deriving it.
-#[derive(
-    Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize, uniffi::Enum,
-)]
+/// Carried typed through `Request::StartSync` / `SyncStartParams` — never a
+/// string flag — so every bind site resolves its address from the same
+/// value instead of re-deriving it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SyncBind {
     /// Production default. LAN sync and beacon discovery must be reachable

@@ -10,7 +10,6 @@ pub mod data_platform;
 pub mod db;
 pub mod delphi;
 pub mod events;
-pub mod ffi;
 pub mod hlc;
 pub mod host;
 pub mod integration_replication;
@@ -31,8 +30,6 @@ pub mod sync_transport;
 pub mod transport_select;
 pub mod type_registry;
 pub mod types;
-
-uniffi::setup_scaffolding!();
 
 // Re-export key types
 pub use beacon::{

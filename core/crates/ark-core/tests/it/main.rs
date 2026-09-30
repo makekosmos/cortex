@@ -19,7 +19,6 @@ mod phase3_canonical_facades;
 mod phase3_canonical_types;
 mod phase3_compatibility;
 mod phase3_delphi_projection;
-mod phase3_ffi_compatibility;
 mod phase3_game_rpc;
 mod phase3_migration;
 mod phase3_migration_ledger;
