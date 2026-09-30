@@ -19,7 +19,7 @@ impl FileIndex {
             self.rescan_pending.store(false, Ordering::SeqCst);
             return;
         }
-        tokio::spawn(async move {
+        let task = tokio::spawn(async move {
             let Some(index) = weak.upgrade() else {
                 return;
             };
@@ -30,11 +30,38 @@ impl FileIndex {
                 tracing::warn!(target: "file_index", error = %e, "background rescan failed");
             }
         });
+        self.track_background_task(task);
+    }
+
+    fn track_background_task(&self, task: tokio::task::JoinHandle<()>) {
+        let mut tasks = self
+            .background_tasks
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        // Reap finished handles first — the registry must stay bounded while
+        // the app runs, not just at teardown (KOS-270).
+        tasks.retain(|t| !t.is_finished());
+        tasks.push(task);
+    }
+
+    /// Wait until every spawned rescan/cleanup task has finished — the tasks
+    /// hold `Arc<FileStore>` (an open SQLite connection), so callers tearing
+    /// down the index's data dir must drain first (KOS-270).
+    pub async fn drain_background(&self) {
+        loop {
+            let task = self
+                .background_tasks
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .pop();
+            let Some(task) = task else { return };
+            let _ = task.await;
+        }
     }
 
     pub(super) fn spawn_removed_root_cleanup(&self, path: String) {
         let store = self.store.clone();
-        tokio::task::spawn_blocking(move || {
+        let task = tokio::task::spawn_blocking(move || {
             if let Err(e) = store.remove_tree(&path) {
                 tracing::warn!(
                     target: "file_index",
@@ -44,6 +71,7 @@ impl FileIndex {
                 );
             }
         });
+        self.track_background_task(task);
     }
 
     pub(super) fn invalidate_running_scan(&self) {

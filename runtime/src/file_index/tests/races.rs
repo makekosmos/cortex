@@ -32,6 +32,7 @@ async fn rescan_coalesces_overlapping_spawn_requests() {
     })
     .await
     .expect("coalesced rescan completes promptly");
+    index.drain_background().await;
 }
 
 #[tokio::test]
@@ -69,6 +70,31 @@ async fn rescan_schedules_followup_when_generation_changes_during_write() {
     .await
     .expect("follow-up rescan must converge");
     assert_eq!(index.search("a.md", 10).unwrap().len(), 1);
+    index.drain_background().await;
+}
+
+#[tokio::test]
+async fn background_task_registry_reaps_finished_handles() {
+    // KOS-270: every spawn used to push a JoinHandle forever — a memory leak
+    // in the long-running app. Spawning after a completed task must reap it.
+    let data = tempdir().unwrap();
+    let index = std::sync::Arc::new(FileIndex::new_disabled(data.path()).unwrap());
+    index.bind_self();
+    for _ in 0..20 {
+        index.spawn_removed_root_cleanup("gone".into());
+        index.drain_background().await;
+        // The drain leaves the registry empty; a subsequent spawn then
+        // reaps rather than accumulates.
+        index.spawn_removed_root_cleanup("gone".into());
+        index.drain_background().await;
+    }
+    index.spawn_rescan();
+    index.drain_background().await;
+    assert!(index
+        .background_tasks
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .is_empty());
 }
 
 #[tokio::test]

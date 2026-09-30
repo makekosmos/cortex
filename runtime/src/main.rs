@@ -1136,6 +1136,7 @@ mod tests {
         let ws_dispatcher = ws.dispatcher();
         let ws_command_bus = ws.command_bus_handle();
         let ws_shutdown = ws.shutdown_handle();
+        let api_shutdown = api.shutdown_handle();
         let ws_task = tokio::spawn(ws.run());
         let http_task = tokio::spawn(api.run());
 
@@ -1263,7 +1264,10 @@ mod tests {
         ws_shutdown.begin_shutdown().await;
         ws_task.await.unwrap().unwrap();
         ws_shutdown.shutdown().await.unwrap();
-        http_task.abort();
+        // Drain the HTTP server like the WS server above so neither task
+        // holds fixture files past the tempdir cleanup (KOS-270).
+        let _ = api_shutdown.shutdown().await;
+        let _ = http_task.await;
     }
 
     #[test]
@@ -1274,8 +1278,11 @@ mod tests {
         assert!(crate_attributes.contains("windows_subsystem = \"windows\""));
 
         let package_build = include_str!("../../desktop/scripts/build-backend.mjs");
-        // The arg is a combined feature list (`windows-gui-subsystem,iroh-spike`).
-        assert!(package_build.contains("--features\", \"windows-gui-subsystem,"));
-        assert!(package_build.contains("iroh-spike"));
+        // The packaged build enables the windows-subsystem feature so the
+        // shipped binary does not allocate a console.
+        assert!(package_build.contains("--features\", \"windows-gui-subsystem\""));
+        // And it must never enable the test-only fixture feature — the
+        // compile_error in lib.rs backs this check at compile time.
+        assert!(!package_build.contains("package-worker-fixture"));
     }
 }

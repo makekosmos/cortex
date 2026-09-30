@@ -15,11 +15,12 @@
             },
         )));
         let token = "a".repeat(64);
-        let server =
+        let (_fixture_dir, server) =
             EngineApiServer::bind_with_test_dispatcher(token.clone(), dispatcher, REQUEST_TIMEOUT)
                 .await
                 .expect("server");
         let port = server.port();
+        let server_shutdown_handle = server.shutdown_handle();
         let task = tokio::spawn(server.run());
         let mut child_command = if cfg!(windows) {
             let mut command = std::process::Command::new("powershell.exe");
@@ -54,7 +55,10 @@
         assert_eq!(request.client.class.as_deref(), Some("engine-http"));
         assert_eq!(request.client.version.as_deref(), Some(API_VERSION));
         assert!(request.client.connection_id.is_some());
-        task.abort();
+        // Drain connection/request tasks so nothing holds test
+        // fixture files past the tempdir cleanup (KOS-270).
+        let _ = server_shutdown_handle.shutdown().await;
+        let _ = task.await;
         let _ = child.kill();
         let _ = child.wait();
     }
@@ -75,6 +79,7 @@
         .await
         .expect("server");
         let port = server.port();
+        let server_shutdown_handle = server.shutdown_handle();
         let task = tokio::spawn(server.run());
 
         let valid = request_with_client(
@@ -122,7 +127,10 @@
             .expect("usage file");
         assert!(!raw.contains("2147483647"));
         assert!(!raw.contains("noted"));
-        task.abort();
+        // Drain connection/request tasks so nothing holds test
+        // fixture files past the tempdir cleanup (KOS-270).
+        let _ = server_shutdown_handle.shutdown().await;
+        let _ = task.await;
     }
 
     #[tokio::test]
@@ -143,7 +151,7 @@
                 }
             }),
         ));
-        let server = EngineApiServer::bind_with_test_dispatcher_and_deadline(
+        let (_fixture_dir, server) = EngineApiServer::bind_with_test_dispatcher_and_deadline(
             "a".repeat(64),
             dispatcher.clone(),
             Duration::from_secs(30),
@@ -203,7 +211,7 @@
             }),
         ));
         let token = "a".repeat(64);
-        let server = EngineApiServer::bind_with_test_dispatcher_and_deadline(
+        let (_fixture_dir, server) = EngineApiServer::bind_with_test_dispatcher_and_deadline(
             token.clone(),
             dispatcher,
             Duration::from_millis(50),
@@ -212,6 +220,7 @@
         .await
         .expect("server");
         let port = server.port();
+        let server_shutdown_handle = server.shutdown_handle();
         let task = tokio::spawn(server.run());
 
         assert!(raw_http(
@@ -234,7 +243,10 @@
         tokio::time::sleep(Duration::from_millis(80)).await;
         assert_eq!(writes.load(Ordering::SeqCst), 2);
         assert_eq!(cleanups.load(Ordering::SeqCst), 2);
-        task.abort();
+        // Drain connection/request tasks so nothing holds test
+        // fixture files past the tempdir cleanup (KOS-270).
+        let _ = server_shutdown_handle.shutdown().await;
+        let _ = task.await;
     }
 
     #[tokio::test]
@@ -262,7 +274,7 @@
             }),
         ));
         let token = "a".repeat(64);
-        let server = EngineApiServer::bind_with_test_dispatcher(
+        let (_fixture_dir, server) = EngineApiServer::bind_with_test_dispatcher(
             token.clone(),
             dispatcher,
             Duration::from_millis(10),
@@ -270,6 +282,7 @@
         .await
         .expect("server");
         let port = server.port();
+        let server_shutdown_handle = server.shutdown_handle();
         let task = tokio::spawn(server.run());
 
         let response = raw_http(
@@ -298,7 +311,10 @@
         .expect("operation and cleanup must complete");
         assert_eq!(writes.load(std::sync::atomic::Ordering::SeqCst), 1);
         assert_eq!(cleanups.load(std::sync::atomic::Ordering::SeqCst), 1);
-        task.abort();
+        // Drain connection/request tasks so nothing holds test
+        // fixture files past the tempdir cleanup (KOS-270).
+        let _ = server_shutdown_handle.shutdown().await;
+        let _ = task.await;
     }
 
     #[tokio::test]
@@ -326,7 +342,7 @@
             }),
         ));
         let token = "a".repeat(64);
-        let server = EngineApiServer::bind_with_test_dispatcher_and_deadline(
+        let (_fixture_dir, server) = EngineApiServer::bind_with_test_dispatcher_and_deadline(
             token.clone(),
             dispatcher.clone(),
             Duration::from_secs(1),
@@ -336,6 +352,7 @@
         .expect("server");
         let port = server.port();
         let permits = server.operations.permits.clone();
+        let server_shutdown_handle = server.shutdown_handle();
         let task = tokio::spawn(server.run());
         let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", port))
             .await
@@ -372,7 +389,10 @@
         .await
         .expect("owned operation must finish and clean up after disconnect");
         assert!(permits.available_permits() > 0);
-        task.abort();
+        // Drain connection/request tasks so nothing holds test
+        // fixture files past the tempdir cleanup (KOS-270).
+        let _ = server_shutdown_handle.shutdown().await;
+        let _ = task.await;
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -442,6 +462,7 @@
         .await
         .expect("http bind");
         let http_port = api.port();
+        let api_shutdown_handle = api.shutdown_handle();
         let api_task = tokio::spawn(api.run());
 
         // The HTTP adapter is independently useful: the legacy listener is
@@ -802,7 +823,65 @@
             .shutdown()
             .await
             .expect("idempotent ws shutdown");
-        api_task.abort();
+        // Drain connection/request tasks so nothing holds test
+        // fixture files past the tempdir cleanup (KOS-270).
+        let _ = api_shutdown_handle.shutdown().await;
+        let _ = api_task.await;
+        // Shutdown must deterministically release every fixture handle: the
+        // data dir is removable immediately, with no retry window (KOS-270).
+        dir.close().expect("fixture dir still locked after shutdown");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn dropped_api_server_releases_package_service_back_reference() {
+        // KOS-270: PackageService stores its package-definition dispatcher
+        // as a Weak ref — a server dropped without shutdown() must not keep
+        // the dispatcher (and every component its dispatch closure captures)
+        // alive. The fixture dir is removable immediately after drop.
+        let dir = tempfile::tempdir().expect("fixture dir");
+        let ark = Arc::new(
+            crate::ark_host::ArkHost::open(&dir.path().join("ark.db").to_string_lossy())
+                .await
+                .expect("ark host fixture"),
+        );
+        let app_index = Arc::new(
+            crate::app_index::AppIndex::new(dir.path(), dir.path().join("icons"))
+                .expect("app index"),
+        );
+        let file_index =
+            Arc::new(crate::file_index::FileIndex::new_disabled(dir.path()).expect("file index"));
+        let package_service =
+            Arc::new(crate::package_service::PackageService::open(dir.path()).expect("packages"));
+        let usage =
+            Arc::new(crate::protocol_usage::ProtocolUsageStore::open(dir.path()).expect("usage"));
+        let token = "a".repeat(64);
+        let ws = crate::ws_server::WsServer::bind(
+            ark,
+            token.clone(),
+            dir.path().to_path_buf(),
+            app_index,
+            file_index,
+            Arc::new(crate::usage_tracker::UsageTrackerDiagnosticsState::default()),
+            usage.clone(),
+            package_service.clone(),
+            "00000000-0000-4000-8000-000000000001".into(),
+        )
+        .await
+        .expect("ws bind");
+        let api = EngineApiServer::bind(
+            token.clone(),
+            ws.port(),
+            usage,
+            "00000000-0000-4000-8000-000000000001".into(),
+            package_service,
+            Arc::new(ws.dispatcher()),
+        )
+        .await
+        .expect("http bind");
+        drop(api);
+        drop(ws);
+        dir.close()
+            .expect("fixture dir still locked after dropping servers");
     }
 
     #[tokio::test]
@@ -824,7 +903,7 @@
             }),
         ));
         let token = "a".repeat(64);
-        let server = EngineApiServer::bind_with_test_dispatcher(
+        let (_fixture_dir, server) = EngineApiServer::bind_with_test_dispatcher(
             token,
             dispatcher.clone(),
             Duration::from_secs(30),
@@ -864,7 +943,7 @@
                 }
             }),
         ));
-        let server = EngineApiServer::bind_with_test_dispatcher(
+        let (_fixture_dir, server) = EngineApiServer::bind_with_test_dispatcher(
             "a".repeat(64),
             dispatcher.clone(),
             Duration::from_secs(1),
@@ -933,7 +1012,7 @@
         let dispatcher = Arc::new(crate::engine_dispatch::EngineDispatcher::new(Arc::new(
             |_| Box::pin(async { Ok(json!({"ok": true})) }),
         )));
-        let server = EngineApiServer::bind_with_test_dispatcher(
+        let (_fixture_dir, server) = EngineApiServer::bind_with_test_dispatcher(
             "a".repeat(64),
             dispatcher.clone(),
             Duration::from_secs(1),
@@ -975,11 +1054,12 @@
         let root = dir.path().join("userdata");
         std::fs::create_dir_all(&root).expect("root dir");
         let token = "a".repeat(64);
-        let server =
+        let (_fixture_dir, server) =
             EngineApiServer::bind_with_test_dispatcher(token.clone(), test_dispatcher(), REQUEST_TIMEOUT)
                 .await
                 .expect("server");
         let port = server.port();
+        let server_shutdown_handle = server.shutdown_handle();
         let task = tokio::spawn(server.run());
 
         // Non-host client classes are rejected before touching the filesystem.
@@ -1092,17 +1172,21 @@
         );
         assert_eq!(body["ok"], false);
         assert_eq!(body["error"], "not-found");
-        task.abort();
+        // Drain connection/request tasks so nothing holds test
+        // fixture files past the tempdir cleanup (KOS-270).
+        let _ = server_shutdown_handle.shutdown().await;
+        let _ = task.await;
     }
 
     #[tokio::test]
     async fn user_data_endpoint_rejects_unknown_roots_and_missing_fields() {
         let token = "a".repeat(64);
-        let server =
+        let (_fixture_dir, server) =
             EngineApiServer::bind_with_test_dispatcher(token.clone(), test_dispatcher(), REQUEST_TIMEOUT)
                 .await
                 .expect("server");
         let port = server.port();
+        let server_shutdown_handle = server.shutdown_handle();
         let task = tokio::spawn(server.run());
 
         let unknown = request_with_client(
@@ -1154,7 +1238,10 @@
         );
         let response = raw_http(port, &put).await;
         assert!(response.starts_with("HTTP/1.1 400"), "{response}");
-        task.abort();
+        // Drain connection/request tasks so nothing holds test
+        // fixture files past the tempdir cleanup (KOS-270).
+        let _ = server_shutdown_handle.shutdown().await;
+        let _ = task.await;
     }
 
     fn request(token: &str, method: &str, path: &str, body: &str) -> String {

@@ -1697,6 +1697,9 @@ pub(crate) mod tests {
             supervisor.health(&manifest.id, &manifest.version).state,
             WorkerState::Stopped
         );
+        // Drain worker tasks so nothing holds the test dir's files past
+        // tempdir cleanup (KOS-270).
+        supervisor.stop_all().await.expect("stop all workers");
     }
 
     // Native-app tests live in package_service/native_tests.rs (KOS-265) —

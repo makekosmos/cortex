@@ -214,6 +214,9 @@ async fn worker_invocation_round_trips_through_the_process_boundary() {
         .stop(&manifest.id, &manifest.version)
         .await
         .expect("worker stop");
+    // Drain every supervisor registry so no task keeps a worker child or
+    // an ArkHost handle alive past the test's tempdir cleanup (KOS-270).
+    let _ = supervisor.stop_all().await;
 }
 
 #[cfg(all(windows, feature = "package-worker-fixture"))]
@@ -262,4 +265,7 @@ async fn worker_crash_resolves_pending_invocation() {
         )
         .await;
     assert_eq!(result, Err("unavailable"));
+    // Drain every supervisor registry so no task keeps a worker child or
+    // an ArkHost handle alive past the test's tempdir cleanup (KOS-270).
+    let _ = supervisor.stop_all().await;
 }

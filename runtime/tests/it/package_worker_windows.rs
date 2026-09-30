@@ -348,6 +348,9 @@ async fn fixture_workers_validate_protocol_and_fail_closed() {
     assert_eq!(diagnostic.restart_count, 3);
     let health = format!("{:?}", supervisor.health(&m.id, &m.version));
     assert!(!health.contains("hash") && !health.contains("corr"));
+    // Drain every supervisor registry so no task keeps a worker child or
+    // an ArkHost handle alive past the test's tempdir cleanup (KOS-270).
+    let _ = supervisor.stop_all().await;
 }
 
 #[tokio::test]
@@ -388,6 +391,9 @@ async fn stop_suppresses_initial_failure_retries() {
         supervisor.health(&m.id, &m.version).state,
         WorkerState::Stopped
     );
+    // Drain every supervisor registry so no task keeps a worker child or
+    // an ArkHost handle alive past the test's tempdir cleanup (KOS-270).
+    let _ = supervisor.stop_all().await;
 }
 
 #[tokio::test]
@@ -452,6 +458,9 @@ async fn worker_ark_write_uses_host_and_advances_sync_state() {
         .stop(&worker_manifest.id, &worker_manifest.version)
         .await
         .expect("worker stop");
+    // Drain every supervisor registry so no task keeps a worker child or
+    // an ArkHost handle alive past the test's tempdir cleanup (KOS-270).
+    let _ = supervisor.stop_all().await;
 }
 
 #[tokio::test]
@@ -595,6 +604,9 @@ async fn fake_provider_collection_uses_keyring_secret_and_broker_injection() {
         .stop("fixture.fake-provider", "1.0.0")
         .await
         .expect("fake provider worker stop");
+    // Drain every supervisor registry so no task keeps a worker child or
+    // an ArkHost handle alive past the test's tempdir cleanup (KOS-270).
+    let _ = supervisor.stop_all().await;
 }
 
 #[tokio::test]
@@ -816,6 +828,9 @@ async fn signed_bridge_worker_projects_real_ark_and_restarts_idempotently() {
         supervisor.health(&manifest.id, &manifest.version).state,
         WorkerState::Stopped
     );
+    // Drain every supervisor registry so no task keeps a worker child or
+    // an ArkHost handle alive past the test's tempdir cleanup (KOS-270).
+    let _ = supervisor.stop_all().await;
 }
 
 #[tokio::test]
@@ -1066,6 +1081,15 @@ async fn secret_bearing_worker_failure_is_redacted_end_to_end() {
         );
     }
     assert!(crash.contains("[REDACTED_PANIC_PAYLOAD]"));
+
+    // The OnceLock'd TempDir is never dropped (statics don't drop), so its
+    // directory would leak into %TEMP%. The production panic hook was
+    // restored above, so nothing writes into the root after this test —
+    // remove it explicitly.
+    std::fs::remove_dir_all(&crash_root).expect("crash test root cleanup");
+    // Drain every supervisor registry so no task keeps a worker child or
+    // an ArkHost handle alive past the test's tempdir cleanup (KOS-270).
+    let _ = supervisor.stop_all().await;
 }
 
 #[tokio::test]
@@ -1140,6 +1164,9 @@ async fn prepublication_wait_failures_quarantine_and_reap_exact_startup() {
             .expect("replacement process")
             .wait_object_0());
         assert_eq!(supervisor.test_registry_snapshot(), (0, 0, 0, 0));
+        // Drain every supervisor registry so no task keeps a worker child or
+        // an ArkHost handle alive past the test's tempdir cleanup (KOS-270).
+        let _ = supervisor.stop_all().await;
     }
     test_support::reset();
 }
@@ -1166,6 +1193,9 @@ async fn supervisor_pid_unavailable_rolls_back_all_worker_reservations() {
         Err("pid-unavailable")
     );
     assert_eq!(supervisor.test_registry_snapshot(), (0, 0, 0, 0));
+    // Drain every supervisor registry so no task keeps a worker child or
+    // an ArkHost handle alive past the test's tempdir cleanup (KOS-270).
+    let _ = supervisor.stop_all().await;
 }
 
 #[tokio::test]

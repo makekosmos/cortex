@@ -16,12 +16,17 @@ const SESSION: &str = "desktop-session";
 const GENERATION: u64 = 7;
 
 struct Fixture {
-    _dir: TempDir,
     address: SocketAddr,
     authority: Arc<engine::desktop_authority::DesktopAuthorityRegistry>,
     grants: Arc<engine::grant_authority::GrantAuthorityRegistry>,
     snapshots: Arc<engine::package_worker_broker::SnapshotRegistry>,
     server: Option<WsServer>,
+    // Last field: TempDir deletes its directory on drop, which on Windows
+    // fails silently if anything still holds a file inside (the aborted
+    // server task's ArkHost keeps ark.db/protocol.db open until it is fully
+    // reaped). Dropping last plus awaiting the JoinHandle keeps the cleanup
+    // deterministic.
+    _dir: TempDir,
 }
 
 async fn fixture() -> Fixture {
@@ -54,12 +59,12 @@ async fn fixture() -> Fixture {
     let grants = server.grants_handle();
     let snapshots = server.snapshots_handle();
     Fixture {
-        _dir: dir,
         address,
         authority,
         grants,
         snapshots,
         server: Some(server),
+        _dir: dir,
     }
 }
 
@@ -105,6 +110,7 @@ async fn rpc(socket: &mut Socket, id: &str, operation: &str, params: Value) -> V
 async fn real_socket_desktop_authority_requires_exact_pid_credential_and_single_bind() {
     let mut fixture = fixture().await;
     let server = fixture.server.take().unwrap();
+    let shutdown = server.shutdown_handle();
     fixture.authority.register(
         SESSION.into(),
         GENERATION,
@@ -148,26 +154,30 @@ async fn real_socket_desktop_authority_requires_exact_pid_credential_and_single_
     fixture.authority.revoke_generation(SESSION, GENERATION);
     fixture.authority.revoke_generation(SESSION, GENERATION);
     assert_eq!(fixture.authority.len(), 0);
-    task.abort();
+    let _ = shutdown.shutdown().await;
+    let _ = task.await;
 }
 
 #[tokio::test]
 async fn real_socket_global_token_and_spoofed_class_cannot_reserve_snapshot() {
     let mut fixture = fixture().await;
     let server = fixture.server.take().unwrap();
+    let shutdown = server.shutdown_handle();
     let authority = fixture.authority.clone();
     let task = tokio::spawn(server.run());
     let (mut socket, _) = connect(fixture.address, std::process::id()).await;
     let denied = rpc(&mut socket, "reserve", "package.snapshot.reserve", json!({"packageId":"x","source":"bundled","root":"/secret","path":"/secret","identity":{"dev":1,"ino":2}})).await;
     assert_eq!(denied["ok"], false);
     assert_eq!(authority.len(), 0);
-    task.abort();
+    let _ = shutdown.shutdown().await;
+    let _ = task.await;
 }
 
 #[tokio::test]
 async fn real_socket_generation_replacement_revokes_old_owner_and_is_idempotent() {
     let mut fixture = fixture().await;
     let server = fixture.server.take().unwrap();
+    let shutdown = server.shutdown_handle();
     fixture.authority.register(
         SESSION.into(),
         GENERATION,
@@ -213,7 +223,8 @@ async fn real_socket_generation_replacement_revokes_old_owner_and_is_idempotent(
         ),
         Ok(())
     );
-    task.abort();
+    let _ = shutdown.shutdown().await;
+    let _ = task.await;
 }
 
 async fn wait_for_empty(fixture: &Fixture) {
@@ -237,6 +248,7 @@ fn assert_no_path(value: &Value, path: &str) {
 async fn real_socket_wrong_pid_is_denied_at_bind_and_has_no_authority() {
     let mut fixture = fixture().await;
     let server = fixture.server.take().unwrap();
+    let shutdown = server.shutdown_handle();
     fixture.authority.revoke_generation(SESSION, GENERATION);
     #[cfg(windows)]
     let mut child = Command::new("cmd")
@@ -264,13 +276,15 @@ async fn real_socket_wrong_pid_is_denied_at_bind_and_has_no_authority() {
     fixture.authority.revoke_generation(SESSION, GENERATION);
     let _ = child.kill();
     wait_for_empty(&fixture).await;
-    task.abort();
+    let _ = shutdown.shutdown().await;
+    let _ = task.await;
 }
 
 #[tokio::test]
 async fn real_socket_authorized_grant_and_snapshot_are_opaque_and_disconnect_cleans_all() {
     let mut fixture = fixture().await;
     let server = fixture.server.take().unwrap();
+    let shutdown = server.shutdown_handle();
     fixture.authority.register(
         SESSION.into(),
         GENERATION,
@@ -343,13 +357,15 @@ async fn real_socket_authorized_grant_and_snapshot_are_opaque_and_disconnect_cle
     assert_eq!(fixture.snapshots.len(), 0);
     drop(socket);
     wait_for_empty(&fixture).await;
-    task.abort();
+    let _ = shutdown.shutdown().await;
+    let _ = task.await;
 }
 
 #[tokio::test]
 async fn real_socket_disconnect_cleans_open_snapshot_and_stale_handle_is_denied() {
     let mut fixture = fixture().await;
     let server = fixture.server.take().unwrap();
+    let shutdown = server.shutdown_handle();
     fixture.authority.register(
         SESSION.into(),
         GENERATION,
@@ -419,5 +435,6 @@ async fn real_socket_disconnect_cleans_open_snapshot_and_stale_handle_is_denied(
     );
     drop(fresh);
     wait_for_empty(&fixture).await;
-    task.abort();
+    let _ = shutdown.shutdown().await;
+    let _ = task.await;
 }
