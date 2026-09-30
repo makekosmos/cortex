@@ -35,6 +35,7 @@ async fn start_iroh_sync(
                 "use_iroh": true,
                 "iroh_peer_ticket": peer_ticket,
                 "discovery_enabled": false,
+                "bind": "loopback",
             }),
         )
         .await
