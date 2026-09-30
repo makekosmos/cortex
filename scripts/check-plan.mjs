@@ -180,8 +180,8 @@ function classify(file, revisions) {
   if (/^desktop\//.test(path)) return ["lint", "format"];
   if (/^runtime\//.test(path)) return ["rustfmt", "clippy", "test:rust", "runtime-staging"];
   // core/ is the vendored upstream subtree: crate sources join the workspace
-  // gates, everything else (docs, the generated TS package, tooling) is not
-  // built by Cortex checks. Manifests/lockfiles under core/ already failed
+  // gates, everything else (docs, tooling) is not built by Cortex checks.
+  // Manifests/lockfiles under core/ already failed
   // closed via isFullInfluence above.
   if (/^core\/crates\//.test(path)) return ["rustfmt", "clippy", "test:rust"];
   if (/^core\//.test(path)) return [];

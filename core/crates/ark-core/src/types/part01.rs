@@ -1,20 +1,12 @@
 ﻿use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-#[cfg(feature = "ts-rs")]
-use ts_rs::TS;
-
 // ---------------------------------------------------------------------------
 // DB entity types (camelCase JSON for sidecar compatibility)
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "ts-rs", derive(TS))]
-#[cfg_attr(
-    feature = "ts-rs",
-    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
-)]
 pub struct TodoItem {
     pub id: String,
     pub title: String,
@@ -36,20 +28,13 @@ pub struct TodoItem {
     pub project_id: Option<String>,
     pub area_id: Option<String>,
     pub tag_ids: Vec<String>,
-    #[cfg_attr(feature = "ts-rs", ts(type = "unknown"))]
     pub checklist_items: Value,
-    #[cfg_attr(feature = "ts-rs", ts(type = "unknown"))]
     pub recurrence_rule: Option<Value>,
     pub created_at: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "ts-rs", derive(TS))]
-#[cfg_attr(
-    feature = "ts-rs",
-    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
-)]
 pub struct Project {
     pub id: String,
     pub title: String,
@@ -65,11 +50,6 @@ pub struct Project {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "ts-rs", derive(TS))]
-#[cfg_attr(
-    feature = "ts-rs",
-    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
-)]
 pub struct Area {
     pub id: String,
     pub title: String,
@@ -79,11 +59,6 @@ pub struct Area {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "ts-rs", derive(TS))]
-#[cfg_attr(
-    feature = "ts-rs",
-    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
-)]
 pub struct Tag {
     pub id: String,
     pub title: String,
@@ -93,11 +68,6 @@ pub struct Tag {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "ts-rs", derive(TS))]
-#[cfg_attr(
-    feature = "ts-rs",
-    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
-)]
 pub struct Heading {
     pub id: String,
     pub title: String,
@@ -107,11 +77,6 @@ pub struct Heading {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "ts-rs", derive(TS))]
-#[cfg_attr(
-    feature = "ts-rs",
-    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
-)]
 pub struct TrackedApp {
     pub id: String,
     pub platform: String,
@@ -127,11 +92,6 @@ pub struct TrackedApp {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "ts-rs", derive(TS))]
-#[cfg_attr(
-    feature = "ts-rs",
-    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
-)]
 pub struct UsageSession {
     pub id: String,
     pub tracked_app_id: String,
@@ -150,17 +110,11 @@ pub struct UsageSession {
     pub pid_start: Option<i64>,
     pub pid_end: Option<i64>,
     #[serde(default = "default_meta_json")]
-    #[cfg_attr(feature = "ts-rs", ts(type = "Record<string, unknown>"))]
     pub meta_json: Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "ts-rs", derive(TS))]
-#[cfg_attr(
-    feature = "ts-rs",
-    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
-)]
 pub struct UsageEvent {
     pub id: String,
     pub tracked_app_id: String,
@@ -177,7 +131,6 @@ pub struct UsageEvent {
     pub is_foreground: bool,
     pub is_idle: bool,
     #[serde(default = "default_meta_json")]
-    #[cfg_attr(feature = "ts-rs", ts(type = "Record<string, unknown>"))]
     pub meta_json: Value,
 }
 
@@ -218,21 +171,14 @@ fn default_usage_day_payload() -> Value {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "ts-rs", derive(TS))]
-#[cfg_attr(
-    feature = "ts-rs",
-    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
-)]
 pub struct ArkObject {
     pub id: String,
     pub type_id: String,
     pub type_version: String,
     pub title: String,
     #[serde(default = "default_content_json")]
-    #[cfg_attr(feature = "ts-rs", ts(type = "unknown"))]
     pub content_json: Value,
     #[serde(default = "default_props_json")]
-    #[cfg_attr(feature = "ts-rs", ts(type = "Record<string, unknown>"))]
     pub props_json: Value,
     pub created_at: String,
     pub updated_at: String,
@@ -241,18 +187,12 @@ pub struct ArkObject {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "ts-rs", derive(TS))]
-#[cfg_attr(
-    feature = "ts-rs",
-    ts(export, export_to = "../../../core/ark/packages/ark/src/generated/")
-)]
 pub struct ArkObjectSummary {
     pub id: String,
     pub type_id: String,
     pub type_version: String,
     pub title: String,
     #[serde(default = "default_props_json")]
-    #[cfg_attr(feature = "ts-rs", ts(type = "Record<string, unknown>"))]
     pub props_json: Value,
     pub created_at: String,
     pub updated_at: String,
