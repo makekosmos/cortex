@@ -4,7 +4,7 @@
 use std::{
     io::Write,
     path::PathBuf,
-    sync::{Arc, Mutex, MutexGuard, OnceLock},
+    sync::{Arc, OnceLock},
     time::{Duration, Instant},
 };
 
@@ -29,19 +29,20 @@ use httpmock::MockServer;
 use sha2::{Digest, Sha256};
 use zip::{write::FileOptions, ZipWriter};
 
-static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 // The crash reporter installs a process-global hook, so its test directory
 // must outlive the test that installs it.
 static CRASH_TEST_ROOT: OnceLock<tempfile::TempDir> = OnceLock::new();
 
-struct FixtureEnv<'a> {
-    _lock: MutexGuard<'a, ()>,
+/// Fixture env vars are process-wide and other test modules in this binary set
+/// the same ones, so the env owns the engine's worker test lock while it exists.
+struct FixtureEnv {
+    _serialized: test_support::FailureGuard<'static>,
     entry: PathBuf,
     bootstrap: PathBuf,
     result: Option<PathBuf>,
 }
 
-impl Drop for FixtureEnv<'_> {
+impl Drop for FixtureEnv {
     fn drop(&mut self) {
         unsafe {
             std::env::remove_var("MUNDUS_FIXTURE_ENTRY_MARKER");
@@ -53,8 +54,8 @@ impl Drop for FixtureEnv<'_> {
     }
 }
 
-fn fixture_env(directory: &tempfile::TempDir) -> FixtureEnv<'static> {
-    let lock = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+fn fixture_env(directory: &tempfile::TempDir) -> FixtureEnv {
+    let serialized = test_support::serialized();
     let entry = directory.path().join("entry.marker");
     let bootstrap = directory.path().join("bootstrap.marker");
     unsafe {
@@ -62,7 +63,7 @@ fn fixture_env(directory: &tempfile::TempDir) -> FixtureEnv<'static> {
         std::env::set_var("MUNDUS_FIXTURE_BOOTSTRAP_MARKER", &bootstrap);
     }
     FixtureEnv {
-        _lock: lock,
+        _serialized: serialized,
         entry,
         bootstrap,
         result: None,
@@ -238,7 +239,6 @@ fn install_binary(
 
 #[tokio::test]
 async fn fixture_workers_validate_protocol_and_fail_closed() {
-    let _lock = test_support::serialized();
     let directory = tempfile::tempdir().expect("fixture marker directory");
     let markers = fixture_env(&directory);
     let supervisor = PackageWorkerSupervisor::new(1);
@@ -450,7 +450,6 @@ async fn worker_ark_write_uses_host_and_advances_sync_state() {
 
 #[tokio::test]
 async fn fake_provider_collection_uses_keyring_secret_and_broker_injection() {
-    let _lock = test_support::serialized();
     let directory = tempfile::tempdir().expect("fixture directory");
     let mut markers = fixture_env(&directory);
     let result_marker = directory.path().join("fake-provider-result.json");
@@ -1037,6 +1036,10 @@ async fn secret_bearing_worker_failure_is_redacted_end_to_end() {
         )
     })
     .join();
+    // The hook is process-wide and deliberately drops panic messages; every
+    // integration test shares this process, so restore the default hook to keep
+    // later failures readable. The crash file is already written by now.
+    drop(std::panic::take_hook());
     assert!(panic.is_err());
     let crash_file = std::fs::read_dir(crash_root.join("crashes"))
         .expect("crash directory")

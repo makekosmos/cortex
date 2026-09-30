@@ -2,6 +2,7 @@ use super::*;
 
 #[test]
 fn fixture_seeds_both_isolated_databases() {
+    let _identities = HOST_IDENTITIES.blocking_lock();
     let setup = new_setup_named(INTEGRATION_ID).unwrap();
     for path in [&setup.origin_db, &setup.recipient_db] {
         let conn = Connection::open(path).unwrap();

@@ -443,7 +443,7 @@ mod win32 {
         // GetDIBits не вытащит alpha — подкручиваем до 0xFF чтобы PNG не был
         // полностью прозрачным.
         let mut alpha_seen = false;
-        for px in buf.chunks_exact_mut(4) {
+        for px in buf.as_chunks_mut::<4>().0 {
             let b = px[0];
             let r = px[2];
             px[0] = r;
@@ -453,7 +453,7 @@ mod win32 {
             }
         }
         if !alpha_seen {
-            for px in buf.chunks_exact_mut(4) {
+            for px in buf.as_chunks_mut::<4>().0 {
                 px[3] = 0xFF;
             }
         }

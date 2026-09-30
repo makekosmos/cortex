@@ -3,8 +3,7 @@ use ark_core::canonical_types::preflight::{inventory_sources, preflight_phase3, 
 use ark_core::db::init_schema_prerequisites_for_phase3;
 use rusqlite::{params, Connection};
 
-#[path = "support/phase3_legacy_fixtures.rs"]
-mod phase3_legacy_fixtures;
+use crate::phase3_legacy_fixtures;
 
 #[test]
 fn preflight_inventories_native_rows_and_is_read_only() {

@@ -203,7 +203,7 @@ fn shared_task_parity_corpus_is_consumed_by_rust_mapper() {
         }
     }
     let corpus: serde_json::Value =
-        serde_json::from_str(include_str!("../fixtures/phase3_compatibility.json")).unwrap();
+        serde_json::from_str(include_str!("../../fixtures/phase3_compatibility.json")).unwrap();
     assert_eq!(
         corpus["provenance"]["mapper"],
         "ark_core::canonical_types::compatibility::map_legacy_source"

@@ -6,7 +6,7 @@ use ark_core::types::SyncEntity;
 use rusqlite::{params, Connection};
 use serde_json::json;
 
-#[path = "../support/phase3_legacy_fixtures.rs"] mod phase3_legacy_fixtures;
+use crate::phase3_legacy_fixtures;
 
 fn phase2_pending_db() -> Connection {
     let conn = Connection::open_in_memory().unwrap();

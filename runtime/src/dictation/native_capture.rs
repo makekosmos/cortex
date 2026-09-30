@@ -80,8 +80,8 @@ fn start_windows(
 fn rms_i16le(bytes: &[u8]) -> f32 {
     let mut sum = 0.0f64;
     let mut n = 0u64;
-    for chunk in bytes.chunks_exact(2) {
-        let s = i16::from_le_bytes([chunk[0], chunk[1]]) as f64 / 32768.0;
+    for chunk in bytes.as_chunks::<2>().0 {
+        let s = i16::from_le_bytes(*chunk) as f64 / 32768.0;
         sum += s * s;
         n += 1;
     }

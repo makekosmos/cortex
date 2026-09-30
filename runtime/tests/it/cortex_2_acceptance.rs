@@ -12,8 +12,8 @@ use std::{collections::HashMap, io::Write};
 use tempfile::TempDir;
 use zip::{write::FileOptions, ZipWriter};
 
-const ARCADIA_APP_MANIFEST: &str = include_str!("fixtures/cortex-2-arcadia-app.json");
-const WORKER_TRANSCRIPT: &str = include_str!("fixtures/cortex-2-worker-transcript.jsonl");
+const ARCADIA_APP_MANIFEST: &str = include_str!("../fixtures/cortex-2-arcadia-app.json");
+const WORKER_TRANSCRIPT: &str = include_str!("../fixtures/cortex-2-worker-transcript.jsonl");
 
 #[test]
 fn cortex_has_no_embedded_arcadia_domain_module() {

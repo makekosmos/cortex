@@ -84,11 +84,6 @@ name = "delphi_filters"
 harness = false
 required-features = ["bench-fixtures"]
 
-[[test]]
-name = "iroh_bidirectional_network"
-path = "tests/iroh_bidirectional_network/main.rs"
-required-features = ["iroh-spike"]
-
 # Explicit table (not workspace = true): ark-core is a member of both the
 # core/ workspace and the Cortex workspace after the KOS-129 subtree merge,
 # and needs identical lint policy under either root. Mirrors the upstream
