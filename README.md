@@ -60,33 +60,34 @@ pnpm run check:affected
 # Force the conservative full path:
 node scripts/check-plan.mjs --full --run
 
-# Validate a release BOM without building or publishing:
+# Check the release BOM, receipt, and preflight contracts without building:
 pnpm run test:release-bom
 
-# Preflight only (must pass before any compilation):
-node desktop/scripts/release-preflight.mjs --platform win --bom path/to/release-bom.json
+# Preflight only (must pass before any compilation; derives the BOM from HEAD):
+node desktop/scripts/release-preflight.mjs --platform win
 
 # Stage packaged components under desktop/.tmp/components (Windows only):
 # each GPUI component is cargo-built for x86_64-pc-windows-msvc and staged as
 # <component>/win-unpacked/Mundus <Name>.exe.
-MUNDUS_RELEASE_BOM=path/to/release-bom.json node desktop/scripts/build-package-components.mjs
+node desktop/scripts/build-package-components.mjs
 
 # Build + package + verify (never publishes; writes a receipt):
-node desktop/scripts/build-desktop.mjs --platform win --bom path/to/release-bom.json
+node desktop/scripts/build-desktop.mjs --platform win
 
-# Run local preflight and print the plan without building or contacting GitHub:
-node desktop/scripts/build-desktop.mjs --platform win --bom path/to/release-bom.json --dry-run
+# Run preflight and print the plan without building:
+node desktop/scripts/build-desktop.mjs --platform win --dry-run
 
 # Publish only the exact verified receipt (rehashes artifacts and rejects stale/mutated inputs):
-node desktop/scripts/publish-release.mjs --platform win --receipt desktop/release/release-receipt.v1.json
+node desktop/scripts/publish-release.mjs --platform win --receipt desktop/release/release-receipt.v2.json
 
-# Validate publish locally without GH mutation or HTTP:
-node desktop/scripts/publish-release.mjs --platform win --receipt desktop/release/release-receipt.v1.json --dry-run
+# Validate publish locally without GH mutation:
+node desktop/scripts/publish-release.mjs --platform win --receipt desktop/release/release-receipt.v2.json --dry-run
 ```
 
-`pnpm run --cwd desktop build` and `build:mac` read the same path from
-`MUNDUS_RELEASE_BOM`, so the existing release commands cannot run without an
-explicit resolved BOM.
+The release BOM (`desktop/scripts/release-bom.mjs`) is never written by hand:
+it is derived from the checkout at HEAD — commit, release version, pnpm/Node/Rust
+pins, target, and Engine API — and ships as `release-bom.v2.json` next to the
+installer. `pnpm --dir desktop run build` runs the whole release build in one go.
 
 ## Shared workspace checkouts
 
@@ -142,15 +143,15 @@ enforceable checks. Branch protection is disabled, and ruleset/merge-queue
 status is NOT_RUN. Use `--full` when reviewing uncertain changes and treat the
 planner's `reasons` field as the explanation for a full selection.
 
-The build wrapper validates Cortex/Core commits, the pinned pnpm/Node/Rust toolchain, and
-the engine/package API contracts before `makensis` starts. The Windows installer is a
+The build wrapper runs the release preflight — clean `main`, a version newer than
+the latest published release, and an Engine built from the same commit — and derives
+the BOM before `makensis` starts. The Windows installer is a
 standalone NSIS script (`desktop/build/installer.nsi`) compiled by `makensis`; the build
 downloads the pinned NSIS bundle when `MUNDUS_NSIS_DIR` is unset. It emits
 `release/release-provenance.json` and atomically writes
-`release/release-receipt.v1.json` with exact inputs and final artifact hashes.
-`publish-release.mjs` consumes only that receipt; it never builds or packages. A BOM may
-include expected `artifacts` entries to make a rebuild fail on a hash or size mismatch;
-omitted entries are recorded from the final build.
+`release/release-receipt.v2.json` with exact inputs and final artifact hashes.
+`publish-release.mjs` consumes only that receipt; it never builds or packages, and it
+re-derives the BOM from HEAD, so a receipt from any other commit is rejected.
 
 `pnpm run check` covers layout, source-size, lint, changed-file Oxfmt,
 Rustfmt, workspace Clippy with warnings denied, complete workspace

@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { test } from "node:test";
 import {
   assertBuildingFromMain,
@@ -7,42 +9,20 @@ import {
   runReleasePreflight,
 } from "./release-preflight.mjs";
 
-test("missing --bom falls back to MUNDUS_RELEASE_BOM", () => {
-  const { platform, bomPath } = resolvePreflightArgs(["--platform", "win"], {
-    MUNDUS_RELEASE_BOM: "bom.json",
-  });
-  assert.equal(platform, "win");
-  assert.equal(bomPath, "bom.json");
-});
-
-test("explicit --bom wins over MUNDUS_RELEASE_BOM", () => {
-  const { bomPath } = resolvePreflightArgs(["--platform", "win", "--bom", "explicit.json"], {
-    MUNDUS_RELEASE_BOM: "env.json",
-  });
-  assert.equal(bomPath, "explicit.json");
-});
-
-test("a missing flag never resolves to another flag token", () => {
-  // Regression: args[args.indexOf("--bom") + 1] used to return args[0] ("--platform"),
-  // which made the env fallback unreachable and died with ENOENT on '--platform'.
-  const { platform, bomPath } = resolvePreflightArgs(["--platform", "win"], {});
-  assert.equal(platform, "win");
-  assert.equal(bomPath, undefined);
-});
-
-test("missing BOM surfaces the required-BOM error instead of ENOENT", async () => {
-  await assert.rejects(
-    () => runReleasePreflight({ platform: "win", bomPath: undefined }),
-    /--bom <path> or MUNDUS_RELEASE_BOM is required for release builds/,
-  );
+test("resolvePreflightArgs reads --platform and never another flag token", () => {
+  assert.equal(resolvePreflightArgs(["--platform", "win"], {}).platform, "win");
+  assert.equal(resolvePreflightArgs(["--local"], {}).platform, undefined);
 });
 
 test("missing --platform is rejected as unknown platform", async () => {
-  const { platform } = resolvePreflightArgs(["--bom", "bom.json"], {});
-  await assert.rejects(
-    () => runReleasePreflight({ platform, bomPath: "bom.json" }),
-    /Unknown platform/,
-  );
+  const { platform } = resolvePreflightArgs(["--local"], {});
+  await assert.rejects(() => runReleasePreflight({ platform, local: true }), /Unknown platform/);
+});
+
+test("the release BOM is derived, never passed in", async () => {
+  const source = await readFile(path.join(import.meta.dirname, "release-preflight.mjs"), "utf8");
+  assert.match(source, /deriveReleaseBom\(/);
+  assert.doesNotMatch(source, /--bom|RELEASE_BOM|bomPath/);
 });
 
 test("resolvePreflightArgs recognizes --local and MUNDUS_RELEASE_LOCAL (KOS-233)", () => {

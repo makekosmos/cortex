@@ -20,7 +20,8 @@ test("release build verifies locally and leaves publishing to the receipt consum
   assert.match(script, /Preflight: source, BOM, and pins/);
   assert.match(script, /--dry-run/);
   assert.doesNotMatch(script, /--clobber/);
-  assert.match(script, /env\("RELEASE_BOM"\)/);
+  assert.match(script, /deriveReleaseBom\(/);
+  assert.doesNotMatch(script, /--bom|RELEASE_BOM"|loadReleaseBom/);
   assert.match(preflight, /release builds require a clean tracked and source worktree/);
 });
 

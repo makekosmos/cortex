@@ -15,8 +15,8 @@ One command builds a complete local installer (Engine + GPUI Manager + NSIS):
 pnpm run build:installer:local
 ```
 
-This runs the same three stages as a release build, but without the BOM and
-publish gates:
+This runs the same three stages as a release build, but without the preflight,
+BOM, receipt, and publish gates:
 
 ```text
 pnpm --dir desktop run build:backend        # cargo release build + engine archive
@@ -31,7 +31,7 @@ GPUI component under `desktop/.tmp/installer-stage`, compiles
 `desktop/release/latest.yml`. It never publishes and never touches the
 installed system.
 
-## Release preflight (`pnpm --dir desktop run build` / `build:mac`)
+## Release preflight (`pnpm --dir desktop run build`)
 
 `scripts/release-preflight.mjs` gates every release build (KOS-233): it
 requires a clean tracked/source worktree, a `main`-HEAD build, a release
@@ -43,6 +43,6 @@ the Desktop release.
 The `main`-HEAD and latest-published-tag checks need network access and a
 `main` checkout, so they are the only checks skipped with `--local` (or
 `MUNDUS_RELEASE_LOCAL=1`) — use that to build and test a candidate locally
-from a feature branch, or offline. Everything else (clean worktree, BOM, ARK
-artifact, Engine/Desktop version match) still runs. Never pass `--local` for
+from a feature branch, or offline. Everything else (clean worktree, derived BOM,
+Engine/Desktop version match) still runs. Never pass `--local` for
 a build that will actually be published.

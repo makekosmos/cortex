@@ -13,10 +13,11 @@ import {
   statSync,
 } from "node:fs";
 import path from "node:path";
-import { loadReleaseBom } from "./release-bom.mjs";
+import { deriveReleaseBom, RELEASE_BOM_FILE } from "./release-bom.mjs";
 import { verifyLocalReleaseChannel } from "./release-channel-local.mjs";
-import { bytes, documentHash, writeAtomic } from "./package-release-utils.mjs";
-import { createReceipt, writeReceipt } from "./release-receipt.mjs";
+import { bytes, documentHash, writeAtomic } from "./release-utils.mjs";
+import { createReceipt, RELEASE_RECEIPT_FILE, writeReceipt } from "./release-receipt.mjs";
+import { getVersion } from "./release-version.mjs";
 import { ensureNsis } from "./ensure-nsis.mjs";
 import { env, MANAGER_EXE } from "./brand.mjs";
 import {
@@ -53,20 +54,9 @@ function collectArtifacts(outputDir, platform, version) {
   return artifacts;
 }
 
-function compareExpectedArtifacts(expected, actual) {
-  if (!expected?.length) return;
-  const actualByName = new Map(actual.map((artifact) => [artifact.name, artifact]));
-  for (const artifact of expected) {
-    const found = actualByName.get(artifact.name);
-    if (!found || found.sha256 !== artifact.sha256 || found.size !== artifact.size)
-      die(`final artifact does not match BOM: ${artifact.name}`);
-  }
-}
-
 async function emitProvenance(outputDir, platform, version, bom) {
   verifyLocalReleaseChannel(outputDir, platform, version);
   const artifacts = collectArtifacts(outputDir, platform, version);
-  compareExpectedArtifacts(bom.value.artifacts, artifacts);
   const provenance = {
     schema_version: 1,
     bom_id: bom.value.id,
@@ -76,7 +66,7 @@ async function emitProvenance(outputDir, platform, version, bom) {
     artifacts,
   };
   const file = path.join(outputDir, "release-provenance.json");
-  const bomFile = path.join(outputDir, "release-bom.v1.json");
+  const bomFile = path.join(outputDir, RELEASE_BOM_FILE);
   await writeAtomic(bomFile, bom.bytes);
   await writeAtomic(file, bytes(provenance));
   log(`Release provenance: ${file}`);
@@ -189,7 +179,6 @@ async function buildWindows(version) {
 async function main() {
   const args = process.argv.slice(2);
   let platform = null;
-  let bomPath = env("RELEASE_BOM") ?? null;
   let dryRun = false;
   let receiptPath = null;
   let skipPreflight = false;
@@ -199,8 +188,6 @@ async function main() {
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--platform") {
       platform = args[++i];
-    } else if (args[i] === "--bom") {
-      bomPath = args[++i];
     } else if (args[i] === "--receipt") {
       receiptPath = args[++i];
     } else if (args[i] === "--dry-run") {
@@ -211,6 +198,8 @@ async function main() {
       local = true;
     } else if (args[i] === "--package-dir") {
       packageDir = true;
+    } else {
+      die(`Unknown argument "${args[i]}"`);
     }
   }
 
@@ -219,36 +208,23 @@ async function main() {
   platform ??= "win";
   if (!VALID_PLATFORMS.includes(platform))
     die(`Unknown platform "${platform}". Valid: ${VALID_PLATFORMS.join(", ")}`);
-  if (local && bomPath && !existsSync(bomPath)) bomPath = null;
 
+  // A local build is a throwaway installer off any ref: no BOM, no receipt.
+  // A release build derives its BOM from HEAD — through the full preflight, or
+  // directly when the caller (`pnpm run build`) has just run the preflight.
   let version;
   let bom = null;
-  if (local && !bomPath) {
-    version = JSON.parse(readFileSync(path.join(SHELL_ROOT, "release-versions.json"), "utf8"))[
-      platform
-    ];
+  if (local) {
+    version = getVersion(platform);
+  } else if (skipPreflight) {
+    version = getVersion(platform);
+    bom = await deriveReleaseBom(path.resolve(SHELL_ROOT, ".."), platform, currentCommit());
   } else {
-    if (!bomPath) die("--bom <path> or MUNDUS_RELEASE_BOM is required for release builds");
-    const preflight = skipPreflight
-      ? {
-          platform,
-          version: JSON.parse(readFileSync(path.join(SHELL_ROOT, "release-versions.json"), "utf8"))[
-            platform
-          ],
-          currentCommit: currentCommit(),
-          bom: await loadReleaseBom(bomPath, {
-            root: path.resolve(SHELL_ROOT, ".."),
-            platform,
-            currentCommit: currentCommit(),
-          }),
-        }
-      : await runReleasePreflight({ platform, bomPath, local });
-    version = preflight.version;
-    bom = preflight.bom;
+    ({ version, bom } = await runReleasePreflight({ platform }));
+    log("Preflight: source, BOM, and pins");
   }
-  receiptPath ??= path.join(SHELL_ROOT, "release", "release-receipt.v1.json");
+  receiptPath ??= path.join(SHELL_ROOT, "release", RELEASE_RECEIPT_FILE);
 
-  if (!skipPreflight) log("Preflight: source, BOM, and pins");
   log(`Platform: ${platform}`);
   log(`Version:  ${version}`);
   if (bom) log(`BOM:      ${bom.value.id} (${bom.digest})`);
@@ -256,6 +232,10 @@ async function main() {
   if (dryRun) {
     log("Dry-run plan:");
     log(`  build: NSIS installer via makensis`);
+    if (!bom) {
+      log("  local build: no BOM, receipt, or publish");
+      return;
+    }
     log("  verify: local channel, BOM, provenance, receipt");
     log(
       `  publish: node scripts/publish-release.mjs --platform ${platform} --receipt ${receiptPath}`,

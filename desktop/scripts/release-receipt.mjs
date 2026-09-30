@@ -1,39 +1,23 @@
 import { lstat, readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import {
-  bytes,
-  canonical,
-  documentHash,
-  integer,
-  sha256,
-  writeAtomic,
-} from "./package-release-utils.mjs";
+import { bytes, canonical, documentHash, integer, sha256, writeAtomic } from "./release-utils.mjs";
 
-export const RELEASE_RECEIPT_SCHEMA_VERSION = 1;
+export const RELEASE_RECEIPT_SCHEMA_VERSION = 2;
+export const RELEASE_RECEIPT_FILE = `release-receipt.v${RELEASE_RECEIPT_SCHEMA_VERSION}.json`;
 
-function commitsFromBom(bom) {
-  const source = bom.value.source;
-  return Object.fromEntries(
-    ["cortex", "core", "arca_sdk", "imago", "store"].map((name) => [name, source[name].commit]),
-  );
-}
-
+// Everything the receipt pins comes from the derived BOM, so a receipt built
+// from a different commit, version, or toolchain can never pass as current.
 export function receiptInputs({ platform, version, currentCommit, bom }) {
   return {
     platform,
     version,
-    commits: { ...commitsFromBom(bom), cortex: currentCommit },
+    commit: currentCommit,
     pins: structuredClone({
       bom_id: bom.value.id,
       toolchain: bom.value.source.toolchain,
       compatibility: bom.value.compatibility,
-      catalog: bom.value.catalog,
-      package_versions: {
-        arca_sdk: bom.value.source.arca_sdk.package?.version ?? null,
-        imago: bom.value.source.imago.package?.version ?? null,
-      },
     }),
-    bom: { path: bom.path, sha256: bom.digest },
+    bom: { sha256: bom.digest },
   };
 }
 
@@ -96,25 +80,10 @@ export async function readReceipt(file) {
   return value;
 }
 
-export function assertReceiptInputs(receipt, expected) {
-  const inputs = receipt.inputs;
-  for (const key of ["platform", "version"]) {
-    if (expected[key] !== undefined && inputs[key] !== expected[key])
-      throw new Error(`stale receipt ${key}: expected ${expected[key]}`);
-  }
-  if (expected.currentCommit && inputs.commits.cortex !== expected.currentCommit)
-    throw new Error("stale receipt Cortex commit");
-  if (expected.bomDigest && inputs.bom.sha256 !== expected.bomDigest)
-    throw new Error("stale receipt BOM hash");
-  if (expected.bomPath && path.resolve(inputs.bom.path) !== path.resolve(expected.bomPath))
-    throw new Error("receipt BOM path mismatch");
-  return receipt;
-}
-
 export function assertReceiptMatchesBom(receipt, expected) {
   const actual = receiptInputs(expected);
   if (JSON.stringify(canonical(receipt.inputs)) !== JSON.stringify(canonical(actual)))
-    throw new Error("receipt commits, pins, or BOM identity are stale");
+    throw new Error("receipt commit, pins, or BOM identity are stale");
   return receipt;
 }
 

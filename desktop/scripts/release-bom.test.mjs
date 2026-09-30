@@ -1,154 +1,92 @@
 import assert from "node:assert/strict";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { documentHash } from "./package-release-utils.mjs";
-import { loadReleaseBom, repositoryContext, validateReleaseBom } from "./release-bom.mjs";
+import { bytes, documentHash } from "./release-utils.mjs";
+import { deriveReleaseBom, RELEASE_BOM_FILE } from "./release-bom.mjs";
 
-const context = {
-  currentCommit: "a".repeat(40),
-  platform: "win",
-  releaseVersion: "0.9.15",
-  workspace: {
-    imago: {
-      repository: "makekosmos/imago",
-      commit: "d".repeat(40),
-      package: {
-        name: "@makekosmos/visuals",
-        version: "0.1.3",
-        integrity: `git:${"d".repeat(40)}`,
-      },
-    },
-    "arca-sdk": {
-      repository: "makekosmos/arca-sdk",
-      commit: "c".repeat(40),
-      package: { name: "@makekosmos/ark", version: "0.1.1", integrity: `git:${"c".repeat(40)}` },
-    },
-  },
-  toolchain: { pnpm: "12.4.1", node: "24.15.0", rust: "1.95.0" },
-  api: { engine: "1.0.0", package_manifest: 2 },
-};
+const COMMIT = "a".repeat(40);
+const repoRoot = path.resolve(import.meta.dirname, "..", "..");
 
-function bom() {
-  return {
-    schema_version: 1,
-    state: "resolved",
-    id: "cortex-0.9.15-win",
-    release: { channel: "stable", platform: "win", version: "0.9.15" },
+async function fixture({
+  packageManager = "pnpm@12.4.1",
+  win = "0.10.0",
+  node = "24.15.0",
+  rust = "1.95.0",
+  api = "1.0.0",
+} = {}) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "mundus-bom-"));
+  await mkdir(path.join(root, "desktop"));
+  await mkdir(path.join(root, "runtime", "src"), { recursive: true });
+  await writeFile(path.join(root, "package.json"), JSON.stringify({ packageManager }));
+  await writeFile(path.join(root, "desktop", "release-versions.json"), JSON.stringify({ win }));
+  await writeFile(path.join(root, "toolchain.json"), JSON.stringify({ node, rust }));
+  await writeFile(
+    path.join(root, "runtime", "src", "protocol_version.rs"),
+    `pub const API_VERSION: &str = "${api}";\n`,
+  );
+  return root;
+}
+
+test("the BOM is derived entirely from the checkout", async () => {
+  const bom = await deriveReleaseBom(await fixture(), "win", COMMIT);
+  assert.deepEqual(bom.value, {
+    schema_version: 2,
+    id: "mundus-desktop-0.10.0-win",
+    release: { version: "0.10.0", channel: "production", platform: "win" },
     source: {
-      cortex: { repository: "makekosmos/cortex", commit: context.currentCommit },
-      core: {
-        repository: "makekosmos/cortex",
-        commit: context.currentCommit,
-        path: "core/",
+      repository: "makekosmos/cortex",
+      commit: COMMIT,
+      toolchain: {
+        pnpm: "12.4.1",
+        node: "24.15.0",
+        rust: "1.95.0",
+        target: "x86_64-pc-windows-msvc",
       },
-      arca_sdk: {
-        repository: "makekosmos/arca-sdk",
-        commit: "c".repeat(40),
-        package: { name: "@makekosmos/ark", version: "0.1.1", integrity: `git:${"c".repeat(40)}` },
-      },
-      imago: {
-        repository: "makekosmos/imago",
-        commit: "d".repeat(40),
-        package: {
-          name: "@makekosmos/visuals",
-          version: "0.1.3",
-          integrity: `git:${"d".repeat(40)}`,
-        },
-      },
-      store: { repository: "makekosmos/store", commit: "f".repeat(40) },
-      toolchain: { ...context.toolchain, target: "x86_64-pc-windows-msvc" },
     },
-    compatibility: {
-      engine_api: context.api.engine,
-      package_schema: context.api.package_manifest,
-    },
-    catalog: {
-      sequence: 12,
-      previous_sequence: 11,
-      store_sequence: 12,
-      channel: "production",
-      signing_key_id: "release",
-    },
-    packages: [
-      {
-        id: "com.kosmos.fixture",
-        manifest_id: "com.kosmos.fixture",
-        kind: "app",
-        repository: "makekosmos/fixture",
-        version: "1.0.0",
-        ref: "e".repeat(40),
-        engine_api: ">=1.0.0",
-        entrypoint: "dist/index.html",
-        icon: "icon.png",
-        artifact: {
-          name: "fixture.kspkg",
-          url: "https://github.com/makekosmos/package-index/releases/download/catalog-12/fixture.kspkg",
-          sha256: "f".repeat(64),
-          size: 1,
-        },
-      },
-    ],
-    artifacts: [],
-  };
-}
-
-test("validates the pinned Cortex release BOM", () => {
-  assert.equal(validateReleaseBom(bom(), context).id, "cortex-0.9.15-win");
-});
-
-test("rejects signing secrets", () => {
-  const value = bom();
-  value.signing = { private_key: "never" };
-  assert.throws(() => validateReleaseBom(value, context), /private_key/);
-});
-
-test("rejects mutable package URLs and a divergent Core subtree commit", () => {
-  const mutable = bom();
-  mutable.packages[0].artifact.url =
-    "https://github.com/makekosmos/package-index/releases/latest/download/fixture.kspkg";
-  assert.throws(() => validateReleaseBom(mutable, context), /immutable catalog release/);
-  const divergent = bom();
-  divergent.source.core.commit = "b".repeat(40);
-  assert.throws(() => validateReleaseBom(divergent, context), /source\.core\.commit/);
-});
-
-test("rejects first-party source metadata outside package.json pins", () => {
-  const value = bom();
-  value.source.imago.package.version = "0.1.4";
-  assert.throws(() => validateReleaseBom(value, context), /package\.json workspace pin/);
-});
-
-for (const [name, edit, message] of [
-  [
-    "Cortex commit",
-    (value) => (value.source.cortex.commit = "f".repeat(40)),
-    "source.cortex.commit",
-  ],
-  ["release version", (value) => (value.release.version = "0.9.16"), "release.version"],
-  ["toolchain", (value) => (value.source.toolchain.rust = "1.94.0"), "source.toolchain.rust"],
-  ["API pin", (value) => (value.compatibility.engine_api = "2.0.0"), "compatibility.engine_api"],
-]) {
-  test(`rejects a mismatched ${name}`, () => {
-    const value = bom();
-    edit(value);
-    assert.throws(() => validateReleaseBom(value, context), new RegExp(message));
+    compatibility: { engine_api: "1.0.0" },
   });
-}
-
-test("reads real API pins from the repository sources", async () => {
-  const root = path.resolve(import.meta.dirname, "..", "..");
-  const real = await repositoryContext(root, "win", context.currentCommit);
-  assert.match(real.api.engine, /^\d+\.\d+\.\d+$/);
+  assert.deepEqual(bom.bytes, bytes(bom.value));
+  assert.equal(bom.digest, documentHash(bom.bytes));
+  assert.equal(RELEASE_BOM_FILE, "release-bom.v2.json");
 });
 
-test("loads exact BOM bytes and digest", async () => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "cortex-bom-"));
-  const file = path.join(dir, "release-bom.json");
-  const raw = Buffer.from(`${JSON.stringify(bom(), null, 2)}\n`);
-  await writeFile(file, raw);
-  const loaded = await loadReleaseBom(file, { context });
-  assert.equal(loaded.bytes.toString(), raw.toString());
-  assert.equal(loaded.digest, documentHash(raw));
+test("the same checkout always yields the same BOM bytes", async () => {
+  const root = await fixture();
+  const first = await deriveReleaseBom(root, "win", COMMIT);
+  const second = await deriveReleaseBom(root, "win", COMMIT);
+  assert.equal(first.digest, second.digest);
+  const other = await deriveReleaseBom(root, "win", "b".repeat(40));
+  assert.notEqual(first.digest, other.digest);
+});
+
+test("the real repository pins derive a valid BOM", async () => {
+  const bom = await deriveReleaseBom(repoRoot, "win", COMMIT);
+  const versions = JSON.parse(
+    await readFile(path.join(repoRoot, "desktop", "release-versions.json"), "utf8"),
+  );
+  assert.equal(bom.value.release.version, versions.win);
+  assert.equal(bom.value.id, `mundus-desktop-${versions.win}-win`);
+});
+
+test("an unknown platform or a malformed commit is rejected", async () => {
+  const root = await fixture();
+  await assert.rejects(() => deriveReleaseBom(root, "mac", COMMIT), /Unknown platform "mac"/);
+  await assert.rejects(() => deriveReleaseBom(root, "win", "abc"), /40-character/);
+  await assert.rejects(() => deriveReleaseBom(root, "win", "A".repeat(40)), /40-character/);
+});
+
+test("every pin must be present and semantic", async () => {
+  const cases = [
+    [{ packageManager: "npm@10.0.0" }, /packageManager pnpm pin/],
+    [{ win: null }, /release-versions\.json win/],
+    [{ node: "24" }, /toolchain\.json node/],
+    [{ rust: null }, /toolchain\.json rust/],
+    [{ api: "one" }, /runtime API_VERSION/],
+  ];
+  for (const [overrides, error] of cases) {
+    const root = await fixture(overrides);
+    await assert.rejects(() => deriveReleaseBom(root, "win", COMMIT), error);
+  }
 });

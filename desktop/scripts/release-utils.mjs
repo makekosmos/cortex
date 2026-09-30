@@ -59,25 +59,6 @@ export function integer(value, name) {
   return n;
 }
 
-export function iso(value, name) {
-  if (
-    Object.prototype.toString.call(value) !== "[object String]" ||
-    !value.endsWith("Z") ||
-    Number.isNaN(Date.parse(value))
-  )
-    fail(`${name} must be an ISO UTC timestamp`);
-  return value;
-}
-
-export function safeId(value, name) {
-  if (
-    Object.prototype.toString.call(value) !== "[object String]" ||
-    !/^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$/.test(value)
-  )
-    fail(`${name} must be a safe identifier`);
-  return value;
-}
-
 export function semver(value, name) {
   if (
     Object.prototype.toString.call(value) !== "[object String]" ||
@@ -95,9 +76,4 @@ export function sha256(value, name) {
 
 export function documentHash(data) {
   return createHash("sha256").update(data).digest("hex");
-}
-
-export function finish(error) {
-  console.error(`[package-release] ${error instanceof Error ? error.message : String(error)}`);
-  process.exitCode = 1;
 }
