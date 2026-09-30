@@ -8,11 +8,6 @@ description = "Unified DB + sync engine for Mundus/Delphi"
 name = "ark_core"
 path = "src/lib.rs"
 
-[[bin]]
-name = "ark-sync-node"
-path = "src/bin/ark-sync-node.rs"
-required-features = ["iroh-spike"]
-
 [dependencies]
 rusqlite.workspace = true
 tokio = { version = "1", features = [
