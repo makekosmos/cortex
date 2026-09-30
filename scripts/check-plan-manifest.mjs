@@ -28,6 +28,7 @@ const SCRIPT_CHECKS = {
     "build:desktop": [],
     "build:installer:local": [],
     "test:backend": [],
+    "test:static": [],
     "test:desktop-tooling": [],
   },
   "desktop/package.json": {

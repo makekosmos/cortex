@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import { openGateTmp, sweepGateTmp } from "./gate-tmp.mjs";
 
 const cortex = resolve(import.meta.dirname, "..", "..");
 const target = process.env.CARGO_TARGET_DIR
@@ -9,12 +10,23 @@ const target = process.env.CARGO_TARGET_DIR
 const executable = (name) =>
   resolve(target, "debug", `${name}${process.platform === "win32" ? ".exe" : ""}`);
 const bridge = executable("ark-markdown-bridge");
+// Tests must not write to the user's %TEMP% (KOS-270): every cargo
+// invocation gets a fresh per-run scratch dir as TMP/TEMP/TMPDIR, swept and
+// reported once the test processes have exited and released their handles.
+const gateTmp = openGateTmp(target, process.pid);
+process.on("exit", () => {
+  const removed = sweepGateTmp(target, gateTmp);
+  console.log(
+    `gate tmp: swept ${removed} leftover entr${removed === 1 ? "y" : "ies"} under ${gateTmp}`,
+  );
+});
+const gateEnv = { ...process.env, TMP: gateTmp, TEMP: gateTmp, TMPDIR: gateTmp };
 // Cargo's default job count is used: a cold `--workspace` run took 1474 s with
 // CARGO_BUILD_JOBS=1 and 498 s with 12, and free memory stayed above 17.5 GB
 // of 32 (docs/experiments/2026-09-30-build-speed.md). Set CARGO_BUILD_JOBS to
 // limit it on a smaller machine.
 function run(cwd, args) {
-  const result = spawnSync("cargo", args, { cwd, stdio: "inherit" });
+  const result = spawnSync("cargo", args, { cwd, stdio: "inherit", env: gateEnv });
   if (result.error) throw result.error;
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
