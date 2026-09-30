@@ -62,6 +62,18 @@ fn test_format_space_code_19() {
 }
 
 #[test]
+fn test_format_space_code_non_ascii_no_panic() {
+    // Byte-length lands on a formatted arm while a multi-byte char straddles a
+    // cut point — must return the input unchanged instead of panicking.
+    assert_eq!(format_space_code("ABCÉDE"), "ABCÉDE");
+    assert_eq!(format_space_code("ABCÉDEFGHJK"), "ABCÉDEFGHJK");
+    assert_eq!(
+        format_space_code("ABCÜDEFGHJKMNPQRS"),
+        "ABCÜDEFGHJKMNPQRS"
+    );
+}
+
+#[test]
 fn test_parse_space_code_12() {
     assert_eq!(
         parse_space_code("ABCD-EFGH-JKMN"),

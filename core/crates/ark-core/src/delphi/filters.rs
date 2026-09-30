@@ -26,7 +26,10 @@ fn is_active(t: &TodoItem) -> bool {
 #[inline]
 fn is_date_today(iso: &Option<String>, today_iso: &str) -> bool {
     match iso {
-        Some(s) if s.len() >= 10 => &s[..10] == today_iso,
+        // `scheduled_date` is free-form TEXT: `&s[..10]` would panic when byte
+        // 10 splits a multi-byte codepoint. `starts_with` is the same check
+        // without slicing.
+        Some(s) => s.starts_with(today_iso),
         _ => false,
     }
 }
@@ -157,5 +160,21 @@ mod tests {
             assert!(filter_todos(list, &[], TODAY_ISO).is_empty());
             assert_eq!(count_todos(list, &[], TODAY_ISO), 0);
         }
+    }
+
+    #[test]
+    fn non_ascii_scheduled_date_does_not_panic() {
+        // scheduled_date is a free-form TEXT column; a value whose 10th byte
+        // splits a multi-byte codepoint must be treated as "not today", not
+        // panic the whole filter.
+        let todo: TodoItem = serde_json::from_value(serde_json::json!({
+            "id": "t1",
+            "title": "x",
+            "scheduledDate": "2026-09-2\u{00dc}",
+            "createdAt": "2026-09-26T00:00:00Z"
+        }))
+        .unwrap();
+        assert!(!is_date_today(&todo.scheduled_date, "2026-09-27"));
+        assert!(filter_todos(SmartList::Today, &[todo], "2026-09-27").is_empty());
     }
 }

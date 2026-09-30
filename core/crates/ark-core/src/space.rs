@@ -102,6 +102,12 @@ pub fn generate_extended_code(code: &str, primary_ipv4: &str) -> Option<String> 
 /// Format code with dashes for display.
 pub fn format_space_code(code: &str) -> String {
     let clean: String = code.replace(['-', ' '], "").to_uppercase();
+    // The match arms key off byte length and slice at fixed offsets — a
+    // multi-byte char straddling a cut point (e.g. "ABCÉDE" is 7 bytes) would
+    // panic. Non-ASCII input can't be a space code anyway; return it as-is.
+    if !clean.is_ascii() {
+        return code.to_string();
+    }
     match clean.len() {
         7 => format!("{}-{}", &clean[0..4], &clean[4..7]),
         12 => format!("{}-{}-{}", &clean[0..4], &clean[4..8], &clean[8..12]),
