@@ -11,8 +11,8 @@ const MANIFEST_CONTRACT = ["package-manager", "format"];
 // Script name → checks that run it (or read it as a contract). An empty list
 // marks a script that `pnpm run check` never runs, so the full check would not
 // exercise it either. Scripts missing here (gate plumbing such as prepare and
-// check:plan, the aggregators check/test:static, lint/format entrypoints, and
-// any newly added script) fail closed.
+// check:plan, the aggregators check, check:fast and test:static, lint/format
+// entrypoints, and any newly added script) fail closed.
 const SCRIPT_CHECKS = {
   "package.json": {
     "check:brand": ["brand"],

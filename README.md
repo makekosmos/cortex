@@ -157,10 +157,16 @@ re-derives the BOM from HEAD, so a receipt from any other commit is rejected.
 Rustfmt, workspace Clippy with warnings denied, complete workspace
 Rust tests, backend tests, and runtime staging. `pnpm install --frozen-lockfile`
 installs Lefthook hooks on a clean checkout; run `pnpm run prepare` if hooks are
-missing. Pre-commit uses the planner against staged files; pre-push uses the
-Git-provided ref range when stdin is available and otherwise falls back to the
-full backend and runtime suite.
+missing. Pre-commit uses the planner against staged files but runs only the
+checks that finish in seconds: Clippy, Rust tests, runtime staging and the
+Manager gate are deferred, and a change that selects the full check runs
+`pnpm run check:fast` instead (`scripts/check-plan-commit.mjs`). Pre-push
+uses the Git-provided ref range when stdin is available and otherwise falls
+back to the full check, so every deferred check runs before anything leaves
+the machine; `--full` still runs everything at commit time.
 
-The Rust gate runs every workspace library and integration test plus Cortex
-binary tests. Elevated Windows service entrypoints are compiled by Clippy but
+The Rust gate runs every workspace library, integration and Cortex binary test
+through [cargo-nextest](https://nexte.st) (`cargo install cargo-nextest
+--locked`; the required version is pinned in `.config/nextest.toml`), one
+process per test, followed by the doc-tests. Elevated Windows service entrypoints are compiled by Clippy but
 not executed by unprivileged hooks; their logic is covered through library tests.

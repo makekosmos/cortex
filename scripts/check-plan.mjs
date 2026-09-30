@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { coveredByCache, diskTree, recordPass } from "./check-plan-cache.mjs";
+import { commitPlan } from "./check-plan-commit.mjs";
 import { executePlan } from "./check-plan-commands.mjs";
 import { gitEnv } from "./git-env.mjs";
 import { parseNameStatus, readRevision } from "./check-plan-git.mjs";
@@ -260,7 +261,8 @@ function parseArgs(argv) {
 
 function main() {
   const options = parseArgs(process.argv.slice(2));
-  const plan = createPlan(options);
+  // `--full` is an explicit request for the whole gate, even at commit time.
+  const plan = options.full ? createPlan(options) : commitPlan(createPlan(options));
   process.stdout.write(`${JSON.stringify(plan)}\n`);
   process.stderr.write(
     `changed → ${plan.changed.length ? plan.changed.join(", ") : "none"}\nchecks → ${plan.checks.join(", ") || "none"}\nreasons → ${plan.reasons.join("; ")}\n`,
