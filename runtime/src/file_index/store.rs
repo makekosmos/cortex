@@ -724,15 +724,20 @@ mod tests {
         let data = tempdir().unwrap();
         let db = data.path().join("files.db");
         let store = FileStore::open(&db).unwrap();
-        for n in 0..4_000 {
-            store
-                .upsert(&IndexedFile {
-                    path: format!(r"C:\docs\checkpoint-{n}.txt"),
-                    name: format!("checkpoint-{n}.txt"),
-                    mtime: n,
-                })
-                .unwrap();
-        }
+        // One bulk transaction fills the WAL; per-row upserts commit through
+        // 4000 fsyncs and dominated the test's runtime without adding signal.
+        store
+            .replace_all(
+                &(0..4_000)
+                    .map(|n| IndexedFile {
+                        path: format!(r"C:\docs\checkpoint-{n}.txt"),
+                        name: format!("checkpoint-{n}.txt"),
+                        mtime: n,
+                    })
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap();
+        assert!(store.database_size_snapshot().unwrap().wal_size_bytes > 0);
 
         store.checkpoint_truncate_wal().unwrap();
 

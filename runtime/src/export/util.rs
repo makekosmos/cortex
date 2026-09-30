@@ -32,13 +32,22 @@ pub(crate) fn csv_safe_cell(value: &str) -> Cow<'_, str> {
     }
 }
 
+/// Верхняя граница числового суффикса до timestamp-fallback.
+const UNIQUE_SUFFIX_LIMIT: u32 = 10_000;
+
 /// Подобрать уникальное имя файла в dest_dir с заданным stem + extension.
 pub(crate) fn unique_path(dest_dir: &Path, stem: &str, ext: &str) -> PathBuf {
+    unique_path_within(dest_dir, stem, ext, UNIQUE_SUFFIX_LIMIT)
+}
+
+/// `limit` — injectable, чтобы тесты проверяли exhaustion-ветку без записи
+/// тысяч файлов; продакшен использует [`UNIQUE_SUFFIX_LIMIT`].
+fn unique_path_within(dest_dir: &Path, stem: &str, ext: &str, limit: u32) -> PathBuf {
     let candidate = dest_dir.join(format!("{stem}.{ext}"));
     if !candidate.exists() {
         return candidate;
     }
-    for n in 2..10_000 {
+    for n in 2..limit {
         let c = dest_dir.join(format!("{stem}-{n}.{ext}"));
         if !c.exists() {
             return c;
@@ -99,10 +108,12 @@ mod tests {
         let tmp = tempfile::TempDir::new().unwrap();
         let dir = tmp.path();
         std::fs::write(dir.join("title.md"), b"").unwrap();
-        for n in 2..10_000u32 {
+        let limit = 8;
+        for n in 2..limit {
             std::fs::write(dir.join(format!("title-{n}.md")), b"").unwrap();
         }
-        let path = unique_path(dir, "title", "md");
+        let path = unique_path_within(dir, "title", "md", limit);
+        assert_eq!(path.parent(), Some(dir));
         assert!(
             !path.exists(),
             "unique_path returned existing path: {path:?}"
