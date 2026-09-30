@@ -8,6 +8,8 @@ const FORMAT_EXTENSIONS = /\.(?:[cm]?[jt]sx?|vue|json|ya?ml)$/i;
 const requireFromRoot = createRequire(new URL("../package.json", import.meta.url));
 
 const COMMANDS_BY_CHECK = {
+  "package-manager": ["pnpm", ["run", "test:package-manager"]],
+  "release-bom": ["pnpm", ["run", "test:release-bom"]],
   "desktop-contracts": ["pnpm", ["run", "test:desktop-contracts"]],
   rustfmt: ["pnpm", ["run", "rustfmt"]],
   clippy: ["pnpm", ["run", "clippy"]],

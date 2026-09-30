@@ -4,13 +4,16 @@ import { fileURLToPath } from "node:url";
 import { coveredByCache, diskTree, recordPass } from "./check-plan-cache.mjs";
 import { executePlan } from "./check-plan-commands.mjs";
 import { gitEnv } from "./git-env.mjs";
-import { parseNameStatus } from "./check-plan-git.mjs";
+import { parseNameStatus, readRevision } from "./check-plan-git.mjs";
+import { DOC_CONTRACTS, isScriptsManifest, manifestChecks } from "./check-plan-manifest.mjs";
 
 export { executePlan } from "./check-plan-commands.mjs";
 export { parseNameStatus } from "./check-plan-git.mjs";
 
 const CHECK_ORDER = [
   "brand",
+  "package-manager",
+  "release-bom",
   "desktop-contracts",
   "rustfmt",
   "clippy",
@@ -22,6 +25,9 @@ const CHECK_ORDER = [
 ];
 const ASSET_EXTENSIONS = /\.(?:png|jpe?g|gif|svg|webp|ico|avif)$/i;
 const ZERO_SHA = /^0{40}$/;
+const PROSE_EXTENSIONS = /\.(?:md|mdx|txt)$/i;
+// .txt files that are build inputs rather than prose.
+const TXT_BUILD_INPUTS = /(?:^|\/)(?:CMakeLists|requirements[^/]*)\.txt$/i;
 
 function git(args) {
   return spawnSync("git", args, { cwd: process.cwd(), encoding: "utf8", env: gitEnv() });
@@ -54,8 +60,9 @@ function validCommit(value) {
 
 function oneMergeBase(base, head) {
   const result = git(["merge-base", "--all", base, head]);
-  if (result.error || result.status !== 0) return false;
-  return result.stdout.trim().split(/\r?\n/).filter(Boolean).length === 1;
+  if (result.error || result.status !== 0) return null;
+  const bases = result.stdout.trim().split(/\r?\n/).filter(Boolean);
+  return bases.length === 1 ? bases[0] : null;
 }
 
 export function parsePushInput(input) {
@@ -83,13 +90,15 @@ function failClosed(mode, reason, changed = []) {
 function filesForMode(mode) {
   if (mode === "pre-commit") {
     const files = diffFiles(["--cached", "HEAD"]);
-    return files ? { files } : { full: "unable to inspect staged changes" };
+    return files
+      ? { files, revisions: { before: "HEAD", after: "index" } }
+      : { full: "unable to inspect staged changes" };
   }
   if (mode === "worktree") {
     const files = diffFiles(["HEAD"]);
     const untracked = untrackedFiles();
     return files && untracked
-      ? { files: [...files, ...untracked] }
+      ? { files: [...files, ...untracked], revisions: { before: "HEAD", after: "worktree" } }
       : { full: "unable to inspect worktree changes" };
   }
   if (mode === "pre-push") {
@@ -105,10 +114,12 @@ function filesForMode(mode) {
       return { full: "pre-push contains an invalid object id" };
     if (isShallow() || !validCommit(push.localSha) || !validCommit(push.remoteSha))
       return { full: "pre-push history is shallow or an object is missing" };
-    if (!oneMergeBase(push.remoteSha, push.localSha))
-      return { full: "pre-push history has no unique merge base" };
+    const base = oneMergeBase(push.remoteSha, push.localSha);
+    if (!base) return { full: "pre-push history has no unique merge base" };
     const files = diffFiles([`${push.remoteSha}...${push.localSha}`]);
-    return files ? { files } : { full: "unable to inspect pre-push diff" };
+    return files
+      ? { files, revisions: { before: base, after: push.localSha } }
+      : { full: "unable to inspect pre-push diff" };
   }
   return { full: `unknown planner mode: ${mode}` };
 }
@@ -140,10 +151,30 @@ function isFullInfluence(path) {
   );
 }
 
-function classify(file) {
+// Both sides of a modified manifest, from the file record (createPlan callers)
+// or from git. Anything but a readable in-place modification fails closed.
+function manifestPlan(file, revisions) {
+  if (file.status !== "M") return { full: `${file.path} is added, removed, or renamed` };
+  const readDisk = (path) => readFileSync(path, "utf8");
+  const read = (side) =>
+    file[side] ?? (revisions ? readRevision(git, readDisk, revisions[side], file.path) : null);
+  const before = read("before");
+  const after = read("after");
+  if (before === null || after === null) return { full: `${file.path} revisions are unavailable` };
+  return manifestChecks(file.path, before, after);
+}
+
+function classify(file, revisions) {
   const path = file.path;
-  if (/^(?:desktop|runtime|packages|shared)\//i.test(path) && /\.(?:md|mdx|txt)$/i.test(path))
-    return "full";
+  if (Object.hasOwn(DOC_CONTRACTS, path)) return DOC_CONTRACTS[path];
+  if (isScriptsManifest(path)) {
+    const result = manifestPlan(file, revisions);
+    return result.full ? result : result.checks;
+  }
+  // Prose under component trees is read by no check unless DOC_CONTRACTS
+  // lists it; core/ docs keep falling through to the core/ rule below.
+  if (/^(?:desktop|runtime|packages|shared)\//i.test(path) && PROSE_EXTENSIONS.test(path))
+    return TXT_BUILD_INPUTS.test(path) ? "full" : [];
   if (isFullInfluence(path)) return "full";
   if (isDocumentation(path) || ASSET_EXTENSIONS.test(path)) return [];
   if (/^desktop\//.test(path)) return ["lint", "format"];
@@ -188,9 +219,10 @@ export function createPlan({ mode = "worktree", full = false, files } = {}) {
   const checks = new Set();
   const reasons = [];
   for (const file of changed) {
-    const result = classify(file);
-    if (result === "full") {
-      reasons.push(`${file.path} requires the full check`);
+    const result = classify(file, discovered.revisions);
+    if (result === "full" || result.full) {
+      const detail = result.full ? ` (${result.full})` : "";
+      reasons.push(`${file.path} requires the full check${detail}`);
       return failClosed(mode, reasons.at(-1), changed);
     }
     for (const check of result) checks.add(check);

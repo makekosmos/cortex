@@ -81,22 +81,83 @@ test("deleted shared or build files still fail closed", async () => {
 });
 
 test("docs and isolated assets are a safe no-op", () => {
-  for (const file of ["README.md", "CHANGELOG.md", "docs/checks.md", "desktop/assets/icon.png"]) {
+  for (const file of [
+    "CHANGELOG.md",
+    "docs/checks.md",
+    "desktop/assets/icon.png",
+    "desktop/DEV.md",
+    "desktop/README.md",
+    "runtime/help.md",
+    "runtime/notes.txt",
+    "packages/readme.mdx",
+  ]) {
     const result = plan("--files", file).json;
     assert.equal(result.full, false, file);
     assert.deepEqual(result.checks, [], file);
   }
-  for (const file of [
-    "desktop/README.md",
-    "host/notes.txt",
-    "runtime/help.md",
-    "packages/readme.md",
-  ]) {
+  for (const file of ["host/notes.txt", "runtime/native/CMakeLists.txt", "shared/requirements.txt"])
     assert.equal(plan("--files", file).json.full, true, file);
-  }
   for (const file of ["shared/icon.svg", "packages/foo/logo.png"]) {
     assert.equal(plan("--files", file).json.full, true, file);
   }
+});
+
+test("README.md is a contract doc read by the package-manager test", () => {
+  assert.deepEqual(plan("--files", "README.md").json.checks, ["package-manager"]);
+});
+
+const manifest = (scripts, extra = {}) =>
+  JSON.stringify({ name: "cortex", scripts, devDependencies: { oxlint: "1.0.0" }, ...extra });
+const edit = (path, before, after) => ({ path, status: "M", before, after });
+
+test("scripts-only package.json edits select the checks those scripts belong to", async () => {
+  const { createPlan } = await import("./check-plan.mjs");
+  const checks = (...files) => createPlan({ files }).checks;
+  const base = { "test:desktop-contracts": "node a.mjs", rustfmt: "cargo fmt", check: "x" };
+  const root = (scripts) => edit("package.json", manifest(base), manifest(scripts));
+  assert.deepEqual(checks(root({ ...base, "test:desktop-contracts": "node b.mjs" })), [
+    "package-manager",
+    "desktop-contracts",
+    "format",
+  ]);
+  const withoutRustfmt = { "test:desktop-contracts": "node a.mjs", check: "x" };
+  assert.deepEqual(checks(root(withoutRustfmt)), ["package-manager", "rustfmt", "format"]);
+  const desktop = edit("desktop/package.json", manifest({ build: "a" }), manifest({ build: "b" }));
+  assert.deepEqual(checks(desktop), ["package-manager", "release-bom", "format"]);
+  // Whitespace-only reformatting is not a semantic change.
+  const reformatted = JSON.stringify(JSON.parse(manifest(base)), null, 2);
+  assert.deepEqual(checks(edit("package.json", manifest(base), reformatted)), [
+    "package-manager",
+    "format",
+  ]);
+});
+
+test("dependency, tooling, unmapped, and unreadable manifest edits fail closed", async () => {
+  const { createPlan } = await import("./check-plan.mjs");
+  const scripts = { rustfmt: "cargo fmt", check: "x" };
+  const before = manifest(scripts);
+  for (const after of [
+    manifest(scripts, { devDependencies: { oxlint: "2.0.0" } }),
+    manifest({ ...scripts, rustfmt: "cargo fmt --all" }, { devDependencies: {} }),
+    manifest(scripts, { engines: { node: ">=24" } }),
+    manifest(scripts, { packageManager: "pnpm@13.0.0" }),
+    manifest(scripts, { mundus: { workspace: {} } }),
+    manifest({ ...scripts, check: "y" }),
+    manifest({ ...scripts, "brand-new": "node x.mjs" }),
+    manifest("not-an-object"),
+    "{ not json",
+  ]) {
+    const result = createPlan({ files: [edit("package.json", before, after)] });
+    assert.equal(result.full, true, after);
+    assert.match(result.reasons[0], /package\.json requires the full check \(/, after);
+  }
+  for (const file of [
+    { path: "package.json", status: "M" },
+    { path: "package.json", status: "A", before, after: before },
+    { path: "desktop/package.json", status: "D", before, after: before },
+    edit("core/ark/packages/ark/package.json", before, before),
+  ])
+    assert.equal(createPlan({ files: [file] }).full, true, JSON.stringify(file));
 });
 
 test("explicit full always selects every check", () => {

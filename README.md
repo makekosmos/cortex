@@ -127,9 +127,14 @@ tests. Bootstrap never resets, stashes, or overwrites a dirty checkout; remove
 The affected-check planner is fail-closed: staged changes use `pre-commit`,
 the worktree plan includes tracked and untracked files, and pre-push input
 uses the pushed ref range. Missing, invalid, zero, shallow, or ambiguous
-revisions select the full check. Docs and isolated assets are a no-op;
-shared, lockfile, manifest, build, workflow, hook, and unknown changes select
-the full check.
+revisions select the full check. Docs and isolated assets are a no-op, except
+documents that tests read as contracts (`DOC_CONTRACTS` in
+`scripts/check-plan-manifest.mjs`), which select the checks reading them. A
+`package.json` edit that only changes known `"scripts"` entries selects the
+checks running those scripts; any other manifest change (dependencies,
+engines, packageManager, workspace pins), an unmapped script, or an
+unparseable revision selects the full check, as do shared, lockfile, build,
+workflow, hook, and unknown changes.
 
 Cheap local baseline: layout 0.108s, source-size test 0.680s, and naming test
 0.154s. There is no hosted CI by policy; local Lefthook gates are the only

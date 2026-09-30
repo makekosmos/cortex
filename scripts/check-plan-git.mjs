@@ -22,3 +22,18 @@ export function parseNameStatus(output) {
   }
   return files;
 }
+
+// Reads one side of a diff: "index" (staged blob), "worktree" (file on disk),
+// or any commit-ish. Returns null when the revision cannot be read.
+export function readRevision(git, readFile, revision, path) {
+  if (revision === "worktree") {
+    try {
+      return readFile(path);
+    } catch {
+      return null;
+    }
+  }
+  const spec = revision === "index" ? `:${path}` : `${revision}:${path}`;
+  const result = git(["show", spec]);
+  return result.error || result.status !== 0 ? null : result.stdout;
+}
