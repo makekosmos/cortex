@@ -3,7 +3,7 @@ use rusqlite::Connection;
 
 fn registration() -> TypeRegistration {
     serde_json::from_str(include_str!(
-        "../../../integrations/fatsecret/type-registration.json"
+        "../../../../integrations/fatsecret/type-registration.json"
     ))
     .expect("FatSecret registration must deserialize")
 }

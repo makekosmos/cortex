@@ -1,6 +1,7 @@
+#![cfg(feature = "iroh-spike")]
 #![allow(clippy::unwrap_used)]
 
-include!("../support/iroh_bidirectional_support.rs");
+include!("support/iroh_bidirectional_support.rs");
 #[tokio::test(flavor = "multi_thread")]
 async fn iroh_bidirectional_hello_and_reverse_send() {
     let (b_events_tx, mut b_events_rx) = mpsc::unbounded_channel::<TransportEvent>();

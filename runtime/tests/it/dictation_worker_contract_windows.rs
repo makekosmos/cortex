@@ -169,6 +169,8 @@ async fn compiled_dictation_worker_round_trips_engine_capabilities() {
         return;
     };
     assert!(worker.is_file(), "worker candidate missing: {worker:?}");
+    // Worker launches share process-wide failure hooks with other test modules.
+    let _serialized = engine::package_worker_process::test_support::serialized();
 
     let directory = tempfile::tempdir().unwrap();
     let (store, installed) = install_candidate(&directory, &worker);

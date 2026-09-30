@@ -35,13 +35,11 @@ if (!existsSync(bridge)) {
 const workspace = process.argv[2] === "--workspace";
 if (workspace) {
   run(cortex, ["test", "--workspace", "--lib"]);
-  // ark-core's iroh_bidirectional_network target requires the iroh-spike
-  // feature; an explicit --test wildcard makes cargo error on it instead of
-  // skipping. Run ark-core with default target selection (same coverage as
-  // upstream's `cargo test --manifest-path crates/ark-core/Cargo.toml`).
+  // Integration tests: one `it` binary per crate (tests/it/main.rs).
   // engine/iroh-spike: the integration replication tests exercise the
   // in-process ARK service's iroh transport (previously provided by the
-  // separately-built ark-core-rpc fixture binary).
+  // separately-built ark-core-rpc fixture binary). ark-core runs on its own
+  // below, with its default features, as upstream does.
   run(cortex, [
     "test",
     "--workspace",

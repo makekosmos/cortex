@@ -1,10 +1,5 @@
 #![allow(clippy::unwrap_used)]
 
-#[path = "support/integration_replication_offline.rs"]
-mod offline;
-#[path = "support/integration_replication_setup.rs"]
-mod support;
-
 use ed25519_dalek::{Signer, SigningKey};
 use engine::ark_host::ArkHost;
 use engine::integrations::handle_operation;
@@ -13,7 +8,7 @@ use rusqlite::Connection;
 use serde_json::{json, Value};
 use std::net::TcpListener;
 
-use support::IntegrationReplicationSetup;
+use crate::{offline, support, support::IntegrationReplicationSetup};
 
 fn free_loopback_port() -> u16 {
     let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
@@ -78,6 +73,7 @@ fn sign_prepared(prepared: &Value, signing_key: &SigningKey) -> Value {
 
 #[tokio::test]
 async fn cortex_consumer_runs_signed_replication_over_two_core_nodes() {
+    let _identities = support::HOST_IDENTITIES.lock().await;
     let setup: IntegrationReplicationSetup =
         support::new_setup_named(support::INTEGRATION_ID).unwrap();
 

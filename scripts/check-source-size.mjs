@@ -66,8 +66,8 @@ const GRANDFATHERED = new Set([
   "runtime/src/store_catalog.rs",
   "runtime/src/usage_tracker/mod.rs",
   "runtime/src/usage_tracker/windows_capture.rs",
-  "runtime/tests/ark_markdown_bridge_worker.rs",
-  "runtime/tests/package_worker_windows.rs",
+  "runtime/tests/it/ark_markdown_bridge_worker.rs",
+  "runtime/tests/it/package_worker_windows.rs",
 ]);
 const IGNORED = new Set([
   ".git",

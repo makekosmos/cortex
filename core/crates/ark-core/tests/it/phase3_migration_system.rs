@@ -6,8 +6,7 @@ use ark_core::db::{
 use rusqlite::{params, Connection};
 use serde_json::json;
 
-#[path = "support/phase3_legacy_fixtures.rs"]
-mod phase3_legacy_fixtures;
+use crate::phase3_legacy_fixtures;
 
 fn table_exists(conn: &Connection, name: &str) -> bool {
     conn.query_row(

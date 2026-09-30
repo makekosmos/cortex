@@ -5,10 +5,8 @@
 mod finish;
 #[path = "support/integration_replication_hpke_fixture.rs"]
 mod fixture;
-#[path = "support/integration_replication_offline.rs"]
-mod offline;
-#[path = "support/integration_replication_setup.rs"]
-mod support;
+
+use crate::{offline, support};
 
 use ed25519_dalek::Signer;
 use engine::{
@@ -17,10 +15,7 @@ use engine::{
 };
 use httpmock::MockServer;
 use serde_json::json;
-use std::{
-    path::Path,
-    sync::{Mutex, OnceLock},
-};
+use std::path::Path;
 use tempfile::tempdir;
 
 const PACKAGE_ID: &str = "com.kosmos.test.hpke-replication";
@@ -28,13 +23,11 @@ const PACKAGE_VERSION: &str = "1.0.0";
 const SETTING: &str = "session";
 const SPACE_ID: &str = "integration-replication-hpke";
 
-static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-
 #[tokio::test]
 async fn signed_hpke_replication_reaches_offline_provider_and_rejects_stale_inputs() {
     let dir = tempdir().unwrap();
     let marker = dir.path().join("provider-result.json");
-    let _cleanup = fixture::cleanup(&marker);
+    let _cleanup = fixture::cleanup(&marker).await;
     let provider = MockServer::start_async().await;
     let endpoint = provider.url("/collect");
     let origin = provider.url("/");

@@ -5,7 +5,7 @@ use std::{
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex, MutexGuard, OnceLock,
+        Arc,
     },
     time::{Duration, Instant},
 };
@@ -14,10 +14,11 @@ use engine::package_worker_process::{
     test_support, FailureStage, LaunchCleanupOwner, WorkerProcess, WorkerProcessError,
 };
 
-static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-
+/// Marker env vars and the worker failure hooks are process-wide, and other
+/// test modules in this binary use both, so the markers own the engine's
+/// worker test lock for as long as they exist. Drop resets both under it.
 struct Markers {
-    _lock: MutexGuard<'static, ()>,
+    _serialized: test_support::FailureGuard<'static>,
     entry: PathBuf,
     bootstrap: PathBuf,
 }
@@ -33,11 +34,8 @@ impl Drop for Markers {
 }
 
 fn markers() -> (tempfile::TempDir, Markers) {
+    let serialized = test_support::serialized();
     let directory = tempfile::tempdir().expect("marker directory");
-    let lock = ENV_LOCK
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let entry = directory.path().join("entry.marker");
     let bootstrap = directory.path().join("bootstrap.marker");
     unsafe {
@@ -47,7 +45,7 @@ fn markers() -> (tempfile::TempDir, Markers) {
     (
         directory,
         Markers {
-            _lock: lock,
+            _serialized: serialized,
             entry,
             bootstrap,
         },
@@ -92,7 +90,6 @@ async fn successful_handle_baseline(markers: &Markers) -> u32 {
 
 async fn pre_resume_failure(stage: FailureStage) {
     let (_directory, markers) = markers();
-    let guard = test_support::serialized();
     test_support::reset_resume_count();
     let baseline = handle_baseline().await;
     test_support::capture_next_process();
@@ -112,7 +109,6 @@ async fn pre_resume_failure(stage: FailureStage) {
         assert!(process.wait_object_0(), "captured process was not reaped");
     }
     assert_handle_count_stable(baseline);
-    drop(guard);
 }
 
 #[tokio::test]
@@ -163,7 +159,6 @@ async fn resume_failure_no_entry() {
 #[tokio::test]
 async fn wrapper_failure_never_reaches_bootstrap() {
     let (_directory, markers) = markers();
-    let guard = test_support::serialized();
     let baseline = handle_baseline().await;
     test_support::reset_resume_count();
     test_support::capture_next_process();
@@ -179,7 +174,6 @@ async fn wrapper_failure_never_reaches_bootstrap() {
         .expect("captured process")
         .wait_object_0());
     assert_handle_count_stable(baseline);
-    drop(guard);
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -206,7 +200,6 @@ async fn configure_failure_cleanup_does_not_block_current_thread_runtime() {
 #[tokio::test]
 async fn success_orders_entry_bootstrap_hello_and_job_limits() {
     let (_directory, markers) = markers();
-    let guard = test_support::serialized();
     let baseline = successful_handle_baseline(&markers).await;
     test_support::reset_resume_count();
     test_support::capture_next_process();
@@ -263,13 +256,11 @@ async fn success_orders_entry_bootstrap_hello_and_job_limits() {
         .expect("captured process")
         .wait_object_0());
     assert_handle_count_stable(baseline);
-    drop(guard);
 }
 
 #[tokio::test]
 async fn dropping_launch_at_pipe_connect_reaps_child_and_closes_handles() {
     let (_directory, _markers) = markers();
-    let guard = test_support::serialized();
     let baseline = handle_baseline().await;
     test_support::capture_next_process();
     let mut barrier = test_support::pause_next_before_pipe_connect();
@@ -294,13 +285,11 @@ async fn dropping_launch_at_pipe_connect_reaps_child_and_closes_handles() {
         "cancelled launch left child unreaped"
     );
     assert_handle_count_stable(baseline);
-    drop(guard);
 }
 
 #[tokio::test]
 async fn dropping_launch_before_resume_reaps_child_and_closes_handles() {
     let (_directory, _markers) = markers();
-    let guard = test_support::serialized();
     let baseline = handle_baseline().await;
     test_support::capture_next_process();
     let mut barrier = test_support::pause_next_before_resume();
@@ -326,12 +315,10 @@ async fn dropping_launch_before_resume_reaps_child_and_closes_handles() {
         "cancelled launch left child unreaped"
     );
     assert_handle_count_stable(baseline);
-    drop(guard);
 }
 
 async fn cleanup_failure(stage: FailureStage) {
     let (_directory, markers) = markers();
-    let guard = test_support::serialized();
     let baseline = handle_baseline().await;
     test_support::reset_resume_count();
     test_support::capture_next_process();
@@ -354,7 +341,6 @@ async fn cleanup_failure(stage: FailureStage) {
         .expect("captured process")
         .wait_object_0());
     assert_handle_count_stable(baseline);
-    drop(guard);
 }
 
 #[tokio::test]
@@ -375,7 +361,6 @@ async fn wait_failed_returns_cleanup() {
 #[tokio::test]
 async fn expired_deadline_does_not_invoke_termination() {
     let (_directory, _markers) = markers();
-    let guard = test_support::serialized();
     test_support::capture_next_process();
     let owner = LaunchCleanupOwner::new();
     let mut process = WorkerProcess::launch_with_owner(fixture(), owner)
@@ -390,13 +375,11 @@ async fn expired_deadline_does_not_invoke_termination() {
         .stop_until(Instant::now() + Duration::from_secs(10))
         .await
         .expect("retry stop");
-    drop(guard);
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn cancelled_cleanup_future_retains_owner_for_retry() {
     let (_directory, _markers) = markers();
-    let guard = test_support::serialized();
     let mut gate = test_support::pause_next_cleanup_wait();
     test_support::fail_next(FailureStage::PreResume);
     let owner = LaunchCleanupOwner::new();
@@ -409,16 +392,13 @@ async fn cancelled_cleanup_future_retains_owner_for_retry() {
         .cleanup_until(Instant::now() + Duration::from_secs(10))
         .await
         .expect("owner retry");
-    drop(guard);
 }
 
 #[tokio::test]
 async fn take_all_pipes_is_atomic_on_a_real_worker_process() {
     let (_directory, _markers) = markers();
-    let guard = test_support::serialized();
     let mut process = launch(fixture()).await.expect("worker launch");
     assert!(test_support::take_all_pipes(&mut process));
     assert!(!test_support::take_all_pipes(&mut process));
     process.stop().await.expect("worker stop");
-    drop(guard);
 }

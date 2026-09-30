@@ -13,8 +13,11 @@ use sha2::{Digest, Sha256};
 use std::io::Write;
 use zip::write::FileOptions;
 
+/// Holds, for the whole test, the locks over process-wide state this test
+/// touches: worker env markers and failure hooks, then keyring identities.
 pub(crate) struct Cleanup {
-    _lock: std::sync::MutexGuard<'static, ()>,
+    _worker: engine::package_worker_process::test_support::FailureGuard<'static>,
+    _identities: tokio::sync::MutexGuard<'static, ()>,
 }
 
 impl Drop for Cleanup {
@@ -35,8 +38,9 @@ impl Drop for Cleanup {
     }
 }
 
-pub fn cleanup(marker: &Path) -> Cleanup {
-    let lock = ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap();
+pub async fn cleanup(marker: &Path) -> Cleanup {
+    let worker = engine::package_worker_process::test_support::serialized();
+    let identities = support::HOST_IDENTITIES.lock().await;
     unsafe {
         std::env::set_var("MUNDUS_FAKE_PROVIDER_RESULT_MARKER", marker);
         std::env::set_var(
@@ -48,7 +52,10 @@ pub fn cleanup(marker: &Path) -> Cleanup {
             marker.with_extension("bootstrap"),
         );
     }
-    Cleanup { _lock: lock }
+    Cleanup {
+        _worker: worker,
+        _identities: identities,
+    }
 }
 
 pub fn manifest(origin: &str) -> VersionedManifest {
