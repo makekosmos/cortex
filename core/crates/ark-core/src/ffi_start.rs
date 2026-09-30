@@ -93,6 +93,7 @@ impl ArkCore {
                         .clone()
                         .unwrap_or_else(get_host_device_name);
                     let ws_port = config.port.unwrap_or(LAN_SYNC_PORT as u32) as u16;
+                    let sync_bind = config.bind.unwrap_or_default();
 
                     let server =
                         Arc::new(SyncServer::new(storage.clone() as Arc<dyn StorageBackend>));
@@ -101,10 +102,9 @@ impl ArkCore {
                     // Wire server → listener (using the self_arc inside the thread).
                     self_arc.install_server_callbacks(&server).await;
 
-                    let own_addresses: Vec<String> = get_own_addresses(ws_port)
-                        .into_iter()
-                        .filter(|a| is_address_routable(a))
-                        .collect();
+                    // See handle_start_sync: the bind choice resolves every
+                    // address the stack opens and advertises.
+                    let own_addresses: Vec<String> = sync_bind.own_addresses(ws_port);
 
                     server
                         .start_with_addr(
@@ -112,7 +112,7 @@ impl ArkCore {
                             &config.device_id,
                             Some(&device_name),
                             Some(own_addresses.clone()),
-                            &format!("0.0.0.0:{ws_port}"),
+                            &sync_bind.ws_bind_addr(ws_port),
                         )
                         .await
                         .map_err(ArkCoreError::from)?;
@@ -169,8 +169,15 @@ impl ArkCore {
                                         secret_key: Some(secret_key),
                                         peer_addr,
                                         peer_ticket: config.iroh_peer_ticket.clone(),
-                                        relay_mode: None,
+                                        // See handle_start_sync: loopback endpoints
+                                        // are unreachable via relay and tests must
+                                        // stay offline.
+                                        relay_mode: match sync_bind {
+                                            SyncBind::Loopback => Some(iroh::RelayMode::Disabled),
+                                            SyncBind::AllInterfaces => None,
+                                        },
                                         auth_secret: config.auth_secret.clone(),
+                                        bind: sync_bind,
                                     },
                                 ));
                             let relay_sync = RelaySync::with_transport(
@@ -220,7 +227,9 @@ impl ArkCore {
                         let reachable: Vec<String> = peer
                             .addresses
                             .iter()
-                            .filter(|a| !own_addresses.contains(a) && is_address_routable(a))
+                            .filter(|a| {
+                                !own_addresses.contains(a) && sync_bind.accepts_peer_address(a)
+                            })
                             .cloned()
                             .collect();
                         if reachable.is_empty() {
@@ -258,34 +267,39 @@ impl ArkCore {
                                 config.space_id.clone(),
                                 own_addresses.clone(),
                                 config.auth_secret.clone(),
+                                sync_bind,
                             )
                             .await;
                     }
 
-                    // Beacon.
+                    // Beacon — see handle_start_sync: loopback mode cannot use
+                    // LAN broadcast discovery, so the socket is never bound.
                     let beacon = Arc::new(BroadcastDiscovery::new());
-                    self_arc
-                        .wire_beacon(
-                            &beacon,
-                            &server,
-                            &storage,
-                            &clients,
-                            config.device_id.clone(),
-                            device_name.clone(),
-                            config.space_id.clone(),
-                            own_addresses.clone(),
-                            config.auth_secret.clone(),
-                        )
-                        .await;
-                    beacon
-                        .start(BroadcastDiscoveryOptions {
-                            space_id: config.space_id.clone(),
-                            device_id: config.device_id.clone(),
-                            device_name: device_name.clone(),
-                            ws_port,
-                        })
-                        .await
-                        .map_err(ArkCoreError::from)?;
+                    if sync_bind.discovery_supported() {
+                        self_arc
+                            .wire_beacon(
+                                &beacon,
+                                &server,
+                                &storage,
+                                &clients,
+                                config.device_id.clone(),
+                                device_name.clone(),
+                                config.space_id.clone(),
+                                own_addresses.clone(),
+                                config.auth_secret.clone(),
+                                sync_bind,
+                            )
+                            .await;
+                        beacon
+                            .start(BroadcastDiscoveryOptions {
+                                space_id: config.space_id.clone(),
+                                device_id: config.device_id.clone(),
+                                device_name: device_name.clone(),
+                                ws_port,
+                            })
+                            .await
+                            .map_err(ArkCoreError::from)?;
+                    }
 
                     // Publish listener via self_arc so later helpers can see it.
                     *self_arc.listener.write().await = Some(listener_for_thread);
@@ -302,6 +316,7 @@ impl ArkCore {
                         space_id: config.space_id.clone(),
                         auth_secret: config.auth_secret.clone(),
                         own_addresses,
+                        bind: sync_bind,
                     };
 
                     Ok::<SyncRuntime, ArkCoreError>(sync_runtime)

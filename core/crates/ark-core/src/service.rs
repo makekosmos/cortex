@@ -50,6 +50,7 @@ use crate::integration_replication::{
 use crate::net::is_address_routable;
 use crate::protocol::LAN_SYNC_PORT;
 use crate::relay_sync::{RelaySync, RelaySyncConfig};
+use crate::sync_bind::SyncBind;
 use crate::sync_client::SyncClient;
 use crate::sync_server::{StorageBackend, SyncServer};
 use crate::transport_select::{select_transport, TransportChoice};

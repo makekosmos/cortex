@@ -27,6 +27,7 @@ use tokio::sync::mpsc;
 
 use ark_core::iroh_transport::{IrohConfig, IrohTransport};
 use ark_core::protocol::LanSyncMessage;
+use ark_core::sync_bind::SyncBind;
 use ark_core::sync_transport::{SyncTransport, TransportEvent};
 use iroh::RelayMode;
 
@@ -84,6 +85,7 @@ async fn iroh_ticket_pairing_round_trip() {
         peer_ticket: None,
         relay_mode: Some(RelayMode::Disabled),
         auth_secret: None,
+        bind: SyncBind::Loopback,
     });
 
     transport_b
@@ -110,6 +112,7 @@ async fn iroh_ticket_pairing_round_trip() {
         peer_ticket: Some(ticket_b),
         relay_mode: Some(RelayMode::Disabled),
         auth_secret: None,
+        bind: SyncBind::Loopback,
     });
 
     transport_a

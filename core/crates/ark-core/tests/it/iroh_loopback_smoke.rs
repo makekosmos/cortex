@@ -27,7 +27,7 @@
 
 use std::time::Duration;
 
-use iroh::endpoint::presets;
+use iroh::endpoint::{presets, BindOpts};
 use iroh::{Endpoint, EndpointAddr, RelayMode};
 
 const ARK_SYNC_ALPN: &[u8] = b"ark-sync/1";
@@ -41,25 +41,39 @@ async fn iroh_offline_loopback_round_trip() {
 
 async fn run() {
     // --- A: будет принимать соединение ---
+    // bind_addr заменяет дефолтный unspecified-bind (`0.0.0.0` / `[::]`) для
+    // соответствующего семейства: endpoint слушает только loopback.
     let endpoint_a = Endpoint::builder(presets::Minimal)
         .relay_mode(RelayMode::Disabled)
         .alpns(vec![ARK_SYNC_ALPN.to_vec()])
+        .bind_addr((std::net::Ipv4Addr::LOCALHOST, 0))
+        .expect("endpoint A: invalid loopback bind")
+        // Без этого остаётся дефолтный `[::]`-bind: bind_addr заменяет
+        // unspecified-адрес только своего семейства адресов.
+        .bind_addr_with_opts(
+            (std::net::Ipv6Addr::LOCALHOST, 0),
+            BindOpts::default().set_is_required(false),
+        )
+        .expect("endpoint A: invalid loopback v6 bind")
         .bind()
         .await
         .expect("endpoint A bind");
 
     let endpoint_a_id = endpoint_a.id();
     let endpoint_a_sockets = endpoint_a.bound_sockets();
-    // `bound_sockets()` отдаёт адрес как у сервера, забинженного на
-    // unspecified-адресе (`0.0.0.0:port` / `[::]:port`) — это валидно для
-    // `bind()`, но НЕ является адресом, на который можно реально открыть
-    // соединение. Для loopback-теста нужно явно подставить `127.0.0.1` (IPv4
-    // unspecified-запись), сохранив реальный забинженный порт.
-    let endpoint_a_port = endpoint_a_sockets
+    // `bound_sockets()` отдаёт адрес как у сервера — теперь это loopback
+    // благодаря bind_addr выше. Забираем реальный забинженный порт и
+    // собираем конкретный `127.0.0.1:port`, на который можно открыть
+    // соединение.
+    let endpoint_a_v4 = endpoint_a_sockets
         .iter()
         .find(|addr| addr.is_ipv4())
-        .expect("endpoint A should have an IPv4 bound socket")
-        .port();
+        .expect("endpoint A should have an IPv4 bound socket");
+    assert!(
+        endpoint_a_v4.ip().is_loopback(),
+        "endpoint A must be bound to loopback, got {endpoint_a_v4}"
+    );
+    let endpoint_a_port = endpoint_a_v4.port();
     let endpoint_a_socket: std::net::SocketAddr =
         (std::net::Ipv4Addr::LOCALHOST, endpoint_a_port).into();
 
@@ -69,6 +83,13 @@ async fn run() {
     // --- B: инициатор соединения, без relay/discovery ---
     let endpoint_b = Endpoint::builder(presets::Minimal)
         .relay_mode(RelayMode::Disabled)
+        .bind_addr((std::net::Ipv4Addr::LOCALHOST, 0))
+        .expect("endpoint B: invalid loopback bind")
+        .bind_addr_with_opts(
+            (std::net::Ipv6Addr::LOCALHOST, 0),
+            BindOpts::default().set_is_required(false),
+        )
+        .expect("endpoint B: invalid loopback v6 bind")
         .bind()
         .await
         .expect("endpoint B bind");

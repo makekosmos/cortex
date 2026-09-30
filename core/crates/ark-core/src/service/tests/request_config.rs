@@ -98,6 +98,7 @@ fn pairing_restart_params_force_iroh_and_replace_ticket() {
             use_iroh: false,
             iroh_peer_ticket: None,
             discovery_enabled: true,
+            bind: SyncBind::AllInterfaces,
         },
         iroh_our_ticket: None,
         beacon: Arc::new(crate::beacon::BroadcastDiscovery::new()),
@@ -159,6 +160,7 @@ async fn start_sync_with_use_iroh_selects_iroh_transport_and_exposes_ticket() {
             use_iroh: true,
             iroh_peer_ticket: None,
             discovery_enabled: false,
+            bind: SyncBind::Loopback,
         },
     )
     .await;
@@ -208,6 +210,7 @@ async fn start_sync_with_use_iroh_fails_gracefully_without_iroh_spike_feature() 
             use_iroh: true,
             iroh_peer_ticket: None,
             discovery_enabled: false,
+            bind: SyncBind::Loopback,
         },
     )
     .await;
@@ -233,6 +236,7 @@ fn request_deserialization_defaults_iroh_fields_when_absent() {
         use_iroh,
         iroh_peer_ticket,
         discovery_enabled,
+        bind,
         ..
     } = request
     else {
@@ -241,6 +245,7 @@ fn request_deserialization_defaults_iroh_fields_when_absent() {
     assert!(!use_iroh);
     assert_eq!(iroh_peer_ticket, None);
     assert!(discovery_enabled);
+    assert_eq!(bind, SyncBind::AllInterfaces);
 }
 
 #[test]

@@ -97,10 +97,11 @@ async fn start_seed_client(
     space_id: String,
     own_addresses: Vec<String>,
     auth_secret: Option<String>,
+    bind: SyncBind,
 ) {
     let reachable: Vec<String> = addresses
         .into_iter()
-        .filter(|a| !own_addresses.contains(a) && is_address_routable(a))
+        .filter(|a| !own_addresses.contains(a) && bind.accepts_peer_address(a))
         .collect();
     if reachable.is_empty() {
         return;
@@ -165,6 +166,7 @@ pub(super) async fn handle_start_sync_with_params(
         params.use_iroh,
         params.iroh_peer_ticket,
         params.discovery_enabled,
+        params.bind,
     )
     .await
 }
@@ -472,6 +474,7 @@ pub(super) async fn handle_add_seed_peer(
         runtime.space_id.clone(),
         own,
         runtime.auth_secret.clone(),
+        runtime.start_params.bind,
     )
     .await;
     Ok(json!(true))

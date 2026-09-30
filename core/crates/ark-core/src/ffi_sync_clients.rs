@@ -88,10 +88,11 @@ impl ArkCore {
         space_id: String,
         own_addresses: Vec<String>,
         auth_secret: Option<String>,
+        sync_bind: SyncBind,
     ) {
         let reachable: Vec<String> = addresses
             .into_iter()
-            .filter(|a| !own_addresses.contains(a) && is_address_routable(a))
+            .filter(|a| !own_addresses.contains(a) && sync_bind.accepts_peer_address(a))
             .collect();
         if reachable.is_empty() {
             return;
@@ -130,6 +131,7 @@ impl ArkCore {
         space_id: String,
         own_addresses: Vec<String>,
         auth_secret: Option<String>,
+        sync_bind: SyncBind,
     ) {
         let server = server.clone();
         let storage = storage.clone();
@@ -154,7 +156,7 @@ impl ArkCore {
                     };
                     let reachable: Vec<String> = addrs
                         .into_iter()
-                        .filter(|a| !own.contains(a) && is_address_routable(a))
+                        .filter(|a| !own.contains(a) && sync_bind.accepts_peer_address(a))
                         .collect();
                     if reachable.is_empty() {
                         return;
@@ -252,6 +254,7 @@ impl SyncRuntime {
             space_id: self.space_id.clone(),
             auth_secret: self.auth_secret.clone(),
             own_addresses: self.own_addresses.clone(),
+            bind: self.bind,
         }
     }
 }

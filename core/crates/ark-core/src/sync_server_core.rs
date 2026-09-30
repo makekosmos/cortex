@@ -251,24 +251,6 @@ impl SyncServer {
         self.device_name.read().await.clone()
     }
 
-    /// Start the WS server on the default LAN sync port.
-    pub async fn start(
-        &self,
-        space_id: &str,
-        device_id: &str,
-        device_name: Option<&str>,
-        own_addresses: Option<Vec<String>>,
-    ) -> Result<(), String> {
-        self.start_with_addr(
-            space_id,
-            device_id,
-            device_name,
-            own_addresses,
-            &format!("0.0.0.0:{LAN_SYNC_PORT}"),
-        )
-        .await
-    }
-
     /// Start the WS server on an explicit bind address. Used by integration
     /// tests that need to avoid port conflicts and by embedders that want a
     /// loopback-only listener.

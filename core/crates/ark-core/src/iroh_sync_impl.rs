@@ -14,6 +14,20 @@ impl SyncTransport for IrohTransport {
             builder = builder.secret_key(secret_key);
         }
 
+        // The builder comes pre-configured to bind 0.0.0.0 and [::]; in
+        // loopback mode replace both per-family defaults with loopback
+        // sockets so the endpoint never listens on a LAN interface. The
+        // IPv6 bind is not required: hosts without an IPv6 stack must
+        // still start.
+        if self.config.bind == SyncBind::Loopback {
+            let (v4, v6) = self.config.bind.iroh_bind_addrs();
+            builder = builder
+                .bind_addr(v4)
+                .map_err(|e| format!("iroh transport: invalid bind {v4}: {e}"))?
+                .bind_addr_with_opts(v6, BindOpts::default().set_is_required(false))
+                .map_err(|e| format!("iroh transport: invalid bind {v6}: {e}"))?;
+        }
+
         let endpoint = builder
             .bind()
             .await

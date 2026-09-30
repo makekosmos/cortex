@@ -35,6 +35,10 @@ pub struct IrohConfig {
     /// Опциональный секрет для HMAC-аутентификации Hello (аналог
     /// `RelayConfig::auth_secret`). `None` => Hello отправляется без HMAC.
     pub auth_secret: Option<String>,
+    /// Куда биндить UDP-сокеты endpoint'а. `AllInterfaces` — production
+    /// (LAN/NAT traversal); `Loopback` — тесты: сокеты слушают только
+    /// 127.0.0.1 / ::1 и не провоцируют firewall-промпт.
+    pub bind: SyncBind,
 }
 
 // ---------------------------------------------------------------------------

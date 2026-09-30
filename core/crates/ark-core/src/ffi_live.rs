@@ -119,6 +119,7 @@ impl ArkCore {
                 runtime.space_id,
                 runtime.own_addresses,
                 runtime.auth_secret,
+                runtime.bind,
             )
             .await;
             Ok(true)
