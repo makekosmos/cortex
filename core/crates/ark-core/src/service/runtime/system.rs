@@ -43,7 +43,7 @@ pub(super) async fn handle(state: &Arc<ServiceState>, request: Request) -> Resul
         }),
 
         Request::DeleteTrashed => with_conn(state, |conn| {
-            let count = db::delete_trashed(conn)?;
+            let count = db::delete_trashed(conn, &local_write_device_id(None))?;
             Ok(json!(count))
         }),
 

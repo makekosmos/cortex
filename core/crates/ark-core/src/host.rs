@@ -47,10 +47,13 @@ pub fn get_host_device_name() -> String {
 /// Strip a trailing `.local` / `.LOCAL` suffix (case-insensitive).
 #[cfg_attr(target_os = "android", allow(dead_code))]
 fn strip_dot_local(raw: &str) -> String {
-    if raw.len() >= 6 {
-        let tail = &raw[raw.len() - 6..];
+    // `raw.len() - 6` is a byte offset; on a multibyte char boundary it is not
+    // a valid char boundary and `&raw[..]` slicing would panic. `str::get`
+    // returns None for non-boundary offsets — the raw name stays unchanged.
+    let start = raw.len().saturating_sub(6);
+    if let Some(tail) = raw.get(start..) {
         if tail.eq_ignore_ascii_case(".local") {
-            return raw[..raw.len() - 6].to_string();
+            return raw[..start].to_string();
         }
     }
     raw.to_string()
@@ -148,6 +151,19 @@ mod tests {
         assert_eq!(strip_dot_local("MacBook.LOCAL"), "MacBook");
         assert_eq!(strip_dot_local("MacBook.Local"), "MacBook");
         assert_eq!(strip_dot_local("mypc"), "mypc");
+    }
+
+    #[test]
+    fn strip_dot_local_multibyte_hostname_does_not_panic() {
+        // "x" + U+4E2D (3 bytes) + "abcde" is 9 bytes; `len - 6` = 3 lands
+        // inside the multibyte char. Naive `&raw[len-6..]` slicing panics.
+        assert_eq!(strip_dot_local("x中abcde"), "x中abcde");
+        // Multibyte char directly before a real suffix must still strip.
+        assert_eq!(strip_dot_local("x中.local"), "x中");
+        assert_eq!(strip_dot_local("中.local"), "中");
+        // A multibyte tail that is not `.local` stays untouched.
+        assert_eq!(strip_dot_local("host中"), "host中");
+        assert_eq!(strip_dot_local(""), "");
     }
 
     #[test]
