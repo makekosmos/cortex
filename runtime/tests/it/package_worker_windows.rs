@@ -221,8 +221,14 @@ fn install_binary(
     archive
         .write_all(&serde_json::to_vec(&versioned).expect("manifest json"))
         .expect("manifest bytes");
+    // Store the worker binary uncompressed: deflate costs seconds for the
+    // multi-megabyte bridge fixture and the store re-inflates it on every
+    // install and pre-launch integrity check.
     archive
-        .start_file(versioned.entrypoint(), FileOptions::default())
+        .start_file(
+            versioned.entrypoint(),
+            FileOptions::default().compression_method(zip::CompressionMethod::Stored),
+        )
         .expect("worker entry");
     archive
         .write_all(&std::fs::read(binary).expect("fixture bytes"))

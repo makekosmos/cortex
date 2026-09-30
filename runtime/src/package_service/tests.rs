@@ -323,8 +323,14 @@ pub(crate) mod tests {
             .expect("manifest entry");
         zip.write_all(&serde_json::to_vec(package_manifest).expect("manifest json"))
             .expect("manifest write");
-        zip.start_file(package_manifest.entrypoint(), FileOptions::default())
-            .expect("entrypoint entry");
+        // The worker binary is megabytes; store it uncompressed — archive
+        // compression is not what these tests exercise, and inflating it on
+        // every install/verify made the worker suite spend seconds per spawn.
+        zip.start_file(
+            package_manifest.entrypoint(),
+            FileOptions::default().compression_method(zip::CompressionMethod::Stored),
+        )
+        .expect("entrypoint entry");
         zip.write_all(&fs::read(binary).expect("bridge binary"))
             .expect("entrypoint write");
         zip.finish().expect("archive finish");

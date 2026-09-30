@@ -1,7 +1,10 @@
 //! First-party Package v1 bridge worker. All ARK and filesystem access goes
 //! through the Engine broker on stdio; this binary never opens SQLite or files.
 use base64::{engine::general_purpose::STANDARD, Engine as _};
-use engine::package_worker_protocol::BridgeStatus;
+// The bridge is an out-of-tree-style worker: it speaks the stable
+// `package-protocol` surface only and must not link the engine crate
+// (which would bloat the fixture binary and every test archive with it).
+use package_protocol::BridgeStatus;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
@@ -14,7 +17,9 @@ use std::{
 };
 
 const MAX_FILES: usize = 4096;
-const TICK: Duration = Duration::from_secs(2);
+// Test fixture: a short tick keeps vault<->ARK round trips responsive so the
+// gate's polling loops observe changes in tens of milliseconds, not seconds.
+const TICK: Duration = Duration::from_millis(100);
 const BRIDGE_FORMAT_VERSION: u64 = 1;
 const CANONICAL_VERSION: &str = "1.0.0";
 
