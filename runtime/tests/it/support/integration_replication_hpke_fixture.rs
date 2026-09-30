@@ -22,8 +22,12 @@ pub(crate) struct Cleanup {
 
 impl Drop for Cleanup {
     fn drop(&mut self) {
+        // The integration test binary links the production engine crate, so
+        // secrets land in the production keyring service — the same one
+        // `secret_store::package_integration_entry` uses. Cleanup must target
+        // that namespace or a real credential is left behind.
         let _ = keyring::Entry::new(
-            "mundus-mundus",
+            "kosmos-kepler",
             &format!("package-integration:{PACKAGE_ID}:{PACKAGE_VERSION}:{SETTING}"),
         )
         .and_then(|entry| entry.delete_credential());

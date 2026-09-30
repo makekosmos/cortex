@@ -27,6 +27,7 @@ async fn removing_root_hides_scope_immediately_and_cleans_index_in_background() 
     })
     .await
     .expect("removed scope cleanup should finish in the background");
+    index.drain_background().await;
 }
 
 #[tokio::test]
@@ -168,6 +169,7 @@ async fn scope_remove_does_not_cleanup_large_index_synchronously() {
     .await
     .expect("scope_remove must not synchronously delete the indexed subtree")
     .unwrap();
+    index.drain_background().await;
 }
 
 #[tokio::test]
@@ -188,4 +190,6 @@ async fn scope_remove_does_not_wait_for_running_rescan_lock() {
     .await
     .expect("scope_remove must not wait for scan_lock")
     .unwrap();
+    drop(_scan_guard);
+    index.drain_background().await;
 }

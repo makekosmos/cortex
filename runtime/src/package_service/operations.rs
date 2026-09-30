@@ -348,11 +348,16 @@ pub async fn invoke_worker_operation(
             .map_err(|_| PackageError::Persistence)
     }
 
+    /// Weak back-reference: the dispatcher's dispatch closure captures an
+    /// `Arc<PackageService>`, so a strong reference here would form a cycle
+    /// that keeps both (and every component in the closure) alive until
+    /// process exit (KOS-270). A dropped dispatcher simply fails to upgrade.
     pub fn configure_package_definition_dispatcher(
         &self,
         dispatcher: std::sync::Arc<crate::engine_dispatch::EngineDispatcher>,
     ) {
-        *Self::lock(&self.package_definition_dispatcher) = Some(dispatcher);
+        *Self::lock(&self.package_definition_dispatcher) =
+            Some(std::sync::Arc::downgrade(&dispatcher));
     }
 
     pub(crate) async fn register_package_definitions(
@@ -382,7 +387,10 @@ pub async fn invoke_worker_operation(
     }
 
     fn register_configured_package_definitions(&self) -> Result<(), PackageError> {
-        let Some(dispatcher) = Self::lock(&self.package_definition_dispatcher).clone() else {
+        let Some(dispatcher) = Self::lock(&self.package_definition_dispatcher)
+            .as_ref()
+            .and_then(std::sync::Weak::upgrade)
+        else {
             return Ok(());
         };
         let handle =

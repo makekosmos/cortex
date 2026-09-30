@@ -49,7 +49,7 @@ const cargoEnv = {
 const cortexBuildArgs = ["build", "--release", "--manifest-path", "../Cargo.toml"];
 const buildMundus = spawnSync(
   "cargo",
-  [...cortexBuildArgs, "--bin", "mundus-engine", "--features", "windows-gui-subsystem,iroh-spike"],
+  [...cortexBuildArgs, "--bin", "mundus-engine", "--features", "windows-gui-subsystem"],
   {
     cwd: shellRoot,
     stdio: "inherit",

@@ -3,8 +3,8 @@
 //! `RelaySync` orchestration (CRDT version-vector exchange) is independent of
 //! the underlying wire transport. This module defines the shared event enum
 //! (`TransportEvent`) and the object-safe trait (`SyncTransport`) that both
-//! `relay_transport::RelayTransport` and (behind `iroh-spike`)
-//! `iroh_transport::IrohTransport` implement, so `RelaySync` can drive either
+//! `relay_transport::RelayTransport` and `iroh_transport::IrohTransport`
+//! implement, so `RelaySync` can drive either
 //! one via `Arc<dyn SyncTransport>`.
 
 use std::sync::Arc;

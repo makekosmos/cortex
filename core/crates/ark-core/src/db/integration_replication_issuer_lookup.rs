@@ -97,7 +97,64 @@ pub fn load_issuer_encryption_key(
         grant_status: issuer_grant.status,
         grant_epoch: issuer.grant_epoch,
         credential_generation,
+        refresh_fencing_token: envelope.refresh_fencing_token,
     })
+}
+
+/// The expected issuer binding and refresh lease a replicated credential was
+/// minted under — one value instead of seven loose parameters.
+pub struct CredentialFenceExpectation<'a> {
+    pub space_id: &'a str,
+    pub integration_id: &'a str,
+    pub recipient_node_id: &'a str,
+    pub issuer_node_id: &'a str,
+    pub credential_generation: u64,
+    pub refresh_fencing_token: u64,
+    pub expected_issuer_key_id: &'a str,
+}
+
+/// Storage-time fence for `replication_receive_credential_envelope_v2`: the
+/// issuer binding is revalidated through `load_issuer_encryption_key`, then
+/// the fence the envelope was minted under must still be the current refresh
+/// lease for this integration — same holder, generation and fencing token.
+/// A lease that moved on (newer fence, different holder, next generation)
+/// means the replicated credential was superseded before it was stored.
+pub fn check_integration_credential_fence(
+    conn: &Connection,
+    expected: &CredentialFenceExpectation<'_>,
+) -> Result<(), String> {
+    let key = load_issuer_encryption_key(
+        conn,
+        expected.space_id,
+        expected.integration_id,
+        expected.recipient_node_id,
+        expected.issuer_node_id,
+        expected.credential_generation,
+        expected.expected_issuer_key_id,
+    )?;
+    if key.refresh_fencing_token != expected.refresh_fencing_token {
+        return Err(IntegrationContractError::Mismatch {
+            field: "refresh_fencing_token",
+        }
+        .to_string());
+    }
+    let lease =
+        load_integration_refresh_lease(conn, expected.integration_id)?.ok_or_else(|| {
+            IntegrationContractError::Mismatch {
+                field: "refresh_lease",
+            }
+            .to_string()
+        })?;
+    if lease.holder_node_id != expected.issuer_node_id
+        || lease.credential_generation != expected.credential_generation
+        || lease.fencing_token != expected.refresh_fencing_token
+    {
+        return Err(IntegrationContractError::NonMonotonic {
+            field: "fencing_token",
+        }
+        .to_string());
+    }
+    Ok(())
 }
 
 pub fn load_issuer_encryption_key_for_publish(

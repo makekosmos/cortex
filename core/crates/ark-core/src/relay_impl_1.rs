@@ -15,7 +15,7 @@ impl RelaySync {
     /// Generalized constructor: build `RelaySync` over an already-constructed
     /// transport. Lets callers (e.g. `handle_start_sync`) drive the same CRDT
     /// orchestration with `RelayTransport`, `IrohTransport` (behind
-    /// `iroh-spike`), or any other `SyncTransport` impl, instead of always
+    /// `IrohTransport`), or any other `SyncTransport` impl, instead of always
     /// constructing a `RelayTransport` internally from `config.relay_url`.
     pub fn with_transport(
         storage: Arc<dyn StorageBackend>,
@@ -40,6 +40,7 @@ impl RelaySync {
             on_change: Arc::new(Mutex::new(None)),
             on_peer_connect: Arc::new(Mutex::new(None)),
             on_peer_disconnect: Arc::new(Mutex::new(None)),
+            tasks: Mutex::new(Vec::new()),
         })
     }
 
@@ -60,13 +61,13 @@ impl RelaySync {
         self.transport.start(event_tx).await?;
 
         let this = self.clone();
-        tokio::spawn(async move {
+        self.tasks.lock().await.push(tokio::spawn(async move {
             while let Some(event) = event_rx.recv().await {
                 this.handle_event(event).await;
             }
-        });
+        }));
         let incoming_sync = self.incoming_sync.clone();
-        tokio::spawn(async move {
+        self.tasks.lock().await.push(tokio::spawn(async move {
             loop {
                 tokio::time::sleep(Duration::from_secs(30)).await;
                 let mut incoming = incoming_sync.lock().await;
@@ -79,13 +80,22 @@ impl RelaySync {
                     trim_process_heap();
                 }
             }
-        });
+        }));
 
         Ok(())
     }
 
-    pub fn stop(&self) {
+    /// Stop transport, then abort and join the background tasks — both
+    /// clone `self` and would otherwise keep `storage` alive past teardown.
+    pub async fn stop(&self) {
         self.transport.stop();
+        let tasks: Vec<_> = self.tasks.lock().await.drain(..).collect();
+        for task in &tasks {
+            task.abort();
+        }
+        for task in tasks {
+            let _ = task.await;
+        }
     }
 
     pub fn broadcast_live_change(&self, entity: SyncEntity) -> Result<(), String> {

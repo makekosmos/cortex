@@ -326,7 +326,7 @@ impl EngineApiServer {
         auth_token: String,
         dispatcher: Arc<crate::engine_dispatch::EngineDispatcher>,
         request_timeout: Duration,
-    ) -> Result<Self, EngineApiError> {
+    ) -> Result<(tempfile::TempDir, Self), EngineApiError> {
         Self::bind_with_test_dispatcher_and_deadline(
             auth_token,
             dispatcher,
@@ -336,13 +336,16 @@ impl EngineApiServer {
         .await
     }
 
+    /// The TempDir is returned to the caller: the server's stores keep open
+    /// file handles inside it, so the directory must outlive the server —
+    /// dropping it at helper return leaks it (KOS-270).
     #[cfg(test)]
     async fn bind_with_test_dispatcher_and_deadline(
         auth_token: String,
         dispatcher: Arc<crate::engine_dispatch::EngineDispatcher>,
         request_timeout: Duration,
         continuation_deadline: Duration,
-    ) -> Result<Self, EngineApiError> {
+    ) -> Result<(tempfile::TempDir, Self), EngineApiError> {
         let dir = tempfile::tempdir().expect("test data dir");
         let mut server = Self::bind_with_limits(
             auth_token,
@@ -358,7 +361,7 @@ impl EngineApiServer {
         )
         .await?;
         server.operations.continuation_deadline = continuation_deadline;
-        Ok(server)
+        Ok((dir, server))
     }
 
     #[allow(clippy::too_many_arguments)]

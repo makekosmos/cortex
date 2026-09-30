@@ -2,8 +2,9 @@ use super::*;
 
 #[tokio::test]
 async fn legacy_entity_writes_bump_version_vector() {
-    let state = test_state();
-    let dir = tempfile::tempdir().unwrap();
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
     handle_request(
         &state,

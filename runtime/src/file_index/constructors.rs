@@ -50,6 +50,7 @@ impl FileIndex {
             like_search_count: AtomicU64::new(0),
             query_len_histogram: StdMutex::new(HashMap::new()),
             rescan_pending: AtomicBool::new(false),
+            background_tasks: StdMutex::new(Vec::new()),
             ntfs_last_state: Arc::new(StdMutex::new(NtfsState::default())),
             last_scan: StdMutex::new(None),
             enabled,

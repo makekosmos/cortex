@@ -2,8 +2,9 @@ use super::*;
 
 #[tokio::test]
 async fn integration_rpc_rejects_revocation_without_local_authorization() {
-    let state = test_state();
-    let dir = tempfile::tempdir().unwrap();
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
     handle_request(
         &state,
@@ -40,8 +41,9 @@ async fn integration_rpc_rejects_revocation_without_local_authorization() {
 
 #[tokio::test]
 async fn integration_rpc_rejects_stale_refresh_lease_fence() {
-    let state = test_state();
-    let dir = tempfile::tempdir().unwrap();
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let dir = &fixture.dir;
     let db_path = dir.path().join("ark.db");
     handle_request(
         &state,
@@ -104,8 +106,9 @@ async fn integration_rpc_rejects_stale_refresh_lease_fence() {
 
 #[tokio::test]
 async fn integration_issuer_key_lookup_rejects_wrong_space() {
-    let state = test_state();
-    let dir = tempfile::tempdir().unwrap();
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let dir = &fixture.dir;
     handle_request(
         &state,
         Request::Init {
@@ -146,7 +149,10 @@ async fn integration_issuer_key_lookup_rejects_wrong_space() {
         prepublish_error,
         "integration lookup requested for the wrong space"
     );
-    *state.sync.lock().await = None;
+    // Deterministic teardown: StopSync stops the relay transport and joins
+    // its background tasks so the shared conn closes before the fixture's
+    // TempDir is removed (KOS-270).
+    handle_request(&state, Request::StopSync).await.unwrap();
 }
 
 #[test]

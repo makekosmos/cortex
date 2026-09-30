@@ -2186,6 +2186,10 @@ mod tests {
             read_relative(&root, &["nested", "file"], 100).unwrap(),
             b"old"
         );
+        // The rename moved the tempdir's contents to a sibling path — drop of
+        // `td` only covers the live path, so remove the ".old" tree or it
+        // leaks into %TEMP% (KOS-270).
+        fs::remove_dir_all(td.path().with_extension("old")).unwrap();
     }
     #[cfg(unix)]
     #[test]

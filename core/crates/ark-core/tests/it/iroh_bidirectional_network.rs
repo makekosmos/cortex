@@ -1,4 +1,3 @@
-#![cfg(feature = "iroh-spike")]
 #![allow(clippy::unwrap_used)]
 
 include!("support/iroh_bidirectional_support.rs");

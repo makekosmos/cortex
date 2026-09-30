@@ -22,6 +22,16 @@
     clippy::unnecessary_lazy_evaluations
 )]
 
+// `package-worker-fixture` relaxes the broker's HTTPS-only origin check to
+// allow loopback http origins and exposes worker test hooks — none of that
+// may ever ship. debug_assertions are off in every release profile, so this
+// compile_error is the hard gate between the test feature and a shipped
+// binary (KOS-270).
+#[cfg(all(feature = "package-worker-fixture", not(debug_assertions)))]
+compile_error!(
+    "feature package-worker-fixture is test-only and cannot be enabled in a release build"
+);
+
 // Mundus backend — headless ARK host runtime.
 //
 // Этот крейт extracted из Electron-шелла в Phase 0 pivot. Содержит

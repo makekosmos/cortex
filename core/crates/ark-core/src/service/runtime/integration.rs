@@ -193,6 +193,28 @@ pub(super) async fn integration_lookup_issuer_encryption_key(
     })
 }
 
+/// Storage-time fence check for a received credential envelope (KOS-270).
+/// `expected` already carries every field so this stays under the arg limit.
+pub(super) async fn integration_check_credential_fence(
+    state: &Arc<ServiceState>,
+    expected: crate::db::CredentialFenceExpectation<'_>,
+) -> Result<Value, String> {
+    let runtime_space_id = state
+        .sync
+        .lock()
+        .await
+        .as_ref()
+        .map(|runtime| runtime.space_id.clone())
+        .ok_or_else(|| "sync not running".to_string())?;
+    if runtime_space_id != expected.space_id {
+        return Err("integration lookup requested for the wrong space".into());
+    }
+    with_conn(state, |conn| {
+        crate::db::check_integration_credential_fence(conn, &expected)?;
+        Ok(json!(true))
+    })
+}
+
 pub(super) async fn integration_lookup_issuer_encryption_key_for_publish(
     state: &Arc<ServiceState>,
     space_id: String,

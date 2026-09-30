@@ -66,14 +66,6 @@ fn resolve_use_iroh_by_default() -> bool {
     )
 }
 
-fn start_sync_unsupported_iroh_error(err: &str) -> bool {
-    let err = err.to_ascii_lowercase();
-    err.contains("iroh-spike")
-        || err.contains("unsupported iroh transport")
-        || err.contains("use_iroh")
-        || err.contains("compiled without")
-}
-
 pub async fn start_lan_sync(
     ark: &ArkHost,
     space_id: &str,
@@ -105,20 +97,17 @@ pub async fn start_lan_sync(
         }
     }
 
-    // Step 4a: iroh transport selection, mirrors MUNDUS_RELAY_URL above.
-    // Reading these env vars is unconditional (cheap, no transport
-    // construction here — this crate talks to the in-process ARK service,
-    // JSON-RPC, it never links iroh directly); they are only ACTED ON by
-    // the embedded ark-core when it was built with the `iroh-spike` Rust feature. A
-    // non-iroh-spike sidecar rejects start_sync with an explicit error if
-    // MUNDUS_IROH=1 is set, rather than silently ignoring it.
+    // iroh transport selection, mirrors MUNDUS_RELAY_URL above. The env vars
+    // are only read here (cheap — this crate talks to the in-process ARK
+    // service over JSON-RPC and never links iroh); the embedded ark-core,
+    // always built with the iroh transport, acts on them in start_sync.
     if let Some(ticket) = crate::brand::env("IROH_PEER_TICKET") {
         if !ticket.is_empty() {
             params["iroh_peer_ticket"] = serde_json::Value::String(ticket);
         }
     }
 
-    let response = ark.request("start_sync", params.clone()).await?;
+    let response = ark.request("start_sync", params).await?;
     if response.ok {
         return Ok(());
     }
@@ -127,33 +116,11 @@ pub async fn start_lan_sync(
         .error
         .clone()
         .unwrap_or_else(|| "(no error message)".to_string());
-    if params
-        .get("use_iroh")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false)
-        && start_sync_unsupported_iroh_error(&error)
-    {
-        tracing::warn!(error = %error, "iroh start_sync unsupported; retrying with LAN fallback");
-        let mut fallback = params;
-        fallback["use_iroh"] = serde_json::Value::Bool(false);
-        let retry = ark.request("start_sync", fallback).await?;
-        if retry.ok {
-            return Ok(());
-        }
-        return Err(format!(
-            "ark-core rejected fallback start_sync: {}",
-            retry
-                .error
-                .unwrap_or_else(|| "(no error message)".to_string())
-        )
-        .into());
-    }
-
     Err(format!("ark-core rejected start_sync: {error}").into())
 }
 
 /// Dev-flow cross-network step: when iroh was requested (`MUNDUS_IROH=1`),
-/// fetch our own pairing ticket from the sidecar (`GetOwnIrohTicket`) and
+/// fetch our own pairing ticket from the service (`GetOwnIrohTicket`) and
 /// print it BIG and unmistakable to stderr so the dev can copy it into the
 /// other machine's `MUNDUS_IROH_PEER_TICKET`. No-op (and cheap — no RPC
 /// call) when iroh wasn't requested, so the default dev flow is unaffected.
@@ -180,8 +147,7 @@ pub async fn print_iroh_pairing_code_if_enabled(ark: &ArkHost) {
             _ => {
                 tracing::warn!(
                     "MUNDUS_IROH set, but get_own_iroh_ticket returned no ticket \
-                         (sidecar likely built without --features iroh-spike, or sync \
-                         did not select the iroh transport)"
+                         (sync did not select the iroh transport)"
                 );
             }
         },

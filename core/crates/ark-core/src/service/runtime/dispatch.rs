@@ -267,6 +267,29 @@ pub(crate) async fn handle_request(
             )
             .await
         }
+        Request::IntegrationCheckCredentialFence {
+            space_id,
+            integration_id,
+            recipient_node_id,
+            issuer_node_id,
+            credential_generation,
+            refresh_fencing_token,
+            expected_issuer_key_id,
+        } => {
+            integration::integration_check_credential_fence(
+                state,
+                crate::db::CredentialFenceExpectation {
+                    space_id: &space_id,
+                    integration_id: &integration_id,
+                    recipient_node_id: &recipient_node_id,
+                    issuer_node_id: &issuer_node_id,
+                    credential_generation,
+                    refresh_fencing_token,
+                    expected_issuer_key_id: &expected_issuer_key_id,
+                },
+            )
+            .await
+        }
         Request::IntegrationLookupIssuerEncryptionKeyForPublish {
             space_id,
             integration_id,

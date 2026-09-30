@@ -246,10 +246,7 @@ pub(super) async fn upsert_object(
     })?;
     let eid = object_id.clone();
     let etid = object_type_id.clone();
-    let state = Arc::clone(state);
-    tokio::spawn(async move {
-        broadcast_local_change(&state, entity).await;
-    });
+    maybe_broadcast_local_change(state, entity).await;
     emit_event(json!({
         "event": "object_upserted",
         "id": eid,
@@ -297,10 +294,7 @@ pub(super) async fn delete_object(
         ))
     })?;
     let eid = object_id.clone();
-    let state = Arc::clone(state);
-    tokio::spawn(async move {
-        broadcast_local_change(&state, entity).await;
-    });
+    maybe_broadcast_local_change(state, entity).await;
     emit_event(json!({
         "event": "object_deleted",
         "id": eid,

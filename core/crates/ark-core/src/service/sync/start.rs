@@ -88,13 +88,7 @@ pub(crate) async fn handle_start_sync(
         .await?;
 
     let transport_choice = select_transport(use_iroh, &relay_url);
-    #[allow(unused_mut, unused_assignments)]
     let mut iroh_our_ticket: Option<String> = None;
-    // `iroh_peer_ticket` is only read inside the `#[cfg(feature = "iroh-spike")]`
-    // branch below; reference it here so a no-feature build doesn't warn about
-    // an unused parameter (the field itself must stay on the wire schema
-    // regardless of build per the UniFFI/JSON-RPC surface-stability rule).
-    let _ = &iroh_peer_ticket;
 
     let transport_state = Some(transport_choice.clone());
     let start_params = SyncStartParams {
@@ -139,74 +133,63 @@ pub(crate) async fn handle_start_sync(
         relay_sync.start().await?;
         Some(relay_sync)
     } else if transport_choice == TransportChoice::Iroh {
-        #[cfg(feature = "iroh-spike")]
-        {
-            let secret_key = {
-                let conn = shared_conn.lock().unwrap_or_else(|e| e.into_inner());
-                crate::iroh_transport::load_or_generate_secret_key(&conn)
-                    .map_err(|e| format!("iroh transport: failed to load identity: {e}"))?
-            };
-            let peer_addr = match iroh_peer_ticket.as_deref() {
-                Some(ticket) => Some(crate::iroh_transport::from_ticket(ticket)?),
-                None => None,
-            };
-            let iroh_transport = Arc::new(crate::iroh_transport::IrohTransport::new(
-                crate::iroh_transport::IrohConfig {
-                    device_id: device_id.clone(),
-                    device_name: device_name.clone(),
-                    space_id: space_id.clone(),
-                    secret_key: Some(secret_key),
-                    peer_addr,
-                    peer_ticket: iroh_peer_ticket.clone(),
-                    // A loopback-bound endpoint cannot be reached through a
-                    // relay anyway, and tests must stay offline; RelayMode::Disabled
-                    // also makes `our_ticket()` advertise the loopback socket.
-                    relay_mode: match bind {
-                        SyncBind::Loopback => Some(iroh::RelayMode::Disabled),
-                        SyncBind::AllInterfaces => None,
-                    },
-                    auth_secret: auth_secret.clone(),
-                    bind,
+        let secret_key = {
+            let conn = shared_conn.lock().unwrap_or_else(|e| e.into_inner());
+            crate::iroh_transport::load_or_generate_secret_key(&conn)
+                .map_err(|e| format!("iroh transport: failed to load identity: {e}"))?
+        };
+        let peer_addr = match iroh_peer_ticket.as_deref() {
+            Some(ticket) => Some(crate::iroh_transport::from_ticket(ticket)?),
+            None => None,
+        };
+        let iroh_transport = Arc::new(crate::iroh_transport::IrohTransport::new(
+            crate::iroh_transport::IrohConfig {
+                device_id: device_id.clone(),
+                device_name: device_name.clone(),
+                space_id: space_id.clone(),
+                secret_key: Some(secret_key),
+                peer_addr,
+                peer_ticket: iroh_peer_ticket.clone(),
+                // A loopback-bound endpoint cannot be reached through a
+                // relay anyway, and tests must stay offline; RelayMode::Disabled
+                // also makes `our_ticket()` advertise the loopback socket.
+                relay_mode: match bind {
+                    SyncBind::Loopback => Some(iroh::RelayMode::Disabled),
+                    SyncBind::AllInterfaces => None,
                 },
-            ));
-            // RelaySyncConfig.relay_url is unused by `with_transport` (only
-            // `RelaySync::new` reads it to build a `RelayTransport`) — pass an
-            // empty string rather than widening the struct for one unused field.
-            let relay_sync = RelaySync::with_transport(
-                storage.clone() as Arc<dyn StorageBackend>,
-                RelaySyncConfig {
-                    relay_url: String::new(),
-                    relay_api_key: None,
-                    space_id: space_id.clone(),
-                    device_id: device_id.clone(),
-                    device_name: device_name.clone(),
-                    auth_secret: auth_secret.clone(),
-                },
-                iroh_transport.clone() as Arc<dyn crate::sync_transport::SyncTransport>,
-            );
-            wire_relay_sync_events(&relay_sync).await;
-            relay_sync.start().await?;
-            // `start()` binds the endpoint, so `our_ticket()` is available now.
-            // Snapshot it onto `SyncRuntime` for `GetOwnIrohTicket` — capture
-            // failures are logged but not fatal (pairing UI degrades to "no
-            // ticket yet" rather than aborting an otherwise-successful start).
-            iroh_our_ticket = match iroh_transport.our_ticket().await {
-                Ok(ticket) => Some(ticket),
-                Err(e) => {
-                    eprintln!("[handle_start_sync] our_ticket() failed: {e}");
-                    None
-                }
-            };
-            Some(relay_sync)
-        }
-        #[cfg(not(feature = "iroh-spike"))]
-        {
-            return Err(
-                "iroh transport requested (use_iroh) but this build was compiled without the \
-                 iroh-spike feature; rebuild with --features iroh-spike or use relay_url instead"
-                    .to_string(),
-            );
-        }
+                auth_secret: auth_secret.clone(),
+                bind,
+            },
+        ));
+        // RelaySyncConfig.relay_url is unused by `with_transport` (only
+        // `RelaySync::new` reads it to build a `RelayTransport`) — pass an
+        // empty string rather than widening the struct for one unused field.
+        let relay_sync = RelaySync::with_transport(
+            storage.clone() as Arc<dyn StorageBackend>,
+            RelaySyncConfig {
+                relay_url: String::new(),
+                relay_api_key: None,
+                space_id: space_id.clone(),
+                device_id: device_id.clone(),
+                device_name: device_name.clone(),
+                auth_secret: auth_secret.clone(),
+            },
+            iroh_transport.clone() as Arc<dyn crate::sync_transport::SyncTransport>,
+        );
+        wire_relay_sync_events(&relay_sync).await;
+        relay_sync.start().await?;
+        // `start()` binds the endpoint, so `our_ticket()` is available now.
+        // Snapshot it onto `SyncRuntime` for `GetOwnIrohTicket` — capture
+        // failures are logged but not fatal (pairing UI degrades to "no
+        // ticket yet" rather than aborting an otherwise-successful start).
+        iroh_our_ticket = match iroh_transport.our_ticket().await {
+            Ok(ticket) => Some(ticket),
+            Err(e) => {
+                eprintln!("[handle_start_sync] our_ticket() failed: {e}");
+                None
+            }
+        };
+        Some(relay_sync)
     } else {
         None
     };

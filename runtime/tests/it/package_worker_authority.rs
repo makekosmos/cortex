@@ -107,4 +107,7 @@ async fn supervisor_authority_denies_without_forwarding_and_allows_bound_generat
         Err("forbidden")
     );
     assert_eq!(ark.calls.lock().expect("test prerequisite").len(), 1);
+    // Drain every supervisor registry so no task keeps a worker child or
+    // an ArkHost handle alive past the test's tempdir cleanup (KOS-270).
+    let _ = supervisor.stop_all().await;
 }

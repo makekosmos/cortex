@@ -916,6 +916,7 @@
         .await
         .unwrap();
         let port = server.port();
+        let server_shutdown_handle = server.shutdown_handle();
         let task = tokio::spawn(server.run());
 
         let unauthorized =
@@ -940,7 +941,10 @@
         let oversized = raw_http(port, &request(&token, "POST", "/v1/rpc", &oversized_body)).await;
         assert!(oversized.starts_with("HTTP/1.1 413"));
 
-        task.abort();
+        // Drain connection/request tasks so nothing holds test
+        // fixture files past the tempdir cleanup (KOS-270).
+        let _ = server_shutdown_handle.shutdown().await;
+        let _ = task.await;
     }
 
     #[tokio::test]
@@ -959,6 +963,7 @@
         .await
         .expect("server");
         let port = server.port();
+        let server_shutdown_handle = server.shutdown_handle();
         let task = tokio::spawn(server.run());
 
         // Cover every new route against the real Engine v1 auth boundary;
@@ -1129,7 +1134,10 @@
         )
         .await
         .starts_with("HTTP/1.1 404"));
-        task.abort();
+        // Drain connection/request tasks so nothing holds test
+        // fixture files past the tempdir cleanup (KOS-270).
+        let _ = server_shutdown_handle.shutdown().await;
+        let _ = task.await;
     }
 
     #[tokio::test]
@@ -1153,6 +1161,7 @@
         .await
         .expect("server");
         let port = server.port();
+        let server_shutdown_handle = server.shutdown_handle();
         let task = tokio::spawn(server.run());
         let launch = response_json(
             &raw_http(
@@ -1200,7 +1209,10 @@
                 .unwrap(),
             b"save"
         );
-        task.abort();
+        // Drain connection/request tasks so nothing holds test
+        // fixture files past the tempdir cleanup (KOS-270).
+        let _ = server_shutdown_handle.shutdown().await;
+        let _ = task.await;
     }
 
     #[tokio::test]
@@ -1222,6 +1234,7 @@
         .expect("server");
         let port = server.port();
         let leases = Arc::clone(&server.launch_leases);
+        let server_shutdown_handle = server.shutdown_handle();
         let task = tokio::spawn(server.run());
         let launched = response_json(
             &raw_http(
@@ -1252,7 +1265,10 @@
         )
         .await
         .starts_with("HTTP/1.1 404"));
-        task.abort();
+        // Drain connection/request tasks so nothing holds test
+        // fixture files past the tempdir cleanup (KOS-270).
+        let _ = server_shutdown_handle.shutdown().await;
+        let _ = task.await;
     }
 
     #[tokio::test]
@@ -1274,6 +1290,7 @@
         .expect("server");
         let port = server.port();
         let leases = Arc::clone(&server.launch_leases);
+        let server_shutdown_handle = server.shutdown_handle();
         let task = tokio::spawn(server.run());
         let launch = || {
             request(
@@ -1334,7 +1351,10 @@
         )
         .await
         .starts_with("HTTP/1.1 200"));
-        task.abort();
+        // Drain connection/request tasks so nothing holds test
+        // fixture files past the tempdir cleanup (KOS-270).
+        let _ = server_shutdown_handle.shutdown().await;
+        let _ = task.await;
     }
 
     fn expire_launch_for_test(leases: &Arc<Mutex<LaunchLeaseRegistry>>, launch_id: &str) {

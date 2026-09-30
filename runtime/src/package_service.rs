@@ -266,7 +266,7 @@ pub struct PackageService {
     typed_grants: Mutex<HashMap<(String, String), LaunchGrant>>,
     package_registrations: PackageRegistrationRegistry,
     package_definition_dispatcher:
-        Mutex<Option<std::sync::Arc<crate::engine_dispatch::EngineDispatcher>>>,
+        Mutex<Option<std::sync::Weak<crate::engine_dispatch::EngineDispatcher>>>,
     typed_registry: Mutex<RegistrySnapshot>,
     grants: std::sync::Arc<GrantAuthorityRegistry>,
 }

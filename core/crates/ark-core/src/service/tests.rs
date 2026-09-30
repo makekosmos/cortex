@@ -11,6 +11,30 @@ pub(super) fn test_state() -> Arc<ServiceState> {
     Arc::new(ServiceState::new())
 }
 
+/// Per-test fixture for tests that open `ark.db` in a tempdir. Field order
+/// is teardown order: `state` (holding the open SQLite connection) drops
+/// before `dir`, so the db file is closed before the directory is removed.
+/// Two separate `let` locals would drop in reverse declaration order and a
+/// `tempdir()` declared after `test_state()` leaked its dir on Windows,
+/// where an open file cannot be deleted (KOS-270).
+pub(super) struct ServiceFixture {
+    pub(crate) state: Arc<ServiceState>,
+    pub(crate) dir: tempfile::TempDir,
+}
+
+pub(super) fn service_fixture() -> ServiceFixture {
+    ServiceFixture {
+        state: test_state(),
+        dir: tempfile::tempdir().unwrap(),
+    }
+}
+
+impl ServiceFixture {
+    pub(crate) fn db_path(&self) -> std::path::PathBuf {
+        self.dir.path().join("ark.db")
+    }
+}
+
 mod legacy_writes;
 mod local_writes;
 mod object_revision_compat;

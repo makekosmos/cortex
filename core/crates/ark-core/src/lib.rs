@@ -13,7 +13,6 @@ pub mod events;
 pub mod hlc;
 pub mod host;
 pub mod integration_replication;
-#[cfg(feature = "iroh-spike")]
 pub mod iroh_transport;
 pub mod mesh;
 pub mod net;

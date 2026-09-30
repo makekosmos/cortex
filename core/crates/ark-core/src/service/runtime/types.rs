@@ -93,10 +93,7 @@ pub(super) async fn upsert_object_type(
             None,
         ))
     })?;
-    let state = Arc::clone(state);
-    tokio::spawn(async move {
-        broadcast_local_change(&state, entity).await;
-    });
+    maybe_broadcast_local_change(state, entity).await;
     Ok(json!(true))
 }
 
@@ -116,10 +113,7 @@ pub(super) async fn delete_object_type(
             Some(true),
         ))
     })?;
-    let state = Arc::clone(state);
-    tokio::spawn(async move {
-        broadcast_local_change(&state, entity).await;
-    });
+    maybe_broadcast_local_change(state, entity).await;
     Ok(json!(true))
 }
 
@@ -146,10 +140,7 @@ pub(super) async fn upsert_object_link(
             None,
         ))
     })?;
-    let state = Arc::clone(state);
-    tokio::spawn(async move {
-        broadcast_local_change(&state, entity).await;
-    });
+    maybe_broadcast_local_change(state, entity).await;
     Ok(json!(true))
 }
 
@@ -169,9 +160,6 @@ pub(super) async fn delete_object_link(
             Some(true),
         ))
     })?;
-    let state = Arc::clone(state);
-    tokio::spawn(async move {
-        broadcast_local_change(&state, entity).await;
-    });
+    maybe_broadcast_local_change(state, entity).await;
     Ok(json!(true))
 }

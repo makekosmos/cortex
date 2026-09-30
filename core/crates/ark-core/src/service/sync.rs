@@ -127,7 +127,7 @@ pub(super) async fn handle_stop_sync(state: &Arc<ServiceState>) {
     if let Some(runtime) = runtime {
         runtime.beacon.stop().await;
         if let Some(relay) = runtime.relay.as_ref() {
-            relay.stop();
+            relay.stop().await;
         }
         let clients: Vec<Arc<SyncClient>> = {
             let clients = runtime.clients.lock().await;
@@ -212,7 +212,7 @@ pub(super) async fn handle_broadcast_change(
 
 /// Step 4a: surface our iroh pairing ticket for the runtime/UI. `null` when
 /// sync isn't running or the running runtime didn't select iroh (relay/no
-/// transport, or a build without `iroh-spike`).
+/// transport).
 pub(super) async fn handle_get_own_iroh_ticket(state: &Arc<ServiceState>) -> Result<Value, String> {
     let guard = state.sync.lock().await;
     let ticket = guard

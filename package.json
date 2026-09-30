@@ -17,7 +17,7 @@
     "clippy": "cargo clippy --workspace --all-targets -- -D warnings",
     "test:rust": "node runtime/scripts/test-lib.mjs --workspace",
     "check:manager-gpui": "cargo fmt --manifest-path manager-gpui/Cargo.toml --all -- --check && cargo clippy --manifest-path manager-gpui/Cargo.toml --all-targets -- -D warnings && cargo test --manifest-path manager-gpui/Cargo.toml",
-    "test:static": "pnpm run test:source-size && pnpm run test:format && pnpm run test:workspace && pnpm run test:package-manager && pnpm run test:check-plan && pnpm run test:release-bom && pnpm run test:desktop-contracts",
+    "test:static": "pnpm run test:source-size && pnpm run test:format && pnpm run test:workspace && pnpm run test:package-manager && pnpm run test:check-plan && pnpm run test:release-bom && pnpm run test:desktop-contracts && node --test runtime/scripts/test-lib.test.mjs",
     "test": "pnpm run test:static && pnpm run test:backend",
     "check": "pnpm run check:layout && pnpm run check:core-pin && pnpm run check:brand && pnpm run check:source-size && pnpm run lint && pnpm run format:check && pnpm run rustfmt && pnpm run clippy && pnpm run test:static && pnpm run test:rust && pnpm run check:manager-gpui && pnpm --dir desktop run test:runtime-staging",
     "lint": "oxlint .",

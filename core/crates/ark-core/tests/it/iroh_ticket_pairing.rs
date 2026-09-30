@@ -1,5 +1,4 @@
 #![allow(clippy::unwrap_used)]
-#![cfg(feature = "iroh-spike")]
 
 //! Integration test (GREEN stage, шаг 3): ticket-based pairing.
 //!

@@ -9,8 +9,9 @@ autobins = false
 default = ["handle-relative-fs-serde"]
 handle-relative-fs-serde = []
 windows-gui-subsystem = []
-# Forwarded to ark-core: opt-in iroh transport for start_sync (`use_iroh`).
-iroh-spike = ["ark-core/iroh-spike"]
+# Test-only: relaxes the broker's HTTPS-only origin check to allow loopback
+# http origins and exposes worker failure hooks. A release build refuses to
+# compile with it (see the compile_error in src/lib.rs).
 package-worker-fixture = []
 # Test-only feature: builds the ark-markdown-bridge integration-test
 # fixture bin. Plain `cargo build`/`cargo test --lib` skip it.

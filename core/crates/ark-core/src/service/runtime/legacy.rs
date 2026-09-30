@@ -43,12 +43,7 @@ pub(super) async fn upsert_todo(
         None,
     );
     let entities = with_write_tx(state, |conn| write_legacy_graph(conn, &[record], device_id))?;
-    let state = Arc::clone(state);
-    tokio::spawn(async move {
-        for entity in entities {
-            broadcast_local_change(&state, entity).await;
-        }
-    });
+    maybe_broadcast_local_changes(state, entities).await;
     Ok(json!(true))
 }
 
@@ -60,10 +55,7 @@ pub(super) async fn delete_todo(
     let entity = with_write_tx(state, |conn| {
         tombstone_legacy(conn, &id, "com.kosmos.task", device_id)
     })?;
-    let state = Arc::clone(state);
-    tokio::spawn(async move {
-        broadcast_local_change(&state, entity).await;
-    });
+    maybe_broadcast_local_change(state, entity).await;
     Ok(json!(true))
 }
 
@@ -75,10 +67,7 @@ pub(super) async fn delete_project(
     let entity = with_write_tx(state, |conn| {
         tombstone_legacy(conn, &id, "com.kosmos.project", device_id)
     })?;
-    let state = Arc::clone(state);
-    tokio::spawn(async move {
-        broadcast_local_change(&state, entity).await;
-    });
+    maybe_broadcast_local_change(state, entity).await;
     Ok(json!(true))
 }
 
@@ -95,12 +84,7 @@ pub(super) async fn batch_upsert_todos(
         "recurrence_rule": todo.recurrence_rule, "project_id": todo.project_id, "tag_ids": todo.tag_ids,
     }), &todo.created_at, None)).collect::<Vec<_>>();
     let entities = with_write_tx(state, |conn| write_legacy_graph(conn, &records, device_id))?;
-    let state = Arc::clone(state);
-    tokio::spawn(async move {
-        for entity in entities {
-            broadcast_local_change(&state, entity).await;
-        }
-    });
+    maybe_broadcast_local_changes(state, entities).await;
     Ok(json!(true))
 }
 
@@ -118,12 +102,7 @@ pub(super) async fn upsert_project(
         None,
     );
     let entities = with_write_tx(state, |conn| write_legacy_graph(conn, &[record], device_id))?;
-    let state = Arc::clone(state);
-    tokio::spawn(async move {
-        for entity in entities {
-            broadcast_local_change(&state, entity).await;
-        }
-    });
+    maybe_broadcast_local_changes(state, entities).await;
     Ok(json!(true))
 }
 
@@ -141,12 +120,7 @@ pub(super) async fn upsert_tag(
         None,
     );
     let entities = with_write_tx(state, |conn| write_legacy_graph(conn, &[record], device_id))?;
-    let state = Arc::clone(state);
-    tokio::spawn(async move {
-        for entity in entities {
-            broadcast_local_change(&state, entity).await;
-        }
-    });
+    maybe_broadcast_local_changes(state, entities).await;
     Ok(json!(true))
 }
 
@@ -166,10 +140,7 @@ pub(super) async fn upsert_tracked_app(
             None,
         ))
     })?;
-    let state = Arc::clone(state);
-    tokio::spawn(async move {
-        broadcast_local_change(&state, entity).await;
-    });
+    maybe_broadcast_local_change(state, entity).await;
     Ok(json!(true))
 }
 
@@ -189,9 +160,6 @@ pub(super) async fn delete_tracked_app(
             Some(true),
         ))
     })?;
-    let state = Arc::clone(state);
-    tokio::spawn(async move {
-        broadcast_local_change(&state, entity).await;
-    });
+    maybe_broadcast_local_change(state, entity).await;
     Ok(json!(true))
 }

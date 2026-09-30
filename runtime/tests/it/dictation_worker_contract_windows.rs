@@ -267,4 +267,7 @@ async fn compiled_dictation_worker_round_trips_engine_capabilities() {
         supervisor.health(PACKAGE_ID, VERSION).state,
         WorkerState::Stopped
     );
+    // Drain every supervisor registry so no task keeps a worker child or
+    // an ArkHost handle alive past the test's tempdir cleanup (KOS-270).
+    let _ = supervisor.stop_all().await;
 }

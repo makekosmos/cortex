@@ -1,5 +1,4 @@
 #![allow(clippy::unwrap_used)]
-#![cfg(feature = "iroh-spike")]
 
 //! Regression test for tokio::select! cancellation desync bug.
 //!
@@ -19,7 +18,7 @@
 //! messages or a desync error in stderr / timeout).
 //!
 //! Run with:
-//!   cargo test --features iroh-spike --test iroh_bidirectional_burst
+//!   cargo test --test iroh_bidirectional_burst
 
 use std::collections::HashSet;
 use std::time::Duration;
