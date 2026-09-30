@@ -5,9 +5,6 @@ pub(super) fn try_dispatch_handle(
     grant: &Grant,
     call: &CallMessage,
 ) -> Option<Result<serde_json::Value, &'static str>> {
-    if call.operation == WorkerMethod::FilesystemRootOpen {
-        return Some(open_root(inner, grant, call));
-    }
     matches!(
         call.operation,
         WorkerMethod::FilesystemRead

@@ -67,49 +67,37 @@ pub(super) async fn dispatch(
             .await;
         }
     }
-    let scope = match call.operation {
-        WorkerMethod::FilesystemRootOpen => None,
-        WorkerMethod::ArkRead | WorkerMethod::ArkWrite => call
-            .params
-            .get("operation")
-            .and_then(serde_json::Value::as_str)
-            .map(str::to_owned),
-        WorkerMethod::NetworkFetch => call
-            .params
-            .get("url")
-            .and_then(serde_json::Value::as_str)
-            .and_then(|url| reqwest::Url::parse(url).ok())
-            .map(|url| url.origin().ascii_serialization()),
-        WorkerMethod::FilesystemRead
-        | WorkerMethod::FilesystemWrite
-        | WorkerMethod::FilesystemList
-        | WorkerMethod::FilesystemPoll
-        | WorkerMethod::FilesystemDelete
-        | WorkerMethod::FilesystemCreateDir
-        | WorkerMethod::ProcessSpawn => call
-            .params
-            .get(if matches!(call.operation, WorkerMethod::ProcessSpawn) {
-                "executable"
-            } else {
-                "path"
-            })
-            .and_then(serde_json::Value::as_str)
-            .and_then(|path| granted_path_scope(grant, &call.operation, Path::new(path))),
+    let authorize = |scope: Option<&str>| {
+        grant.authorize(
+            &call.token,
+            grant.pid,
+            call.generation,
+            inner.api_major,
+            inner.api_major,
+            &call.operation,
+            scope,
+        )
     };
-    if !grant.authorize(
-        &call.token,
-        grant.pid,
-        call.generation,
-        inner.api_major,
-        inner.api_major,
-        &call.operation,
-        scope.as_deref(),
-    ) {
-        return Err("forbidden");
-    }
+    let path_scope = |key: &str| {
+        call.params
+            .get(key)
+            .and_then(serde_json::Value::as_str)
+            .and_then(|path| granted_path_scope(grant, &call.operation, Path::new(path)))
+    };
     match call.operation {
+        // FilesystemRootOpen authenticates inside open_root (its own
+        // filesystem.read/write scope check) and never goes through
+        // grant.authorize.
         WorkerMethod::FilesystemRootOpen => handle_relative::open_root(inner, grant, call),
         WorkerMethod::ArkRead | WorkerMethod::ArkWrite => {
+            let scope = call
+                .params
+                .get("operation")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_owned);
+            if !authorize(scope.as_deref()) {
+                return Err("forbidden");
+            }
             let operation = scope.ok_or("invalid-request")?;
             let params = call
                 .params
@@ -119,9 +107,22 @@ pub(super) async fn dispatch(
             inner.ark_executor.request(&operation, params).await
         }
         WorkerMethod::NetworkFetch => {
+            let scope = call
+                .params
+                .get("url")
+                .and_then(serde_json::Value::as_str)
+                .and_then(|url| reqwest::Url::parse(url).ok())
+                .map(|url| url.origin().ascii_serialization());
+            if !authorize(scope.as_deref()) {
+                return Err("forbidden");
+            }
             dispatch_network(inner, grant, broker, integration, call).await
         }
         WorkerMethod::FilesystemRead => {
+            let scope = path_scope("path");
+            if !authorize(scope.as_deref()) {
+                return Err("forbidden");
+            }
             let path = call
                 .params
                 .get("path")
@@ -146,6 +147,10 @@ pub(super) async fn dispatch(
             )
         }
         WorkerMethod::FilesystemWrite => {
+            let scope = path_scope("path");
+            if !authorize(scope.as_deref()) {
+                return Err("forbidden");
+            }
             let path = call
                 .params
                 .get("path")
@@ -162,6 +167,10 @@ pub(super) async fn dispatch(
             Ok(serde_json::Value::Null)
         }
         WorkerMethod::FilesystemDelete => {
+            let scope = path_scope("path");
+            if !authorize(scope.as_deref()) {
+                return Err("forbidden");
+            }
             let path = call
                 .params
                 .get("path")
@@ -172,6 +181,10 @@ pub(super) async fn dispatch(
             Ok(serde_json::Value::Null)
         }
         WorkerMethod::FilesystemCreateDir => {
+            let scope = path_scope("path");
+            if !authorize(scope.as_deref()) {
+                return Err("forbidden");
+            }
             let path = call
                 .params
                 .get("path")
@@ -182,6 +195,10 @@ pub(super) async fn dispatch(
             Ok(serde_json::Value::Null)
         }
         WorkerMethod::FilesystemList => {
+            let scope = path_scope("path");
+            if !authorize(scope.as_deref()) {
+                return Err("forbidden");
+            }
             let path = call
                 .params
                 .get("path")
@@ -192,6 +209,10 @@ pub(super) async fn dispatch(
             serde_json::to_value(entries).map_err(|_| "unavailable")
         }
         WorkerMethod::FilesystemPoll => {
+            let scope = path_scope("path");
+            if !authorize(scope.as_deref()) {
+                return Err("forbidden");
+            }
             let path = call
                 .params
                 .get("path")
@@ -202,6 +223,10 @@ pub(super) async fn dispatch(
             serde_json::to_value(entries).map_err(|_| "unavailable")
         }
         WorkerMethod::ProcessSpawn => {
+            let scope = path_scope("executable");
+            if !authorize(scope.as_deref()) {
+                return Err("forbidden");
+            }
             let executable = call
                 .params
                 .get("executable")
