@@ -9,16 +9,12 @@ const target = process.env.CARGO_TARGET_DIR
 const executable = (name) =>
   resolve(target, "debug", `${name}${process.platform === "win32" ? ".exe" : ""}`);
 const bridge = executable("ark-markdown-bridge");
-const env = {
-  ...process.env,
-  // The ark-core library tests still compile the in-tree crate, which is
-  // memory-heavy on Windows CI/dev machines. Keep the preflight deterministic
-  // unless the caller explicitly opts in.
-  CARGO_BUILD_JOBS: process.env.CARGO_BUILD_JOBS ?? "1",
-};
-
+// Cargo's default job count is used: a cold `--workspace` run took 1474 s with
+// CARGO_BUILD_JOBS=1 and 498 s with 12, and free memory stayed above 17.5 GB
+// of 32 (docs/experiments/2026-09-30-build-speed.md). Set CARGO_BUILD_JOBS to
+// limit it on a smaller machine.
 function run(cwd, args) {
-  const result = spawnSync("cargo", args, { cwd, stdio: "inherit", env });
+  const result = spawnSync("cargo", args, { cwd, stdio: "inherit" });
   if (result.error) throw result.error;
   if (result.status !== 0) process.exit(result.status ?? 1);
 }

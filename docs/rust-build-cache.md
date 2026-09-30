@@ -110,9 +110,10 @@ output uses exact keys. Target output is an untrusted CI convenience cache and
 the published sidecar is never cached as a trusted release artifact. GitHub's
 PR cache scope cannot write into the base branch's cache.
 
-`CARGO_BUILD_JOBS=1` remains test-only behavior in
-`runtime/scripts/test-lib.mjs`; changing it was not measured. Peak-memory
-tradeoffs are `NOT_RUN`.
+`runtime/scripts/test-lib.mjs` no longer forces `CARGO_BUILD_JOBS=1`: on the
+dev machine a cold `--workspace` run took 1474 s with one job and 498 s with
+twelve, with free memory never below 17.5 GB of 32
+(`docs/experiments/2026-09-30-build-speed.md`).
 
 Hosted CI evidence is `NOT_RUN` because KOS-50 billing/spending prevents runs;
 this is not a code failure. `sccache` was not installed because the baseline
