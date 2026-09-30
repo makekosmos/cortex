@@ -101,7 +101,7 @@ async fn disconnect_peer_stops_matching_outbound_client_and_emits_events() {
                 tokio::time::sleep(std::time::Duration::from_millis(5)).await;
             }
             Err(tokio::sync::broadcast::error::TryRecvError::Closed) => {
-                unreachable!("event bus is process-wide and never closes");
+                panic!("event bus is process-wide and never closes");
             }
         }
     }

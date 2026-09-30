@@ -1,24 +1,24 @@
 use super::*;
 use crate::service::runtime::get_shared_conn;
 
-// Mirrors the StartSync request fields one-to-one; the request struct is the
-// params object already, this fn just destructures it for the sync stack.
-#[allow(clippy::too_many_arguments)]
 pub(crate) async fn handle_start_sync(
     state: &Arc<ServiceState>,
-    space_id: String,
-    device_id: String,
-    device_name: Option<String>,
-    port: Option<u16>,
-    seed_addresses: Option<Vec<String>>,
-    relay_url: Option<String>,
-    relay_api_key: Option<String>,
-    auth_secret: Option<String>,
-    use_iroh: bool,
-    iroh_peer_ticket: Option<String>,
-    discovery_enabled: bool,
-    bind: SyncBind,
+    params: StartSyncParams,
 ) -> Result<Value, String> {
+    let StartSyncParams {
+        space_id,
+        device_id,
+        device_name,
+        port,
+        seed_addresses,
+        relay_url,
+        relay_api_key,
+        auth_secret,
+        use_iroh,
+        iroh_peer_ticket,
+        discovery_enabled,
+        bind,
+    } = params;
     // Idempotency: tear down any running runtime first.
     handle_stop_sync(state).await;
 
@@ -216,6 +216,16 @@ pub(crate) async fn handle_start_sync(
         Arc::new(TokioMutex::new(HashMap::new()));
     let known_peers = server.get_known_peers().await;
     let removed_peer_ids = server.get_removed_peer_ids().await;
+    let client_env = ClientEnv {
+        server: server.clone(),
+        storage: storage.clone(),
+        clients: clients.clone(),
+        device_id: device_id.clone(),
+        device_name: device_name.clone(),
+        space_id: space_id.clone(),
+        own_addresses: own_addresses.clone(),
+        auth_secret: auth_secret.clone(),
+    };
     for peer in known_peers {
         if peer.device_id == device_id || removed_peer_ids.iter().any(|id| id == &peer.device_id) {
             continue;
@@ -233,36 +243,13 @@ pub(crate) async fn handle_start_sync(
             addresses: reachable,
             ..peer
         };
-        spawn_sync_client(
-            &server,
-            &storage,
-            &clients,
-            peer_rec,
-            device_id.clone(),
-            device_name.clone(),
-            space_id.clone(),
-            own_addresses.clone(),
-            auth_secret.clone(),
-        )
-        .await;
+        spawn_sync_client(&client_env, peer_rec).await;
     }
 
     // Seed addresses from QR payload / initial-join flow.
     if let Some(addrs) = seed_addresses {
         if !addrs.is_empty() {
-            start_seed_client(
-                &server,
-                &storage,
-                &clients,
-                addrs,
-                device_id.clone(),
-                device_name.clone(),
-                space_id.clone(),
-                own_addresses.clone(),
-                auth_secret.clone(),
-                bind,
-            )
-            .await;
+            start_seed_client(&client_env, addrs, bind).await;
         }
     }
 
@@ -357,15 +344,17 @@ pub(crate) async fn handle_start_sync(
                         last_address: None,
                     };
                     spawn_sync_client(
-                        &server,
-                        &storage,
-                        &clients,
+                        &ClientEnv {
+                            server: server.clone(),
+                            storage: storage.clone(),
+                            clients: clients.clone(),
+                            device_id,
+                            device_name,
+                            space_id,
+                            own_addresses: own,
+                            auth_secret,
+                        },
                         peer_rec,
-                        device_id,
-                        device_name,
-                        space_id,
-                        own,
-                        auth_secret,
                     )
                     .await;
                 });

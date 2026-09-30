@@ -83,13 +83,15 @@ pub fn new_setup_named(integration_id: &str) -> Result<IntegrationReplicationSet
         .as_millis() as u64;
     try_acquire_integration_refresh_lease(
         &conn,
-        integration_id,
-        &origin.node_id,
-        1,
-        now_ms,
-        60_000,
-        0,
-        &origin.node_id,
+        &ark_core::db::RefreshLeaseAcquireParams {
+            integration_id: integration_id.into(),
+            holder_node_id: origin.node_id.clone(),
+            credential_generation: 1,
+            now_ms,
+            ttl_ms: 60_000,
+            expected_fencing_token: 0,
+            device_id: origin.node_id.clone(),
+        },
     )?;
     Ok(IntegrationReplicationSetup {
         _dir: dir,
@@ -116,10 +118,10 @@ pub fn decode_hex(value: &str) -> Vec<u8> {
         .0
         .iter()
         .map(|pair| {
-            let digit = |byte: u8| match byte {
-                b'0'..=b'9' => byte - b'0',
-                b'a'..=b'f' => byte - b'a' + 10,
-                _ => unreachable!("canonical bytes must be lowercase hexadecimal"),
+            let digit = |byte: u8| {
+                (byte as char)
+                    .to_digit(16)
+                    .expect("canonical bytes must be lowercase hexadecimal") as u8
             };
             (digit(pair[0]) << 4) | digit(pair[1])
         })

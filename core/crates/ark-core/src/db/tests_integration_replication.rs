@@ -76,8 +76,19 @@ fn acquire_integration_test_lease(
     conn: &rusqlite::Connection,
     device_id: &str,
 ) -> IntegrationRefreshLease {
-    try_acquire_integration_refresh_lease(conn, "integration-a", "node-a", 3, 10, 10, 0, device_id)
-        .unwrap()
+    try_acquire_integration_refresh_lease(
+        conn,
+        &RefreshLeaseAcquireParams {
+            integration_id: "integration-a".into(),
+            holder_node_id: "node-a".into(),
+            credential_generation: 3,
+            now_ms: 10,
+            ttl_ms: 10,
+            expected_fencing_token: 0,
+            device_id: device_id.into(),
+        },
+    )
+    .unwrap()
 }
 
 #[test]

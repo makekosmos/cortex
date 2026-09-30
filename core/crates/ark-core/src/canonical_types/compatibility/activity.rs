@@ -33,8 +33,8 @@ pub fn time_entry(
         string(m, "taskTitle", &["task_title"], u, true)?,
     );
     put_extensions(o);
-    relation_single_with_aliases(m, "taskId", &["task_id"], "for-task", l, id, at, u)?;
-    relation_with_aliases(m, "tagIds", &["tag_ids"], "tag", l, id, at, u)?;
+    relation_single_with_aliases(m, "taskId", &["task_id"], "for-task", LinkWrite { links: l, id, at, unknown: u })?;
+    relation_with_aliases(m, "tagIds", &["tag_ids"], "tag", LinkWrite { links: l, id, at, unknown: u })?;
     for k in [
         "provider",
         "accountId",
@@ -52,20 +52,17 @@ pub fn time_entry(
     }
     Ok(())
 }
-// Field-by-field mapper: each parameter is a distinct output accumulator the
-// caller threads through every mapper, so a params struct would just rename
-// the same list at every call site.
-#[allow(clippy::too_many_arguments)]
-pub fn game(
-    m: &Map<String, Value>,
-    o: &mut Map<String, Value>,
-    u: &mut BTreeSet<String>,
-    l: &mut Vec<crate::types::ObjectLink>,
-    local: &mut Map<String, Value>,
-    q: &mut Map<String, Value>,
-    id: &str,
-    at: &str,
-) -> Result<(), CompatFailure> {
+// Field-by-field mapper over the shared `CompatCtx` write bundle.
+pub fn game(m: &Map<String, Value>, ctx: CompatCtx<'_>) -> Result<(), CompatFailure> {
+    let CompatCtx {
+        out: o,
+        consumed: u,
+        links: l,
+        local,
+        quarantine: q,
+        id,
+        at,
+    } = ctx;
     let s = val(m, "playStatus", &["play_status"], u)?;
     o.insert(
         "playStatus".into(),
@@ -161,7 +158,7 @@ pub fn game(
             q.insert(c.into(), v.clone());
         }
     }
-    relation_with_aliases(m, "noteIds", &["note_ids"], "note", l, id, at, u)?;
-    relation_with_aliases(m, "taskIds", &["task_ids"], "task", l, id, at, u)?;
-    relation_with_aliases(m, "tagIds", &["tag_ids"], "tag", l, id, at, u)
+    relation_with_aliases(m, "noteIds", &["note_ids"], "note", LinkWrite { links: l, id, at, unknown: u })?;
+    relation_with_aliases(m, "taskIds", &["task_ids"], "task", LinkWrite { links: l, id, at, unknown: u })?;
+    relation_with_aliases(m, "tagIds", &["tag_ids"], "tag", LinkWrite { links: l, id, at, unknown: u })
 }

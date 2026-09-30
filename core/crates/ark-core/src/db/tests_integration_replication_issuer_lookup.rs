@@ -1,3 +1,4 @@
+use crate::integration_replication::Reauthorization;
 fn setup_issuer_key_lookup(conn: &rusqlite::Connection) -> AuthorizedNode {
     upsert_integration_configuration(conn, &integration_config(serde_json::json!({})), "node-a")
         .unwrap();
@@ -19,13 +20,15 @@ fn setup_issuer_key_lookup(conn: &rusqlite::Connection) -> AuthorizedNode {
 
     let lease = try_acquire_integration_refresh_lease(
         conn,
-        "integration-a",
-        "node-b",
-        3,
-        10,
-        10,
-        0,
-        "node-b",
+        &RefreshLeaseAcquireParams {
+            integration_id: "integration-a".into(),
+            holder_node_id: "node-b".into(),
+            credential_generation: 3,
+            now_ms: 10,
+            ttl_ms: 10,
+            expected_fencing_token: 0,
+            device_id: "node-b".into(),
+        },
     )
     .unwrap();
     let mut envelope = integration_envelope(lease.credential_generation);
@@ -77,13 +80,15 @@ fn issuer_key_lookup_rejects_a_retained_older_generation() {
     let expected_key_id = encryption_key_id(&issuer.encryption_public_key);
     let next_lease = try_acquire_integration_refresh_lease(
         &conn,
-        "integration-a",
-        "node-b",
-        4,
-        20,
-        10,
-        1,
-        "node-b",
+        &RefreshLeaseAcquireParams {
+            integration_id: "integration-a".into(),
+            holder_node_id: "node-b".into(),
+            credential_generation: 4,
+            now_ms: 20,
+            ttl_ms: 10,
+            expected_fencing_token: 1,
+            device_id: "node-b".into(),
+        },
     )
     .unwrap();
     let mut latest = integration_envelope(4);
@@ -148,13 +153,15 @@ fn issuer_key_lookup_rejects_wrong_binding_rotation_and_revocation() {
 
     let rotated = issuer
         .reauthorize(
-            3,
-            "fp-b-rotated",
-            "sign-b-rotated",
-            "enc-b-rotated",
-            None,
-            "2026-08-30T00:00:00Z",
-            "2026-08-30T00:00:00.000Z:000003:node-b",
+            Reauthorization {
+                grant_epoch: 3,
+                key_fingerprint: "fp-b-rotated".into(),
+                signing_public_key: "sign-b-rotated".into(),
+                encryption_public_key: "enc-b-rotated".into(),
+                transport_public_key: None,
+                authorized_at: "2026-08-30T00:00:00Z".into(),
+                hlc: "2026-08-30T00:00:00.000Z:000003:node-b".into(),
+            },
         )
         .unwrap();
     let mut rotated_grant = integration_grant();

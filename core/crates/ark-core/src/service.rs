@@ -63,8 +63,12 @@ mod sync;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use self::definitions::{ObjectWriteSnapshot, Request, SyncRuntime, SyncStartParams};
+pub(crate) use self::definitions::{
+    ObjectWriteSnapshot, Request, StartSyncParams, SyncRuntime, SyncStartParams,
+};
 use self::runtime::handle_request;
+#[cfg(test)]
+pub(crate) use crate::db::RefreshLeaseAcquireParams;
 // The runtime::system handlers reach the sync handlers through the shared
 // `use super::*` chain, so the whole set is imported at this scope.
 #[cfg(test)]
@@ -245,18 +249,10 @@ async fn worker_loop(
 ) {
     use futures_util::FutureExt;
     while let Some(job) = rx.recv().await {
-        let outcome = std::panic::AssertUnwindSafe(async {
-            // Test-only fault injection: proves the worker recovers from a
-            // panicking request instead of dying silently.
-            #[cfg(test)]
-            #[allow(clippy::panic)]
-            if let Request::TestPanic = job.request {
-                panic!("ark-service test panic injection");
-            }
-            handle_request(&state, job.request).await
-        })
-        .catch_unwind()
-        .await;
+        let outcome =
+            std::panic::AssertUnwindSafe(async { handle_request(&state, job.request).await })
+                .catch_unwind()
+                .await;
         let reply = match outcome {
             Ok(result) => result.map_err(ArkServiceError::Request),
             Err(panic) => {

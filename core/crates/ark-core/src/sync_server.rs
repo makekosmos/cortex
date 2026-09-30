@@ -16,8 +16,12 @@ use crate::types::*;
 
 #[path = "sync_server_core.rs"]
 mod sync_server_core;
+#[path = "sync_server_inbound.rs"]
+mod sync_server_inbound;
 #[path = "sync_server_messages.rs"]
 mod sync_server_messages;
+#[path = "sync_server_peers.rs"]
+mod sync_server_peers;
 #[cfg(test)]
 #[path = "sync_server_reject_tests.rs"]
 mod sync_server_reject_tests;
@@ -185,6 +189,24 @@ async fn load_removed_peer_ids(storage: &Arc<dyn StorageBackend>) -> Vec<String>
     }
 }
 
+/// Shared mutable state handed to `handle_message`. Every field has a
+/// different owner; the struct only bundles the Arcs the peer reader task
+/// already clones per connection.
+#[derive(Clone)]
+struct MessageContext {
+    peers: Arc<Mutex<HashMap<usize, PeerState>>>,
+    storage: Arc<dyn StorageBackend>,
+    space_id: Arc<RwLock<String>>,
+    device_id: Arc<RwLock<String>>,
+    device_name: Arc<RwLock<String>>,
+    own_addresses: Arc<RwLock<Vec<String>>>,
+    auth_secret: Arc<RwLock<Option<String>>>,
+    known_peer_records: Arc<Mutex<Vec<PeerRecord>>>,
+    on_change: Arc<Mutex<Option<OnChangeCallback>>>,
+    on_peer_connect: Arc<Mutex<Option<OnPeerConnectCallback>>>,
+    on_new_peer_discovered: Arc<Mutex<Option<OnNewPeerDiscoveredCallback>>>,
+}
+
 async fn save_removed_peer_ids(storage: &Arc<dyn StorageBackend>, peer_ids: &[String]) {
     let json = serde_json::to_string(peer_ids).unwrap_or_default();
     storage.set_kv(REMOVED_PEERS_KEY, &json).await;
@@ -208,7 +230,6 @@ async fn reject_hello(peers: &Mutex<HashMap<usize, PeerState>>, peer_id: usize) 
 // Message handler
 // ---------------------------------------------------------------------------
 
-#[allow(clippy::too_many_arguments)]
 async fn broadcast_to_others(
     peers: &Arc<Mutex<HashMap<usize, PeerState>>>,
     entity: &SyncEntity,

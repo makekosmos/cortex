@@ -1529,7 +1529,7 @@ mod tests {
         let crate::package_manifest::VersionedManifest::V2(manifest) =
             crate::package_manifest::PackageManifest::parse(raw).expect("valid manifest")
         else {
-            unreachable!("expected v2 manifest");
+            panic!("expected v2 manifest");
         };
 
         let grant = compile_manifest_v2(&manifest, &RegistrySnapshot::default(), "digest")
@@ -1585,7 +1585,7 @@ mod tests {
         let crate::package_manifest::VersionedManifest::V2(manifest) =
             crate::package_manifest::PackageManifest::parse(raw).expect("valid manifest")
         else {
-            unreachable!("expected v2 manifest");
+            panic!("expected v2 manifest");
         };
 
         let grant = compile_manifest_v2(&manifest, &RegistrySnapshot::default(), "digest")
@@ -1617,7 +1617,7 @@ mod tests {
         let crate::package_manifest::VersionedManifest::V2(manifest) =
             crate::package_manifest::PackageManifest::parse(raw).expect("valid manifest")
         else {
-            unreachable!("expected v2 manifest");
+            panic!("expected v2 manifest");
         };
         let grant = compile_manifest_v2(&manifest, &RegistrySnapshot::default(), "digest")
             .expect("compiled grant");
@@ -1638,7 +1638,7 @@ mod tests {
         let crate::package_manifest::VersionedManifest::V2(manifest) =
             crate::package_manifest::PackageManifest::parse(raw).expect("valid manifest")
         else {
-            unreachable!("expected v2 manifest");
+            panic!("expected v2 manifest");
         };
 
         let grant = compile_manifest_v2(&manifest, &RegistrySnapshot::default(), "digest")
@@ -1664,7 +1664,7 @@ mod tests {
         let crate::package_manifest::VersionedManifest::V2(manifest) =
             crate::package_manifest::PackageManifest::parse(raw).expect("valid manifest")
         else {
-            unreachable!("expected v2 manifest");
+            panic!("expected v2 manifest");
         };
 
         let grant = compile_manifest_v2(&manifest, &RegistrySnapshot::default(), "digest")
@@ -1692,7 +1692,7 @@ mod tests {
         let crate::package_manifest::VersionedManifest::V2(manifest) =
             crate::package_manifest::PackageManifest::parse(raw).expect("valid manifest")
         else {
-            unreachable!("expected v2 manifest");
+            panic!("expected v2 manifest");
         };
 
         let grant = compile_manifest_v2(&manifest, &RegistrySnapshot::default(), "digest")

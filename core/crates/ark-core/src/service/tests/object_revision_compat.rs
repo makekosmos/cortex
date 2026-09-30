@@ -8,8 +8,9 @@ fn task(id: &str, title: &str) -> ArkObjectWrite {
 }
 
 fn remote_entity(object: &ArkObject, title: &str) -> SyncEntity {
-    let Value::Object(mut data) = serde_json::to_value(object).unwrap() else {
-        unreachable!()
+    let value = serde_json::to_value(object).unwrap();
+    let Value::Object(mut data) = value else {
+        panic!("expected JSON object, got {value:?}")
     };
     data.remove("id");
     data.insert("title".to_string(), json!(title));

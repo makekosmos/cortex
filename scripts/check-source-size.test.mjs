@@ -60,6 +60,12 @@ test("retired Godfile paths cannot reuse an old exemption", async () => {
   assert.match(result.stderr, /runtime\/src\/integrations\.rs: 501 lines/);
 });
 
+test("core/ is first-party and checked like everything else", async () => {
+  const result = await runFixture({ "core/crates/ark-core/src/big.rs": lines(501) });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /core\/crates\/ark-core\/src\/big\.rs: 501 lines \(max 500\)/);
+});
+
 test("only the explicit debt baseline is grandfathered", async () => {
   const result = await runFixture({
     "runtime/src/main.rs": lines(501),

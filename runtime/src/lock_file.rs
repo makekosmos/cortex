@@ -38,15 +38,16 @@ fn lock_permissions_disabled() -> bool {
 /// Ретраим с bounded backoff; последняя ошибка возвращается как есть.
 pub(crate) fn retry_io<T>(mut op: impl FnMut() -> io::Result<T>) -> io::Result<T> {
     const ATTEMPTS: u32 = 20;
-    for attempt in 0..ATTEMPTS {
+    let mut attempt = 0;
+    loop {
+        attempt += 1;
         match op() {
-            Err(error) if is_transient_io(&error) && attempt + 1 < ATTEMPTS => {
+            Err(error) if is_transient_io(&error) && attempt < ATTEMPTS => {
                 std::thread::sleep(std::time::Duration::from_millis(50));
             }
             result => return result,
         }
     }
-    unreachable!("retry_io всегда возвращается из цикла попыток")
 }
 
 fn is_transient_io(error: &io::Error) -> bool {

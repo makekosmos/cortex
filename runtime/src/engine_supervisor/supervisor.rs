@@ -146,18 +146,11 @@ pub async fn run_supervisor() -> ExitCode {
             {
                 Ok(child) => child,
                 Err(error) => {
-                    if matches!(
-                        &error,
-                        SpawnAttemptError::Control | SpawnAttemptError::State
-                    ) {
+                    let SpawnAttemptError::Spawn(error) = error else {
                         return ExitCode::from(1);
-                    }
+                    };
                     crate::observability::stderr(format!(
-                        "[mundus-engine] failed to spawn core worker: {}",
-                        match error {
-                            SpawnAttemptError::Spawn(error) => error,
-                            SpawnAttemptError::Control | SpawnAttemptError::State => unreachable!(),
-                        }
+                        "[mundus-engine] failed to spawn core worker: {error}"
                     ));
                     crash_streak = crash_streak.saturating_add(1);
                     if crash_streak > RESTART_DELAYS.len() {

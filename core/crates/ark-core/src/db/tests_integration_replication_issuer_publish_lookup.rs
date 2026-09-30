@@ -62,13 +62,15 @@ fn issuer_key_lookup_for_publish_rejects_wrong_key_and_accepts_rotated_key() {
 
     let rotated = issuer
         .reauthorize(
-            3,
-            "fp-b-rotated",
-            "sign-b-rotated",
-            "enc-b-rotated",
-            None,
-            "2026-08-30T00:00:00Z",
-            "2026-08-30T00:00:00.000Z:000002:node-b",
+            Reauthorization {
+                grant_epoch: 3,
+                key_fingerprint: "fp-b-rotated".into(),
+                signing_public_key: "sign-b-rotated".into(),
+                encryption_public_key: "enc-b-rotated".into(),
+                transport_public_key: None,
+                authorized_at: "2026-08-30T00:00:00Z".into(),
+                hlc: "2026-08-30T00:00:00.000Z:000002:node-b".into(),
+            },
         )
         .unwrap();
     let mut rotated_grant = integration_grant();

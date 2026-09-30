@@ -148,13 +148,15 @@ fn map_value(
         )?,
         "game_obj" => activity::game(
             props,
-            &mut out,
-            &mut consumed,
-            &mut links,
-            &mut local,
-            &mut quarantine,
-            &record.id,
-            &record.updated_at,
+            shared::CompatCtx {
+                out: &mut out,
+                consumed: &mut consumed,
+                links: &mut links,
+                local: &mut local,
+                quarantine: &mut quarantine,
+                id: &record.id,
+                at: &record.updated_at,
+            },
         )?,
         _ => {
             return Err(shared::CompatFailure::UnsupportedLegacyValue {

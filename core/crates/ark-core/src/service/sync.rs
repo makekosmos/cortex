@@ -10,19 +10,32 @@ use self::events::wire_relay_sync_events;
 // Re-exported so `service.rs` can import it as `self::sync::handle_start_sync`.
 pub(crate) use self::start::handle_start_sync;
 
-#[allow(clippy::too_many_arguments)]
-async fn spawn_sync_client(
-    server: &Arc<SyncServer>,
-    storage: &Arc<SqliteStorageBackend>,
-    clients: &Arc<TokioMutex<HashMap<String, Arc<SyncClient>>>>,
-    peer: PeerRecord,
+/// Everything a spawned SyncClient needs: the shared server-side handles
+/// plus this node's identity material.
+#[derive(Clone)]
+struct ClientEnv {
+    server: Arc<SyncServer>,
+    storage: Arc<SqliteStorageBackend>,
+    clients: Arc<TokioMutex<HashMap<String, Arc<SyncClient>>>>,
     device_id: String,
     device_name: String,
     space_id: String,
     own_addresses: Vec<String>,
     auth_secret: Option<String>,
-) {
-    if peer.device_id == device_id {
+}
+
+async fn spawn_sync_client(env: &ClientEnv, peer: PeerRecord) {
+    let ClientEnv {
+        server,
+        storage,
+        clients,
+        device_id,
+        device_name,
+        space_id,
+        own_addresses,
+        auth_secret,
+    } = env;
+    if peer.device_id == *device_id {
         return;
     }
 
@@ -33,7 +46,7 @@ async fn spawn_sync_client(
         device_name.clone(),
         space_id.clone(),
         own_addresses.clone(),
-        auth_secret,
+        auth_secret.clone(),
     ));
 
     client
@@ -86,19 +99,8 @@ async fn spawn_sync_client(
     clients.lock().await.insert(peer.device_id.clone(), client);
 }
 
-#[allow(clippy::too_many_arguments)]
-async fn start_seed_client(
-    server: &Arc<SyncServer>,
-    storage: &Arc<SqliteStorageBackend>,
-    clients: &Arc<TokioMutex<HashMap<String, Arc<SyncClient>>>>,
-    addresses: Vec<String>,
-    device_id: String,
-    device_name: String,
-    space_id: String,
-    own_addresses: Vec<String>,
-    auth_secret: Option<String>,
-    bind: SyncBind,
-) {
+async fn start_seed_client(env: &ClientEnv, addresses: Vec<String>, bind: SyncBind) {
+    let ClientEnv { own_addresses, .. } = env;
     let reachable: Vec<String> = addresses
         .into_iter()
         .filter(|a| !own_addresses.contains(a) && bind.accepts_peer_address(a))
@@ -114,18 +116,7 @@ async fn start_seed_client(
         last_seen: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
         last_address: None,
     };
-    spawn_sync_client(
-        server,
-        storage,
-        clients,
-        peer,
-        device_id,
-        device_name,
-        space_id,
-        own_addresses,
-        auth_secret,
-    )
-    .await;
+    spawn_sync_client(env, peer).await;
 }
 
 pub(super) async fn handle_stop_sync(state: &Arc<ServiceState>) {
@@ -155,18 +146,20 @@ pub(super) async fn handle_start_sync_with_params(
 ) -> Result<Value, String> {
     handle_start_sync(
         state,
-        params.space_id,
-        params.device_id,
-        Some(params.device_name),
-        params.port,
-        params.seed_addresses,
-        params.relay_url,
-        params.relay_api_key,
-        params.auth_secret,
-        params.use_iroh,
-        params.iroh_peer_ticket,
-        params.discovery_enabled,
-        params.bind,
+        StartSyncParams {
+            space_id: params.space_id,
+            device_id: params.device_id,
+            device_name: Some(params.device_name),
+            port: params.port,
+            seed_addresses: params.seed_addresses,
+            relay_url: params.relay_url,
+            relay_api_key: params.relay_api_key,
+            auth_secret: params.auth_secret,
+            use_iroh: params.use_iroh,
+            iroh_peer_ticket: params.iroh_peer_ticket,
+            discovery_enabled: params.discovery_enabled,
+            bind: params.bind,
+        },
     )
     .await
 }
@@ -463,19 +456,16 @@ pub(super) async fn handle_add_seed_peer(
             None => return Err("Sync not running".to_string()),
         }
     };
-    let own = runtime.own_addresses.lock().await.clone();
-    start_seed_client(
-        &runtime.server,
-        &runtime.storage,
-        &runtime.clients,
-        addresses,
-        runtime.device_id.clone(),
-        runtime.device_name.clone(),
-        runtime.space_id.clone(),
-        own,
-        runtime.auth_secret.clone(),
-        runtime.start_params.bind,
-    )
-    .await;
+    let env = ClientEnv {
+        server: runtime.server.clone(),
+        storage: runtime.storage.clone(),
+        clients: runtime.clients.clone(),
+        device_id: runtime.device_id.clone(),
+        device_name: runtime.device_name.clone(),
+        space_id: runtime.space_id.clone(),
+        own_addresses: runtime.own_addresses.lock().await.clone(),
+        auth_secret: runtime.auth_secret.clone(),
+    };
+    start_seed_client(&env, addresses, runtime.start_params.bind).await;
     Ok(json!(true))
 }

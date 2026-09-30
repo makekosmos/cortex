@@ -13,9 +13,8 @@
     fn sync_todo(id: &str, title: &str) -> SyncEntity {
         let todo = make_todo(id, title);
         let value = serde_json::to_value(&todo).unwrap();
-        let mut map = match value {
-            Value::Object(m) => m,
-            _ => unreachable!(),
+        let Value::Object(mut map) = value else {
+            panic!("expected JSON object, got {value:?}")
         };
         map.remove("id");
         SyncEntity {
@@ -32,9 +31,8 @@
     fn sync_tracked_app(id: &str) -> SyncEntity {
         let tracked_app = make_tracked_app(id);
         let value = serde_json::to_value(&tracked_app).unwrap();
-        let mut map = match value {
-            Value::Object(m) => m,
-            _ => unreachable!(),
+        let Value::Object(mut map) = value else {
+            panic!("expected JSON object, got {value:?}")
         };
         map.remove("id");
         SyncEntity {
@@ -51,9 +49,8 @@
     fn sync_usage_session(id: &str, tracked_app_id: &str) -> SyncEntity {
         let session = make_usage_session(id, tracked_app_id);
         let value = serde_json::to_value(&session).unwrap();
-        let mut map = match value {
-            Value::Object(m) => m,
-            _ => unreachable!(),
+        let Value::Object(mut map) = value else {
+            panic!("expected JSON object, got {value:?}")
         };
         map.remove("id");
         SyncEntity {
@@ -70,9 +67,8 @@
     fn sync_usage_event(id: &str, tracked_app_id: &str, session_id: Option<&str>) -> SyncEntity {
         let event = make_usage_event(id, tracked_app_id, session_id);
         let value = serde_json::to_value(&event).unwrap();
-        let mut map = match value {
-            Value::Object(m) => m,
-            _ => unreachable!(),
+        let Value::Object(mut map) = value else {
+            panic!("expected JSON object, got {value:?}")
         };
         map.remove("id");
         SyncEntity {
@@ -89,9 +85,8 @@
     fn sync_object(id: &str, type_id: &str, title: &str) -> SyncEntity {
         let object = make_object(id, type_id, title);
         let value = serde_json::to_value(&object).unwrap();
-        let mut map = match value {
-            Value::Object(m) => m,
-            _ => unreachable!(),
+        let Value::Object(mut map) = value else {
+            panic!("expected JSON object, got {value:?}")
         };
         map.remove("id");
         SyncEntity {
@@ -108,9 +103,8 @@
     fn sync_object_link(id: &str, source_object_id: &str, target_object_id: &str) -> SyncEntity {
         let object_link = make_object_link(id, source_object_id, target_object_id);
         let value = serde_json::to_value(&object_link).unwrap();
-        let mut map = match value {
-            Value::Object(m) => m,
-            _ => unreachable!(),
+        let Value::Object(mut map) = value else {
+            panic!("expected JSON object, got {value:?}")
         };
         map.remove("id");
         SyncEntity {

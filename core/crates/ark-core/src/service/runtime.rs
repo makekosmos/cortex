@@ -290,6 +290,7 @@ fn tombstone_legacy(
 
 // ---------------------------------------------------------------------------
 
+mod dispatch;
 mod integration;
 mod legacy;
 mod objects;
@@ -297,102 +298,4 @@ mod system;
 mod types;
 mod usage;
 
-pub(crate) async fn handle_request(
-    state: &Arc<ServiceState>,
-    request: Request,
-) -> Result<Value, String> {
-    match request {
-        request @ (Request::Init { .. }
-        | Request::LoadAll
-        | Request::UpsertTodo { .. }
-        | Request::DeleteTodo { .. }
-        | Request::DeleteProject { .. }
-        | Request::BatchUpsertTodos { .. }
-        | Request::UpsertProject { .. }
-        | Request::UpsertTag { .. }
-        | Request::UpsertTrackedApp { .. }
-        | Request::DeleteTrackedApp { .. }) => legacy::handle(state, request).await,
-
-        request @ (Request::UpsertUsageSession { .. }
-        | Request::DeleteUsageSession { .. }
-        | Request::UpsertUsageEvent { .. }
-        | Request::DeleteUsageEvent { .. }
-        | Request::UpsertUsageSpan { .. }
-        | Request::GetUsageTitleTotal { .. }
-        | Request::GetUsageAnalytics { .. }
-        | Request::ListRecentUsageProcesses { .. }
-        | Request::SearchUsageProcesses { .. }
-        | Request::GetUsageGamePlaytimeSummary { .. }) => usage::handle(state, request).await,
-
-        request @ (Request::ListObjects
-        | Request::ListObjectSummaries
-        | Request::ListObjectsByType { .. }
-        | Request::ListObjectSummariesByType { .. }
-        | Request::ListRunningTimeEntries { .. }
-        | Request::GetObjectsByIds { .. }
-        | Request::SearchObjects { .. }
-        | Request::GetObject { .. }
-        | Request::GetObjectWriteSnapshot { .. }
-        | Request::CanonicalGameList { .. }
-        | Request::CanonicalGameGet { .. }
-        | Request::CanonicalGameUpsert { .. }
-        | Request::CanonicalAssetSources { .. }
-        | Request::CanonicalSetBookCover { .. }
-        | Request::UpsertObject { .. }
-        | Request::DeleteObject { .. }) => objects::handle(state, request).await,
-
-        request @ (Request::TypesList
-        | Request::TypesRegisterPackageDefinitions { .. }
-        | Request::TypesGet { .. }
-        | Request::TypesListVersions { .. }
-        | Request::TypesResolveAlias { .. }
-        | Request::ListObjectTypes
-        | Request::GetObjectType { .. }
-        | Request::UpsertObjectType { .. }
-        | Request::DeleteObjectType { .. }
-        | Request::ListObjectLinks
-        | Request::UpsertObjectLink { .. }
-        | Request::DeleteObjectLink { .. }) => types::handle(state, request).await,
-
-        request @ (Request::GetSyncKv { .. }
-        | Request::SetSyncKv { .. }
-        | Request::ExternalRefsUpsert { .. }
-        | Request::ClearAll
-        | Request::DeleteTrashed
-        | Request::DbBackup { .. }
-        | Request::DbBackupList
-        | Request::DbBackupValidate { .. }
-        | Request::DbBackupRestore { .. }
-        | Request::StartSync { .. }
-        | Request::StopSync
-        | Request::BroadcastChange { .. }
-        | Request::GetConnectedPeers
-        | Request::GetSyncSnapshot
-        | Request::DisconnectPeer { .. }
-        | Request::ConnectWithPairingCode { .. }
-        | Request::LeaveSpace
-        | Request::AddSeedPeer { .. }
-        | Request::GetOwnAddresses { .. }
-        | Request::GetHostDeviceName
-        | Request::GetOwnIrohTicket) => system::handle(state, request).await,
-
-        request @ (Request::IntegrationPersistNodeAuthorization { .. }
-        | Request::IntegrationPersistIntegrationGrant { .. }
-        | Request::IntegrationPrepareSignedSync { .. }
-        | Request::IntegrationValidateOutboundSignedSync { .. }
-        | Request::IntegrationSendSignedSync { .. }
-        | Request::IntegrationAcquireRefreshLease { .. }
-        | Request::IntegrationPublishCredentialEnvelope { .. }
-        | Request::IntegrationLoadLatestCredentialEnvelope { .. }
-        | Request::IntegrationLookupIssuerEncryptionKey { .. }
-        | Request::IntegrationLookupIssuerEncryptionKeyForPublish { .. }
-        | Request::IntegrationVerificationStatus { .. }) => {
-            integration::handle(state, request).await
-        }
-
-        // Intercepted by the service worker loop before dispatch; must never
-        // reach `handle_request`.
-        #[cfg(test)]
-        Request::TestPanic => unreachable!("test.panic is intercepted by the service worker"),
-    }
-}
+pub(crate) use dispatch::handle_request;

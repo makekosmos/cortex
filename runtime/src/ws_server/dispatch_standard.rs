@@ -200,7 +200,7 @@ pub(super) async fn dispatch_standard(
                 )
                 .map(LocalResponse::ok)
                 .unwrap_or_else(LocalResponse::err),
-            _ => unreachable!(),
+            other => LocalResponse::err(format!("unknown engine operation {other}")),
         }
     } else if let Some(rest) = operation.strip_prefix("manager.") {
         let result = match rest {

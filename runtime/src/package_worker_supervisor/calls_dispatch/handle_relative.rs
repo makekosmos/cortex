@@ -5,9 +5,6 @@ pub(super) fn try_dispatch_handle(
     grant: &Grant,
     call: &CallMessage,
 ) -> Option<Result<serde_json::Value, &'static str>> {
-    if call.operation == WorkerMethod::FilesystemRootOpen {
-        return Some(open_root(inner, grant, call));
-    }
     matches!(
         call.operation,
         WorkerMethod::FilesystemRead
@@ -42,7 +39,7 @@ fn owner(grant: &Grant, generation: u64) -> GrantOwner {
     }
 }
 
-fn open_root(
+pub(super) fn open_root(
     inner: &SupervisorInner,
     grant: &Grant,
     call: &CallMessage,

@@ -64,26 +64,8 @@ fn check_schema(schema: &Value, pointer: &str, root: bool) -> Result<(), Canonic
     let object = schema
         .as_object()
         .ok_or_else(|| invariant(pointer, "schema"))?;
-    const ALLOWED: &[&str] = &[
-        "$schema",
-        "type",
-        "required",
-        "properties",
-        "additionalProperties",
-        "enum",
-        "minimum",
-        "maximum",
-        "minLength",
-        "items",
-        "uniqueItems",
-        "default",
-        "format",
-    ];
     for (key, value) in object {
         let key_pointer = child(pointer, key);
-        if !ALLOWED.contains(&key.as_str()) {
-            return Err(invariant(&key_pointer, key));
-        }
         match key.as_str() {
             "$schema" => {
                 if value.as_str() != Some(DRAFT_SCHEMA) {
@@ -157,7 +139,7 @@ fn check_schema(schema: &Value, pointer: &str, root: bool) -> Result<(), Canonic
                     return Err(invariant(&key_pointer, "format"));
                 }
             }
-            _ => unreachable!(),
+            _ => return Err(invariant(&key_pointer, key)),
         }
     }
     if root && object.get("$schema").and_then(Value::as_str) != Some(DRAFT_SCHEMA) {

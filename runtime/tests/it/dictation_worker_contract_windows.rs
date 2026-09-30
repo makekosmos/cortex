@@ -122,9 +122,10 @@ fn projected_worker_manifest() -> PackageManifest {
         entrypoint: WORKER_ENTRYPOINT.into(),
         publisher: "kosmos".into(),
         permissions: match app_manifest() {
-            VersionedManifest::V2(manifest) => manifest.permissions,
-            VersionedManifest::V1(_) => unreachable!(),
-        },
+            VersionedManifest::V2(manifest) => Some(manifest.permissions),
+            VersionedManifest::V1(_) => None,
+        }
+        .expect("expected v2 manifest"),
     }
 }
 

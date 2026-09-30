@@ -30,6 +30,7 @@ unwrap_used = "deny"
 panic = "warn"
 todo = "warn"
 unimplemented = "warn"
+unreachable = "deny"
 
 [workspace.lints.rust]
 unused_must_use = "deny"

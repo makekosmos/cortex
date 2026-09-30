@@ -208,21 +208,33 @@ impl Drop for ChildSavepoint<'_> {
     }
 }
 
-// Applies one ledger row: the parameters are the row's columns plus the
-// write connection; grouping them into a struct would restate the schema.
-#[allow(clippy::too_many_arguments)]
-pub fn transition_item(
-    conn: &Connection,
-    contract: &str,
-    kind: &str,
-    id: &str,
-    status: ItemStatus,
-    checkpoint: ItemCheckpoint,
-    canonical_hash: Option<&str>,
-    result_json: &str,
-    error_code: Option<&str>,
-    now: &str,
-) -> Result<(), LedgerError> {
+/// Fields written to one `canonical_migration_items` row: the row's columns
+/// plus the write timestamp.
+pub struct ItemTransition<'a> {
+    pub contract: &'a str,
+    pub kind: &'a str,
+    pub id: &'a str,
+    pub status: ItemStatus,
+    pub checkpoint: ItemCheckpoint,
+    pub canonical_hash: Option<&'a str>,
+    pub result_json: &'a str,
+    pub error_code: Option<&'a str>,
+    pub now: &'a str,
+}
+
+// Applies one ledger row.
+pub fn transition_item(conn: &Connection, t: ItemTransition<'_>) -> Result<(), LedgerError> {
+    let ItemTransition {
+        contract,
+        kind,
+        id,
+        status,
+        checkpoint,
+        canonical_hash,
+        result_json,
+        error_code,
+        now,
+    } = t;
     let current: (String,String,i64)=conn.query_row("SELECT status,checkpoint,attempt FROM canonical_migration_items WHERE contract_version=?1 AND source_kind=?2 AND source_id=?3",params![contract,kind,id],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).map_err(storage)?;
     if current.0 != "pending" && current.1 == "committed" {
         return Err(LedgerError::InvariantViolation(

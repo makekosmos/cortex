@@ -1,17 +1,39 @@
 ﻿
-// Relation mappers share one accumulator set with the sibling mappers in
-// this file; each argument is a distinct channel, not a cluster.
-#[allow(clippy::too_many_arguments)]
+/// The full write bundle threaded through the kind mappers that need every
+/// accumulator: canonical `out`, unknown-field sink, links, local-state and
+/// quarantine maps, plus the record identity pair.
+pub struct CompatCtx<'a> {
+    pub out: &'a mut Map<String, Value>,
+    pub consumed: &'a mut std::collections::BTreeSet<String>,
+    pub links: &'a mut Vec<crate::types::ObjectLink>,
+    pub local: &'a mut Map<String, Value>,
+    pub quarantine: &'a mut Map<String, Value>,
+    pub id: &'a str,
+    pub at: &'a str,
+}
+
+/// Write targets shared by the relation helpers: the link accumulator plus
+/// the record's identity pair and the unknown-field sink.
+pub struct LinkWrite<'a> {
+    pub links: &'a mut Vec<crate::types::ObjectLink>,
+    pub id: &'a str,
+    pub at: &'a str,
+    pub unknown: &'a mut std::collections::BTreeSet<String>,
+}
+
 pub fn relation_with_aliases(
     m: &Map<String, Value>,
     key: &str,
     aliases: &[&str],
     kind: &str,
-    links: &mut Vec<crate::types::ObjectLink>,
-    id: &str,
-    at: &str,
-    u: &mut std::collections::BTreeSet<String>,
+    w: LinkWrite<'_>,
 ) -> Result<(), CompatFailure> {
+    let LinkWrite {
+        links,
+        id,
+        at,
+        unknown: u,
+    } = w;
     let pointer = |fallback: &str| {
         if m.contains_key(key) {
             format!("/props/{key}")
@@ -49,18 +71,20 @@ pub fn relation_with_aliases(
     }
     Ok(())
 }
-// Same accumulator-set contract as `relation_with_aliases`.
-#[allow(clippy::too_many_arguments)]
+// Same write-target contract as `relation_with_aliases`.
 pub fn relation_single_with_aliases(
     m: &Map<String, Value>,
     key: &str,
     aliases: &[&str],
     kind: &str,
-    links: &mut Vec<crate::types::ObjectLink>,
-    id: &str,
-    at: &str,
-    u: &mut std::collections::BTreeSet<String>,
+    w: LinkWrite<'_>,
 ) -> Result<(), CompatFailure> {
+    let LinkWrite {
+        links,
+        id,
+        at,
+        unknown: u,
+    } = w;
     let pointer = || {
         if m.contains_key(key) {
             format!("/props/{key}")
@@ -81,7 +105,7 @@ pub fn relation_single_with_aliases(
             }
         }
     }
-    relation_with_aliases(m, key, aliases, kind, links, id, at, u)
+    relation_with_aliases(m, key, aliases, kind, LinkWrite { links, id, at, unknown: u })
 }
 pub fn bundle(m: Map<String, Value>) -> Vec<LocalState> {
     if m.is_empty() {

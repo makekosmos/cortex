@@ -124,7 +124,7 @@ mod releases_tests {
         let probe = ReleaseProbe::with_base(server.base_url()).unwrap();
         let result = fetch_latest(&probe, AGENDA, TARGET, None).await;
         let Ok(ReleaseCheck::Fresh { info, etag }) = result else {
-            unreachable!("expected fresh release, got {result:?}")
+            panic!("expected fresh release, got {result:?}")
         };
         assert_eq!(info.tag, "v0.1.1");
         assert_eq!(info.version, "0.1.1");
@@ -186,7 +186,7 @@ mod releases_tests {
         let Ok(ReleaseCheck::Fresh { info, .. }) =
             fetch_latest(&probe, AGENDA, TARGET, Some(&stale)).await
         else {
-            unreachable!("moved tag must refetch the body")
+            panic!("moved tag must refetch the body")
         };
         assert_eq!(info.tag, "v0.2.0");
         assert_eq!(info.version, "0.2.0");

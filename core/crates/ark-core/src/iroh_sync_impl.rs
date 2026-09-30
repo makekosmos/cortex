@@ -79,16 +79,16 @@ impl SyncTransport for IrohTransport {
                                     }
                                 };
                                 eprintln!("[iroh] accepted incoming connection remote={}", conn.remote_id());
-                                handle_connection(
+                                handle_connection(ConnectionParams {
                                     conn,
-                                    false, // is_dialer
+                                    is_dialer: false,
                                     hello,
                                     out_rx,
                                     stop_rx,
                                     event_tx,
                                     registry,
                                     outbound_storage,
-                                )
+                                })
                                 .await;
                             });
                         }
@@ -149,16 +149,16 @@ impl SyncTransport for IrohTransport {
                             backoff_secs = 1; // сбрасываем backoff при успехе
                             let out_rx = out_tx.subscribe();
                             let stop_rx = dial_stop.clone();
-                            handle_connection(
+                            handle_connection(ConnectionParams {
                                 conn,
-                                true, // is_dialer
-                                hello.clone(),
+                                is_dialer: true,
+                                hello: hello.clone(),
                                 out_rx,
                                 stop_rx,
-                                dial_event_tx.clone(),
-                                dial_registry.clone(),
-                                dial_outbound_storage.clone(),
-                            )
+                                event_tx: dial_event_tx.clone(),
+                                registry: dial_registry.clone(),
+                                outbound_storage: dial_outbound_storage.clone(),
+                            })
                             .await;
 
                             // handle_connection вернулась — соединение закрыто.

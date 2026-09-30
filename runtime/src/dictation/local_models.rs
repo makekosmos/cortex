@@ -338,7 +338,8 @@ fn same_file_contents(left: &Path, right: &Path) -> io::Result<bool> {
 }
 
 fn unique_legacy_destination(destination: &Path) -> PathBuf {
-    for i in 1.. {
+    let mut i = 1;
+    loop {
         let candidate = destination.with_extension(format!(
             "{}legacy-{i}",
             destination
@@ -350,8 +351,8 @@ fn unique_legacy_destination(destination: &Path) -> PathBuf {
         if !candidate.exists() {
             return candidate;
         }
+        i += 1;
     }
-    unreachable!()
 }
 
 pub fn migrate_legacy_assets(data_dir: &Path) -> io::Result<bool> {

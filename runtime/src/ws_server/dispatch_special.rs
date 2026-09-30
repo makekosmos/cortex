@@ -28,8 +28,7 @@ pub(super) async fn dispatch_special(
     if !(operation.starts_with("package.snapshot.") || operation.starts_with("grant.")) {
         return LocalResponse::err("not a special operation");
     }
-    let response = if operation.starts_with("package.snapshot.") || operation.starts_with("grant.")
-    {
+    let response = {
         if !request.client.desktop_authorized {
             LocalResponse::err("desktop authority denied")
         } else {
@@ -256,8 +255,6 @@ pub(super) async fn dispatch_special(
                 _ => LocalResponse::err("unknown package snapshot operation"),
             }
         }
-    } else {
-        unreachable!()
     };
     response
 }

@@ -62,7 +62,7 @@ fn subscribe_receives_phase_changed_on_start() {
             assert_eq!(from, Phase::Idle);
             assert_eq!(to, Phase::Work);
         }
-        other => unreachable!("expected PhaseChanged, got {other:?}"),
+        other => panic!("expected PhaseChanged, got {other:?}"),
     }
 }
 
@@ -130,7 +130,7 @@ fn boundary_phase_changed_event_has_corrected_state() {
             assert_eq!(state.phase, Phase::ShortBreak);
             assert_eq!(state.completed_pomodoros, 1);
         }
-        other => unreachable!("expected PhaseChanged, got {other:?}"),
+        other => panic!("expected PhaseChanged, got {other:?}"),
     }
 }
 
