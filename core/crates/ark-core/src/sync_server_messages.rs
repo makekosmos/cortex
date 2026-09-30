@@ -25,30 +25,21 @@ pub(super) async fn handle_message(
             auth_nonce,
             auth_hmac,
         } => {
-            {
-                let mut peers_guard = peers.lock().await;
-                if peers_guard
-                    .get(&peer_id)
-                    .is_some_and(|peer| peer.authenticated)
-                {
-                    eprintln!("{TAG} Rejecting repeated hello on an authenticated connection");
-                    if let Some(peer) = peers_guard.remove(&peer_id) {
-                        let _ = peer.tx.send(Message::Close(None));
-                    }
-                    return;
-                }
+            let repeated = peers
+                .lock()
+                .await
+                .get(&peer_id)
+                .is_some_and(|peer| peer.authenticated);
+            if repeated {
+                eprintln!("{TAG} Rejecting repeated hello on an authenticated connection");
+                reject_hello(peers, peer_id).await;
+                return;
             }
             if protocol_version != PROTOCOL_VERSION {
                 eprintln!(
                     "{TAG} Protocol version mismatch: {protocol_version} vs {PROTOCOL_VERSION}"
                 );
-                // Evict the session and close the socket — a bare return
-                // leaves a phantom unauthenticated peer and a half-open
-                // connection the dialer waits on forever.
-                let mut peers_guard = peers.lock().await;
-                if let Some(peer) = peers_guard.remove(&peer_id) {
-                    let _ = peer.tx.send(Message::Close(None));
-                }
+                reject_hello(peers, peer_id).await;
                 return;
             }
 
@@ -59,10 +50,7 @@ pub(super) async fn handle_message(
 
             if peer_space_id != my_space_id {
                 eprintln!("{TAG} Rejecting peer hello from a different space");
-                let mut peers_guard = peers.lock().await;
-                if let Some(peer) = peers_guard.remove(&peer_id) {
-                    let _ = peer.tx.send(Message::Close(None));
-                }
+                reject_hello(peers, peer_id).await;
                 return;
             }
 
@@ -75,10 +63,7 @@ pub(super) async fn handle_message(
                 };
                 if !valid {
                     eprintln!("{TAG} Rejecting peer hello with invalid HMAC");
-                    let mut peers_guard = peers.lock().await;
-                    if let Some(peer) = peers_guard.remove(&peer_id) {
-                        let _ = peer.tx.send(Message::Close(None));
-                    }
+                    reject_hello(peers, peer_id).await;
                     return;
                 }
             }
@@ -89,19 +74,13 @@ pub(super) async fn handle_message(
                 eprintln!(
                     "{TAG} Rejecting self-connect: client claims our device_id {peer_device_id}"
                 );
-                let mut peers_guard = peers.lock().await;
-                if let Some(peer) = peers_guard.remove(&peer_id) {
-                    let _ = peer.tx.send(Message::Close(None));
-                }
+                reject_hello(peers, peer_id).await;
                 return;
             }
             let removed = load_removed_peer_ids(storage).await;
             if !peer_device_id.is_empty() && removed.iter().any(|id| id == &peer_device_id) {
                 eprintln!("{TAG} Rejecting blocked peer: {peer_device_id}");
-                let mut peers_guard = peers.lock().await;
-                if let Some(peer) = peers_guard.remove(&peer_id) {
-                    let _ = peer.tx.send(Message::Close(None));
-                }
+                reject_hello(peers, peer_id).await;
                 return;
             }
 

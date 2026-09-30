@@ -195,6 +195,15 @@ fn send_msg(tx: &mpsc::UnboundedSender<Message>, msg: &LanSyncMessage) {
     let _ = tx.send(Message::Text(json));
 }
 
+/// Drops a rejected hello's session and closes its socket. A bare return would
+/// leave a phantom unauthenticated peer and a half-open connection the dialer
+/// waits on forever.
+async fn reject_hello(peers: &Mutex<HashMap<usize, PeerState>>, peer_id: usize) {
+    if let Some(peer) = peers.lock().await.remove(&peer_id) {
+        let _ = peer.tx.send(Message::Close(None));
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Message handler
 // ---------------------------------------------------------------------------
