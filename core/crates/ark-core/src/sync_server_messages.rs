@@ -42,6 +42,13 @@ pub(super) async fn handle_message(
                 eprintln!(
                     "{TAG} Protocol version mismatch: {protocol_version} vs {PROTOCOL_VERSION}"
                 );
+                // Evict the session and close the socket — a bare return
+                // leaves a phantom unauthenticated peer and a half-open
+                // connection the dialer waits on forever.
+                let mut peers_guard = peers.lock().await;
+                if let Some(peer) = peers_guard.remove(&peer_id) {
+                    let _ = peer.tx.send(Message::Close(None));
+                }
                 return;
             }
 
@@ -83,14 +90,18 @@ pub(super) async fn handle_message(
                     "{TAG} Rejecting self-connect: client claims our device_id {peer_device_id}"
                 );
                 let mut peers_guard = peers.lock().await;
-                peers_guard.remove(&peer_id);
+                if let Some(peer) = peers_guard.remove(&peer_id) {
+                    let _ = peer.tx.send(Message::Close(None));
+                }
                 return;
             }
             let removed = load_removed_peer_ids(storage).await;
             if !peer_device_id.is_empty() && removed.iter().any(|id| id == &peer_device_id) {
                 eprintln!("{TAG} Rejecting blocked peer: {peer_device_id}");
                 let mut peers_guard = peers.lock().await;
-                peers_guard.remove(&peer_id);
+                if let Some(peer) = peers_guard.remove(&peer_id) {
+                    let _ = peer.tx.send(Message::Close(None));
+                }
                 return;
             }
 
@@ -481,12 +492,19 @@ pub(super) async fn handle_message(
 
             let my_device_id = device_id.read().await.clone();
             let my_addresses = own_addresses.read().await.clone();
+            // Blocked peers must not re-enter through gossiped peer lists —
+            // otherwise a removed device resurrects in known_peers and gets
+            // re-gossiped to the rest of the mesh.
+            let removed = load_removed_peer_ids(storage).await;
             // Filter self-references: our own device_id, or any record whose
             // addresses are all ours (stale phantom from prior runs).
             let filtered: Vec<PeerRecord> = incoming_peers
                 .into_iter()
                 .filter(|p| {
                     if p.device_id == my_device_id {
+                        return false;
+                    }
+                    if removed.iter().any(|id| id == &p.device_id) {
                         return false;
                     }
                     if !p.addresses.is_empty()
