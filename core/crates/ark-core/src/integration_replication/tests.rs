@@ -260,29 +260,29 @@ fn revocation_and_reauthorization_require_a_higher_epoch() {
         Err(IntegrationContractError::RevokedNode)
     ));
     assert!(matches!(
-        revoked.reauthorize(
-            3,
-            "fp-b",
-            "sign-b",
-            "enc-b",
-            None,
-            "2026-08-30T02:00:00Z",
-            "2026-08-30T02:00:00.000Z:000001:node-b",
-        ),
+        revoked.reauthorize(Reauthorization {
+            grant_epoch: 3,
+            key_fingerprint: "fp-b".into(),
+            signing_public_key: "sign-b".into(),
+            encryption_public_key: "enc-b".into(),
+            transport_public_key: None,
+            authorized_at: "2026-08-30T02:00:00Z".into(),
+            hlc: "2026-08-30T02:00:00.000Z:000001:node-b".into(),
+        },),
         Err(IntegrationContractError::NonMonotonic {
             field: "grant_epoch"
         })
     ));
     let reauthorized = revoked
-        .reauthorize(
-            4,
-            "fp-b",
-            "sign-b",
-            "enc-b",
-            Some("iroh-endpoint-b".into()),
-            "2026-08-30T02:00:00Z",
-            "2026-08-30T02:00:00.000Z:000001:node-b",
-        )
+        .reauthorize(Reauthorization {
+            grant_epoch: 4,
+            key_fingerprint: "fp-b".into(),
+            signing_public_key: "sign-b".into(),
+            encryption_public_key: "enc-b".into(),
+            transport_public_key: Some("iroh-endpoint-b".into()),
+            authorized_at: "2026-08-30T02:00:00Z".into(),
+            hlc: "2026-08-30T02:00:00.000Z:000001:node-b".into(),
+        })
         .unwrap();
     assert_eq!(reauthorized.grant_epoch, 4);
     assert_eq!(

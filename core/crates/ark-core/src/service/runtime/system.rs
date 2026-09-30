@@ -1,4 +1,5 @@
 use super::*;
+use crate::data_platform::ExternalRefUpsert;
 
 pub(super) async fn get_sync_kv(state: &Arc<ServiceState>, key: String) -> Result<Value, String> {
     with_conn(state, |conn| {
@@ -20,21 +21,11 @@ pub(super) async fn set_sync_kv(
 
 pub(super) async fn external_refs_upsert(
     state: &Arc<ServiceState>,
-    params: ExternalRefsUpsertParams,
+    params: ExternalRefUpsert,
 ) -> Result<Value, String> {
     with_write_tx(state, |conn| {
         crate::data_platform::ensure_schema(conn)?;
-        crate::data_platform::upsert_external_ref(
-            conn,
-            &params.connector_id,
-            &params.account_id,
-            &params.external_type,
-            &params.external_id,
-            &params.object_id,
-            params.revision.as_deref(),
-            params.hash.as_deref(),
-            &params.state,
-        )?;
+        crate::data_platform::upsert_external_ref(conn, &params)?;
         Ok(json!(true))
     })
 }

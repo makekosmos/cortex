@@ -198,13 +198,15 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
 
     let successor_lease = try_acquire_integration_refresh_lease(
         &target,
-        "integration-a",
-        "node-b",
-        4,
-        20,
-        10,
-        1,
-        "node-b",
+        &RefreshLeaseAcquireParams {
+            integration_id: "integration-a".into(),
+            holder_node_id: "node-b".into(),
+            credential_generation: 4,
+            now_ms: 20,
+            ttl_ms: 10,
+            expected_fencing_token: 1,
+            device_id: "node-b".into(),
+        },
     )
     .unwrap();
     assert_eq!(successor_lease.fencing_token, 2);

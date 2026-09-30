@@ -41,13 +41,15 @@ fn publication_requires_the_current_refresh_fence() {
 
     assert!(try_acquire_integration_refresh_lease(
         &conn,
-        "integration-a",
-        "node-a",
-        3,
-        20,
-        10,
-        lease.fencing_token,
-        "node-a",
+        &RefreshLeaseAcquireParams {
+            integration_id: "integration-a".into(),
+            holder_node_id: "node-a".into(),
+            credential_generation: 3,
+            now_ms: 20,
+            ttl_ms: 10,
+            expected_fencing_token: lease.fencing_token,
+            device_id: "node-a".into(),
+        },
     )
     .is_err());
     assert_eq!(
@@ -64,13 +66,15 @@ fn local_refresh_writes_cannot_impersonate_another_node() {
     setup_refresh_authority(&conn);
     assert!(try_acquire_integration_refresh_lease(
         &conn,
-        "integration-a",
-        "node-a",
-        3,
-        10,
-        10,
-        0,
-        "node-b",
+        &RefreshLeaseAcquireParams {
+            integration_id: "integration-a".into(),
+            holder_node_id: "node-a".into(),
+            credential_generation: 3,
+            now_ms: 10,
+            ttl_ms: 10,
+            expected_fencing_token: 0,
+            device_id: "node-b".into(),
+        },
     )
     .is_err());
 
@@ -140,13 +144,15 @@ fn expired_unpublished_generation_retries_with_a_higher_fence() {
 
     let retry = try_acquire_integration_refresh_lease(
         &conn,
-        "integration-a",
-        "node-a",
-        first.credential_generation,
-        first.expires_at_ms,
-        10,
-        first.fencing_token,
-        "node-a",
+        &RefreshLeaseAcquireParams {
+            integration_id: "integration-a".into(),
+            holder_node_id: "node-a".into(),
+            credential_generation: first.credential_generation,
+            now_ms: first.expires_at_ms,
+            ttl_ms: 10,
+            expected_fencing_token: first.fencing_token,
+            device_id: "node-a".into(),
+        },
     )
     .unwrap();
 
@@ -172,15 +178,17 @@ fn concurrent_refresh_acquire_has_one_fence_winner() {
                 let conn = open_db(path.to_str().unwrap()).unwrap();
                 barrier.wait();
                 try_acquire_integration_refresh_lease(
-                    &conn,
-                    "integration-a",
-                    "node-a",
-                    3,
-                    10,
-                    10,
-                    0,
-                    "node-a",
-                )
+        &conn,
+        &RefreshLeaseAcquireParams {
+            integration_id: "integration-a".into(),
+            holder_node_id: "node-a".into(),
+            credential_generation: 3,
+            now_ms: 10,
+            ttl_ms: 10,
+            expected_fencing_token: 0,
+            device_id: "node-a".into(),
+        },
+    )
             })
         })
         .collect::<Vec<_>>();

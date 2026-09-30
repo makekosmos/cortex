@@ -55,19 +55,21 @@ pub fn apply_plan_with_failure(
             let result = apply::apply_one(conn, item, now).and_then(|canonical_hash| {
                 migration_ledger::transition_item(
                     conn,
-                    CONTRACT_VERSION,
-                    &ledger_source_kind(&item.source_kind_variant),
-                    &item.source_id,
-                    if item.mapped.quarantine.is_empty() {
-                        ItemStatus::Migrated
-                    } else {
-                        ItemStatus::Quarantined
+                    migration_ledger::ItemTransition {
+                        contract: CONTRACT_VERSION,
+                        kind: &ledger_source_kind(&item.source_kind_variant),
+                        id: &item.source_id,
+                        status: if item.mapped.quarantine.is_empty() {
+                            ItemStatus::Migrated
+                        } else {
+                            ItemStatus::Quarantined
+                        },
+                        checkpoint: ItemCheckpoint::Committed,
+                        canonical_hash: Some(&canonical_hash),
+                        result_json: "{}",
+                        error_code: None,
+                        now,
                     },
-                    ItemCheckpoint::Committed,
-                    Some(&canonical_hash),
-                    "{}",
-                    None,
-                    now,
                 )
                 .map(|_| canonical_hash)
                 .map_err(|e| e.to_string())

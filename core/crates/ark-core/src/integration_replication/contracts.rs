@@ -141,48 +141,48 @@ impl AuthorizedNode {
         Ok(next)
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub fn reauthorize(
-        &self,
-        grant_epoch: u64,
-        key_fingerprint: impl Into<String>,
-        signing_public_key: impl Into<String>,
-        encryption_public_key: impl Into<String>,
-        transport_public_key: Option<String>,
-        authorized_at: impl Into<String>,
-        hlc: impl Into<String>,
-    ) -> Result<Self, IntegrationContractError> {
+    pub fn reauthorize(&self, params: Reauthorization) -> Result<Self, IntegrationContractError> {
         self.validate()?;
-        require_newer(grant_epoch, self.grant_epoch, "grant_epoch")?;
-        let key_fingerprint = key_fingerprint.into();
-        let encryption_public_key = encryption_public_key.into();
-        if key_fingerprint == self.key_fingerprint {
+        require_newer(params.grant_epoch, self.grant_epoch, "grant_epoch")?;
+        if params.key_fingerprint == self.key_fingerprint {
             return Err(IntegrationContractError::Mismatch {
                 field: "key_fingerprint",
             });
         }
-        if encryption_public_key == self.encryption_public_key {
+        if params.encryption_public_key == self.encryption_public_key {
             return Err(IntegrationContractError::Mismatch {
                 field: "encryption_public_key",
             });
         }
         let next = Self {
             node_id: self.node_id.clone(),
-            key_fingerprint,
-            signing_public_key: signing_public_key.into(),
-            encryption_public_key,
-            transport_public_key,
-            grant_epoch,
+            key_fingerprint: params.key_fingerprint,
+            signing_public_key: params.signing_public_key,
+            encryption_public_key: params.encryption_public_key,
+            transport_public_key: params.transport_public_key,
+            grant_epoch: params.grant_epoch,
             status: NodeStatus::Active,
-            authorized_at: authorized_at.into(),
+            authorized_at: params.authorized_at,
             revoked_at: None,
             revocation_epoch: None,
             revision: self.revision.saturating_add(1),
-            hlc: hlc.into(),
+            hlc: params.hlc,
         };
         next.validate()?;
         Ok(next)
     }
+}
+
+/// Fields of a `reauthorize` transition: every value replaces the
+/// corresponding grant field after the epoch monotonicity check.
+pub struct Reauthorization {
+    pub grant_epoch: u64,
+    pub key_fingerprint: String,
+    pub signing_public_key: String,
+    pub encryption_public_key: String,
+    pub transport_public_key: Option<String>,
+    pub authorized_at: String,
+    pub hlc: String,
 }
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]

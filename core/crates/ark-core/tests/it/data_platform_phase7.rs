@@ -12,14 +12,16 @@ fn external_refs_are_additive_and_unique() {
     conn.execute("INSERT INTO objects(id,type_id,type_version,title,created_at,updated_at) VALUES('note-1','com.kosmos.note','1.0.0','Note','now','now')",[]).unwrap();
     data_platform::upsert_external_ref(
         &conn,
-        "obsidian",
-        "vault",
-        "markdown",
-        "notes/a.md",
-        "note-1",
-        Some("1"),
-        Some(&"a".repeat(64)),
-        "clean",
+        &data_platform::ExternalRefUpsert {
+            connector_id: "obsidian".into(),
+            account_id: "vault".into(),
+            external_type: "markdown".into(),
+            external_id: "notes/a.md".into(),
+            object_id: "note-1".into(),
+            revision: Some("1".into()),
+            hash: Some("a".repeat(64)),
+            state: "clean".into(),
+        },
     )
     .unwrap();
     assert_eq!(
@@ -29,7 +31,17 @@ fn external_refs_are_additive_and_unique() {
         "note-1"
     );
     assert!(data_platform::upsert_external_ref(
-        &conn, "", "vault", "markdown", "x", "note-1", None, None, "clean"
+        &conn,
+        &data_platform::ExternalRefUpsert {
+            connector_id: String::new(),
+            account_id: "vault".into(),
+            external_type: "markdown".into(),
+            external_id: "x".into(),
+            object_id: "note-1".into(),
+            revision: None,
+            hash: None,
+            state: "clean".into(),
+        },
     )
     .is_err());
 }

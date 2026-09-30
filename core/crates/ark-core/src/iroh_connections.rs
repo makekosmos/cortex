@@ -1,17 +1,28 @@
 /// Runs one long-lived Iroh connection with separate reader and writer tasks.
-// Each parameter is an independently-owned channel/endpoint the connection
-// pumps between; merging them would hide which side owns each half.
-#[allow(clippy::too_many_arguments)]
-async fn handle_connection(
+// Each field is an independently-owned channel/endpoint the connection pumps
+// between; the struct only names the bundle the spawn sites already clone.
+struct ConnectionParams {
     conn: iroh::endpoint::Connection,
     is_dialer: bool,
     hello: LanSyncMessage,
-    mut out_rx: broadcast::Receiver<OutgoingMessage>,
+    out_rx: broadcast::Receiver<OutgoingMessage>,
     stop_rx: watch::Receiver<bool>,
     event_tx: mpsc::UnboundedSender<TransportEvent>,
     registry: Arc<DeviceRegistry>,
     outbound_storage: Arc<tokio::sync::RwLock<Option<OutboundStorage>>>,
-) {
+}
+
+async fn handle_connection(params: ConnectionParams) {
+    let ConnectionParams {
+        conn,
+        is_dialer,
+        hello,
+        mut out_rx,
+        stop_rx,
+        event_tx,
+        registry,
+        outbound_storage,
+    } = params;
     let remote_endpoint_id = conn.remote_id();
     let role = if is_dialer { "dialer" } else { "listener" };
 

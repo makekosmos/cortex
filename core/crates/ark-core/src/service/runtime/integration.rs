@@ -125,19 +125,10 @@ pub(super) async fn integration_send_signed_sync(
 
 pub(super) async fn integration_acquire_refresh_lease(
     state: &Arc<ServiceState>,
-    params: AcquireRefreshLeaseParams,
+    params: crate::db::RefreshLeaseAcquireParams,
 ) -> Result<Value, String> {
     with_conn(state, |conn| {
-        let lease = crate::db::try_acquire_integration_refresh_lease(
-            conn,
-            &params.integration_id,
-            &params.holder_node_id,
-            params.credential_generation,
-            params.now_ms,
-            params.ttl_ms,
-            params.expected_fencing_token,
-            &params.device_id,
-        )?;
+        let lease = crate::db::try_acquire_integration_refresh_lease(conn, &params)?;
         serde_json::to_value(lease).map_err(|error| error.to_string())
     })
 }

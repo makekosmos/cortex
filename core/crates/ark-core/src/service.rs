@@ -64,10 +64,11 @@ mod sync;
 mod tests;
 
 pub(crate) use self::definitions::{
-    AcquireRefreshLeaseParams, ExternalRefsUpsertParams, ObjectWriteSnapshot, Request,
-    StartSyncParams, SyncRuntime, SyncStartParams,
+    ObjectWriteSnapshot, Request, StartSyncParams, SyncRuntime, SyncStartParams,
 };
 use self::runtime::handle_request;
+#[cfg(test)]
+pub(crate) use crate::db::RefreshLeaseAcquireParams;
 // The runtime::system handlers reach the sync handlers through the shared
 // `use super::*` chain, so the whole set is imported at this scope.
 #[cfg(test)]

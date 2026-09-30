@@ -65,7 +65,21 @@ pub(super) mod reject_tests {
             },
         );
 
+        let ctx = MessageContext {
+            peers: server.peers.clone(),
+            storage: storage.clone(),
+            space_id: server.space_id.clone(),
+            device_id: server.device_id.clone(),
+            device_name: server.device_name.clone(),
+            own_addresses: server.own_addresses.clone(),
+            auth_secret: server.auth_secret.clone(),
+            known_peer_records: server.known_peer_records.clone(),
+            on_change: server.on_change.clone(),
+            on_peer_connect: server.on_peer_connect.clone(),
+            on_new_peer_discovered: server.on_new_peer_discovered.clone(),
+        };
         sync_server_messages::handle_message(
+            &ctx,
             7,
             LanSyncMessage::PeerList {
                 peers: vec![
@@ -73,17 +87,6 @@ pub(super) mod reject_tests {
                     peer_rec("fresh", &["192.168.1.31:21531"]),
                 ],
             },
-            &server.peers,
-            &storage,
-            &server.space_id,
-            &server.device_id,
-            &server.device_name,
-            &server.own_addresses,
-            &server.auth_secret,
-            &server.known_peer_records,
-            &server.on_change,
-            &server.on_peer_connect,
-            &server.on_new_peer_discovered,
         )
         .await;
 

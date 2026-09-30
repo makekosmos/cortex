@@ -294,7 +294,7 @@ pub(crate) enum Request {
         value: String,
     },
     #[serde(rename = "external_refs.upsert")]
-    ExternalRefsUpsert(ExternalRefsUpsertParams),
+    ExternalRefsUpsert(crate::data_platform::ExternalRefUpsert),
     ClearAll,
     DeleteTrashed,
 
@@ -380,7 +380,7 @@ pub(crate) enum Request {
         frame: SignedSyncEnvelope,
     },
     #[serde(rename = "integration.acquire_refresh_lease")]
-    IntegrationAcquireRefreshLease(AcquireRefreshLeaseParams),
+    IntegrationAcquireRefreshLease(crate::db::RefreshLeaseAcquireParams),
     #[serde(rename = "integration.publish_credential_envelope")]
     IntegrationPublishCredentialEnvelope {
         envelope: IntegrationCredentialEnvelope,
@@ -461,37 +461,4 @@ pub(crate) struct StartSyncParams {
     /// `all_interfaces` (default) keeps LAN behaviour.
     #[serde(default)]
     pub(crate) bind: SyncBind,
-}
-
-/// Params of `external_refs.upsert`; newtype-wrapped for the same reason as
-/// `StartSyncParams`.
-#[derive(Debug, Deserialize)]
-pub(crate) struct ExternalRefsUpsertParams {
-    #[serde(rename = "connectorId")]
-    pub(crate) connector_id: String,
-    #[serde(rename = "accountId")]
-    pub(crate) account_id: String,
-    #[serde(rename = "externalType")]
-    pub(crate) external_type: String,
-    #[serde(rename = "externalId")]
-    pub(crate) external_id: String,
-    #[serde(rename = "objectId")]
-    pub(crate) object_id: String,
-    #[serde(default)]
-    pub(crate) revision: Option<String>,
-    #[serde(default)]
-    pub(crate) hash: Option<String>,
-    pub(crate) state: String,
-}
-
-/// Params of `integration.acquire_refresh_lease`.
-#[derive(Debug, Deserialize)]
-pub(crate) struct AcquireRefreshLeaseParams {
-    pub(crate) integration_id: String,
-    pub(crate) holder_node_id: String,
-    pub(crate) credential_generation: u64,
-    pub(crate) now_ms: u64,
-    pub(crate) ttl_ms: u64,
-    pub(crate) expected_fencing_token: u64,
-    pub(crate) device_id: String,
 }

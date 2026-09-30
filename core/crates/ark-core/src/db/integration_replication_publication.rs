@@ -1,15 +1,30 @@
+/// Params of `integration.acquire_refresh_lease` — the `Request` newtype
+/// variant wraps this struct so wire fields and the db call share one shape.
+#[derive(Clone, Debug, serde::Deserialize)]
+pub struct RefreshLeaseAcquireParams {
+    pub integration_id: String,
+    pub holder_node_id: String,
+    pub credential_generation: u64,
+    pub now_ms: u64,
+    pub ttl_ms: u64,
+    pub expected_fencing_token: u64,
+    pub device_id: String,
+}
+
 /// Acquire a refresh lease with an atomic expected-fence compare-and-swap.
-#[allow(clippy::too_many_arguments)]
 pub fn try_acquire_integration_refresh_lease(
     conn: &Connection,
-    integration_id: &str,
-    holder_node_id: &str,
-    credential_generation: u64,
-    now_ms: u64,
-    ttl_ms: u64,
-    expected_fencing_token: u64,
-    device_id: &str,
+    params: &RefreshLeaseAcquireParams,
 ) -> Result<ReplicatedRefreshLease, String> {
+    let RefreshLeaseAcquireParams {
+        integration_id,
+        holder_node_id,
+        credential_generation,
+        now_ms,
+        ttl_ms,
+        expected_fencing_token,
+        device_id,
+    } = params;
     if holder_node_id != device_id {
         return Err("refresh lease holder must be the local node".into());
     }
@@ -24,7 +39,7 @@ pub fn try_acquire_integration_refresh_lease(
             .map_err(storage)?
             .map(|value| u64_value(value, "credential_generation"))
             .transpose()?;
-        if published_generation.is_some_and(|current| credential_generation <= current) {
+        if published_generation.is_some_and(|current| *credential_generation <= current) {
             return Err(IntegrationContractError::NonMonotonic {
                 field: "credential_generation",
             }
@@ -32,7 +47,7 @@ pub fn try_acquire_integration_refresh_lease(
         }
         let current = load_integration_refresh_lease(conn, integration_id)?;
         let actual_fence = current.as_ref().map_or(0, |lease| lease.fencing_token);
-        if actual_fence != expected_fencing_token {
+        if actual_fence != *expected_fencing_token {
             return Err(IntegrationContractError::Mismatch {
                 field: "expected_fencing_token",
             }
@@ -42,9 +57,9 @@ pub fn try_acquire_integration_refresh_lease(
             current.as_ref(),
             integration_id,
             holder_node_id,
-            credential_generation,
-            now_ms,
-            ttl_ms,
+            *credential_generation,
+            *now_ms,
+            *ttl_ms,
         )
         .map_err(|error| error.to_string())?;
         upsert_integration_refresh_lease_record(conn, &lease, device_id, false)?;

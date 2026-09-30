@@ -219,23 +219,33 @@ fn parse_sync_mode(mode: &str) -> rusqlite::Result<SyncMode> {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-pub fn upsert_external_ref(
-    conn: &Connection,
-    connector: &str,
-    account: &str,
-    external_type: &str,
-    external_id: &str,
-    object_id: &str,
-    revision: Option<&str>,
-    hash: Option<&str>,
-    state: &str,
-) -> Result<(), String> {
-    if connector.is_empty()
-        || account.is_empty()
-        || external_type.is_empty()
-        || external_id.is_empty()
-        || object_id.is_empty()
+/// Params of `external_refs.upsert` — the `Request` newtype variant wraps this
+/// struct so the wire fields and the db call share one shape.
+#[derive(Debug, serde::Deserialize)]
+pub struct ExternalRefUpsert {
+    #[serde(rename = "connectorId")]
+    pub connector_id: String,
+    #[serde(rename = "accountId")]
+    pub account_id: String,
+    #[serde(rename = "externalType")]
+    pub external_type: String,
+    #[serde(rename = "externalId")]
+    pub external_id: String,
+    #[serde(rename = "objectId")]
+    pub object_id: String,
+    #[serde(default)]
+    pub revision: Option<String>,
+    #[serde(default)]
+    pub hash: Option<String>,
+    pub state: String,
+}
+
+pub fn upsert_external_ref(conn: &Connection, r: &ExternalRefUpsert) -> Result<(), String> {
+    if r.connector_id.is_empty()
+        || r.account_id.is_empty()
+        || r.external_type.is_empty()
+        || r.external_id.is_empty()
+        || r.object_id.is_empty()
     {
         return Err("invalid external ref".into());
     }
@@ -243,6 +253,6 @@ pub fn upsert_external_ref(
         "INSERT INTO external_refs(connector_id,account_id,external_type,external_id,object_id,external_revision,content_hash,conflict_state)
          VALUES(?1,?2,?3,?4,?5,?6,?7,?8)
          ON CONFLICT(connector_id,account_id,external_type,external_id) DO UPDATE SET object_id=excluded.object_id,external_revision=excluded.external_revision,content_hash=excluded.content_hash,conflict_state=excluded.conflict_state",
-        params![connector,account,external_type,external_id,object_id,revision,hash,state],
+        params![r.connector_id,r.account_id,r.external_type,r.external_id,r.object_id,r.revision,r.hash,r.state],
     ).map_err(|e| e.to_string()).map(|_| ())
 }

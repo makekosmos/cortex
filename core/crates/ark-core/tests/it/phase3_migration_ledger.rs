@@ -100,15 +100,17 @@ fn explicit_retry_increments_attempt_once_and_terminal_transition_is_illegal() {
     );
     ark_core::canonical_types::migration_ledger::transition_item(
         &conn,
-        "phase3-canonical-v1",
-        "note_obj",
-        "n1",
-        ItemStatus::Migrated,
-        ItemCheckpoint::Committed,
-        Some("c1"),
-        "{}",
-        None,
-        "t3",
+        ark_core::canonical_types::migration_ledger::ItemTransition {
+            contract: "phase3-canonical-v1",
+            kind: "note_obj",
+            id: "n1",
+            status: ItemStatus::Migrated,
+            checkpoint: ItemCheckpoint::Committed,
+            canonical_hash: Some("c1"),
+            result_json: "{}",
+            error_code: None,
+            now: "t3",
+        },
     )
     .unwrap();
     assert!(ark_core::canonical_types::migration_ledger::retry_item(
@@ -122,15 +124,17 @@ fn explicit_retry_increments_attempt_once_and_terminal_transition_is_illegal() {
     assert!(
         ark_core::canonical_types::migration_ledger::transition_item(
             &conn,
-            "phase3-canonical-v1",
-            "note_obj",
-            "n1",
-            ItemStatus::Pending,
-            ItemCheckpoint::Prepared,
-            None,
-            "{}",
-            None,
-            "t5"
+            ark_core::canonical_types::migration_ledger::ItemTransition {
+                contract: "phase3-canonical-v1",
+                kind: "note_obj",
+                id: "n1",
+                status: ItemStatus::Pending,
+                checkpoint: ItemCheckpoint::Prepared,
+                canonical_hash: None,
+                result_json: "{}",
+                error_code: None,
+                now: "t5",
+            },
         )
         .is_err()
     );
@@ -143,15 +147,17 @@ fn completed_rerun_requires_canonical_validation_and_changed_inventory_conflicts
     begin_or_resume(&conn, "phase3-canonical-v1", &records, "t1").unwrap();
     ark_core::canonical_types::migration_ledger::transition_item(
         &conn,
-        "phase3-canonical-v1",
-        "note_obj",
-        "n1",
-        ItemStatus::Migrated,
-        ItemCheckpoint::Committed,
-        Some("c1"),
-        "{}",
-        None,
-        "t2",
+        ark_core::canonical_types::migration_ledger::ItemTransition {
+            contract: "phase3-canonical-v1",
+            kind: "note_obj",
+            id: "n1",
+            status: ItemStatus::Migrated,
+            checkpoint: ItemCheckpoint::Committed,
+            canonical_hash: Some("c1"),
+            result_json: "{}",
+            error_code: None,
+            now: "t2",
+        },
     )
     .unwrap();
     ark_core::canonical_types::migration_ledger::complete_run(

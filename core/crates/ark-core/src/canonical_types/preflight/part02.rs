@@ -88,16 +88,16 @@ fn native_inventory(conn: &Connection, out: &mut Vec<SourceRecord>) -> Result<()
                 .unwrap_or(Value::Null),
         );
         let props = Value::Object(props);
-        let value = envelope(
-            id.clone(),
-            "task_obj",
-            title,
-            json!({"type":"doc","content":[{"type":"paragraph"}]}),
-            props,
-            created.clone(),
-            created,
-            None,
-        );
+        let value = envelope(SourceEnvelope {
+                id: id.clone(),
+                source_kind: "task_obj",
+                title,
+                content: json!({"type":"doc","content":[{"type":"paragraph"}]}),
+                props,
+                created: created.clone(),
+                updated: created,
+                deleted: None
+            });
         let bytes = compact(&value)?;
         out.push(SourceRecord {
             source_kind: SourceKind::Native("todos".into()),
@@ -126,16 +126,16 @@ fn native_inventory(conn: &Connection, out: &mut Vec<SourceRecord>) -> Result<()
     {
         let (id, title, notes, status, scheduled, deadline, color, area, created) =
             row.map_err(|e| e.to_string())?;
-        let value = envelope(
-            id.clone(),
-            "project_obj",
-            title,
-            json!({"type":"doc","content":[{"type":"paragraph"}]}),
-            json!({"notes":notes,"status":status,"scheduled_date":scheduled,"deadline":deadline,"color_tag":color,"area_id":area}),
-            created.clone(),
-            created,
-            None,
-        );
+        let value = envelope(SourceEnvelope {
+                id: id.clone(),
+                source_kind: "project_obj",
+                title,
+                content: json!({"type":"doc","content":[{"type":"paragraph"}]}),
+                props: json!({"notes":notes,"status":status,"scheduled_date":scheduled,"deadline":deadline,"color_tag":color,"area_id":area}),
+                created: created.clone(),
+                updated: created,
+                deleted: None
+            });
         let bytes = compact(&value)?;
         out.push(SourceRecord {
             source_kind: SourceKind::Native("projects".into()),
@@ -160,16 +160,16 @@ fn native_inventory(conn: &Connection, out: &mut Vec<SourceRecord>) -> Result<()
         .map_err(|e| e.to_string())?
     {
         let (id, title, color, created) = row.map_err(|e| e.to_string())?;
-        let value = envelope(
-            id.clone(),
-            "tag_obj",
-            title,
-            json!({"type":"doc","content":[{"type":"paragraph"}]}),
-            json!({"color":color}),
-            created.clone(),
-            created,
-            None,
-        );
+        let value = envelope(SourceEnvelope {
+                id: id.clone(),
+                source_kind: "tag_obj",
+                title,
+                content: json!({"type":"doc","content":[{"type":"paragraph"}]}),
+                props: json!({"color":color}),
+                created: created.clone(),
+                updated: created,
+                deleted: None
+            });
         let bytes = compact(&value)?;
         out.push(SourceRecord {
             source_kind: SourceKind::Native("tags".into()),
@@ -203,16 +203,16 @@ fn native_inventory(conn: &Connection, out: &mut Vec<SourceRecord>) -> Result<()
         .map_err(|e| e.to_string())?
     {
         let (id, title, sort_order, created) = row.map_err(|e| e.to_string())?;
-        let bytes = compact(&envelope(
-            id.clone(),
-            "project_obj",
-            title,
-            json!({"type":"doc","content":[{"type":"paragraph"}]}),
-            json!({"legacy_kind":"area","sort_order":sort_order}),
-            created.clone(),
-            created,
-            None,
-        ))?;
+        let bytes = compact(&envelope(SourceEnvelope {
+                id: id.clone(),
+                source_kind: "project_obj",
+                title,
+                content: json!({"type":"doc","content":[{"type":"paragraph"}]}),
+                props: json!({"legacy_kind":"area","sort_order":sort_order}),
+                created: created.clone(),
+                updated: created,
+                deleted: None
+            }))?;
         out.push(SourceRecord {
             source_kind: SourceKind::Native("areas".into()),
             source_id: id,
@@ -238,21 +238,21 @@ fn native_inventory(conn: &Connection, out: &mut Vec<SourceRecord>) -> Result<()
         .map_err(|e| e.to_string())?
     {
         let (id, title, sort_order, project) = row.map_err(|e| e.to_string())?;
-        let bytes = compact(&envelope(
-            id.clone(),
-            "project_obj",
-            title,
-            json!({"type":"doc","content":[{"type":"paragraph"}]}),
-            json!({
+        let bytes = compact(&envelope(SourceEnvelope {
+                id: id.clone(),
+                source_kind: "project_obj",
+                title,
+                content: json!({"type":"doc","content":[{"type":"paragraph"}]}),
+                props: json!({
                 "legacy_kind":"heading",
                 "sort_order":sort_order,
                 "legacy_parent_project_id":project,
                 "related_ids":[project]
             }),
-            "1970-01-01T00:00:00.000Z".into(),
-            "1970-01-01T00:00:00.000Z".into(),
-            None,
-        ))?;
+                created: "1970-01-01T00:00:00.000Z".into(),
+                updated: "1970-01-01T00:00:00.000Z".into(),
+                deleted: None
+            }))?;
         out.push(SourceRecord {
             source_kind: SourceKind::Native("headings".into()),
             source_id: id,

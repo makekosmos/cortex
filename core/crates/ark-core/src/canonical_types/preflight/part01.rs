@@ -89,20 +89,22 @@ pub(crate) fn compact(value: &Value) -> Result<Vec<u8>, String> {
     serde_json::to_vec(&canonical_json(value)).map_err(|e| e.to_string())
 }
 
-// Serialises one preflight record field-by-field; the parameters are the
-// record's own columns, so a wrapper struct would only rename them.
-#[allow(clippy::too_many_arguments)]
-fn envelope(
+/// One preflight record's fields — the record's own columns before
+/// serialisation into the envelope JSON.
+struct SourceEnvelope<'a> {
     id: String,
-    source_kind: &str,
+    source_kind: &'a str,
     title: String,
     content: Value,
     props: Value,
     created: String,
     updated: String,
     deleted: Option<String>,
-) -> Value {
-    json!({"id":id,"legacy_type_id":source_kind,"title":title,"content":content,"props":props,"created_at":created,"updated_at":updated,"deleted_at":deleted})
+}
+
+// Serialises one preflight record field-by-field.
+fn envelope(e: SourceEnvelope<'_>) -> Value {
+    json!({"id":e.id,"legacy_type_id":e.source_kind,"title":e.title,"content":e.content,"props":e.props,"created_at":e.created,"updated_at":e.updated,"deleted_at":e.deleted})
 }
 
 fn generic_inventory(
@@ -170,16 +172,16 @@ fn generic_inventory(
                     continue;
                 }
             };
-            let value = envelope(
-                id.clone(),
-                kind,
+            let value = envelope(SourceEnvelope {
+                id: id.clone(),
+                source_kind: kind,
                 title,
                 content,
                 props,
                 created,
                 updated,
-                deleted,
-            );
+                deleted
+            });
             let bytes = compact(&value)?;
             // raw_source is the exact stored JSON object columns, not the canonicalized envelope.
             let raw = [content_raw.as_slice(), b"\0", props_raw.as_slice()].concat();
