@@ -489,8 +489,11 @@ async fn fake_provider_collection_uses_keyring_secret_and_broker_injection() {
     let endpoint = server.url("/collect");
     let origin = server.url("/");
 
+    // Same service `secret_store::package_integration_entry` uses in the
+    // shipped engine; the fixture-only account name keeps real credentials
+    // untouched, and `CredentialCleanup` deletes the entry on drop.
     let keyring_entry = keyring::Entry::new(
-        "mundus-mundus",
+        engine::brand::KEYRING_SERVICE,
         "package-integration:fixture.fake-provider:1.0.0:session",
     )
     .expect("keyring entry");

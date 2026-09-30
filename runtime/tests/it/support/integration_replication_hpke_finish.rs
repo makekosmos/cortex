@@ -28,7 +28,7 @@ pub async fn receive_and_validate(
     .unwrap();
     assert_eq!(received["stored"], true);
     let stored = keyring::Entry::new(
-        "kosmos-kepler",
+        engine::brand::KEYRING_SERVICE,
         &format!("package-integration:{PACKAGE_ID}:{PACKAGE_VERSION}:{SETTING}"),
     )
     .unwrap()

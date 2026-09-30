@@ -27,7 +27,7 @@ not control. `scripts/check-brand.mjs` enforces this list — it reads
 | `extensions.kosmos` JSON key (incl. `/props/extensions/kosmos/…` pointers) | ARK object extensions (`taskBucket` etc.) | Persisted user data. |
 | `kosmos-host` / `TargetRuntime::KosmosHost` | `targets[].runtime` in package manifests | Signed manifests and installed package state use this value. |
 | `kosmos-desktop` | WS `client_class` sent by pinned components; usage-accounting keys | Pinned sibling builds report it; recorded usage keys already contain it. |
-| `kosmos-kepler` | Windows Credential Manager service for user API keys + integration secrets | Renaming orphans every stored credential. |
+| `kosmos-kepler` | `brand::KEYRING_SERVICE` — Windows Credential Manager service for user API keys + integration secrets | Renaming orphans every stored credential. |
 | `kepler-fallback` | fallback device id written into `*-device-id.txt` | Existing installs persist this value in sync identity. |
 
 ## Legacy install state (consumed by the KOS-267 migration)
