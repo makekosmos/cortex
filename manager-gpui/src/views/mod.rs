@@ -9,9 +9,6 @@ pub mod browser;
 pub mod connections;
 pub mod data;
 pub mod dev;
-pub mod dictation;
-mod dictation_cards;
-mod dictation_local;
 pub mod engine_settings;
 pub mod secrets;
 pub mod settings;
@@ -35,7 +32,6 @@ pub enum View {
     Secrets,
     Browser,
     Dev,
-    Dictation,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -46,12 +42,7 @@ pub enum StoreTab {
 
 pub const NAV_GROUPS: &[&[View]] = &[
     &[View::Data, View::Usage, View::Packages, View::Browser],
-    &[
-        View::Sync,
-        View::Connections,
-        View::Dictation,
-        View::Secrets,
-    ],
+    &[View::Sync, View::Connections, View::Secrets],
     &[View::Settings, View::Engine, View::Dev],
     &[View::Updates, View::About],
 ];
@@ -71,7 +62,6 @@ impl View {
             View::Secrets => "Ключи",
             View::Browser => "Браузер",
             View::Dev => "Разработка",
-            View::Dictation => "Диктовка",
         }
     }
 
@@ -89,7 +79,6 @@ impl View {
             View::Secrets => "icons/key.svg",
             View::Browser => "icons/globe.svg",
             View::Dev => "icons/code.svg",
-            View::Dictation => "icons/mic.svg",
         };
         Icon::default().path(path)
     }
@@ -110,7 +99,6 @@ pub fn load(view: View, app: &mut ManagerApp) {
         View::Secrets => secrets::load(app),
         View::Browser => browser::load(app),
         View::Dev => dev::load(app),
-        View::Dictation => dictation::load(app),
     }
 }
 
@@ -133,6 +121,5 @@ pub fn render(
         View::Secrets => secrets::render(app, window, cx),
         View::Browser => browser::render(app, window, cx),
         View::Dev => dev::render(app, window, cx),
-        View::Dictation => dictation::render(app, window, cx),
     }
 }

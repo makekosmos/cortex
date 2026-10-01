@@ -5,7 +5,6 @@ Window ""
   Button "Браузер" selected=false
   Button "Синхронизация" selected=false
   Button "Интеграции" selected=false
-  Button "Диктовка" selected=false
   Button "Ключи" selected=false
   Button "Настройки" selected=false
   Button "Движок" selected=false

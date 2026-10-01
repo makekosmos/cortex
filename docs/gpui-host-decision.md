@@ -89,7 +89,7 @@ from memory. «Window» means a real `BrowserWindow` creation site.
 
 | Window | Files | Status |
 |---|---|---|
-| Settings | `settings-window.ts`, `settings-store.ts`, `settings-storage-summary.ts` | Vue hash-route `#settings`; IPC for hotkey/tray-flag/version/storage summary. Superseded by `manager-gpui` Настройки (engine autostart + dictation hotkey already live there). |
+| Settings | `settings-window.ts`, `settings-store.ts`, `settings-storage-summary.ts` | Vue hash-route `#settings`; IPC for hotkey/tray-flag/version/storage summary. Superseded by `manager-gpui` Настройки (engine autostart) + `dictation-gpui` (dictation hotkey/settings). |
 | Dictation pill overlay | `dictation-pill.ts`, `main-runtime-integrations.ts` | Transparent always-on-top `screen-saver`-level overlay, warmup, `mundus:dictation:*` IPC, Engine `dictation_*_trigger` event subscription. **Superseded by `dictation-gpui`** — this is the departing implementation still wired into `main.ts`. |
 | Focus-mode windows | — | **Already deleted** (D2, 2026-09-25): FocusWidget/BlockOverlay/focus-session windows are gone. What remains is OS-level blocking: `focus-block.ts` (spawn `Mundus Helper.exe` / UAC `RunAs` fallback / named-pipe service client for hosts-file edits) and `focus-enforcement.ts` (authoritative apply after `focus.set_active_state` on the `mundus:ark:request` path). |
 | Test harness | `main-test-window.ts` | Hidden Playwright window (`MUNDUS_TEST_MODE`). |
