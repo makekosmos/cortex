@@ -230,6 +230,24 @@ pub(in crate::ws_server) async fn handle_package_op(
             }
             package_response(subop, result)
         }
+        // `open` mints (or reuses) a launch lease for an App-kind package —
+        // the same machinery as POST /v1/apps/launch, exposed to the Manager
+        // over the shared dispatch channel. Only installed, enabled,
+        // non-revoked app packages resolve; every other answer is typed.
+        "open" => {
+            let Some(id) = params
+                .get("id")
+                .or_else(|| params.get("package_id"))
+                .and_then(Value::as_str)
+            else {
+                return LocalResponse::err("packages.open: invalid-request");
+            };
+            let version = params.get("version").and_then(Value::as_str);
+            match service.open_app(id, version).await {
+                Ok(data) => LocalResponse::ok(data),
+                Err(error) => LocalResponse::err(format!("packages.open: {}", error.code())),
+            }
+        }
         "set_enabled" => {
             let Some(id) = params
                 .get("id")

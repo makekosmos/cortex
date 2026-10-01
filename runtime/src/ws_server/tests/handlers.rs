@@ -118,3 +118,108 @@ async fn package_api_returns_bounded_metadata_without_trust_material_or_paths() 
     assert!(!install.ok);
     assert!(!install.error.unwrap_or_default().contains(private_path));
 }
+
+/// `packages.open` mints a launch lease through the registry the Engine
+/// shares in — and every failure is a typed `packages.open: <code>` wire
+/// error, never a bare string.
+#[tokio::test]
+async fn package_open_mints_reuses_and_reports_typed_errors() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (service, _, _) = crate::package_service::tests::enabled_app_service(dir.path());
+    let service = Arc::new(service);
+
+    let open = |params: serde_json::Value| {
+        let service = service.clone();
+        async move {
+            let service = service;
+            handle_package_op("open", params, &service).await
+        }
+    };
+
+    // No launch surface wired (an engine without its HTTP API) — the op
+    // must fail closed with a typed code, not panic.
+    let response = open(serde_json::json!({"package_id": "com.kosmos.demo"})).await;
+    assert!(!response.ok);
+    assert_eq!(
+        response.error.as_deref(),
+        Some("packages.open: unavailable")
+    );
+
+    // Unknown id is `not-installed`, a malformed id is `invalid-request`,
+    // and a missing id never reaches the resolver.
+    for (params, expected) in [
+        (
+            serde_json::json!({"package_id": "com.kosmos.missing"}),
+            "packages.open: not-installed",
+        ),
+        (
+            serde_json::json!({"package_id": "com.kosmos.demo", "version": "9.9.9"}),
+            "packages.open: not-installed",
+        ),
+        (
+            serde_json::json!({"package_id": "com.kosmos.\u{7}demo"}),
+            "packages.open: invalid-request",
+        ),
+        (serde_json::json!({}), "packages.open: invalid-request"),
+    ] {
+        let response = open(params).await;
+        assert!(!response.ok);
+        assert_eq!(response.error.as_deref(), Some(expected));
+    }
+
+    let leases = Arc::new(std::sync::Mutex::new(
+        crate::package_launch::LaunchLeaseRegistry::default(),
+    ));
+    service.configure_launch_surface(crate::package_launch::LaunchSurface {
+        leases: leases.clone(),
+        http_port: 12_345,
+    });
+
+    let first = open(serde_json::json!({"package_id": "com.kosmos.demo"})).await;
+    assert!(
+        first.ok,
+        "open must mint a lease: {}",
+        first.error.unwrap_or_default()
+    );
+    let launch_id = first.data["launch_id"].as_str().expect("launch_id");
+    assert_eq!(first.data["already_running"], false);
+    assert_eq!(
+        first.data["launch_url"].as_str().expect("launch_url"),
+        format!(
+            "http://127.0.0.1:12345/v1/apps/assets/{}/index.html",
+            first.data["asset_token"].as_str().unwrap()
+        )
+    );
+    assert!(first.data["broker_token"].as_str().is_some());
+    assert!(first.data["data_api"]
+        .as_str()
+        .is_some_and(|url| url.contains(launch_id)));
+
+    // A second open while the lease lives reuses the session — the Engine
+    // cannot raise a host window, so the honest answer is the same lease
+    // marked `already_running`, not a duplicate mint.
+    let second = open(serde_json::json!({"package_id": "com.kosmos.demo"})).await;
+    assert!(second.ok);
+    assert_eq!(second.data["launch_id"].as_str(), Some(launch_id));
+    assert_eq!(second.data["already_running"], true);
+
+    // An expired lease is gone — the next open mints fresh.
+    leases
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .expire(launch_id);
+    let third = open(serde_json::json!({"package_id": "com.kosmos.demo"})).await;
+    assert!(third.ok);
+    assert_ne!(third.data["launch_id"].as_str(), Some(launch_id));
+    assert_eq!(third.data["already_running"], false);
+
+    // Disabled app → `disabled`; re-enabled → the stale lease was already
+    // expired above, so open mints again.
+    service
+        .set_enabled("com.kosmos.demo", "1.0.0", false)
+        .await
+        .expect("disable");
+    let response = open(serde_json::json!({"package_id": "com.kosmos.demo"})).await;
+    assert!(!response.ok);
+    assert_eq!(response.error.as_deref(), Some("packages.open: disabled"));
+}

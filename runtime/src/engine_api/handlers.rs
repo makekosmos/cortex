@@ -7,5 +7,4 @@ include!("handlers/assets.rs");
 include!("handlers/authorization.rs");
 include!("handlers/authorize_request.rs");
 include!("handlers/response_filter.rs");
-include!("handlers/payload.rs");
 include!("handlers/auth.rs");

@@ -76,6 +76,7 @@ pub mod manager_api;
 pub mod markdown_vault;
 pub mod native_apps;
 pub mod observability;
+pub(crate) mod package_launch;
 pub mod package_manifest;
 pub mod package_registration;
 pub mod package_service;

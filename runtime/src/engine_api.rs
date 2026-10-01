@@ -22,6 +22,10 @@ use tokio::sync::Notify;
 
 use crate::auth;
 use crate::engine_dispatch::{DispatchClient, DispatchRequest, Operation};
+use crate::package_launch::{
+    launch_payload, resolve_payload, AssetGrant, LaunchLeaseRegistry, LaunchRequest,
+    LeaseCapacityError, DATA_GRANT_TTL, LAUNCH_LEASE_TTL, MAX_ACTIVE_LAUNCH_LEASES,
+};
 use crate::package_service::PackageService;
 use crate::protocol_usage::ProtocolUsageStore;
 use crate::protocol_version::{
@@ -33,9 +37,6 @@ use crate::runtime_grants::{DataRequest, FieldInput, LaunchGrant};
 // (~43 KiB/s at 16 kHz mono), so the old 1 MiB cap 413'd any recording
 // longer than ~24 s. 32 MiB covers ~12 min of dictation.
 const MAX_HTTP_BODY_BYTES: usize = 32 * 1024 * 1024;
-const LAUNCH_LEASE_TTL: Duration = Duration::from_secs(300);
-const DATA_GRANT_TTL: Duration = Duration::from_secs(900);
-const MAX_ACTIVE_LAUNCH_LEASES: usize = 2_048;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 // Wire header names stay `x-kosmos-*`: pinned component builds
 // (agenda/memoria/dictation and kosmos-gpui-kit) send exactly these names —

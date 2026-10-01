@@ -106,9 +106,3 @@ fn mime_type(path: &str) -> &'static str {
         _ => "application/octet-stream",
     }
 }
-
-fn new_asset_token() -> String {
-    let mut bytes = [0u8; 32];
-    rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut bytes);
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
-}

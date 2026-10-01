@@ -1384,14 +1384,10 @@
     }
 
     fn expire_launch_for_test(leases: &Arc<Mutex<LaunchLeaseRegistry>>, launch_id: &str) {
-        let mut leases = leases
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
         leases
-            .leases
-            .get_mut(launch_id)
-            .expect("launch lease")
-            .expires_at = Instant::now() - Duration::from_secs(1);
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .expire(launch_id);
     }
 
     async fn wait_for_lease_count(leases: &Arc<Mutex<LaunchLeaseRegistry>>, expected: usize) {
@@ -1409,4 +1405,170 @@
         })
         .await
         .expect("lifecycle cleanup deadline");
+    }
+
+    /// KOS-299 end-to-end in isolation: `packages.open` on the dispatch
+    /// channel (the Manager's /v1/rpc path) mints a lease in the same
+    /// registry the HTTP launch routes use, and the returned `launch_url`
+    /// really serves the package blob from that isolated data dir.
+    #[tokio::test]
+    async fn packages_open_mints_a_working_launch_lease() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let token = "a".repeat(64);
+        let (service, _, _) = crate::package_service::tests::enabled_app_service(dir.path());
+        let service = Arc::new(service);
+        // A WsServer bound on the same temp dir owns the real dispatch table —
+        // `packages.open` must run through it, not a stubbed dispatcher.
+        let ws = crate::ws_server::WsServer::bind(
+            Arc::new(
+                crate::ark_host::ArkHost::open(&dir.path().join("ark.db").to_string_lossy())
+                    .await
+                    .expect("ark"),
+            ),
+            token.clone(),
+            dir.path().to_path_buf(),
+            Arc::new(
+                crate::app_index::AppIndex::new(dir.path(), dir.path().join("icons"))
+                    .expect("app index"),
+            ),
+            Arc::new(crate::file_index::FileIndex::new_disabled(dir.path()).expect("file index")),
+            Arc::new(crate::usage_tracker::UsageTrackerDiagnosticsState::default()),
+            Arc::new(ProtocolUsageStore::open(dir.path()).expect("usage")),
+            service.clone(),
+            "00000000-0000-4000-8000-000000000001".into(),
+        )
+        .await
+        .expect("ws server");
+        let server = EngineApiServer::bind(
+            token.clone(),
+            ws.port(),
+            Arc::new(ProtocolUsageStore::open(&dir.path().join("usage2")).expect("usage2")),
+            "00000000-0000-4000-8000-000000000001".into(),
+            service.clone(),
+            Arc::new(ws.dispatcher()),
+        )
+        .await
+        .expect("server");
+        let port = server.port();
+        let server_shutdown_handle = server.shutdown_handle();
+        let task = tokio::spawn(server.run());
+
+        // No bearer token → the dispatch channel stays closed (401).
+        let anon = raw_http(
+            port,
+            "POST /v1/rpc HTTP/1.1\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}",
+        )
+        .await;
+        assert!(anon.starts_with("HTTP/1.1 401"), "{anon}");
+
+        let opened = response_json(
+            &raw_http(
+                port,
+                &request(
+                    &token,
+                    "POST",
+                    "/v1/rpc",
+                    r#"{"operation":"packages.open","package_id":"com.kosmos.demo"}"#,
+                ),
+            )
+            .await,
+        );
+        assert_eq!(opened["ok"], true, "{opened}");
+        let data = &opened["data"];
+        assert_eq!(data["already_running"], false);
+        assert!(data["launch_id"].as_str().is_some_and(|id| !id.is_empty()));
+        assert!(data["broker_token"].as_str().is_some_and(|t| !t.is_empty()));
+        assert!(data["data_api"].as_str().is_some());
+        let launch_id = data["launch_id"].as_str().unwrap().to_owned();
+        let broker_token = data["broker_token"].as_str().unwrap().to_owned();
+        let asset_path = data["launch_url"]
+            .as_str()
+            .expect("launch_url")
+            .split_once(&format!(":{port}"))
+            .expect("loopback URL")
+            .1
+            .to_owned();
+
+        // The minted lease actually serves the package blob — this is the
+        // same immutable-asset path a package host fetches.
+        let asset = raw_http(
+            port,
+            &format!("GET {asset_path} HTTP/1.1\r\nConnection: close\r\n\r\n"),
+        )
+        .await;
+        assert!(asset.starts_with("HTTP/1.1 200"), "{asset}");
+        assert!(asset.ends_with("ok"), "{asset}");
+
+        // Repeat open reuses the live session — one lease per running app,
+        // not a fresh mint per click.
+        let again = response_json(
+            &raw_http(
+                port,
+                &request(
+                    &token,
+                    "POST",
+                    "/v1/rpc",
+                    r#"{"operation":"packages.open","package_id":"com.kosmos.demo"}"#,
+                ),
+            )
+            .await,
+        );
+        assert_eq!(again["data"]["launch_id"], Value::String(launch_id.clone()));
+        assert_eq!(again["data"]["already_running"], true);
+
+        // A launch-scoped package client is not a Manager: the app-RPC
+        // channel's operation allowlist refuses `packages.open` outright.
+        let app_channel = raw_http(
+            port,
+            &format!(
+                "POST /v1/apps/launch/{launch_id}/ark HTTP/1.1\r\n\
+                 Authorization: Bearer {token}\r\n\
+                 X-Kosmos-Launch-Token: {broker_token}\r\n\
+                 X-Kosmos-Client-Pid: {}\r\n\
+                 X-Kosmos-Api-Version: {API_VERSION}\r\n\
+                 Content-Length: 29\r\n\
+                 Connection: close\r\n\r\n{{\"operation\":\"packages.open\"}}",
+                std::process::id()
+            ),
+        )
+        .await;
+        assert!(app_channel.starts_with("HTTP/1.1 400"), "{app_channel}");
+
+        // Typed errors: not installed, then disabled.
+        let missing = response_json(
+            &raw_http(
+                port,
+                &request(
+                    &token,
+                    "POST",
+                    "/v1/rpc",
+                    r#"{"operation":"packages.open","package_id":"com.kosmos.missing"}"#,
+                ),
+            )
+            .await,
+        );
+        assert_eq!(missing["ok"], false);
+        assert_eq!(missing["error"], "packages.open: not-installed");
+
+        service
+            .set_enabled("com.kosmos.demo", "1.0.0", false)
+            .await
+            .expect("disable");
+        let disabled = response_json(
+            &raw_http(
+                port,
+                &request(
+                    &token,
+                    "POST",
+                    "/v1/rpc",
+                    r#"{"operation":"packages.open","package_id":"com.kosmos.demo"}"#,
+                ),
+            )
+            .await,
+        );
+        assert_eq!(disabled["ok"], false);
+        assert_eq!(disabled["error"], "packages.open: disabled");
+
+        let _ = server_shutdown_handle.shutdown().await;
+        let _ = task.await;
     }
