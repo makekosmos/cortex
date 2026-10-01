@@ -44,6 +44,11 @@ pub struct EngineApiServer {
     correlation_id: Arc<String>,
     package_service: Arc<PackageService>,
     launch_leases: Arc<Mutex<LaunchLeaseRegistry>>,
+    /// ARK event bus receiver — each `/v1/apps/launch/<id>/events` request
+    /// resubscribes its own consumer off this seed.
+    launch_events: std::sync::Mutex<
+        Option<tokio::sync::broadcast::Receiver<(String, Value)>>,
+    >,
     user_data: Arc<crate::user_data::UserDataRoots>,
     cleanup_interval: Duration,
     operations: HttpOperationRegistry,
@@ -192,12 +197,26 @@ impl EngineApiServer {
             correlation_id: Arc::new(correlation_id),
             package_service,
             launch_leases,
+            launch_events: std::sync::Mutex::new(None),
             user_data: Arc::new(crate::user_data::UserDataRoots::new()),
             cleanup_interval,
             operations: HttpOperationRegistry::default(),
             connections: Arc::new(HttpConnectionLifecycle::default()),
             request_timeout,
         })
+    }
+
+    /// Wire the ARK event bus after bind — the server is constructed before
+    /// the ArkHost in some boot paths; an unset bus answers `/events` with
+    /// 503 rather than hanging a silent stream.
+    pub fn set_launch_events(
+        &mut self,
+        events: tokio::sync::broadcast::Receiver<(String, Value)>,
+    ) {
+        *self
+            .launch_events
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(events);
     }
 
     pub async fn shutdown(&self) -> Result<(), &'static str> {
@@ -246,6 +265,12 @@ impl EngineApiServer {
             let request_timeout = self.request_timeout;
             let operations = self.operations.clone();
             let launch_leases = self.launch_leases.clone();
+            let launch_events = self
+                .launch_events
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .as_ref()
+                .map(tokio::sync::broadcast::Receiver::resubscribe);
             let user_data = self.user_data.clone();
             let http_port = self.port();
             let connections = self.connections.clone();
@@ -297,6 +322,7 @@ impl EngineApiServer {
                         request_timeout,
                         operations.clone(),
                         launch_leases.clone(),
+                        launch_events.as_ref().map(tokio::sync::broadcast::Receiver::resubscribe),
                         user_data.clone(),
                         http_port,
                     )

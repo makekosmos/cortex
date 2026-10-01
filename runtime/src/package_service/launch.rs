@@ -2,13 +2,12 @@
 // (KOS-299). It reuses the launch-lease machinery of `POST /v1/apps/launch`
 // through the `LaunchSurface` the Engine API server shares in: same
 // definition registration, same `resolve_app` checks, same typed-grant
-// lease, same payload — one launch path, two entry points.
+// lease, one mint path — two entry points.
 //
-// "Already running" is approximated by the lease itself: the Engine owns no
-// window state, so a live lease is the only running-session evidence it can
-// honestly report. A repeat open returns the existing (TTL-extended) lease
-// with `already_running: true` instead of minting a duplicate — the host
-// reopens the same session rather than stacking independent leases.
+// Every call is a new session: a second «Открыть» opens a second browser
+// tab, and two tabs sharing one lease would revoke each other on close.
+// The returned `launch_url` carries the single-use bootstrap code in its
+// fragment — `broker_token` never reaches the Manager.
 
 /// What `packages.open` reports. `code()` is the stable wire code appended
 /// after `packages.open:` — the Manager maps it to a Russian UI message.
@@ -50,9 +49,12 @@ impl PackageService {
         *Self::lock(&self.launch_surface) = Some(surface);
     }
 
-    /// Mint (or reuse) the launch lease for an App package and return the
-    /// same `data` payload `POST /v1/apps/launch` produces, plus
-    /// `already_running` marking a reused live session.
+    /// Mint a fresh launch lease for an App package — every `packages.open`
+    /// is a new tab, and a new tab must own a new session: two tabs sharing
+    /// one lease would revoke each other on close. The reply carries only
+    /// `launch_url` (with the one-time bootstrap code in the fragment — the
+    /// browser never sends it to the Engine) plus the row identity; the
+    /// Manager needs nothing else.
     pub(crate) async fn open_app(
         &self,
         id: &str,
@@ -73,32 +75,43 @@ impl PackageService {
         let surface = Self::lock(&self.launch_surface)
             .clone()
             .ok_or(PackageOpenError::Unavailable)?;
-        let mut leases = surface
+        let lease = surface
             .leases
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let ttl = leases.ttl;
-        let (lease, already_running) =
-            match leases.reopen(&package.id, &package.version) {
-                Some(lease) => (lease, true),
-                None => (
-                    leases
-                        .create_with_typed_grant(
-                            crate::package_launch::AssetGrant {
-                                id: package.id.clone(),
-                                version: package.version.clone(),
-                                hash: package.hash.clone(),
-                            },
-                            resolved.grant,
-                        )
-                        .map_err(|_| PackageOpenError::AtCapacity)?,
-                    false,
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .create_with_typed_grant(
+                crate::package_launch::AssetGrant {
+                    id: package.id.clone(),
+                    version: package.version.clone(),
+                    hash: package.hash.clone(),
+                },
+                resolved.grant,
+            )
+            .map_err(|_| PackageOpenError::AtCapacity)?;
+        let code = lease
+            .bootstrap_code
+            .as_deref()
+            .ok_or(PackageOpenError::LaunchFailed)?;
+        Ok(Value::Object(
+            [
+                ("id".into(), Value::String(package.id.clone())),
+                ("version".into(), Value::String(package.version.clone())),
+                ("name".into(), Value::String(package.manifest.name().to_owned())),
+                (
+                    "launch_url".into(),
+                    Value::String(format!(
+                        "http://127.0.0.1:{}/v1/apps/assets/{}/{}#launch={}&code={}",
+                        surface.http_port,
+                        lease.asset_token,
+                        package.manifest.entrypoint(),
+                        lease.launch_id,
+                        code,
+                    )),
                 ),
-            };
-        let mut payload =
-            crate::package_launch::launch_payload(surface.http_port, &lease, &package, ttl);
-        payload["data"]["already_running"] = Value::Bool(already_running);
-        Ok(payload["data"].take())
+            ]
+            .into_iter()
+            .collect(),
+        ))
     }
 
     /// `resolve_app` with the typed outcomes `packages.open` reports — the

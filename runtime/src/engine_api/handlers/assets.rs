@@ -1,3 +1,13 @@
+/// The Engine-side host shim: served at a reserved asset-relative name and
+/// injected into every package HTML page, it bootstraps the launch-scoped
+/// credentials and exposes the `window.kosmosApp` API the Electron host's
+/// preload used to define. Kept as a real file so it reads and diffs as JS.
+const HOST_SHIM: &str = include_str!("../host_shim.js");
+/// Reserved asset name under each launch's asset token — `.kspkg` archives
+/// cannot collide: the asset path is looked up after grant validation and
+/// this name is answered by the Engine before the package store is read.
+const HOST_SHIM_ASSET: &str = "__kosmos_host_shim.js";
+
 async fn serve_asset(
     path: &str,
     package_service: Arc<PackageService>,
@@ -27,12 +37,39 @@ async fn serve_asset(
     let Some(grant) = grant else {
         return asset_error(StatusCode::NOT_FOUND);
     };
+    if asset == HOST_SHIM_ASSET {
+        return asset_response(&asset, HOST_SHIM.as_bytes().to_vec());
+    }
     let bytes = match package_service.read_app_asset(&grant.id, &grant.version, &grant.hash, &asset)
     {
         Ok(bytes) => bytes,
         Err(_) => return asset_error(StatusCode::NOT_FOUND),
     };
-    asset_response(&asset, bytes)
+    asset_response(&asset, inject_host_shim(&asset, &bytes))
+}
+
+/// Inject the shim `<script>` tag as early as the served HTML allows — the
+/// parser loads it synchronously, so the `kosmosApp` global exists before
+/// the app's own scripts run; the async credential exchange is queued by
+/// the shim itself.
+fn inject_host_shim(asset: &str, bytes: &[u8]) -> Vec<u8> {
+    let html = asset.rsplit_once('.').is_some_and(|(_, ext)| {
+        ext.eq_ignore_ascii_case("html") || ext.eq_ignore_ascii_case("htm")
+    });
+    if !html {
+        return bytes.to_vec();
+    }
+    let tag = format!("<script src=\"{HOST_SHIM_ASSET}\"></script>");
+    let text = String::from_utf8_lossy(bytes);
+    let Some(head) = text.find("<head").and_then(|at| text[at..].find('>').map(|e| at + e + 1))
+    else {
+        return [tag.as_bytes(), bytes].concat();
+    };
+    let mut out = Vec::with_capacity(bytes.len() + tag.len());
+    out.extend_from_slice(&bytes[..head]);
+    out.extend_from_slice(tag.as_bytes());
+    out.extend_from_slice(&bytes[head..]);
+    out
 }
 
 fn asset_response(asset: &str, bytes: Vec<u8>) -> HttpResponse {
@@ -47,13 +84,15 @@ fn asset_response(asset: &str, bytes: Vec<u8>) -> HttpResponse {
         .header("referrer-policy", "no-referrer")
         .header("x-content-type-options", "nosniff");
     if html {
+        // connect-src 'self': the shim's bootstrap/ark/renew/revoke and the
+        // SSE event stream are same-origin fetches.
         response = response.header(
             "content-security-policy",
-            "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+            "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
         );
     }
     response
-        .body(Full::new(Bytes::from(bytes)))
+        .body(boxed(Bytes::from(bytes)))
         .unwrap_or_else(|_| asset_error(StatusCode::INTERNAL_SERVER_ERROR))
 }
 
@@ -62,8 +101,8 @@ fn asset_error(status: StatusCode) -> HttpResponse {
         .status(status)
         .header("cache-control", "no-store")
         .header("referrer-policy", "no-referrer")
-        .body(Full::new(Bytes::new()))
-        .unwrap_or_else(|_| Response::new(Full::new(Bytes::new())))
+        .body(boxed(Bytes::new()))
+        .unwrap_or_else(|_| Response::new(boxed(Bytes::new())))
 }
 
 fn percent_decode(value: &str) -> Option<String> {

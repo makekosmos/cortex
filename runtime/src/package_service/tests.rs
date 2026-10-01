@@ -381,6 +381,7 @@ pub(crate) mod tests {
         package_manifest.data.access[0].actions = vec![
             crate::package_manifest::DataAction::Read,
             crate::package_manifest::DataAction::Create,
+            crate::package_manifest::DataAction::Subscribe,
         ];
         package_manifest.data.access[0].fields.write =
             ["title", "props.description", "props.extensions"]

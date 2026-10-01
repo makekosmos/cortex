@@ -6,6 +6,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use bytes::Bytes;
+use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Full, Limited};
 use hyper::body::Incoming;
 use hyper::header::{AUTHORIZATION, CONTENT_TYPE};
@@ -47,7 +48,13 @@ const CLIENT_CLASS_HEADER: &str = "x-kosmos-client-class";
 const CLIENT_VERSION_HEADER: &str = "x-kosmos-client-version";
 const APP_LAUNCH_TOKEN_HEADER: &str = "x-kosmos-launch-token";
 
-type HttpResponse = Response<Full<Bytes>>;
+// BoxBody so the launch `events` route can answer with a long-lived SSE
+// stream while every other handler keeps returning buffered bodies.
+type HttpResponse = Response<BoxBody<Bytes, Infallible>>;
+
+fn boxed(bytes: impl Into<Bytes>) -> BoxBody<Bytes, Infallible> {
+    Full::new(bytes.into()).boxed()
+}
 
 const MAX_IN_FLIGHT_HTTP_OPERATIONS: usize = 128;
 const MAX_ACTIVE_HTTP_CONNECTIONS: usize = 128;
@@ -65,4 +72,6 @@ mod tests {
 
     include!("engine_api/tests_core.rs");
     include!("engine_api/tests_http.rs");
+    include!("engine_api/tests_open.rs");
+    include!("engine_api/tests_open_events.rs");
 }

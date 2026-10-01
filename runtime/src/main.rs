@@ -618,7 +618,7 @@ async fn setup() -> Result<SetupState, DynError> {
     let port = ws.port();
     tracing::info!(port = port, "WS listening on 127.0.0.1");
     let dispatcher = Arc::new(ws.dispatcher());
-    let api = EngineApiServer::bind(
+    let mut api = EngineApiServer::bind(
         token.clone(),
         port,
         protocol_usage,
@@ -627,6 +627,7 @@ async fn setup() -> Result<SetupState, DynError> {
         dispatcher,
     )
     .await?;
+    api.set_launch_events(ark.subscribe_events());
     let http_port = api.port();
     tracing::info!(port = http_port, "Engine HTTP listening on 127.0.0.1");
 

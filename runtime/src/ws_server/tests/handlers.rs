@@ -119,11 +119,11 @@ async fn package_api_returns_bounded_metadata_without_trust_material_or_paths() 
     assert!(!install.error.unwrap_or_default().contains(private_path));
 }
 
-/// `packages.open` mints a launch lease through the registry the Engine
-/// shares in — and every failure is a typed `packages.open: <code>` wire
-/// error, never a bare string.
+/// `packages.open` mints a fresh launch lease per call through the registry
+/// the Engine shares in — and every failure is a typed
+/// `packages.open: <code>` wire error, never a bare string.
 #[tokio::test]
-async fn package_open_mints_reuses_and_reports_typed_errors() {
+async fn package_open_mints_per_tab_leases_and_reports_typed_errors() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (service, _, _) = crate::package_service::tests::enabled_app_service(dir.path());
     let service = Arc::new(service);
@@ -181,40 +181,28 @@ async fn package_open_mints_reuses_and_reports_typed_errors() {
         "open must mint a lease: {}",
         first.error.unwrap_or_default()
     );
-    let launch_id = first.data["launch_id"].as_str().expect("launch_id");
-    assert_eq!(first.data["already_running"], false);
-    assert_eq!(
-        first.data["launch_url"].as_str().expect("launch_url"),
-        format!(
-            "http://127.0.0.1:12345/v1/apps/assets/{}/index.html",
-            first.data["asset_token"].as_str().unwrap()
-        )
+    // The reply is just what the Manager opens: the launch URL carries the
+    // one-time bootstrap code in the fragment — no token crosses to it.
+    let launch_url = first.data["launch_url"].as_str().expect("launch_url");
+    assert!(
+        launch_url.starts_with("http://127.0.0.1:12345/v1/apps/assets/")
+            && launch_url.contains("#launch=")
+            && launch_url.contains("&code="),
+        "{launch_url}"
     );
-    assert!(first.data["broker_token"].as_str().is_some());
-    assert!(first.data["data_api"]
-        .as_str()
-        .is_some_and(|url| url.contains(launch_id)));
+    assert!(first.data["broker_token"].is_null());
+    assert!(first.data["launch_id"].is_null());
 
-    // A second open while the lease lives reuses the session — the Engine
-    // cannot raise a host window, so the honest answer is the same lease
-    // marked `already_running`, not a duplicate mint.
+    // Every open is a new session — a second tab shares no token, so its
+    // pagehide revoke cannot kill the first tab's session.
     let second = open(serde_json::json!({"package_id": "com.kosmos.demo"})).await;
     assert!(second.ok);
-    assert_eq!(second.data["launch_id"].as_str(), Some(launch_id));
-    assert_eq!(second.data["already_running"], true);
+    assert_ne!(
+        second.data["launch_url"].as_str(),
+        first.data["launch_url"].as_str()
+    );
 
-    // An expired lease is gone — the next open mints fresh.
-    leases
-        .lock()
-        .unwrap_or_else(|p| p.into_inner())
-        .expire(launch_id);
-    let third = open(serde_json::json!({"package_id": "com.kosmos.demo"})).await;
-    assert!(third.ok);
-    assert_ne!(third.data["launch_id"].as_str(), Some(launch_id));
-    assert_eq!(third.data["already_running"], false);
-
-    // Disabled app → `disabled`; re-enabled → the stale lease was already
-    // expired above, so open mints again.
+    // Disabled app → `disabled`.
     service
         .set_enabled("com.kosmos.demo", "1.0.0", false)
         .await
