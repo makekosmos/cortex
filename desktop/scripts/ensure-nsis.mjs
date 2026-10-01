@@ -12,7 +12,6 @@ import {
   rmSync,
 } from "node:fs";
 import { get } from "node:https";
-import { tmpdir } from "node:os";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
@@ -100,7 +99,9 @@ export async function ensureNsis() {
     throw new Error(`NSIS bundle sha256 mismatch: expected ${NSIS_SHA256}, got ${hash}`);
   }
 
-  const extractDir = mkdtempSync(path.join(tmpdir(), "mundus-nsis-"));
+  // Extract next to the final location: the rename below fails with EXDEV
+  // when os.tmpdir() and the worktree sit on different volumes (CI runners).
+  const extractDir = mkdtempSync(path.join(cacheDir, "extract-"));
   const result = spawnSync("tar", ["-xzf", path.basename(archive), "-C", extractDir], {
     cwd: cacheDir,
     stdio: "inherit",
