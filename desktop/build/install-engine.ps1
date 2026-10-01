@@ -253,12 +253,31 @@ if ($installedVersion -and ($installedOrder -gt 0 -or
   # runs at every Engine startup), so call the just-verified exe rather than
   # duplicating it here. Only the exe installed by this script is invoked: it
   # is guaranteed to carry the subcommand, while an unrelated binary in the
-  # skip branch above might not. Best-effort — a failed prune is a warning,
-  # never a failed install; the next Engine start retries the same rule.
+  # skip branch above might not.
+  # `&` cannot be used here: the shipped exe is a GUI-subsystem binary, so
+  # `&` would neither wait for it nor capture its output — and a non-zero
+  # exit code from a native exe never throws, so the failure would be
+  # silent. Start-Process -Wait + redirected stdout covers both.
+  # Best-effort: any failure is a warning, never a failed install; the next
+  # Engine start retries the same rule.
+  $pruneExe = Join-Path $versionRoot 'mundus-engine.exe'
+  $pruneOut = Join-Path $env:TEMP "mundus-engine-prune-$PID.log"
   try {
-    & (Join-Path $versionRoot 'mundus-engine.exe') 'prune-versions' | Out-Null
+    $proc = Start-Process -FilePath $pruneExe -ArgumentList 'prune-versions' `
+      -Wait -PassThru -WindowStyle Hidden -RedirectStandardOutput $pruneOut
+    $raw = if (Test-Path -LiteralPath $pruneOut) { (Get-Content -Raw -LiteralPath $pruneOut).Trim() } else { '' }
+    $outcome = $raw | ConvertFrom-Json -ErrorAction SilentlyContinue
+    if ($proc.ExitCode -ne 0) {
+      $detail = if ($outcome -and $outcome.error) { $outcome.error } else { $raw }
+      Write-Warning "engine versions prune failed: $detail"
+    } elseif ($outcome -and $outcome.report -and @($outcome.report.removed).Count -gt 0) {
+      $mb = [math]::Round($outcome.report.removed_bytes / 1MB, 1)
+      Write-Output "PRUNED old engine versions: $($outcome.report.removed -join ', ') (freed $mb MB)"
+    }
   } catch {
-    Write-Warning "engine versions prune failed: $($_.Exception.Message)"
+    Write-Warning "engine versions prune failed to start: $($_.Exception.Message)"
+  } finally {
+    Remove-Item -LiteralPath $pruneOut -Force -ErrorAction SilentlyContinue
   }
 }
 

@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import {
-  copyFileSync,
   existsSync,
   mkdtempSync,
   mkdirSync,
@@ -35,7 +34,7 @@ function fixture(version = "1.2.3") {
   return { root, archive, manifestPath, manifest };
 }
 
-function runInstall({ archive, manifestPath, root }, extraArgs = []) {
+function runInstall({ archive, manifestPath, root }, extraArgs = [], env = {}) {
   const args = [
     "-NoProfile",
     "-ExecutionPolicy",
@@ -50,7 +49,55 @@ function runInstall({ archive, manifestPath, root }, extraArgs = []) {
     path.join(root, "installed"),
     ...extraArgs,
   ];
-  return spawnSync("powershell", args, { encoding: "utf8" });
+  return spawnSync("powershell", args, {
+    encoding: "utf8",
+    env: { ...process.env, ...env },
+  });
+}
+
+// A runnable stand-in for mundus-engine.exe: the fixture above ships a text
+// file, which can prove the script survives a failed-to-start prune but can
+// never exercise exit-code/output handling. This stub (compiled per test via
+// the .NET Framework csc.exe) prints the same JSON outcome line the real
+// `prune-versions` mode does and fails on request via PRUNE_STUB_FAIL.
+const PRUNE_STUB_CS = `
+class P {
+  static int Main() {
+    if (System.Environment.GetEnvironmentVariable("PRUNE_STUB_FAIL") == "1") {
+      System.Console.WriteLine("{\\"ok\\":false,\\"error\\":\\"boom\\"}");
+      return 1;
+    }
+    System.Console.WriteLine("{\\"ok\\":true,\\"report\\":{\\"current\\":\\"1.2.3\\",\\"removed\\":[\\"0.9.0\\",\\"0.9.1\\"],\\"removed_bytes\\":73400320}}");
+    return 0;
+  }
+}`;
+
+function cscExe() {
+  const base = path.join(process.env.WINDIR ?? "C:\\Windows", "Microsoft.NET", "Framework64");
+  for (const dir of readdirSync(base)) {
+    const candidate = path.join(base, dir, "csc.exe");
+    if (existsSync(candidate)) return candidate;
+  }
+  throw new Error(`csc.exe not found under ${base}`);
+}
+
+// Same as fixture(), but the staged mundus-engine.exe is the runnable stub.
+function fixtureWithStubExe(version = "1.2.3") {
+  const f = fixture(version);
+  const csPath = path.join(f.root, "prune-stub.cs");
+  writeFileSync(csPath, PRUNE_STUB_CS);
+  execFileSync(cscExe(), [
+    "/nologo",
+    "/target:exe",
+    `/out:${path.join(f.root, "release", "mundus-engine.exe")}`,
+    csPath,
+  ]);
+  const manifest = buildEngineArchive(path.join(f.root, "release"), f.archive, {
+    version,
+    sourceCommit: SOURCE_COMMIT,
+  });
+  writeFileSync(f.manifestPath, JSON.stringify(manifest));
+  return f;
 }
 
 test("fresh install extracts, verifies, and points current.json at the bundled version", () => {
@@ -132,34 +179,30 @@ test("a same-version rebuild replaces the installed Engine", () => {
 // KOS-261: after switching current.json the installer asks the just-verified
 // Engine to prune old versions/<v> dirs (`<exe> prune-versions`). The
 // selection rule itself is tested in Rust (engine_versions::prune); here we
-// only pin that the invocation happens and that its failure is a warning,
-// never a failed install.
-test("post-install prune invokes the installed exe with prune-versions", () => {
-  const f = fixture();
-  // Make the fixture exe runnable: a renamed powershell.exe executes the arg
-  // as a command and reports it as unrecognized — the arg echoes in stderr,
-  // proving the invocation reached the binary.
-  const powershellExe = execFileSync(
-    "powershell",
-    ["-NoProfile", "-Command", "(Get-Command powershell.exe).Source"],
-    { encoding: "utf8" },
-  ).trim();
-  copyFileSync(powershellExe, path.join(f.root, "release", "mundus-engine.exe"));
-  const manifest = buildEngineArchive(path.join(f.root, "release"), f.archive, {
-    version: "1.2.3",
-    sourceCommit: SOURCE_COMMIT,
-  });
-  writeFileSync(f.manifestPath, JSON.stringify(manifest));
-
-  const result = runInstall(f);
+// pin the PowerShell side: a non-zero prune exit reports the error, a
+// successful prune logs what was freed, and neither can fail the install.
+test("a failed prune reports the engine's error and never fails the install", () => {
+  const f = fixtureWithStubExe();
+  const result = runInstall(f, [], { PRUNE_STUB_FAIL: "1" });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stderr, /prune-versions/);
+  assert.match(result.stdout + result.stderr, /engine versions prune failed: boom/);
+  assert.equal(
+    JSON.parse(readFileSync(path.join(f.root, "installed", "current.json"), "utf8")).version,
+    "1.2.3",
+  );
 });
 
-test("a failing prune is a warning and never fails the install", () => {
+test("a successful prune logs the removed versions and freed bytes", () => {
+  const f = fixtureWithStubExe();
+  const result = runInstall(f);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /PRUNED old engine versions: 0\.9\.0, 0\.9\.1 \(freed 70 MB\)/);
+});
+
+test("a prune that cannot even start is still only a warning", () => {
   const f = fixture();
-  // The fixture exe is a plain text file: exec fails, the script warns and
-  // the install still completes with the pointer switched.
+  // The fixture exe is a plain text file: Start-Process throws, the catch
+  // warns, and the install still completes with the pointer switched.
   const result = runInstall(f);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout + result.stderr, /engine versions prune failed/);
