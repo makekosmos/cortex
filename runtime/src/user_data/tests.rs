@@ -7,57 +7,6 @@
         (dir, roots, id)
     }
 
-    /// Create a directory link — a junction on Windows, a symlink on unix.
-    /// Returns false when the environment cannot produce one.
-    fn link_dir(target: &Path, link: &Path) -> bool {
-        #[cfg(unix)]
-        {
-            std::os::unix::fs::symlink(target, link).is_ok()
-        }
-        #[cfg(windows)]
-        {
-            std::os::windows::fs::symlink_dir(target, link)
-                .or_else(|_| {
-                    std::process::Command::new("cmd")
-                        .args([
-                            "/C",
-                            &format!("mklink /J \"{}\" \"{}\"", link.display(), target.display()),
-                        ])
-                        .status()
-                        .map(|status| status.success())
-                        .and_then(|success| {
-                            if success {
-                                Ok(())
-                            } else {
-                                Err(io::Error::other("mklink failed"))
-                            }
-                        })
-                })
-                .is_ok()
-        }
-        #[cfg(not(any(unix, windows)))]
-        {
-            let _ = (target, link);
-            false
-        }
-    }
-
-    fn link_file(target: &Path, link: &Path) -> bool {
-        #[cfg(unix)]
-        {
-            std::os::unix::fs::symlink(target, link).is_ok()
-        }
-        #[cfg(windows)]
-        {
-            std::os::windows::fs::symlink_file(target, link).is_ok()
-        }
-        #[cfg(not(any(unix, windows)))]
-        {
-            let _ = (target, link);
-            false
-        }
-    }
-
     fn app_dir(base: &Path) -> PathBuf {
         base.join(APP_DIRECTORY).join(APP)
     }
@@ -191,9 +140,7 @@
         let base = tempfile::tempdir().unwrap();
         let outside = tempfile::tempdir().unwrap();
         let linked = base.path().join("linked");
-        if !link_dir(outside.path(), &linked) {
-            return;
-        }
+        crate::test_links::link_dir(outside.path(), &linked).expect("junction");
         let roots = UserDataRoots::new();
         assert!(roots.open(&linked).is_err());
     }

@@ -471,42 +471,7 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let target = tempfile::tempdir().unwrap();
         let backups = root.path().join(BACKUPS_SUBDIR);
-        let linked = {
-            #[cfg(unix)]
-            {
-                std::os::unix::fs::symlink(target.path(), &backups).is_ok()
-            }
-            #[cfg(windows)]
-            {
-                std::os::windows::fs::symlink_dir(target.path(), &backups)
-                    .or_else(|_| {
-                        let command = format!(
-                            "mklink /J \"{}\" \"{}\"",
-                            backups.display(),
-                            target.path().display()
-                        );
-                        std::process::Command::new("cmd")
-                            .args(["/C", &command])
-                            .status()
-                            .map(|status| status.success())
-                            .and_then(|success| {
-                                if success {
-                                    Ok(())
-                                } else {
-                                    Err(std::io::Error::other("mklink failed"))
-                                }
-                            })
-                    })
-                    .is_ok()
-            }
-            #[cfg(not(any(unix, windows)))]
-            {
-                false
-            }
-        };
-        if !linked {
-            return;
-        }
+        crate::test_links::link_dir(target.path(), &backups).expect("junction");
 
         assert!(ensure_backups_dir(root.path()).is_err());
     }

@@ -96,6 +96,8 @@ pub mod runtime_grants;
 pub mod singleton;
 pub mod store_catalog;
 pub mod sync;
+#[cfg(test)]
+mod test_links;
 pub mod updater;
 pub mod usage_tracker;
 pub mod user_data;
