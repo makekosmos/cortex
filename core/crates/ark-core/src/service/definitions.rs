@@ -318,6 +318,17 @@ pub(crate) enum Request {
         backup_id: String,
     },
 
+    /// KOS-302: один батч компакции `usage_sync_log` (правило — в
+    /// `db::compact_usage_sync_log`). Engine maintenance loop вызывает его
+    /// повторно: каждый вызов — короткая транзакция ≤ batch_limit строк,
+    /// worker остаётся отзывчивым между батчами.
+    CompactUsageSyncLog {
+        #[serde(default)]
+        older_than_days: Option<i64>,
+        #[serde(default)]
+        batch_limit: Option<i64>,
+    },
+
     // --- Sync ops (new) ---
     StartSync(StartSyncParams),
     StopSync,

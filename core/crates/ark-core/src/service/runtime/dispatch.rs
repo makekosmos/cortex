@@ -61,6 +61,10 @@ pub(crate) async fn handle_request(
         Request::SearchUsageProcesses { query, limit } => {
             usage::search_usage_processes(state, query, limit).await
         }
+        Request::CompactUsageSyncLog {
+            older_than_days,
+            batch_limit,
+        } => usage::compact_usage_sync_log(state, older_than_days, batch_limit).await,
         Request::GetUsageGamePlaytimeSummary {
             bindings,
             range_start,
