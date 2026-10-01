@@ -1,5 +1,6 @@
-//! Данные — manager.data.summary/types/list/search. Type picker left,
-//! objects right; search hits the Engine search op (DataView.vue parity).
+//! Данные — manager.data.summary/types/list/search/storage. Type picker
+//! left, objects right; search hits the Engine search op (DataView.vue
+//! parity), storage breakdown comes from `manager.data.storage`.
 use ::gpui::{prelude::*, *};
 use gpui_component::input::Input;
 use serde_json::json;
@@ -11,6 +12,7 @@ use mundus_gpui_kit::theme::*;
 pub fn load(app: &mut ManagerApp) {
     app.call("data.summary", "manager.data.summary", json!({}));
     app.call("data.types", "manager.data.types", json!({}));
+    app.call("data.storage", "manager.data.storage", json!({}));
     let type_id = app.data_type.clone();
     if let Some(t) = type_id {
         app.call(
@@ -58,16 +60,35 @@ pub fn render(
             .flex_col()
             .gap_2()
             .child(cards)
-            .child(
-                div()
-                    .text_size(px(12.))
-                    .text_color(c(MUTED_FG()))
-                    .child(format!(
-                        "Управляемое хранилище: {}",
-                        fmt_bytes(vnum(v, "managed_storage_bytes"))
-                    )),
-            )
             .into_any_element()
+    }));
+
+    col = col.child(slot_or(app, "data.storage", |v| {
+        let mut list = card();
+        list = list.child(
+            div()
+                .flex()
+                .items_baseline()
+                .gap_2()
+                .child(div().text_size(px(13.)).child("Хранилище на диске"))
+                .child(
+                    div()
+                        .text_size(px(12.))
+                        .text_color(c(MUTED_FG()))
+                        .child(format!("всего {}", fmt_bytes(vnum(v, "total_bytes")))),
+                ),
+        );
+        for cat in varr(v, "categories") {
+            list = list.child(row(vstr(cat, "label"), fmt_bytes(vnum(cat, "bytes"))));
+            for part in varr(cat, "detail") {
+                list = list.child(
+                    div()
+                        .pl_4()
+                        .child(row(vstr(part, "label"), fmt_bytes(vnum(part, "bytes")))),
+                );
+            }
+        }
+        list.into_any_element()
     }));
 
     let search = app.input("data.search", "Поиск объектов…", window, cx);
