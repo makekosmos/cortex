@@ -1,206 +1,236 @@
-// Engine host shim for browser-opened .kspkg apps (KOS-299). Injected into
-// every page served through the launch asset channel; it performs the
-// one-time bootstrap exchange, then exposes the same `window.kosmosApp`
-// page API the Electron host's preload defined. Nothing here trusts page
-// JS: every request is re-authorized server-side against the launch grant.
-//
-// Credential flow:
-//   launch_url#launch=<id>&code=<code>  (fragment — never sent to the Engine)
-//   POST /v1/apps/launch/<id>/bootstrap {code}  →  broker_token + data_api
-//   history.replaceState strips the fragment immediately.
-// The session survives in-tab reloads via sessionStorage (per-tab storage),
-// and is revoked on pagehide via sendBeacon; the lease TTL stays the backstop.
+// Host bridge for a .kspkg app served by the Engine: delivers the launch
+// credentials a browser page cannot otherwise hold, then exposes the
+// window.kosmosApp / window.kepler API the removed package host provided.
 (function () {
   "use strict";
-  var LAUNCH_PREFIX = "/v1/apps/launch/";
+
+  // Session survives in-tab reloads: the fragment is gone after the first
+  // load, so the credentials ride in this tab's sessionStorage until the
+  // tab closes — the same boundary Electron gave the old host.
   var SESSION_KEY = "mundus.launch";
+
+  function parseHash() {
+    var hash = location.hash || "";
+    if (hash.charAt(0) === "#") {
+      hash = hash.slice(1);
+    }
+    var out = {};
+    hash.split("&").forEach(function (pair) {
+      var at = pair.indexOf("=");
+      if (at > 0) {
+        out[pair.slice(0, at)] = pair.slice(at + 1);
+      }
+    });
+    return out.launch && out.code ? out : null;
+  }
 
   function persist(state) {
     try {
       sessionStorage.setItem(SESSION_KEY, JSON.stringify(state));
-    } catch (_) {
-      /* private-mode storage — the tab still works until reload */
+    } catch (e) {
+      // Storage may be disabled — the page works until it reloads.
     }
   }
 
   function restore() {
+    var raw;
     try {
-      var raw = sessionStorage.getItem(SESSION_KEY);
-      if (!raw) return null;
-      var state = JSON.parse(raw);
-      if (!state || !state.launch_id || !state.broker_token || !state.expires_at) return null;
-      if (Date.parse(state.expires_at) - Date.now() <= 1000) return null;
-      return state;
-    } catch (_) {
+      raw = sessionStorage.getItem(SESSION_KEY);
+    } catch (e) {
       return null;
     }
-  }
-
-  function arkUrl(launchId, op) {
-    return LAUNCH_PREFIX + launchId + "/" + op;
-  }
-
-  // Mirrors the deleted host's launchRenewalDelayMs: renew ~30 s before
-  // expiry, and on failure retry sooner but never past the deadline.
-  function renewDelayMs(expiresAt, retry) {
-    var until = Date.parse(expiresAt) - Date.now();
-    if (!isFinite(until) || until <= 1000) return null;
-    return retry ? Math.max(1000, Math.min(30000, until - 1000)) : Math.max(1000, until - 30000);
-  }
-
-  function install(state) {
-    var ready = Promise.resolve(state);
-
-    var api = {
-      identity: { id: state.id, version: state.version },
-      ark: {
-        request: function (operation, params) {
-          return ready.then(function (session) {
-            return fetch(session.data_api, {
-              method: "POST",
-              headers: {
-                "content-type": "application/json",
-                "x-kosmos-launch-token": session.broker_token,
-              },
-              body: JSON.stringify({ operation: operation, params: params || {} }),
-            }).then(function (r) {
-              return r.json();
-            });
-          });
-        },
-        subscribe: function (handler) {
-          var controller = new AbortController();
-          ready.then(function (session) {
-            return fetch(arkUrl(session.launch_id, "events"), {
-              headers: { "x-kosmos-launch-token": session.broker_token },
-              signal: controller.signal,
-            }).then(function (resp) {
-              if (!resp.ok || !resp.body) return;
-              var reader = resp.body.getReader();
-              var decoder = new TextDecoder();
-              var buf = "";
-              (function pump() {
-                reader
-                  .read()
-                  .then(function (r) {
-                    if (r.done) return;
-                    buf += decoder.decode(r.value, { stream: true });
-                    var cut;
-                    while ((cut = buf.indexOf("\n\n")) >= 0) {
-                      var block = buf.slice(0, cut);
-                      buf = buf.slice(cut + 2);
-                      var data = "";
-                      block.split("\n").forEach(function (line) {
-                        if (line.indexOf("data:") === 0) data += line.slice(5).trimStart();
-                      });
-                      if (data) {
-                        try {
-                          handler(JSON.parse(data));
-                        } catch (_) {
-                          /* a bad handler must not kill the stream */
-                        }
-                      }
-                    }
-                    pump();
-                  })
-                  .catch(function () {
-                    /* aborted or connection dropped — the lease may be gone */
-                  });
-              })();
-            });
-          });
-          return function () {
-            controller.abort();
-          };
-        },
-      },
-    };
-
-    var timer = null;
-    function scheduleRenew(retry) {
-      if (timer) clearTimeout(timer);
-      var delay = renewDelayMs(state.expires_at, retry);
-      if (delay === null) return; // lease is dead — the next request 403s
-      timer = setTimeout(function () {
-        fetch(arkUrl(state.launch_id, "renew"), {
-          method: "POST",
-          headers: { "x-kosmos-launch-token": state.broker_token },
-        })
-          .then(function (r) {
-            return r.json();
-          })
-          .then(function (resp) {
-            if (resp && resp.ok && resp.data && resp.data.expires_at) {
-              state.expires_at = resp.data.expires_at;
-              persist(state);
-              scheduleRenew(false);
-            } else {
-              scheduleRenew(true);
-            }
-          })
-          .catch(function () {
-            scheduleRenew(true);
-          });
-      }, delay);
+    if (!raw) {
+      return null;
     }
-    scheduleRenew(false);
-
-    window.addEventListener("pagehide", function () {
-      if (timer) clearTimeout(timer);
-      try {
-        navigator.sendBeacon(
-          arkUrl(state.launch_id, "revoke"),
-          JSON.stringify({ token: state.broker_token }),
-        );
-      } catch (_) {
-        /* best effort — the TTL expiry is the backstop */
-      }
+    var state = JSON.parse(raw);
+    if (!state || !state.launch_id || !state.broker_token) {
+      return null;
+    }
+    if (new Date(state.expires_at).getTime() <= Date.now()) {
       try {
         sessionStorage.removeItem(SESSION_KEY);
-      } catch (_) {}
-    });
-
-    window.kosmosApp = api;
-    // The deleted preload exposed the same object on both names; packages
-    // built against the legacy `kepler` global keep working.
-    window.kepler = api;
+      } catch (e) {}
+      return null;
+    }
+    return state;
   }
 
-  var match = /[#&]launch=([0-9a-fA-F-]+)&code=([0-9a-f]+)/.exec(location.hash);
-  if (match) {
-    var launchId = match[1];
-    var code = match[2];
-    // The fragment is spent state: strip it before it can leak into logs,
-    // clipboard shares or a Referer on an embedded link.
-    history.replaceState(null, "", location.pathname + location.search);
-    fetch(arkUrl(launchId, "bootstrap"), {
+  // POST /v1/apps/launch/<id>/bootstrap — the one-time code rides in the
+  // URL fragment (never sent over HTTP) and burns on first exchange.
+  function bootstrap(launchId, code) {
+    return fetch("/v1/apps/launch/" + launchId + "/bootstrap", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ code: code }),
     })
-      .then(function (r) {
-        return r.json();
+      .then(function (res) {
+        return res.json();
       })
-      .then(function (resp) {
-        if (resp && resp.ok && resp.data) {
-          var state = {
-            launch_id: resp.data.launch_id,
-            id: resp.data.id,
-            version: resp.data.version,
-            broker_token: resp.data.broker_token,
-            data_api: resp.data.data_api,
-            expires_at: resp.data.expires_at,
-          };
-          persist(state);
-          install(state);
+      .then(function (body) {
+        if (!body || !body.ok || !body.data || !body.data.broker_token) {
+          return null;
         }
-      })
-      .catch(function () {
-        /* bootstrap failed — the app sees no bridge and reports its own error */
+        var state = {
+          launch_id: body.data.launch_id,
+          id: body.data.id,
+          version: body.data.version,
+          broker_token: body.data.broker_token,
+          data_api: body.data.data_api,
+          expires_at: body.data.expires_at,
+        };
+        persist(state);
+        return state;
       });
-    return;
   }
 
-  var session = restore();
-  if (session) install(session);
+  function renew(session) {
+    return fetch("/v1/apps/launch/" + session.launch_id + "/renew", {
+      method: "POST",
+      headers: { "X-Kosmos-Launch-Token": session.broker_token },
+    })
+      .then(function (res) {
+        return res.ok ? res.json() : null;
+      })
+      .then(function (body) {
+        if (body && body.ok && body.data && body.data.expires_at) {
+          session.expires_at = body.data.expires_at;
+          persist(session);
+        }
+        return session.expires_at;
+      });
+  }
+
+  // Same cadence the deleted host used: renew ~30 s before expiry.
+  function scheduleRenew(session) {
+    renew(session)
+      .catch(function () {
+        return session.expires_at;
+      })
+      .then(function (expiresAt) {
+        var ms = Math.max(new Date(expiresAt).getTime() - Date.now() - 30 * 1000, 5 * 1000);
+        setTimeout(function () {
+          scheduleRenew(session);
+        }, ms);
+      });
+  }
+
+  function startEventStream(session, handler, signal) {
+    fetch("/v1/apps/launch/" + session.launch_id + "/events", {
+      headers: { "X-Kosmos-Launch-Token": session.broker_token },
+      signal: signal,
+    })
+      .then(function (res) {
+        if (!res.ok || !res.body) {
+          return;
+        }
+        var reader = res.body.getReader();
+        var decoder = new TextDecoder();
+        var buffer = "";
+        function pump() {
+          return reader.read().then(function (step) {
+            if (step.done) {
+              return;
+            }
+            buffer += decoder.decode(step.value, { stream: true });
+            var at;
+            while ((at = buffer.indexOf("\n\n")) >= 0) {
+              var chunk = buffer.slice(0, at);
+              buffer = buffer.slice(at + 2);
+              chunk.split("\n").forEach(function (line) {
+                if (line.indexOf("data:") === 0) {
+                  handler(JSON.parse(line.slice(5)));
+                }
+              });
+            }
+            return pump();
+          });
+        }
+        return pump();
+      })
+      .catch(function () {
+        // Stream end or abort — unsubscribe needs no callback.
+      });
+  }
+
+  // Install the API synchronously, the moment the shim parses — app
+  // scripts that read window.kosmosApp at startup must find it. ark.*
+  // waits on `ready`, which resolves once the credentials exist.
+  function install(identity, ready) {
+    var session = null;
+    var wired = ready.then(function (next) {
+      session = next;
+      if (session) {
+        // An immediate renew doubles as the release cancel: a pagehide from
+        // the previous load marked this lease released, and only a renew
+        // inside the grace window keeps it alive.
+        scheduleRenew(session);
+        addEventListener("pagehide", function (event) {
+          // `persisted` = back/forward cache, the page keeps its session —
+          // releasing there would kill a tab that is still usable.
+          if (event.persisted) {
+            return;
+          }
+          navigator.sendBeacon(
+            "/v1/apps/launch/" + session.launch_id + "/release",
+            JSON.stringify({ token: session.broker_token }),
+          );
+        });
+      }
+      return session;
+    });
+
+    function arkRequest(operation, params) {
+      return wired.then(function () {
+        if (!session) {
+          return { ok: false, error: "launch session unavailable" };
+        }
+        return fetch(session.data_api, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Kosmos-Launch-Token": session.broker_token,
+          },
+          body: JSON.stringify({ operation: operation, params: params || {} }),
+        })
+          .then(function (res) {
+            return res.json();
+          })
+          .catch(function () {
+            return { ok: false, error: "request failed" };
+          });
+      });
+    }
+
+    function arkSubscribe(handler) {
+      var done = new AbortController();
+      wired.then(function () {
+        if (session && !done.signal.aborted) {
+          startEventStream(session, handler, done.signal);
+        }
+      });
+      return function () {
+        done.abort();
+      };
+    }
+
+    window.kosmosApp = {
+      identity: identity,
+      ark: { request: arkRequest, subscribe: arkSubscribe },
+    };
+    window.kepler = window.kosmosApp;
+  }
+
+  var hash = parseHash();
+  if (hash) {
+    // Strip the fragment before any app code or history entry can copy it.
+    history.replaceState(null, "", location.pathname + location.search);
+    install({ id: hash.pkg || null, version: hash.v || null }, bootstrap(hash.launch, hash.code));
+  } else {
+    var stored = restore();
+    if (stored) {
+      install({ id: stored.id, version: stored.version }, Promise.resolve(stored));
+    }
+    // No fragment, no stored session: this page was never launched through
+    // packages.open — install nothing rather than a dead API.
+  }
 })();
