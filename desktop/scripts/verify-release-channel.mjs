@@ -27,9 +27,9 @@
 //   3. release-versions.json[platform]
 //   4. package.json.version (last fallback)
 //
-// Repo resolution (reads from build.<platform>.publish[0]):
-//   win → build.win.publish[0]  → makekosmos/desktop
-//   mac → build.mac.publish[0]  → makekosmos/desktop-mac
+// Repo resolution (release-repos.mjs; overridable with --repo for bridge runs):
+//   win → makekosmos/cortex
+//   mac → makekosmos/desktop-mac
 //
 // Channel file:
 //   win → latest.yml
@@ -52,6 +52,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { env } from "./brand.mjs";
+import { RELEASE_REPOS } from "./release-repos.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -320,10 +321,12 @@ async function fetchTextWithRetry(url, maxRetries, delayMs) {
  * Supports:
  *   --platform <win|mac>
  *   --version <x.y.z>
+ *   --repo <owner/name>  (default: the platform's release repo; bridge
+ *                         publishes pass the second repo explicitly)
  *   <x.y.z>  (positional, backward-compat)
  */
 function parseArgs(argv) {
-  const result = { platform: null, version: null, positional: null };
+  const result = { platform: null, version: null, repo: null, positional: null };
   const args = argv.slice(2);
 
   for (let i = 0; i < args.length; i++) {
@@ -331,6 +334,8 @@ function parseArgs(argv) {
       result.platform = args[++i];
     } else if (args[i] === "--version") {
       result.version = args[++i];
+    } else if (args[i] === "--repo") {
+      result.repo = args[++i];
     } else if (!args[i].startsWith("--")) {
       // Positional arg (backward-compat: bare version string)
       result.positional = args[i];
@@ -381,8 +386,9 @@ async function main() {
     die("Cannot determine version — pass --version <v> or set version in release-versions.json");
   }
 
-  // The release repositories are fixed for this product line.
-  const ownerRepo = platform === "win" ? "makekosmos/desktop" : "makekosmos/desktop-mac";
+  // The release repositories are fixed for this product line; --repo exists
+  // for the one-time bridge publish that lands on the legacy feed too.
+  const ownerRepo = parsed.repo ?? RELEASE_REPOS[platform];
   const tag = `v${version}`;
 
   log(`Platform:     ${platform}`);

@@ -1,8 +1,10 @@
 use super::manifest::{parse_latest_yml, LatestManifest};
 use super::UpdaterError;
 
+// KOS-304: releases moved to makekosmos/cortex; makekosmos/desktop only
+// carries the one-time 0.10.1 bridge release for pre-0.10.1 clients.
 pub(crate) const DEFAULT_FEED_BASE: &str =
-    "https://github.com/makekosmos/desktop/releases/latest/download";
+    "https://github.com/makekosmos/cortex/releases/latest/download";
 const CHANNEL_FILE: &str = "latest.yml";
 
 pub(crate) fn build_client() -> Result<reqwest::Client, UpdaterError> {
@@ -83,6 +85,14 @@ mod tests {
             .await
             .unwrap_err();
         assert!(matches!(error, UpdaterError::Network(_)));
+    }
+
+    #[test]
+    fn default_feed_reads_cortex_releases() {
+        assert_eq!(
+            DEFAULT_FEED_BASE,
+            "https://github.com/makekosmos/cortex/releases/latest/download"
+        );
     }
 
     #[test]

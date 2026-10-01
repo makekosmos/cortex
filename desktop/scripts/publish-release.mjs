@@ -7,7 +7,8 @@ import { fileURLToPath } from "node:url";
 import { documentHash, requireArgs } from "./release-utils.mjs";
 import { verifyLocalReleaseChannel } from "./release-channel-local.mjs";
 import { RELEASE_BOM_FILE } from "./release-bom.mjs";
-import { runReleasePreflight } from "./release-preflight.mjs";
+import { assertVersionIsPublishable, runReleasePreflight } from "./release-preflight.mjs";
+import { RELEASE_REPOS } from "./release-repos.mjs";
 import {
   assertExactArtifactSet,
   assertReceiptMatchesBom,
@@ -36,6 +37,21 @@ export function duplicateRelease(repository, version, run = spawnSync) {
     die(`duplicate-release check failed closed: ${result.stderr?.trim() || "unknown gh error"}`);
 }
 
+// Every publish goes to the primary repo. `--also-bridge-repo owner/name`
+// additionally publishes the identical release (same tag, assets, latest.yml)
+// to a second repo — the one-time KOS-304 bridge so clients still polling
+// makekosmos/desktop's `latest` endpoint update onto the cortex feed. The
+// nightly workflow never passes it.
+export function publishTargets(args) {
+  const bridge = args["also-bridge-repo"];
+  if (bridge === undefined) return [RELEASE_REPOS.win];
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(bridge))
+    die(`--also-bridge-repo must be an owner/repo, got ${JSON.stringify(bridge)}`);
+  if (bridge === RELEASE_REPOS.win)
+    die("--also-bridge-repo must differ from the primary release repo");
+  return [RELEASE_REPOS.win, bridge];
+}
+
 export async function main() {
   const dryRun = process.argv.includes("--dry-run");
   const args = requireArgs(
@@ -44,6 +60,7 @@ export async function main() {
   );
   const platform = args.platform;
   if (platform !== "win") die(`Unknown platform "${platform}"`);
+  const repositories = publishTargets(args);
   const receiptPath = path.resolve(args.receipt);
   const receipt = await readReceipt(receiptPath);
   const preflight = await runReleasePreflight({ platform });
@@ -54,6 +71,10 @@ export async function main() {
     currentCommit: commit,
     bom,
   });
+  // A bridge release must also be newer than what the bridge repo published —
+  // the clients polling it refuse to downgrade to an older-or-equal version.
+  for (const repository of repositories.slice(1))
+    await assertVersionIsPublishable({ platform, version, repository });
 
   const outputDir = path.dirname(receiptPath);
   const provenancePath = path.join(outputDir, "release-provenance.json");
@@ -76,44 +97,51 @@ export async function main() {
     "release-provenance.json",
   ]);
   const artifacts = await verifyReceiptArtifacts(receipt, outputDir);
-  const repository = "makekosmos/desktop";
   const files = artifacts.map(({ file }) => file).concat(receiptPath);
   console.log(`[publish-release] verified ${artifacts.length} immutable artifacts`);
-  console.log(`[publish-release] plan: gh release create v${version} --repo ${repository}`);
+  for (const repository of repositories)
+    console.log(`[publish-release] plan: gh release create v${version} --repo ${repository}`);
   if (dryRun) return;
 
   // gh brings its own auth (keyring or GH_TOKEN); the duplicate-release probe
-  // fails closed on any auth error before anything is created.
-  duplicateRelease(repository, version);
-  const result = spawnSync(
-    "gh",
-    [
-      "release",
-      "create",
-      `v${version}`,
-      ...files,
-      "--repo",
-      repository,
-      "--title",
-      `Mundus ${version}`,
-      "--notes",
-      "Immutable release assembled from the attached verification receipt.",
-    ],
-    { cwd: ROOT, stdio: "inherit", windowsHide: true, env: process.env },
-  );
-  if (result.status !== 0) die(`failed to publish verified release to ${repository}`);
-  const verify = spawnSync(
-    process.execPath,
-    [
-      path.join(ROOT, "scripts", "verify-release-channel.mjs"),
-      "--platform",
-      platform,
-      "--version",
-      version,
-    ],
-    { cwd: ROOT, stdio: "inherit", windowsHide: true },
-  );
-  if (verify.status !== 0) die(`verify-release-channel failed for ${platform} v${version}`);
+  // fails closed on any auth error before anything is created. All probes run
+  // first so an already-existing bridge release cannot leave the primary repo
+  // published on its own.
+  for (const repository of repositories) duplicateRelease(repository, version);
+  for (const repository of repositories) {
+    const result = spawnSync(
+      "gh",
+      [
+        "release",
+        "create",
+        `v${version}`,
+        ...files,
+        "--repo",
+        repository,
+        "--title",
+        `Mundus ${version}`,
+        "--notes",
+        "Immutable release assembled from the attached verification receipt.",
+      ],
+      { cwd: ROOT, stdio: "inherit", windowsHide: true, env: process.env },
+    );
+    if (result.status !== 0) die(`failed to publish verified release to ${repository}`);
+    const verify = spawnSync(
+      process.execPath,
+      [
+        path.join(ROOT, "scripts", "verify-release-channel.mjs"),
+        "--platform",
+        platform,
+        "--version",
+        version,
+        "--repo",
+        repository,
+      ],
+      { cwd: ROOT, stdio: "inherit", windowsHide: true },
+    );
+    if (verify.status !== 0)
+      die(`verify-release-channel failed for ${repository} ${platform} v${version}`);
+  }
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

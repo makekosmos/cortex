@@ -43,7 +43,7 @@ test("assertBuildingFromMain rejects any branch other than main (KOS-233)", () =
 });
 
 test("assertVersionIsPublishable requires a strictly newer version than the latest tag (KOS-233)", async () => {
-  const fetchImpl = async () => ({ ok: true, json: async () => ({ tag_name: "v0.9.38" }) });
+  const fetchImpl = async () => ({ ok: true, json: async () => [{ tag_name: "v0.9.38" }] });
   await assert.rejects(
     () => assertVersionIsPublishable({ platform: "win", version: "0.9.38", fetchImpl }),
     /must be greater than the latest published 0\.9\.38/,
@@ -55,6 +55,39 @@ test("assertVersionIsPublishable requires a strictly newer version than the late
   await assert.doesNotReject(() =>
     assertVersionIsPublishable({ platform: "win", version: "0.9.39", fetchImpl }),
   );
+});
+
+// KOS-304: a release repo that exists but has never published — cortex before
+// the bridge release — has no baseline to beat, so any version is publishable.
+// Only the list endpoint can tell this apart from a missing repo (which stays
+// a hard error).
+test("assertVersionIsPublishable passes when the repo has no releases yet", async () => {
+  const fetchImpl = async (url) => {
+    assert.equal(url, "https://api.github.com/repos/makekosmos/cortex/releases?per_page=100");
+    return { ok: true, json: async () => [] };
+  };
+  await assert.doesNotReject(() =>
+    assertVersionIsPublishable({ platform: "win", version: "0.10.1", fetchImpl }),
+  );
+});
+
+test("assertVersionIsPublishable can check a bridge repository override", async () => {
+  const seen = [];
+  const fetchImpl = async (url) => {
+    seen.push(url);
+    return { ok: true, json: async () => [{ tag_name: "v0.10.0" }] };
+  };
+  await assert.rejects(
+    () =>
+      assertVersionIsPublishable({
+        platform: "win",
+        version: "0.10.0",
+        repository: "makekosmos/desktop",
+        fetchImpl,
+      }),
+    /must be greater than the latest published 0\.10\.0 on makekosmos\/desktop/,
+  );
+  assert.match(seen[0], /repos\/makekosmos\/desktop\//);
 });
 
 test("assertVersionIsPublishable surfaces a clear error when the check is unreachable (KOS-233)", async () => {

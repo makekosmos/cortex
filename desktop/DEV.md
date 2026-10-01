@@ -38,7 +38,8 @@ requires a clean tracked/source worktree, a `main`-HEAD build, a release
 version strictly greater than the latest published tag for that platform,
 and — for `win` — that `.tmp/engine.next/engine-manifest.json` (built by
 `build:backend` from this same tree) reports the same version and commit as
-the Desktop release.
+the Desktop release. Release repos per platform live in
+`scripts/release-repos.mjs` (win → `makekosmos/cortex`, KOS-304).
 
 The `main`-HEAD and latest-published-tag checks need network access and a
 `main` checkout, so they are the only checks skipped with `--local` (or

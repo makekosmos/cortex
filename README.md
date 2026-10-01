@@ -77,11 +77,19 @@ node desktop/scripts/build-desktop.mjs --platform win
 # Run preflight and print the plan without building:
 node desktop/scripts/build-desktop.mjs --platform win --dry-run
 
-# Publish only the exact verified receipt (rehashes artifacts and rejects stale/mutated inputs):
+# Publish only the exact verified receipt (rehashes artifacts and rejects stale/mutated inputs)
+# to the makekosmos/cortex releases feed the Engine updater polls:
 node desktop/scripts/publish-release.mjs --platform win --receipt desktop/release/release-receipt.v2.json
 
 # Validate publish locally without GH mutation:
 node desktop/scripts/publish-release.mjs --platform win --receipt desktop/release/release-receipt.v2.json --dry-run
+
+# One-time migration bridge (KOS-304) — run exactly once, for the 0.10.1
+# release: publishes the identical release (same tag, assets and latest.yml)
+# to makekosmos/desktop as well, so 0.10.0 and older clients still polling
+# that repo's `latest` endpoint update onto the cortex feed. The nightly
+# workflow never passes this flag:
+node desktop/scripts/publish-release.mjs --platform win --receipt desktop/release/release-receipt.v2.json --also-bridge-repo makekosmos/desktop
 ```
 
 The release BOM (`desktop/scripts/release-bom.mjs`) is never written by hand:
