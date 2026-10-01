@@ -1,7 +1,13 @@
 //! Маркетплейс — store.catalog/refresh/external_url + packages.list/install/
 //! set_enabled/uninstall/trust_status/disclosure (StoreView+PackagesView parity).
+//!
+//! KOS-283/285: installed packages split by the manifest `kind` the Engine
+//! already serves (`PackageSummary.kind`): `app` rows join the «Приложения»
+//! card however unfinished they are, `source`/`bridge` stay in «Пакеты».
+//! Every row shows the product icon (manifest `icon` → `icon_path`,
+//! catalog `icon_url`) and the display name; the package id is the caption.
 use ::gpui::{prelude::*, *};
-use serde_json::json;
+use serde_json::{json, Value};
 
 use crate::app::ManagerApp;
 use crate::views::StoreTab;
@@ -103,16 +109,113 @@ pub fn render(
     match app.store_tab {
         StoreTab::Catalog => {
             col = col.child(render_catalog(app, cx));
-            col = col.child(super::store_apps::render_native_apps(app, cx, false));
+            col = col.child(super::store_apps::render_native_apps(
+                app,
+                cx,
+                false,
+                vec![],
+            ));
         }
         // Native apps belong on both tabs — Installed shows just the live
-        // ones, alongside the .kspkg package list.
+        // ones, alongside the app-kind .kspkg packages in the same card.
         StoreTab::Installed => {
-            col = col.child(super::store_apps::render_native_apps(app, cx, true));
+            let package_apps = app_package_rows(app, cx);
+            col = col.child(super::store_apps::render_native_apps(
+                app,
+                cx,
+                true,
+                package_apps,
+            ));
             col = col.child(render_installed(app, cx));
         }
     }
     col.into_any_element()
+}
+
+/// An installed package is an app exactly when its verified manifest says so
+/// — `kind` on `packages.list` is serialized `PackageKind`, not a guess.
+fn is_app_package(p: &Value) -> bool {
+    vstr(p, "kind") == "app"
+}
+
+/// Dev-installed records have no signed catalog entry (`catalog_sequence`
+/// 0) — they are the unfinished apps the «В разработке» badge is for.
+pub(crate) fn is_development(p: &Value) -> bool {
+    // Missing field ≠ 0: the field always serializes, so its absence means
+    // the row is malformed — not a dev install.
+    p.get("catalog_sequence").and_then(Value::as_u64) == Some(0)
+}
+
+/// Display name first, package id second — the name the user knows the app
+/// by, never the `com.kosmos.*` identifier as the headline.
+fn entry_title(p: &Value) -> String {
+    vopt(p, "name")
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| vstr(p, "id"))
+}
+
+/// App-kind rows from `packages.list` for the «Приложения» card. An app
+/// stays an app however unfinished it is — the readiness badge says
+/// «В разработке» instead of moving the row to «Пакеты».
+fn app_package_rows(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> Vec<Div> {
+    varr(&app.data("store.installed"), "packages")
+        .iter()
+        .filter(|p| is_app_package(p))
+        .map(|p| package_row(p, cx))
+        .collect()
+}
+
+/// One installed package row: icon, display name, `id · v<version>`
+/// caption, status badge, enable toggle and Удалить.
+fn package_row(p: &Value, cx: &mut Context<ManagerApp>) -> Div {
+    let id = vstr(p, "id");
+    let name = entry_title(p);
+    let enabled = vbool(p, "enabled");
+    let status = if enabled {
+        "Включён"
+    } else {
+        "Отключён"
+    };
+    let rid = id.clone();
+    let uid = id.clone();
+    let mut r = entry_row(
+        icon_file(vopt(p, "icon_path")),
+        name.clone(),
+        format!("{id} · v{}", vstr(p, "version")),
+    );
+    if is_development(p) {
+        r = r.child(badge("В разработке", WARN()));
+    }
+    r = r
+        .child(badge(status, if enabled { SUCCESS() } else { MUTED_FG() }))
+        .child(
+            toggle(
+                // leaks a key per package id — ids are stable and few
+                Box::leak(format!("en-{rid}").into_boxed_str()),
+                enabled,
+                cx,
+                move |this, checked, _| {
+                    this.action(
+                        "packages.set_enabled",
+                        json!({"package_id": rid, "enabled": checked}),
+                    );
+                },
+            )
+            .accessibility_label(name.clone()),
+        )
+        .child(btn_id(&format!("un-{id}"), "Удалить", {
+            let pid = uid;
+            cx.listener(move |this, _, _, cx| {
+                this.ask_confirm(
+                    "Удалить пакет",
+                    format!("Пакет «{name}» будет удалён из Engine."),
+                    "packages.uninstall",
+                    json!({"package_id": pid}),
+                    cx,
+                );
+            })
+        }));
+    r
 }
 
 fn render_catalog(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {
@@ -131,14 +234,19 @@ fn render_catalog(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElem
         }
         for item in listings {
             let id = vstr(item, "id");
-            let name = vopt(item, "name").unwrap_or_else(|| id.clone());
+            let name = entry_title(item);
             let desc = vopt(item, "description").unwrap_or_default();
             let ver = vstr(item, "version");
             let kind = vstr(item, "kind");
-            let mut r = row(
-                name.clone(),
-                if desc.is_empty() { kind.clone() } else { desc },
-            );
+            // The id is the secondary caption; the description or the
+            // listing kind follows it when the catalog provides one.
+            let caption = match (desc.is_empty(), kind.is_empty()) {
+                (true, true) => id.clone(),
+                (true, false) => format!("{id} · {kind}"),
+                (false, true) => format!("{id} · {desc}"),
+                (false, false) => format!("{id} · {desc}"),
+            };
+            let mut r = entry_row(icon_url(vopt(item, "icon_url")), name.clone(), caption);
             r = r.child(badge(format!("v{ver}"), MUTED_FG()));
             let install_id = id.clone();
             let detail_item = item.clone();
@@ -177,7 +285,12 @@ fn render_catalog(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElem
 
 fn render_installed(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {
     slot_or(app, "store.installed", |v| {
-        let items = varr(v, "packages");
+        // App-kind entries live in the «Приложения» card — this card lists
+        // only integrations and other non-app packages.
+        let items: Vec<&Value> = varr(v, "packages")
+            .iter()
+            .filter(|p| !is_app_package(p))
+            .collect();
         let mut el = card();
         el = el.child(
             div()
@@ -189,49 +302,59 @@ fn render_installed(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> AnyEl
             el = el.child(empty("Нет установленных пакетов"));
         }
         for p in items {
-            let id = vstr(p, "id");
-            let name = vopt(p, "name").unwrap_or_else(|| id.clone());
-            let ver = vstr(p, "version");
-            let enabled = vbool(p, "enabled");
-            let status = if enabled {
-                "Включён"
-            } else {
-                "Отключён"
-            };
-            let rid = id.clone();
-            let uid = id.clone();
-            el = el.child(
-                row(format!("{name} · v{ver}"), id.clone())
-                    .child(badge(status, if enabled { SUCCESS() } else { MUTED_FG() }))
-                    .child(
-                        toggle(
-                            // leaks a key per package id — ids are stable and few
-                            Box::leak(format!("en-{rid}").into_boxed_str()),
-                            enabled,
-                            cx,
-                            move |this, checked, _| {
-                                this.action(
-                                    "packages.set_enabled",
-                                    json!({"package_id": rid, "enabled": checked}),
-                                );
-                            },
-                        )
-                        .accessibility_label(format!("{name} · v{ver}")),
-                    )
-                    .child(btn_id(&format!("un-{id}"), "Удалить", {
-                        let pid = uid;
-                        cx.listener(move |this, _, _, cx| {
-                            this.ask_confirm(
-                                "Удалить пакет",
-                                format!("Пакет «{name}» будет удалён из Engine."),
-                                "packages.uninstall",
-                                json!({"package_id": pid}),
-                                cx,
-                            );
-                        })
-                    })),
-            );
+            el = el.child(package_row(p, cx));
         }
         el.into_any_element()
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{entry_title, is_app_package, is_development};
+    use serde_json::json;
+
+    #[test]
+    fn app_kind_lands_in_apps_whatever_its_readiness() {
+        // KOS-283: an unfinished (dev-installed, catalog_sequence 0) app is
+        // still an app — it must not fall back to «Установленные пакеты».
+        for p in [
+            json!({"id": "com.kosmos.arcadia", "kind": "app", "catalog_sequence": 15}),
+            json!({"id": "com.kosmos.arcadia", "kind": "app", "catalog_sequence": 0}),
+            json!({"id": "com.kosmos.focus", "kind": "app"}),
+        ] {
+            assert!(is_app_package(&p), "{p}");
+        }
+        for p in [
+            json!({"id": "com.kosmos.codewars", "kind": "source"}),
+            json!({"id": "com.kosmos.bridge", "kind": "bridge"}),
+            json!({"id": "com.kosmos.unknown", "kind": "widget"}),
+            json!({"id": "com.kosmos.broken"}),
+        ] {
+            assert!(!is_app_package(&p), "{p}");
+        }
+    }
+
+    #[test]
+    fn development_marker_is_the_absent_catalog_entry() {
+        // install_development lands with catalog_sequence 0 — that, not the
+        // id or version, is what marks a row «В разработке».
+        assert!(is_development(&json!({"catalog_sequence": 0})));
+        assert!(!is_development(&json!({"catalog_sequence": 15})));
+        assert!(!is_development(&json!({})));
+    }
+
+    #[test]
+    fn display_name_wins_over_the_package_id() {
+        // KOS-285: «Ordo» is the headline; «com.kosmos.focus» is the caption.
+        let p = json!({"id": "com.kosmos.focus", "name": "Ordo"});
+        assert_eq!(entry_title(&p), "Ordo");
+        assert_eq!(
+            entry_title(&json!({"id": "com.kosmos.focus"})),
+            "com.kosmos.focus"
+        );
+        assert_eq!(
+            entry_title(&json!({"id": "com.kosmos.focus", "name": ""})),
+            "com.kosmos.focus"
+        );
+    }
 }
