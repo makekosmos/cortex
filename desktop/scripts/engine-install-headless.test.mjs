@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -118,6 +127,47 @@ test("a same-version rebuild replaces the installed Engine", () => {
     JSON.parse(readFileSync(path.join(f.root, "installed", "current.json"), "utf8")).version,
     "1.2.3",
   );
+});
+
+// KOS-261: after switching current.json the installer asks the just-verified
+// Engine to prune old versions/<v> dirs (`<exe> prune-versions`). The
+// selection rule itself is tested in Rust (engine_versions::prune); here we
+// only pin that the invocation happens and that its failure is a warning,
+// never a failed install.
+test("post-install prune invokes the installed exe with prune-versions", () => {
+  const f = fixture();
+  // Make the fixture exe runnable: a renamed powershell.exe executes the arg
+  // as a command and reports it as unrecognized — the arg echoes in stderr,
+  // proving the invocation reached the binary.
+  const powershellExe = execFileSync(
+    "powershell",
+    ["-NoProfile", "-Command", "(Get-Command powershell.exe).Source"],
+    { encoding: "utf8" },
+  ).trim();
+  copyFileSync(powershellExe, path.join(f.root, "release", "mundus-engine.exe"));
+  const manifest = buildEngineArchive(path.join(f.root, "release"), f.archive, {
+    version: "1.2.3",
+    sourceCommit: SOURCE_COMMIT,
+  });
+  writeFileSync(f.manifestPath, JSON.stringify(manifest));
+
+  const result = runInstall(f);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stderr, /prune-versions/);
+});
+
+test("a failing prune is a warning and never fails the install", () => {
+  const f = fixture();
+  // The fixture exe is a plain text file: exec fails, the script warns and
+  // the install still completes with the pointer switched.
+  const result = runInstall(f);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout + result.stderr, /engine versions prune failed/);
+  assert.equal(
+    JSON.parse(readFileSync(path.join(f.root, "installed", "current.json"), "utf8")).version,
+    "1.2.3",
+  );
+  assert.deepEqual(readdirSync(path.join(f.root, "installed", "versions")), ["1.2.3"]);
 });
 
 test("untrusted engine archive blocks installation", () => {

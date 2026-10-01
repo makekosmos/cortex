@@ -247,6 +247,19 @@ if ($installedVersion -and ($installedOrder -gt 0 -or
     }
   }
   Update-EngineAutostart $versionRoot
+
+  # KOS-261: prune superseded versions/<v> dirs — keep current + one previous
+  # for rollback. The selection rule lives in the Engine itself (the same code
+  # runs at every Engine startup), so call the just-verified exe rather than
+  # duplicating it here. Only the exe installed by this script is invoked: it
+  # is guaranteed to carry the subcommand, while an unrelated binary in the
+  # skip branch above might not. Best-effort — a failed prune is a warning,
+  # never a failed install; the next Engine start retries the same rule.
+  try {
+    & (Join-Path $versionRoot 'mundus-engine.exe') 'prune-versions' | Out-Null
+  } catch {
+    Write-Warning "engine versions prune failed: $($_.Exception.Message)"
+  }
 }
 
 Invoke-EngineMigration
