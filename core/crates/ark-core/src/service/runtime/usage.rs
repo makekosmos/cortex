@@ -132,7 +132,6 @@ pub(super) async fn get_usage_analytics(
     range_days: Option<i64>,
     top_apps_limit: Option<i64>,
     recent_sessions_limit: Option<i64>,
-    windows_dir: Option<String>,
 ) -> Result<Value, String> {
     with_conn(state, |conn| {
         let snapshot = db::load_usage_analytics(
@@ -140,7 +139,10 @@ pub(super) async fn get_usage_analytics(
             range_days.unwrap_or(21),
             top_apps_limit.unwrap_or(8),
             recent_sessions_limit.unwrap_or(24),
-            windows_dir.as_deref(),
+            // Resolved by the Engine via GetSystemWindowsDirectoryW at service
+            // construction — a request param would let clients lie about what
+            // counts as a system app (KOS-287).
+            state.windows_dir.as_deref(),
         )?;
         serde_json::to_value(snapshot).map_err(|e| e.to_string())
     })

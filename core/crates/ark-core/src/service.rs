@@ -83,6 +83,15 @@ use self::sync::{
 /// (`DB`, `DB_PATH`, `SYNC`, `BACKUP_GATE`), scoped to one `ArkService`
 /// instance so a single process can host several services (tests do;
 /// production hosts exactly one).
+/// Host-provided environment facts the service must not discover on its own
+/// — ark-core never guesses OS paths. `windows_dir` is the real %SystemRoot%
+/// the Engine resolved via `GetSystemWindowsDirectoryW`; usage analytics
+/// marks rows under it as system apps (KOS-287). `None` marks nothing.
+#[derive(Clone, Debug, Default)]
+pub struct ArkHostConfig {
+    pub windows_dir: Option<String>,
+}
+
 pub(crate) struct ServiceState {
     /// Shared SQLite connection behind a mutex — the single writer for every
     /// op executed by this service's worker.
@@ -96,15 +105,18 @@ pub(crate) struct ServiceState {
     /// before the DB mutex (deadlock-safe: the backup thread works on its own
     /// read connection and never takes the DB mutex).
     backup_gate: StdMutex<()>,
+    /// Host config resolved by the Engine at construction (KOS-287).
+    windows_dir: Option<String>,
 }
 
 impl ServiceState {
-    fn new() -> Self {
+    fn new(host_config: ArkHostConfig) -> Self {
         Self {
             db: StdMutex::new(None),
             db_path: StdMutex::new(None),
             sync: TokioMutex::new(None),
             backup_gate: StdMutex::new(()),
+            windows_dir: host_config.windows_dir,
         }
     }
 }
@@ -140,8 +152,16 @@ impl ArkService {
     /// Spawn the worker and open (create if needed) the ARK database at
     /// `db_path`. Same semantics as the sidecar's `init` op.
     pub async fn open(db_path: impl Into<String>) -> Result<Self, ArkServiceError> {
+        Self::open_with_host_config(db_path, ArkHostConfig::default()).await
+    }
+
+    /// `open` + host-provided environment facts (see [`ArkHostConfig`]).
+    pub async fn open_with_host_config(
+        db_path: impl Into<String>,
+        host_config: ArkHostConfig,
+    ) -> Result<Self, ArkServiceError> {
         let db_path = db_path.into();
-        let state = Arc::new(ServiceState::new());
+        let state = Arc::new(ServiceState::new(host_config));
         let panic_count = Arc::new(AtomicU64::new(0));
         let (jobs, worker) = spawn_worker(state.clone(), db_path.clone(), panic_count.clone())
             .map_err(|e| ArkServiceError::Unavailable(format!("worker spawn failed: {e}")))?;
