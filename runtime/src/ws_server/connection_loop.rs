@@ -204,14 +204,37 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
                             return;
                         }
                         let _permit = permit.lock().unwrap_or_else(|p| p.into_inner()).take();
+                        // Rejection metadata for the Engine log (KOS-298) —
+                        // captured before `request` is consumed by dispatch.
+                        // Metadata only, never payload values.
+                        let client_class = request.client.class.clone();
+                        let operation = request.operation.as_str().to_owned();
+                        let type_id = crate::observability::app_rpc_type_id(&request.params)
+                            .map(str::to_owned);
                         let dispatch = task_dispatcher.dispatch(request);
                         let result = tokio::select! {
                             _ = task_shutdown.cancelled() => Err("server shutting down".to_string()),
                             _ = cancel_receiver => Err("request cancelled".to_string()),
                             result = tokio::time::timeout(task_shutdown.response_deadline(), dispatch) => match result {
                                 Ok(Ok(value)) => Ok(value),
-                                Ok(Err(error)) => Err(error.to_string()),
-                                Err(_) => Err("dispatch timed out".to_string()),
+                                Ok(Err(error)) => {
+                                    crate::observability::log_app_rpc_rejection(
+                                        client_class.as_deref().unwrap_or("-"),
+                                        &operation,
+                                        type_id.as_deref(),
+                                        &error.to_string(),
+                                    );
+                                    Err(error.to_string())
+                                }
+                                Err(_) => {
+                                    crate::observability::log_app_rpc_rejection(
+                                        client_class.as_deref().unwrap_or("-"),
+                                        &operation,
+                                        type_id.as_deref(),
+                                        "timeout",
+                                    );
+                                    Err("dispatch timed out".to_string())
+                                }
                             },
                         };
                         let _ = result_sender.send(result);

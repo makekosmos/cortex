@@ -109,18 +109,24 @@ async fn handle_app_rpc(
             )
         }
     };
-    let (wire_request_id, operation, params) = match parse_app_rpc(
-        serde_json::from_slice(&collected.to_bytes()).unwrap_or(Value::Null),
-        &typed_grant,
-    ) {
+    let body = serde_json::from_slice(&collected.to_bytes()).unwrap_or(Value::Null);
+    let (wire_request_id, operation, params) = match parse_app_rpc(body.clone(), &typed_grant) {
         Ok(value) => value,
-        Err(_) => {
+        Err(reason) => {
+            crate::observability::log_app_rpc_rejection(
+                &client.class,
+                body.get("operation").and_then(Value::as_str).unwrap_or("-"),
+                None,
+                reason,
+            );
             return json_response(
                 StatusCode::BAD_REQUEST,
                 json!({ "ok": false, "error": "invalid-request" }),
-            )
+            );
         }
     };
+    // Metadata for the rejection log — read before authorize rewrites params.
+    let type_id = crate::observability::app_rpc_type_id(&params).map(str::to_owned);
     let app_client = DispatchClient {
         pid: Some(client.pid),
         class: Some(client.class.clone()),
@@ -139,20 +145,32 @@ async fn handle_app_rpc(
     .await
     {
         Ok(params) => params,
-        Err(_) => {
+        Err(reason) => {
+            crate::observability::log_app_rpc_rejection(
+                &client.class,
+                &operation,
+                type_id.as_deref(),
+                reason,
+            );
             return json_response(
                 StatusCode::FORBIDDEN,
                 json!({ "ok": false, "error": "forbidden" }),
-            )
+            );
         }
     };
     let owner = match dispatcher.allocate_owner() {
         Ok(owner) => owner,
         Err(_) => {
+            crate::observability::log_app_rpc_rejection(
+                &client.class,
+                &operation,
+                type_id.as_deref(),
+                "dispatcher has no free owner",
+            );
             return json_response(
                 StatusCode::SERVICE_UNAVAILABLE,
                 json!({ "ok": false, "error": "unavailable" }),
-            )
+            );
         }
     };
     let request = DispatchRequest {
@@ -167,6 +185,12 @@ async fn handle_app_rpc(
     let Some((_operation_id, receiver, mut response_guard)) =
         operations.start(request, dispatcher.clone(), owner).await
     else {
+        crate::observability::log_app_rpc_rejection(
+            &client.class,
+            &operation,
+            type_id.as_deref(),
+            "HTTP operation capacity exhausted or server shutting down",
+        );
         return json_response(
             StatusCode::SERVICE_UNAVAILABLE,
             json!({ "ok": false, "error": "HTTP operation capacity exhausted or server shutting down" }),
@@ -175,17 +199,47 @@ async fn handle_app_rpc(
     let response = match tokio::time::timeout(request_timeout, receiver).await {
         Ok(Ok(Ok(value))) => {
             response_guard.disarm();
-            filter_app_response(&operation, value, &typed_grant, &dispatcher, &app_client).await
+            filter_app_response(
+                &operation,
+                value,
+                &typed_grant,
+                &dispatcher,
+                &app_client,
+                type_id.as_deref(),
+            )
+            .await
         }
         Ok(Ok(Err(error))) => {
             response_guard.disarm();
-            json!({ "ok": false, "error": public_app_error(&error.to_string()) })
+            let reason = error.to_string();
+            let public = public_app_error(&reason);
+            crate::observability::log_app_rpc_rejection(
+                &client.class,
+                &operation,
+                type_id.as_deref(),
+                &reason,
+            );
+            json!({ "ok": false, "error": public })
         }
         Ok(Err(_)) => {
             response_guard.disarm();
+            crate::observability::log_app_rpc_rejection(
+                &client.class,
+                &operation,
+                type_id.as_deref(),
+                "dispatch task failed",
+            );
             json!({ "ok": false, "error": "unavailable" })
         }
-        Err(_) => json!({ "ok": false, "error": "timeout" }),
+        Err(_) => {
+            crate::observability::log_app_rpc_rejection(
+                &client.class,
+                &operation,
+                type_id.as_deref(),
+                "timeout",
+            );
+            json!({ "ok": false, "error": "timeout" })
+        }
     };
     if let Err(error) = protocol_usage.record(
         crate::protocol_usage::TransportKind::ApiV1,

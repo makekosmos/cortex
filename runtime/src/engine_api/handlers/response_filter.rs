@@ -232,8 +232,21 @@ async fn filter_app_response(
     grant: &LaunchGrant,
     dispatcher: &crate::engine_dispatch::EngineDispatcher,
     client: &DispatchClient,
+    type_id: Option<&str>,
 ) -> Value {
     if let Some(error) = public_app_error_response(&response) {
+        // `{ok:false}` envelopes reaching this point carried the internal
+        // reason until the redaction above — log it before it is lost.
+        let reason = response
+            .get("error")
+            .and_then(Value::as_str)
+            .unwrap_or("unavailable");
+        crate::observability::log_app_rpc_rejection(
+            client.class.as_deref().unwrap_or("-"),
+            operation,
+            type_id,
+            reason,
+        );
         return error;
     }
     let mut response = response;
