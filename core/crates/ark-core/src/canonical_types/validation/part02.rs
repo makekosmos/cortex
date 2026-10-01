@@ -1,4 +1,11 @@
 ﻿
+/// Strict RFC 3339 full-date: exactly `YYYY-MM-DD` and a real calendar day.
+pub(crate) fn is_full_date(s: &str) -> bool {
+    chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
+        .map(|d| d.format("%Y-%m-%d").to_string() == s)
+        .unwrap_or(false)
+}
+
 fn validate_schema(
     schema: &Value,
     value: &Value,
@@ -30,6 +37,18 @@ fn validate_schema(
         }
         if value.is_null() {
             return Ok(());
+        }
+    }
+    // `format` is enforced only where the contract is unambiguous. `date`
+    // fields accept exactly `YYYY-MM-DD`. `date-time` stays an annotation on
+    // purpose: 1.0.0 day fields declared date-time but hold bare dates, and a
+    // bare day cannot be honestly coerced to an instant — enforcing it would
+    // reject data that was always legal in practice.
+    if object.get("format").and_then(Value::as_str) == Some("date") {
+        if let Some(raw) = value.as_str() {
+            if !is_full_date(raw) {
+                return Err(invalid(pointer, "format"));
+            }
         }
     }
     if let Some(values) = object.get("enum").and_then(Value::as_array) {

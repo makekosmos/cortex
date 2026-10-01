@@ -121,6 +121,19 @@ pub fn prepare_registry_for_objects(conn: &Connection) -> Result<(), RegistryErr
     Ok(())
 }
 
+/// Idempotent post-migration step: installs canonical version rows that a
+/// definition bump added after the phase3 migration completed, and bumps
+/// `current_version` to the newest registered version. Existing version rows
+/// are only hash-checked, never rewritten.
+pub fn ensure_canonical_type_versions(conn: &Connection) -> Result<(), RegistryError> {
+    let registrations = canonical_type_registrations()
+        .map_err(|detail| RegistryError::InvariantViolation { detail })?;
+    for registration in &registrations {
+        install_definition(conn, registration)?;
+    }
+    Ok(())
+}
+
 /// Apply a previously read-only plan inside a savepoint. The caller retains transaction ownership.
 pub fn apply_registry(
     conn: &Connection,

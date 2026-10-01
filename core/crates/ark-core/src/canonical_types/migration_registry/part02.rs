@@ -76,6 +76,17 @@ pub fn preflight_registry(conn: &Connection) -> Result<RegistryPlan, RegistryErr
     let registrations = canonical_type_registrations()
         .map_err(|detail| RegistryError::InvariantViolation { detail })?;
     let canonical_ids: Vec<_> = registrations.iter().map(|r| r.type_id.clone()).collect();
+    // A type may be registered at several versions; `object_types.current_version`
+    // must name one of them — a superseded registration still on disk is a
+    // pending upgrade installed by `ensure_canonical_type_versions`, not a
+    // conflict. An unknown version is.
+    let mut registered_versions: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    for registration in &registrations {
+        registered_versions
+            .entry(registration.type_id.as_str())
+            .or_default()
+            .push(registration.version.as_str());
+    }
     let mut legacy_type_ids = Vec::new();
     for registration in &registrations {
         let canonical_as_alias: Option<String> = conn
@@ -103,7 +114,9 @@ pub fn preflight_registry(conn: &Connection) -> Result<RegistryPlan, RegistryErr
                 .map_err(storage)?;
             if row.0 != registration.name
                 || row.1 != registration.owner_id
-                || row.2 != registration.version
+                || !registered_versions
+                    .get(registration.type_id.as_str())
+                    .is_some_and(|versions| versions.contains(&row.2.as_str()))
                 || row.3 != registration.status
                 || row.5 != registration.base_type_id
                 || row.6 != registration.owner_kind
@@ -121,17 +134,17 @@ pub fn preflight_registry(conn: &Connection) -> Result<RegistryPlan, RegistryErr
                 )
                 .optional()
                 .map_err(storage)?;
-            let matches = existing
-                .map(|row| {
-                    row.0 == version.0
-                        && row.1 == version.1
-                        && row.2 == version.2
-                        && row.3 == version.3
-                        && row.4 == version.4
-                        && row.5 == registration.schema_hash
-                })
-                .unwrap_or(false);
-            if !matches {
+            // A missing version row is installable, not a conflict: a schema
+            // bump lands as a new version row without rewriting existing ones.
+            let conflicts = existing.is_some_and(|row| {
+                !(row.0 == version.0
+                    && row.1 == version.1
+                    && row.2 == version.2
+                    && row.3 == version.3
+                    && row.4 == version.4
+                    && row.5 == registration.schema_hash)
+            });
+            if conflicts {
                 return Err(RegistryError::CanonicalConflict {
                     type_id: registration.type_id.clone(),
                 });
@@ -256,7 +269,34 @@ fn install_definition(
                 type_id: registration.type_id.clone(),
             });
         }
-        return Ok(());
+    } else {
+        conn.execute("INSERT INTO object_type_versions(type_id,version,schema_json,ui_schema_json,content_contract_json,relations_json,sync_policy_json,schema_hash,created_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)", params![registration.type_id, registration.version, version.0, version.1, version.2, version.3, version.4, registration.schema_hash, registration.created_at]).map(|_| ()).map_err(storage)?;
     }
-    conn.execute("INSERT INTO object_type_versions(type_id,version,schema_json,ui_schema_json,content_contract_json,relations_json,sync_policy_json,schema_hash,created_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)", params![registration.type_id, registration.version, version.0, version.1, version.2, version.3, version.4, registration.schema_hash, registration.created_at]).map(|_| ()).map_err(storage)
+    // A newer registration supersedes the stored current_version: unversioned
+    // reads and version resolution must see the newest contract.
+    let current_version: Option<String> = conn
+        .query_row(
+            "SELECT current_version FROM object_types WHERE id=?1",
+            [registration.type_id.as_str()],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(storage)?;
+    let next = Version::parse(&registration.version).ok();
+    let superseded = match (
+        current_version.as_deref().and_then(|v| Version::parse(v).ok()),
+        next,
+    ) {
+        (Some(current), Some(next)) => next > current,
+        (None, Some(_)) => true,
+        _ => false,
+    };
+    if superseded {
+        conn.execute(
+            "UPDATE object_types SET current_version=?2 WHERE id=?1",
+            params![registration.type_id, registration.version],
+        )
+        .map_err(storage)?;
+    }
+    Ok(())
 }

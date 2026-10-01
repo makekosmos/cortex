@@ -160,6 +160,10 @@ pub fn init_schema(conn: &Connection) -> Result<(), String> {
         .map(|_| ())
         .map_err(|error| format!("phase3 migration during init_schema failed: {error:?}"))?;
     if phase3_migration_completed(conn)? {
+        // Definitions can gain a new canonical version after the migration
+        // has completed; install the new version rows without re-migrating.
+        crate::canonical_types::migration_registry::ensure_canonical_type_versions(conn)
+            .map_err(|error| format!("canonical version install during init_schema failed: {error:?}"))?;
         migration::retire_legacy_planning_tables(conn)
             .map(|_| ())
             .map_err(|error| format!("legacy planning retirement during init_schema failed: {error:?}"))?;

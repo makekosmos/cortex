@@ -7,6 +7,7 @@ pub mod migration;
 pub mod migration_ledger;
 pub mod migration_objects;
 pub mod migration_registry;
+pub mod normalize;
 pub mod pending;
 pub mod preflight;
 pub mod validation;
