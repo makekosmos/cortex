@@ -64,7 +64,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use iroh::endpoint::{presets, BindOpts};
-use iroh::{Endpoint, EndpointAddr, EndpointId, RelayMode};
+use iroh::{Endpoint, EndpointAddr, EndpointId, RelayMode, Watcher};
 use iroh_tickets::endpoint::EndpointTicket;
 use iroh_tickets::Ticket;
 use rusqlite::Connection;

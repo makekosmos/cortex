@@ -41,6 +41,16 @@ impl SyncTransport for IrohTransport {
 
         *self.endpoint.lock().unwrap_or_else(|e| e.into_inner()) = Some(endpoint.clone());
 
+        // ── Relay connectivity watcher ───────────────────────────────────────
+        // iroh's relay actor retries internally and warns per attempt — the
+        // Engine filters those to error (runtime `init_tracing`), so one WARN
+        // per up→down / down→up transition is the signal that survives.
+        spawn_relay_connectivity_watch(
+            &endpoint,
+            self.config.relay_mode.as_ref(),
+            self.stop_rx.clone(),
+        );
+
         // ── Accept-loop ───────────────────────────────────────────────────────
         // Каждое входящее соединение порождает `handle_connection(is_dialer=false)`.
         {

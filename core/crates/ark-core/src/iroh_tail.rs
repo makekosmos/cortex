@@ -251,3 +251,30 @@ mod identity_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod relay_connectivity_tests {
+    use super::relay_connectivity_change;
+
+    /// The watcher fires on every retry (each `Disconnected` carries a fresh
+    /// error) — only real up/down transitions must produce a new state, so
+    /// the log keeps exactly one warn per flap (KOS-298).
+    #[test]
+    fn relay_connectivity_logs_only_on_state_transitions() {
+        // First observation records state without reporting a flap.
+        assert_eq!(relay_connectivity_change(None, &[false]), Some(false));
+        // Retrying while still down yields no transition.
+        assert_eq!(relay_connectivity_change(Some(false), &[false]), None);
+        // up after down — one transition.
+        assert_eq!(relay_connectivity_change(Some(false), &[true]), Some(true));
+        // Still up — nothing.
+        assert_eq!(relay_connectivity_change(Some(true), &[true]), None);
+        // Any relay connected counts as connected.
+        assert_eq!(relay_connectivity_change(Some(true), &[false, true]), None);
+        // All relays lost — down transition.
+        assert_eq!(relay_connectivity_change(Some(true), &[false, false]), Some(false));
+        // No home relay selected yet keeps the previous state.
+        assert_eq!(relay_connectivity_change(Some(true), &[]), Some(true));
+        assert_eq!(relay_connectivity_change(None, &[]), None);
+    }
+}
