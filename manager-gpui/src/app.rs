@@ -49,6 +49,10 @@ pub struct ManagerApp {
     pub pending_install: Option<String>,
     /// Store listing shown in the detail overlay.
     pub detail: Option<Value>,
+    /// Usage view state: column sort, system-process filter, virtual list scroll.
+    pub usage_sort: views::usage::UsageSort,
+    pub usage_show_system: bool,
+    pub usage_scroll: gpui_component::VirtualListScrollHandle,
     pub(crate) action_busy: bool,
     worker_dead: bool,
     next_updater_poll: Instant,
@@ -85,6 +89,9 @@ impl ManagerApp {
             disclosure: None,
             pending_install: None,
             detail: None,
+            usage_sort: views::usage::UsageSort::default(),
+            usage_show_system: false,
+            usage_scroll: gpui_component::VirtualListScrollHandle::new(),
             action_busy: false,
             worker_dead: false,
             next_updater_poll: Instant::now(),
