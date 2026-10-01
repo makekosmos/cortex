@@ -374,6 +374,29 @@ pub(crate) mod tests {
         service
     }
 
+    /// Enabled app whose manifest grants read+create on `com.kosmos.note`
+    /// — lets app-RPC tests drive a real write past authorize into dispatch.
+    pub(crate) fn enabled_note_write_app_service(dir: &Path) -> PackageService {
+        let mut package_manifest = manifest_v2_with_canonical_access();
+        package_manifest.data.access[0].actions = vec![
+            crate::package_manifest::DataAction::Read,
+            crate::package_manifest::DataAction::Create,
+        ];
+        package_manifest.data.access[0].fields.write =
+            ["title", "props.description", "props.extensions"]
+                .into_iter()
+                .map(str::to_owned)
+                .collect();
+        let versioned = VersionedManifest::V2(package_manifest);
+        let (archive, _, _) = archive_with_versioned_manifest(dir, &versioned);
+        let (trust, _, _) = trust();
+        let service = PackageService::open_with_trust(dir, trust).expect("service");
+        service
+            .install_development_app_from_path("com.kosmos.demo", "2.0.0", &archive)
+            .expect("development install");
+        service
+    }
+
     #[test]
     fn replacement_verification_is_read_only_and_checks_exact_archive_identity() {
         let dir = tempdir().expect("temp dir");

@@ -4,6 +4,8 @@ use std::sync::OnceLock;
 
 use regex::Regex;
 
+pub mod app_rpc;
+
 pub const CORRELATION_ID_ENV: &str = "MUNDUS_CORRELATION_ID";
 const MAX_REDACTED_TEXT_BYTES: usize = 16 * 1024;
 

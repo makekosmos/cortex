@@ -467,6 +467,7 @@
             &app_test_grant(),
             &dispatcher,
             &DispatchClient::default(),
+            None,
         )
         .await;
         assert_eq!(response["data"][0]["text"], "");
@@ -496,6 +497,7 @@
             &app_test_grant(),
             &dispatcher,
             &client,
+            None,
         )
         .await;
         assert_eq!(
@@ -519,6 +521,7 @@
             &app_test_grant(),
             &dispatcher,
             &client,
+            None,
         )
         .await;
         assert_eq!(
@@ -538,6 +541,7 @@
             &app_test_grant(),
             &dispatcher,
             &client,
+            None,
         )
         .await;
         assert_eq!(
@@ -560,6 +564,7 @@
             &app_test_grant(),
             &dispatcher,
             &client,
+            None,
         )
         .await;
         assert_eq!(
@@ -589,6 +594,7 @@
                 &app_test_grant(),
                 &dispatcher,
                 &DispatchClient::default(),
+                None,
             )
             .await,
             json!({"ok":false,"error":"unavailable"})

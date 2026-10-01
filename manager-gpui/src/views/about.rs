@@ -143,7 +143,7 @@ pub fn render(
                                             this.error = Some(e);
                                         }
                                     }
-                                    Err(e) => this.error = Some(e),
+                                    Err(e) => this.error = Some(e.message()),
                                 }
                                 cx.notify();
                             })),
@@ -160,7 +160,7 @@ pub fn render(
                                             this.error = Some(e);
                                         }
                                     }
-                                    Err(e) => this.error = Some(e),
+                                    Err(e) => this.error = Some(e.message()),
                                 }
                                 cx.notify();
                             })),

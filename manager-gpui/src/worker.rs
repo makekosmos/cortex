@@ -4,6 +4,7 @@ use serde_json::{json, Value};
 use std::sync::mpsc::{Receiver, Sender};
 
 use mundus_gpui_kit::engine::Engine;
+use mundus_gpui_kit::engine_error::EngineError;
 
 pub enum Command {
     /// POST /v1/rpc — `slot` routes the reply into `ManagerApp::slots`.
@@ -39,15 +40,15 @@ impl Worker {
                 let reply = match request {
                     Command::Rpc { slot, op, params } => Reply {
                         slot,
-                        result: engine.rpc(op, params),
+                        result: engine.rpc(op, params).map_err(engine_error_message),
                     },
                     Command::Get { slot, path } => Reply {
                         slot,
-                        result: engine.status(path),
+                        result: engine.status(path).map_err(engine_error_message),
                     },
                     Command::UsageReport { slot } => Reply {
                         slot,
-                        result: usage_report(&engine),
+                        result: usage_report(&engine).map_err(engine_error_message),
                     },
                 };
                 if results.send(reply).is_err() {
@@ -57,6 +58,14 @@ impl Worker {
         });
         Self { commands, replies }
     }
+}
+
+/// Engine failures reach the UI as `message()` text; the raw wire code in
+/// `detail` is what a support session needs, so it goes to the app log
+/// (KOS-298 — KOS-295 could not recover why a write was rejected).
+fn engine_error_message(error: EngineError) -> String {
+    tracing::warn!(error = %error, "engine call failed");
+    error.message()
 }
 
 /// store.ts normalizePath parity: trim + '/'→'\\' + lowercase.
@@ -69,7 +78,7 @@ fn normalize_path(path: &str) -> String {
 /// normalized exec paths to app ids, then `app_index.icon_path` resolves the
 /// cached PNG (Electron `mundus-icon://` equivalent for GPUI). A failing
 /// app_index is non-fatal — rows render with letter badges.
-fn usage_report(engine: &Engine) -> Result<Value, String> {
+fn usage_report(engine: &Engine) -> Result<Value, EngineError> {
     let mut snapshot = engine.rpc(
         "get_usage_analytics",
         json!({
