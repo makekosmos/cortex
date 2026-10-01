@@ -23,6 +23,7 @@ pub mod local_sidecar_protocol;
 pub mod local_whisper_dll;
 #[cfg(target_os = "macos")]
 pub mod macos_native;
+pub(crate) mod model_sweep;
 pub mod native_capture;
 pub mod network;
 pub mod pending;
