@@ -6,6 +6,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getVersion } from "./release-version.mjs";
 import { deriveReleaseBom } from "./release-bom.mjs";
+import { latestPublishedRelease } from "./release-plan.mjs";
+import { RELEASE_REPOS } from "./release-repos.mjs";
 
 export const SHELL_ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -68,20 +70,28 @@ function compareSemver(a, b) {
 // history, not just at build time. Network-dependent, so it is the one check
 // `--local`/MUNDUS_RELEASE_LOCAL skip: an offline or throwaway local build has
 // no way to reach the GitHub API and does not need this guarantee.
-export async function assertVersionIsPublishable({ platform, version, fetchImpl = fetch }) {
-  const repository = platform === "win" ? "makekosmos/desktop" : "makekosmos/desktop-mac";
-  const response = await fetchImpl(`https://api.github.com/repos/${repository}/releases/latest`);
+//
+// The list endpoint (not releases/latest) is deliberate: `latest` answers 404
+// both for a missing repo and for a repo with zero releases, while the list
+// answers 200 `[]` for the latter — the only state in which any version is
+// publishable, which is exactly what the KOS-304 bridge publish relies on.
+export async function assertVersionIsPublishable({
+  platform,
+  version,
+  repository,
+  fetchImpl = fetch,
+}) {
+  const repo = repository ?? RELEASE_REPOS[platform];
+  if (!repo) throw new Error(`Unknown platform "${platform}"`);
+  const response = await fetchImpl(`https://api.github.com/repos/${repo}/releases?per_page=100`);
   if (!response.ok)
     throw new Error(
-      `could not read the latest published ${repository} release (HTTP ${response.status}) — pass --local for an offline/local build`,
+      `could not read the published ${repo} releases (HTTP ${response.status}) — pass --local for an offline/local build`,
     );
-  const data = await response.json();
-  const latest = String(data.tag_name ?? "").replace(/^v/, "");
-  if (!/^\d+\.\d+\.\d+$/.test(latest))
-    throw new Error(`unexpected latest ${repository} tag: ${data.tag_name}`);
-  if (compareSemver(version, latest) <= 0)
+  const latest = latestPublishedRelease(await response.json())?.version;
+  if (latest && compareSemver(version, latest) <= 0)
     throw new Error(
-      `release version ${version} must be greater than the latest published ${latest}`,
+      `release version ${version} must be greater than the latest published ${latest} on ${repo}`,
     );
 }
 

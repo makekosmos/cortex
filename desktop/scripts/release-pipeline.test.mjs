@@ -48,24 +48,67 @@ test("publish is a receipt consumer and never invokes build or package", async (
   assert.match(publish, /assertReceiptMatchesBom/);
   assert.match(publish, /release create/);
   assert.ok(publish.indexOf("if (dryRun) return") < publish.lastIndexOf("duplicateRelease("));
-  assert.ok(publish.indexOf("if (dryRun) return") < publish.indexOf('"release",\n      "create"'));
   assert.ok(
-    publish.indexOf('"release",\n      "create"') <
+    publish.indexOf("if (dryRun) return") < publish.indexOf('"release",\n        "create"'),
+  );
+  assert.ok(
+    publish.indexOf('"release",\n        "create"') <
       publish.lastIndexOf("verify-release-channel.mjs"),
   );
+});
+
+// KOS-304: the primary target is always makekosmos/cortex; the legacy
+// makekosmos/desktop feed is reachable only via the explicit bridge flag,
+// which publishes the identical asset set to both repos.
+test("publish targets: cortex only unless --also-bridge-repo opts in", async () => {
+  const { publishTargets } = await import("./publish-release.mjs");
+  assert.deepEqual(publishTargets({}), ["makekosmos/cortex"]);
+  assert.deepEqual(publishTargets({ "also-bridge-repo": "makekosmos/desktop" }), [
+    "makekosmos/cortex",
+    "makekosmos/desktop",
+  ]);
+  assert.throws(() => publishTargets({ "also-bridge-repo": "not-a-repo" }), /owner\/repo/);
+  assert.throws(
+    () => publishTargets({ "also-bridge-repo": "makekosmos/cortex" }),
+    /differ from the primary/,
+  );
+});
+
+// KOS-304: both repos get the identical gh release create — same tag, files
+// and notes — and the duplicate probe for every target runs before the first
+// create, so a stale bridge release cannot orphan a cortex-only publish.
+test("a bridge publish probes every repo before creating any", async () => {
+  const publish = await readFile(path.join(scripts, "publish-release.mjs"), "utf8");
+  const probes = publish.indexOf("for (const repository of repositories) duplicateRelease");
+  const create = publish.indexOf('"release",\n        "create"');
+  assert.ok(probes >= 0 && create > probes);
+});
+
+// The nightly job must authenticate with only its own GITHUB_TOKEN: no
+// Actions secrets, no credential-helper PAT plumbing, and contents: write on
+// the release job for the tag push and release creation.
+test("the nightly workflow carries no PAT secrets", async () => {
+  const workflow = await readFile(
+    path.join(scripts, "..", "..", ".github", "workflows", "nightly-release.yml"),
+    "utf8",
+  );
+  assert.doesNotMatch(workflow, /secrets\./);
+  assert.doesNotMatch(workflow, /credential\.helper|persist-credentials:\s*false/);
+  assert.match(workflow, /permissions:\s*\n\s*contents: write/);
+  assert.match(workflow, /github\.token/);
 });
 
 test("duplicate release guard fails closed", async () => {
   const { duplicateRelease } = await import("./publish-release.mjs");
   const missing = () => ({ status: 1, stdout: "", stderr: "release not found" });
-  assert.doesNotThrow(() => duplicateRelease("makekosmos/desktop", "1.2.3", missing));
+  assert.doesNotThrow(() => duplicateRelease("makekosmos/cortex", "1.2.3", missing));
   assert.throws(
-    () => duplicateRelease("makekosmos/desktop", "1.2.3", () => ({ status: 0 })),
+    () => duplicateRelease("makekosmos/cortex", "1.2.3", () => ({ status: 0 })),
     /already exists/,
   );
   assert.throws(
     () =>
-      duplicateRelease("makekosmos/desktop", "1.2.3", () => ({
+      duplicateRelease("makekosmos/cortex", "1.2.3", () => ({
         status: 1,
         stdout: "",
         stderr: "authentication failed",

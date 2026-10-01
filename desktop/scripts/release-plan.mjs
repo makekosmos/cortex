@@ -3,7 +3,7 @@
 //
 // Decides whether `main` carries work that has not been released yet, and which
 // version the next Windows release gets. The baseline is the latest *published*
-// release in makekosmos/desktop — never a bare git tag — so a release whose
+// release in makekosmos/cortex — never a bare git tag — so a release whose
 // publish step failed stays retryable on the next run.
 //
 // Cortex has no tags for releases cut before this pipeline existed, so the diff
@@ -33,12 +33,13 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { RELEASE_RECEIPT_FILE } from "./release-receipt.mjs";
+import { RELEASE_REPOS } from "./release-repos.mjs";
 import { readVersions } from "./release-version.mjs";
 
 const SHELL_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const REPO_ROOT = path.resolve(SHELL_ROOT, "..");
 const VERSIONS_FILE = path.join(SHELL_ROOT, "release-versions.json");
-export const RELEASE_REPO = "makekosmos/desktop";
+export const RELEASE_REPO = RELEASE_REPOS.win;
 
 const STABLE_TAG = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const STABLE_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
@@ -152,23 +153,27 @@ export function planRelease({ run = defaultRun, currentVersion, repo = RELEASE_R
   // --slurp wraps each page in its own array.
   const releases = pages.flat();
   const baseline = latestPublishedRelease(releases);
+  // No baseline means the repo has never seen a release — the planner must not
+  // guess a starting point or fall back to the legacy makekosmos/desktop feed.
+  // The first cortex release is the manual KOS-304 bridge publish.
+  if (!baseline)
+    throw new Error(
+      `${repo} has no published stable release to diff against — ` +
+        `publish the first one manually (publish-release.mjs --also-bridge-repo makekosmos/desktop)`,
+    );
   const head = must(run("git", ["rev-parse", "HEAD"]), "git rev-parse HEAD").trim();
   const current = currentVersion ?? readVersions().win;
 
-  let previousCommit = "";
-  let changed = true;
-  if (baseline) {
-    previousCommit = baselineCommit(run, repo, baseline);
-    // Missing commits, rewritten history and Git errors must fail — they must
-    // never look like "no changes".
-    must(run("git", ["merge-base", "--is-ancestor", previousCommit, "HEAD"]), "git merge-base");
-    const diff = run("git", ["diff", "--quiet", previousCommit, "HEAD", "--"]);
-    if (diff.status !== 0 && diff.status !== 1)
-      throw new Error(`git diff failed (${diff.status}): ${diff.stderr.trim()}`);
-    changed = diff.status === 1;
-  }
+  const previousCommit = baselineCommit(run, repo, baseline);
+  // Missing commits, rewritten history and Git errors must fail — they must
+  // never look like "no changes".
+  must(run("git", ["merge-base", "--is-ancestor", previousCommit, "HEAD"]), "git merge-base");
+  const diff = run("git", ["diff", "--quiet", previousCommit, "HEAD", "--"]);
+  if (diff.status !== 0 && diff.status !== 1)
+    throw new Error(`git diff failed (${diff.status}): ${diff.stderr.trim()}`);
+  const changed = diff.status === 1;
 
-  const version = nextReleaseVersion(current, baseline?.version ?? null, changed);
+  const version = nextReleaseVersion(current, baseline.version, changed);
 
   // A tag that exists but has no published release is a partially-failed
   // earlier run: the bump commit and tag were pushed, then publish failed.
@@ -198,7 +203,7 @@ export function planRelease({ run = defaultRun, currentVersion, repo = RELEASE_R
     release: version !== null,
     version: version ?? "",
     sha,
-    previousTag: baseline?.tag ?? "",
+    previousTag: baseline.tag,
     previousCommit,
     bumped: version !== null && version !== current,
     retry,

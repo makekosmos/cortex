@@ -14,9 +14,14 @@ import {
 import { RELEASE_RECEIPT_FILE } from "./release-receipt.mjs";
 
 const HEAD = "a".repeat(40);
+
 const BASE_COMMIT = "b".repeat(40);
 const TAGGED_COMMIT = "c".repeat(40);
 const CURRENT = "0.10.0";
+
+test("the release baseline repo is makekosmos/cortex", () => {
+  assert.equal(RELEASE_REPO, "makekosmos/cortex");
+});
 
 function release(tag, { draft = false, prerelease = false, receipt = true } = {}) {
   return {
@@ -113,16 +118,17 @@ test("git errors fail loudly instead of looking like no changes", () => {
   assert.throws(() => planRelease({ run: runDiff, currentVersion: CURRENT }), /git diff failed/);
 });
 
-test("with no published releases the current version ships", () => {
+// KOS-304: with no published release in cortex there is no receipt to diff
+// against. The planner must fail closed and point at the one-time bridge
+// publish — never fall back to makekosmos/desktop or guess a version.
+test("with no published releases the plan fails closed", () => {
   const { run } = fakeRun([
     [`gh api --paginate --slurp repos/${RELEASE_REPO}/releases`, { stdout: "[[]]" }],
-    ["git rev-parse HEAD", { stdout: HEAD }],
-    ["git rev-parse -q --verify refs/tags/", { status: 1 }],
   ]);
-  const plan = planRelease({ run, currentVersion: CURRENT });
-  assert.equal(plan.release, true);
-  assert.equal(plan.version, CURRENT);
-  assert.equal(plan.bumped, false);
+  assert.throws(
+    () => planRelease({ run, currentVersion: CURRENT }),
+    /no published stable release.*--also-bridge-repo/s,
+  );
 });
 
 // A run can die between "tag pushed" and "release published": the next plan
