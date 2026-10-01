@@ -7,6 +7,9 @@
 //!     (`metadata` → `NotFound`) or when it sits under no configured root —
 //!     a root removed without `remove_tree` finishing (crash, kill) would
 //!     otherwise leave its whole subtree indexed forever;
+//! *   a configured root that is itself unavailable (unplugged drive,
+//!     offline share) is skipped whole — every path under it reads
+//!     `NotFound`, so pruning would wipe a healthy index;
 //! *   `file_search_fts` rows whose `files` row is gone are pruned
 //!     (orphans the chunked deletes above can leave behind);
 //! *   `VACUUM` reclaims the freed pages, at most once per
@@ -35,6 +38,11 @@ pub struct MaintenanceReport {
     pub removed_out_of_roots: usize,
     /// FTS rows with no matching `files` row.
     pub removed_orphan_fts: usize,
+    /// Configured roots that were skipped because the root itself is
+    /// unavailable (unplugged drive, offline share, not-yet-mounted letter).
+    /// Rows under them are left alone: `metadata` there answers `NotFound`
+    /// for every file and would otherwise wipe the subtree's index.
+    pub skipped_unavailable_roots: usize,
     pub vacuumed: bool,
 }
 
@@ -61,13 +69,30 @@ fn path_in_roots(path_lower: &str, roots: &[String]) -> bool {
         .any(|root| path_lower.starts_with(root.as_str()))
 }
 
+/// Split configured roots into (available, unavailable). A root counts as
+/// available only when it exists and is a directory; anything else —
+/// NotFound, ACCESS_DENIED, a stale drive letter — means the whole subtree
+/// is off-limits for pruning.
+fn partition_roots(roots: Vec<String>) -> (Vec<String>, Vec<String>) {
+    roots.into_iter().partition(|root| {
+        std::fs::metadata(root)
+            .map(|meta| meta.is_dir())
+            .unwrap_or(false)
+    })
+}
+
 impl FileStore {
     /// One full maintenance pass. Long-running and blocking by design —
     /// callers wrap it in `spawn_blocking`.
     pub(super) fn maintain(&self, now_unix: i64) -> Result<MaintenanceReport> {
         let mut report = MaintenanceReport::default();
-        let roots = normalized_roots(&self.roots()?);
-        self.prune_entries(&roots, &mut report)?;
+        let (available, unavailable) = partition_roots(self.roots()?);
+        report.skipped_unavailable_roots = unavailable.len();
+        self.prune_entries(
+            &normalized_roots(&available),
+            &normalized_roots(&unavailable),
+            &mut report,
+        )?;
         report.removed_orphan_fts = self.prune_orphan_fts()?;
         report.vacuumed = self.vacuum_if_due(now_unix, VACUUM_MIN_INTERVAL_SECS)?;
         Ok(report)
@@ -76,8 +101,15 @@ impl FileStore {
     /// Pages through `files` and drops rows that fail the retention rules.
     /// Existence is checked outside the lock; the delete re-asserts
     /// `(path, mtime)` so a file recreated between the check and the write
-    /// keeps its fresh row.
-    fn prune_entries(&self, roots: &[String], report: &mut MaintenanceReport) -> Result<()> {
+    /// keeps its fresh row. Rows under `unavailable` roots are skipped
+    /// whole: an unreachable root reports NotFound for every file beneath
+    /// it, so pruning there would delete a healthy index.
+    fn prune_entries(
+        &self,
+        roots: &[String],
+        unavailable: &[String],
+        report: &mut MaintenanceReport,
+    ) -> Result<()> {
         let mut cursor = String::new();
         let mut pending: Vec<(String, i64, bool)> = Vec::with_capacity(PRUNE_CHUNK);
         loop {
@@ -97,6 +129,9 @@ impl FileStore {
             cursor = page.last().expect("non-empty page").0.clone();
             for (path, mtime) in page {
                 let lower = path.to_lowercase();
+                if path_in_roots(&lower, unavailable) {
+                    continue;
+                }
                 let out_of_roots = !path_in_roots(&lower, roots);
                 // Anything that is not plainly "not found" counts as
                 // existing — ACCESS_DENIED and friends still occupy the path
@@ -266,6 +301,36 @@ mod tests {
             .maintain(1_000_000 + VACUUM_MIN_INTERVAL_SECS + 1)
             .unwrap();
         assert!(report.vacuumed);
+    }
+
+    #[test]
+    fn maintenance_skips_rows_under_an_unavailable_root() {
+        // Regression for KOS-302 review: a configured root that is absent
+        // (unplugged USB drive, offline share) must not lose its index —
+        // every file under it stats as NotFound and pruning used to delete
+        // the whole subtree.
+        let dir = tempdir().unwrap();
+        let root = dir.path().join("root");
+        std::fs::create_dir_all(&root).unwrap();
+        let file = root.join("remote.txt");
+        std::fs::write(&file, b"x").unwrap();
+
+        let store = FileStore::open(&dir.path().join("file-index.db")).unwrap();
+        store.add_root(&root.to_string_lossy()).unwrap();
+        store.upsert(&indexed(&file)).unwrap();
+
+        // The root goes away after indexing — the drive is unplugged.
+        std::fs::remove_dir_all(&root).unwrap();
+
+        let report = store.maintain(3_000_000).unwrap();
+        assert_eq!(report.skipped_unavailable_roots, 1);
+        assert_eq!(report.removed_stale, 0);
+        assert_eq!(report.removed_out_of_roots, 0);
+        assert_eq!(store.stats_snapshot().unwrap().total, 1);
+        assert_eq!(
+            store.search("remote", 10).unwrap()[0].path,
+            indexed(&file).path
+        );
     }
 
     #[test]
