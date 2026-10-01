@@ -167,14 +167,17 @@ async fn run_app_server(
 }
 
 async fn start_app_server(session: &Session) -> Result<AppServerStartup, String> {
-    let mut command = codex_command();
+    // codex is an npm `codex.cmd` shim on Windows: resolve it before setting
+    // stdio, which a rebuilt command would drop.
+    let mut command = process_tree::resolve_command(codex_command())
+        .map_err(|e| format!("Не удалось запустить Codex CLI: {e}"))?;
     command
         .args(["app-server", "--stdio"])
         .current_dir(&session.worktree_path)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
-    let mut process_tree = process_tree::ProcessTree::spawn(&mut command)
+    let mut process_tree = process_tree::ProcessTree::spawn(&mut command, 0)
         .await
         .map_err(|e| format!("Не удалось запустить Codex CLI: {e}"))?;
     let mut stdin = process_tree
@@ -406,7 +409,9 @@ async fn write_json(stdin: &mut tokio::process::ChildStdin, value: &Value) -> Re
 }
 
 async fn codex_one_shot(method: &str, params_value: Value) -> Result<Value, String> {
-    let mut child = codex_command()
+    let mut command =
+        process_tree::resolve_command(codex_command()).map_err(|e| e.to_string())?;
+    let mut child = command
         .args(["app-server", "--stdio"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
