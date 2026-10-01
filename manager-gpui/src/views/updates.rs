@@ -133,7 +133,10 @@ fn render_package_updates(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> Any
             .map(|listing| vstr(listing, "version"))
             .unwrap_or_default();
         if !latest.is_empty() && latest != current {
-            updates.push((id, current, latest));
+            let name = vopt(package, "name")
+                .filter(|name| !name.is_empty())
+                .unwrap_or_else(|| id.clone());
+            updates.push((id, name, vopt(package, "icon_path"), current, latest));
         }
     }
     let mut element = card().child(
@@ -145,10 +148,15 @@ fn render_package_updates(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> Any
     if updates.is_empty() {
         element = element.child(empty("Все пакеты актуальны"));
     }
-    for (id, current, latest) in updates {
+    for (id, name, icon_path, current, latest) in updates {
         let package_id = id.clone();
         element = element.child(
-            row(id.clone(), format!("{current} → {latest}")).child(btn_id(
+            entry_row(
+                icon_file(icon_path),
+                name,
+                format!("{id} · {current} → {latest}"),
+            )
+            .child(btn_id(
                 &format!("upd-{id}"),
                 "Обновить",
                 cx.listener(move |this, _, _, cx| {

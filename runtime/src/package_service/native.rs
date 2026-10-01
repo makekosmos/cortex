@@ -43,6 +43,9 @@ pub struct NativeAppSummary {
     pub download_total: Option<u64>,
     /// `apps.*` error code of the failed job while `state == failed`.
     pub failure: Option<&'static str>,
+    /// Materialized product icon (`<Apps>/icons/<id>.png`) — the Manager
+    /// renders it directly; `None` only when the write failed.
+    pub icon_path: Option<String>,
 }
 
 /// In-flight or last-failed background install job for one app.
@@ -163,6 +166,8 @@ pub(crate) struct NativeRowInput<'a> {
     pub availability: NativeAvailability,
     /// Live job snapshot — overrides the derived state.
     pub job: Option<NativeJob>,
+    /// Materialized icon path (`ensure_native_icon`), if it landed.
+    pub icon_path: Option<String>,
 }
 
 impl PackageService {
@@ -287,6 +292,7 @@ impl PackageService {
             latest,
             availability,
             job,
+            icon_path,
         } = input;
         let installed_version = record.map(|record| record.version.clone());
         let latest_version = latest.map(|info| info.version.clone());
@@ -332,7 +338,41 @@ impl PackageService {
             download_bytes: progress.map(|(bytes, _)| bytes),
             download_total: progress.and_then(|(_, total)| total),
             failure,
+            icon_path,
         }
+    }
+
+    /// Materialize the descriptor's embedded product icon under
+    /// `<Apps>/icons/<id>.png` and return its path for the Manager's `img`.
+    /// The PNG lives next to the app records — `list()` skips it (no
+    /// `install.json`) and `uninstall` only removes `<Apps>/<id>`. Rewrite
+    /// when bytes drift so an icon refresh in a new build takes effect.
+    /// `None` on io failure — the Store falls back to a letter placeholder.
+    fn ensure_native_icon(
+        &self,
+        store: &crate::native_apps::NativeAppStore,
+        desc: &native_apps::NativeAppDescriptor,
+    ) -> Option<String> {
+        let path = store.root().join("icons").join(format!("{}.png", desc.id));
+        if fs::read(&path).ok().as_deref() != Some(desc.icon_png) {
+            let write = fs::create_dir_all(path.parent()?)
+                .and_then(|()| fs::write(&path, desc.icon_png));
+            if let Err(error) = write {
+                tracing::warn!(
+                    target: "native_apps",
+                    id = desc.id,
+                    %error,
+                    "app icon materialization failed"
+                );
+                return None;
+            }
+        }
+        let path = path.to_string_lossy();
+        Some(
+            path.strip_prefix(r"\\?\")
+                .unwrap_or(path.as_ref())
+                .to_owned(),
+        )
     }
 
     /// One row per hardcoded app. The release probe runs inline (bounded by
@@ -391,6 +431,7 @@ impl PackageService {
                     NativeAvailability::Ready
                 },
                 job: self.current_job(desc.id),
+                icon_path: self.ensure_native_icon(&store, desc),
             }));
         }
         Ok(rows)

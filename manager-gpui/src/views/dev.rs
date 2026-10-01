@@ -206,13 +206,11 @@ pub fn render(
 
     col = col.child(slot_or(app, "dev.packages", |v| {
         let items = varr(v, "packages");
+        // Dev installs never come from the signed catalog — catalog_sequence
+        // 0 is the marker (see packages.install_development).
         let dev: Vec<_> = items
             .iter()
-            .filter(|p| {
-                vstr(p, "source") == "development"
-                    || vbool(p, "development")
-                    || vstr(p, "channel") == "dev"
-            })
+            .filter(|p| super::store::is_development(p))
             .cloned()
             .collect();
         let mut el = card();
@@ -229,9 +227,10 @@ pub fn render(
             let id = vstr(&p, "id");
             let uid = id.clone();
             el = el.child(
-                row(
+                entry_row(
+                    icon_file(vopt(&p, "icon_path")),
                     vopt(&p, "name").unwrap_or_else(|| id.clone()),
-                    format!("v{} · {}", vstr(&p, "version"), id),
+                    format!("{id} · v{}", vstr(&p, "version")),
                 )
                 .child(btn_id(&format!("dev-un-{id}"), "Удалить", {
                     cx.listener(move |this, _, _, cx| {

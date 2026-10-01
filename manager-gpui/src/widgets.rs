@@ -12,6 +12,88 @@ use crate::app::ManagerApp;
 use crate::views;
 use mundus_gpui_kit::theme::*;
 
+// --- Store/list entries ------------------------------------------------------
+
+/// First letter placeholder for a missing icon — the same neutral badge the
+/// usage table renders when `app_index.icon_path` has nothing cached.
+fn icon_letter(name: &str) -> String {
+    name.chars()
+        .find(|ch| ch.is_alphanumeric())
+        .unwrap_or('?')
+        .to_uppercase()
+        .to_string()
+}
+
+/// Icon from an on-disk image path (`icon_path` fields the Engine serves).
+pub fn icon_file(path: Option<String>) -> Option<ImageSource> {
+    path.filter(|p| !p.is_empty())
+        .map(|p| ImageSource::from(std::path::PathBuf::from(p)))
+}
+
+/// Icon from a remote image URL (store catalog `icon_url`).
+pub fn icon_url(url: Option<String>) -> Option<ImageSource> {
+    url.filter(|u| !u.is_empty()).map(ImageSource::from)
+}
+
+/// 20px icon slot: the letter badge always renders underneath, so a missing
+/// or unloadable image degrades to a neutral placeholder — never an empty
+/// hole in the row.
+pub fn app_icon(source: Option<ImageSource>, name: &str) -> Div {
+    let mut icon = div()
+        .w(px(20.))
+        .h(px(20.))
+        .flex_none()
+        .relative()
+        .rounded_md()
+        .overflow_hidden()
+        .bg(fade(FG(), 0.06))
+        .child(
+            div()
+                .size_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .text_size(px(11.))
+                .text_color(c(MUTED_FG()))
+                .child(icon_letter(name)),
+        );
+    if let Some(source) = source {
+        icon = icon.child(
+            div()
+                .absolute()
+                .inset_0()
+                .child(img(source).w(px(20.)).h(px(20.))),
+        );
+    }
+    icon
+}
+
+/// Icon + primary display name + muted secondary caption (usually the
+/// package id) — the shared row head for every store-style list.
+pub fn entry_row(icon: Option<ImageSource>, title: String, caption: String) -> Div {
+    div()
+        .w_full()
+        .min_h_10()
+        .flex()
+        .items_center()
+        .gap_3()
+        .child(app_icon(icon, &title))
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .flex()
+                .flex_col()
+                .child(div().text_size(px(13.)).child(title))
+                .child(
+                    div()
+                        .text_size(px(12.))
+                        .text_color(c(MUTED_FG()))
+                        .child(caption),
+                ),
+        )
+}
+
 // --- Chrome -----------------------------------------------------------------
 
 pub fn render_sidebar(

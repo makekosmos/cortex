@@ -96,30 +96,9 @@ fn usage_row(entry: &Value) -> Div {
         .unwrap_or_else(|| vstr(entry, "processName"));
     let icon_path = vopt(entry, "iconPath").filter(|p| !p.is_empty());
 
-    // 20px icon slot: cached PNG via app_index.icon_path, letter badge otherwise
-    // (Vue renders an <img> that hides itself on error).
-    let mut icon = div()
-        .w(px(20.))
-        .h(px(20.))
-        .flex_none()
-        .rounded_md()
-        .overflow_hidden()
-        .flex()
-        .items_center()
-        .justify_center()
-        .bg(fade(FG(), 0.06))
-        .text_size(px(11.))
-        .text_color(c(MUTED_FG()));
-    icon = match icon_path {
-        Some(path) => icon.child(img(std::path::PathBuf::from(path)).size(px(20.))),
-        None => icon.child(
-            name.chars()
-                .next()
-                .unwrap_or('?')
-                .to_uppercase()
-                .to_string(),
-        ),
-    };
+    // 20px icon slot: cached PNG via app_index.icon_path, letter badge
+    // underneath when the cache has nothing or the file fails to load.
+    let icon = app_icon(icon_file(icon_path), &name);
 
     div()
         .w_full()

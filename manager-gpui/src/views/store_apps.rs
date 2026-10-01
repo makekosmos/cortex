@@ -81,18 +81,20 @@ fn native_status(item: &serde_json::Value) -> (String, u32) {
 
 /// Native GPUI apps (KOS-265): GitHub Releases rows with
 /// Установить / Обновить / Открыть / Удалить. `installed_only` narrows the
-/// list for the Установленные tab.
+/// list for the Установленные tab. `extra` appends already-built rows
+/// (app-kind .kspkg packages, KOS-283) inside the same «Приложения» card.
 pub(super) fn render_native_apps(
     app: &mut ManagerApp,
     cx: &mut Context<ManagerApp>,
     installed_only: bool,
+    extra: Vec<Div>,
 ) -> AnyElement {
     slot_or(app, "store.apps", |v| {
         let items: Vec<&serde_json::Value> = varr(v, "apps")
             .iter()
             .filter(|item| !installed_only || vbool(item, "installed"))
             .collect();
-        if items.is_empty() {
+        if items.is_empty() && extra.is_empty() {
             // Nothing to show — render nothing rather than a blank padded
             // card.
             return div().into_any_element();
@@ -108,7 +110,8 @@ pub(super) fn render_native_apps(
             let id = vstr(item, "id");
             let name = vopt(item, "name").unwrap_or_else(|| id.clone());
             let (status, color) = native_status(item);
-            let mut r = row(name.clone(), id.clone()).child(badge(status, color));
+            let mut r = entry_row(icon_file(vopt(item, "icon_path")), name.clone(), id.clone())
+                .child(badge(status, color));
             for action_kind in native_actions(item) {
                 let aid = id.clone();
                 let aname = name.clone();
@@ -151,6 +154,9 @@ pub(super) fn render_native_apps(
                 });
             }
             el = el.child(r);
+        }
+        for row in extra {
+            el = el.child(row);
         }
         el.into_any_element()
     })
