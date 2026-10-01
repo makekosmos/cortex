@@ -112,6 +112,10 @@
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
 
+    // KOS-287: per-id aggregates are merged in Rust under the canonical exe
+    // identity (path case / version folders / updates collapse to one row),
+    // then sorted by active time. The SQL therefore has no LIMIT — the
+    // `top_apps_limit` applies after the merge.
     let mut stmt = conn
         .prepare(
             "SELECT tracked_apps.id,
@@ -126,13 +130,11 @@
                     MAX(COALESCE(usage_sessions.ended_at, usage_sessions.started_at)) AS last_seen_at
              FROM tracked_apps
              JOIN usage_sessions ON usage_sessions.tracked_app_id = tracked_apps.id
-             GROUP BY tracked_apps.id
-             ORDER BY runtime_ms DESC, foreground_ms DESC, last_seen_at DESC
-             LIMIT ?1",
+             GROUP BY tracked_apps.id",
         )
         .map_err(|e| e.to_string())?;
-    let top_apps = stmt
-        .query_map(params![top_apps_limit], |row| {
+    let top_app_rows = stmt
+        .query_map([], |row| {
             let display_name: Option<String> = row.get(1)?;
             let process_name: String = row.get(2)?;
             Ok(TopAppEntry {
@@ -151,11 +153,17 @@
                 idle_ms: row.get::<_, Option<i64>>(7)?.unwrap_or(0),
                 sessions: row.get::<_, Option<i64>>(8)?.unwrap_or(0),
                 last_seen_at: row.get(9)?,
+                is_system: false,
             })
         })
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
+    let top_apps = merge_top_apps(
+        top_app_rows,
+        top_apps_limit.max(0) as usize,
+        &system_windows_dir(),
+    );
 
     let mut stmt = conn
         .prepare(

@@ -131,6 +131,9 @@ pub struct TopAppEntry {
     pub idle_ms: i64,
     pub sessions: i64,
     pub last_seen_at: Option<String>,
+    /// Row's exe lives under %SystemRoot% — OS noise (explorer, sihost, …).
+    /// UI hides these by default behind a toggle.
+    pub is_system: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
