@@ -11,6 +11,7 @@
 // См. spec: `.agent/tasks/2026-05-22-app-launcher/spec.md`.
 
 pub mod app;
+pub mod exe_info;
 pub mod icons;
 pub mod platform;
 pub mod ranking;
@@ -121,6 +122,15 @@ pub trait AppSource: Send + Sync {
     fn discover(&self) -> Result<Vec<App>>;
 }
 
+/// Memoized per-exe metadata for the usage report (KOS-287): version-info
+/// display name + icon PNG. Extraction failures are cached too — re-reading a
+/// permanently iconless exe on every refresh would just burn FFI calls.
+#[derive(Debug, Clone, Default)]
+pub struct ExeInfo {
+    pub display_name: Option<String>,
+    pub icon_path: Option<String>,
+}
+
 /// Реестр всех источников + кэш + SQLite store.
 ///
 /// Singleton per backend process, shared через `Arc`.
@@ -129,6 +139,7 @@ pub struct AppIndex {
     store: Arc<store::AppStore>,
     cache: Arc<RwLock<Vec<App>>>,
     icon_cache_dir: PathBuf,
+    exe_info_cache: std::sync::Mutex<std::collections::HashMap<String, ExeInfo>>,
     last_rescan_ms: AtomicU64,
     icon_reads_count: AtomicU64,
     icon_bytes_read: AtomicU64,
@@ -165,6 +176,7 @@ impl AppIndex {
             store,
             cache,
             icon_cache_dir,
+            exe_info_cache: std::sync::Mutex::new(std::collections::HashMap::new()),
             last_rescan_ms: AtomicU64::new(0),
             icon_reads_count: AtomicU64::new(0),
             icon_bytes_read: AtomicU64::new(0),
@@ -176,6 +188,40 @@ impl AppIndex {
             last_icon_ms: AtomicU64::new(0),
             icon_sleep_ms: AtomicU64::new(icon_extract_sleep()),
         })
+    }
+
+    /// Per-exe metadata for the usage report: version-info display name +
+    /// icon PNG extracted on demand through the shared `icons::ensure_icon`
+    /// cache (no second extractor). Blocking FFI — call from a blocking-pool
+    /// thread; results are memoized for the process lifetime.
+    pub fn exe_info(&self, exec_path: &str) -> ExeInfo {
+        if let Some(hit) = self
+            .exe_info_cache
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(exec_path)
+        {
+            return hit.clone();
+        }
+        let app = App {
+            id: String::new(),
+            name: String::new(),
+            exec_path: exec_path.to_string(),
+            icon_path: None,
+            icon_source: None,
+            kind: AppKind::Win32,
+            source: "usage_tracker".to_string(),
+            mtime: 0,
+        };
+        let info = ExeInfo {
+            display_name: exe_info::exe_display_name(exec_path),
+            icon_path: icons::ensure_icon(&self.icon_cache_dir, &app).ok(),
+        };
+        self.exe_info_cache
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(exec_path.to_string(), info.clone());
+        info
     }
 
     /// Force re-index — пройти все sources, обновить SQLite + cache.
@@ -453,6 +499,7 @@ mod tests {
             store: store.clone(),
             cache: Arc::new(RwLock::new(Vec::new())),
             icon_cache_dir: icon_dir,
+            exe_info_cache: std::sync::Mutex::new(std::collections::HashMap::new()),
             last_rescan_ms: AtomicU64::new(0),
             icon_reads_count: AtomicU64::new(0),
             icon_bytes_read: AtomicU64::new(0),
@@ -490,6 +537,7 @@ mod tests {
             store,
             cache: Arc::new(RwLock::new(Vec::new())),
             icon_cache_dir: icon_dir,
+            exe_info_cache: std::sync::Mutex::new(std::collections::HashMap::new()),
             last_rescan_ms: AtomicU64::new(0),
             icon_reads_count: AtomicU64::new(0),
             icon_bytes_read: AtomicU64::new(0),
