@@ -25,12 +25,18 @@ jobs:
   release:
     runs-on: windows-latest
     timeout-minutes: 300
+    # Releases live in this repo (makekosmos/cortex) — the job's own
+    # GITHUB_TOKEN pushes the release commit/tag and creates the GitHub
+    # release. All other scopes stay at the default "none".
+    permissions:
+      contents: write
     steps:
+      # Credentials persist (the default) so `git push` reuses the same
+      # GITHUB_TOKEN — there are no PAT secrets anywhere in this workflow.
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: main
           fetch-depth: 0
-          persist-credentials: false
 
       # Releases are only cut from main — a dispatch on another ref must fail.
       - name: Validate release branch
@@ -77,28 +83,9 @@ jobs:
         id: plan
         shell: bash
         env:
-          # Read-only on makekosmos/desktop releases; falls back to anonymous
-          # rate limits if unset.
-          GH_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKEN }}
+          # Read-only on this repo's releases; the job token suffices.
+          GH_TOKEN: ${{ github.token }}
         run: node desktop/scripts/release-plan.mjs plan
-
-      # A release run without both tokens can only die at the push/publish
-      # steps — hours in. Fail here, naming only the secret names.
-      - name: Check release secrets exist
-        if: steps.plan.outputs.release == 'true'
-        shell: bash
-        env:
-          CORTEX_RELEASE_TOKEN: ${{ secrets.CORTEX_RELEASE_TOKEN }}
-          DESKTOP_RELEASE_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKEN }}
-        run: |
-          missing=""
-          [ -z "$CORTEX_RELEASE_TOKEN" ] && missing=" CORTEX_RELEASE_TOKEN"
-          [ -z "$DESKTOP_RELEASE_TOKEN" ] && missing="$missing DESKTOP_RELEASE_TOKEN"
-          if [ -n "$missing" ]; then
-            echo "Release is planned but these Actions secrets are missing:$missing" >&2
-            echo "Add them under repo Settings → Secrets and variables → Actions, then rerun." >&2
-            exit 1
-          fi
 
       # plan.outputs.sha is HEAD normally, or the already-tagged commit when
       # retrying a run that died between tag push and publish — the release
@@ -153,7 +140,6 @@ jobs:
         env:
           VERSION: ${{ steps.plan.outputs.version }}
           BASE_SHA: ${{ steps.plan.outputs.sha }}
-          PUSH_TOKEN: ${{ secrets.CORTEX_RELEASE_TOKEN }}
         run: |
           set -euo pipefail
           head=$(git rev-parse HEAD)
@@ -175,9 +161,7 @@ jobs:
           fi
           [ -z "$remote_tag" ] && refs+=("refs/tags/v$VERSION")
           if [ ${#refs[@]} -gt 0 ]; then
-            # Token via credential helper — never in the remote URL, so git
-            # error output can never echo it.
-            git config credential.helper '!f() { echo username=x-access-token; echo "password=$PUSH_TOKEN"; }; f'
+            # The checkout's persisted GITHUB_TOKEN authenticates the push.
             git push --atomic origin "${refs[@]}"
           else
             echo "Release commit and tag already on origin — nothing to push"
@@ -186,7 +170,7 @@ jobs:
       - name: Publish release
         if: steps.plan.outputs.release == 'true'
         env:
-          GH_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: node desktop/scripts/publish-release.mjs --platform win --receipt desktop/release/release-receipt.v2.json
 
       - name: Verify release channel
