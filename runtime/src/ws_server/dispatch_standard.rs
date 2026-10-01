@@ -205,7 +205,11 @@ pub(super) async fn dispatch_standard(
     } else if let Some(rest) = operation.strip_prefix("manager.") {
         let result = match rest {
             "data.summary" => manager_state
-                .data_summary(&ark_host, package_service.storage_root())
+                .data_summary(&ark_host)
+                .await
+                .map(LocalResponse::ok),
+            "data.storage" => manager_state
+                .data_storage(package_service.storage_root())
                 .await
                 .map(LocalResponse::ok),
             "data.types" => manager_state

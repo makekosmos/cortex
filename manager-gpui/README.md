@@ -31,7 +31,7 @@ MUNDUS_DATA_DIR=/tmp/mundus-dev cargo run --manifest-path manager-gpui/Cargo.tom
 
 | Раздел | Операции |
 | --- | --- |
-| Данные | `manager.data.summary/types/list/search` |
+| Данные | `manager.data.summary/types/list/search/storage` |
 | Синхронизация | `get_sync_snapshot`, `get_own_iroh_ticket`, `connect_with_pairing_code`, `disconnect_peer` |
 | Маркетплейс | `store.catalog/refresh`, `packages.list/install/set_enabled/uninstall/trust_status/disclosure/refresh_catalog` |
 | Движок | `engine.settings.get/set` (warm timeout, usage tracker) |

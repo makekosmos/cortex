@@ -279,3 +279,56 @@
         assert_eq!(data.todos.len(), 1);
         assert_eq!(data.todos[0].id, "t1");
     }
+
+    #[test]
+    fn by_type_queries_match_objects_stored_under_legacy_alias() {
+        let conn = setup_db();
+        // Rows written before the type registry existed keep `task_obj` in
+        // objects.type_id, which never was a row in object_types — the FK was
+        // added later. Seeding it directly (upsert_object() would canonicalise
+        // the id on write) requires FK checks off on this connection.
+        conn.execute_batch("PRAGMA foreign_keys = OFF").unwrap();
+        for (id, deleted) in [
+            ("legacy-task-1", None),
+            ("legacy-task-2", None),
+            ("legacy-task-gone", Some("2026-02-01T00:00:00.000Z")),
+        ] {
+            conn.execute(
+                "INSERT INTO objects (id,type_id,type_version,title,content_json,props_json,created_at,updated_at,deleted_at)
+                 VALUES (?1,'task_obj','0.0.0-legacy',?1,'{}','{}','2026-01-01T00:00:00.000Z','2026-01-02T00:00:00.000Z',?2)",
+                params![id, deleted],
+            )
+            .unwrap();
+        }
+        for queried in ["com.kosmos.task", "task_obj"] {
+            let summaries = list_object_summaries_by_type(&conn, queried).unwrap();
+            assert_eq!(
+                summaries.len(),
+                3,
+                "{queried} must see alias-stored objects"
+            );
+            let objects = list_objects_by_type(&conn, queried).unwrap();
+            assert_eq!(objects.len(), 3);
+        }
+
+        // Same contract for the running-time-entry hot path.
+        let running = make_time_entry("entry-legacy", "2026-03-01T10:00:00.000Z", None, "manual");
+        conn.execute(
+            "INSERT INTO objects (id,type_id,type_version,title,content_json,props_json,created_at,updated_at,deleted_at)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,NULL)",
+            params![
+                running.id,
+                running.type_id,
+                running.type_version,
+                running.title,
+                serde_json::to_string(&running.content_json).unwrap(),
+                serde_json::to_string(&running.props_json).unwrap(),
+                running.created_at,
+                running.updated_at,
+            ],
+        )
+        .unwrap();
+        let running_entries = list_running_time_entries(&conn, Some("manual")).unwrap();
+        assert_eq!(running_entries.len(), 1);
+        assert_eq!(running_entries[0].id, "entry-legacy");
+    }
