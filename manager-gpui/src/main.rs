@@ -3,7 +3,6 @@
 #![windows_subsystem = "windows"]
 
 mod app;
-mod assets;
 mod components;
 mod devpkg;
 mod fps;
@@ -34,7 +33,7 @@ fn window_bounds(cx: &mut App) -> Bounds<gpui::Pixels> {
 
 fn main() {
     gpui::application()
-        .with_assets(assets::Assets)
+        .with_assets(imago_gpui::assets::Assets)
         .run(|cx: &mut App| {
             gpui_component::init(cx);
             cx.text_system()

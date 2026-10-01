@@ -27,17 +27,12 @@ pub struct Reply {
 pub struct Worker {
     pub commands: Sender<Command>,
     pub replies: Receiver<Reply>,
-    /// Engine broadcast events (`{"event": ...}`) from the WS subscription —
-    /// drained on the same UI poll as `replies`.
-    pub events: Receiver<Value>,
 }
 
 impl Worker {
     pub fn start(data_dir: Option<std::path::PathBuf>) -> Self {
         let (commands, requests) = std::sync::mpsc::channel::<Command>();
         let (results, replies) = std::sync::mpsc::channel::<Reply>();
-        let (event_sink, events) = std::sync::mpsc::channel::<Value>();
-        let events_dir = data_dir.clone();
         std::thread::spawn(move || {
             let engine = Engine { data_dir };
             for request in requests {
@@ -60,33 +55,7 @@ impl Worker {
                 }
             }
         });
-        // Engine broadcast events (dictation hotkey triggers, state and
-        // download progress) — ws_server pushes them to every hello'd client.
-        // Blocking socket reads stay off the UI thread; reconnect with
-        // backoff so an Engine restart resubscribes on its own.
-        std::thread::spawn(move || {
-            let engine = Engine {
-                data_dir: events_dir,
-            };
-            let mut backoff = std::time::Duration::from_millis(500);
-            loop {
-                if let Ok(mut stream) = engine.subscribe() {
-                    backoff = std::time::Duration::from_millis(500);
-                    while let Some(event) = stream.next_event() {
-                        if event_sink.send(event).is_err() {
-                            return;
-                        }
-                    }
-                }
-                std::thread::sleep(backoff);
-                backoff = (backoff * 2).min(std::time::Duration::from_secs(10));
-            }
-        });
-        Self {
-            commands,
-            replies,
-            events,
-        }
+        Self { commands, replies }
     }
 }
 

@@ -172,7 +172,6 @@ async fn a11y_tree_shell_exposes_russian_names(cx: &mut TestAppContext) {
         "Затреканное время",
         "Маркетплейс",
         "Настройки",
-        "Диктовка",
         "Обновить",
         "Боковая панель",
         "Свернуть",
