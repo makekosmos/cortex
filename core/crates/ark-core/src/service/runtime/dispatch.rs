@@ -51,9 +51,16 @@ pub(crate) async fn handle_request(
             range_days,
             top_apps_limit,
             recent_sessions_limit,
+            windows_dir,
         } => {
-            usage::get_usage_analytics(state, range_days, top_apps_limit, recent_sessions_limit)
-                .await
+            usage::get_usage_analytics(
+                state,
+                range_days,
+                top_apps_limit,
+                recent_sessions_limit,
+                windows_dir,
+            )
+            .await
         }
         Request::ListRecentUsageProcesses { limit } => {
             usage::list_recent_usage_processes(state, limit).await

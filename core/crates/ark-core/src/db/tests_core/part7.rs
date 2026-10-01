@@ -68,7 +68,7 @@
                 Some("2026-02-01T00:00:00Z"),
             ),
         ];
-        let merged = merge_top_apps(rows, 10, "c:\\windows");
+        let merged = merge_top_apps(rows, 10, Some("c:\\windows"));
         assert_eq!(merged.len(), 1);
         let app = &merged[0];
         assert_eq!(app.id, "new");
@@ -102,7 +102,7 @@
                 Some("2026-01-02T00:00:00Z"),
             ),
         ];
-        let merged = merge_top_apps(rows, 10, "c:\\windows");
+        let merged = merge_top_apps(rows, 10, Some("c:\\windows"));
         assert_eq!(merged.len(), 1);
         assert_eq!(merged[0].display_name, "Microsoft Edge");
         assert_eq!(merged[0].foreground_ms, 30);
@@ -121,12 +121,27 @@
             ),
             top_app_entry("y", "c:\\apps\\y.exe", "Y", 99, Some("2026-01-01T00:00:00Z")),
         ];
-        let merged = merge_top_apps(rows, 10, "c:\\windows");
+        let merged = merge_top_apps(rows, 10, Some("c:\\windows"));
         assert_eq!(
             merged.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(),
             vec!["y", "x", "explorer"]
         );
         assert!(merged[2].is_system);
+        assert!(!merged[0].is_system);
+    }
+
+    #[test]
+    fn merge_marks_nothing_system_without_windows_dir() {
+        // Engine could not resolve %SystemRoot% (or non-Windows host): rows
+        // stay unmarked rather than guessing a hard-coded path.
+        let rows = vec![top_app_entry(
+            "explorer",
+            "c:\\windows\\explorer.exe",
+            "Explorer",
+            5,
+            Some("2026-01-02T00:00:00Z"),
+        )];
+        let merged = merge_top_apps(rows, 10, None);
         assert!(!merged[0].is_system);
     }
 
@@ -179,7 +194,8 @@
         upsert_usage_session(&conn, &s_new).unwrap();
         upsert_usage_session(&conn, &s_exp).unwrap();
 
-        let snapshot = load_usage_analytics(&conn, 21, 10, 24).unwrap();
+        let snapshot =
+            load_usage_analytics(&conn, 21, 10, 24, Some("c:\\windows")).unwrap();
         assert_eq!(snapshot.top_apps.len(), 2);
         let discord = &snapshot.top_apps[0];
         assert_eq!(discord.display_name, "Discord");
@@ -188,4 +204,48 @@
         assert!(!discord.is_system);
         assert_eq!(snapshot.top_apps[1].process_name, "explorer.exe");
         assert!(snapshot.top_apps[1].is_system);
+    }
+
+    #[test]
+    fn summary_headline_is_active_time_not_visible_runtime() {
+        // KOS-287 regression: the summary card's total must be active
+        // (foreground && !idle) time — the removed `totalRuntimeMs` carried
+        // visible wall-clock time and inflated the headline.
+        let conn = setup_db();
+        let app = make_tracked_app("app-1");
+        upsert_tracked_app(&conn, &app).unwrap();
+        let mut session = make_usage_session("s-1", "app-1");
+        session.runtime_ms = 10_000; // visible
+        session.foreground_ms = 4_000; // active
+        session.idle_ms = 1_000;
+        upsert_usage_session(&conn, &session).unwrap();
+
+        let snapshot = load_usage_analytics(&conn, 21, 10, 24, None).unwrap();
+        assert_eq!(snapshot.summary.total_foreground_ms, 4_000);
+        assert_eq!(snapshot.summary.total_idle_ms, 1_000);
+    }
+
+    #[test]
+    fn usage_process_candidates_dedup_across_version_dirs() {
+        // The game-binding picker must not list the same app twice when its
+        // exe moved between version dirs (pre-KOS-287 ids hashed the path).
+        let conn = setup_db();
+        let mut old_app = make_tracked_app("cand-old");
+        old_app.exe_path = "C:\\Games\\Nebula\\app-1.0.1\\nebula.exe".to_string();
+        old_app.normalized_exe_path =
+            "c:\\games\\nebula\\app-1.0.1\\nebula.exe".to_string();
+        let mut new_app = make_tracked_app("cand-new");
+        new_app.exe_path = "C:\\Games\\Nebula\\app-1.0.2\\nebula.exe".to_string();
+        new_app.normalized_exe_path =
+            "c:\\games\\nebula\\app-1.0.2\\nebula.exe".to_string();
+        upsert_tracked_app(&conn, &old_app).unwrap();
+        upsert_tracked_app(&conn, &new_app).unwrap();
+        upsert_usage_session(&conn, &make_usage_session("s-old", "cand-old")).unwrap();
+        let mut s_new = make_usage_session("s-new", "cand-new");
+        s_new.ended_at = Some("2026-02-01T00:10:00.000Z".to_string());
+        upsert_usage_session(&conn, &s_new).unwrap();
+
+        let recent = list_recent_usage_processes(&conn, 10).unwrap();
+        assert_eq!(recent.len(), 1);
+        assert_eq!(recent[0].tracked_app_id, "cand-new");
     }

@@ -19,8 +19,8 @@
     let aggregate_sql = format!(
         "SELECT tracked_apps.normalized_exe_path AS normalized_path,
                 LOWER(COALESCE(tracked_apps.process_name, '')) AS normalized_process_name,
-                CAST(SUM(usage_sessions.runtime_ms) / 1000 AS INTEGER) AS total_seconds,
-                SUM(CASE WHEN usage_sessions.runtime_ms > 0 THEN 1 ELSE 0 END) AS session_count,
+                CAST(SUM(usage_sessions.foreground_ms) / 1000 AS INTEGER) AS total_seconds,
+                SUM(CASE WHEN usage_sessions.foreground_ms > 0 THEN 1 ELSE 0 END) AS session_count,
                 MAX(COALESCE(usage_sessions.ended_at, usage_sessions.started_at)) AS last_played
          FROM usage_sessions
          JOIN tracked_apps ON tracked_apps.id = usage_sessions.tracked_app_id
@@ -103,7 +103,7 @@
             "SELECT tracked_apps.normalized_exe_path AS normalized_path,
                     LOWER(COALESCE(tracked_apps.process_name, '')) AS normalized_process_name,
                     SUBSTR(COALESCE(usage_sessions.ended_at, usage_sessions.started_at), 1, 10) AS date,
-                    CAST(SUM(usage_sessions.runtime_ms) / 1000 AS INTEGER) AS seconds
+                    CAST(SUM(usage_sessions.foreground_ms) / 1000 AS INTEGER) AS seconds
              FROM usage_sessions
              JOIN tracked_apps ON tracked_apps.id = usage_sessions.tracked_app_id
              {daily_where_sql}

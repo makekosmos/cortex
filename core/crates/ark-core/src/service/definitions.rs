@@ -148,6 +148,10 @@ pub(crate) enum Request {
         top_apps_limit: Option<i64>,
         #[serde(default)]
         recent_sessions_limit: Option<i64>,
+        // Resolved engine-side via GetSystemWindowsDirectoryW — ark-core does
+        // not guess host paths. Absent means: mark nothing as system.
+        #[serde(default)]
+        windows_dir: Option<String>,
     },
     ListRecentUsageProcesses {
         #[serde(default)]

@@ -1,8 +1,12 @@
-﻿pub fn load_usage_analytics(
+﻿/// `windows_dir` is the real OS system dir (resolved engine-side via
+/// `GetSystemWindowsDirectoryW`); `None` marks nothing as system — ark-core
+/// must not guess host paths from the environment.
+pub fn load_usage_analytics(
     conn: &Connection,
     range_days: i64,
     top_apps_limit: i64,
     recent_sessions_limit: i64,
+    windows_dir: Option<&str>,
 ) -> Result<UsageAnalyticsSnapshot, String> {
     let range_days = clamp_positive_i64(range_days, 21);
     let top_apps_limit = clamp_positive_i64(top_apps_limit, 8);
@@ -15,7 +19,6 @@
             "SELECT COUNT(DISTINCT tracked_apps.id) AS tracked_app_count,
                     COUNT(DISTINCT usage_sessions.id) AS session_count,
                     (SELECT COUNT(*) FROM usage_events) AS event_count,
-                    COALESCE(SUM(usage_sessions.runtime_ms), 0) AS total_runtime_ms,
                     COALESCE(SUM(usage_sessions.foreground_ms), 0) AS total_foreground_ms,
                     COALESCE(SUM(usage_sessions.idle_ms), 0) AS total_idle_ms,
                     MIN(usage_sessions.started_at) AS first_recorded_at,
@@ -28,11 +31,10 @@
                     tracked_app_count: row.get::<_, Option<i64>>(0)?.unwrap_or(0),
                     session_count: row.get::<_, Option<i64>>(1)?.unwrap_or(0),
                     event_count: row.get::<_, Option<i64>>(2)?.unwrap_or(0),
-                    total_runtime_ms: row.get::<_, Option<i64>>(3)?.unwrap_or(0),
-                    total_foreground_ms: row.get::<_, Option<i64>>(4)?.unwrap_or(0),
-                    total_idle_ms: row.get::<_, Option<i64>>(5)?.unwrap_or(0),
-                    first_recorded_at: row.get(6)?,
-                    last_recorded_at: row.get(7)?,
+                    total_foreground_ms: row.get::<_, Option<i64>>(3)?.unwrap_or(0),
+                    total_idle_ms: row.get::<_, Option<i64>>(4)?.unwrap_or(0),
+                    first_recorded_at: row.get(5)?,
+                    last_recorded_at: row.get(6)?,
                 })
             },
         )
@@ -162,7 +164,7 @@
     let top_apps = merge_top_apps(
         top_app_rows,
         top_apps_limit.max(0) as usize,
-        &system_windows_dir(),
+        windows_dir,
     );
 
     let mut stmt = conn

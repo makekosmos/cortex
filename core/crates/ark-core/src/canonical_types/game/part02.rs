@@ -12,15 +12,95 @@ fn links_for(conn: &Connection, id: &str) -> Result<Vec<GameLink>, String> {
 }
 
 fn usage_for(conn: &Connection, id: &str) -> Result<GameUsage, String> {
-    let row: Option<(i64, i64, Option<String>)> = conn.query_row(
-        "SELECT COALESCE(SUM(CAST((julianday(COALESCE(s.ended_at,s.started_at))-julianday(s.started_at))*86400 AS INTEGER)),0), COUNT(s.id), MAX(COALESCE(s.ended_at,s.started_at)) FROM usage_sessions s JOIN object_links l ON l.target_object_id=s.tracked_app_id WHERE l.source_object_id=?1 AND l.link_type IN ('game','game-usage')",
-        params![id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).optional().map_err(|e| e.to_string())?;
+    // The link pins ONE tracked_app id — the id used to hash the full exe
+    // path, so an update across a version dir split the app's sessions under
+    // a second id and playtime silently halved (KOS-287). Expand the link to
+    // every tracked_app row sharing the canonical exe identity before summing.
+    let linked_ids: Vec<String> = {
+        let mut stmt = conn
+            .prepare(
+                "SELECT target_object_id FROM object_links
+                 WHERE source_object_id=?1 AND link_type IN ('game','game-usage')",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![id], |r| r.get(0))
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?
+    };
+    let wanted_ids = usage_session_app_ids(conn, &linked_ids)?;
+    if wanted_ids.is_empty() {
+        return Ok(GameUsage {
+            seconds: 0,
+            session_count: 0,
+            last_played_at: None,
+        });
+    }
+    let placeholders = wanted_ids
+        .iter()
+        .enumerate()
+        .map(|(i, _)| format!("?{}", i + 1))
+        .collect::<Vec<_>>()
+        .join(", ");
+    // Active play time: foreground && !idle. julianday(ended-started)
+    // wall-clock counted idle and never-closed sessions (KOS-287).
+    let sql = format!(
+        "SELECT COALESCE(SUM(s.foreground_ms) / 1000, 0), COUNT(s.id),
+                MAX(COALESCE(s.ended_at, s.started_at))
+         FROM usage_sessions s WHERE s.tracked_app_id IN ({placeholders})"
+    );
+    let row: Option<(i64, i64, Option<String>)> = conn
+        .query_row(
+            &sql,
+            params_from_iter(wanted_ids.iter()),
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
     let (seconds, count, last) = row.unwrap_or((0, 0, None));
     Ok(GameUsage {
         seconds: seconds.max(0),
         session_count: count.max(0) as u64,
         last_played_at: last,
     })
+}
+
+/// linked tracked_app ids → every tracked_app row sharing the canonical exe
+/// identity (version dirs, path case, update moves). Linked ids missing from
+/// tracked_apps are kept verbatim — behavior unchanged for dangling links.
+fn usage_session_app_ids(conn: &Connection, linked_ids: &[String]) -> Result<Vec<String>, String> {
+    if linked_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut stmt = conn
+        .prepare("SELECT id, normalized_exe_path, process_name FROM tracked_apps")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?;
+    let mut key_by_id = std::collections::HashMap::new();
+    for row in rows {
+        let (app_id, path, process_name) = row.map_err(|e| e.to_string())?;
+        key_by_id.insert(app_id, db::canonical_app_key(&path, &process_name));
+    }
+    let wanted_keys: std::collections::HashSet<&str> = linked_ids
+        .iter()
+        .filter_map(|linked| key_by_id.get(linked.as_str()).map(String::as_str))
+        .collect();
+    let mut ids: Vec<String> = linked_ids.to_vec();
+    for (app_id, key) in &key_by_id {
+        if wanted_keys.contains(key.as_str()) && !linked_ids.contains(app_id) {
+            ids.push(app_id.clone());
+        }
+    }
+    Ok(ids)
 }
 
 fn quarantine_for(conn: &Connection, id: &str) -> Result<GameQuarantine, String> {
@@ -202,6 +282,114 @@ pub fn upsert_game(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::{ObjectLink, TrackedApp, UsageSession};
+
+    fn tracked_app(id: &str, normalized_path: &str) -> TrackedApp {
+        TrackedApp {
+            id: id.to_string(),
+            platform: "windows".to_string(),
+            exe_path: normalized_path.to_string(),
+            normalized_exe_path: normalized_path.to_string(),
+            process_name: "game.exe".to_string(),
+            display_name: None,
+            publisher: None,
+            icon_ref: None,
+            first_seen_at: "2026-01-01T00:00:00.000Z".to_string(),
+            last_seen_at: "2026-01-01T00:00:00.000Z".to_string(),
+        }
+    }
+
+    fn session(id: &str, app_id: &str, foreground_ms: i64, idle_ms: i64) -> UsageSession {
+        UsageSession {
+            id: id.to_string(),
+            tracked_app_id: app_id.to_string(),
+            device_id: "d".to_string(),
+            device_name: "D".to_string(),
+            platform: "windows".to_string(),
+            started_at: "2026-01-01T00:00:00.000Z".to_string(),
+            ended_at: Some("2026-01-01T01:00:00.000Z".to_string()),
+            runtime_ms: 3_600_000,
+            foreground_ms,
+            idle_ms,
+            window_title: None,
+            process_name: "game.exe".to_string(),
+            exe_path: String::new(),
+            pid_start: None,
+            pid_end: None,
+            meta_json: json!({}),
+        }
+    }
+
+    /// KOS-287 regression: a game link pins one tracked_app id, but updates
+    /// across version dirs split the app into two ids. Playtime must merge
+    /// them by canonical exe identity — and count active (foreground, not
+    /// idle) seconds rather than the julianday wall-clock interval.
+    #[test]
+    fn game_usage_merges_version_dir_splits_and_counts_active_time() {
+        let conn = Connection::open_in_memory().unwrap();
+        crate::db::init_schema(&conn).unwrap();
+        // object_links has FK to objects(id) on both ends.
+        crate::db::upsert_object_type(
+            &conn,
+            &crate::types::ObjectType {
+                id: "game".into(),
+                name: "Game".into(),
+                schema_json: "{}".into(),
+                ui_schema_json: "{}".into(),
+                created_at: "2026-01-01T00:00:00.000Z".into(),
+                updated_at: "2026-01-01T00:00:00.000Z".into(),
+                system_locked: false,
+            },
+        )
+        .unwrap();
+        for object_id in ["game-1", "app-v2"] {
+            crate::db::upsert_object(
+                &conn,
+                &crate::types::ArkObject {
+                    id: object_id.into(),
+                    type_id: "game".into(),
+                    type_version: "0.0.0-legacy".into(),
+                    title: object_id.into(),
+                    content_json: json!({}),
+                    props_json: json!({}),
+                    created_at: "2026-01-01T00:00:00.000Z".into(),
+                    updated_at: "2026-01-01T00:00:00.000Z".into(),
+                    deleted_at: None,
+                },
+            )
+            .unwrap();
+        }
+        for (id, path) in [
+            ("app-v1", "c:\\games\\demo\\app-1.0.1\\game.exe"),
+            ("app-v2", "c:\\games\\demo\\app-1.0.2\\game.exe"),
+        ] {
+            crate::db::upsert_tracked_app(&conn, &tracked_app(id, path)).unwrap();
+        }
+        // Pre-update session on the OLD id: 30 min focused, 10 min idle.
+        crate::db::upsert_usage_session(&conn, &session("s1", "app-v1", 1_800_000, 600_000))
+            .unwrap();
+        // Post-update session on the NEW id: 10 min focused.
+        crate::db::upsert_usage_session(&conn, &session("s2", "app-v2", 600_000, 0)).unwrap();
+        crate::db::upsert_object_link(
+            &conn,
+            &ObjectLink {
+                id: "l1".into(),
+                source_object_id: "game-1".into(),
+                target_object_id: "app-v2".into(), // link points at the new id
+                link_type: "game".into(),
+                created_at: "2026-01-01T00:00:00.000Z".into(),
+            },
+        )
+        .unwrap();
+
+        let usage = usage_for(&conn, "game-1").unwrap();
+        // 1800s + 600s of ACTIVE time — not the 2×3600s julianday wall clock
+        // (which also included idle), and not the 600s the pinned id alone saw.
+        assert_eq!(usage.seconds, 2400);
+        assert_eq!(usage.session_count, 2);
+        assert!(usage.last_played_at.is_some());
+    }
+
     #[test]
     fn wire_contract_is_typed_and_camel_case() {
         let command = GameUpsertCommand {

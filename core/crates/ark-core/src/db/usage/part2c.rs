@@ -75,11 +75,24 @@ pub fn is_system_path(normalized_exe_path: &str, windows_dir: &str) -> bool {
         .starts_with(&format!("{dir}\\"))
 }
 
-fn system_windows_dir() -> String {
-    std::env::var("SystemRoot")
-        .ok()
-        .filter(|v| !v.trim().is_empty())
-        .unwrap_or_else(|| "c:\\windows".to_string())
+/// Candidate pickers (`list_recent_usage_processes`, `search_usage_processes`)
+/// group by `tracked_apps.id`, which used to hash the full path — the same
+/// game across version dirs produced duplicate picker rows. Collapse to one
+/// candidate per canonical exe identity; callers order by last_seen_at DESC,
+/// so the first row per key is the freshest.
+fn dedup_usage_process_candidates(
+    candidates: Vec<UsageProcessCandidate>,
+) -> Vec<UsageProcessCandidate> {
+    let mut seen = HashSet::new();
+    candidates
+        .into_iter()
+        .filter(|candidate| {
+            seen.insert(canonical_app_key(
+                candidate.exe_path.as_deref().unwrap_or_default(),
+                candidate.process_name.as_deref().unwrap_or_default(),
+            ))
+        })
+        .collect()
 }
 
 fn newer_than(a: &Option<String>, b: &Option<String>) -> bool {
@@ -99,7 +112,7 @@ fn newer_than(a: &Option<String>, b: &Option<String>) -> bool {
 fn merge_top_apps(
     rows: Vec<TopAppEntry>,
     limit: usize,
-    windows_dir: &str,
+    windows_dir: Option<&str>,
 ) -> Vec<TopAppEntry> {
     let mut order: Vec<String> = Vec::new();
     let mut groups: HashMap<String, TopAppEntry> = HashMap::new();
@@ -132,7 +145,8 @@ fn merge_top_apps(
         .into_iter()
         .filter_map(|key| groups.remove(&key))
         .map(|mut row| {
-            row.is_system = is_system_path(&row.normalized_path, windows_dir);
+            row.is_system = windows_dir
+                .is_some_and(|dir| is_system_path(&row.normalized_path, dir));
             row
         })
         .collect();
