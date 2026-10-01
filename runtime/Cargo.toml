@@ -20,6 +20,9 @@ markdown-bridge-fixture = []
 [lib]
 name = "engine"
 path = "src/lib.rs"
+# No doc-tests in the workspace; disabling them removes an empty
+# `cargo test --doc` pass from the gate (KOS-291).
+doctest = false
 
 [[bin]]
 name = "mundus-engine"

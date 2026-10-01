@@ -5,6 +5,11 @@ edition.workspace = true
 description = "Stable worker-facing protocol types for Mundus package workers"
 publish = false
 
+[lib]
+# No doc-tests in the workspace; disabling them removes an empty
+# `cargo test --doc` pass from the gate (KOS-291).
+doctest = false
+
 [dependencies]
 serde.workspace = true
 
