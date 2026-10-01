@@ -26,6 +26,7 @@ use super::hotkey_hook;
 use super::inject::{self, InjectError};
 use super::local::{self, DEFAULT_LOCAL_ENGINE};
 use super::local_models;
+use super::model_sweep;
 use super::network;
 use super::stats::{self, DictationStats};
 

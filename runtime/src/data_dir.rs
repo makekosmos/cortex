@@ -30,10 +30,12 @@ use crate::brand;
 use crate::lock_file::LockFileError;
 
 mod migration;
+pub(crate) mod temp_sweep;
 #[cfg(test)]
 mod tests;
 
 pub use migration::{remove_legacy_lock_shim, write_legacy_lock_shim, MigrationReport};
+pub use temp_sweep::{sweep_engine_root, SweepReport};
 
 /// Marker written into the new roaming dir after a successful migration.
 const MIGRATION_MARKER: &str = "mundus-migration.json";

@@ -16,6 +16,7 @@
 //! does not explicitly recognize, and `updater.*` is not among them. This
 //! mirrors how `manager.*` (diagnostics, data browsing, db backups) is
 //! already Manager-only in practice.
+mod cleanup;
 mod download;
 mod feed;
 mod install;

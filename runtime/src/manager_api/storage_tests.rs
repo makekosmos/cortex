@@ -135,8 +135,10 @@ fn storage_breakdown_does_not_descend_into_symlinks() {
 #[tokio::test]
 async fn data_storage_runs_off_the_request_loop() {
     let dir = tempfile::tempdir().unwrap();
-    put(dir.path(), "updates/x.bin", 5);
     let state = ManagerState::new(dir.path().to_path_buf());
+    // Seed after ManagerState::new: its UpdaterService sweeps updates/ for
+    // stale payloads on construction (KOS-301).
+    put(dir.path(), "updates/x.bin", 5);
     let value = state
         .data_storage(&dir.path().join("packages"))
         .await

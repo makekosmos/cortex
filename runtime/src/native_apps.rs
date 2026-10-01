@@ -200,10 +200,12 @@ impl NativeAppStore {
     /// Open (creating) the store root — the write-path constructor.
     pub fn new(root: PathBuf) -> Result<Self> {
         fs::create_dir_all(&root)?;
-        Ok(Self {
+        let store = Self {
             root,
             mutation: Mutex::new(()),
-        })
+        };
+        store.sweep_stale_leftovers();
+        Ok(store)
     }
 
     /// Open the store root without creating it — the read-path constructor

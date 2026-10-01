@@ -104,6 +104,55 @@ async fn install_requires_finished_download() {
 }
 
 #[test]
+fn construction_sweeps_payloads_left_by_a_previous_run() {
+    // KOS-301: applied installers and crashed `.part` downloads used to
+    // accumulate in updates/ forever.
+    let dir = tempfile::tempdir().unwrap();
+    let updates = dir.path().join("updates");
+    std::fs::create_dir(&updates).unwrap();
+    std::fs::write(updates.join("Mundus-Setup-1.0.0.exe"), b"x").unwrap();
+    std::fs::write(updates.join("Mundus-Setup-1.1.0.exe.part"), b"x").unwrap();
+
+    let _service = UpdaterService::new(dir.path().to_path_buf());
+
+    assert!(std::fs::read_dir(&updates).unwrap().next().is_none());
+}
+
+#[tokio::test]
+async fn check_replacing_pending_drops_the_superseded_installer() {
+    let body = b"installer payload".repeat(50);
+    let server = MockServer::start_async().await;
+    server
+        .mock_async(|when, then| {
+            when.method(httpmock::Method::GET).path("/latest.yml");
+            then.status(200).body(format!(
+                "version: 99.0.0\nfiles:\n  - url: Mundus-Setup-99.0.0.exe\n    sha512: {}\n    size: {}\n",
+                hash(&body),
+                body.len()
+            ));
+        })
+        .await;
+    server
+        .mock_async(|when, then| {
+            when.method(httpmock::Method::GET)
+                .path("/Mundus-Setup-99.0.0.exe");
+            then.status(200).body(body.clone());
+        })
+        .await;
+    let dir = tempfile::tempdir().unwrap();
+    let updates = dir.path().join("updates");
+    std::fs::create_dir(&updates).unwrap();
+
+    let service = UpdaterService::with_feed_base(dir.path().to_path_buf(), server.base_url());
+    // A payload staged by a previous pending (construction already swept
+    // anything older); check() must drop it once pending moves to 99.0.0.
+    std::fs::write(updates.join("Mundus-Setup-98.0.0.exe"), b"old").unwrap();
+    service.check().await;
+
+    assert!(!updates.join("Mundus-Setup-98.0.0.exe").exists());
+}
+
+#[test]
 fn desktop_lease_keeps_startup_state_idle() {
     let dir = tempfile::tempdir().unwrap();
     let service = UpdaterService::new(dir.path().to_path_buf());

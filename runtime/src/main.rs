@@ -456,6 +456,19 @@ async fn setup() -> Result<SetupState, DynError> {
     }
     tracing::info!(path = ?singleton_path, "singleton acquired");
 
+    // KOS-301: crash leftover temp files (`.<name>.tmp.<pid>`,
+    // `<name>.json.tmp`, …) of every atomic writer that targets the data-dir
+    // root. Runs after the singleton acquire, so no other Engine can be
+    // mid-write; the sweep's own grace window covers suspended processes.
+    let sweep = engine::data_dir::sweep_engine_root(&lock_dir);
+    if sweep.removed > 0 || sweep.failed > 0 {
+        tracing::info!(
+            removed = sweep.removed,
+            failed = sweep.failed,
+            "swept stale temp files in data dir root"
+        );
+    }
+
     let db_path = std::env::var("MUNDUS_DB_PATH")
         .unwrap_or_else(|_| lock_dir.join("ark.db").to_string_lossy().into_owned());
     tracing::info!(db_path = %db_path, "ark db path");

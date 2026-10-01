@@ -74,6 +74,9 @@ impl DictationHost {
         }) {
             tracing::info!("removed obsolete local STT assets");
         }
+        // KOS-301: crash mid-download оставлял .download/.part/.extracting
+        // навсегда; no download can be in flight this early in startup.
+        model_sweep::sweep_stale_downloads(&data_dir);
         let mut cfg = config::load_from(&data_dir.join("dictation-config.json"));
         let mut config_changed = normalize_platform_local_engine(&mut cfg);
         if local_models::cleanup_unused_backends(&data_dir).unwrap_or_else(|e| {
