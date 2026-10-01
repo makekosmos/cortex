@@ -223,6 +223,9 @@
         let snapshot = load_usage_analytics(&conn, 21, 10, 24, None).unwrap();
         assert_eq!(snapshot.summary.total_foreground_ms, 4_000);
         assert_eq!(snapshot.summary.total_idle_ms, 1_000);
+        // totalRuntimeMs stays on the wire as raw visible-time data (SDK
+        // contract) — the headline reads totalForegroundMs.
+        assert_eq!(snapshot.summary.total_runtime_ms, 10_000);
     }
 
     #[test]

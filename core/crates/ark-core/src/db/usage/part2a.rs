@@ -19,6 +19,7 @@ pub fn load_usage_analytics(
             "SELECT COUNT(DISTINCT tracked_apps.id) AS tracked_app_count,
                     COUNT(DISTINCT usage_sessions.id) AS session_count,
                     (SELECT COUNT(*) FROM usage_events) AS event_count,
+                    COALESCE(SUM(usage_sessions.runtime_ms), 0) AS total_runtime_ms,
                     COALESCE(SUM(usage_sessions.foreground_ms), 0) AS total_foreground_ms,
                     COALESCE(SUM(usage_sessions.idle_ms), 0) AS total_idle_ms,
                     MIN(usage_sessions.started_at) AS first_recorded_at,
@@ -31,10 +32,11 @@ pub fn load_usage_analytics(
                     tracked_app_count: row.get::<_, Option<i64>>(0)?.unwrap_or(0),
                     session_count: row.get::<_, Option<i64>>(1)?.unwrap_or(0),
                     event_count: row.get::<_, Option<i64>>(2)?.unwrap_or(0),
-                    total_foreground_ms: row.get::<_, Option<i64>>(3)?.unwrap_or(0),
-                    total_idle_ms: row.get::<_, Option<i64>>(4)?.unwrap_or(0),
-                    first_recorded_at: row.get(5)?,
-                    last_recorded_at: row.get(6)?,
+                    total_runtime_ms: row.get::<_, Option<i64>>(3)?.unwrap_or(0),
+                    total_foreground_ms: row.get::<_, Option<i64>>(4)?.unwrap_or(0),
+                    total_idle_ms: row.get::<_, Option<i64>>(5)?.unwrap_or(0),
+                    first_recorded_at: row.get(6)?,
+                    last_recorded_at: row.get(7)?,
                 })
             },
         )

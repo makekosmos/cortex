@@ -120,6 +120,7 @@
         assert_eq!(snapshot.summary.tracked_app_count, 1);
         assert_eq!(snapshot.summary.session_count, 1);
         assert_eq!(snapshot.summary.event_count, 1);
+        assert_eq!(snapshot.summary.total_runtime_ms, 1_500);
         assert_eq!(snapshot.summary.total_foreground_ms, 1_200);
         assert_eq!(snapshot.summary.total_idle_ms, 300);
         assert_eq!(snapshot.daily_trend.len(), 3);
