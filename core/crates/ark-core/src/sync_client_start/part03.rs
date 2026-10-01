@@ -195,6 +195,15 @@
 
                                                 let mut local_vector =
                                                     load_version_vector(&storage).await;
+                                                // KOS-302: snapshot the
+                                                // completeness claims BEFORE
+                                                // the first page — computed
+                                                // later they could include a
+                                                // seq allocated mid-pull,
+                                                // moving the peer's cursor
+                                                // past an entry it never got.
+                                                let complete_through =
+                                                    storage.usage_complete_through().await;
                                                 let mut offset = 0;
                                                 loop {
                                                     let mut load_vector = local_vector.clone();
@@ -245,14 +254,6 @@
                                                     }
                                                 }
                                                 save_version_vector(&storage, &local_vector).await;
-                                                // Hole-tolerant cursors
-                                                // (KOS-302): the final page
-                                                // claims how far each origin
-                                                // is served complete, so the
-                                                // peer's contiguous cursor
-                                                // can jump compacted holes.
-                                                let complete_through =
-                                                    storage.usage_complete_through().await;
                                                 send_msg(
                                                     &tx,
                                                     &LanSyncMessage::SyncChanges {

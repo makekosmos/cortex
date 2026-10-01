@@ -168,6 +168,11 @@ impl RelaySync {
     async fn send_missing_entities(&self, remote_vector: &VersionVector) {
         let mut load_vector = load_version_vector(&self.storage).await;
         merge_usage_cursors(&mut load_vector, remote_vector);
+        // Hole-tolerant cursors (KOS-302): a relay must advertise these too —
+        // it may itself have compacted refs the next hop still needs a claim
+        // for. Snapshot BEFORE the first page: a claim computed afterwards
+        // could cover a seq allocated mid-pull that never got streamed.
+        let complete_through = self.storage.usage_complete_through().await;
         let mut offset = 0;
 
         loop {
@@ -198,10 +203,6 @@ impl RelaySync {
             }
         }
 
-        // Hole-tolerant cursors (KOS-302): a relay must advertise these too —
-        // it may itself have compacted refs the next hop still needs a claim
-        // for, so pass our own coverage floor on the final page.
-        let complete_through = self.storage.usage_complete_through().await;
         let _ = self.transport.send(LanSyncMessage::SyncChanges {
             batch_id: generate_id(),
             entities: vec![],

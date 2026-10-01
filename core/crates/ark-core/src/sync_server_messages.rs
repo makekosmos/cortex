@@ -215,6 +215,12 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
 
             let mut local_vector = load_version_vector(storage).await;
 
+            // Hole-tolerant cursors (KOS-302): snapshot the completeness
+            // claims BEFORE the first page is read. Computed afterwards
+            // they could include a seq allocated mid-pull — the peer would
+            // advance its cursor past an entry it never received.
+            let complete_through = storage.usage_complete_through().await;
+
             let mut vector_updated = false;
             let mut offset = 0;
             loop {
@@ -253,11 +259,6 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
             if vector_updated {
                 save_version_vector(storage, &local_vector).await;
             }
-            // Hole-tolerant cursors (KOS-302): on the final page claim, per
-            // origin device, the seq we can serve completely — compacted
-            // refs count as covered, so the receiver's contiguous cursor can
-            // jump over the holes this stream skipped.
-            let complete_through = storage.usage_complete_through().await;
             send_msg(
                 &tx,
                 &LanSyncMessage::SyncChanges {
