@@ -82,23 +82,45 @@ jobs:
           GH_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKEN }}
         run: node desktop/scripts/release-plan.mjs plan
 
-      - name: Apply version bump and tag
+      # A release run without both tokens can only die at the push/publish
+      # steps — hours in. Fail here, naming only the secret names.
+      - name: Check release secrets exist
+        if: steps.plan.outputs.release == 'true'
+        shell: bash
+        env:
+          CORTEX_RELEASE_TOKEN: ${{ secrets.CORTEX_RELEASE_TOKEN }}
+          DESKTOP_RELEASE_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKEN }}
+        run: |
+          missing=""
+          [ -z "$CORTEX_RELEASE_TOKEN" ] && missing=" CORTEX_RELEASE_TOKEN"
+          [ -z "$DESKTOP_RELEASE_TOKEN" ] && missing="$missing DESKTOP_RELEASE_TOKEN"
+          if [ -n "$missing" ]; then
+            echo "Release is planned but these Actions secrets are missing:$missing" >&2
+            echo "Add them under repo Settings → Secrets and variables → Actions, then rerun." >&2
+            exit 1
+          fi
+
+      # plan.outputs.sha is HEAD normally, or the already-tagged commit when
+      # retrying a run that died between tag push and publish — the release
+      # must be built from exactly that commit.
+      - name: Prepare release commit
         if: steps.plan.outputs.release == 'true'
         shell: bash
         env:
           VERSION: ${{ steps.plan.outputs.version }}
+          RELEASE_SHA: ${{ steps.plan.outputs.sha }}
         run: |
           set -euo pipefail
-          node desktop/scripts/release-plan.mjs set "$VERSION"
+          # The release preflight requires branch "main" checked out; the
+          # checkout may be a detached HEAD.
+          git checkout -B main "$RELEASE_SHA"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          node desktop/scripts/release-plan.mjs set "$VERSION"
           git add desktop/release-versions.json
           if ! git diff --cached --quiet; then
             git commit -m "chore: release v$VERSION"
           fi
-          # The release preflight requires branch "main" checked out; the
-          # checkout may be a detached HEAD.
-          git checkout -B main
           tag="v$VERSION"
           if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
             test "$(git rev-parse "$tag^{commit}")" = "$(git rev-parse HEAD)"
@@ -122,33 +144,44 @@ jobs:
         run: node desktop/scripts/publish-release.mjs --platform win --receipt desktop/release/release-receipt.v2.json --dry-run
 
       # Push the bump commit and tag only after the gate and build passed, so
-      # a broken run never lands commits on main. Retry-safe: if a previous
-      # run already pushed (publish failed afterwards), the push is a no-op.
+      # a broken run never lands commits on main. Retry-safe: when a previous
+      # run already pushed them (publish died afterwards), the release commit
+      # is already part of origin/main and only a missing piece is pushed.
       - name: Push release commit and tag
         if: steps.plan.outputs.release == 'true'
         shell: bash
         env:
           VERSION: ${{ steps.plan.outputs.version }}
-          PLAN_SHA: ${{ steps.plan.outputs.sha }}
+          BASE_SHA: ${{ steps.plan.outputs.sha }}
           PUSH_TOKEN: ${{ secrets.CORTEX_RELEASE_TOKEN }}
         run: |
           set -euo pipefail
           head=$(git rev-parse HEAD)
           git fetch origin main
-          remote_main=$(git rev-parse origin/main)
           remote_tag=$(git ls-remote origin "refs/tags/v$VERSION" | cut -f1)
           if [ -n "$remote_tag" ] && [ "$remote_tag" != "$head" ]; then
             echo "refs/tags/v$VERSION exists on origin pointing at $remote_tag — refusing" >&2
             exit 1
           fi
-          if [ "$remote_main" != "$head" ] && [ "$remote_main" != "$PLAN_SHA" ]; then
-            echo "origin/main moved to $remote_main during the run — rerun" >&2
+          refs=()
+          if git merge-base --is-ancestor "$head" origin/main; then
+            # Retry of a failed publish: the commit is on main already.
+            :
+          elif [ "$(git rev-parse origin/main)" = "$BASE_SHA" ]; then
+            refs+=("HEAD:refs/heads/main")
+          else
+            echo "origin/main moved during the run — rerun" >&2
             exit 1
           fi
-          # Token via credential helper — never in the remote URL, so git
-          # error output can never echo it.
-          git config credential.helper '!f() { echo username=x-access-token; echo "password=$PUSH_TOKEN"; }; f'
-          git push --atomic origin "HEAD:refs/heads/main" "refs/tags/v$VERSION"
+          [ -z "$remote_tag" ] && refs+=("refs/tags/v$VERSION")
+          if [ ${#refs[@]} -gt 0 ]; then
+            # Token via credential helper — never in the remote URL, so git
+            # error output can never echo it.
+            git config credential.helper '!f() { echo username=x-access-token; echo "password=$PUSH_TOKEN"; }; f'
+            git push --atomic origin "${refs[@]}"
+          else
+            echo "Release commit and tag already on origin — nothing to push"
+          fi
 
       - name: Publish release
         if: steps.plan.outputs.release == 'true'
