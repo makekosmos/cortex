@@ -59,8 +59,14 @@ fn projects_canonical_task_fields_and_sole_project_link() {
     let view = project_task_to_delphi(&object, &links).unwrap();
     assert_eq!(view.id, "t-1");
     // `scheduledAt` stored an RFC 3339 stamp under schema 1.0.0; the
-    // projection exposes the expressed calendar day.
-    assert_eq!(view.scheduled_date.as_deref(), Some("2026-05-15"));
+    // projection exposes the day the stamp expresses in local time — the same
+    // rule Agenda applies when rendering the field.
+    let local_day = chrono::DateTime::parse_from_rfc3339("2026-05-15T08:00:00.000Z")
+        .unwrap()
+        .with_timezone(&chrono::Local)
+        .format("%Y-%m-%d")
+        .to_string();
+    assert_eq!(view.scheduled_date.as_deref(), Some(local_day.as_str()));
     assert!(view.is_today);
     assert!(view.is_someday);
     assert!(view.is_completed);

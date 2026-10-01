@@ -234,17 +234,20 @@ fn raw_source_and_context_preserve_malformed_and_existing_link_semantics() {
 #[test]
 fn legacy_day_fields_normalize_stamps_to_the_date_contract() {
     // Legacy writers stored RFC 3339 stamps in `scheduled_date`; the 1.1.0
-    // contract is `format: "date"` — compat keeps the expressed day.
+    // contract is `format: "date"` — compat keeps the day the stamp expresses
+    // in local time (same rule as agenda `date_only`, see normalize.rs).
     let task = record(
         "task_obj",
-        json!({"status":"todo","scheduled_date":"2026-05-15T08:00:00.000Z"}),
+        json!({"status":"todo","scheduled_date":"2026-05-15T21:00:00.000Z"}),
     );
     let mapped = map_legacy(&task).unwrap();
     assert_eq!(mapped.object.type_version, "1.1.0");
-    assert_eq!(
-        mapped.object.props_json["scheduledAt"],
-        json!("2026-05-15")
-    );
+    let local_day = chrono::DateTime::parse_from_rfc3339("2026-05-15T21:00:00.000Z")
+        .unwrap()
+        .with_timezone(&chrono::Local)
+        .format("%Y-%m-%d")
+        .to_string();
+    assert_eq!(mapped.object.props_json["scheduledAt"], json!(local_day));
     // Bare dates pass through unchanged.
     let task = record("task_obj", json!({"status":"todo","deadline":"2026-05-20"}));
     let mapped = map_legacy(&task).unwrap();
