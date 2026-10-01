@@ -19,7 +19,7 @@ pub fn link_dir(target: &Path, link: &Path) -> io::Result<()> {
     }
     #[cfg(windows)]
     {
-        windows::junction(target, link)
+        win::junction(target, link)
     }
     #[cfg(not(any(unix, windows)))]
     {
@@ -41,43 +41,20 @@ pub fn link_file(target: &Path, link: &Path) -> io::Result<()> {
 }
 
 #[cfg(windows)]
-mod windows {
+mod win {
     use super::*;
     use std::ffi::OsStr;
     use std::os::windows::ffi::OsStrExt;
-
-    type Handle = *mut std::ffi::c_void;
-    const INVALID_HANDLE: Handle = -1isize as Handle;
-    const GENERIC_WRITE: u32 = 0x4000_0000;
-    const OPEN_EXISTING: u32 = 3;
-    const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
-    const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
-    const FSCTL_SET_REPARSE_POINT: u32 = 0x0009_00a4;
-    const IO_REPARSE_TAG_MOUNT_POINT: u32 = 0xa000_0003;
-
-    #[link(name = "kernel32")]
-    unsafe extern "system" {
-        fn CreateFileW(
-            name: *const u16,
-            access: u32,
-            share: u32,
-            security: *mut std::ffi::c_void,
-            disposition: u32,
-            flags: u32,
-            template: Handle,
-        ) -> Handle;
-        fn CloseHandle(handle: Handle) -> i32;
-        fn DeviceIoControl(
-            handle: Handle,
-            code: u32,
-            input: *const std::ffi::c_void,
-            input_len: u32,
-            output: *mut std::ffi::c_void,
-            output_len: u32,
-            returned: *mut u32,
-            overlapped: *mut std::ffi::c_void,
-        ) -> i32;
-    }
+    use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::Storage::FileSystem::{
+        CreateFileW, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_GENERIC_WRITE,
+        FILE_SHARE_NONE, OPEN_EXISTING,
+    };
+    use windows::Win32::System::Ioctl::FSCTL_SET_REPARSE_POINT;
+    use windows::Win32::System::SystemServices::IO_REPARSE_TAG_MOUNT_POINT;
+    use windows::Win32::System::IO::DeviceIoControl;
 
     fn wide(text: &str) -> Vec<u16> {
         OsStr::new(text).encode_wide().chain(Some(0)).collect()
@@ -118,41 +95,42 @@ mod windows {
 
         std::fs::create_dir(link)?;
         let name = wide(&link.to_string_lossy());
+        // OwnedHandle closes on drop, so the cleanup-on-failure paths below
+        // cannot leak the directory handle.
         let handle = unsafe {
             CreateFileW(
-                name.as_ptr(),
-                GENERIC_WRITE,
-                0,
-                std::ptr::null_mut(),
+                PCWSTR(name.as_ptr()),
+                FILE_GENERIC_WRITE.0,
+                FILE_SHARE_NONE,
+                None,
                 OPEN_EXISTING,
                 FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
-                std::ptr::null_mut(),
+                HANDLE::default(),
             )
         };
-        if handle.is_null() || handle == INVALID_HANDLE {
-            let _ = std::fs::remove_dir(link);
-            return Err(io::Error::last_os_error());
-        }
+        let handle = match handle {
+            Ok(handle) => unsafe { OwnedHandle::from_raw_handle(handle.0) },
+            Err(error) => {
+                let _ = std::fs::remove_dir(link);
+                return Err(io::Error::other(error));
+            }
+        };
         let mut returned = 0u32;
-        let ok = unsafe {
+        let set = unsafe {
             DeviceIoControl(
-                handle,
+                HANDLE(handle.as_raw_handle()),
                 FSCTL_SET_REPARSE_POINT,
-                buffer.as_ptr().cast(),
+                Some(buffer.as_ptr().cast()),
                 buffer.len() as u32,
-                std::ptr::null_mut(),
+                None,
                 0,
-                &mut returned,
-                std::ptr::null_mut(),
+                Some(&mut returned),
+                None,
             )
         };
-        unsafe {
-            CloseHandle(handle);
-        }
-        if ok == 0 {
-            let error = io::Error::last_os_error();
+        if let Err(error) = set {
             let _ = std::fs::remove_dir(link);
-            return Err(error);
+            return Err(io::Error::other(error));
         }
         Ok(())
     }
