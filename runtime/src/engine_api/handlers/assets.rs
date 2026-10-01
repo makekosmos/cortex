@@ -60,9 +60,10 @@ fn inject_host_shim(asset: &str, bytes: &[u8]) -> Vec<u8> {
         return bytes.to_vec();
     }
     let tag = format!("<script src=\"{HOST_SHIM_ASSET}\"></script>");
-    let text = String::from_utf8_lossy(bytes);
-    let Some(head) = text.find("<head").and_then(|at| text[at..].find('>').map(|e| at + e + 1))
-    else {
+    // Search the raw bytes — `from_utf8_lossy` rewrites invalid sequences
+    // to U+FFFD, shifting every later offset, so string offsets cannot be
+    // reused on the original byte buffer.
+    let Some(head) = head_tag_end(bytes) else {
         return [tag.as_bytes(), bytes].concat();
     };
     let mut out = Vec::with_capacity(bytes.len() + tag.len());
@@ -70,6 +71,25 @@ fn inject_host_shim(asset: &str, bytes: &[u8]) -> Vec<u8> {
     out.extend_from_slice(tag.as_bytes());
     out.extend_from_slice(&bytes[head..]);
     out
+}
+
+/// Offset just past a `<head>` open tag, byte-exact and ASCII
+/// case-insensitive. The char after `head` must be `>`, `/` or whitespace —
+/// that is what keeps `<header>` from matching.
+fn head_tag_end(bytes: &[u8]) -> Option<usize> {
+    bytes.windows(5).enumerate().find_map(|(at, window)| {
+        if !window.eq_ignore_ascii_case(b"<head") {
+            return None;
+        }
+        let next = bytes.get(at + 5)?;
+        if !(matches!(next, b'>' | b'/' | b' ' | b'\t' | b'\r' | b'\n' | b'\x0c')) {
+            return None;
+        }
+        bytes[at + 5..]
+            .iter()
+            .position(|b| *b == b'>')
+            .map(|end| at + 5 + end + 1)
+    })
 }
 
 fn asset_response(asset: &str, bytes: Vec<u8>) -> HttpResponse {

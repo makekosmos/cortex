@@ -184,8 +184,9 @@ async fn package_open_mints_per_tab_leases_and_reports_typed_errors() {
     // The reply is just what the Manager opens: the launch URL carries the
     // one-time bootstrap code in the fragment — no token crosses to it.
     let launch_url = first.data["launch_url"].as_str().expect("launch_url");
+    let origin_host = crate::package_launch::package_origin_host("com.kosmos.demo");
     assert!(
-        launch_url.starts_with("http://127.0.0.1:12345/v1/apps/assets/")
+        launch_url.starts_with(&format!("http://{origin_host}:12345/v1/apps/assets/"))
             && launch_url.contains("#launch=")
             && launch_url.contains("&code="),
         "{launch_url}"

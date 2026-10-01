@@ -100,12 +100,15 @@ impl PackageService {
                 (
                     "launch_url".into(),
                     Value::String(format!(
-                        "http://127.0.0.1:{}/v1/apps/assets/{}/{}#launch={}&code={}",
+                        "http://{}:{}/v1/apps/assets/{}/{}#launch={}&code={}&pkg={}&v={}",
+                        crate::package_launch::package_origin_host(&package.id),
                         surface.http_port,
                         lease.asset_token,
                         package.manifest.entrypoint(),
                         lease.launch_id,
                         code,
+                        package.id,
+                        package.version,
                     )),
                 ),
             ]

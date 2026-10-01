@@ -2,6 +2,27 @@
     // on revoke. Shares the fixture/helpers from tests_open.rs (same `mod tests`).
 
 
+    /// Read from a streaming SSE response until `until` appears or EOF.
+    async fn drain_until(
+        stream: &mut tokio::net::TcpStream,
+        until: &str,
+        buf: &mut [u8],
+    ) -> String {
+        let mut captured = String::new();
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while !captured.contains(until) {
+                let n = stream.read(buf).await.expect("stream read");
+                if n == 0 {
+                    break;
+                }
+                captured.push_str(&String::from_utf8_lossy(&buf[..n]));
+            }
+        })
+        .await
+        .expect("event delivery deadline");
+        captured
+    }
+
     /// Allowed types stream through, ungranted types are dropped, and a
     /// revoked lease's stream ends.
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -13,7 +34,7 @@
         );
         let fixture = open_engine(dir, &token, service).await;
         let port = fixture.port;
-        let origin = format!("http://127.0.0.1:{port}");
+        let origin = package_origin(port);
 
         let opened = rpc_open(port, &token, "com.kosmos.demo").await;
         let (_, launch_id, code) =
@@ -70,8 +91,9 @@
         assert!(!window.contains("o-denied"), "{window}");
         assert!(!window.contains("com.secret.type"), "{window}");
 
-        // Revocation ends the stream — a dead session must not keep
-        // receiving events.
+        // Revocation ends the stream promptly (the liveness tick, not the
+        // next event) — and an event that arrives after the revoke is
+        // never emitted to the dead session.
         let body = format!(r#"{{"token":"{launch_token}"}}"#);
         let revoked = raw_http(
             port,
@@ -90,16 +112,22 @@
             "id": "o-after-revoke",
             "type_id": "com.kosmos.note",
         }));
+        let mut tail = String::new();
         tokio::time::timeout(Duration::from_secs(5), async {
             loop {
                 let n = stream.read(&mut read_buf).await.expect("eof read");
                 if n == 0 {
                     return;
                 }
+                tail.push_str(&String::from_utf8_lossy(&read_buf[..n]));
             }
         })
         .await
         .expect("revoked event stream must end");
+        assert!(
+            !tail.contains("o-after-revoke"),
+            "the post-revoke event must never reach the client: {tail}"
+        );
 
         fixture.shutdown().await;
     }

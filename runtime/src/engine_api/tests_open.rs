@@ -110,6 +110,16 @@
         )
     }
 
+    /// The per-package origin the page is served from — each package gets
+    /// its own localStorage/IndexedDB namespace, so sibling packages can
+    /// never share one.
+    fn package_origin(port: u16) -> String {
+        format!(
+            "http://{}:{port}",
+            crate::package_launch::package_origin_host("com.kosmos.demo")
+        )
+    }
+
     async fn rpc_open(port: u16, token: &str, package_id: &str) -> Value {
         response_json(
             &raw_http(
@@ -141,27 +151,6 @@
             ),
         )
         .await
-    }
-
-    /// Read from a streaming SSE response until `until` appears or EOF.
-    async fn drain_until(
-        stream: &mut tokio::net::TcpStream,
-        until: &str,
-        buf: &mut [u8],
-    ) -> String {
-        let mut captured = String::new();
-        tokio::time::timeout(Duration::from_secs(5), async {
-            while !captured.contains(until) {
-                let n = stream.read(buf).await.expect("stream read");
-                if n == 0 {
-                    break;
-                }
-                captured.push_str(&String::from_utf8_lossy(&buf[..n]));
-            }
-        })
-        .await
-        .expect("event delivery deadline");
-        captured
     }
 
     fn ark_request(port: u16, launch_id: &str, launch_token: &str, operation: &str) -> String {
@@ -198,6 +187,10 @@
         assert!(data["data_api"].is_null(), "{data}");
         assert!(data["asset_token"].is_null(), "{data}");
         let launch_url = data["launch_url"].as_str().expect("launch_url");
+        // The page is served on the package's own *.localhost origin — not
+        // the shared 127.0.0.1 origin every sibling would see.
+        assert!(launch_url.starts_with(&package_origin(port)), "{launch_url}");
+        assert!(!launch_url.contains("127.0.0.1"), "{launch_url}");
         let (asset_path, launch_id, code) = launch_bootstrap_parts(launch_url, port);
         assert!(!launch_url.contains("broker_token"), "{launch_url}");
 
@@ -226,14 +219,35 @@
         assert!(shim.contains("kosmosApp"), "{shim}");
         assert!(shim.contains("bootstrap"), "{shim}");
 
-        // Bootstrap exchange: no bearer, the Engine's own origin required.
+        // Bootstrap exchange: no bearer, and only this package's own
+        // origin — neither the bare loopback host nor a sibling's origin
+        // may spend the code.
         let wrong_origin = bootstrap(port, &launch_id, &code, "https://evil.example").await;
         assert!(wrong_origin.starts_with("HTTP/1.1 403"), "{wrong_origin}");
-        let exchanged = bootstrap(
+        let sibling_origin = bootstrap(
+            port,
+            &launch_id,
+            &code,
+            &format!(
+                "http://{}:{port}",
+                crate::package_launch::package_origin_host("com.kosmos.other")
+            ),
+        )
+        .await;
+        assert!(sibling_origin.starts_with("HTTP/1.1 403"), "{sibling_origin}");
+        let bare_loopback = bootstrap(
             port,
             &launch_id,
             &code,
             &format!("http://127.0.0.1:{port}"),
+        )
+        .await;
+        assert!(bare_loopback.starts_with("HTTP/1.1 403"), "{bare_loopback}");
+        let exchanged = bootstrap(
+            port,
+            &launch_id,
+            &code,
+            &package_origin(port),
         )
         .await;
         assert!(exchanged.starts_with("HTTP/1.1 200"), "{exchanged}");
@@ -246,7 +260,7 @@
             port,
             &launch_id,
             &code,
-            &format!("http://127.0.0.1:{port}"),
+            &package_origin(port),
         )
         .await;
         assert!(replay.starts_with("HTTP/1.1 403"), "{replay}");
@@ -300,12 +314,12 @@
             port,
             &second_id,
             &first_code,
-            &format!("http://127.0.0.1:{port}"),
+            &package_origin(port),
         )
         .await;
         assert!(crossed.starts_with("HTTP/1.1 403"), "{crossed}");
 
-        let origin = format!("http://127.0.0.1:{port}");
+        let origin = package_origin(port);
         let first_session = response_json(&bootstrap(port, &first_id, &first_code, &origin).await);
         let second_session =
             response_json(&bootstrap(port, &second_id, &second_code, &origin).await);
@@ -368,7 +382,7 @@
         );
         let fixture = open_engine(dir, &token, service).await;
         let port = fixture.port;
-        let origin = format!("http://127.0.0.1:{port}");
+        let origin = package_origin(port);
 
         let opened = rpc_open(port, &token, "com.kosmos.demo").await;
         let (_, launch_id, code) =
@@ -437,7 +451,7 @@
             port,
             &launch_id,
             &code,
-            &format!("http://127.0.0.1:{port}"),
+            &package_origin(port),
         ).await);
         let launch_token = session["data"]["broker_token"].as_str().unwrap();
         let refused = raw_http(

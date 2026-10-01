@@ -19,6 +19,23 @@ pub(crate) const MAX_ACTIVE_LAUNCH_LEASES: usize = 2_048;
 /// The one-time code the served page exchanges for its launch credentials —
 /// short because it rides in the URL fragment, which browsers never send.
 pub(crate) const BOOTSTRAP_CODE_TTL: Duration = Duration::from_secs(60);
+/// A released lease dies this long after the pagehide beacon. Grace — not
+/// instant revoke — lets F5 and back/forward survive: the reloaded page
+/// renews inside the window and cancels the release.
+pub(crate) const RELEASE_GRACE: Duration = Duration::from_secs(30);
+
+/// Per-package origin host: `p<sha256(id)>.localhost`. Browsers resolve
+/// `*.localhost` to loopback, so the Engine keeps listening only on
+/// 127.0.0.1 while every package gets a real distinct origin — a shared
+/// `127.0.0.1` origin would let any package read every sibling's
+/// localStorage/IndexedDB/cookies. The id is hashed so the label stays
+/// within DNS limits and cannot collide with a differently-spelled id.
+pub(crate) fn package_origin_host(package_id: &str) -> String {
+    use sha2::Digest;
+    let digest = sha2::Sha256::digest(package_id.as_bytes());
+    let hex: String = digest[..16].iter().map(|b| format!("{b:02x}")).collect();
+    format!("p{hex}.localhost")
+}
 
 /// `POST /v1/apps/launch` and `/v1/apps/resolve` body shape.
 #[derive(Debug, Deserialize)]
@@ -54,6 +71,10 @@ pub(crate) struct LaunchLease {
     pub bootstrap_code: Option<String>,
     pub bootstrap_expires_at: Option<Instant>,
     pub bootstrap_spent: bool,
+    /// Set by the `/release` pagehide beacon: the page is leaving. A `renew`
+    /// inside `RELEASE_GRACE` clears this (reload); past it, the lease is
+    /// purged like an expiry (real close).
+    pub released_at: Option<Instant>,
     pub grant: AssetGrant,
     pub typed_grant: Option<LaunchGrant>,
     pub expires_at: Instant,
@@ -143,6 +164,7 @@ impl LaunchLeaseRegistry {
             bootstrap_code,
             bootstrap_expires_at,
             bootstrap_spent: false,
+            released_at: None,
             grant,
             typed_grant,
             expires_at: now + lease_ttl,
@@ -180,9 +202,61 @@ impl LaunchLeaseRegistry {
         Some(lease.clone())
     }
 
-    /// Revoke by launch credential for browser-side `pagehide` beacons —
-    /// `DELETE` requires the Engine bearer, which a page never holds, so the
-    /// beacon carries the launch token in its body instead.
+    /// Mark the lease released (`pagehide` beacon): it keeps working through
+    /// `RELEASE_GRACE` so a reloaded page can renew and continue, then is
+    /// purged as if expired. Wrong/missing token → `false` — no oracle.
+    pub(crate) fn release(&mut self, launch_id: &str, token: &str) -> bool {
+        self.purge_expired();
+        let Some(lease) = self.leases.get_mut(launch_id) else {
+            return false;
+        };
+        let Some(stored) = lease.launch_token.as_deref() else {
+            return false;
+        };
+        if !auth::validate_token(token, stored) {
+            return false;
+        }
+        lease.released_at = Some(Instant::now());
+        true
+    }
+
+    /// Read-only `typed_grant` for the event stream's per-frame liveness:
+    /// token-valid, unexpired, and not released — a closed tab stops
+    /// receiving immediately rather than after the TTL.
+    pub(crate) fn live_grant(
+        &self,
+        launch_id: &str,
+        token: &str,
+    ) -> Option<(AssetGrant, LaunchGrant)> {
+        let lease = self.leases.get(launch_id)?;
+        let stored = lease.launch_token.as_deref()?;
+        if !auth::validate_token(token, stored)
+            || lease.released_at.is_some()
+            || lease.expires_at <= Instant::now()
+            || lease
+                .grant_expires_at
+                .is_some_and(|expires_at| expires_at <= Instant::now())
+        {
+            return None;
+        }
+        Some((lease.grant.clone(), lease.typed_grant.clone()?))
+    }
+
+    /// The exact `Origin` a bootstrap for this lease must come from — the
+    /// lease's own package host, so a sibling package's page cannot spend a
+    /// code. `None` for unknown leases: the caller denies uniformly.
+    pub(crate) fn expected_origin(&self, launch_id: &str, http_port: u16) -> Option<String> {
+        self.leases.get(launch_id).map(|lease| {
+            format!(
+                "http://{}:{http_port}",
+                package_origin_host(&lease.grant.id)
+            )
+        })
+    }
+
+    /// Immediate revoke by launch credential — used by tests and any
+    /// launch-scoped caller that needs a hard kill rather than the grace
+    /// window `release` provides.
     pub(crate) fn revoke_with_token(&mut self, launch_id: &str, token: &str) -> bool {
         self.purge_expired();
         let Some(lease) = self.leases.get(launch_id) else {
@@ -240,6 +314,9 @@ impl LaunchLeaseRegistry {
         if !auth::validate_token(launch_token, token) || lease.typed_grant.is_none() {
             return None;
         }
+        // A renew inside the release grace cancels the pagehide mark — the
+        // page reloaded, it did not close.
+        lease.released_at = None;
         let now = Instant::now();
         lease.expires_at = now + DATA_GRANT_TTL;
         lease.expires_at_rfc3339 = (chrono::Utc::now()
@@ -262,7 +339,11 @@ impl LaunchLeaseRegistry {
             .leases
             .iter()
             .filter_map(|(id, lease)| {
-                if lease.expires_at <= now {
+                if lease.expires_at <= now
+                    || lease
+                        .released_at
+                        .is_some_and(|released| released + RELEASE_GRACE <= now)
+                {
                     Some(id.clone())
                 } else {
                     None
@@ -291,6 +372,14 @@ impl LaunchLeaseRegistry {
     pub(crate) fn expire_bootstrap(&mut self, launch_id: &str) {
         if let Some(lease) = self.leases.get_mut(launch_id) {
             lease.bootstrap_expires_at = Some(Instant::now() - Duration::from_secs(1));
+        }
+    }
+
+    /// Test seam: age the release mark past the grace window.
+    #[cfg(test)]
+    pub(crate) fn expire_release(&mut self, launch_id: &str) {
+        if let Some(lease) = self.leases.get_mut(launch_id) {
+            lease.released_at = Some(Instant::now() - RELEASE_GRACE - Duration::from_secs(1));
         }
     }
 
@@ -327,7 +416,7 @@ pub(crate) fn launch_payload(
         "id": package.id,
         "version": package.version,
         "name": package.manifest.name(),
-        "launch_url": format!("http://127.0.0.1:{http_port}/v1/apps/assets/{}/{}", lease.asset_token, package.manifest.entrypoint()),
+        "launch_url": format!("http://{}:{http_port}/v1/apps/assets/{}/{}", package_origin_host(&package.id), lease.asset_token, package.manifest.entrypoint()),
         "permissions": package.manifest.permissions(),
         "launch_id": lease.launch_id,
         "asset_token": lease.asset_token,

@@ -73,5 +73,6 @@ mod tests {
     include!("engine_api/tests_core.rs");
     include!("engine_api/tests_http.rs");
     include!("engine_api/tests_open.rs");
+    include!("engine_api/tests_open_bootstrap.rs");
     include!("engine_api/tests_open_events.rs");
 }

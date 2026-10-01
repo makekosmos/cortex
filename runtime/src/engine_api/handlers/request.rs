@@ -11,7 +11,7 @@ fn launch_scoped_route(method: &Method, path: &str) -> bool {
     matches!(
         (method, op),
         (&Method::GET, "events")
-            | (&Method::POST, "bootstrap" | "ark" | "renew" | "revoke")
+            | (&Method::POST, "bootstrap" | "ark" | "renew" | "release" | "revoke")
     )
 }
 
@@ -188,6 +188,8 @@ async fn handle_launch_scoped(
         .await
     } else if path.ends_with("/renew") {
         handle_renew(request, package_service, launch_leases, path).await
+    } else if path.ends_with("/release") {
+        handle_release(request, launch_leases, path).await
     } else if path.ends_with("/revoke") {
         handle_revoke_token(request, launch_leases, path).await
     } else if path.ends_with("/events") {
