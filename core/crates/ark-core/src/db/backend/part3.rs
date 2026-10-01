@@ -227,10 +227,14 @@ impl StorageBackend for SqliteStorageBackend {
 
     async fn usage_complete_through(&self) -> std::collections::HashMap<String, u64> {
         let conn = self.conn.clone();
-        let device_id = self.device_id();
         tokio::task::spawn_blocking(move || {
             let guard = conn.lock().unwrap_or_else(|e| e.into_inner());
-            usage_log_complete_through(&guard, &device_id).unwrap_or_default()
+            // Cursor-only claims (`None`): always a safe lower bound.
+            // Live usage writes are stamped with `usage_tracker.device_id`,
+            // and even where the sync id does reach the log (the one-time
+            // migration backfill via `set_device_id`) its cursor is
+            // contiguous, so it equals the head-bound claim anyway.
+            usage_log_complete_through(&guard, None).unwrap_or_default()
         })
         .await
         .unwrap_or_default()

@@ -64,29 +64,39 @@ async fn write_last_run(ark: &ArkHost) {
 }
 
 /// The device id our usage writes are stamped with (the tracker's stable
-/// id, falling back to ark_host's env-scoped id when the tracker has not
-/// run yet). ark-core needs it to bound own-device refs by the journal
-/// head rather than a version-vector cursor that a sync_kv reset could
-/// freeze.
-async fn own_usage_device_id(ark: &ArkHost) -> String {
-    let tracked = ark
+/// `usage-tracker-<uuid>`). `None` means the tracker has never written —
+/// no origin gets the journal-head bound, every one is bounded by its
+/// contiguous cursor. The `get_sync_kv` error propagates: a failed read
+/// must surface as a maintenance failure, not silently pin own refs.
+async fn own_usage_device_id(ark: &ArkHost) -> Result<Option<String>, String> {
+    let resp = ark
         .request("get_sync_kv", json!({ "key": "usage_tracker.device_id" }))
         .await
-        .ok()
-        .and_then(|resp| resp.data.as_str().map(|s| s.trim().to_string()))
-        .filter(|id| !id.is_empty());
-    tracked.unwrap_or_else(crate::ark_host::stable_device_id)
+        .map_err(|e| e.to_string())?;
+    if !resp.ok {
+        return Err(resp.error.unwrap_or_else(|| "get_sync_kv failed".into()));
+    }
+    Ok(resp
+        .data
+        .as_str()
+        .map(|id| id.trim().to_string())
+        .filter(|id| !id.is_empty()))
+}
+
+fn compact_params(own_device_id: Option<&str>) -> serde_json::Value {
+    let mut params = json!({ "batch_limit": COMPACT_BATCH_LIMIT });
+    if let Some(id) = own_device_id {
+        params["device_id"] = json!(id);
+    }
+    params
 }
 
 async fn compact_usage_sync_log(ark: &ArkHost) -> Result<u64, String> {
-    let device_id = own_usage_device_id(ark).await;
+    let params = compact_params(own_usage_device_id(ark).await?.as_deref());
     let mut total = 0_u64;
     for _ in 0..COMPACT_MAX_BATCHES {
         let resp = ark
-            .request(
-                "compact_usage_sync_log",
-                json!({ "batch_limit": COMPACT_BATCH_LIMIT, "device_id": device_id }),
-            )
+            .request("compact_usage_sync_log", params.clone())
             .await
             .map_err(|e| e.to_string())?;
         if !resp.ok {
@@ -151,4 +161,20 @@ pub fn spawn(ark: Arc<ArkHost>, file_index: Arc<FileIndex>) -> JoinHandle<()> {
             write_last_run(&ark).await;
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compact_params_omit_device_id_when_the_tracker_never_wrote() {
+        // No `usage_tracker.device_id` key → no `device_id` on the wire:
+        // ark-core then bounds every origin by its contiguous cursor.
+        assert!(compact_params(None).get("device_id").is_none());
+        assert_eq!(
+            compact_params(Some("usage-tracker-abc"))["device_id"],
+            "usage-tracker-abc"
+        );
+    }
 }

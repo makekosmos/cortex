@@ -191,7 +191,7 @@ impl ArkHost {
     }
 }
 
-pub(crate) fn stable_device_id() -> String {
+fn stable_device_id() -> String {
     crate::brand::env("DEVICE_ID")
         .filter(|id| !id.trim().is_empty())
         .map(|id| id.trim().to_owned())

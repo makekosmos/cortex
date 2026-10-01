@@ -53,7 +53,7 @@
         // path: anything appended mid-pull is excluded from both the data
         // and the completeness claim.
         let through =
-            claims.then(|| usage_log_complete_through(server, server_device).unwrap());
+            claims.then(|| usage_log_complete_through(server, None).unwrap());
         let remote = stored_vector(client);
         let mut offset = 0;
         let mut applied = 0;
@@ -111,7 +111,7 @@
             record_usage_sequence(&conn, "usage_session", id, "dev-a", seq, &hlc(seq), false)
                 .unwrap();
         }
-        let deleted = compact_usage_sync_log(&conn, "dev-a", "2026-09-01T00:00:00.000Z", 1_000).unwrap();
+        let deleted = compact_usage_sync_log(&conn, Some("dev-a"), "2026-09-01T00:00:00.000Z", 1_000).unwrap();
         assert_eq!(deleted, 3, "fixture must compact refs 1, 2 and 3");
         conn
     }
@@ -148,7 +148,7 @@
         });
 
         let deleted =
-            compact_usage_sync_log(&conn, "dev-a", "2026-09-01T00:00:00.000Z", 1_000).unwrap();
+            compact_usage_sync_log(&conn, Some("dev-a"), "2026-09-01T00:00:00.000Z", 1_000).unwrap();
         assert_eq!(deleted, 1);
         assert_eq!(
             usage_log_refs(&conn)
@@ -161,25 +161,53 @@
     }
 
     #[test]
-    fn complete_through_reports_own_head_and_foreign_cursor() {
+    fn complete_through_reports_cursors_and_the_own_head() {
         let conn = compacted_usage_server();
-        let through = usage_log_complete_through(&conn, "dev-a").unwrap();
-        // Own device: the full head — own seqs are contiguous by construction.
+        // Wire shape (`None`): every device is claimed by its contiguous
+        // cursor — for our own device it already equals the head.
+        let through = usage_log_complete_through(&conn, None).unwrap();
         assert_eq!(through["dev-a"], 6);
+        // Compaction shape (`Some`): the own device is bounded by the log
+        // head even if the vector cursor is gone.
+        let conn2 = setup_db();
+        upsert_tracked_app(&conn2, &make_tracked_app("app-1")).unwrap();
+        upsert_usage_session(&conn2, &make_usage_session("s-1", "app-1")).unwrap();
+        for seq in 1..=3 {
+            record_usage_sequence(
+                &conn2,
+                "usage_session",
+                "s-1",
+                "dev",
+                seq,
+                &format!("2026-08-01T00:00:0{seq}.000Z:{seq:06}:dev"),
+                false,
+            )
+            .unwrap();
+        }
+        let mut vector = stored_vector(&conn2);
+        vector.remove("@usage:dev");
+        save_stored_vector(&conn2, &vector);
+        assert_eq!(usage_log_complete_through(&conn2, None).unwrap()["dev"], 0);
+        assert_eq!(usage_log_complete_through(&conn2, Some("dev")).unwrap()["dev"], 3);
         // A foreign origin we only partially received can only be claimed
         // up to our own contiguous coverage of it.
-        let conn = setup_db();
-        conn.execute(
-            "INSERT INTO usage_sync_heads (device_id, max_seq) VALUES ('remote', 9)",
-            [],
-        )
-        .unwrap();
-        save_stored_vector(&conn, &{
+        let conn3 = setup_db();
+        conn3
+            .execute(
+                "INSERT INTO usage_sync_heads (device_id, max_seq) VALUES ('remote', 9)",
+                [],
+            )
+            .unwrap();
+        save_stored_vector(&conn3, &{
             let mut vector = VersionVector::new();
             vector.insert("@usage:remote".to_string(), "4".to_string());
             vector
         });
-        assert_eq!(usage_log_complete_through(&conn, "dev-a").unwrap()["remote"], 4);
+        assert_eq!(usage_log_complete_through(&conn3, None).unwrap()["remote"], 4);
+        assert_eq!(
+            usage_log_complete_through(&conn3, Some("me")).unwrap()["remote"],
+            4
+        );
     }
 
     #[test]
@@ -221,7 +249,7 @@
             "cursor must not jump: seqs 1..3 are compacted holes on the receiver"
         );
 
-        let through = usage_log_complete_through(&server, "dev-a").unwrap();
+        let through = usage_log_complete_through(&server, None).unwrap();
         let mut vector = stored_vector(&client);
         crate::protocol::apply_usage_complete_through(&mut vector, &through);
         save_stored_vector(&client, &vector);
@@ -262,7 +290,7 @@
         )
         .unwrap();
         assert_eq!(
-            compact_usage_sync_log(&relay_b, "dev-b", "2026-09-01T00:00:00.000Z", 1_000).unwrap(),
+            compact_usage_sync_log(&relay_b, Some("dev-b"), "2026-09-01T00:00:00.000Z", 1_000).unwrap(),
             1
         );
 
@@ -316,9 +344,34 @@
         save_stored_vector(&conn, &vector);
 
         let deleted =
-            compact_usage_sync_log(&conn, "dev", "2026-09-01T00:00:00.000Z", 100).unwrap();
+            compact_usage_sync_log(&conn, Some("dev"), "2026-09-01T00:00:00.000Z", 100).unwrap();
         assert_eq!(deleted, 2, "own head bounds superseded own refs");
         assert_eq!(usage_log_refs(&conn).len(), 1, "the newest ref stays");
+    }
+
+    #[test]
+    fn compaction_with_no_own_device_binds_everything_to_cursors() {
+        // `None` means no origin gets the journal-head bound: the same refs
+        // that `Some("dev")` compacts stay put once the vector cursor is
+        // frozen — used by the wire claim path and by maintenance when the
+        // tracker has never written.
+        let conn = setup_db();
+        upsert_tracked_app(&conn, &make_tracked_app("app-1")).unwrap();
+        upsert_usage_session(&conn, &make_usage_session("s-1", "app-1")).unwrap();
+        let hlc = |seq: u64| format!("2026-08-01T00:00:{seq:02}.000Z:{seq:06}:dev");
+        for seq in 1..=3 {
+            record_usage_sequence(&conn, "usage_session", "s-1", "dev", seq, &hlc(seq), false)
+                .unwrap();
+        }
+        let mut vector = stored_vector(&conn);
+        vector.remove("@usage:dev");
+        save_stored_vector(&conn, &vector);
+
+        assert_eq!(
+            compact_usage_sync_log(&conn, None, "2026-09-01T00:00:00.000Z", 100).unwrap(),
+            0
+        );
+        assert_eq!(usage_log_refs(&conn).len(), 3);
     }
 
     #[test]
@@ -331,7 +384,7 @@
         let client = setup_db();
         upsert_tracked_app(&client, &make_tracked_app("app-1")).unwrap();
 
-        let through = usage_log_complete_through(&server, "dev-a").unwrap();
+        let through = usage_log_complete_through(&server, None).unwrap();
         assert_eq!(through["dev-a"], 6);
 
         let remote = stored_vector(&client);

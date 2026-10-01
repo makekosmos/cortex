@@ -133,9 +133,8 @@ pub(super) async fn compact_usage_sync_log(
         .format("%Y-%m-%dT%H:%M:%S%.3fZ")
         .to_string();
     let limit = batch_limit.unwrap_or(2_000).clamp(1, 50_000);
-    let own_device_id = local_write_device_id(device_id);
     with_write_tx(state, |conn| {
-        let deleted = db::compact_usage_sync_log(conn, &own_device_id, &cutoff, limit)?;
+        let deleted = db::compact_usage_sync_log(conn, device_id.as_deref(), &cutoff, limit)?;
         Ok(json!({
             "deleted": deleted,
             "has_more": deleted as i64 == limit,
