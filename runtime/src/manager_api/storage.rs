@@ -20,6 +20,9 @@ enum Category {
     Updates,
     FileIndex,
     AppIndex,
+    // KOS-302: 0.9.x leftover with no writer in cortex — surfaced as its own
+    // row so the «Данные» page can offer the «Очистить» action.
+    LegacyQuarantine,
     Other,
 }
 
@@ -33,6 +36,7 @@ impl Category {
             Category::Updates => "Загруженные обновления",
             Category::FileIndex => "Индекс файлов",
             Category::AppIndex => "Индекс приложений",
+            Category::LegacyQuarantine => "Устаревшие данные",
             Category::Other => "Прочее",
         }
     }
@@ -46,6 +50,7 @@ impl Category {
             Category::Updates => "updates",
             Category::FileIndex => "file_index",
             Category::AppIndex => "app_index",
+            Category::LegacyQuarantine => "legacy_quarantine",
             Category::Other => "other",
         }
     }
@@ -59,6 +64,7 @@ const ALL_CATEGORIES: &[Category] = &[
     Category::Updates,
     Category::FileIndex,
     Category::AppIndex,
+    Category::LegacyQuarantine,
     Category::Other,
 ];
 
@@ -71,6 +77,7 @@ fn classify(name: &str, is_package_root: bool) -> Category {
         "backups" => Category::Backups,
         "updates" => Category::Updates,
         "packages" => Category::Packages,
+        "legacy-quarantine" => Category::LegacyQuarantine,
         _ if is_package_root => Category::Packages,
         _ if name.starts_with("ark.db.") => Category::Backups,
         _ if name.starts_with("file-index.db") => Category::FileIndex,
@@ -101,7 +108,7 @@ fn entry_bytes(entry: &std::fs::DirEntry) -> u64 {
     }
 }
 
-fn directory_bytes(path: &Path) -> u64 {
+pub(super) fn directory_bytes(path: &Path) -> u64 {
     let Ok(entries) = std::fs::read_dir(path) else {
         return 0;
     };

@@ -79,7 +79,22 @@ pub fn render(
                 ),
         );
         for cat in varr(v, "categories") {
-            list = list.child(row(vstr(cat, "label"), fmt_bytes(vnum(cat, "bytes"))));
+            let mut cat_row = row(vstr(cat, "label"), fmt_bytes(vnum(cat, "bytes")));
+            if vstr(cat, "id") == "legacy_quarantine" {
+                cat_row = cat_row.child(btn_id("quarantine-clear", "Очистить", {
+                    cx.listener(|this, _, _, cx| {
+                        this.ask_confirm(
+                            "Удалить устаревшие данные?",
+                            "Это файлы, оставшиеся от старой версии приложения. \
+                             Они не нужны для работы, но удаление необратимо.",
+                            "manager.data.quarantine.clear",
+                            json!({}),
+                            cx,
+                        );
+                    })
+                }));
+            }
+            list = list.child(cat_row);
             for part in varr(cat, "detail") {
                 list = list.child(
                     div()

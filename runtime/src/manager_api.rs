@@ -12,6 +12,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 
 mod data;
+mod quarantine;
 mod storage;
 
 const MAX_LOG_TAIL: usize = 200;
