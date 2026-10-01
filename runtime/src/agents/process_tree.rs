@@ -165,9 +165,9 @@ impl Drop for ProcessTree {
 /// Windows `Command` only searches PATH for `<name>.exe`, so an npm shim like
 /// `codex.cmd` would never spawn — and the PowerShell gate this replaced is
 /// gone. This resolves a bare name over the command's `PATH` × `PATHEXT`
-/// (explicit paths pass through) and returns the command to spawn. A resolved
-/// `.cmd`/`.bat` is rebuilt around `cmd.exe /d /s /c` with arguments escaped
-/// against both cmd parse passes.
+/// (explicit paths pass through) and rebuilds the command around the full
+/// path; a resolved `.cmd`/`.bat` then gets std's own `cmd.exe` wrapping,
+/// which is hardened against command injection (CVE-2024-24576).
 ///
 /// The returned command may be rebuilt around the resolved path, so only
 /// program, args, env and current_dir carry over: set stdio *after* this call

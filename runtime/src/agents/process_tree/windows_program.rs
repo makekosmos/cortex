@@ -5,12 +5,12 @@
 //! `codex` finds the `codex.cmd` shim npm installs next to it. This module
 //! keeps that lookup working without a shell in between.
 //!
-//! A resolved `.cmd`/`.bat` is run through an explicit `cmd.exe /d /s /c`
-//! line built here rather than relying on std's implicit batch wrapping:
-//! std quotes args for `cmd /c` but does not escape `&`, `|`, `<` or `>`
-//! against the second parse the batch file's invocation line goes through,
-//! so a metacharacter argument could split into another command.
-//! [`escape_batch_token`] caret-escapes at both parse levels.
+//! A resolved `.cmd`/`.bat` path is handed to `Command` as-is: since
+//! Rust 1.77.2 (the BatBadBut fix, CVE-2024-24576) std wraps batch files in
+//! `cmd.exe` itself and refuses or escapes arguments it cannot pass safely,
+//! including across the second parse a batch file's invocation goes through.
+//! Hand-rolling that line was tried and is wrong: `%*`-forwarding shims pass
+//! cmd's escaping on to the real program.
 
 use std::env;
 use std::ffi::{OsStr, OsString};
@@ -29,12 +29,10 @@ pub(super) enum Resolution {
     /// The program names a concrete path or carries an explicit extension —
     /// spawn the command unchanged.
     Unchanged,
-    /// A bare extensionless name resolved to an image through
-    /// PATH × PATHEXT — rebuild the command around it.
+    /// A bare extensionless name resolved through PATH × PATHEXT — rebuild
+    /// the command around the full path. A `.cmd`/`.bat` path goes in
+    /// verbatim so std does its own `cmd.exe` wrapping and escaping.
     Resolved(PathBuf),
-    /// A bare extensionless name resolved to a batch file — run it through
-    /// `cmd.exe /d /s /c` with the line [`batch_command_line`] builds.
-    Batch(PathBuf),
 }
 
 /// Rebuild `command` around its resolved program path when the program is a
@@ -42,12 +40,10 @@ pub(super) enum Resolution {
 ///
 /// Only program, args, env vars and current_dir are carried over: the caller
 /// configures stdio on the returned command and passes creation flags to
-/// `ProcessTree::spawn`. `raw_arg` arguments lose their rawness on a `.cmd`
-/// target (they arrive through `get_args` as plain strings and are quoted
-/// again), and `env_clear` is not observable on a built `Command` — neither
-/// survives the rebuild.
+/// `ProcessTree::spawn`. `raw_arg` arguments lose their rawness (they arrive
+/// through `get_args` as plain strings and are quoted again), and `env_clear`
+/// is not observable on a built `Command` — neither survives the rebuild.
 pub(super) fn resolve_command(command: Command) -> io::Result<Command> {
-    let resolution = resolve(command.as_std())?;
     let source = command.as_std();
     let args = source
         .get_args()
@@ -58,25 +54,12 @@ pub(super) fn resolve_command(command: Command) -> io::Result<Command> {
         .map(|(key, value)| (key.to_os_string(), value.map(OsStr::to_os_string)))
         .collect::<Vec<_>>();
     let current_dir = source.get_current_dir().map(Path::to_path_buf);
-
-    let mut resolved = match resolution {
-        Resolution::Unchanged => return Ok(command),
-        Resolution::Resolved(program) => {
-            let mut resolved = Command::new(program);
-            resolved.args(args);
-            resolved
-        }
-        Resolution::Batch(program) => {
-            let line = batch_command_line(program.as_os_str(), &args)?;
-            let mut resolved = Command::new(command_prompt()?);
-            resolved.args(["/d", "/s", "/e:ON", "/v:OFF", "/c"]);
-            // The /c line is one verbatim tail: cmd.exe parses it itself, so
-            // it must not go through argv quoting again.
-            use std::os::windows::process::CommandExt;
-            resolved.as_std_mut().raw_arg(line);
-            resolved
-        }
+    let Resolution::Resolved(program) = resolve(source)? else {
+        return Ok(command);
     };
+
+    let mut resolved = Command::new(program);
+    resolved.args(args);
     for (key, value) in envs {
         match value {
             Some(value) => resolved.env(key, value),
@@ -87,89 +70,6 @@ pub(super) fn resolve_command(command: Command) -> io::Result<Command> {
         resolved.current_dir(dir);
     }
     Ok(resolved)
-}
-
-/// `%SystemDirectory%\cmd.exe` — the same interpreter std picks for batch
-/// files: fixed by the OS, not inherited through PATH or COMSPEC.
-fn command_prompt() -> io::Result<PathBuf> {
-    use std::os::windows::ffi::OsStringExt;
-    use windows::Win32::System::SystemInformation::GetSystemDirectoryW;
-
-    let mut buffer = vec![0u16; 260];
-    let len = unsafe { GetSystemDirectoryW(Some(&mut buffer)) } as usize;
-    if len == 0 {
-        return Err(io::Error::last_os_error());
-    }
-    if len > buffer.len() {
-        // The buffer was too small; the return value is the required length
-        // including the terminator.
-        buffer.resize(len, 0);
-        let len = unsafe { GetSystemDirectoryW(Some(&mut buffer)) } as usize;
-        if len == 0 || len > buffer.len() {
-            return Err(io::Error::last_os_error());
-        }
-        buffer.truncate(len);
-    } else {
-        buffer.truncate(len);
-    }
-    Ok(PathBuf::from(OsString::from_wide(&buffer)).join("cmd.exe"))
-}
-
-/// The `"<line>"` tail for `cmd.exe /d /s /c`: `/s` makes cmd strip exactly
-/// the first and last quote, so the line is wrapped in one outer pair and
-/// every token inside carries its own quoting.
-fn batch_command_line(program: &OsStr, args: &[OsString]) -> io::Result<OsString> {
-    let mut line = OsString::from("\"");
-    line.push(escape_batch_token(program)?);
-    for arg in args {
-        line.push(" ");
-        line.push(escape_batch_token(arg)?);
-    }
-    line.push("\"");
-    Ok(line)
-}
-
-/// One quoted token inside a `cmd.exe /s /c` line.
-///
-/// The line is parsed twice: once by cmd.exe when it reads the `/c` string,
-/// and again when it builds the batch file's invocation line. Inside quotes
-/// cmd still treats a bare `&`, `|`, `<` or `>` as a command separator at the
-/// second pass, so every metacharacter is written `^X` — the caret survives
-/// the first parse literally and is consumed as an escape in the second.
-/// `"` is written `""`: the doubled quote is cmd's own quote escape, which is
-/// why a batch shim that forwards `%1`/`%*` hands the original argument to a
-/// real program (an .exe sees `""` inside quotes as a literal `"`). `\r`,
-/// `\n` and NUL cannot be represented on a command line and fail closed.
-pub(super) fn escape_batch_token(arg: &OsStr) -> io::Result<OsString> {
-    use std::os::windows::ffi::{OsStrExt, OsStringExt};
-
-    const CARET: u16 = '^' as u16;
-    const QUOTE: u16 = '"' as u16;
-    let metachar = |unit: u16| {
-        // `!` is escaped for callers whose cmd enables delayed expansion;
-        // `^` itself must double so it survives to the batch line as one.
-        b"^&|<>()%!".iter().any(|&byte| unit == byte as u16)
-    };
-
-    let mut out = vec![QUOTE];
-    for unit in arg.encode_wide() {
-        if unit == QUOTE {
-            out.push(QUOTE);
-        } else if unit == 0 || unit == '\r' as u16 || unit == '\n' as u16 {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!(
-                    "argument cannot be passed on a batch command line: `{}`",
-                    arg.to_string_lossy()
-                ),
-            ));
-        } else if metachar(unit) {
-            out.push(CARET);
-        }
-        out.push(unit);
-    }
-    out.push(QUOTE);
-    Ok(OsString::from_wide(&out))
 }
 
 /// Resolves `command`'s program the way its spawned environment will see it.
@@ -222,11 +122,11 @@ fn is_bare_name(path: &Path) -> bool {
     matches!(components.next(), Some(Component::Normal(_))) && components.next().is_none()
 }
 
-/// The PATHEXT entry that won the lookup decides how the file spawns.
+/// The PATHEXT entry that won the lookup decides whether CreateProcess can
+/// run the file: `.cmd`/`.bat` count because std wraps them in `cmd.exe`.
 fn classify(candidate: PathBuf) -> io::Result<Resolution> {
     match extension(&candidate).as_deref() {
-        Some("exe" | "com") => Ok(Resolution::Resolved(candidate)),
-        Some("cmd" | "bat") => Ok(Resolution::Batch(candidate)),
+        Some("exe" | "com" | "cmd" | "bat") => Ok(Resolution::Resolved(candidate)),
         Some(extension) => Err(unsupported_extension(&candidate, extension)),
         None => Err(unsupported_extension(&candidate, "")),
     }

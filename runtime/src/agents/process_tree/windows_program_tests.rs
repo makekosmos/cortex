@@ -1,11 +1,11 @@
-use super::windows_program::{escape_batch_token, resolve, Resolution};
+use super::windows_program::{resolve, Resolution};
 use super::*;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 fn resolved_path(command: &Command) -> Option<PathBuf> {
     match resolve(command.as_std()).unwrap() {
-        Resolution::Resolved(path) | Resolution::Batch(path) => Some(path),
+        Resolution::Resolved(path) => Some(path),
         Resolution::Unchanged => None,
     }
 }
@@ -149,23 +149,19 @@ fn npm_style_codex_resolves_to_cmd_shim() {
     command.env("PATH", dir.path());
 
     let resolved = resolve_command(command).unwrap();
-    let resolved_std = resolved.as_std();
+    // The program becomes the shim itself: std wraps the .cmd in cmd.exe at
+    // spawn, escaping arguments for both cmd parse passes.
     assert!(
-        Path::new(resolved_std.get_program())
-            .file_name()
-            .is_some_and(|name| name.eq_ignore_ascii_case("cmd.exe")),
-        "codex.cmd spawns through cmd.exe, got {:?}",
-        resolved_std.get_program()
-    );
-    let line = resolved_std.get_args().nth(5).unwrap().to_string_lossy();
-    assert!(
-        line.to_ascii_lowercase().contains("codex.cmd"),
-        "/c line names the resolved shim: {line}"
+        Path::new(resolved.as_std().get_program())
+            .as_os_str()
+            .eq_ignore_ascii_case(dir.path().join("codex.cmd").as_os_str()),
+        "resolved program is the shim: {:?}",
+        resolved.as_std().get_program()
     );
 }
 
 #[test]
-fn batch_resolution_reroutes_through_cmd_exe() {
+fn batch_resolution_keeps_args_and_env() {
     let dir = tempfile::tempdir().unwrap();
     let script = dir.path().join("probe.cmd");
     std::fs::write(&script, []).unwrap();
@@ -179,68 +175,17 @@ fn batch_resolution_reroutes_through_cmd_exe() {
     let resolved_std = resolved.as_std();
     assert!(
         Path::new(resolved_std.get_program())
-            .file_name()
-            .is_some_and(|name| name.eq_ignore_ascii_case("cmd.exe")),
-        "batch files spawn through cmd.exe, got {:?}",
+            .as_os_str()
+            .eq_ignore_ascii_case(script.as_os_str()),
+        "resolved program is the batch file itself: {:?}",
         resolved_std.get_program()
     );
-    let args = resolved_std.get_args().collect::<Vec<_>>();
-    // raw_arg'd text still shows up through get_args: the last entry is the
-    // whole /c line, quotes and caret escapes included.
+    // Arguments stay plain strings; quoting/escaping is std's job at spawn.
     assert_eq!(
-        args[..5],
-        ["/d", "/s", "/e:ON", "/v:OFF", "/c"].map(OsStr::new)
-    );
-    let line = args[5].to_string_lossy();
-    assert!(
-        line.starts_with('"') && line.ends_with('"'),
-        "/s strips the outer quote pair: {line}"
-    );
-    let script_name = script.display().to_string();
-    assert!(
-        line.to_ascii_lowercase()
-            .contains(&format!("\"{}\"", script_name.to_ascii_lowercase())),
-        "script path is quoted in the line: {line}"
-    );
-    assert!(
-        line.contains("\"a^&b\""),
-        "metacharacters carry caret escapes: {line}"
+        resolved_std.get_args().collect::<Vec<_>>(),
+        [OsStr::new("one"), OsStr::new("a&b")]
     );
     assert!(resolved_std
         .get_envs()
         .any(|(key, value)| key == OsStr::new("EXTRA") && value == Some(OsStr::new("kept"))));
-}
-
-#[test]
-fn batch_token_escaping() {
-    // (input, expected token) — the token goes through cmd /c parsing and then
-    // the batch invocation parse; verified against cmd.exe on Windows.
-    let cases = [
-        ("plain", "\"plain\""),
-        ("with space", "\"with space\""),
-        ("a&b|c>d", "\"a^&b^|c^>d\""),
-        ("x^y!(z)", "\"x^^y^!^(z^)\""),
-        ("50%", "\"50^%\""),
-        // `"` doubles — the batch-level quote escape a downstream .exe
-        // collapses back to a literal `"` when it parses argv.
-        ("say \"hi\"", "\"say \"\"hi\"\"\""),
-        ("a\"&b", "\"a\"\"^&b\""),
-        ("a\" b", "\"a\"\" b\""),
-        ("", "\"\""),
-        ("trailing\\", "\"trailing\\\""),
-    ];
-    for (input, expected) in cases {
-        assert_eq!(
-            escape_batch_token(OsStr::new(input)).unwrap(),
-            OsStr::new(expected),
-            "input: {input:?}"
-        );
-    }
-}
-
-#[test]
-fn batch_token_rejects_line_breaks() {
-    // `\r`/`\n` would truncate the /c line mid-argument.
-    let error = escape_batch_token(OsStr::new("a\rb")).unwrap_err();
-    assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
 }

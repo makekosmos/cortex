@@ -58,47 +58,62 @@ async fn terminate_kills_grandchild() {
 }
 
 /// A bare program name resolves over PATH × PATHEXT, so an npm-style `.cmd`
-/// shim on the command's PATH spawns through ProcessTree — and every
-/// metacharacter in its arguments survives the cmd.exe hand-off unchanged.
+/// shim on the command's PATH spawns through ProcessTree. The shim forwards
+/// `%*` verbatim — the way npm's shims hand arguments to `node.exe` — and the
+/// consumer prints the argv it actually received, so a metacharacter that
+/// survives only inside cmd's own quoting (e.g. `echo(%~N`) cannot hide here.
 #[cfg(windows)]
 #[tokio::test]
 async fn spawn_runs_cmd_shim_from_path() {
     use tokio::io::AsyncReadExt;
 
     let dir = tempfile::tempdir().unwrap();
-    // echo(%~N prints argument N verbatim on its own line.
     std::fs::write(
-        dir.path().join("probe.cmd"),
-        "@echo off\r\necho(%~1\r\necho(%~2\r\necho(%~3\r\necho(%~4\r\necho(%~5\r\necho(%~6\r\necho(%~7\r\necho(%~8\r\necho(%~9\r\n",
+        dir.path().join("argv.js"),
+        "process.stdout.write(JSON.stringify(process.argv.slice(2)))",
     )
     .unwrap();
-    // Pairs of (argument sent, line echo(%~N prints). A `"` arrives in the
-    // batch-level doubled form `""` — cmd's quote escape, which a real .exe
-    // behind the shim collapses back to `"` when it parses argv.
-    let cases = [
-        ("plain", "plain"),
-        ("with space", "with space"),
-        ("a&b|c>d", "a&b|c>d"),
-        ("x^y!(z)", "x^y!(z)"),
-        ("50%", "50%"),
-        ("", ""),
-        ("trailing\\", "trailing\\"),
-        ("say \"hi\"", "say \"\"hi\"\""),
-        ("a\"&b", "a\"\"&b"),
+    std::fs::write(
+        dir.path().join("probe.cmd"),
+        "@node \"%~dp0argv.js\" %*\r\n",
+    )
+    .unwrap();
+    let args = [
+        "plain",
+        "with space",
+        "a&b|c>d",
+        "x^y!(z)",
+        "50%",
+        "%PATH%",
+        "",
+        "trailing\\",
+        "say \"hi\"",
+        "a\"&b",
     ];
     let mut command = Command::new("probe");
-    command
-        .args(cases.map(|(arg, _)| arg))
-        .env("PATH", dir.path());
+    // dir goes first so it wins the lookup; the inherited PATH stays so the
+    // shim can still find node.
+    command.args(args).env(
+        "PATH",
+        format!(
+            "{};{}",
+            dir.path().display(),
+            std::env::var("PATH").unwrap()
+        ),
+    );
     let mut command = resolve_command(command).unwrap();
-    command.stdout(Stdio::piped()).stderr(Stdio::null());
+    command.stdout(Stdio::piped()).stderr(Stdio::inherit());
     let mut tree = ProcessTree::spawn(&mut command, 0).await.unwrap();
 
     let mut stdout = tree.child_mut().stdout.take().unwrap();
     let mut output = Vec::new();
     stdout.read_to_end(&mut output).await.unwrap();
-    let expected = cases.map(|(_, line)| format!("{line}\r\n")).concat();
-    assert_eq!(String::from_utf8_lossy(&output), expected);
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&output).unwrap(),
+        serde_json::json!(args),
+        "node printed {}",
+        String::from_utf8_lossy(&output)
+    );
     tree.terminate_and_wait(Duration::from_secs(5))
         .await
         .unwrap();
