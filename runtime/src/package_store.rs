@@ -17,6 +17,8 @@ use std::{
 use thiserror::Error;
 use zip::ZipArchive;
 
+mod sweep;
+
 pub(crate) const MAX_ARCHIVE: u64 = 128 * 1024 * 1024;
 pub(crate) const MAX_EXPANDED: u64 = 512 * 1024 * 1024;
 pub(crate) const MAX_ENTRIES: usize = 512;
@@ -89,6 +91,7 @@ impl PackageStore {
         let root = root.into();
         retry_io(|| fs::create_dir_all(root.join("blobs")))?;
         retry_io(|| fs::create_dir_all(root.join("unpacked")))?;
+        sweep::sweep_stale_leftovers(&root);
         Ok(Self {
             root,
             mutation: Mutex::new(()),
