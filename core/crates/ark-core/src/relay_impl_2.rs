@@ -193,19 +193,30 @@ impl RelaySync {
                     entities: batch,
                     is_last: false,
                     origin_device_id: Some(self.config.device_id.clone()),
+                    usage_complete_through: None,
                 });
             }
         }
 
+        // Hole-tolerant cursors (KOS-302): a relay must advertise these too —
+        // it may itself have compacted refs the next hop still needs a claim
+        // for, so pass our own coverage floor on the final page.
+        let complete_through = self.storage.usage_complete_through().await;
         let _ = self.transport.send(LanSyncMessage::SyncChanges {
             batch_id: generate_id(),
             entities: vec![],
             is_last: true,
             origin_device_id: Some(self.config.device_id.clone()),
+            usage_complete_through: (!complete_through.is_empty()).then_some(complete_through),
         });
     }
 
-    async fn apply_entities(&self, entities: &[SyncEntity], is_last: bool) {
+    async fn apply_entities(
+        &self,
+        entities: &[SyncEntity],
+        is_last: bool,
+        usage_complete_through: Option<&HashMap<String, u64>>,
+    ) {
         let mut incoming = self.incoming_sync.lock().await;
         if incoming.is_none() {
             *incoming = Some(IncomingSyncState {
@@ -244,10 +255,14 @@ impl RelaySync {
         }
 
         if is_last {
-            if state.changed {
-                merge_usage_cursors(&mut state.vector, &load_version_vector(&self.storage).await);
-                save_version_vector(&self.storage, &state.vector).await;
-            }
+            crate::sync_server::persist_pull_vector(
+                &self.storage,
+                &mut state.vector,
+                state.changed,
+                true,
+                usage_complete_through,
+            )
+            .await;
             *incoming = None;
             drop(incoming);
             trim_process_heap();

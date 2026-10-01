@@ -239,11 +239,20 @@
                                                                 entities: batch,
                                                                 is_last: false,
                                                                 origin_device_id: None,
+                                                                usage_complete_through: None,
                                                             },
                                                         );
                                                     }
                                                 }
                                                 save_version_vector(&storage, &local_vector).await;
+                                                // Hole-tolerant cursors
+                                                // (KOS-302): the final page
+                                                // claims how far each origin
+                                                // is served complete, so the
+                                                // peer's contiguous cursor
+                                                // can jump compacted holes.
+                                                let complete_through =
+                                                    storage.usage_complete_through().await;
                                                 send_msg(
                                                     &tx,
                                                     &LanSyncMessage::SyncChanges {
@@ -251,6 +260,9 @@
                                                         entities: vec![],
                                                         is_last: true,
                                                         origin_device_id: None,
+                                                        usage_complete_through:
+                                                            (!complete_through.is_empty())
+                                                                .then_some(complete_through),
                                                     },
                                                 );
 
@@ -273,6 +285,7 @@
                                                 batch_id,
                                                 entities,
                                                 is_last,
+                                                usage_complete_through,
                                                 ..
                                             } => {
                                                 if !authenticated {
@@ -314,14 +327,14 @@
                                                     }
                                                 }
 
-                                                if vector_updated {
-                                                    merge_usage_cursors(
-                                                        &mut local_vector,
-                                                        &load_version_vector(&storage).await,
-                                                    );
-                                                    save_version_vector(&storage, &local_vector)
-                                                        .await;
-                                                }
+                                                crate::sync_server::persist_pull_vector(
+                                                    &storage,
+                                                    &mut local_vector,
+                                                    vector_updated,
+                                                    is_last,
+                                                    usage_complete_through.as_ref(),
+                                                )
+                                                .await;
                                                 send_msg(
                                                     &tx,
                                                     &LanSyncMessage::SyncAck { batch_id, accepted },

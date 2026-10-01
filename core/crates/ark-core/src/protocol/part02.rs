@@ -57,6 +57,7 @@ mod tests {
             entities: vec![entity],
             is_last: true,
             origin_device_id: None,
+            usage_complete_through: None,
         };
         let json_str = serialize_message(&msg);
         let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
@@ -66,6 +67,35 @@ mod tests {
         assert_eq!(parsed["entities"][0]["type"], "todo");
         // deleted should be omitted when None
         assert!(parsed["entities"][0].get("deleted").is_none());
+    }
+
+    #[test]
+    fn test_sync_changes_usage_complete_through_compat() {
+        // Old senders omit the field — a new receiver deserializes to None
+        // and keeps contiguous-only cursor advancement (KOS-302).
+        let json = r#"{"type":"sync_changes","batch_id":"b1","entities":[],"is_last":true}"#;
+        let msg = deserialize_message(json).unwrap();
+        match msg {
+            LanSyncMessage::SyncChanges {
+                usage_complete_through,
+                ..
+            } => assert!(usage_complete_through.is_none()),
+            other => panic!("expected SyncChanges, got {other:?}"),
+        }
+
+        // A new sender's claim round-trips to a new receiver.
+        let mut through = std::collections::HashMap::new();
+        through.insert("dev-a".to_string(), 42_u64);
+        let msg = LanSyncMessage::SyncChanges {
+            batch_id: "b2".to_string(),
+            entities: vec![],
+            is_last: true,
+            origin_device_id: None,
+            usage_complete_through: Some(through),
+        };
+        let parsed: serde_json::Value =
+            serde_json::from_str(&serialize_message(&msg)).unwrap();
+        assert_eq!(parsed["usage_complete_through"]["dev-a"], 42);
     }
 
     #[test]

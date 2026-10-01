@@ -15,23 +15,30 @@
 // state — a peer never needs the same entity twice, so an old ref is fully
 // covered ("synced") once a newer ref for the same entity exists.
 //
-// Compaction rule (explicit):
-//   delete a ref iff
-//     1) another ref for the same (entity_type, entity_id) carries a newer
-//        hlc — the entity still reaches every peer, fresh devices included,
-//        through the surviving ref;
-//     2) the ref's hlc wall time is older than `USAGE_SYNC_LOG_RETENTION_DAYS`
-//        — peers that sync more often than the horizon never see a gap.
+// The catch: `@usage:<device>` cursors are *contiguous* — the receiver's
+// `record_usage_sequence` advances its cursor only while `seq = cursor+1`
+// exists in its own log. Deleting refs opens holes, and a receiver sitting
+// below a hole could never advance past it. That is why the sender pairs
+// compaction with `usage_complete_through` (see below): on the final sync
+// page it tells the receiver up to which seq each origin device is served
+// complete, counting compacted refs as covered, and the receiver raises its
+// cursor to that floor.
+//
+// Compaction rule (explicit) — delete a ref iff ALL of:
+//   1) another ref for the same (entity_type, entity_id) carries a newer
+//      hlc — the entity still reaches every peer, fresh devices included,
+//      through the surviving ref;
+//   2) the ref's hlc wall time is older than `USAGE_SYNC_LOG_RETENTION_DAYS`
+//      — peers that sync more often than the horizon never see a gap;
+//   3) the ref's seq is within our own contiguous coverage for that origin
+//      device (`@usage:<device>` in the version vector). We may only delete
+//      refs we can vouch for: a ref above our contiguous cursor is one we
+//      never received completely ourselves, so deleting it would leave a
+//      relay serving claims it cannot prove.
 //   The newest ref per entity is NEVER deleted: it is the only carrier to
 //   peers that have not seen the entity ("unsynced rows are never dropped").
 //   Refs to deleted/missing entity rows are never superseded by a newer ref,
 //   so they also stay — they are how peers learn about the deletion.
-//
-// Documented trade-off: a peer whose cursor sits below a deleted seq cannot
-// advance its contiguous cursor past the gap; its later pulls keep getting
-// the surviving tail. The data stays correct (entities still arrive via the
-// surviving refs, dedup by hlc); the 30-day horizon confines the cost to
-// peers that have not synced in a month.
 //
 // Batching: one call = one short write transaction of at most `batch_limit`
 // rows. The Engine loops this op with pauses between calls, so the service
@@ -40,6 +47,26 @@
 /// Age horizon for compaction: refs younger than this are always kept, so
 /// devices that sync regularly observe a gapless stream.
 pub const USAGE_SYNC_LOG_RETENTION_DAYS: i64 = 30;
+
+fn usage_cursors(conn: &Connection) -> Result<Vec<(String, i64)>, String> {
+    let raw = get_sync_kv(conn, VERSION_VECTOR_KEY)?;
+    let vector: VersionVector = raw
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .and_then(|value| serde_json::from_str(value).ok())
+        .unwrap_or_default();
+    let mut cursors = vector
+        .iter()
+        .filter_map(|(key, value)| {
+            key.strip_prefix("@usage:")
+                .and_then(|device_id| {
+                    value.parse::<i64>().ok().map(|seq| (device_id.to_string(), seq))
+                })
+        })
+        .collect::<Vec<_>>();
+    cursors.sort_unstable();
+    Ok(cursors)
+}
 
 /// Delete one batch of superseded refs. `cutoff_wall_time` is the ISO-8601
 /// hlc wall-time prefix (24 chars) bounding which refs are old enough.
@@ -50,21 +77,69 @@ pub fn compact_usage_sync_log(
     cutoff_wall_time: &str,
     batch_limit: i64,
 ) -> Result<usize, String> {
-    conn.execute(
+    let cursors = usage_cursors(conn)?;
+    let mut sql = String::from(
         "DELETE FROM usage_sync_log
          WHERE (device_id, seq) IN (
              SELECT l.device_id, l.seq
              FROM usage_sync_log l
-             WHERE SUBSTR(l.hlc, 1, 24) < ?1
+             WHERE SUBSTR(l.hlc, 1, 24) < ?
+               AND l.seq <= CASE l.device_id ",
+    );
+    let mut values = Vec::<rusqlite::types::Value>::new();
+    values.push(cutoff_wall_time.to_string().into());
+    for (device_id, cursor) in &cursors {
+        sql.push_str("WHEN ? THEN ? ");
+        values.push(device_id.clone().into());
+        values.push((*cursor).into());
+    }
+    sql.push_str(
+        "ELSE 0 END
                AND EXISTS (
                    SELECT 1 FROM usage_sync_log n
                    WHERE n.entity_type = l.entity_type
                      AND n.entity_id = l.entity_id
                      AND n.hlc > l.hlc
                )
-             LIMIT ?2
+             LIMIT ?
          )",
-        params![cutoff_wall_time, batch_limit.max(1)],
-    )
-    .map_err(|e| e.to_string())
+    );
+    values.push(batch_limit.max(1).into());
+    conn.execute(&sql, params_from_iter(values))
+        .map_err(|e| e.to_string())
+}
+
+/// Per origin device, the highest seq this node can serve completely —
+/// what the sender advertises as `usage_complete_through` on the final
+/// sync page so the receiver can raise its cursor past compacted holes.
+/// For our own device that is the log head: own seqs are allocated
+/// contiguously, so every seq at or below it is either still in the log or
+/// was compacted by us. For a foreign origin it is our contiguous
+/// `@usage:<device>` cursor — never claimed above it, because refs past
+/// our own coverage are exactly the ones the delete rule spares.
+pub fn usage_log_complete_through(
+    conn: &Connection,
+    own_device_id: &str,
+) -> Result<HashMap<String, u64>, String> {
+    let cursors: HashMap<String, i64> = usage_cursors(conn)?.into_iter().collect();
+    let mut statement = conn
+        .prepare("SELECT device_id, max_seq FROM usage_sync_heads")
+        .map_err(|e| e.to_string())?;
+    let rows = statement
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    let mut through = HashMap::with_capacity(rows.len());
+    for (device_id, max_seq) in rows {
+        let claim = if device_id == own_device_id {
+            max_seq.max(0) as u64
+        } else {
+            cursors.get(&device_id).copied().unwrap_or(0).max(0) as u64
+        };
+        through.insert(device_id, claim);
+    }
+    Ok(through)
 }

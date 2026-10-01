@@ -178,7 +178,17 @@
             .map(|session| ("usage_session", session.id.as_str()))
             .chain([("usage_event", "ev-1")])
             .collect();
-        let mut seq = 100_u64;
+        // Churn refs must continue the migration's contiguous head — the
+        // compaction rule keeps any ref above our contiguous cursor, so a
+        // sequence jump here would (correctly) pin the churn in place.
+        let mut seq = conn
+            .query_row(
+                "SELECT COALESCE(max_seq, 0) FROM usage_sync_heads WHERE device_id = 'dev'",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap()
+            .max(0) as u64;
         for (kind, id) in &entity_ids {
             for round in 0..3 {
                 seq += 1;

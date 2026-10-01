@@ -15,10 +15,7 @@ async fn load_version_vector(storage: &Arc<dyn StorageBackend>) -> VersionVector
         None => VersionVector::new(),
     }
 }
-async fn save_version_vector(storage: &Arc<dyn StorageBackend>, vector: &VersionVector) {
-    let json = serde_json::to_string(vector).unwrap_or_default();
-    storage.set_kv(VERSION_VECTOR_KEY, &json).await;
-}
+
 #[allow(dead_code)]
 fn _touch_peer_record(_: Option<PeerRecord>) {}
 #[cfg(test)]

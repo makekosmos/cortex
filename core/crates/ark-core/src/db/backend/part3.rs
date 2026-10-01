@@ -225,6 +225,17 @@ impl StorageBackend for SqliteStorageBackend {
         .map_err(|e| e.to_string())?
     }
 
+    async fn usage_complete_through(&self) -> std::collections::HashMap<String, u64> {
+        let conn = self.conn.clone();
+        let device_id = self.device_id();
+        tokio::task::spawn_blocking(move || {
+            let guard = conn.lock().unwrap_or_else(|e| e.into_inner());
+            usage_log_complete_through(&guard, &device_id).unwrap_or_default()
+        })
+        .await
+        .unwrap_or_default()
+    }
+
     async fn get_kv(&self, key: &str) -> Option<String> {
         let conn = self.conn.clone();
         let key = key.to_string();

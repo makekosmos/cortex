@@ -159,6 +159,7 @@ mod tests {
             entities: vec![],
             is_last: true,
             origin_device_id: Some("dev".to_string()),
+            usage_complete_through: None,
         };
         assert!(MeshCoordinator::dedup_key_from_message(&msg).is_none());
     }

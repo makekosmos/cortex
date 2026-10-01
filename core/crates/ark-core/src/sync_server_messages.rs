@@ -245,6 +245,7 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                             entities: batch,
                             is_last: false,
                             origin_device_id: None,
+                            usage_complete_through: None,
                         },
                     );
                 }
@@ -252,6 +253,11 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
             if vector_updated {
                 save_version_vector(storage, &local_vector).await;
             }
+            // Hole-tolerant cursors (KOS-302): on the final page claim, per
+            // origin device, the seq we can serve completely — compacted
+            // refs count as covered, so the receiver's contiguous cursor can
+            // jump over the holes this stream skipped.
+            let complete_through = storage.usage_complete_through().await;
             send_msg(
                 &tx,
                 &LanSyncMessage::SyncChanges {
@@ -259,6 +265,8 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                     entities: vec![],
                     is_last: true,
                     origin_device_id: None,
+                    usage_complete_through: (!complete_through.is_empty())
+                        .then_some(complete_through),
                 },
             );
 
@@ -288,6 +296,7 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
             batch_id,
             entities,
             is_last,
+            usage_complete_through,
             ..
         } => {
             let (tx, authenticated) = {
@@ -343,10 +352,14 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                 }
             }
 
-            if vector_updated {
-                merge_usage_cursors(&mut local_vector, &load_version_vector(storage).await);
-                save_version_vector(storage, &local_vector).await;
-            }
+            persist_pull_vector(
+                storage,
+                &mut local_vector,
+                vector_updated,
+                is_last,
+                usage_complete_through.as_ref(),
+            )
+            .await;
             send_msg(&tx, &LanSyncMessage::SyncAck { batch_id, accepted });
 
             if is_last {
