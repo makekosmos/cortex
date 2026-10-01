@@ -17,7 +17,6 @@ const GRANDFATHERED = new Set([
   // Files above FAIL_LIMIT that predate it. Additions here require an
   // intentional review; drop an entry once its file is back under the limit.
   "desktop/scripts/verify-release-channel.mjs",
-  "manager-gpui/src/app.rs",
   "runtime/src/agents/app_server.rs",
   "runtime/src/agents/definitions.rs",
   "runtime/src/agents/tests.rs",
