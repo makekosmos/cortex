@@ -4,8 +4,10 @@
 // раз в N часов (default 24, override через MUNDUS_BACKUP_INTERVAL_HOURS).
 // Online Backup API не блокирует concurrent readers/writer — safe для live DB.
 //
-// Rotation: после успешного backup'а удаляем старые, оставляя последние
-// `MUNDUS_BACKUP_RETAIN_COUNT` (default 7).
+// Retention (см. `retention` модуль, KOS-300): после успешного backup'а и на
+// каждом старте Engine держим последние `MUNDUS_BACKUP_RETAIN_COUNT`
+// (default 7) backup'ов, убираем orphan SQLite sidecar'ы и stale temp файлы
+// crashed restore.
 //
 // Last-backup timestamp хранится в sync_kv под ключом `mundus.last_backup_ts`.
 // Если backup упал — логируем eprintln и продолжаем; следующий запуск
@@ -19,6 +21,8 @@ use chrono::{DateTime, Utc};
 use serde_json::json;
 
 use crate::ark_host::ArkHost;
+
+mod retention;
 
 const SYNC_KV_LAST_BACKUP: &str = "mundus.last_backup_ts";
 const BACKUPS_SUBDIR: &str = "backups";
@@ -214,28 +218,20 @@ fn ensure_backups_dir(data_dir: &Path) -> Result<PathBuf, String> {
     validated_backups_dir(data_dir, true)?.ok_or("backup directory was not created".to_string())
 }
 
-/// Удалить все backup'ы кроме последних `retain` (sorted by parsed timestamp
-/// descending). Возвращает count удалённых.
-fn rotate_backups(backups_dir: &Path, retain: usize) -> Result<usize, String> {
-    let mut entries: Vec<(PathBuf, DateTime<Utc>)> = std::fs::read_dir(backups_dir)
-        .map_err(|e| format!("read_dir {backups_dir:?}: {e}"))?
-        .filter_map(|entry| entry.ok())
-        .filter_map(|entry| {
-            let path = entry.path();
-            let name = path.file_name()?.to_str()?.to_string();
-            let ts = parse_backup_timestamp(&name)?;
-            Some((path, ts))
-        })
-        .collect();
-    entries.sort_by_key(|entry| std::cmp::Reverse(entry.1));
-    let mut removed = 0;
-    for (path, _) in entries.iter().skip(retain) {
-        match std::fs::remove_file(path) {
-            Ok(()) => removed += 1,
-            Err(e) => eprintln!("[db-backup] failed to remove {path:?}: {e}"),
-        }
+/// Применить retention к `<data_dir>/backups/` (см. retention.rs: ротация +
+/// orphan sidecar'ы + stale restore temps). Failure не фатален — логируем.
+fn enforce_retention(backups_dir: &Path) {
+    match retention::enforce(backups_dir, retain_count()) {
+        Ok(report) if report.total_removed() > 0 => eprintln!(
+            "[db-backup] retention: {} rotated, {} sidecars, {} pre-restore, {} restore temps removed",
+            report.rotated_backups,
+            report.removed_sidecars,
+            report.removed_pre_restore,
+            report.removed_restore_temps
+        ),
+        Ok(_) => {}
+        Err(e) => eprintln!("[db-backup] retention failed: {e}"),
     }
-    Ok(removed)
 }
 
 /// Сделать backup сейчас (без проверки interval). Используется в тестах и
@@ -279,11 +275,7 @@ pub async fn run_backup_now(ark: &ArkHost, data_dir: &Path) -> Result<PathBuf, S
 
     write_last_backup_ts(ark, now).await?;
 
-    match rotate_backups(&backups_dir, retain_count()) {
-        Ok(n) if n > 0 => eprintln!("[db-backup] rotated {n} old backup(s)"),
-        Ok(_) => {}
-        Err(e) => eprintln!("[db-backup] rotation failed: {e}"),
-    }
+    enforce_retention(&backups_dir);
 
     eprintln!(
         "[db-backup] success → {dest:?} ({} ms, background-priority chunked copy)",
@@ -387,6 +379,23 @@ pub async fn handle_manager_op(
 /// backend каждый restart дёргает; для long-running daemon процессов
 /// можно добавить отдельный tick'нутый scheduler позже).
 pub async fn maybe_backup_on_startup(ark: Arc<ArkHost>, data_dir: PathBuf) {
+    // Retention применяем на каждом старте, а не только когда backup due:
+    // между интервалами orphan sidecar'ы и stale restore temps копились бы
+    // бесконечно. Тот же BACKUP_LOCK, что у run_backup_now — cleanup не
+    // гонится с ручным db_backups.create. Директорию не создаём: чистить
+    // несуществующее нечего.
+    match validated_backups_dir(&data_dir, false) {
+        Ok(Some(backups_dir)) => {
+            let _guard = BACKUP_LOCK
+                .get_or_init(|| tokio::sync::Mutex::new(()))
+                .lock()
+                .await;
+            enforce_retention(&backups_dir);
+        }
+        Ok(None) => {}
+        Err(e) => eprintln!("[db-backup] startup retention skipped: {e}"),
+    }
+
     let interval = chrono::Duration::hours(interval_hours() as i64);
     let last = read_last_backup_ts(&ark).await;
     let should_backup = match last {
@@ -422,128 +431,4 @@ pub async fn maybe_backup_on_startup(ark: Arc<ArkHost>, data_dir: PathBuf) {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parses_backup_timestamp_round_trip() {
-        let ts = DateTime::parse_from_rfc3339("2026-05-18T15:30:45Z")
-            .unwrap()
-            .with_timezone(&Utc);
-        let name = backup_filename(ts);
-        let parsed = parse_backup_timestamp(&name).expect("должен распарситься");
-        assert_eq!(parsed, ts);
-    }
-
-    #[test]
-    fn rejects_non_backup_filename() {
-        assert!(parse_backup_timestamp("ark.db").is_none());
-        assert!(parse_backup_timestamp("ark.db.backup-not-a-date").is_none());
-        assert!(parse_backup_timestamp("random.txt").is_none());
-    }
-
-    #[test]
-    fn snapshot_id_accepts_only_backup_basenames() {
-        let params = serde_json::json!({ "backup_id": "ark.db.backup-2026-09-16-153045" });
-        assert_eq!(
-            snapshot_id(&params).unwrap(),
-            "ark.db.backup-2026-09-16-153045"
-        );
-        for bad in [
-            "",
-            "ark.db",
-            "ark.db.backup-2026-09-16",
-            "ark.db.backup-not-a-date",
-            ".restore-rollback-1.db",
-            "../ark.db.backup-2026-09-16-153045",
-            "sub/ark.db.backup-2026-09-16-153045",
-            "ark.db.backup-2026-09-16-153045.db",
-        ] {
-            let params = serde_json::json!({ "backup_id": bad });
-            assert!(snapshot_id(&params).is_err(), "{bad} must be rejected");
-        }
-        assert!(snapshot_id(&serde_json::json!({})).is_err());
-        assert!(snapshot_id(&serde_json::json!({ "backup_id": 42 })).is_err());
-    }
-
-    #[test]
-    fn rejects_linked_backups_directory() {
-        let root = tempfile::tempdir().unwrap();
-        let target = tempfile::tempdir().unwrap();
-        let backups = root.path().join(BACKUPS_SUBDIR);
-        crate::test_links::link_dir(target.path(), &backups).expect("junction");
-
-        assert!(ensure_backups_dir(root.path()).is_err());
-    }
-
-    #[test]
-    fn allocates_a_unique_name_when_second_resolution_collides() {
-        let dir = tempfile::tempdir().unwrap();
-        let now = Utc::now();
-        std::fs::write(dir.path().join(backup_filename(now)), b"existing").unwrap();
-
-        let (allocated, path) = next_backup_destination(dir.path(), now).unwrap();
-        assert_eq!(allocated, now + chrono::Duration::seconds(1));
-        assert_eq!(path, dir.path().join(backup_filename(allocated)));
-    }
-
-    #[test]
-    fn rotate_keeps_newest_n() {
-        let dir = tempfile::tempdir().unwrap();
-        let backups_dir = dir.path().to_path_buf();
-
-        // 10 fake backup'ов с разными timestamps.
-        let times: Vec<DateTime<Utc>> = (0..10)
-            .map(|i| Utc::now() - chrono::Duration::hours(i as i64 * 24))
-            .collect();
-        for t in &times {
-            std::fs::write(backups_dir.join(backup_filename(*t)), b"fake").unwrap();
-        }
-
-        let removed = rotate_backups(&backups_dir, 7).unwrap();
-        assert_eq!(removed, 3, "должны были удалить 3 старейших");
-
-        let remaining: Vec<_> = std::fs::read_dir(&backups_dir)
-            .unwrap()
-            .filter_map(|e| e.ok())
-            .map(|e| e.file_name().to_string_lossy().into_owned())
-            .collect();
-        assert_eq!(remaining.len(), 7, "ровно 7 должно остаться");
-    }
-
-    #[test]
-    fn rotate_noop_when_under_limit() {
-        let dir = tempfile::tempdir().unwrap();
-        let now = Utc::now();
-        for i in 0..3 {
-            let t = now - chrono::Duration::hours(i as i64);
-            std::fs::write(dir.path().join(backup_filename(t)), b"x").unwrap();
-        }
-        let removed = rotate_backups(dir.path(), 7).unwrap();
-        assert_eq!(removed, 0);
-    }
-
-    #[test]
-    fn rotate_ignores_unrelated_files() {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("README.md"), b"doc").unwrap();
-        std::fs::write(dir.path().join("ark.db"), b"db").unwrap();
-        let now = Utc::now();
-        std::fs::write(dir.path().join(backup_filename(now)), b"backup").unwrap();
-        let removed = rotate_backups(dir.path(), 7).unwrap();
-        assert_eq!(removed, 0);
-        assert!(dir.path().join("README.md").exists());
-        assert!(dir.path().join("ark.db").exists());
-    }
-
-    #[test]
-    fn diagnostics_exposes_db_backup_background_worker() {
-        // Regression: 2026-06-09. diagnostics.snapshot must expose DB backup
-        // background worker state and chunking config in background_workers.
-        let snapshot = diagnostics_snapshot();
-
-        assert!(!snapshot.active);
-        assert!(snapshot.pages_per_step > 0);
-        assert!(snapshot.background_mode);
-    }
-}
+mod tests;
