@@ -241,11 +241,11 @@ async fn filter_app_response(
             .get("error")
             .and_then(Value::as_str)
             .unwrap_or("unavailable");
-        crate::observability::log_app_rpc_rejection(
+        crate::observability::app_rpc::log_app_rpc_rejection(
             client.class.as_deref().unwrap_or("-"),
             operation,
             type_id,
-            reason,
+            crate::observability::app_rpc::RejectionReason::Dispatch(reason),
         );
         return error;
     }

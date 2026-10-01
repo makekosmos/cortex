@@ -209,7 +209,7 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
                         // Metadata only, never payload values.
                         let client_class = request.client.class.clone();
                         let operation = request.operation.as_str().to_owned();
-                        let type_id = crate::observability::app_rpc_type_id(&request.params)
+                        let type_id = crate::observability::app_rpc::app_rpc_type_id(&request.params)
                             .map(str::to_owned);
                         let dispatch = task_dispatcher.dispatch(request);
                         let result = tokio::select! {
@@ -218,20 +218,24 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
                             result = tokio::time::timeout(task_shutdown.response_deadline(), dispatch) => match result {
                                 Ok(Ok(value)) => Ok(value),
                                 Ok(Err(error)) => {
-                                    crate::observability::log_app_rpc_rejection(
+                                    crate::observability::app_rpc::log_app_rpc_rejection(
                                         client_class.as_deref().unwrap_or("-"),
                                         &operation,
                                         type_id.as_deref(),
-                                        &error.to_string(),
+                                        crate::observability::app_rpc::RejectionReason::Dispatch(
+                                            &error.to_string(),
+                                        ),
                                     );
                                     Err(error.to_string())
                                 }
                                 Err(_) => {
-                                    crate::observability::log_app_rpc_rejection(
+                                    crate::observability::app_rpc::log_app_rpc_rejection(
                                         client_class.as_deref().unwrap_or("-"),
                                         &operation,
                                         type_id.as_deref(),
-                                        "timeout",
+                                        crate::observability::app_rpc::RejectionReason::Site(
+                                            "timeout",
+                                        ),
                                     );
                                     Err("dispatch timed out".to_string())
                                 }

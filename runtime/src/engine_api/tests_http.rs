@@ -1248,6 +1248,149 @@
         let _ = task.await;
     }
 
+    /// KOS-298 end-to-end: a real `upsert_object` rejected by ark-core lands
+    /// in the Engine log as a wire code, and a producer that *does* quote a
+    /// payload value (a leaky package worker, say) still cannot reach the
+    /// log — `RejectionReason::Dispatch` collapses it to the public class.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn rejected_app_rpc_logs_the_wire_code_but_never_payload_values() {
+        let dir = tempfile::tempdir().expect("fixture dir");
+        let ark = Arc::new(
+            crate::ark_host::ArkHost::open(&dir.path().join("ark.db").to_string_lossy())
+                .await
+                .expect("ark host fixture"),
+        );
+        let package_service = Arc::new(
+            crate::package_service::tests::enabled_note_write_app_service(dir.path()),
+        );
+        // The rejection is logged inside the spawned server task, so only a
+        // global subscriber sees it. This is the one test in the binary that
+        // installs a global default.
+        let log = crate::observability::app_rpc::tests::CaptureBuf::default();
+        tracing_subscriber::fmt()
+            .with_writer(log.clone())
+            .with_ansi(false)
+            .try_init()
+            .expect("global log capture");
+        let dispatcher = Arc::new(crate::engine_dispatch::EngineDispatcher::new(Arc::new(
+            move |request: crate::engine_dispatch::DispatchRequest| {
+                let ark = ark.clone();
+                Box::pin(async move {
+                    let mut params = request.params.clone();
+                    let mode = params
+                        .as_object_mut()
+                        .and_then(|p| p.remove("mode"))
+                        .and_then(|v| v.as_str().map(str::to_owned));
+                    if mode.as_deref() == Some("leak") {
+                        // A producer that embeds the rejected value in its
+                        // error string — the shape a buggy worker/serde
+                        // message would take.
+                        let title = params["object"]["title"].as_str().unwrap_or("?");
+                        return Err(crate::engine_dispatch::DispatchError::Failed(format!(
+                            "schema error: \"{title}\" is not a valid note"
+                        )));
+                    }
+                    match ark
+                        .request(request.operation.as_str(), params)
+                        .await
+                    {
+                        Ok(reply) => Ok(serde_json::json!({
+                                "ok": reply.ok,
+                                "data": reply.data,
+                                "error": reply.error,
+                            })),
+                        Err(error) => Err(crate::engine_dispatch::DispatchError::Failed(
+                            error.to_string(),
+                        )),
+                    }
+                })
+            },
+        )));
+        let token = "a".repeat(64);
+        let server = EngineApiServer::bind(
+            token.clone(),
+            9,
+            Arc::new(ProtocolUsageStore::open(dir.path()).expect("usage")),
+            "00000000-0000-4000-8000-000000000001".into(),
+            package_service,
+            dispatcher,
+        )
+        .await
+        .expect("server");
+        let port = server.port();
+        let server_shutdown_handle = server.shutdown_handle();
+        let task = tokio::spawn(server.run());
+        let launched = response_json(
+            &raw_http(
+                port,
+                &request(
+                    &token,
+                    "POST",
+                    "/v1/apps/launch",
+                    r#"{"id":"com.kosmos.demo"}"#,
+                ),
+            )
+            .await,
+        );
+        let launch_id = launched["data"]["launch_id"].as_str().expect("launch id");
+        let launch_token = launched["data"]["broker_token"].as_str().expect("token");
+
+        for mode in ["real", "leak"] {
+            let body = serde_json::json!({
+                "operation": "upsert_object",
+                "params": {
+                    "mode": mode,
+                    "device_id": "log-test",
+                    "object": {
+                        "id": "log-test-object",
+                        "typeId": "com.kosmos.note",
+                        "typeVersion": "1.0.0",
+                        "title": "SECRET-TITLE-456",
+                        "propsJson": {
+                            "description": ["SECRET-VALUE-123"],
+                            "extensions": {}
+                        }
+                    }
+                }
+            })
+            .to_string();
+            let request = request_with_client(
+                &token,
+                "POST",
+                &format!("/v1/apps/launch/{launch_id}/ark"),
+                &body,
+                "memoria-test",
+                API_VERSION,
+            )
+            .replace(
+                "Content-Length:",
+                &format!("X-Kosmos-Launch-Token: {launch_token}\r\nContent-Length:"),
+            );
+            let response = response_json(&raw_http(port, &request).await);
+            assert_eq!(response["ok"], false, "{mode}: {response}");
+            assert_eq!(response["error"], "unavailable", "{mode}: {response}");
+        }
+
+        let captured = log.text();
+        // The real ark rejection surfaces as its stable wire code.
+        assert!(
+            captured.contains("canonical_ingress:invalid_request"),
+            "{captured}"
+        );
+        assert!(captured.contains("app RPC rejected"), "{captured}");
+        assert!(captured.contains("canonical_field:/description"), "{captured}");
+        assert!(captured.contains("upsert_object"), "{captured}");
+        // The leaky producer's value collapse is all the log may keep.
+        assert!(captured.contains("reason=unavailable"), "{captured}");
+        assert!(!captured.contains("SECRET-VALUE-123"), "{captured}");
+        assert!(!captured.contains("SECRET-TITLE-456"), "{captured}");
+
+        // Drain connection/request tasks so nothing holds test
+        // fixture files past the tempdir cleanup (KOS-270).
+        let _ = server_shutdown_handle.shutdown().await;
+        let _ = task.await;
+    }
+
     fn request(token: &str, method: &str, path: &str, body: &str) -> String {
         request_with_pid(token, method, path, body, &std::process::id().to_string())
     }
