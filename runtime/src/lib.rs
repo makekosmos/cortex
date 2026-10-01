@@ -65,6 +65,7 @@ pub mod engine_control;
 pub mod engine_dispatch;
 pub mod engine_settings;
 pub mod engine_supervisor;
+pub mod engine_versions;
 pub mod export;
 pub mod file_index;
 pub mod focus;

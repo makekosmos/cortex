@@ -130,6 +130,11 @@ fn main() -> ExitCode {
     if let Some(code) = engine::privileged::cli::run_if_privileged(&args) {
         return code;
     }
+    // `prune-versions` — one-shot version-dir cleanup for install-engine.ps1
+    // (KOS-261); dedicated process, never starts the Engine runtime.
+    if let Some(code) = engine::engine_versions::run_if_prune_versions(&args) {
+        return code;
+    }
     run(args)
 }
 
@@ -467,6 +472,23 @@ async fn setup() -> Result<SetupState, DynError> {
             failed = sweep.failed,
             "swept stale temp files in data dir root"
         );
+    }
+
+    // KOS-261: prune superseded `versions/<v>` dirs — current + one previous
+    // are kept for rollback. Runs under the singleton, after the temp sweep;
+    // a dev build launched from target/ never matches the install layout and
+    // prunes nothing.
+    if let Some(report) = engine::engine_versions::prune_self_install() {
+        if !report.is_idle() {
+            tracing::info!(
+                removed = ?report.removed,
+                freed_bytes = report.removed_bytes,
+                skipped = ?report.skipped,
+                kept_newer = ?report.kept_newer,
+                failed = report.failed,
+                "pruned old engine versions"
+            );
+        }
     }
 
     let db_path = std::env::var("MUNDUS_DB_PATH")
