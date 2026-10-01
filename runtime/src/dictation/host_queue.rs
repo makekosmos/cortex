@@ -687,21 +687,6 @@ async fn op_end_hotkey_capture(host: &DictationHost) -> DictationResponse {
     }
 }
 
-async fn op_native_status() -> DictationResponse {
-    #[cfg(target_os = "macos")]
-    {
-        DictationResponse::ok(crate::dictation::macos_native::helper_status())
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        DictationResponse::ok(json!({
-            "platform": std::env::consts::OS,
-            "helpers": [],
-            "supported": false,
-        }))
-    }
-}
-
 async fn op_local_status() -> DictationResponse {
     match local::status().await {
         Ok(status) => DictationResponse::ok(json!({
@@ -723,46 +708,6 @@ async fn op_local_status() -> DictationResponse {
             "idleUnloadAfterMs": null,
             "error": e.to_string(),
         })),
-    }
-}
-
-async fn op_ensure_native_permissions(params: Value) -> DictationResponse {
-    let prompt = params
-        .get("prompt")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-
-    #[cfg(target_os = "macos")]
-    {
-        match crate::dictation::macos_native::check_permissions(prompt) {
-            Ok(v) => DictationResponse::ok(v),
-            Err(e) => DictationResponse::err(format!("ensure_native_permissions: {e}")),
-        }
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = prompt;
-        DictationResponse::ok(json!({
-            "platform": std::env::consts::OS,
-            "supported": false,
-        }))
-    }
-}
-
-async fn op_native_audio_ping() -> DictationResponse {
-    #[cfg(target_os = "macos")]
-    {
-        match crate::dictation::macos_native::audio_ping() {
-            Ok(v) => DictationResponse::ok(v),
-            Err(e) => DictationResponse::err(format!("native_audio_ping: {e}")),
-        }
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        DictationResponse::ok(json!({
-            "platform": std::env::consts::OS,
-            "supported": false,
-        }))
     }
 }
 

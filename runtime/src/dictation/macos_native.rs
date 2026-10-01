@@ -5,7 +5,7 @@
 // `platform/desktop/scripts/build-macos-native.mjs`.
 
 use serde_json::{json, Value};
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -19,16 +19,6 @@ use super::config::TriggerMode;
 static WATCH_GENERATION: AtomicU64 = AtomicU64::new(0);
 static CAPTURE_GENERATION: AtomicU64 = AtomicU64::new(0);
 
-const HELPERS: &[&str] = &[
-    "audio-capturer",
-    "capture-hotkey",
-    "get-selected-text",
-    "hotkey-hold-monitor",
-    "input-monitoring-request",
-    "microphone-access",
-    "speech-recognizer",
-];
-
 #[derive(Debug, Error)]
 pub enum NativeHelperError {
     #[error("helper '{name}' not found in candidates: {candidates:?}")]
@@ -36,52 +26,6 @@ pub enum NativeHelperError {
         name: String,
         candidates: Vec<PathBuf>,
     },
-    #[error("helper '{name}' failed: {error}")]
-    Spawn { name: String, error: String },
-    #[error("helper '{name}' returned invalid JSON: {output}")]
-    Json { name: String, output: String },
-}
-
-pub fn helper_status() -> Value {
-    let helpers: Vec<Value> = HELPERS
-        .iter()
-        .map(|name| match resolve_helper(name) {
-            Ok(path) => json!({
-                "name": name,
-                "available": true,
-                "path": path.to_string_lossy(),
-            }),
-            Err(e) => json!({
-                "name": name,
-                "available": false,
-                "error": e.to_string(),
-            }),
-        })
-        .collect();
-    json!({
-        "platform": "macos",
-        "helpers": helpers,
-    })
-}
-
-pub fn check_permissions(prompt: bool) -> Result<Value, NativeHelperError> {
-    let microphone = run_json_helper(
-        "microphone-access",
-        if prompt { &["--prompt"][..] } else { &[] },
-    )?;
-    let input_monitoring = run_json_helper(
-        "input-monitoring-request",
-        if prompt { &[] } else { &["--check"][..] },
-    )?;
-    Ok(json!({
-        "platform": "macos",
-        "microphone": microphone,
-        "inputMonitoring": input_monitoring,
-    }))
-}
-
-pub fn audio_ping() -> Result<Value, NativeHelperError> {
-    run_json_helper_stdin("audio-capturer", json!({ "command": "ping" }))
 }
 
 pub fn set_hotkey_active(
@@ -497,66 +441,6 @@ fn mac_key_code(key: &str) -> Option<u16> {
         "space" => Some(49),
         _ => None,
     }
-}
-
-fn run_json_helper(name: &str, args: &[&str]) -> Result<Value, NativeHelperError> {
-    let path = resolve_helper(name)?;
-    let output = Command::new(&path)
-        .args(args)
-        .output()
-        .map_err(|e| NativeHelperError::Spawn {
-            name: name.to_string(),
-            error: e.to_string(),
-        })?;
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let first_line = stdout.lines().next().unwrap_or("").trim();
-    serde_json::from_str(first_line).map_err(|_| NativeHelperError::Json {
-        name: name.to_string(),
-        output: stdout.to_string(),
-    })
-}
-
-fn run_json_helper_stdin(name: &str, request: Value) -> Result<Value, NativeHelperError> {
-    let path = resolve_helper(name)?;
-    let mut child = Command::new(&path)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .map_err(|e| NativeHelperError::Spawn {
-            name: name.to_string(),
-            error: e.to_string(),
-        })?;
-    {
-        let stdin = child
-            .stdin
-            .as_mut()
-            .ok_or_else(|| NativeHelperError::Spawn {
-                name: name.to_string(),
-                error: "missing helper stdin".into(),
-            })?;
-        writeln!(stdin, "{request}").map_err(|e| NativeHelperError::Spawn {
-            name: name.to_string(),
-            error: e.to_string(),
-        })?;
-        writeln!(stdin, "{}", json!({ "command": "exit" })).map_err(|e| {
-            NativeHelperError::Spawn {
-                name: name.to_string(),
-                error: e.to_string(),
-            }
-        })?;
-    }
-    let output = child
-        .wait_with_output()
-        .map_err(|e| NativeHelperError::Spawn {
-            name: name.to_string(),
-            error: e.to_string(),
-        })?;
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let first_line = stdout.lines().next().unwrap_or("").trim();
-    serde_json::from_str(first_line).map_err(|_| NativeHelperError::Json {
-        name: name.to_string(),
-        output: stdout.to_string(),
-    })
 }
 
 fn resolve_helper(name: &str) -> Result<PathBuf, NativeHelperError> {
