@@ -91,6 +91,54 @@ fn storage_breakdown_on_empty_dir_reports_zero() {
         .any(|c| c["id"] == "database"));
 }
 
+/// A corrupt or non-sqlite ark.db must not kill the breakdown: categories
+/// still carry their byte counts and the database entry just has no detail.
+#[test]
+fn storage_breakdown_survives_a_non_sqlite_ark_db() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    put(root, "ark.db", 4096); // zeroed pages — not a sqlite header
+    put(root, "updates/x.bin", 5);
+    let breakdown = storage_breakdown(root, &root.join("packages"));
+    let database = breakdown["categories"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["id"] == "database")
+        .unwrap();
+    assert_eq!(database["bytes"].as_u64().unwrap(), 4096);
+    assert!(
+        database.get("detail").is_none(),
+        "corrupt db must omit detail, got {database}"
+    );
+    assert_eq!(bytes_of(&breakdown, "updates"), 5);
+}
+
+/// A directory symlink pointing back at its parent must be counted once as
+/// a link and never descended into — no infinite recursion, no double count.
+#[test]
+fn storage_breakdown_does_not_descend_into_symlinks() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    put(root, "real/payload.bin", 64);
+    #[cfg(windows)]
+    let linked = std::os::windows::fs::symlink_dir(root.join("real"), root.join("link"));
+    #[cfg(not(windows))]
+    let linked = std::os::unix::fs::symlink(root.join("real"), root.join("link"));
+    let Ok(()) = linked else {
+        eprintln!("skipping: symlink privilege unavailable on this machine");
+        return;
+    };
+    let breakdown = storage_breakdown(root, &root.join("packages"));
+    let other = bytes_of(&breakdown, "other");
+    assert_eq!(
+        other, 64,
+        "link counted once, target payload not doubled: {breakdown}"
+    );
+    // The walk completing at all is the point — a descent into `link` would
+    // have made it 128+ or hung.
+}
+
 #[tokio::test]
 async fn data_storage_runs_off_the_request_loop() {
     let dir = tempfile::tempdir().unwrap();

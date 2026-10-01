@@ -88,50 +88,53 @@ fn classify_models_entry(name: &str) -> Category {
     }
 }
 
-fn file_bytes(path: &Path) -> u64 {
-    std::fs::metadata(path).map(|m| m.len()).unwrap_or(0)
+/// Bytes attributed to one directory entry. `DirEntry::file_type` /
+/// `DirEntry::metadata` never follow links: a symlink or junction counts
+/// only its own (tiny) record and is never descended into — a junction
+/// inside the data dir could otherwise loop the walk or count bytes twice.
+fn entry_bytes(entry: &std::fs::DirEntry) -> u64 {
+    match entry.file_type() {
+        Ok(ft) if ft.is_symlink() => entry.metadata().map(|m| m.len()).unwrap_or(0),
+        Ok(ft) if ft.is_dir() => directory_bytes(&entry.path()),
+        Ok(_) => entry.metadata().map(|m| m.len()).unwrap_or(0),
+        Err(_) => 0,
+    }
 }
 
 fn directory_bytes(path: &Path) -> u64 {
     let Ok(entries) = std::fs::read_dir(path) else {
         return 0;
     };
-    entries
-        .flatten()
-        .map(|entry| {
-            let p = entry.path();
-            if p.is_dir() {
-                directory_bytes(&p)
-            } else {
-                entry.metadata().map(|m| m.len()).unwrap_or(0)
-            }
-        })
-        .sum()
+    entries.flatten().map(|entry| entry_bytes(&entry)).sum()
 }
 
-/// Split `models/` per subdirectory; everything outside it is one class.
+/// Accumulate `bytes` into the per-category bucket keyed by discriminant —
+/// `Category` is not `Ord`, and a HashMap<Category> needs `Hash`.
 fn add_path(acc: &mut BTreeMap<usize, u64>, category: Category, bytes: u64) {
     *acc.entry(category as usize).or_default() += bytes;
 }
 
-fn database_detail(db_path: &Path) -> Option<Value> {
+/// Per-table on-disk split of ark.db via the `dbstat` vtab, so «трекер
+/// использования» counts usage_sync_log *and* its indexes rather than just
+/// raw column bytes. Errors surface to the caller — a broken or locked db
+/// must not silently lose the breakdown.
+fn database_detail(db_path: &Path) -> Result<Value, String> {
     if !db_path.is_file() {
-        return None;
+        return Err("ark.db does not exist".into());
     }
-    // Read-only path through SQLite itself: `dbstat` reports on-disk pages
-    // per btree, so «трекер использования» includes usage_sync_log *and* its
-    // indexes instead of just the raw column bytes.
-    let conn = rusqlite::Connection::open(db_path).ok()?;
+    let conn =
+        rusqlite::Connection::open_with_flags(db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .map_err(|e| e.to_string())?;
     let mut stmt = conn
         .prepare("SELECT name, SUM(pgsize) FROM dbstat GROUP BY name")
-        .ok()?;
+        .map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map([], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
         })
-        .ok()?
+        .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
-        .ok()?;
+        .map_err(|e| e.to_string())?;
     let mut objects = 0_i64;
     let mut usage = 0_i64;
     let mut search = 0_i64;
@@ -150,7 +153,7 @@ fn database_detail(db_path: &Path) -> Option<Value> {
             other += bytes;
         }
     }
-    Some(json!([
+    Ok(json!([
         {"id": "objects", "label": "Объекты", "bytes": objects.max(0)},
         {"id": "usage_tracker", "label": "Трекер использования", "bytes": usage.max(0)},
         {"id": "search_index", "label": "Поисковый индекс", "bytes": search.max(0)},
@@ -168,31 +171,24 @@ fn storage_breakdown(data_dir: &Path, package_root: &Path) -> Value {
             let is_package_root = package_root
                 .as_deref()
                 .is_some_and(|root| std::fs::canonicalize(&path).is_ok_and(|p| p == *root));
-            if name == "models" && path.is_dir() {
+            let is_dir = entry.file_type().is_ok_and(|ft| ft.is_dir());
+            if name == "models" && is_dir {
                 if let Ok(models) = std::fs::read_dir(&path) {
                     for model_entry in models.flatten() {
-                        let model_path = model_entry.path();
-                        let bytes = if model_path.is_dir() {
-                            directory_bytes(&model_path)
-                        } else {
-                            model_entry.metadata().map(|m| m.len()).unwrap_or(0)
-                        };
                         add_path(
                             &mut acc,
                             classify_models_entry(&model_entry.file_name().to_string_lossy()),
-                            bytes,
+                            entry_bytes(&model_entry),
                         );
                     }
                 }
                 continue;
             }
-            let bytes = if path.is_dir() {
-                directory_bytes(&path)
-            } else {
-                file_bytes(&path)
-            };
-            let category = classify(&name, is_package_root);
-            add_path(&mut acc, category, bytes);
+            add_path(
+                &mut acc,
+                classify(&name, is_package_root),
+                entry_bytes(&entry),
+            );
         }
     }
     let mut categories = Vec::new();
@@ -209,8 +205,17 @@ fn storage_breakdown(data_dir: &Path, package_root: &Path) -> Value {
             "bytes": bytes,
         });
         if matches!(category, Category::Database) {
-            if let Some(detail) = database_detail(&data_dir.join("ark.db")) {
-                value["detail"] = detail;
+            let db_path = data_dir.join("ark.db");
+            match database_detail(&db_path) {
+                Ok(detail) => value["detail"] = detail,
+                Err(error) => {
+                    tracing::warn!(
+                        target: "manager_api",
+                        path = %db_path.display(),
+                        %error,
+                        "ark.db page breakdown skipped"
+                    );
+                }
             }
         }
         categories.push(value);
