@@ -44,6 +44,11 @@ pub struct EngineApiServer {
     correlation_id: Arc<String>,
     package_service: Arc<PackageService>,
     launch_leases: Arc<Mutex<LaunchLeaseRegistry>>,
+    /// ARK event bus receiver — each `/v1/apps/launch/<id>/events` request
+    /// resubscribes its own consumer off this seed.
+    launch_events: std::sync::Mutex<
+        Option<tokio::sync::broadcast::Receiver<(String, Value)>>,
+    >,
     user_data: Arc<crate::user_data::UserDataRoots>,
     cleanup_interval: Duration,
     operations: HttpOperationRegistry,
@@ -51,208 +56,6 @@ pub struct EngineApiServer {
     request_timeout: Duration,
 }
 
-#[derive(Debug, Clone)]
-struct AssetGrant {
-    id: String,
-    version: String,
-    hash: String,
-}
-
-#[derive(Debug, Clone)]
-struct LaunchLease {
-    launch_id: String,
-    asset_token: String,
-    launch_token: Option<String>,
-    grant: AssetGrant,
-    typed_grant: Option<LaunchGrant>,
-    expires_at: Instant,
-    expires_at_rfc3339: String,
-    grant_expires_at: Option<Instant>,
-    grant_expires_at_rfc3339: Option<String>,
-}
-
-#[derive(Debug)]
-struct LaunchLeaseRegistry {
-    leases: HashMap<String, LaunchLease>,
-    asset_tokens: HashMap<String, String>,
-    ttl: Duration,
-    capacity: usize,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct LeaseCapacityError;
-
-impl Default for LaunchLeaseRegistry {
-    fn default() -> Self {
-        Self::with_limits(LAUNCH_LEASE_TTL, MAX_ACTIVE_LAUNCH_LEASES)
-    }
-}
-
-impl LaunchLeaseRegistry {
-    fn with_limits(ttl: Duration, capacity: usize) -> Self {
-        Self {
-            leases: HashMap::new(),
-            asset_tokens: HashMap::new(),
-            ttl,
-            capacity,
-        }
-    }
-
-    fn create(&mut self, grant: AssetGrant) -> Result<LaunchLease, LeaseCapacityError> {
-        self.try_create_with_grant_at(grant, None, Instant::now())
-    }
-
-    fn create_with_typed_grant(
-        &mut self,
-        grant: AssetGrant,
-        typed_grant: LaunchGrant,
-    ) -> Result<LaunchLease, LeaseCapacityError> {
-        self.try_create_with_grant_at(grant, Some(typed_grant), Instant::now())
-    }
-
-    fn try_create_at(
-        &mut self,
-        grant: AssetGrant,
-        now: Instant,
-    ) -> Result<LaunchLease, LeaseCapacityError> {
-        self.try_create_with_grant_at(grant, None, now)
-    }
-
-    fn try_create_with_grant_at(
-        &mut self,
-        grant: AssetGrant,
-        typed_grant: Option<LaunchGrant>,
-        now: Instant,
-    ) -> Result<LaunchLease, LeaseCapacityError> {
-        self.purge_expired_at(now);
-        if self.leases.len() >= self.capacity {
-            return Err(LeaseCapacityError);
-        }
-        let launch_token = typed_grant.as_ref().map(|_| new_asset_token());
-        let lease_ttl = if typed_grant.is_some() {
-            DATA_GRANT_TTL
-        } else {
-            self.ttl
-        };
-        let grant_expires_at = typed_grant.as_ref().map(|_| now + lease_ttl);
-        let grant_expires_at_rfc3339 = typed_grant.as_ref().map(|_| {
-            (chrono::Utc::now() + chrono::Duration::seconds(lease_ttl.as_secs() as i64))
-                .to_rfc3339()
-        });
-        let lease = LaunchLease {
-            launch_id: uuid::Uuid::new_v4().to_string(),
-            asset_token: new_asset_token(),
-            launch_token,
-            grant,
-            typed_grant,
-            expires_at: now + lease_ttl,
-            expires_at_rfc3339: (chrono::Utc::now()
-                + chrono::Duration::seconds(lease_ttl.as_secs() as i64))
-            .to_rfc3339(),
-            grant_expires_at,
-            grant_expires_at_rfc3339,
-        };
-        self.asset_tokens
-            .insert(lease.asset_token.clone(), lease.launch_id.clone());
-        self.leases.insert(lease.launch_id.clone(), lease.clone());
-        Ok(lease)
-    }
-
-    fn asset(&mut self, asset_token: &str) -> Option<AssetGrant> {
-        self.purge_expired();
-        let launch_id = self.asset_tokens.get(asset_token)?;
-        self.leases
-            .get(launch_id)
-            .filter(|lease| lease.expires_at > Instant::now())
-            .map(|lease| lease.grant.clone())
-    }
-
-    fn revoke(&mut self, launch_id: &str) -> bool {
-        self.purge_expired();
-        let Some(lease) = self.leases.remove(launch_id) else {
-            return false;
-        };
-        self.asset_tokens.remove(&lease.asset_token);
-        true
-    }
-
-    fn typed_grant(
-        &mut self,
-        launch_id: &str,
-        launch_token: &str,
-    ) -> Option<(AssetGrant, LaunchGrant)> {
-        self.purge_expired();
-        let lease = self.leases.get(launch_id)?;
-        let token = lease.launch_token.as_deref()?;
-        if !auth::validate_token(launch_token, token)
-            || lease
-                .grant_expires_at
-                .is_some_and(|expires_at| expires_at <= Instant::now())
-        {
-            return None;
-        }
-        Some((lease.grant.clone(), lease.typed_grant.clone()?))
-    }
-
-    fn renew(&mut self, launch_id: &str, launch_token: &str) -> Option<LaunchLease> {
-        self.purge_expired();
-        let lease = self.leases.get_mut(launch_id)?;
-        let token = lease.launch_token.as_deref()?;
-        if !auth::validate_token(launch_token, token) || lease.typed_grant.is_none() {
-            return None;
-        }
-        let now = Instant::now();
-        lease.expires_at = now + DATA_GRANT_TTL;
-        lease.expires_at_rfc3339 = (chrono::Utc::now()
-            + chrono::Duration::seconds(DATA_GRANT_TTL.as_secs() as i64))
-        .to_rfc3339();
-        lease.grant_expires_at = Some(now + DATA_GRANT_TTL);
-        lease.grant_expires_at_rfc3339 = Some(
-            (chrono::Utc::now() + chrono::Duration::seconds(DATA_GRANT_TTL.as_secs() as i64))
-                .to_rfc3339(),
-        );
-        Some(lease.clone())
-    }
-
-    fn purge_expired(&mut self) {
-        self.purge_expired_at(Instant::now());
-    }
-
-    fn purge_expired_at(&mut self, now: Instant) {
-        let expired = self
-            .leases
-            .iter()
-            .filter_map(|(id, lease)| {
-                if lease.expires_at <= now {
-                    Some(id.clone())
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-        for id in expired {
-            self.revoke_expired(&id);
-        }
-    }
-
-    fn revoke_expired(&mut self, launch_id: &str) {
-        if let Some(lease) = self.leases.remove(launch_id) {
-            self.asset_tokens.remove(&lease.asset_token);
-        }
-    }
-
-    #[cfg(test)]
-    fn len(&self) -> usize {
-        self.leases.len()
-    }
-}
-
-#[derive(Debug, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-struct LaunchRequest {
-    id: String,
-    version: Option<String>,
-}
 
 impl EngineApiServer {
     pub async fn bind(
@@ -378,6 +181,13 @@ impl EngineApiServer {
         request_timeout: Duration,
     ) -> Result<Self, EngineApiError> {
         let listener = TcpListener::bind("127.0.0.1:0").await?;
+        let launch_leases = Arc::new(Mutex::new(LaunchLeaseRegistry::with_limits(ttl, capacity)));
+        // The dispatch-side `packages.open` mints through this same registry —
+        // wire the surface before serving so the op is never half-configured.
+        package_service.configure_launch_surface(crate::package_launch::LaunchSurface {
+            leases: launch_leases.clone(),
+            http_port: listener.local_addr()?.port(),
+        });
         Ok(Self {
             listener,
             dispatcher,
@@ -386,13 +196,27 @@ impl EngineApiServer {
             protocol_usage,
             correlation_id: Arc::new(correlation_id),
             package_service,
-            launch_leases: Arc::new(Mutex::new(LaunchLeaseRegistry::with_limits(ttl, capacity))),
+            launch_leases,
+            launch_events: std::sync::Mutex::new(None),
             user_data: Arc::new(crate::user_data::UserDataRoots::new()),
             cleanup_interval,
             operations: HttpOperationRegistry::default(),
             connections: Arc::new(HttpConnectionLifecycle::default()),
             request_timeout,
         })
+    }
+
+    /// Wire the ARK event bus after bind — the server is constructed before
+    /// the ArkHost in some boot paths; an unset bus answers `/events` with
+    /// 503 rather than hanging a silent stream.
+    pub fn set_launch_events(
+        &mut self,
+        events: tokio::sync::broadcast::Receiver<(String, Value)>,
+    ) {
+        *self
+            .launch_events
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(events);
     }
 
     pub async fn shutdown(&self) -> Result<(), &'static str> {
@@ -441,6 +265,12 @@ impl EngineApiServer {
             let request_timeout = self.request_timeout;
             let operations = self.operations.clone();
             let launch_leases = self.launch_leases.clone();
+            let launch_events = self
+                .launch_events
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .as_ref()
+                .map(tokio::sync::broadcast::Receiver::resubscribe);
             let user_data = self.user_data.clone();
             let http_port = self.port();
             let connections = self.connections.clone();
@@ -492,6 +322,7 @@ impl EngineApiServer {
                         request_timeout,
                         operations.clone(),
                         launch_leases.clone(),
+                        launch_events.as_ref().map(tokio::sync::broadcast::Receiver::resubscribe),
                         user_data.clone(),
                         http_port,
                     )

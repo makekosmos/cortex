@@ -29,6 +29,7 @@ not control. `scripts/check-brand.mjs` enforces this list — it reads
 | `kosmos-desktop` | WS `client_class` sent by pinned components; usage-accounting keys | Pinned sibling builds report it; recorded usage keys already contain it. |
 | `kosmos-kepler` | `brand::KEYRING_SERVICE` — Windows Credential Manager service for user API keys + integration secrets | Renaming orphans every stored credential. |
 | `kepler-fallback` | fallback device id written into `*-device-id.txt` | Existing installs persist this value in sync identity. |
+| `window.kosmosApp` / `window.kepler` | page globals the Engine host shim (`runtime/src/engine_api/host_shim.js`) exposes | The persisted host API shipped `.kspkg` apps (Arcadia) call; renaming breaks installed packages. |
 
 ## Legacy install state (consumed by the KOS-267 migration)
 

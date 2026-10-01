@@ -1384,14 +1384,10 @@
     }
 
     fn expire_launch_for_test(leases: &Arc<Mutex<LaunchLeaseRegistry>>, launch_id: &str) {
-        let mut leases = leases
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
         leases
-            .leases
-            .get_mut(launch_id)
-            .expect("launch lease")
-            .expires_at = Instant::now() - Duration::from_secs(1);
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .expire(launch_id);
     }
 
     async fn wait_for_lease_count(leases: &Arc<Mutex<LaunchLeaseRegistry>>, expected: usize) {

@@ -167,6 +167,31 @@ that spawns them. Steps 1–4 are already landed and listed for the record.
    windows, brokers and shortcut reconcile are reimplemented in Rust or
    deleted with the apps that needed them. `host/electron/` retires when
    the last hosted Vue package leaves it.
+
+   **Status (KOS-299):** browser-hosted packages work again. The Manager's
+   «Открыть» calls `packages.open`, which mints a fresh lease plus a
+   one-time bootstrap code carried in the `launch_url` fragment; the Engine
+   injects `runtime/src/engine_api/host_shim.js` into every served HTML
+   page, and that shim installs `window.kosmosApp` (`identity`,
+   `ark.request`, `ark.subscribe`) synchronously — `ark.*` resolves through
+   the bootstrap promise — exchanges the code once at
+   `POST /v1/apps/launch/<id>/bootstrap` (origin-locked to the launch's own
+   package origin), renews the lease ahead of expiry, and on `pagehide`
+   (non-persisted only — a bfcache-persisted page keeps running) beacons
+   `POST .../release`, which marks the lease released. Release is a
+   `RELEASE_GRACE` (30 s) countdown, not an immediate revoke: an F5 reload's
+   new page renews inside the window and cancels it, while a real close is
+   purged when the grace lapses — TTL stays the backstop. Every package is
+   served on its own origin (`http://p<sha256(id)>.localhost:<port>` —
+   `*.localhost` resolves to loopback), so sibling packages share no
+   localStorage/IndexedDB/cookies, and the bootstrap Origin check accepts
+   exactly that lease's package origin. Launch-scoped routes (`/ark`,
+   `/renew`, `/release`, `/revoke`, `/events`, `/bootstrap`) authenticate on
+   the launch credential alone — a page never holds the Engine bearer.
+   Still open for the GPUI web-host track: aux windows,
+   `dialogs.pickDirectoryGrant` (needs a native picker), `userData`,
+   `launcher.*`, `apps.open` and `navigation` — packages that only use
+   `ark.*` (Arcadia) are fully functional.
 10. **Focus OS-blocking → Engine/native services.** `focus-block.ts` +
     `focus-enforcement.ts` are spawn/IPC plumbing around
     `Mundus Helper.exe` and the focus service — the trigger belongs behind

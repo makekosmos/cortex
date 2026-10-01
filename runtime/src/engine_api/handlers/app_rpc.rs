@@ -29,7 +29,9 @@ mod app_rpc_error_tests {
 
 async fn handle_app_rpc(
     request: Request<Incoming>,
-    client: AuthenticatedClient,
+    // The launch token is the credential on this route; a bearer-authenticated
+    // client is only metadata (rejection logs, protocol usage) when present.
+    client: Option<AuthenticatedClient>,
     correlation_id: Arc<String>,
     package_service: Arc<PackageService>,
     dispatcher: Arc<crate::engine_dispatch::EngineDispatcher>,
@@ -59,6 +61,10 @@ async fn handle_app_rpc(
             json!({ "ok": false, "error": "missing launch token" }),
         );
     };
+    let client_class = client
+        .as_ref()
+        .map(|client| client.class.clone())
+        .unwrap_or_else(|| "package-page".to_string());
     let Some((asset_grant, typed_grant)) = ({
         let mut leases = launch_leases
             .lock()
@@ -94,7 +100,7 @@ async fn handle_app_rpc(
         Ok(value) => value,
         Err(reason) => {
             crate::observability::app_rpc::log_app_rpc_rejection(
-                &client.class,
+                &client_class,
                 body.get("operation").and_then(Value::as_str).unwrap_or("-"),
                 None,
                 crate::observability::app_rpc::RejectionReason::Site(reason),
@@ -108,9 +114,9 @@ async fn handle_app_rpc(
     // Metadata for the rejection log — read before authorize rewrites params.
     let type_id = crate::observability::app_rpc::app_rpc_type_id(&params).map(str::to_owned);
     let app_client = DispatchClient {
-        pid: Some(client.pid),
-        class: Some(client.class.clone()),
-        version: Some(client.version.clone()),
+        pid: client.as_ref().map(|client| client.pid),
+        class: client.as_ref().map(|client| client.class.clone()),
+        version: client.as_ref().map(|client| client.version.clone()),
         correlation_id: Some(correlation_id.as_ref().clone()),
         connection_id: None,
         desktop_authorized: false,
@@ -127,7 +133,7 @@ async fn handle_app_rpc(
         Ok(params) => params,
         Err(reason) => {
             crate::observability::app_rpc::log_app_rpc_rejection(
-                &client.class,
+                &client_class,
                 &operation,
                 type_id.as_deref(),
                 crate::observability::app_rpc::RejectionReason::Site(reason),
@@ -142,7 +148,7 @@ async fn handle_app_rpc(
         Ok(owner) => owner,
         Err(_) => {
             crate::observability::app_rpc::log_app_rpc_rejection(
-                &client.class,
+                &client_class,
                 &operation,
                 type_id.as_deref(),
                 crate::observability::app_rpc::RejectionReason::Site(
@@ -168,7 +174,7 @@ async fn handle_app_rpc(
         operations.start(request, dispatcher.clone(), owner).await
     else {
         crate::observability::app_rpc::log_app_rpc_rejection(
-            &client.class,
+            &client_class,
             &operation,
             type_id.as_deref(),
             crate::observability::app_rpc::RejectionReason::Site(
@@ -198,7 +204,7 @@ async fn handle_app_rpc(
             let reason = error.to_string();
             let public = crate::observability::app_rpc::app_error_class(&reason);
             crate::observability::app_rpc::log_app_rpc_rejection(
-                &client.class,
+                &client_class,
                 &operation,
                 type_id.as_deref(),
                 crate::observability::app_rpc::RejectionReason::Dispatch(&reason),
@@ -208,7 +214,7 @@ async fn handle_app_rpc(
         Ok(Err(_)) => {
             response_guard.disarm();
             crate::observability::app_rpc::log_app_rpc_rejection(
-                &client.class,
+                &client_class,
                 &operation,
                 type_id.as_deref(),
                 crate::observability::app_rpc::RejectionReason::Site("dispatch task failed"),
@@ -217,7 +223,7 @@ async fn handle_app_rpc(
         }
         Err(_) => {
             crate::observability::app_rpc::log_app_rpc_rejection(
-                &client.class,
+                &client_class,
                 &operation,
                 type_id.as_deref(),
                 crate::observability::app_rpc::RejectionReason::Site("timeout"),
@@ -227,8 +233,8 @@ async fn handle_app_rpc(
     };
     if let Err(error) = protocol_usage.record(
         crate::protocol_usage::TransportKind::ApiV1,
-        Some(&client.class),
-        Some(&client.version),
+        Some(client_class.as_str()),
+        client.as_ref().map(|client| client.version.as_str()),
     ) {
         tracing::warn!(error = %error, "protocol usage persistence failed");
     }

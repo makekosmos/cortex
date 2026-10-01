@@ -267,6 +267,10 @@ pub struct PackageService {
     package_registrations: PackageRegistrationRegistry,
     package_definition_dispatcher:
         Mutex<Option<std::sync::Weak<crate::engine_dispatch::EngineDispatcher>>>,
+    /// Launch-lease registry + HTTP port owned by the Engine API server and
+    /// shared in via `configure_launch_surface` — `packages.open` mints
+    /// through the same registry `/v1/apps/launch` uses.
+    launch_surface: Mutex<Option<crate::package_launch::LaunchSurface>>,
     typed_registry: Mutex<RegistrySnapshot>,
     grants: std::sync::Arc<GrantAuthorityRegistry>,
 }
@@ -286,6 +290,7 @@ include!("package_service/dictation_app.rs");
 #[cfg(test)]
 include!("package_service/dictation_app_tests.rs");
 include!("package_service/operations.rs");
+include!("package_service/launch.rs");
 include!("package_service/helpers.rs");
 include!("package_service/disclosure.rs");
 include!("package_service/integrations.rs");

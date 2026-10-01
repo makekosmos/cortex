@@ -7,6 +7,7 @@
 //! Every row shows the product icon (manifest `icon` → `icon_path`,
 //! catalog `icon_url`) and the display name; the package id is the caption.
 use ::gpui::{prelude::*, *};
+use gpui_component::Disableable;
 use serde_json::{json, Value};
 
 use crate::app::ManagerApp;
@@ -165,6 +166,13 @@ fn app_package_rows(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> Vec<Div> 
         .collect()
 }
 
+/// «Открыть» disabled flag — a disabled package can never launch, so the
+/// control is disabled rather than letting the click fail. The vendored
+/// a11y tree does not surface `disabled`, so tests assert this predicate.
+pub(crate) fn package_open_disabled(p: &Value) -> bool {
+    !vbool(p, "enabled")
+}
+
 /// One installed package row: icon, display name, `id · v<version>`
 /// caption, status badge, enable toggle and Удалить.
 fn package_row(p: &Value, cx: &mut Context<ManagerApp>) -> Div {
@@ -202,19 +210,37 @@ fn package_row(p: &Value, cx: &mut Context<ManagerApp>) -> Div {
                 },
             )
             .accessibility_label(name.clone()),
-        )
-        .child(btn_id(&format!("un-{id}"), "Удалить", {
-            let pid = uid;
-            cx.listener(move |this, _, _, cx| {
-                this.ask_confirm(
-                    "Удалить пакет",
-                    format!("Пакет «{name}» будет удалён из Engine."),
-                    "packages.uninstall",
-                    json!({"package_id": pid}),
-                    cx,
-                );
-            })
-        }));
+        );
+    // App-kind rows get «Открыть» like native apps (KOS-299): packages.open
+    // mints the launch lease and the reply opens it in the system browser.
+    if is_app_package(p) {
+        let oid = id.clone();
+        let oversion = vstr(p, "version");
+        r = r.child(
+            btn_id(
+                &format!("open-{id}"),
+                "Открыть",
+                cx.listener(move |this, _, _, cx| {
+                    this.open_package(oid.clone(), oversion.clone());
+                    cx.notify();
+                }),
+            )
+            .disabled(package_open_disabled(p))
+            .accessibility_label(format!("Открыть {name}")),
+        );
+    }
+    r = r.child(btn_id(&format!("un-{id}"), "Удалить", {
+        let pid = uid;
+        cx.listener(move |this, _, _, cx| {
+            this.ask_confirm(
+                "Удалить пакет",
+                format!("Пакет «{name}» будет удалён из Engine."),
+                "packages.uninstall",
+                json!({"package_id": pid}),
+                cx,
+            );
+        })
+    }));
     r
 }
 

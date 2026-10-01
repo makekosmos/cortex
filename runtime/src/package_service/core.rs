@@ -115,6 +115,7 @@ impl PackageService {
             typed_grants: Mutex::new(HashMap::new()),
             package_registrations,
             package_definition_dispatcher: Mutex::new(None),
+            launch_surface: Mutex::new(None),
             typed_registry: Mutex::new(typed_registry),
             grants: std::sync::Arc::new(GrantAuthorityRegistry::with_data_dir(data_dir)),
         };

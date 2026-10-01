@@ -247,6 +247,33 @@ impl ManagerApp {
         self.call("@action", op, params);
     }
 
+    /// «Открыть» on a .kspkg app row: `packages.open` mints (or reuses) the
+    /// launch lease; the `pkg.open` reply carries the launch URL which
+    /// `open_reply` hands to the system browser.
+    pub fn open_package(&mut self, id: String, version: String) {
+        self.call(
+            "pkg.open",
+            "packages.open",
+            json!({ "package_id": id, "version": version }),
+        );
+    }
+
+    /// The `pkg.open` reply: open the launch URL or surface the typed
+    /// Engine error (already a Russian line — `worker::package_open_message`).
+    pub(crate) fn open_reply(&mut self, result: Result<Value, String>) {
+        match result {
+            Ok(v) => match v.get("launch_url").and_then(Value::as_str) {
+                Some(url) if !url.is_empty() => {
+                    if let Err(e) = mundus_gpui_kit::engine::open_url(url) {
+                        self.error = Some(e);
+                    }
+                }
+                _ => self.error = Some("Engine не вернул адрес приложения.".into()),
+            },
+            Err(e) => self.error = Some(e),
+        }
+    }
+
     /// Destructive op behind the confirm modal.
     pub fn ask_confirm(
         &mut self,
@@ -335,6 +362,8 @@ impl ManagerApp {
                     }
                     Err(e) => self.error = Some(e),
                 }
+            } else if reply.slot == "pkg.open" {
+                self.open_reply(reply.result);
             } else if reply.slot == "apps.op" {
                 // A background app install/update just started (or failed to
                 // start) — pull the fresh row set so progress or the typed

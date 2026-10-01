@@ -1384,6 +1384,9 @@
         assert!(captured.contains("reason=unavailable"), "{captured}");
         assert!(!captured.contains("SECRET-VALUE-123"), "{captured}");
         assert!(!captured.contains("SECRET-TITLE-456"), "{captured}");
+        // The launch credential is a bearer for the data channel — it must
+        // never be logged (KOS-299 browser sessions rely on that).
+        assert!(!captured.contains(launch_token), "{captured}");
 
         // Drain connection/request tasks so nothing holds test
         // fixture files past the tempdir cleanup (KOS-270).

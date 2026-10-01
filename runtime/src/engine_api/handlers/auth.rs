@@ -73,6 +73,6 @@ fn json_response(status: StatusCode, value: Value) -> HttpResponse {
         .status(status)
         .header(CONTENT_TYPE, "application/json")
         .header("cache-control", "no-store")
-        .body(Full::new(Bytes::from(value.to_string())))
-        .unwrap_or_else(|_| Response::new(Full::new(Bytes::from_static(b"{\"ok\":false}"))))
+        .body(boxed(value.to_string()))
+        .unwrap_or_else(|_| Response::new(boxed(Bytes::from_static(b"{\"ok\":false}"))))
 }

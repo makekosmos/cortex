@@ -1,3 +1,20 @@
+/// Launch-scoped routes: authenticated by the launch credential (the
+/// bootstrap code or the `X-Kosmos-Launch-Token` it exchanges for), never by
+/// the Engine bearer — a served package page cannot hold the lock token.
+fn launch_scoped_route(method: &Method, path: &str) -> bool {
+    let Some(rest) = path.strip_prefix("/v1/apps/launch/") else {
+        return false;
+    };
+    let Some(op) = rest.rsplit('/').next() else {
+        return false;
+    };
+    matches!(
+        (method, op),
+        (&Method::GET, "events")
+            | (&Method::POST, "bootstrap" | "ark" | "renew" | "release" | "revoke")
+    )
+}
+
 #[allow(clippy::too_many_arguments, clippy::result_large_err)]
 async fn handle_request(
     request: Request<Incoming>,
@@ -10,13 +27,33 @@ async fn handle_request(
     request_timeout: Duration,
     operations: HttpOperationRegistry,
     launch_leases: Arc<Mutex<LaunchLeaseRegistry>>,
+    launch_events: Option<tokio::sync::broadcast::Receiver<(String, Value)>>,
     user_data: Arc<crate::user_data::UserDataRoots>,
     http_port: u16,
 ) -> Result<HttpResponse, Infallible> {
-    let response = if request.method() == Method::GET
-        && request.uri().path().starts_with("/v1/apps/assets/")
-    {
-        serve_asset(request.uri().path(), package_service, launch_leases).await
+    let method = request.method().clone();
+    let path = request.uri().path().to_owned();
+    let response = if method == Method::GET && path.starts_with("/v1/apps/assets/") {
+        serve_asset(&path, package_service, launch_leases).await
+    } else if launch_scoped_route(&method, &path) {
+        // A bearer, when present, is metadata (rejection logs, protocol
+        // usage); the launch credential is what authorizes the call.
+        let client = authenticate(request.headers(), &expected_token).ok();
+        handle_launch_scoped(
+            request,
+            client,
+            correlation_id,
+            package_service,
+            dispatcher,
+            request_timeout,
+            operations,
+            launch_leases,
+            launch_events,
+            protocol_usage,
+            http_port,
+            &path,
+        )
+        .await
     } else {
         match authenticate(request.headers(), &expected_token) {
             Ok(client) => {
@@ -98,28 +135,6 @@ async fn handle_authenticated_request(
             handle_launch(request, package_service, dispatcher, launch_leases, http_port).await
         }
         (&Method::POST, route)
-            if route.starts_with("/v1/apps/launch/") && route.ends_with("/ark") =>
-        {
-            handle_app_rpc(
-                request,
-                client,
-                correlation_id,
-                package_service,
-                dispatcher,
-                request_timeout,
-                operations,
-                launch_leases,
-                route.to_owned(),
-                protocol_usage,
-            )
-            .await
-        }
-        (&Method::POST, route)
-            if route.starts_with("/v1/apps/launch/") && route.ends_with("/renew") =>
-        {
-            handle_renew(request, package_service, launch_leases, route).await
-        }
-        (&Method::POST, route)
             if route.starts_with("/v1/apps/launch/") && route.ends_with("/grants/directory") =>
         {
             handle_directory_grant(request, client, package_service, launch_leases, route).await
@@ -137,5 +152,52 @@ async fn handle_authenticated_request(
             StatusCode::NOT_FOUND,
             json!({ "ok": false, "error": "not found" }),
         ),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn handle_launch_scoped(
+    request: Request<Incoming>,
+    client: Option<AuthenticatedClient>,
+    correlation_id: Arc<String>,
+    package_service: Arc<PackageService>,
+    dispatcher: Arc<crate::engine_dispatch::EngineDispatcher>,
+    request_timeout: Duration,
+    operations: HttpOperationRegistry,
+    launch_leases: Arc<Mutex<LaunchLeaseRegistry>>,
+    launch_events: Option<tokio::sync::broadcast::Receiver<(String, Value)>>,
+    protocol_usage: Arc<ProtocolUsageStore>,
+    http_port: u16,
+    path: &str,
+) -> HttpResponse {
+    if path.ends_with("/bootstrap") {
+        handle_bootstrap(request, launch_leases, http_port, path).await
+    } else if path.ends_with("/ark") {
+        handle_app_rpc(
+            request,
+            client,
+            correlation_id,
+            package_service,
+            dispatcher,
+            request_timeout,
+            operations,
+            launch_leases,
+            path.to_owned(),
+            protocol_usage,
+        )
+        .await
+    } else if path.ends_with("/renew") {
+        handle_renew(request, package_service, launch_leases, path).await
+    } else if path.ends_with("/release") {
+        handle_release(request, launch_leases, path).await
+    } else if path.ends_with("/revoke") {
+        handle_revoke_token(request, launch_leases, path).await
+    } else if path.ends_with("/events") {
+        handle_launch_events(request, package_service, launch_leases, &launch_events, path)
+    } else {
+        json_response(
+            StatusCode::NOT_FOUND,
+            json!({ "ok": false, "error": "not found" }),
+        )
     }
 }

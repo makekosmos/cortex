@@ -38,10 +38,16 @@ impl Worker {
             let engine = Engine { data_dir };
             for request in requests {
                 let reply = match request {
-                    Command::Rpc { slot, op, params } => Reply {
-                        slot,
-                        result: engine.rpc(op, params).map_err(engine_error_message),
-                    },
+                    Command::Rpc { slot, op, params } => {
+                        let result = engine.rpc(op, params).map_err(|error| {
+                            if slot == "pkg.open" {
+                                package_open_message(error)
+                            } else {
+                                engine_error_message(error)
+                            }
+                        });
+                        Reply { slot, result }
+                    }
                     Command::Get { slot, path } => Reply {
                         slot,
                         result: engine.status(path).map_err(engine_error_message),
@@ -66,6 +72,24 @@ impl Worker {
 fn engine_error_message(error: EngineError) -> String {
     tracing::warn!(error = %error, "engine call failed");
     error.message()
+}
+
+/// `packages.open` answers carry typed codes (`packages.open: <code>`) that
+/// mean more than the generic Engine error classes — "отключено" is an
+/// instruction, not a failure. Map them to a precise Russian line; a
+/// non-open Engine failure keeps the generic class text.
+fn package_open_message(error: EngineError) -> String {
+    let Some(code) = error.detail.strip_prefix("packages.open:").map(str::trim) else {
+        return engine_error_message(error);
+    };
+    tracing::warn!(error = %error, "packages.open failed");
+    match code {
+        "not-installed" => "Приложение не установлено.".into(),
+        "disabled" => "Приложение отключено. Включите его в списке.".into(),
+        "at-capacity" => "Открыто слишком много приложений. Закройте одно и повторите.".into(),
+        "unavailable" => "Запуск приложений недоступен. Перезапустите Engine.".into(),
+        _ => "Не удалось открыть приложение. Повторите попытку.".into(),
+    }
 }
 
 /// store.ts normalizePath parity: trim + '/'→'\\' + lowercase.
@@ -179,4 +203,30 @@ fn usage_report(engine: &Engine) -> Result<Value, EngineError> {
         row["iconPath"] = icon.map_or(Value::Null, Value::String);
     }
     Ok(snapshot)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The typed `packages.open` codes must each land on a specific Russian
+    /// line — a bare Engine error keeps the generic class text.
+    #[test]
+    fn package_open_message_maps_typed_codes() {
+        let message =
+            |code| package_open_message(EngineError::engine(&format!("packages.open: {code}")));
+        assert_eq!(message("not-installed"), "Приложение не установлено.");
+        assert_eq!(
+            message("disabled"),
+            "Приложение отключено. Включите его в списке."
+        );
+        assert_eq!(
+            message("at-capacity"),
+            "Открыто слишком много приложений. Закройте одно и повторите."
+        );
+        assert_eq!(
+            message("launch-failed"),
+            "Не удалось открыть приложение. Повторите попытку."
+        );
+    }
 }

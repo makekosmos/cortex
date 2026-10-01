@@ -118,3 +118,97 @@ async fn package_api_returns_bounded_metadata_without_trust_material_or_paths() 
     assert!(!install.ok);
     assert!(!install.error.unwrap_or_default().contains(private_path));
 }
+
+/// `packages.open` mints a fresh launch lease per call through the registry
+/// the Engine shares in — and every failure is a typed
+/// `packages.open: <code>` wire error, never a bare string.
+#[tokio::test]
+async fn package_open_mints_per_tab_leases_and_reports_typed_errors() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (service, _, _) = crate::package_service::tests::enabled_app_service(dir.path());
+    let service = Arc::new(service);
+
+    let open = |params: serde_json::Value| {
+        let service = service.clone();
+        async move {
+            let service = service;
+            handle_package_op("open", params, &service).await
+        }
+    };
+
+    // No launch surface wired (an engine without its HTTP API) — the op
+    // must fail closed with a typed code, not panic.
+    let response = open(serde_json::json!({"package_id": "com.kosmos.demo"})).await;
+    assert!(!response.ok);
+    assert_eq!(
+        response.error.as_deref(),
+        Some("packages.open: unavailable")
+    );
+
+    // Unknown id is `not-installed`, a malformed id is `invalid-request`,
+    // and a missing id never reaches the resolver.
+    for (params, expected) in [
+        (
+            serde_json::json!({"package_id": "com.kosmos.missing"}),
+            "packages.open: not-installed",
+        ),
+        (
+            serde_json::json!({"package_id": "com.kosmos.demo", "version": "9.9.9"}),
+            "packages.open: not-installed",
+        ),
+        (
+            serde_json::json!({"package_id": "com.kosmos.\u{7}demo"}),
+            "packages.open: invalid-request",
+        ),
+        (serde_json::json!({}), "packages.open: invalid-request"),
+    ] {
+        let response = open(params).await;
+        assert!(!response.ok);
+        assert_eq!(response.error.as_deref(), Some(expected));
+    }
+
+    let leases = Arc::new(std::sync::Mutex::new(
+        crate::package_launch::LaunchLeaseRegistry::default(),
+    ));
+    service.configure_launch_surface(crate::package_launch::LaunchSurface {
+        leases: leases.clone(),
+        http_port: 12_345,
+    });
+
+    let first = open(serde_json::json!({"package_id": "com.kosmos.demo"})).await;
+    assert!(
+        first.ok,
+        "open must mint a lease: {}",
+        first.error.unwrap_or_default()
+    );
+    // The reply is just what the Manager opens: the launch URL carries the
+    // one-time bootstrap code in the fragment — no token crosses to it.
+    let launch_url = first.data["launch_url"].as_str().expect("launch_url");
+    let origin_host = crate::package_launch::package_origin_host("com.kosmos.demo");
+    assert!(
+        launch_url.starts_with(&format!("http://{origin_host}:12345/v1/apps/assets/"))
+            && launch_url.contains("#launch=")
+            && launch_url.contains("&code="),
+        "{launch_url}"
+    );
+    assert!(first.data["broker_token"].is_null());
+    assert!(first.data["launch_id"].is_null());
+
+    // Every open is a new session — a second tab shares no token, so its
+    // pagehide revoke cannot kill the first tab's session.
+    let second = open(serde_json::json!({"package_id": "com.kosmos.demo"})).await;
+    assert!(second.ok);
+    assert_ne!(
+        second.data["launch_url"].as_str(),
+        first.data["launch_url"].as_str()
+    );
+
+    // Disabled app → `disabled`.
+    service
+        .set_enabled("com.kosmos.demo", "1.0.0", false)
+        .await
+        .expect("disable");
+    let response = open(serde_json::json!({"package_id": "com.kosmos.demo"})).await;
+    assert!(!response.ok);
+    assert_eq!(response.error.as_deref(), Some("packages.open: disabled"));
+}

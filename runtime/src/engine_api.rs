@@ -6,6 +6,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use bytes::Bytes;
+use http_body_util::combinators::BoxBody;
 use http_body_util::{BodyExt, Full, Limited};
 use hyper::body::Incoming;
 use hyper::header::{AUTHORIZATION, CONTENT_TYPE};
@@ -22,6 +23,10 @@ use tokio::sync::Notify;
 
 use crate::auth;
 use crate::engine_dispatch::{DispatchClient, DispatchRequest, Operation};
+use crate::package_launch::{
+    launch_payload, resolve_payload, AssetGrant, LaunchLeaseRegistry, LaunchRequest,
+    LeaseCapacityError, DATA_GRANT_TTL, LAUNCH_LEASE_TTL, MAX_ACTIVE_LAUNCH_LEASES,
+};
 use crate::package_service::PackageService;
 use crate::protocol_usage::ProtocolUsageStore;
 use crate::protocol_version::{
@@ -33,9 +38,6 @@ use crate::runtime_grants::{DataRequest, FieldInput, LaunchGrant};
 // (~43 KiB/s at 16 kHz mono), so the old 1 MiB cap 413'd any recording
 // longer than ~24 s. 32 MiB covers ~12 min of dictation.
 const MAX_HTTP_BODY_BYTES: usize = 32 * 1024 * 1024;
-const LAUNCH_LEASE_TTL: Duration = Duration::from_secs(300);
-const DATA_GRANT_TTL: Duration = Duration::from_secs(900);
-const MAX_ACTIVE_LAUNCH_LEASES: usize = 2_048;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 // Wire header names stay `x-kosmos-*`: pinned component builds
 // (agenda/memoria/dictation and kosmos-gpui-kit) send exactly these names —
@@ -46,7 +48,13 @@ const CLIENT_CLASS_HEADER: &str = "x-kosmos-client-class";
 const CLIENT_VERSION_HEADER: &str = "x-kosmos-client-version";
 const APP_LAUNCH_TOKEN_HEADER: &str = "x-kosmos-launch-token";
 
-type HttpResponse = Response<Full<Bytes>>;
+// BoxBody so the launch `events` route can answer with a long-lived SSE
+// stream while every other handler keeps returning buffered bodies.
+type HttpResponse = Response<BoxBody<Bytes, Infallible>>;
+
+fn boxed(bytes: impl Into<Bytes>) -> BoxBody<Bytes, Infallible> {
+    Full::new(bytes.into()).boxed()
+}
 
 const MAX_IN_FLIGHT_HTTP_OPERATIONS: usize = 128;
 const MAX_ACTIVE_HTTP_CONNECTIONS: usize = 128;
@@ -64,4 +72,7 @@ mod tests {
 
     include!("engine_api/tests_core.rs");
     include!("engine_api/tests_http.rs");
+    include!("engine_api/tests_open.rs");
+    include!("engine_api/tests_open_bootstrap.rs");
+    include!("engine_api/tests_open_events.rs");
 }
