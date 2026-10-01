@@ -167,6 +167,21 @@ that spawns them. Steps 1–4 are already landed and listed for the record.
    windows, brokers and shortcut reconcile are reimplemented in Rust or
    deleted with the apps that needed them. `host/electron/` retires when
    the last hosted Vue package leaves it.
+
+   **Status (KOS-299):** browser-hosted packages work again. The Manager's
+   «Открыть» calls `packages.open`, which mints a fresh lease plus a
+   one-time bootstrap code carried in the `launch_url` fragment; the Engine
+   injects `runtime/src/engine_api/host_shim.js` into every served HTML
+   page, and that shim exchanges the code once at
+   `POST /v1/apps/launch/<id>/bootstrap`, installs `window.kosmosApp`
+   (`identity`, `ark.request`, `ark.subscribe`), renews the lease ahead of
+   expiry and revokes it on `pagehide` via `sendBeacon`. Launch-scoped
+   routes (`/ark`, `/renew`, `/revoke`, `/events`, `/bootstrap`) now
+   authenticate on the launch credential alone — a page never holds the
+   Engine bearer. Still open for the GPUI web-host track: aux windows,
+   `dialogs.pickDirectoryGrant` (needs a native picker), `userData`,
+   `launcher.*`, `apps.open` and `navigation` — packages that only use
+   `ark.*` (Arcadia) are fully functional.
 10. **Focus OS-blocking → Engine/native services.** `focus-block.ts` +
     `focus-enforcement.ts` are spawn/IPC plumbing around
     `Mundus Helper.exe` and the focus service — the trigger belongs behind
