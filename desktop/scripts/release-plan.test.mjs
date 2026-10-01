@@ -15,6 +15,7 @@ import { RELEASE_RECEIPT_FILE } from "./release-receipt.mjs";
 
 const HEAD = "a".repeat(40);
 const BASE_COMMIT = "b".repeat(40);
+const TAGGED_COMMIT = "c".repeat(40);
 const CURRENT = "0.10.0";
 
 function release(tag, { draft = false, prerelease = false, receipt = true } = {}) {
@@ -53,6 +54,7 @@ function baseHandlers({ diffStatus = 1 } = {}) {
     ["git rev-parse HEAD", { stdout: HEAD }],
     [`git merge-base --is-ancestor ${BASE_COMMIT} HEAD`, {}],
     [`git diff --quiet ${BASE_COMMIT} HEAD --`, { status: diffStatus }],
+    ["git rev-parse -q --verify refs/tags/", { status: 1 }],
   ];
 }
 
@@ -75,6 +77,7 @@ test("changes with an unbumped version bump the patch", () => {
     previousTag: "v0.10.0",
     previousCommit: BASE_COMMIT,
     bumped: true,
+    retry: false,
   });
 });
 
@@ -114,11 +117,51 @@ test("with no published releases the current version ships", () => {
   const { run } = fakeRun([
     [`gh api --paginate --slurp repos/${RELEASE_REPO}/releases`, { stdout: "[[]]" }],
     ["git rev-parse HEAD", { stdout: HEAD }],
+    ["git rev-parse -q --verify refs/tags/", { status: 1 }],
   ]);
   const plan = planRelease({ run, currentVersion: CURRENT });
   assert.equal(plan.release, true);
   assert.equal(plan.version, CURRENT);
   assert.equal(plan.bumped, false);
+});
+
+// A run can die between "tag pushed" and "release published": the next plan
+// must then pin the tagged commit as the release point, not HEAD — otherwise
+// every later run trips on the existing tag forever.
+test("an unpublished tag on an older commit becomes the release point", () => {
+  const { run } = fakeRun([
+    ...baseHandlers().slice(0, -1),
+    ["git rev-parse -q --verify refs/tags/v0.10.1^{commit}", { stdout: TAGGED_COMMIT }],
+    [`git merge-base --is-ancestor ${TAGGED_COMMIT} HEAD`, {}],
+  ]);
+  const plan = planRelease({ run, currentVersion: CURRENT });
+  assert.equal(plan.release, true);
+  assert.equal(plan.version, "0.10.1");
+  assert.equal(plan.sha, TAGGED_COMMIT);
+  assert.equal(plan.retry, true);
+});
+
+test("an unpublished tag outside main history fails loudly", () => {
+  const { run } = fakeRun([
+    ...baseHandlers().slice(0, -1),
+    ["git rev-parse -q --verify refs/tags/v0.10.1^{commit}", { stdout: TAGGED_COMMIT }],
+    [
+      `git merge-base --is-ancestor ${TAGGED_COMMIT} HEAD`,
+      { status: 1, stderr: "not an ancestor" },
+    ],
+  ]);
+  assert.throws(() => planRelease({ run, currentVersion: CURRENT }), /merge-base.*v0\.10\.1/);
+});
+
+test("a git error while resolving the tag fails loudly", () => {
+  const { run } = fakeRun([
+    ...baseHandlers().slice(0, -1),
+    [
+      "git rev-parse -q --verify refs/tags/v0.10.1^{commit}",
+      { status: 128, stderr: "not a git repository" },
+    ],
+  ]);
+  assert.throws(() => planRelease({ run, currentVersion: CURRENT }), /git rev-parse failed/);
 });
 
 test("drafts, prereleases and non-stable tags never become the baseline", () => {

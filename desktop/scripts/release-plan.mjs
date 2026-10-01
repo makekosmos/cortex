@@ -22,7 +22,9 @@
 //   node scripts/release-plan.mjs plan
 //       Prints `key=value` lines to $GITHUB_OUTPUT (when set) and a human line
 //       to stdout. Keys: release, version, sha, previous_tag, previous_commit,
-//       bumped.
+//       bumped, retry. `sha` is the commit to build — HEAD normally, the
+//       existing tag's commit when an earlier run died between tag push and
+//       publish.
 //   node scripts/release-plan.mjs set <version>
 //       Idempotently writes <version> as release-versions.json["win"].
 
@@ -167,13 +169,39 @@ export function planRelease({ run = defaultRun, currentVersion, repo = RELEASE_R
   }
 
   const version = nextReleaseVersion(current, baseline?.version ?? null, changed);
+
+  // A tag that exists but has no published release is a partially-failed
+  // earlier run: the bump commit and tag were pushed, then publish failed.
+  // The tagged commit is the release point — rebuild and publish exactly it,
+  // and let newer main commits wait for the next run. A tag outside main's
+  // history means rewritten history or a manual tag: fail loudly.
+  let sha = head;
+  let retry = false;
+  if (version !== null) {
+    const tag = run("git", ["rev-parse", "-q", "--verify", `refs/tags/v${version}^{commit}`]);
+    if (tag.status === 0) {
+      const tagged = tag.stdout.trim();
+      if (!/^[0-9a-f]{40}$/.test(tagged))
+        throw new Error(`git rev-parse returned an unexpected value: ${tagged}`);
+      must(
+        run("git", ["merge-base", "--is-ancestor", tagged, "HEAD"]),
+        `git merge-base --is-ancestor v${version} HEAD`,
+      );
+      sha = tagged;
+      retry = true;
+    } else if (tag.status !== 1) {
+      throw new Error(`git rev-parse failed (${tag.status}): ${tag.stderr.trim()}`);
+    }
+  }
+
   return {
     release: version !== null,
     version: version ?? "",
-    sha: head,
+    sha,
     previousTag: baseline?.tag ?? "",
     previousCommit,
     bumped: version !== null && version !== current,
+    retry,
   };
 }
 
@@ -203,6 +231,7 @@ function cli() {
       previous_tag: plan.previousTag,
       previous_commit: plan.previousCommit,
       bumped: String(plan.bumped),
+      retry: String(plan.retry),
     };
     if (process.env.GITHUB_OUTPUT)
       appendFileSync(
@@ -213,7 +242,7 @@ function cli() {
       );
     console.log(
       plan.release
-        ? `Release v${plan.version} (baseline ${plan.previousTag || "none"}, bump: ${plan.bumped})`
+        ? `Release v${plan.version} (baseline ${plan.previousTag || "none"}, bump: ${plan.bumped}${plan.retry ? `, retrying tagged commit ${plan.sha}` : ""})`
         : `No changes since the last published release ${plan.previousTag}`,
     );
     return;
