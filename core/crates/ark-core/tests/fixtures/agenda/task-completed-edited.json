@@ -1,0 +1,63 @@
+{
+  "id": "t",
+  "typeId": "com.kosmos.task",
+  "typeVersion": "1.1.0",
+  "title": "task-completed edited",
+  "createdAt": "2026-05-14T09:00:00.000Z",
+  "propsJson": {
+    "extensions": {
+      "priority": 0,
+      "scheduled_date": null,
+      "deadline": null,
+      "reminder_date": null,
+      "is_today": false,
+      "is_evening": false,
+      "is_someday": false,
+      "status": "done",
+      "system_kind": null,
+      "is_completed": true,
+      "completed_at": "2026-05-15T09:30:00.000Z",
+      "is_cancelled": false,
+      "is_trashed": false,
+      "created_at": "2026-05-14T09:00:00.000Z",
+      "heading_id": null,
+      "project_id": null,
+      "area_id": null,
+      "tag_ids": [],
+      "billable": false,
+      "price": null,
+      "significance": null,
+      "fuel_cost": null,
+      "sort_order": 0,
+      "description": null,
+      "cancelled_at": null,
+      "checklist_items": [],
+      "recurrence_rule": null
+    },
+    "status": "done",
+    "canceledAt": null,
+    "priority": "none",
+    "scheduledAt": null,
+    "dueAt": null,
+    "reminderAt": null,
+    "completedAt": "2026-05-15T09:30:00.000Z",
+    "checklist": [],
+    "recurrence": null
+  },
+  "contentJson": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "text": ""
+          }
+        ]
+      }
+    ]
+  },
+  "deletedAt": null,
+  "updatedAt": "2026-05-15T10:00:00.000Z"
+}

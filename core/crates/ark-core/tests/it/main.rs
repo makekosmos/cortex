@@ -15,6 +15,7 @@ mod iroh_loopback_smoke;
 mod iroh_round_trip;
 mod iroh_ticket_pairing;
 mod phase2_slice2_object_versions;
+mod phase3_agenda_contract;
 mod phase3_canonical_facades;
 mod phase3_canonical_types;
 mod phase3_compatibility;
