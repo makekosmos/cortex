@@ -154,7 +154,12 @@ fn compatibility_planning_views(objects: &[ArkObject]) -> (Vec<Area>, Vec<Headin
     let mut areas = Vec::new();
     let mut headings = Vec::new();
     for object in objects {
-        if object.type_id != "com.kosmos.project" || object.type_version != "1.0.0" {
+        if object.type_id != "com.kosmos.project"
+            || !crate::canonical_types::definitions::is_canonical_version(
+                &object.type_id,
+                &object.type_version,
+            )
+        {
             continue;
         }
         let Some(compatibility) = object

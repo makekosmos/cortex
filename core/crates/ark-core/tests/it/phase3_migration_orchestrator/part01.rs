@@ -92,7 +92,7 @@ fn populated_fixture_reaches_real_orchestrator_and_preserves_source_only_rows() 
     );
     assert_eq!(
         conn.query_row(
-            "SELECT COUNT(*) FROM objects WHERE type_version='1.0.0'",
+            "SELECT COUNT(*) FROM objects",
             [],
             |r| r.get::<_, i64>(0)
         )
@@ -231,7 +231,7 @@ fn blocked_preflight_is_read_only_and_retains_exact_raw_evidence() {
     assert_eq!(report.status, "blocked");
     assert_eq!(
         conn.query_row(
-            "SELECT COUNT(*) FROM objects WHERE type_version='1.0.0'",
+            "SELECT COUNT(*) FROM objects WHERE type_id LIKE 'com.kosmos.%'",
             [],
             |r| r.get::<_, i64>(0)
         )

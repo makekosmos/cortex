@@ -58,10 +58,9 @@ fn projects_canonical_task_fields_and_sole_project_link() {
     let links = vec![link("p", "project-1", "project")];
     let view = project_task_to_delphi(&object, &links).unwrap();
     assert_eq!(view.id, "t-1");
-    assert_eq!(
-        view.scheduled_date.as_deref(),
-        Some("2026-05-15T08:00:00.000Z")
-    );
+    // `scheduledAt` stored an RFC 3339 stamp under schema 1.0.0; the
+    // projection exposes the expressed calendar day.
+    assert_eq!(view.scheduled_date.as_deref(), Some("2026-05-15"));
     assert!(view.is_today);
     assert!(view.is_someday);
     assert!(view.is_completed);

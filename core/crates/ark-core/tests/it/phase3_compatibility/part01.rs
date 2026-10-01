@@ -64,7 +64,15 @@ fn all_nine_aliases_map_to_exact_canonical_ids_and_version() {
         };
         let mapped = map_legacy(&record(alias, props)).unwrap();
         assert_eq!(mapped.object.type_id, canonical);
-        assert_eq!(mapped.object.type_version, "1.0.0");
+        // Mapped objects claim the newest registered version of their type.
+        assert_eq!(
+            mapped.object.type_version,
+            if matches!(canonical, "com.kosmos.task" | "com.kosmos.project") {
+                "1.1.0"
+            } else {
+                "1.0.0"
+            }
+        );
         assert_eq!(mapped.object.id, format!("{alias}-1"));
         assert_eq!(mapped.object.title, "Preserved title");
         assert_eq!(
@@ -222,4 +230,26 @@ fn raw_source_and_context_preserve_malformed_and_existing_link_semantics() {
         .links
         .iter()
         .all(|link| link.target_object_id != "https://example.invalid/a"));
+}
+#[test]
+fn legacy_day_fields_normalize_stamps_to_the_date_contract() {
+    // Legacy writers stored RFC 3339 stamps in `scheduled_date`; the 1.1.0
+    // contract is `format: "date"` — compat keeps the expressed day.
+    let task = record(
+        "task_obj",
+        json!({"status":"todo","scheduled_date":"2026-05-15T08:00:00.000Z"}),
+    );
+    let mapped = map_legacy(&task).unwrap();
+    assert_eq!(mapped.object.type_version, "1.1.0");
+    assert_eq!(
+        mapped.object.props_json["scheduledAt"],
+        json!("2026-05-15")
+    );
+    // Bare dates pass through unchanged.
+    let task = record("task_obj", json!({"status":"todo","deadline":"2026-05-20"}));
+    let mapped = map_legacy(&task).unwrap();
+    assert_eq!(mapped.object.props_json["dueAt"], json!("2026-05-20"));
+    // Garbage still fails loudly instead of being silently normalized away.
+    let task = record("task_obj", json!({"scheduled_date":"soon"}));
+    assert!(map_legacy(&task).is_err());
 }

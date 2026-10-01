@@ -88,7 +88,7 @@ fn late_link_collision_rolls_back_objects_and_ledger_rows() {
     conn.execute("INSERT INTO object_links(id,source_object_id,target_object_id,link_type,created_at) VALUES(?1,'other','project-1','project','x')", [collision]).unwrap();
     let plan = plan_objects(&conn, "now").unwrap();
     assert!(apply_plan(&conn, &plan, "now").is_err());
-    assert_eq!(conn.query_row::<i64, _, _>("SELECT COUNT(*) FROM objects WHERE id IN ('project-1','task-1') AND type_version='1.0.0'", [], |r| r.get(0)).unwrap(), 0);
+    assert_eq!(conn.query_row::<i64, _, _>("SELECT COUNT(*) FROM objects WHERE id IN ('project-1','task-1') AND type_id LIKE 'com.kosmos.%'", [], |r| r.get(0)).unwrap(), 0);
     assert_eq!(
         conn.query_row::<i64, _, _>("SELECT COUNT(*) FROM canonical_migration_items", [], |r| r
             .get(0))

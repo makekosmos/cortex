@@ -40,7 +40,9 @@ fn fresh_registry_installs_all_exact_definitions_and_aliases() {
     let conn = db();
     let plan = preflight_registry(&conn).unwrap();
     let report = apply_registry(&conn, &plan).unwrap();
-    assert_eq!(report.installed, 9);
+    // Nine canonical types; task and project carry a second registered
+    // version (1.1.0) next to the original 1.0.0.
+    assert_eq!(report.installed, 11);
     assert_eq!(
         conn.query_row("SELECT count(*) FROM object_types", [], |r| r
             .get::<_, i64>(0))
@@ -180,5 +182,52 @@ fn legacy_archive_is_lossless_and_late_failure_rolls_back() {
 
 #[test]
 fn definitions_are_the_registry_hash_authority() {
-    assert_eq!(canonical_type_registrations().unwrap().len(), 9);
+    assert_eq!(canonical_type_registrations().unwrap().len(), 11);
+}
+
+#[test]
+fn init_schema_installs_added_canonical_versions() {
+    // A DB that completed the phase3 migration before the 1.1.0 bump: the new
+    // version rows are missing and current_version still names 1.0.0.
+    let conn = Connection::open_in_memory().unwrap();
+    ark_core::db::init_schema(&conn).unwrap();
+    conn.execute("DELETE FROM object_type_versions WHERE version='1.1.0'", [])
+        .unwrap();
+    conn.execute(
+        "UPDATE object_types SET current_version='1.0.0' WHERE id IN ('com.kosmos.task','com.kosmos.project')",
+        [],
+    )
+    .unwrap();
+    // The next boot must reinstall the version rows and bump current_version
+    // without touching stored objects.
+    ark_core::db::init_schema(&conn).unwrap();
+    assert_eq!(
+        conn.query_row(
+            "SELECT COUNT(*) FROM object_type_versions WHERE version='1.1.0'",
+            [],
+            |r| r.get::<_, i64>(0)
+        )
+        .unwrap(),
+        2
+    );
+    for id in ["com.kosmos.task", "com.kosmos.project"] {
+        let current: String = conn
+            .query_row(
+                "SELECT current_version FROM object_types WHERE id=?1",
+                [id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(current, "1.1.0", "{id}");
+    }
+    // Objects written under 1.0.0 keep their version and still resolve.
+    let mut stmt = conn
+        .prepare("SELECT version FROM object_type_versions WHERE type_id='com.kosmos.task' ORDER BY version")
+        .unwrap();
+    let versions: Vec<String> = stmt
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(versions, ["1.0.0", "1.1.0"]);
 }
