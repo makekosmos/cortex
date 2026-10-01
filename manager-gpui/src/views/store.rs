@@ -166,6 +166,13 @@ fn app_package_rows(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> Vec<Div> 
         .collect()
 }
 
+/// «Открыть» disabled flag — a disabled package can never launch, so the
+/// control is disabled rather than letting the click fail. The vendored
+/// a11y tree does not surface `disabled`, so tests assert this predicate.
+pub(crate) fn package_open_disabled(p: &Value) -> bool {
+    !vbool(p, "enabled")
+}
+
 /// One installed package row: icon, display name, `id · v<version>`
 /// caption, status badge, enable toggle and Удалить.
 fn package_row(p: &Value, cx: &mut Context<ManagerApp>) -> Div {
@@ -206,8 +213,6 @@ fn package_row(p: &Value, cx: &mut Context<ManagerApp>) -> Div {
         );
     // App-kind rows get «Открыть» like native apps (KOS-299): packages.open
     // mints the launch lease and the reply opens it in the system browser.
-    // A disabled package can never launch — disable the control rather than
-    // letting the click fail.
     if is_app_package(p) {
         let oid = id.clone();
         let oversion = vstr(p, "version");
@@ -220,7 +225,7 @@ fn package_row(p: &Value, cx: &mut Context<ManagerApp>) -> Div {
                     cx.notify();
                 }),
             )
-            .disabled(!enabled)
+            .disabled(package_open_disabled(p))
             .accessibility_label(format!("Открыть {name}")),
         );
     }

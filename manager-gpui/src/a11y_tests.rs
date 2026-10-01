@@ -360,12 +360,21 @@ async fn app_package_row_exposes_open_button(cx: &mut TestAppContext) {
         "a bridge-kind package row must not expose «Открыть»; got {open_labels:?}"
     );
 
-    // A disabled package still renders «Открыть» — the control is disabled
-    // (`package_row` calls `.disabled(!enabled)`); the vendored test window
-    // does not surface the disabled flag, so presence is what we can prove.
+    // A disabled package still renders «Открыть» as a disabled control.
+    // The vendored test window does not surface the flag in the a11y tree,
+    // so the flag itself — the predicate the row passes to `.disabled(...)` —
+    // is what this test asserts.
     assert!(
         open_labels.contains(&"Открыть Sleepy".to_string()),
         "a disabled app row must still render its «Открыть»; got {open_labels:?}"
+    );
+    assert!(
+        crate::views::store::package_open_disabled(&json!({ "enabled": false })),
+        "a disabled package must disable «Открыть»"
+    );
+    assert!(
+        !crate::views::store::package_open_disabled(&json!({ "enabled": true })),
+        "an enabled package must leave «Открыть» actionable"
     );
 }
 
