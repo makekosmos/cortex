@@ -84,6 +84,38 @@ impl NativeAppStore {
         Ok(record)
     }
 
+    /// KOS-301: `cleanup_stale` only runs after a successful install — an app
+    /// that is never reinstalled kept its crashed `.download-*` files,
+    /// `.staging-*`/`.tombstone-*` dirs and `write_owner_only_json` temps
+    /// forever. Called from `NativeAppStore::new`: sweeps every app dir, but
+    /// only temp-shaped names older than `LEFTOVER_GRACE` (a suspended
+    /// download/install keeps its young temps). Superseded version dirs are
+    /// *not* swept here — they need the exe-in-use check and are handled by
+    /// the post-install `cleanup_stale`.
+    fn sweep_stale_leftovers(&self) {
+        let Ok(entries) = fs::read_dir(&self.root) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !entry.file_type().is_ok_and(|ft| ft.is_dir()) {
+                continue;
+            }
+            crate::data_dir::temp_sweep::sweep(
+                &path,
+                crate::data_dir::temp_sweep::LEFTOVER_GRACE,
+                |name, is_dir| {
+                    if is_dir {
+                        name.starts_with(".staging-") || name.starts_with(".tombstone-")
+                    } else {
+                        name.starts_with(".download-")
+                            || (name.starts_with('.') && name.contains(".tmp."))
+                    }
+                },
+            );
+        }
+    }
+
     /// Sweep everything that is not the live `<keep_version>` dir or the
     /// pointer: superseded version dirs, interrupted `.staging-*` /
     /// `.download-*` temp names (files AND dirs — a crashed download leaves
