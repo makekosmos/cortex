@@ -57,14 +57,19 @@
     #[cfg(windows)]
     #[test]
     fn startup_attribute_list_requires_extended_startup_flag() {
-        let flags = CREATE_SUSPENDED
-            | CREATE_NO_WINDOW
-            | CREATE_UNICODE_ENVIRONMENT
-            | EXTENDED_STARTUPINFO_PRESENT;
-        assert_ne!(flags & EXTENDED_STARTUPINFO_PRESENT, 0);
+        // The production CreateProcessW flags must carry
+        // EXTENDED_STARTUPINFO_PRESENT, or the PROC_THREAD_ATTRIBUTE_HANDLE_LIST
+        // the worker inherits is silently ignored, and CREATE_SUSPENDED so the
+        // job containment is installed before the child runs.
+        let flags = worker_creation_flags();
         assert_eq!(
             flags & EXTENDED_STARTUPINFO_PRESENT,
             EXTENDED_STARTUPINFO_PRESENT
+        );
+        assert_eq!(flags & CREATE_SUSPENDED, CREATE_SUSPENDED);
+        assert_eq!(
+            flags & CREATE_UNICODE_ENVIRONMENT,
+            CREATE_UNICODE_ENVIRONMENT
         );
     }
 

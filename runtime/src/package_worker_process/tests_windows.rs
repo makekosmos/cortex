@@ -109,18 +109,16 @@
         assert!(test_support::take_captured_process().is_none());
     }
 
+    #[cfg(not(windows))]
     #[tokio::test]
     async fn non_windows_fails_closed() {
-        #[cfg(not(windows))]
-        {
-            let directory = tempfile::tempdir().expect("temporary directory");
-            let path = directory.path().join("worker.exe");
-            std::fs::write(&path, minimal_pe()).expect("temporary executable");
-            assert!(matches!(
-                WorkerProcess::launch(path).await,
-                Err(WorkerProcessError::UnsupportedPlatform)
-            ));
-        }
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("worker.exe");
+        std::fs::write(&path, minimal_pe()).expect("temporary executable");
+        assert!(matches!(
+            WorkerProcess::launch(path).await,
+            Err(WorkerProcessError::UnsupportedPlatform)
+        ));
     }
 
     #[cfg(windows)]
