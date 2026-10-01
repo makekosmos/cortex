@@ -42,11 +42,7 @@ pub enum StoreTab {
 
 pub const NAV_GROUPS: &[&[View]] = &[
     &[View::Data, View::Usage, View::Packages, View::Browser],
-    &[
-        View::Sync,
-        View::Connections,
-        View::Secrets,
-    ],
+    &[View::Sync, View::Connections, View::Secrets],
     &[View::Settings, View::Engine, View::Dev],
     &[View::Updates, View::About],
 ];
