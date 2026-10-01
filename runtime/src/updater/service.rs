@@ -6,7 +6,7 @@ use std::time::Duration;
 use serde_json::Value;
 
 use super::state::{Phase, UpdaterStatus};
-use super::{download, feed, install, version, UpdaterError};
+use super::{cleanup, download, feed, install, version, UpdaterError};
 
 const STARTUP_GRACE: Duration = Duration::from_secs(5);
 
@@ -39,9 +39,21 @@ impl UpdaterService {
     }
 
     fn try_with_feed_base(data_dir: PathBuf, feed_base: String) -> Result<Arc<Self>, UpdaterError> {
+        let downloads_dir = data_dir.join("updates");
+        // KOS-301: a fresh service has no pending update and no live download,
+        // so every payload in `updates/` is a leftover from a previous run
+        // (applied installer, superseded version, crashed .part).
+        let report = cleanup::sweep_downloads(&downloads_dir, &cleanup::keep_set(None));
+        if report.removed > 0 || report.failed > 0 {
+            tracing::info!(
+                removed = report.removed,
+                failed = report.failed,
+                "updater sweep"
+            );
+        }
         Ok(Arc::new(Self {
             feed_base,
-            downloads_dir: data_dir.join("updates"),
+            downloads_dir,
             client: feed::build_client()?,
             inner: Mutex::new(Inner {
                 status: UpdaterStatus::idle(version::current_version()),
@@ -95,10 +107,13 @@ impl UpdaterService {
                     size: file.size,
                     installer_path: self.downloads_dir.join(file.url),
                 };
+                let keep = cleanup::keep_set(Some(&pending.installer_path));
                 self.inner
                     .lock()
                     .unwrap_or_else(|poisoned| poisoned.into_inner())
                     .pending = Some(pending);
+                // Superseded payloads go away once the new pending is known.
+                cleanup::sweep_downloads(&self.downloads_dir, &keep);
                 let json = self.set_status(UpdaterStatus {
                     phase: Phase::Available,
                     current_version: current,
@@ -112,6 +127,8 @@ impl UpdaterService {
             }
             Ok(_) => {
                 self.clear_pending();
+                // No pending update — nothing in updates/ is still needed.
+                cleanup::sweep_downloads(&self.downloads_dir, &cleanup::keep_set(None));
                 self.set_status(UpdaterStatus {
                     phase: Phase::NotAvailable,
                     current_version: current,
@@ -140,81 +157,6 @@ impl UpdaterService {
         }
         self.start_download();
         self.status()
-    }
-
-    fn start_download(self: &Arc<Self>) {
-        if self.downloading.swap(true, Ordering::SeqCst) {
-            return;
-        }
-        let this = self.clone();
-        tokio::spawn(async move {
-            this.run_download().await;
-            this.downloading.store(false, Ordering::SeqCst);
-        });
-    }
-
-    async fn run_download(self: &Arc<Self>) {
-        let Some(pending) = self.snapshot_pending() else {
-            return;
-        };
-        self.update_progress(&pending, 0);
-        let part_path = pending.installer_path.with_extension("exe.part");
-        let this = self.clone();
-        let progress_pending = pending.clone();
-        let transfer = download::download_resumable(
-            &self.client,
-            &pending.asset_url,
-            &part_path,
-            pending.size,
-            move |done, total| {
-                let percent = if total == 0 {
-                    100
-                } else {
-                    ((done as f64 / total as f64) * 100.0).round() as u32
-                };
-                this.update_progress(&progress_pending, percent.min(100));
-            },
-        )
-        .await;
-        let result = match transfer {
-            Ok(()) => {
-                download::verify_and_commit(
-                    &part_path,
-                    &pending.installer_path,
-                    pending.size,
-                    &pending.sha512,
-                )
-                .await
-            }
-            Err(error) => Err(error),
-        };
-        match result {
-            Ok(()) => {
-                self.set_status(UpdaterStatus {
-                    phase: Phase::Downloaded,
-                    current_version: version::current_version(),
-                    new_version: Some(pending.version),
-                    percent: Some(100),
-                    message: None,
-                    checked_at_ms: self.snapshot().checked_at_ms,
-                });
-            }
-            Err(error) => {
-                let _ = tokio::fs::remove_file(&part_path).await;
-                self.set_error(error, self.snapshot().checked_at_ms);
-            }
-        }
-    }
-
-    fn update_progress(&self, pending: &PendingUpdate, percent: u32) {
-        self.set_status(UpdaterStatus {
-            phase: Phase::Downloading,
-            current_version: version::current_version(),
-            new_version: Some(pending.version.clone()),
-            percent: Some(percent),
-            message: None,
-            checked_at_ms: self.snapshot().checked_at_ms,
-        });
     }
 
     pub(crate) fn install(&self) -> Value {
@@ -281,6 +223,8 @@ impl UpdaterService {
 fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
 }
+
+include!("service_download.rs");
 
 #[cfg(test)]
 #[path = "service_tests.rs"]
