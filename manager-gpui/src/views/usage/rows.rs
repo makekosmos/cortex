@@ -1,6 +1,7 @@
 //! Usage view data layer: row filtering (system processes), column sorting
 //! and the duration/date formatting the table cells render.
 
+use gpui::SharedString;
 use serde_json::Value;
 
 use crate::app::ManagerApp;
@@ -46,7 +47,40 @@ impl UsageSort {
 impl ManagerApp {
     pub fn toggle_usage_sort(&mut self, column: UsageColumn) {
         self.usage_sort.toggled(column);
+        self.rebuild_usage_rows();
     }
+
+    pub fn set_usage_show_system(&mut self, show: bool) {
+        self.usage_show_system = show;
+        self.rebuild_usage_rows();
+    }
+}
+
+/// Display-ready row with every string pre-formatted. Built once per
+/// report/sort/filter change (see `ManagerApp::rebuild_usage_rows`); the
+/// `v_virtual_list` render closure only indexes into it — per-frame sorting
+/// or formatting is what made the old 500-row page stutter.
+pub struct UsageRow {
+    pub name: SharedString,
+    pub icon_path: Option<String>,
+    pub active: String,
+    pub sessions: String,
+    pub last_seen: String,
+    pub path: String,
+}
+
+pub fn build_usage_rows(v: &Value, show_system: bool, sort: UsageSort) -> Vec<UsageRow> {
+    usage_rows(v, show_system, sort)
+        .iter()
+        .map(|row| UsageRow {
+            name: SharedString::from(row_name(row)),
+            icon_path: vopt(row, "iconPath").filter(|p| !p.is_empty()),
+            active: fmt_duration(vnum(row, "foregroundMs")),
+            sessions: vstr(row, "sessions"),
+            last_seen: fmt_last_seen(row),
+            path: vstr(row, "normalizedPath"),
+        })
+        .collect()
 }
 
 /// Rows ready for display: system processes (exe under %SystemRoot%) hidden

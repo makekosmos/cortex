@@ -3892,6 +3892,7 @@ dependencies = [
  "mundus-gpui-kit",
  "serde",
  "serde_json",
+ "tracing",
  "ureq",
  "uuid",
 ]

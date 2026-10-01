@@ -110,13 +110,20 @@ fn usage_report(engine: &Engine) -> Result<Value, String> {
         .collect();
     let mut exe_info: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
     if !paths.is_empty() {
-        if let Ok(v) = engine.rpc("app_index.exe_info", json!({ "paths": paths })) {
-            if let Some(entries) = v.get("entries").and_then(Value::as_array) {
-                for entry in entries {
-                    if let Some(path) = entry.get("path").and_then(Value::as_str) {
-                        exe_info.insert(normalize_path(path), entry.clone());
+        match engine.rpc("app_index.exe_info", json!({ "paths": paths })) {
+            Ok(v) => {
+                if let Some(entries) = v.get("entries").and_then(Value::as_array) {
+                    for entry in entries {
+                        if let Some(path) = entry.get("path").and_then(Value::as_str) {
+                            exe_info.insert(normalize_path(path), entry.clone());
+                        }
                     }
                 }
+            }
+            // Rows keep their stored name and icon — degraded, not broken —
+            // but the failure must not be silent.
+            Err(error) => {
+                tracing::warn!(%error, "app_index.exe_info failed; usage rows keep stored names")
             }
         }
     }

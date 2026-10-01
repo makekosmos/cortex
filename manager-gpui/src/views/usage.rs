@@ -10,15 +10,13 @@ use std::rc::Rc;
 
 use ::gpui::{prelude::*, *};
 use gpui_component::v_virtual_list;
-use serde_json::Value;
 
 use crate::app::ManagerApp;
 use crate::widgets::*;
 use mundus_gpui_kit::theme::*;
 
 mod rows;
-use rows::{fmt_duration, fmt_last_seen};
-pub use rows::{row_name, usage_rows, UsageColumn, UsageSort};
+pub use rows::{build_usage_rows, UsageColumn, UsageRow, UsageSort};
 
 /// Fixed row height — v_virtual_list needs `item_sizes` upfront; uniform rows
 /// keep the arithmetic exact instead of measuring every row.
@@ -35,6 +33,7 @@ pub fn render(
 ) -> AnyElement {
     let sort = app.usage_sort;
     let show_system = app.usage_show_system;
+    let rows = app.usage_rows.clone();
     let scroll = app.usage_scroll.clone();
     let mut col = div().flex().flex_col().gap_4().w_full().h_full();
     col = col.child(section(
@@ -48,7 +47,7 @@ pub fn render(
             .gap_2()
             .child(
                 toggle("usage-show-system", show_system, cx, |this, checked, _| {
-                    this.usage_show_system = checked;
+                    this.set_usage_show_system(checked);
                 })
                 .accessibility_label("Показывать системные процессы"),
             )
@@ -59,35 +58,34 @@ pub fn render(
                     .child("Показывать системные процессы"),
             ),
     );
-    col = col.child(slot_or(app, "usage.report", |v| {
-        usage_table(v, sort, show_system, scroll, cx)
+    col = col.child(slot_or(app, "usage.report", |_v| {
+        usage_table(rows, sort, scroll, cx)
     }));
     col.into_any_element()
 }
 
 fn usage_table(
-    v: &Value,
+    rows: Rc<Vec<UsageRow>>,
     sort: UsageSort,
-    show_system: bool,
     scroll: gpui_component::VirtualListScrollHandle,
     cx: &mut Context<ManagerApp>,
 ) -> AnyElement {
-    let count = usage_rows(v, show_system, sort).len();
     let mut table = card().flex().flex_col().flex_1().min_h_0();
     table = table.child(header_row(sort, cx));
-    if count == 0 {
+    if rows.is_empty() {
         table = table.child(empty("Затреканное время не найдено"));
     } else {
-        let sizes = Rc::new(vec![size(px(0.), px(ROW_H)); count]);
+        let sizes = Rc::new(vec![size(px(0.), px(ROW_H)); rows.len()]);
         let list = v_virtual_list(
             cx.entity(),
             "usage-rows",
             sizes,
             |app, range, _window, _cx| {
-                let snapshot = app.data("usage.report");
-                let rows = usage_rows(&snapshot, app.usage_show_system, app.usage_sort);
+                // Pure indexing into rows prepared on data/sort/filter change —
+                // cloning the report and re-sorting per visible-range render
+                // was the per-frame O(n log n) stutter.
                 range
-                    .filter_map(|ix| rows.get(ix).map(|row| usage_row(ix, row)))
+                    .filter_map(|ix| app.usage_rows.get(ix).map(|row| usage_row(ix, row)))
                     .collect()
             },
         )
@@ -192,13 +190,10 @@ fn metric(text: String, width: f32) -> Div {
         .child(text)
 }
 
-fn usage_row(ix: usize, entry: &Value) -> Stateful<Div> {
-    let name = row_name(entry);
-    let icon_path = vopt(entry, "iconPath").filter(|p| !p.is_empty());
-
+fn usage_row(ix: usize, entry: &UsageRow) -> Stateful<Div> {
     // 20px icon slot: cached PNG via app_index.icon_path / exe_info, letter
     // badge underneath when the cache has nothing or the file fails to load.
-    let icon = app_icon(icon_file(icon_path), &name);
+    let icon = app_icon(icon_file(entry.icon_path.clone()), &entry.name);
 
     div()
         .id(ElementId::NamedInteger("usage-row".into(), ix as u64))
@@ -208,7 +203,7 @@ fn usage_row(ix: usize, entry: &Value) -> Stateful<Div> {
         .items_center()
         .gap_3()
         .role(Role::ListItem)
-        .aria_label(name.clone())
+        .aria_label(entry.name.clone())
         .child(icon)
         .child(
             div()
@@ -219,11 +214,11 @@ fn usage_row(ix: usize, entry: &Value) -> Stateful<Div> {
                 .whitespace_nowrap()
                 .text_ellipsis()
                 .overflow_hidden()
-                .child(name),
+                .child(entry.name.clone()),
         )
-        .child(metric(fmt_duration(vnum(entry, "foregroundMs")), 110.))
-        .child(metric(vstr(entry, "sessions"), 76.))
-        .child(metric(fmt_last_seen(entry), 150.))
+        .child(metric(entry.active.clone(), 110.))
+        .child(metric(entry.sessions.clone(), 76.))
+        .child(metric(entry.last_seen.clone(), 150.))
         .child(
             div()
                 .flex_1()
@@ -233,6 +228,6 @@ fn usage_row(ix: usize, entry: &Value) -> Stateful<Div> {
                 .whitespace_nowrap()
                 .text_ellipsis()
                 .overflow_hidden()
-                .child(vstr(entry, "normalizedPath")),
+                .child(entry.path.clone()),
         )
 }

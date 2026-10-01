@@ -213,6 +213,7 @@ async fn usage_list_is_virtualized(cx: &mut TestAppContext) {
             "usage.report".into(),
             crate::app::Slot::Ready(json!({ "topApps": rows })),
         );
+        app.rebuild_usage_rows();
         cx.notify();
     });
     let tree = a11y_tree(cx);
@@ -231,6 +232,39 @@ async fn usage_list_is_virtualized(cx: &mut TestAppContext) {
         rendered < 100,
         "virtual list must not materialize all 600 rows, got {rendered}"
     );
+}
+
+/// KOS-287 regression: prepared rows are built once per data/sort/filter
+/// change — re-rendering the view must not re-sort or re-format the table
+/// (that per-frame O(n log n) was the scroll stutter).
+#[gpui::test]
+async fn usage_rows_rebuild_only_on_input_change(cx: &mut TestAppContext) {
+    let (manager, cx) = launch(cx);
+    manager.update(cx, |app, _cx| {
+        app.view = crate::views::View::Usage;
+        app.slots.insert(
+            "usage.report".into(),
+            crate::app::Slot::Ready(json!({ "topApps": [
+                { "displayName": "Alpha", "processName": "a.exe", "foregroundMs": 10, "sessions": 1 },
+                { "displayName": "Beta", "processName": "b.exe", "foregroundMs": 20, "sessions": 1 },
+            ] })),
+        );
+        app.rebuild_usage_rows();
+    });
+    // Two renders back-to-back — same inputs, no rebuild.
+    let _ = a11y_tree(cx);
+    let _ = a11y_tree(cx);
+    manager.read_with(cx, |app, _| assert_eq!(app.usage_builds, 1));
+    // Sort and filter changes are the only rebuild triggers.
+    manager.update(cx, |app, _| {
+        app.toggle_usage_sort(crate::views::usage::UsageColumn::Name)
+    });
+    manager.read_with(cx, |app, _| {
+        assert_eq!(app.usage_builds, 2);
+        assert_eq!(app.usage_rows[0].name.as_ref(), "Alpha");
+    });
+    manager.update(cx, |app, _| app.set_usage_show_system(true));
+    manager.read_with(cx, |app, _| assert_eq!(app.usage_builds, 3));
 }
 
 #[gpui::test]
