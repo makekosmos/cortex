@@ -96,6 +96,7 @@ pub mod protocol_usage;
 pub mod protocol_version;
 pub mod runtime_grants;
 pub mod singleton;
+pub mod storage_maintenance;
 pub mod store_catalog;
 pub mod sync;
 #[cfg(test)]
