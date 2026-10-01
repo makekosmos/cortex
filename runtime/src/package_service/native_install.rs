@@ -52,6 +52,7 @@ impl PackageService {
                 downloaded: 0,
                 total: None,
             }),
+            icon_path: self.ensure_native_icon(&store, desc),
         }))
     }
 
@@ -173,12 +174,15 @@ impl PackageService {
             .native_store()?
             .current(desc.id)
             .map_err(native_store_error)?;
+        let store = self.native_store()?;
+        let icon_path = self.ensure_native_icon(&store, desc);
         Ok(self.native_summary(NativeRowInput {
             desc,
             record: record.as_ref(),
             latest,
             availability: NativeAvailability::Ready,
             job: None,
+            icon_path,
         }))
     }
 
