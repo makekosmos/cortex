@@ -213,9 +213,18 @@ impl AppIndex {
             source: "usage_tracker".to_string(),
             mtime: 0,
         };
+        // The result is memoized — a failure is never retried, so it must be
+        // logged here or it is invisible (KOS-287).
+        let icon_path = match icons::ensure_icon(&self.icon_cache_dir, &app) {
+            Ok(path) => Some(path),
+            Err(error) => {
+                tracing::warn!(target: "app_index", path = %exec_path, %error, "exe_info icon extraction failed");
+                None
+            }
+        };
         let info = ExeInfo {
             display_name: exe_info::exe_display_name(exec_path),
-            icon_path: icons::ensure_icon(&self.icon_cache_dir, &app).ok(),
+            icon_path,
         };
         self.exe_info_cache
             .lock()

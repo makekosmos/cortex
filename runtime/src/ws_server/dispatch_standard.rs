@@ -282,6 +282,7 @@ pub(super) async fn dispatch_standard(
         };
         result.unwrap_or_else(LocalResponse::err)
     } else {
+        let params = inject_usage_windows_dir(&operation, params);
         match ark_host.request(&operation, params).await {
             Ok(result) => LocalResponse {
                 ok: result.ok,
@@ -292,6 +293,51 @@ pub(super) async fn dispatch_standard(
         }
     };
     response
+}
+
+/// KOS-287: `get_usage_analytics` flags %SystemRoot% exes as system rows.
+/// The real system dir is OS knowledge — the engine resolves it via
+/// `GetSystemWindowsDirectoryW` (memoized) and passes it as a query param;
+/// ark-core must not guess host paths from the environment. When resolution
+/// fails we warn once and send no dir — nothing gets misclassified.
+fn inject_usage_windows_dir(operation: &str, mut params: serde_json::Value) -> serde_json::Value {
+    if operation != "get_usage_analytics" {
+        return params;
+    }
+    let Some(dir) = system_windows_dir() else {
+        return params;
+    };
+    if let Some(obj) = params.as_object_mut() {
+        obj.insert(
+            "windows_dir".to_string(),
+            serde_json::Value::String(dir.to_string()),
+        );
+    }
+    params
+}
+
+#[cfg(target_os = "windows")]
+fn system_windows_dir() -> Option<&'static str> {
+    use std::sync::OnceLock;
+    static DIR: OnceLock<Option<String>> = OnceLock::new();
+    DIR.get_or_init(|| {
+        use windows::Win32::System::SystemInformation::GetSystemWindowsDirectoryW;
+        let mut buf = [0u16; 260];
+        let len = unsafe { GetSystemWindowsDirectoryW(Some(&mut buf)) };
+        if len == 0 || len as usize >= buf.len() {
+            tracing::warn!(
+                "GetSystemWindowsDirectoryW failed — usage analytics will not flag system apps"
+            );
+            return None;
+        }
+        Some(String::from_utf16_lossy(&buf[..len as usize]))
+    })
+    .as_deref()
+}
+
+#[cfg(not(target_os = "windows"))]
+fn system_windows_dir() -> Option<&'static str> {
+    None
 }
 
 #[cfg(test)]
