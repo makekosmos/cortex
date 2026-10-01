@@ -301,3 +301,106 @@ async fn a11y_tree_matches_snapshot(cx: &mut TestAppContext) {
         );
     }
 }
+
+/// KOS-299: an installed `kind:"app"` .kspkg row in «Приложения» renders a
+/// named «Открыть» button — the same affordance native app rows expose.
+#[gpui::test]
+async fn app_package_row_exposes_open_button(cx: &mut TestAppContext) {
+    let (manager, cx) = launch(cx);
+    manager.update(cx, |app, _cx| {
+        app.view = crate::views::View::Packages;
+        app.store_tab = crate::views::StoreTab::Installed;
+        app.slots.insert(
+            "store.apps".into(),
+            crate::app::Slot::Ready(json!({ "apps": [] })),
+        );
+        app.slots.insert(
+            "store.installed".into(),
+            crate::app::Slot::Ready(json!({ "packages": [
+                {
+                    "id": "com.kosmos.arcadia",
+                    "name": "Arcadia",
+                    "version": "1.2.3",
+                    "kind": "app",
+                    "enabled": true,
+                    "catalog_sequence": 7,
+                },
+                {
+                    "id": "com.kosmos.sleepy",
+                    "name": "Sleepy",
+                    "version": "0.9.9",
+                    "kind": "app",
+                    "enabled": false,
+                    "catalog_sequence": 7,
+                },
+                {
+                    "id": "com.kosmos.bridge",
+                    "name": "Some Bridge",
+                    "version": "0.1.0",
+                    "kind": "bridge",
+                    "enabled": true,
+                    "catalog_sequence": 7,
+                },
+            ]})),
+        );
+    });
+    let tree = a11y_tree(cx);
+    let nodes = nodes(&tree);
+    let open_labels: Vec<String> = nodes
+        .iter()
+        .filter(|(role, _)| role == "Button")
+        .filter_map(|(_, n)| n["aria"]["label"].as_str().map(str::to_string))
+        .collect();
+    assert!(
+        open_labels.contains(&"Открыть Arcadia".to_string()),
+        "the app-kind package row must expose «Открыть Arcadia»; got {open_labels:?}"
+    );
+    assert!(
+        !open_labels.contains(&"Открыть Some Bridge".to_string()),
+        "a bridge-kind package row must not expose «Открыть»; got {open_labels:?}"
+    );
+
+    // A disabled package still renders «Открыть» — the control is disabled
+    // (`package_row` calls `.disabled(!enabled)`); the vendored test window
+    // does not surface the disabled flag, so presence is what we can prove.
+    assert!(
+        open_labels.contains(&"Открыть Sleepy".to_string()),
+        "a disabled app row must still render its «Открыть»; got {open_labels:?}"
+    );
+}
+
+/// KOS-299: «Открыть» dispatches `packages.open` into the `pkg.open` slot,
+/// and the typed Engine error surfaces as the Russian banner text.
+#[gpui::test]
+async fn package_open_dispatches_and_surfaces_errors(cx: &mut TestAppContext) {
+    let (manager, cx) = launch(cx);
+    manager.update(cx, |app, _cx| {
+        app.open_package("com.kosmos.arcadia".into(), "1.2.3".into());
+    });
+    manager.read_with(cx, |app, _| {
+        assert!(matches!(
+            app.slots.get("pkg.open"),
+            Some(crate::app::Slot::Loading)
+        ));
+    });
+    manager.update(cx, |app, _cx| {
+        app.open_reply(Err("Приложение отключено. Включите его в списке.".into()));
+    });
+    manager.read_with(cx, |app, _| {
+        assert_eq!(
+            app.error.as_deref(),
+            Some("Приложение отключено. Включите его в списке.")
+        );
+    });
+    // A lease payload without a launch URL is malformed — say so instead of
+    // opening nothing.
+    manager.update(cx, |app, _cx| {
+        app.open_reply(Ok(json!({})));
+    });
+    manager.read_with(cx, |app, _| {
+        assert_eq!(
+            app.error.as_deref(),
+            Some("Engine не вернул адрес приложения.")
+        );
+    });
+}

@@ -7,6 +7,7 @@
 //! Every row shows the product icon (manifest `icon` → `icon_path`,
 //! catalog `icon_url`) and the display name; the package id is the caption.
 use ::gpui::{prelude::*, *};
+use gpui_component::Disableable;
 use serde_json::{json, Value};
 
 use crate::app::ManagerApp;
@@ -202,19 +203,39 @@ fn package_row(p: &Value, cx: &mut Context<ManagerApp>) -> Div {
                 },
             )
             .accessibility_label(name.clone()),
-        )
-        .child(btn_id(&format!("un-{id}"), "Удалить", {
-            let pid = uid;
-            cx.listener(move |this, _, _, cx| {
-                this.ask_confirm(
-                    "Удалить пакет",
-                    format!("Пакет «{name}» будет удалён из Engine."),
-                    "packages.uninstall",
-                    json!({"package_id": pid}),
-                    cx,
-                );
-            })
-        }));
+        );
+    // App-kind rows get «Открыть» like native apps (KOS-299): packages.open
+    // mints the launch lease and the reply opens it in the system browser.
+    // A disabled package can never launch — disable the control rather than
+    // letting the click fail.
+    if is_app_package(p) {
+        let oid = id.clone();
+        let oversion = vstr(p, "version");
+        r = r.child(
+            btn_id(
+                &format!("open-{id}"),
+                "Открыть",
+                cx.listener(move |this, _, _, cx| {
+                    this.open_package(oid.clone(), oversion.clone());
+                    cx.notify();
+                }),
+            )
+            .disabled(!enabled)
+            .accessibility_label(format!("Открыть {name}")),
+        );
+    }
+    r = r.child(btn_id(&format!("un-{id}"), "Удалить", {
+        let pid = uid;
+        cx.listener(move |this, _, _, cx| {
+            this.ask_confirm(
+                "Удалить пакет",
+                format!("Пакет «{name}» будет удалён из Engine."),
+                "packages.uninstall",
+                json!({"package_id": pid}),
+                cx,
+            );
+        })
+    }));
     r
 }
 
