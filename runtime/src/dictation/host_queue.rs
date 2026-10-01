@@ -413,7 +413,8 @@ async fn process_one_attempt_with_injector(
 
 /// Auto-retry в фоне с расписанием `delays_sec`. Вызывается из spawn'нутой
 /// tokio-таски — не блокирует WS / pill. Останавливается на Success / Fatal
-/// / исчерпании расписания. На исчерпании pending остаётся на диске до gc.
+/// / исчерпании расписания. На исчерпании pending остаётся на диске для
+/// ручного retry из Settings → Очередь.
 async fn auto_retry_loop(
     host: Arc<DictationHost>,
     uuid: String,
@@ -480,9 +481,170 @@ async fn op_list_pending(host: &DictationHost) -> DictationResponse {
     DictationResponse::ok(json!({ "items": arr }))
 }
 
+async fn op_retry(params: Value, host: &Arc<DictationHost>) -> DictationResponse {
+    let uuid = match params.get("uuid").and_then(|v| v.as_str()) {
+        Some(s) => s.to_string(),
+        None => return DictationResponse::err("retry: missing 'uuid'"),
+    };
+    let items = match super::pending::list(&host.data_dir) {
+        Ok(v) => v,
+        Err(e) => return DictationResponse::err(format!("retry: list failed: {e}")),
+    };
+    let item = match items.iter().find(|i| i.uuid == uuid) {
+        Some(i) => i.clone(),
+        None => return DictationResponse::err(format!("retry: uuid '{uuid}' не найден")),
+    };
+    let cfg = host.snapshot_config().await;
+    let api_key = if provider_needs_api_key(&cfg) {
+        match config::get_api_key() {
+            Some(k) => k,
+            None => return DictationResponse::err("retry: API key не задан"),
+        }
+    } else {
+        String::new()
+    };
+    let host_clone = host.clone();
+    let uuid_for_task = uuid.clone();
+    let dur = item.duration_sec;
+    // Ручной retry: одна попытка + если retryable — повторное auto-retry-расписание.
+    tokio::spawn(async move {
+        match process_one_attempt(
+            &host_clone,
+            &uuid_for_task,
+            &api_key,
+            dur,
+            AttemptDelivery::Background,
+        )
+        .await
+        {
+            AttemptOutcome::Retryable => {
+                auto_retry_loop(
+                    host_clone,
+                    uuid_for_task,
+                    api_key,
+                    dur,
+                    &AUTO_RETRY_DELAYS_SEC,
+                )
+                .await;
+            }
+            AttemptOutcome::Success { .. }
+            | AttemptOutcome::Cancelled
+            | AttemptOutcome::DeliveryFailed { .. }
+            | AttemptOutcome::Fatal => {}
+        }
+    });
+    DictationResponse::ok(json!({ "uuid": uuid, "started": true }))
+}
+
+async fn op_discard(params: Value, host: &DictationHost) -> DictationResponse {
+    let uuid = match params.get("uuid").and_then(|v| v.as_str()) {
+        Some(s) => s,
+        None => return DictationResponse::err("discard: missing 'uuid'"),
+    };
+    if let Err(e) = super::pending::drop_item(&host.data_dir, uuid) {
+        return DictationResponse::err(format!("discard: {e}"));
+    }
+    host.emit_pending_changed();
+    // Если активная сессия — сбрасываем state.
+    let mut s = host.state.lock().await;
+    if s.active_uuid.as_deref() == Some(uuid) {
+        *s = HostState::idle();
+        let snap = s.clone();
+        drop(s);
+        host.emit_state(&snap).await;
+    }
+    DictationResponse::ok(json!({ "uuid": uuid, "discarded": true }))
+}
+
+async fn op_discard_all(host: &DictationHost) -> DictationResponse {
+    let items = match super::pending::list(&host.data_dir) {
+        Ok(v) => v,
+        Err(e) => return DictationResponse::err(format!("discard_all: list: {e}")),
+    };
+    let active_uuid = {
+        let s = host.state.lock().await;
+        s.active_uuid.clone()
+    };
+    let mut discarded = 0usize;
+    let mut active_discarded = false;
+
+    for item in items {
+        if let Err(e) = super::pending::drop_item(&host.data_dir, &item.uuid) {
+            return DictationResponse::err(format!("discard_all: {}: {e}", item.uuid));
+        }
+        if active_uuid.as_deref() == Some(item.uuid.as_str()) {
+            active_discarded = true;
+        }
+        discarded += 1;
+    }
+
+    host.emit_pending_changed();
+    if active_discarded {
+        let mut s = host.state.lock().await;
+        *s = HostState::idle();
+        let snap = s.clone();
+        drop(s);
+        host.emit_state(&snap).await;
+    }
+    DictationResponse::ok(json!({ "discarded": discarded }))
+}
+
+async fn op_retry_all(host: &Arc<DictationHost>) -> DictationResponse {
+    let items = match super::pending::list(&host.data_dir) {
+        Ok(v) => v,
+        Err(e) => return DictationResponse::err(format!("retry_all: list: {e}")),
+    };
+    let cfg = host.snapshot_config().await;
+    let api_key = if provider_needs_api_key(&cfg) {
+        match config::get_api_key() {
+            Some(k) => k,
+            None => return DictationResponse::err("retry_all: API key не задан"),
+        }
+    } else {
+        String::new()
+    };
+    let count = items.len();
+    for item in items {
+        let host_clone = host.clone();
+        let uuid = item.uuid.clone();
+        let dur = item.duration_sec;
+        let api_key_clone = api_key.clone();
+        tokio::spawn(async move {
+            if matches!(
+                process_one_attempt(
+                    &host_clone,
+                    &uuid,
+                    &api_key_clone,
+                    dur,
+                    AttemptDelivery::Background,
+                )
+                .await,
+                AttemptOutcome::Retryable
+            ) {
+                auto_retry_loop(host_clone, uuid, api_key_clone, dur, &AUTO_RETRY_DELAYS_SEC).await;
+            }
+        });
+    }
+    DictationResponse::ok(json!({ "started": count }))
+}
+
 async fn op_get_stats(host: &DictationHost) -> DictationResponse {
     let s = host.stats.lock().await;
     DictationResponse::ok(stats_to_value(&s))
+}
+
+async fn op_reset_stats(host: &DictationHost) -> DictationResponse {
+    let mut s = host.stats.lock().await;
+    *s = DictationStats::default();
+    if let Err(e) = save_stats_in(&host.data_dir, &s) {
+        return DictationResponse::err(format!("reset_stats: save failed: {e}"));
+    }
+    let snap = stats_to_value(&s);
+    drop(s);
+    let _ = host
+        .events_tx
+        .send(json!({ "event": "dictation_stats_changed" }));
+    DictationResponse::ok(snap)
 }
 
 async fn op_begin_hotkey_capture(host: &DictationHost) -> DictationResponse {
