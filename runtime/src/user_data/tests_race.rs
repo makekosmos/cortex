@@ -13,9 +13,7 @@
         fs::write(parent.join("secret.bin"), b"inside").unwrap();
         fs::write(outside.path().join("secret.bin"), b"outside").unwrap();
         fs::rename(&parent, &moved).unwrap();
-        if !link_dir(outside.path(), &parent) {
-            return;
-        }
+        crate::test_links::link_dir(outside.path(), &parent).expect("junction");
         let key = "attachments/secret.bin";
         assert_eq!(roots.read(&id, APP, key), Err(UserDataError::Io));
         assert_eq!(roots.stat(&id, APP, key), Err(UserDataError::Io));
@@ -46,9 +44,7 @@
         fs::create_dir_all(outside.path().join(APP)).unwrap();
         fs::write(outside.path().join(APP).join("task.bin"), b"outside").unwrap();
         fs::rename(&target, &held).unwrap();
-        if !link_dir(outside.path(), &target) {
-            return;
-        }
+        crate::test_links::link_dir(outside.path(), &target).expect("junction");
         assert_eq!(roots.read(&id, APP, "task.bin"), Err(UserDataError::Io));
         assert_eq!(roots.stat(&id, APP, "task.bin"), Err(UserDataError::Io));
         assert_eq!(roots.delete(&id, APP, "task.bin"), Err(UserDataError::Io));
@@ -74,9 +70,7 @@
         roots.write(&id, APP, "task.bin", b"inside").unwrap();
         fs::write(outside.path().join("task.bin"), b"outside").unwrap();
         fs::rename(&app, &held).unwrap();
-        if !link_dir(outside.path(), &app) {
-            return;
-        }
+        crate::test_links::link_dir(outside.path(), &app).expect("junction");
         assert_eq!(roots.read(&id, APP, "task.bin"), Err(UserDataError::Io));
         assert_eq!(roots.stat(&id, APP, "task.bin"), Err(UserDataError::Io));
         assert_eq!(roots.delete(&id, APP, "task.bin"), Err(UserDataError::Io));
@@ -92,8 +86,11 @@
         let _ = fs::remove_dir(&app);
     }
 
-    /// A symlinked target file is never followed: reads and stats fail, and
-    /// delete refuses rather than unlinking through the link.
+    /// A linked leaf is never followed: reads and stats fail, and delete
+    /// refuses rather than unlinking through the link. unix builds a file
+    /// symlink; Windows cannot create one without SeCreateSymbolicLinkPrivilege,
+    /// so it builds a junctioned directory leaf — the same "leaf is a reparse
+    /// point" production check.
     #[test]
     fn linked_target_file_is_never_read_written_or_deleted() {
         let (dir, roots, id) = roots();
@@ -103,9 +100,10 @@
         let app = app_dir(dir.path());
         fs::create_dir_all(&app).unwrap();
         let link = app.join("linked.bin");
-        if !link_file(&secret, &link) {
-            return;
-        }
+        #[cfg(unix)]
+        crate::test_links::link_file(&secret, &link).expect("file symlink");
+        #[cfg(windows)]
+        crate::test_links::link_dir(outside.path(), &link).expect("junction leaf");
         assert_eq!(roots.read(&id, APP, "linked.bin"), Err(UserDataError::Io));
         assert_eq!(roots.stat(&id, APP, "linked.bin"), Err(UserDataError::Io));
         assert_eq!(roots.delete(&id, APP, "linked.bin"), Err(UserDataError::Io));

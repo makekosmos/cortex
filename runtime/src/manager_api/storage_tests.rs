@@ -121,14 +121,7 @@ fn storage_breakdown_does_not_descend_into_symlinks() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     put(root, "real/payload.bin", 64);
-    #[cfg(windows)]
-    let linked = std::os::windows::fs::symlink_dir(root.join("real"), root.join("link"));
-    #[cfg(not(windows))]
-    let linked = std::os::unix::fs::symlink(root.join("real"), root.join("link"));
-    let Ok(()) = linked else {
-        eprintln!("skipping: symlink privilege unavailable on this machine");
-        return;
-    };
+    crate::test_links::link_dir(&root.join("real"), &root.join("link")).expect("junction");
     let breakdown = storage_breakdown(root, &root.join("packages"));
     let other = bytes_of(&breakdown, "other");
     assert_eq!(

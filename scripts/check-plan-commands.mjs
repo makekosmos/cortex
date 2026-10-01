@@ -10,6 +10,7 @@ const requireFromRoot = createRequire(new URL("../package.json", import.meta.url
 const COMMANDS_BY_CHECK = {
   fast: ["pnpm", ["run", "check:fast"]],
   "core-pin": ["pnpm", ["run", "check:core-pin"]],
+  "test-skips": ["pnpm", ["run", "check:test-skips"]],
   "package-manager": ["pnpm", ["run", "test:package-manager"]],
   "release-bom": ["pnpm", ["run", "test:release-bom"]],
   "desktop-contracts": ["pnpm", ["run", "test:desktop-contracts"]],
@@ -46,6 +47,10 @@ function commandsFor(plan) {
   // The brand-rename gate is a fast git-grep scan; a stray legacy name can
   // appear in any file, so it runs on every hook invocation.
   commands.push({ name: "brand", command: "pnpm", args: ["run", "check:brand"] });
+  // Same always-on scan as brand: a reintroduced test-skip pattern can hide
+  // in any .rs file, so the lint runs on every hook invocation (KOS-282).
+  if (!plan.checks.includes("test-skips"))
+    commands.push({ name: "test-skips", command: "pnpm", args: ["run", "check:test-skips"] });
   if (plan.mode === "pre-commit")
     commands.push({ name: "source-size", command: "pnpm", args: ["run", "check:source-size"] });
   const files = plan.changed.filter((path) => SOURCE_EXTENSIONS.test(path));

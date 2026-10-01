@@ -547,7 +547,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "diagnostic probe: needs live internet access to public DoH providers and prints a report instead of asserting"]
     async fn integration_dns_providers_matrix() {
         // Матрица DoH провайдеров — посмотреть кто реально пускает к Groq
         // из текущей сети. NOT run in CI (требует internet + время).
@@ -593,7 +593,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "diagnostic probe: needs live internet access to public DoH providers and prints a report instead of asserting"]
     async fn integration_dns_resolve_matrix() {
         // Изолируем DNS-резолв (без HTTPS к Groq). Покажет где валится:
         // на DoH connect или дальше.
@@ -656,7 +656,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore]
+    #[ignore = "needs live internet access to dns.malw.link and api.groq.com"]
     async fn integration_user_provided_doh_malwlink() {
         // Конкретно проверяем https://dns.malw.link/dns-query — юзер просил.
         let (ok, msg) = try_doh("malw.link", "https://dns.malw.link/dns-query").await;

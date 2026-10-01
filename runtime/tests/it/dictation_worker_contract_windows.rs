@@ -163,12 +163,16 @@ fn install_candidate(
     (store, installed)
 }
 
+// The gate builds the generic worker fixture, not a dictation worker — this
+// contract test needs MUNDUS_DICTATION_WORKER_EXE pointing at a reviewed
+// dictation worker build, so it runs only when explicitly invoked.
 #[tokio::test]
+#[ignore = "requires MUNDUS_DICTATION_WORKER_EXE pointing at a reviewed dictation worker build"]
 async fn compiled_dictation_worker_round_trips_engine_capabilities() {
-    let Some(worker) = std::env::var_os("MUNDUS_DICTATION_WORKER_EXE").map(PathBuf::from) else {
-        eprintln!("NOT_RUN: set MUNDUS_DICTATION_WORKER_EXE to a reviewed candidate");
-        return;
-    };
+    let worker = PathBuf::from(
+        std::env::var_os("MUNDUS_DICTATION_WORKER_EXE")
+            .expect("MUNDUS_DICTATION_WORKER_EXE must name a reviewed worker candidate"),
+    );
     assert!(worker.is_file(), "worker candidate missing: {worker:?}");
     // Worker launches share process-wide failure hooks with other test modules.
     let _serialized = engine::package_worker_process::test_support::serialized();

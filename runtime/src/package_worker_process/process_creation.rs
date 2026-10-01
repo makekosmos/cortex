@@ -146,10 +146,7 @@ fn create_process_suspended(
                 None,
                 true,
                 windows::Win32::System::Threading::PROCESS_CREATION_FLAGS(
-                    CREATE_SUSPENDED
-                        | CREATE_NO_WINDOW
-                        | CREATE_UNICODE_ENVIRONMENT
-                        | EXTENDED_STARTUPINFO_PRESENT,
+                    worker_creation_flags(),
                 ),
                 Some(env.as_ptr() as *const _),
                 PCWSTR(current_dir.as_ptr()),
@@ -175,6 +172,15 @@ fn create_process_suspended(
     owner_state.thread = Some(OwnedHandle(pi.hThread));
     owner_state.state = OwnerState::Created;
     Ok(())
+}
+
+/// The exact flag set CreateProcessW receives. EXTENDED_STARTUPINFO_PRESENT
+/// is mandatory whenever a STARTUPINFOEXW attribute list is passed — without
+/// it the handle allowlist is silently ignored — and CREATE_SUSPENDED keeps
+/// the child frozen until the job containment is installed.
+#[cfg(windows)]
+fn worker_creation_flags() -> u32 {
+    CREATE_SUSPENDED | CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT | EXTENDED_STARTUPINFO_PRESENT
 }
 
 #[cfg(any(test, windows))]
