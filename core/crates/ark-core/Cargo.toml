@@ -10,6 +10,9 @@ autobins = false
 [lib]
 name = "ark_core"
 path = "src/lib.rs"
+# No doc-tests in the workspace; disabling them removes an empty
+# `cargo test --doc` pass from the gate (KOS-291).
+doctest = false
 
 
 [dependencies]

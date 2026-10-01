@@ -128,11 +128,14 @@
     async fn stopping_worker_does_not_kill_unrelated_process() {
         let _test_lock = windows_worker_test_lock();
         use std::process::Command as StdCommand;
-        let comspec = std::env::var_os("COMSPEC").expect("COMSPEC");
-        let mut unrelated = StdCommand::new(&comspec)
-            .args(["/c", "ping", "127.0.0.1", "-n", "5"])
+        // Spawn ping directly, not via `cmd /c`: killing cmd would orphan the
+        // grandchild ping.exe, which then keeps the inherited stdio pipe open
+        // and fails nextest's leaked-handle check (KOS-291).
+        let mut unrelated = StdCommand::new("ping")
+            .args(["127.0.0.1", "-n", "5"])
             .spawn()
             .expect("unrelated child");
+        let comspec = std::env::var_os("COMSPEC").expect("COMSPEC");
         let mut worker = WorkerProcess::launch_with_owner(&comspec, LaunchCleanupOwner::new())
             .await
             .expect("worker child");

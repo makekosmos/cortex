@@ -66,9 +66,9 @@ if (nextest.status !== 0) {
 const workspace = process.argv[2] === "--workspace";
 if (workspace) {
   // One compilation of each crate serves lib, bin and `it` tests. nextest does
-  // not run doc-tests, so they get their own pass.
+  // not run doc-tests; the workspace has none, so lib targets set
+  // `doctest = false` instead of paying for an empty pass here (KOS-291).
   run(cortex, ["nextest", "run", "--workspace", ...GATE_FEATURES]);
-  run(cortex, ["test", "--doc", "--workspace", ...GATE_FEATURES]);
 } else {
   run(cortex, [
     "nextest",

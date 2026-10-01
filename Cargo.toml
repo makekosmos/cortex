@@ -19,8 +19,9 @@ debug = "line-tables-only"
 [profile.dev.package."*"]
 debug = false
 
-[profile.test]
-debug = 0
+# No [profile.test] override: the test profile inherits dev. A different
+# debuginfo setting here made the gate compile the engine rlib twice per run —
+# once in dev for the fixture bins, once in test for nextest (KOS-291).
 
 [workspace.package]
 edition = "2021"

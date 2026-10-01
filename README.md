@@ -168,5 +168,5 @@ the machine; `--full` still runs everything at commit time.
 The Rust gate runs every workspace library, integration and Cortex binary test
 through [cargo-nextest](https://nexte.st) (`cargo install cargo-nextest
 --locked`; the required version is pinned in `.config/nextest.toml`), one
-process per test, followed by the doc-tests. Elevated Windows service entrypoints are compiled by Clippy but
+process per test. Doc-tests are disabled on the library targets (`doctest = false` in each crate's manifest): the workspace has none, so the gate does not run an empty `cargo test --doc` pass. Elevated Windows service entrypoints are compiled by Clippy but
 not executed by unprivileged hooks; their logic is covered through library tests.
