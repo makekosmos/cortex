@@ -5,12 +5,17 @@
 //! Job Object before returning the child to its caller.
 
 use std::io;
-#[cfg(windows)]
-use std::path::PathBuf;
 use std::process::ExitStatus;
 use std::time::Duration;
 
 use tokio::process::{Child, Command};
+
+#[cfg(windows)]
+pub(super) mod win32;
+#[cfg(windows)]
+mod windows_program;
+#[cfg(all(test, windows))]
+mod windows_program_tests;
 
 /// An app-server child together with the OS primitive that contains its tree.
 pub struct ProcessTree {
@@ -18,13 +23,38 @@ pub struct ProcessTree {
     #[cfg(unix)]
     process_group: i32,
     #[cfg(windows)]
-    job: JobHandle,
+    job: win32::JobHandle,
 }
 
 impl ProcessTree {
     /// Spawn a command with process-tree containment installed.
-    pub async fn spawn(command: &mut Command) -> io::Result<Self> {
-        configure_command(command)?;
+    ///
+    /// `creation_flags` are the Windows process-creation flags the caller wants
+    /// on the child (e.g. `CREATE_NO_WINDOW`); `ProcessTree` ORs its own
+    /// `CREATE_SUSPENDED` into them — `Command` offers no flag getter, so the
+    /// caller's flags travel through this parameter instead of being silently
+    /// overwritten. On Unix the value is ignored: a process group provides the
+    /// same containment without it.
+    ///
+    /// A bare program name on Windows resolves only `<name>.exe`; pass the
+    /// command through [`resolve_command`] first when it may be a `.cmd`/`.bat`
+    /// shim (as npm installs one for `codex`).
+    pub async fn spawn(command: &mut Command, creation_flags: u32) -> io::Result<Self> {
+        command.kill_on_drop(true);
+
+        #[cfg(unix)]
+        {
+            let _ = creation_flags;
+            command.process_group(0);
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            command
+                .as_std_mut()
+                .creation_flags(win32::CREATE_SUSPENDED | creation_flags);
+        }
+
         let mut child = command.spawn()?;
         let pid = match child.id() {
             Some(pid) => pid,
@@ -55,28 +85,18 @@ impl ProcessTree {
 
         #[cfg(windows)]
         {
-            use tokio::io::AsyncWriteExt;
-
-            let job = match JobHandle::for_process(pid) {
+            // The child is still suspended, so the job must be in place before
+            // its first thread runs — after that point a grandchild could
+            // escape the tree.
+            let job = match win32::JobHandle::for_process(pid) {
                 Ok(job) => job,
                 Err(error) => {
-                    let _ = child.kill().await;
-                    let _ = child.wait().await;
+                    reap_failed_spawn(&mut child).await;
                     return Err(error);
                 }
             };
-            if let Err(error) = async {
-                let stdin = child
-                    .stdin
-                    .as_mut()
-                    .ok_or_else(|| io::Error::other("gated process has no stdin"))?;
-                stdin.write_all(b"\n").await?;
-                stdin.flush().await
-            }
-            .await
-            {
-                drop(job);
-                let _ = child.wait().await;
+            if let Err(error) = win32::resume_primary_thread(pid) {
+                reap_failed_spawn(&mut child).await;
                 return Err(error);
             }
             Ok(Self { child, job })
@@ -140,63 +160,35 @@ impl Drop for ProcessTree {
     }
 }
 
+/// Resolve `command`'s program the way its spawned environment will see it.
+///
+/// Windows `Command` only searches PATH for `<name>.exe`, so an npm shim like
+/// `codex.cmd` would never spawn — and the PowerShell gate this replaced is
+/// gone. This resolves a bare name over the command's `PATH` × `PATHEXT`
+/// (explicit paths pass through) and returns the command to spawn. A resolved
+/// `.cmd`/`.bat` is rebuilt around `cmd.exe /d /s /c` with arguments escaped
+/// against both cmd parse passes.
+///
+/// The returned command may be rebuilt around the resolved path, so only
+/// program, args, env and current_dir carry over: set stdio *after* this call
+/// and pass creation flags to [`ProcessTree::spawn`], not `CommandExt`.
+/// `raw_arg` arguments and `env_clear` are not observable on a built `Command`
+/// and are not preserved.
+#[cfg(windows)]
+pub fn resolve_command(command: Command) -> io::Result<Command> {
+    windows_program::resolve_command(command)
+}
+
+/// Non-Windows builds keep the command as given — `Command` resolves bare
+/// names through `PATH` execvp-style on its own.
+#[cfg(not(windows))]
+pub fn resolve_command(command: Command) -> io::Result<Command> {
+    Ok(command)
+}
+
 async fn reap_failed_spawn(child: &mut Child) {
     let _ = child.kill().await;
     let _ = child.wait().await;
-}
-
-fn configure_command(command: &mut Command) -> io::Result<()> {
-    #[cfg(windows)]
-    gate_windows_command(command)?;
-
-    command.kill_on_drop(true);
-
-    #[cfg(unix)]
-    {
-        command.process_group(0);
-    }
-    Ok(())
-}
-
-#[cfg(windows)]
-fn gate_windows_command(command: &mut Command) -> io::Result<()> {
-    use base64::Engine;
-
-    let source = command.as_std();
-    let spec = serde_json::json!({
-        "program": source.get_program().to_string_lossy(),
-        "args": source.get_args().map(|arg| arg.to_string_lossy()).collect::<Vec<_>>(),
-    });
-    let encoded = base64::engine::general_purpose::STANDARD.encode(spec.to_string());
-    let script = format!(
-        "$gateStream=[Console]::OpenStandardInput();$null=$gateStream.ReadByte();\
-         $spec=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{encoded}'))|ConvertFrom-Json;\
-         & $spec.program @($spec.args);exit $LASTEXITCODE"
-    );
-    let current_dir = source.get_current_dir().map(PathBuf::from);
-    let environment = source
-        .get_envs()
-        .map(|(name, value)| (name.to_os_string(), value.map(|value| value.to_os_string())))
-        .collect::<Vec<_>>();
-
-    let mut gated = Command::new("powershell.exe");
-    gated
-        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null());
-    if let Some(current_dir) = current_dir {
-        gated.current_dir(current_dir);
-    }
-    for (name, value) in environment {
-        if let Some(value) = value {
-            gated.env(name, value);
-        } else {
-            gated.env_remove(name);
-        }
-    }
-    *command = gated;
-    Ok(())
 }
 
 #[cfg(unix)]
@@ -211,66 +203,5 @@ fn terminate_process_group(process_group: i32) -> io::Result<()> {
         Ok(())
     } else {
         Err(error)
-    }
-}
-
-#[cfg(windows)]
-struct JobHandle(windows::Win32::Foundation::HANDLE);
-
-#[cfg(windows)]
-unsafe impl Send for JobHandle {}
-
-#[cfg(windows)]
-impl JobHandle {
-    fn raw(&self) -> windows::Win32::Foundation::HANDLE {
-        self.0
-    }
-
-    fn for_process(pid: u32) -> io::Result<Self> {
-        use std::mem::size_of;
-        use windows::Win32::System::JobObjects::{
-            AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
-            SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
-            JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
-        };
-        use windows::Win32::System::Threading::{
-            OpenProcess, PROCESS_SET_QUOTA, PROCESS_TERMINATE,
-        };
-
-        let job = unsafe { CreateJobObjectW(None, None) }
-            .map_err(|error| io::Error::other(error.to_string()))?;
-        let job = Self(job);
-        let mut limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
-        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-        unsafe {
-            SetInformationJobObject(
-                job.raw(),
-                JobObjectExtendedLimitInformation,
-                (&mut limits as *mut _) as *const _,
-                size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
-            )
-        }
-        .map_err(|error| io::Error::other(error.to_string()))?;
-
-        let process = unsafe { OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, false, pid) }
-            .map_err(|error| io::Error::other(error.to_string()))?;
-        if process.is_invalid() {
-            return Err(io::Error::last_os_error());
-        }
-        let assigned = unsafe { AssignProcessToJobObject(job.raw(), process) };
-        unsafe {
-            let _ = windows::Win32::Foundation::CloseHandle(process);
-        }
-        assigned.map_err(|error| io::Error::other(error.to_string()))?;
-        Ok(job)
-    }
-}
-
-#[cfg(windows)]
-impl Drop for JobHandle {
-    fn drop(&mut self) {
-        unsafe {
-            let _ = windows::Win32::Foundation::CloseHandle(self.0);
-        }
     }
 }
