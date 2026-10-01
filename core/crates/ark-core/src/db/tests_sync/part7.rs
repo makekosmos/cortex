@@ -49,6 +49,11 @@
         client: &Connection,
         claims: bool,
     ) -> usize {
+        // Claims snapshot BEFORE the stream, exactly like the fixed send
+        // path: anything appended mid-pull is excluded from both the data
+        // and the completeness claim.
+        let through =
+            claims.then(|| usage_log_complete_through(server, server_device).unwrap());
         let remote = stored_vector(client);
         let mut offset = 0;
         let mut applied = 0;
@@ -74,8 +79,7 @@
                 applied += usize::from(is_usage);
             }
         }
-        if claims {
-            let through = usage_log_complete_through(server, server_device).unwrap();
+        if let Some(through) = through {
             let mut vector = stored_vector(client);
             crate::protocol::apply_usage_complete_through(&mut vector, &through);
             save_stored_vector(client, &vector);
@@ -107,13 +111,13 @@
             record_usage_sequence(&conn, "usage_session", id, "dev-a", seq, &hlc(seq), false)
                 .unwrap();
         }
-        let deleted = compact_usage_sync_log(&conn, "2026-09-01T00:00:00.000Z", 1_000).unwrap();
+        let deleted = compact_usage_sync_log(&conn, "dev-a", "2026-09-01T00:00:00.000Z", 1_000).unwrap();
         assert_eq!(deleted, 3, "fixture must compact refs 1, 2 and 3");
         conn
     }
 
     #[test]
-    fn compaction_never_deletes_above_own_contiguous_cursor() {
+    fn compaction_never_deletes_above_foreign_contiguous_cursor() {
         // Relay safety: refs whose seq is above our contiguous coverage of
         // that origin are gaps we cannot vouch for — superseded or not,
         // they stay.
@@ -144,7 +148,7 @@
         });
 
         let deleted =
-            compact_usage_sync_log(&conn, "2026-09-01T00:00:00.000Z", 1_000).unwrap();
+            compact_usage_sync_log(&conn, "dev-a", "2026-09-01T00:00:00.000Z", 1_000).unwrap();
         assert_eq!(deleted, 1);
         assert_eq!(
             usage_log_refs(&conn)
@@ -258,7 +262,7 @@
         )
         .unwrap();
         assert_eq!(
-            compact_usage_sync_log(&relay_b, "2026-09-01T00:00:00.000Z", 1_000).unwrap(),
+            compact_usage_sync_log(&relay_b, "dev-b", "2026-09-01T00:00:00.000Z", 1_000).unwrap(),
             1
         );
 
@@ -290,4 +294,89 @@
         );
         // Re-served tail: today's cost for an old peer.
         assert_eq!(pull_usage(&server, "dev-a", &client, false), 3);
+    }
+
+    #[test]
+    fn own_refs_compact_by_journal_head_when_cursor_is_frozen() {
+        // KOS-302 review round 2: own-device refs must be bounded by the
+        // journal head, not the version-vector cursor — a wiped/reset
+        // sync_kv (clear_all, corruption) can freeze `@usage:<own>` while
+        // own seqs keep advancing past it, pinning every own ref forever.
+        let conn = setup_db();
+        upsert_tracked_app(&conn, &make_tracked_app("app-1")).unwrap();
+        upsert_usage_session(&conn, &make_usage_session("s-1", "app-1")).unwrap();
+        let hlc = |seq: u64| format!("2026-08-01T00:00:{seq:02}.000Z:{seq:06}:dev");
+        for seq in 1..=3 {
+            record_usage_sequence(&conn, "usage_session", "s-1", "dev", seq, &hlc(seq), false)
+                .unwrap();
+        }
+        // Freeze the own cursor: the vector forgets it, the head stays 3.
+        let mut vector = stored_vector(&conn);
+        vector.remove("@usage:dev");
+        save_stored_vector(&conn, &vector);
+
+        let deleted =
+            compact_usage_sync_log(&conn, "dev", "2026-09-01T00:00:00.000Z", 100).unwrap();
+        assert_eq!(deleted, 2, "own head bounds superseded own refs");
+        assert_eq!(usage_log_refs(&conn).len(), 1, "the newest ref stays");
+    }
+
+    #[test]
+    fn complete_through_snapshot_excludes_mid_stream_appends() {
+        // KOS-302 review round 2: the claim map is snapshotted BEFORE the
+        // first page is produced. An entry appended mid-stream must not be
+        // covered by it — otherwise the receiver's cursor jumps past a seq
+        // it never received.
+        let server = compacted_usage_server(); // surviving refs {4,5,6}, head 6
+        let client = setup_db();
+        upsert_tracked_app(&client, &make_tracked_app("app-1")).unwrap();
+
+        let through = usage_log_complete_through(&server, "dev-a").unwrap();
+        assert_eq!(through["dev-a"], 6);
+
+        let remote = stored_vector(&client);
+        let mut offset = 0;
+        let mut appended = false;
+        loop {
+            let entities = SqliteStorageBackend::collect_entities_page_blocking(
+                &server, &remote, "dev-a", offset, 3,
+            );
+            if entities.is_empty() {
+                break;
+            }
+            offset += entities.len();
+            for entity in entities {
+                SqliteStorageBackend::apply_entity_blocking(&client, &entity).unwrap();
+            }
+            if !appended {
+                appended = true;
+                // Lands between the snapshot and the stream's end: seq 7
+                // exists on the server but is not covered by the claim.
+                upsert_usage_session(&server, &make_usage_session("s-4", "app-1")).unwrap();
+                record_usage_sequence(
+                    &server,
+                    "usage_session",
+                    "s-4",
+                    "dev-a",
+                    7,
+                    "2026-10-01T00:00:07.000Z:000007:dev-a",
+                    false,
+                )
+                .unwrap();
+            }
+        }
+
+        let mut vector = stored_vector(&client);
+        crate::protocol::apply_usage_complete_through(&mut vector, &through);
+        save_stored_vector(&client, &vector);
+        assert_eq!(
+            usage_cursor(&client, "dev-a"),
+            6,
+            "the claim must not pass the mid-stream seq"
+        );
+
+        // The entry is delivered on the next pull and the cursor advances
+        // past it via the new claim.
+        assert!(pull_usage(&server, "dev-a", &client, true) >= 1);
+        assert_eq!(usage_cursor(&client, "dev-a"), 7);
     }

@@ -30,11 +30,15 @@
 //      through the surviving ref;
 //   2) the ref's hlc wall time is older than `USAGE_SYNC_LOG_RETENTION_DAYS`
 //      — peers that sync more often than the horizon never see a gap;
-//   3) the ref's seq is within our own contiguous coverage for that origin
-//      device (`@usage:<device>` in the version vector). We may only delete
-//      refs we can vouch for: a ref above our contiguous cursor is one we
-//      never received completely ourselves, so deleting it would leave a
-//      relay serving claims it cannot prove.
+//   3) the ref's seq is within what we can serve completely for that
+//      origin device — the exact bound `usage_log_complete_through`
+//      advertises on the wire: our log head for our own device (own seqs
+//      are allocated contiguously, so the journal is complete through the
+//      head by construction, and this bound never depends on the version
+//      vector surviving intact), our contiguous `@usage:<device>` cursor
+//      for foreign origins. A ref above that bound is one we cannot vouch
+//      for — deleting it would leave a relay serving claims it cannot
+//      prove.
 //   The newest ref per entity is NEVER deleted: it is the only carrier to
 //   peers that have not seen the entity ("unsynced rows are never dropped").
 //   Refs to deleted/missing entity rows are never superseded by a newer ref,
@@ -68,16 +72,26 @@ fn usage_cursors(conn: &Connection) -> Result<Vec<(String, i64)>, String> {
     Ok(cursors)
 }
 
-/// Delete one batch of superseded refs. `cutoff_wall_time` is the ISO-8601
-/// hlc wall-time prefix (24 chars) bounding which refs are old enough.
-/// Returns the number of deleted rows; the caller repeats while the result
-/// equals `batch_limit`.
+/// Delete one batch of superseded refs. `own_device_id` identifies refs we
+/// authored locally — their bound is the log head, not the version-vector
+/// cursor (a wiped/reset `sync_kv` can freeze the cursor while the head
+/// keeps advancing, which would pin every own ref above it forever).
+/// `cutoff_wall_time` is the ISO-8601 hlc wall-time prefix (24 chars)
+/// bounding which refs are old enough. Returns the number of deleted rows;
+/// the caller repeats while the result equals `batch_limit`.
 pub fn compact_usage_sync_log(
     conn: &Connection,
+    own_device_id: &str,
     cutoff_wall_time: &str,
     batch_limit: i64,
 ) -> Result<usize, String> {
-    let cursors = usage_cursors(conn)?;
+    // The deletion bound is exactly the completeness claim we send peers:
+    // one definition, shared with `usage_complete_through` on the wire.
+    let mut bounds: Vec<(String, i64)> = usage_log_complete_through(conn, own_device_id)?
+        .into_iter()
+        .map(|(device_id, seq)| (device_id, seq as i64))
+        .collect();
+    bounds.sort_unstable();
     let mut sql = String::from(
         "DELETE FROM usage_sync_log
          WHERE (device_id, seq) IN (
@@ -88,10 +102,10 @@ pub fn compact_usage_sync_log(
     );
     let mut values = Vec::<rusqlite::types::Value>::new();
     values.push(cutoff_wall_time.to_string().into());
-    for (device_id, cursor) in &cursors {
+    for (device_id, bound) in &bounds {
         sql.push_str("WHEN ? THEN ? ");
         values.push(device_id.clone().into());
-        values.push((*cursor).into());
+        values.push((*bound).into());
     }
     sql.push_str(
         "ELSE 0 END

@@ -63,13 +63,29 @@ async fn write_last_run(ark: &ArkHost) {
         .await;
 }
 
+/// The device id our usage writes are stamped with (the tracker's stable
+/// id, falling back to ark_host's env-scoped id when the tracker has not
+/// run yet). ark-core needs it to bound own-device refs by the journal
+/// head rather than a version-vector cursor that a sync_kv reset could
+/// freeze.
+async fn own_usage_device_id(ark: &ArkHost) -> String {
+    let tracked = ark
+        .request("get_sync_kv", json!({ "key": "usage_tracker.device_id" }))
+        .await
+        .ok()
+        .and_then(|resp| resp.data.as_str().map(|s| s.trim().to_string()))
+        .filter(|id| !id.is_empty());
+    tracked.unwrap_or_else(crate::ark_host::stable_device_id)
+}
+
 async fn compact_usage_sync_log(ark: &ArkHost) -> Result<u64, String> {
+    let device_id = own_usage_device_id(ark).await;
     let mut total = 0_u64;
     for _ in 0..COMPACT_MAX_BATCHES {
         let resp = ark
             .request(
                 "compact_usage_sync_log",
-                json!({ "batch_limit": COMPACT_BATCH_LIMIT }),
+                json!({ "batch_limit": COMPACT_BATCH_LIMIT, "device_id": device_id }),
             )
             .await
             .map_err(|e| e.to_string())?;

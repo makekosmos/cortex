@@ -64,7 +64,8 @@ pub(crate) async fn handle_request(
         Request::CompactUsageSyncLog {
             older_than_days,
             batch_limit,
-        } => usage::compact_usage_sync_log(state, older_than_days, batch_limit).await,
+            device_id,
+        } => usage::compact_usage_sync_log(state, older_than_days, batch_limit, device_id).await,
         Request::GetUsageGamePlaytimeSummary {
             bindings,
             range_start,

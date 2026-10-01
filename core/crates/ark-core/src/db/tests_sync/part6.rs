@@ -76,7 +76,7 @@
         record_usage_sequence(&conn, "usage_session", "s-del", "dev", 9, &old(9, 9), true).unwrap();
 
         let deleted =
-            compact_usage_sync_log(&conn, "2026-09-01T00:00:00.000Z", 1_000).unwrap();
+            compact_usage_sync_log(&conn, "dev", "2026-09-01T00:00:00.000Z", 1_000).unwrap();
         assert_eq!(deleted, 3);
         assert_eq!(
             usage_log_refs(&conn),
@@ -91,7 +91,7 @@
         );
         // Second pass is a no-op: nothing left to compact.
         assert_eq!(
-            compact_usage_sync_log(&conn, "2026-09-01T00:00:00.000Z", 1_000).unwrap(),
+            compact_usage_sync_log(&conn, "dev", "2026-09-01T00:00:00.000Z", 1_000).unwrap(),
             0
         );
     }
@@ -112,10 +112,10 @@
             )
             .unwrap();
         }
-        let deleted = compact_usage_sync_log(&conn, "2026-09-01T00:00:00.000Z", 2).unwrap();
+        let deleted = compact_usage_sync_log(&conn, "dev", "2026-09-01T00:00:00.000Z", 2).unwrap();
         assert_eq!(deleted, 2);
         assert_eq!(usage_log_refs(&conn).len(), 3);
-        while compact_usage_sync_log(&conn, "2026-09-01T00:00:00.000Z", 2).unwrap() > 0 {}
+        while compact_usage_sync_log(&conn, "dev", "2026-09-01T00:00:00.000Z", 2).unwrap() > 0 {}
         assert_eq!(usage_log_refs(&conn).len(), 1);
     }
 
@@ -212,7 +212,7 @@
         let served_before = served_usage_ids(&conn, "dev");
 
         // Full compaction loop, tiny batches like the Engine runs them.
-        while compact_usage_sync_log(&conn, "2026-09-01T00:00:00.000Z", 2).unwrap() > 0 {}
+        while compact_usage_sync_log(&conn, "dev", "2026-09-01T00:00:00.000Z", 2).unwrap() > 0 {}
 
         let mut analytics_after = load_usage_analytics(&conn, 21, 8, 24, None).unwrap();
         analytics_after.generated_at = analytics_before.generated_at.clone();

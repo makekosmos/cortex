@@ -327,6 +327,11 @@ pub(crate) enum Request {
         older_than_days: Option<i64>,
         #[serde(default)]
         batch_limit: Option<i64>,
+        /// The device id our own usage writes are stamped with — own refs
+        /// are bounded by the journal head; anything else is bounded by our
+        /// contiguous cursor (rule 3 in `db::compact_usage_sync_log`).
+        #[serde(default)]
+        device_id: Option<String>,
     },
 
     // --- Sync ops (new) ---
