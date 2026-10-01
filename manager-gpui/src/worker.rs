@@ -94,17 +94,71 @@ fn usage_report(engine: &Engine) -> Result<Value, String> {
     let Some(rows) = snapshot.get_mut("topApps").and_then(Value::as_array_mut) else {
         return Ok(snapshot);
     };
+
+    // KOS-287: one batched `app_index.exe_info` call enriches every row with
+    // the exe version-info display name (fixes legacy rows whose displayName
+    // is a stale window title, e.g. a browser's last tab) and an on-demand
+    // extracted icon for apps the index never saw.
+    let paths: Vec<Value> = rows
+        .iter()
+        .filter_map(|row| {
+            row.get("normalizedPath")
+                .and_then(Value::as_str)
+                .filter(|p| !p.is_empty())
+                .map(|p| Value::String(p.to_string()))
+        })
+        .collect();
+    let mut exe_info: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
+    if !paths.is_empty() {
+        match engine.rpc("app_index.exe_info", json!({ "paths": paths })) {
+            Ok(v) => {
+                if let Some(entries) = v.get("entries").and_then(Value::as_array) {
+                    for entry in entries {
+                        if let Some(path) = entry.get("path").and_then(Value::as_str) {
+                            exe_info.insert(normalize_path(path), entry.clone());
+                        }
+                    }
+                }
+            }
+            // Rows keep their stored name and icon — degraded, not broken —
+            // but the failure must not be silent.
+            Err(error) => {
+                tracing::warn!(%error, "app_index.exe_info failed; usage rows keep stored names")
+            }
+        }
+    }
+
     for row in rows.iter_mut() {
         let normalized_path = row
             .get("normalizedPath")
             .and_then(Value::as_str)
             .unwrap_or_default()
             .to_string();
-        let icon = ids_by_path
-            .get(&normalize_path(&normalized_path))
-            .and_then(|id| engine.rpc("app_index.icon_path", json!({ "id": id })).ok())
-            .and_then(|v| v.get("path").and_then(Value::as_str).map(str::to_string))
+        let info = exe_info.get(&normalize_path(&normalized_path));
+
+        // Version-info name wins over the stored displayName — the stored one
+        // may be a window title persisted before KOS-287.
+        if let Some(name) = info
+            .and_then(|v| v.get("displayName"))
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            row["displayName"] = Value::String(name.to_string());
+        }
+
+        let icon = info
+            .and_then(|v| v.get("iconPath"))
+            .and_then(Value::as_str)
             .filter(|p| std::path::Path::new(p).is_file())
+            .map(str::to_string)
+            .or_else(|| {
+                ids_by_path
+                    .get(&normalize_path(&normalized_path))
+                    .and_then(|id| engine.rpc("app_index.icon_path", json!({ "id": id })).ok())
+                    .and_then(|v| v.get("path").and_then(Value::as_str).map(str::to_string))
+                    .filter(|p| std::path::Path::new(p).is_file())
+            })
             .or_else(|| {
                 // tracked_apps.icon_ref — путь к PNG в icon cache (может быть
                 // stale, postmortems §2026-06-09); берём только существующий файл.

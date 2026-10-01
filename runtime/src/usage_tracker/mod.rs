@@ -40,6 +40,11 @@ const DEFAULT_POLL_MS: u64 = 5_000;
 const DEFAULT_IDLE_SECS: u64 = 180;
 const SESSION_HEARTBEAT_FLUSH_MS: i64 = 60_000;
 const USAGE_SPAN_HEARTBEAT_SECS: i64 = 60;
+/// A persisted usage span may extend at most this far past its last flush:
+/// span boundaries are wall-clock, so a stalled tick (sleep/hibernate) would
+/// otherwise stretch the last foreground span across the whole sleep —
+/// the same phantom-hours bug as session deltas (KOS-287).
+const MAX_USAGE_SPAN_GAP_SECS: i64 = USAGE_SPAN_HEARTBEAT_SECS * 4;
 const WINDOW_TITLE_STABILITY_MS: i64 = 10_000;
 const HIDDEN_INACTIVE_SESSION_TTL_MS: i64 = 10 * 60_000;
 const MAX_ACTIVE_SESSIONS: usize = 256;
@@ -315,7 +320,7 @@ async fn run(
         let captured_now = chrono::Utc::now();
         let captured_at = captured_now.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
         let captured_at_unix = captured_now.timestamp();
-        let delta_ms = previous_tick.elapsed().as_millis().min(i64::MAX as u128) as i64;
+        let delta_ms = capped_tick_delta_ms(previous_tick.elapsed(), opts.poll_interval);
         let foreground_key = sample.as_ref().map(SessionKey::from_sample);
 
         let mut ended_keys = Vec::new();
@@ -414,6 +419,19 @@ async fn run(
         );
         tokio::time::sleep(opts.poll_interval).await;
     }
+}
+
+/// Per-tick attribution cap. `delta_ms` is the real elapsed time since the
+/// previous tick; on a stall (sleep, hibernate, debugger pause) the full gap
+/// would be credited to every tracked session — and to whatever window
+/// happened to stay focused. Ticks land at ~poll_interval, so 4× poll (with a
+/// 60s floor) covers scheduling jitter without letting a stall mint phantom
+/// hours (KOS-287).
+fn capped_tick_delta_ms(elapsed: Duration, poll_interval: Duration) -> i64 {
+    let cap_ms = (poll_interval.as_millis() * 4)
+        .max(60_000)
+        .min(i64::MAX as u128) as i64;
+    (elapsed.as_millis().min(i64::MAX as u128) as i64).min(cap_ms)
 }
 
 #[cfg(target_os = "windows")]
@@ -724,7 +742,7 @@ async fn start_session(
         exe_path: sample.exe_path.clone(),
         normalized_exe_path: sample.normalized_exe_path.clone(),
         process_name: sample.process_name.clone(),
-        display_name: derive_display_name(&sample.process_name, &sample.window_title),
+        display_name: resolve_display_name(&sample.exe_path, &sample.process_name).await,
         icon_ref: resolve_icon_ref(&sample, icon_cache_dir).await,
         first_seen_at,
         last_seen_at: captured_at.clone(),
@@ -903,7 +921,8 @@ async fn update_usage_timeline(
     let state_changed = active.as_ref().map(|span| &span.key) != current.as_ref();
     if state_changed {
         if let Some(previous) = active.as_ref() {
-            persist_compact_usage_span(ark, identity, previous, now_unix, updated_at).await?;
+            let ended_at = clamp_span_end(previous, now_unix);
+            persist_compact_usage_span(ark, identity, previous, ended_at, updated_at).await?;
         }
         *active = current.map(|key| ActiveUsageSpan {
             key,
@@ -915,11 +934,24 @@ async fn update_usage_timeline(
 
     if let Some(span) = active.as_mut() {
         if now_unix.saturating_sub(span.last_flushed_at_unix) >= USAGE_SPAN_HEARTBEAT_SECS {
-            persist_compact_usage_span(ark, identity, span, now_unix, updated_at).await?;
+            let ended_at = clamp_span_end(span, now_unix);
+            persist_compact_usage_span(ark, identity, span, ended_at, updated_at).await?;
             span.last_flushed_at_unix = now_unix;
         }
     }
     Ok(())
+}
+
+/// Wall-clock span end, clamped to at most MAX_USAGE_SPAN_GAP_SECS past the
+/// last flush — a stalled/suspended tick must not stretch the span (KOS-287).
+#[cfg(target_os = "windows")]
+fn clamp_span_end(span: &ActiveUsageSpan, now_unix: i64) -> i64 {
+    now_unix
+        .min(
+            span.last_flushed_at_unix
+                .saturating_add(MAX_USAGE_SPAN_GAP_SECS),
+        )
+        .max(span.started_at_unix)
 }
 
 #[cfg(target_os = "windows")]
@@ -1069,19 +1101,23 @@ fn resolve_device_name() -> String {
         .unwrap_or_else(|| "Windows Device".to_string())
 }
 
+/// Display name comes from the exe version resource (FileDescription →
+/// ProductName → file stem) — never the window title, or a browser would be
+/// labelled with whatever tab happened to be open last (KOS-287).
 #[cfg(target_os = "windows")]
-fn derive_display_name(process_name: &str, window_title: &Option<String>) -> Option<String> {
-    if let Some(title) = window_title
-        .as_ref()
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-    {
-        return Some(title.to_string());
-    }
-    std::path::Path::new(process_name)
-        .file_stem()
-        .and_then(|value| value.to_str())
-        .map(|value| value.to_string())
+async fn resolve_display_name(exe_path: &str, process_name: &str) -> Option<String> {
+    let path = exe_path.to_string();
+    let name =
+        tokio::task::spawn_blocking(move || crate::app_index::exe_info::exe_display_name(&path))
+            .await
+            .ok()
+            .flatten();
+    name.or_else(|| {
+        std::path::Path::new(process_name)
+            .file_stem()
+            .and_then(|value| value.to_str())
+            .map(|value| value.to_string())
+    })
 }
 
 fn new_uuid() -> String {
@@ -1317,6 +1353,66 @@ mod tests {
             observe(&mut session, "GitHub", "2026-01-01T00:00:14Z", 1_000),
             None
         );
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn active_time_is_focus_minus_idle_not_visible_runtime() {
+        // KOS-287 regression, the Raycast case: a launcher sits visible in the
+        // background for hours but is focused for seconds. Active time is
+        // foreground&&!idle only — runtime (visible) stays a separate counter.
+        let mut session = test_session();
+        for _ in 0..100 {
+            session.accumulate(60_000, false, true); // visible, not focused
+        }
+        session.current_is_idle = false;
+        session.accumulate(5_000, true, true); // briefly focused
+        session.current_is_idle = true;
+        session.accumulate(300_000, true, true); // focused but idle
+
+        assert_eq!(session.foreground_ms, 5_000);
+        assert_eq!(session.idle_ms, 300_000);
+        assert_eq!(session.runtime_ms, 6_305_000);
+    }
+
+    #[test]
+    fn tick_delta_is_capped_so_stalls_do_not_mint_phantom_time() {
+        // KOS-287 regression: a suspended tracker must not credit the whole
+        // gap. Normal ticks stay untouched; an 8h sleep collapses to the cap.
+        let poll = Duration::from_millis(DEFAULT_POLL_MS);
+        assert_eq!(
+            capped_tick_delta_ms(Duration::from_millis(5_000), poll),
+            5_000
+        );
+        assert_eq!(
+            capped_tick_delta_ms(Duration::from_millis(45_000), poll),
+            45_000
+        );
+        assert_eq!(
+            capped_tick_delta_ms(Duration::from_secs(8 * 3600), poll),
+            60_000
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn usage_span_end_is_capped_past_last_flush() {
+        let span = ActiveUsageSpan {
+            key: UsageTimelineKey {
+                tracked_app_id: "app".to_string(),
+                window_title: None,
+                is_idle: false,
+                is_private: false,
+            },
+            started_at_unix: 1_000,
+            last_flushed_at_unix: 1_060,
+        };
+        // Normal heartbeat pace — end follows now.
+        assert_eq!(clamp_span_end(&span, 1_120), 1_120);
+        // Stall: end is clamped to last_flush + MAX_USAGE_SPAN_GAP_SECS.
+        assert_eq!(clamp_span_end(&span, 1_060 + 8 * 3_600), 1_300);
+        // Clock skew backwards never produces an end before the start.
+        assert_eq!(clamp_span_end(&span, 100), 1_000);
     }
 
     #[cfg(target_os = "windows")]

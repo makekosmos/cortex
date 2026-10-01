@@ -94,7 +94,12 @@ pub struct UsageSummary {
     pub tracked_app_count: i64,
     pub session_count: i64,
     pub event_count: i64,
+    /// Visible wall-clock time across all sessions — raw data, NOT "time
+    /// used" (it counts background-visible windows and is what inflated
+    /// headlines pre-KOS-287). Consumers presenting a total must read
+    /// `total_foreground_ms`.
     pub total_runtime_ms: i64,
+    /// The headline total: ACTIVE time — focused and not idle (KOS-287).
     pub total_foreground_ms: i64,
     pub total_idle_ms: i64,
     pub first_recorded_at: Option<String>,
@@ -131,6 +136,9 @@ pub struct TopAppEntry {
     pub idle_ms: i64,
     pub sessions: i64,
     pub last_seen_at: Option<String>,
+    /// Row's exe lives under %SystemRoot% — OS noise (explorer, sihost, …).
+    /// UI hides these by default behind a toggle.
+    pub is_system: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

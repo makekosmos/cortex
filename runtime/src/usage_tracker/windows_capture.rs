@@ -435,10 +435,16 @@ impl ProcessProbeCache {
     }
 }
 
+/// App identity hashes the canonical exe path (KOS-287): version-looking
+/// directories are stripped so an update that moves the exe — Squirrel
+/// `app-1.0.x`, per-version browser dirs — keeps one tracked_app row instead
+/// of spawning a duplicate. `ark_core::db::canonical_app_key` merges
+/// pre-change ids the same way at query time.
 pub fn tracked_app_id_for(exe_path: &str) -> String {
     let normalized = normalize_exe_path(exe_path);
+    let canonical = ark_core::db::canonical_app_key(&normalized, "");
     let mut hasher = Sha256::new();
-    hasher.update(format!("{PLATFORM}:{normalized}").as_bytes());
+    hasher.update(format!("{PLATFORM}:{canonical}").as_bytes());
     format!("{:x}", hasher.finalize())
 }
 
@@ -459,6 +465,19 @@ mod tests {
         let first = tracked_app_id_for("C:/Games/Demo/Game.EXE");
         let second = tracked_app_id_for("c:\\games\\demo\\game.exe");
         assert_eq!(first, second);
+    }
+
+    #[test]
+    fn tracked_app_id_survives_version_folder_updates() {
+        // KOS-287 regression: a Squirrel-style update moves the exe into a new
+        // `app-<version>` dir — the app must keep one id, not double-list.
+        let before =
+            tracked_app_id_for("C:\\Users\\k\\AppData\\Local\\Discord\\app-1.0.1\\Discord.exe");
+        let after =
+            tracked_app_id_for("C:\\Users\\k\\AppData\\Local\\Discord\\app-1.0.2\\Discord.exe");
+        assert_eq!(before, after);
+        let other = tracked_app_id_for("C:\\Other\\Discord.exe");
+        assert_ne!(before, other);
     }
 
     #[test]

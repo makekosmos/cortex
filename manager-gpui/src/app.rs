@@ -49,6 +49,16 @@ pub struct ManagerApp {
     pub pending_install: Option<String>,
     /// Store listing shown in the detail overlay.
     pub detail: Option<Value>,
+    /// Usage view state: column sort, system-process filter, virtual list scroll.
+    pub usage_sort: views::usage::UsageSort,
+    pub usage_show_system: bool,
+    pub usage_scroll: gpui_component::VirtualListScrollHandle,
+    /// Prepared usage rows (filtered + sorted + formatted). Rebuilt only when
+    /// the report slot, sort or the system toggle changes — the virtualized
+    /// list closure must stay a pure index, not a per-frame re-sort.
+    pub usage_rows: std::rc::Rc<Vec<views::usage::UsageRow>>,
+    #[cfg(test)]
+    pub usage_builds: usize,
     pub(crate) action_busy: bool,
     worker_dead: bool,
     next_updater_poll: Instant,
@@ -85,6 +95,12 @@ impl ManagerApp {
             disclosure: None,
             pending_install: None,
             detail: None,
+            usage_sort: views::usage::UsageSort::default(),
+            usage_show_system: false,
+            usage_scroll: gpui_component::VirtualListScrollHandle::new(),
+            usage_rows: std::rc::Rc::new(Vec::new()),
+            #[cfg(test)]
+            usage_builds: 0,
             action_busy: false,
             worker_dead: false,
             next_updater_poll: Instant::now(),
@@ -154,6 +170,22 @@ impl ManagerApp {
             self.worker_dead = true;
             self.error = Some("Соединение с Engine завершено. Перезапустите приложение.".into());
         }
+    }
+
+    /// Rebuild the prepared usage rows from the current report slot. Called
+    /// only when the report arrives or sort/filter changes — the virtualized
+    /// list render closure must index prebuilt rows, never re-sort per frame.
+    pub fn rebuild_usage_rows(&mut self) {
+        #[cfg(test)]
+        {
+            self.usage_builds += 1;
+        }
+        let snapshot = self.data("usage.report");
+        self.usage_rows = std::rc::Rc::new(views::usage::build_usage_rows(
+            &snapshot,
+            self.usage_show_system,
+            self.usage_sort,
+        ));
     }
 
     /// Queue the composite usage report (analytics + icon resolution) into a
@@ -335,9 +367,10 @@ impl ManagerApp {
                     Err(e) => self.error = Some(e),
                 }
             } else {
-                let background = self.background_slots.remove(&reply.slot);
+                let slot = reply.slot.clone();
+                let background = self.background_slots.remove(&slot);
                 self.slots.insert(
-                    reply.slot,
+                    slot.clone(),
                     match reply.result {
                         Ok(v) => {
                             if !background && self.error.is_some() {
@@ -351,6 +384,9 @@ impl ManagerApp {
                         }
                     },
                 );
+                if slot == "usage.report" {
+                    self.rebuild_usage_rows();
+                }
             }
             cx.notify();
         }

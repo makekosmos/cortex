@@ -8,7 +8,7 @@ use super::*;
 /// Fresh per-test service state — replaces the old global `DB`/`SYNC`
 /// statics and the `TEST_DB_MUTEX` serialization they forced.
 pub(super) fn test_state() -> Arc<ServiceState> {
-    Arc::new(ServiceState::new())
+    Arc::new(ServiceState::new(ArkHostConfig::default()))
 }
 
 /// Per-test fixture for tests that open `ark.db` in a tempdir. Field order

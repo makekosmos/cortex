@@ -107,7 +107,19 @@ impl ArkHost {
     /// Open (create if needed) the ARK database at `db_path` and start the
     /// service worker. Same semantics as the old `ArkHost::spawn` + `init`.
     pub async fn open(db_path: &str) -> ArkResult<Self> {
-        let service = ArkService::open(db_path).await.map_err(|error| {
+        // Host config (KOS-287): the real %SystemRoot%, resolved once here via
+        // GetSystemWindowsDirectoryW. ark-core marks exes under it as system
+        // apps; a request param would let clients lie about that, so it lives
+        // in construction-time config. On failure we warn and pass None —
+        // nothing gets misclassified.
+        let service = ArkService::open_with_host_config(
+            db_path,
+            ark_core::service::ArkHostConfig {
+                windows_dir: system_windows_dir().map(str::to_string),
+            },
+        )
+        .await
+        .map_err(|error| {
             ArkHostError::RpcError(format!(
                 "failed to open ARK database at {db_path} (locked by a stale ark-core-rpc \
                  or another Engine?): {error}"
@@ -198,6 +210,33 @@ fn typed_response<T: for<'de> Deserialize<'de>>(
     serde_json::from_value(response.data).map_err(ArkHostError::Json)
 }
 
+/// Real %SystemRoot% via `GetSystemWindowsDirectoryW`, memoized. `None`
+/// (resolution failed, or non-Windows host) means usage analytics marks
+/// nothing as system — never a hard-coded `c:\windows` guess (KOS-287).
+#[cfg(target_os = "windows")]
+fn system_windows_dir() -> Option<&'static str> {
+    use std::sync::OnceLock;
+    static DIR: OnceLock<Option<String>> = OnceLock::new();
+    DIR.get_or_init(|| {
+        use windows::Win32::System::SystemInformation::GetSystemWindowsDirectoryW;
+        let mut buf = [0u16; 260];
+        let len = unsafe { GetSystemWindowsDirectoryW(Some(&mut buf)) };
+        if len == 0 || len as usize >= buf.len() {
+            tracing::warn!(
+                "GetSystemWindowsDirectoryW failed — usage analytics will not flag system apps"
+            );
+            return None;
+        }
+        Some(String::from_utf16_lossy(&buf[..len as usize]))
+    })
+    .as_deref()
+}
+
+#[cfg(not(target_os = "windows"))]
+fn system_windows_dir() -> Option<&'static str> {
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -248,5 +287,74 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(name, "ark_host_test_event");
+    }
+
+    /// KOS-287: the real %SystemRoot% is resolved at ArkHost::open and fed to
+    /// usage analytics as host config — no request param, no env guess.
+    #[tokio::test]
+    async fn analytics_marks_system_app_from_host_windows_dir() {
+        let Some(windows_dir) = system_windows_dir() else {
+            return; // non-Windows host: nothing to classify
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let host = ArkHost::open(dir.path().join("ark.db").to_str().unwrap())
+            .await
+            .unwrap();
+        let exe = format!("{windows_dir}\\explorer.exe");
+        host.request(
+            "upsert_tracked_app",
+            serde_json::json!({
+                "tracked_app": {
+                    "id": "app-explorer",
+                    "platform": "windows",
+                    "exePath": exe,
+                    "normalizedExePath": exe.to_lowercase(),
+                    "processName": "explorer.exe",
+                    "displayName": "File Explorer",
+                    "publisher": null,
+                    "iconRef": null,
+                    "firstSeenAt": "2026-01-01T00:00:00.000Z",
+                    "lastSeenAt": "2026-01-01T00:10:00.000Z",
+                }
+            }),
+        )
+        .await
+        .unwrap();
+        host.request(
+            "upsert_usage_session",
+            serde_json::json!({
+                "usage_session": {
+                    "id": "s-1",
+                    "trackedAppId": "app-explorer",
+                    "deviceId": "d",
+                    "deviceName": "D",
+                    "platform": "windows",
+                    "startedAt": "2026-01-01T00:00:00.000Z",
+                    "endedAt": "2026-01-01T00:10:00.000Z",
+                    "runtimeMs": 600_000,
+                    "foregroundMs": 600_000,
+                    "idleMs": 0,
+                    "windowTitle": null,
+                    "processName": "explorer.exe",
+                    "exePath": exe,
+                    "pidStart": null,
+                    "pidEnd": null,
+                }
+            }),
+        )
+        .await
+        .unwrap();
+
+        let report = host
+            .request("get_usage_analytics", serde_json::json!({}))
+            .await
+            .unwrap();
+        let explorer = report.data["topApps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["processName"] == "explorer.exe")
+            .expect("explorer row present");
+        assert_eq!(explorer["isSystem"], true);
     }
 }

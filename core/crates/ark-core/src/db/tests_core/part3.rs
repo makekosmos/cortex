@@ -114,7 +114,8 @@
         event.occurred_at = today_start;
         upsert_usage_event(&conn, &event).unwrap();
 
-        let snapshot = load_usage_analytics(&conn, 3, 5, 5).unwrap();
+        let snapshot =
+            load_usage_analytics(&conn, 3, 5, 5, Some("c:\\windows")).unwrap();
 
         assert_eq!(snapshot.summary.tracked_app_count, 1);
         assert_eq!(snapshot.summary.session_count, 1);

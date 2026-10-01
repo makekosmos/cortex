@@ -115,6 +115,7 @@ pub fn list_recent_usage_processes(
     })
     .collect::<Result<Vec<_>, _>>()
     .map_err(|e| e.to_string())
+    .map(dedup_usage_process_candidates)
 }
 
 pub fn search_usage_processes(
@@ -159,4 +160,5 @@ pub fn search_usage_processes(
     })
     .collect::<Result<Vec<_>, _>>()
     .map_err(|e| e.to_string())
+    .map(dedup_usage_process_candidates)
 }

@@ -43,6 +43,43 @@ pub(in crate::ws_server) async fn handle_app_index_op(
                 Err(e) => LocalResponse::err(format!("app_index.search: serialize: {e}")),
             }
         }
+        "exe_info" => {
+            // KOS-287: usage report needs per-exe display name (version info)
+            // + icon for rows the index never saw. Blocking FFI batch — off
+            // the async executor.
+            let paths: Vec<String> = params
+                .get("paths")
+                .and_then(|v| v.as_array())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(str::to_string))
+                        .take(1000)
+                        .collect()
+                })
+                .unwrap_or_default();
+            if paths.is_empty() {
+                return LocalResponse::err("app_index.exe_info: missing 'paths'");
+            }
+            let index = Arc::clone(app_index);
+            match tokio::task::spawn_blocking(move || {
+                paths
+                    .iter()
+                    .map(|path| {
+                        let info = index.exe_info(path);
+                        serde_json::json!({
+                            "path": path,
+                            "displayName": info.display_name,
+                            "iconPath": info.icon_path,
+                        })
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .await
+            {
+                Ok(entries) => LocalResponse::ok(serde_json::json!({ "entries": entries })),
+                Err(e) => LocalResponse::err(format!("app_index.exe_info: {e}")),
+            }
+        }
         "icon_path" => {
             let id = match params.get("id").and_then(|v| v.as_str()) {
                 Some(s) => s.to_string(),

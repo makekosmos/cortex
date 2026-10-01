@@ -7,7 +7,7 @@ use crate::canonical_types::ingress::prepare_object;
 use crate::db;
 
 use crate::types::{ArkObject, ArkObjectWrite};
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, params_from_iter, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
