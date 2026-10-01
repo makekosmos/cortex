@@ -13,7 +13,7 @@
 (function () {
   "use strict";
   var LAUNCH_PREFIX = "/v1/apps/launch/";
-  var SESSION_KEY = "kosmos.launch";
+  var SESSION_KEY = "mundus.launch";
 
   function persist(state) {
     try {

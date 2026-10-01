@@ -131,7 +131,7 @@ test("a reloaded page restores the session from sessionStorage", async () => {
     data_api: "/v1/apps/launch/7e3d-42/ark",
     expires_at: new Date(Date.now() + 900_000).toISOString(),
   };
-  page.__storage.set("kosmos.launch", JSON.stringify(stored));
+  page.__storage.set("mundus.launch", JSON.stringify(stored));
   page.__respond = () =>
     Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true, data: [] }) });
   page.__run();
@@ -142,7 +142,7 @@ test("a reloaded page restores the session from sessionStorage", async () => {
 test("an expired stored session is ignored", () => {
   const page = makePage("");
   page.__storage.set(
-    "kosmos.launch",
+    "mundus.launch",
     JSON.stringify({
       launch_id: "x",
       broker_token: "tok",
