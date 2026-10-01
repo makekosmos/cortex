@@ -165,10 +165,37 @@ fn map_value(
         }
     }
     shared::extensions(props, &mut out, &consumed, &mut local, &mut quarantine)?;
+    // Mapped objects claim the newest registered version of their type; a
+    // schema bump must not strand new writes on the superseded contract.
+    let version = crate::canonical_types::definitions::current_canonical_version(canonical)
+        .ok()
+        .flatten()
+        .ok_or_else(|| shared::CompatFailure::DataLossRisk {
+            pointer: "/type_id".into(),
+        })?;
+    let registration = crate::canonical_types::definitions::canonical_type_registrations()
+        .map_err(|_| shared::CompatFailure::DataLossRisk {
+            pointer: "/".into(),
+        })?
+        .into_iter()
+        .find(|r| r.type_id == canonical && r.version == version)
+        .ok_or_else(|| shared::CompatFailure::DataLossRisk {
+            pointer: "/type_id".into(),
+        })?;
+    // Legacy day fields (`scheduled_date`, `deadline`) may carry RFC 3339
+    // stamps; the day-field contract stores bare dates, so coerce here — the
+    // validation below still rejects genuinely malformed values.
+    let schema: Value =
+        serde_json::from_str(&registration.schema_json).map_err(|_| {
+            shared::CompatFailure::DataLossRisk {
+                pointer: "/schema".into(),
+            }
+        })?;
+    crate::canonical_types::normalize::day_props(&schema, &mut out);
     let object = crate::types::ArkObject {
         id: record.id,
         type_id: canonical.into(),
-        type_version: "1.0.0".into(),
+        type_version: version,
         title: record.title,
         content_json: record.content,
         props_json: Value::Object(out),

@@ -135,8 +135,13 @@ fn check_schema(schema: &Value, pointer: &str, root: bool) -> Result<(), Canonic
             }
             "default" => {}
             "format" => {
-                if !value.is_string() {
-                    return Err(invariant(&key_pointer, "format"));
+                // Closed set: a typo'd format would silently degrade to an
+                // annotation, so unknown names are an invariant violation.
+                // `date` is enforced on values; `date-time` and `uri` remain
+                // documentation — see `validate_schema` for why.
+                match value.as_str() {
+                    Some("date" | "date-time" | "uri") => {}
+                    _ => return Err(invariant(&key_pointer, "format")),
                 }
             }
             _ => return Err(invariant(&key_pointer, key)),

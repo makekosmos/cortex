@@ -84,7 +84,9 @@ pub fn project_task_to_delphi(
     Ok(TodoItem {
         id: object.id.clone(),
         title: object.title.clone(),
-        scheduled_date: string_or_none(object, props, "scheduledAt")?,
+        // `scheduledAt` is a day field; objects written under schema 1.0.0 may
+        // still carry the RFC 3339 stamp the old contract declared.
+        scheduled_date: day_or_none(object, props, "scheduledAt")?,
         is_today,
         is_someday: task_bucket.and_then(Value::as_str) == Some("backlog"),
         is_completed: status == "done",
@@ -154,6 +156,19 @@ fn extension_i64(
                 "INVALID_FIELD",
             )
         }),
+    }
+}
+
+fn day_or_none(
+    object: &ArkObject,
+    props: &Map<String, Value>,
+    key: &str,
+) -> Result<Option<String>, CompatibilityError> {
+    match props.get(key) {
+        Some(Value::Null) | None => Ok(None),
+        Some(value) => crate::canonical_types::normalize::day_value(value)
+            .map(Some)
+            .ok_or_else(|| projection_error(object, &format!("/props/{key}"), "INVALID_FIELD")),
     }
 }
 

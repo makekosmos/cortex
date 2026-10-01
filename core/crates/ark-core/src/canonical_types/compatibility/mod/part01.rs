@@ -74,7 +74,11 @@ pub fn map_legacy_with_context(
                 .existing_object_ids
                 .get(target)
                 .is_some_and(|identity| {
-                    identity.type_id == "com.kosmos.image" && identity.type_version == "1.0.0"
+                    identity.type_id == "com.kosmos.image"
+                        && crate::canonical_types::definitions::is_canonical_version(
+                            &identity.type_id,
+                            &identity.type_version,
+                        )
                 })
             {
                 add_link(
@@ -108,7 +112,11 @@ pub fn map_legacy_with_context(
                 .existing_object_ids
                 .get(target)
                 .is_some_and(|identity| {
-                    identity.type_id == "com.kosmos.project" && identity.type_version == "1.0.0"
+                    identity.type_id == "com.kosmos.project"
+                        && crate::canonical_types::definitions::is_canonical_version(
+                            &identity.type_id,
+                            &identity.type_version,
+                        )
                 })
             {
                 add_link(
@@ -127,7 +135,11 @@ pub fn map_legacy_with_context(
             .existing_object_ids
             .get(&link.target_object_id)
             .is_some_and(|identity| {
-                expected_type == Some(identity.type_id.as_str()) && identity.type_version == "1.0.0"
+                expected_type == Some(identity.type_id.as_str())
+                    && crate::canonical_types::definitions::is_canonical_version(
+                        &identity.type_id,
+                        &identity.type_version,
+                    )
             })
         {
             let pointer = relation_pointer(&record, link);

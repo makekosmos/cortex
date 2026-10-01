@@ -115,10 +115,13 @@ fn context(conn: &Connection, records: &[SourceRecord]) -> Result<MappingContext
             "tags" => "com.kosmos.tag",
             k => alias.get(k).map(|x| x.type_id.as_str()).unwrap_or(k),
         };
-        ids.insert(
-            r.source_id.clone(),
-            CanonicalIdentity::new(canonical, "1.0.0"),
-        );
+        let version = super::definitions::current_canonical_version(canonical)
+            .ok()
+            .flatten()
+            .ok_or_else(|| {
+                ObjectPlanError::Storage(format!("no canonical registration for {canonical}"))
+            })?;
+        ids.insert(r.source_id.clone(), CanonicalIdentity::new(canonical, version));
     }
     Ok(MappingContext {
         existing_object_ids: ids,

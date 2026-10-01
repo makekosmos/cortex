@@ -386,7 +386,10 @@ pub fn retire_legacy_planning_tables(
             if !matches!(
                 canonical.as_ref(),
                 Some((type_id, version))
-                    if type_id == "com.kosmos.project" && version == "1.0.0"
+                    if type_id == "com.kosmos.project"
+                        && crate::canonical_types::definitions::is_canonical_version(
+                            type_id, version,
+                        )
             ) {
                 return Err(MigrationError::Objects(format!(
                     "legacy planning row {table}/{id} has no canonical project"

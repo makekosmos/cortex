@@ -118,3 +118,80 @@ fn fails_closed_on_unsupported_schema_keyword() {
     assert_eq!(failure.pointer, "/unevaluatedProperties");
 }
 
+fn registration_at(
+    type_id: &str,
+    version: &str,
+) -> ark_core::type_registry::TypeRegistration {
+    canonical_type_registrations()
+        .unwrap()
+        .into_iter()
+        .find(|r| r.type_id == type_id && r.version == version)
+        .unwrap()
+}
+
+#[test]
+fn day_fields_enforce_date_on_the_current_contract() {
+    let task = registration_at("com.kosmos.task", "1.1.0");
+    let mut props = valid_task_props();
+    props["scheduledAt"] = json!("2026-05-15");
+    props["dueAt"] = json!("2026-05-20");
+    assert!(validate_canonical(&task, &props, &valid_doc()).is_ok());
+    for bad in [
+        // An RFC 3339 stamp under `format: "date"` is exactly the bug class
+        // this contract closes: a day is not an instant.
+        "2026-05-15T08:00:00.000Z",
+        "2026-13-40",
+        "2026-5-15",
+        "next friday",
+    ] {
+        props["scheduledAt"] = json!(bad);
+        let failure = validate_canonical(&task, &props, &valid_doc()).unwrap_err();
+        assert_eq!(failure.pointer, "/scheduledAt", "{bad}");
+        assert_eq!(failure.keyword.as_deref(), Some("format"), "{bad}");
+    }
+    props["scheduledAt"] = json!("2026-05-15");
+    props["recurrence"] = json!({"frequency":"weekly","interval":1,"recurrenceType":"fixed","daysOfWeek":null,"endDate":"2026-06-01T00:00:00Z"});
+    let failure = validate_canonical(&task, &props, &valid_doc()).unwrap_err();
+    assert_eq!(failure.pointer, "/recurrence/endDate");
+
+    let project = registration_at("com.kosmos.project", "1.1.0");
+    let props = json!({"status":"active","scheduledAt":"2026-05-15T00:00:00Z","dueAt":null,"color":null,"extensions":{}});
+    let failure = validate_canonical(&project, &props, &valid_doc()).unwrap_err();
+    assert_eq!(failure.pointer, "/scheduledAt");
+
+    // Instant fields stay `date-time` and remain unenforced annotations —
+    // a stored bare date there cannot be honestly coerced to an instant.
+    let mut props = valid_task_props();
+    props["completedAt"] = json!("2026-05-15");
+    assert!(validate_canonical(&task, &props, &valid_doc()).is_ok());
+}
+
+#[test]
+fn superseded_contract_keeps_legacy_values_valid() {
+    let task = registration_at("com.kosmos.task", "1.0.0");
+    for value in ["2026-05-15", "2026-05-15T08:00:00.000Z"] {
+        let mut props = valid_task_props();
+        props["scheduledAt"] = json!(value);
+        assert!(
+            validate_canonical(&task, &props, &valid_doc()).is_ok(),
+            "{value} must stay valid under the 1.0.0 contract"
+        );
+    }
+}
+
+#[test]
+fn unknown_format_name_is_an_invariant_violation() {
+    let mut registration = registration("com.kosmos.note");
+    let mut schema: Value = serde_json::from_str(&registration.schema_json).unwrap();
+    schema["properties"]["description"]["format"] = json!("email");
+    registration.schema_json = serde_json::to_string(&schema).unwrap();
+    let failure = validate_canonical(
+        &registration,
+        &json!({"description":null,"extensions":{}}),
+        &valid_doc(),
+    )
+    .unwrap_err();
+    assert_eq!(failure.code, CanonicalValidationCode::InvariantViolation);
+    assert_eq!(failure.pointer, "/properties/description/format");
+}
+

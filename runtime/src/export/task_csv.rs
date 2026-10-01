@@ -165,10 +165,14 @@ impl Converter for TaskCsvConverter {
                     .and_then(|v| v.as_str())
                     .unwrap_or("none")
                     .into(),
+                // Day fields may still hold RFC 3339 stamps written under
+                // schema 1.0.0; the CSV column is a date.
                 p.get("scheduledAt")
-                    .map(ToString::to_string)
+                    .and_then(ark_core::canonical_types::normalize::day_value)
                     .unwrap_or_default(),
-                p.get("dueAt").map(ToString::to_string).unwrap_or_default(),
+                p.get("dueAt")
+                    .and_then(ark_core::canonical_types::normalize::day_value)
+                    .unwrap_or_default(),
                 p.get("completedAt")
                     .map(ToString::to_string)
                     .unwrap_or_default(),

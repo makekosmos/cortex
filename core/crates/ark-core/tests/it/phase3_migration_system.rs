@@ -211,7 +211,7 @@ fn production_init_runs_phase3_once_and_reopen_is_idempotent() {
         assert!(table_exists(&conn, table), "missing {table}");
     }
     assert_eq!(count(&conn, "object_types"), 9);
-    assert_eq!(count(&conn, "object_type_versions"), 9);
+    assert_eq!(count(&conn, "object_type_versions"), 11);
     assert_eq!(count(&conn, "object_type_aliases"), 9);
     assert_eq!(
         conn.query_row(

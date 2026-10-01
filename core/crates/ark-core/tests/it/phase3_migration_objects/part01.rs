@@ -86,7 +86,7 @@ fn populated_generic_fixture_maps_all_nine_aliases_and_applies_exact_envelope() 
     apply_plan(&conn, &plan, "unused").expect("apply");
     let count: i64 = conn
         .query_row(
-            "SELECT COUNT(*) FROM objects WHERE type_version='1.0.0'",
+            "SELECT COUNT(*) FROM objects",
             [],
             |r| r.get(0),
         )
@@ -107,7 +107,15 @@ fn populated_generic_fixture_maps_all_nine_aliases_and_applies_exact_envelope() 
         let id = format!("g-{index}");
         let (type_id, version, created, updated, deleted): (String, String, String, String, Option<String>) = conn.query_row("SELECT type_id,type_version,created_at,updated_at,deleted_at FROM objects WHERE id=?1", [&id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))).unwrap();
         assert_eq!(type_id, *expected_type);
-        assert_eq!(version, "1.0.0");
+        // Mapped objects claim the newest registered version of their type.
+        assert_eq!(
+            version,
+            if matches!(*expected_type, "com.kosmos.task" | "com.kosmos.project") {
+                "1.1.0"
+            } else {
+                "1.0.0"
+            }
+        );
         assert_eq!(created, "2026-01-01T00:00:00Z");
         assert_eq!(updated, "2026-01-02T00:00:00Z");
         assert_eq!(
@@ -146,7 +154,7 @@ fn native_adapters_migrate_area_heading_identity_and_hierarchy() {
     apply_plan(&conn, &plan, "now").unwrap();
     let objects: i64 = conn
         .query_row(
-            "SELECT COUNT(*) FROM objects WHERE type_version='1.0.0'",
+            "SELECT COUNT(*) FROM objects",
             [],
             |r| r.get(0),
         )
@@ -220,7 +228,7 @@ fn link_id_collision_is_a_canonical_conflict_without_partial_object() {
     assert!(apply_plan(&conn, &plan, "now").is_err());
     assert_eq!(
         conn.query_row::<i64, _, _>(
-            "SELECT COUNT(*) FROM objects WHERE id IN ('project-1','task-1') AND type_version='1.0.0'",
+            "SELECT COUNT(*) FROM objects WHERE id IN ('project-1','task-1') AND type_id LIKE 'com.kosmos.%'",
             [],
             |r| r.get(0)
         )
@@ -245,7 +253,7 @@ fn typed_missing_relation_is_blocked_without_any_candidate_mutation() {
     assert_eq!(plan.blocked[0].code, "INVALID_FIELD");
     assert_eq!(
         conn.query_row::<i64, _, _>(
-            "SELECT COUNT(*) FROM objects WHERE id='task-missing' AND type_version='1.0.0'",
+            "SELECT COUNT(*) FROM objects WHERE id='task-missing' AND type_id='com.kosmos.task'",
             [],
             |r| r.get(0)
         )

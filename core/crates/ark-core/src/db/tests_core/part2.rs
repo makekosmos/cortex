@@ -143,9 +143,10 @@
                 |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .unwrap();
+        // Migrated objects claim the newest registered version of their type.
         assert_eq!(
             migrated,
-            ("com.kosmos.task".to_string(), "1.0.0".to_string()),
+            ("com.kosmos.task".to_string(), "1.1.0".to_string()),
         );
         let canonical_type_exists: i64 = conn
             .query_row(
