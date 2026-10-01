@@ -259,41 +259,6 @@ async fn native_list_reports_hardcoded_rows_and_update() {
 }
 
 #[tokio::test]
-async fn native_list_materializes_descriptor_icons() {
-    // KOS-285: every row carries the product icon as a real file the
-    // Manager can `img()` — installed or not. The PNG is the committed
-    // build artifact (desktop/build/app-icons), materialized under
-    // `<Apps>/icons/`; `list()` must skip that dir (no install.json).
-    let dir = tempdir().expect("temp dir");
-    let server = httpmock::MockServer::start_async().await;
-    let service = native_service(&dir);
-    let apps = service
-        .native_apps_with(&probe(&server), false)
-        .await
-        .expect("list");
-    for row in &apps {
-        let icon = row.icon_path.as_deref().expect("icon path");
-        assert!(icon.ends_with(".png"), "{icon}");
-        assert!(!icon.starts_with(r"\\?\"), "{icon}");
-        let bytes = fs::read(icon).expect("icon file exists");
-        let desc = crate::native_apps::app_descriptor(&row.id).expect("descriptor");
-        assert_eq!(bytes, desc.icon_png, "{icon} must hold the product icon");
-    }
-    // The icons dir is inside the store root but never surfaces as an app.
-    assert!(dir.path().join("apps").join("icons").is_dir());
-    assert_eq!(
-        service
-            .native_store()
-            .expect("store")
-            .list()
-            .iter()
-            .filter(|record| record.id == "icons")
-            .count(),
-        0
-    );
-}
-
-#[tokio::test]
 async fn native_update_keeps_previous_on_bad_sha() {
     let dir = tempdir().expect("temp dir");
     let exe = agenda().executable(TARGET);

@@ -238,13 +238,15 @@ fn render_catalog(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElem
             let desc = vopt(item, "description").unwrap_or_default();
             let ver = vstr(item, "version");
             let kind = vstr(item, "kind");
-            // The id is the secondary caption; the description or the
-            // listing kind follows it when the catalog provides one.
-            let caption = match (desc.is_empty(), kind.is_empty()) {
-                (true, true) => id.clone(),
-                (true, false) => format!("{id} · {kind}"),
-                (false, true) => format!("{id} · {desc}"),
-                (false, false) => format!("{id} · {desc}"),
+            // The id is the constant secondary caption. A description carries
+            // the meaning and wins the slot; the listing kind is only the
+            // fallback when no description exists — printing both reads as
+            // noise next to the id.
+            let detail = if desc.is_empty() { kind } else { desc };
+            let caption = if detail.is_empty() {
+                id.clone()
+            } else {
+                format!("{id} · {detail}")
             };
             let mut r = entry_row(icon_url(vopt(item, "icon_url")), name.clone(), caption);
             r = r.child(badge(format!("v{ver}"), MUTED_FG()));

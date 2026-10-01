@@ -355,8 +355,17 @@ impl PackageService {
     ) -> Option<String> {
         let path = store.root().join("icons").join(format!("{}.png", desc.id));
         if fs::read(&path).ok().as_deref() != Some(desc.icon_png) {
-            fs::create_dir_all(path.parent()?).ok()?;
-            fs::write(&path, desc.icon_png).ok()?;
+            let write = fs::create_dir_all(path.parent()?)
+                .and_then(|()| fs::write(&path, desc.icon_png));
+            if let Err(error) = write {
+                tracing::warn!(
+                    target: "native_apps",
+                    id = desc.id,
+                    %error,
+                    "app icon materialization failed"
+                );
+                return None;
+            }
         }
         let path = path.to_string_lossy();
         Some(

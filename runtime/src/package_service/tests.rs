@@ -1713,5 +1713,7 @@ pub(crate) mod tests {
     #[cfg(all(windows, target_arch = "x86_64"))]
     include!("native_tests.rs");
     #[cfg(all(windows, target_arch = "x86_64"))]
+    include!("native_icon_tests.rs");
+    #[cfg(all(windows, target_arch = "x86_64"))]
     include!("native_migration_tests.rs");
 }

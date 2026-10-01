@@ -170,11 +170,8 @@ impl PackageService {
         latest: Option<&releases::ReleaseInfo>,
     ) -> Result<NativeAppSummary, PackageError> {
         self.sync_native_shortcut(desc);
-        let record = self
-            .native_store()?
-            .current(desc.id)
-            .map_err(native_store_error)?;
         let store = self.native_store()?;
+        let record = store.current(desc.id).map_err(native_store_error)?;
         let icon_path = self.ensure_native_icon(&store, desc);
         Ok(self.native_summary(NativeRowInput {
             desc,
