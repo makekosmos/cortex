@@ -50,6 +50,7 @@ pub mod app_index;
 pub(crate) mod app_network;
 pub mod ark_host;
 pub mod auth;
+pub mod backend_tray;
 pub(crate) mod background_task;
 pub mod brand;
 pub mod build_info;

@@ -191,7 +191,7 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
                         correlation_id: Some(correlation_id.as_ref().clone()),
                         connection_id: Some(client_id),
                         desktop_authorized: desktop_authority.authorize(client_id),
-                        manager_channel: false,
+                        manager_process: false,
                     }),
                     Err(error) => {
                         let invalid = Message::Text(serde_json::json!({

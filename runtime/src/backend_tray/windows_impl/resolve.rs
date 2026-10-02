@@ -27,17 +27,17 @@ fn install_roots() -> Vec<PathBuf> {
 /// — read-only, the Apps dir is not created here. Dev env overrides win in
 /// both paths.
 pub fn resolve_component_executable(component: Component) -> Option<PathBuf> {
-    if let Some(path) = engine::brand::env_os(component.env_override()) {
+    if let Some(path) = crate::brand::env_os(component.env_override()) {
         let path = PathBuf::from(path);
         if path.is_file() {
             return Some(path);
         }
     }
     if let Some(desc) = component.app_descriptor() {
-        return engine::native_apps::native_apps_root()
+        return crate::native_apps::native_apps_root()
             .ok()
             .and_then(|root| {
-                engine::native_apps::NativeAppStore::at(root).executable_path(desc.id)
+                crate::native_apps::NativeAppStore::at(root).executable_path(desc.id)
             });
     }
     manager_executable_candidates(&install_roots())

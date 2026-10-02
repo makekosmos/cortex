@@ -13,7 +13,7 @@ fn client(pid: u32) -> DispatchClient {
         correlation_id: None,
         connection_id: Some(1),
         desktop_authorized: false,
-        manager_channel: false,
+        manager_process: false,
     }
 }
 

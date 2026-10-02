@@ -22,11 +22,11 @@ pub(in crate::ws_server) async fn handle_system_op(
             }
         }
         "privileged.enable" => {
-            // WS: the bound desktop shell. HTTP `/v1/rpc`: the authenticated
-            // Manager channel — the gpui Manager cannot take a desktop lease
-            // (leases are minted for the Electron shell PID via the control
-            // socket), but its channel is already the lock-token credential.
-            if !(client.desktop_authorized || client.manager_channel) {
+            // Two trusted callers: the bound WS desktop shell, and a `/v1/rpc`
+            // client whose *process image* is the installed Manager exe
+            // (the lock token alone is not Manager identity — any same-user
+            // process can read engine.lock.json).
+            if !(client.desktop_authorized || client.manager_process) {
                 return LocalResponse::err("system.privileged.enable: unauthorized client");
             }
             match tokio::task::spawn_blocking(crate::privileged::client::enable).await {

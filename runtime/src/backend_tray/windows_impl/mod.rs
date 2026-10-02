@@ -26,6 +26,12 @@ use components::Component;
 use icon::{load_icon, notify_data, remove_tray_icon, resolve_icon_path, WM_TRAY_CALLBACK};
 use menu::{build_menu, MenuAction, MenuPresence};
 use resolve::resolve_component_executable;
+
+/// Resolved Manager exe path — re-exported for the Engine's `/v1/rpc`
+/// caller-identity check.
+pub(crate) fn manager_executable() -> Option<std::path::PathBuf> {
+    resolve_component_executable(Component::Manager)
+}
 use wide::wide;
 
 static EVENTS: std::sync::OnceLock<UnboundedSender<TrayEvent>> = std::sync::OnceLock::new();

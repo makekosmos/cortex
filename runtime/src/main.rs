@@ -5,8 +5,6 @@
 )]
 #![allow(dead_code, clippy::useless_conversion)]
 
-mod backend_tray;
-
 // Mundus backend — native runtime and Windows tray owner.
 //
 // По умолчанию запускается как самостоятельный native supervisor. Внутренний
@@ -30,7 +28,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use engine::{
     ark_host::ArkHost,
-    auth, crash_reporter, db_backup,
+    auth, backend_tray, crash_reporter, db_backup,
     dictation::DictationHost,
     engine_api::EngineApiServer,
     engine_control::{self, ControlMessage},

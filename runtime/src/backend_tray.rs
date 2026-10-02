@@ -47,6 +47,16 @@ pub fn start() -> (BackendTray, UnboundedReceiver<TrayEvent>) {
     (BackendTray { _events: events }, receiver)
 }
 
+/// The installed Manager executable (`resources/components/manager/
+/// Mundus Manager.exe`), or the `MUNDUS_MANAGER_EXECUTABLE` dev override —
+/// the same resolution the tray menu uses to launch it. `/v1/rpc` pins
+/// "this request came from the Manager" by comparing the caller PID's
+/// process image to this path (KOS-269 round 3).
+#[cfg(windows)]
+pub(crate) fn manager_executable() -> Option<std::path::PathBuf> {
+    windows_impl::manager_executable()
+}
+
 impl BackendTray {
     pub fn stop(self) {
         #[cfg(windows)]
