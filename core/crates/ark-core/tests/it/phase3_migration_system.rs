@@ -262,12 +262,13 @@ fn historical_malformed_registry_fails_closed_before_phase3_state() {
     let conn = Connection::open(&path).unwrap();
     conn.execute_batch(
         "PRAGMA foreign_keys=ON;
-         CREATE TABLE object_types(id TEXT PRIMARY KEY, name TEXT NOT NULL, schema_json TEXT \
-         NOT NULL, ui_schema_json TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, \
-         system_locked INTEGER NOT NULL DEFAULT 0);
+         CREATE TABLE object_types(id TEXT PRIMARY KEY, name TEXT NOT NULL, \
+         schema_json TEXT NOT NULL, ui_schema_json TEXT NOT NULL, created_at TEXT NOT NULL, \
+         updated_at TEXT NOT NULL, system_locked INTEGER NOT NULL DEFAULT 0);
          CREATE TABLE object_type_versions(type_id TEXT NOT NULL, version TEXT NOT NULL, \
-         schema_json TEXT NOT NULL, ui_schema_json TEXT NOT NULL, content_contract_json TEXT NOT NULL, \
-         relations_json TEXT NOT NULL, sync_policy_json TEXT NOT NULL, schema_hash TEXT NOT NULL, \
+         schema_json TEXT NOT NULL, ui_schema_json TEXT NOT NULL, \
+         content_contract_json TEXT NOT NULL, relations_json TEXT NOT NULL, \
+         sync_policy_json TEXT NOT NULL, schema_hash TEXT NOT NULL, \
          created_at TEXT NOT NULL, PRIMARY KEY(type_id,version));
          CREATE TABLE object_type_aliases(alias TEXT PRIMARY KEY, canonical_type_id TEXT NOT \
          NULL, created_at TEXT NOT NULL);

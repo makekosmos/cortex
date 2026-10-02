@@ -95,10 +95,38 @@ pub struct AgentsEvent {
     pub payload: Value,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct RuntimeHandle {
     tx: mpsc::Sender<AppCommand>,
     generation: u64,
+    task: tokio::task::JoinHandle<()>,
+}
+
+impl RuntimeHandle {
+    /// Stopping must end with the task joined: the ack is sent while the task
+    /// is still unwinding, and its Arc<AgentsService> — the SQLite connection
+    /// inside the data dir — is released only when the task returns. Without
+    /// the join a TempDir fixture can outrace the teardown (KOS-314).
+    async fn stop(self, session_id: &str) -> Result<(), String> {
+        let (done_tx, done_rx) = tokio::sync::oneshot::channel();
+        let result = if self
+            .tx
+            .send(AppCommand::Shutdown(Some(done_tx)))
+            .await
+            .is_err()
+        {
+            // The receiver is gone — the task is already exiting.
+            Err("Codex app-server недоступен во время остановки".to_string())
+        } else {
+            match tokio::time::timeout(RUNTIME_ACK_TIMEOUT, done_rx).await {
+                Ok(Ok(result)) => result,
+                Ok(Err(_)) => Err("Codex app-server закрыл канал остановки".to_string()),
+                Err(_) => Err("Codex app-server не подтвердил остановку".to_string()),
+            }
+        };
+        crate::background_task::join_task(session_id, self.task, RUNTIME_JOIN_TIMEOUT).await;
+        result
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -284,6 +312,12 @@ pub struct AgentsService {
     root: PathBuf,
     db: Mutex<Connection>,
     runtimes: Mutex<HashMap<String, RuntimeHandle>>,
+    /// Tasks whose handle left `runtimes` without being joined (a task
+    /// deregisters itself at the end of run_app_server). Kept so shutdown()
+    /// can still wait for their last instructions — the Arc<AgentsService>
+    /// they hold keeps the SQLite connection open until the task returns.
+    /// Entries are pruned on push, so the vec is bounded by live tasks.
+    finished_tasks: crate::background_task::TaskRegistry,
     lifecycle_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
     next_runtime_generation: AtomicU64,
     events: broadcast::Sender<Value>,
@@ -365,6 +399,7 @@ impl AgentsService {
             root,
             db: Mutex::new(conn),
             runtimes: Mutex::new(HashMap::new()),
+            finished_tasks: Mutex::new(Vec::new()),
             lifecycle_locks: Mutex::new(HashMap::new()),
             next_runtime_generation: AtomicU64::new(1),
             events,
@@ -383,27 +418,28 @@ impl AgentsService {
     }
 
     pub async fn shutdown(&self) {
-        let handles = {
-            self.runtimes()
-                .drain()
-                .map(|(_, handle)| handle)
-                .collect::<Vec<_>>()
-        };
-        let mut completions = Vec::with_capacity(handles.len());
-        for handle in handles {
+        let handles = { self.runtimes().drain().collect::<Vec<_>>() };
+        let mut pending = Vec::with_capacity(handles.len());
+        for (id, handle) in handles {
             let (done_tx, done_rx) = tokio::sync::oneshot::channel();
-            if handle
+            let acked = handle
                 .tx
                 .send(AppCommand::Shutdown(Some(done_tx)))
                 .await
-                .is_ok()
-            {
-                completions.push(done_rx);
+                .is_ok();
+            pending.push((id, acked.then_some(done_rx), handle.task));
+        }
+        for (id, completion, task) in pending {
+            if let Some(done_rx) = completion {
+                let _ = tokio::time::timeout(RUNTIME_ACK_TIMEOUT, done_rx).await;
             }
+            // See RuntimeHandle::stop: the ack precedes the task's teardown,
+            // so the join is what makes shutdown deterministic.
+            crate::background_task::join_task(&id, task, RUNTIME_JOIN_TIMEOUT).await;
         }
-        for completion in completions {
-            let _ = tokio::time::timeout(Duration::from_secs(5), completion).await;
-        }
+        // Tasks that deregistered themselves keep their Arc until they
+        // return; drain them so no connection outlives the service.
+        crate::background_task::drain_tasks(&self.finished_tasks, RUNTIME_JOIN_TIMEOUT).await;
     }
 
     fn db(&self) -> MutexGuard<'_, Connection> {
@@ -439,7 +475,13 @@ impl AgentsService {
             .get(session_id)
             .is_some_and(|runtime| runtime.generation == generation)
         {
-            runtimes.remove(session_id);
+            if let Some(handle) = runtimes.remove(session_id) {
+                crate::background_task::track_task(
+                    &self.finished_tasks,
+                    format!("agents-runtime:{session_id}"),
+                    handle.task,
+                );
+            }
         }
     }
 
@@ -991,15 +1033,24 @@ impl AgentsService {
         let service = self.clone();
         let id = session.id.clone();
         {
+            // tokio::spawn is synchronous — check, spawn and insert under one
+            // lock, so a duplicate registration can never be observed.
             let mut runtimes = self.runtimes();
             if runtimes.contains_key(&id) {
                 return Ok(());
             }
-            runtimes.insert(id.clone(), RuntimeHandle { tx, generation });
+            let task = tokio::spawn(async move {
+                run_app_server(service, session, generation, rx, ready_tx).await;
+            });
+            runtimes.insert(
+                id.clone(),
+                RuntimeHandle {
+                    tx,
+                    generation,
+                    task,
+                },
+            );
         }
-        tokio::spawn(async move {
-            run_app_server(service, session, generation, rx, ready_tx).await;
-        });
         let result = ready_rx
             .await
             .map_err(|_| "Codex app-server завершился при запуске".to_string())?;
@@ -1190,16 +1241,7 @@ impl AgentsService {
         let Some(handle) = self.runtimes().remove(session_id) else {
             return Ok(());
         };
-        let (done_tx, done_rx) = tokio::sync::oneshot::channel();
-        handle
-            .tx
-            .send(AppCommand::Shutdown(Some(done_tx)))
-            .await
-            .map_err(|_| "Codex app-server недоступен во время остановки".to_string())?;
-        tokio::time::timeout(Duration::from_secs(5), done_rx)
-            .await
-            .map_err(|_| "Codex app-server не подтвердил остановку".to_string())?
-            .map_err(|_| "Codex app-server закрыл канал остановки".to_string())?
+        handle.stop(session_id).await
     }
 
     async fn remove_worktree(&self, session_id: &str) -> Result<Value, String> {

@@ -53,6 +53,7 @@ type DynError = Box<dyn std::error::Error + Send + Sync>;
 struct SetupState {
     ark: Arc<ArkHost>,
     package_workers: PackageWorkerSupervisor,
+    package_service: Arc<engine::package_service::PackageService>,
     ws: WsServer,
     api: EngineApiServer,
     usage_diagnostics: Arc<UsageTrackerDiagnosticsState>,
@@ -167,6 +168,7 @@ async fn run_core_worker() -> ExitCode {
     let SetupState {
         ark,
         package_workers,
+        package_service,
         ws,
         api,
         usage_diagnostics,
@@ -329,6 +331,9 @@ async fn run_core_worker() -> ExitCode {
     if let Some(agents) = agents_shutdown.get() {
         agents.shutdown().await;
     }
+    // Join every spawned install/migration task so no write into the data
+    // dir outlives the service (KOS-314).
+    package_service.drain_background().await;
     if let Err(error) = package_workers.stop_all().await {
         tracing::error!(
             target: "package_worker",
@@ -577,9 +582,10 @@ async fn setup() -> Result<SetupState, DynError> {
     // are logged and retried next start; Engine startup never waits on it.
     {
         let migration_service = package_service.clone();
-        tokio::spawn(async move {
+        let task = tokio::spawn(async move {
             migration_service.migrate_legacy_native_apps().await;
         });
+        package_service.track_background_task("legacy-native-migration", task);
     }
 
     // The Engine owns the Start-menu entries for store-installed apps:
@@ -588,7 +594,10 @@ async fn setup() -> Result<SetupState, DynError> {
     // waiting for an install event. Blocking COM/fs work off the runtime.
     {
         let shortcut_service = package_service.clone();
-        tokio::task::spawn_blocking(move || shortcut_service.reconcile_native_shortcuts());
+        package_service.track_background_task(
+            "native-shortcut-reconcile",
+            tokio::task::spawn_blocking(move || shortcut_service.reconcile_native_shortcuts()),
+        );
     }
 
     // Hotkey hooks are Engine-owned; forward their normalized trigger to the
@@ -815,6 +824,7 @@ async fn setup() -> Result<SetupState, DynError> {
     Ok(SetupState {
         ark,
         package_workers,
+        package_service,
         ws,
         api,
         usage_diagnostics,

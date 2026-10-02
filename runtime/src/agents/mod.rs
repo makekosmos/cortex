@@ -31,6 +31,11 @@ const FULL_ACCESS_CONSENT_TTL: Duration = Duration::from_secs(60);
 const INTERRUPT_ACK_TIMEOUT: Duration = Duration::from_secs(10);
 #[cfg(test)]
 const INTERRUPT_ACK_TIMEOUT: Duration = Duration::from_millis(500);
+/// How long stop/shutdown waits for a runtime's Shutdown ack.
+const RUNTIME_ACK_TIMEOUT: Duration = Duration::from_secs(5);
+/// How long a runtime join is awaited before the task is aborted — the bound
+/// keeps a wedged task from hanging shutdown while never leaving it detached.
+const RUNTIME_JOIN_TIMEOUT: Duration = Duration::from_secs(10);
 
 include!("definitions.rs");
 include!("app_server.rs");

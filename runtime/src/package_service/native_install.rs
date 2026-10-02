@@ -38,10 +38,11 @@ impl PackageService {
         let service = Arc::clone(self);
         // `job` moves into the task: a panic unwinds through its Drop and the
         // row still settles — `installing` can never outlive the install.
-        tokio::spawn(async move {
+        let task = tokio::spawn(async move {
             let result = service.run_native_install_with(&probe, desc, None).await;
             job.finish(&result);
         });
+        self.track_background_task(format!("native-install:{}", desc.id), task);
         // The claim is already held — the row reports Installing directly.
         Ok(self.native_summary(NativeRowInput {
             desc,

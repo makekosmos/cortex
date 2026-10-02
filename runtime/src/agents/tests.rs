@@ -10,6 +10,68 @@ mod tests {
         }
     }
 
+    fn temp_repo(dir: &tempfile::TempDir) -> PathBuf {
+        let repo = dir.path().join("repo");
+        std::fs::create_dir_all(&repo).unwrap();
+        assert!(StdCommand::new("git")
+            .args(["init", "--quiet"])
+            .current_dir(&repo)
+            .status()
+            .unwrap()
+            .success());
+        repo
+    }
+
+    fn configured_repo(dir: &tempfile::TempDir) -> PathBuf {
+        let repo = temp_repo(dir);
+        for args in [
+            vec!["config", "user.email", "daedalus@test.invalid"],
+            vec!["config", "user.name", "Daedalus Test"],
+        ] {
+            assert!(StdCommand::new("git")
+                .args(args)
+                .current_dir(&repo)
+                .status()
+                .unwrap()
+                .success());
+        }
+        repo
+    }
+
+    fn commit_file(repo: &Path, name: &str, contents: &str, message: &str) {
+        std::fs::write(repo.join(name), contents).unwrap();
+        assert!(StdCommand::new("git")
+            .args(["add", name])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+        assert!(StdCommand::new("git")
+            .args(["commit", "-m", message])
+            .current_dir(repo)
+            .status()
+            .unwrap()
+            .success());
+    }
+
+    fn fake_app_server_env() {
+        let script = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/daedalus-fake-app-server.mjs")
+            .canonicalize()
+            .unwrap();
+        let script_arg = script
+            .to_string_lossy()
+            .trim_start_matches("\\\\?\\")
+            .replace('\\', "/");
+        std::env::set_var("DAEDALUS_FAKE_APP_SERVER_EXE", "node");
+        std::env::set_var("DAEDALUS_FAKE_APP_SERVER_SCRIPT", &script_arg);
+    }
+
+    fn clear_fake_app_server_env() {
+        std::env::remove_var("DAEDALUS_FAKE_APP_SERVER_EXE");
+        std::env::remove_var("DAEDALUS_FAKE_APP_SERVER_SCRIPT");
+    }
+
     #[test]
     fn git_fixture_rejects_a_cwd_that_would_fall_back_to_the_outer_repo() {
         let dir = tempfile::tempdir().unwrap();
@@ -28,6 +90,7 @@ mod tests {
         // discover the implementation repository and mutate it.
         let error = git_cwd_is_isolated(&nested).unwrap_err();
         assert!(error.contains("escaped requested fixture") || error.contains("not a git"));
+        dir.close().unwrap();
     }
 
     #[test]
@@ -136,14 +199,7 @@ mod tests {
     #[tokio::test]
     async fn full_access_consent_is_desktop_bound_single_use_and_audited() {
         let dir = tempfile::tempdir().unwrap();
-        let repo = dir.path().join("repo");
-        std::fs::create_dir_all(&repo).unwrap();
-        assert!(StdCommand::new("git")
-            .args(["init", "--quiet"])
-            .current_dir(&repo)
-            .status()
-            .unwrap()
-            .success());
+        let repo = temp_repo(&dir);
         let service = AgentsService::new(dir.path()).unwrap();
         let project = service.add_project(repo.to_str().unwrap()).await.unwrap();
         let mut request = json!({
@@ -234,19 +290,14 @@ mod tests {
             )
             .unwrap();
         assert_eq!(prompt_count, 0);
+        drop(service);
+        dir.close().unwrap();
     }
 
     #[tokio::test]
     async fn full_access_consent_fails_closed_when_audit_storage_fails() {
         let dir = tempfile::tempdir().unwrap();
-        let repo = dir.path().join("repo");
-        std::fs::create_dir_all(&repo).unwrap();
-        assert!(StdCommand::new("git")
-            .args(["init", "--quiet"])
-            .current_dir(&repo)
-            .status()
-            .unwrap()
-            .success());
+        let repo = temp_repo(&dir);
         let service = AgentsService::new(dir.path()).unwrap();
         let project = service.add_project(repo.to_str().unwrap()).await.unwrap();
         service
@@ -276,6 +327,8 @@ mod tests {
             .unwrap()
             .pending
             .is_empty());
+        drop(service);
+        dir.close().unwrap();
     }
 
     #[test]
@@ -296,6 +349,8 @@ mod tests {
             .timeline(json!({"session_id":"s","limit":2,"cursor":cursor}))
             .unwrap();
         assert_eq!(second["events"].as_array().unwrap().len(), 1);
+        drop(service);
+        dir.close().unwrap();
     }
     #[test]
     fn output_is_utf8_truncated() {
@@ -327,37 +382,14 @@ mod tests {
         let pending = reopened.pending_approvals().unwrap();
         assert_eq!(pending.len(), 1);
         assert_eq!(pending[0].id, approval.id);
+        drop(reopened);
+        dir.close().unwrap();
     }
     #[tokio::test]
     async fn dirty_base_does_not_leak_into_worktree() {
         let dir = tempfile::tempdir().unwrap();
-        let repo = dir.path().join("repo");
-        std::fs::create_dir_all(&repo).unwrap();
-        for args in [
-            vec!["init"],
-            vec!["config", "user.email", "daedalus@test.invalid"],
-            vec!["config", "user.name", "Daedalus Test"],
-        ] {
-            assert!(StdCommand::new("git")
-                .args(args)
-                .current_dir(&repo)
-                .status()
-                .unwrap()
-                .success());
-        }
-        std::fs::write(repo.join("tracked.txt"), "base").unwrap();
-        assert!(StdCommand::new("git")
-            .args(["add", "tracked.txt"])
-            .current_dir(&repo)
-            .status()
-            .unwrap()
-            .success());
-        assert!(StdCommand::new("git")
-            .args(["commit", "-m", "base"])
-            .current_dir(&repo)
-            .status()
-            .unwrap()
-            .success());
+        let repo = configured_repo(&dir);
+        commit_file(&repo, "tracked.txt", "base", "base");
         std::fs::write(repo.join("tracked.txt"), "dirty").unwrap();
         let worktree = dir.path().join("worktree");
         git_status(
@@ -417,6 +449,8 @@ mod tests {
             .unwrap();
         service.remove_worktree("s").await.unwrap();
         assert!(!worktree.exists());
+        drop(service);
+        dir.close().unwrap();
     }
 
     #[tokio::test]
@@ -436,20 +470,29 @@ mod tests {
         let _released = tokio::time::timeout(Duration::from_secs(60), second.lock())
             .await
             .unwrap();
+        drop(service);
+        dir.close().unwrap();
     }
 
-    #[test]
-    fn stale_runtime_generation_cannot_remove_current_runtime() {
+    #[tokio::test]
+    async fn stale_runtime_generation_cannot_remove_current_runtime() {
         let dir = tempfile::tempdir().unwrap();
         let service = AgentsService::new(dir.path()).unwrap();
         let (tx, _rx) = mpsc::channel(1);
-        service
-            .runtimes()
-            .insert("session".into(), RuntimeHandle { tx, generation: 2 });
+        service.runtimes().insert(
+            "session".into(),
+            RuntimeHandle {
+                tx,
+                generation: 2,
+                task: tokio::spawn(async {}),
+            },
+        );
 
         assert!(!service.runtime_is_current("session", 1));
         service.remove_runtime("session", 1);
         assert!(service.runtime_is_current("session", 2));
+        drop(service);
+        dir.close().unwrap();
     }
 
     #[tokio::test]
@@ -493,38 +536,15 @@ mod tests {
             .unwrap();
         assert_eq!(message["payload"]["text"], "Привет, мир");
         assert_eq!(service.pending_approvals().unwrap().len(), 1);
+        drop(service);
+        dir.close().unwrap();
     }
 
     #[tokio::test]
     async fn diff_contains_committed_uncommitted_and_untracked_text() {
         let dir = tempfile::tempdir().unwrap();
-        let repo = dir.path().join("repo");
-        std::fs::create_dir_all(&repo).unwrap();
-        for args in [
-            vec!["init"],
-            vec!["config", "user.email", "daedalus@test.invalid"],
-            vec!["config", "user.name", "Daedalus Test"],
-        ] {
-            assert!(StdCommand::new("git")
-                .args(args)
-                .current_dir(&repo)
-                .status()
-                .unwrap()
-                .success());
-        }
-        std::fs::write(repo.join("tracked.txt"), "base\n").unwrap();
-        assert!(StdCommand::new("git")
-            .args(["add", "tracked.txt"])
-            .current_dir(&repo)
-            .status()
-            .unwrap()
-            .success());
-        assert!(StdCommand::new("git")
-            .args(["commit", "-m", "base"])
-            .current_dir(&repo)
-            .status()
-            .unwrap()
-            .success());
+        let repo = configured_repo(&dir);
+        commit_file(&repo, "tracked.txt", "base\n", "base");
         let base = git_output(&repo, &["rev-parse", "HEAD"])
             .await
             .unwrap()
@@ -581,6 +601,8 @@ mod tests {
             .unwrap();
         assert!(service.remove_worktree("s").await.is_err());
         assert!(worktree.exists());
+        drop(service);
+        dir.close().unwrap();
     }
 
     #[tokio::test]
@@ -592,33 +614,8 @@ mod tests {
             "set DAEDALUS_REAL_CODEX_SMOKE=1 explicitly"
         );
         let dir = tempfile::tempdir().unwrap();
-        let repo = dir.path().join("repo");
-        std::fs::create_dir_all(&repo).unwrap();
-        for args in [
-            vec!["init"],
-            vec!["config", "user.email", "daedalus@test.invalid"],
-            vec!["config", "user.name", "Daedalus Test"],
-        ] {
-            assert!(StdCommand::new("git")
-                .args(args)
-                .current_dir(&repo)
-                .status()
-                .unwrap()
-                .success());
-        }
-        std::fs::write(repo.join("README.md"), "Daedalus smoke\n").unwrap();
-        assert!(StdCommand::new("git")
-            .args(["add", "README.md"])
-            .current_dir(&repo)
-            .status()
-            .unwrap()
-            .success());
-        assert!(StdCommand::new("git")
-            .args(["commit", "-m", "base"])
-            .current_dir(&repo)
-            .status()
-            .unwrap()
-            .success());
+        let repo = configured_repo(&dir);
+        commit_file(&repo, "README.md", "Daedalus smoke\n", "base");
 
         let service = AgentsService::new(dir.path()).unwrap();
         let project = service.add_project(path_str(&repo).unwrap()).await.unwrap();
@@ -666,59 +663,21 @@ mod tests {
             );
             tokio::time::sleep(Duration::from_millis(250)).await;
         }
-        let handles = service
-            .runtimes()
-            .drain()
-            .map(|(_, handle)| handle)
-            .collect::<Vec<_>>();
-        for handle in handles {
-            let (done_tx, done_rx) = tokio::sync::oneshot::channel();
-            let _ = handle.tx.send(AppCommand::Shutdown(Some(done_tx))).await;
-            let _ = tokio::time::timeout(Duration::from_secs(60), done_rx).await;
+        let handles = service.runtimes().drain().collect::<Vec<_>>();
+        for (id, handle) in handles {
+            let _ = handle.stop(&id).await;
         }
+        drop(service);
+        dir.close().unwrap();
     }
 
     #[tokio::test]
     async fn fake_app_server_recovers_session_and_expires_stale_approval() {
-        let script = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/fixtures/daedalus-fake-app-server.mjs")
-            .canonicalize()
-            .unwrap();
-        let script_arg = script
-            .to_string_lossy()
-            .trim_start_matches("\\\\?\\")
-            .replace('\\', "/");
-        std::env::set_var("DAEDALUS_FAKE_APP_SERVER_EXE", "node");
-        std::env::set_var("DAEDALUS_FAKE_APP_SERVER_SCRIPT", &script_arg);
+        fake_app_server_env();
 
         let dir = tempfile::tempdir().unwrap();
-        let repo = dir.path().join("repo");
-        std::fs::create_dir_all(&repo).unwrap();
-        for args in [
-            vec!["init"],
-            vec!["config", "user.email", "daedalus@test.invalid"],
-            vec!["config", "user.name", "Daedalus Test"],
-        ] {
-            assert!(StdCommand::new("git")
-                .args(args)
-                .current_dir(&repo)
-                .status()
-                .unwrap()
-                .success());
-        }
-        std::fs::write(repo.join("README.md"), "fixture\n").unwrap();
-        assert!(StdCommand::new("git")
-            .args(["add", "README.md"])
-            .current_dir(&repo)
-            .status()
-            .unwrap()
-            .success());
-        assert!(StdCommand::new("git")
-            .args(["commit", "-m", "base"])
-            .current_dir(&repo)
-            .status()
-            .unwrap()
-            .success());
+        let repo = configured_repo(&dir);
+        commit_file(&repo, "README.md", "fixture\n", "base");
 
         let service = AgentsService::new(dir.path()).unwrap();
         let project = service.add_project(path_str(&repo).unwrap()).await.unwrap();
@@ -734,18 +693,7 @@ mod tests {
             assert!(tokio::time::Instant::now() < deadline);
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
-        let runtime = { service.runtimes().remove(&session_id).unwrap() };
-        let (done_tx, done_rx) = tokio::sync::oneshot::channel();
-        runtime
-            .tx
-            .send(AppCommand::Shutdown(Some(done_tx)))
-            .await
-            .unwrap();
-        tokio::time::timeout(Duration::from_secs(60), done_rx)
-            .await
-            .unwrap()
-            .unwrap()
-            .unwrap();
+        service.stop_runtime(&session_id).await.unwrap();
         drop(service);
 
         let reopened = AgentsService::new(dir.path()).unwrap();
@@ -824,8 +772,82 @@ mod tests {
             .any(|approval| approval.session_id == archived_id));
         reopened.shutdown().await;
         assert!(reopened.runtimes().is_empty());
+        assert_eq!(Arc::strong_count(&reopened), 1);
+        drop(reopened);
+        dir.close().unwrap();
 
-        std::env::remove_var("DAEDALUS_FAKE_APP_SERVER_EXE");
-        std::env::remove_var("DAEDALUS_FAKE_APP_SERVER_SCRIPT");
+        clear_fake_app_server_env();
+    }
+
+    #[tokio::test]
+    async fn finished_runtime_registry_stays_bounded() {
+        let dir = tempfile::tempdir().unwrap();
+        let service = AgentsService::new(dir.path()).unwrap();
+
+        // A handle whose task already completed is pruned by the next push,
+        // so a long-lived service never accumulates dead JoinHandles.
+        let mut done = tokio::spawn(async {});
+        (&mut done).await.unwrap();
+        let (tx, _rx) = mpsc::channel(1);
+        service.runtimes().insert(
+            "done".into(),
+            RuntimeHandle {
+                tx,
+                generation: 1,
+                task: done,
+            },
+        );
+        service.remove_runtime("done", 1);
+
+        let (tx, _rx) = mpsc::channel(1);
+        let (park_tx, park_rx) = tokio::sync::oneshot::channel::<()>();
+        service.runtimes().insert(
+            "live".into(),
+            RuntimeHandle {
+                tx,
+                generation: 1,
+                task: tokio::spawn(async move {
+                    let _ = park_rx.await;
+                }),
+            },
+        );
+        service.remove_runtime("live", 1);
+        assert_eq!(service.finished_tasks.lock().unwrap().len(), 1);
+
+        let _ = park_tx.send(());
+        service.shutdown().await;
+        assert!(service.finished_tasks.lock().unwrap().is_empty());
+        assert_eq!(Arc::strong_count(&service), 1);
+        drop(service);
+        dir.close().unwrap();
+    }
+
+    #[tokio::test]
+    async fn stopped_runtime_releases_its_service_arc() {
+        // KOS-314 contract: the Shutdown ack precedes the runtime task's
+        // teardown, so only a joined task proves the Arc<AgentsService> — and
+        // the SQLite connection inside the data dir — is released.
+        fake_app_server_env();
+
+        let dir = tempfile::tempdir().unwrap();
+        let repo = configured_repo(&dir);
+        commit_file(&repo, "README.md", "fixture\n", "base");
+        let service = AgentsService::new(dir.path()).unwrap();
+        let project = service.add_project(path_str(&repo).unwrap()).await.unwrap();
+        let session = service
+            .create_session(
+                json!({"project_id":project["id"],"prompt":"arc contract","mode":"default"}),
+            )
+            .await
+            .unwrap();
+        let session_id = session["id"].as_str().unwrap().to_string();
+        assert!(Arc::strong_count(&service) > 1);
+
+        service.stop_runtime(&session_id).await.unwrap();
+        assert_eq!(Arc::strong_count(&service), 1);
+        drop(service);
+        dir.close().unwrap();
+
+        clear_fake_app_server_env();
     }
 }
