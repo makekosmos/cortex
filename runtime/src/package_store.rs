@@ -387,9 +387,26 @@ impl PackageStore {
         }
         // Record the verified blob's identity so later opens can skip the
         // re-hash (KOS-290). Failure degrades to the always-hash path, never
-        // to a weaker check, so it must not fail the install.
-        if let Ok(file) = open_immutable_read(&blob) {
-            let _ = identity::store(&blob, &file);
+        // to a weaker check, so it must not fail the install — but a store
+        // that can never write records would silently re-pay the 2 s hash
+        // on every launch, so it is logged.
+        match open_immutable_read(&blob) {
+            Ok(file) => {
+                if let Err(error) = identity::store(&blob, &file) {
+                    tracing::warn!(
+                        blob = %blob.display(),
+                        %error,
+                        "package blob identity record not written; launches will re-hash"
+                    );
+                }
+            }
+            Err(error) => {
+                tracing::warn!(
+                    blob = %blob.display(),
+                    %error,
+                    "installed package blob unreadable for identity record; launches will re-hash"
+                );
+            }
         }
         let unpacked = fs::canonicalize(self.root.join("unpacked"))?
             .join(expected_manifest.id())
@@ -779,8 +796,17 @@ fn open_verified_blob(blob: &Path, expected_hash: &str) -> Result<fs::File, Stor
     if !eq_hash(&hash_reader(&mut file)?, expected_hash) {
         return Err(StoreError::HashMismatch);
     }
+    // The bytes are verified, so a failed record write stays non-fatal — but
+    // without the record every launch silently re-pays the full hash, which
+    // is the exact regression this fast path exists to remove; log it.
     if current.is_some() {
-        let _ = identity::store(blob, &file);
+        if let Err(error) = identity::store(blob, &file) {
+            tracing::warn!(
+                blob = %blob.display(),
+                %error,
+                "package blob identity record not written; launches will re-hash"
+            );
+        }
     }
     file.seek(SeekFrom::Start(0))?;
     Ok(file)
@@ -1468,6 +1494,26 @@ mod tests {
             PackageStore::verify_immutable_entrypoint_path(&entrypoint),
             Err(StoreError::HashMismatch)
         ));
+    }
+
+    #[test]
+    fn entrypoint_verify_survives_failed_identity_record_write() {
+        let d = tempdir().unwrap();
+        let store = PackageStore::new(d.path().join("store")).unwrap();
+        let (installed, entrypoint) = install_worker(d.path(), &store);
+        let blob = blob_path(d.path(), &installed);
+        fs::remove_file(identity::record_path(&blob)).unwrap();
+        identity::FAIL_NEXT_STORE.store(true, Ordering::Relaxed);
+        // The verified handle is returned even when the record cannot be
+        // written; the launch just keeps paying the full hash.
+        PackageStore::verify_immutable_entrypoint_path(&entrypoint).unwrap();
+        assert_eq!(full_blob_hash_count(&blob), 1);
+        assert!(!identity::record_path(&blob).exists());
+        PackageStore::verify_immutable_entrypoint_path(&entrypoint).unwrap();
+        assert_eq!(full_blob_hash_count(&blob), 2);
+        assert!(identity::load(&blob).is_some());
+        PackageStore::verify_immutable_entrypoint_path(&entrypoint).unwrap();
+        assert_eq!(full_blob_hash_count(&blob), 2);
     }
 
     #[test]

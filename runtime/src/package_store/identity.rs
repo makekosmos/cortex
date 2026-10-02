@@ -61,13 +61,39 @@ pub(crate) fn of(file: &fs::File) -> io::Result<BlobIdentity> {
 /// unreadable — both take the same full-hash path, so a corrupt record is
 /// indistinguishable from a missing one and self-repairs.
 pub(crate) fn load(blob: &Path) -> Option<BlobIdentity> {
-    read_owner_only_json(&record_path(blob)).ok()
+    match read_owner_only_json(&record_path(blob)) {
+        Ok(identity) => Some(identity),
+        Err(error) => {
+            // NotFound is the ordinary pre-upgrade/absent case; anything else
+            // (corrupt JSON, permissions) means the fast path silently
+            // degrades to a full hash every launch, so make it visible.
+            if error.kind() != io::ErrorKind::NotFound {
+                tracing::warn!(
+                    blob = %blob.display(),
+                    %error,
+                    "package blob identity record unreadable; falling back to full hash"
+                );
+            }
+            None
+        }
+    }
 }
 
 /// Persist the identity of `file` next to `blob`, owner-only like state.json.
 pub(crate) fn store(blob: &Path, file: &fs::File) -> io::Result<()> {
-    write_owner_only_json(&record_path(blob), &of(file)?).map_err(io::Error::other)
+    let identity = of(file)?;
+    #[cfg(test)]
+    if FAIL_NEXT_STORE.swap(false, std::sync::atomic::Ordering::Relaxed) {
+        return Err(io::Error::other("injected identity write failure"));
+    }
+    write_owner_only_json(&record_path(blob), &identity).map_err(io::Error::other)
 }
+
+/// Test seam: inject a one-shot failure into the next `store` call, like
+/// `fail_next_state_write` on `PackageStore`.
+#[cfg(test)]
+pub(crate) static FAIL_NEXT_STORE: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
 
 #[cfg(windows)]
 fn platform_identity(file: &fs::File) -> io::Result<BlobIdentity> {
