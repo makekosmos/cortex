@@ -1,4 +1,3 @@
-﻿
 fn line_matches_query(line: &str, normalized_query: &str, query_terms: &[String]) -> bool {
     if line.is_empty() {
         return false;

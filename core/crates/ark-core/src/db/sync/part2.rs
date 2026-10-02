@@ -1,4 +1,3 @@
-﻿
 fn record_usage_sequence(
     conn: &Connection,
     entity_type: &str,
@@ -132,7 +131,9 @@ fn finish_usage_entity_sync(conn: &Connection, entity: &SyncEntity) -> Result<()
 pub fn get_object_revision(conn: &Connection, entity_id: &str) -> Result<Option<String>, String> {
     let vector_revision = get_sync_kv(conn, VERSION_VECTOR_KEY)?
         .filter(|value| !value.trim().is_empty())
-        .map(|value| serde_json::from_str::<VersionVector>(&value).map_err(|error| error.to_string()))
+        .map(|value| {
+            serde_json::from_str::<VersionVector>(&value).map_err(|error| error.to_string())
+        })
         .transpose()?
         .and_then(|vector| vector.get(entity_id).cloned());
     let object_revision = conn

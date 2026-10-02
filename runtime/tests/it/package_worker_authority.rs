@@ -87,7 +87,14 @@ async fn supervisor_authority_denies_without_forwarding_and_allows_bound_generat
             "1.0.0",
             "session-1",
             7,
-            json!({"kind":"read_object","type_id":"note","type_version":"1.0.0","object_id":"n1","fields":[],"relations":[],"unknown":true}),
+            json!(
+                {"kind":"read_object",
+                "type_id":"note",
+                "type_version":"1.0.0",
+                "object_id":"n1",
+                "fields":[],
+                "relations":[],
+                "unknown":true}),
         )
         .await;
     assert_eq!(malformed, Err("invalid-request"));

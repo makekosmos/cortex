@@ -1,4 +1,3 @@
-﻿
 impl SqliteStorageBackend {
     pub fn set_selective_sync_profile(
         &self,
@@ -10,9 +9,7 @@ impl SqliteStorageBackend {
             .unwrap_or_else(|error| error.into_inner()) = profile;
     }
 
-    fn selective_sync_profile(
-        &self,
-    ) -> Option<crate::data_platform::SelectiveSyncProfile> {
+    fn selective_sync_profile(&self) -> Option<crate::data_platform::SelectiveSyncProfile> {
         self.selective_profile
             .lock()
             .unwrap_or_else(|error| error.into_inner())
@@ -71,7 +68,11 @@ impl StorageBackend for SqliteStorageBackend {
         tokio::task::spawn_blocking(move || {
             let guard = conn.lock().unwrap_or_else(|e| e.into_inner());
             crate::integration_replication::validate_outbound_signed_sync_with_transport(
-                &guard, &space_id, &origin_id, &frame, &transport_key,
+                &guard,
+                &space_id,
+                &origin_id,
+                &frame,
+                &transport_key,
             )
         })
         .await
@@ -170,9 +171,11 @@ impl StorageBackend for SqliteStorageBackend {
         tokio::task::spawn_blocking(move || {
             // Poison recovery: РµСЃР»Рё earlier panic Р·Р°РїРѕР»СѓС‡РёР» lock, РјС‹ РІСЃС‘
             // СЂР°РІРЅРѕ РјРѕР¶РµРј С‡РёС‚Р°С‚СЊ. Р­С‚Рѕ backend РґР»СЏ load (read-only path),
-            // РґР°РЅРЅС‹Рµ РІРЅСѓС‚СЂРё guard'Р° С†РµР»С‹. Р‘РµР· recovery РєР°Р¶РґС‹Р№ РїРѕСЃР»РµРґСѓСЋС‰РёР№
+            // РґР°РЅРЅС‹Рµ РІРЅСѓС‚СЂРё guard'Р° С†РµР»С‹. Р‘РµР· recovery РєР°Р¶РґС‹Р№
+            // РїРѕСЃР»РµРґСѓСЋС‰РёР№
             // sync round РІРѕР·РІСЂР°С‰Р°РµС‚ empty list в†’ multi-device sync silent
-            // С„РµР№Р»РёС‚СЃСЏ РЅР°РІСЃРµРіРґР° РїРѕСЃР»Рµ РїРµСЂРІРѕРіРѕ panic'Р° РІ СЌС‚РѕРј РїСЂРѕС†РµСЃСЃРµ.
+            // С„РµР№Р»РёС‚СЃСЏ РЅР°РІСЃРµРіРґР° РїРѕСЃР»Рµ РїРµСЂРІРѕРіРѕ panic'Р° РІ СЌС‚РѕРј
+            // РїСЂРѕС†РµСЃСЃРµ.
             let guard = conn.lock().unwrap_or_else(|e| e.into_inner());
             let entities = Self::collect_entities_blocking(&guard, &vector, &device_id);
             profile.as_ref().map_or(entities.clone(), |profile| {
@@ -216,8 +219,8 @@ impl StorageBackend for SqliteStorageBackend {
         tokio::task::spawn_blocking(move || {
             // Apply вЂ” write path. Poison recovery acceptable: SQLite
             // transactions atomic, partially-applied state РЅРµ РІРѕР·РјРѕР¶РµРЅ.
-            // РђР»СЊС‚РµСЂРЅР°С‚РёРІР° (return Err) РґРµР»Р°РµС‚ sync РЅРµСЂР°Р±РѕС‚РѕСЃРїРѕСЃРѕР±РЅС‹Рј РґРѕ
-            // process restart.
+            // РђР»СЊС‚РµСЂРЅР°С‚РёРІР° (return Err) РґРµР»Р°РµС‚ sync
+            // РЅРµСЂР°Р±РѕС‚РѕСЃРїРѕСЃРѕР±РЅС‹Рј РґРѕ process restart.
             let guard = conn.lock().unwrap_or_else(|e| e.into_inner());
             Self::apply_entity_blocking(&guard, &entity)
         })

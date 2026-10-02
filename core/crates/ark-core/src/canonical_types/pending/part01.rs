@@ -1,4 +1,4 @@
-﻿use std::cmp::Ordering;
+use std::cmp::Ordering;
 
 use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension};
@@ -11,7 +11,10 @@ const LEGACY_INDEX: &str = "idx_sync_pending_awaited_type";
 const VERSION_INDEX: &str = "idx_sync_pending_awaited_type_version";
 const LEGACY_INDEX_SQL: &str =
     "CREATE INDEX idx_sync_pending_awaited_type ON sync_pending_objects(awaited_type_id)";
-const VERSION_INDEX_SQL: &str = "CREATE INDEX idx_sync_pending_awaited_type_version ON sync_pending_objects(awaited_type_id,awaited_type_version)";
+const VERSION_INDEX_SQL: &str = concat!(
+    "CREATE INDEX idx_sync_pending_awaited_type_version ON sync_pending_objects(",
+    "awaited_type_id,awaited_type_version)"
+);
 
 fn error(message: impl Into<String>) -> String {
     message.into()
@@ -121,7 +124,10 @@ type PendingRow = (String, String, String, String, String);
 
 fn rows(conn: &Connection) -> Result<Vec<PendingRow>, String> {
     let mut stmt = conn
-        .prepare("SELECT id,payload,awaited_type_id,awaited_type_version,received_at FROM sync_pending_objects ORDER BY id,awaited_type_id,awaited_type_version")
+        .prepare(concat!(
+            "SELECT id,payload,awaited_type_id,awaited_type_version,received_at FROM ",
+            "sync_pending_objects ORDER BY id,awaited_type_id,awaited_type_version"
+        ))
         .map_err(|e| e.to_string())?;
     let result = stmt
         .query_map([], |row| {
@@ -141,7 +147,10 @@ fn rows(conn: &Connection) -> Result<Vec<PendingRow>, String> {
 
 fn indexes(conn: &Connection) -> Result<Vec<(String, String)>, String> {
     let mut stmt = conn
-        .prepare("SELECT name, sql FROM sqlite_master WHERE type='index' AND tbl_name='sync_pending_objects' AND name IN (?1,?2) ORDER BY name")
+        .prepare(concat!(
+            "SELECT name, sql FROM sqlite_master WHERE type='index' AND ",
+            "tbl_name='sync_pending_objects' AND name IN (?1,?2) ORDER BY name"
+        ))
         .map_err(|e| e.to_string())?;
     let result = stmt
         .query_map(params![LEGACY_INDEX, VERSION_INDEX], |row| {
@@ -183,12 +192,36 @@ pub fn migrate_phase2_to_v3(conn: &Connection) -> Result<(), String> {
     conn.execute_batch("SAVEPOINT ark_phase3_pending")
         .map_err(|e| e.to_string())?;
     let result = (|| {
-        conn.execute_batch("CREATE TABLE sync_pending_objects_v3 (id TEXT NOT NULL, payload TEXT NOT NULL, awaited_type_id TEXT NOT NULL, awaited_type_version TEXT NOT NULL, received_at TEXT NOT NULL, PRIMARY KEY(id, awaited_type_id, awaited_type_version))")
+        conn.execute_batch(concat!(
+            "CREATE TABLE sync_pending_objects_v3 (id TEXT NOT NULL, payload TEXT NOT ",
+            "NULL, awaited_type_id TEXT NOT NULL, awaited_type_version TEXT NOT NULL, ",
+            "received_at TEXT NOT NULL, PRIMARY KEY(id, awaited_type_id, ",
+            "awaited_type_version))"
+        ))
+        .map_err(|e| e.to_string())?;
+        conn.execute(
+            concat!(
+                "INSERT INTO sync_pending_objects_v3 (id,payload,awaited_type_id,",
+                "awaited_type_version,received_at) SELECT id,payload,awaited_type_id,",
+                "awaited_type_version,received_at FROM sync_pending_objects"
+            ),
+            [],
+        )
+        .map_err(|e| e.to_string())?;
+        let copied = conn.query_row(
+            concat!(
+                "SELECT id,payload,awaited_type_id,awaited_type_version,received_at FROM ",
+                "sync_pending_objects_v3 ORDER BY id,awaited_type_id,awaited_type_version"
+            ),
+            [],
+            |_| Ok(()),
+        );
+        let mut stmt = conn
+            .prepare(concat!(
+                "SELECT id,payload,awaited_type_id,awaited_type_version,received_at FROM ",
+                "sync_pending_objects_v3 ORDER BY id,awaited_type_id,awaited_type_version"
+            ))
             .map_err(|e| e.to_string())?;
-        conn.execute("INSERT INTO sync_pending_objects_v3 (id,payload,awaited_type_id,awaited_type_version,received_at) SELECT id,payload,awaited_type_id,awaited_type_version,received_at FROM sync_pending_objects", [])
-            .map_err(|e| e.to_string())?;
-        let copied = conn.query_row("SELECT id,payload,awaited_type_id,awaited_type_version,received_at FROM sync_pending_objects_v3 ORDER BY id,awaited_type_id,awaited_type_version", [], |_| Ok(()));
-        let mut stmt = conn.prepare("SELECT id,payload,awaited_type_id,awaited_type_version,received_at FROM sync_pending_objects_v3 ORDER BY id,awaited_type_id,awaited_type_version").map_err(|e| e.to_string())?;
         let copied_rows: Vec<(String, String, String, String, String)> = stmt
             .query_map([], |row| {
                 Ok((
@@ -207,8 +240,14 @@ pub fn migrate_phase2_to_v3(conn: &Connection) -> Result<(), String> {
         if copied_rows != snapshot {
             return Err(error("pending migration snapshot mismatch"));
         }
-        conn.execute_batch("DROP TABLE sync_pending_objects; ALTER TABLE sync_pending_objects_v3 RENAME TO sync_pending_objects; CREATE INDEX idx_sync_pending_awaited_type ON sync_pending_objects(awaited_type_id); CREATE INDEX idx_sync_pending_awaited_type_version ON sync_pending_objects(awaited_type_id,awaited_type_version)")
-            .map_err(|e| e.to_string())?;
+        conn.execute_batch(concat!(
+            "DROP TABLE sync_pending_objects; ALTER TABLE sync_pending_objects_v3 RENAME ",
+            "TO sync_pending_objects; CREATE INDEX idx_sync_pending_awaited_type ON ",
+            "sync_pending_objects(awaited_type_id); CREATE INDEX ",
+            "idx_sync_pending_awaited_type_version ON sync_pending_objects(",
+            "awaited_type_id,awaited_type_version)"
+        ))
+        .map_err(|e| e.to_string())?;
         if rows(conn)? != snapshot {
             return Err(error("pending migration post-snapshot mismatch"));
         }

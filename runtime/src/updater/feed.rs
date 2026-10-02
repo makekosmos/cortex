@@ -60,9 +60,10 @@ mod tests {
         let mock = server
             .mock_async(|when, then| {
                 when.method(httpmock::Method::GET).path("/latest.yml");
-                then.status(200).body(
-                    "version: 0.5.3\nfiles:\n  - url: Mundus-Setup-0.5.3.exe\n    sha512: AAA\n    size: 10\n",
-                );
+                then.status(200).body(concat!(
+                    "version: 0.5.3\nfiles:\n  - url: Mundus-Setup-0.5.3.exe\n    sha512: AAA\n  ",
+                    "  size: 10\n"
+                ));
             })
             .await;
         let manifest = fetch_manifest(&build_client().unwrap(), &server.base_url())

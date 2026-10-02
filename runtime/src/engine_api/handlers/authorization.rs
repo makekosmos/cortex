@@ -109,7 +109,8 @@ fn grant_authorizes(
     fields: &[String],
     relations: &[String],
 ) -> Result<(), &'static str> {
-    let rule = grant_rule_matches(grant, type_id, type_version, action).ok_or("data grant denied")?;
+    let rule =
+        grant_rule_matches(grant, type_id, type_version, action).ok_or("data grant denied")?;
     let allowed_fields = if matches!(action, "read" | "subscribe") {
         &rule.fields_read
     } else {
@@ -138,7 +139,11 @@ fn object_field_inputs(object: &Value) -> Result<(Vec<FieldInput>, Vec<String>),
     let map = object.as_object().ok_or("object must be an object")?;
     let mut fields = Vec::new();
     let mut names = Vec::new();
-    for (key, field_id) in [("title", "title"), ("contentJson", "content"), ("content_json", "content")] {
+    for (key, field_id) in [
+        ("title", "title"),
+        ("contentJson", "content"),
+        ("content_json", "content"),
+    ] {
         if let Some(value) = map.get(key) {
             if key == "content_json" && map.contains_key("contentJson") {
                 continue;
@@ -189,7 +194,8 @@ fn object_type_and_version_for_write(
     object: &Value,
     grant: &LaunchGrant,
 ) -> Result<(String, String), &'static str> {
-    let type_id = canonical_type_id(param_str(object, "type_id", "typeId").ok_or("object type is required")?);
+    let type_id =
+        canonical_type_id(param_str(object, "type_id", "typeId").ok_or("object type is required")?);
     if let Some(version) = param_str(object, "type_version", "typeVersion") {
         return Ok((type_id, version.to_owned()));
     }
@@ -205,7 +211,9 @@ fn object_type_and_version_for_write(
 }
 
 fn data_request_allowed(grant: &LaunchGrant, request: DataRequest) -> Result<(), &'static str> {
-    grant.authorize_request(&request).map_err(|_| "data grant denied")
+    grant
+        .authorize_request(&request)
+        .map_err(|_| "data grant denied")
 }
 
 async fn internal_app_lookup(

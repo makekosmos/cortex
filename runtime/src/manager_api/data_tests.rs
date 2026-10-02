@@ -6,11 +6,13 @@ use super::*;
 /// with FK checks off — exactly how the legacy writer produced them.
 fn seed_object(conn: &rusqlite::Connection, id: &str, type_id: &str, deleted_at: Option<&str>) {
     conn.execute(
-            "INSERT INTO objects (id,type_id,type_version,title,content_json,props_json,created_at,updated_at,deleted_at)
-             VALUES (?1,?2,'0.0.0-legacy',?1,'{}','{}','2026-01-01T00:00:00.000Z','2026-01-02T00:00:00.000Z',?3)",
-            rusqlite::params![id, type_id, deleted_at],
-        )
-        .unwrap();
+        "INSERT INTO objects (id,type_id,type_version,title,content_json,props_json,created_at,
+         updated_at,deleted_at)
+         VALUES (?1,?2,'0.0.0-legacy',?1,'{}','{}','2026-01-01T00:00:00.000Z',
+         '2026-01-02T00:00:00.000Z',?3)",
+        rusqlite::params![id, type_id, deleted_at],
+    )
+    .unwrap();
 }
 
 async fn fixture() -> (
@@ -100,7 +102,11 @@ async fn data_search_resolves_hits_back_to_objects() {
                 "typeId": "com.kosmos.note",
                 "typeVersion": "1.0.0",
                 "title": "unsichtbare orchidee",
-                "contentJson": {"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "a note body mentioning orchidee"}]}]},
+                "contentJson": {"type": "doc", "content": [
+                    {"type": "paragraph", "content": [
+                        {"type": "text", "text": "a note body mentioning orchidee"},
+                    ]},
+                ]},
                 "propsJson": {"description": null, "extensions": {}},
                 "createdAt": "2026-01-01T00:00:00.000Z",
                 "updatedAt": "2026-01-02T00:00:00.000Z",
@@ -164,7 +170,8 @@ fn manager_rows_are_bounded_redacted_and_body_free() {
     // stay visible, with only the allow-listed fields projected.
     let task = json!({
         "id": "task-1", "type_id": "task_obj", "type_version": "0.0.0-legacy",
-        "title": "Task", "props_json": {"status": "done", "api_token": "secret", "local_path": "/private"}
+        "title": "Task",
+        "props_json": {"status": "done", "api_token": "secret", "local_path": "/private"}
     });
     let task_safe = safe_row(&task, None).expect("legacy task stays visible");
     assert_eq!(task_safe["type_id"], "com.kosmos.task");

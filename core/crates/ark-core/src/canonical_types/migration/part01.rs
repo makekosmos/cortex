@@ -1,4 +1,4 @@
-﻿// Integrated Phase 3 migration orchestration.
+// Integrated Phase 3 migration orchestration.
 //
 // This facade owns sequencing and the outer rollback boundary.  Inventory,
 // compatibility, ledger, registry, and object persistence remain owned by
@@ -154,7 +154,10 @@ fn report_from_plan(plan: &MigrationPlan, status: &str) -> MigrationReport {
 fn completed_item_count(conn: &Connection) -> Result<usize, MigrationError> {
     let exists: bool = conn
         .query_row(
-            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='canonical_migration_runs')",
+            concat!(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND ",
+                "name='canonical_migration_runs')"
+            ),
             [],
             |row| row.get(0),
         )
@@ -210,14 +213,30 @@ fn ensure_source_archive(
     conn: &Connection,
     items: &[migration_objects::PlannedItem],
 ) -> Result<(), MigrationError> {
-    conn.execute_batch("CREATE TABLE IF NOT EXISTS canonical_migration_source_archive (contract_version TEXT NOT NULL, source_kind TEXT NOT NULL, source_id TEXT NOT NULL, source_hash TEXT NOT NULL, raw_source BLOB NOT NULL, planned_json TEXT NOT NULL, PRIMARY KEY(contract_version,source_kind,source_id))")
-        .map_err(|e| MigrationError::Storage(e.to_string()))?;
+    conn.execute_batch(concat!(
+        "CREATE TABLE IF NOT EXISTS canonical_migration_source_archive (",
+        "contract_version TEXT NOT NULL, source_kind TEXT NOT NULL, source_id TEXT ",
+        "NOT NULL, source_hash TEXT NOT NULL, raw_source BLOB NOT NULL, planned_json ",
+        "TEXT NOT NULL, PRIMARY KEY(contract_version,source_kind,source_id))"
+    ))
+    .map_err(|e| MigrationError::Storage(e.to_string()))?;
     for item in items {
         let planned_json =
             serde_json::to_string(item).map_err(|e| MigrationError::Storage(e.to_string()))?;
         conn.execute(
-            "INSERT OR IGNORE INTO canonical_migration_source_archive(contract_version,source_kind,source_id,source_hash,raw_source,planned_json) VALUES(?1,?2,?3,?4,?5,?6)",
-            params![CONTRACT_VERSION, ledger_kind(&item.source_kind_variant), item.source_id, item.source_hash, item.raw_source, planned_json],
+            concat!(
+                "INSERT OR IGNORE INTO canonical_migration_source_archive(contract_version,",
+                "source_kind,source_id,source_hash,raw_source,planned_json) VALUES(?1,?2,?3,",
+                "?4,?5,?6)"
+            ),
+            params![
+                CONTRACT_VERSION,
+                ledger_kind(&item.source_kind_variant),
+                item.source_id,
+                item.source_hash,
+                item.raw_source,
+                planned_json
+            ],
         )
         .map_err(|e| MigrationError::Storage(e.to_string()))?;
     }
@@ -229,7 +248,10 @@ fn archived_items(
 ) -> Result<Vec<migration_objects::PlannedItem>, MigrationError> {
     let exists: bool = conn
         .query_row(
-            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='canonical_migration_source_archive')",
+            concat!(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND ",
+                "name='canonical_migration_source_archive')"
+            ),
             [],
             |row| row.get(0),
         )
@@ -238,7 +260,10 @@ fn archived_items(
         return Ok(Vec::new());
     }
     let mut stmt = conn
-        .prepare("SELECT planned_json FROM canonical_migration_source_archive WHERE contract_version=?1 ORDER BY source_kind,source_id")
+        .prepare(concat!(
+            "SELECT planned_json FROM canonical_migration_source_archive WHERE ",
+            "contract_version=?1 ORDER BY source_kind,source_id"
+        ))
         .map_err(|e| MigrationError::Storage(e.to_string()))?;
     let rows = stmt
         .query_map([CONTRACT_VERSION], |row| row.get::<_, String>(0))

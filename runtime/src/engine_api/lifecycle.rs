@@ -341,7 +341,11 @@ impl HttpOperationRegistry {
             operation.cleanup.run();
         }
         if timed_out {
-            tracing::error!(?deadline, elapsed = ?started.elapsed(), "HTTP shutdown exceeded its bounded cleanup lifecycle");
+            tracing::error!(
+                ?deadline,
+                elapsed = ?started.elapsed(),
+                "HTTP shutdown exceeded its bounded cleanup lifecycle",
+            );
             Err("HTTP shutdown exceeded its deadline")
         } else {
             Ok(())

@@ -16,19 +16,47 @@ fn setup() -> Connection {
 
 fn phase2_state_snapshot(conn: &Connection) -> serde_json::Value {
     let object_types: Vec<_> = conn
-        .prepare("SELECT id,name,schema_json,ui_schema_json,created_at,updated_at,system_locked,COALESCE(current_version,''),COALESCE(status,'') FROM object_types ORDER BY id")
+        .prepare(concat!(
+            "SELECT id,name,schema_json,ui_schema_json,created_at,updated_at,",
+            "system_locked,COALESCE(current_version,''),COALESCE(status,'') FROM ",
+            "object_types ORDER BY id"
+        ))
         .unwrap()
         .query_map([], |row| {
-            Ok(json!([row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, String>(3)?, row.get::<_, String>(4)?, row.get::<_, String>(5)?, row.get::<_, i64>(6)?, row.get::<_, String>(7)?, row.get::<_, String>(8)?]))
+            Ok(json!([
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, String>(5)?,
+                row.get::<_, i64>(6)?,
+                row.get::<_, String>(7)?,
+                row.get::<_, String>(8)?
+            ]))
         })
         .unwrap()
         .collect::<Result<_, _>>()
         .unwrap();
     let versions: Vec<_> = conn
-        .prepare("SELECT type_id,version,schema_json,ui_schema_json,schema_hash,created_at FROM object_type_versions ORDER BY type_id,version")
+        .prepare(concat!(
+            "SELECT type_id,version,schema_json,ui_schema_json,schema_hash,created_at ",
+            "FROM object_type_versions ORDER BY type_id,version"
+        ))
         .unwrap()
-        .query_map([], |row| Ok(json!([row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, String>(3)?, row.get::<_, String>(4)?, row.get::<_, String>(5)?])))
-        .unwrap().collect::<Result<_, _>>().unwrap();
+        .query_map([], |row| {
+            Ok(json!([
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, String>(5)?
+            ]))
+        })
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
     let aliases: Vec<_> = conn
         .prepare(
             "SELECT alias,canonical_type_id,created_at FROM object_type_aliases ORDER BY alias",
@@ -45,15 +73,45 @@ fn phase2_state_snapshot(conn: &Connection) -> serde_json::Value {
         .collect::<Result<_, _>>()
         .unwrap();
     let objects: Vec<_> = conn
-        .prepare("SELECT id,type_id,type_version,title,content_json,props_json,created_at,updated_at,deleted_at FROM objects ORDER BY id")
+        .prepare(concat!(
+            "SELECT id,type_id,type_version,title,content_json,props_json,created_at,",
+            "updated_at,deleted_at FROM objects ORDER BY id"
+        ))
         .unwrap()
-        .query_map([], |row| Ok(json!([row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, String>(3)?, row.get::<_, String>(4)?, row.get::<_, String>(5)?, row.get::<_, String>(6)?, row.get::<_, String>(7)?, row.get::<_, Option<String>>(8)?])))
-        .unwrap().collect::<Result<_, _>>().unwrap();
+        .query_map([], |row| {
+            Ok(json!([
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, String>(5)?,
+                row.get::<_, String>(6)?,
+                row.get::<_, String>(7)?,
+                row.get::<_, Option<String>>(8)?
+            ]))
+        })
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
     let links: Vec<_> = conn
-        .prepare("SELECT id,source_object_id,target_object_id,link_type,created_at FROM object_links ORDER BY id")
+        .prepare(concat!(
+            "SELECT id,source_object_id,target_object_id,link_type,created_at FROM ",
+            "object_links ORDER BY id"
+        ))
         .unwrap()
-        .query_map([], |row| Ok(json!([row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, String>(3)?, row.get::<_, String>(4)?])))
-        .unwrap().collect::<Result<_, _>>().unwrap();
+        .query_map([], |row| {
+            Ok(json!([
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?
+            ]))
+        })
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
     let sync_kv: Vec<_> = conn
         .prepare("SELECT key,value FROM sync_kv ORDER BY key")
         .unwrap()
@@ -63,7 +121,13 @@ fn phase2_state_snapshot(conn: &Connection) -> serde_json::Value {
         .unwrap()
         .collect::<Result<_, _>>()
         .unwrap();
-    json!({"objectTypes": object_types, "versions": versions, "aliases": aliases, "objects": objects, "links": links, "syncKv": sync_kv})
+    json!(
+        {"objectTypes": object_types,
+        "versions": versions,
+        "aliases": aliases,
+        "objects": objects,
+        "links": links,
+        "syncKv": sync_kv})
 }
 
 #[test]
@@ -250,7 +314,10 @@ fn pending_same_id_keeps_newest_hlc_and_complete_payload() {
     insert_pending_object(&conn, &older, "other-missing").unwrap();
     let row: (String, String, String) = conn
         .query_row(
-            "SELECT payload, awaited_type_id, awaited_type_version FROM sync_pending_objects WHERE id='pending-1'",
+            concat!(
+                "SELECT payload, awaited_type_id, awaited_type_version FROM ",
+                "sync_pending_objects WHERE id='pending-1'"
+            ),
             [],
             |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
         )

@@ -31,17 +31,18 @@ fn user_data_ok(data: Value) -> HttpResponse {
 }
 
 fn user_data_field<'a>(value: Option<&'a str>, field: &str) -> Result<&'a str, HttpResponse> {
-    value
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| {
-            json_response(
-                StatusCode::BAD_REQUEST,
-                json!({ "ok": false, "error": format!("missing {field}") }),
-            )
-        })
+    value.filter(|value| !value.is_empty()).ok_or_else(|| {
+        json_response(
+            StatusCode::BAD_REQUEST,
+            json!({ "ok": false, "error": format!("missing {field}") }),
+        )
+    })
 }
 
-fn user_data_header<'a>(request: &'a Request<Incoming>, name: &str) -> Result<&'a str, HttpResponse> {
+fn user_data_header<'a>(
+    request: &'a Request<Incoming>,
+    name: &str,
+) -> Result<&'a str, HttpResponse> {
     request
         .headers()
         .get(name)
@@ -124,9 +125,10 @@ async fn handle_user_data(
             };
             match parsed.operation.as_str() {
                 "read" => match user_data.read(root_id, app_id, key) {
-                    Ok(bytes) => user_data_ok(
-                        json!({ "bytes": base64::Engine::encode(&base64::engine::general_purpose::STANDARD, bytes) }),
-                    ),
+                    Ok(bytes) => {
+                        let engine = &base64::engine::general_purpose::STANDARD;
+                        user_data_ok(json!({ "bytes": base64::Engine::encode(engine, bytes) }))
+                    }
                     Err(error) => user_data_failure(error),
                 },
                 "stat" => match user_data.stat(root_id, app_id, key) {
@@ -172,10 +174,7 @@ async fn handle_user_data_write(
         Ok(value) => value,
         Err(response) => return response,
     };
-    let body = Limited::new(
-        request.into_body(),
-        crate::user_data::USER_DATA_MAX_BYTES,
-    );
+    let body = Limited::new(request.into_body(), crate::user_data::USER_DATA_MAX_BYTES);
     let collected = match body.collect().await {
         Ok(collected) => collected,
         Err(_) => return user_data_failure(crate::user_data::UserDataError::TooLarge),

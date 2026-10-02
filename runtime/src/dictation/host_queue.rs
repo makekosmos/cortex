@@ -258,7 +258,10 @@ async fn process_one_attempt_with_injector(
                 s.active_uuid.as_deref() == Some(uuid)
             };
             if matches!(delivery, AttemptDelivery::Active) && !is_active_attempt {
-                tracing::info!(%uuid, "dictation: transcription finished after cancel; skipping inject");
+                tracing::info!(
+                    %uuid,
+                    "dictation: transcription finished after cancel; skipping inject",
+                );
                 return AttemptOutcome::Cancelled;
             }
             let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
@@ -309,7 +312,11 @@ async fn process_one_attempt_with_injector(
                 }
                 Err(error) => {
                     let reason = "inject_task_failed";
-                    tracing::warn!(%uuid, error = %error, "dictation: transcript delivery task failed");
+                    tracing::warn!(
+                        %uuid,
+                        error = %error,
+                        "dictation: transcript delivery task failed",
+                    );
                     let _ = super::pending::bump_attempt(&host.data_dir, uuid, reason);
                     host.emit_pending_changed();
                     if matches!(delivery, AttemptDelivery::Active) {
@@ -381,7 +388,11 @@ async fn process_one_attempt_with_injector(
             {
                 let s = host.state.lock().await;
                 if s.active_uuid.is_some() && s.active_uuid.as_deref() != Some(uuid) {
-                    tracing::info!(%uuid, error = %e, "dictation: transcription failed after cancel; ignoring result");
+                    tracing::info!(
+                        %uuid,
+                        error = %e,
+                        "dictation: transcription failed after cancel; ignoring result",
+                    );
                     return AttemptOutcome::Cancelled;
                 }
             }
@@ -403,7 +414,11 @@ async fn process_one_attempt_with_injector(
                     AttemptOutcome::Fatal
                 }
                 super::retry::FailureKind::Retryable => {
-                    tracing::info!(%uuid, error = %e, "dictation: retryable — scheduling next attempt");
+                    tracing::info!(
+                        %uuid,
+                        error = %e,
+                        "dictation: retryable — scheduling next attempt",
+                    );
                     AttemptOutcome::Retryable
                 }
             }

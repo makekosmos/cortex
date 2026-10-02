@@ -977,7 +977,10 @@ pub async fn transcribe(req: LocalRequest<'_>) -> Result<TranscriptionResult, Lo
 
     match send_sidecar_request(request).await {
         Ok(LocalSttResponse::Transcription(transcription)) => {
-            tracing::info!(backend = %transcription.backend, "dictation local transcribe completed");
+            tracing::info!(
+                backend = %transcription.backend,
+                "dictation local transcribe completed",
+            );
             Ok(TranscriptionResult {
                 // See postmortems.md 2026-07-03: sidecar output still crosses a version boundary.
                 text: clean_whisper_transcript(&transcription.text)

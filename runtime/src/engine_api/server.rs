@@ -46,16 +46,13 @@ pub struct EngineApiServer {
     launch_leases: Arc<Mutex<LaunchLeaseRegistry>>,
     /// ARK event bus receiver — each `/v1/apps/launch/<id>/events` request
     /// resubscribes its own consumer off this seed.
-    launch_events: std::sync::Mutex<
-        Option<tokio::sync::broadcast::Receiver<(String, Value)>>,
-    >,
+    launch_events: std::sync::Mutex<Option<tokio::sync::broadcast::Receiver<(String, Value)>>>,
     user_data: Arc<crate::user_data::UserDataRoots>,
     cleanup_interval: Duration,
     operations: HttpOperationRegistry,
     connections: Arc<HttpConnectionLifecycle>,
     request_timeout: Duration,
 }
-
 
 impl EngineApiServer {
     pub async fn bind(
@@ -209,10 +206,7 @@ impl EngineApiServer {
     /// Wire the ARK event bus after bind — the server is constructed before
     /// the ArkHost in some boot paths; an unset bus answers `/events` with
     /// 503 rather than hanging a silent stream.
-    pub fn set_launch_events(
-        &mut self,
-        events: tokio::sync::broadcast::Receiver<(String, Value)>,
-    ) {
+    pub fn set_launch_events(&mut self, events: tokio::sync::broadcast::Receiver<(String, Value)>) {
         *self
             .launch_events
             .lock()
@@ -322,7 +316,9 @@ impl EngineApiServer {
                         request_timeout,
                         operations.clone(),
                         launch_leases.clone(),
-                        launch_events.as_ref().map(tokio::sync::broadcast::Receiver::resubscribe),
+                        launch_events
+                            .as_ref()
+                            .map(tokio::sync::broadcast::Receiver::resubscribe),
                         user_data.clone(),
                         http_port,
                     )

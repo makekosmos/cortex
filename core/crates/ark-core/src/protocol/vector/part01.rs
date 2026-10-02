@@ -152,4 +152,3 @@ pub fn merge_peer_records(existing: &[PeerRecord], incoming: &[PeerRecord]) -> V
 
     map.into_values().collect()
 }
-

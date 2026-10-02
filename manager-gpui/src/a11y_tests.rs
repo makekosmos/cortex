@@ -245,8 +245,18 @@ async fn usage_rows_rebuild_only_on_input_change(cx: &mut TestAppContext) {
         app.slots.insert(
             "usage.report".into(),
             crate::app::Slot::Ready(json!({ "topApps": [
-                { "displayName": "Alpha", "processName": "a.exe", "foregroundMs": 10, "sessions": 1 },
-                { "displayName": "Beta", "processName": "b.exe", "foregroundMs": 20, "sessions": 1 },
+                {
+                    "displayName": "Alpha",
+                    "processName": "a.exe",
+                    "foregroundMs": 10,
+                    "sessions": 1,
+                },
+                {
+                    "displayName": "Beta",
+                    "processName": "b.exe",
+                    "foregroundMs": 20,
+                    "sessions": 1,
+                },
             ] })),
         );
         app.rebuild_usage_rows();

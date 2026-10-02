@@ -17,7 +17,15 @@ fn image(id: &str) -> ArkObject {
         type_version: "1.0.0".into(),
         title: "".into(),
         content_json: json!({}),
-        props_json: json!({"fileName":null,"mimeType":null,"sizeBytes":null,"width":null,"height":null,"resolution":null,"altText":"","extensions":{}}),
+        props_json: json!(
+            {"fileName":null,
+            "mimeType":null,
+            "sizeBytes":null,
+            "width":null,
+            "height":null,
+            "resolution":null,
+            "altText":"",
+            "extensions":{}}),
         created_at: "2026-01-01T00:00:00Z".into(),
         updated_at: "2026-01-01T00:00:00Z".into(),
         deleted_at: None,
@@ -30,7 +38,15 @@ fn book(id: &str) -> ArkObject {
         type_version: "1.0.0".into(),
         title: "Book".into(),
         content_json: json!({"type":"doc","content":[]}),
-        props_json: json!({"author":null,"isbn":null,"pageCount":null,"language":null,"publisher":null,"publishedDate":null,"sourceUrl":null,"extensions":{}}),
+        props_json: json!(
+            {"author":null,
+            "isbn":null,
+            "pageCount":null,
+            "language":null,
+            "publisher":null,
+            "publishedDate":null,
+            "sourceUrl":null,
+            "extensions":{}}),
         created_at: "2026-01-01T00:00:00Z".into(),
         updated_at: "2026-01-01T00:00:00Z".into(),
         deleted_at: None,
@@ -40,12 +56,29 @@ fn book(id: &str) -> ArkObject {
 fn asset_sources_prefers_local_and_orders_rich_text_without_legacy_props() {
     let conn = setup();
     db::upsert_object(&conn, &image("img-local")).unwrap();
-    conn.execute("INSERT INTO object_local_state(object_id,device_id,data_json,updated_at) VALUES('img-local','d','{\"image\":{\"sourcePath\":\"/tmp/local.png\"}}','now')", []).unwrap();
+    conn.execute(
+        concat!(
+            "INSERT INTO object_local_state(object_id,device_id,data_json,updated_at) ",
+            "VALUES('img-local','d','{\"image\":{\"sourcePath\":\"/tmp/local.png\"}}',",
+            "'now')"
+        ),
+        [],
+    )
+    .unwrap();
     let mut note = book("note-like");
     note.type_id = "com.kosmos.note".into();
     note.props_json = json!({"description":null,"extensions":{}});
     db::upsert_object(&conn, &note).unwrap();
-    conn.execute("INSERT INTO object_local_state(object_id,device_id,data_json,updated_at) VALUES('note-like','d','{\"richTextImages\":{\"kosmos-local://richtext-image/b\":\"/b\",\"kosmos-local://richtext-image/a\":\"/a\"}}','now')", []).unwrap();
+    conn.execute(
+        concat!(
+            "INSERT INTO object_local_state(object_id,device_id,data_json,updated_at) ",
+            "VALUES('note-like','d',",
+            "'{\"richTextImages\":{\"kosmos-local://richtext-image/b\":\"/b\",",
+            "\"kosmos-local://richtext-image/a\":\"/a\"}}','now')"
+        ),
+        [],
+    )
+    .unwrap();
     let rows = asset_sources(&conn, &["note-like".into(), "img-local".into()]).unwrap();
     assert_eq!(rows[0].source_ref, "/tmp/local.png");
     assert_eq!(

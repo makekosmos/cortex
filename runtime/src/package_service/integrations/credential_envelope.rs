@@ -243,7 +243,9 @@ fn decode_private_key(value: &str) -> Result<X25519HkdfSha256PrivateKey, Credent
 
 type X25519HkdfSha256PrivateKey = <X25519HkdfSha256 as Kem>::PrivateKey;
 
-fn decode_key(value: &str) -> Result<<X25519HkdfSha256 as Kem>::PublicKey, CredentialEnvelopeError> {
+fn decode_key(
+    value: &str
+) -> Result<<X25519HkdfSha256 as Kem>::PublicKey, CredentialEnvelopeError> {
     <X25519HkdfSha256 as Kem>::PublicKey::from_bytes(&decode(value)?)
         .map_err(|_| CredentialEnvelopeError::InvalidEncoding)
 }

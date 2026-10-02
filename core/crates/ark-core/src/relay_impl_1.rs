@@ -23,11 +23,8 @@ impl RelaySync {
         transport: Arc<dyn SyncTransport>,
     ) -> Arc<Self> {
         let auth_secret = normalize_auth_secret(config.auth_secret.clone());
-        let _ = transport.set_outbound_storage(
-            storage.clone(),
-            &config.space_id,
-            &config.device_id,
-        );
+        let _ =
+            transport.set_outbound_storage(storage.clone(), &config.space_id, &config.device_id);
 
         Arc::new(Self {
             storage,
@@ -241,5 +238,4 @@ impl RelaySync {
             .map(|peer| peer.authenticated)
             .unwrap_or(false)
     }
-
 }

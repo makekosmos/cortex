@@ -11,10 +11,7 @@
 /// version-looking directory segments removed. Same app before and after an
 /// update maps to one key; distinct install roots still differ.
 pub fn canonical_app_key(normalized_exe_path: &str, process_name: &str) -> String {
-    let path = normalized_exe_path
-        .trim()
-        .replace('/', "\\")
-        .to_lowercase();
+    let path = normalized_exe_path.trim().replace('/', "\\").to_lowercase();
     if path.is_empty() {
         return format!("proc:{}", process_name.trim().to_lowercase());
     }
@@ -145,8 +142,8 @@ fn merge_top_apps(
         .into_iter()
         .filter_map(|key| groups.remove(&key))
         .map(|mut row| {
-            row.is_system = windows_dir
-                .is_some_and(|dir| is_system_path(&row.normalized_path, dir));
+            row.is_system =
+                windows_dir.is_some_and(|dir| is_system_path(&row.normalized_path, dir));
             row
         })
         .collect();

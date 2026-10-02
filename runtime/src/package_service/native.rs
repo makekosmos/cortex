@@ -5,8 +5,8 @@
 
 use std::time::Duration;
 
-use crate::native_apps::{self, NativeAppInstall};
 use crate::native_apps::releases::{CachedReleaseMeta, ReleaseError, ReleaseInfo, ReleaseProbe};
+use crate::native_apps::{self, NativeAppInstall};
 
 /// Row state the Store renders for one native app.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -171,7 +171,9 @@ pub(crate) struct NativeRowInput<'a> {
 }
 
 impl PackageService {
-    fn native_store(&self) -> Result<std::sync::Arc<crate::native_apps::NativeAppStore>, PackageError> {
+    fn native_store(
+        &self,
+    ) -> Result<std::sync::Arc<crate::native_apps::NativeAppStore>, PackageError> {
         self.native_apps.clone().ok_or(PackageError::Unsupported)
     }
 
@@ -206,8 +208,7 @@ impl PackageService {
     /// Publish download progress for the running job — cheap enough to do
     /// per chunk.
     fn note_native_progress(&self, id: &'static str, downloaded: u64, total: Option<u64>) {
-        if let Some(job @ NativeJob::Installing { .. }) =
-            Self::lock(&self.native_jobs).get_mut(id)
+        if let Some(job @ NativeJob::Installing { .. }) = Self::lock(&self.native_jobs).get_mut(id)
         {
             *job = NativeJob::Installing { downloaded, total };
         }
@@ -238,13 +239,10 @@ impl PackageService {
                 Some(cached) if cached.checked_at.elapsed() < RELEASE_CACHE_TTL && !force => {
                     return Ok(cached.info.clone())
                 }
-                Some(cached) => cached
-                    .etag
-                    .as_deref()
-                    .map(|etag| CachedReleaseMeta {
-                        tag: cached.info.tag.clone(),
-                        etag: etag.to_owned(),
-                    }),
+                Some(cached) => cached.etag.as_deref().map(|etag| CachedReleaseMeta {
+                    tag: cached.info.tag.clone(),
+                    etag: etag.to_owned(),
+                }),
                 None => None,
             }
         };
@@ -269,8 +267,7 @@ impl PackageService {
                 Ok(cached.info.clone())
             }
             Err(error) => {
-                Self::lock(&self.release_failures)
-                    .insert(desc.id.to_owned(), Instant::now());
+                Self::lock(&self.release_failures).insert(desc.id.to_owned(), Instant::now());
                 Err(error)
             }
         }
@@ -309,9 +306,11 @@ impl PackageService {
             _ => None,
         };
         let (job_state, progress, failure) = match job {
-            Some(NativeJob::Installing { downloaded, total }) => {
-                (Some(NativeAppState::Installing), Some((downloaded, total)), None)
-            }
+            Some(NativeJob::Installing { downloaded, total }) => (
+                Some(NativeAppState::Installing),
+                Some((downloaded, total)),
+                None,
+            ),
             Some(NativeJob::Failed(code)) => (Some(NativeAppState::Failed), None, Some(code)),
             None => (None, None, None),
         };
@@ -321,9 +320,7 @@ impl PackageService {
                 NativeAvailability::Unsupported => NativeAppState::Unsupported,
                 _ if update_version.is_some() => NativeAppState::UpdateAvailable,
                 _ if record.is_some() => NativeAppState::Installed,
-                NativeAvailability::Offline if latest_version.is_none() => {
-                    NativeAppState::Offline
-                }
+                NativeAvailability::Offline if latest_version.is_none() => NativeAppState::Offline,
                 _ => NativeAppState::NotInstalled,
             },
         };
@@ -355,8 +352,8 @@ impl PackageService {
     ) -> Option<String> {
         let path = store.root().join("icons").join(format!("{}.png", desc.id));
         if fs::read(&path).ok().as_deref() != Some(desc.icon_png) {
-            let write = fs::create_dir_all(path.parent()?)
-                .and_then(|()| fs::write(&path, desc.icon_png));
+            let write =
+                fs::create_dir_all(path.parent()?).and_then(|()| fs::write(&path, desc.icon_png));
             if let Err(error) = write {
                 tracing::warn!(
                     target: "native_apps",
@@ -399,15 +396,15 @@ impl PackageService {
         let store = self.native_store()?;
         let target = native_apps::host_app_target();
         let checks: Vec<Option<Result<ReleaseInfo, ReleaseError>>> = match target {
-            Some(target) => {
-                futures_util::future::join_all(native_apps::NATIVE_APPS.iter().map(|desc| {
-                    self.check_app_release(probe, desc, target, force)
-                }))
-                .await
-                .into_iter()
-                .map(Some)
-                .collect()
-            }
+            Some(target) => futures_util::future::join_all(
+                native_apps::NATIVE_APPS
+                    .iter()
+                    .map(|desc| self.check_app_release(probe, desc, target, force)),
+            )
+            .await
+            .into_iter()
+            .map(Some)
+            .collect(),
             None => native_apps::NATIVE_APPS.iter().map(|_| None).collect(),
         };
         let mut rows = Vec::with_capacity(native_apps::NATIVE_APPS.len());

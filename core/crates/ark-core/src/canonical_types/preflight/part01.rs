@@ -1,4 +1,4 @@
-﻿// Read-only Phase 3 source inventory and mapper preflight.
+// Read-only Phase 3 source inventory and mapper preflight.
 use std::collections::BTreeMap;
 
 use rusqlite::Connection;
@@ -104,7 +104,15 @@ struct SourceEnvelope<'a> {
 
 // Serialises one preflight record field-by-field.
 fn envelope(e: SourceEnvelope<'_>) -> Value {
-    json!({"id":e.id,"legacy_type_id":e.source_kind,"title":e.title,"content":e.content,"props":e.props,"created_at":e.created,"updated_at":e.updated,"deleted_at":e.deleted})
+    json!(
+        {"id":e.id,
+        "legacy_type_id":e.source_kind,
+        "title":e.title,
+        "content":e.content,
+        "props":e.props,
+        "created_at":e.created,
+        "updated_at":e.updated,
+        "deleted_at":e.deleted})
 }
 
 fn generic_inventory(
@@ -123,7 +131,12 @@ fn generic_inventory(
         "game_obj",
         "book_obj",
     ] {
-        let mut stmt = conn.prepare("SELECT id,title,content_json,props_json,created_at,updated_at,deleted_at FROM objects WHERE type_id=?1 ORDER BY id") .map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare(concat!(
+                "SELECT id,title,content_json,props_json,created_at,updated_at,deleted_at ",
+                "FROM objects WHERE type_id=?1 ORDER BY id"
+            ))
+            .map_err(|e| e.to_string())?;
         for row in stmt
             .query_map([kind], |r| {
                 Ok((
@@ -180,7 +193,7 @@ fn generic_inventory(
                 props,
                 created,
                 updated,
-                deleted
+                deleted,
             });
             let bytes = compact(&value)?;
             // raw_source is the exact stored JSON object columns, not the canonicalized envelope.

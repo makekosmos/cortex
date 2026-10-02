@@ -59,7 +59,10 @@ pub fn check_integrity(conn: &Connection) -> Result<(), String> {
 fn phase3_migration_completed(conn: &Connection) -> Result<bool, String> {
     let table_exists: bool = conn
         .query_row(
-            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='canonical_migration_runs')",
+            concat!(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND ",
+                "name='canonical_migration_runs')"
+            ),
             [],
             |row| row.get(0),
         )
@@ -68,7 +71,10 @@ fn phase3_migration_completed(conn: &Connection) -> Result<bool, String> {
         return Ok(false);
     }
     conn.query_row(
-        "SELECT EXISTS(SELECT 1 FROM canonical_migration_runs WHERE contract_version='phase3-canonical-v1' AND status='completed')",
+        concat!(
+            "SELECT EXISTS(SELECT 1 FROM canonical_migration_runs WHERE ",
+            "contract_version='phase3-canonical-v1' AND status='completed')"
+        ),
         [],
         |row| row.get(0),
     )
@@ -162,11 +168,14 @@ pub fn init_schema(conn: &Connection) -> Result<(), String> {
     if phase3_migration_completed(conn)? {
         // Definitions can gain a new canonical version after the migration
         // has completed; install the new version rows without re-migrating.
-        crate::canonical_types::migration_registry::ensure_canonical_type_versions(conn)
-            .map_err(|error| format!("canonical version install during init_schema failed: {error:?}"))?;
+        crate::canonical_types::migration_registry::ensure_canonical_type_versions(conn).map_err(
+            |error| format!("canonical version install during init_schema failed: {error:?}"),
+        )?;
         migration::retire_legacy_planning_tables(conn)
             .map(|_| ())
-            .map_err(|error| format!("legacy planning retirement during init_schema failed: {error:?}"))?;
+            .map_err(|error| {
+                format!("legacy planning retirement during init_schema failed: {error:?}")
+            })?;
     }
     Ok(())
 }

@@ -88,7 +88,7 @@ async fn start_relay(rooms: Rooms, listener: TcpListener) {
                     _ = &mut write_task => break,
                     frame = ws_rx.next() => {
                         match frame {
-                            Some(Ok(msg @ Message::Text(_))) | Some(Ok(msg @ Message::Binary(_))) => {
+                            Some(Ok(msg @ (Message::Text(_) | Message::Binary(_)))) => {
                                 let rs = rooms.lock().unwrap();
                                 if let Some(room) = rs.get(&space_id) {
                                     for (dev, tx) in room {

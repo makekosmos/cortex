@@ -33,11 +33,15 @@ async fn production_ws_shutdown_reaps_authenticated_and_stalled_lifecycles() {
         .unwrap()
         .contains("hello_ok"));
     socket
-            .send(Message::Text(
-                r#"{"operation":"commands.register","commands":[{"id":"lifecycle.command","title":"Lifecycle","category":"test"}]}"#.into(),
-            ))
-            .await
-            .unwrap();
+        .send(Message::Text(
+            concat!(
+                r#"{"operation":"commands.register","commands":[{"id":"lifecycle.command","#,
+                r#""title":"Lifecycle","category":"test"}]}"#
+            )
+            .into(),
+        ))
+        .await
+        .unwrap();
     let _ = tokio::time::timeout(Duration::from_secs(60), socket.next())
         .await
         .unwrap();

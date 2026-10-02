@@ -9,10 +9,19 @@ fn upsert_integration_refresh_lease_record(
     lease.validate().map_err(|e| e.to_string())?;
     let (generation, fence, issued) = lease_epoch(lease)?;
     let expires = sqlite_i64(lease.expires_at_ms, "expires_at_ms")?;
-    let holder = load_authorized_node(conn, &lease.holder_node_id)?
-        .ok_or_else(|| IntegrationContractError::Mismatch { field: "authorized_node" }.to_string())?;
+    let holder = load_authorized_node(conn, &lease.holder_node_id)?.ok_or_else(|| {
+        IntegrationContractError::Mismatch {
+            field: "authorized_node",
+        }
+        .to_string()
+    })?;
     let grant = load_integration_node_grant(conn, &lease.integration_id, &lease.holder_node_id)?
-        .ok_or_else(|| IntegrationContractError::Mismatch { field: "integration_node_grant" }.to_string())?;
+        .ok_or_else(|| {
+            IntegrationContractError::Mismatch {
+                field: "integration_node_grant",
+            }
+            .to_string()
+        })?;
     if holder.status != NodeStatus::Active {
         return Err(IntegrationContractError::RevokedNode.to_string());
     }
@@ -22,7 +31,10 @@ fn upsert_integration_refresh_lease_record(
     if holder.grant_epoch != grant.grant_epoch
         || holder.encryption_public_key != grant.node_encryption_key
     {
-        return Err(IntegrationContractError::Mismatch { field: "node_key_epoch" }.to_string());
+        return Err(IntegrationContractError::Mismatch {
+            field: "node_key_epoch",
+        }
+        .to_string());
     }
     persist_with_vector(
         conn,

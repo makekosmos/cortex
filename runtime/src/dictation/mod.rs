@@ -2,7 +2,9 @@
 // `.agent/tasks/2026-05-24-dictation/spec.md`.
 //
 // Wire format для WS broadcast events (flat JSON, см. forbidden.md):
-//   {"event":"dictation_state_changed","state":"idle|recording|transcribing|error","error":null|"..."}
+//
+// {"event":"dictation_state_changed",
+//  "state":"idle|recording|transcribing|error","error":null|"..."}
 //   {"event":"dictation_transcript","text":"...","language":"ru","durationMs":1234}
 //   {"event":"dictation_config_changed"}
 //

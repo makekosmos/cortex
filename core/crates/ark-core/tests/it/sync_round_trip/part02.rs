@@ -1,4 +1,3 @@
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 
 async fn round_trip_sync_between_two_servers() {

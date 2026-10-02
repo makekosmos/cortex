@@ -27,10 +27,7 @@ impl PackageService {
         self.ensure_dictation_running_with(spawn_dictation_background);
     }
 
-    fn ensure_dictation_running_with(
-        &self,
-        spawn: impl FnOnce(&Path) -> std::io::Result<()>,
-    ) {
+    fn ensure_dictation_running_with(&self, spawn: impl FnOnce(&Path) -> std::io::Result<()>) {
         let Some(desc) = crate::native_apps::app_descriptor(DICTATION_APP_ID) else {
             return;
         };
@@ -91,9 +88,7 @@ impl PackageService {
         loop {
             match store.app_is_running(DICTATION_APP_ID) {
                 Ok(false) => return true,
-                Ok(true) if Instant::now() < deadline => {
-                    std::thread::sleep(DICTATION_STOP_POLL)
-                }
+                Ok(true) if Instant::now() < deadline => std::thread::sleep(DICTATION_STOP_POLL),
                 _ => return false,
             }
         }

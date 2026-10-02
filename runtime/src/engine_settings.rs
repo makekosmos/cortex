@@ -228,7 +228,14 @@ mod tests {
     #[test]
     fn engine_setting_wins_and_updates_preserve_unknown_fields() {
         let dir = tempfile::tempdir().unwrap();
-        std::fs::write(settings_path(dir.path()), r#"{"desktop_host":{"warm_timeout_seconds":0,"future":7},"future_root":{"x":true},"usage_tracker":{"enabled":true}}"#).unwrap();
+        std::fs::write(
+            settings_path(dir.path()),
+            concat!(
+                r#"{"desktop_host":{"warm_timeout_seconds":0,"future":7},"#,
+                r#""future_root":{"x":true},"usage_tracker":{"enabled":true}}"#
+            ),
+        )
+        .unwrap();
         assert!(resolve_usage_tracker(dir.path(), None).enabled);
         let result = update_settings(dir.path(), None, Some(false)).unwrap();
         assert_eq!(result["desktop_host"]["warm_timeout_seconds"], 0);

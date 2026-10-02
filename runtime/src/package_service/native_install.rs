@@ -69,7 +69,9 @@ impl PackageService {
         version: Option<&str>,
     ) -> Result<NativeAppSummary, PackageError> {
         if desc.id == DICTATION_APP_ID {
-            return self.run_dictation_native_install(probe, desc, version).await;
+            return self
+                .run_dictation_native_install(probe, desc, version)
+                .await;
         }
         self.run_native_install_inner(probe, desc, version).await
     }
@@ -126,16 +128,16 @@ impl PackageService {
         // Unique per attempt — a concurrent or previous attempt can never
         // collide with (or truncate) this download. The guard deletes the
         // file on drop, including on cancellation or any failure below.
-        let download = TempDownload::at(
-            app_dir.join(crate::native_apps::unique_temp_name(".download-")),
-        );
+        let download =
+            TempDownload::at(app_dir.join(crate::native_apps::unique_temp_name(".download-")));
         let url = releases::asset_url(&probe.base, desc.repository, &info.tag, &info.asset);
         let id = desc.id;
-        let (sha256, size) = releases::download(probe, &url, download.path(), &mut |done, total| {
-            self.note_native_progress(id, done, total);
-        })
-        .await
-        .map_err(map_release_error)?;
+        let (sha256, size) =
+            releases::download(probe, &url, download.path(), &mut |done, total| {
+                self.note_native_progress(id, done, total);
+            })
+            .await
+            .map_err(map_release_error)?;
         if !eq_hash(&sha256, &info.sha256) {
             return Err(PackageError::Integrity);
         }

@@ -20,7 +20,12 @@ fn valid_task_props() -> Value {
 }
 
 fn valid_doc() -> Value {
-    json!({"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"hello","marks":[{"type":"bold"}]}]}]})
+    json!(
+        {"type":"doc",
+        "content":[{"type":"paragraph",
+        "content":[{"type":"text",
+        "text":"hello",
+        "marks":[{"type":"bold"}]}]}]})
 }
 
 fn error(
@@ -196,7 +201,11 @@ fn rich_text_uses_contract_for_nodes_marks_and_attributes() {
     let cases = [
         (json!({"type":"doc","extra":true}), "/extra", "nodeShape"),
         (
-            json!({"type":"doc","content":[{"type":"paragraph","marks":[{"type":"bold","extra":true}]}]}),
+            json!(
+                {"type":"doc",
+                "content":[{"type":"paragraph",
+                "marks":[{"type":"bold",
+                "extra":true}]}]}),
             "/content/0/marks/0/extra",
             "markShape",
         ),
@@ -206,12 +215,20 @@ fn rich_text_uses_contract_for_nodes_marks_and_attributes() {
             "attributes",
         ),
         (
-            json!({"type":"doc","content":[{"type":"paragraph","marks":[{"type":"link","attrs":{}}]}]}),
+            json!(
+                {"type":"doc",
+                "content":[{"type":"paragraph",
+                "marks":[{"type":"link",
+                "attrs":{}}]}]}),
             "/content/0/marks/0/attrs/href",
             "required",
         ),
         (
-            json!({"type":"doc","content":[{"type":"paragraph","marks":[{"type":"link","attrs":{"href":null}}]}]}),
+            json!(
+                {"type":"doc",
+                "content":[{"type":"paragraph",
+                "marks":[{"type":"link",
+                "attrs":{"href":null}}]}]}),
             "/content/0/marks/0/attrs/href",
             "type",
         ),

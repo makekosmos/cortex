@@ -1,4 +1,4 @@
-﻿// Core-owned typed Game RPC contract and persistence facade.
+// Core-owned typed Game RPC contract and persistence facade.
 //
 // The generic object tables remain an implementation detail here.  Consumers
 // receive this projection and never construct or inspect `ArkObject`/props.

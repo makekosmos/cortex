@@ -1,4 +1,3 @@
-﻿
 fn load_all_todos(conn: &Connection) -> Result<Vec<TodoItem>, String> {
     let mut stmt = conn
         .prepare(

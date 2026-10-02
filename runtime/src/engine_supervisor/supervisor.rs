@@ -62,9 +62,10 @@ pub async fn run_supervisor() -> ExitCode {
     let _control_cleanup = ControlStateCleanup(&control_state_path);
     let engine_lock_path = data_dir.join(lock_file::ENGINE_LOCK_FILE_NAME);
     if running_engine_pid(&engine_lock_path).is_some() {
-        crate::observability::stderr(
-            "[mundus-engine] supervisor unavailable: existing core has no verifiable control ownership",
-        );
+        crate::observability::stderr(concat!(
+            "[mundus-engine] supervisor unavailable: existing core has no verifiable ",
+            "control ownership"
+        ));
         return ExitCode::from(2);
     }
     let session_id = uuid::Uuid::new_v4().to_string();
@@ -114,9 +115,10 @@ pub async fn run_supervisor() -> ExitCode {
             );
             match monitor_existing_core(&engine_lock_path).await {
                 MonitorResult::Shutdown => {
-                    crate::observability::stderr(
-                        "[mundus-engine] cannot stop an existing core without authenticated ownership",
-                    );
+                    crate::observability::stderr(concat!(
+                        "[mundus-engine] cannot stop an existing core without authenticated ",
+                        "ownership",
+                    ));
                     cleanup_state(&state_path);
                     cleanup_state(&control_state_path);
                     return ExitCode::from(1);

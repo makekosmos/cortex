@@ -172,7 +172,13 @@ pub(super) async fn finish_inner_until(
             worker.restart_allowed = false;
             worker.lifecycle_reason = Some("cleanup-failed".into());
         }
-        tracing::error!(target: "package_worker", package_id = %key.0, version = %key.1, generation, "worker cleanup failed");
+        tracing::error!(
+            target: "package_worker",
+            package_id = %key.0,
+            version = %key.1,
+            generation,
+            "worker cleanup failed",
+        );
         return;
     }
     let still_exact = lock(&inner.workers)
@@ -181,7 +187,14 @@ pub(super) async fn finish_inner_until(
     if !still_exact {
         return;
     }
-    tracing::info!(target: "package_worker", package_id = %key.0, version = %key.1, generation, state = ?state, "worker lifecycle transition");
+    tracing::info!(
+        target: "package_worker",
+        package_id = %key.0,
+        version = %key.1,
+        generation,
+        state = ?state,
+        "worker lifecycle transition",
+    );
     if terminal_disable {
         let still_exact = lock(&inner.workers)
             .get(key)

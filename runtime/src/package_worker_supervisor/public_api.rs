@@ -111,7 +111,13 @@ impl PackageWorkerSupervisor {
             }
         }
         worker.lifecycle_reason = Some("activated".into());
-        tracing::info!(target: "package_worker", package_id = %id, version = %version, generation = worker.generation, "worker activated");
+        tracing::info!(
+            target: "package_worker",
+            package_id = %id,
+            version = %version,
+            generation = worker.generation,
+            "worker activated",
+        );
         true
     }
 

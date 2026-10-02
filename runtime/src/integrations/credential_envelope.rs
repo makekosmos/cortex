@@ -245,9 +245,9 @@ pub(crate) async fn publish(
         }))
         .await
         .map_err(|_| "Core credential publication rejected".to_string())?;
-    Ok(
-        json!({ "published": response, "version": crate::package_service::credential_envelope::ENVELOPE_VERSION }),
-    )
+    Ok(json!(
+        { "published": response,
+        "version": crate::package_service::credential_envelope::ENVELOPE_VERSION }))
 }
 
 fn required<'a>(value: &'a Value, field: &str) -> Result<&'a str, String> {

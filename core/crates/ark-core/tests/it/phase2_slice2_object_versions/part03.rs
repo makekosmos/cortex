@@ -1,4 +1,3 @@
-
 #[test]
 
 fn load_all_json_is_additive_deterministic_and_hides_deprecated_legacy_types() {
@@ -46,4 +45,3 @@ fn load_all_json_is_additive_deterministic_and_hides_deprecated_legacy_types() {
     assert!(registry_ids.contains(&"z-type"));
     assert!(registry_ids.windows(2).all(|w| w[0] <= w[1]));
 }
-

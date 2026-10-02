@@ -177,7 +177,11 @@ pub(super) async fn canonical_set_book_cover(
         }
         let book_hlc = record_local_upsert(conn, "object", &book_id, Some(device_id.clone()))?;
         conn.execute(
-            "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,0) ON CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=0 WHERE excluded.hlc > object_sync_versions.hlc",
+            concat!(
+                "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,0) ON ",
+                "CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=0 WHERE ",
+                "excluded.hlc > object_sync_versions.hlc"
+            ),
             rusqlite::params![book_id, book_hlc],
         )
         .map_err(|e| e.to_string())?;
@@ -185,7 +189,11 @@ pub(super) async fn canonical_set_book_cover(
             let link_hlc =
                 record_local_upsert(conn, "object_link", &link.id, Some(device_id.clone()))?;
             conn.execute(
-                "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,0) ON CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=0 WHERE excluded.hlc > object_sync_versions.hlc",
+                concat!(
+                    "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,0) ON ",
+                    "CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=0 WHERE ",
+                    "excluded.hlc > object_sync_versions.hlc"
+                ),
                 rusqlite::params![link.id, link_hlc],
             )
             .map_err(|e| e.to_string())?;

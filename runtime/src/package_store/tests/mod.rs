@@ -29,10 +29,14 @@ fn archive<M: Serialize>(path: &Path, manifest: &M, entry: &str) {
     z.finish().unwrap();
 }
 fn manifest_v2() -> VersionedManifest {
-    PackageManifest::parse(
-            r#"{"schema_version":2,"id":"com.kosmos.v2-demo","name":"V2 Demo","version":"2.0.0","kind":"app","engine_api":">=1.0.0","entrypoint":"index.html","publisher":"kosmos","permissions":[],"targets":[{"runtime":"standalone","os":["windows"]}],"data":{"access":[],"defines":[],"mappings":[]}}"#,
-        )
-        .unwrap()
+    PackageManifest::parse(concat!(
+        r#"{"schema_version":2,"id":"com.kosmos.v2-demo","name":"V2 Demo","#,
+        r#""version":"2.0.0","kind":"app","engine_api":">=1.0.0","#,
+        r#""entrypoint":"index.html","publisher":"kosmos","permissions":[],"#,
+        r#""targets":[{"runtime":"standalone","os":["windows"]}],"#,
+        r#""data":{"access":[],"defines":[],"mappings":[]}}"#
+    ))
+    .unwrap()
 }
 fn archive_versioned(path: &Path, manifest: &VersionedManifest, entry: &str) {
     let f = fs::File::create(path).unwrap();

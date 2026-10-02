@@ -175,17 +175,13 @@ mod tests {
         let mut registry = FullAccessConsentRegistry::default();
         let issued = registry.issue_at(binding.clone(), now);
         let request_id = issued["request_id"].as_str().unwrap();
-        assert!(registry
-            .approve_at(request_id, true, Some(8), now)
-            .is_err());
+        assert!(registry.approve_at(request_id, true, Some(8), now).is_err());
         let denied_token = registry.pending.get(request_id).unwrap().token.clone();
         assert!(registry
             .approve_at(request_id, false, Some(7), now)
             .unwrap()
             .is_none());
-        assert!(registry
-            .consume_at(&denied_token, &binding, now)
-            .is_err());
+        assert!(registry.consume_at(&denied_token, &binding, now).is_err());
 
         let mut registry = FullAccessConsentRegistry::default();
         let issued = registry.issue_at(binding.clone(), now);
@@ -304,7 +300,10 @@ mod tests {
         let repo = temp_repo(&dir);
         let service = AgentsService::new(dir.path()).unwrap();
         let project = service.add_project(repo.to_str().unwrap()).await.unwrap();
-        service.db().execute("DROP TABLE security_audit", []).unwrap();
+        service
+            .db()
+            .execute("DROP TABLE security_audit", [])
+            .unwrap();
 
         let error = service
             .issue_full_access_consent(
@@ -437,10 +436,17 @@ mod tests {
                 params![repo.to_string_lossy(), timestamp],
             )
             .unwrap();
-        service.db().execute(
-            "INSERT INTO sessions(id,project_id,title,prompt,mode,status,branch,worktree_path,base_commit,created_at,updated_at,archived_at) VALUES('s','p','t','p','default','archived','codex/test-12345678',?1,'HEAD',?2,?2,?2)",
-            params![worktree.to_string_lossy(), timestamp],
-        ).unwrap();
+        service
+            .db()
+            .execute(
+                concat!(
+                    "INSERT INTO sessions(id,project_id,title,prompt,mode,status,branch,",
+                    "worktree_path,base_commit,created_at,updated_at,archived_at) VALUES('s','p',",
+                    "'t','p','default','archived','codex/test-12345678',?1,'HEAD',?2,?2,?2)"
+                ),
+                params![worktree.to_string_lossy(), timestamp],
+            )
+            .unwrap();
         service.remove_worktree("s").await.unwrap();
         assert!(!worktree.exists());
         drop(service);
@@ -455,9 +461,11 @@ mod tests {
         let held = first.lock().await;
         let second = service.lifecycle_lock("session");
 
-        assert!(tokio::time::timeout(Duration::from_millis(20), second.lock())
-            .await
-            .is_err());
+        assert!(
+            tokio::time::timeout(Duration::from_millis(20), second.lock())
+                .await
+                .is_err()
+        );
         drop(held);
         let _released = tokio::time::timeout(Duration::from_secs(60), second.lock())
             .await
@@ -568,10 +576,17 @@ mod tests {
 
         let service = AgentsService::new(dir.path()).unwrap();
         let timestamp = now();
-        service.db().execute(
-            "INSERT INTO sessions(id,project_id,title,prompt,mode,status,branch,worktree_path,base_commit,created_at,updated_at) VALUES('s','p','t','p','default','running','b',?1,?2,?3,?3)",
-            params![worktree.to_string_lossy(),base,timestamp],
-        ).unwrap();
+        service
+            .db()
+            .execute(
+                concat!(
+                    "INSERT INTO sessions(id,project_id,title,prompt,mode,status,branch,",
+                    "worktree_path,base_commit,created_at,updated_at) VALUES('s','p','t','p',",
+                    "'default','running','b',?1,?2,?3,?3)"
+                ),
+                params![worktree.to_string_lossy(), base, timestamp],
+            )
+            .unwrap();
         let diff = service.diff("s").await.unwrap();
         let unified = diff["unifiedDiff"].as_str().unwrap();
         assert!(unified.contains("committed"));
@@ -607,7 +622,10 @@ mod tests {
         let session = service
             .create_session(json!({
                 "project_id": project["id"],
-                "prompt": "Создай файл daedalus-real-smoke.txt с единственной строкой ok. Не изменяй другие файлы.",
+                "prompt": concat!(
+                    "Создай файл daedalus-real-smoke.txt с единственной строкой ok. Не изменяй ",
+                    "другие файлы.",
+                ),
                 "mode": "default"
             }))
             .await
@@ -645,10 +663,7 @@ mod tests {
             );
             tokio::time::sleep(Duration::from_millis(250)).await;
         }
-        let handles = service
-            .runtimes()
-            .drain()
-            .collect::<Vec<_>>();
+        let handles = service.runtimes().drain().collect::<Vec<_>>();
         for (id, handle) in handles {
             let _ = handle.stop(&id).await;
         }

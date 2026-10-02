@@ -1106,39 +1106,68 @@ impl GrantCompiler {
 impl LaunchGrant {
     pub fn allows_dictation_operation(&self, operation: &str) -> bool {
         self.capabilities.iter().any(|capability| {
-            matches!(capability, ScopedCapability::Dictation { operations } if operations.iter().any(|allowed| allowed == operation))
+            matches!(
+                capability,
+                ScopedCapability::Dictation {
+                    operations
+                } if operations.iter().any(|allowed| allowed == operation),
+            )
         })
     }
 
     pub fn allows_focus_operation(&self, operation: &str) -> bool {
         self.capabilities.iter().any(|capability| {
-            matches!(capability, ScopedCapability::Focus { operations } if operations.iter().any(|allowed| allowed == operation))
+            matches!(
+                capability,
+                ScopedCapability::Focus {
+                    operations
+                } if operations.iter().any(|allowed| allowed == operation),
+            )
         })
     }
 
     pub fn allows_agents_operation(&self, operation: &str) -> bool {
         self.capabilities.iter().any(|capability| {
-            matches!(capability, ScopedCapability::Agents { operations } if operations.iter().any(|allowed| allowed == operation))
+            matches!(
+                capability,
+                ScopedCapability::Agents {
+                    operations
+                } if operations.iter().any(|allowed| allowed == operation),
+            )
         })
     }
 
     pub fn allows_worker_operation(&self, operation: &str) -> bool {
         self.capabilities.iter().any(|capability| {
-            matches!(capability, ScopedCapability::WorkerInvoke { operations } if operations.iter().any(|allowed| {
-                allowed == operation || allowed.strip_suffix(".*").is_some_and(|prefix| operation.starts_with(&format!("{prefix}.")))
+            matches!(capability, ScopedCapability::WorkerInvoke {
+                operations
+            } if operations.iter().any(|allowed| {
+                allowed == operation || allowed.strip_suffix(
+                    ".*"
+                ).is_some_and(|prefix| operation.starts_with(&format!("{prefix}.")))
             }))
         })
     }
 
     pub fn allows_app_network_scope(&self, scope: &str) -> bool {
         self.capabilities.iter().any(|capability| {
-            matches!(capability, ScopedCapability::AppNetwork { scopes } if scopes.iter().any(|allowed| allowed == scope))
+            matches!(
+                capability,
+                ScopedCapability::AppNetwork {
+                    scopes
+                } if scopes.iter().any(|allowed| allowed == scope),
+            )
         })
     }
 
     pub fn allows_filesystem_operation(&self, operation: &str) -> bool {
         self.capabilities.iter().any(|capability| {
-            matches!(capability, ScopedCapability::Filesystem { operations } if operations.iter().any(|allowed| allowed == operation))
+            matches!(
+                capability,
+                ScopedCapability::Filesystem {
+                    operations
+                } if operations.iter().any(|allowed| allowed == operation),
+            )
         })
     }
 
@@ -1458,7 +1487,21 @@ impl SafeProjection {
         }
     }
     pub fn to_value(&self) -> Value {
-        serde_json::json!({"package_id":self.package_id,"package_version":self.package_version,"manifest_digest":self.manifest_digest,"capabilities":self.capabilities.iter().map(|c|match c{ScopedCapability::Storage{root_capability_id,actions,max_bytes,..}=>serde_json::json!({"kind":"storage","root_capability_id":root_capability_id,"actions":actions,"max_bytes":max_bytes}),_=>serde_json::to_value(c).unwrap_or(Value::Null)}).collect::<Vec<_>>()})
+        serde_json::json!(
+            {"package_id":self.package_id,
+            "package_version":self.package_version,
+            "manifest_digest":self.manifest_digest,
+            "capabilities":self.capabilities.iter().map(
+                |c|match c{ScopedCapability::Storage{root_capability_id,
+                actions,
+                max_bytes,
+                ..}=>serde_json::json!(
+                    {"kind":"storage",
+                    "root_capability_id":root_capability_id,
+                    "actions":actions,
+                    "max_bytes":max_bytes}),
+                _=>serde_json::to_value(c).unwrap_or(Value::Null)},
+            ).collect::<Vec<_>>()})
     }
 }
 pub fn boot_epoch() -> Result<[u8; 32], GrantError> {
@@ -1510,7 +1553,8 @@ mod tests {
 
     #[test]
     fn manifest_v2_compiles_only_matching_dictation_permissions() {
-        let raw = r#"{
+        let raw = concat!(
+            r#"{
             "schema_version": 2,
             "id": "com.kosmos.demo",
             "name": "Demo",
@@ -1520,12 +1564,14 @@ mod tests {
             "entrypoint": "index.html",
             "publisher": "kosmos",
             "permissions": [
-                {"capability": "ark.read", "scopes": ["dictation.get_state", "dictation.start_recording"]},
+                {"capability": "ark.read", "#,
+            r#""scopes": ["dictation.get_state", "dictation.start_recording"]},
                 {"capability": "ark.write", "scopes": ["dictation.cancel", "dictation.get_config"]}
             ],
             "targets": [{"runtime": "standalone", "os": ["windows"]}],
             "data": {"access": [], "defines": [], "mappings": []}
-        }"#;
+        }"#,
+        );
         let crate::package_manifest::VersionedManifest::V2(manifest) =
             crate::package_manifest::PackageManifest::parse(raw).expect("valid manifest")
         else {
@@ -1678,17 +1724,23 @@ mod tests {
 
     #[test]
     fn manifest_v2_grants_only_exact_agents_operations_by_capability() {
-        let raw = r#"{
+        let raw = concat!(
+            r#"{
             "schema_version": 2, "id": "com.kosmos.daedalus", "name": "Daedalus",
             "version": "0.1.0", "kind": "app", "engine_api": ">=1.0.0",
             "entrypoint": "dist/index.html", "publisher": "kosmos",
             "permissions": [
-                {"capability": "ark.read", "scopes": ["agents.projects.list", "agents.models.list", "agents.sessions.create", "agents.unknown"]},
-                {"capability": "ark.write", "scopes": ["agents.sessions.create", "agents.editors.open", "agents.projects.list"]}
+                {"capability": "ark.read", "#,
+            r#""scopes": ["agents.projects.list", "agents.models.list", "#,
+            r#""agents.sessions.create", "agents.unknown"]},
+                {"capability": "ark.write", "#,
+            r#""scopes": ["agents.sessions.create", "#,
+            r#""agents.editors.open", "agents.projects.list"]}
             ],
             "targets": [{"runtime": "standalone", "os": ["windows"]}],
             "data": {"access": [], "defines": [], "mappings": []}
-        }"#;
+        }"#,
+        );
         let crate::package_manifest::VersionedManifest::V2(manifest) =
             crate::package_manifest::PackageManifest::parse(raw).expect("valid manifest")
         else {

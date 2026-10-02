@@ -71,11 +71,11 @@ use rusqlite::Connection;
 use tokio::sync::{broadcast, mpsc, watch, Notify};
 
 use crate::db::{get_sync_kv, set_sync_kv};
-use crate::sync_bind::SyncBind;
 use crate::protocol::{
     compute_hello_auth_hmac, deserialize_message, generate_auth_nonce, message_origin_device_id,
     normalize_auth_secret, serialize_message, LanSyncMessage, PROTOCOL_VERSION,
 };
+use crate::sync_bind::SyncBind;
 use crate::sync_transport::{SyncTransport, TransportEvent};
 
 /// `sync_kv` ключ для персистентного iroh identity secret key (см. spec

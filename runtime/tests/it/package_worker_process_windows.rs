@@ -233,8 +233,12 @@ async fn success_orders_entry_bootstrap_hello_and_job_limits() {
     assert_eq!(snapshot.job_memory_limit, 512 * 1024 * 1024);
     assert!(snapshot.cpu_hard_cap);
     assert_eq!(snapshot.cpu_rate, 2500);
-    let bootstrap = br#"{"package_id":"fixture","version":"1","hash":"hash","pid":1,"api_version":1,"token":"token"}
-"#;
+    let bootstrap = concat!(
+        r#"{"package_id":"fixture","version":"1","hash":"hash","pid":1,"api_version":1,"#,
+        r#""token":"token"}
+"#,
+    )
+    .as_bytes();
     process
         .test_send_line(bootstrap)
         .await

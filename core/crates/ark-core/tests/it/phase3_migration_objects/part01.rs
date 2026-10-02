@@ -17,7 +17,14 @@ fn db() -> Connection {
         "com.kosmos.game",
         "com.kosmos.book",
     ] {
-        conn.execute("INSERT OR IGNORE INTO object_types(id,name,schema_json,ui_schema_json,created_at,updated_at) VALUES(?1,'canonical','{}','{}','c','u')", [id]).expect("canonical type");
+        conn.execute(
+            concat!(
+                "INSERT OR IGNORE INTO object_types(id,name,schema_json,ui_schema_json,",
+                "created_at,updated_at) VALUES(?1,'canonical','{}','{}','c','u')"
+            ),
+            [id],
+        )
+        .expect("canonical type");
     }
     conn
 }
@@ -29,13 +36,35 @@ fn insert_generic(
     props: serde_json::Value,
     deleted: Option<&str>,
 ) {
-    conn.execute("INSERT OR IGNORE INTO object_types(id,name,schema_json,ui_schema_json,created_at,updated_at) VALUES(?1,'legacy','{}','{}','c','u')", [alias]).expect("legacy type");
+    conn.execute(
+        concat!(
+            "INSERT OR IGNORE INTO object_types(id,name,schema_json,ui_schema_json,",
+            "created_at,updated_at) VALUES(?1,'legacy','{}','{}','c','u')"
+        ),
+        [alias],
+    )
+    .expect("legacy type");
     let content = if matches!(alias, "image_obj" | "game_obj") {
         json!({"type":"image"})
     } else {
         json!({"type":"doc","content":[{"type":"paragraph"}]})
     };
-    conn.execute("INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,created_at,updated_at,deleted_at) VALUES(?1,?2,'0.0.0-legacy',?3,?4,?5,'2026-01-01T00:00:00Z','2026-01-02T00:00:00Z',?6)", params![id, alias, alias, serde_json::to_string(&content).unwrap(), serde_json::to_string(&props).unwrap(), deleted]).expect("insert legacy object");
+    conn.execute(
+        concat!(
+            "INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,",
+            "created_at,updated_at,deleted_at) VALUES(?1,?2,'0.0.0-legacy',?3,?4,?5,",
+            "'2026-01-01T00:00:00Z','2026-01-02T00:00:00Z',?6)"
+        ),
+        params![
+            id,
+            alias,
+            alias,
+            serde_json::to_string(&content).unwrap(),
+            serde_json::to_string(&props).unwrap(),
+            deleted
+        ],
+    )
+    .expect("insert legacy object");
 }
 
 #[test]
@@ -85,11 +114,7 @@ fn populated_generic_fixture_maps_all_nine_aliases_and_applies_exact_envelope() 
     assert_eq!(plan.blocked.len(), 0);
     apply_plan(&conn, &plan, "unused").expect("apply");
     let count: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM objects",
-            [],
-            |r| r.get(0),
-        )
+        .query_row("SELECT COUNT(*) FROM objects", [], |r| r.get(0))
         .unwrap();
     assert_eq!(count, 9);
     let expected_types = [
@@ -105,7 +130,22 @@ fn populated_generic_fixture_maps_all_nine_aliases_and_applies_exact_envelope() 
     ];
     for (index, expected_type) in expected_types.iter().enumerate() {
         let id = format!("g-{index}");
-        let (type_id, version, created, updated, deleted): (String, String, String, String, Option<String>) = conn.query_row("SELECT type_id,type_version,created_at,updated_at,deleted_at FROM objects WHERE id=?1", [&id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))).unwrap();
+        let (type_id, version, created, updated, deleted): (
+            String,
+            String,
+            String,
+            String,
+            Option<String>,
+        ) = conn
+            .query_row(
+                concat!(
+                    "SELECT type_id,type_version,created_at,updated_at,deleted_at FROM objects ",
+                    "WHERE id=?1"
+                ),
+                [&id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+            )
+            .unwrap();
         assert_eq!(type_id, *expected_type);
         // Mapped objects claim the newest registered version of their type.
         assert_eq!(
@@ -129,12 +169,29 @@ fn populated_generic_fixture_maps_all_nine_aliases_and_applies_exact_envelope() 
 fn native_adapters_migrate_area_heading_identity_and_hierarchy() {
     let conn = db();
     conn.execute_batch(
-        "CREATE TABLE areas (id TEXT PRIMARY KEY, title TEXT NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
-         CREATE TABLE headings (id TEXT PRIMARY KEY, title TEXT NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0, project_id TEXT NOT NULL);",
+        "CREATE TABLE areas (id TEXT PRIMARY KEY, title TEXT NOT NULL, sort_order INTEGER NOT NULL
+         DEFAULT 0, created_at TEXT NOT NULL);
+         CREATE TABLE headings (id TEXT PRIMARY KEY, title TEXT NOT NULL, sort_order INTEGER NOT
+         NULL DEFAULT 0, project_id TEXT NOT NULL);",
     )
     .unwrap();
-    conn.execute("INSERT INTO todos(id,title,notes,priority,project_id,tag_ids,checklist_items,created_at) VALUES('todo-1','Todo','note',2,NULL,'[]','[]','2026-01-01T00:00:00Z')", []).unwrap();
-    conn.execute("INSERT INTO projects(id,title,notes,status,color_tag,created_at) VALUES('project-1','Project','notes','completed','green','2026-01-01T00:00:00Z')", []).unwrap();
+    conn.execute(
+        concat!(
+            "INSERT INTO todos(id,title,notes,priority,project_id,tag_ids,",
+            "checklist_items,created_at) VALUES('todo-1','Todo','note',2,NULL,'[]','[]',",
+            "'2026-01-01T00:00:00Z')"
+        ),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        concat!(
+            "INSERT INTO projects(id,title,notes,status,color_tag,created_at) VALUES(",
+            "'project-1','Project','notes','completed','green','2026-01-01T00:00:00Z')"
+        ),
+        [],
+    )
+    .unwrap();
     conn.execute(
         "INSERT INTO areas(id,title,created_at) VALUES('area-1','Area','2026-01-01T00:00:00Z')",
         [],
@@ -145,7 +202,14 @@ fn native_adapters_migrate_area_heading_identity_and_hierarchy() {
         [],
     )
     .unwrap();
-    conn.execute("INSERT INTO tags(id,title,color,created_at) VALUES('tag-1','Tag','blue','2026-01-01T00:00:00Z')", []).unwrap();
+    conn.execute(
+        concat!(
+            "INSERT INTO tags(id,title,color,created_at) VALUES('tag-1','Tag','blue',",
+            "'2026-01-01T00:00:00Z')"
+        ),
+        [],
+    )
+    .unwrap();
     let plan = plan_objects(&conn, "now").unwrap();
     assert_eq!(plan.items.len(), 5);
     assert!(plan.items.iter().any(|item| item.source_kind == "todos"
@@ -153,11 +217,7 @@ fn native_adapters_migrate_area_heading_identity_and_hierarchy() {
             == ark_core::canonical_types::preflight::SourceKind::Native("todos".into())));
     apply_plan(&conn, &plan, "now").unwrap();
     let objects: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM objects",
-            [],
-            |r| r.get(0),
-        )
+        .query_row("SELECT COUNT(*) FROM objects", [], |r| r.get(0))
         .unwrap();
     assert_eq!(objects, 5);
     assert_eq!(
@@ -170,7 +230,13 @@ fn native_adapters_migrate_area_heading_identity_and_hierarchy() {
         2
     );
     assert_eq!(
-        conn.query_row::<i64, _, _>("SELECT COUNT(*) FROM object_links WHERE source_object_id='heading-1' AND link_type='related' AND target_object_id='project-1'", [], |r| r.get(0)).unwrap(),
+        conn.query_row::<i64, _, _>(
+            "SELECT COUNT(*) FROM object_links WHERE source_object_id='heading-1' AND
+             link_type='related' AND target_object_id='project-1'",
+            [],
+            |r| r.get(0)
+        )
+        .unwrap(),
         1
     );
 }
@@ -178,8 +244,23 @@ fn native_adapters_migrate_area_heading_identity_and_hierarchy() {
 #[test]
 fn malformed_source_is_collected_and_apply_is_globally_refused() {
     let conn = db();
-    conn.execute("INSERT OR IGNORE INTO object_types(id,name,schema_json,ui_schema_json,created_at,updated_at) VALUES('note_obj','legacy','{}','{}','c','u')", []).unwrap();
-    conn.execute("INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,created_at,updated_at) VALUES('bad','note_obj','0.0.0-legacy','bad','not-json','{}','c','u')", []).unwrap();
+    conn.execute(
+        concat!(
+            "INSERT OR IGNORE INTO object_types(id,name,schema_json,ui_schema_json,",
+            "created_at,updated_at) VALUES('note_obj','legacy','{}','{}','c','u')"
+        ),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        concat!(
+            "INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,",
+            "created_at,updated_at) VALUES('bad','note_obj','0.0.0-legacy','bad',",
+            "'not-json','{}','c','u')"
+        ),
+        [],
+    )
+    .unwrap();
     let plan = plan_objects(&conn, "now").unwrap();
     assert_eq!(plan.blocked.len(), 1);
     assert_eq!(plan.blocked[0].code, "MALFORMED_JSON");
@@ -199,17 +280,50 @@ fn rerunning_identical_plan_is_idempotent_and_normalizes_json_order() {
     insert_generic(&conn, "n1", "note_obj", json!({"description":"x"}), None);
     let plan = plan_objects(&conn, "now").unwrap();
     apply_plan(&conn, &plan, "now").unwrap();
-    let before: (i64,i64,String) = conn.query_row("SELECT (SELECT COUNT(*) FROM objects),(SELECT COUNT(*) FROM object_sync_versions),updated_at FROM objects WHERE id='n1'", [], |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?))).unwrap();
+    let before: (i64, i64, String) = conn
+        .query_row(
+            concat!(
+                "SELECT (SELECT COUNT(*) FROM objects),(SELECT COUNT(*) FROM ",
+                "object_sync_versions),updated_at FROM objects WHERE id='n1'"
+            ),
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .unwrap();
     apply_plan(&conn, &plan, "later").unwrap();
-    let after: (i64,i64,String) = conn.query_row("SELECT (SELECT COUNT(*) FROM objects),(SELECT COUNT(*) FROM object_sync_versions),updated_at FROM objects WHERE id='n1'", [], |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?))).unwrap();
+    let after: (i64, i64, String) = conn
+        .query_row(
+            concat!(
+                "SELECT (SELECT COUNT(*) FROM objects),(SELECT COUNT(*) FROM ",
+                "object_sync_versions),updated_at FROM objects WHERE id='n1'"
+            ),
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .unwrap();
     assert_eq!(before, after);
 }
 
 #[test]
 fn link_id_collision_is_a_canonical_conflict_without_partial_object() {
     let conn = db();
-    conn.execute("INSERT INTO object_types(id,name,schema_json,ui_schema_json,created_at,updated_at) VALUES('other','other','{}','{}','c','u')", []).unwrap();
-    conn.execute("INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,created_at,updated_at) VALUES('other','other','1.0.0','other','{}','{}','c','u')", []).unwrap();
+    conn.execute(
+        concat!(
+            "INSERT INTO object_types(id,name,schema_json,ui_schema_json,created_at,",
+            "updated_at) VALUES('other','other','{}','{}','c','u')"
+        ),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        concat!(
+            "INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,",
+            "created_at,updated_at) VALUES('other','other','1.0.0','other','{}','{}','c',",
+            "'u')"
+        ),
+        [],
+    )
+    .unwrap();
     insert_generic(&conn, "project-1", "project_obj", json!({}), None);
     insert_generic(
         &conn,
@@ -223,12 +337,22 @@ fn link_id_collision_is_a_canonical_conflict_without_partial_object() {
         "project",
         "project-1",
     );
-    conn.execute("INSERT INTO object_links(id,source_object_id,target_object_id,link_type,created_at) VALUES(?1,'other','project-1','project','x')", [&collision]).unwrap();
+    conn.execute(
+        concat!(
+            "INSERT INTO object_links(id,source_object_id,target_object_id,link_type,",
+            "created_at) VALUES(?1,'other','project-1','project','x')"
+        ),
+        [&collision],
+    )
+    .unwrap();
     let plan = plan_objects(&conn, "now").unwrap();
     assert!(apply_plan(&conn, &plan, "now").is_err());
     assert_eq!(
         conn.query_row::<i64, _, _>(
-            "SELECT COUNT(*) FROM objects WHERE id IN ('project-1','task-1') AND type_id LIKE 'com.kosmos.%'",
+            concat!(
+                "SELECT COUNT(*) FROM objects WHERE id IN ('project-1','task-1') AND type_id ",
+                "LIKE 'com.kosmos.%'"
+            ),
             [],
             |r| r.get(0)
         )

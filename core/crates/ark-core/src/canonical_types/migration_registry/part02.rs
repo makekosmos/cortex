@@ -1,4 +1,3 @@
-﻿
 type LegacyDefinitionRow = (
     String,
     String,
@@ -16,9 +15,23 @@ fn is_generated_legacy_definition(
 ) -> Result<bool, RegistryError> {
     let row: Option<LegacyDefinitionRow> = conn
         .query_row(
-            "SELECT current_version,schema_json,ui_schema_json,owner_kind,owner_id,status,base_type_id,system_locked FROM object_types WHERE id=?1",
+            concat!(
+                "SELECT current_version,schema_json,ui_schema_json,owner_kind,owner_id,",
+                "status,base_type_id,system_locked FROM object_types WHERE id=?1"
+            ),
             [registration.type_id.as_str()],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?, row.get(6)?, row.get(7)?)),
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                    row.get(7)?,
+                ))
+            },
         )
         .optional()
         .map_err(storage)?;
@@ -50,9 +63,22 @@ fn is_generated_legacy_definition(
     }
     let version: Option<(String, String, String, String, String, String)> = conn
         .query_row(
-            "SELECT schema_json,ui_schema_json,content_contract_json,relations_json,sync_policy_json,schema_hash FROM object_type_versions WHERE type_id=?1 AND version=?2",
+            concat!(
+                "SELECT schema_json,ui_schema_json,content_contract_json,relations_json,",
+                "sync_policy_json,schema_hash FROM object_type_versions WHERE type_id=?1 AND ",
+                "version=?2"
+            ),
             params![registration.type_id, current_version],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?)),
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                ))
+            },
         )
         .optional()
         .map_err(storage)?;
@@ -105,11 +131,32 @@ pub fn preflight_registry(conn: &Connection) -> Result<RegistryPlan, RegistryErr
         if canonical_exists(conn, registration)?
             && !is_generated_legacy_definition(conn, registration)?
         {
-            let row: (String, Option<String>, String, String, i64, Option<String>, String) = conn
+            let row: (
+                String,
+                Option<String>,
+                String,
+                String,
+                i64,
+                Option<String>,
+                String,
+            ) = conn
                 .query_row(
-                    "SELECT name,owner_id,current_version,status,system_locked,base_type_id,owner_kind FROM object_types WHERE id=?1",
+                    concat!(
+                        "SELECT name,owner_id,current_version,status,system_locked,base_type_id,",
+                        "owner_kind FROM object_types WHERE id=?1"
+                    ),
                     [registration.type_id.as_str()],
-                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?, row.get(6)?)),
+                    |row| {
+                        Ok((
+                            row.get(0)?,
+                            row.get(1)?,
+                            row.get(2)?,
+                            row.get(3)?,
+                            row.get(4)?,
+                            row.get(5)?,
+                            row.get(6)?,
+                        ))
+                    },
                 )
                 .map_err(storage)?;
             if row.0 != registration.name
@@ -128,9 +175,25 @@ pub fn preflight_registry(conn: &Connection) -> Result<RegistryPlan, RegistryErr
             let version = registration_version(registration)?;
             let existing: Option<(String, String, String, String, String, String)> = conn
                 .query_row(
-                    "SELECT schema_json,ui_schema_json,content_contract_json,relations_json,sync_policy_json,schema_hash FROM object_type_versions WHERE type_id=?1 AND version=?2",
+                    concat!(
+                        "SELECT schema_json,ui_schema_json,content_contract_json,relations_json,",
+                        concat!(
+                            "sync_policy_json,schema_hash FROM object_type_versions WHERE ",
+                            "type_id=?1 AND ",
+                        ),
+                        "version=?2",
+                    ),
                     params![registration.type_id, registration.version],
-                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?)),
+                    |row| {
+                        Ok((
+                            row.get(0)?,
+                            row.get(1)?,
+                            row.get(2)?,
+                            row.get(3)?,
+                            row.get(4)?,
+                            row.get(5)?,
+                        ))
+                    },
                 )
                 .optional()
                 .map_err(storage)?;
@@ -212,7 +275,16 @@ pub fn preflight_registry(conn: &Connection) -> Result<RegistryPlan, RegistryErr
 }
 
 fn ensure_archive_schema(conn: &Connection) -> Result<(), RegistryError> {
-    conn.execute_batch("CREATE TABLE IF NOT EXISTS legacy_type_definition_archive (contract_version TEXT NOT NULL, legacy_type_id TEXT NOT NULL, canonical_type_id TEXT NOT NULL, summary_json TEXT NOT NULL, versions_json TEXT NOT NULL, inbound_aliases_json TEXT NOT NULL, source_hash TEXT NOT NULL, archived_at TEXT NOT NULL, PRIMARY KEY(contract_version,legacy_type_id)); CREATE INDEX IF NOT EXISTS idx_legacy_type_definition_archive_canonical ON legacy_type_definition_archive(canonical_type_id);").map_err(storage)
+    conn.execute_batch(concat!(
+        "CREATE TABLE IF NOT EXISTS legacy_type_definition_archive (contract_version ",
+        "TEXT NOT NULL, legacy_type_id TEXT NOT NULL, canonical_type_id TEXT NOT ",
+        "NULL, summary_json TEXT NOT NULL, versions_json TEXT NOT NULL, ",
+        "inbound_aliases_json TEXT NOT NULL, source_hash TEXT NOT NULL, archived_at ",
+        "TEXT NOT NULL, PRIMARY KEY(contract_version,legacy_type_id)); CREATE INDEX ",
+        "IF NOT EXISTS idx_legacy_type_definition_archive_canonical ON ",
+        "legacy_type_definition_archive(canonical_type_id);"
+    ))
+    .map_err(storage)
 }
 
 fn install_definition(
@@ -221,7 +293,26 @@ fn install_definition(
 ) -> Result<(), RegistryError> {
     let exists = canonical_exists(conn, registration)?;
     if !exists {
-        conn.execute("INSERT INTO object_types(id,name,schema_json,ui_schema_json,created_at,updated_at,system_locked,owner_kind,owner_id,current_version,status,base_type_id) VALUES(?1,?2,?3,?4,?5,?5,1,?6,?7,?8,?9,?10)", params![registration.type_id, registration.name, registration.schema_json, registration.ui_schema_json, registration.created_at, registration.owner_kind, registration.owner_id, registration.version, registration.status, registration.base_type_id]).map_err(storage)?;
+        conn.execute(
+            concat!(
+                "INSERT INTO object_types(id,name,schema_json,ui_schema_json,created_at,",
+                "updated_at,system_locked,owner_kind,owner_id,current_version,status,",
+                "base_type_id) VALUES(?1,?2,?3,?4,?5,?5,1,?6,?7,?8,?9,?10)"
+            ),
+            params![
+                registration.type_id,
+                registration.name,
+                registration.schema_json,
+                registration.ui_schema_json,
+                registration.created_at,
+                registration.owner_kind,
+                registration.owner_id,
+                registration.version,
+                registration.status,
+                registration.base_type_id
+            ],
+        )
+        .map_err(storage)?;
     } else {
         if is_generated_legacy_definition(conn, registration)? {
             let evidence = archive_evidence(conn, &registration.type_id, &registration.type_id)?;
@@ -233,10 +324,49 @@ fn install_definition(
                     })
                 }
                 None => {
-                    conn.execute("INSERT INTO legacy_type_definition_archive(contract_version,legacy_type_id,canonical_type_id,summary_json,versions_json,inbound_aliases_json,source_hash,archived_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8)", params![CONTRACT_VERSION, evidence.legacy_type_id, evidence.canonical_type_id, evidence.summary_json, evidence.versions_json, evidence.inbound_aliases_json, evidence.source_hash, evidence.archived_at]).map_err(storage)?;
+                    conn.execute(
+                        concat!(
+                            concat!(
+                                "INSERT INTO legacy_type_definition_archive(contract_version,",
+                                "legacy_type_id,",
+                            ),
+                            "canonical_type_id,summary_json,versions_json,inbound_aliases_json,",
+                            "source_hash,archived_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8)",
+                        ),
+                        params![
+                            CONTRACT_VERSION,
+                            evidence.legacy_type_id,
+                            evidence.canonical_type_id,
+                            evidence.summary_json,
+                            evidence.versions_json,
+                            evidence.inbound_aliases_json,
+                            evidence.source_hash,
+                            evidence.archived_at
+                        ],
+                    )
+                    .map_err(storage)?;
                 }
             }
-            conn.execute("UPDATE object_types SET name=?2,schema_json=?3,ui_schema_json=?4,created_at=?5,updated_at=?5,system_locked=1,owner_kind=?6,owner_id=?7,current_version=?8,status=?9,base_type_id=?10 WHERE id=?1", params![registration.type_id, registration.name, registration.schema_json, registration.ui_schema_json, registration.created_at, registration.owner_kind, registration.owner_id, registration.version, registration.status, registration.base_type_id]).map_err(storage)?;
+            conn.execute(
+                concat!(
+                    "UPDATE object_types SET name=?2,schema_json=?3,ui_schema_json=?4,",
+                    "created_at=?5,updated_at=?5,system_locked=1,owner_kind=?6,owner_id=?7,",
+                    "current_version=?8,status=?9,base_type_id=?10 WHERE id=?1"
+                ),
+                params![
+                    registration.type_id,
+                    registration.name,
+                    registration.schema_json,
+                    registration.ui_schema_json,
+                    registration.created_at,
+                    registration.owner_kind,
+                    registration.owner_id,
+                    registration.version,
+                    registration.status,
+                    registration.base_type_id
+                ],
+            )
+            .map_err(storage)?;
         } else {
             conn.execute(
                 "UPDATE object_types SET system_locked=1 WHERE id=?1",
@@ -248,9 +378,22 @@ fn install_definition(
     let version = registration_version(registration)?;
     let version_exists: Option<(String, String, String, String, String, String)> = conn
         .query_row(
-            "SELECT schema_json,ui_schema_json,content_contract_json,relations_json,sync_policy_json,schema_hash FROM object_type_versions WHERE type_id=?1 AND version=?2",
+            concat!(
+                "SELECT schema_json,ui_schema_json,content_contract_json,relations_json,",
+                "sync_policy_json,schema_hash FROM object_type_versions WHERE type_id=?1 AND ",
+                "version=?2"
+            ),
             params![registration.type_id, registration.version],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?)),
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                ))
+            },
         )
         .optional()
         .map_err(storage)?;
@@ -270,7 +413,26 @@ fn install_definition(
             });
         }
     } else {
-        conn.execute("INSERT INTO object_type_versions(type_id,version,schema_json,ui_schema_json,content_contract_json,relations_json,sync_policy_json,schema_hash,created_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)", params![registration.type_id, registration.version, version.0, version.1, version.2, version.3, version.4, registration.schema_hash, registration.created_at]).map(|_| ()).map_err(storage)?;
+        conn.execute(
+            concat!(
+                "INSERT INTO object_type_versions(type_id,version,schema_json,ui_schema_json,",
+                "content_contract_json,relations_json,sync_policy_json,schema_hash,",
+                "created_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)"
+            ),
+            params![
+                registration.type_id,
+                registration.version,
+                version.0,
+                version.1,
+                version.2,
+                version.3,
+                version.4,
+                registration.schema_hash,
+                registration.created_at
+            ],
+        )
+        .map(|_| ())
+        .map_err(storage)?;
     }
     // A newer registration supersedes the stored current_version: unversioned
     // reads and version resolution must see the newest contract.
@@ -284,7 +446,9 @@ fn install_definition(
         .map_err(storage)?;
     let next = Version::parse(&registration.version).ok();
     let superseded = match (
-        current_version.as_deref().and_then(|v| Version::parse(v).ok()),
+        current_version
+            .as_deref()
+            .and_then(|v| Version::parse(v).ok()),
         next,
     ) {
         (Some(current), Some(next)) => next > current,

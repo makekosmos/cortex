@@ -178,17 +178,17 @@ fn concurrent_refresh_acquire_has_one_fence_winner() {
                 let conn = open_db(path.to_str().unwrap()).unwrap();
                 barrier.wait();
                 try_acquire_integration_refresh_lease(
-        &conn,
-        &RefreshLeaseAcquireParams {
-            integration_id: "integration-a".into(),
-            holder_node_id: "node-a".into(),
-            credential_generation: 3,
-            now_ms: 10,
-            ttl_ms: 10,
-            expected_fencing_token: 0,
-            device_id: "node-a".into(),
-        },
-    )
+                    &conn,
+                    &RefreshLeaseAcquireParams {
+                        integration_id: "integration-a".into(),
+                        holder_node_id: "node-a".into(),
+                        credential_generation: 3,
+                        now_ms: 10,
+                        ttl_ms: 10,
+                        expected_fencing_token: 0,
+                        device_id: "node-a".into(),
+                    },
+                )
             })
         })
         .collect::<Vec<_>>();

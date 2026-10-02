@@ -98,7 +98,25 @@ impl Converter for NoteMdConverter {
                 .get("description")
                 .and_then(Value::as_str)
                 .unwrap_or("");
-            let mut content = format!("---\nid: {}\ntype: {}\ntypeVersion: {}\ntitle: {}\ntags: [{}]\nrelated: [{}]\ncreatedAt: {}\nupdatedAt: {}\n---\n\n", yaml_scalar(&obj.id), yaml_scalar(&obj.type_id), yaml_scalar(&obj.type_version), yaml_scalar(&title), tags.iter().map(|v| yaml_scalar(v)).collect::<Vec<_>>().join(", "), related.iter().map(|v| yaml_scalar(v)).collect::<Vec<_>>().join(", "), yaml_scalar(&obj.created_at), yaml_scalar(&obj.updated_at));
+            let mut content = format!(
+                "---\nid: {}\ntype: {}\ntypeVersion: {}\ntitle: {}\ntags: [{}]\nrelated: \
+                     [{}]\ncreatedAt: {}\nupdatedAt: {}\n---\n\n",
+                yaml_scalar(&obj.id),
+                yaml_scalar(&obj.type_id),
+                yaml_scalar(&obj.type_version),
+                yaml_scalar(&title),
+                tags.iter()
+                    .map(|v| yaml_scalar(v))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                related
+                    .iter()
+                    .map(|v| yaml_scalar(v))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                yaml_scalar(&obj.created_at),
+                yaml_scalar(&obj.updated_at)
+            );
             content.push_str(description);
             if !description.is_empty() {
                 content.push_str("\n\n");

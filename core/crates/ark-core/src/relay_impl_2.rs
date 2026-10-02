@@ -115,20 +115,27 @@ impl RelaySync {
             && frame.origin_node_id == from_device_id
             && frame.recipient_node_id == self.config.device_id
             && self.is_authenticated_peer(&from_device_id).await
-            && self.storage.apply_signed_integration_frame_with_transport(
-                &frame,
-                &self.config.space_id,
+            && self
+                .storage
+                .apply_signed_integration_frame_with_transport(
+                    &frame,
+                    &self.config.space_id,
+                    &from_device_id,
+                    &self.config.device_id,
+                    transport_public_key.as_deref(),
+                )
+                .await
+                .is_ok();
+        let _ = self
+            .transport
+            .send_to(
                 &from_device_id,
-                &self.config.device_id,
-                transport_public_key.as_deref(),
-            ).await.is_ok();
-        let _ = self.transport.send_to(
-            &from_device_id,
-            LanSyncMessage::SignedIntegrationAck {
-                message_id: frame.message_id,
-                accepted,
-            },
-        ).await;
+                LanSyncMessage::SignedIntegrationAck {
+                    message_id: frame.message_id,
+                    accepted,
+                },
+            )
+            .await;
     }
 
     fn make_hello(&self) -> LanSyncMessage {

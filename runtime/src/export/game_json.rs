@@ -52,15 +52,28 @@ impl Converter for GameJsonConverter {
                 return result;
             }
         };
-        let rows = envelopes.into_iter().filter(|e| e.object.deleted_at.is_none()).map(|e| {
-            let p = e.object.props_json;
-            serde_json::json!({ "id": e.object.id, "typeId": e.object.type_id, "typeVersion": e.object.type_version,
-                "title": e.object.title, "playStatus": p.get("playStatus"), "userRating": p.get("userRating"),
-                "genres": p.get("genres"), "platforms": p.get("platforms"), "released": p.get("released"),
+        let rows = envelopes
+            .into_iter()
+            .filter(|e| e.object.deleted_at.is_none())
+            .map(|e| {
+                let p = e.object.props_json;
+                serde_json::json!({ "id": e.object.id, "typeId": e.object.type_id,
+                "typeVersion": e.object.type_version,
+                "title": e.object.title, "playStatus": p.get(
+                    "playStatus"
+                ), "userRating": p.get("userRating"),
+                "genres": p.get(
+                    "genres"
+                ), "platforms": p.get("platforms"), "released": p.get("released"),
                 "description": p.get("description"),
-                "cover": e.links.iter().find(|l| l.link_type == "cover-image").map(|l| l.target_object_id.clone()),
-                "background": e.links.iter().find(|l| l.link_type == "background-image").map(|l| l.target_object_id.clone()) })
-        }).collect::<Vec<_>>();
+                "cover": e.links.iter().find(
+                    |l| l.link_type == "cover-image"
+                ).map(|l| l.target_object_id.clone()),
+                "background": e.links.iter().find(
+                    |l| l.link_type == "background-image"
+                ).map(|l| l.target_object_id.clone()) })
+            })
+            .collect::<Vec<_>>();
         let path = dest_dir.join("games.json");
         match serde_json::to_vec_pretty(&rows) {
             Ok(bytes) => match fs::write(&path, &bytes) {

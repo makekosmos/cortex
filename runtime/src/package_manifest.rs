@@ -821,11 +821,20 @@ mod tests {
     fn v1_validation_and_unknown_fields() {
         let m = valid();
         assert!(m.validate().is_ok());
-        assert!(serde_json::from_str::<PackageManifest>(r#"{"schema_version":1,"id":"x","name":"x","version":"1.0.0","kind":"app","engine_api":"*","entrypoint":"x","publisher":"kosmos","nope":1}"#).is_err());
+        assert!(serde_json::from_str::<PackageManifest>(concat!(
+            r#"{"schema_version":1,"id":"x","name":"x","version":"1.0.0","kind":"app","#,
+            r#""engine_api":"*","entrypoint":"x","publisher":"kosmos","nope":1}"#,
+        ))
+        .is_err());
     }
     #[test]
     fn v2_strict_contract_and_dependencies() {
-        let s = r#"{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.2.3","kind":"app","engine_api":"*","entrypoint":"index.html","icon":"icon.ico","publisher":"kosmos","targets":[{"runtime":"kosmos-host","os":["linux"]}],"data":{"access":[],"defines":[],"mappings":[]}}"#;
+        let s = concat!(
+            r#"{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.2.3","#,
+            r#""kind":"app","engine_api":"*","entrypoint":"index.html","icon":"icon.ico","#,
+            r#""publisher":"kosmos","targets":[{"runtime":"kosmos-host","os":["linux"]}],"#,
+            r#""data":{"access":[],"defines":[],"mappings":[]}}"#
+        );
         let VersionedManifest::V2(m) = PackageManifest::parse(s).unwrap() else {
             panic!()
         };
@@ -839,7 +848,15 @@ mod tests {
     fn v2_rejects_unsafe_or_non_windows_icon_paths() {
         for icon in ["../icon.ico", "icon.svg", "icon.ico/extra"] {
             let input = format!(
-                r#"{{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.2.3","kind":"app","engine_api":"*","entrypoint":"index.html","icon":"{icon}","publisher":"kosmos","targets":[{{"runtime":"kosmos-host","os":["linux"]}}],"data":{{"access":[],"defines":[],"mappings":[]}}}}"#
+                concat!(
+                    r#"{{"schema_version":2,"id":"com.kosmos.demo","#,
+                    r#""name":"Demo","version":"1.2.3","#,
+                    r#""kind":"app","engine_api":"*","entrypoint":"index.html","icon":"{icon}","#,
+                    r#""publisher":"kosmos","#,
+                    r#""targets":[{{"runtime":"kosmos-host","os":["linux"]}}],"#,
+                    r#""data":{{"access":[],"defines":[],"mappings":[]}}}}"#
+                ),
+                icon = icon
             );
             assert!(PackageManifest::parse(&input).is_err(), "{icon}");
         }
@@ -847,17 +864,47 @@ mod tests {
 
     #[test]
     fn v2_rejects_duplicate_targets_and_overlong_requirements() {
-        let base = r#"{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.2.3","kind":"app","engine_api":"*","entrypoint":"index.html","publisher":"kosmos","targets":[{"runtime":"kosmos-host","os":["linux"]},{"runtime":"kosmos-host","os":["linux"]}],"data":{"access":[],"defines":[],"mappings":[]}}"#;
+        let base = concat!(
+            r#"{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.2.3","#,
+            r#""kind":"app","engine_api":"*","entrypoint":"index.html","#,
+            r#""publisher":"kosmos","targets":[{"runtime":"kosmos-host","os":["linux"]},"#,
+            r#"{"runtime":"kosmos-host","os":["linux"]}],"data":{"access":[],"defines":[],"#,
+            r#""mappings":[]}}"#
+        );
         assert!(PackageManifest::parse(base).is_err());
-        let long = base.replace("\"access\":[]", &format!("\"access\":[{{\"type\":\"com.kosmos.note\",\"versions\":\"{}\",\"actions\":[\"read\"],\"fields\":{{\"read\":[],\"write\":[]}}}}]", "x".repeat(129)));
+        let long = base.replace(
+            "\"access\":[]",
+            &format!(
+                "\"access\":[{{\"type\":\"com.kosmos.note\",\"versions\":\"{}\",\
+                    \"actions\":[\"read\"],\"fields\":{{\"read\":[],\"write\":[]}}}}]",
+                "x".repeat(129)
+            ),
+        );
         assert!(PackageManifest::parse(&long).is_err());
     }
 
     #[test]
     fn v2_rejects_duplicate_mappings_and_long_namespace_suffix() {
-        let s = r#"{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.2.3","kind":"app","engine_api":"*","entrypoint":"index.html","publisher":"kosmos","targets":[{"runtime":"kosmos-host","os":["linux"]}],"data":{"access":[],"defines":[],"mappings":[{"type":"com.kosmos.note","versions":"*","direction":"import","fidelity":"native"},{"type":"com.kosmos.note","versions":"*","direction":"export","fidelity":"native"}]}}"#;
+        let s = concat!(
+            r#"{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.2.3","#,
+            r#""kind":"app","engine_api":"*","entrypoint":"index.html","#,
+            r#""publisher":"kosmos","targets":[{"runtime":"kosmos-host","os":["linux"]}],"#,
+            r#""data":{"access":[],"defines":[],"mappings":[{"type":"com.kosmos.note","#,
+            r#""versions":"*","direction":"import","fidelity":"native"},"#,
+            r#"{"type":"com.kosmos.note","versions":"*","direction":"export","#,
+            r#""fidelity":"native"}]}}"#
+        );
         assert!(PackageManifest::parse(s).is_err());
-        let long = s.replace("\"mappings\":[", &format!("\"defines\":[{{\"type\":\"com.kosmos.demo.{}\",\"version\":\"1.0.0\",\"schema\":\"schema.json\"}}],\"mappings\":[", "x".repeat(65)));
+        let long = s.replace(
+            "\"mappings\":[",
+            &format!(
+                concat!(
+                    "\"defines\":[{{\"type\":\"com.kosmos.demo.{}\",\"version\":\"1.0.0\",",
+                    "\"schema\":\"schema.json\"}}],\"mappings\":["
+                ),
+                "x".repeat(65)
+            ),
+        );
         assert!(PackageManifest::parse(&long).is_err());
     }
 
@@ -884,7 +931,15 @@ mod tests {
 
     #[test]
     fn worker_entrypoint_selects_the_current_target_only() {
-        let input = r#"{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.2.3","kind":"app","engine_api":"*","entrypoint":"index.html","publisher":"kosmos","targets":[{"runtime":"kosmos-host","os":["windows"]},{"runtime":"worker","os":["windows"],"arch":["x86_64"],"entrypoint":"worker-windows.exe"},{"runtime":"worker","os":["linux"],"arch":["x86_64"],"entrypoint":"worker-linux.exe"}],"data":{"access":[],"defines":[],"mappings":[]}}"#;
+        let input = concat!(
+            r#"{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.2.3","#,
+            r#""kind":"app","engine_api":"*","entrypoint":"index.html","#,
+            r#""publisher":"kosmos","targets":[{"runtime":"kosmos-host","os":["windows"]},"#,
+            r#"{"runtime":"worker","os":["windows"],"arch":["x86_64"],"#,
+            r#""entrypoint":"worker-windows.exe"},{"runtime":"worker","os":["linux"],"#,
+            r#""arch":["x86_64"],"entrypoint":"worker-linux.exe"}],"data":{"access":[],"#,
+            r#""defines":[],"mappings":[]}}"#
+        );
         let manifest = PackageManifest::parse(input).unwrap();
         let expected = if cfg!(windows) {
             Some("worker-windows.exe")

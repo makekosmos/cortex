@@ -33,11 +33,14 @@ pub(super) async fn upsert_todo(
         "task_obj",
         &todo.title,
         json!({
-            "priority": todo.priority, "scheduled_date": todo.scheduled_date, "deadline": todo.deadline,
-            "reminder_date": todo.reminder_date, "is_today": todo.is_today, "is_evening": todo.is_evening,
-            "is_someday": todo.is_someday, "is_completed": todo.is_completed, "completed_at": todo.completed_at,
-            "is_cancelled": todo.is_cancelled, "cancelled_at": todo.cancelled_at, "checklist_items": todo.checklist_items,
-            "recurrence_rule": todo.recurrence_rule, "project_id": todo.project_id, "tag_ids": todo.tag_ids,
+            "priority": todo.priority, "scheduled_date": todo.scheduled_date,
+            "deadline": todo.deadline, "reminder_date": todo.reminder_date,
+            "is_today": todo.is_today, "is_evening": todo.is_evening,
+            "is_someday": todo.is_someday, "is_completed": todo.is_completed,
+            "completed_at": todo.completed_at, "is_cancelled": todo.is_cancelled,
+            "cancelled_at": todo.cancelled_at, "checklist_items": todo.checklist_items,
+            "recurrence_rule": todo.recurrence_rule, "project_id": todo.project_id,
+            "tag_ids": todo.tag_ids,
         }),
         &todo.created_at,
         None,
@@ -76,13 +79,29 @@ pub(super) async fn batch_upsert_todos(
     todos: Vec<TodoItem>,
     device_id: Option<String>,
 ) -> Result<Value, String> {
-    let records = todos.iter().map(|todo| legacy_record(&todo.id, "task_obj", &todo.title, json!({
-        "priority": todo.priority, "scheduled_date": todo.scheduled_date, "deadline": todo.deadline,
-        "reminder_date": todo.reminder_date, "is_today": todo.is_today, "is_evening": todo.is_evening,
-        "is_someday": todo.is_someday, "is_completed": todo.is_completed, "completed_at": todo.completed_at,
-        "is_cancelled": todo.is_cancelled, "cancelled_at": todo.cancelled_at, "checklist_items": todo.checklist_items,
-        "recurrence_rule": todo.recurrence_rule, "project_id": todo.project_id, "tag_ids": todo.tag_ids,
-    }), &todo.created_at, None)).collect::<Vec<_>>();
+    let records = todos
+        .iter()
+        .map(|todo| {
+            legacy_record(
+                &todo.id,
+                "task_obj",
+                &todo.title,
+                json!({
+                    "priority": todo.priority, "scheduled_date": todo.scheduled_date,
+                    "deadline": todo.deadline, "reminder_date": todo.reminder_date,
+                    "is_today": todo.is_today, "is_evening": todo.is_evening,
+                    "is_someday": todo.is_someday, "is_completed": todo.is_completed,
+                    "completed_at": todo.completed_at, "is_cancelled": todo.is_cancelled,
+                    "cancelled_at": todo.cancelled_at,
+                    "checklist_items": todo.checklist_items,
+                    "recurrence_rule": todo.recurrence_rule,
+                    "project_id": todo.project_id, "tag_ids": todo.tag_ids,
+                }),
+                &todo.created_at,
+                None,
+            )
+        })
+        .collect::<Vec<_>>();
     let entities = with_write_tx(state, |conn| write_legacy_graph(conn, &records, device_id))?;
     maybe_broadcast_local_changes(state, entities).await;
     Ok(json!(true))
@@ -97,7 +116,12 @@ pub(super) async fn upsert_project(
         &project.id,
         "project_obj",
         &project.title,
-        json!({"status": project.status, "scheduled_date": project.scheduled_date, "deadline": project.deadline, "color": project.color_tag}),
+        json!(
+            {"status": project.status,
+            "scheduled_date": project.scheduled_date,
+            "deadline": project.deadline,
+            "color": project.color_tag}
+        ),
         &project.created_at,
         None,
     );

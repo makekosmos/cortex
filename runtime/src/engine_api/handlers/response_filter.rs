@@ -149,7 +149,10 @@ fn sanitize_dictation_config(value: &Value) -> Value {
         "localModelId": input.get("localModelId").and_then(Value::as_str),
         "providerEnabled": input.get("providerEnabled").and_then(Value::as_bool),
     });
-    output.as_object_mut().expect("object").retain(|_, value| !value.is_null());
+    output
+        .as_object_mut()
+        .expect("object")
+        .retain(|_, value| !value.is_null());
     output
 }
 
@@ -175,9 +178,8 @@ fn sanitize_dictation_state(value: &Value) -> Value {
     if let Some(value) = input.get("state").and_then(Value::as_str) {
         output.insert("state".into(), Value::String(value.into()));
     }
-    if let Some(value @ ("unknown" | "granted" | "denied" | "prompt")) = input
-        .get("microphonePermission")
-        .and_then(Value::as_str)
+    if let Some(value @ ("unknown" | "granted" | "denied" | "prompt")) =
+        input.get("microphonePermission").and_then(Value::as_str)
     {
         output.insert("microphonePermission".into(), Value::String(value.into()));
     }
@@ -290,7 +292,8 @@ async fn filter_app_response(
                         continue;
                     };
                     let Some(object) =
-                        internal_app_lookup(dispatcher, client, "get_object", json!({ "id": id })).await
+                        internal_app_lookup(dispatcher, client, "get_object", json!({ "id": id }))
+                            .await
                     else {
                         continue;
                     };

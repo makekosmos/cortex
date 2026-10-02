@@ -1,5 +1,5 @@
 impl PackageService {
-pub async fn invoke_worker_operation(
+    pub async fn invoke_worker_operation(
         &self,
         operation: &str,
         params: serde_json::Value,
@@ -98,13 +98,9 @@ pub async fn invoke_worker_operation(
             return Err(PackageError::Persistence);
         }
         let hash = format!("{:x}", Sha256::digest(&bytes));
-        let package = self.store.install_versioned(
-            path,
-            bytes.len() as u64,
-            &hash,
-            &manifest,
-            0,
-        )?;
+        let package =
+            self.store
+                .install_versioned(path, bytes.len() as u64, &hash, &manifest, 0)?;
         if let Some((manifest, documents)) = definition_documents {
             if let Err(error) = self
                 .package_registrations
@@ -224,8 +220,7 @@ pub async fn invoke_worker_operation(
         let Some(entry) = trust.catalog_entry(&catalog.document, id, version) else {
             return false;
         };
-        entry.manifest.kind() == expected_kind
-            && trust.ensure_package_allowed(entry).is_ok()
+        entry.manifest.kind() == expected_kind && trust.ensure_package_allowed(entry).is_ok()
     }
 
     /// Read-only projection of the declared permission contract for a package
@@ -535,8 +530,7 @@ pub async fn invoke_worker_operation(
         let url = std::env::var("MUNDUS_PACKAGE_CATALOG_URL")
             .unwrap_or_else(|_| PRODUCTION_CATALOG_URL.to_string());
         let parsed = reqwest::Url::parse(&url).map_err(|_| PackageError::Invalid)?;
-        if parsed.scheme() != "https"
-            && !(cfg!(debug_assertions) && parsed.scheme() == "file")
+        if parsed.scheme() != "https" && !(cfg!(debug_assertions) && parsed.scheme() == "file")
             || parsed.username() != ""
             || parsed.password().is_some()
             || parsed.fragment().is_some()
@@ -919,8 +913,7 @@ pub async fn invoke_worker_operation(
                         };
                         let restored = {
                             let _mutation = Self::lock(&self.mutation);
-                            if Some(replacement)
-                                != self.store.installed(id, version).ok().as_ref()
+                            if Some(replacement) != self.store.installed(id, version).ok().as_ref()
                             {
                                 return Err(PackageError::Persistence);
                             }
@@ -961,7 +954,7 @@ pub async fn invoke_worker_operation(
                         Err(error)
                     }
                 }
-            },
+            }
             Err(error) => {
                 if !should_restart {
                     return Err(error);
@@ -971,9 +964,7 @@ pub async fn invoke_worker_operation(
                 };
                 if !restored_package_record_matches(&self.store, previous, id, version) {
                     let _mutation = Self::lock(&self.mutation);
-                    if replacement.as_ref()
-                        != self.store.installed(id, version).ok().as_ref()
-                    {
+                    if replacement.as_ref() != self.store.installed(id, version).ok().as_ref() {
                         return Err(PackageError::Persistence);
                     }
                     if let Some(worker) = self.worker.as_ref() {
@@ -1170,7 +1161,10 @@ pub async fn invoke_worker_operation(
             })
             .map(|package| {
                 let was_running = !matches!(
-                    worker.supervisor.health(&package.id, &package.version).state,
+                    worker
+                        .supervisor
+                        .health(&package.id, &package.version)
+                        .state,
                     WorkerState::Stopped
                 );
                 self.prepare_worker_launch(&package.id, &package.version, false, Some(&package))
@@ -1184,7 +1178,12 @@ pub async fn invoke_worker_operation(
         let mut stopped = Vec::new();
         for (old, was_running) in &previous {
             if *was_running {
-                if worker.supervisor.stop(&old.expected.id, &old.expected.version).await.is_err() {
+                if worker
+                    .supervisor
+                    .stop(&old.expected.id, &old.expected.version)
+                    .await
+                    .is_err()
+                {
                     self.restore_stopped_workers(&stopped).await?;
                     return Err(PackageError::Persistence);
                 }
@@ -1201,7 +1200,10 @@ pub async fn invoke_worker_operation(
                 return Err(PackageError::Persistence);
             }
         }
-        if let Err(error) = self.start_prepared_worker(&launch, require_current_catalog).await {
+        if let Err(error) = self
+            .start_prepared_worker(&launch, require_current_catalog)
+            .await
+        {
             let _ = worker.supervisor.stop(id, version).await;
             self.restore_worker_cutover(&launch, &previous).await?;
             return Err(error);
@@ -1310,7 +1312,13 @@ pub async fn invoke_worker_operation(
         let version = &launch.expected.version;
         worker
             .supervisor
-            .bind_typed_launch(id, version, &worker.correlation_id, 1, launch.typed_grant.clone())
+            .bind_typed_launch(
+                id,
+                version,
+                &worker.correlation_id,
+                1,
+                launch.typed_grant.clone(),
+            )
             .map_err(|_| {
                 worker.supervisor.revoke_typed_launch(id, version);
                 PackageError::Worker("unavailable")
@@ -1331,9 +1339,7 @@ pub async fn invoke_worker_operation(
         {
             worker.supervisor.revoke_typed_launch(id, version);
             return Err(PackageError::Worker(match error {
-                "worker-required" | "unsupported-platform" | "already-running" => {
-                    "invalid-request"
-                }
+                "worker-required" | "unsupported-platform" | "already-running" => "invalid-request",
                 _ => "unavailable",
             }));
         }
@@ -1344,7 +1350,8 @@ pub async fn invoke_worker_operation(
         } else {
             true
         };
-        let exact_record = self.store.installed(id, version).ok().as_ref() == Some(&launch.expected);
+        let exact_record =
+            self.store.installed(id, version).ok().as_ref() == Some(&launch.expected);
         if !exact_record || !catalog_matches || !worker.supervisor.activate(id, version) {
             let _ = worker.supervisor.stop(id, version).await;
             worker.supervisor.revoke_typed_launch(id, version);
@@ -1359,7 +1366,8 @@ pub async fn invoke_worker_operation(
     ) -> Result<(), PackageError> {
         for worker in workers {
             self.start_prepared_worker(worker, false).await?;
-            self.store.enable_worker(&worker.expected.id, &worker.expected.version)?;
+            self.store
+                .enable_worker(&worker.expected.id, &worker.expected.version)?;
         }
         Ok(())
     }
@@ -1370,9 +1378,11 @@ pub async fn invoke_worker_operation(
         previous: &[(PreparedWorkerLaunch, bool)],
     ) -> Result<(), PackageError> {
         let _mutation = Self::lock(&self.mutation);
-        self.store.disable(&selected.expected.id, &selected.expected.version)?;
+        self.store
+            .disable(&selected.expected.id, &selected.expected.version)?;
         if let Some((old, _)) = previous.first() {
-            self.store.enable_worker(&old.expected.id, &old.expected.version)?;
+            self.store
+                .enable_worker(&old.expected.id, &old.expected.version)?;
         }
         drop(_mutation);
         self.restore_stopped_workers(
@@ -1462,9 +1472,9 @@ fn worker_scopes_overlap(left: &VersionedManifest, right: &VersionedManifest) ->
     let left = scopes(left);
     let right = scopes(right);
     left.iter().any(|left| {
-        right.iter().any(|right| {
-            scope_contains(left, right) || scope_contains(right, left)
-        })
+        right
+            .iter()
+            .any(|right| scope_contains(left, right) || scope_contains(right, left))
     })
 }
 
@@ -1531,8 +1541,12 @@ mod worker_scope_tests {
         let manifest = PackageManifest::parse(raw).expect("valid v2 worker manifest");
         let projected = worker_permissions(&manifest);
         assert_eq!(projected.len(), 2);
-        assert!(projected.iter().any(|p| p.capability == "dictation.control"));
+        assert!(projected
+            .iter()
+            .any(|p| p.capability == "dictation.control"));
         assert!(projected.iter().any(|p| p.capability == "worker.invoke"));
-        assert!(!projected.iter().any(|p| p.scopes.iter().any(|s| s == "dictation.get_state")));
+        assert!(!projected
+            .iter()
+            .any(|p| p.scopes.iter().any(|s| s == "dictation.get_state")));
     }
 }

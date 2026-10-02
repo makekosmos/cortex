@@ -203,8 +203,7 @@ mod releases_tests {
                     "/{}/releases/latest/download/SHA256SUMS.txt",
                     AGENDA.repository
                 ));
-                then.status(200)
-                    .body(sums("0.1.1", &"a".repeat(64)));
+                then.status(200).body(sums("0.1.1", &"a".repeat(64)));
             })
             .await;
         let probe = ReleaseProbe::with_base(server.base_url()).unwrap();
@@ -229,7 +228,10 @@ mod releases_tests {
         stub_sums(
             &server,
             "v9.9.9",
-            format!("{}  agenda-gpui-0.1.1-x86_64-pc-windows-msvc.zip\n", "a".repeat(64)),
+            format!(
+                "{}  agenda-gpui-0.1.1-x86_64-pc-windows-msvc.zip\n",
+                "a".repeat(64)
+            ),
             None,
         )
         .await;
@@ -330,7 +332,13 @@ mod releases_tests {
         // A pinned tag skips the latest redirect entirely and still gets the
         // tag/asset cross-check.
         let server = httpmock::MockServer::start_async().await;
-        stub_sums(&server, "v0.1.1", sums("0.1.1", "aa".repeat(32).as_str()), None).await;
+        stub_sums(
+            &server,
+            "v0.1.1",
+            sums("0.1.1", "aa".repeat(32).as_str()),
+            None,
+        )
+        .await;
         let probe = ReleaseProbe::with_base(server.base_url()).unwrap();
         let info = fetch_tagged(&probe, AGENDA, "v0.1.1", TARGET)
             .await

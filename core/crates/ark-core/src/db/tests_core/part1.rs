@@ -1,4 +1,4 @@
-﻿    fn setup_db() -> Connection {
+    fn setup_db() -> Connection {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(
             "PRAGMA journal_mode = WAL;
@@ -120,7 +120,14 @@
             name: name.to_string(),
             schema_json: json!({
                 "fields": [
-                    { "id": "description", "label": "РћРїРёСЃР°РЅРёРµ", "kind": "long_text", "required": false, "visible": true, "read_only": false }
+                    {
+                        "id": "description",
+                        "label": "РћРїРёСЃР°РЅРёРµ",
+                        "kind": "long_text",
+                        "required": false,
+                        "visible": true,
+                        "read_only": false,
+                    }
                 ]
             })
             .to_string(),

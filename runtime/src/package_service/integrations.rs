@@ -1,13 +1,13 @@
-#[path = "integrations/secret_store.rs"]
-pub(crate) mod secret_store;
 #[path = "integrations/credential_envelope.rs"]
 pub mod credential_envelope;
 #[path = "integrations/credential_target.rs"]
 mod credential_target;
-#[path = "integrations/validation.rs"]
-mod validation;
 #[path = "integrations/provider.rs"]
 mod provider;
+#[path = "integrations/secret_store.rs"]
+pub(crate) mod secret_store;
+#[path = "integrations/validation.rs"]
+mod validation;
 
 use secret_store::{
     clear_package_integration_secret, read_package_integration_secret,
@@ -85,7 +85,11 @@ impl PackageService {
         }))
     }
 
-    pub async fn complete_integration_login(&self, id: &str, _callback: &str) -> Result<(), PackageError> {
+    pub async fn complete_integration_login(
+        &self,
+        id: &str,
+        _callback: &str,
+    ) -> Result<(), PackageError> {
         // No provider-specific code exchanges remain in Engine (the Huawei
         // implementation moved out with the integration packages). The op
         // stays in the contract so hosts get a clean rejection.
@@ -130,8 +134,11 @@ impl PackageService {
         expected_kind: Option<&str>,
         value: &str,
     ) -> Result<(), PackageError> {
-        if !valid_integration_value(value) { return Err(PackageError::Invalid); }
-        self.set_integration_value_unlocked(id, setting_key, expected_kind, value).await
+        if !valid_integration_value(value) {
+            return Err(PackageError::Invalid);
+        }
+        self.set_integration_value_unlocked(id, setting_key, expected_kind, value)
+            .await
     }
 
     async fn set_integration_value_unlocked(
@@ -160,22 +167,17 @@ impl PackageService {
         }
         // The client echoes the kind it rendered; the manifest kind is
         // authoritative — a mismatch means a stale or confused client.
-        if expected_kind.is_some_and(|expected| {
-            serde_json::to_value(&setting.kind).ok().and_then(|kind| kind.as_str().map(str::to_owned)).as_deref()
-                != Some(expected)
-        }) {
+        let actual_kind = serde_json::to_value(&setting.kind)
+            .ok()
+            .and_then(|kind| kind.as_str().map(str::to_owned));
+        if expected_kind.is_some_and(|expected| actual_kind.as_deref() != Some(expected)) {
             return Err(PackageError::Invalid);
         }
         // Storage follows the manifest-declared kind: public values (ник and
         // other plain text) live in integration-settings.json, secrets go to
         // the OS credential vault.
         if setting.kind.is_secret() {
-            save_package_integration_secret(
-                &package.id,
-                &package.version,
-                &setting.key,
-                value,
-            )?;
+            save_package_integration_secret(&package.id, &package.version, &setting.key, value)?;
         } else {
             let mut state = self.read_integration_settings();
             state
@@ -187,8 +189,10 @@ impl PackageService {
                 .map_err(|_| PackageError::Persistence)?;
         }
         if package.enabled {
-            self.set_enabled(&package.id, &package.version, false).await?;
-            self.set_enabled(&package.id, &package.version, true).await?;
+            self.set_enabled(&package.id, &package.version, false)
+                .await?;
+            self.set_enabled(&package.id, &package.version, true)
+                .await?;
         } else {
             let values = self
                 .read_integration_settings()
@@ -196,13 +200,9 @@ impl PackageService {
                 .get(&Self::bridge_key(&package.id, &package.version))
                 .cloned()
                 .unwrap_or_default();
-            if has_integration_credential(
-                integration,
-                &package.id,
-                &package.version,
-                &values,
-            ) {
-                self.set_enabled(&package.id, &package.version, true).await?;
+            if has_integration_credential(integration, &package.id, &package.version, &values) {
+                self.set_enabled(&package.id, &package.version, true)
+                    .await?;
             }
         }
         Ok(())
@@ -219,7 +219,8 @@ impl PackageService {
                     && matches!(
                         &package.manifest,
                         VersionedManifest::V2(manifest)
-                            if manifest.kind == PackageKind::Source && manifest.integration.is_some()
+                            if manifest.kind == PackageKind::Source
+                                && manifest.integration.is_some()
                     )
             })
             .collect::<Vec<_>>();
@@ -228,7 +229,8 @@ impl PackageService {
         }
         for package in &packages {
             if package.enabled {
-                self.set_enabled(&package.id, &package.version, false).await?;
+                self.set_enabled(&package.id, &package.version, false)
+                    .await?;
             }
         }
         if let Some(worker) = self.worker.as_ref() {
@@ -304,7 +306,9 @@ impl PackageService {
             return Ok(());
         };
         let mut state = self.read_integration_settings();
-        state.values.remove(&Self::bridge_key(&package.id, &package.version));
+        state
+            .values
+            .remove(&Self::bridge_key(&package.id, &package.version));
         write_owner_only_json(&self.integration_settings_path(), &state)
             .map_err(|_| PackageError::Persistence)?;
         for setting in &integration.settings {
@@ -312,7 +316,8 @@ impl PackageService {
                 clear_package_integration_secret(&package.id, &package.version, &setting.key)?;
                 // Also drop rotated-secret leftovers written by retired provider
                 // login flows (`:huawei-refresh:*` from the removed Huawei login).
-                clear_package_integration_secret(&package.id, &package.version, &format!(":huawei-refresh:{}", setting.key))?;
+                let legacy_key = format!(":huawei-refresh:{}", setting.key);
+                clear_package_integration_secret(&package.id, &package.version, &legacy_key)?;
             }
         }
         Ok(())

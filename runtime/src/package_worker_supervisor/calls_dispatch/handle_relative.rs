@@ -123,9 +123,9 @@ fn dispatch(
             let bytes = grants
                 .read(root_id, &owner, &grant.package_id, &components, 700 * 1024)
                 .map_err(|_| "unavailable")?;
-            Ok(
-                serde_json::json!({ "bytes": base64::engine::general_purpose::STANDARD.encode(bytes) }),
-            )
+            Ok(serde_json::json!(
+                { "bytes": base64::engine::general_purpose::STANDARD.encode(bytes) }
+            ))
         }
         WorkerMethod::FilesystemWrite => {
             let bytes = call

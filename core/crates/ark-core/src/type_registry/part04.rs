@@ -1,4 +1,3 @@
-﻿
 pub fn register_type(conn: &Connection, registration: &TypeRegistration) -> Result<(), String> {
     validate_id(&registration.type_id, "type id")?;
     if registration.owner_kind.trim().is_empty() {
@@ -103,10 +102,25 @@ pub fn register_type(conn: &Connection, registration: &TypeRegistration) -> Resu
         .map_err(|e| e.to_string())?;
     let result = (|| {
         conn.execute(
-                "INSERT INTO object_types (id,name,schema_json,ui_schema_json,created_at,updated_at,system_locked,owner_kind,owner_id,current_version,status,base_type_id) VALUES (?1,?2,?3,?4,?5,?5,0,?6,?7,?8,?9,?10)",
-                params![registration.type_id, registration.name, registration.schema_json, registration.ui_schema_json, registration.created_at, registration.owner_kind, registration.owner_id, registration.version, registration.status, registration.base_type_id],
-            )
-            .map_err(|e| e.to_string())?;
+            concat!(
+                "INSERT INTO object_types (id,name,schema_json,ui_schema_json,created_at,",
+                "updated_at,system_locked,owner_kind,owner_id,current_version,status,",
+                "base_type_id) VALUES (?1,?2,?3,?4,?5,?5,0,?6,?7,?8,?9,?10)"
+            ),
+            params![
+                registration.type_id,
+                registration.name,
+                registration.schema_json,
+                registration.ui_schema_json,
+                registration.created_at,
+                registration.owner_kind,
+                registration.owner_id,
+                registration.version,
+                registration.status,
+                registration.base_type_id
+            ],
+        )
+        .map_err(|e| e.to_string())?;
         insert_type_version(
             conn,
             &TypeVersion {
@@ -144,7 +158,10 @@ pub fn register_type(conn: &Connection, registration: &TypeRegistration) -> Resu
             .execute_batch("RELEASE SAVEPOINT ark_registry_registration")
             .map_err(|e| e.to_string()),
         Err(error) => {
-            let _ = conn.execute_batch("ROLLBACK TO SAVEPOINT ark_registry_registration; RELEASE SAVEPOINT ark_registry_registration");
+            let _ = conn.execute_batch(concat!(
+                "ROLLBACK TO SAVEPOINT ark_registry_registration; RELEASE SAVEPOINT ",
+                "ark_registry_registration"
+            ));
             Err(error)
         }
     }
@@ -154,7 +171,22 @@ pub fn migrate_phase2(conn: &Connection) -> Result<(), String> {
     conn.execute_batch("SAVEPOINT ark_phase2_registry")
         .map_err(|e| e.to_string())?;
     let result = (|| {
-        conn.execute_batch("CREATE TABLE IF NOT EXISTS sync_pending_objects (id TEXT PRIMARY KEY, payload TEXT NOT NULL, awaited_type_id TEXT NOT NULL, received_at TEXT NOT NULL); CREATE INDEX IF NOT EXISTS idx_sync_pending_awaited_type ON sync_pending_objects(awaited_type_id); CREATE TABLE IF NOT EXISTS object_type_versions (type_id TEXT NOT NULL, version TEXT NOT NULL, schema_json TEXT NOT NULL, ui_schema_json TEXT NOT NULL DEFAULT '{}', content_contract_json TEXT NOT NULL DEFAULT '{}', relations_json TEXT NOT NULL DEFAULT '[]', sync_policy_json TEXT NOT NULL DEFAULT '{}', schema_hash TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(type_id,version), FOREIGN KEY(type_id) REFERENCES object_types(id)); CREATE TABLE IF NOT EXISTS object_type_aliases (alias TEXT PRIMARY KEY, canonical_type_id TEXT NOT NULL, created_at TEXT NOT NULL, FOREIGN KEY(canonical_type_id) REFERENCES object_types(id));").map_err(|e| e.to_string())?;
+        conn.execute_batch(concat!(
+            "CREATE TABLE IF NOT EXISTS sync_pending_objects (id TEXT PRIMARY KEY, ",
+            "payload TEXT NOT NULL, awaited_type_id TEXT NOT NULL, received_at TEXT NOT ",
+            "NULL); CREATE INDEX IF NOT EXISTS idx_sync_pending_awaited_type ON ",
+            "sync_pending_objects(awaited_type_id); CREATE TABLE IF NOT EXISTS ",
+            "object_type_versions (type_id TEXT NOT NULL, version TEXT NOT NULL, ",
+            "schema_json TEXT NOT NULL, ui_schema_json TEXT NOT NULL DEFAULT '{}', ",
+            "content_contract_json TEXT NOT NULL DEFAULT '{}', relations_json TEXT NOT ",
+            "NULL DEFAULT '[]', sync_policy_json TEXT NOT NULL DEFAULT '{}', schema_hash ",
+            "TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(type_id,version), ",
+            "FOREIGN KEY(type_id) REFERENCES object_types(id)); CREATE TABLE IF NOT ",
+            "EXISTS object_type_aliases (alias TEXT PRIMARY KEY, canonical_type_id TEXT ",
+            "NOT NULL, created_at TEXT NOT NULL, FOREIGN KEY(canonical_type_id) ",
+            "REFERENCES object_types(id));"
+        ))
+        .map_err(|e| e.to_string())?;
         for (table, column, definition) in [
             (
                 "object_types",
@@ -196,7 +228,16 @@ pub fn migrate_phase2(conn: &Connection) -> Result<(), String> {
                 .map_err(|e| e.to_string())?;
             }
         }
-        conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_object_type_versions_lookup ON object_type_versions(type_id,version); CREATE INDEX IF NOT EXISTS idx_object_type_aliases_canonical ON object_type_aliases(canonical_type_id); CREATE INDEX IF NOT EXISTS idx_objects_type_version ON objects(type_id,type_version); CREATE INDEX IF NOT EXISTS idx_sync_pending_awaited_type_version ON sync_pending_objects(awaited_type_id,awaited_type_version);").map_err(|e|e.to_string())?;
+        conn.execute_batch(concat!(
+            "CREATE INDEX IF NOT EXISTS idx_object_type_versions_lookup ON ",
+            "object_type_versions(type_id,version); CREATE INDEX IF NOT EXISTS ",
+            "idx_object_type_aliases_canonical ON object_type_aliases(canonical_type_id);",
+            " CREATE INDEX IF NOT EXISTS idx_objects_type_version ON objects(type_id,",
+            "type_version); CREATE INDEX IF NOT EXISTS ",
+            "idx_sync_pending_awaited_type_version ON sync_pending_objects(",
+            "awaited_type_id,awaited_type_version);"
+        ))
+        .map_err(|e| e.to_string())?;
         let mut stmt = conn
             .prepare(
                 "SELECT id,schema_json,ui_schema_json,created_at,current_version FROM object_types",
@@ -240,7 +281,22 @@ pub fn migrate_phase2(conn: &Connection) -> Result<(), String> {
                 &json_empty_array(),
                 &json_empty(),
             )?;
-            conn.execute("INSERT OR IGNORE INTO object_type_versions(type_id,version,schema_json,ui_schema_json,content_contract_json,relations_json,sync_policy_json,schema_hash,created_at) VALUES (?1,?2,?3,?4,'{}','[]','{}',?5,?6)",params![id,LEGACY_VERSION,serde_json::to_string(&canonical_value(&schema_v)).map_err(|e|e.to_string())?,serde_json::to_string(&canonical_value(&ui_v)).map_err(|e|e.to_string())?,hash,created]).map_err(|e|e.to_string())?;
+            conn.execute(
+                concat!(
+                    "INSERT OR IGNORE INTO object_type_versions(type_id,version,schema_json,",
+                    "ui_schema_json,content_contract_json,relations_json,sync_policy_json,",
+                    "schema_hash,created_at) VALUES (?1,?2,?3,?4,'{}','[]','{}',?5,?6)"
+                ),
+                params![
+                    id,
+                    LEGACY_VERSION,
+                    serde_json::to_string(&canonical_value(&schema_v)).map_err(|e| e.to_string())?,
+                    serde_json::to_string(&canonical_value(&ui_v)).map_err(|e| e.to_string())?,
+                    hash,
+                    created
+                ],
+            )
+            .map_err(|e| e.to_string())?;
         }
         Ok::<(), String>(())
     })();

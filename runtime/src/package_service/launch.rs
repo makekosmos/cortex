@@ -96,7 +96,10 @@ impl PackageService {
             [
                 ("id".into(), Value::String(package.id.clone())),
                 ("version".into(), Value::String(package.version.clone())),
-                ("name".into(), Value::String(package.manifest.name().to_owned())),
+                (
+                    "name".into(),
+                    Value::String(package.manifest.name().to_owned()),
+                ),
                 (
                     "launch_url".into(),
                     Value::String(format!(

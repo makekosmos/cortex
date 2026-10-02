@@ -2,8 +2,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::types::*;
 
-#[path = "../protocol/auth.rs"] mod auth;
-#[path = "../protocol/vector.rs"] mod vector;
+#[path = "../protocol/auth.rs"]
+mod auth;
+#[path = "../protocol/vector.rs"]
+mod vector;
 
 pub use auth::{
     compute_hello_auth_hmac, generate_auth_nonce, normalize_auth_secret, verify_hello_auth_hmac,

@@ -128,23 +128,31 @@ pub(super) async fn dispatch(
                 .get("path")
                 .and_then(serde_json::Value::as_str)
                 .ok_or("invalid-request")?;
-            let bytes = package_worker_broker::read_file(broker, Path::new(path)).map_err(|error| {
-                let class = match error {
-                    package_worker_broker::BrokerError::Invalid(_) => "invalid",
-                    package_worker_broker::BrokerError::Io(ref error)
-                        if error.kind() == std::io::ErrorKind::NotFound => return "not-found",
-                    package_worker_broker::BrokerError::Io(_) => "io",
-                    package_worker_broker::BrokerError::Http(_) => "http",
-                };
-                tracing::warn!(target: "package_worker", error_class = class, "worker filesystem read failed");
-                "unavailable"
-            })?;
+            let bytes =
+                package_worker_broker::read_file(broker, Path::new(path)).map_err(|error| {
+                    let class = match error {
+                        package_worker_broker::BrokerError::Invalid(_) => "invalid",
+                        package_worker_broker::BrokerError::Io(ref error)
+                            if error.kind() == std::io::ErrorKind::NotFound =>
+                        {
+                            return "not-found"
+                        }
+                        package_worker_broker::BrokerError::Io(_) => "io",
+                        package_worker_broker::BrokerError::Http(_) => "http",
+                    };
+                    tracing::warn!(
+                        target: "package_worker",
+                        error_class = class,
+                        "worker filesystem read failed",
+                    );
+                    "unavailable"
+                })?;
             if bytes.len() > 700 * 1024 {
                 return Err("unavailable");
             }
-            Ok(
-                serde_json::json!({ "bytes": base64::engine::general_purpose::STANDARD.encode(bytes) }),
-            )
+            Ok(serde_json::json!(
+                { "bytes": base64::engine::general_purpose::STANDARD.encode(bytes) }
+            ))
         }
         WorkerMethod::FilesystemWrite => {
             let scope = path_scope("path");

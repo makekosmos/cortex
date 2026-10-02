@@ -157,8 +157,14 @@ mod registry_tests {
         assert!(registry.bind_authenticated("device-A", &endpoint_id.to_string()));
 
         assert!(!registry.insert_untrusted(endpoint_id, "device-attacker".to_string()));
-        assert_eq!(registry.device_id_for(&endpoint_id).as_deref(), Some("device-A"));
-        assert_eq!(registry.authenticated_endpoint("device-A"), Some(endpoint_id));
+        assert_eq!(
+            registry.device_id_for(&endpoint_id).as_deref(),
+            Some("device-A")
+        );
+        assert_eq!(
+            registry.authenticated_endpoint("device-A"),
+            Some(endpoint_id)
+        );
     }
 
     #[test]
@@ -172,7 +178,10 @@ mod registry_tests {
 
         assert!(!registry.insert_untrusted(new_endpoint, "device-A".to_string()));
         assert_eq!(registry.endpoint_id_for("device-A"), Some(old_endpoint));
-        assert_eq!(registry.authenticated_endpoint("device-A"), Some(old_endpoint));
+        assert_eq!(
+            registry.authenticated_endpoint("device-A"),
+            Some(old_endpoint)
+        );
     }
 
     #[test]
@@ -272,7 +281,10 @@ mod relay_connectivity_tests {
         // Any relay connected counts as connected.
         assert_eq!(relay_connectivity_change(Some(true), &[false, true]), None);
         // All relays lost — down transition.
-        assert_eq!(relay_connectivity_change(Some(true), &[false, false]), Some(false));
+        assert_eq!(
+            relay_connectivity_change(Some(true), &[false, false]),
+            Some(false)
+        );
         // No home relay selected yet keeps the previous state.
         assert_eq!(relay_connectivity_change(Some(true), &[]), Some(true));
         assert_eq!(relay_connectivity_change(None, &[]), None);

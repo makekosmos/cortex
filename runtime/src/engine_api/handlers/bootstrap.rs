@@ -94,14 +94,11 @@ async fn handle_bootstrap(
 
 async fn beacon_token(request: Request<Incoming>) -> Option<String> {
     let body = Limited::new(request.into_body(), MAX_HTTP_BODY_BYTES);
-    body.collect()
-        .await
-        .ok()
-        .and_then(|collected| {
-            serde_json::from_slice::<Value>(&collected.to_bytes())
-                .ok()
-                .and_then(|body| body.get("token").and_then(Value::as_str).map(str::to_owned))
-        })
+    body.collect().await.ok().and_then(|collected| {
+        serde_json::from_slice::<Value>(&collected.to_bytes())
+            .ok()
+            .and_then(|body| body.get("token").and_then(Value::as_str).map(str::to_owned))
+    })
 }
 
 /// `POST /v1/apps/launch/<id>/release` — the `pagehide` beacon: marks the
@@ -185,13 +182,11 @@ fn event_type_id(payload: &Value) -> Option<&str> {
                 .iter()
                 .find_map(|key| entity.get(*key).and_then(Value::as_str))
                 .or_else(|| {
-                    entity
-                        .get("data")
-                        .and_then(|data| {
-                            ["type_id", "typeId"]
-                                .iter()
-                                .find_map(|key| data.get(*key).and_then(Value::as_str))
-                        })
+                    entity.get("data").and_then(|data| {
+                        ["type_id", "typeId"]
+                            .iter()
+                            .find_map(|key| data.get(*key).and_then(Value::as_str))
+                    })
                 })
         })
 }
@@ -203,9 +198,8 @@ fn event_allowed(
     event_names: &[String],
 ) -> bool {
     event_names.iter().any(|allowed| allowed == name)
-        || event_type_id(payload).is_some_and(|type_id| {
-            read_types.iter().any(|allowed| allowed == type_id)
-        })
+        || event_type_id(payload)
+            .is_some_and(|type_id| read_types.iter().any(|allowed| allowed == type_id))
 }
 
 /// `GET /v1/apps/launch/<id>/events` — grant-filtered ARK events as SSE.
@@ -291,8 +285,7 @@ fn handle_launch_events(
                     };
                     match received {
                         Ok((name, payload)) => {
-                            if !event_allowed(&name, &payload, &read_types, &event_names)
-                                || !live()
+                            if !event_allowed(&name, &payload, &read_types, &event_names) || !live()
                             {
                                 continue;
                             }
