@@ -95,7 +95,9 @@ fn pairing_restart_params_force_iroh_and_replace_ticket() {
             use_iroh: false,
             iroh_peer_ticket: None,
             discovery_enabled: true,
-            bind: SyncBind::AllInterfaces,
+            // Loopback on purpose: the pairing restart must escalate the
+            // bind, not just inherit it (KOS-269).
+            bind: SyncBind::Loopback,
         },
         iroh_our_ticket: None,
         beacon: Arc::new(crate::beacon::BroadcastDiscovery::new()),
@@ -112,6 +114,10 @@ fn pairing_restart_params_force_iroh_and_replace_ticket() {
     assert_eq!(params.relay_url.as_deref(), Some("ws://relay.example"));
     assert_eq!(params.space_id, "space-a");
     assert_eq!(params.device_id, "device-a");
+    // KOS-269: pairing is the explicit sync opt-in — even a loopback-bound
+    // boot must switch to the LAN bind so the iroh endpoint can reach the
+    // remote ticket (and the firewall prompt happens now, not at boot).
+    assert_eq!(params.bind, SyncBind::AllInterfaces);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

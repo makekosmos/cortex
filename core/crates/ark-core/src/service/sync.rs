@@ -171,6 +171,12 @@ pub(super) fn build_pairing_restart_params(
     let mut params = runtime.start_params.clone();
     params.use_iroh = true;
     params.iroh_peer_ticket = Some(pairing_code.trim().to_string());
+    // Pairing a device is the explicit "turn sync on" (KOS-269): a boot
+    // without paired peers starts loopback-only, and a loopback iroh
+    // endpoint cannot reach a remote ticket. Escalate to the LAN bind here —
+    // this is the one moment the Windows firewall prompt is expected to
+    // appear for an unprivileged Engine.
+    params.bind = SyncBind::AllInterfaces;
     params
 }
 
