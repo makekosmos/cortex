@@ -100,9 +100,10 @@ installer. `pnpm --dir desktop run build` runs the whole release build in one go
 The affected-check planner is fail-closed: every mode plans the diff of the
 revision under test against `merge-base(HEAD, origin/main)` — staged changes
 for `pre-commit`, tracked plus untracked disk changes for the worktree plan,
-and the pushed commit for pre-push, regardless of whether the remote ref
-already exists. A missing merge base, a shallow clone, or a pushed object that
-is not a commit selects the full check. Docs and isolated assets are a no-op, except
+and pre-push, regardless of whether the remote ref already exists, plans the
+union of every pushed commit's diff against its own merge base. A missing
+merge base, a shallow clone, a non-commit pushed object, or an empty or
+malformed push record selects the full check. Docs and isolated assets are a no-op, except
 documents that tests read as contracts (`DOC_CONTRACTS` in
 `scripts/check-plan-manifest.mjs`), which select the checks reading them. A
 `package.json` edit that only changes known `"scripts"` entries selects the
@@ -127,7 +128,10 @@ downloads the pinned NSIS bundle when `MUNDUS_NSIS_DIR` is unset. It emits
 `publish-release.mjs` consumes only that receipt; it never builds or packages, and it
 re-derives the BOM from HEAD, so a receipt from any other commit is rejected.
 
-`pnpm run check` covers layout, source-size, lint, changed-file Oxfmt,
+`pnpm run check` is `check-plan --full --run`: the full plan's command list in
+`scripts/check-plan-commands.mjs` is the single definition of the gate, and
+the run records a "full" cache entry only when the tree is unchanged at the
+end. It covers layout, source-size, lint, changed-file Oxfmt,
 Rustfmt, workspace Clippy with warnings denied, complete workspace
 Rust tests, backend tests, and runtime staging. `pnpm install --frozen-lockfile`
 installs Lefthook hooks on a clean checkout; run `pnpm run prepare` if hooks are

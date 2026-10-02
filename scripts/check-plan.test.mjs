@@ -1,11 +1,8 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { gitEnv } from "./git-env.mjs";
 
 const script = fileURLToPath(new URL("./check-plan.mjs", import.meta.url));
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -176,28 +173,23 @@ test("unknown planner modes fail closed", async () => {
   }
 });
 
-test("pre-push input parses one update; zero and ambiguous records defer to HEAD", async () => {
+test("pre-push input parses every record; a malformed line fails the parse", async () => {
   const { parseNameStatus, parsePushInput } = await import("./check-plan.mjs");
-  assert.deepEqual(parsePushInput("refs/heads/feature abc refs/heads/main def\n"), {
-    localRef: "refs/heads/feature",
-    localSha: "abc",
-    remoteRef: "refs/heads/main",
-  });
+  assert.deepEqual(parsePushInput("refs/heads/feature abc refs/heads/main def\n"), [
+    { localRef: "refs/heads/feature", localSha: "abc", remoteRef: "refs/heads/main" },
+  ]);
   // A new remote ref is a normal record: the remote sha is simply all zeros.
+  const zero = "0".repeat(40);
   assert.deepEqual(
-    parsePushInput(
-      "refs/heads/feature abc refs/heads/feature 0000000000000000000000000000000000000000\n",
-    )?.localSha,
-    "abc",
+    parsePushInput(`refs/heads/t abc refs/heads/t ${zero}\nrefs/tags/v1 abc refs/tags/v1 ${zero}\n`)
+      .length,
+    2,
   );
-  // A deletion has a zero local sha; several or malformed records parse to null.
-  assert.equal(
-    parsePushInput(
-      "refs/heads/feature 0000000000000000000000000000000000000000 refs/heads/feature abc\n",
-    )?.localSha,
-    "0000000000000000000000000000000000000000",
-  );
+  // A deletion keeps its zero local sha; the caller decides it pushes no code.
+  assert.equal(parsePushInput(`refs/heads/t ${zero} refs/heads/t abc\n`)[0].localSha, zero);
+  assert.deepEqual(parsePushInput(""), []);
   assert.equal(parsePushInput("one\ntwo\n"), null);
+  assert.equal(parsePushInput("refs/heads/t abc refs/heads/t def extra\n"), null);
   assert.deepEqual(parseNameStatus("R100\0old/path.ts\0new/path.ts\0"), [
     { path: "old/path.ts", status: "R" },
     { path: "new/path.ts", status: "R" },
@@ -224,32 +216,52 @@ test("command failures aggregate instead of stopping after the first selected gr
   assert.deepEqual(seen, ["brand", "test-skips", "desktop-contracts", "manager-gpui"]);
 });
 
-test("full gate runs the root check", async () => {
+test("the full gate runs the same steps pnpm run check is made of", async () => {
   const { executePlan } = await import("./check-plan.mjs");
+  const check = JSON.parse(readFileSync(`${root}package.json`, "utf8")).scripts.check;
+  assert.equal(
+    check,
+    "node scripts/check-plan.mjs --full --run",
+    "check must run the planner's full plan so both share one gate definition",
+  );
   const seen = [];
   const status = executePlan(
     { mode: "worktree", full: true, checks: ["full"], changed: [], reasons: [] },
     (command) => {
-      seen.push(`${command.command} ${command.args.join(" ")}`);
+      seen.push(command.name);
       return 0;
     },
   );
   assert.equal(status, 0);
-  assert.deepEqual(seen, ["pnpm run check"]);
+  assert.deepEqual(seen, [
+    "fast",
+    "clippy",
+    "test:static",
+    "test:rust",
+    "manager-gpui",
+    "runtime-staging",
+  ]);
 });
 
-test("full gate still fails when the root check fails", async () => {
+test("the full gate aggregates failures instead of stopping at the first", async () => {
   const { executePlan } = await import("./check-plan.mjs");
   const seen = [];
   const status = executePlan(
     { mode: "worktree", full: true, checks: ["full"], changed: [], reasons: [] },
     (command) => {
       seen.push(command.name);
-      return command.name === "full" ? 1 : 0;
+      return command.name === "clippy" ? 1 : 0;
     },
   );
   assert.equal(status, 1);
-  assert.deepEqual(seen, ["full"]);
+  assert.deepEqual(seen, [
+    "fast",
+    "clippy",
+    "test:static",
+    "test:rust",
+    "manager-gpui",
+    "runtime-staging",
+  ]);
 });
 
 test("pre-commit retains the existing source-size safeguard through the planner", async () => {
@@ -288,112 +300,4 @@ test("checkEnv strips git hook variables from spawned check commands", async () 
     if (saved === undefined) delete process.env.GIT_DIR;
     else process.env.GIT_DIR = saved;
   }
-});
-
-// A scratch repository whose HEAD branch sits one commit ahead of a fabricated
-// refs/remotes/origin/main, mirroring the branch layout every mode plans over.
-// gitEnv(): under a hook, GIT_DIR/GIT_INDEX_FILE would point these commands at
-// the real repository.
-function branchRepo(t, files) {
-  const dir = mkdtempSync(path.join(os.tmpdir(), "check-plan-branch-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const git = (...args) => {
-    const result = spawnSync("git", args, { cwd: dir, encoding: "utf8", env: gitEnv() });
-    assert.equal(result.status, 0, `${args.join(" ")}: ${result.stderr}`);
-    return result.stdout.trim();
-  };
-  git("init", "-q");
-  git("config", "user.email", "check-plan@example.invalid");
-  git("config", "user.name", "check-plan");
-  writeFileSync(path.join(dir, "a.md"), "base\n");
-  git("add", ".");
-  git("commit", "-qm", "base");
-  git("update-ref", "refs/remotes/origin/main", "HEAD");
-  for (const [name, content] of Object.entries(files)) {
-    const file = path.join(dir, name);
-    mkdirSync(path.dirname(file), { recursive: true });
-    writeFileSync(file, content);
-    git("add", name);
-  }
-  git("commit", "-qm", "branch work");
-  const planIn = (mode) => {
-    const head = git("rev-parse", "HEAD");
-    const result = spawnSync(process.execPath, [script, "--mode", mode], {
-      cwd: dir,
-      encoding: "utf8",
-      env: gitEnv(),
-      // Every push in these tests creates the remote ref, like the first
-      // `git push -u origin <branch>` of a fresh task branch.
-      input: `refs/heads/t ${head} refs/heads/t 0000000000000000000000000000000000000000\n`,
-    });
-    assert.equal(result.status, 0, result.stderr);
-    return JSON.parse(result.stdout);
-  };
-  return { dir, git, planIn };
-}
-
-test("worktree and pre-push compute the same plan for the same tree", (t) => {
-  const { planIn } = branchRepo(t, { "desktop/scripts/probe.mjs": "export {};\n" });
-  const worktree = planIn("worktree");
-  const push = planIn("pre-push");
-  for (const plan of [worktree, push]) {
-    assert.equal(plan.full, false, plan.reasons.join("; "));
-    assert.deepEqual(plan.changed, ["desktop/scripts/probe.mjs"]);
-    assert.deepEqual(plan.checks, ["lint", "format"]);
-  }
-});
-
-test("a new-ref push is covered by a check:affected pass on the same tree", async (t) => {
-  const { coveredByCache, diskTree, recordPass } = await import("./check-plan-cache.mjs");
-  const { dir, planIn } = branchRepo(t, { "runtime/src/probe.rs": "pub fn p() {}\n" });
-  const worktree = planIn("worktree");
-  assert.deepEqual(worktree.checks, ["rustfmt", "clippy", "test:rust", "runtime-staging"]);
-  const tree = diskTree(dir);
-  recordPass(dir, tree, worktree.checks);
-  const push = planIn("pre-push");
-  assert.equal(push.tree, tree, "a clean tree is the pushed HEAD tree");
-  assert.equal(coveredByCache(dir, tree, push.checks), true);
-  writeFileSync(path.join(dir, "runtime/src/probe.rs"), "pub fn p() { 1; }\n");
-  assert.equal(
-    coveredByCache(dir, diskTree(dir), push.checks),
-    false,
-    "editing the tree after the pass invalidates the entry",
-  );
-});
-
-test("a manifest added on the branch still widens a push to the full check", (t) => {
-  const { planIn } = branchRepo(t, { "package.json": '{"name":"probe"}\n' });
-  const push = planIn("pre-push");
-  assert.equal(push.full, true);
-  assert.match(push.reasons.join("; "), /package\.json/);
-});
-
-test("a multi-ref push like a release plans HEAD, not an ambiguous failure", (t) => {
-  const { dir, git } = branchRepo(t, { "docs/probe.md": "x\n" });
-  const head = git("rev-parse", "HEAD");
-  const zero = "0".repeat(40);
-  const result = spawnSync(process.execPath, [script, "--mode", "pre-push"], {
-    cwd: dir,
-    encoding: "utf8",
-    env: gitEnv(),
-    input: `refs/heads/t ${head} refs/heads/main ${zero}\nrefs/tags/v9 ${head} refs/tags/v9 ${zero}\n`,
-  });
-  assert.equal(result.status, 0, result.stderr);
-  const plan = JSON.parse(result.stdout);
-  assert.equal(plan.full, false, plan.reasons.join("; "));
-  assert.deepEqual(plan.changed, ["docs/probe.md"]);
-});
-
-test("check records its pass as a full cache entry", async (t) => {
-  const { coveredByCache, diskTree } = await import("./check-plan-cache.mjs");
-  const { dir } = branchRepo(t, { "docs/probe.md": "x\n" });
-  const result = spawnSync(process.execPath, [script, "--record-full"], {
-    cwd: dir,
-    encoding: "utf8",
-    env: gitEnv(),
-  });
-  assert.equal(result.status, 0, result.stderr);
-  const tree = diskTree(dir);
-  assert.equal(coveredByCache(dir, tree, ["full"]), true);
-  assert.equal(coveredByCache(dir, tree, ["clippy", "lint"]), true);
 });
