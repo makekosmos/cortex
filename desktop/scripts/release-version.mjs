@@ -1,36 +1,22 @@
 #!/usr/bin/env node
-// Source-of-truth CLI + library for per-platform desktop version management.
+// Source-of-truth CLI + library for the desktop release version.
 //
-// Each platform (win / mac) has its own independent PATCH version, but shares
-// a MAJOR.MINOR "parity line" that is bumped together when a feature ships on
-// both platforms.
+// Windows is the only released platform, so release-versions.json holds a
+// single "win" key.
 //
 // Library API:
-//   readVersions()           → { win: "0.5.3", mac: "0.5.1" }
-//   getVersion(platform)     → "0.5.3"
+//   readVersions()           → { win: "0.10.1" }
+//   getVersion(platform)     → "0.10.1"   (platform is always "win")
 //   writeVersions(obj)       → void  (2-space indent + trailing newline)
 //
 // CLI usage:
-//   node scripts/release-version.mjs get <win|mac>
+//   node scripts/release-version.mjs get win
 //       Prints just the version string to stdout. Used by build wrapper.
 //
-//   node scripts/release-version.mjs bump --platform <win|mac>
-//       PATCH +1 for that platform. Writes file, prints "old -> new".
+//   node scripts/release-version.mjs bump [--minor|--major]
+//       Default PATCH +1. --minor: MINOR +1, PATCH 0. --major: MAJOR +1,
+//       MINOR 0, PATCH 0. Writes file, prints "win: old -> new".
 //
-//   node scripts/release-version.mjs bump --platform <win|mac> --minor
-//       MINOR +1, PATCH reset to 0 for that platform.
-//
-//   node scripts/release-version.mjs bump --platform <win|mac> --major
-//       MAJOR +1, MINOR 0, PATCH 0 for that platform.
-//
-//   node scripts/release-version.mjs bump --minor
-//       (NO --platform) BOTH platforms: MINOR +1, PATCH reset to 0.
-//       This is the shared parity-line bump.
-//
-//   node scripts/release-version.mjs bump --major
-//       (NO --platform) BOTH platforms: MAJOR +1, MINOR 0, PATCH 0.
-//
-// Default bump = PATCH. Minor/major ONLY via explicit --minor / --major flag.
 // Does NOT touch git, does NOT publish, does NOT edit package.json.
 
 import { readFileSync, writeFileSync } from "node:fs";
@@ -41,7 +27,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const VERSIONS_PATH = path.resolve(__dirname, "..", "release-versions.json");
 
-const VALID_PLATFORMS = ["win", "mac"];
+const VALID_PLATFORMS = ["win"];
 
 // ─── Semver helpers ────────────────────────────────────────────────────────────
 
@@ -70,7 +56,7 @@ function validateVersionString(v, context) {
 
 // ─── Library exports ───────────────────────────────────────────────────────────
 
-/** Read release-versions.json and return { win, mac }. Validates semver on read. */
+/** Read release-versions.json and return { win }. Validates semver on read. */
 export function readVersions() {
   let raw;
   try {
@@ -92,7 +78,7 @@ export function readVersions() {
   return obj;
 }
 
-/** Get the version for a single platform ("win" or "mac"). */
+/** Get the release version for a platform ("win" is the only released platform). */
 export function getVersion(platform) {
   if (!VALID_PLATFORMS.includes(platform)) {
     console.error(
@@ -103,7 +89,7 @@ export function getVersion(platform) {
   return readVersions()[platform];
 }
 
-/** Write { win, mac } back to release-versions.json (2-space indent + trailing newline). */
+/** Write { win } back to release-versions.json (2-space indent + trailing newline). */
 export function writeVersions(obj) {
   for (const platform of VALID_PLATFORMS) {
     validateVersionString(obj[platform], `writeVersions["${platform}"]`);
@@ -147,9 +133,8 @@ function cli() {
     console.log(
       [
         "Usage:",
-        "  node scripts/release-version.mjs get <win|mac>",
-        "  node scripts/release-version.mjs bump --platform <win|mac> [--minor|--major]",
-        "  node scripts/release-version.mjs bump [--minor|--major]   (both platforms)",
+        "  node scripts/release-version.mjs get win",
+        "  node scripts/release-version.mjs bump [--minor|--major]",
       ].join("\n"),
     );
     process.exit(0);
@@ -170,13 +155,11 @@ function cli() {
   }
 
   if (command === "bump") {
-    // Parse flags
-    let platform = null;
     let bumpType = "patch"; // default
 
     for (let i = 1; i < args.length; i++) {
       if (args[i] === "--platform") {
-        platform = args[++i];
+        const platform = args[++i];
         if (!platform || !VALID_PLATFORMS.includes(platform)) {
           console.error(
             `[release-version] --platform requires one of: ${VALID_PLATFORMS.join(", ")}`,
@@ -194,26 +177,11 @@ function cli() {
     }
 
     const versions = readVersions();
-
-    if (platform) {
-      // Single-platform bump
-      const oldVersion = versions[platform];
-      const newVersion = bumpVersion(oldVersion, bumpType);
-      versions[platform] = newVersion;
-      writeVersions(versions);
-      console.log(`${platform}: ${oldVersion} -> ${newVersion}`);
-    } else {
-      // Both-platforms bump (parity line)
-      const oldWin = versions.win;
-      const oldMac = versions.mac;
-      const newWin = bumpVersion(oldWin, bumpType);
-      const newMac = bumpVersion(oldMac, bumpType);
-      versions.win = newWin;
-      versions.mac = newMac;
-      writeVersions(versions);
-      console.log(`win: ${oldWin} -> ${newWin}`);
-      console.log(`mac: ${oldMac} -> ${newMac}`);
-    }
+    const oldVersion = versions.win;
+    const newVersion = bumpVersion(oldVersion, bumpType);
+    versions.win = newVersion;
+    writeVersions(versions);
+    console.log(`win: ${oldVersion} -> ${newVersion}`);
     return;
   }
 

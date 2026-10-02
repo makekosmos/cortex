@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Verifies that a published GitHub release's channel file (latest.yml /
-// latest-mac.yml) is consistent with the actual uploaded installer assets.
+// Verifies that a published GitHub release's channel file (latest.yml) is
+// consistent with the actual uploaded installer assets.
 //
 // Background: electron-updater verifies the sha512 field in the channel file
 // against the downloaded installer before applying the update. If the release
@@ -13,27 +13,23 @@
 // latest.yml still described build A. This script detects that exact scenario.
 //
 // Usage:
-//   node scripts/verify-release-channel.mjs                         # win, version from release-versions.json
-//   node scripts/verify-release-channel.mjs 0.5.3                   # win, explicit version (positional, backward-compat)
-//   node scripts/verify-release-channel.mjs --platform win          # explicit platform
-//   node scripts/verify-release-channel.mjs --platform mac          # mac channel
-//   node scripts/verify-release-channel.mjs --platform win --version 0.5.3
+//   node scripts/verify-release-channel.mjs                  # version from release-versions.json
+//   node scripts/verify-release-channel.mjs 0.5.3            # explicit version (positional, backward-compat)
+//   node scripts/verify-release-channel.mjs --version 0.5.3
+//   node scripts/verify-release-channel.mjs --repo owner/name   # bridge-run override
 //   pnpm run verify:channel
 //   pnpm run verify:channel -- 0.5.3
 //
 // Version resolution order:
 //   1. --version flag
 //   2. positional argument (backward-compat)
-//   3. release-versions.json[platform]
+//   3. release-versions.json["win"]
 //   4. package.json.version (last fallback)
 //
-// Repo resolution (release-repos.mjs; overridable with --repo for bridge runs):
-//   win → makekosmos/cortex
-//   mac → makekosmos/desktop-mac
+// Repo resolution: release-repos.mjs (win → makekosmos/cortex), overridable
+// with --repo for bridge runs.
 //
-// Channel file:
-//   win → latest.yml
-//   mac → latest-mac.yml
+// Channel file: latest.yml
 //
 // Exit codes:
 //   0  — all checks PASS
@@ -163,7 +159,7 @@ function fetchAssetTimestamps(ownerRepo, tag) {
 // below is fixed and simple, so a targeted parser is deterministic everywhere.
 
 /**
- * Hand-parser for the flat latest.yml / latest-mac.yml format electron-builder emits.
+ * Hand-parser for the flat latest.yml format electron-builder emits.
  *
  * Handles:
  *   version: 0.5.3
@@ -171,9 +167,6 @@ function fetchAssetTimestamps(ownerRepo, tag) {
  *     - url: Mundus-Setup-0.5.3.exe
  *       sha512: CX4w...==
  *       size: 122041993
- *     - url: Mundus-0.5.1.dmg           (mac may list multiple files: dmg + zip)
- *       sha512: ...
- *       size: ...
  *   path: Mundus-Setup-0.5.3.exe
  *   sha512: CX4w...==
  *   releaseDate: '2026-06-18T12:18:15.656Z'
@@ -319,20 +312,17 @@ async function fetchTextWithRetry(url, maxRetries, delayMs) {
 /**
  * Parse CLI args.
  * Supports:
- *   --platform <win|mac>
  *   --version <x.y.z>
- *   --repo <owner/name>  (default: the platform's release repo; bridge
- *                         publishes pass the second repo explicitly)
+ *   --repo <owner/name>  (default: the release repo; bridge publishes pass
+ *                         the second repo explicitly)
  *   <x.y.z>  (positional, backward-compat)
  */
 function parseArgs(argv) {
-  const result = { platform: null, version: null, repo: null, positional: null };
+  const result = { version: null, repo: null, positional: null };
   const args = argv.slice(2);
 
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--platform") {
-      result.platform = args[++i];
-    } else if (args[i] === "--version") {
+    if (args[i] === "--version") {
       result.version = args[++i];
     } else if (args[i] === "--repo") {
       result.repo = args[++i];
@@ -348,15 +338,9 @@ function parseArgs(argv) {
 // ─── Main verification logic ──────────────────────────────────────────────────
 
 async function main() {
-  // ── 1. Determine platform ────────────────────────────────────────────────
+  // Windows is the only released platform; the channel file is latest.yml.
   const parsed = parseArgs(process.argv);
-  const platform = parsed.platform ?? "win";
-
-  if (!["win", "mac"].includes(platform)) {
-    die(`Unknown platform "${platform}". Valid values: win, mac`);
-  }
-
-  const channelFile = platform === "mac" ? "latest-mac.yml" : "latest.yml";
+  const channelFile = "latest.yml";
 
   // ── 2. Determine version & publish config ────────────────────────────────
   const pkgPath = path.join(SHELL_ROOT, "package.json");
@@ -365,7 +349,7 @@ async function main() {
   // Version resolution order:
   //   1. --version flag
   //   2. positional arg (backward-compat)
-  //   3. release-versions.json[platform]
+  //   3. release-versions.json["win"]
   //   4. package.json.version (last fallback)
   let version = parsed.version ?? parsed.positional ?? null;
   if (!version) {
@@ -374,7 +358,7 @@ async function main() {
     try {
       const versionsRaw = await readFile(versionsPath, "utf8");
       const versions = JSON.parse(versionsRaw);
-      version = versions[platform] ?? null;
+      version = versions.win ?? null;
     } catch {
       // file may not exist on very old checkouts
     }
@@ -386,12 +370,10 @@ async function main() {
     die("Cannot determine version — pass --version <v> or set version in release-versions.json");
   }
 
-  // The release repositories are fixed for this product line; --repo exists
+  // The release repository is fixed for this product line; --repo exists
   // for the one-time bridge publish that lands on the legacy feed too.
-  const ownerRepo = parsed.repo ?? RELEASE_REPOS[platform];
+  const ownerRepo = parsed.repo ?? RELEASE_REPOS.win;
   const tag = `v${version}`;
-
-  log(`Platform:     ${platform}`);
   log(`Verifying release ${tag} on ${ownerRepo}`);
   log(`Channel file: ${channelFile}`);
   log("");
@@ -406,10 +388,7 @@ async function main() {
   } catch (err) {
     die(
       `Failed to download ${channelFile} after ${MAX_RETRIES} attempts: ${err.message}\n\n` +
-        `Fix: ensure the release ${tag} exists on ${ownerRepo} and ${channelFile} was published.\n` +
-        (platform === "mac"
-          ? `Note: the Mac repo makekosmos/desktop-mac may not exist yet — the USER must create it first.`
-          : ``),
+        `Fix: ensure the release ${tag} exists on ${ownerRepo} and ${channelFile} was published.`,
     );
   }
 
@@ -597,7 +576,7 @@ async function main() {
   // ── 9. Summary ────────────────────────────────────────────────────────────
   log("");
   log("════════════════════════════════════════");
-  log(`Platform: ${platform}  Release: ${ownerRepo} ${tag}`);
+  log(`Release: ${ownerRepo} ${tag}`);
   log("Results:");
   for (const r of results) {
     const status = r.pass ? "PASS" : "FAIL";
@@ -609,7 +588,7 @@ async function main() {
 
   if (anyHardFail) {
     log("════════════════════════════════════════");
-    console.error(`${LOG_PREFIX} OVERALL: FAIL (platform: ${platform})`);
+    console.error(`${LOG_PREFIX} OVERALL: FAIL`);
     console.error("");
     console.error(`${LOG_PREFIX} HOW TO FIX:`);
     console.error(
@@ -619,17 +598,10 @@ async function main() {
     console.error(
       `${LOG_PREFIX}   2. Bump a new patch version (e.g. ${version} → ${bumpPatch(version)}).`,
     );
-    if (platform === "win") {
-      console.error(`${LOG_PREFIX}   3. Run one clean build+publish:  pnpm run build`);
-      console.error(
-        `${LOG_PREFIX}      (which ends with: node scripts/build-desktop.mjs --platform win)`,
-      );
-    } else {
-      console.error(`${LOG_PREFIX}   3. Run one clean build+publish:  pnpm run build:mac`);
-      console.error(
-        `${LOG_PREFIX}      (which ends with: node scripts/build-desktop.mjs --platform mac)`,
-      );
-    }
+    console.error(`${LOG_PREFIX}   3. Run one clean build+publish:  pnpm run build`);
+    console.error(
+      `${LOG_PREFIX}      (which ends with: node scripts/build-desktop.mjs --platform win)`,
+    );
     console.error(
       `${LOG_PREFIX}   4. That produces an atomic set: installer + .blockmap + ${channelFile} from the same build.`,
     );

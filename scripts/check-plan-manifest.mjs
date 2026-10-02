@@ -38,7 +38,6 @@ const SCRIPT_CHECKS = {
     "package:dir": ["release-bom"],
     "build:backend": [],
     "build:backend:dev": [],
-    "build:native:macos": [],
     "build:package-components": [],
     "verify:channel": [],
   },

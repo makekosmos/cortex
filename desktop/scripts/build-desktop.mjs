@@ -55,7 +55,7 @@ function collectArtifacts(outputDir, platform, version) {
 }
 
 async function emitProvenance(outputDir, platform, version, bom) {
-  verifyLocalReleaseChannel(outputDir, platform, version);
+  verifyLocalReleaseChannel(outputDir, version);
   const artifacts = collectArtifacts(outputDir, platform, version);
   const provenance = {
     schema_version: 1,

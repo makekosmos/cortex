@@ -10,8 +10,10 @@ function sha512(file) {
   return createHash("sha512").update(readFileSync(file)).digest("base64");
 }
 
-export function verifyLocalReleaseChannel(outputDir, platform, expectedVersion) {
-  const channelName = platform === "win" ? "latest.yml" : "latest-mac.yml";
+// Windows is the only released platform, so the channel file is always
+// latest.yml.
+export function verifyLocalReleaseChannel(outputDir, expectedVersion) {
+  const channelName = "latest.yml";
   const document = readFileSync(path.join(outputDir, channelName), "utf8");
   const version = /^version:\s*(.+?)\s*$/m.exec(document)?.[1];
   const primaryName = /^path:\s*(.+?)\s*$/m.exec(document)?.[1];

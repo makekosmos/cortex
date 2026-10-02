@@ -19,9 +19,9 @@ test("verifies every local channel artifact before publication", async () => {
       path.join(directory, "latest.yml"),
       `version: 1.2.3\nfiles:\n  - url: Mundus-Setup-1.2.3.exe\n    sha512: ${hash(installer)}\n    size: ${installer.length}\n  - url: Mundus-Setup-1.2.3.exe.blockmap\n    sha512: ${hash(blockmap)}\n    size: ${blockmap.length}\npath: Mundus-Setup-1.2.3.exe\nsha512: ${hash(installer)}\n`,
     );
-    assert.doesNotThrow(() => verifyLocalReleaseChannel(directory, "win", "1.2.3"));
+    assert.doesNotThrow(() => verifyLocalReleaseChannel(directory, "1.2.3"));
     await writeFile(path.join(directory, "Mundus-Setup-1.2.3.exe.blockmap"), "tampered");
-    assert.throws(() => verifyLocalReleaseChannel(directory, "win", "1.2.3"), /artifact mismatch/);
+    assert.throws(() => verifyLocalReleaseChannel(directory, "1.2.3"), /artifact mismatch/);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

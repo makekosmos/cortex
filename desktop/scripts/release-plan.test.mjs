@@ -218,9 +218,9 @@ test("parseStableVersion rejects non-stable input", () => {
 test("setWinVersion writes only the win entry and stays idempotent", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "mundus-release-plan-"));
   const file = path.join(dir, "release-versions.json");
-  await writeFile(file, JSON.stringify({ win: "0.10.0", mac: "0.5.1" }, null, 2) + "\n");
+  await writeFile(file, JSON.stringify({ win: "0.10.0" }, null, 2) + "\n");
   assert.equal(setWinVersion("0.10.1", file), true);
-  assert.deepEqual(JSON.parse(await readFile(file, "utf8")), { win: "0.10.1", mac: "0.5.1" });
+  assert.deepEqual(JSON.parse(await readFile(file, "utf8")), { win: "0.10.1" });
   assert.equal(setWinVersion("0.10.1", file), false);
   assert.throws(() => setWinVersion("0.10.x", file), /MAJOR\.MINOR\.PATCH/);
 });
