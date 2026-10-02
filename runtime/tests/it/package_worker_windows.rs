@@ -1073,7 +1073,7 @@ async fn secret_bearing_worker_failure_is_redacted_end_to_end() {
             snapshot,
             serde_json::json!(
                 {"worker_stdout": worker.stdout_tail,
-                "worker_stderr": worker.stderr_tail},
+                "worker_stderr": worker.stderr_tail}
             ),
         )
         .await

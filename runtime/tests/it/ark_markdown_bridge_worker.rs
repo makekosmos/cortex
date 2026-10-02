@@ -256,7 +256,7 @@ fn worker_projects_and_imports_only_through_broker_stdio() {
         "text":"From server"}]}]},
         "created_at":"x",
         "updated_at":"server",
-        "deleted_at":null},
+        "deleted_at":null}
     );
     reply(&mut input, &ark, true, json!([server]));
     let compare = call(&mut output);

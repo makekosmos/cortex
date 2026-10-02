@@ -1,13 +1,13 @@
-#[path = "integrations/secret_store.rs"]
-pub(crate) mod secret_store;
 #[path = "integrations/credential_envelope.rs"]
 pub mod credential_envelope;
 #[path = "integrations/credential_target.rs"]
 mod credential_target;
-#[path = "integrations/validation.rs"]
-mod validation;
 #[path = "integrations/provider.rs"]
 mod provider;
+#[path = "integrations/secret_store.rs"]
+pub(crate) mod secret_store;
+#[path = "integrations/validation.rs"]
+mod validation;
 
 use secret_store::{
     clear_package_integration_secret, read_package_integration_secret,
@@ -134,8 +134,11 @@ impl PackageService {
         expected_kind: Option<&str>,
         value: &str,
     ) -> Result<(), PackageError> {
-        if !valid_integration_value(value) { return Err(PackageError::Invalid); }
-        self.set_integration_value_unlocked(id, setting_key, expected_kind, value).await
+        if !valid_integration_value(value) {
+            return Err(PackageError::Invalid);
+        }
+        self.set_integration_value_unlocked(id, setting_key, expected_kind, value)
+            .await
     }
 
     async fn set_integration_value_unlocked(
@@ -174,12 +177,7 @@ impl PackageService {
         // other plain text) live in integration-settings.json, secrets go to
         // the OS credential vault.
         if setting.kind.is_secret() {
-            save_package_integration_secret(
-                &package.id,
-                &package.version,
-                &setting.key,
-                value,
-            )?;
+            save_package_integration_secret(&package.id, &package.version, &setting.key, value)?;
         } else {
             let mut state = self.read_integration_settings();
             state
@@ -191,8 +189,10 @@ impl PackageService {
                 .map_err(|_| PackageError::Persistence)?;
         }
         if package.enabled {
-            self.set_enabled(&package.id, &package.version, false).await?;
-            self.set_enabled(&package.id, &package.version, true).await?;
+            self.set_enabled(&package.id, &package.version, false)
+                .await?;
+            self.set_enabled(&package.id, &package.version, true)
+                .await?;
         } else {
             let values = self
                 .read_integration_settings()
@@ -200,13 +200,9 @@ impl PackageService {
                 .get(&Self::bridge_key(&package.id, &package.version))
                 .cloned()
                 .unwrap_or_default();
-            if has_integration_credential(
-                integration,
-                &package.id,
-                &package.version,
-                &values,
-            ) {
-                self.set_enabled(&package.id, &package.version, true).await?;
+            if has_integration_credential(integration, &package.id, &package.version, &values) {
+                self.set_enabled(&package.id, &package.version, true)
+                    .await?;
             }
         }
         Ok(())
@@ -233,7 +229,8 @@ impl PackageService {
         }
         for package in &packages {
             if package.enabled {
-                self.set_enabled(&package.id, &package.version, false).await?;
+                self.set_enabled(&package.id, &package.version, false)
+                    .await?;
             }
         }
         if let Some(worker) = self.worker.as_ref() {
@@ -309,7 +306,9 @@ impl PackageService {
             return Ok(());
         };
         let mut state = self.read_integration_settings();
-        state.values.remove(&Self::bridge_key(&package.id, &package.version));
+        state
+            .values
+            .remove(&Self::bridge_key(&package.id, &package.version));
         write_owner_only_json(&self.integration_settings_path(), &state)
             .map_err(|_| PackageError::Persistence)?;
         for setting in &integration.settings {
