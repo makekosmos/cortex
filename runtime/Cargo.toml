@@ -99,15 +99,15 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg"]
 # enigo — кросс-платформенная симуляция клавиш (Win32 SendInput) для Ctrl+V инжекта.
 # arboard — clipboard read/write с восстановлением оригинала после inject.
 # keyring — нативный secret store для API key (enterprise-standard, не plaintext):
-#   Windows Credential Manager (windows-native) + macOS Keychain (apple-native).
-#   Без backend-feature для платформы keyring молча использует mock store —
-#   запись «успешна», но ключ не персистит (на macOS → submit_audio: API key не задан).
+#   Windows Credential Manager (feature windows-native). Без backend-feature
+#   для платформы keyring молча использует mock store — запись «успешна», но
+#   ключ не персистит.
 # hickory-resolver — DoH resolver для AI HTTP клиентов (РФ обход DNS poisoning).
 # base64 — encode/decode WAV bytes между renderer и backend.
 # arboard — save/restore clipboard поверх inject'а транскрипта. Ctrl+V сам шлётся
 # через нативный windows::Win32 SendInput (enigo шёл через VK_PACKET, ломался).
 arboard = "3"
-keyring = { version = "3", features = ["windows-native", "apple-native"] }
+keyring = { version = "3", features = ["windows-native"] }
 hickory-resolver = { version = "0.24", features = ["dns-over-https-rustls"] }
 base64 = "0.22"
 ed25519-dalek = "2"

@@ -1,7 +1,6 @@
-//! Silent installer launch. Windows-only for now: the feed this module reads
-//! (`feed::DEFAULT_FEED_BASE`) only ever names an NSIS `.exe`, so there is no
-//! macOS/Linux installer to launch here yet — see the PR description for the
-//! mac follow-up.
+//! Silent installer launch. Windows-only: the feed this module reads
+//! (`feed::DEFAULT_FEED_BASE`) only ever names an NSIS `.exe`, so every other
+//! host returns `UnsupportedPlatform`.
 //!
 //! The installer is spawned **detached** and this call does not wait for it
 //! or terminate the current process: Engine is not the process that owns

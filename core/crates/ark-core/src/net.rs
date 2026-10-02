@@ -12,7 +12,8 @@
 
 /// Interface-name prefixes that belong to virtual / VPN / container adapters.
 pub const VIRTUAL_IFACE_PREFIXES: &[&str] = &[
-    // macOS
+    // Name prefixes of virtual interfaces (utun, awdl, llw, anpi, …).
+    // Matched by name on every host.
     "utun",
     "awdl",
     "llw",

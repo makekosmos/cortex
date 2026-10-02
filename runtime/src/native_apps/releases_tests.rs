@@ -10,7 +10,7 @@ mod releases_tests {
         let stem = AGENDA.asset_stem;
         format!(
             "{sha}  {stem}-{version}-x86_64-pc-windows-msvc.zip\n\
-             {sha}  {stem}-{version}-aarch64-apple-darwin.tar.gz\n\
+             {sha}  {stem}-{version}-aarch64-unknown-linux-gnu.tar.gz\n\
              {sha} *{stem}-{version}-x86_64-unknown-linux-gnu.tar.gz\n"
         )
     }
@@ -69,7 +69,8 @@ mod releases_tests {
         assert_eq!(found.asset, "agenda-gpui-0.3.0-x86_64-pc-windows-msvc.zip");
         assert_eq!(found.sha256, "a".repeat(64));
         // Other targets resolve to their own extension.
-        let found = select_asset(&parsed, AGENDA, "aarch64-apple-darwin").expect("darwin line");
+        let found =
+            select_asset(&parsed, AGENDA, "aarch64-unknown-linux-gnu").expect("linux arm line");
         assert_eq!(found.version, "0.3.0");
         assert!(found.asset.ends_with(".tar.gz"));
         // Absent target → None.

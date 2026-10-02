@@ -43,8 +43,8 @@ cat /tmp/mundus-data/engine.lock.json    # { pid, http_port, auth_token }
 curl -H "Authorization: Bearer <auth_token>" http://127.0.0.1:<http_port>/v1/...
 ```
 
-Package manifests declare `targets[].os`; the Engine maps non-Windows/non-macOS
-to `linux`, so a first-party manifest with `"os": ["windows", "linux"]` is
+Package manifests declare `targets[].os`; the Engine maps every non-Windows
+host to `linux`, so a first-party manifest with `"os": ["windows", "linux"]` is
 accepted without host changes.
 
 ## Engine smoke (one command)

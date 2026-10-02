@@ -151,13 +151,12 @@ pub enum Platform {
 impl Platform {
     /// Host OS token in the catalog availability vocabulary. The Engine owns
     /// the OS→token mapping so shells filter listings without OS branches of
-    /// their own. Non-desktop targets fold into Linux, matching
-    /// `ManifestTarget::supports_current`.
+    /// their own. `Platform::Macos` stays parseable for catalog documents;
+    /// this build never reports it as the current host. Every non-Windows
+    /// host folds into Linux, matching `ManifestTarget::supports_current`.
     pub fn current() -> Self {
         if cfg!(windows) {
             Self::Windows
-        } else if cfg!(target_os = "macos") {
-            Self::Macos
         } else {
             Self::Linux
         }
@@ -738,17 +737,20 @@ mod tests {
 
     #[test]
     fn current_platform_serializes_to_the_host_catalog_token() {
-        let expected = if cfg!(windows) {
-            "windows"
-        } else if cfg!(target_os = "macos") {
-            "macos"
-        } else {
-            "linux"
-        };
+        let expected = if cfg!(windows) { "windows" } else { "linux" };
         assert_eq!(
             serde_json::to_value(Platform::current()).unwrap(),
             serde_json::Value::String(expected.into())
         );
+    }
+
+    #[test]
+    fn macos_remains_a_catalog_platform_token() {
+        // Catalog documents may list `"platforms": ["macos"]`. The variant is
+        // a data contract, not a host this build compiles for.
+        let platform: Platform = serde_json::from_str("\"macos\"").unwrap();
+        assert_eq!(platform, Platform::Macos);
+        assert_eq!(serde_json::to_value(Platform::Macos).unwrap(), "macos");
     }
 
     #[test]

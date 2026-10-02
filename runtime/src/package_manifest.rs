@@ -418,10 +418,11 @@ impl ManifestV2 {
 
 impl ManifestTarget {
     fn supports_current(&self) -> bool {
+        // `TargetOs::Macos` stays in the manifest vocabulary (a package may
+        // declare it) but this build never selects it: non-Windows hosts are
+        // Linux, matching `store_catalog::Platform::current`.
         let os = if cfg!(windows) {
             TargetOs::Windows
-        } else if cfg!(target_os = "macos") {
-            TargetOs::Macos
         } else {
             TargetOs::Linux
         };
@@ -816,6 +817,14 @@ mod tests {
             publisher: "kosmos".into(),
             permissions: vec![],
         }
+    }
+    #[test]
+    fn macos_remains_a_manifest_os_token() {
+        // A package may declare `"os": ["macos"]`. Dropping the variant would
+        // reject that manifest even though this build never runs as that host.
+        let os: TargetOs = serde_json::from_str("\"macos\"").unwrap();
+        assert_eq!(os, TargetOs::Macos);
+        assert_eq!(serde_json::to_value(TargetOs::Macos).unwrap(), "macos");
     }
     #[test]
     fn v1_validation_and_unknown_fields() {

@@ -11,8 +11,7 @@ cargo run --manifest-path manager-gpui/Cargo.toml
 ```
 
 Приложение читает `engine.lock.json` из `MUNDUS_DATA_DIR` (по умолчанию
-`~/.config/Mundus` на Linux, `%APPDATA%\Mundus` на Windows,
-`~/Library/Application Support/Mundus` на macOS) на каждый запрос — перезапуск
+`~/.config/Mundus` на Linux, `%APPDATA%\Mundus` на Windows) на каждый запрос — перезапуск
 Engine подхватывается без рестарта приложения.
 
 ## Engine
