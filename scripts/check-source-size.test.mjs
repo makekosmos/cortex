@@ -69,7 +69,7 @@ test("core/ is first-party and checked like everything else", async () => {
 test("only the explicit debt baseline is grandfathered", async () => {
   const result = await runFixture({
     "runtime/src/main.rs": lines(501),
-    "runtime/src/package_store.rs": lines(501),
+    "runtime/src/package_manifest.rs": lines(501),
     "runtime/src/focus.rs": lines(501),
   });
   assert.equal(result.status, 0, result.stderr);
@@ -77,9 +77,22 @@ test("only the explicit debt baseline is grandfathered", async () => {
 });
 
 test("pruned baseline entries under 500 lines are no longer exempt", async () => {
-  const result = await runFixture({ "runtime/src/ark_host.rs": lines(501) });
+  const pruned = [
+    "runtime/src/ark_host.rs",
+    "runtime/src/db_backup.rs",
+    "runtime/src/manager_api.rs",
+    "runtime/src/engine_api/server.rs",
+    "runtime/src/package_store.rs",
+    "runtime/src/grant_authority.rs",
+    "runtime/src/handle_relative_fs.rs",
+    "runtime/src/runtime_grants.rs",
+  ];
+  const result = await runFixture(Object.fromEntries(pruned.map((file) => [file, lines(501)])));
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /runtime\/src\/ark_host\.rs: 501 lines \(max 500\)/);
+  for (const file of pruned) {
+    const pattern = `${file.replaceAll(".", "\\.")}: 501 lines \\(max 500\\)`;
+    assert.match(result.stderr, new RegExp(pattern));
+  }
 });
 
 test("moved packages/ sources are no longer grandfathered", async () => {
