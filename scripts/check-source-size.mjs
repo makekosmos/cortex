@@ -51,6 +51,7 @@ const GRANDFATHERED = new Set([
   "runtime/src/handle_relative_fs.rs",
   "runtime/src/main.rs",
   "runtime/src/manager_api.rs",
+  "runtime/src/package_launch.rs",
   "runtime/src/package_manifest.rs",
   "runtime/src/package_registration.rs",
   "runtime/src/package_service/core.rs",

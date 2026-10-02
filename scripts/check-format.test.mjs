@@ -69,7 +69,30 @@ test("format discovery ignores unstaged files and fails closed on an invalid bas
     });
     assert.notEqual(invalidBase.status, 0, "git discovery errors must fail the format gate");
 
+    writeFileSync(resolve(cwd, "sample.ts"), "export const value = 1;\n");
+
+    writeFileSync(
+      resolve(cwd, "bom.rs"),
+      Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from("fn main() {}\n")]),
+    );
+    git(cwd, "add", "bom.rs");
+    const bommed = spawnSync(process.execPath, [script], { cwd });
+    assert.equal(bommed.status, 1, "BOM in a changed .rs file must fail the gate");
+    assert.match(String(bommed.stderr), /UTF-8 BOM/);
+
+    writeFileSync(resolve(cwd, "bom.rs"), "fn main() {}\n");
+    const clean = spawnSync(process.execPath, [script], { cwd });
+    assert.equal(clean.status, 0, "plain .rs file must pass the BOM guard");
+
+    writeFileSync(resolve(cwd, "long.rs"), `fn x() {\n    let s = "${"a".repeat(110)}";\n}\n`);
+    git(cwd, "add", "long.rs");
+    const long = spawnSync(process.execPath, [script], { cwd });
+    assert.equal(long.status, 1, "over-100-char .rs line must fail the gate");
+    assert.match(String(long.stderr), /over 100 chars/);
+
     rmSync(resolve(cwd, "sample.ts"));
+    rmSync(resolve(cwd, "bom.rs"));
+    rmSync(resolve(cwd, "long.rs"));
     const deleted = spawnSync(process.execPath, [script], { cwd });
     assert.equal(deleted.status, 0, "deleted files must not enter the format gate");
     const after = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" });
