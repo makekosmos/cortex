@@ -38,6 +38,8 @@ test("worktree and pre-commit modes read package.json revisions from git", (t) =
   write({ scripts: { clippy: "cargo clippy" }, devDependencies: { oxlint: "1.0.0" } });
   git(dir, "add", "package.json");
   git(dir, "commit", "-qm", "base");
+  // Every mode plans the diff against merge-base(HEAD, origin/main).
+  git(dir, "update-ref", "refs/remotes/origin/main", "HEAD");
 
   write({ scripts: { clippy: "cargo clippy -D warnings" }, devDependencies: { oxlint: "1.0.0" } });
   assert.deepEqual(planIn(dir, "worktree").checks, ["package-manager", "clippy", "format"]);

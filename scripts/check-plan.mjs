@@ -56,9 +56,9 @@ function isShallow() {
   return result.error || result.status !== 0 || result.stdout.trim() === "true";
 }
 
-function validCommit(value) {
-  const result = git(["rev-parse", "--verify", `${value}^{commit}`]);
-  return !result.error && result.status === 0;
+function revParse(spec) {
+  const result = git(["rev-parse", "--verify", spec]);
+  return result.error || result.status !== 0 ? null : result.stdout.trim();
 }
 
 function oneMergeBase(base, head) {
@@ -68,15 +68,25 @@ function oneMergeBase(base, head) {
   return bases.length === 1 ? bases[0] : null;
 }
 
+// "What this branch changes" is defined once for every mode: the diff of the
+// revision under test against merge-base(HEAD, origin/main). It never depends
+// on the remote ref named in the push, so a brand-new remote branch, a release
+// push carrying a tag, or a rebase across main's own commits all plan the same
+// way. A missing merge base still fails closed; in a shallow clone the merge
+// base may be a grafted boundary, so that fails closed too.
+function branchBase(revision) {
+  if (isShallow()) return null;
+  return oneMergeBase("origin/main", revision);
+}
+
 export function parsePushInput(input) {
   const records = input
     .split(/\r?\n/)
     .map((line) => line.trim().split(/\s+/))
     .filter((parts) => parts.length > 1 && parts.some(Boolean));
   if (records.length !== 1 || records[0].length !== 4) return null;
-  const [localRef, localSha, remoteRef, remoteSha] = records[0];
-  if (ZERO_SHA.test(localSha) || ZERO_SHA.test(remoteSha)) return null;
-  return { localRef, localSha, remoteRef, remoteSha };
+  const [localRef, localSha, remoteRef] = records[0];
+  return { localRef, localSha, remoteRef };
 }
 
 function failClosed(mode, reason, changed = []) {
@@ -91,38 +101,46 @@ function failClosed(mode, reason, changed = []) {
 }
 
 function filesForMode(mode) {
-  if (mode === "pre-commit") {
-    const files = diffFiles(["--cached", "HEAD"]);
-    return files
-      ? { files, revisions: { before: "HEAD", after: "index" } }
-      : { full: "unable to inspect staged changes" };
-  }
-  if (mode === "worktree") {
-    const files = diffFiles(["HEAD"]);
+  if (mode === "pre-commit" || mode === "worktree") {
+    const base = branchBase("HEAD");
+    if (!base) return { full: "no merge base with origin/main" };
+    // The commit plan describes the index, because that is the tree the commit
+    // will contain; the worktree plan describes the disk, which is what the
+    // checks and the cache key see. On a clean tree both equal HEAD.
+    if (mode === "pre-commit") {
+      const files = diffFiles(["--cached", base]);
+      return files
+        ? { files, revisions: { before: base, after: "index" } }
+        : { full: "unable to inspect staged changes" };
+    }
+    const files = diffFiles([base]);
     const untracked = untrackedFiles();
     return files && untracked
-      ? { files: [...files, ...untracked], revisions: { before: "HEAD", after: "worktree" } }
+      ? { files: [...files, ...untracked], revisions: { before: base, after: "worktree" } }
       : { full: "unable to inspect worktree changes" };
   }
   if (mode === "pre-push") {
-    let input;
+    let input = "";
     try {
       input = readFileSync(0, "utf8");
     } catch {
-      return { full: "pre-push input is unavailable" };
+      // Hooks always pass stdin; a manual invocation plans HEAD instead.
     }
     const push = parsePushInput(input);
-    if (!push) return { full: "pre-push input is missing, new, or ambiguous" };
-    if (![push.localSha, push.remoteSha].every((sha) => /^[0-9a-f]{40}$/i.test(sha)))
-      return { full: "pre-push contains an invalid object id" };
-    if (isShallow() || !validCommit(push.localSha) || !validCommit(push.remoteSha))
-      return { full: "pre-push history is shallow or an object is missing" };
-    const base = oneMergeBase(push.remoteSha, push.localSha);
-    if (!base) return { full: "pre-push history has no unique merge base" };
-    const files = diffFiles([`${push.remoteSha}...${push.localSha}`]);
+    // A ref deletion pushes no code, so there is nothing to check.
+    if (push && ZERO_SHA.test(push.localSha))
+      return { files: [], revisions: { before: "HEAD", after: "HEAD" }, tree: null };
+    let after = "HEAD";
+    if (push) {
+      after = revParse(`${push.localSha}^{commit}`);
+      if (!after) return { full: "the pushed object is not a commit" };
+    }
+    const base = branchBase(after);
+    if (!base) return { full: "no merge base with origin/main" };
+    const files = diffFiles([base, after]);
     return files
-      ? { files, revisions: { before: base, after: push.localSha } }
-      : { full: "unable to inspect pre-push diff" };
+      ? { files, revisions: { before: base, after }, tree: revParse(`${after}^{tree}`) }
+      : { full: "unable to inspect the push diff" };
   }
   return { full: `unknown planner mode: ${mode}` };
 }
@@ -217,6 +235,7 @@ export function createPlan({ mode = "worktree", full = false, files } = {}) {
       changed: [],
       checks: [],
       reasons: ["no changes"],
+      tree: discovered.tree ?? null,
     };
 
   const checks = new Set();
@@ -240,15 +259,20 @@ export function createPlan({ mode = "worktree", full = false, files } = {}) {
     changed: changed.map((file) => file.path),
     checks: ordered,
     reasons,
+    // The tree whose checks a pass would certify. Only pre-push sets it: the
+    // pushed commit may differ from the disk the cache describes, so a cache
+    // hit additionally requires the two trees to be identical.
+    tree: discovered.tree ?? null,
   };
 }
 
 function parseArgs(argv) {
-  const options = { mode: "worktree", files: null, run: false, full: false };
+  const options = { mode: "worktree", files: null, run: false, full: false, recordFull: false };
   for (let index = 0; index < argv.length; index++) {
     const arg = argv[index];
     if (arg === "--full") options.full = true;
     else if (arg === "--run") options.run = true;
+    else if (arg === "--record-full") options.recordFull = true;
     else if (arg === "--mode") options.mode = argv[++index];
     else if (arg.startsWith("--mode=")) options.mode = arg.slice(7);
     else if (arg === "--files") {
@@ -262,6 +286,20 @@ function parseArgs(argv) {
 
 function main() {
   const options = parseArgs(process.argv.slice(2));
+  // `pnpm run check` is a plain script chain and never builds a plan, so it
+  // records its pass through this flag instead of going through --run. It is
+  // the tail of the `check` script: a failure anywhere upstream never reaches
+  // it. The writer is the same recordPass the hooks use.
+  if (options.recordFull) {
+    const tree = diskTree(process.cwd());
+    if (tree) {
+      recordPass(process.cwd(), tree, ["full"]);
+      process.stderr.write(`cache → recorded full pass on tree ${tree}\n`);
+    } else {
+      process.stderr.write("cache → tree unknown; full pass was not recorded\n");
+    }
+    return;
+  }
   // `--full` is an explicit request for the whole gate, even at commit time.
   const plan = options.full ? createPlan(options) : commitPlan(createPlan(options));
   process.stdout.write(`${JSON.stringify(plan)}\n`);
@@ -278,7 +316,10 @@ function runPlan(plan, options) {
   const cwd = process.cwd();
   const useCache = !options.full && process.env.CHECK_PLAN_NO_CACHE !== "1";
   const tree = useCache ? diskTree(cwd) : null;
-  if (tree && plan.checks.length && coveredByCache(cwd, tree, plan.checks)) {
+  // A pre-push plan certifies the pushed commit's tree; the cache only vouches
+  // for the disk, so a hit requires the pushed tree to be the disk tree.
+  const cacheable = tree && plan.checks.length && (!plan.tree || plan.tree === tree);
+  if (cacheable && coveredByCache(cwd, tree, plan.checks)) {
     process.stderr.write(`cache → ${plan.checks.join(", ")} already passed on tree ${tree}\n`);
     return 0;
   }

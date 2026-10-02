@@ -97,10 +97,12 @@ it is derived from the checkout at HEAD — commit, release version, pnpm/Node/R
 pins, target, and Engine API — and ships as `release-bom.v2.json` next to the
 installer. `pnpm --dir desktop run build` runs the whole release build in one go.
 
-The affected-check planner is fail-closed: staged changes use `pre-commit`,
-the worktree plan includes tracked and untracked files, and pre-push input
-uses the pushed ref range. Missing, invalid, zero, shallow, or ambiguous
-revisions select the full check. Docs and isolated assets are a no-op, except
+The affected-check planner is fail-closed: every mode plans the diff of the
+revision under test against `merge-base(HEAD, origin/main)` — staged changes
+for `pre-commit`, tracked plus untracked disk changes for the worktree plan,
+and the pushed commit for pre-push, regardless of whether the remote ref
+already exists. A missing merge base, a shallow clone, or a pushed object that
+is not a commit selects the full check. Docs and isolated assets are a no-op, except
 documents that tests read as contracts (`DOC_CONTRACTS` in
 `scripts/check-plan-manifest.mjs`), which select the checks reading them. A
 `package.json` edit that only changes known `"scripts"` entries selects the
@@ -133,9 +135,10 @@ missing. Pre-commit uses the planner against staged files but runs only the
 checks that finish in seconds: Clippy, Rust tests, runtime staging and the
 Manager gate are deferred, and a change that selects the full check runs
 `pnpm run check:fast` instead (`scripts/check-plan-commit.mjs`). Pre-push
-uses the Git-provided ref range when stdin is available and otherwise falls
-back to the full check, so every deferred check runs before anything leaves
-the machine; `--full` still runs everything at commit time.
+plans the same branch diff as check:affected — `merge-base(HEAD, origin/main)`
+to the pushed commit — and caches passes by on-disk tree hash, so a push right
+after `pnpm run check:affected` or `pnpm run check` (which records a "full"
+entry) skips what already ran; `--full` still runs everything at commit time.
 
 The Rust gate runs every workspace library, integration and Cortex binary test
 through [cargo-nextest](https://nexte.st) (`cargo install cargo-nextest
