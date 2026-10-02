@@ -1,0 +1,320 @@
+name: Installer smoke
+
+# KOS-309: v0.10.2 shipped an installer that aborted on every upgrade — the
+# script-level tests only ever read the NSIS text. This workflow builds the
+# installer the same way the release does and actually runs it: fresh
+# install, upgrade over the last published release with live product
+# processes, then uninstall — each on a clean runner, so leftovers from a
+# previous step can never make a later assert pass by accident.
+#
+# Upgrade source: the newest published release whose installer exits 0 is
+# used as the "previous" install — a broken release (0.10.2) must not block
+# this gate. If none of the last five install cleanly, the "previous" step
+# falls back to installing the just-built installer twice, which still
+# exercises the swap and kill paths.
+#
+# Notes for maintainers:
+#  - `Start-Process -Wait` also waits for the process' *descendants* — the
+#    installer starts the Engine, which runs forever, so -Wait hangs. Use
+#    `WaitForExit(timeout)` on the process object instead (see
+#    Invoke-Installer below).
+#  - The NSIS installer writes no log file in /S mode, so on failure there
+#    is nothing to upload; the step output is the record.
+on:
+  workflow_call:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "desktop/build/**"
+      - "runtime/src/installer/**"
+      - "desktop/scripts/**"
+      - ".github/workflows/installer-smoke.yml"
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Read toolchain pins
+        id: version
+        shell: bash
+        run: |
+          node -p 'const t = require("./toolchain.json"); `NODE_VERSION=${t.node}\nRUST_VERSION=${t.rust}`' >> "$GITHUB_ENV"
+          node -p '"version=" + require("./desktop/release-versions.json").win' >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Bootstrap pnpm and install
+        shell: bash
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+          pnpm --dir desktop install --frozen-lockfile
+
+      - name: Install Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install "$RUST_VERSION" --profile minimal
+          rustup default "$RUST_VERSION"
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: |
+            . -> target
+            core -> target
+            manager-gpui -> target
+
+      # Same recipe as the release's "Build installer" step, minus the
+      # receipt/preflight (--local): identical NSIS compile and staging.
+      - name: Build installer
+        run: pnpm run build:installer:local
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mundus-setup
+          path: desktop/release/Mundus-Setup-*.exe
+          retention-days: 1
+
+  fresh:
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: mundus-setup
+
+      - name: Fresh install, assert, uninstall, assert
+        timeout-minutes: 10
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          # Start-Process -Wait waits for descendants too (the started Engine
+          # never exits) — WaitForExit observes only the installer itself.
+          function Invoke-Installer {
+            param([string]$Exe)
+            $p = Start-Process -FilePath $Exe -ArgumentList '/S' -PassThru
+            if (-not $p.WaitForExit(300000)) { throw "$Exe did not exit in 300 s" }
+            if ($p.ExitCode -ne 0) { throw "$Exe exited $($p.ExitCode)" }
+          }
+
+          # Poll for the Engine that --start-engine / the Run key brings up —
+          # it must run from the installed versions\<v> dir at FileVersion v.
+          function Show-ProductProcesses {
+            Get-Process -ErrorAction SilentlyContinue |
+              Where-Object { 'mundus-engine','Mundus Manager','Mundus','agenda-gpui','memoria-gpui','dictation-gpui' -contains $_.Name } |
+              ForEach-Object { Write-Host "  proc $($_.Name) pid=$($_.Id) path='$($_.Path)' fv='$($_.VersionInfo.FileVersion)'" }
+          }
+
+          function Assert-EngineRunning {
+            # Process.VersionInfo is empty for a running image here — read
+            # the version from the file behind $_.Path instead.
+            $want = "$env:LOCALAPPDATA\Mundus\Engine\versions\$env:VERSION\mundus-engine.exe"
+            $deadline = (Get-Date).AddSeconds(60)
+            do {
+              $hit = Get-Process -Name 'mundus-engine' -ErrorAction SilentlyContinue |
+                Where-Object { $_.Path -eq $want -and (Get-Item $_.Path).VersionInfo.FileVersion -eq $env:VERSION }
+              if ($hit) { return }
+              Start-Sleep -Milliseconds 500
+            } while ((Get-Date) -lt $deadline)
+            Show-ProductProcesses
+            throw "engine not running from $want at version $env:VERSION"
+          }
+
+          $setup = Get-ChildItem -Filter 'Mundus-Setup-*.exe' | Select-Object -First 1
+          if (!$setup) { throw "installer artifact missing" }
+          Invoke-Installer $setup.FullName
+
+          $instdir = "$env:LOCALAPPDATA\Programs\Mundus"
+          $engine = "$instdir\resources\engine\mundus-engine.exe"
+          if (!(Test-Path $engine)) { throw "engine payload missing: $engine" }
+          $engineVersion = (Get-Item $engine).VersionInfo.FileVersion
+          Write-Host "installed engine FileVersion: '$engineVersion' (want '$env:VERSION')"
+          if ($engineVersion -ne $env:VERSION) {
+            throw "engine FileVersion '$engineVersion' != '$env:VERSION'"
+          }
+          if (Test-Path "$instdir\resources.next") { throw "resources.next left behind" }
+          if (Test-Path "$instdir\resources.old") { throw "resources.old left behind" }
+          if (!(Test-Path "$env:LOCALAPPDATA\Mundus\Engine\versions\$env:VERSION")) {
+            throw "engine versions\$env:VERSION missing"
+          }
+          if (!(Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'Mundus Engine' -ErrorAction SilentlyContinue)) {
+            throw "Run value missing"
+          }
+          if (!(Test-Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Mundus')) {
+            throw "uninstall key missing"
+          }
+          Assert-EngineRunning
+
+          # Uninstall: product files and registration go; user data stays.
+          $sentinelDir = "$env:APPDATA\Mundus"
+          New-Item -ItemType Directory -Force -Path $sentinelDir | Out-Null
+          $sentinel = "$sentinelDir\smoke-sentinel.txt"
+          Set-Content $sentinel 'keep me'
+
+          Invoke-Installer "$instdir\Uninstall.exe"
+
+          # NSIS uninstallers self-copy to %TEMP% and the copy does the
+          # deleting — the process we waited on exits first. Poll until the
+          # dir is really gone instead of asserting on a half-deleted tree.
+          $deadline = (Get-Date).AddSeconds(60)
+          while (Test-Path $instdir) {
+            if ((Get-Date) -gt $deadline) { throw "$instdir left behind" }
+            Start-Sleep -Milliseconds 500
+          }
+          if (Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Mundus") {
+            throw "Start Menu folder left behind"
+          }
+          if (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'Mundus Engine' -ErrorAction SilentlyContinue) {
+            throw "Run value left behind"
+          }
+          if (Test-Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Mundus') {
+            throw "uninstall key left behind"
+          }
+          if (!(Test-Path $sentinel)) { throw "user data was deleted" }
+          if (!(Test-Path "$env:LOCALAPPDATA\Mundus")) { throw "%LOCALAPPDATA%\Mundus was deleted" }
+
+  upgrade:
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: mundus-setup
+
+      - name: Install previous release, run its Engine+Manager, upgrade, assert
+        timeout-minutes: 10
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          function Invoke-Installer {
+            param([string]$Exe)
+            $p = Start-Process -FilePath $Exe -ArgumentList '/S' -PassThru
+            if (-not $p.WaitForExit(300000)) { throw "$Exe did not exit in 300 s" }
+            if ($p.ExitCode -ne 0) { throw "$Exe exited $($p.ExitCode)" }
+          }
+
+          # The engine a product actually runs lives in versions\<v>; wait
+          # for it instead of a fixed sleep.
+          function Wait-ProductProcesses {
+            param([string]$ExpectVersion)
+            $deadline = (Get-Date).AddSeconds(60)
+            do {
+              $procs = Get-Process -ErrorAction SilentlyContinue |
+                Where-Object { 'mundus-engine','Mundus Manager','Mundus','agenda-gpui','memoria-gpui','dictation-gpui' -contains $_.Name } |
+                Where-Object { $_.Path }
+              $engine = $procs | Where-Object {
+                $_.Name -eq 'mundus-engine' -and
+                $_.Path -like "$env:LOCALAPPDATA\Mundus\Engine\versions\*" -and
+                (Get-Item $_.Path).VersionInfo.FileVersion -eq $ExpectVersion
+              }
+              if ($engine) { return $procs }
+              Start-Sleep -Milliseconds 500
+            } while ((Get-Date) -lt $deadline)
+            $procs | ForEach-Object { Write-Host "  proc $($_.Name) pid=$($_.Id) path='$($_.Path)' fv='$($_.VersionInfo.FileVersion)'" }
+            throw "no mundus-engine at version $ExpectVersion running from versions\"
+          }
+
+          $newSetup = (Get-ChildItem -Filter 'Mundus-Setup-*.exe' | Select-Object -First 1).FullName
+          if (!$newSetup) { throw "installer artifact missing" }
+          $instdir = "$env:LOCALAPPDATA\Programs\Mundus"
+
+          # Pick the newest published installer that actually installs —
+          # 0.10.2 aborts on install (KOS-309) and must not gate this job.
+          $prevInstalled = $false
+          $releases = gh release list --repo makekosmos/cortex --limit 5 --json tagName | ConvertFrom-Json
+          foreach ($rel in $releases) {
+            $dir = "$env:TEMP\prev-setup"
+            Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
+            gh release download $rel.tagName --repo makekosmos/cortex --pattern 'Mundus-Setup-*.exe' --dir $dir
+            $prev = Get-ChildItem $dir -Filter 'Mundus-Setup-*.exe' | Select-Object -First 1
+            if (!$prev) { continue }
+            $p = Start-Process -FilePath $prev.FullName -ArgumentList '/S' -PassThru
+            if (-not $p.WaitForExit(300000)) { Write-Host "$($rel.tagName) install timed out — trying older"; continue }
+            if ($p.ExitCode -eq 0) {
+              $prevInstalled = $true
+              Write-Host "previous release: $($rel.tagName)"
+              break
+            }
+            Write-Host "release $($rel.tagName) does not install cleanly (exit $($p.ExitCode)) — trying older"
+          }
+          if (!$prevInstalled) {
+            Write-Host "no published release installs cleanly — bootstrapping with the current build"
+            Invoke-Installer $newSetup
+          }
+
+          # Real product processes must run when the upgrade starts — the
+          # leftover-process failure mode only shows then. The previous
+          # Engine is looked up in resources\engine (0.10.2+ staging layout)
+          # and falls back to Engine\versions\*\ — v0.10.1 predates KOS-306
+          # staging and only installs there. Post-upgrade asserts stay
+          # strict: the new version must be the only one running.
+          $prevEngine = "$instdir\resources\engine\mundus-engine.exe"
+          if (!(Test-Path $prevEngine)) {
+            $prevEngine = Get-ChildItem "$env:LOCALAPPDATA\Mundus\Engine\versions\*\mundus-engine.exe" -ErrorAction SilentlyContinue |
+              Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
+          }
+          if (!$prevEngine) { throw "previous install has no engine anywhere" }
+          Write-Host "previous engine: $prevEngine"
+          $prevVersion = (Get-Item $prevEngine).VersionInfo.FileVersion
+          # Equal is fine only when the "previous" install IS this build —
+          # the fallback bootstrap still exercises kill + swap paths.
+          if ($prevInstalled -and $prevVersion -eq $env:VERSION) {
+            throw "previous release is already $env:VERSION"
+          }
+          if (!(Get-Process -Name 'mundus-engine' -ErrorAction SilentlyContinue)) {
+            Start-Process -FilePath $prevEngine -ArgumentList '--start'
+          }
+          $manager = Get-ChildItem "$instdir\resources\components\manager\*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($manager) { Start-Process -FilePath $manager.FullName }
+          # Poll for any mundus-engine process — the previous release's
+          # engine may not run from a versions\<v> path.
+          $deadline = (Get-Date).AddSeconds(60)
+          while (!(Get-Process -Name 'mundus-engine' -ErrorAction SilentlyContinue)) {
+            if ((Get-Date) -gt $deadline) { throw "previous engine never came up" }
+            Start-Sleep -Milliseconds 500
+          }
+          Write-Host "previous engine running @ $prevVersion"
+
+          Invoke-Installer $newSetup
+
+          $engine = "$instdir\resources\engine\mundus-engine.exe"
+          if ((Get-Item $engine).VersionInfo.FileVersion -ne $env:VERSION) {
+            throw "engine FileVersion != $env:VERSION after upgrade"
+          }
+          if (Test-Path "$instdir\resources.next") { throw "resources.next left behind" }
+          if (Test-Path "$instdir\resources.old") { throw "resources.old left behind" }
+          if (!(Test-Path "$env:LOCALAPPDATA\Mundus\Engine\versions\$env:VERSION")) {
+            throw "engine versions\$env:VERSION missing"
+          }
+          # The installer restarts the Engine itself; every product process
+          # still alive must be the new version — an old one anywhere fails.
+          $after = Wait-ProductProcesses $env:VERSION
+          foreach ($p in $after) {
+            if ((Get-Item $p.Path).VersionInfo.FileVersion -ne $env:VERSION) {
+              throw "stale $($p.Name) (pid $($p.Id)) from $($p.Path) at FileVersion $((Get-Item $p.Path).VersionInfo.FileVersion)"
+            }
+          }

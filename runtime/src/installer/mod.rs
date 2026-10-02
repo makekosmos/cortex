@@ -31,6 +31,8 @@ mod processes;
 pub(crate) mod registry;
 mod swap;
 
+#[cfg(all(test, windows))]
+mod processes_tests;
 #[cfg(test)]
 mod tests;
 

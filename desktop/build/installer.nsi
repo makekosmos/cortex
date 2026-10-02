@@ -114,6 +114,8 @@ LangString ABORT_PAYLOAD_ROLLBACK ${LANG_ENGLISH} "Mundus payload update failed 
 LangString ABORT_PAYLOAD_ROLLBACK ${LANG_RUSSIAN} "Не удалось обновить файлы Mundus — предыдущая версия восстановлена"
 LangString ABORT_ENGINE_INSTALL ${LANG_ENGLISH} "Mundus Engine installation failed"
 LangString ABORT_ENGINE_INSTALL ${LANG_RUSSIAN} "Не удалось установить Mundus Engine"
+LangString ABORT_KILL_FAILED ${LANG_ENGLISH} "Could not close Mundus. Close the program and run the installer again."
+LangString ABORT_KILL_FAILED ${LANG_RUSSIAN} "Не удалось закрыть Mundus. Закройте программу и запустите установку снова."
 LangString MSG_PRIVILEGED_SVC_LEFT ${LANG_ENGLISH} "The Mundus privileged service is still installed. To remove it later, run as administrator:"
 LangString MSG_PRIVILEGED_SVC_LEFT ${LANG_RUSSIAN} "Служба Mundus всё ещё установлена. Чтобы удалить её позже, запустите от имени администратора:"
 
@@ -153,11 +155,23 @@ LangString MSG_PRIVILEGED_SVC_LEFT ${LANG_RUSSIAN} "Служба Mundus всё �
     Goto stage_ok
     Abort "$(ABORT_STAGING_FAILED)"
   stage_ok:
+  ; KOS-309: SetOutPath also changes the installer process' own working
+  ; directory, and Windows refuses to rename a directory that is some
+  ; process' CWD. Leaving it at resources.next made the resources.next ->
+  ; resources rename below always fail with an in-use error. Move the CWD
+  ; back to the parent before the swap.
+  SetOutPath "$INSTDIR"
   nsExec::ExecToLog '"$INSTDIR\resources.next\engine\mundus-engine.exe" --shutdown'
   nsExec::ExecToStack '"$INSTDIR\resources.next\engine\mundus-engine.exe" kill-product-processes'
+  ; ExecToStack pushes exit code first. A survivor still pins files, so a
+  ; non-zero exit aborts the install — the staged payload is removed again
+  ; so a retry starts clean.
   Pop $R8
   Pop $R9
-  Sleep 500
+  IntCmp $R8 0 kill_done
+    RMDir /r "$INSTDIR\resources.next"
+    Abort "$(ABORT_KILL_FAILED)"
+  kill_done:
 !macroend
 
 ; MIGRATION(KOS-267): remove after 2026-11-01.
@@ -199,8 +213,18 @@ FunctionEnd
 ; Always start the installed Engine at the end of the install. The Manager
 ; launch lives on the MUI finish page instead — the checked "Launch Mundus"
 ; checkbox runs it only on interactive installs.
+; KOS-309: ExecWait, not nsExec — ExecToLog waits for the child's output
+; pipe to hit EOF, and the Engine spawned here inherits the post-install
+; process' std handles (default stdio is inherit), so it holds the pipe's
+; write end open forever. Proven by grandchildren_hold_our_piped_stdout_open
+; in runtime/src/installer/processes_tests.rs. ExecWait waits on the process
+; handle only.
 Function StartEngine
-  nsExec::ExecToLog '"${ENGINE_STAGED}\mundus-engine.exe" post-install --start-engine'
+  ExecWait '"${ENGINE_STAGED}\mundus-engine.exe" post-install --start-engine' $0
+  ; Engine start failure is logged but not fatal: the Run key written by
+  ; --migrate-autostart starts it at the next login regardless.
+  IntCmp $0 0 +2
+    DetailPrint "post-install --start-engine exited $0"
 FunctionEnd
 
 
@@ -396,6 +420,12 @@ FunctionEnd
 Section "Uninstall"
   SetShellVarContext current
 
+  ; KOS-309: the uninstaller runs from $INSTDIR, so its own working
+  ; directory sits inside the tree it deletes — a directory cannot be
+  ; removed while it is a process' CWD, and the final `RMDir "$INSTDIR"`
+  ; would fail silently. Park the CWD in $TEMP; no File commands follow.
+  SetOutPath "$TEMP"
+
   ; Stop processes (current and legacy names) before deleting files so
   ; nothing is locked. The staged engine exe ships the subcommand and still
   ; exists at this point — it is deleted with resources below. When it is
@@ -404,9 +434,13 @@ Section "Uninstall"
   IfFileExists "${ENGINE_STAGED}\mundus-engine.exe" 0 un_kill_done
     nsExec::ExecToLog '"${ENGINE_STAGED}\mundus-engine.exe" --shutdown'
     nsExec::ExecToStack '"${ENGINE_STAGED}\mundus-engine.exe" kill-product-processes'
+    ; KOS-309: a survivor means the deletes below would half-fail under /S
+    ; with nobody watching the log — abort before anything is removed, so
+    ; the install is either fully gone or fully intact.
     Pop $R8
     Pop $R9
-    Sleep 500
+    IntCmp $R8 0 un_kill_done
+      Abort "$(ABORT_KILL_FAILED)"
   un_kill_done:
 
   ; One UAC prompt to remove the service before files are cleaned.
