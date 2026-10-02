@@ -267,9 +267,11 @@ jobs:
           }
 
           # Real product processes must run when the upgrade starts — the
-          # leftover-process failure mode only shows then. Older releases
-          # predate the resources\engine staging layout, so the previous
-          # Engine is located where install put it: any versions\<v> dir.
+          # leftover-process failure mode only shows then. The previous
+          # Engine is looked up in resources\engine (0.10.2+ staging layout)
+          # and falls back to Engine\versions\*\ — v0.10.1 predates KOS-306
+          # staging and only installs there. Post-upgrade asserts stay
+          # strict: the new version must be the only one running.
           $prevEngine = "$instdir\resources\engine\mundus-engine.exe"
           if (!(Test-Path $prevEngine)) {
             $prevEngine = Get-ChildItem "$env:LOCALAPPDATA\Mundus\Engine\versions\*\mundus-engine.exe" -ErrorAction SilentlyContinue |
