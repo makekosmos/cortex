@@ -160,7 +160,7 @@ fn entrypoint_verify_survives_failed_identity_record_write() {
     let (installed, entrypoint) = install_worker(d.path(), &store);
     let blob = blob_path(d.path(), &installed);
     fs::remove_file(identity::record_path(&blob)).unwrap();
-    identity::FAIL_NEXT_STORE.store(true, Ordering::Relaxed);
+    identity::fail_next_store_for(&blob);
     // The verified handle is returned even when the record cannot be
     // written; the launch just keeps paying the full hash.
     PackageStore::verify_immutable_entrypoint_path(&entrypoint).unwrap();

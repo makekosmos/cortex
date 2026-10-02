@@ -39,9 +39,13 @@
 
 use crate::lock_file::{read_owner_only_json, write_owner_only_json};
 use serde::{Deserialize, Serialize};
+#[cfg(test)]
+use std::collections::HashSet;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+#[cfg(test)]
+use std::sync::{LazyLock, Mutex};
 
 /// `<hash>.kspkg` → `<hash>.identity.json`, kept in `blobs/` so the sweep of
 /// interrupted writes covers its temp files too.
@@ -91,17 +95,34 @@ pub(crate) fn load(blob: &Path) -> Option<BlobIdentity> {
 pub(crate) fn store(blob: &Path, file: &fs::File) -> io::Result<()> {
     let identity = of(file)?;
     #[cfg(test)]
-    if FAIL_NEXT_STORE.swap(false, std::sync::atomic::Ordering::Relaxed) {
-        return Err(io::Error::other("injected identity write failure"));
+    {
+        let canonical = fs::canonicalize(blob).unwrap_or_else(|_| blob.to_path_buf());
+        if FAIL_STORE_BLOBS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&canonical)
+        {
+            return Err(io::Error::other("injected identity write failure"));
+        }
     }
     write_owner_only_json(&record_path(blob), &identity).map_err(io::Error::other)
 }
 
-/// Test seam: inject a one-shot failure into the next `store` call, like
-/// `fail_next_state_write` on `PackageStore`.
+/// Test seam: blob paths whose next `store` call fails once. Keyed by path —
+/// a process-wide flag would let an unrelated parallel test consume the
+/// injected failure and pass for the wrong reason.
 #[cfg(test)]
-pub(crate) static FAIL_NEXT_STORE: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
+static FAIL_STORE_BLOBS: LazyLock<Mutex<HashSet<PathBuf>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
+
+#[cfg(test)]
+pub(crate) fn fail_next_store_for(blob: &Path) {
+    let canonical = fs::canonicalize(blob).unwrap_or_else(|_| blob.to_path_buf());
+    FAIL_STORE_BLOBS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(canonical);
+}
 
 #[cfg(windows)]
 fn platform_identity(file: &fs::File) -> io::Result<BlobIdentity> {
