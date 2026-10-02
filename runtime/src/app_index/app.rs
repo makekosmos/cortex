@@ -9,9 +9,11 @@ pub enum AppKind {
     Win32,
     /// UWP / Microsoft Store app, запускается через `shell:AppsFolder\<AUMID>`.
     Uwp,
-    /// macOS .app bundle (для будущей реализации).
+    /// Stored kind `mac_bundle`. This build never discovers or launches it;
+    /// the tag stays so an index row with that discriminant still loads.
     MacBundle,
-    /// Linux .desktop entry (для будущей реализации).
+    /// Stored kind `linux_desktop`. This build never discovers or launches it;
+    /// the tag stays so an index row with that discriminant still loads.
     LinuxDesktop,
 }
 
