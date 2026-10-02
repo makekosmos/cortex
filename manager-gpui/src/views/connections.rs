@@ -189,7 +189,7 @@ fn render_provider(
                         })),
                 );
         }
-        _ => {
+        IntegrationState::Configured | IntegrationState::NotConnected => {
             if browser_login {
                 let lid = id.clone();
                 actions = actions.child(

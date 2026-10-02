@@ -67,6 +67,22 @@ pub fn render_confirm(confirm: &Confirm, cx: &mut Context<ManagerApp>) -> impl I
         )
 }
 
+/// Human-readable body for the «Подробнее» listing card: description plus
+/// labelled fields — never the raw JSON (it contains the internal id).
+fn detail_text(d: &Value) -> String {
+    let mut out = String::new();
+    if let Some(desc) = vopt(d, "description").filter(|s| !s.is_empty()) {
+        out.push_str(&desc);
+        out.push_str("\n\n");
+    }
+    for (key, label) in [("version", "Версия"), ("publisher", "Издатель")] {
+        if let Some(value) = vopt(d, key).filter(|s| !s.is_empty()) {
+            out.push_str(&format!("{label}: {value}\n"));
+        }
+    }
+    out.trim_end().to_string()
+}
+
 pub fn render_overlay(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> impl IntoElement {
     let (title, body) = if let Some(d) = &app.disclosure {
         (
@@ -75,9 +91,11 @@ pub fn render_overlay(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> imp
         )
     } else {
         let d = app.detail.clone().unwrap_or(Value::Null);
+        // Curated fields only — the raw listing payload would dump the
+        // internal package id onto the screen (KOS-279).
         (
             vopt(&d, "name").unwrap_or_else(|| "Пакет".into()),
-            serde_json::to_string_pretty(&d).unwrap_or_default(),
+            detail_text(&d),
         )
     };
     div()
