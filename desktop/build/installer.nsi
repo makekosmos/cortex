@@ -213,8 +213,16 @@ FunctionEnd
 ; Always start the installed Engine at the end of the install. The Manager
 ; launch lives on the MUI finish page instead — the checked "Launch Mundus"
 ; checkbox runs it only on interactive installs.
+; KOS-309: ExecWait, not nsExec — nsExec waits for the child's output pipe
+; to hit EOF, and the Engine spawned here inherits that pipe handle, so
+; ExecToLog would block forever on a healthy Engine. ExecWait waits on the
+; process handle only.
 Function StartEngine
-  nsExec::ExecToLog '"${ENGINE_STAGED}\mundus-engine.exe" post-install --start-engine'
+  ExecWait '"${ENGINE_STAGED}\mundus-engine.exe" post-install --start-engine' $0
+  ; Engine start failure is logged but not fatal: the Run key written by
+  ; --migrate-autostart starts it at the next login regardless.
+  IntCmp $0 0 +2
+    DetailPrint "post-install --start-engine exited $0"
 FunctionEnd
 
 
