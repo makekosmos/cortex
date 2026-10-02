@@ -102,7 +102,7 @@ mod tests {
             display_name: "Mundus Engine",
             exe_name: "mundus-engine.exe",
             version: [1, 2, 3],
-            icon: Some(Path::new(r"C:\icons\app.ico").to_path_buf()),
+            icon: Some(PathBuf::from(r"C:\icons\app.ico")),
         });
         for key in [
             "CompanyName",
