@@ -28,6 +28,7 @@ mod tests {
         // discover the implementation repository and mutate it.
         let error = git_cwd_is_isolated(&nested).unwrap_err();
         assert!(error.contains("escaped requested fixture") || error.contains("not a git"));
+        dir.close().unwrap();
     }
 
     #[test]
@@ -238,6 +239,8 @@ mod tests {
             )
             .unwrap();
         assert_eq!(prompt_count, 0);
+        drop(service);
+        dir.close().unwrap();
     }
 
     #[tokio::test]
@@ -277,6 +280,8 @@ mod tests {
             .unwrap()
             .pending
             .is_empty());
+        drop(service);
+        dir.close().unwrap();
     }
 
     #[test]
@@ -297,6 +302,8 @@ mod tests {
             .timeline(json!({"session_id":"s","limit":2,"cursor":cursor}))
             .unwrap();
         assert_eq!(second["events"].as_array().unwrap().len(), 1);
+        drop(service);
+        dir.close().unwrap();
     }
     #[test]
     fn output_is_utf8_truncated() {
@@ -328,6 +335,8 @@ mod tests {
         let pending = reopened.pending_approvals().unwrap();
         assert_eq!(pending.len(), 1);
         assert_eq!(pending[0].id, approval.id);
+        drop(reopened);
+        dir.close().unwrap();
     }
     #[tokio::test]
     async fn dirty_base_does_not_leak_into_worktree() {
@@ -411,6 +420,8 @@ mod tests {
         ).unwrap();
         service.remove_worktree("s").await.unwrap();
         assert!(!worktree.exists());
+        drop(service);
+        dir.close().unwrap();
     }
 
     #[tokio::test]
@@ -428,10 +439,12 @@ mod tests {
         let _released = tokio::time::timeout(Duration::from_secs(60), second.lock())
             .await
             .unwrap();
+        drop(service);
+        dir.close().unwrap();
     }
 
-    #[test]
-    fn stale_runtime_generation_cannot_remove_current_runtime() {
+    #[tokio::test]
+    async fn stale_runtime_generation_cannot_remove_current_runtime() {
         let dir = tempfile::tempdir().unwrap();
         let service = AgentsService::new(dir.path()).unwrap();
         let (tx, _rx) = mpsc::channel(1);
@@ -440,12 +453,15 @@ mod tests {
             RuntimeHandle {
                 tx,
                 generation: 2,
+                task: tokio::spawn(async {}),
             },
         );
 
         assert!(!service.runtime_is_current("session", 1));
         service.remove_runtime("session", 1);
         assert!(service.runtime_is_current("session", 2));
+        drop(service);
+        dir.close().unwrap();
     }
 
     #[tokio::test]
@@ -489,6 +505,8 @@ mod tests {
             .unwrap();
         assert_eq!(message["payload"]["text"], "Привет, мир");
         assert_eq!(service.pending_approvals().unwrap().len(), 1);
+        drop(service);
+        dir.close().unwrap();
     }
 
     #[tokio::test]
@@ -570,6 +588,8 @@ mod tests {
             .unwrap();
         assert!(service.remove_worktree("s").await.is_err());
         assert!(worktree.exists());
+        drop(service);
+        dir.close().unwrap();
     }
 
     #[tokio::test]
@@ -658,10 +678,10 @@ mod tests {
             .map(|(_, handle)| handle)
             .collect::<Vec<_>>();
         for handle in handles {
-            let (done_tx, done_rx) = tokio::sync::oneshot::channel();
-            let _ = handle.tx.send(AppCommand::Shutdown(Some(done_tx))).await;
-            let _ = tokio::time::timeout(Duration::from_secs(60), done_rx).await;
+            let _ = handle.stop().await;
         }
+        drop(service);
+        dir.close().unwrap();
     }
 
     #[tokio::test]
@@ -720,18 +740,7 @@ mod tests {
             assert!(tokio::time::Instant::now() < deadline);
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
-        let runtime = { service.runtimes().remove(&session_id).unwrap() };
-        let (done_tx, done_rx) = tokio::sync::oneshot::channel();
-        runtime
-            .tx
-            .send(AppCommand::Shutdown(Some(done_tx)))
-            .await
-            .unwrap();
-        tokio::time::timeout(Duration::from_secs(60), done_rx)
-            .await
-            .unwrap()
-            .unwrap()
-            .unwrap();
+        service.stop_runtime(&session_id).await.unwrap();
         drop(service);
 
         let reopened = AgentsService::new(dir.path()).unwrap();
@@ -810,6 +819,8 @@ mod tests {
             .any(|approval| approval.session_id == archived_id));
         reopened.shutdown().await;
         assert!(reopened.runtimes().is_empty());
+        drop(reopened);
+        dir.close().unwrap();
 
         std::env::remove_var("DAEDALUS_FAKE_APP_SERVER_EXE");
         std::env::remove_var("DAEDALUS_FAKE_APP_SERVER_SCRIPT");

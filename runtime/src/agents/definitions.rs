@@ -95,10 +95,40 @@ pub struct AgentsEvent {
     pub payload: Value,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct RuntimeHandle {
     tx: mpsc::Sender<AppCommand>,
     generation: u64,
+    task: tokio::task::JoinHandle<()>,
+}
+
+impl RuntimeHandle {
+    async fn stop(self) -> Result<(), String> {
+        // The task outlives every acknowledgement: its Arc<AgentsService> —
+        // and the SQLite connection inside the data dir — is released only
+        // when the task returns. Joining it is the only point where the child
+        // process and every file handle are provably gone; without this a
+        // TempDir fixture can outrace the teardown. The bound keeps a wedged
+        // task from hanging shutdown forever.
+        let join = tokio::time::timeout(Duration::from_secs(10), self.task);
+        let (done_tx, done_rx) = tokio::sync::oneshot::channel();
+        if self
+            .tx
+            .send(AppCommand::Shutdown(Some(done_tx)))
+            .await
+            .is_err()
+        {
+            // The receiver is gone — the task is already exiting.
+            let _ = join.await;
+            return Err("Codex app-server недоступен во время остановки".into());
+        }
+        let result = tokio::time::timeout(Duration::from_secs(5), done_rx)
+            .await
+            .map_err(|_| "Codex app-server не подтвердил остановку".to_string())?
+            .map_err(|_| "Codex app-server закрыл канал остановки".to_string())?;
+        let _ = join.await;
+        result
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -286,6 +316,11 @@ pub struct AgentsService {
     root: PathBuf,
     db: Mutex<Connection>,
     runtimes: Mutex<HashMap<String, RuntimeHandle>>,
+    /// Tasks whose handle left `runtimes` without being joined (a task
+    /// deregisters itself at the end of run_app_server). Kept so shutdown()
+    /// can still wait for their last instructions — the Arc<AgentsService>
+    /// they hold keeps the SQLite connection open until the task returns.
+    finished_tasks: Mutex<Vec<tokio::task::JoinHandle<()>>>,
     lifecycle_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
     next_runtime_generation: AtomicU64,
     events: broadcast::Sender<Value>,
@@ -366,6 +401,7 @@ impl AgentsService {
             root,
             db: Mutex::new(conn),
             runtimes: Mutex::new(HashMap::new()),
+            finished_tasks: Mutex::new(Vec::new()),
             lifecycle_locks: Mutex::new(HashMap::new()),
             next_runtime_generation: AtomicU64::new(1),
             events,
@@ -390,20 +426,35 @@ impl AgentsService {
                 .map(|(_, handle)| handle)
                 .collect::<Vec<_>>()
         };
-        let mut completions = Vec::with_capacity(handles.len());
+        let mut pending = Vec::with_capacity(handles.len());
         for handle in handles {
             let (done_tx, done_rx) = tokio::sync::oneshot::channel();
-            if handle
+            let acked = handle
                 .tx
                 .send(AppCommand::Shutdown(Some(done_tx)))
                 .await
-                .is_ok()
-            {
-                completions.push(done_rx);
-            }
+                .is_ok();
+            pending.push((acked.then_some(done_rx), handle.task));
         }
-        for completion in completions {
-            let _ = tokio::time::timeout(Duration::from_secs(5), completion).await;
+        for (completion, task) in pending {
+            if let Some(done_rx) = completion {
+                let _ = tokio::time::timeout(Duration::from_secs(5), done_rx).await;
+            }
+            // See RuntimeHandle::stop: the ack precedes the task's teardown,
+            // so the join is what makes shutdown deterministic.
+            let _ = tokio::time::timeout(Duration::from_secs(10), task).await;
+        }
+        // Tasks that deregistered themselves keep their Arc until they
+        // return; drain them so no connection outlives the service.
+        let finished = {
+            self.finished_tasks
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .drain(..)
+                .collect::<Vec<_>>()
+        };
+        for task in finished {
+            let _ = tokio::time::timeout(Duration::from_secs(10), task).await;
         }
     }
 
@@ -440,7 +491,12 @@ impl AgentsService {
             .get(session_id)
             .is_some_and(|runtime| runtime.generation == generation)
         {
-            runtimes.remove(session_id);
+            if let Some(handle) = runtimes.remove(session_id) {
+                self.finished_tasks
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .push(handle.task);
+            }
         }
     }
 
@@ -934,22 +990,35 @@ impl AgentsService {
             .fetch_add(1, Ordering::Relaxed);
         let service = self.clone();
         let id = session.id.clone();
-        {
-            let mut runtimes = self.runtimes();
-            if runtimes.contains_key(&id) {
-                return Ok(());
-            }
-            runtimes.insert(
-                id.clone(),
-                RuntimeHandle {
-                    tx,
-                    generation,
-                },
-            );
+        if self.runtimes().contains_key(&id) {
+            return Ok(());
         }
-        tokio::spawn(async move {
+        let task = tokio::spawn(async move {
             run_app_server(service, session, generation, rx, ready_tx).await;
         });
+        let duplicate = {
+            let mut runtimes = self.runtimes();
+            if runtimes.contains_key(&id) {
+                Some(task)
+            } else {
+                runtimes.insert(
+                    id.clone(),
+                    RuntimeHandle {
+                        tx,
+                        generation,
+                        task,
+                    },
+                );
+                None
+            }
+        };
+        if let Some(task) = duplicate {
+            // A concurrent spawn won the race; kill the duplicate task
+            // deterministically so its child (kill_on_drop) cannot leak.
+            task.abort();
+            let _ = task.await;
+            return Ok(());
+        }
         let result = ready_rx
             .await
             .map_err(|_| "Codex app-server завершился при запуске".to_string())?;
@@ -1095,16 +1164,7 @@ impl AgentsService {
         let Some(handle) = self.runtimes().remove(session_id) else {
             return Ok(());
         };
-        let (done_tx, done_rx) = tokio::sync::oneshot::channel();
-        handle
-            .tx
-            .send(AppCommand::Shutdown(Some(done_tx)))
-            .await
-            .map_err(|_| "Codex app-server недоступен во время остановки".to_string())?;
-        tokio::time::timeout(Duration::from_secs(5), done_rx)
-            .await
-            .map_err(|_| "Codex app-server не подтвердил остановку".to_string())?
-            .map_err(|_| "Codex app-server закрыл канал остановки".to_string())?
+        handle.stop().await
     }
 
     async fn remove_worktree(&self, session_id: &str) -> Result<Value, String> {
