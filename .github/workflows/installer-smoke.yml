@@ -172,7 +172,14 @@ jobs:
 
           Invoke-Installer "$instdir\Uninstall.exe"
 
-          if (Test-Path $instdir) { throw "$instdir left behind" }
+          # NSIS uninstallers self-copy to %TEMP% and the copy does the
+          # deleting — the process we waited on exits first. Poll until the
+          # dir is really gone instead of asserting on a half-deleted tree.
+          $deadline = (Get-Date).AddSeconds(60)
+          while (Test-Path $instdir) {
+            if ((Get-Date) -gt $deadline) { throw "$instdir left behind" }
+            Start-Sleep -Milliseconds 500
+          }
           if (Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Mundus") {
             throw "Start Menu folder left behind"
           }
