@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { getVersion } from "./release-version.mjs";
+import { readReleaseVersion } from "./release-version.mjs";
 import { deriveReleaseBom } from "./release-bom.mjs";
 import { latestPublishedRelease } from "./release-plan.mjs";
 import { RELEASE_REPOS } from "./release-repos.mjs";
@@ -116,7 +116,7 @@ export function assertBuildingFromMain(
 
 export async function runReleasePreflight({ platform, local = false }) {
   if (platform !== "win") throw new Error(`Unknown platform "${platform}"`);
-  const version = getVersion(platform);
+  const version = readReleaseVersion();
   ensureCleanSource();
   const commit = currentCommit();
   if (!local) {

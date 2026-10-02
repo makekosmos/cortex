@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync, spawnSync } from "node:child_process";
 import path from "node:path";
-import { copyFileSync, readFileSync } from "node:fs";
+import { copyFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   effectiveCargoTargetDir,
@@ -11,6 +11,7 @@ import {
   cleanBuildIntermediates,
 } from "./runtime-staging.mjs";
 import { buildEnginePayload } from "./engine-distribution.mjs";
+import { readReleaseVersion } from "./release-version.mjs";
 
 const shellRoot = fileURLToPath(new URL("..", import.meta.url));
 const releaseBuildLock = acquireBuildLock(shellRoot);
@@ -28,14 +29,11 @@ const cortexTargetDir = effectiveCargoTargetDir(
 
 // KOS-233: one product, one version. The Engine no longer has its own
 // per-Engine version config file — it reports the Mundus Desktop product
-// version (`desktop/release-versions.json`) and the commit it was built from.
+// version (read via `release-version.mjs`) and the commit it was built from.
 // Both are baked into the binary at compile time via `option_env!`
 // (see runtime/src/build_info.rs), so they must be set before the `cargo build`
 // calls below, on every platform.
-const releaseVersions = JSON.parse(
-  readFileSync(path.join(shellRoot, "release-versions.json"), "utf8"),
-);
-const productVersion = process.platform === "win32" ? releaseVersions.win : releaseVersions.mac;
+const productVersion = readReleaseVersion();
 const sourceCommit = execFileSync("git", ["rev-parse", "HEAD"], {
   cwd: shellRoot,
   encoding: "utf8",

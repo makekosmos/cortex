@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -217,12 +217,13 @@ test("parseStableVersion rejects non-stable input", () => {
 
 test("setWinVersion writes only the win entry and stays idempotent", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "mundus-release-plan-"));
-  const file = path.join(dir, "release-versions.json");
+  const file = path.join(dir, "desktop", "release-versions.json");
+  await mkdir(path.dirname(file), { recursive: true });
   await writeFile(file, JSON.stringify({ win: "0.10.0" }, null, 2) + "\n");
-  assert.equal(setWinVersion("0.10.1", file), true);
+  assert.equal(setWinVersion("0.10.1", { root: dir }), true);
   assert.deepEqual(JSON.parse(await readFile(file, "utf8")), { win: "0.10.1" });
-  assert.equal(setWinVersion("0.10.1", file), false);
-  assert.throws(() => setWinVersion("0.10.x", file), /MAJOR\.MINOR\.PATCH/);
+  assert.equal(setWinVersion("0.10.1", { root: dir }), false);
+  assert.throws(() => setWinVersion("0.10.x", { root: dir }), /MAJOR\.MINOR\.PATCH/);
 });
 
 test("nextReleaseVersion mirrors the manual release bump rules", () => {

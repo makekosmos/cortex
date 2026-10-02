@@ -13,7 +13,7 @@
 // latest.yml still described build A. This script detects that exact scenario.
 //
 // Usage:
-//   node scripts/verify-release-channel.mjs                  # version from release-versions.json
+//   node scripts/verify-release-channel.mjs                  # version from the pinned release version
 //   node scripts/verify-release-channel.mjs 0.5.3            # explicit version (positional, backward-compat)
 //   node scripts/verify-release-channel.mjs --version 0.5.3
 //   node scripts/verify-release-channel.mjs --repo owner/name   # bridge-run override
@@ -23,7 +23,7 @@
 // Version resolution order:
 //   1. --version flag
 //   2. positional argument (backward-compat)
-//   3. release-versions.json["win"]
+//   3. the pinned release version (release-version.mjs)
 //   4. package.json.version (last fallback)
 //
 // Repo resolution: release-repos.mjs (win → makekosmos/cortex), overridable
@@ -49,6 +49,7 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { env } from "./brand.mjs";
 import { RELEASE_REPOS } from "./release-repos.mjs";
+import { readReleaseVersion } from "./release-version.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -349,25 +350,21 @@ async function main() {
   // Version resolution order:
   //   1. --version flag
   //   2. positional arg (backward-compat)
-  //   3. release-versions.json["win"]
+  //   3. the pinned release version
   //   4. package.json.version (last fallback)
   let version = parsed.version ?? parsed.positional ?? null;
   if (!version) {
-    // Try release-versions.json
-    const versionsPath = path.join(SHELL_ROOT, "release-versions.json");
     try {
-      const versionsRaw = await readFile(versionsPath, "utf8");
-      const versions = JSON.parse(versionsRaw);
-      version = versions.win ?? null;
+      version = readReleaseVersion();
     } catch {
-      // file may not exist on very old checkouts
+      // the pinned version file may not exist on very old checkouts
     }
   }
   if (!version) {
     version = pkg.version ?? null;
   }
   if (!version) {
-    die("Cannot determine version — pass --version <v> or set version in release-versions.json");
+    die("Cannot determine version — pass --version <v> or bump the win release version");
   }
 
   // The release repository is fixed for this product line; --repo exists
