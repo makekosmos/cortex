@@ -119,15 +119,15 @@ jobs:
           # Poll for the Engine that --start-engine / the Run key brings up —
           # it must run from the installed versions\<v> dir at FileVersion v.
           function Assert-EngineRunning {
-            $want = "$env:LOCALAPPDATA\Mundus\Engine\versions\$VERSION\mundus-engine.exe"
+            $want = "$env:LOCALAPPDATA\Mundus\Engine\versions\$env:VERSION\mundus-engine.exe"
             $deadline = (Get-Date).AddSeconds(60)
             do {
               $hit = Get-Process -Name 'mundus-engine' -ErrorAction SilentlyContinue |
-                Where-Object { $_.Path -eq $want -and $_.VersionInfo.FileVersion -eq $VERSION }
+                Where-Object { $_.Path -eq $want -and $_.VersionInfo.FileVersion -eq $env:VERSION }
               if ($hit) { return }
               Start-Sleep -Milliseconds 500
             } while ((Get-Date) -lt $deadline)
-            throw "engine not running from $want at version $VERSION"
+            throw "engine not running from $want at version $env:VERSION"
           }
 
           $setup = Get-ChildItem -Filter 'Mundus-Setup-*.exe' | Select-Object -First 1
@@ -138,14 +138,14 @@ jobs:
           $engine = "$instdir\resources\engine\mundus-engine.exe"
           if (!(Test-Path $engine)) { throw "engine payload missing: $engine" }
           $engineVersion = (Get-Item $engine).VersionInfo.FileVersion
-          Write-Host "installed engine FileVersion: '$engineVersion' (want '$VERSION')"
-          if ($engineVersion -ne $VERSION) {
-            throw "engine FileVersion '$engineVersion' != '$VERSION'"
+          Write-Host "installed engine FileVersion: '$engineVersion' (want '$env:VERSION')"
+          if ($engineVersion -ne $env:VERSION) {
+            throw "engine FileVersion '$engineVersion' != '$env:VERSION'"
           }
           if (Test-Path "$instdir\resources.next") { throw "resources.next left behind" }
           if (Test-Path "$instdir\resources.old") { throw "resources.old left behind" }
-          if (!(Test-Path "$env:LOCALAPPDATA\Mundus\Engine\versions\$VERSION")) {
-            throw "engine versions\$VERSION missing"
+          if (!(Test-Path "$env:LOCALAPPDATA\Mundus\Engine\versions\$env:VERSION")) {
+            throw "engine versions\$env:VERSION missing"
           }
           if (!(Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'Mundus Engine' -ErrorAction SilentlyContinue)) {
             throw "Run value missing"
@@ -263,8 +263,8 @@ jobs:
           $prevVersion = (Get-Item $prevEngine).VersionInfo.FileVersion
           # Equal is fine only when the "previous" install IS this build —
           # the fallback bootstrap still exercises kill + swap paths.
-          if ($prevInstalled -and $prevVersion -eq $VERSION) {
-            throw "previous release is already $VERSION"
+          if ($prevInstalled -and $prevVersion -eq $env:VERSION) {
+            throw "previous release is already $env:VERSION"
           }
           if (!(Get-Process -Name 'mundus-engine' -ErrorAction SilentlyContinue)) {
             Start-Process -FilePath $prevEngine -ArgumentList '--start'
@@ -283,19 +283,19 @@ jobs:
           Invoke-Installer $newSetup
 
           $engine = "$instdir\resources\engine\mundus-engine.exe"
-          if ((Get-Item $engine).VersionInfo.FileVersion -ne $VERSION) {
-            throw "engine FileVersion != $VERSION after upgrade"
+          if ((Get-Item $engine).VersionInfo.FileVersion -ne $env:VERSION) {
+            throw "engine FileVersion != $env:VERSION after upgrade"
           }
           if (Test-Path "$instdir\resources.next") { throw "resources.next left behind" }
           if (Test-Path "$instdir\resources.old") { throw "resources.old left behind" }
-          if (!(Test-Path "$env:LOCALAPPDATA\Mundus\Engine\versions\$VERSION")) {
-            throw "engine versions\$VERSION missing"
+          if (!(Test-Path "$env:LOCALAPPDATA\Mundus\Engine\versions\$env:VERSION")) {
+            throw "engine versions\$env:VERSION missing"
           }
           # The installer restarts the Engine itself; every product process
           # still alive must be the new version — an old one anywhere fails.
-          $after = Wait-ProductProcesses $VERSION
+          $after = Wait-ProductProcesses $env:VERSION
           foreach ($p in $after) {
-            if ($p.VersionInfo.FileVersion -ne $VERSION) {
+            if ($p.VersionInfo.FileVersion -ne $env:VERSION) {
               throw "stale $($p.Name) (pid $($p.Id)) from $($p.Path) at FileVersion $($p.VersionInfo.FileVersion)"
             }
           }
