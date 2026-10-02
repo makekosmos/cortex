@@ -2,14 +2,18 @@ impl LocalSttSidecarClient {
     async fn spawn() -> Result<Self, LocalError> {
         let sidecar_path = local_stt_sidecar_path()?;
         let mut command = TokioCommand::new(&sidecar_path);
-        #[cfg(windows)]
-        command.creation_flags(CREATE_NO_WINDOW);
-        let mut child = command
+        command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .kill_on_drop(true)
-            .spawn()
+            .stderr(Stdio::piped());
+        // See backend.rs: creation flags travel through ProcessTree::spawn so
+        // the suspended child joins the KILL_ON_JOB_CLOSE job before running.
+        #[cfg(windows)]
+        let creation_flags = CREATE_NO_WINDOW;
+        #[cfg(not(windows))]
+        let creation_flags = 0;
+        let mut tree = ProcessTree::spawn(&mut command, creation_flags)
+            .await
             .map_err(|e| {
                 LocalError::SidecarUnavailable(format!(
                     "не удалось запустить {}: {e}",
@@ -17,6 +21,7 @@ impl LocalSttSidecarClient {
                 ))
             })?;
 
+        let child = tree.child_mut();
         let stdin = child
             .stdin
             .take()
@@ -36,7 +41,7 @@ impl LocalSttSidecarClient {
         }
 
         Ok(Self {
-            child,
+            child: tree,
             stdin,
             stdout: BufReader::new(stdout),
             next_request_id: 1,
@@ -46,6 +51,7 @@ impl LocalSttSidecarClient {
     async fn request(&mut self, request: LocalSttRequest) -> Result<LocalSttResponse, LocalError> {
         if let Some(status) = self
             .child
+            .child_mut()
             .try_wait()
             .map_err(|e| LocalError::SidecarUnavailable(format!("sidecar wait failed: {e}")))?
         {

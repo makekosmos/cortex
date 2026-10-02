@@ -1,8 +1,10 @@
-//! Process-tree ownership for app-server children.
+//! Process-tree ownership for long-lived spawned children.
 //!
 //! `ProcessTree::spawn` must be used instead of spawning the command directly:
 //! it creates a private Unix process group or assigns the child to a Windows
-//! Job Object before returning the child to its caller.
+//! Job Object before returning the child to its caller. Dropping the
+//! `ProcessTree` — or the death of the process holding it — kills the whole
+//! tree, so a child can never outlive its owner.
 
 use std::io;
 use std::process::ExitStatus;
@@ -11,13 +13,13 @@ use std::time::Duration;
 use tokio::process::{Child, Command};
 
 #[cfg(windows)]
-pub(super) mod win32;
+pub(crate) mod win32;
 #[cfg(windows)]
 mod windows_program;
 #[cfg(all(test, windows))]
 mod windows_program_tests;
 
-/// An app-server child together with the OS primitive that contains its tree.
+/// A spawned child together with the OS primitive that contains its tree.
 pub struct ProcessTree {
     child: Child,
     #[cfg(unix)]

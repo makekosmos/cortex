@@ -17,9 +17,11 @@ use reqwest::Client;
 use serde_json::Value;
 use thiserror::Error;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child, ChildStdin, ChildStdout, Command as TokioCommand};
+use tokio::process::{ChildStdin, ChildStdout, Command as TokioCommand};
 use transcribe_rs::onnx::parakeet::{ParakeetModel, ParakeetParams, TimestampGranularity};
 use transcribe_rs::onnx::Quantization;
+
+use crate::process_tree::ProcessTree;
 
 use super::groq::{filter_segments, VerboseResponse};
 use super::local_sidecar_protocol::{
@@ -86,7 +88,9 @@ impl<'a> From<LocalRequest<'a>> for OwnedLocalRequest {
 }
 
 struct LocalSttSidecarClient {
-    child: Child,
+    // ProcessTree, not a bare Child: the sidecar is long-lived and must not
+    // outlive the Engine — the job kills it even on a hard kill (KOS-312).
+    child: ProcessTree,
     stdin: ChildStdin,
     stdout: BufReader<ChildStdout>,
     next_request_id: u64,

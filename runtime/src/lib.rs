@@ -94,6 +94,9 @@ pub mod pomodoro;
 pub mod pomodoro_host;
 pub mod priority;
 pub mod privileged;
+pub mod process_tree;
+#[cfg(test)]
+mod process_tree_tests;
 pub mod protocol_usage;
 pub mod protocol_version;
 pub mod runtime_grants;
