@@ -100,12 +100,41 @@ test("format discovery ignores unstaged files and fails closed on an invalid bas
     assert.equal(flat.status, 1, "column-0 string continuation must fail the gate");
     assert.match(String(flat.stderr), /column 0/);
 
+    // a `\`-line in the middle of a multi-line literal carries no `"`, so a
+    // line-local check misses it — the lexer must still catch it
+    writeFileSync(
+      resolve(cwd, "flat.rs"),
+      'fn x() {\n    let s = "CREATE TABLE t (a TEXT,\n         b TEXT \\\nc TEXT)";\n}\n',
+    );
+    const middle = spawnSync(process.execPath, [script], { cwd });
+    assert.equal(middle.status, 1, "quote-less continuation line must fail the gate");
+    assert.match(String(middle.stderr), /column 0/);
+
     writeFileSync(
       resolve(cwd, "flat.rs"),
       'fn x() {\n    let s = "INSERT INTO t(a,b) \\\n         VALUES(1,2)";\n}\n',
     );
     const indented = spawnSync(process.execPath, [script], { cwd });
     assert.equal(indented.status, 0, "indented string continuation must pass");
+
+    // raw strings, char literals and `"` inside comments must not confuse the
+    // lexer: none of these opens a string continuation
+    writeFileSync(
+      resolve(cwd, "flat.rs"),
+      [
+        "fn x() {",
+        '    let r = r#"raw content',
+        'still inside the raw string at column zero"#;',
+        "    let c1: char = '\"';",
+        "    let c2: char = '\\'';",
+        '    // a comment ending in \\ and a "quote" inside it',
+        "next line at column zero inside nothing",
+        '    let s = "one \\\n        two";',
+        "}",
+      ].join("\n") + "\n",
+    );
+    const lexerSafe = spawnSync(process.execPath, [script], { cwd });
+    assert.equal(lexerSafe.status, 0, "raw strings, char literals and comments must pass");
 
     rmSync(resolve(cwd, "sample.ts"));
     rmSync(resolve(cwd, "bom.rs"));

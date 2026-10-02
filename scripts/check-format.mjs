@@ -72,22 +72,108 @@ if (longLines.length) {
 
 // A `\`-continuation inside a string literal whose next line starts at
 // column 0 is the signature of a mechanical mid-token split: continuations
-// must be indented so the source stays readable.
+// must be indented so the source stays readable. This is a debt guard, so it
+// scans every tracked .rs file — a tiny lexer keeps string state correct
+// across escapes, raw strings, byte strings, char literals and comments.
+function col0Continuations(src) {
+  const bad = [];
+  const lines = src.split("\n");
+  let state = "code"; // code | string | raw | lineComment | blockComment
+  let rawHashes = 0;
+  let blockDepth = 0;
+  for (let li = 0; li < lines.length; li++) {
+    const line = lines[li];
+    let i = 0;
+    while (i < line.length) {
+      if (state === "code") {
+        if (line.startsWith("//", i)) break;
+        if (line.startsWith("/*", i)) {
+          state = "blockComment";
+          blockDepth = 1;
+          i += 2;
+          continue;
+        }
+        const raw = line.slice(i).match(/^b?r(#*)"/);
+        if (raw) {
+          state = "raw";
+          rawHashes = raw[1].length;
+          i += raw[0].length;
+          continue;
+        }
+        if (line[i] === '"' || line.startsWith('b"', i)) {
+          state = "string";
+          i += line[i] === "b" ? 2 : 1;
+          continue;
+        }
+        if (line[i] === "'") {
+          // char literal ('a', '\'', '"', '\\') vs lifetime ('a): a char
+          // literal is `<quote><escape|char><quote>` — look ahead.
+          const m = line.slice(i).match(/^'(\\[\\'"nrt0xu]|[^'\\])'/);
+          i += m ? m[0].length : 1;
+          continue;
+        }
+        i++;
+        continue;
+      }
+      if (state === "string") {
+        if (line[i] === "\\") {
+          i += 2;
+          continue;
+        }
+        if (line[i] === '"') state = "code";
+        i++;
+        continue;
+      }
+      if (state === "raw") {
+        if (line[i] === '"' && line.startsWith('"'.padEnd(rawHashes + 1, "#"), i)) {
+          state = "code";
+          i += rawHashes + 1;
+          continue;
+        }
+        i++;
+        continue;
+      }
+      if (state === "blockComment") {
+        if (line.startsWith("/*", i)) {
+          blockDepth++;
+          i += 2;
+          continue;
+        }
+        if (line.startsWith("*/", i)) {
+          blockDepth--;
+          if (blockDepth === 0) state = "code";
+          i += 2;
+          continue;
+        }
+        i++;
+        continue;
+      }
+      i++;
+    }
+    // a `\`-continued non-raw string literal: the line ends while still in
+    // `string` state with an ODD number of trailing backslashes (an even
+    // count ends in an escaped `\\`, which is literal content)
+    let trailing = 0;
+    for (let k = line.length - 1; k >= 0 && line[k] === "\\"; k--) trailing++;
+    if (state === "string" && trailing % 2 === 1) {
+      const next = lines[li + 1];
+      if (next !== undefined && next !== "" && !next.startsWith(" ") && !next.startsWith("\t"))
+        bad.push(li + 1);
+    }
+  }
+  return bad;
+}
+
 const flatConts = [];
-for (const file of changedRs) {
-  if (!existsSync(file)) continue;
-  const lines = readFileSync(file, "utf8").split("\n");
-  lines.forEach((line, i) => {
-    if (
-      line.endsWith("\\") &&
-      line.includes('"') &&
-      lines[i + 1] !== undefined &&
-      lines[i + 1] !== "" &&
-      !lines[i + 1].startsWith(" ") &&
-      !lines[i + 1].startsWith("\t")
-    )
-      flatConts.push(`${file}:${i + 1}`);
-  });
+const trackedRs = spawnSync("git", ["ls-files", "*.rs"], {
+  encoding: "utf8",
+  env: gitEnv,
+});
+if (!trackedRs.error && trackedRs.status === 0) {
+  for (const file of trackedRs.stdout.split(/\r?\n/).filter(Boolean)) {
+    if (!existsSync(file) || file.includes("vendor/")) continue;
+    for (const ln of col0Continuations(readFileSync(file, "utf8"))) flatConts.push(`${file}:${ln}`);
+  }
 }
 if (flatConts.length) {
   failed = true;
