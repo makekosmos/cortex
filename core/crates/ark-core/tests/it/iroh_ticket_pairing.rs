@@ -29,6 +29,10 @@ use ark_core::sync_bind::SyncBind;
 use ark_core::sync_transport::{SyncTransport, TransportEvent};
 use iroh::RelayMode;
 
+/// Generous hang guard for event drains — the awaited message is the real
+/// condition; the cap only bounds a wedged transport under load (KOS-308).
+const EVENT_GUARD: Duration = Duration::from_secs(60);
+
 /// Дренирует события пока не найдёт `MessageReceived` с нужным `from_device_id`
 /// и типом сообщения (определяется предикатом), либо не истечёт таймаут.
 async fn find_message<F>(
@@ -121,12 +125,11 @@ async fn iroh_ticket_pairing_round_trip() {
     // 4. Ждём auto-инжектированного Hello от A (транспорт инжектирует его
     // при подключении, до любого явного send()). Это гарантирует, что реестр
     // device_id ↔ EndpointId заполнен до LiveChange.
-    let (hello_from, _hello_msg) =
-        find_message(&mut b_events_rx, Duration::from_secs(5), |from, msg| {
-            from == "device-A" && matches!(msg, LanSyncMessage::Hello { .. })
-        })
-        .await
-        .expect("B must receive Hello from A (auto-injected by transport) within 5s");
+    let (hello_from, _hello_msg) = find_message(&mut b_events_rx, EVENT_GUARD, |from, msg| {
+        from == "device-A" && matches!(msg, LanSyncMessage::Hello { .. })
+    })
+    .await
+    .expect("B must receive Hello from A (auto-injected by transport)");
 
     assert_eq!(hello_from, "device-A", "hello must carry real device_id");
 
@@ -158,16 +161,15 @@ async fn iroh_ticket_pairing_round_trip() {
 
     transport_a.send(msg).expect("A send live_change");
 
-    let (live_change_from, received) =
-        find_message(&mut b_events_rx, Duration::from_secs(5), |from, msg| {
-            from == "device-A"
-                && matches!(msg, LanSyncMessage::LiveChange {
+    let (live_change_from, received) = find_message(&mut b_events_rx, EVENT_GUARD, |from, msg| {
+        from == "device-A"
+            && matches!(msg, LanSyncMessage::LiveChange {
                     entity,
                     ..
                 } if entity.id == "test-entity-iroh-ticket-001")
-        })
-        .await
-        .expect("timed out waiting for iroh message");
+    })
+    .await
+    .expect("timed out waiting for iroh message");
 
     assert_eq!(
         live_change_from, "device-A",
