@@ -98,10 +98,15 @@ pub fn render(
                 .text_color(c(MUTED_FG()))
                 .child("Engine"),
         );
-        for key in ["version", "api_version", "build", "channel"] {
+        for (key, label) in [
+            ("version", "Версия"),
+            ("api_version", "Версия API"),
+            ("build", "Сборка"),
+            ("channel", "Канал"),
+        ] {
             let val = vopt(v, key);
             if let Some(val) = val {
-                el = el.child(kv(key, val));
+                el = el.child(kv(label, val));
             }
         }
         if v.is_null() {

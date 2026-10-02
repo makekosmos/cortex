@@ -3,6 +3,7 @@
 #![windows_subsystem = "windows"]
 
 mod app;
+mod app_replies;
 mod components;
 mod devpkg;
 mod fps;

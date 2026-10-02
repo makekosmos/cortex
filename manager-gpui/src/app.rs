@@ -258,22 +258,6 @@ impl ManagerApp {
         );
     }
 
-    /// The `pkg.open` reply: open the launch URL or surface the typed
-    /// Engine error (already a Russian line — `worker::package_open_message`).
-    pub(crate) fn open_reply(&mut self, result: Result<Value, String>) {
-        match result {
-            Ok(v) => match v.get("launch_url").and_then(Value::as_str) {
-                Some(url) if !url.is_empty() => {
-                    if let Err(e) = mundus_gpui_kit::engine::open_url(url) {
-                        self.error = Some(e);
-                    }
-                }
-                _ => self.error = Some("Engine не вернул адрес приложения.".into()),
-            },
-            Err(e) => self.error = Some(e),
-        }
-    }
-
     /// Destructive op behind the confirm modal.
     pub fn ask_confirm(
         &mut self,
@@ -309,18 +293,24 @@ impl ManagerApp {
         cx.notify();
     }
 
-    /// Lazily create a text input keyed per view field.
+    /// Lazily create a text input keyed per view field. `masked` renders
+    /// bullets — for vault-bound secrets only; public values (ник) stay plain.
     pub fn input(
         &mut self,
         key: &str,
         placeholder: impl Into<SharedString>,
+        masked: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Entity<InputState> {
         if let Some(state) = self.inputs.get(key) {
             return state.clone();
         }
-        let state = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
+        let state = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(placeholder)
+                .masked(masked)
+        });
         self.inputs.insert(key.to_string(), state.clone());
         state
     }
@@ -364,6 +354,8 @@ impl ManagerApp {
                 }
             } else if reply.slot == "pkg.open" {
                 self.open_reply(reply.result);
+            } else if reply.slot == "conn.login" {
+                self.login_reply(reply.result);
             } else if reply.slot == "apps.op" {
                 // A background app install/update just started (or failed to
                 // start) — pull the fresh row set so progress or the typed
@@ -379,22 +371,7 @@ impl ManagerApp {
                     Err(e) => self.error = Some(e),
                 }
             } else if reply.slot == "store.ext" {
-                // store.external_url → open in the system browser.
-                match reply.result {
-                    Ok(v) => {
-                        let url = v
-                            .get("url")
-                            .and_then(Value::as_str)
-                            .map(str::to_string)
-                            .unwrap_or_else(|| v.as_str().unwrap_or_default().to_string());
-                        if url.is_empty() {
-                            self.error = Some("Engine не вернул ссылку маркетплейса.".into());
-                        } else if let Err(e) = mundus_gpui_kit::engine::open_url(&url) {
-                            self.error = Some(e);
-                        }
-                    }
-                    Err(e) => self.error = Some(e),
-                }
+                self.external_url_reply(reply.result);
             } else {
                 let slot = reply.slot.clone();
                 let background = self.background_slots.remove(&slot);

@@ -65,7 +65,7 @@ pub fn render(
         );
     }
 
-    let key_in = app.input("secrets.key", "gsk_…", window, cx);
+    let key_in = app.input("secrets.key", "gsk_…", true, window, cx);
     col = col.child(
         card()
             .child(div().text_size(px(13.)).font_weight(FontWeight::SEMIBOLD).child("API-ключ Groq"))

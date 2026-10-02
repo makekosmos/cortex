@@ -135,7 +135,7 @@ fn render_package_updates(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> Any
         if !latest.is_empty() && latest != current {
             let name = vopt(package, "name")
                 .filter(|name| !name.is_empty())
-                .unwrap_or_else(|| id.clone());
+                .unwrap_or_else(|| "Пакет".into());
             updates.push((id, name, vopt(package, "icon_path"), current, latest));
         }
     }
@@ -151,12 +151,7 @@ fn render_package_updates(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> Any
     for (id, name, icon_path, current, latest) in updates {
         let package_id = id.clone();
         element = element.child(
-            entry_row(
-                icon_file(icon_path),
-                name,
-                format!("{id} · {current} → {latest}"),
-            )
-            .child(btn_id(
+            entry_row(icon_file(icon_path), name, format!("{current} → {latest}")).child(btn_id(
                 &format!("upd-{id}"),
                 "Обновить",
                 cx.listener(move |this, _, _, cx| {

@@ -42,7 +42,7 @@ pub fn render(
         el.into_any_element()
     }));
 
-    let warm_in = app.input("engine.warm", "Таймаут в секундах…", window, cx);
+    let warm_in = app.input("engine.warm", "Таймаут в секундах…", false, window, cx);
     col = col.child(
         card()
             .child(
