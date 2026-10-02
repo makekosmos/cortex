@@ -37,6 +37,52 @@ pub fn with_client_impersonation(pipe: HANDLE, f: impl FnOnce() -> bool) -> bool
     }
 }
 
+/// PID of the process on the other end of the pipe. No impersonation needed —
+/// the pipe itself reports the client's identity, so this is trustworthy for
+/// security checks.
+pub fn client_process_id(pipe: HANDLE) -> Result<u32, String> {
+    let mut pid = 0u32;
+    unsafe {
+        windows::Win32::System::Pipes::GetNamedPipeClientProcessId(pipe, &mut pid)
+            .map_err(|e| format!("pipe client pid query failed: {e}"))?;
+    }
+    if pid == 0 {
+        return Err("pipe client pid unavailable".to_string());
+    }
+    Ok(pid)
+}
+
+/// Filesystem image path of the pipe client process. Combined with
+/// `client_profile_dir` this pins down "which exe is asking" without ever
+/// trusting a path the client sent (KOS-269 firewall rule).
+pub fn client_image_path(pipe: HANDLE) -> Result<PathBuf, String> {
+    use windows::Win32::System::Threading::{
+        OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_FORMAT,
+        PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+    let pid = client_process_id(pipe)?;
+    unsafe {
+        let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
+            .map_err(|e| format!("open client process {pid} failed: {e}"))?;
+        let result = (|| {
+            let mut buf = vec![0u16; 1024];
+            let mut size = buf.len() as u32;
+            QueryFullProcessImageNameW(
+                process,
+                PROCESS_NAME_FORMAT(0),
+                windows::core::PWSTR(buf.as_mut_ptr()),
+                &mut size,
+            )
+            .map_err(|e| format!("client image path query failed: {e}"))?;
+            Ok(PathBuf::from(String::from_utf16_lossy(
+                &buf[..size as usize],
+            )))
+        })();
+        let _ = CloseHandle(process);
+        result
+    }
+}
+
 fn client_profile_dir_impersonated() -> Result<PathBuf, String> {
     unsafe {
         let mut token = HANDLE::default();

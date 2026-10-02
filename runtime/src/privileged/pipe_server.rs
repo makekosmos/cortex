@@ -39,8 +39,8 @@ use windows::Win32::System::Pipes::{
 };
 
 use crate::privileged::brand;
+use crate::privileged::firewall;
 use crate::privileged::hosts;
-use crate::privileged::impersonate;
 use crate::privileged::ntfs_scan;
 use crate::privileged::protocol::{self, Request, Response};
 use crate::privileged::request_io;
@@ -252,7 +252,11 @@ fn serve_connection(pipe: HANDLE, file: &mut std::fs::File) {
         Request::NtfsScan {
             root,
             exclude_noisy,
-        } => handle_ntfs_scan(pipe, &root, exclude_noisy),
+        } => ntfs_scan::handle_pipe_request(pipe, &root, exclude_noisy),
+        Request::EnsureEngineAllow => match firewall::ensure_for_pipe_client(pipe) {
+            Ok(_) => Response::ok(),
+            Err(e) => Response::err(e),
+        },
         other => protocol::dispatch(other, &hosts::default_hosts_path()),
     };
     write_response(file, &resp);
@@ -263,35 +267,6 @@ fn write_response(file: &mut std::fs::File, resp: &Response) {
         .unwrap_or_else(|_| String::from(r#"{"ok":false,"error":"serialize failed"}"#));
     let _ = writeln!(file, "{json}");
     let _ = file.flush();
-}
-
-/// `ntfs_scan` with caller gating:
-/// 1. impersonate the client and prove it can enumerate the requested drive
-///    root itself;
-/// 2. scan as SYSTEM;
-/// 3. drop entries under other users' profile directories.
-fn handle_ntfs_scan(pipe: HANDLE, root: &str, exclude_noisy: bool) -> Response {
-    let root = match ntfs_scan::validate_scan_root(root) {
-        Ok(r) => r,
-        Err(e) => return Response::err(e),
-    };
-    let profile = match impersonate::client_profile_dir(pipe) {
-        Ok(p) => p,
-        Err(e) => return Response::err(e),
-    };
-
-    // Access check under the client's identity: it must be able to enumerate
-    // the requested root on its own.
-    let readable =
-        impersonate::with_client_impersonation(pipe, || std::fs::read_dir(&root).is_ok());
-    if !readable {
-        return Response::err(format!("scan root {root} is not readable by the caller"));
-    }
-
-    match ntfs_scan::scan_drive_root(&root, exclude_noisy) {
-        Ok(files) => Response::files(ntfs_scan::retain_visible_to(files, &profile)),
-        Err(e) => Response::err(e),
-    }
 }
 
 #[cfg(test)]

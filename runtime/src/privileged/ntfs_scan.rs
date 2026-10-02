@@ -158,6 +158,43 @@ fn strip_volume_prefix(raw: &str, prefix: &str, drive: char) -> Option<String> {
     Some(format!(r"{drive}:\{suffix}"))
 }
 
+/// `ntfs_scan` pipe-request handler with caller gating (moved out of
+/// `pipe_server` — this is request logic, not accept-loop logic):
+/// 1. impersonate the client and prove it can enumerate the requested drive
+///    root itself;
+/// 2. scan as SYSTEM;
+/// 3. drop entries under other users' profile directories.
+pub fn handle_pipe_request(
+    pipe: windows::Win32::Foundation::HANDLE,
+    root: &str,
+    exclude_noisy: bool,
+) -> crate::privileged::protocol::Response {
+    use crate::privileged::impersonate;
+    use crate::privileged::protocol::Response;
+
+    let root = match validate_scan_root(root) {
+        Ok(r) => r,
+        Err(e) => return Response::err(e),
+    };
+    let profile = match impersonate::client_profile_dir(pipe) {
+        Ok(p) => p,
+        Err(e) => return Response::err(e),
+    };
+
+    // Access check under the client's identity: it must be able to enumerate
+    // the requested root on its own.
+    let readable =
+        impersonate::with_client_impersonation(pipe, || std::fs::read_dir(&root).is_ok());
+    if !readable {
+        return Response::err(format!("scan root {root} is not readable by the caller"));
+    }
+
+    match scan_drive_root(&root, exclude_noisy) {
+        Ok(files) => Response::files(retain_visible_to(files, &profile)),
+        Err(e) => Response::err(e),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

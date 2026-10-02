@@ -152,6 +152,7 @@ windows = { version = "0.58", features = [
   "Win32_Media_Audio",
   "Win32_Media_Audio_Endpoints",
   "Win32_Storage_FileSystem",
+  "Win32_NetworkManagement_WindowsFirewall",
   # App Index icons (2026-05-22): ExtractIconExW + GDI DIB → PNG conversion.
   "Win32_UI_Shell",
   "Win32_Graphics_Gdi",
