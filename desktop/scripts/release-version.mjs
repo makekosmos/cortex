@@ -1,10 +1,12 @@
-// The single owner of desktop/release-versions.json: every script reads and
-// writes the release version through this module, and a contract test fails
-// on any other mention of the file under scripts/.
+// The single owner of desktop/release-versions.json on the script side: every
+// Node script reads and writes the release version through this module, and a
+// contract test fails on any other mention of the file under scripts/ or in
+// Rust outside runtime/crates/pe-version-info.
 //
 // The file shape `{ "win": "x.y.z" }` is contractual — the "win" key is read
-// by name by the nightly workflow, manager-gpui/build.rs and older checkouts.
-// Windows is the only released platform.
+// by name by the nightly workflow, `runtime/crates/pe-version-info`
+// (product_version, used by runtime/build.rs and manager-gpui/build.rs) and
+// older checkouts. Windows is the only released platform.
 //
 // Library API:
 //   readReleaseVersion({ root } = {})            → "x.y.z" (semver-validated)
@@ -24,10 +26,12 @@ function versionsPath(root) {
   return path.join(root ?? REPO_ROOT, "desktop", "release-versions.json");
 }
 
+// The file is machine-written, so surrounding whitespace is rejected rather
+// than trimmed — a tag or installer name must never carry it silently.
 function assertStableVersion(version, context) {
   if (
     Object.prototype.toString.call(version) !== "[object String]" ||
-    !STABLE_VERSION.test(version.trim())
+    !STABLE_VERSION.test(version)
   )
     throw new Error(
       `${context} must be a MAJOR.MINOR.PATCH version, got ${JSON.stringify(version)}`,
