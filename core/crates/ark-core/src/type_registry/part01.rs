@@ -221,7 +221,7 @@ pub fn insert_type_version(
     if canonical_exists.is_none() {
         return Err("canonical type missing".into());
     }
-    let existing = conn.query_row("SELECT schema_json,ui_schema_json,content_contract_json,relations_json,sync_policy_json,schema_hash,created_at FROM object_type_versions WHERE type_id=?1 AND version=?2", params![input.type_id, input.version], |r| Ok((r.get::<_,String>(0)?,r.get::<_,String>(1)?,r.get::<_,String>(2)?,r.get::<_,String>(3)?,r.get::<_,String>(4)?,r.get::<_,String>(5)?,r.get::<_,String>(6)?))).optional().map_err(|e| e.to_string())?;
+    let existing = conn.query_row(concat!("SELECT schema_json,ui_schema_json,content_contract_json,relations_json,","sync_policy_json,schema_hash,created_at FROM object_type_versions WHERE ","type_id=?1 AND version=?2"), params![input.type_id, input.version], |r| Ok((r.get::<_,String>(0)?,r.get::<_,String>(1)?,r.get::<_,String>(2)?,r.get::<_,String>(3)?,r.get::<_,String>(4)?,r.get::<_,String>(5)?,r.get::<_,String>(6)?))).optional().map_err(|e| e.to_string())?;
     let policy = parse_json(&input.sync_policy_json, "sync_policy_json")?;
     let policy = serde_json::to_string(&canonical_value(&policy)).map_err(|e| e.to_string())?;
     if let Some((a, b, c, d, e, f, _)) = existing {
@@ -235,7 +235,7 @@ pub fn insert_type_version(
         }
         return Err("immutable type version conflict".into());
     }
-    conn.execute("INSERT INTO object_type_versions (type_id,version,schema_json,ui_schema_json,content_contract_json,relations_json,sync_policy_json,schema_hash,created_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)", params![input.type_id,input.version,schema,ui,content,relations,policy,hash,created_at]).map_err(|e| e.to_string())?;
+    conn.execute(concat!("INSERT INTO object_type_versions (type_id,version,schema_json,","ui_schema_json,content_contract_json,relations_json,sync_policy_json,","schema_hash,created_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)"), params![input.type_id,input.version,schema,ui,content,relations,policy,hash,created_at]).map_err(|e| e.to_string())?;
     crate::canonical_types::pending::replay_pending_for_type(conn, &input.type_id, &input.version)?;
     Ok(())
 }

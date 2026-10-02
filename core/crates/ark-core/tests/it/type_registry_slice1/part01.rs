@@ -125,12 +125,12 @@ fn builtin_startup_does_not_rewrite_existing_definition_or_timestamp() {
     let conn = Connection::open_in_memory().unwrap();
     init_schema(&conn).unwrap();
     conn.execute(
-        "UPDATE object_types SET name='user-owned', schema_json='{\"custom\":true}', updated_at='kept' WHERE id='com.kosmos.note'",
+        concat!("UPDATE object_types SET name='user-owned', schema_json='{\"custom\":true}', ","updated_at='kept' WHERE id='com.kosmos.note'"),
         [],
     )
     .unwrap();
     conn.execute(
-        "UPDATE object_type_versions SET schema_json='{\"custom\":true}', schema_hash='kept-hash', created_at='kept-created' WHERE type_id='com.kosmos.note' AND version='1.0.0'",
+        concat!("UPDATE object_type_versions SET schema_json='{\"custom\":true}', ","schema_hash='kept-hash', created_at='kept-created' WHERE ","type_id='com.kosmos.note' AND version='1.0.0'"),
         [],
     )
     .unwrap();
@@ -153,14 +153,14 @@ fn builtin_startup_does_not_rewrite_existing_definition_or_timestamp() {
         .unwrap(),
         "kept"
     );
-    assert_eq!(conn.query_row("SELECT schema_hash FROM object_type_versions WHERE type_id='com.kosmos.note' AND version='1.0.0'", [], |r| r.get::<_, String>(0)).unwrap(), "kept-hash");
+    assert_eq!(conn.query_row(concat!("SELECT schema_hash FROM object_type_versions WHERE ","type_id='com.kosmos.note' AND version='1.0.0'"), [], |r| r.get::<_, String>(0)).unwrap(), "kept-hash");
 }
 
 #[test]
 fn malformed_schema_or_ui_rolls_back_all_phase2_state() {
     for (schema, ui) in [("", "{}"), ("{", "{}"), ("{}", "[")] {
         let conn = Connection::open_in_memory().unwrap();
-        conn.execute_batch(r#"PRAGMA foreign_keys=ON; CREATE TABLE object_types (id TEXT PRIMARY KEY, name TEXT NOT NULL, schema_json TEXT NOT NULL, ui_schema_json TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, system_locked INTEGER NOT NULL DEFAULT 0); CREATE TABLE objects (id TEXT PRIMARY KEY, type_id TEXT NOT NULL, title TEXT NOT NULL, content_json TEXT NOT NULL, props_json TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT, FOREIGN KEY(type_id) REFERENCES object_types(id)); INSERT INTO object_types VALUES ('bad','Bad', 'SCHEMA', 'UI', 'c','u',0);"#).unwrap();
+        conn.execute_batch(concat!(r#"PRAGMA foreign_keys=ON; CREATE TABLE object_types (id TEXT PRIMARY KEY, "#,r#"name TEXT NOT NULL, schema_json TEXT NOT NULL, ui_schema_json TEXT NOT NULL,"#,r#" created_at TEXT NOT NULL, updated_at TEXT NOT NULL, system_locked INTEGER "#,r#"NOT NULL DEFAULT 0); CREATE TABLE objects (id TEXT PRIMARY KEY, type_id "#,r#"TEXT NOT NULL, title TEXT NOT NULL, content_json TEXT NOT NULL, props_json "#,r#"TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, "#,r#"deleted_at TEXT, FOREIGN KEY(type_id) REFERENCES object_types(id)); INSERT "#,r#"INTO object_types VALUES ('bad','Bad', 'SCHEMA', 'UI', 'c','u',0);"#)).unwrap();
         conn.execute(
             "UPDATE object_types SET schema_json=?1, ui_schema_json=?2",
             params![schema, ui],
@@ -197,7 +197,7 @@ fn canonical_hash_sorts_keys_but_preserves_array_order() {
 #[test]
 fn immutable_versions_validate_semver_order_and_conflicts() {
     let conn = Connection::open_in_memory().unwrap();
-    conn.execute_batch(r#"PRAGMA foreign_keys=ON; CREATE TABLE object_types (id TEXT PRIMARY KEY, name TEXT NOT NULL, schema_json TEXT NOT NULL, ui_schema_json TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, system_locked INTEGER NOT NULL DEFAULT 0); CREATE TABLE object_type_versions (type_id TEXT NOT NULL, version TEXT NOT NULL, schema_json TEXT NOT NULL, ui_schema_json TEXT NOT NULL DEFAULT '{}', content_contract_json TEXT NOT NULL DEFAULT '{}', relations_json TEXT NOT NULL DEFAULT '[]', sync_policy_json TEXT NOT NULL DEFAULT '{}', schema_hash TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(type_id,version), FOREIGN KEY(type_id) REFERENCES object_types(id)); INSERT INTO object_types VALUES ('t','T','{}','{}','c','u',0);"#).unwrap();
+    conn.execute_batch(concat!(r#"PRAGMA foreign_keys=ON; CREATE TABLE object_types (id TEXT PRIMARY KEY, "#,r#"name TEXT NOT NULL, schema_json TEXT NOT NULL, ui_schema_json TEXT NOT NULL,"#,r#" created_at TEXT NOT NULL, updated_at TEXT NOT NULL, system_locked INTEGER "#,r#"NOT NULL DEFAULT 0); CREATE TABLE object_type_versions (type_id TEXT NOT "#,r#"NULL, version TEXT NOT NULL, schema_json TEXT NOT NULL, ui_schema_json TEXT "#,r#"NOT NULL DEFAULT '{}', content_contract_json TEXT NOT NULL DEFAULT '{}', "#,r#"relations_json TEXT NOT NULL DEFAULT '[]', sync_policy_json TEXT NOT NULL "#,r#"DEFAULT '{}', schema_hash TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY "#,r#"KEY(type_id,version), FOREIGN KEY(type_id) REFERENCES object_types(id)); "#,r#"INSERT INTO object_types VALUES ('t','T','{}','{}','c','u',0);"#)).unwrap();
     for v in ["1.0.0", "1.0.0+build.1", "0.2.0"] {
         insert_type_version(&conn, &version("t", v, "{}"), "now").unwrap();
     }
@@ -217,7 +217,7 @@ fn immutable_versions_validate_semver_order_and_conflicts() {
 #[test]
 fn aliases_and_pointer_status_base_invariants_are_atomic() {
     let conn = Connection::open_in_memory().unwrap();
-    conn.execute_batch(r#"PRAGMA foreign_keys=ON; CREATE TABLE object_types (id TEXT PRIMARY KEY, name TEXT NOT NULL, schema_json TEXT NOT NULL, ui_schema_json TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, system_locked INTEGER NOT NULL DEFAULT 0, owner_kind TEXT NOT NULL DEFAULT 'system', owner_id TEXT, current_version TEXT NOT NULL DEFAULT '0.0.0-legacy', status TEXT NOT NULL DEFAULT 'active', base_type_id TEXT); CREATE TABLE object_type_versions (type_id TEXT NOT NULL, version TEXT NOT NULL, schema_json TEXT NOT NULL, ui_schema_json TEXT NOT NULL DEFAULT '{}', content_contract_json TEXT NOT NULL DEFAULT '{}', relations_json TEXT NOT NULL DEFAULT '[]', sync_policy_json TEXT NOT NULL DEFAULT '{}', schema_hash TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(type_id,version), FOREIGN KEY(type_id) REFERENCES object_types(id)); CREATE TABLE object_type_aliases (alias TEXT PRIMARY KEY, canonical_type_id TEXT NOT NULL, created_at TEXT NOT NULL, FOREIGN KEY(canonical_type_id) REFERENCES object_types(id)); INSERT INTO object_types VALUES ('a','A','{}','{}','c','u',0,'system',NULL,'1.0.0','active',NULL); INSERT INTO object_types VALUES ('b','B','{}','{}','c','u',0,'system',NULL,'1.0.0','active',NULL);"#).unwrap();
+    conn.execute_batch(concat!(r#"PRAGMA foreign_keys=ON; CREATE TABLE object_types (id TEXT PRIMARY KEY, "#,r#"name TEXT NOT NULL, schema_json TEXT NOT NULL, ui_schema_json TEXT NOT NULL,"#,r#" created_at TEXT NOT NULL, updated_at TEXT NOT NULL, system_locked INTEGER "#,r#"NOT NULL DEFAULT 0, owner_kind TEXT NOT NULL DEFAULT 'system', owner_id "#,r#"TEXT, current_version TEXT NOT NULL DEFAULT '0.0.0-legacy', status TEXT NOT "#,r#"NULL DEFAULT 'active', base_type_id TEXT); CREATE TABLE "#,r#"object_type_versions (type_id TEXT NOT NULL, version TEXT NOT NULL, "#,r#"schema_json TEXT NOT NULL, ui_schema_json TEXT NOT NULL DEFAULT '{}', "#,r#"content_contract_json TEXT NOT NULL DEFAULT '{}', relations_json TEXT NOT "#,r#"NULL DEFAULT '[]', sync_policy_json TEXT NOT NULL DEFAULT '{}', schema_hash "#,r#"TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(type_id,version), "#,r#"FOREIGN KEY(type_id) REFERENCES object_types(id)); CREATE TABLE "#,r#"object_type_aliases (alias TEXT PRIMARY KEY, canonical_type_id TEXT NOT "#,r#"NULL, created_at TEXT NOT NULL, FOREIGN KEY(canonical_type_id) REFERENCES "#,r#"object_types(id)); INSERT INTO object_types VALUES ('a','A','{}','{}','c',"#,r#"'u',0,'system',NULL,'1.0.0','active',NULL); INSERT INTO object_types VALUES "#,r#"('b','B','{}','{}','c','u',0,'system',NULL,'1.0.0','active',NULL);"#)).unwrap();
     insert_type_version(&conn, &version("a", "1.0.0", "{}"), "now").unwrap();
     insert_type_version(&conn, &version("b", "1.0.0", "{}"), "now").unwrap();
     register_alias(

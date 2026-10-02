@@ -14,7 +14,7 @@ fn legacy_opaque_sync_cursor_is_scrubbed_before_configuration_load() {
            ('numeric', 'fatsecret', 'b', '[]', '{}', 1, '42', 1, '2026-08-30T00:00:00.000Z:000001:node-a');",
     ).unwrap();
     assert_eq!(load_integration_configuration(&conn, "opaque").unwrap().unwrap().sync_cursor, None);
-    let persisted: Option<String> = conn.query_row("SELECT sync_cursor FROM integration_configurations WHERE integration_id = 'opaque'", [], |row| row.get(0)).unwrap();
+    let persisted: Option<String> = conn.query_row(concat!("SELECT sync_cursor FROM integration_configurations WHERE integration_id = ","'opaque'"), [], |row| row.get(0)).unwrap();
     assert_eq!(persisted, None);
     assert_eq!(load_integration_configuration(&conn, "numeric").unwrap().unwrap().sync_cursor, Some(42));
 }

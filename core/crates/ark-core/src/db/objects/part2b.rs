@@ -6,7 +6,7 @@
 fn query_type_ids(conn: &Connection, type_id: &str) -> Result<Vec<String>, String> {
     let registry_ready: bool = conn
         .query_row(
-            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='object_type_aliases')",
+            concat!("SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND ","name='object_type_aliases')"),
             [],
             |row| row.get::<_, i64>(0),
         )

@@ -119,7 +119,7 @@ fn production_registration_rejects_existing_canonical_without_any_changes() {
     let conn = Connection::open_in_memory().unwrap();
     init_schema(&conn).unwrap();
     let before: Vec<ObjectTypeRow> = conn
-        .prepare("SELECT id, name, schema_json, ui_schema_json, created_at, updated_at, system_locked, owner_kind, owner_id, current_version, status, base_type_id FROM object_types ORDER BY id")
+        .prepare(concat!("SELECT id, name, schema_json, ui_schema_json, created_at, updated_at, ","system_locked, owner_kind, owner_id, current_version, status, base_type_id ","FROM object_types ORDER BY id"))
         .unwrap()
         .query_map([], |row| {
             Ok((
@@ -183,7 +183,7 @@ fn production_registration_rejects_existing_canonical_without_any_changes() {
     assert_eq!(error, "canonical type already exists");
 
     let after: Vec<ObjectTypeRow> = conn
-        .prepare("SELECT id, name, schema_json, ui_schema_json, created_at, updated_at, system_locked, owner_kind, owner_id, current_version, status, base_type_id FROM object_types ORDER BY id")
+        .prepare(concat!("SELECT id, name, schema_json, ui_schema_json, created_at, updated_at, ","system_locked, owner_kind, owner_id, current_version, status, base_type_id ","FROM object_types ORDER BY id"))
         .unwrap()
         .query_map([], |row| {
             Ok((

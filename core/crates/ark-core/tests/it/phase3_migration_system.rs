@@ -114,13 +114,15 @@ fn phase9_retirement_refuses_archive_or_semantic_mismatch_and_rolls_back_drop_ba
 
     let original_raw: Vec<u8> = conn
         .query_row(
-            "SELECT raw_source FROM canonical_migration_source_archive WHERE source_kind='native:areas' AND source_id='area-1'",
+            "SELECT raw_source FROM canonical_migration_source_archive WHERE \
+source_kind='native:areas' AND source_id='area-1'",
             [],
             |row| row.get(0),
         )
         .unwrap();
     conn.execute(
-        "UPDATE canonical_migration_source_archive SET raw_source=?1 WHERE source_kind='native:areas' AND source_id='area-1'",
+        "UPDATE canonical_migration_source_archive SET raw_source=?1 WHERE \
+source_kind='native:areas' AND source_id='area-1'",
         [b"tampered".as_slice()],
     )
     .unwrap();
@@ -128,7 +130,8 @@ fn phase9_retirement_refuses_archive_or_semantic_mismatch_and_rolls_back_drop_ba
     assert!(table_exists(&conn, "areas"));
     assert!(table_exists(&conn, "headings"));
     conn.execute(
-        "UPDATE canonical_migration_source_archive SET raw_source=?1 WHERE source_kind='native:areas' AND source_id='area-1'",
+        "UPDATE canonical_migration_source_archive SET raw_source=?1 WHERE \
+source_kind='native:areas' AND source_id='area-1'",
         [original_raw.as_slice()],
     )
     .unwrap();
@@ -289,13 +292,28 @@ fn historical_malformed_registry_fails_closed_before_phase3_state() {
 fn clear_all_removes_ephemeral_rows_but_keeps_locked_registry_and_archive() {
     let conn = Connection::open_in_memory().unwrap();
     init_schema(&conn).unwrap();
-    conn.execute("INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,created_at,updated_at) VALUES('obj-marker','com.kosmos.note','1.0.0','marker','{}','{}','now','now')", []).unwrap();
-    conn.execute("INSERT INTO object_links(id,source_object_id,target_object_id,link_type,created_at) VALUES('link-marker','obj-marker','obj-marker','marker','now')", []).unwrap();
-    conn.execute("INSERT INTO object_local_state(object_id,device_id,data_json,updated_at) VALUES('obj-marker','dev','local-marker','now')", []).unwrap();
-    conn.execute("INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES('obj-marker','marker-hlc',0)", []).unwrap();
-    conn.execute("INSERT INTO object_migration_quarantine(object_id,contract_version,source_type_id,fields_json,source_hash,updated_at) VALUES('obj-marker','phase3-canonical-v1','com.kosmos.note','quarantine-marker','hash','now')", []).unwrap();
-    conn.execute("INSERT INTO canonical_migration_items(contract_version,source_kind,source_id,source_hash,raw_source,status,updated_at) VALUES(?1,?2,?3,?4,?5,'unchanged','now')", params!["phase3-canonical-v1", "marker", "marker", "hash", b"marker"])
-        .unwrap();
+    conn.execute_batch(
+        "INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,\
+created_at,updated_at) VALUES('obj-marker','com.kosmos.note','1.0.0',\
+'marker','{}','{}','now','now');\
+INSERT INTO object_links(id,source_object_id,target_object_id,link_type,\
+created_at) VALUES('link-marker','obj-marker','obj-marker','marker','now');\
+INSERT INTO object_local_state(object_id,device_id,data_json,updated_at) \
+VALUES('obj-marker','dev','local-marker','now');\
+INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES('obj-marker',\
+'marker-hlc',0);\
+INSERT INTO object_migration_quarantine(object_id,contract_version,\
+source_type_id,fields_json,source_hash,updated_at) VALUES('obj-marker',\
+'phase3-canonical-v1','com.kosmos.note','quarantine-marker','hash','now')",
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO canonical_migration_items(contract_version,source_kind,\
+source_id,source_hash,raw_source,status,updated_at) VALUES(?1,?2,?3,?4,?5,\
+'unchanged','now')",
+        params!["phase3-canonical-v1", "marker", "marker", "hash", b"marker"],
+    )
+    .unwrap();
     let locked_before = count(&conn, "object_types");
     let archive_before = count(&conn, "legacy_type_definition_archive");
     clear_all(&conn).unwrap();
@@ -321,11 +339,41 @@ fn clear_all_removes_ephemeral_rows_but_keeps_locked_registry_and_archive() {
 fn internal_markers_are_not_exposed_by_load_all() {
     let conn = Connection::open_in_memory().unwrap();
     init_schema(&conn).unwrap();
-    conn.execute("INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,created_at,updated_at) VALUES('obj-public','com.kosmos.note','1.0.0','Public object','{}','{}','now','now')", []).unwrap();
-    conn.execute("INSERT INTO object_local_state(object_id,device_id,data_json,updated_at) VALUES('obj-public','dev','LOCAL_INTERNAL_MARKER','now')", []).unwrap();
-    conn.execute("INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES('obj-public','SYNC_INTERNAL_MARKER',0)", []).unwrap();
-    conn.execute("INSERT INTO object_migration_quarantine(object_id,contract_version,source_type_id,fields_json,source_hash,updated_at) VALUES('obj-public','phase3-canonical-v1','com.kosmos.note','QUARANTINE_INTERNAL_MARKER','hash','now')", []).unwrap();
-    conn.execute("INSERT INTO canonical_migration_items(contract_version,source_kind,source_id,source_hash,raw_source,status,updated_at) VALUES('phase3-canonical-v1','marker','marker','hash',X'4c45444745525f494e5445524e414c5f4d41524b4552','unchanged','now')", []).unwrap();
+    conn.execute(
+        "INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,\
+created_at,updated_at) VALUES('obj-public','com.kosmos.note','1.0.0',\
+'Public object','{}','{}','now','now')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO object_local_state(object_id,device_id,data_json,updated_at) \
+VALUES('obj-public','dev','LOCAL_INTERNAL_MARKER','now')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES('obj-public',\
+'SYNC_INTERNAL_MARKER',0)",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO object_migration_quarantine(object_id,contract_version,\
+source_type_id,fields_json,source_hash,updated_at) VALUES('obj-public',\
+'phase3-canonical-v1','com.kosmos.note','QUARANTINE_INTERNAL_MARKER','hash',\
+'now')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO canonical_migration_items(contract_version,source_kind,\
+source_id,source_hash,raw_source,status,updated_at) VALUES(\
+'phase3-canonical-v1','marker','marker','hash',\
+X'4c45444745525f494e5445524e414c5f4d41524b4552','unchanged','now')",
+        [],
+    )
+    .unwrap();
     let exported = serde_json::to_string(&load_all(&conn).unwrap()).unwrap();
     assert!(exported.contains("Public object"));
     for marker in [
@@ -363,8 +411,25 @@ fn raw_backup_preserves_nonempty_internal_blobs_and_schema() {
     let dest = dir.path().join("backup.sqlite");
     let conn = open_db(source.to_str().unwrap()).unwrap();
     init_schema(&conn).unwrap();
-    conn.execute("INSERT INTO canonical_migration_items(contract_version,source_kind,source_id,source_hash,raw_source,status,updated_at) VALUES(?1,?2,?3,?4,?5,'unchanged','now')", params!["phase3-canonical-v1", "marker", "blob", "hash", b"NONEMPTY_BACKUP_BLOB"]).unwrap();
-    conn.execute("INSERT INTO object_local_state(object_id,device_id,data_json,updated_at) SELECT id,'backup-device','BACKUP_LOCAL_MARKER','now' FROM objects LIMIT 1", []).unwrap();
+    conn.execute(
+        "INSERT INTO canonical_migration_items(contract_version,source_kind,\
+source_id,source_hash,raw_source,status,updated_at) VALUES(?1,?2,?3,?4,?5,\
+'unchanged','now')",
+        params![
+            "phase3-canonical-v1",
+            "marker",
+            "blob",
+            "hash",
+            b"NONEMPTY_BACKUP_BLOB"
+        ],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO object_local_state(object_id,device_id,data_json,updated_at) \
+SELECT id,'backup-device','BACKUP_LOCAL_MARKER','now' FROM objects LIMIT 1",
+        [],
+    )
+    .unwrap();
     let source_item: (Vec<u8>, String) = conn
         .query_row(
             "SELECT raw_source, result_json FROM canonical_migration_items WHERE source_id='blob'",

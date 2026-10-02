@@ -45,25 +45,35 @@ const DOWNLOAD_MAX_ATTEMPTS: usize = 8;
 #[cfg(windows)]
 const WHISPER_RUNTIME_VERSION: &str = "1.9.3";
 #[cfg(windows)]
-const RUNTIME_MANIFEST_URL: &str = "https://github.com/makekosmos/local-ai-runtimes/releases/download/runtime-v1.9.3/runtimes.manifest.json";
+const RUNTIME_MANIFEST_URL: &str = concat!(
+    "https://github.com/makekosmos/local-ai-runtimes/releases/download/runtime-v1",
+    ".9.3/runtimes.manifest.json"
+);
 #[cfg(windows)]
-const RUNTIME_ENVELOPE_URL: &str = "https://github.com/makekosmos/local-ai-runtimes/releases/download/runtime-v1.9.3/runtimes.manifest.envelope.json";
+const RUNTIME_ENVELOPE_URL: &str = concat!(
+    "https://github.com/makekosmos/local-ai-runtimes/releases/download/runtime-v1",
+    ".9.3/runtimes.manifest.envelope.json"
+);
 #[cfg(windows)]
 const RUNTIME_KEY_ID: &str = "runtime-prod-2026-1";
 #[cfg(windows)]
 const RUNTIME_PUBLIC_KEY_B64: &str = "ukKkVVFmhQ7wzR4ZvM3Iea83x2ptrE/+2HxHBKOk6Cc=";
 
 #[cfg(windows)]
-const WHISPER_CPP_CPU_ZIP_URL: &str =
-    "https://github.com/makekosmos/local-ai-runtimes/releases/download/runtime-v1.9.3/whisper-cpu-bin-x64-v1.9.3.zip";
+const WHISPER_CPP_CPU_ZIP_URL: &str = concat!(
+    "https://github.com/makekosmos/local-ai-runtimes/releases/download/runtime-v1",
+    ".9.3/whisper-cpu-bin-x64-v1.9.3.zip"
+);
 #[cfg(windows)]
 const WHISPER_CPP_CPU_ZIP_SHA256: &str =
     "2464c8ecdc070ccdba079b363943e979708443180fd6dda12d7d0801beeb5954";
 #[cfg(windows)]
 const WHISPER_CPP_CPU_ZIP_SIZE: u64 = 1_436_012;
 #[cfg(windows)]
-const WHISPER_CPP_VULKAN_ZIP_URL: &str =
-    "https://github.com/makekosmos/local-ai-runtimes/releases/download/runtime-v1.9.3/whisper-vulkan-bin-x64-v1.9.3.zip";
+const WHISPER_CPP_VULKAN_ZIP_URL: &str = concat!(
+    "https://github.com/makekosmos/local-ai-runtimes/releases/download/runtime-v1",
+    ".9.3/whisper-vulkan-bin-x64-v1.9.3.zip"
+);
 #[cfg(windows)]
 const WHISPER_CPP_VULKAN_ZIP_SHA256: &str =
     "520ab6225f6b0afd2e8dcbc67e196a934df44bc7932f86cc2c29796a996c48f4";
@@ -946,9 +956,10 @@ async fn download_file(
             let chunk = match response.chunk().await {
                 Ok(chunk) => chunk,
                 Err(e) => {
-                    let message = format!(
-                        "{request_url}: stream read failed after {downloaded_bytes} bytes ({content_type}, encoding {content_encoding}): {e}"
-                    );
+                    let message = format!(concat!(
+                        "{request_url}: stream read failed after {downloaded_bytes} bytes (",
+                        "{content_type}, encoding {content_encoding}): {e}"
+                    ));
                     tracing::warn!(phase, attempt, error = %message, "dictation local model download chunk failed");
                     last_error = Some(message);
                     break;

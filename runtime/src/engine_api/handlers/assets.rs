@@ -108,7 +108,7 @@ fn asset_response(asset: &str, bytes: Vec<u8>) -> HttpResponse {
         // SSE event stream are same-origin fetches.
         response = response.header(
             "content-security-policy",
-            "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+            concat!("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' ","data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri ","'none'; frame-ancestors 'none'"),
         );
     }
     response

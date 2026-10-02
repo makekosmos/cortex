@@ -80,7 +80,16 @@ fn fresh_registry_installs_all_exact_definitions_and_aliases() {
 #[test]
 fn mismatch_is_read_only_and_structured() {
     let conn = db();
-    conn.execute("INSERT INTO object_types(id,name,schema_json,ui_schema_json,created_at,updated_at,system_locked,owner_kind,owner_id,current_version,status,base_type_id) VALUES('com.kosmos.note','wrong','{}','{}','x','x',1,'core','com.kosmos.core','1.0.0','active',NULL)", []).unwrap();
+    conn.execute(
+        concat!(
+            "INSERT INTO object_types(id,name,schema_json,ui_schema_json,created_at,",
+            "updated_at,system_locked,owner_kind,owner_id,current_version,status,",
+            "base_type_id) VALUES('com.kosmos.note','wrong','{}','{}','x','x',1,'core',",
+            "'com.kosmos.core','1.0.0','active',NULL)"
+        ),
+        [],
+    )
+    .unwrap();
     let err = preflight_registry(&conn).unwrap_err();
     assert!(
         matches!(err, RegistryError::CanonicalConflict { ref type_id } if type_id == "com.kosmos.note")
@@ -97,9 +106,35 @@ fn mismatch_is_read_only_and_structured() {
 fn generated_legacy_definition_at_canonical_id_is_promoted_losslessly() {
     let conn = db();
     let (legacy_version, legacy_hash) = legacy_compatibility_version("{}", "{}").unwrap();
-    conn.execute("INSERT INTO object_types(id,name,schema_json,ui_schema_json,created_at,updated_at,system_locked,owner_kind,owner_id,current_version,status,base_type_id) VALUES('com.kosmos.note','Заметка','{}','{}','legacy-created','legacy-updated',1,'system',NULL,?1,'active',NULL)", [&legacy_version]).unwrap();
-    conn.execute("INSERT INTO object_type_versions(type_id,version,schema_json,ui_schema_json,content_contract_json,relations_json,sync_policy_json,schema_hash,created_at) VALUES('com.kosmos.note',?1,'{}','{}','{}','[]','{}',?2,'legacy-created')", [&legacy_version, &legacy_hash]).unwrap();
-    conn.execute("INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,created_at,updated_at,deleted_at) VALUES('note-1','com.kosmos.note',?1,'Legacy note','{}','{}','created','updated',NULL)", [&legacy_version]).unwrap();
+    conn.execute(
+        concat!(
+            "INSERT INTO object_types(id,name,schema_json,ui_schema_json,created_at,",
+            "updated_at,system_locked,owner_kind,owner_id,current_version,status,",
+            "base_type_id) VALUES('com.kosmos.note','Заметка','{}','{}','legacy-created',",
+            "'legacy-updated',1,'system',NULL,?1,'active',NULL)"
+        ),
+        [&legacy_version],
+    )
+    .unwrap();
+    conn.execute(
+        concat!(
+            "INSERT INTO object_type_versions(type_id,version,schema_json,ui_schema_json,",
+            "content_contract_json,relations_json,sync_policy_json,schema_hash,",
+            "created_at) VALUES('com.kosmos.note',?1,'{}','{}','{}','[]','{}',?2,",
+            "'legacy-created')"
+        ),
+        [&legacy_version, &legacy_hash],
+    )
+    .unwrap();
+    conn.execute(
+        concat!(
+            "INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,",
+            "created_at,updated_at,deleted_at) VALUES('note-1','com.kosmos.note',?1,",
+            "'Legacy note','{}','{}','created','updated',NULL)"
+        ),
+        [&legacy_version],
+    )
+    .unwrap();
 
     let plan = preflight_registry(&conn).unwrap();
     apply_registry(&conn, &plan).unwrap();
@@ -132,7 +167,15 @@ fn generated_legacy_definition_at_canonical_id_is_promoted_losslessly() {
         2
     );
     assert_eq!(
-        conn.query_row("SELECT count(*) FROM legacy_type_definition_archive WHERE legacy_type_id='com.kosmos.note'", [], |row| row.get::<_, i64>(0)).unwrap(),
+        conn.query_row(
+            concat!(
+                "SELECT count(*) FROM legacy_type_definition_archive WHERE ",
+                "legacy_type_id='com.kosmos.note'"
+            ),
+            [],
+            |row| row.get::<_, i64>(0)
+        )
+        .unwrap(),
         1
     );
 }
@@ -140,8 +183,26 @@ fn generated_legacy_definition_at_canonical_id_is_promoted_losslessly() {
 #[test]
 fn legacy_archive_is_lossless_and_late_failure_rolls_back() {
     let conn = db();
-    conn.execute("INSERT INTO object_types(id,name,schema_json,ui_schema_json,created_at,updated_at,system_locked,owner_kind,owner_id,current_version,status,base_type_id) VALUES('note_obj','Legacy','{}','{}','created','updated',0,'package','p','2.0.0','active',NULL)", []).unwrap();
-    conn.execute("INSERT INTO object_type_versions(type_id,version,schema_json,ui_schema_json,content_contract_json,relations_json,sync_policy_json,schema_hash,created_at) VALUES('note_obj','2.0.0','{}','{}','{}','[]','{}','legacy-hash','v-created')", []).unwrap();
+    conn.execute(
+        concat!(
+            "INSERT INTO object_types(id,name,schema_json,ui_schema_json,created_at,",
+            "updated_at,system_locked,owner_kind,owner_id,current_version,status,",
+            "base_type_id) VALUES('note_obj','Legacy','{}','{}','created','updated',0,",
+            "'package','p','2.0.0','active',NULL)"
+        ),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        concat!(
+            "INSERT INTO object_type_versions(type_id,version,schema_json,ui_schema_json,",
+            "content_contract_json,relations_json,sync_policy_json,schema_hash,",
+            "created_at) VALUES('note_obj','2.0.0','{}','{}','{}','[]','{}',",
+            "'legacy-hash','v-created')"
+        ),
+        [],
+    )
+    .unwrap();
     let plan = preflight_registry(&conn).unwrap();
     let err = apply_registry_with_failure(&conn, &plan, Some(1)).unwrap_err();
     assert!(matches!(err, RegistryError::InjectedFailure));
@@ -165,7 +226,16 @@ fn legacy_archive_is_lossless_and_late_failure_rolls_back() {
     );
     let report = apply_registry(&conn, &plan).unwrap();
     assert_eq!(report.archived, 1);
-    let (summary, versions, hash): (String, String, String) = conn.query_row("SELECT summary_json,versions_json,source_hash FROM legacy_type_definition_archive WHERE legacy_type_id='note_obj'", [], |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?))).unwrap();
+    let (summary, versions, hash): (String, String, String) = conn
+        .query_row(
+            concat!(
+                "SELECT summary_json,versions_json,source_hash FROM ",
+                "legacy_type_definition_archive WHERE legacy_type_id='note_obj'"
+            ),
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .unwrap();
     assert!(summary.contains("Legacy"));
     assert!(versions.contains("2.0.0"));
     assert_eq!(hash.len(), 64);
@@ -194,7 +264,10 @@ fn init_schema_installs_added_canonical_versions() {
     conn.execute("DELETE FROM object_type_versions WHERE version='1.1.0'", [])
         .unwrap();
     conn.execute(
-        "UPDATE object_types SET current_version='1.0.0' WHERE id IN ('com.kosmos.task','com.kosmos.project')",
+        concat!(
+            "UPDATE object_types SET current_version='1.0.0' WHERE id IN (",
+            "'com.kosmos.task','com.kosmos.project')"
+        ),
         [],
     )
     .unwrap();
@@ -222,7 +295,10 @@ fn init_schema_installs_added_canonical_versions() {
     }
     // Objects written under 1.0.0 keep their version and still resolve.
     let mut stmt = conn
-        .prepare("SELECT version FROM object_type_versions WHERE type_id='com.kosmos.task' ORDER BY version")
+        .prepare(concat!(
+            "SELECT version FROM object_type_versions WHERE type_id='com.kosmos.task' ",
+            "ORDER BY version"
+        ))
         .unwrap();
     let versions: Vec<String> = stmt
         .query_map([], |r| r.get(0))

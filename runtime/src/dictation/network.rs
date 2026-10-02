@@ -547,7 +547,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "diagnostic probe: needs live internet access to public DoH providers and prints a report instead of asserting"]
+    #[ignore = concat!("diagnostic probe: needs live internet access to public DoH providers and ","prints a report instead of asserting")]
     async fn integration_dns_providers_matrix() {
         // Матрица DoH провайдеров — посмотреть кто реально пускает к Groq
         // из текущей сети. NOT run in CI (требует internet + время).
@@ -593,7 +593,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "diagnostic probe: needs live internet access to public DoH providers and prints a report instead of asserting"]
+    #[ignore = concat!("diagnostic probe: needs live internet access to public DoH providers and ","prints a report instead of asserting")]
     async fn integration_dns_resolve_matrix() {
         // Изолируем DNS-резолв (без HTTPS к Groq). Покажет где валится:
         // на DoH connect или дальше.

@@ -144,9 +144,19 @@ pub fn upsert_sync_profile(
         .map_err(|e| e.to_string())?;
         for rule in rules {
             conn.execute(
-                "INSERT INTO sync_profile_rules(profile_id,resource_kind,resource_id,mode,filter_json) VALUES(?1,?2,?3,?4,?5)",
-                params![profile_id, rule.resource_kind, rule.resource_id, sync_mode_name(rule.mode), validate_filter_json(&rule.filter_json)?],
-            ).map_err(|e| e.to_string())?;
+                concat!(
+                    "INSERT INTO sync_profile_rules(profile_id,resource_kind,resource_id,mode,",
+                    "filter_json) VALUES(?1,?2,?3,?4,?5)"
+                ),
+                params![
+                    profile_id,
+                    rule.resource_kind,
+                    rule.resource_id,
+                    sync_mode_name(rule.mode),
+                    validate_filter_json(&rule.filter_json)?
+                ],
+            )
+            .map_err(|e| e.to_string())?;
         }
         load_sync_profile(conn, local_device_id, profile_id)
     })();
@@ -179,7 +189,12 @@ pub fn load_sync_profile(
     if device_id != local_device_id {
         return Err("PROFILE_OWNER_DENIED".into());
     }
-    let mut statement = conn.prepare("SELECT resource_kind,resource_id,mode,filter_json FROM sync_profile_rules WHERE profile_id=?1 ORDER BY resource_kind,resource_id").map_err(|e| e.to_string())?;
+    let mut statement = conn
+        .prepare(concat!(
+            "SELECT resource_kind,resource_id,mode,filter_json FROM sync_profile_rules ",
+            "WHERE profile_id=?1 ORDER BY resource_kind,resource_id"
+        ))
+        .map_err(|e| e.to_string())?;
     let rules = statement
         .query_map([profile_id], |row| {
             Ok(SyncProfileRule {

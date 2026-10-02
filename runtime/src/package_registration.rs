@@ -336,7 +336,14 @@ mod tests {
     use tempfile::tempdir;
 
     fn manifest() -> ManifestV2 {
-        let raw = r#"{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.0.0","kind":"app","engine_api":"*","entrypoint":"index.html","publisher":"kosmos","targets":[{"runtime":"standalone","os":["linux"]}],"data":{"access":[],"defines":[{"type":"com.kosmos.demo.note","version":"1.0.0","schema":"schema.json","content_contract":"content.json","relations":"relations.json"}],"mappings":[]}}"#;
+        let raw = concat!(
+            r#"{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.0.0","#,
+            r#""kind":"app","engine_api":"*","entrypoint":"index.html","#,
+            r#""publisher":"kosmos","targets":[{"runtime":"standalone","os":["linux"]}],"#,
+            r#""data":{"access":[],"defines":[{"type":"com.kosmos.demo.note","#,
+            r#""version":"1.0.0","schema":"schema.json","content_contract":"content.json","#,
+            r#""relations":"relations.json"}],"mappings":[]}}"#
+        );
         let crate::package_manifest::VersionedManifest::V2(m) =
             PackageManifest::parse(raw).unwrap()
         else {

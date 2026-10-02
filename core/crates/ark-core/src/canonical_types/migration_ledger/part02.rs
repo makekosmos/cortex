@@ -1,5 +1,5 @@
 fn load_items(conn: &Connection, contract: &str) -> Result<Vec<LedgerItem>, LedgerError> {
-    let mut s=conn.prepare("SELECT contract_version,source_kind,source_id,source_hash,raw_source,status,canonical_hash,result_json,error_code,attempt,checkpoint,updated_at FROM canonical_migration_items WHERE contract_version=?1 ORDER BY source_kind,source_id").map_err(storage)?;
+    let mut s=conn.prepare(concat!("SELECT contract_version,source_kind,source_id,source_hash,raw_source,status,","canonical_hash,result_json,error_code,attempt,checkpoint,updated_at FROM ","canonical_migration_items WHERE contract_version=?1 ORDER BY source_kind,","source_id")).map_err(storage)?;
     let rows = s
         .query_map([contract], |r| {
             Ok((
@@ -46,7 +46,7 @@ pub fn begin_or_resume(
 ) -> Result<MigrationRun, LedgerError> {
     ensure_ledger_schema(conn)?;
     let inv = inventory_hash(records);
-    let existing: Option<(String,String,String,String,Option<String>)> = conn.query_row("SELECT source_inventory_hash,status,started_at,report_json,completed_at FROM canonical_migration_runs WHERE contract_version=?1", [contract], |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?))).optional().map_err(storage)?;
+    let existing: Option<(String,String,String,String,Option<String>)> = conn.query_row(concat!("SELECT source_inventory_hash,status,started_at,report_json,completed_at ","FROM canonical_migration_runs WHERE contract_version=?1"), [contract], |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?))).optional().map_err(storage)?;
     if let Some((old, status, started, _, completed)) = existing {
         if old != inv {
             return Err(LedgerError::CanonicalConflict {
@@ -67,9 +67,9 @@ pub fn begin_or_resume(
             completed_at: completed,
         });
     }
-    conn.execute("INSERT INTO canonical_migration_runs(contract_version,source_inventory_hash,status,started_at) VALUES(?1,?2,'running',?3)",params![contract,inv,now]).map_err(storage)?;
+    conn.execute(concat!("INSERT INTO canonical_migration_runs(contract_version,source_inventory_hash,","status,started_at) VALUES(?1,?2,'running',?3)"),params![contract,inv,now]).map_err(storage)?;
     for r in records {
-        conn.execute("INSERT INTO canonical_migration_items(contract_version,source_kind,source_id,source_hash,raw_source,status,attempt,checkpoint,updated_at) VALUES(?1,?2,?3,?4,?5,'pending',0,'prepared',?6)",params![contract,r.source_kind.name(),r.source_id,r.source_hash,r.raw_source,now]).map_err(storage)?;
+        conn.execute(concat!("INSERT INTO canonical_migration_items(contract_version,source_kind,","source_id,source_hash,raw_source,status,attempt,checkpoint,updated_at) ","VALUES(?1,?2,?3,?4,?5,'pending',0,'prepared',?6)"),params![contract,r.source_kind.name(),r.source_id,r.source_hash,r.raw_source,now]).map_err(storage)?;
     }
     Ok(MigrationRun {
         contract_version: contract.into(),
@@ -132,7 +132,7 @@ pub fn retry_item(
 ) -> Result<i64, LedgerError> {
     let (status, attempt): (String, i64) = conn
         .query_row(
-            "SELECT status,attempt FROM canonical_migration_items WHERE contract_version=?1 AND source_kind=?2 AND source_id=?3",
+            concat!("SELECT status,attempt FROM canonical_migration_items WHERE ","contract_version=?1 AND source_kind=?2 AND source_id=?3"),
             params![contract, kind, id],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
@@ -144,7 +144,7 @@ pub fn retry_item(
     }
     let next = attempt + 1;
     conn.execute(
-        "UPDATE canonical_migration_items SET status='pending',checkpoint='prepared',error_code=NULL,attempt=?4,updated_at=?5 WHERE contract_version=?1 AND source_kind=?2 AND source_id=?3",
+        concat!("UPDATE canonical_migration_items SET status='pending',checkpoint='prepared',","error_code=NULL,attempt=?4,updated_at=?5 WHERE contract_version=?1 AND ","source_kind=?2 AND source_id=?3"),
         params![contract, kind, id, next, now],
     )
     .map_err(storage)?;
@@ -235,7 +235,7 @@ pub fn transition_item(conn: &Connection, t: ItemTransition<'_>) -> Result<(), L
         error_code,
         now,
     } = t;
-    let current: (String,String,i64)=conn.query_row("SELECT status,checkpoint,attempt FROM canonical_migration_items WHERE contract_version=?1 AND source_kind=?2 AND source_id=?3",params![contract,kind,id],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).map_err(storage)?;
+    let current: (String,String,i64)=conn.query_row(concat!("SELECT status,checkpoint,attempt FROM canonical_migration_items WHERE ","contract_version=?1 AND source_kind=?2 AND source_id=?3"),params![contract,kind,id],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).map_err(storage)?;
     if current.0 != "pending" && current.1 == "committed" {
         return Err(LedgerError::InvariantViolation(
             "terminal_regression".into(),
@@ -244,7 +244,7 @@ pub fn transition_item(conn: &Connection, t: ItemTransition<'_>) -> Result<(), L
     if checkpoint == ItemCheckpoint::Committed && matches!(status, ItemStatus::Pending) {
         return Err(LedgerError::InvariantViolation("illegal_transition".into()));
     }
-    conn.execute("UPDATE canonical_migration_items SET status=?4,checkpoint=?5,canonical_hash=?6,result_json=?7,error_code=?8,attempt=?9,updated_at=?10 WHERE contract_version=?1 AND source_kind=?2 AND source_id=?3",params![contract,kind,id,status.as_str(),checkpoint.as_str(),canonical_hash,result_json,error_code,current.2+if current.0=="pending"{1}else{0},now]).map_err(storage)?;
+    conn.execute(concat!("UPDATE canonical_migration_items SET status=?4,checkpoint=?5,","canonical_hash=?6,result_json=?7,error_code=?8,attempt=?9,updated_at=?10 ","WHERE contract_version=?1 AND source_kind=?2 AND source_id=?3"),params![contract,kind,id,status.as_str(),checkpoint.as_str(),canonical_hash,result_json,error_code,current.2+if current.0=="pending"{1}else{0},now]).map_err(storage)?;
     Ok(())
 }
 
@@ -254,13 +254,13 @@ pub fn complete_run(
     report_json: &str,
     now: &str,
 ) -> Result<(), LedgerError> {
-    let pending:i64=conn.query_row("SELECT COUNT(*) FROM canonical_migration_items WHERE contract_version=?1 AND checkpoint!='committed'",[contract],|r|r.get(0)).map_err(storage)?;
+    let pending:i64=conn.query_row(concat!("SELECT COUNT(*) FROM canonical_migration_items WHERE contract_version=?1 ","AND checkpoint!='committed'"),[contract],|r|r.get(0)).map_err(storage)?;
     if pending != 0 {
         return Err(LedgerError::InvariantViolation(
             "items_not_committed".into(),
         ));
     }
-    conn.execute("UPDATE canonical_migration_runs SET status='completed',report_json=?2,completed_at=?3 WHERE contract_version=?1",params![contract,report_json,now]).map_err(storage)?;
+    conn.execute(concat!("UPDATE canonical_migration_runs SET status='completed',report_json=?2,","completed_at=?3 WHERE contract_version=?1"),params![contract,report_json,now]).map_err(storage)?;
     Ok(())
 }
 

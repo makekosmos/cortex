@@ -2,7 +2,7 @@
 pub fn upsert_object(conn: &Connection, object: &ArkObject) -> Result<(), String> {
     let registry_ready: bool = conn
         .query_row(
-            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='object_type_versions')",
+            concat!("SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND ","name='object_type_versions')"),
             [],
             |row| row.get::<_, i64>(0),
         )

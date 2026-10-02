@@ -97,7 +97,7 @@ pub fn asset_sources(
         validate_object(&object)?;
         if object.type_id == IMAGE {
             let local: Option<String> = conn.query_row(
-                "SELECT json_extract(data_json, '$.image.sourcePath') FROM object_local_state WHERE object_id=?1 ORDER BY device_id LIMIT 1", params![id], |r| r.get(0)).optional().map_err(|_| AssetSourceError::new("storage"))?.flatten();
+                concat!("SELECT json_extract(data_json, '$.image.sourcePath') FROM ","object_local_state WHERE object_id=?1 ORDER BY device_id LIMIT 1"), params![id], |r| r.get(0)).optional().map_err(|_| AssetSourceError::new("storage"))?.flatten();
             if let Some(source_ref) = local {
                 out.push(AssetSource {
                     object_id: id.clone(),
@@ -108,7 +108,7 @@ pub fn asset_sources(
                 continue;
             }
             let quarantine: Option<String> = conn.query_row(
-                "SELECT fields_json FROM object_migration_quarantine WHERE object_id=?1 ORDER BY contract_version LIMIT 1", params![id], |r| r.get(0)).optional().map_err(|_| AssetSourceError::new("storage"))?.flatten();
+                concat!("SELECT fields_json FROM object_migration_quarantine WHERE object_id=?1 ","ORDER BY contract_version LIMIT 1"), params![id], |r| r.get(0)).optional().map_err(|_| AssetSourceError::new("storage"))?.flatten();
             if let Some(fields) = quarantine {
                 let parsed_fields = serde_json::from_str::<Value>(&fields)
                     .map_err(|_| AssetSourceError::new("malformed_source"))?;
@@ -128,7 +128,7 @@ pub fn asset_sources(
         }
         let local_data: Option<String> = conn
             .query_row(
-                "SELECT data_json FROM object_local_state WHERE object_id=?1 ORDER BY device_id LIMIT 1",
+                concat!("SELECT data_json FROM object_local_state WHERE object_id=?1 ORDER BY ","device_id LIMIT 1"),
                 params![id],
                 |r| r.get(0),
             )

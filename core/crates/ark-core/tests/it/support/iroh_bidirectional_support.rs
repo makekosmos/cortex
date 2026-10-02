@@ -212,7 +212,7 @@ fn set_recipient_transport_key(
     let revocation_epoch = (status == "revoked").then_some(epoch as i64);
     guard
         .execute(
-            "UPDATE authorized_nodes SET transport_public_key = ?1, status = ?2, grant_epoch = ?3, revoked_at = ?4, revocation_epoch = ?5 WHERE node_id = ?6",
+            concat!("UPDATE authorized_nodes SET transport_public_key = ?1, status = ?2, ","grant_epoch = ?3, revoked_at = ?4, revocation_epoch = ?5 WHERE node_id = ?6"),
             rusqlite::params![transport_key, status, epoch as i64, revoked_at, revocation_epoch, "device-A"],
         )
         .unwrap();

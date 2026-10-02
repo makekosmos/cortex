@@ -13,7 +13,7 @@ fn archive_and_promote(
             })
         }
         None => {
-            conn.execute("INSERT INTO legacy_type_definition_archive(contract_version,legacy_type_id,canonical_type_id,summary_json,versions_json,inbound_aliases_json,source_hash,archived_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8)", params![CONTRACT_VERSION, evidence.legacy_type_id, evidence.canonical_type_id, evidence.summary_json, evidence.versions_json, evidence.inbound_aliases_json, evidence.source_hash, evidence.archived_at]).map_err(storage)?;
+            conn.execute(concat!("INSERT INTO legacy_type_definition_archive(contract_version,legacy_type_id,","canonical_type_id,summary_json,versions_json,inbound_aliases_json,","source_hash,archived_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8)"), params![CONTRACT_VERSION, evidence.legacy_type_id, evidence.canonical_type_id, evidence.summary_json, evidence.versions_json, evidence.inbound_aliases_json, evidence.source_hash, evidence.archived_at]).map_err(storage)?;
         }
     }
     let object_count: i64 = conn
@@ -96,7 +96,7 @@ fn apply_inner(
                 }
                 Some(_) => {}
                 None => {
-                    conn.execute("INSERT INTO object_type_aliases(alias,canonical_type_id,created_at) VALUES(?1,?2,?3)", params![alias.alias, registration.type_id, alias.created_at]).map_err(storage)?;
+                    conn.execute(concat!("INSERT INTO object_type_aliases(alias,canonical_type_id,created_at) VALUES(","?1,?2,?3)"), params![alias.alias, registration.type_id, alias.created_at]).map_err(storage)?;
                 }
             }
         }

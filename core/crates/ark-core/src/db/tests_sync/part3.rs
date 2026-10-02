@@ -205,7 +205,7 @@
                 err.contains("integrity")
                     || err.contains("corruption")
                     || err.contains("malformed"),
-                "РѕС€РёР±РєР° РґРѕР»Р¶РЅР° СѓРїРѕРјРёРЅР°С‚СЊ integrity/corruption/malformed, РїРѕР»СѓС‡РёР»Рё: {err}"
+                concat!("РѕС€РёР±РєР° РґРѕР»Р¶РЅР° СѓРїРѕРјРёРЅР°С‚СЊ integrity/corruption/malformed,"," РїРѕР»СѓС‡РёР»Рё: {err}")
             );
         }
         // else: open_db СѓР¶Рµ fail'РёР» вЂ” С‚РѕР¶Рµ acceptable fail-loud path.

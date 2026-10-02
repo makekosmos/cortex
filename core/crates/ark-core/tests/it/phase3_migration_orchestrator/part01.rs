@@ -13,12 +13,12 @@ fn db() -> Connection {
 
 fn legacy(conn: &Connection, id: &str, alias: &str, props: serde_json::Value) {
     conn.execute(
-        "INSERT OR IGNORE INTO object_types(id,name,schema_json,ui_schema_json,created_at,updated_at) VALUES(?1,'legacy','{}','{}','c','u')",
+        concat!("INSERT OR IGNORE INTO object_types(id,name,schema_json,ui_schema_json,","created_at,updated_at) VALUES(?1,'legacy','{}','{}','c','u')"),
         [alias],
     ).unwrap();
-    conn.execute("UPDATE object_types SET owner_kind='package',owner_id='fixture',current_version='0.0.0-legacy',status='active',system_locked=0 WHERE id=?1", [alias]).unwrap();
-    conn.execute("INSERT OR IGNORE INTO object_type_versions(type_id,version,schema_json,ui_schema_json,content_contract_json,relations_json,sync_policy_json,schema_hash,created_at) VALUES(?1,'0.0.0-legacy','{}','{}','{}','[]','{}','legacy-hash','c')", [alias]).unwrap();
-    conn.execute("INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,created_at,updated_at,deleted_at) VALUES(?1,?2,'0.0.0-legacy',?1,'{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\"}]}',?3,'2026-01-01T00:00:00Z','2026-01-02T00:00:00Z',NULL)", params![id, alias, serde_json::to_string(&props).unwrap()]).unwrap();
+    conn.execute(concat!("UPDATE object_types SET owner_kind='package',owner_id='fixture',","current_version='0.0.0-legacy',status='active',system_locked=0 WHERE id=?1"), [alias]).unwrap();
+    conn.execute(concat!("INSERT OR IGNORE INTO object_type_versions(type_id,version,schema_json,","ui_schema_json,content_contract_json,relations_json,sync_policy_json,","schema_hash,created_at) VALUES(?1,'0.0.0-legacy','{}','{}','{}','[]','{}',","'legacy-hash','c')"), [alias]).unwrap();
+    conn.execute(concat!("INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,","created_at,updated_at,deleted_at) VALUES(?1,?2,'0.0.0-legacy',?1,","'{\"type\":\"doc\",\"content\":[{\"type\":\"paragraph\"}]}',?3,","'2026-01-01T00:00:00Z','2026-01-02T00:00:00Z',NULL)"), params![id, alias, serde_json::to_string(&props).unwrap()]).unwrap();
 }
 
 fn table_exists(conn: &Connection, table: &str) -> bool {
@@ -80,11 +80,11 @@ fn populated_fixture_reaches_real_orchestrator_and_preserves_source_only_rows() 
          CREATE TABLE headings (id TEXT PRIMARY KEY, title TEXT NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0, project_id TEXT NOT NULL);",
     )
     .unwrap();
-    conn.execute("INSERT INTO todos(id,title,notes,priority,project_id,tag_ids,checklist_items,created_at) VALUES('todo-native','Todo','n',2,NULL,'[]','[]','2026-01-01T00:00:00Z')", []).unwrap();
-    conn.execute("INSERT INTO projects(id,title,notes,status,color_tag,created_at) VALUES('project-native','Project','n','active','green','2026-01-01T00:00:00Z')", []).unwrap();
-    conn.execute("INSERT INTO areas(id,title,created_at) VALUES('area-source','Area','2026-01-01T00:00:00Z')", []).unwrap();
-    conn.execute("INSERT INTO headings(id,title,project_id) VALUES('heading-source','Heading','project-native')", []).unwrap();
-    conn.execute("INSERT INTO tags(id,title,color,created_at) VALUES('tag-native','Tag','blue','2026-01-01T00:00:00Z')", []).unwrap();
+    conn.execute(concat!("INSERT INTO todos(id,title,notes,priority,project_id,tag_ids,","checklist_items,created_at) VALUES('todo-native','Todo','n',2,NULL,'[]',","'[]','2026-01-01T00:00:00Z')"), []).unwrap();
+    conn.execute(concat!("INSERT INTO projects(id,title,notes,status,color_tag,created_at) VALUES(","'project-native','Project','n','active','green','2026-01-01T00:00:00Z')"), []).unwrap();
+    conn.execute(concat!("INSERT INTO areas(id,title,created_at) VALUES('area-source','Area',","'2026-01-01T00:00:00Z')"), []).unwrap();
+    conn.execute(concat!("INSERT INTO headings(id,title,project_id) VALUES('heading-source','Heading',","'project-native')"), []).unwrap();
+    conn.execute(concat!("INSERT INTO tags(id,title,color,created_at) VALUES('tag-native','Tag',","'blue','2026-01-01T00:00:00Z')"), []).unwrap();
     let report = migrate_phase3(&conn).unwrap();
     assert_eq!(
         (report.migrated, report.quarantined, report.blocked.len()),
@@ -128,7 +128,7 @@ fn populated_fixture_reaches_real_orchestrator_and_preserves_source_only_rows() 
         14
     );
     let archive: Vec<(String, String, String, String, String, String, String)> = conn
-        .prepare("SELECT legacy_type_id,canonical_type_id,summary_json,versions_json,inbound_aliases_json,source_hash,archived_at FROM legacy_type_definition_archive ORDER BY legacy_type_id")
+        .prepare(concat!("SELECT legacy_type_id,canonical_type_id,summary_json,versions_json,","inbound_aliases_json,source_hash,archived_at FROM ","legacy_type_definition_archive ORDER BY legacy_type_id"))
         .unwrap()
         .query_map([], |r| {
             Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?))
@@ -167,7 +167,7 @@ fn populated_fixture_reaches_real_orchestrator_and_preserves_source_only_rows() 
     let rerun = migrate_phase3(&conn).unwrap();
     assert_eq!(rerun.unchanged, 14);
     let archive_after: Vec<(String, String, String, String, String, String, String)> = conn
-        .prepare("SELECT legacy_type_id,canonical_type_id,summary_json,versions_json,inbound_aliases_json,source_hash,archived_at FROM legacy_type_definition_archive ORDER BY legacy_type_id")
+        .prepare(concat!("SELECT legacy_type_id,canonical_type_id,summary_json,versions_json,","inbound_aliases_json,source_hash,archived_at FROM ","legacy_type_definition_archive ORDER BY legacy_type_id"))
         .unwrap()
         .query_map([], |r| {
             Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?))

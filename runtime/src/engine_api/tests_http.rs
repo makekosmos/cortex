@@ -683,7 +683,7 @@
             .await
             .expect("ws register");
         let _ = socket.next().await.expect("ws register response");
-        let http_register = raw_http(http_port, &request(&token, "POST", "/v1/rpc", r#"{"operation":"commands.register","commands":[{"id":"http.command","title":"HTTP","category":"action"}]}"#)).await;
+        let http_register = raw_http(http_port, &request(&token, "POST", "/v1/rpc", concat!(r#"{"operation":"commands.register","commands":[{"id":"http.command","#,r#""title":"HTTP","category":"action"}]}"#))).await;
         assert!(response_json(&http_register)["ok"]
             .as_bool()
             .unwrap_or(false));
@@ -756,7 +756,7 @@
                 &token,
                 "POST",
                 "/v1/rpc",
-                r#"{"_req_id":"type-write-1","operation":"upsert_object_type","object_type":{"id":"note","name":"Note","schemaJson":"{}","uiSchemaJson":"{}","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z","systemLocked":false},"device_id":"socket-test"}"#,
+                concat!(r#"{"_req_id":"type-write-1","operation":"upsert_object_type","#,r#""object_type":{"id":"note","name":"Note","schemaJson":"{}","#,r#""uiSchemaJson":"{}","createdAt":"2026-01-01T00:00:00Z","#,r#""updatedAt":"2026-01-01T00:00:00Z","systemLocked":false},"#,r#""device_id":"socket-test"}"#),
             ),
         )
         .await;
@@ -770,7 +770,7 @@
                 &token,
                 "POST",
                 "/v1/rpc",
-                r#"{"_req_id":"write-1","operation":"upsert_object","object":{"id":"direct-dispatch-write","typeId":"note","title":"socket","contentJson":{},"propsJson":{},"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z","deletedAt":null},"device_id":"socket-test"}"#,
+                concat!(r#"{"_req_id":"write-1","operation":"upsert_object","#,r#""object":{"id":"direct-dispatch-write","typeId":"note","title":"socket","#,r#""contentJson":{},"propsJson":{},"createdAt":"2026-01-01T00:00:00Z","#,r#""updatedAt":"2026-01-01T00:00:00Z","deletedAt":null},"#,r#""device_id":"socket-test"}"#),
             ),
         )
         .await;
@@ -785,7 +785,7 @@
                 &token,
                 "POST",
                 "/v1/rpc",
-                r#"{"_req_id":"invoke-1","operation":"commands.invoke","id":"ws.command","params":{"source":"http"}}"#,
+                concat!(r#"{"_req_id":"invoke-1","operation":"commands.invoke","id":"ws.command","#,r#""params":{"source":"http"}}"#),
             ),
         )
         .await;
@@ -1111,7 +1111,7 @@
         assert_eq!(body["data"]["size_bytes"], 7);
 
         let stat = format!(
-            r#"{{"operation":"stat","root_id":"{root_id}","app_id":"com.kosmos.agenda","key":"attachments/task-1.bin"}}"#
+            concat!(r#"{{"operation":"stat","root_id":"{root_id}","app_id":"com.kosmos.agenda","#,r#""key":"attachments/task-1.bin"}}"#)
         );
         let body = response_json(
             &raw_http(
@@ -1123,7 +1123,7 @@
         assert_eq!(body["data"]["size_bytes"], 7);
 
         let read = format!(
-            r#"{{"operation":"read","root_id":"{root_id}","app_id":"com.kosmos.agenda","key":"attachments/task-1.bin"}}"#
+            concat!(r#"{{"operation":"read","root_id":"{root_id}","app_id":"com.kosmos.agenda","#,r#""key":"attachments/task-1.bin"}}"#)
         );
         let body = response_json(
             &raw_http(
@@ -1144,7 +1144,7 @@
         );
 
         let traversal = format!(
-            r#"{{"operation":"read","root_id":"{root_id}","app_id":"com.kosmos.agenda","key":"../escape"}}"#
+            concat!(r#"{{"operation":"read","root_id":"{root_id}","app_id":"com.kosmos.agenda","#,r#""key":"../escape"}}"#)
         );
         let body = response_json(
             &raw_http(
@@ -1157,7 +1157,7 @@
         assert_eq!(body["error"], "invalid-key");
 
         let delete = format!(
-            r#"{{"operation":"delete","root_id":"{root_id}","app_id":"com.kosmos.agenda","key":"attachments/task-1.bin"}}"#
+            concat!(r#"{{"operation":"delete","root_id":"{root_id}","app_id":"com.kosmos.agenda","#,r#""key":"attachments/task-1.bin"}}"#)
         );
         let body = response_json(
             &raw_http(
@@ -1197,7 +1197,7 @@
             &token,
             "POST",
             "/v1/user-data",
-            r#"{"operation":"read","root_id":"00000000-0000-4000-8000-0000000000aa","app_id":"app","key":"a.bin"}"#,
+            concat!(r#"{"operation":"read","root_id":"00000000-0000-4000-8000-0000000000aa","#,r#""app_id":"app","key":"a.bin"}"#),
             "desktop-host",
             "1.0.0",
         );
@@ -1414,7 +1414,7 @@
             .replace(
                 "Content-Length:",
                 &format!(
-                    "X-Kosmos-Client-Class: {class}\r\nX-Kosmos-Client-Version: {version}\r\nContent-Length:"
+                    concat!("X-Kosmos-Client-Class: {class}\r\nX-Kosmos-Client-Version: ","{version}\r\nContent-Length:")
                 ),
             )
     }

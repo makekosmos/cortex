@@ -855,7 +855,13 @@ impl UsageTrackerDiagnostics {
             u64::from(probe_diagnostics.process_path_queries),
         );
         eprintln!(
-            "[usage-tracker] diagnostics usage_tracker.tick_ms={} usage_tracker.tick_ms.p95={} usage_tracker.active_sessions={} usage_tracker.enum_windows_calls_per_tick={} usage_tracker.process_path_queries_per_tick={} usage_tracker.visible_window_count={}",
+            concat!(
+                "[usage-tracker] diagnostics usage_tracker.tick_ms={} ",
+                "usage_tracker.tick_ms.p95={} usage_tracker.active_sessions={} ",
+                "usage_tracker.enum_windows_calls_per_tick={} ",
+                "usage_tracker.process_path_queries_per_tick={} ",
+                "usage_tracker.visible_window_count={}"
+            ),
             tick_ms,
             p95,
             active_sessions,

@@ -156,7 +156,10 @@ releaseDate: '2026-06-18T12:18:15.656Z'
 
     #[test]
     fn handles_multiple_file_entries_and_keeps_the_first() {
-        let text = "version: 1.2.0\nfiles:\n  - url: Mundus-Setup-1.2.0.exe\n    sha512: AAA\n    size: 10\n  - url: extra.blockmap\n    sha512: BBB\n    size: 20\n";
+        let text = concat!(
+            "version: 1.2.0\nfiles:\n  - url: Mundus-Setup-1.2.0.exe\n    sha512: AAA\n  ",
+            "  size: 10\n  - url: extra.blockmap\n    sha512: BBB\n    size: 20\n"
+        );
         let manifest = parse_latest_yml(text).unwrap();
         assert_eq!(manifest.files.len(), 2);
         assert_eq!(
@@ -179,7 +182,10 @@ releaseDate: '2026-06-18T12:18:15.656Z'
 
     #[test]
     fn ignores_comments_and_blank_lines() {
-        let text = "# channel file\nversion: 2.0.0\n\nfiles:\n  # single asset\n  - url: a.exe\n    sha512: c\n    size: 5\n";
+        let text = concat!(
+            "# channel file\nversion: 2.0.0\n\nfiles:\n  # single asset\n  - url: ",
+            "a.exe\n    sha512: c\n    size: 5\n"
+        );
         let manifest = parse_latest_yml(text).unwrap();
         assert_eq!(manifest.version, "2.0.0");
         assert_eq!(manifest.primary_file().unwrap().size, 5);

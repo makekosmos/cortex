@@ -644,9 +644,9 @@ impl AgentsService {
 
     fn list_sessions(&self, include_archived: bool) -> Result<Vec<Session>, String> {
         let sql = if include_archived {
-            "SELECT id,project_id,title,prompt,mode,model,status,branch,worktree_path,base_commit,codex_thread_id,active_turn_id,created_at,updated_at,archived_at FROM sessions ORDER BY updated_at DESC"
+            concat!("SELECT id,project_id,title,prompt,mode,model,status,branch,worktree_path,","base_commit,codex_thread_id,active_turn_id,created_at,updated_at,","archived_at FROM sessions ORDER BY updated_at DESC")
         } else {
-            "SELECT id,project_id,title,prompt,mode,model,status,branch,worktree_path,base_commit,codex_thread_id,active_turn_id,created_at,updated_at,archived_at FROM sessions WHERE archived_at IS NULL ORDER BY updated_at DESC"
+            concat!("SELECT id,project_id,title,prompt,mode,model,status,branch,worktree_path,","base_commit,codex_thread_id,active_turn_id,created_at,updated_at,","archived_at FROM sessions WHERE archived_at IS NULL ORDER BY updated_at DESC")
         };
         let db = self.db();
         let mut statement = db.prepare(sql).map_err(|e| e.to_string())?;
@@ -659,7 +659,7 @@ impl AgentsService {
 
     fn get_session(&self, id: &str) -> Result<Session, String> {
         self.db().query_row(
-            "SELECT id,project_id,title,prompt,mode,model,status,branch,worktree_path,base_commit,codex_thread_id,active_turn_id,created_at,updated_at,archived_at FROM sessions WHERE id=?1",
+            concat!("SELECT id,project_id,title,prompt,mode,model,status,branch,worktree_path,","base_commit,codex_thread_id,active_turn_id,created_at,updated_at,","archived_at FROM sessions WHERE id=?1"),
             [id], session_from_row,
         ).optional().map_err(|e| e.to_string())?.ok_or_else(|| "Сессия не найдена".into())
     }
@@ -910,7 +910,7 @@ impl AgentsService {
         binding: Option<&FullAccessConsentBinding>,
     ) -> Result<(), String> {
         self.db().execute(
-            "INSERT INTO security_audit(event,result,package_id,package_version,project_id,project_path,mode,model,prompt_sha256,created_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
+            concat!("INSERT INTO security_audit(event,result,package_id,package_version,","project_id,project_path,mode,model,prompt_sha256,created_at) VALUES(?1,?2,","?3,?4,?5,?6,?7,?8,?9,?10)"),
             params![
                 event,
                 result,
@@ -1084,7 +1084,7 @@ impl AgentsService {
         let timestamp = now();
         self.db()
             .execute(
-                "UPDATE sessions SET status='archived',active_turn_id=NULL,archived_at=?2,updated_at=?2 WHERE id=?1",
+                concat!("UPDATE sessions SET status='archived',active_turn_id=NULL,archived_at=?2,","updated_at=?2 WHERE id=?1"),
                 params![session_id, timestamp],
             )
             .map_err(|e| e.to_string())?;
@@ -1155,7 +1155,7 @@ impl AgentsService {
             .clamp(1, 500) as i64;
         let db = self.db();
         let mut statement = db.prepare(
-            "SELECT id,session_id,kind,payload_json,created_at,updated_at,truncated FROM timeline WHERE session_id=?1 AND id<?2 ORDER BY id DESC LIMIT ?3"
+            concat!("SELECT id,session_id,kind,payload_json,created_at,updated_at,truncated FROM ","timeline WHERE session_id=?1 AND id<?2 ORDER BY id DESC LIMIT ?3")
         ).map_err(|e| e.to_string())?;
         let rows = statement
             .query_map(params![session_id, cursor, limit], timeline_from_row)
@@ -1216,7 +1216,7 @@ impl AgentsService {
             .map_err(|_| "Codex app-server не подтвердил ответ".to_string())?
             .map_err(|_| "Codex app-server завершился".to_string())??;
         let timestamp = now();
-        self.db().execute("UPDATE approvals SET status='resolved',response_json=?2,resolved_at=?3 WHERE id=?1", params![approval_id,result.to_string(),timestamp]).map_err(|e| e.to_string())?;
+        self.db().execute(concat!("UPDATE approvals SET status='resolved',response_json=?2,resolved_at=?3 ","WHERE id=?1"), params![approval_id,result.to_string(),timestamp]).map_err(|e| e.to_string())?;
         let remaining: i64 = self
             .db()
             .query_row(
@@ -1417,7 +1417,7 @@ impl AgentsService {
         }
         let timestamp = now();
         let db = self.db();
-        db.execute("INSERT INTO timeline(session_id,kind,payload_json,truncated,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?5)", params![session_id,kind,payload.to_string(),truncated as i64,timestamp]).map_err(|e| e.to_string())?;
+        db.execute(concat!("INSERT INTO timeline(session_id,kind,payload_json,truncated,created_at,","updated_at) VALUES(?1,?2,?3,?4,?5,?5)"), params![session_id,kind,payload.to_string(),truncated as i64,timestamp]).map_err(|e| e.to_string())?;
         let id = db.last_insert_rowid();
         Ok(TimelineEvent {
             id,
@@ -1525,7 +1525,7 @@ impl AgentsService {
     fn set_status(&self, session_id: &str, status: SessionStatus) -> Result<(), String> {
         self.db()
             .execute(
-                "UPDATE sessions SET status=CASE WHEN archived_at IS NULL THEN ?2 ELSE 'archived' END,updated_at=?3 WHERE id=?1",
+                concat!("UPDATE sessions SET status=CASE WHEN archived_at IS NULL THEN ?2 ELSE ","'archived' END,updated_at=?3 WHERE id=?1"),
                 params![session_id, status.as_str(), now()],
             )
             .map_err(|e| e.to_string())?;
@@ -1538,7 +1538,7 @@ impl AgentsService {
         thread_id: Option<&str>,
         turn_id: Option<&str>,
     ) -> Result<(), String> {
-        self.db().execute("UPDATE sessions SET codex_thread_id=COALESCE(?2,codex_thread_id),active_turn_id=?3,updated_at=?4 WHERE id=?1", params![session_id,thread_id,turn_id,now()]).map_err(|e| e.to_string())?;
+        self.db().execute(concat!("UPDATE sessions SET codex_thread_id=COALESCE(?2,codex_thread_id),","active_turn_id=?3,updated_at=?4 WHERE id=?1"), params![session_id,thread_id,turn_id,now()]).map_err(|e| e.to_string())?;
         Ok(())
     }
 
@@ -1551,7 +1551,7 @@ impl AgentsService {
     ) -> Result<Approval, String> {
         let request_id_json = request_id.to_string();
         if let Some(existing) = self.db().query_row(
-            "SELECT id,session_id,request_id_json,method,params_json,status,response_json,created_at,resolved_at FROM approvals WHERE session_id=?1 AND request_id_json=?2 AND method=?3 AND status='pending' ORDER BY created_at DESC LIMIT 1",
+            concat!("SELECT id,session_id,request_id_json,method,params_json,status,","response_json,created_at,resolved_at FROM approvals WHERE session_id=?1 AND ","request_id_json=?2 AND method=?3 AND status='pending' ORDER BY created_at ","DESC LIMIT 1"),
             params![session_id, request_id_json, method],
             approval_from_row,
         ).optional().map_err(|e| e.to_string())? {
@@ -1568,18 +1568,18 @@ impl AgentsService {
             created_at: now(),
             resolved_at: None,
         };
-        self.db().execute("INSERT INTO approvals(id,session_id,request_id_json,method,params_json,status,created_at) VALUES(?1,?2,?3,?4,?5,'pending',?6)", params![approval.id,approval.session_id,approval.request_id.to_string(),approval.method,approval.params.to_string(),approval.created_at]).map_err(|e| e.to_string())?;
+        self.db().execute(concat!("INSERT INTO approvals(id,session_id,request_id_json,method,params_json,","status,created_at) VALUES(?1,?2,?3,?4,?5,'pending',?6)"), params![approval.id,approval.session_id,approval.request_id.to_string(),approval.method,approval.params.to_string(),approval.created_at]).map_err(|e| e.to_string())?;
         self.set_status(session_id, SessionStatus::WaitingApproval)?;
         Ok(approval)
     }
 
     fn get_approval(&self, id: &str) -> Result<Approval, String> {
-        self.db().query_row("SELECT id,session_id,request_id_json,method,params_json,status,response_json,created_at,resolved_at FROM approvals WHERE id=?1", [id], approval_from_row).optional().map_err(|e|e.to_string())?.ok_or_else(||"Approval не найден".into())
+        self.db().query_row(concat!("SELECT id,session_id,request_id_json,method,params_json,status,","response_json,created_at,resolved_at FROM approvals WHERE id=?1"), [id], approval_from_row).optional().map_err(|e|e.to_string())?.ok_or_else(||"Approval не найден".into())
     }
 
     fn pending_approvals(&self) -> Result<Vec<Approval>, String> {
         let db = self.db();
-        let mut statement=db.prepare("SELECT id,session_id,request_id_json,method,params_json,status,response_json,created_at,resolved_at FROM approvals WHERE status='pending' ORDER BY created_at").map_err(|e|e.to_string())?;
+        let mut statement=db.prepare(concat!("SELECT id,session_id,request_id_json,method,params_json,status,","response_json,created_at,resolved_at FROM approvals WHERE status='pending' ","ORDER BY created_at")).map_err(|e|e.to_string())?;
         let rows = statement
             .query_map([], approval_from_row)
             .map_err(|e| e.to_string())?;
@@ -1603,7 +1603,7 @@ impl AgentsService {
         };
         self.db()
             .execute(
-                "UPDATE approvals SET status='resolved',response_json=?2,resolved_at=?3 WHERE session_id=?1 AND status='pending'",
+                concat!("UPDATE approvals SET status='resolved',response_json=?2,resolved_at=?3 ","WHERE session_id=?1 AND status='pending'"),
                 params![session_id, json!({"stale":true,"reason":reason}).to_string(), timestamp],
             )
             .map_err(|error| error.to_string())?;
@@ -1633,7 +1633,7 @@ impl AgentsService {
         let approval_id = self
             .db()
             .query_row(
-                "SELECT id FROM approvals WHERE session_id=?1 AND request_id_json=?2 AND status='pending' ORDER BY created_at DESC LIMIT 1",
+                concat!("SELECT id FROM approvals WHERE session_id=?1 AND request_id_json=?2 AND ","status='pending' ORDER BY created_at DESC LIMIT 1"),
                 params![session_id, request_id.to_string()],
                 |row| row.get::<_, String>(0),
             )
@@ -1643,7 +1643,7 @@ impl AgentsService {
             let timestamp = now();
             self.db()
                 .execute(
-                    "UPDATE approvals SET status='resolved',response_json=?2,resolved_at=?3 WHERE id=?1",
+                    concat!("UPDATE approvals SET status='resolved',response_json=?2,resolved_at=?3 ","WHERE id=?1"),
                     params![approval_id, json!({"resolvedByServer":true}).to_string(), timestamp],
                 )
                 .map_err(|error| error.to_string())?;

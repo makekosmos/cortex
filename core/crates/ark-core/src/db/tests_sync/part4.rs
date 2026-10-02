@@ -11,7 +11,7 @@
         // Р”Рѕ Р¤Р°Р·С‹ B РїР°РґР°РµС‚: "cannot start a transaction within a transaction".
         // РџРѕСЃР»Рµ Р¤Р°Р·С‹ B (SAVEPOINT) РґРѕР»Р¶РЅРѕ РїСЂРѕР№С‚Рё Р±РµР· РѕС€РёР±РєРё.
         batch_upsert_todos(&conn, &todos)
-            .expect("batch_upsert_todos РґРѕР»Р¶РµРЅ СЂР°Р±РѕС‚Р°С‚СЊ РІРЅСѓС‚СЂРё РІРЅРµС€РЅРµР№ С‚СЂР°РЅР·Р°РєС†РёРё");
+            .expect(concat!("batch_upsert_todos РґРѕР»Р¶РµРЅ СЂР°Р±РѕС‚Р°С‚СЊ РІРЅСѓС‚СЂРё ","РІРЅРµС€РЅРµР№ С‚СЂР°РЅР·Р°РєС†РёРё"));
         conn.execute_batch("COMMIT").unwrap();
         // РџСЂРѕРІРµСЂСЏРµРј, С‡С‚Рѕ todo РґРµР№СЃС‚РІРёС‚РµР»СЊРЅРѕ Р·Р°РїРёСЃР°РЅС‹.
         let data = load_all(&conn).unwrap();
@@ -28,7 +28,7 @@
         // "cannot start a transaction within a transaction".
         // РџРѕСЃР»Рµ Р¤Р°Р·С‹ B (SAVEPOINT) РґРѕР»Р¶РЅРѕ РїСЂРѕР№С‚Рё Р±РµР· РѕС€РёР±РєРё.
         upsert_object_type(&conn, &ot)
-            .expect("upsert_object_type РґРѕР»Р¶РµРЅ СЂР°Р±РѕС‚Р°С‚СЊ РІРЅСѓС‚СЂРё РІРЅРµС€РЅРµР№ С‚СЂР°РЅР·Р°РєС†РёРё");
+            .expect(concat!("upsert_object_type РґРѕР»Р¶РµРЅ СЂР°Р±РѕС‚Р°С‚СЊ РІРЅСѓС‚СЂРё ","РІРЅРµС€РЅРµР№ С‚СЂР°РЅР·Р°РєС†РёРё"));
         conn.execute_batch("COMMIT").unwrap();
         // РџСЂРѕРІРµСЂСЏРµРј, С‡С‚Рѕ С‚РёРї Р·Р°РїРёСЃР°РЅ.
         let types = list_object_types(&conn).unwrap();

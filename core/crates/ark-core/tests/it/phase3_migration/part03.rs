@@ -5,14 +5,14 @@ fn phase3_migration_collision_leaves_registry_and_ledger_unchanged() {
     let conn = Connection::open_in_memory().unwrap();
     init_schema(&conn).unwrap();
     conn.execute(
-        "INSERT INTO object_type_aliases(alias,canonical_type_id,created_at) VALUES ('com.kosmos.task','com.kosmos.note','now')",
+        concat!("INSERT INTO object_type_aliases(alias,canonical_type_id,created_at) VALUES (","'com.kosmos.task','com.kosmos.note','now')"),
         [],
     )
     .unwrap();
     let snapshot = [
-        ("object_types", "SELECT id, name, schema_json, ui_schema_json, created_at, updated_at, system_locked, owner_kind, owner_id, current_version, status, COALESCE(base_type_id, '') FROM object_types ORDER BY id"),
-        ("object_type_versions", "SELECT type_id, version, schema_json, ui_schema_json, content_contract_json, relations_json, sync_policy_json, schema_hash, created_at FROM object_type_versions ORDER BY type_id, version"),
-        ("object_type_aliases", "SELECT alias, canonical_type_id, created_at FROM object_type_aliases ORDER BY alias"),
+        ("object_types", concat!("SELECT id, name, schema_json, ui_schema_json, created_at, updated_at, ","system_locked, owner_kind, owner_id, current_version, status, COALESCE(","base_type_id, '') FROM object_types ORDER BY id")),
+        ("object_type_versions", concat!("SELECT type_id, version, schema_json, ui_schema_json, content_contract_json,"," relations_json, sync_policy_json, schema_hash, created_at FROM ","object_type_versions ORDER BY type_id, version")),
+        ("object_type_aliases", concat!("SELECT alias, canonical_type_id, created_at FROM object_type_aliases ORDER ","BY alias")),
     ]
     .into_iter()
     .map(|(name, sql)| {
@@ -32,7 +32,7 @@ fn phase3_migration_collision_leaves_registry_and_ledger_unchanged() {
     })
     .collect::<Vec<_>>();
     let ledger_snapshot: Vec<(String, i64, String)> = conn
-        .prepare("SELECT source_kind, attempt, checkpoint FROM canonical_migration_items ORDER BY source_kind, source_id")
+        .prepare(concat!("SELECT source_kind, attempt, checkpoint FROM canonical_migration_items ","ORDER BY source_kind, source_id"))
         .unwrap()
         .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
         .unwrap()
@@ -40,9 +40,9 @@ fn phase3_migration_collision_leaves_registry_and_ledger_unchanged() {
         .unwrap();
     assert!(ark_core::canonical_types::migration::migrate_phase3(&conn).is_err());
     let after = [
-        ("object_types", "SELECT id, name, schema_json, ui_schema_json, created_at, updated_at, system_locked, owner_kind, owner_id, current_version, status, COALESCE(base_type_id, '') FROM object_types ORDER BY id"),
-        ("object_type_versions", "SELECT type_id, version, schema_json, ui_schema_json, content_contract_json, relations_json, sync_policy_json, schema_hash, created_at FROM object_type_versions ORDER BY type_id, version"),
-        ("object_type_aliases", "SELECT alias, canonical_type_id, created_at FROM object_type_aliases ORDER BY alias"),
+        ("object_types", concat!("SELECT id, name, schema_json, ui_schema_json, created_at, updated_at, ","system_locked, owner_kind, owner_id, current_version, status, COALESCE(","base_type_id, '') FROM object_types ORDER BY id")),
+        ("object_type_versions", concat!("SELECT type_id, version, schema_json, ui_schema_json, content_contract_json,"," relations_json, sync_policy_json, schema_hash, created_at FROM ","object_type_versions ORDER BY type_id, version")),
+        ("object_type_aliases", concat!("SELECT alias, canonical_type_id, created_at FROM object_type_aliases ORDER ","BY alias")),
     ]
     .into_iter()
     .map(|(name, sql)| {
@@ -62,7 +62,7 @@ fn phase3_migration_collision_leaves_registry_and_ledger_unchanged() {
     })
     .collect::<Vec<_>>();
     let ledger_after: Vec<(String, i64, String)> = conn
-        .prepare("SELECT source_kind, attempt, checkpoint FROM canonical_migration_items ORDER BY source_kind, source_id")
+        .prepare(concat!("SELECT source_kind, attempt, checkpoint FROM canonical_migration_items ","ORDER BY source_kind, source_id"))
         .unwrap()
         .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
         .unwrap()

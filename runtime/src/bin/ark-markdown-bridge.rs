@@ -1008,7 +1008,10 @@ mod tests {
     #[allow(clippy::unwrap_used)]
     #[test]
     fn import_requires_version_and_editable_allowlist() {
-        let valid = "---\nark_id: \"id-1\"\nark_type: \"com.kosmos.note\"\nark_version: \"1.0.0\"\nbridge_version: 1\nreadonly: \"changed\"\n---\nbody";
+        let valid = concat!(
+            "---\nark_id: \"id-1\"\nark_type: \"com.kosmos.note\"\nark_version: ",
+            "\"1.0.0\"\nbridge_version: 1\nreadonly: \"changed\"\n---\nbody"
+        );
         let parsed = parse(valid, &config()).expect("valid bridge file");
         assert!(parsed.2.is_empty());
         assert!(apply_editable(
@@ -1039,7 +1042,10 @@ mod tests {
 
     #[test]
     fn legacy_reserved_alias_is_normalized_at_import_boundary() {
-        let markdown = "---\nark_id: \"legacy-1\"\nark_type: \"note_obj\"\nark_version: \"1.0.0\"\nbridge_version: 1\n---\nbody";
+        let markdown = concat!(
+            "---\nark_id: \"legacy-1\"\nark_type: \"note_obj\"\nark_version: ",
+            "\"1.0.0\"\nbridge_version: 1\n---\nbody"
+        );
         let (id, kind, _, body) = parse(markdown, &config()).expect("legacy alias accepted");
         assert_eq!(id, "legacy-1");
         assert_eq!(kind, "com.kosmos.note");
@@ -1048,7 +1054,10 @@ mod tests {
 
     #[test]
     fn reserved_wrong_version_is_rejected_before_edit() {
-        let markdown = "---\nark_id: \"note-1\"\nark_type: \"com.kosmos.note\"\nark_version: \"2.0.0\"\nbridge_version: 1\n---\nchanged";
+        let markdown = concat!(
+            "---\nark_id: \"note-1\"\nark_type: \"com.kosmos.note\"\nark_version: ",
+            "\"2.0.0\"\nbridge_version: 1\n---\nchanged"
+        );
         assert!(parse(markdown, &config()).is_none());
     }
     #[test]

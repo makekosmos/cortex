@@ -91,7 +91,40 @@ impl Converter for TaskMdConverter {
                 .filter(|l| l.link_type == "tag")
                 .map(|l| l.target_object_id.clone())
                 .collect::<Vec<_>>();
-            let mut out=format!("---\nid: {}\ntype: {}\ntypeVersion: {}\ntitle: {}\nstatus: {}\npriority: {}\nscheduledAt: {}\ndueAt: {}\ncompletedAt: {}\ncanceledAt: {}\ntags: [{}]\n---\n\n",yaml(&o.id),yaml(&o.type_id),yaml(&o.type_version),yaml(title),yaml(p.get("status").and_then(|v|v.as_str()).unwrap_or("inbox")),yaml(p.get("priority").and_then(|v|v.as_str()).unwrap_or("none")),yaml(&p.get("scheduledAt").and_then(ark_core::canonical_types::normalize::day_value).unwrap_or_default()),yaml(&p.get("dueAt").and_then(ark_core::canonical_types::normalize::day_value).unwrap_or_default()),yaml(&p.get("completedAt").map(ToString::to_string).unwrap_or_default()),yaml(&p.get("canceledAt").map(ToString::to_string).unwrap_or_default()),tags.iter().map(|v|yaml(v)).collect::<Vec<_>>().join(", "));
+            let mut out = format!(
+                concat!(
+                    "---\nid: {}\ntype: {}\ntypeVersion: {}\ntitle: {}\nstatus: {}\npriority: ",
+                    "{}\nscheduledAt: {}\ndueAt: {}\ncompletedAt: {}\ncanceledAt: {}\ntags: ",
+                    "[{}]\n---\n\n"
+                ),
+                yaml(&o.id),
+                yaml(&o.type_id),
+                yaml(&o.type_version),
+                yaml(title),
+                yaml(p.get("status").and_then(|v| v.as_str()).unwrap_or("inbox")),
+                yaml(p.get("priority").and_then(|v| v.as_str()).unwrap_or("none")),
+                yaml(
+                    &p.get("scheduledAt")
+                        .and_then(ark_core::canonical_types::normalize::day_value)
+                        .unwrap_or_default()
+                ),
+                yaml(
+                    &p.get("dueAt")
+                        .and_then(ark_core::canonical_types::normalize::day_value)
+                        .unwrap_or_default()
+                ),
+                yaml(
+                    &p.get("completedAt")
+                        .map(ToString::to_string)
+                        .unwrap_or_default()
+                ),
+                yaml(
+                    &p.get("canceledAt")
+                        .map(ToString::to_string)
+                        .unwrap_or_default()
+                ),
+                tags.iter().map(|v| yaml(v)).collect::<Vec<_>>().join(", ")
+            );
             out.push_str(&collect_doc_text(&o.content_json));
             out.push('\n');
             if let Some(items) = p.get("checklist").and_then(|v| v.as_array()) {

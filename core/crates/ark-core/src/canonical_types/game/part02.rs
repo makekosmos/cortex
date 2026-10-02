@@ -104,7 +104,7 @@ fn usage_session_app_ids(conn: &Connection, linked_ids: &[String]) -> Result<Vec
 }
 
 fn quarantine_for(conn: &Connection, id: &str) -> Result<GameQuarantine, String> {
-    let raw: Option<String> = conn.query_row("SELECT fields_json FROM object_migration_quarantine WHERE object_id=?1 AND contract_version=?2", params![id, GAME_QUARANTINE_CONTRACT], |r| r.get(0)).optional().map_err(|e| e.to_string())?;
+    let raw: Option<String> = conn.query_row(concat!("SELECT fields_json FROM object_migration_quarantine WHERE object_id=?1 AND ","contract_version=?2"), params![id, GAME_QUARANTINE_CONTRACT], |r| r.get(0)).optional().map_err(|e| e.to_string())?;
     let value = raw
         .map(|s| serde_json::from_str::<Value>(&s).map_err(|e| e.to_string()))
         .transpose()?
@@ -233,7 +233,7 @@ pub fn upsert_game(
         }
         let prepared = prepare_object(conn, object_write(&command)).map_err(|e| e.to_string())?;
         db::upsert_object(conn, &prepared)?;
-        conn.execute("INSERT INTO object_local_state(object_id,device_id,data_json,updated_at) VALUES(?1,?2,?3,?4) ON CONFLICT(object_id,device_id) DO UPDATE SET data_json=excluded.data_json,updated_at=excluded.updated_at", params![command.id, effective_device, serde_json::to_string(&command.local).map_err(|e| e.to_string())?, command.updated_at]).map_err(|e| e.to_string())?;
+        conn.execute(concat!("INSERT INTO object_local_state(object_id,device_id,data_json,updated_at) ","VALUES(?1,?2,?3,?4) ON CONFLICT(object_id,device_id) DO UPDATE SET ","data_json=excluded.data_json,updated_at=excluded.updated_at"), params![command.id, effective_device, serde_json::to_string(&command.local).map_err(|e| e.to_string())?, command.updated_at]).map_err(|e| e.to_string())?;
         conn.execute(
             "DELETE FROM object_migration_quarantine WHERE object_id=?1 AND contract_version=?2",
             params![command.id, GAME_QUARANTINE_CONTRACT],
@@ -242,7 +242,7 @@ pub fn upsert_game(
         if !command.quarantine.provider_refs.is_empty() || !command.quarantine.fields.is_empty() {
             let fields = serde_json::to_string(&json!({"providerRefs": command.quarantine.provider_refs, "fields": command.quarantine.fields})).map_err(|e| e.to_string())?;
             let source_hash = format!("{:x}", Sha256::digest(fields.as_bytes()));
-            conn.execute("INSERT INTO object_migration_quarantine(object_id,contract_version,source_type_id,fields_json,source_hash,updated_at) VALUES(?1,?2,?3,?4,?5,?6) ON CONFLICT(object_id,contract_version) DO UPDATE SET fields_json=excluded.fields_json,source_hash=excluded.source_hash,updated_at=excluded.updated_at", params![command.id, GAME_QUARANTINE_CONTRACT, GAME_TYPE_ID, fields, source_hash, command.updated_at]).map_err(|e| e.to_string())?;
+            conn.execute(concat!("INSERT INTO object_migration_quarantine(object_id,contract_version,","source_type_id,fields_json,source_hash,updated_at) VALUES(?1,?2,?3,?4,?5,","?6) ON CONFLICT(object_id,contract_version) DO UPDATE SET ","fields_json=excluded.fields_json,source_hash=excluded.source_hash,","updated_at=excluded.updated_at"), params![command.id, GAME_QUARANTINE_CONTRACT, GAME_TYPE_ID, fields, source_hash, command.updated_at]).map_err(|e| e.to_string())?;
         }
         let desired: std::collections::HashSet<String> =
             command.links.iter().map(|l| l.id.clone()).collect();
@@ -256,11 +256,11 @@ pub fn upsert_game(
             }
         }
         for link in &command.links {
-            conn.execute("INSERT INTO object_links(id,source_object_id,target_object_id,link_type,created_at) VALUES(?1,?2,?3,?4,?5) ON CONFLICT(id) DO UPDATE SET target_object_id=excluded.target_object_id,link_type=excluded.link_type", params![link.id, command.id, link.target_object_id, link.link_type, command.created_at]).map_err(|e| e.to_string())?;
+            conn.execute(concat!("INSERT INTO object_links(id,source_object_id,target_object_id,link_type,","created_at) VALUES(?1,?2,?3,?4,?5) ON CONFLICT(id) DO UPDATE SET ","target_object_id=excluded.target_object_id,link_type=excluded.link_type"), params![link.id, command.id, link.target_object_id, link.link_type, command.created_at]).map_err(|e| e.to_string())?;
         }
         let hlc =
             db::bump_sync_version_vector(conn, "object", &command.id, &effective_device, false)?;
-        conn.execute("INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,0) ON CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=0", params![command.id, hlc]).map_err(|e| e.to_string())?;
+        conn.execute(concat!("INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,0) ON ","CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=0"), params![command.id, hlc]).map_err(|e| e.to_string())?;
         Ok(GameMutationResult {
             record: get_game(conn, &command.id, &effective_device)?,
             changed: true,
@@ -273,7 +273,7 @@ pub fn upsert_game(
             Ok(record)
         }
         Err(error) => {
-            let _ = conn.execute_batch("ROLLBACK TO SAVEPOINT canonical_game_upsert; RELEASE SAVEPOINT canonical_game_upsert");
+            let _ = conn.execute_batch(concat!("ROLLBACK TO SAVEPOINT canonical_game_upsert; RELEASE SAVEPOINT ","canonical_game_upsert"));
             Err(error)
         }
     }

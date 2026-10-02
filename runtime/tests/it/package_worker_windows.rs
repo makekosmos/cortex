@@ -1080,9 +1080,10 @@ async fn secret_bearing_worker_failure_is_redacted_end_to_end() {
         "00000000-0000-4000-8000-000000000001".into(),
     );
     let panic = std::thread::spawn(|| {
-        panic!(
-            "WORKER_SECRET_UNIQUE ARK_MARKDOWN_BODY_UNIQUE RAW_REQUEST_PAYLOAD_UNIQUE C:\\Users\\secret-user\\vault\\private-note.md"
-        )
+        panic!(concat!(
+            "WORKER_SECRET_UNIQUE ARK_MARKDOWN_BODY_UNIQUE RAW_REQUEST_PAYLOAD_UNIQUE ",
+            "C:\\Users\\secret-user\\vault\\private-note.md"
+        ))
     })
     .join();
     // The hook is process-wide and deliberately drops panic messages; every

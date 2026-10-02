@@ -60,7 +60,7 @@ pub(crate) fn apply_one(
 
     if let Some((type_id, version, title, content, props, created, updated, deleted)) = conn
         .query_row(
-            "SELECT type_id,type_version,title,content_json,props_json,created_at,updated_at,deleted_at FROM objects WHERE id=?1",
+            concat!("SELECT type_id,type_version,title,content_json,props_json,created_at,","updated_at,deleted_at FROM objects WHERE id=?1"),
             [object.id.as_str()],
             |row| {
                 Ok((
@@ -100,7 +100,7 @@ pub(crate) fn apply_one(
             && deleted == object.deleted_at;
         if legacy_upgrade {
             conn.execute(
-                "UPDATE objects SET type_id=?2,type_version=?3,title=?4,content_json=?5,props_json=?6,created_at=?7,updated_at=?8,deleted_at=?9 WHERE id=?1",
+                concat!("UPDATE objects SET type_id=?2,type_version=?3,title=?4,content_json=?5,","props_json=?6,created_at=?7,updated_at=?8,deleted_at=?9 WHERE id=?1"),
                 params![object.id, object.type_id, object.type_version, object.title, String::from_utf8(json_bytes(&object.content_json)?).map_err(|error| ObjectPlanError::Storage(error.to_string()))?, String::from_utf8(json_bytes(&object.props_json)?).map_err(|error| ObjectPlanError::Storage(error.to_string()))?, object.created_at, object.updated_at, object.deleted_at],
             ).map_err(|error| ObjectPlanError::Storage(error.to_string()))?;
         } else if !exact {
@@ -111,7 +111,7 @@ pub(crate) fn apply_one(
         }
     } else {
         conn.execute(
-            "INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,created_at,updated_at,deleted_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)",
+            concat!("INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,","created_at,updated_at,deleted_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)"),
             params![
                 object.id,
                 object.type_id,
@@ -135,7 +135,7 @@ pub(crate) fn apply_one(
         );
         let equivalent = conn
             .query_row(
-                "SELECT id FROM object_links WHERE source_object_id=?1 AND link_type=?2 AND target_object_id=?3",
+                concat!("SELECT id FROM object_links WHERE source_object_id=?1 AND link_type=?2 AND ","target_object_id=?3"),
                 params![link.source_object_id, link.link_type, link.target_object_id],
                 |row| row.get::<_, String>(0),
             )
@@ -174,7 +174,7 @@ pub(crate) fn apply_one(
             continue;
         }
         conn.execute(
-            "INSERT INTO object_links(id,source_object_id,target_object_id,link_type,created_at) VALUES(?1,?2,?3,?4,?5)",
+            concat!("INSERT INTO object_links(id,source_object_id,target_object_id,link_type,","created_at) VALUES(?1,?2,?3,?4,?5)"),
             params![deterministic_id, link.source_object_id, link.target_object_id, link.link_type, link.created_at],
         )
         .map_err(|error| ObjectPlanError::Storage(error.to_string()))?;
@@ -184,7 +184,7 @@ pub(crate) fn apply_one(
         let data = String::from_utf8(json_bytes(&state.data_json)?)
             .map_err(|error| ObjectPlanError::Storage(error.to_string()))?;
         conn.execute(
-            "INSERT INTO object_local_state(object_id,device_id,data_json,updated_at) VALUES(?1,?2,?3,?4) ON CONFLICT(object_id,device_id) DO UPDATE SET data_json=excluded.data_json,updated_at=excluded.updated_at WHERE data_json<>excluded.data_json",
+            concat!("INSERT INTO object_local_state(object_id,device_id,data_json,updated_at) ","VALUES(?1,?2,?3,?4) ON CONFLICT(object_id,device_id) DO UPDATE SET ","data_json=excluded.data_json,updated_at=excluded.updated_at WHERE ","data_json<>excluded.data_json"),
             params![object.id, "migration", data, object.updated_at],
         )
         .map_err(|error| ObjectPlanError::Storage(error.to_string()))?;
@@ -201,14 +201,14 @@ pub(crate) fn apply_one(
         let fields = String::from_utf8(json_bytes(&fields)?)
             .map_err(|error| ObjectPlanError::Storage(error.to_string()))?;
         conn.execute(
-            "INSERT INTO object_migration_quarantine(object_id,contract_version,source_type_id,fields_json,source_hash,updated_at) VALUES(?1,'phase3-canonical-v1',?2,?3,?4,?5) ON CONFLICT(object_id,contract_version) DO UPDATE SET fields_json=excluded.fields_json,source_hash=excluded.source_hash,updated_at=excluded.updated_at WHERE fields_json<>excluded.fields_json OR source_hash<>excluded.source_hash",
+            concat!("INSERT INTO object_migration_quarantine(object_id,contract_version,","source_type_id,fields_json,source_hash,updated_at) VALUES(?1,","'phase3-canonical-v1',?2,?3,?4,?5) ON CONFLICT(object_id,contract_version) ","DO UPDATE SET fields_json=excluded.fields_json,","source_hash=excluded.source_hash,updated_at=excluded.updated_at WHERE ","fields_json<>excluded.fields_json OR source_hash<>excluded.source_hash"),
             params![object.id, object.type_id, fields, item.source_hash, object.updated_at],
         )
         .map_err(|error| ObjectPlanError::Storage(error.to_string()))?;
     }
 
     conn.execute(
-        "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,?3) ON CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=excluded.deleted WHERE hlc<>excluded.hlc OR deleted<>excluded.deleted",
+        concat!("INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,?3) ON ","CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=excluded.deleted ","WHERE hlc<>excluded.hlc OR deleted<>excluded.deleted"),
         params![object.id, object.updated_at, i64::from(object.deleted_at.is_some())],
     )
     .map_err(|error| ObjectPlanError::Storage(error.to_string()))?;

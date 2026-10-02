@@ -59,7 +59,7 @@ pub fn check_integrity(conn: &Connection) -> Result<(), String> {
 fn phase3_migration_completed(conn: &Connection) -> Result<bool, String> {
     let table_exists: bool = conn
         .query_row(
-            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='canonical_migration_runs')",
+            concat!("SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND ","name='canonical_migration_runs')"),
             [],
             |row| row.get(0),
         )
@@ -68,7 +68,7 @@ fn phase3_migration_completed(conn: &Connection) -> Result<bool, String> {
         return Ok(false);
     }
     conn.query_row(
-        "SELECT EXISTS(SELECT 1 FROM canonical_migration_runs WHERE contract_version='phase3-canonical-v1' AND status='completed')",
+        concat!("SELECT EXISTS(SELECT 1 FROM canonical_migration_runs WHERE ","contract_version='phase3-canonical-v1' AND status='completed')"),
         [],
         |row| row.get(0),
     )

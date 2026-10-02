@@ -91,7 +91,7 @@ pub fn render(
                             this.action("dictation.set_api_key", json!({"key": key}));
                         } else {
                             this.error =
-                                Some("Сначала проверьте ключ — сохранение разрешено только после успешной проверки.".into());
+                                Some(concat!("Сначала проверьте ключ — сохранение разрешено только после успешной ","проверки.").into());
                         }
                     }))
                     .child(btn("secrets-clear", "Удалить", false, cx, |this, cx| {

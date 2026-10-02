@@ -123,7 +123,7 @@ fn generic_inventory(
         "game_obj",
         "book_obj",
     ] {
-        let mut stmt = conn.prepare("SELECT id,title,content_json,props_json,created_at,updated_at,deleted_at FROM objects WHERE type_id=?1 ORDER BY id") .map_err(|e| e.to_string())?;
+        let mut stmt = conn.prepare(concat!("SELECT id,title,content_json,props_json,created_at,updated_at,deleted_at ","FROM objects WHERE type_id=?1 ORDER BY id")) .map_err(|e| e.to_string())?;
         for row in stmt
             .query_map([kind], |r| {
                 Ok((

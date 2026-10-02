@@ -211,7 +211,7 @@ async fn handle_connection(params: ConnectionParams) {
                             .unwrap_or_default();
 
                         eprintln!(
-                            "[iroh] ← recv {variant} from={from_device_id} ({role}) remote={remote_endpoint_id}"
+                            concat!("[iroh] ← recv {variant} from={from_device_id} ({role}) ","remote={remote_endpoint_id}")
                         );
 
                         let _ = reader_event_tx.send(TransportEvent::MessageReceivedFromTransport {

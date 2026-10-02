@@ -46,7 +46,10 @@ async fn check_downloads_and_verifies_update_in_background() {
         .mock_async(|when, then| {
             when.method(httpmock::Method::GET).path("/latest.yml");
             then.status(200).body(format!(
-                "version: 99.0.0\nfiles:\n  - url: Mundus-Setup-99.0.0.exe\n    sha512: {}\n    size: {}\n",
+                concat!(
+                    "version: 99.0.0\nfiles:\n  - url: Mundus-Setup-99.0.0.exe\n    sha512: {}\n ",
+                    "   size: {}\n"
+                ),
                 hash(&body),
                 body.len()
             ));
@@ -126,7 +129,10 @@ async fn check_replacing_pending_drops_the_superseded_installer() {
         .mock_async(|when, then| {
             when.method(httpmock::Method::GET).path("/latest.yml");
             then.status(200).body(format!(
-                "version: 99.0.0\nfiles:\n  - url: Mundus-Setup-99.0.0.exe\n    sha512: {}\n    size: {}\n",
+                concat!(
+                    "version: 99.0.0\nfiles:\n  - url: Mundus-Setup-99.0.0.exe\n    sha512: {}\n ",
+                    "   size: {}\n"
+                ),
                 hash(&body),
                 body.len()
             ));

@@ -2,7 +2,7 @@
 fn run_status(conn: &Connection) -> Result<Option<String>, MigrationError> {
     let exists: bool = conn
         .query_row(
-            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='canonical_migration_runs')",
+            concat!("SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND ","name='canonical_migration_runs')"),
             [],
             |row| row.get(0),
         )
@@ -43,7 +43,7 @@ fn validate_canonical_state(
     );
     let actual: Option<ObjectRow> = conn
         .query_row(
-            "SELECT type_id,type_version,title,content_json,props_json,created_at,updated_at,deleted_at FROM objects WHERE id=?1",
+            concat!("SELECT type_id,type_version,title,content_json,props_json,created_at,","updated_at,deleted_at FROM objects WHERE id=?1"),
             [object.id.as_str()],
             |row| Ok((row.get(0)?,row.get(1)?,row.get(2)?,row.get(3)?,row.get(4)?,row.get(5)?,row.get(6)?,row.get(7)?)),
         )
@@ -64,7 +64,7 @@ fn validate_canonical_state(
         return Err(MigrationError::Objects("CanonicalConflict".into()));
     }
     let mut links: Vec<(String, String, String)> = conn
-        .prepare("SELECT source_object_id,link_type,target_object_id FROM object_links WHERE source_object_id=?1 ORDER BY link_type,target_object_id")
+        .prepare(concat!("SELECT source_object_id,link_type,target_object_id FROM object_links WHERE ","source_object_id=?1 ORDER BY link_type,target_object_id"))
         .map_err(|e| MigrationError::Storage(e.to_string()))?
         .query_map([object.id.as_str()], |row| Ok((row.get(0)?,row.get(1)?,row.get(2)?)))
         .map_err(|e| MigrationError::Storage(e.to_string()))?
@@ -109,7 +109,7 @@ fn validate_completed(
         }
         let stored_hash: Option<String> = conn
             .query_row(
-                "SELECT canonical_hash FROM canonical_migration_items WHERE contract_version=?1 AND source_kind=?2 AND source_id=?3",
+                concat!("SELECT canonical_hash FROM canonical_migration_items WHERE ","contract_version=?1 AND source_kind=?2 AND source_id=?3"),
                 params![CONTRACT_VERSION, ledger_kind(&item.source_kind_variant), item.source_id],
                 |row| row.get(0),
             )
@@ -181,7 +181,7 @@ pub fn migrate_phase3_with_options(
             let mut report = report_from_plan(&plan, "completed");
             report.source_inventory_hash = conn
                 .query_row(
-                    "SELECT source_inventory_hash FROM canonical_migration_runs WHERE contract_version=?1",
+                    concat!("SELECT source_inventory_hash FROM canonical_migration_runs WHERE ","contract_version=?1"),
                     [CONTRACT_VERSION],
                     |row| row.get(0),
                 )
@@ -238,7 +238,7 @@ pub fn migrate_phase3_with_options(
         }
         Err(error) => {
             let _ = conn.execute_batch(
-                "ROLLBACK TO SAVEPOINT phase3_migration_outer; RELEASE SAVEPOINT phase3_migration_outer",
+                concat!("ROLLBACK TO SAVEPOINT phase3_migration_outer; RELEASE SAVEPOINT ","phase3_migration_outer"),
             );
             Err(error)
         }
@@ -254,7 +254,7 @@ pub fn retire_legacy_planning_tables(
 ) -> Result<(usize, usize), MigrationError> {
     let completed = conn
         .query_row(
-            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='canonical_migration_runs') AND EXISTS(SELECT 1 FROM canonical_migration_runs WHERE contract_version=?1 AND status='completed')",
+            concat!("SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND ","name='canonical_migration_runs') AND EXISTS(SELECT 1 FROM ","canonical_migration_runs WHERE contract_version=?1 AND status='completed')"),
             [CONTRACT_VERSION],
             |row| row.get::<_, bool>(0),
         )
@@ -305,14 +305,14 @@ pub fn retire_legacy_planning_tables(
             .map_err(|e| MigrationError::Storage(e.to_string()))?;
         let archive_count: i64 = conn
             .query_row(
-                "SELECT COUNT(*) FROM canonical_migration_source_archive WHERE contract_version=?1 AND source_kind=?2",
+                concat!("SELECT COUNT(*) FROM canonical_migration_source_archive WHERE ","contract_version=?1 AND source_kind=?2"),
                 params![CONTRACT_VERSION, source_kind],
                 |row| row.get(0),
             )
             .map_err(|e| MigrationError::Storage(e.to_string()))?;
         if source_count != archive_count {
             return Err(MigrationError::Objects(format!(
-                "legacy planning archive incomplete for {table}: {source_count} source rows, {archive_count} archived"
+                concat!("legacy planning archive incomplete for {table}: {source_count} source rows, ","{archive_count} archived")
             )));
         }
         let mut ids = conn
@@ -325,7 +325,7 @@ pub fn retire_legacy_planning_tables(
             let id = row.map_err(|e| MigrationError::Storage(e.to_string()))?;
             let (source_hash, raw_source, planned_json): (String, Vec<u8>, String) = conn
                 .query_row(
-                    "SELECT source_hash,raw_source,planned_json FROM canonical_migration_source_archive WHERE contract_version=?1 AND source_kind=?2 AND source_id=?3",
+                    concat!("SELECT source_hash,raw_source,planned_json FROM ","canonical_migration_source_archive WHERE contract_version=?1 AND ","source_kind=?2 AND source_id=?3"),
                     params![CONTRACT_VERSION, source_kind, id.as_str()],
                     |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
                 )
@@ -363,7 +363,7 @@ pub fn retire_legacy_planning_tables(
             let expected_hash = canonical_hash(&item)?;
             let stored_hash: Option<String> = conn
                 .query_row(
-                    "SELECT canonical_hash FROM canonical_migration_items WHERE contract_version=?1 AND source_kind=?2 AND source_id=?3",
+                    concat!("SELECT canonical_hash FROM canonical_migration_items WHERE ","contract_version=?1 AND source_kind=?2 AND source_id=?3"),
                     params![CONTRACT_VERSION, source_kind, id.as_str()],
                     |row| row.get(0),
                 )
@@ -413,7 +413,7 @@ pub fn retire_legacy_planning_tables(
         }
         Err(error) => {
             let _ = conn.execute_batch(
-                "ROLLBACK TO SAVEPOINT phase9_legacy_planning_retirement; RELEASE SAVEPOINT phase9_legacy_planning_retirement",
+                concat!("ROLLBACK TO SAVEPOINT phase9_legacy_planning_retirement; RELEASE SAVEPOINT ","phase9_legacy_planning_retirement"),
             );
             Err(MigrationError::Storage(error.to_string()))
         }

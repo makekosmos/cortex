@@ -351,7 +351,7 @@
             .mock_async(|when, then| {
                 when.method(POST).path("/openai/v1/audio/transcriptions");
                 then.status(200).body(
-                    r#"{"text":"привет","segments":[{"text":"привет","no_speech_prob":0.05,"avg_logprob":-0.3}]}"#,
+                    concat!(r#"{"text":"привет","segments":[{"text":"привет","no_speech_prob":0.05,"#,r#""avg_logprob":-0.3}]}"#),
                 );
             })
             .await;
@@ -410,7 +410,7 @@
             .mock_async(|when, then| {
                 when.method(POST).path("/openai/v1/audio/transcriptions");
                 then.status(200).body(
-                    r#"{"text":"retry transcript","segments":[{"text":"retry transcript","no_speech_prob":0.05,"avg_logprob":-0.3}]}"#,
+                    concat!(r#"{"text":"retry transcript","segments":[{"text":"retry transcript","#,r#""no_speech_prob":0.05,"avg_logprob":-0.3}]}"#),
                 );
             })
             .await;
@@ -457,7 +457,7 @@
             .mock_async(|when, then| {
                 when.method(POST).path("/openai/v1/audio/transcriptions");
                 then.status(200).body(
-                    r#"{"text":"delivery test","segments":[{"text":"delivery test","no_speech_prob":0.05,"avg_logprob":-0.3}]}"#,
+                    concat!(r#"{"text":"delivery test","segments":[{"text":"delivery test","#,r#""no_speech_prob":0.05,"avg_logprob":-0.3}]}"#),
                 );
             })
             .await;
@@ -1220,7 +1220,7 @@
             .mock_async(|when, then| {
                 when.method(POST).path("/openai/v1/audio/transcriptions");
                 then.status(200).header("content-type", "application/json").body(
-                    r#"{"text":"groq runtime transcript","segments":[{"text":"groq runtime transcript","no_speech_prob":0.05,"avg_logprob":-0.2}]}"#,
+                    concat!(r#"{"text":"groq runtime transcript","segments":[{"text":"groq runtime "#,r#"transcript","no_speech_prob":0.05,"avg_logprob":-0.2}]}"#),
                 );
             })
             .await;

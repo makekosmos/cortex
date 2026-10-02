@@ -3,7 +3,7 @@ fn native_inventory(conn: &Connection, out: &mut Vec<SourceRecord>) -> Result<()
     // Areas and headings are migrated as canonical project objects. Their
     // legacy kind, ordering and parent are carried in compatibility extensions
     // so the compatibility read view remains lossless after table retirement.
-    let mut todo = conn.prepare("SELECT id,title,notes,priority,scheduled_date,deadline,reminder_date,is_someday,is_completed,completed_at,is_cancelled,cancelled_at,heading_id,project_id,area_id,tag_ids,checklist_items,recurrence_rule,created_at FROM todos ORDER BY id").map_err(|e| e.to_string())?;
+    let mut todo = conn.prepare(concat!("SELECT id,title,notes,priority,scheduled_date,deadline,reminder_date,","is_someday,is_completed,completed_at,is_cancelled,cancelled_at,heading_id,","project_id,area_id,tag_ids,checklist_items,recurrence_rule,created_at FROM ","todos ORDER BY id")).map_err(|e| e.to_string())?;
     for row in todo
         .query_map([], |r| {
             Ok((
@@ -107,7 +107,7 @@ fn native_inventory(conn: &Connection, out: &mut Vec<SourceRecord>) -> Result<()
             raw_source: bytes,
         });
     }
-    let mut projects=conn.prepare("SELECT id,title,notes,status,scheduled_date,deadline,color_tag,area_id,created_at FROM projects ORDER BY id").map_err(|e|e.to_string())?;
+    let mut projects=conn.prepare(concat!("SELECT id,title,notes,status,scheduled_date,deadline,color_tag,area_id,","created_at FROM projects ORDER BY id")).map_err(|e|e.to_string())?;
     for row in projects
         .query_map([], |r| {
             Ok((

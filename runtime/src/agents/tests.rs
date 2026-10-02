@@ -406,7 +406,7 @@ mod tests {
             )
             .unwrap();
         service.db().execute(
-            "INSERT INTO sessions(id,project_id,title,prompt,mode,status,branch,worktree_path,base_commit,created_at,updated_at,archived_at) VALUES('s','p','t','p','default','archived','codex/test-12345678',?1,'HEAD',?2,?2,?2)",
+            concat!("INSERT INTO sessions(id,project_id,title,prompt,mode,status,branch,","worktree_path,base_commit,created_at,updated_at,archived_at) VALUES('s','p',","'t','p','default','archived','codex/test-12345678',?1,'HEAD',?2,?2,?2)"),
             params![worktree.to_string_lossy(), timestamp],
         ).unwrap();
         service.remove_worktree("s").await.unwrap();
@@ -553,7 +553,7 @@ mod tests {
         let service = AgentsService::new(dir.path()).unwrap();
         let timestamp = now();
         service.db().execute(
-            "INSERT INTO sessions(id,project_id,title,prompt,mode,status,branch,worktree_path,base_commit,created_at,updated_at) VALUES('s','p','t','p','default','running','b',?1,?2,?3,?3)",
+            concat!("INSERT INTO sessions(id,project_id,title,prompt,mode,status,branch,","worktree_path,base_commit,created_at,updated_at) VALUES('s','p','t','p',","'default','running','b',?1,?2,?3,?3)"),
             params![worktree.to_string_lossy(),base,timestamp],
         ).unwrap();
         let diff = service.diff("s").await.unwrap();
@@ -614,7 +614,7 @@ mod tests {
         let session = service
             .create_session(json!({
                 "project_id": project["id"],
-                "prompt": "Создай файл daedalus-real-smoke.txt с единственной строкой ok. Не изменяй другие файлы.",
+                "prompt": concat!("Создай файл daedalus-real-smoke.txt с единственной строкой ok. Не изменяй ","другие файлы."),
                 "mode": "default"
             }))
             .await
