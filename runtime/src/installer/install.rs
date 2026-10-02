@@ -153,10 +153,10 @@ pub fn install(options: &Options) -> Result<Value, String> {
     // backend kill and still holds the DB open.
     // MIGRATION(KOS-267): remove after 2026-11-01.
     let rpc_kill = processes::kill_by_names(&["ark-core-rpc.exe"])?;
-    if !rpc_kill.failed.is_empty() {
+    if !processes::report_ok(&rpc_kill) {
         return Err(format!(
-            "ark-core-rpc.exe still running: {:?}",
-            rpc_kill.failed
+            "ark-core-rpc.exe still running: survived={:?} failed={:?}",
+            rpc_kill.survived, rpc_kill.failed
         ));
     }
 

@@ -22,7 +22,13 @@ env:
   CARGO_INCREMENTAL: "0"
 
 jobs:
+  # KOS-309: the installer must actually install before a release publishes —
+  # 0.10.2 passed every script-text test and aborted on every real install.
+  smoke:
+    uses: ./.github/workflows/installer-smoke.yml
+
   release:
+    needs: smoke
     runs-on: windows-latest
     timeout-minutes: 300
     # Releases live in this repo (makekosmos/cortex) — the job's own
