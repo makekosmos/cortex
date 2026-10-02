@@ -10,24 +10,32 @@
 //! and compare, while the deny-write share mode of `open_immutable_read`
 //! keeps the file from being modified or replaced underneath.
 //!
-//! Why each field:
-//! - `volume_serial` + `file_id`: a swapped file (delete + recreate,
-//!   rename-over, restored backup) gets a new file ID even at the same path;
-//! - `size` + `modified`: any write through the data stream moves them;
-//! - `changed`: NTFS change time / unix ctime also move on *metadata*
-//!   changes and — unlike mtime — cannot be rolled back with
-//!   `SetFileTime`/`utimens`, so an in-place rewrite cannot hide behind
-//!   restored timestamps. A filesystem that reports no change time is
-//!   refused and always takes the full-hash path.
+//! What the identity defends against:
+//! - accidental corruption and partial writes, which move the size or the
+//!   timestamps;
+//! - a swapped file — delete + recreate, rename-over, a restored backup:
+//!   a new file at the same path always gets a new file ID;
+//! - other users, who have no write access to the per-user store at all.
 //!
-//! The record lives next to the blob (`<hash>.identity.json`) with the same
-//! owner-only permissions as `state.json`: forging it requires write access
-//! to the per-user store, and anyone with that can already rewrite the store
-//! wholesale. Anything doubtful — missing record (installs predating this
-//! scheme), an unreadable or unparsable record, an identity query the
-//! filesystem refuses, or a plain mismatch — falls back to the full SHA-256,
-//! and the record is rewritten only when the bytes check out. The guarantee
-//! never drops below the old always-hash behaviour.
+//! What it does not defend against: a same-user process. Such a process
+//! can rewrite the blob in place and restore every timestamp (on Windows
+//! `ChangeTime` is settable via `SetFileInformationByHandle`, with no
+//! privilege), can rewrite this `identity.json` record itself, and can
+//! replace the Engine binaries under `%LOCALAPPDATA%\Mundus`, which
+//! nothing verifies at launch. A same-user attacker is therefore out of
+//! scope for the package store — as it was before KOS-290: the old
+//! per-launch hash only proved that the bytes behind the path were the
+//! verified ones, it never protected the reference.
+//!
+//! The accepted trade-off: in-place corruption that changes no metadata at
+//! all is no longer caught on every launch. It is still caught by the full
+//! hash at install and unpack, and by the full-hash fallback any time the
+//! identity does not match — which every realistic write produces.
+//!
+//! Anything doubtful — missing record (installs predating this scheme), an
+//! unreadable or unparsable record, an identity query the filesystem
+//! refuses, or a plain mismatch — falls back to the full SHA-256, and the
+//! record is rewritten only when the bytes check out.
 
 use crate::lock_file::{read_owner_only_json, write_owner_only_json};
 use serde::{Deserialize, Serialize};

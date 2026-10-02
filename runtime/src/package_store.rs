@@ -197,22 +197,37 @@ impl PackageStore {
     /// The launcher calls this immediately before spawning a worker.
     ///
     /// Threat model (the blob lives at `<store>/blobs/<hash>.kspkg` under the
-    /// per-user data dir; the store tree is only writable by the owning user):
-    /// - Tampering with the stored blob after install (a same-user process;
-    ///   another user has no write access at all): detected by the recorded
-    ///   handle identity — file ID, size, write time and the non-settable
-    ///   change time — with the full SHA-256 as fallback when the identity
-    ///   cannot be trusted (see `identity`).
+    /// per-user data dir, writable only by the owning user). A same-user
+    /// process is out of scope entirely — it can rewrite the blob, the
+    /// identity record, `state.json`, or the Engine binaries (never verified
+    /// at launch) — before and after KOS-290 alike. The rows below compare
+    /// with the old always-hash check for the attackers that remain:
+    /// another user, or plain corruption.
+    /// - Tampering with the stored blob after install: another user has no
+    ///   write access; accidental corruption moves the size or timestamps
+    ///   → identity miss → full hash. Same as before — except in-place
+    ///   corruption that changes *no* metadata, which the per-launch hash
+    ///   caught and the fast path does not: weaker, accepted (the bytes are
+    ///   still hashed at install, at unpack, and on any identity mismatch).
     /// - TOCTOU between verification and the worker opening the entrypoint:
     ///   the unpacked `.exe` itself is hashed on every launch (one archive
     ///   entry, cheap), and the blob is held with write sharing denied for
-    ///   the whole read so it cannot be modified or swapped under the handle.
-    /// - A swapped file at the same path: the file ID changes, the identity
-    ///   misses, and the full hash re-runs, re-binding the record only if the
-    ///   bytes still are the verified blob.
+    ///   the whole read so it cannot be modified or swapped under the
+    ///   handle. Same as before — the mechanism is unchanged.
+    /// - A swapped file at the same path (delete+recreate, rename-over,
+    ///   restored backup): a new file ID → full re-verify, re-binding the
+    ///   record only when the bytes still are the verified blob. Same as
+    ///   before.
     /// - A hard link or junction redirecting the path: a link to the same
     ///   file keeps its identity (still the verified bytes); a different
     ///   file behind the path fails the identity check and re-verifies.
+    ///   Same as before.
+    ///
+    /// Separately, a *reference* swap — pointing `state.json` or the
+    /// `unpacked/<hash>` directory at differently-hashed content — is a
+    /// store-integrity question, not a content check; for catalog packages
+    /// in release builds `prepare_worker_launch` additionally pins
+    /// `installed.hash` to the signed catalog entry.
     pub(crate) fn verify_immutable_entrypoint_path(path: &Path) -> Result<(), StoreError> {
         let canonical = fs::canonicalize(path)?;
         let Some(hash_dir) = canonical.ancestors().find(|candidate| {
