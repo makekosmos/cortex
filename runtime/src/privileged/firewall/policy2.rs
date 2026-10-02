@@ -11,13 +11,13 @@ use windows::core::BSTR;
 use windows::Win32::Foundation::VARIANT_BOOL;
 use windows::Win32::NetworkManagement::WindowsFirewall::{
     INetFwPolicy2, INetFwRule, INetFwRules, NetFwPolicy2, NetFwRule, NET_FW_ACTION_ALLOW,
-    NET_FW_RULE_DIR_IN,
+    NET_FW_ACTION_BLOCK, NET_FW_RULE_DIR_IN,
 };
 use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CLSCTX_ALL, COINIT_MULTITHREADED,
 };
 
-use super::{FirewallPolicy, ObservedRule, RuleSpec};
+use super::{FirewallPolicy, ObservedRule, RuleAction, RuleSpec};
 
 fn bstr(s: &str) -> BSTR {
     BSTR::from(s)
@@ -66,8 +66,11 @@ unsafe fn fill_rule(rule: &INetFwRule, spec: &RuleSpec) -> Result<(), String> {
         rule.SetProfiles(spec.profiles).map_err(|e| e.to_string())?;
         rule.SetDirection(NET_FW_RULE_DIR_IN)
             .map_err(|e| e.to_string())?;
-        rule.SetAction(NET_FW_ACTION_ALLOW)
-            .map_err(|e| e.to_string())?;
+        rule.SetAction(match spec.action {
+            RuleAction::Allow => NET_FW_ACTION_ALLOW,
+            RuleAction::Block => NET_FW_ACTION_BLOCK,
+        })
+        .map_err(|e| e.to_string())?;
         rule.SetInterfaceTypes(&bstr("All"))
             .map_err(|e| e.to_string())?;
         rule.SetLocalPorts(&bstr("*")).map_err(|e| e.to_string())?;
@@ -90,10 +93,10 @@ fn read_rule(rule: &INetFwRule) -> Result<ObservedRule, String> {
                 .Direction()
                 .map(|d| d == NET_FW_RULE_DIR_IN)
                 .unwrap_or(false),
-            action_allow: rule
-                .Action()
-                .map(|a| a == NET_FW_ACTION_ALLOW)
-                .unwrap_or(false),
+            action: match rule.Action().unwrap_or(NET_FW_ACTION_BLOCK) {
+                NET_FW_ACTION_ALLOW => RuleAction::Allow,
+                _ => RuleAction::Block,
+            },
         })
     }
 }

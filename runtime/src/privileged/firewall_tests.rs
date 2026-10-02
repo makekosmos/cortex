@@ -34,7 +34,7 @@ impl FirewallPolicy for FakePolicy {
                 protocol: spec.protocol,
                 profiles: spec.profiles,
                 direction_inbound: true,
-                action_allow: true,
+                action: spec.action,
             },
         );
         Ok(())
@@ -47,60 +47,79 @@ impl FirewallPolicy for FakePolicy {
     }
 }
 
-fn spec_for(path: &str) -> RuleSpec {
-    engine_allow_spec(Path::new(path))
+const EXE: &str = r"C:\Users\anna\AppData\Local\Mundus\Engine\versions\0.10.3\mundus-engine.exe";
+
+fn allow_spec(path: &str) -> RuleSpec {
+    engine_rule_specs(Path::new(path))[0].clone()
 }
 
 #[test]
-fn rule_spec_is_stable_inbound_allow() {
-    let spec =
-        spec_for(r"C:\Users\anna\AppData\Local\Mundus\Engine\versions\0.10.3\mundus-engine.exe");
-    assert_eq!(spec.name, RULE_NAME);
-    assert_eq!(spec.grouping, RULE_GROUPING);
-    assert_eq!(
-        spec.program,
-        r"C:\Users\anna\AppData\Local\Mundus\Engine\versions\0.10.3\mundus-engine.exe"
-    );
+fn rule_specs_are_stable_inbound_allow_plus_public_block() {
+    let [allow, block] = engine_rule_specs(Path::new(EXE));
+
+    assert_eq!(allow.name, RULE_NAME);
+    assert_eq!(allow.grouping, RULE_GROUPING);
+    assert_eq!(allow.program, EXE);
     // Any-protocol single rule covering TCP+UDP, Domain+Private profiles only.
-    assert_eq!(spec.protocol, PROTOCOL_ANY);
-    assert_eq!(spec.profiles, PROFILES_DOMAIN_PRIVATE);
+    assert_eq!(allow.protocol, PROTOCOL_ANY);
+    assert_eq!(allow.profiles, PROFILES_DOMAIN_PRIVATE);
+    assert_eq!(allow.action, RuleAction::Allow);
+
+    // The Public-profile sibling suppresses the "allow access" prompt on
+    // public networks without opening the port (KOS-269 round 1).
+    assert_eq!(block.name, BLOCK_RULE_NAME);
+    assert_eq!(block.grouping, RULE_GROUPING);
+    assert_eq!(block.program, EXE);
+    assert_eq!(block.protocol, PROTOCOL_ANY);
+    assert_eq!(block.profiles, PROFILES_PUBLIC);
+    assert_eq!(block.action, RuleAction::Block);
 }
 
 #[test]
-fn ensure_writes_rule_once_then_is_idempotent() {
+fn ensure_writes_both_rules_once_then_is_idempotent() {
     let mut fw = FakePolicy::default();
-    let exe =
-        Path::new(r"C:\Users\anna\AppData\Local\Mundus\Engine\versions\0.10.3\mundus-engine.exe");
+    let exe = Path::new(EXE);
 
-    assert_eq!(ensure_engine_rule(&mut fw, exe), Ok(EnsureOutcome::Updated));
-    assert_eq!(fw.written.len(), 1);
-
-    // Second call: rule already points at this exe — no write.
     assert_eq!(
-        ensure_engine_rule(&mut fw, exe),
+        ensure_engine_rules(&mut fw, exe),
+        Ok(EnsureOutcome::Updated)
+    );
+    assert_eq!(fw.written.len(), 2);
+
+    // Second call: both rules already point at this exe — no writes.
+    assert_eq!(
+        ensure_engine_rules(&mut fw, exe),
         Ok(EnsureOutcome::Unchanged)
     );
-    assert_eq!(fw.written.len(), 1);
+    assert_eq!(fw.written.len(), 2);
 }
 
 #[test]
-fn ensure_repoints_rule_after_engine_update() {
+fn ensure_repoints_both_rules_after_engine_update() {
     let mut fw = FakePolicy::default();
     let old =
         Path::new(r"C:\Users\anna\AppData\Local\Mundus\Engine\versions\0.10.3\mundus-engine.exe");
     let new =
         Path::new(r"C:\Users\anna\AppData\Local\Mundus\Engine\versions\0.10.4\mundus-engine.exe");
 
-    assert_eq!(ensure_engine_rule(&mut fw, old), Ok(EnsureOutcome::Updated));
-    assert_eq!(ensure_engine_rule(&mut fw, new), Ok(EnsureOutcome::Updated));
-    assert_eq!(fw.written.last().unwrap().program, new.to_string_lossy());
+    assert_eq!(
+        ensure_engine_rules(&mut fw, old),
+        Ok(EnsureOutcome::Updated)
+    );
+    assert_eq!(
+        ensure_engine_rules(&mut fw, new),
+        Ok(EnsureOutcome::Updated)
+    );
+    // Exactly two rewrites, both pointed at the new exe.
+    let repointed: Vec<_> = fw.written[2..].iter().collect();
+    assert_eq!(repointed.len(), 2);
+    assert!(repointed.iter().all(|s| s.program == new.to_string_lossy()));
 }
 
 #[test]
 fn ensure_replaces_stale_or_disabled_rule() {
     let mut fw = FakePolicy::default();
-    let spec =
-        spec_for(r"C:\Users\anna\AppData\Local\Mundus\Engine\versions\0.10.3\mundus-engine.exe");
+    let spec = allow_spec(EXE);
 
     for stale in [
         ObservedRule {
@@ -109,7 +128,7 @@ fn ensure_replaces_stale_or_disabled_rule() {
             protocol: spec.protocol,
             profiles: spec.profiles,
             direction_inbound: true,
-            action_allow: true,
+            action: RuleAction::Allow,
         },
         ObservedRule {
             program: Some(spec.program.clone()),
@@ -117,7 +136,7 @@ fn ensure_replaces_stale_or_disabled_rule() {
             protocol: spec.protocol,
             profiles: 7, // drifted onto Public
             direction_inbound: true,
-            action_allow: true,
+            action: RuleAction::Allow,
         },
         ObservedRule {
             program: Some(spec.program.clone()),
@@ -125,14 +144,23 @@ fn ensure_replaces_stale_or_disabled_rule() {
             protocol: spec.protocol,
             profiles: spec.profiles,
             direction_inbound: false, // outbound rule squatting on the name
-            action_allow: true,
+            action: RuleAction::Allow,
+        },
+        ObservedRule {
+            program: Some(spec.program.clone()),
+            enabled: true,
+            protocol: spec.protocol,
+            profiles: spec.profiles,
+            direction_inbound: true,
+            action: RuleAction::Block, // wrong action on the allow name
         },
     ] {
         fw.rules.insert(spec.name.to_string(), stale);
         assert_eq!(
-            ensure_engine_rule(&mut fw, Path::new(&spec.program)),
+            ensure_engine_rules(&mut fw, Path::new(&spec.program)),
             Ok(EnsureOutcome::Updated)
         );
+        fw.written.clear();
     }
 }
 
@@ -142,22 +170,28 @@ fn ensure_propagates_lookup_errors() {
         fail_rule: true,
         ..FakePolicy::default()
     };
-    let err = ensure_engine_rule(&mut fw, Path::new("x")).unwrap_err();
+    let err = ensure_engine_rules(&mut fw, Path::new("x")).unwrap_err();
     assert_eq!(err, "lookup failed");
 }
 
 #[test]
-fn remove_targets_only_our_rule_name() {
+fn remove_targets_only_our_rule_names() {
     let mut fw = FakePolicy::default();
     fw.rules
         .insert(RULE_NAME.to_string(), ObservedRule::default());
     fw.rules
+        .insert(BLOCK_RULE_NAME.to_string(), ObservedRule::default());
+    fw.rules
         .insert("Some Other Rule".to_string(), ObservedRule::default());
 
-    remove_engine_rule(&mut fw).unwrap();
-    assert_eq!(fw.removed, vec![RULE_NAME.to_string()]);
+    remove_engine_rules(&mut fw).unwrap();
+    assert_eq!(
+        fw.removed,
+        vec![RULE_NAME.to_string(), BLOCK_RULE_NAME.to_string()]
+    );
     assert!(fw.rules.contains_key("Some Other Rule"));
     assert!(!fw.rules.contains_key(RULE_NAME));
+    assert!(!fw.rules.contains_key(BLOCK_RULE_NAME));
 }
 
 // ------------------------- path validation -------------------------
