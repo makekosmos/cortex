@@ -1,4 +1,3 @@
-
 pub fn insert_pending_object(
     conn: &Connection,
     entity: &SyncEntity,
@@ -15,7 +14,10 @@ pub fn insert_pending_object(
     }
     let payload = serde_json::to_string(entity).map_err(|e| e.to_string())?;
     let existing_sql = if is_v3 {
-        concat!("SELECT payload FROM sync_pending_objects WHERE id=?1 AND awaited_type_id=?2 ","AND awaited_type_version=?3")
+        concat!(
+            "SELECT payload FROM sync_pending_objects WHERE id=?1 AND awaited_type_id=?2 ",
+            "AND awaited_type_version=?3"
+        )
     } else {
         "SELECT payload FROM sync_pending_objects WHERE id=?1"
     };
@@ -38,9 +40,21 @@ pub fn insert_pending_object(
         }
     }
     let sql = if is_v3 {
-        concat!("INSERT INTO sync_pending_objects (id,payload,awaited_type_id,","awaited_type_version,received_at) VALUES (?1,?2,?3,?4,?5) ON CONFLICT(id,","awaited_type_id,awaited_type_version) DO UPDATE SET ","payload=excluded.payload,received_at=excluded.received_at")
+        concat!(
+            "INSERT INTO sync_pending_objects (id,payload,awaited_type_id,",
+            "awaited_type_version,received_at) VALUES (?1,?2,?3,?4,?5) ON CONFLICT(id,",
+            "awaited_type_id,awaited_type_version) DO UPDATE SET ",
+            "payload=excluded.payload,received_at=excluded.received_at"
+        )
     } else {
-        concat!("INSERT INTO sync_pending_objects (id,payload,awaited_type_id,","awaited_type_version,received_at) VALUES (?1,?2,?3,?4,?5) ON CONFLICT(id) ","DO UPDATE SET payload=excluded.payload,","awaited_type_id=excluded.awaited_type_id,","awaited_type_version=excluded.awaited_type_version,","received_at=excluded.received_at")
+        concat!(
+            "INSERT INTO sync_pending_objects (id,payload,awaited_type_id,",
+            "awaited_type_version,received_at) VALUES (?1,?2,?3,?4,?5) ON CONFLICT(id) ",
+            "DO UPDATE SET payload=excluded.payload,",
+            "awaited_type_id=excluded.awaited_type_id,",
+            "awaited_type_version=excluded.awaited_type_version,",
+            "received_at=excluded.received_at"
+        )
     };
     conn.execute(
         sql,
@@ -63,7 +77,10 @@ pub fn replay_pending_for_type(
 ) -> Result<usize, String> {
     let exists: bool = conn
         .query_row(
-            concat!("SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND ","name='sync_pending_objects')"),
+            concat!(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND ",
+                "name='sync_pending_objects')"
+            ),
             [],
             |row| row.get(0),
         )
@@ -72,7 +89,13 @@ pub fn replay_pending_for_type(
         return Ok(0);
     }
     let is_v3 = exact_shape(&table_columns(conn)?, true);
-    let mut stmt = conn.prepare(concat!("SELECT id,payload,awaited_type_id,awaited_type_version FROM ","sync_pending_objects WHERE awaited_type_id=?1 AND awaited_type_version=?2 ","ORDER BY id")).map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare(concat!(
+            "SELECT id,payload,awaited_type_id,awaited_type_version FROM ",
+            "sync_pending_objects WHERE awaited_type_id=?1 AND awaited_type_version=?2 ",
+            "ORDER BY id"
+        ))
+        .map_err(|e| e.to_string())?;
     let pending: Vec<(String, String, String, String)> = stmt
         .query_map(params![type_id, type_version], |row| {
             Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
@@ -90,7 +113,14 @@ pub fn replay_pending_for_type(
                 validate_entity_tuple(&entity, id, awaited_id, awaited_version)?;
             }
             crate::canonical_types::facades::apply_canonical_object_entity(conn, &entity)?;
-            conn.execute(concat!("DELETE FROM sync_pending_objects WHERE id=?1 AND awaited_type_id=?2 AND ","awaited_type_version=?3"), params![id,awaited_id,awaited_version]).map_err(|e| e.to_string())?;
+            conn.execute(
+                concat!(
+                    "DELETE FROM sync_pending_objects WHERE id=?1 AND awaited_type_id=?2 AND ",
+                    "awaited_type_version=?3"
+                ),
+                params![id, awaited_id, awaited_version],
+            )
+            .map_err(|e| e.to_string())?;
         }
         Ok::<_, String>(())
     })();

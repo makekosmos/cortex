@@ -36,9 +36,8 @@
     #[test]
     fn compaction_deletes_only_superseded_old_refs() {
         let conn = setup_db();
-        let old = |day: u8, counter: u64| {
-            format!("2026-08-{day:02}T12:00:00.000Z:{counter:06}:tracker")
-        };
+        let old =
+            |day: u8, counter: u64| format!("2026-08-{day:02}T12:00:00.000Z:{counter:06}:tracker");
         // Three writes to the same session — the first two refs are
         // superseded by the third.
         record_usage_sequence(&conn, "usage_session", "s-1", "dev", 1, &old(1, 1), false).unwrap();
@@ -81,12 +80,42 @@
         assert_eq!(
             usage_log_refs(&conn),
             vec![
-                ("dev".to_string(), 3, "usage_session".to_string(), "s-1".to_string()),
-                ("dev".to_string(), 4, "usage_day".to_string(), "d-1".to_string()),
-                ("dev".to_string(), 6, "usage_session".to_string(), "s-2".to_string()),
-                ("dev".to_string(), 7, "usage_session".to_string(), "s-3".to_string()),
-                ("dev".to_string(), 8, "usage_session".to_string(), "s-3".to_string()),
-                ("dev".to_string(), 9, "usage_session".to_string(), "s-del".to_string()),
+                (
+                    "dev".to_string(),
+                    3,
+                    "usage_session".to_string(),
+                    "s-1".to_string()
+                ),
+                (
+                    "dev".to_string(),
+                    4,
+                    "usage_day".to_string(),
+                    "d-1".to_string()
+                ),
+                (
+                    "dev".to_string(),
+                    6,
+                    "usage_session".to_string(),
+                    "s-2".to_string()
+                ),
+                (
+                    "dev".to_string(),
+                    7,
+                    "usage_session".to_string(),
+                    "s-3".to_string()
+                ),
+                (
+                    "dev".to_string(),
+                    8,
+                    "usage_session".to_string(),
+                    "s-3".to_string()
+                ),
+                (
+                    "dev".to_string(),
+                    9,
+                    "usage_session".to_string(),
+                    "s-del".to_string()
+                ),
             ]
         );
         // Second pass is a no-op: nothing left to compact.
@@ -112,10 +141,13 @@
             )
             .unwrap();
         }
-        let deleted = compact_usage_sync_log(&conn, Some("dev"), "2026-09-01T00:00:00.000Z", 2).unwrap();
+        let deleted =
+            compact_usage_sync_log(&conn, Some("dev"), "2026-09-01T00:00:00.000Z", 2).unwrap();
         assert_eq!(deleted, 2);
         assert_eq!(usage_log_refs(&conn).len(), 3);
-        while compact_usage_sync_log(&conn, Some("dev"), "2026-09-01T00:00:00.000Z", 2).unwrap() > 0 {}
+        while compact_usage_sync_log(&conn, Some("dev"), "2026-09-01T00:00:00.000Z", 2).unwrap() > 0
+        {
+        }
         assert_eq!(usage_log_refs(&conn).len(), 1);
     }
 
@@ -129,9 +161,30 @@
 
         let mut sessions = Vec::new();
         for (id, app, started, ended, fg, idle) in [
-            ("sa-1", "app-browser", "2026-01-01T23:55:00.000Z", "2026-01-02T00:10:00.000Z", 900_000, 0),
-            ("sa-2", "app-editor", "2026-01-02T08:00:00.000Z", "2026-01-02T09:30:00.000Z", 3_000_000, 2_400_000),
-            ("sa-3", "app-browser", "2026-01-03T12:00:00.000Z", "2026-01-03T12:30:00.000Z", 0, 1_800_000),
+            (
+                "sa-1",
+                "app-browser",
+                "2026-01-01T23:55:00.000Z",
+                "2026-01-02T00:10:00.000Z",
+                900_000,
+                0,
+            ),
+            (
+                "sa-2",
+                "app-editor",
+                "2026-01-02T08:00:00.000Z",
+                "2026-01-02T09:30:00.000Z",
+                3_000_000,
+                2_400_000,
+            ),
+            (
+                "sa-3",
+                "app-browser",
+                "2026-01-03T12:00:00.000Z",
+                "2026-01-03T12:30:00.000Z",
+                0,
+                1_800_000,
+            ),
         ] {
             let mut session = make_usage_session(id, app);
             session.started_at = started.to_string();
@@ -142,7 +195,11 @@
             upsert_usage_session(&conn, &session).unwrap();
             sessions.push(session);
         }
-        upsert_usage_event(&conn, &make_usage_event("ev-1", "app-browser", Some("sa-1"))).unwrap();
+        upsert_usage_event(
+            &conn,
+            &make_usage_event("ev-1", "app-browser", Some("sa-1")),
+        )
+        .unwrap();
         upsert_usage_span(
             &conn,
             &UsageSpanWrite {
@@ -212,7 +269,9 @@
         let served_before = served_usage_ids(&conn, "dev");
 
         // Full compaction loop, tiny batches like the Engine runs them.
-        while compact_usage_sync_log(&conn, Some("dev"), "2026-09-01T00:00:00.000Z", 2).unwrap() > 0 {}
+        while compact_usage_sync_log(&conn, Some("dev"), "2026-09-01T00:00:00.000Z", 2).unwrap() > 0
+        {
+        }
 
         let mut analytics_after = load_usage_analytics(&conn, 21, 8, 24, None).unwrap();
         analytics_after.generated_at = analytics_before.generated_at.clone();

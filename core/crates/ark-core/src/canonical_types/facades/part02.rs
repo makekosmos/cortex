@@ -1,4 +1,3 @@
-
 /// Atomically set, replace, or remove the Book's sole canonical cover link.
 ///
 /// This boundary never materializes an Image. `source_ref` is retained in the
@@ -156,7 +155,11 @@ pub fn write_legacy_records(
         db::upsert_object(conn, &item.object)?;
         let hlc = db::bump_sync_version_vector(conn, "object", &id, write_device, false)?;
         conn.execute(
-            concat!("INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,0) ON ","CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=0 WHERE ","excluded.hlc > object_sync_versions.hlc"),
+            concat!(
+                "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,0) ON ",
+                "CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=0 WHERE ",
+                "excluded.hlc > object_sync_versions.hlc"
+            ),
             params![id, hlc],
         )
         .map_err(|e| e.to_string())?;
@@ -211,7 +214,11 @@ pub fn delete_legacy_object(
     db::upsert_object(conn, &object)?;
     let hlc = db::bump_sync_version_vector(conn, "object", id, write_device, true)?;
     conn.execute(
-        concat!("INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,1) ON ","CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=1 WHERE ","excluded.hlc > object_sync_versions.hlc"),
+        concat!(
+            "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,1) ON ",
+            "CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=1 WHERE ",
+            "excluded.hlc > object_sync_versions.hlc"
+        ),
         params![id, hlc],
     )
     .map_err(|e| e.to_string())?;
@@ -219,7 +226,9 @@ pub fn delete_legacy_object(
     Ok(SyncEntity {
         entity_type: "object".into(),
         id: id.into(),
-        data: [("typeId".into(), object.type_id.into())].into_iter().collect(),
+        data: [("typeId".into(), object.type_id.into())]
+            .into_iter()
+            .collect(),
         hlc,
         deleted: Some(true),
         origin_device_id: None,

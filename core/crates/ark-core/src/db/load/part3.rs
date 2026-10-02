@@ -1,4 +1,3 @@
-
 fn load_all_usage_sessions(conn: &Connection) -> Result<Vec<UsageSession>, String> {
     load_usage_sessions_page(conn, -1, 0)
 }
@@ -160,4 +159,3 @@ fn load_usage_events_page(
     rows.collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())
 }
-

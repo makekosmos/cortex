@@ -75,7 +75,8 @@ impl IrohTransport {
             Err(_elapsed) => {
                 eprintln!(
                     "[iroh] WARNING: endpoint.online() timed out after 8s; \
-                     building ticket from best-effort local addr (relay homing may complete later)"
+                     building ticket from best-effort local addr (relay homing may complete \
+later)"
                 );
             }
         }

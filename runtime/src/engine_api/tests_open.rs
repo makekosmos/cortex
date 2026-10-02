@@ -51,7 +51,8 @@
             token.to_string(),
             dir_path.clone(),
             Arc::new(
-                crate::app_index::AppIndex::new(&dir_path, dir_path.join("icons")).expect("app index"),
+                crate::app_index::AppIndex::new(&dir_path, dir_path.join("icons"))
+                    .expect("app index"),
             ),
             Arc::new(crate::file_index::FileIndex::new_disabled(&dir_path).expect("file index")),
             Arc::new(crate::usage_tracker::UsageTrackerDiagnosticsState::default()),
@@ -128,9 +129,7 @@
                     token,
                     "POST",
                     "/v1/rpc",
-                    &format!(
-                        r#"{{"operation":"packages.open","package_id":"{package_id}"}}"#
-                    ),
+                    &format!(r#"{{"operation":"packages.open","package_id":"{package_id}"}}"#),
                 ),
             )
             .await,
@@ -173,9 +172,8 @@
     async fn packages_open_serves_a_bootstrapped_data_session() {
         let dir = tempfile::tempdir().expect("tempdir");
         let token = "a".repeat(64);
-        let service = Arc::new(
-            crate::package_service::tests::enabled_note_write_app_service(dir.path()),
-        );
+        let service =
+            Arc::new(crate::package_service::tests::enabled_note_write_app_service(dir.path()));
         let fixture = open_engine(dir, &token, service).await;
         let port = fixture.port;
 
@@ -189,7 +187,10 @@
         let launch_url = data["launch_url"].as_str().expect("launch_url");
         // The page is served on the package's own *.localhost origin — not
         // the shared 127.0.0.1 origin every sibling would see.
-        assert!(launch_url.starts_with(&package_origin(port)), "{launch_url}");
+        assert!(
+            launch_url.starts_with(&package_origin(port)),
+            "{launch_url}"
+        );
         assert!(!launch_url.contains("127.0.0.1"), "{launch_url}");
         let (asset_path, launch_id, code) = launch_bootstrap_parts(launch_url, port);
         assert!(!launch_url.contains("broker_token"), "{launch_url}");
@@ -206,7 +207,10 @@
             html.contains(r#"<script src="__kosmos_host_shim.js"></script>"#),
             "{html}"
         );
-        assert!(!html.contains(&code), "the shim HTML must not embed the code");
+        assert!(
+            !html.contains(&code),
+            "the shim HTML must not embed the code"
+        );
         let shim = raw_http(
             port,
             &format!(
@@ -234,35 +238,24 @@
             ),
         )
         .await;
-        assert!(sibling_origin.starts_with("HTTP/1.1 403"), "{sibling_origin}");
-        let bare_loopback = bootstrap(
-            port,
-            &launch_id,
-            &code,
-            &format!("http://127.0.0.1:{port}"),
-        )
-        .await;
+        assert!(
+            sibling_origin.starts_with("HTTP/1.1 403"),
+            "{sibling_origin}"
+        );
+        let bare_loopback =
+            bootstrap(port, &launch_id, &code, &format!("http://127.0.0.1:{port}")).await;
         assert!(bare_loopback.starts_with("HTTP/1.1 403"), "{bare_loopback}");
-        let exchanged = bootstrap(
-            port,
-            &launch_id,
-            &code,
-            &package_origin(port),
-        )
-        .await;
+        let exchanged = bootstrap(port, &launch_id, &code, &package_origin(port)).await;
         assert!(exchanged.starts_with("HTTP/1.1 200"), "{exchanged}");
         let session = response_json(&exchanged);
         let broker_token = session["data"]["broker_token"].as_str().expect("token");
-        assert_eq!(session["data"]["launch_id"].as_str(), Some(launch_id.as_str()));
+        assert_eq!(
+            session["data"]["launch_id"].as_str(),
+            Some(launch_id.as_str())
+        );
 
         // Single-use: the same code must not be replayable.
-        let replay = bootstrap(
-            port,
-            &launch_id,
-            &code,
-            &package_origin(port),
-        )
-        .await;
+        let replay = bootstrap(port, &launch_id, &code, &package_origin(port)).await;
         assert!(replay.starts_with("HTTP/1.1 403"), "{replay}");
         assert!(replay.contains("bootstrap denied"), "{replay}");
 
@@ -292,9 +285,8 @@
     async fn repeat_opens_are_independent_sessions() {
         let dir = tempfile::tempdir().expect("tempdir");
         let token = "a".repeat(64);
-        let service = Arc::new(
-            crate::package_service::tests::enabled_note_write_app_service(dir.path()),
-        );
+        let service =
+            Arc::new(crate::package_service::tests::enabled_note_write_app_service(dir.path()));
         let fixture = open_engine(dir, &token, service).await;
         let port = fixture.port;
 
@@ -310,13 +302,7 @@
         assert_ne!(first_code, second_code);
 
         // A code minted for one lease must not bootstrap the other.
-        let crossed = bootstrap(
-            port,
-            &second_id,
-            &first_code,
-            &package_origin(port),
-        )
-        .await;
+        let crossed = bootstrap(port, &second_id, &first_code, &package_origin(port)).await;
         assert!(crossed.starts_with("HTTP/1.1 403"), "{crossed}");
 
         let origin = package_origin(port);
@@ -377,9 +363,8 @@
     async fn bootstrap_denies_expired_and_wrong_codes_uniformly() {
         let dir = tempfile::tempdir().expect("tempdir");
         let token = "a".repeat(64);
-        let service = Arc::new(
-            crate::package_service::tests::enabled_note_write_app_service(dir.path()),
-        );
+        let service =
+            Arc::new(crate::package_service::tests::enabled_note_write_app_service(dir.path()));
         let fixture = open_engine(dir, &token, service).await;
         let port = fixture.port;
         let origin = package_origin(port);
@@ -447,12 +432,8 @@
         let opened = rpc_open(port, &token, "com.kosmos.demo").await;
         let (_, launch_id, code) =
             launch_bootstrap_parts(opened["data"]["launch_url"].as_str().unwrap(), port);
-        let session = response_json(&bootstrap(
-            port,
-            &launch_id,
-            &code,
-            &package_origin(port),
-        ).await);
+        let session =
+            response_json(&bootstrap(port, &launch_id, &code, &package_origin(port)).await);
         let launch_token = session["data"]["broker_token"].as_str().unwrap();
         let refused = raw_http(
             port,

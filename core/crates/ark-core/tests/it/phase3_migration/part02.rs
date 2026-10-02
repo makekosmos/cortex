@@ -1,4 +1,3 @@
-
 #[test]
 
 fn phase3_pending_exact_v3_retry_is_noop() {
@@ -43,9 +42,10 @@ fn phase3_pending_exact_v3_retry_rejects_missing_index_and_malformed_row() {
         1
     );
 
-    conn.execute_batch(
-        concat!("CREATE INDEX idx_sync_pending_awaited_type_version ON sync_pending_objects(","awaited_type_id, awaited_type_version)"),
-    )
+    conn.execute_batch(concat!(
+        "CREATE INDEX idx_sync_pending_awaited_type_version ON sync_pending_objects(",
+        "awaited_type_id, awaited_type_version)"
+    ))
     .unwrap();
     conn.execute(
         "UPDATE sync_pending_objects SET payload='{\"id\":\"different\"}' WHERE id='o1'",
@@ -60,7 +60,10 @@ fn phase3_pending_rebuild_failures_restore_phase2_table_and_rows() {
     fn assert_phase2_preserved(conn: &Connection, payload: &str) {
         let row: (String, String, String, String, String) = conn
             .query_row(
-                concat!("SELECT id,payload,awaited_type_id,awaited_type_version,received_at FROM ","sync_pending_objects"),
+                concat!(
+                    "SELECT id,payload,awaited_type_id,awaited_type_version,received_at FROM ",
+                    "sync_pending_objects"
+                ),
                 [],
                 |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
             )
@@ -99,14 +102,17 @@ fn phase3_pending_rebuild_failures_restore_phase2_table_and_rows() {
                 .execute_batch("CREATE TABLE sync_pending_objects_v3(blocker TEXT)")
                 .unwrap(),
             "drop" => conn
-                .execute_batch(
-                    concat!("CREATE TABLE pending_ref(id TEXT REFERENCES sync_pending_objects(id)); ","INSERT INTO pending_ref VALUES ('o1')"),
-                )
+                .execute_batch(concat!(
+                    "CREATE TABLE pending_ref(id TEXT REFERENCES sync_pending_objects(id)); ",
+                    "INSERT INTO pending_ref VALUES ('o1')"
+                ))
                 .unwrap(),
             "index" => conn
-                .execute_batch(
-                    concat!("DROP INDEX idx_sync_pending_awaited_type_version; CREATE TABLE ","index_name_owner(value TEXT); CREATE INDEX ","idx_sync_pending_awaited_type_version ON index_name_owner(value)"),
-                )
+                .execute_batch(concat!(
+                    "DROP INDEX idx_sync_pending_awaited_type_version; CREATE TABLE ",
+                    "index_name_owner(value TEXT); CREATE INDEX ",
+                    "idx_sync_pending_awaited_type_version ON index_name_owner(value)"
+                ))
                 .unwrap(),
             other => panic!("unknown failure stage {other}"),
         }
@@ -186,7 +192,15 @@ fn phase3_clear_all_removes_ephemeral_state_but_preserves_locked_registry_and_ar
         [],
     )
     .unwrap();
-    conn.execute(concat!("INSERT INTO canonical_migration_items(contract_version,source_kind,","source_id,source_hash,status,updated_at) VALUES ('phase3-canonical-v1',","'test','x','h','unchanged','now')"), []).unwrap();
+    conn.execute(
+        concat!(
+            "INSERT INTO canonical_migration_items(contract_version,source_kind,",
+            "source_id,source_hash,status,updated_at) VALUES ('phase3-canonical-v1',",
+            "'test','x','h','unchanged','now')"
+        ),
+        [],
+    )
+    .unwrap();
     ark_core::db::clear_all(&conn).unwrap();
     assert_eq!(
         conn.query_row("SELECT COUNT(*) FROM object_sync_versions", [], |r| r

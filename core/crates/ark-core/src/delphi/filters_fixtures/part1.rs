@@ -61,4 +61,3 @@ fn canonical(spec: &Spec) -> (ArkObject, Vec<ObjectLink>) {
         .collect();
     (object, links)
 }
-

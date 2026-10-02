@@ -93,8 +93,7 @@ mod tests {
             origin_device_id: None,
             usage_complete_through: Some(through),
         };
-        let parsed: serde_json::Value =
-            serde_json::from_str(&serialize_message(&msg)).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&serialize_message(&msg)).unwrap();
         assert_eq!(parsed["usage_complete_through"]["dev-a"], 42);
     }
 
@@ -220,7 +219,11 @@ mod tests {
     #[test]
     fn test_deserialize_ts_compatible_hello() {
         // JSON exactly as the TS implementation would produce
-        let json = concat!(r#"{"type":"hello","protocol_version":1,"device_id":"dev-123","#,r#""device_name":"Electron","space_id":"abcdef0123456789","#,r#""addresses":["192.168.1.70:21531"]}"#);
+        let json = concat!(
+            r#"{"type":"hello","protocol_version":1,"device_id":"dev-123","#,
+            r#""device_name":"Electron","space_id":"abcdef0123456789","#,
+            r#""addresses":["192.168.1.70:21531"]}"#
+        );
         let msg = deserialize_message(json).unwrap();
         match msg {
             LanSyncMessage::Hello {
@@ -246,7 +249,11 @@ mod tests {
 
     #[test]
     fn test_deserialize_ts_compatible_sync_entity() {
-        let json = concat!(r#"{"type":"todo","id":"550e8400-e29b-41d4-a716-446655440000","#,r#""data":{"title":"Buy milk","isCompleted":false,"tagIds":["tag1"]},"#,r#""hlc":"2026-03-28T14:30:00.123Z:000042:delphi-web-abc123"}"#);
+        let json = concat!(
+            r#"{"type":"todo","id":"550e8400-e29b-41d4-a716-446655440000","#,
+            r#""data":{"title":"Buy milk","isCompleted":false,"tagIds":["tag1"]},"#,
+            r#""hlc":"2026-03-28T14:30:00.123Z:000042:delphi-web-abc123"}"#
+        );
         let entity: SyncEntity = serde_json::from_str(json).unwrap();
         assert_eq!(entity.entity_type, "todo");
         assert_eq!(entity.id, "550e8400-e29b-41d4-a716-446655440000");

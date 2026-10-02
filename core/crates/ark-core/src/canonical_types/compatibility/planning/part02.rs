@@ -84,10 +84,54 @@ pub(crate) fn task(
         array_or_null(m, "checklist", &["checklist_items"], u, json!([]))?,
     );
     put_extensions(o);
-    relation_single_with_aliases(m, "projectId", &["project_id"], "project", LinkWrite { links: l, id, at, unknown: u })?;
-    relation_with_aliases(m, "tagIds", &["tag_ids"], "tag", LinkWrite { links: l, id, at, unknown: u })?;
-    relation_with_aliases(m, "relatedIds", &["related_ids"], "related", LinkWrite { links: l, id, at, unknown: u })?;
-    relation_with_aliases(m, "sourceNoteId", &["source_note_id"], "source-note", LinkWrite { links: l, id, at, unknown: u })
+    relation_single_with_aliases(
+        m,
+        "projectId",
+        &["project_id"],
+        "project",
+        LinkWrite {
+            links: l,
+            id,
+            at,
+            unknown: u,
+        },
+    )?;
+    relation_with_aliases(
+        m,
+        "tagIds",
+        &["tag_ids"],
+        "tag",
+        LinkWrite {
+            links: l,
+            id,
+            at,
+            unknown: u,
+        },
+    )?;
+    relation_with_aliases(
+        m,
+        "relatedIds",
+        &["related_ids"],
+        "related",
+        LinkWrite {
+            links: l,
+            id,
+            at,
+            unknown: u,
+        },
+    )?;
+    relation_with_aliases(
+        m,
+        "sourceNoteId",
+        &["source_note_id"],
+        "source-note",
+        LinkWrite {
+            links: l,
+            id,
+            at,
+            unknown: u,
+        },
+    )
 }
 pub(crate) fn project(
     m: &Map<String, Value>,
@@ -115,8 +159,30 @@ pub(crate) fn project(
         o.insert(c.into(), string(m, c, &[a], u, true)?);
     }
     put_extensions(o);
-    relation_with_aliases(m, "tagIds", &["tag_ids"], "tag", LinkWrite { links: l, id, at, unknown: u })?;
-    relation_with_aliases(m, "relatedIds", &["related_ids"], "related", LinkWrite { links: l, id, at, unknown: u })?;
+    relation_with_aliases(
+        m,
+        "tagIds",
+        &["tag_ids"],
+        "tag",
+        LinkWrite {
+            links: l,
+            id,
+            at,
+            unknown: u,
+        },
+    )?;
+    relation_with_aliases(
+        m,
+        "relatedIds",
+        &["related_ids"],
+        "related",
+        LinkWrite {
+            links: l,
+            id,
+            at,
+            unknown: u,
+        },
+    )?;
     Ok(())
 }
 pub(crate) fn tag(
@@ -129,5 +195,16 @@ pub(crate) fn tag(
 ) -> Result<(), CompatFailure> {
     o.insert("color".into(), string(m, "color", &[], u, true)?);
     put_extensions(o);
-    relation_with_aliases(m, "relatedIds", &["related_ids", "related"], "related", LinkWrite { links: l, id, at, unknown: u })
+    relation_with_aliases(
+        m,
+        "relatedIds",
+        &["related_ids", "related"],
+        "related",
+        LinkWrite {
+            links: l,
+            id,
+            at,
+            unknown: u,
+        },
+    )
 }

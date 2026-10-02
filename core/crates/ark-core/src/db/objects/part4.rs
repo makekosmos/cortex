@@ -1,4 +1,3 @@
-
 pub fn upsert_object_link(conn: &Connection, link: &ObjectLink) -> Result<(), String> {
     // Do not use SQLite REPLACE here: it deletes the old row first.
     // РЎРј. postmortems.md В§ 2026-06-04.
@@ -51,4 +50,3 @@ pub fn list_object_links(conn: &Connection) -> Result<Vec<ObjectLink>, String> {
     rows.collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())
 }
-

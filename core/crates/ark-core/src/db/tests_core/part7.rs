@@ -32,7 +32,10 @@
             "c:\\users\\k\\appdata\\local\\discord\\discord.exe"
         );
         assert_eq!(
-            canonical_app_key("C:/Users/K/AppData/Local/Discord/app-1.0.9200/Discord.EXE", "x"),
+            canonical_app_key(
+                "C:/Users/K/AppData/Local/Discord/app-1.0.9200/Discord.EXE",
+                "x"
+            ),
             "c:\\users\\k\\appdata\\local\\discord\\discord.exe"
         );
         assert_eq!(
@@ -111,7 +114,13 @@
     #[test]
     fn merge_sorts_by_active_time_and_marks_system() {
         let rows = vec![
-            top_app_entry("x", "c:\\apps\\x.exe", "X", 10, Some("2026-01-01T00:00:00Z")),
+            top_app_entry(
+                "x",
+                "c:\\apps\\x.exe",
+                "X",
+                10,
+                Some("2026-01-01T00:00:00Z"),
+            ),
             top_app_entry(
                 "explorer",
                 "c:\\windows\\explorer.exe",
@@ -119,7 +128,13 @@
                 5,
                 Some("2026-01-02T00:00:00Z"),
             ),
-            top_app_entry("y", "c:\\apps\\y.exe", "Y", 99, Some("2026-01-01T00:00:00Z")),
+            top_app_entry(
+                "y",
+                "c:\\apps\\y.exe",
+                "Y",
+                99,
+                Some("2026-01-01T00:00:00Z"),
+            ),
         ];
         let merged = merge_top_apps(rows, 10, Some("c:\\windows"));
         assert_eq!(
@@ -194,8 +209,7 @@
         upsert_usage_session(&conn, &s_new).unwrap();
         upsert_usage_session(&conn, &s_exp).unwrap();
 
-        let snapshot =
-            load_usage_analytics(&conn, 21, 10, 24, Some("c:\\windows")).unwrap();
+        let snapshot = load_usage_analytics(&conn, 21, 10, 24, Some("c:\\windows")).unwrap();
         assert_eq!(snapshot.top_apps.len(), 2);
         let discord = &snapshot.top_apps[0];
         assert_eq!(discord.display_name, "Discord");
@@ -235,12 +249,10 @@
         let conn = setup_db();
         let mut old_app = make_tracked_app("cand-old");
         old_app.exe_path = "C:\\Games\\Nebula\\app-1.0.1\\nebula.exe".to_string();
-        old_app.normalized_exe_path =
-            "c:\\games\\nebula\\app-1.0.1\\nebula.exe".to_string();
+        old_app.normalized_exe_path = "c:\\games\\nebula\\app-1.0.1\\nebula.exe".to_string();
         let mut new_app = make_tracked_app("cand-new");
         new_app.exe_path = "C:\\Games\\Nebula\\app-1.0.2\\nebula.exe".to_string();
-        new_app.normalized_exe_path =
-            "c:\\games\\nebula\\app-1.0.2\\nebula.exe".to_string();
+        new_app.normalized_exe_path = "c:\\games\\nebula\\app-1.0.2\\nebula.exe".to_string();
         upsert_tracked_app(&conn, &old_app).unwrap();
         upsert_tracked_app(&conn, &new_app).unwrap();
         upsert_usage_session(&conn, &make_usage_session("s-old", "cand-old")).unwrap();

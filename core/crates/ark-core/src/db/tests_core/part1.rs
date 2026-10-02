@@ -120,7 +120,14 @@
             name: name.to_string(),
             schema_json: json!({
                 "fields": [
-                    { "id": "description", "label": "РћРїРёСЃР°РЅРёРµ", "kind": "long_text", "required": false, "visible": true, "read_only": false }
+                    {
+                        "id": "description",
+                        "label": "РћРїРёСЃР°РЅРёРµ",
+                        "kind": "long_text",
+                        "required": false,
+                        "visible": true,
+                        "read_only": false,
+                    }
                 ]
             })
             .to_string(),

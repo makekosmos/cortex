@@ -9,8 +9,8 @@ use ark_core::integration_replication::{
     IntegrationReplicationChange, IntegrationReplicationEntity, NodeStatus, SignedSyncEnvelope,
 };
 use ark_core::iroh_transport::{IrohConfig, IrohTransport};
-use ark_core::sync_bind::SyncBind;
 use ark_core::protocol::{generate_id, LanSyncMessage};
+use ark_core::sync_bind::SyncBind;
 use ark_core::sync_server::StorageBackend;
 use ark_core::sync_transport::{SyncTransport, TransportEvent};
 use ark_core::types::SyncEntity;
@@ -212,8 +212,18 @@ fn set_recipient_transport_key(
     let revocation_epoch = (status == "revoked").then_some(epoch as i64);
     guard
         .execute(
-            concat!("UPDATE authorized_nodes SET transport_public_key = ?1, status = ?2, ","grant_epoch = ?3, revoked_at = ?4, revocation_epoch = ?5 WHERE node_id = ?6"),
-            rusqlite::params![transport_key, status, epoch as i64, revoked_at, revocation_epoch, "device-A"],
+            concat!(
+                "UPDATE authorized_nodes SET transport_public_key = ?1, status = ?2, ",
+                "grant_epoch = ?3, revoked_at = ?4, revocation_epoch = ?5 WHERE node_id = ?6"
+            ),
+            rusqlite::params![
+                transport_key,
+                status,
+                epoch as i64,
+                revoked_at,
+                revocation_epoch,
+                "device-A"
+            ],
         )
         .unwrap();
 }

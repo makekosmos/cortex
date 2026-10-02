@@ -1,7 +1,6 @@
     // KOS-299: launch-scoped ARK events over SSE — grant-filtered, ending
     // on revoke. Shares the fixture/helpers from tests_open.rs (same `mod tests`).
 
-
     /// Read from a streaming SSE response until `until` appears or EOF.
     async fn drain_until(
         stream: &mut tokio::net::TcpStream,
@@ -29,9 +28,8 @@
     async fn launch_events_stream_filters_by_grant_and_ends_on_revoke() {
         let dir = tempfile::tempdir().expect("tempdir");
         let token = "a".repeat(64);
-        let service = Arc::new(
-            crate::package_service::tests::enabled_note_write_app_service(dir.path()),
-        );
+        let service =
+            Arc::new(crate::package_service::tests::enabled_note_write_app_service(dir.path()));
         let fixture = open_engine(dir, &token, service).await;
         let port = fixture.port;
         let origin = package_origin(port);
@@ -40,7 +38,10 @@
         let (_, launch_id, code) =
             launch_bootstrap_parts(opened["data"]["launch_url"].as_str().unwrap(), port);
         let session = response_json(&bootstrap(port, &launch_id, &code, &origin).await);
-        let launch_token = session["data"]["broker_token"].as_str().unwrap().to_string();
+        let launch_token = session["data"]["broker_token"]
+            .as_str()
+            .unwrap()
+            .to_string();
 
         let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", port))
             .await
@@ -131,4 +132,3 @@
 
         fixture.shutdown().await;
     }
-

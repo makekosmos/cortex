@@ -45,23 +45,22 @@ fn envelope_version_is_newer(
         || (proposed_hlc == current_hlc && proposed_issuer > current_issuer)
 }
 
-fn with_savepoint<T>(conn: &Connection, operation: impl FnOnce() -> Result<T, String>)
-    -> Result<T, String>
-{
+fn with_savepoint<T>(
+    conn: &Connection,
+    operation: impl FnOnce() -> Result<T, String>,
+) -> Result<T, String> {
     conn.execute_batch(&format!("SAVEPOINT {SAVEPOINT}"))
         .map_err(storage)?;
     match operation() {
-        Ok(value) => {
-            match conn.execute_batch(&format!("RELEASE SAVEPOINT {SAVEPOINT}")) {
-                Ok(()) => Ok(value),
-                Err(error) => {
-                    let _ = conn.execute_batch(&format!(
-                        "ROLLBACK TO SAVEPOINT {SAVEPOINT}; RELEASE SAVEPOINT {SAVEPOINT}"
-                    ));
-                    Err(storage(error))
-                }
+        Ok(value) => match conn.execute_batch(&format!("RELEASE SAVEPOINT {SAVEPOINT}")) {
+            Ok(()) => Ok(value),
+            Err(error) => {
+                let _ = conn.execute_batch(&format!(
+                    "ROLLBACK TO SAVEPOINT {SAVEPOINT}; RELEASE SAVEPOINT {SAVEPOINT}"
+                ));
+                Err(storage(error))
             }
-        }
+        },
         Err(error) => {
             let _ = conn.execute_batch(&format!(
                 "ROLLBACK TO SAVEPOINT {SAVEPOINT}; RELEASE SAVEPOINT {SAVEPOINT}"

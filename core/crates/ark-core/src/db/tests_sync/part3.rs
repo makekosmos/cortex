@@ -65,8 +65,8 @@
 
     #[test]
     fn phase2_insert_pending_overwrites_same_id() {
-        // Р•СЃР»Рё sync РїСЂРёРЅРѕСЃРёС‚ РѕР±РЅРѕРІР»С‘РЅРЅСѓСЋ version С‚РѕРіРѕ Р¶Рµ object'Р°, REPLACE'РёС‚,
-        // РЅРµ РґСѓР±Р»РёСЂСѓРµС‚.
+        // Р•СЃР»Рё sync РїСЂРёРЅРѕСЃРёС‚ РѕР±РЅРѕРІР»С‘РЅРЅСѓСЋ version С‚РѕРіРѕ Р¶Рµ
+        // object'Р°, REPLACE'РёС‚, РЅРµ РґСѓР±Р»РёСЂСѓРµС‚.
         let conn = setup_db();
         let e1 = phase2_make_sync_entity_object("obj-1", "future_type", "First");
         let e2 = phase2_make_sync_entity_object("obj-1", "future_type", "Second");
@@ -150,20 +150,23 @@
     #[test]
     fn check_integrity_passes_on_fresh_db() {
         let conn = Connection::open_in_memory().unwrap();
-        check_integrity(&conn).expect("РїСѓСЃС‚Р°СЏ DB РґРѕР»Р¶РЅР° РїСЂРѕС…РѕРґРёС‚СЊ integrity_check");
+        check_integrity(&conn)
+            .expect("РїСѓСЃС‚Р°СЏ DB РґРѕР»Р¶РЅР° РїСЂРѕС…РѕРґРёС‚СЊ integrity_check");
     }
 
     #[test]
     fn check_integrity_passes_after_init_schema() {
         let conn = setup_db();
-        check_integrity(&conn).expect("DB РїРѕСЃР»Рµ init_schema РґРѕР»Р¶РЅР° Р±С‹С‚СЊ С†РµР»РѕСЃС‚РЅРѕР№");
+        check_integrity(&conn)
+            .expect("DB РїРѕСЃР»Рµ init_schema РґРѕР»Р¶РЅР° Р±С‹С‚СЊ С†РµР»РѕСЃС‚РЅРѕР№");
     }
 
     #[test]
     fn init_schema_fails_on_corrupted_db() {
         let tmp = tempfile::NamedTempFile::new().unwrap();
         let path = tmp.path().to_path_buf();
-        // РЎРѕР·РґР°С‘Рј РІР°Р»РёРґРЅСѓСЋ DB Рё РЅР°РїРѕР»РЅСЏРµРј РґР°РЅРЅС‹РјРё (РЅСѓР¶РЅРѕ в‰Ґ 1 data page С‡С‚РѕР±С‹
+        // РЎРѕР·РґР°С‘Рј РІР°Р»РёРґРЅСѓСЋ DB Рё РЅР°РїРѕР»РЅСЏРµРј РґР°РЅРЅС‹РјРё (РЅСѓР¶РЅРѕ в‰Ґ
+        // 1 data page С‡С‚РѕР±С‹
         // РїРѕРІСЂРµРґРёС‚СЊ РЅРµ header).
         {
             let conn = open_db(path.to_str().unwrap()).unwrap();
@@ -190,7 +193,8 @@
             file.write_all(&[0xFF; 4096]).unwrap();
             file.flush().unwrap();
         }
-        // РћС‚РєСЂС‹РІР°РµРј СЃРЅРѕРІР°. open_db РјРѕР¶РµС‚ РїСЂРѕР№С‚Рё (header РёРЅС‚Р°РєС‚РµРЅ) РёР»Рё fail
+        // РћС‚РєСЂС‹РІР°РµРј СЃРЅРѕРІР°. open_db РјРѕР¶РµС‚ РїСЂРѕР№С‚Рё
+        // (header РёРЅС‚Р°РєС‚РµРЅ) РёР»Рё fail
         // РЅР° PRAGMA journal_mode. Р•СЃР»Рё РѕС‚РєСЂС‹С‚ вЂ” init_schema fail'РёС‚ РЅР°
         // integrity_check. Р›СЋР±РѕР№ РїСѓС‚СЊ вЂ” fail-loud.
         let open_result = open_db(path.to_str().unwrap());
@@ -205,7 +209,8 @@
                 err.contains("integrity")
                     || err.contains("corruption")
                     || err.contains("malformed"),
-                concat!("РѕС€РёР±РєР° РґРѕР»Р¶РЅР° СѓРїРѕРјРёРЅР°С‚СЊ integrity/corruption/malformed,"," РїРѕР»СѓС‡РёР»Рё: {err}")
+                "РѕС€РёР±РєР° РґРѕР»Р¶РЅР° СѓРїРѕРјРёРЅР°С‚СЊ integrity/corruption/malformed,\
+ РїРѕР»СѓС‡РёР»Рё: {err}"
             );
         }
         // else: open_db СѓР¶Рµ fail'РёР» вЂ” С‚РѕР¶Рµ acceptable fail-loud path.
@@ -226,7 +231,10 @@
         let dest_str = dest.to_str().unwrap();
         backup_to_file(&conn, dest_str).expect("backup РґРѕР»Р¶РµРЅ РїСЂРѕР№С‚Рё");
 
-        assert!(dest.exists(), "С„Р°Р№Р» backup'Р° РґРѕР»Р¶РµРЅ СЃСѓС‰РµСЃС‚РІРѕРІР°С‚СЊ");
+        assert!(
+            dest.exists(),
+            "С„Р°Р№Р» backup'Р° РґРѕР»Р¶РµРЅ СЃСѓС‰РµСЃС‚РІРѕРІР°С‚СЊ"
+        );
         let backup_conn = open_db(dest_str).unwrap();
         let objects = list_objects(&backup_conn).unwrap();
         assert_eq!(
@@ -244,7 +252,8 @@
         let src_path = tmp.path().join("ark.db");
         let src_str = src_path.to_str().unwrap();
         {
-            // Р¤Р°Р№Р»РѕРІС‹Р№ source: chunked backup РѕС‚РєСЂС‹РІР°РµС‚ РµРіРѕ РїРѕ РїСѓС‚Рё РѕС‚РґРµР»СЊРЅС‹Рј
+            // Р¤Р°Р№Р»РѕРІС‹Р№ source: chunked backup РѕС‚РєСЂС‹РІР°РµС‚ РµРіРѕ РїРѕ РїСѓС‚Рё
+            // РѕС‚РґРµР»СЊРЅС‹Рј
             // РєРѕРЅРЅРµРєС€РЅРѕРј (Р° РЅРµ РёР· РїРµСЂРµРґР°РЅРЅРѕРіРѕ &Connection).
             let conn = open_db(src_str).unwrap();
             init_schema(&conn).unwrap();
@@ -265,7 +274,10 @@
         backup_to_file_chunked(src_str, dest_str, 4, std::time::Duration::from_millis(0))
             .expect("chunked backup РґРѕР»Р¶РµРЅ РїСЂРѕР№С‚Рё");
 
-        assert!(dest.exists(), "С„Р°Р№Р» backup'Р° РґРѕР»Р¶РµРЅ СЃСѓС‰РµСЃС‚РІРѕРІР°С‚СЊ");
+        assert!(
+            dest.exists(),
+            "С„Р°Р№Р» backup'Р° РґРѕР»Р¶РµРЅ СЃСѓС‰РµСЃС‚РІРѕРІР°С‚СЊ"
+        );
         let backup_conn = open_db(dest_str).unwrap();
         let objects = list_objects(&backup_conn).unwrap();
         assert_eq!(

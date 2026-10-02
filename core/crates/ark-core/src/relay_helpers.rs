@@ -21,13 +21,13 @@ fn _touch_peer_record(_: Option<PeerRecord>) {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::{init_schema, SqliteStorageBackend};
     use futures_util::{SinkExt, StreamExt};
     use rusqlite::Connection;
     use std::sync::{Arc, Mutex as StdMutex};
     use std::time::Duration;
     use tokio::net::TcpListener;
     use tokio_tungstenite::tungstenite::Message;
-    use crate::db::{init_schema, SqliteStorageBackend};
     type Room = HashMap<String, mpsc::UnboundedSender<Message>>;
     type Rooms = Arc<StdMutex<HashMap<String, Room>>>;
     // The accept_hdr_async callback must return tungstenite's
@@ -85,7 +85,9 @@ mod tests {
                         _ = &mut write_task => break,
                         frame = ws_rx.next() => {
                             match frame {
-                                Some(Ok(msg @ Message::Text(_))) | Some(Ok(msg @ Message::Binary(_))) => {
+                                Some(
+                                    Ok(msg @ Message::Text(_))
+                                ) | Some(Ok(msg @ Message::Binary(_))) => {
                                     let guard = rooms.lock().unwrap();
                                     if let Some(room) = guard.get(&space_id) {
                                         for (dev, tx) in room {

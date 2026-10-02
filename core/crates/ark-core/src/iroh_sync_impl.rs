@@ -88,7 +88,10 @@ impl SyncTransport for IrohTransport {
                                         return;
                                     }
                                 };
-                                eprintln!("[iroh] accepted incoming connection remote={}", conn.remote_id());
+                                eprintln!(
+                                    "[iroh] accepted incoming connection remote={}",
+                                    conn.remote_id(),
+                                );
                                 handle_connection(ConnectionParams {
                                     conn,
                                     is_dialer: false,
@@ -204,7 +207,11 @@ impl SyncTransport for IrohTransport {
         ) {
             return Err("iroh broadcast cannot carry addressed integration messages".into());
         }
-        let _ = self.out_tx.send(OutgoingMessage { target: None, msg, completion: None });
+        let _ = self.out_tx.send(OutgoingMessage {
+            target: None,
+            msg,
+            completion: None,
+        });
         Ok(())
     }
 
@@ -229,9 +236,13 @@ impl SyncTransport for IrohTransport {
             let context = self.outbound_storage.read().await.clone().ok_or_else(|| {
                 "iroh outbound integration authorization is unavailable".to_string()
             })?;
-            context.storage
+            context
+                .storage
                 .validate_outbound_signed_integration_frame_with_transport(
-                    frame, &context.space_id, &context.origin_node_id, &target.to_string(),
+                    frame,
+                    &context.space_id,
+                    &context.origin_node_id,
+                    &target.to_string(),
                 )
                 .await?;
         }
@@ -267,8 +278,15 @@ impl SyncTransport for IrohTransport {
         Ok(())
     }
 
-    fn bind_authenticated_peer(&self, device_id: &str, transport_public_key: &str) -> Result<(), String> {
-        if self.registry.bind_authenticated(device_id, transport_public_key) {
+    fn bind_authenticated_peer(
+        &self,
+        device_id: &str,
+        transport_public_key: &str,
+    ) -> Result<(), String> {
+        if self
+            .registry
+            .bind_authenticated(device_id, transport_public_key)
+        {
             Ok(())
         } else {
             Err("iroh transport identity does not match peer endpoint".into())

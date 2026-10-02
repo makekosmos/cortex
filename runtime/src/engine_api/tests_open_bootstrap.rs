@@ -42,9 +42,8 @@
     async fn release_grace_lets_a_reload_renew_then_purges_a_real_close() {
         let dir = tempfile::tempdir().expect("tempdir");
         let token = "a".repeat(64);
-        let service = Arc::new(
-            crate::package_service::tests::enabled_note_write_app_service(dir.path()),
-        );
+        let service =
+            Arc::new(crate::package_service::tests::enabled_note_write_app_service(dir.path()));
         let fixture = open_engine(dir, &token, service).await;
         let port = fixture.port;
 

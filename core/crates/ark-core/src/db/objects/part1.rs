@@ -14,7 +14,10 @@ pub fn upsert_object_type(conn: &Connection, object_type: &ObjectType) -> Result
     // mutating object_types so the legacy write remains fail-closed and atomic.
     let has_aliases: bool = conn
         .query_row(
-            concat!("SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND ","name='object_type_aliases')"),
+            concat!(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND ",
+                "name='object_type_aliases')"
+            ),
             [],
             |row| row.get::<_, i64>(0),
         )
@@ -57,8 +60,16 @@ pub fn upsert_object_type(conn: &Connection, object_type: &ObjectType) -> Result
     )
     .map_err(|e| e.to_string())?;
     let has_versions: bool = conn
-        .query_row(concat!("SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND ","name='object_type_versions')"), [], |row| row.get::<_, i64>(0))
-        .map_err(|e| e.to_string())? != 0;
+        .query_row(
+            concat!(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND ",
+                "name='object_type_versions')"
+            ),
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(|e| e.to_string())?
+        != 0;
     if has_versions {
         type_registry::ensure_legacy_type_version(
             conn,
@@ -84,7 +95,22 @@ pub fn upsert_object_type(conn: &Connection, object_type: &ObjectType) -> Result
                 return Err("legacy compatibility version hash conflict".into());
             }
         } else {
-            conn.execute(concat!("INSERT INTO object_type_versions(type_id,version,schema_json,ui_schema_json,","content_contract_json,relations_json,sync_policy_json,schema_hash,","created_at) VALUES (?1,?2,?3,?4,'{}','[]','{}',?5,?6)"), params![object_type.id, compat_version, object_type.schema_json, object_type.ui_schema_json, full_hash, object_type.created_at]).map_err(|e| e.to_string())?;
+            conn.execute(
+                concat!(
+                    "INSERT INTO object_type_versions(type_id,version,schema_json,ui_schema_json,",
+                    "content_contract_json,relations_json,sync_policy_json,schema_hash,",
+                    "created_at) VALUES (?1,?2,?3,?4,'{}','[]','{}',?5,?6)"
+                ),
+                params![
+                    object_type.id,
+                    compat_version,
+                    object_type.schema_json,
+                    object_type.ui_schema_json,
+                    full_hash,
+                    object_type.created_at
+                ],
+            )
+            .map_err(|e| e.to_string())?;
         }
         conn.execute(
             "UPDATE object_types SET current_version=?1,status='active' WHERE id=?2",
@@ -94,7 +120,10 @@ pub fn upsert_object_type(conn: &Connection, object_type: &ObjectType) -> Result
     }
     let has_current_version: bool = conn
         .query_row(
-            concat!("SELECT EXISTS(SELECT 1 FROM pragma_table_info('object_types') WHERE ","name='current_version')"),
+            concat!(
+                "SELECT EXISTS(SELECT 1 FROM pragma_table_info('object_types') WHERE ",
+                "name='current_version')"
+            ),
             [],
             |row| row.get::<_, i64>(0),
         )

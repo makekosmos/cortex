@@ -19,7 +19,8 @@ fn phase2_pending_db() -> Connection {
             received_at TEXT NOT NULL
          );
          CREATE INDEX idx_sync_pending_awaited_type ON sync_pending_objects(awaited_type_id);
-         CREATE INDEX idx_sync_pending_awaited_type_version ON sync_pending_objects(awaited_type_id, awaited_type_version);",
+         CREATE INDEX idx_sync_pending_awaited_type_version ON \
+sync_pending_objects(awaited_type_id, awaited_type_version);",
     )
     .unwrap();
     conn
@@ -68,10 +69,16 @@ fn phase3_pending_migrates_phase2_key_losslessly_and_preserves_five_columns() {
 
     migrate_phase2_to_v3(&conn).unwrap();
 
-    let row: (String, String, String, String, String) = conn.query_row(
-        concat!("SELECT id,payload,awaited_type_id,awaited_type_version,received_at FROM ","sync_pending_objects"),
-        [], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
-    ).unwrap();
+    let row: (String, String, String, String, String) = conn
+        .query_row(
+            concat!(
+                "SELECT id,payload,awaited_type_id,awaited_type_version,received_at FROM ",
+                "sync_pending_objects"
+            ),
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+        )
+        .unwrap();
     assert_eq!(
         row,
         (
@@ -143,7 +150,16 @@ fn phase3_pending_replaces_only_exact_tuple_when_hlc_is_newer() {
         "type-b",
     )
     .unwrap();
-    let payload: String = conn.query_row(concat!("SELECT payload FROM sync_pending_objects WHERE id='o1' AND ","awaited_type_id='type-a' AND awaited_type_version='1.0.0'"), [], |r| r.get(0)).unwrap();
+    let payload: String = conn
+        .query_row(
+            concat!(
+                "SELECT payload FROM sync_pending_objects WHERE id='o1' AND ",
+                "awaited_type_id='type-a' AND awaited_type_version='1.0.0'"
+            ),
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
     assert!(payload.contains("new"));
     assert_eq!(
         conn.query_row("SELECT COUNT(*) FROM sync_pending_objects", [], |r| r
@@ -190,7 +206,16 @@ fn phase3_pending_replay_rejects_corrupted_tuple_atomically() {
         system_locked: false,
     };
     ark_core::db::upsert_object_type(&conn, &typ).unwrap();
-    conn.execute(concat!("INSERT INTO object_type_versions (type_id,version,schema_json,","ui_schema_json,content_contract_json,relations_json,sync_policy_json,","schema_hash,created_at) VALUES ('future','1.0.0','{}','{}','{}','[]','{}',","'h1','now')"), []).unwrap();
+    conn.execute(
+        concat!(
+            "INSERT INTO object_type_versions (type_id,version,schema_json,",
+            "ui_schema_json,content_contract_json,relations_json,sync_policy_json,",
+            "schema_hash,created_at) VALUES ('future','1.0.0','{}','{}','{}','[]','{}',",
+            "'h1','now')"
+        ),
+        [],
+    )
+    .unwrap();
     let corrupted = serde_json::to_string(&entity_for_type(
         "o1",
         "wrong-type",
@@ -200,7 +225,11 @@ fn phase3_pending_replay_rejects_corrupted_tuple_atomically() {
     ))
     .unwrap();
     conn.execute(
-        concat!("INSERT INTO sync_pending_objects (id,payload,awaited_type_id,","awaited_type_version,received_at) VALUES ('o1',?1,'future','1.0.0',","'received')"),
+        concat!(
+            "INSERT INTO sync_pending_objects (id,payload,awaited_type_id,",
+            "awaited_type_version,received_at) VALUES ('o1',?1,'future','1.0.0',",
+            "'received')"
+        ),
         params![corrupted],
     )
     .unwrap();
@@ -231,7 +260,16 @@ fn phase3_pending_replay_and_delete_are_exact_tuple_isolated() {
         system_locked: false,
     };
     ark_core::db::upsert_object_type(&conn, &typ).unwrap();
-    conn.execute(concat!("INSERT INTO object_type_versions (type_id,version,schema_json,","ui_schema_json,content_contract_json,relations_json,sync_policy_json,","schema_hash,created_at) VALUES ('future','1.0.0','{}','{}','{}','[]','{}',","'h1','now'),('future','2.0.0','{}','{}','{}','[]','{}','h2','now')"), []).unwrap();
+    conn.execute(
+        concat!(
+            "INSERT INTO object_type_versions (type_id,version,schema_json,",
+            "ui_schema_json,content_contract_json,relations_json,sync_policy_json,",
+            "schema_hash,created_at) VALUES ('future','1.0.0','{}','{}','{}','[]','{}',",
+            "'h1','now'),('future','2.0.0','{}','{}','{}','[]','{}','h2','now')"
+        ),
+        [],
+    )
+    .unwrap();
     insert_pending_object(
         &conn,
         &entity("o1", "1.0.0", "2026-01-01T00:00:00Z:1", "a"),
@@ -248,13 +286,29 @@ fn phase3_pending_replay_and_delete_are_exact_tuple_isolated() {
         replay_pending_for_type(&conn, "future", "1.0.0").unwrap(),
         1
     );
-    assert_eq!(conn.query_row(concat!("SELECT COUNT(*) FROM sync_pending_objects WHERE id='o1' AND ","awaited_type_version='2.0.0'"), [], |r| r.get::<_, i64>(0)).unwrap(), 1);
+    assert_eq!(
+        conn.query_row(
+            "SELECT COUNT(*) FROM sync_pending_objects WHERE id='o1' AND \
+awaited_type_version='2.0.0'",
+            [],
+            |r| r.get::<_, i64>(0)
+        )
+        .unwrap(),
+        1
+    );
 }
 
 #[test]
 fn phase3_pending_rejects_inconsistent_payload_without_mutation() {
     let conn = phase2_pending_db();
-    conn.execute(concat!("INSERT INTO sync_pending_objects VALUES ('o1','{\"id\":\"different\"}',","'future','1.0.0','r')"), []).unwrap();
+    conn.execute(
+        concat!(
+            "INSERT INTO sync_pending_objects VALUES ('o1','{\"id\":\"different\"}',",
+            "'future','1.0.0','r')"
+        ),
+        [],
+    )
+    .unwrap();
     assert!(migrate_phase2_to_v3(&conn).is_err());
     let pk: i64 = conn
         .query_row(

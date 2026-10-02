@@ -1,4 +1,3 @@
-
 fn clamp_usage_process_limit(limit: i64) -> i64 {
     limit.clamp(1, 25)
 }
@@ -92,15 +91,20 @@ pub fn list_recent_usage_processes(
     let mut stmt = conn
         .prepare(
             "SELECT tracked_apps.id AS tracked_app_id,
-                    NULLIF(COALESCE(tracked_apps.display_name, tracked_apps.process_name, tracked_apps.exe_path), '') AS display_name,
+                    NULLIF(COALESCE(tracked_apps.display_name, tracked_apps.process_name, \
+tracked_apps.exe_path), '') AS display_name,
                     NULLIF(tracked_apps.exe_path, '') AS exe_path,
                     NULLIF(tracked_apps.process_name, '') AS process_name,
-                    MAX(COALESCE(usage_sessions.ended_at, usage_sessions.started_at)) AS last_seen_at,
-                    SUM(CASE WHEN usage_sessions.runtime_ms > 0 THEN 1 ELSE 0 END) AS session_count
+                    MAX(COALESCE(usage_sessions.ended_at, usage_sessions.started_at)) AS \
+last_seen_at,
+                    SUM(CASE WHEN usage_sessions.runtime_ms > 0 THEN 1 ELSE 0 END) AS \
+session_count
              FROM usage_sessions
              JOIN tracked_apps ON tracked_apps.id = usage_sessions.tracked_app_id
-             WHERE NULLIF(COALESCE(tracked_apps.exe_path, tracked_apps.process_name), '') IS NOT NULL
-             GROUP BY tracked_apps.id, tracked_apps.display_name, tracked_apps.exe_path, tracked_apps.process_name
+             WHERE NULLIF(COALESCE(tracked_apps.exe_path, tracked_apps.process_name), '') IS \
+NOT NULL
+             GROUP BY tracked_apps.id, tracked_apps.display_name, tracked_apps.exe_path, \
+tracked_apps.process_name
              ORDER BY last_seen_at DESC
              LIMIT ?1",
         )
@@ -133,11 +137,14 @@ pub fn search_usage_processes(
     let mut stmt = conn
         .prepare(
             "SELECT tracked_apps.id AS tracked_app_id,
-                    NULLIF(COALESCE(tracked_apps.display_name, tracked_apps.process_name, tracked_apps.exe_path), '') AS display_name,
+                    NULLIF(COALESCE(tracked_apps.display_name, tracked_apps.process_name, \
+tracked_apps.exe_path), '') AS display_name,
                     NULLIF(tracked_apps.exe_path, '') AS exe_path,
                     NULLIF(tracked_apps.process_name, '') AS process_name,
-                    MAX(COALESCE(usage_sessions.ended_at, usage_sessions.started_at)) AS last_seen_at,
-                    SUM(CASE WHEN usage_sessions.runtime_ms > 0 THEN 1 ELSE 0 END) AS session_count
+                    MAX(COALESCE(usage_sessions.ended_at, usage_sessions.started_at)) AS \
+last_seen_at,
+                    SUM(CASE WHEN usage_sessions.runtime_ms > 0 THEN 1 ELSE 0 END) AS \
+session_count
              FROM usage_sessions
              JOIN tracked_apps ON tracked_apps.id = usage_sessions.tracked_app_id
              WHERE (
@@ -145,7 +152,8 @@ pub fn search_usage_processes(
                 OR LOWER(COALESCE(tracked_apps.process_name, '')) LIKE ?1
                 OR LOWER(COALESCE(tracked_apps.exe_path, '')) LIKE ?1
              )
-             GROUP BY tracked_apps.id, tracked_apps.display_name, tracked_apps.exe_path, tracked_apps.process_name
+             GROUP BY tracked_apps.id, tracked_apps.display_name, tracked_apps.exe_path, \
+tracked_apps.process_name
              ORDER BY last_seen_at DESC
              LIMIT ?2",
         )

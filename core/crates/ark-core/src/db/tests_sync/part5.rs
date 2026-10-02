@@ -145,22 +145,17 @@
         {
             let guard = conn.lock().unwrap();
             assert_eq!(
-                guard.query_row(
-                    "SELECT COUNT(*) FROM usage_sync_log",
-                    [],
-                    |row| row.get::<_, i64>(0),
-                ),
+                guard.query_row("SELECT COUNT(*) FROM usage_sync_log", [], |row| row
+                    .get::<_, i64>(0),),
                 Ok(1),
                 "applied usage entity should have a sync-log ref"
             );
             clear_all(&guard).unwrap();
             for table in ["usage_sync_log", "usage_sync_versions"] {
                 let count: i64 = guard
-                    .query_row(
-                        &format!("SELECT COUNT(*) FROM {table}"),
-                        [],
-                        |row| row.get(0),
-                    )
+                    .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+                        row.get(0)
+                    })
                     .unwrap();
                 assert_eq!(count, 0, "clear_all must clear {table}");
             }

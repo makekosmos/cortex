@@ -20,10 +20,34 @@ fn regenerate_phase3_compatibility_corpus() {
         let raw = serde_json::to_vec(&source).expect("serialize source");
         case["expected"] = match map_legacy(&source) {
             Ok(m) => {
-                serde_json::json!({"ok":true,"value":{"object":{"id":m.object.id,"typeId":m.object.type_id,"typeVersion":m.object.type_version,"title":m.object.title,"contentJson":m.object.content_json,"propsJson":m.object.props_json,"createdAt":m.object.created_at,"updatedAt":m.object.updated_at,"deletedAt":m.object.deleted_at},"links":m.links,"localState":m.local_state.into_iter().map(|x| serde_json::json!({"dataJson":x.data_json})).collect::<Vec<_>>(),"quarantine":m.quarantine.into_iter().map(|x| serde_json::json!({"fieldsJson":x.fields_json})).collect::<Vec<_>>(),"rawSource":String::from_utf8(raw).unwrap()}})
+                serde_json::json!(
+                    {"ok":true,
+                    "value":{"object":{"id":m.object.id,
+                    "typeId":m.object.type_id,
+                    "typeVersion":m.object.type_version,
+                    "title":m.object.title,
+                    "contentJson":m.object.content_json,
+                    "propsJson":m.object.props_json,
+                    "createdAt":m.object.created_at,
+                    "updatedAt":m.object.updated_at,
+                    "deletedAt":m.object.deleted_at},
+                    "links":m.links,
+                    "localState":m.local_state.into_iter().map(
+                        |x| serde_json::json!({"dataJson":x.data_json})
+                    ).collect::<Vec<_>>(),
+                    "quarantine":m.quarantine.into_iter().map(
+                        |x| serde_json::json!({"fieldsJson":x.fields_json})
+                    ).collect::<Vec<_>>(),
+                    "rawSource":String::from_utf8(raw).unwrap()}})
             }
             Err(e) => {
-                serde_json::json!({"ok":false,"error":{"code":e.code(),"sourceKind":e.source_kind(),"sourceId":e.source_id(),"pointer":e.pointer(),"rawSource":String::from_utf8_lossy(e.raw_source()).to_string()}})
+                serde_json::json!(
+                    {"ok":false,
+                    "error":{"code":e.code(),
+                    "sourceKind":e.source_kind(),
+                    "sourceId":e.source_id(),
+                    "pointer":e.pointer(),
+                    "rawSource":String::from_utf8_lossy(e.raw_source()).to_string()}})
             }
         };
     }

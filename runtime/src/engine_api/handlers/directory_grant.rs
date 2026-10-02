@@ -113,7 +113,10 @@ async fn handle_directory_grant(
     match result {
         Ok((_, _, Some(persistent_grant_id))) => json_response(
             StatusCode::OK,
-            json!({ "ok": true, "data": { "persistentGrantId": persistent_grant_id, "label": label } }),
+            json!(
+                { "ok": true,
+                "data": { "persistentGrantId": persistent_grant_id,
+                "label": label } }),
         ),
         _ => json_response(
             StatusCode::BAD_REQUEST,

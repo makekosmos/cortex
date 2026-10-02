@@ -294,8 +294,11 @@
             ("legacy-task-gone", Some("2026-02-01T00:00:00.000Z")),
         ] {
             conn.execute(
-                "INSERT INTO objects (id,type_id,type_version,title,content_json,props_json,created_at,updated_at,deleted_at)
-                 VALUES (?1,'task_obj','0.0.0-legacy',?1,'{}','{}','2026-01-01T00:00:00.000Z','2026-01-02T00:00:00.000Z',?2)",
+                "INSERT INTO objects (id,type_id,type_version,title,content_json,props_json,\
+created_at,\
+updated_at,deleted_at)
+                 VALUES (?1,'task_obj','0.0.0-legacy',?1,'{}','{}','2026-01-01T00:00:00.000Z',\
+'2026-01-02T00:00:00.000Z',?2)",
                 params![id, deleted],
             )
             .unwrap();
@@ -314,7 +317,8 @@
         // Same contract for the running-time-entry hot path.
         let running = make_time_entry("entry-legacy", "2026-03-01T10:00:00.000Z", None, "manual");
         conn.execute(
-            "INSERT INTO objects (id,type_id,type_version,title,content_json,props_json,created_at,updated_at,deleted_at)
+            "INSERT INTO objects (id,type_id,type_version,title,content_json,props_json,created_at,\
+updated_at,deleted_at)
              VALUES (?1,?2,?3,?4,?5,?6,?7,?8,NULL)",
             params![
                 running.id,

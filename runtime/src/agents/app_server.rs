@@ -93,71 +93,171 @@ async fn run_app_server(
     loop {
         tokio::select! {
             command = rx.recv() => match command {
-                Some(AppCommand::Send{text}) => {
-                    let turn_id=active_turn.lock().await.clone();
-                    let request_id=next_id.fetch_add(1,Ordering::Relaxed);
-                    if let Err(error)=send_turn(&mut startup.stdin,request_id,&startup.thread_id,&text,session.model.as_deref(),&session.mode,turn_id.as_deref()).await {
-                        let _=service.append_and_emit(&session.id,"error",json!({"message":error}));
+                Some(AppCommand::Send { text }) => {
+                    let turn_id = active_turn.lock().await.clone();
+                    let request_id = next_id.fetch_add(1, Ordering::Relaxed);
+                    let send = send_turn(
+                        &mut startup.stdin,
+                        request_id,
+                        &startup.thread_id,
+                        &text,
+                        session.model.as_deref(),
+                        &session.mode,
+                        turn_id.as_deref(),
+                    )
+                    .await;
+                    if let Err(error) = send {
+                        let _ = service
+                            .append_and_emit(&session.id, "error", json!({ "message": error }));
                     } else {
                         pending_turn_requests.insert(request_id);
                     }
                 }
-                Some(AppCommand::Interrupt{expected_turn_id,done}) => {
-                    let current=active_turn.lock().await.clone();
-                    if current.as_deref()!=Some(expected_turn_id.as_str()) {
-                        let _=done.send(Err("active turn changed before interrupt".into()));
+                Some(AppCommand::Interrupt { expected_turn_id, done }) => {
+                    let current = active_turn.lock().await.clone();
+                    if current.as_deref() != Some(expected_turn_id.as_str()) {
+                        let _ = done.send(Err("active turn changed before interrupt".into()));
                     } else if pending_interrupt.is_some() {
-                        let _=done.send(Err("interrupt already pending".into()));
+                        let _ = done.send(Err("interrupt already pending".into()));
                     } else {
-                        let request_id=next_id.fetch_add(1,Ordering::Relaxed);
-                        match send_rpc(&mut startup.stdin,request_id,"turn/interrupt",json!({"threadId":startup.thread_id,"turnId":expected_turn_id})).await {
-                            Ok(()) => pending_interrupt=Some((request_id,expected_turn_id,done)),
-                            Err(error) => { let _=done.send(Err(error)); }
+                        let request_id = next_id.fetch_add(1, Ordering::Relaxed);
+                        let sent = send_rpc(
+                            &mut startup.stdin,
+                            request_id,
+                            "turn/interrupt",
+                            json!({
+                                "threadId": startup.thread_id,
+                                "turnId": expected_turn_id,
+                            }))
+                        .await;
+                        match sent {
+                            Ok(()) => {
+                                pending_interrupt = Some((request_id, expected_turn_id, done));
+                            }
+                            Err(error) => {
+                                let _ = done.send(Err(error));
+                            }
                         }
                     }
                 }
-                Some(AppCommand::Approval{request_id,result,done}) => { let result=write_json(&mut startup.stdin,&json!({"id":request_id,"result":result})).await; let _=done.send(result); }
+                Some(AppCommand::Approval { request_id, result, done }) => {
+                    let result = write_json(
+                        &mut startup.stdin,
+                        &json!({ "id": request_id, "result": result }))
+                    .await;
+                    let _ = done.send(result);
+                }
                 Some(AppCommand::Shutdown(done)) => {
-                    if let Some((_,_,interrupt_done))=pending_interrupt.take() { let _=interrupt_done.send(Err("runtime stopped".into())); }
-                    let result=startup.process_tree.terminate_and_wait(Duration::from_secs(5)).await.map(|_|()).map_err(|error|error.to_string());
-                    if let Some(done)=done { let _=done.send(result); }
+                    if let Some((_, _, interrupt_done)) = pending_interrupt.take() {
+                        let _ = interrupt_done.send(Err("runtime stopped".into()));
+                    }
+                    let result = startup
+                        .process_tree
+                        .terminate_and_wait(Duration::from_secs(5))
+                        .await
+                        .map(|_| ())
+                        .map_err(|error| error.to_string());
+                    if let Some(done) = done {
+                        let _ = done.send(result);
+                    }
                     break;
                 }
-                None => { let _=startup.process_tree.terminate_and_wait(Duration::from_secs(5)).await; break; }
+                None => {
+                    let _ = startup
+                        .process_tree
+                        .terminate_and_wait(Duration::from_secs(5))
+                        .await;
+                    break;
+                }
             },
             line = startup.lines.next_line() => match line {
-                Ok(Some(line)) => if let Ok(message)=serde_json::from_str::<Value>(&line) {
-                    if !service.runtime_is_current(&session.id,generation) { continue; }
-                    if let Some((request_id,_,_))=pending_interrupt.as_ref() {
-                        if message.get("id").and_then(Value::as_i64)==Some(*request_id) && message.get("error").is_some() {
-                            if let Some((_,_,done))=pending_interrupt.take() { let _=done.send(Err(message["error"].to_string())); }
+                Ok(Some(line)) => if let Ok(message) = serde_json::from_str::<Value>(&line) {
+                    if !service.runtime_is_current(&session.id, generation) {
+                        continue;
+                    }
+                    if let Some((request_id, _, _)) = pending_interrupt.as_ref() {
+                        let answered = message.get("id").and_then(Value::as_i64)
+                            == Some(*request_id);
+                        if answered && message.get("error").is_some() {
+                            if let Some((_, _, done)) = pending_interrupt.take() {
+                                let _ = done.send(Err(message["error"].to_string()));
+                            }
                         }
                     }
-                    if let Some(id)=message.get("id").and_then(Value::as_i64).filter(|id| pending_turn_requests.remove(id)) {
-                        if let Some(error)=message.get("error") {
-                            let _=service.set_status(&session.id,SessionStatus::Failed);
-                            let _=service.append_and_emit(&session.id,"error",json!({"requestId":id,"message":error}));
-                            service.emit("session_updated",&session.id,json!(service.get_session(&session.id).ok()));
-                        } else if let Some(turn_id)=message.pointer("/result/turn/id").and_then(Value::as_str) {
-                            *active_turn.lock().await=Some(turn_id.to_string());
-                            let _=service.update_codex_ids(&session.id,None,Some(turn_id));
+                    let request_id = message
+                        .get("id")
+                        .and_then(Value::as_i64)
+                        .filter(|id| pending_turn_requests.remove(id));
+                    if let Some(id) = request_id {
+                        if let Some(error) = message.get("error") {
+                            let _ = service.set_status(&session.id, SessionStatus::Failed);
+                            let _ = service.append_and_emit(
+                                &session.id,
+                                "error",
+                                json!({ "requestId": id, "message": error }));
+                            service.emit(
+                                "session_updated",
+                                &session.id,
+                                json!(service.get_session(&session.id).ok()),
+                            );
+                        } else if let Some(turn_id) = message
+                            .pointer("/result/turn/id")
+                            .and_then(Value::as_str)
+                        {
+                            *active_turn.lock().await = Some(turn_id.to_string());
+                            let _ =
+                                service.update_codex_ids(&session.id, None, Some(turn_id));
                         }
                     }
-                    let completed=message.get("method").and_then(Value::as_str)==Some("turn/completed");
-                    let completed_id=message.pointer("/params/turn/id").and_then(Value::as_str).map(str::to_string);
-                    let completed_status=message.pointer("/params/turn/status").and_then(Value::as_str).map(str::to_string);
-                    handle_app_message(&service,&session.id,generation,&active_turn,message).await;
+                    let completed =
+                        message.get("method").and_then(Value::as_str) == Some("turn/completed");
+                    let completed_id = message
+                        .pointer("/params/turn/id")
+                        .and_then(Value::as_str)
+                        .map(str::to_string);
+                    let completed_status = message
+                        .pointer("/params/turn/status")
+                        .and_then(Value::as_str)
+                        .map(str::to_string);
+                    handle_app_message(&service, &session.id, generation, &active_turn, message)
+                        .await;
                     if completed {
-                        if let Some((_,expected,done))=pending_interrupt.take() {
-                            let result=if completed_id.as_deref()==Some(expected.as_str()) && completed_status.as_deref()==Some("interrupted") { Ok(()) } else { Err("active turn did not acknowledge interrupt".into()) };
-                            let _=done.send(result);
+                        if let Some((_, expected, done)) = pending_interrupt.take() {
+                            let acknowledged = completed_id.as_deref()
+                                == Some(expected.as_str())
+                                && completed_status.as_deref() == Some("interrupted");
+                            let result = if acknowledged {
+                                Ok(())
+                            } else {
+                                Err("active turn did not acknowledge interrupt".into())
+                            };
+                            let _ = done.send(result);
                         }
                     }
                 },
-                Ok(None)|Err(_) => {
-                    if let Some((_,_,done))=pending_interrupt.take() { let _=done.send(Err("app-server pipe closed".into())); }
-                    let should_fail=service.runtime_is_current(&session.id,generation) && service.get_session(&session.id).map(|current| matches!(current.status.as_str(),"starting"|"running"|"waiting_approval"|"interrupting")).unwrap_or(true);
-                    if should_fail { let _=service.set_status(&session.id,SessionStatus::Failed); service.emit("session_updated",&session.id,json!(service.get_session(&session.id).ok())); }
+                Ok(None) | Err(_) => {
+                    if let Some((_, _, done)) = pending_interrupt.take() {
+                        let _ = done.send(Err("app-server pipe closed".into()));
+                    }
+                    let active = service
+                        .get_session(&session.id)
+                        .map(|current| {
+                            matches!(
+                                current.status.as_str(),
+                                "starting" | "running" | "waiting_approval" | "interrupting"
+                            )
+                        })
+                        .unwrap_or(true);
+                    let should_fail =
+                        service.runtime_is_current(&session.id, generation) && active;
+                    if should_fail {
+                        let _ = service.set_status(&session.id, SessionStatus::Failed);
+                        service.emit(
+                            "session_updated",
+                            &session.id,
+                            json!(service.get_session(&session.id).ok()),
+                        );
+                    }
                     break;
                 }
             }
@@ -191,7 +291,21 @@ async fn start_app_server(session: &Session) -> Result<AppServerStartup, String>
         .take()
         .ok_or("Codex stdout недоступен")?;
     let mut lines = BufReader::new(stdout).lines();
-    let (init, mut buffered)=rpc_call(&mut stdin,&mut lines,1,"initialize",json!({"clientInfo":{"name":"daedalus","title":"Mundus Daedalus","version":"0.1.0"},"capabilities":{"experimentalApi":true}})).await?;
+    let (init, mut buffered) = rpc_call(
+        &mut stdin,
+        &mut lines,
+        1,
+        "initialize",
+        json!({
+            "clientInfo": {
+                "name": "daedalus",
+                "title": "Mundus Daedalus",
+                "version": "0.1.0",
+            },
+            "capabilities": { "experimentalApi": true },
+        }),
+    )
+    .await?;
     if init.get("error").is_some() {
         return Err(format!("Codex initialize: {}", init["error"]));
     }
@@ -200,12 +314,26 @@ async fn start_app_server(session: &Session) -> Result<AppServerStartup, String>
     let (method, params_value) = if let Some(thread_id) = &session.codex_thread_id {
         (
             "thread/resume",
-            json!({"threadId":thread_id,"cwd":session.worktree_path,"model":session.model,"sandbox":sandbox,"approvalPolicy":approval_policy,"approvalsReviewer":reviewer}),
+            json!({
+                "threadId": thread_id,
+                "cwd": session.worktree_path,
+                "model": session.model,
+                "sandbox": sandbox,
+                "approvalPolicy": approval_policy,
+                "approvalsReviewer": reviewer,
+            }),
         )
     } else {
         (
             "thread/start",
-            json!({"cwd":session.worktree_path,"model":session.model,"sandbox":sandbox,"approvalPolicy":approval_policy,"approvalsReviewer":reviewer,"experimentalRawEvents":false}),
+            json!({
+                "cwd": session.worktree_path,
+                "model": session.model,
+                "sandbox": sandbox,
+                "approvalPolicy": approval_policy,
+                "approvalsReviewer": reviewer,
+                "experimentalRawEvents": false,
+            }),
         )
     };
     let (response, pending) = rpc_call(&mut stdin, &mut lines, 2, method, params_value).await?;
@@ -376,14 +504,31 @@ async fn send_turn(
     active_turn_id: Option<&str>,
 ) -> Result<(), String> {
     if let Some(turn_id) = active_turn_id {
-        return send_rpc(stdin,id,"turn/steer",json!({"threadId":thread_id,"expectedTurnId":turn_id,"input":[{"type":"text","text":text}]})).await;
+        return send_rpc(
+            stdin,
+            id,
+            "turn/steer",
+            json!({
+                "threadId": thread_id,
+                "expectedTurnId": turn_id,
+                "input": [{ "type": "text", "text": text }],
+            }),
+        )
+        .await;
     }
     let policy = turn_policy(mode);
     send_rpc(
         stdin,
         id,
         "turn/start",
-        json!({"threadId":thread_id,"input":[{"type":"text","text":text}],"model":model,"approvalPolicy":policy["approvalPolicy"],"sandboxPolicy":policy["sandboxPolicy"],"approvalsReviewer":policy["approvalsReviewer"]}),
+        json!({
+            "threadId": thread_id,
+            "input": [{ "type": "text", "text": text }],
+            "model": model,
+            "approvalPolicy": policy["approvalPolicy"],
+            "sandboxPolicy": policy["sandboxPolicy"],
+            "approvalsReviewer": policy["approvalsReviewer"],
+        }),
     )
     .await
 }
@@ -409,8 +554,7 @@ async fn write_json(stdin: &mut tokio::process::ChildStdin, value: &Value) -> Re
 }
 
 async fn codex_one_shot(method: &str, params_value: Value) -> Result<Value, String> {
-    let mut command =
-        process_tree::resolve_command(codex_command()).map_err(|e| e.to_string())?;
+    let mut command = process_tree::resolve_command(codex_command()).map_err(|e| e.to_string())?;
     let mut child = command
         .args(["app-server", "--stdio"])
         .stdin(Stdio::piped())
@@ -422,7 +566,17 @@ async fn codex_one_shot(method: &str, params_value: Value) -> Result<Value, Stri
     let mut stdin = child.stdin.take().ok_or("Codex stdin недоступен")?;
     let stdout = child.stdout.take().ok_or("Codex stdout недоступен")?;
     let mut lines = BufReader::new(stdout).lines();
-    let _=rpc_call(&mut stdin,&mut lines,1,"initialize",json!({"clientInfo":{"name":"daedalus","version":"0.1.0"},"capabilities":{"experimentalApi":true}})).await?;
+    let _ = rpc_call(
+        &mut stdin,
+        &mut lines,
+        1,
+        "initialize",
+        json!({
+            "clientInfo": { "name": "daedalus", "version": "0.1.0" },
+            "capabilities": { "experimentalApi": true },
+        }),
+    )
+    .await?;
     write_json(&mut stdin, &json!({"method":"initialized","params":{}})).await?;
     let (response, _) = rpc_call(&mut stdin, &mut lines, 2, method, params_value).await?;
     let _ = child.kill().await;
@@ -533,7 +687,10 @@ fn untracked_patch(path: &str, content: &str) -> String {
         .lines()
         .map(|line| format!("+{line}\n"))
         .collect::<String>();
-    format!(concat!("\ndiff --git a/{normalized} b/{normalized}\nnew file mode 100644\n--- ","/dev/null\n+++ b/{normalized}\n@@ -0,0 +1,{line_count} @@\n{body}"))
+    format!(
+        "\ndiff --git a/{normalized} b/{normalized}\nnew file mode 100644\n--- \
+/dev/null\n+++ b/{normalized}\n@@ -0,0 +1,{line_count} @@\n{body}"
+    )
 }
 fn git_dirty(path: &Path) -> bool {
     if git_cwd_is_isolated(path).is_err() {

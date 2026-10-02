@@ -63,10 +63,12 @@ fn usage_cursors(conn: &Connection) -> Result<Vec<(String, i64)>, String> {
     let mut cursors = vector
         .iter()
         .filter_map(|(key, value)| {
-            key.strip_prefix("@usage:")
-                .and_then(|device_id| {
-                    value.parse::<i64>().ok().map(|seq| (device_id.to_string(), seq))
-                })
+            key.strip_prefix("@usage:").and_then(|device_id| {
+                value
+                    .parse::<i64>()
+                    .ok()
+                    .map(|seq| (device_id.to_string(), seq))
+            })
         })
         .collect::<Vec<_>>();
     cursors.sort_unstable();

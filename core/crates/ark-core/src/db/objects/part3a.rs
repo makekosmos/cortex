@@ -1,4 +1,3 @@
-
 fn search_objects_with_fts(
     conn: &Connection,
     fts_query: &str,
@@ -11,7 +10,9 @@ fn search_objects_with_fts(
 
     let mut stmt = conn
         .prepare(
-            "SELECT objects.id, objects.type_id, objects.type_version, objects.title, objects.content_json, objects.props_json
+            "SELECT objects.id, objects.type_id, objects.type_version, objects.title, \
+objects.content_json, \
+ objects.props_json
              FROM object_search_fts
              JOIN objects ON objects.id = object_search_fts.object_id
              WHERE object_search_fts MATCH ?1

@@ -108,8 +108,30 @@ fn storage(e: impl std::fmt::Display) -> LedgerError {
 }
 
 const TABLES: &[(&str, &str)] = &[
-    ("canonical_migration_runs", concat!("CREATE TABLE canonical_migration_runs (contract_version TEXT PRIMARY KEY, ","source_inventory_hash TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN (","'running','completed')), report_json TEXT NOT NULL DEFAULT '{}', started_at ","TEXT NOT NULL, completed_at TEXT)")),
-    ("canonical_migration_items", concat!("CREATE TABLE canonical_migration_items (contract_version TEXT NOT NULL, ","source_kind TEXT NOT NULL, source_id TEXT NOT NULL, source_hash TEXT NOT ","NULL, raw_source BLOB NOT NULL DEFAULT X'', status TEXT NOT NULL CHECK(","status IN ('pending','migrated','unchanged','quarantined')), canonical_hash ","TEXT, result_json TEXT NOT NULL DEFAULT '{}', error_code TEXT, attempt ","INTEGER NOT NULL DEFAULT 0 CHECK(attempt >= 0), checkpoint TEXT NOT NULL ","DEFAULT 'committed' CHECK(checkpoint IN ('prepared','applied','committed')),"," updated_at TEXT NOT NULL, PRIMARY KEY(contract_version, source_kind, ","source_id), FOREIGN KEY(contract_version) REFERENCES ","canonical_migration_runs(contract_version) ON DELETE CASCADE)")),
+    (
+        "canonical_migration_runs",
+        concat!(
+            "CREATE TABLE canonical_migration_runs (contract_version TEXT PRIMARY KEY, ",
+            "source_inventory_hash TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN (",
+            "'running','completed')), report_json TEXT NOT NULL DEFAULT '{}', started_at ",
+            "TEXT NOT NULL, completed_at TEXT)"
+        ),
+    ),
+    (
+        "canonical_migration_items",
+        concat!(
+            "CREATE TABLE canonical_migration_items (contract_version TEXT NOT NULL, ",
+            "source_kind TEXT NOT NULL, source_id TEXT NOT NULL, source_hash TEXT NOT ",
+            "NULL, raw_source BLOB NOT NULL DEFAULT X'', status TEXT NOT NULL CHECK(",
+            "status IN ('pending','migrated','unchanged','quarantined')), canonical_hash ",
+            "TEXT, result_json TEXT NOT NULL DEFAULT '{}', error_code TEXT, attempt ",
+            "INTEGER NOT NULL DEFAULT 0 CHECK(attempt >= 0), checkpoint TEXT NOT NULL ",
+            "DEFAULT 'committed' CHECK(checkpoint IN ('prepared','applied','committed')),",
+            " updated_at TEXT NOT NULL, PRIMARY KEY(contract_version, source_kind, ",
+            "source_id), FOREIGN KEY(contract_version) REFERENCES ",
+            "canonical_migration_runs(contract_version) ON DELETE CASCADE)"
+        ),
+    ),
 ];
 
 fn table_sql(conn: &Connection, table: &str) -> Result<Option<String>, LedgerError> {

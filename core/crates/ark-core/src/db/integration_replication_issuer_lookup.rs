@@ -32,13 +32,14 @@ pub fn load_issuer_encryption_key(
         }
         .to_string()
     })?;
-    let latest = load_latest_integration_credential_envelope(conn, integration_id, recipient_node_id)?
-        .ok_or_else(|| {
-            IntegrationContractError::Mismatch {
-                field: "credential_envelope",
-            }
-            .to_string()
-        })?;
+    let latest =
+        load_latest_integration_credential_envelope(conn, integration_id, recipient_node_id)?
+            .ok_or_else(|| {
+                IntegrationContractError::Mismatch {
+                    field: "credential_envelope",
+                }
+                .to_string()
+            })?;
     if latest.credential_generation != credential_generation {
         return Err(IntegrationContractError::Mismatch {
             field: "credential_generation",

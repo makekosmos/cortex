@@ -1,4 +1,3 @@
-
 #[test]
 
 fn load_all_clear_and_raw_backup_preserve_phase2_registry_contract() {

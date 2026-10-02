@@ -145,9 +145,7 @@ fn create_process_suspended(
                 None,
                 None,
                 true,
-                windows::Win32::System::Threading::PROCESS_CREATION_FLAGS(
-                    worker_creation_flags(),
-                ),
+                windows::Win32::System::Threading::PROCESS_CREATION_FLAGS(worker_creation_flags()),
                 Some(env.as_ptr() as *const _),
                 PCWSTR(current_dir.as_ptr()),
                 &si as *const STARTUPINFOEXW

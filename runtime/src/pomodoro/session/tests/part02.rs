@@ -103,7 +103,10 @@ fn overdue_restore_auto_starts_multiple_phases_with_exact_state() {
     let mut session = Session::new(clock);
     session.start(cfg.clone());
 
-    let restored = Session::from_persisted(Arc::new(MockClock::new(3 * 60_000 + 15_000)), session.snapshot_persisted());
+    let restored = Session::from_persisted(
+        Arc::new(MockClock::new(3 * 60_000 + 15_000)),
+        session.snapshot_persisted(),
+    );
     let state = restored.snapshot();
     assert_eq!(state.phase, Phase::ShortBreak);
     assert_eq!(state.completed_pomodoros, 2);
@@ -142,7 +145,10 @@ fn paused_restore_does_not_increment_counter() {
     clock.advance(1_000);
     session.tick();
     session.pause();
-    let restored = Session::from_persisted(Arc::new(MockClock::new(60_000)), session.snapshot_persisted());
+    let restored = Session::from_persisted(
+        Arc::new(MockClock::new(60_000)),
+        session.snapshot_persisted(),
+    );
     let state = restored.snapshot();
     assert!(state.is_paused);
     assert_eq!(state.phase, Phase::Work);

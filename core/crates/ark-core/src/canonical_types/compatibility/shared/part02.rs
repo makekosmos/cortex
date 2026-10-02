@@ -1,4 +1,3 @@
-
 /// The full write bundle threaded through the kind mappers that need every
 /// accumulator: canonical `out`, unknown-field sink, links, local-state and
 /// quarantine maps, plus the record identity pair.
@@ -105,7 +104,18 @@ pub fn relation_single_with_aliases(
             }
         }
     }
-    relation_with_aliases(m, key, aliases, kind, LinkWrite { links, id, at, unknown: u })
+    relation_with_aliases(
+        m,
+        key,
+        aliases,
+        kind,
+        LinkWrite {
+            links,
+            id,
+            at,
+            unknown: u,
+        },
+    )
 }
 pub fn bundle(m: Map<String, Value>) -> Vec<LocalState> {
     if m.is_empty() {

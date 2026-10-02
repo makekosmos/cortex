@@ -32,7 +32,10 @@ async fn legacy_package_record_triggers_native_migration_once() {
         .unwrap()
         .iter()
         .all(|package| package.id != "com.kosmos.agenda"));
-    let marker = dir.path().join("packages").join("native-apps-migration.json");
+    let marker = dir
+        .path()
+        .join("packages")
+        .join("native-apps-migration.json");
     let marker: serde_json::Value =
         serde_json::from_slice(&fs::read(&marker).expect("marker")).expect("marker json");
     assert_eq!(
@@ -44,7 +47,10 @@ async fn legacy_package_record_triggers_native_migration_once() {
     service
         .migrate_legacy_native_apps_with(&probe(&server))
         .await;
-    let apps = service.native_apps_with(&probe(&server), false).await.expect("list");
+    let apps = service
+        .native_apps_with(&probe(&server), false)
+        .await
+        .expect("list");
     let row = apps
         .iter()
         .find(|row| row.id == "com.kosmos.agenda")
@@ -84,16 +90,15 @@ async fn unreadable_marker_defers_instead_of_settling() {
     let service = native_service(&dir);
     fs::write(dir.path().join("legacy-components.json"), b"not json").expect("marker");
 
-    service
-        .migrate_legacy_native_apps_with(&dead_probe())
-        .await;
-    let marker_path = dir.path().join("packages").join("native-apps-migration.json");
+    service.migrate_legacy_native_apps_with(&dead_probe()).await;
+    let marker_path = dir
+        .path()
+        .join("packages")
+        .join("native-apps-migration.json");
     let resolved = fs::read(&marker_path)
         .ok()
         .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
-        .and_then(|marker| {
-            marker["apps"]["com.kosmos.agenda"]["resolved"].as_bool()
-        })
+        .and_then(|marker| marker["apps"]["com.kosmos.agenda"]["resolved"].as_bool())
         .unwrap_or(false);
     assert!(!resolved, "corrupt marker must not settle the app");
     assert!(service.native_app_executable(agenda()).is_err());
@@ -106,9 +111,15 @@ async fn migration_without_legacy_records_is_a_noop() {
     let service = native_service(&dir);
     service.migrate_legacy_native_apps_with(&dead_probe()).await;
     // No legacy record and no marker → everything resolves "not-present".
-    let apps = service.native_apps_with(&dead_probe(), false).await.expect("list");
+    let apps = service
+        .native_apps_with(&dead_probe(), false)
+        .await
+        .expect("list");
     assert!(apps.iter().all(|row| !row.installed));
-    let marker_path = dir.path().join("packages").join("native-apps-migration.json");
+    let marker_path = dir
+        .path()
+        .join("packages")
+        .join("native-apps-migration.json");
     let marker: serde_json::Value =
         serde_json::from_slice(&fs::read(&marker_path).expect("marker")).expect("marker json");
     for desc in crate::native_apps::NATIVE_APPS {

@@ -23,7 +23,8 @@ pub fn load_usage_analytics(
                     COALESCE(SUM(usage_sessions.foreground_ms), 0) AS total_foreground_ms,
                     COALESCE(SUM(usage_sessions.idle_ms), 0) AS total_idle_ms,
                     MIN(usage_sessions.started_at) AS first_recorded_at,
-                    MAX(COALESCE(usage_sessions.ended_at, usage_sessions.started_at)) AS last_recorded_at
+                    MAX(COALESCE(usage_sessions.ended_at, usage_sessions.started_at)) AS \
+last_recorded_at
              FROM tracked_apps
              LEFT JOIN usage_sessions ON usage_sessions.tracked_app_id = tracked_apps.id",
             [],
@@ -131,7 +132,8 @@ pub fn load_usage_analytics(
                     COALESCE(SUM(usage_sessions.foreground_ms), 0) AS foreground_ms,
                     COALESCE(SUM(usage_sessions.idle_ms), 0) AS idle_ms,
                     COUNT(usage_sessions.id) AS sessions,
-                    MAX(COALESCE(usage_sessions.ended_at, usage_sessions.started_at)) AS last_seen_at
+                    MAX(COALESCE(usage_sessions.ended_at, usage_sessions.started_at)) AS \
+last_seen_at
              FROM tracked_apps
              JOIN usage_sessions ON usage_sessions.tracked_app_id = tracked_apps.id
              GROUP BY tracked_apps.id",
@@ -163,11 +165,7 @@ pub fn load_usage_analytics(
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
-    let top_apps = merge_top_apps(
-        top_app_rows,
-        top_apps_limit.max(0) as usize,
-        windows_dir,
-    );
+    let top_apps = merge_top_apps(top_app_rows, top_apps_limit.max(0) as usize, windows_dir);
 
     let mut stmt = conn
         .prepare(

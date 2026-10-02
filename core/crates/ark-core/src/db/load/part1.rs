@@ -33,8 +33,10 @@ pub fn clear_all(conn: &Connection) -> Result<(), String> {
         "DELETE FROM object_links;
          DELETE FROM objects;
          DELETE FROM sync_pending_objects;
-         DELETE FROM object_type_aliases WHERE canonical_type_id IN (SELECT id FROM object_types WHERE system_locked = 0);
-         DELETE FROM object_type_versions WHERE type_id IN (SELECT id FROM object_types WHERE system_locked = 0);
+         DELETE FROM object_type_aliases WHERE canonical_type_id IN (SELECT id FROM \
+object_types WHERE system_locked = 0);
+         DELETE FROM object_type_versions WHERE type_id IN (SELECT id FROM object_types WHERE \
+system_locked = 0);
          DELETE FROM object_types WHERE system_locked = 0;
          DELETE FROM usage_days;
          DELETE FROM usage_events;
@@ -170,7 +172,9 @@ fn compatibility_planning_views(objects: &[ArkObject]) -> (Vec<Area>, Vec<Headin
         else {
             continue;
         };
-        let Some(kind) = compatibility.get("legacyKind").and_then(serde_json::Value::as_str)
+        let Some(kind) = compatibility
+            .get("legacyKind")
+            .and_then(serde_json::Value::as_str)
         else {
             continue;
         };

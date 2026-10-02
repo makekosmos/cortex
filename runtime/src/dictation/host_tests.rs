@@ -291,11 +291,8 @@
 
     fn isolated_host() -> (tempfile::TempDir, Arc<DictationHost>) {
         let data = tempfile::TempDir::new().expect("tempdir");
-        let host = DictationHost::new_for_test(
-            data.path().into(),
-            groq::GROQ_ENDPOINT.into(),
-            test_cfg(),
-        );
+        let host =
+            DictationHost::new_for_test(data.path().into(), groq::GROQ_ENDPOINT.into(), test_cfg());
         (data, host)
     }
 
@@ -350,9 +347,10 @@
         server
             .mock_async(|when, then| {
                 when.method(POST).path("/openai/v1/audio/transcriptions");
-                then.status(200).body(
-                    concat!(r#"{"text":"привет","segments":[{"text":"привет","no_speech_prob":0.05,"#,r#""avg_logprob":-0.3}]}"#),
-                );
+                then.status(200).body(concat!(
+                    r#"{"text":"привет","segments":[{"text":"привет","no_speech_prob":0.05,"#,
+                    r#""avg_logprob":-0.3}]}"#
+                ));
             })
             .await;
         let td = tempfile::TempDir::new().unwrap();
@@ -409,9 +407,10 @@
         server
             .mock_async(|when, then| {
                 when.method(POST).path("/openai/v1/audio/transcriptions");
-                then.status(200).body(
-                    concat!(r#"{"text":"retry transcript","segments":[{"text":"retry transcript","#,r#""no_speech_prob":0.05,"avg_logprob":-0.3}]}"#),
-                );
+                then.status(200).body(concat!(
+                    r#"{"text":"retry transcript","segments":[{"text":"retry transcript","#,
+                    r#""no_speech_prob":0.05,"avg_logprob":-0.3}]}"#
+                ));
             })
             .await;
         let td = tempfile::TempDir::new().unwrap();
@@ -456,9 +455,10 @@
         server
             .mock_async(|when, then| {
                 when.method(POST).path("/openai/v1/audio/transcriptions");
-                then.status(200).body(
-                    concat!(r#"{"text":"delivery test","segments":[{"text":"delivery test","#,r#""no_speech_prob":0.05,"avg_logprob":-0.3}]}"#),
-                );
+                then.status(200).body(concat!(
+                    r#"{"text":"delivery test","segments":[{"text":"delivery test","#,
+                    r#""no_speech_prob":0.05,"avg_logprob":-0.3}]}"#
+                ));
             })
             .await;
         let td = tempfile::TempDir::new().unwrap();
@@ -1219,9 +1219,12 @@
         let mock = server
             .mock_async(|when, then| {
                 when.method(POST).path("/openai/v1/audio/transcriptions");
-                then.status(200).header("content-type", "application/json").body(
-                    concat!(r#"{"text":"groq runtime transcript","segments":[{"text":"groq runtime "#,r#"transcript","no_speech_prob":0.05,"avg_logprob":-0.2}]}"#),
-                );
+                then.status(200)
+                    .header("content-type", "application/json")
+                    .body(concat!(
+                        r#"{"text":"groq runtime transcript","segments":[{"text":"groq runtime "#,
+                        r#"transcript","no_speech_prob":0.05,"avg_logprob":-0.2}]}"#
+                    ));
             })
             .await;
 
@@ -1556,11 +1559,8 @@
             serde_json::from_slice::<DictationConfig>(&bytes).expect("valid config JSON");
         }
         let persisted = config::load_from(&config_path);
-        let host2 = DictationHost::new_for_test(
-            tmp.path().into(),
-            groq::GROQ_ENDPOINT.into(),
-            persisted,
-        );
+        let host2 =
+            DictationHost::new_for_test(tmp.path().into(), groq::GROQ_ENDPOINT.into(), persisted);
         let state = handle_dictation_op("get_state", Value::Null, &host2).await;
         assert_eq!(state.data["config"]["language"], "auto");
         assert_eq!(state.data["config"]["injectMode"], "clipboard_only");
@@ -1682,7 +1682,6 @@
             .any(|model| model["id"] == "small"
                 && model["downloaded"] == true
                 && model["selected"] == true));
-
     }
 
     #[tokio::test]
@@ -1720,7 +1719,6 @@
                 && model["downloaded"] == true
                 && model["selected"] == true
                 && model["transcriptionSupported"] == true));
-
     }
 
     // ---- autoselect_local_model ----

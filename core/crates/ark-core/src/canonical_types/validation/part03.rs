@@ -1,4 +1,3 @@
-
 fn validate_node(
     contract: &serde_json::Map<String, Value>,
     value: &Value,

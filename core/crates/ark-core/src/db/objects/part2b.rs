@@ -1,4 +1,3 @@
-
 /// Every stored type_id that answers a by-type query: the canonical id plus
 /// all registered aliases. Objects written before a type was canonicalised
 /// keep the alias in `objects.type_id`; matching only the canonical id makes
@@ -6,7 +5,10 @@
 fn query_type_ids(conn: &Connection, type_id: &str) -> Result<Vec<String>, String> {
     let registry_ready: bool = conn
         .query_row(
-            concat!("SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND ","name='object_type_aliases')"),
+            concat!(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND ",
+                "name='object_type_aliases')"
+            ),
             [],
             |row| row.get::<_, i64>(0),
         )
@@ -41,7 +43,9 @@ fn type_id_in_clause(ids: &[String]) -> String {
 pub fn list_objects_by_type(conn: &Connection, type_id: &str) -> Result<Vec<ArkObject>, String> {
     let type_ids = query_type_ids(conn, type_id)?;
     let sql = format!(
-        "SELECT id, type_id, type_version, title, content_json, props_json, created_at, updated_at, deleted_at
+        "SELECT id, type_id, type_version, title, content_json, props_json, created_at, \
+updated_at, \
+deleted_at
          FROM objects
          WHERE {}
          ORDER BY updated_at DESC, created_at DESC",
@@ -79,19 +83,23 @@ pub fn list_object_summaries_by_type(
 }
 
 /// Р’РѕР·РІСЂР°С‰Р°РµС‚ С‚РѕР»СЊРєРѕ running time_entry_obj (props.endedAt IS NULL),
-/// РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ РѕС‚С„РёР»СЊС‚СЂРѕРІР°РЅРЅС‹С… РїРѕ props.source. Р‘РµР· РѕР±С…РѕРґР° РІСЃРµС… Р·Р°РїРёСЃРµР№
+/// РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ РѕС‚С„РёР»СЊС‚СЂРѕРІР°РЅРЅС‹С… РїРѕ props.source. Р‘РµР· РѕР±С…РѕРґР°
+/// РІСЃРµС… Р·Р°РїРёСЃРµР№
 /// С‚РёРїР° вЂ” С„РёР»СЊС‚СЂ РЅР° SQL СѓСЂРѕРІРЅРµ С‡РµСЂРµР· `json_extract`. Hot path РґР»СЏ
 /// focus widget'Р° (`stopManualStopwatch`).
 ///
 /// `deleted_at IS NULL` вЂ” С‡С‚РѕР±С‹ tombstones РЅРµ РІРѕР·РІСЂР°С‰Р°Р»РёСЃСЊ РєР°Рє running.
-/// РЎРѕСЂС‚РёСЂРѕРІРєР°: РЅРѕРІРµР№С€РёРµ startedAt СЃРІРµСЂС…Сѓ (DESC), РєР°Рє Сѓ callers'РѕРІ СЂР°РЅСЊС€Рµ.
+/// РЎРѕСЂС‚РёСЂРѕРІРєР°: РЅРѕРІРµР№С€РёРµ startedAt СЃРІРµСЂС…Сѓ (DESC), РєР°Рє Сѓ callers'РѕРІ
+/// СЂР°РЅСЊС€Рµ.
 pub fn list_running_time_entries(
     conn: &Connection,
     source_filter: Option<&str>,
 ) -> Result<Vec<ArkObject>, String> {
     let time_entry_type_ids = query_type_ids(conn, "time_entry_obj")?;
     let base_sql = format!(
-        "SELECT id, type_id, type_version, title, content_json, props_json, created_at, updated_at, deleted_at
+        "SELECT id, type_id, type_version, title, content_json, props_json, created_at, \
+updated_at, \
+deleted_at
          FROM objects
          WHERE {}
            AND deleted_at IS NULL
@@ -135,7 +143,9 @@ pub fn get_objects_by_ids(conn: &Connection, ids: &[String]) -> Result<Vec<ArkOb
         .collect::<Vec<_>>()
         .join(", ");
     let sql = format!(
-        "SELECT id, type_id, type_version, title, content_json, props_json, created_at, updated_at, deleted_at
+        "SELECT id, type_id, type_version, title, content_json, props_json, created_at, \
+updated_at, \
+deleted_at
          FROM objects
          WHERE id IN ({placeholders})
          ORDER BY updated_at DESC, created_at DESC"
@@ -150,7 +160,9 @@ pub fn get_objects_by_ids(conn: &Connection, ids: &[String]) -> Result<Vec<ArkOb
 
 pub fn get_object(conn: &Connection, id: &str) -> Result<Option<ArkObject>, String> {
     conn.query_row(
-        "SELECT id, type_id, type_version, title, content_json, props_json, created_at, updated_at, deleted_at
+        "SELECT id, type_id, type_version, title, content_json, props_json, created_at, \
+updated_at, \
+deleted_at
          FROM objects
          WHERE id = ?1",
         params![id],

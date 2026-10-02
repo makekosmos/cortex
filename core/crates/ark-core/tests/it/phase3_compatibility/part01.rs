@@ -206,14 +206,19 @@ fn raw_source_and_context_preserve_malformed_and_existing_link_semantics() {
     assert_eq!(error.source_id(), "note-raw-1");
     assert_eq!(error.pointer(), "");
     assert_eq!(error.raw_source(), raw);
-    let valid_raw = br#"{"id":"note-raw-2","legacy_type_id":"note_obj","title":"Raw","content":{"type":"doc","content":[{"type":"paragraph"}]},"props":{},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-02T00:00:00Z","deleted_at":null}"#;
+    let valid_raw = concat!(
+        r#"{"id":"note-raw-2","legacy_type_id":"note_obj","title":"Raw","content":{"type":"doc","#,
+        r#""content":[{"type":"paragraph"}]},"props":{},"created_at":"2026-01-01T00:00:00Z","#,
+        r#""updated_at":"2026-01-02T00:00:00Z","deleted_at":null}"#,
+    )
+    .as_bytes();
     let mapped = map_legacy_source(LegacySource {
         source_kind: "note_obj",
         source_id: "note-raw-2",
         raw_json: valid_raw,
     })
     .expect("valid raw source");
-    assert_eq!(mapped.raw_source.as_deref(), Some(valid_raw.as_slice()));
+    assert_eq!(mapped.raw_source.as_deref(), Some(valid_raw));
     let book = record(
         "book_obj",
         json!({"cover_image":"https://example.invalid/a"}),

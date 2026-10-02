@@ -1,4 +1,3 @@
-
 pub struct SqliteStorageBackend {
     conn: Arc<Mutex<rusqlite::Connection>>,
     device_id: Arc<Mutex<String>>,
@@ -107,7 +106,11 @@ impl SqliteStorageBackend {
             hlc: local_vector
                 .get(id)
                 .cloned()
-                .or_else(|| (entity_type == "object").then(|| authoritative_object_hlc(id)).flatten())
+                .or_else(|| {
+                    (entity_type == "object")
+                        .then(|| authoritative_object_hlc(id))
+                        .flatten()
+                })
                 .unwrap_or_else(|| HLC::now(device_id).to_string()),
             deleted: None,
             origin_device_id: None,

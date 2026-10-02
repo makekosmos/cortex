@@ -1,4 +1,3 @@
-
 pub fn apply_legacy_compat_entity(conn: &Connection, entity: &SyncEntity) -> Result<(), String> {
     let current: Option<String> = conn
         .query_row(
@@ -58,7 +57,16 @@ pub fn apply_legacy_compat_entity(conn: &Connection, entity: &SyncEntity) -> Res
     // Historical planning rows did not carry rich-text content.  The
     // compatibility contract supplies the canonical empty document rather
     // than rejecting an otherwise valid legacy wire payload.
-    let source = json!({"id": entity.id, "legacy_type_id": legacy_type, "title": title, "content": {"type":"doc","content":[{"type":"paragraph"}]}, "props": props, "created_at": created_at, "updated_at": updated_at, "deleted_at": null});
+    let source = json!(
+        {"id": entity.id,
+        "legacy_type_id": legacy_type,
+        "title": title,
+        "content": {"type":"doc",
+        "content":[{"type":"paragraph"}]},
+        "props": props,
+        "created_at": created_at,
+        "updated_at": updated_at,
+        "deleted_at": null});
     let mapped = crate::canonical_types::compatibility::map_legacy_source(
         crate::canonical_types::compatibility::LegacySource {
             source_kind: &entity.entity_type,
@@ -71,7 +79,15 @@ pub fn apply_legacy_compat_entity(conn: &Connection, entity: &SyncEntity) -> Res
     for link in mapped.links {
         db::upsert_object_link(conn, &link)?;
     }
-    conn.execute(concat!("INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,0) ON ","CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=0 WHERE ","excluded.hlc > object_sync_versions.hlc"), params![entity.id, entity.hlc]).map_err(|e| e.to_string())?;
+    conn.execute(
+        concat!(
+            "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,0) ON ",
+            "CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=0 WHERE ",
+            "excluded.hlc > object_sync_versions.hlc"
+        ),
+        params![entity.id, entity.hlc],
+    )
+    .map_err(|e| e.to_string())?;
     db::delete_sync_tombstone(conn, &entity.id)
 }
 
@@ -89,9 +105,14 @@ pub fn apply_canonical_object_entity(conn: &Connection, entity: &SyncEntity) -> 
         if entity.deleted == Some(true) {
             db::delete_object(conn, &entity.id)?;
             conn.execute(
-                    concat!("INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,1) ON ","CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=1 WHERE ","excluded.hlc > object_sync_versions.hlc"),
-                    params![entity.id, entity.hlc],
-                ).map_err(|e| e.to_string())?;
+                concat!(
+                    "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,1) ON ",
+                    "CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=1 WHERE ",
+                    "excluded.hlc > object_sync_versions.hlc"
+                ),
+                params![entity.id, entity.hlc],
+            )
+            .map_err(|e| e.to_string())?;
             db::upsert_sync_tombstone(conn, entity)?;
             return Ok(());
         }
@@ -161,9 +182,14 @@ pub fn apply_canonical_object_entity(conn: &Connection, entity: &SyncEntity) -> 
             }
         }
         conn.execute(
-                concat!("INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,0) ON ","CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=0 WHERE ","excluded.hlc > object_sync_versions.hlc"),
-                params![object.id, entity.hlc],
-            ).map_err(|e| e.to_string())?;
+            concat!(
+                "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,0) ON ",
+                "CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=0 WHERE ",
+                "excluded.hlc > object_sync_versions.hlc"
+            ),
+            params![object.id, entity.hlc],
+        )
+        .map_err(|e| e.to_string())?;
         db::delete_sync_tombstone(conn, &entity.id)
     })();
     match result {

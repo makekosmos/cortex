@@ -105,7 +105,8 @@ pub fn delete_todo(conn: &Connection, id: &str) -> Result<(), String> {
 pub fn upsert_project(conn: &Connection, project: &Project) -> Result<(), String> {
     conn.execute(
         "INSERT INTO projects
-            (id, title, notes, status, scheduled_date, deadline, sort_order, color_tag, area_id, created_at)
+            (id, title, notes, status, scheduled_date, deadline, sort_order, color_tag, \
+area_id, created_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
          ON CONFLICT(id) DO UPDATE SET
             title = excluded.title,

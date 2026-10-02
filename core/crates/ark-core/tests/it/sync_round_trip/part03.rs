@@ -1,4 +1,3 @@
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 
 async fn hmac_authenticated_sync_succeeds_with_matching_secret() {
@@ -263,4 +262,3 @@ async fn usage_entities_sync_between_two_servers() {
     server_a.stop().await;
     server_b.stop().await;
 }
-

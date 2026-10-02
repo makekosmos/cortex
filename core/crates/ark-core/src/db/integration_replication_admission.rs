@@ -104,8 +104,13 @@ fn require_existing_grant(
     integration_id: &str,
     node: &AdmissionNode,
 ) -> Result<(), String> {
-    let grant = load_integration_node_grant(conn, integration_id, &node.node_id)?
-        .ok_or_else(|| format!("node {} has no pre-existing integration grant", node.node_id))?;
+    let grant =
+        load_integration_node_grant(conn, integration_id, &node.node_id)?.ok_or_else(|| {
+            format!(
+                "node {} has no pre-existing integration grant",
+                node.node_id
+            )
+        })?;
     require_current_grant(&grant, integration_id, node)
 }
 

@@ -1,6 +1,8 @@
 // Checkpoint D: read-only all-source planning and narrow per-item application.
-#[path = "../apply.rs"] mod apply;
-#[path = "../native.rs"] mod native;
+#[path = "../apply.rs"]
+mod apply;
+#[path = "../native.rs"]
+mod native;
 
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
@@ -62,7 +64,15 @@ fn hash(v: &[u8]) -> String {
     format!("{:x}", Sha256::digest(v))
 }
 fn inventory_hash(records: &[SourceRecord]) -> Result<String, ObjectPlanError> {
-    let rows: Vec<Value> = records.iter().map(|r| serde_json::json!({"sourceKind":r.source_kind.name(),"sourceId":r.source_id,"sourceHash":r.source_hash})).collect();
+    let rows: Vec<Value> = records
+        .iter()
+        .map(|r| {
+            serde_json::json!(
+                {"sourceKind":r.source_kind.name(),
+                "sourceId":r.source_id,
+                "sourceHash":r.source_hash})
+        })
+        .collect();
     serde_json::to_vec(&rows)
         .map(|bytes| hash(&bytes))
         .map_err(|e| ObjectPlanError::Storage(e.to_string()))
@@ -107,7 +117,8 @@ fn context(conn: &Connection, records: &[SourceRecord]) -> Result<MappingContext
                 .unwrap_or_else(|| CanonicalIdentity::new(t, v)),
         );
     }
-    // All source identities are known before mapping: this makes forward and back references symmetric.
+    // All source identities are known before mapping: this makes forward and back references
+    // symmetric.
     for r in records {
         let canonical = match r.source_kind.name() {
             "todos" => "com.kosmos.task",
@@ -121,7 +132,10 @@ fn context(conn: &Connection, records: &[SourceRecord]) -> Result<MappingContext
             .ok_or_else(|| {
                 ObjectPlanError::Storage(format!("no canonical registration for {canonical}"))
             })?;
-        ids.insert(r.source_id.clone(), CanonicalIdentity::new(canonical, version));
+        ids.insert(
+            r.source_id.clone(),
+            CanonicalIdentity::new(canonical, version),
+        );
     }
     Ok(MappingContext {
         existing_object_ids: ids,
@@ -197,8 +211,11 @@ pub fn plan_objects(conn: &Connection, _now: &str) -> Result<ObjectPlan, ObjectP
             "headings" => 2,
             _ => 3,
         };
-        (rank(&a.source_kind), &a.source_kind, &a.source_id)
-            .cmp(&(rank(&b.source_kind), &b.source_kind, &b.source_id))
+        (rank(&a.source_kind), &a.source_kind, &a.source_id).cmp(&(
+            rank(&b.source_kind),
+            &b.source_kind,
+            &b.source_id,
+        ))
     });
     Ok(ObjectPlan {
         contract_version: CONTRACT_VERSION.into(),

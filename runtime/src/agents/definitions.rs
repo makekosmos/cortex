@@ -173,7 +173,7 @@ impl FullAccessConsentRegistry {
         let expires_at = now + FULL_ACCESS_CONSENT_TTL;
         let expires_at_rfc3339 = (Utc::now()
             + chrono::Duration::seconds(FULL_ACCESS_CONSENT_TTL.as_secs() as i64))
-            .to_rfc3339();
+        .to_rfc3339();
         self.pending.insert(
             request_id.clone(),
             FullAccessConsent {
@@ -198,7 +198,9 @@ impl FullAccessConsentRegistry {
     }
 
     fn binding(&self, request_id: &str) -> Option<FullAccessConsentBinding> {
-        self.pending.get(request_id).map(|consent| consent.binding.clone())
+        self.pending
+            .get(request_id)
+            .map(|consent| consent.binding.clone())
     }
 
     fn approve(
@@ -236,11 +238,7 @@ impl FullAccessConsentRegistry {
         Ok(Some(consent.token.clone()))
     }
 
-    fn consume(
-        &mut self,
-        token: &str,
-        binding: &FullAccessConsentBinding,
-    ) -> Result<(), String> {
+    fn consume(&mut self, token: &str, binding: &FullAccessConsentBinding) -> Result<(), String> {
         self.consume_at(token, binding, Instant::now())
     }
 
@@ -327,7 +325,8 @@ impl AgentsService {
              );
              CREATE TABLE IF NOT EXISTS timeline (
                 id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL,
-                kind TEXT NOT NULL, payload_json TEXT NOT NULL, truncated INTEGER NOT NULL DEFAULT 0,
+                kind TEXT NOT NULL, payload_json TEXT NOT NULL, truncated INTEGER NOT NULL \
+DEFAULT 0, \
                 created_at TEXT NOT NULL, updated_at TEXT NOT NULL
              );
              CREATE INDEX IF NOT EXISTS idx_timeline_session_id ON timeline(session_id, id);
@@ -492,11 +491,8 @@ impl AgentsService {
             "sessions.get" => Ok(json!(
                 self.get_session(&required_str(&params, "session_id")?)?
             )),
-            "sessions.issue_full_access_consent" => {
-                self.issue_full_access_consent(params, &client)
-            }
-            "sessions.approve_full_access_consent"
-            | "sessions.respond_full_access_consent" => {
+            "sessions.issue_full_access_consent" => self.issue_full_access_consent(params, &client),
+            "sessions.approve_full_access_consent" | "sessions.respond_full_access_consent" => {
                 self.approve_full_access_consent(params, &client)
             }
             "sessions.create" => self.create_session_with_client(params, &client).await,
@@ -555,17 +551,29 @@ impl AgentsService {
                 let _ = self.append_and_emit(
                     &session.id,
                     "lifecycle",
-                    json!({"action":"reconcile","origin":"runtime","outcome":"forced","reason":"runtime_restarted"}),
+                    json!(
+                        {"action":"reconcile",
+                        "origin":"runtime",
+                        "outcome":"forced",
+                        "reason":"runtime_restarted"}),
                 );
                 continue;
             }
             if let Err(error) = self.spawn_runtime(session.clone()).await {
-                tracing::warn!(session_id = %session.id, %error, "failed to restore Daedalus session");
+                tracing::warn!(
+                    session_id = %session.id,
+                    %error,
+                    "failed to restore Daedalus session",
+                );
                 let _ = self.set_status(&session.id, SessionStatus::Failed);
                 let _ = self.append_and_emit(
                     &session.id,
                     "lifecycle",
-                    json!({"action":"restore","origin":"runtime","outcome":"failed","reason":"app_server_start_failed"}),
+                    json!(
+                        {"action":"restore",
+                        "origin":"runtime",
+                        "outcome":"failed",
+                        "reason":"app_server_start_failed"}),
                 );
                 self.emit(
                     "session_updated",
@@ -644,9 +652,17 @@ impl AgentsService {
 
     fn list_sessions(&self, include_archived: bool) -> Result<Vec<Session>, String> {
         let sql = if include_archived {
-            concat!("SELECT id,project_id,title,prompt,mode,model,status,branch,worktree_path,","base_commit,codex_thread_id,active_turn_id,created_at,updated_at,","archived_at FROM sessions ORDER BY updated_at DESC")
+            concat!(
+                "SELECT id,project_id,title,prompt,mode,model,status,branch,worktree_path,",
+                "base_commit,codex_thread_id,active_turn_id,created_at,updated_at,",
+                "archived_at FROM sessions ORDER BY updated_at DESC"
+            )
         } else {
-            concat!("SELECT id,project_id,title,prompt,mode,model,status,branch,worktree_path,","base_commit,codex_thread_id,active_turn_id,created_at,updated_at,","archived_at FROM sessions WHERE archived_at IS NULL ORDER BY updated_at DESC")
+            concat!(
+                "SELECT id,project_id,title,prompt,mode,model,status,branch,worktree_path,",
+                "base_commit,codex_thread_id,active_turn_id,created_at,updated_at,",
+                "archived_at FROM sessions WHERE archived_at IS NULL ORDER BY updated_at DESC"
+            )
         };
         let db = self.db();
         let mut statement = db.prepare(sql).map_err(|e| e.to_string())?;
@@ -658,10 +674,19 @@ impl AgentsService {
     }
 
     fn get_session(&self, id: &str) -> Result<Session, String> {
-        self.db().query_row(
-            concat!("SELECT id,project_id,title,prompt,mode,model,status,branch,worktree_path,","base_commit,codex_thread_id,active_turn_id,created_at,updated_at,","archived_at FROM sessions WHERE id=?1"),
-            [id], session_from_row,
-        ).optional().map_err(|e| e.to_string())?.ok_or_else(|| "Сессия не найдена".into())
+        self.db()
+            .query_row(
+                concat!(
+                    "SELECT id,project_id,title,prompt,mode,model,status,branch,worktree_path,",
+                    "base_commit,codex_thread_id,active_turn_id,created_at,updated_at,",
+                    "archived_at FROM sessions WHERE id=?1"
+                ),
+                [id],
+                session_from_row,
+            )
+            .optional()
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "Сессия не найдена".into())
     }
 
     async fn create_session(self: &Arc<Self>, input: Value) -> Result<Value, String> {
@@ -676,8 +701,14 @@ impl AgentsService {
     ) -> Result<Value, String> {
         let project_id = required_str(&input, "project_id")?;
         let prompt = required_str(&input, "prompt")?;
-        let package_id = input.get("package_id").and_then(Value::as_str).map(str::to_string);
-        let package_version = input.get("package_version").and_then(Value::as_str).map(str::to_string);
+        let package_id = input
+            .get("package_id")
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        let package_version = input
+            .get("package_version")
+            .and_then(Value::as_str)
+            .map(str::to_string);
         let mode = input
             .get("mode")
             .and_then(Value::as_str)
@@ -706,7 +737,10 @@ impl AgentsService {
                         project_id: project_id.clone(),
                         project_path: project_path.clone(),
                         mode: mode.clone(),
-                        model: input.get("model").and_then(Value::as_str).map(str::to_string),
+                        model: input
+                            .get("model")
+                            .and_then(Value::as_str)
+                            .map(str::to_string),
                         prompt_hash: hex_hash(&prompt),
                         connection_id: client.connection_id,
                     };
@@ -720,7 +754,10 @@ impl AgentsService {
                 project_id: project_id.clone(),
                 project_path: project_path.clone(),
                 mode: mode.clone(),
-                model: input.get("model").and_then(Value::as_str).map(str::to_string),
+                model: input
+                    .get("model")
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
                 prompt_hash: hex_hash(&prompt),
                 connection_id: client.connection_id,
             };
@@ -781,11 +818,26 @@ impl AgentsService {
             .get("model")
             .and_then(Value::as_str)
             .map(str::to_string);
-        self.db().execute(
-            "INSERT INTO sessions(id,project_id,title,prompt,mode,model,status,branch,worktree_path,base_commit,created_at,updated_at)
+        self.db()
+            .execute(
+                "INSERT INTO sessions(id,project_id,title,prompt,mode,model,status,\
+branch,worktree_path,\
+base_commit,created_at,updated_at)
              VALUES(?1,?2,?3,?4,?5,?6,'starting',?7,?8,?9,?10,?10)",
-            params![id, project_id, title, prompt, mode, model, branch, worktree.to_string_lossy(), base_commit, timestamp],
-        ).map_err(|e| e.to_string())?;
+                params![
+                    id,
+                    project_id,
+                    title,
+                    prompt,
+                    mode,
+                    model,
+                    branch,
+                    worktree.to_string_lossy(),
+                    base_commit,
+                    timestamp,
+                ],
+            )
+            .map_err(|e| e.to_string())?;
         self.append_timeline(&id, "user_message", json!({"text": prompt}), false)?;
         let session = self.get_session(&id)?;
         self.emit("session_updated", &id, json!(session));
@@ -909,29 +961,34 @@ impl AgentsService {
         result: &str,
         binding: Option<&FullAccessConsentBinding>,
     ) -> Result<(), String> {
-        self.db().execute(
-            concat!("INSERT INTO security_audit(event,result,package_id,package_version,","project_id,project_path,mode,model,prompt_sha256,created_at) VALUES(?1,?2,","?3,?4,?5,?6,?7,?8,?9,?10)"),
-            params![
-                event,
-                result,
-                binding.map(|value| value.package_id.as_str()),
-                binding.map(|value| value.package_version.as_str()),
-                binding.map(|value| value.project_id.as_str()),
-                binding.map(|value| value.project_path.as_str()),
-                binding.map(|value| value.mode.as_str()),
-                binding.and_then(|value| value.model.as_deref()),
-                binding.map(|value| value.prompt_hash.as_str()),
-                now(),
-            ],
-        ).map(|_| ()).map_err(|error| format!("security audit failed: {error}"))
+        self.db()
+            .execute(
+                concat!(
+                    "INSERT INTO security_audit(event,result,package_id,package_version,",
+                    "project_id,project_path,mode,model,prompt_sha256,created_at) VALUES(?1,?2,",
+                    "?3,?4,?5,?6,?7,?8,?9,?10)"
+                ),
+                params![
+                    event,
+                    result,
+                    binding.map(|value| value.package_id.as_str()),
+                    binding.map(|value| value.package_version.as_str()),
+                    binding.map(|value| value.project_id.as_str()),
+                    binding.map(|value| value.project_path.as_str()),
+                    binding.map(|value| value.mode.as_str()),
+                    binding.and_then(|value| value.model.as_deref()),
+                    binding.map(|value| value.prompt_hash.as_str()),
+                    now(),
+                ],
+            )
+            .map(|_| ())
+            .map_err(|error| format!("security audit failed: {error}"))
     }
 
     async fn spawn_runtime(self: &Arc<Self>, session: Session) -> Result<(), String> {
         let (tx, rx) = mpsc::channel(64);
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
-        let generation = self
-            .next_runtime_generation
-            .fetch_add(1, Ordering::Relaxed);
+        let generation = self.next_runtime_generation.fetch_add(1, Ordering::Relaxed);
         let service = self.clone();
         let id = session.id.clone();
         {
@@ -939,13 +996,7 @@ impl AgentsService {
             if runtimes.contains_key(&id) {
                 return Ok(());
             }
-            runtimes.insert(
-                id.clone(),
-                RuntimeHandle {
-                    tx,
-                    generation,
-                },
-            );
+            runtimes.insert(id.clone(), RuntimeHandle { tx, generation });
         }
         tokio::spawn(async move {
             run_app_server(service, session, generation, rx, ready_tx).await;
@@ -963,8 +1014,10 @@ impl AgentsService {
         let lifecycle = self.lifecycle_lock(session_id);
         let _guard = lifecycle.lock().await;
         let session = self.get_session(session_id)?;
-        if matches!(session.status.as_str(), "interrupting" | "stopping" | "archived")
-            || session.archived_at.is_some()
+        if matches!(
+            session.status.as_str(),
+            "interrupting" | "stopping" | "archived"
+        ) || session.archived_at.is_some()
         {
             return Err("Сессия останавливается или уже архивирована".into());
         }
@@ -997,7 +1050,11 @@ impl AgentsService {
             .map(|h| h.tx.clone())
             .ok_or("Сессия Codex не запущена")?;
         self.set_status(session_id, SessionStatus::Interrupting)?;
-        self.emit("session_updated", session_id, json!(self.get_session(session_id)?));
+        self.emit(
+            "session_updated",
+            session_id,
+            json!(self.get_session(session_id)?),
+        );
         let (done_tx, done_rx) = tokio::sync::oneshot::channel();
         if tx
             .send(AppCommand::Interrupt {
@@ -1011,27 +1068,43 @@ impl AgentsService {
             self.append_and_emit(
                 session_id,
                 "lifecycle",
-                json!({"action":"interrupt","origin":"user","outcome":"failed","reason":"command_channel_closed"}),
+                json!(
+                    {"action":"interrupt",
+                    "origin":"user",
+                    "outcome":"failed",
+                    "reason":"command_channel_closed"}),
             )?;
-            self.emit("session_updated", session_id, json!(self.get_session(session_id)?));
+            self.emit(
+                "session_updated",
+                session_id,
+                json!(self.get_session(session_id)?),
+            );
             return Err("Codex app-server недоступен".into());
         }
-        let (acknowledged, reason) = match tokio::time::timeout(INTERRUPT_ACK_TIMEOUT, done_rx).await
-        {
-            Ok(Ok(Ok(()))) => (true, "app_server_acknowledged"),
-            Ok(Ok(Err(_))) => (false, "app_server_refused"),
-            Ok(Err(_)) => (false, "ack_channel_closed"),
-            Err(_) => (false, "ack_timeout"),
-        };
+        let (acknowledged, reason) =
+            match tokio::time::timeout(INTERRUPT_ACK_TIMEOUT, done_rx).await {
+                Ok(Ok(Ok(()))) => (true, "app_server_acknowledged"),
+                Ok(Ok(Err(_))) => (false, "app_server_refused"),
+                Ok(Err(_)) => (false, "ack_channel_closed"),
+                Err(_) => (false, "ack_timeout"),
+            };
         if !acknowledged {
             if let Err(error) = self.stop_runtime(session_id).await {
                 self.set_status(session_id, SessionStatus::Failed)?;
                 self.append_and_emit(
                     session_id,
                     "lifecycle",
-                    json!({"action":"interrupt","origin":"user","outcome":"failed","reason":"force_stop_failed"}),
+                    json!(
+                        {"action":"interrupt",
+                        "origin":"user",
+                        "outcome":"failed",
+                        "reason":"force_stop_failed"}),
                 )?;
-                self.emit("session_updated", session_id, json!(self.get_session(session_id)?));
+                self.emit(
+                    "session_updated",
+                    session_id,
+                    json!(self.get_session(session_id)?),
+                );
                 return Err(error);
             }
             self.set_status(session_id, SessionStatus::Interrupted)?;
@@ -1041,7 +1114,11 @@ impl AgentsService {
         self.append_and_emit(
             session_id,
             "lifecycle",
-            json!({"action":"interrupt","origin":"user","outcome":if acknowledged {"acknowledged"} else {"forced"},"reason":reason}),
+            json!(
+                {"action":"interrupt",
+                "origin":"user",
+                "outcome":if acknowledged {"acknowledged"} else {"forced"},
+                "reason":reason}),
         )?;
         self.emit(
             "session_updated",
@@ -1058,15 +1135,27 @@ impl AgentsService {
             return Ok(json!(true));
         }
         self.set_status(session_id, SessionStatus::Stopping)?;
-        self.emit("session_updated", session_id, json!(self.get_session(session_id)?));
+        self.emit(
+            "session_updated",
+            session_id,
+            json!(self.get_session(session_id)?),
+        );
         if let Err(error) = self.stop_runtime(session_id).await {
             self.set_status(session_id, SessionStatus::Failed)?;
             self.append_and_emit(
                 session_id,
                 "lifecycle",
-                json!({"action":"archive","origin":"user","outcome":"failed","reason":"force_stop_failed"}),
+                json!(
+                    {"action":"archive",
+                    "origin":"user",
+                    "outcome":"failed",
+                    "reason":"force_stop_failed"}),
             )?;
-            self.emit("session_updated", session_id, json!(self.get_session(session_id)?));
+            self.emit(
+                "session_updated",
+                session_id,
+                json!(self.get_session(session_id)?),
+            );
             return Err(error);
         }
         self.expire_pending_approvals(session_id, "session_archived")?;
@@ -1076,7 +1165,11 @@ impl AgentsService {
             "lifecycle",
             json!({"action":"archive","origin":"user","outcome":"stopped"}),
         )?;
-        self.emit("session_updated", session_id, json!(self.get_session(session_id)?));
+        self.emit(
+            "session_updated",
+            session_id,
+            json!(self.get_session(session_id)?),
+        );
         Ok(json!(true))
     }
 
@@ -1084,7 +1177,10 @@ impl AgentsService {
         let timestamp = now();
         self.db()
             .execute(
-                concat!("UPDATE sessions SET status='archived',active_turn_id=NULL,archived_at=?2,","updated_at=?2 WHERE id=?1"),
+                concat!(
+                    "UPDATE sessions SET status='archived',active_turn_id=NULL,archived_at=?2,",
+                    "updated_at=?2 WHERE id=?1"
+                ),
                 params![session_id, timestamp],
             )
             .map_err(|e| e.to_string())?;
@@ -1154,9 +1250,12 @@ impl AgentsService {
             .unwrap_or(100)
             .clamp(1, 500) as i64;
         let db = self.db();
-        let mut statement = db.prepare(
-            concat!("SELECT id,session_id,kind,payload_json,created_at,updated_at,truncated FROM ","timeline WHERE session_id=?1 AND id<?2 ORDER BY id DESC LIMIT ?3")
-        ).map_err(|e| e.to_string())?;
+        let mut statement = db
+            .prepare(concat!(
+                "SELECT id,session_id,kind,payload_json,created_at,updated_at,truncated FROM ",
+                "timeline WHERE session_id=?1 AND id<?2 ORDER BY id DESC LIMIT ?3"
+            ))
+            .map_err(|e| e.to_string())?;
         let rows = statement
             .query_map(params![session_id, cursor, limit], timeline_from_row)
             .map_err(|e| e.to_string())?;
@@ -1191,7 +1290,11 @@ impl AgentsService {
             json!({"answers": input.get("answers").cloned().unwrap_or_else(|| json!({}))})
         } else if approval.method == "item/permissions/requestApproval" {
             if decision == json!("accept") {
-                json!({"permissions": approval.params.get("permissions").cloned().unwrap_or_else(|| json!({})), "scope":"turn"})
+                json!(
+                    {"permissions": approval.params.get(
+                        "permissions"
+                    ).cloned().unwrap_or_else(|| json!({})),
+                    "scope":"turn"})
             } else {
                 json!({"permissions": {}})
             }
@@ -1216,7 +1319,15 @@ impl AgentsService {
             .map_err(|_| "Codex app-server не подтвердил ответ".to_string())?
             .map_err(|_| "Codex app-server завершился".to_string())??;
         let timestamp = now();
-        self.db().execute(concat!("UPDATE approvals SET status='resolved',response_json=?2,resolved_at=?3 ","WHERE id=?1"), params![approval_id,result.to_string(),timestamp]).map_err(|e| e.to_string())?;
+        self.db()
+            .execute(
+                concat!(
+                    "UPDATE approvals SET status='resolved',response_json=?2,resolved_at=?3 ",
+                    "WHERE id=?1"
+                ),
+                params![approval_id, result.to_string(), timestamp],
+            )
+            .map_err(|e| e.to_string())?;
         let remaining: i64 = self
             .db()
             .query_row(
@@ -1311,13 +1422,21 @@ impl AgentsService {
                     );
                 }
             }
-            files.push(json!({"path":path,"status":state,"size":size,"binary":binary,"contentOmitted":binary || size > MAX_OUTPUT_BYTES as u64}));
+            files.push(json!(
+                {"path":path,
+                "status":state,
+                "size":size,
+                "binary":binary,
+                "contentOmitted":binary || size > MAX_OUTPUT_BYTES as u64}));
         }
         let truncated = unified.len() > MAX_OUTPUT_BYTES;
         let diff = truncate_utf8(unified, MAX_OUTPUT_BYTES);
-        Ok(
-            json!({"sessionId":session_id,"baseCommit":session.base_commit,"files":files,"unifiedDiff":diff,"truncated":truncated}),
-        )
+        Ok(json!(
+            {"sessionId":session_id,
+            "baseCommit":session.base_commit,
+            "files":files,
+            "unifiedDiff":diff,
+            "truncated":truncated}))
     }
 
     async fn models(&self) -> Result<Value, String> {
@@ -1378,9 +1497,13 @@ impl AgentsService {
             .filter(|event| event.get("seq").and_then(Value::as_u64).unwrap_or(0) > after_seq)
             .cloned()
             .collect::<Vec<_>>();
-        Ok(
-            json!({"seq":self.seq.load(Ordering::Relaxed),"afterSeq":after_seq,"recentEvents":recent_events,"projects":self.list_projects()?,"sessions":self.list_sessions(false)?,"approvals":approvals}),
-        )
+        Ok(json!(
+            {"seq":self.seq.load(Ordering::Relaxed),
+            "afterSeq":after_seq,
+            "recentEvents":recent_events,
+            "projects":self.list_projects()?,
+            "sessions":self.list_sessions(false)?,
+            "approvals":approvals}))
     }
 
     fn append_timeline(
@@ -1417,7 +1540,20 @@ impl AgentsService {
         }
         let timestamp = now();
         let db = self.db();
-        db.execute(concat!("INSERT INTO timeline(session_id,kind,payload_json,truncated,created_at,","updated_at) VALUES(?1,?2,?3,?4,?5,?5)"), params![session_id,kind,payload.to_string(),truncated as i64,timestamp]).map_err(|e| e.to_string())?;
+        db.execute(
+            concat!(
+                "INSERT INTO timeline(session_id,kind,payload_json,truncated,created_at,",
+                "updated_at) VALUES(?1,?2,?3,?4,?5,?5)"
+            ),
+            params![
+                session_id,
+                kind,
+                payload.to_string(),
+                truncated as i64,
+                timestamp
+            ],
+        )
+        .map_err(|e| e.to_string())?;
         let id = db.last_insert_rowid();
         Ok(TimelineEvent {
             id,
@@ -1525,7 +1661,10 @@ impl AgentsService {
     fn set_status(&self, session_id: &str, status: SessionStatus) -> Result<(), String> {
         self.db()
             .execute(
-                concat!("UPDATE sessions SET status=CASE WHEN archived_at IS NULL THEN ?2 ELSE ","'archived' END,updated_at=?3 WHERE id=?1"),
+                concat!(
+                    "UPDATE sessions SET status=CASE WHEN archived_at IS NULL THEN ?2 ELSE ",
+                    "'archived' END,updated_at=?3 WHERE id=?1"
+                ),
                 params![session_id, status.as_str(), now()],
             )
             .map_err(|e| e.to_string())?;
@@ -1538,7 +1677,15 @@ impl AgentsService {
         thread_id: Option<&str>,
         turn_id: Option<&str>,
     ) -> Result<(), String> {
-        self.db().execute(concat!("UPDATE sessions SET codex_thread_id=COALESCE(?2,codex_thread_id),","active_turn_id=?3,updated_at=?4 WHERE id=?1"), params![session_id,thread_id,turn_id,now()]).map_err(|e| e.to_string())?;
+        self.db()
+            .execute(
+                concat!(
+                    "UPDATE sessions SET codex_thread_id=COALESCE(?2,codex_thread_id),",
+                    "active_turn_id=?3,updated_at=?4 WHERE id=?1"
+                ),
+                params![session_id, thread_id, turn_id, now()],
+            )
+            .map_err(|e| e.to_string())?;
         Ok(())
     }
 
@@ -1550,11 +1697,21 @@ impl AgentsService {
         params_value: Value,
     ) -> Result<Approval, String> {
         let request_id_json = request_id.to_string();
-        if let Some(existing) = self.db().query_row(
-            concat!("SELECT id,session_id,request_id_json,method,params_json,status,","response_json,created_at,resolved_at FROM approvals WHERE session_id=?1 AND ","request_id_json=?2 AND method=?3 AND status='pending' ORDER BY created_at ","DESC LIMIT 1"),
-            params![session_id, request_id_json, method],
-            approval_from_row,
-        ).optional().map_err(|e| e.to_string())? {
+        if let Some(existing) = self
+            .db()
+            .query_row(
+                concat!(
+                    "SELECT id,session_id,request_id_json,method,params_json,status,",
+                    "response_json,created_at,resolved_at FROM approvals WHERE session_id=?1 AND ",
+                    "request_id_json=?2 AND method=?3 AND status='pending' ORDER BY created_at ",
+                    "DESC LIMIT 1"
+                ),
+                params![session_id, request_id_json, method],
+                approval_from_row,
+            )
+            .optional()
+            .map_err(|e| e.to_string())?
+        {
             return Ok(existing);
         }
         let approval = Approval {
@@ -1568,18 +1725,50 @@ impl AgentsService {
             created_at: now(),
             resolved_at: None,
         };
-        self.db().execute(concat!("INSERT INTO approvals(id,session_id,request_id_json,method,params_json,","status,created_at) VALUES(?1,?2,?3,?4,?5,'pending',?6)"), params![approval.id,approval.session_id,approval.request_id.to_string(),approval.method,approval.params.to_string(),approval.created_at]).map_err(|e| e.to_string())?;
+        self.db()
+            .execute(
+                concat!(
+                    "INSERT INTO approvals(id,session_id,request_id_json,method,params_json,",
+                    "status,created_at) VALUES(?1,?2,?3,?4,?5,'pending',?6)"
+                ),
+                params![
+                    approval.id,
+                    approval.session_id,
+                    approval.request_id.to_string(),
+                    approval.method,
+                    approval.params.to_string(),
+                    approval.created_at
+                ],
+            )
+            .map_err(|e| e.to_string())?;
         self.set_status(session_id, SessionStatus::WaitingApproval)?;
         Ok(approval)
     }
 
     fn get_approval(&self, id: &str) -> Result<Approval, String> {
-        self.db().query_row(concat!("SELECT id,session_id,request_id_json,method,params_json,status,","response_json,created_at,resolved_at FROM approvals WHERE id=?1"), [id], approval_from_row).optional().map_err(|e|e.to_string())?.ok_or_else(||"Approval не найден".into())
+        self.db()
+            .query_row(
+                concat!(
+                    "SELECT id,session_id,request_id_json,method,params_json,status,",
+                    "response_json,created_at,resolved_at FROM approvals WHERE id=?1"
+                ),
+                [id],
+                approval_from_row,
+            )
+            .optional()
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "Approval не найден".into())
     }
 
     fn pending_approvals(&self) -> Result<Vec<Approval>, String> {
         let db = self.db();
-        let mut statement=db.prepare(concat!("SELECT id,session_id,request_id_json,method,params_json,status,","response_json,created_at,resolved_at FROM approvals WHERE status='pending' ","ORDER BY created_at")).map_err(|e|e.to_string())?;
+        let mut statement = db
+            .prepare(concat!(
+                "SELECT id,session_id,request_id_json,method,params_json,status,",
+                "response_json,created_at,resolved_at FROM approvals WHERE status='pending' ",
+                "ORDER BY created_at"
+            ))
+            .map_err(|e| e.to_string())?;
         let rows = statement
             .query_map([], approval_from_row)
             .map_err(|e| e.to_string())?;
@@ -1603,8 +1792,15 @@ impl AgentsService {
         };
         self.db()
             .execute(
-                concat!("UPDATE approvals SET status='resolved',response_json=?2,resolved_at=?3 ","WHERE session_id=?1 AND status='pending'"),
-                params![session_id, json!({"stale":true,"reason":reason}).to_string(), timestamp],
+                concat!(
+                    "UPDATE approvals SET status='resolved',response_json=?2,resolved_at=?3 ",
+                    "WHERE session_id=?1 AND status='pending'"
+                ),
+                params![
+                    session_id,
+                    json!({"stale":true,"reason":reason}).to_string(),
+                    timestamp
+                ],
             )
             .map_err(|error| error.to_string())?;
         if !approval_ids.is_empty() {
@@ -1633,7 +1829,10 @@ impl AgentsService {
         let approval_id = self
             .db()
             .query_row(
-                concat!("SELECT id FROM approvals WHERE session_id=?1 AND request_id_json=?2 AND ","status='pending' ORDER BY created_at DESC LIMIT 1"),
+                concat!(
+                    "SELECT id FROM approvals WHERE session_id=?1 AND request_id_json=?2 AND ",
+                    "status='pending' ORDER BY created_at DESC LIMIT 1"
+                ),
                 params![session_id, request_id.to_string()],
                 |row| row.get::<_, String>(0),
             )
@@ -1643,8 +1842,15 @@ impl AgentsService {
             let timestamp = now();
             self.db()
                 .execute(
-                    concat!("UPDATE approvals SET status='resolved',response_json=?2,resolved_at=?3 ","WHERE id=?1"),
-                    params![approval_id, json!({"resolvedByServer":true}).to_string(), timestamp],
+                    concat!(
+                        "UPDATE approvals SET status='resolved',response_json=?2,resolved_at=?3 ",
+                        "WHERE id=?1"
+                    ),
+                    params![
+                        approval_id,
+                        json!({"resolvedByServer":true}).to_string(),
+                        timestamp
+                    ],
                 )
                 .map_err(|error| error.to_string())?;
             self.emit(

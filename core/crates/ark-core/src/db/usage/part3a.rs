@@ -1,4 +1,3 @@
-
 #[derive(Debug)]
 struct UsageGameBindingIndex {
     game_names_by_id: HashMap<String, String>,

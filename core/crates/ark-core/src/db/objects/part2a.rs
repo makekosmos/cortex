@@ -1,8 +1,10 @@
-
 pub fn upsert_object(conn: &Connection, object: &ArkObject) -> Result<(), String> {
     let registry_ready: bool = conn
         .query_row(
-            concat!("SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND ","name='object_type_versions')"),
+            concat!(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND ",
+                "name='object_type_versions')"
+            ),
             [],
             |row| row.get::<_, i64>(0),
         )
@@ -45,7 +47,8 @@ fn upsert_object_inner(conn: &Connection, object: &ArkObject) -> Result<(), Stri
         // РЎРј. postmortems.md В§ 2026-06-04.
         conn.execute(
             "INSERT INTO objects
-                (id, type_id, type_version, title, content_json, props_json, created_at, updated_at, deleted_at)
+                (id, type_id, type_version, title, content_json, props_json, created_at, \
+updated_at, deleted_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
              ON CONFLICT(id) DO UPDATE SET
                 type_id = excluded.type_id,
@@ -131,7 +134,9 @@ fn map_ark_object_summary_row(row: &Row<'_>) -> rusqlite::Result<ArkObjectSummar
 pub fn list_objects(conn: &Connection) -> Result<Vec<ArkObject>, String> {
     let mut stmt = conn
         .prepare(
-            "SELECT id, type_id, type_version, title, content_json, props_json, created_at, updated_at, deleted_at
+            "SELECT id, type_id, type_version, title, content_json, props_json, created_at, \
+updated_at, \
+deleted_at
              FROM objects
              ORDER BY updated_at DESC, created_at DESC",
         )

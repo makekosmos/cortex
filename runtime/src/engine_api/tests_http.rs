@@ -404,7 +404,7 @@
         let dir = tempfile::tempdir().expect("fixture dir");
 
         let ark = Arc::new(
-            crate::ark_host::ArkHost::open( &dir.path().join("ark.db").to_string_lossy())
+            crate::ark_host::ArkHost::open(&dir.path().join("ark.db").to_string_lossy())
                 .await
                 .expect("ark host fixture"),
         );
@@ -683,7 +683,19 @@
             .await
             .expect("ws register");
         let _ = socket.next().await.expect("ws register response");
-        let http_register = raw_http(http_port, &request(&token, "POST", "/v1/rpc", concat!(r#"{"operation":"commands.register","commands":[{"id":"http.command","#,r#""title":"HTTP","category":"action"}]}"#))).await;
+        let http_register = raw_http(
+            http_port,
+            &request(
+                &token,
+                "POST",
+                "/v1/rpc",
+                concat!(
+                    r#"{"operation":"commands.register","commands":[{"id":"http.command","#,
+                    r#""title":"HTTP","category":"action"}]}"#
+                ),
+            ),
+        )
+        .await;
         assert!(response_json(&http_register)["ok"]
             .as_bool()
             .unwrap_or(false));
@@ -756,7 +768,13 @@
                 &token,
                 "POST",
                 "/v1/rpc",
-                concat!(r#"{"_req_id":"type-write-1","operation":"upsert_object_type","#,r#""object_type":{"id":"note","name":"Note","schemaJson":"{}","#,r#""uiSchemaJson":"{}","createdAt":"2026-01-01T00:00:00Z","#,r#""updatedAt":"2026-01-01T00:00:00Z","systemLocked":false},"#,r#""device_id":"socket-test"}"#),
+                concat!(
+                    r#"{"_req_id":"type-write-1","operation":"upsert_object_type","#,
+                    r#""object_type":{"id":"note","name":"Note","schemaJson":"{}","#,
+                    r#""uiSchemaJson":"{}","createdAt":"2026-01-01T00:00:00Z","#,
+                    r#""updatedAt":"2026-01-01T00:00:00Z","systemLocked":false},"#,
+                    r#""device_id":"socket-test"}"#
+                ),
             ),
         )
         .await;
@@ -770,7 +788,13 @@
                 &token,
                 "POST",
                 "/v1/rpc",
-                concat!(r#"{"_req_id":"write-1","operation":"upsert_object","#,r#""object":{"id":"direct-dispatch-write","typeId":"note","title":"socket","#,r#""contentJson":{},"propsJson":{},"createdAt":"2026-01-01T00:00:00Z","#,r#""updatedAt":"2026-01-01T00:00:00Z","deletedAt":null},"#,r#""device_id":"socket-test"}"#),
+                concat!(
+                    r#"{"_req_id":"write-1","operation":"upsert_object","#,
+                    r#""object":{"id":"direct-dispatch-write","typeId":"note","title":"socket","#,
+                    r#""contentJson":{},"propsJson":{},"createdAt":"2026-01-01T00:00:00Z","#,
+                    r#""updatedAt":"2026-01-01T00:00:00Z","deletedAt":null},"#,
+                    r#""device_id":"socket-test"}"#
+                ),
             ),
         )
         .await;
@@ -785,7 +809,10 @@
                 &token,
                 "POST",
                 "/v1/rpc",
-                concat!(r#"{"_req_id":"invoke-1","operation":"commands.invoke","id":"ws.command","#,r#""params":{"source":"http"}}"#),
+                concat!(
+                    r#"{"_req_id":"invoke-1","operation":"commands.invoke","id":"ws.command","#,
+                    r#""params":{"source":"http"}}"#
+                ),
             ),
         )
         .await;
@@ -833,7 +860,8 @@
         let _ = api_task.await;
         // Shutdown must deterministically release every fixture handle: the
         // data dir is removable immediately, with no retry window (KOS-270).
-        dir.close().expect("fixture dir still locked after shutdown");
+        dir.close()
+            .expect("fixture dir still locked after shutdown");
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -1058,10 +1086,13 @@
         let root = dir.path().join("userdata");
         std::fs::create_dir_all(&root).expect("root dir");
         let token = "a".repeat(64);
-        let (_fixture_dir, server) =
-            EngineApiServer::bind_with_test_dispatcher(token.clone(), test_dispatcher(), REQUEST_TIMEOUT)
-                .await
-                .expect("server");
+        let (_fixture_dir, server) = EngineApiServer::bind_with_test_dispatcher(
+            token.clone(),
+            test_dispatcher(),
+            REQUEST_TIMEOUT,
+        )
+        .await
+        .expect("server");
         let port = server.port();
         let server_shutdown_handle = server.shutdown_handle();
         let task = tokio::spawn(server.run());
@@ -1083,12 +1114,22 @@
         );
         let response = raw_http(
             port,
-            &request_with_client(&token, "POST", "/v1/user-data", &open, "desktop-host", "1.0.0"),
+            &request_with_client(
+                &token,
+                "POST",
+                "/v1/user-data",
+                &open,
+                "desktop-host",
+                "1.0.0",
+            ),
         )
         .await;
         let body = response_json(&response);
         assert_eq!(body["ok"], true, "{response}");
-        let root_id = body["data"]["root_id"].as_str().expect("root id").to_owned();
+        let root_id = body["data"]["root_id"]
+            .as_str()
+            .expect("root id")
+            .to_owned();
 
         // Binary writes arrive over PUT so the payload never crosses a JSON
         // or WebSocket ceiling.
@@ -1111,24 +1152,42 @@
         assert_eq!(body["data"]["size_bytes"], 7);
 
         let stat = format!(
-            concat!(r#"{{"operation":"stat","root_id":"{root_id}","app_id":"com.kosmos.agenda","#,r#""key":"attachments/task-1.bin"}}"#)
+            "{{\"operation\":\"stat\",\"root_id\":\"{root_id}\",\"app_id\":\
+\"com.kosmos.agenda\",\
+\"key\":\"attachments/task-1.bin\"}}"
         );
         let body = response_json(
             &raw_http(
                 port,
-                &request_with_client(&token, "POST", "/v1/user-data", &stat, "desktop-host", "1.0.0"),
+                &request_with_client(
+                    &token,
+                    "POST",
+                    "/v1/user-data",
+                    &stat,
+                    "desktop-host",
+                    "1.0.0",
+                ),
             )
             .await,
         );
         assert_eq!(body["data"]["size_bytes"], 7);
 
         let read = format!(
-            concat!(r#"{{"operation":"read","root_id":"{root_id}","app_id":"com.kosmos.agenda","#,r#""key":"attachments/task-1.bin"}}"#)
+            "{{\"operation\":\"read\",\"root_id\":\"{root_id}\",\"app_id\":\
+\"com.kosmos.agenda\",\
+\"key\":\"attachments/task-1.bin\"}}"
         );
         let body = response_json(
             &raw_http(
                 port,
-                &request_with_client(&token, "POST", "/v1/user-data", &read, "desktop-host", "1.0.0"),
+                &request_with_client(
+                    &token,
+                    "POST",
+                    "/v1/user-data",
+                    &read,
+                    "desktop-host",
+                    "1.0.0",
+                ),
             )
             .await,
         );
@@ -1144,12 +1203,21 @@
         );
 
         let traversal = format!(
-            concat!(r#"{{"operation":"read","root_id":"{root_id}","app_id":"com.kosmos.agenda","#,r#""key":"../escape"}}"#)
+            "{{\"operation\":\"read\",\"root_id\":\"{root_id}\",\"app_\
+id\":\"com.kosmos.agenda\",\
+\"key\":\"../escape\"}}"
         );
         let body = response_json(
             &raw_http(
                 port,
-                &request_with_client(&token, "POST", "/v1/user-data", &traversal, "desktop-host", "1.0.0"),
+                &request_with_client(
+                    &token,
+                    "POST",
+                    "/v1/user-data",
+                    &traversal,
+                    "desktop-host",
+                    "1.0.0",
+                ),
             )
             .await,
         );
@@ -1157,12 +1225,21 @@
         assert_eq!(body["error"], "invalid-key");
 
         let delete = format!(
-            concat!(r#"{{"operation":"delete","root_id":"{root_id}","app_id":"com.kosmos.agenda","#,r#""key":"attachments/task-1.bin"}}"#)
+            "{{\"operation\":\"delete\",\"root_id\":\"{root_id}\",\"app_i\
+d\":\"com.kosmos.agenda\",\
+\"key\":\"attachments/task-1.bin\"}}"
         );
         let body = response_json(
             &raw_http(
                 port,
-                &request_with_client(&token, "POST", "/v1/user-data", &delete, "desktop-host", "1.0.0"),
+                &request_with_client(
+                    &token,
+                    "POST",
+                    "/v1/user-data",
+                    &delete,
+                    "desktop-host",
+                    "1.0.0",
+                ),
             )
             .await,
         );
@@ -1170,7 +1247,14 @@
         let body = response_json(
             &raw_http(
                 port,
-                &request_with_client(&token, "POST", "/v1/user-data", &stat, "desktop-host", "1.0.0"),
+                &request_with_client(
+                    &token,
+                    "POST",
+                    "/v1/user-data",
+                    &stat,
+                    "desktop-host",
+                    "1.0.0",
+                ),
             )
             .await,
         );
@@ -1185,10 +1269,13 @@
     #[tokio::test]
     async fn user_data_endpoint_rejects_unknown_roots_and_missing_fields() {
         let token = "a".repeat(64);
-        let (_fixture_dir, server) =
-            EngineApiServer::bind_with_test_dispatcher(token.clone(), test_dispatcher(), REQUEST_TIMEOUT)
-                .await
-                .expect("server");
+        let (_fixture_dir, server) = EngineApiServer::bind_with_test_dispatcher(
+            token.clone(),
+            test_dispatcher(),
+            REQUEST_TIMEOUT,
+        )
+        .await
+        .expect("server");
         let port = server.port();
         let server_shutdown_handle = server.shutdown_handle();
         let task = tokio::spawn(server.run());
@@ -1197,7 +1284,10 @@
             &token,
             "POST",
             "/v1/user-data",
-            concat!(r#"{"operation":"read","root_id":"00000000-0000-4000-8000-0000000000aa","#,r#""app_id":"app","key":"a.bin"}"#),
+            concat!(
+                r#"{"operation":"read","root_id":"00000000-0000-4000-8000-0000000000aa","#,
+                r#""app_id":"app","key":"a.bin"}"#
+            ),
             "desktop-host",
             "1.0.0",
         );
@@ -1260,9 +1350,8 @@
                 .await
                 .expect("ark host fixture"),
         );
-        let package_service = Arc::new(
-            crate::package_service::tests::enabled_note_write_app_service(dir.path()),
-        );
+        let package_service =
+            Arc::new(crate::package_service::tests::enabled_note_write_app_service(dir.path()));
         // The rejection is logged inside the spawned server task, so only a
         // global subscriber sees it. This is the one test in the binary that
         // installs a global default.
@@ -1290,15 +1379,12 @@
                             "schema error: \"{title}\" is not a valid note"
                         )));
                     }
-                    match ark
-                        .request(request.operation.as_str(), params)
-                        .await
-                    {
+                    match ark.request(request.operation.as_str(), params).await {
                         Ok(reply) => Ok(serde_json::json!({
-                                "ok": reply.ok,
-                                "data": reply.data,
-                                "error": reply.error,
-                            })),
+                            "ok": reply.ok,
+                            "data": reply.data,
+                            "error": reply.error,
+                        })),
                         Err(error) => Err(crate::engine_dispatch::DispatchError::Failed(
                             error.to_string(),
                         )),
@@ -1378,7 +1464,10 @@
             "{captured}"
         );
         assert!(captured.contains("app RPC rejected"), "{captured}");
-        assert!(captured.contains("canonical_field:/description"), "{captured}");
+        assert!(
+            captured.contains("canonical_field:/description"),
+            "{captured}"
+        );
         assert!(captured.contains("upsert_object"), "{captured}");
         // The leaky producer's value collapse is all the log may keep.
         assert!(captured.contains("reason=unavailable"), "{captured}");
@@ -1410,13 +1499,21 @@
         class: &str,
         version: &str,
     ) -> String {
-        request_with_headers(token, method, path, body, &std::process::id().to_string(), API_VERSION)
-            .replace(
-                "Content-Length:",
-                &format!(
-                    concat!("X-Kosmos-Client-Class: {class}\r\nX-Kosmos-Client-Version: ","{version}\r\nContent-Length:")
-                ),
-            )
+        request_with_headers(
+            token,
+            method,
+            path,
+            body,
+            &std::process::id().to_string(),
+            API_VERSION,
+        )
+        .replace(
+            "Content-Length:",
+            &format!(
+                "X-Kosmos-Client-Class: {class}\r\nX-Kosmos-Client-Version: \
+{version}\r\nContent-Length:"
+            ),
+        )
     }
 
     fn request_with_headers(

@@ -117,4 +117,3 @@ fn evolved_registration(
         .ok_or("canonical definition missing schemaHash")? = Value::String(hash);
     registration_from_literal(&serde_json::to_string(&definition).map_err(|e| e.to_string())?)
 }
-

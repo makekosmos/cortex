@@ -363,7 +363,9 @@ impl PackageService {
     }
     pub fn validate_legacy_grants(&self, source_ids: &[String]) -> Result<(), PackageError> {
         let source_ids = source_ids.iter().map(String::as_str).collect::<Vec<_>>();
-        self.grants.validate_legacy_records(&source_ids).map_err(|_| PackageError::Persistence)
+        self.grants
+            .validate_legacy_records(&source_ids)
+            .map_err(|_| PackageError::Persistence)
     }
 
     pub async fn restore_enabled_workers(&self) -> Result<(), PackageError> {
@@ -380,7 +382,10 @@ impl PackageService {
                     "enabled worker restore failed"
                 );
                 if let Some(worker) = self.worker.as_ref() {
-                    if worker.supervisor.health(&package.id, &package.version).state
+                    if worker
+                        .supervisor
+                        .health(&package.id, &package.version)
+                        .state
                         != WorkerState::Stopped
                     {
                         worker
