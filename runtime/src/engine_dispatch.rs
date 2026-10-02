@@ -173,6 +173,13 @@ pub struct DispatchClient {
     pub correlation_id: Option<String>,
     pub connection_id: Option<u64>,
     pub desktop_authorized: bool,
+    /// The request arrived on the authenticated Manager HTTP channel
+    /// (`/v1/rpc`: engine.lock.json bearer + validated same-user PID). That
+    /// is the Manager's own trust level — equivalent to the WS
+    /// desktop-authority lease for ops a trusted local UI may trigger
+    /// (`system.privileged.enable`), without widening `desktop_authorized`
+    /// to also cover `grant.*`, consents and package snapshots.
+    pub manager_channel: bool,
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]

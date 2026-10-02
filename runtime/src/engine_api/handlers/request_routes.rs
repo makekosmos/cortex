@@ -60,6 +60,8 @@ async fn handle_rpc(
         correlation_id: Some(correlation_id.as_ref().clone()),
         connection_id: Some(owner.id()),
         desktop_authorized: false,
+        // Bearer-token + same-user PID auth — this is the Manager's channel.
+        manager_channel: true,
     });
     let Some((_operation_id, receiver, mut response_guard)) =
         operations.start(request, dispatcher, owner).await

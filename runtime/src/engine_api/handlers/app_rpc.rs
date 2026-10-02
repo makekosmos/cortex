@@ -120,6 +120,8 @@ async fn handle_app_rpc(
         correlation_id: Some(correlation_id.as_ref().clone()),
         connection_id: None,
         desktop_authorized: false,
+        // App-RPC clients share the HTTP listener but are not the Manager.
+        manager_channel: false,
     };
     let params =
         match authorize_app_request(&operation, params, &typed_grant, &dispatcher, &app_client)
