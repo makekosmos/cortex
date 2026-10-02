@@ -212,6 +212,10 @@ pub(super) async fn dispatch_standard(
                 .data_storage(package_service.storage_root())
                 .await
                 .map(LocalResponse::ok),
+            "data.quarantine.clear" => manager_state
+                .clear_legacy_quarantine()
+                .await
+                .map(LocalResponse::ok),
             "data.types" => manager_state
                 .data_types(&ark_host)
                 .await

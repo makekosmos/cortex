@@ -168,6 +168,11 @@ impl RelaySync {
     async fn send_missing_entities(&self, remote_vector: &VersionVector) {
         let mut load_vector = load_version_vector(&self.storage).await;
         merge_usage_cursors(&mut load_vector, remote_vector);
+        // Hole-tolerant cursors (KOS-302): a relay must advertise these too —
+        // it may itself have compacted refs the next hop still needs a claim
+        // for. Snapshot BEFORE the first page: a claim computed afterwards
+        // could cover a seq allocated mid-pull that never got streamed.
+        let complete_through = self.storage.usage_complete_through().await;
         let mut offset = 0;
 
         loop {
@@ -193,6 +198,7 @@ impl RelaySync {
                     entities: batch,
                     is_last: false,
                     origin_device_id: Some(self.config.device_id.clone()),
+                    usage_complete_through: None,
                 });
             }
         }
@@ -202,10 +208,16 @@ impl RelaySync {
             entities: vec![],
             is_last: true,
             origin_device_id: Some(self.config.device_id.clone()),
+            usage_complete_through: (!complete_through.is_empty()).then_some(complete_through),
         });
     }
 
-    async fn apply_entities(&self, entities: &[SyncEntity], is_last: bool) {
+    async fn apply_entities(
+        &self,
+        entities: &[SyncEntity],
+        is_last: bool,
+        usage_complete_through: Option<&HashMap<String, u64>>,
+    ) {
         let mut incoming = self.incoming_sync.lock().await;
         if incoming.is_none() {
             *incoming = Some(IncomingSyncState {
@@ -244,10 +256,14 @@ impl RelaySync {
         }
 
         if is_last {
-            if state.changed {
-                merge_usage_cursors(&mut state.vector, &load_version_vector(&self.storage).await);
-                save_version_vector(&self.storage, &state.vector).await;
-            }
+            crate::sync_server::persist_pull_vector(
+                &self.storage,
+                &mut state.vector,
+                state.changed,
+                true,
+                usage_complete_through,
+            )
+            .await;
             *incoming = None;
             drop(incoming);
             trim_process_heap();

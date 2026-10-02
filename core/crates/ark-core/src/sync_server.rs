@@ -116,6 +116,15 @@ pub trait StorageBackend: Send + Sync {
     async fn get_kv(&self, key: &str) -> Option<String>;
     async fn set_kv(&self, key: &str, value: &str);
 
+    /// Per usage origin device, the highest seq this node can serve
+    /// completely — sent as `usage_complete_through` on the final sync page
+    /// so the receiver can raise its `@usage:` cursor past compacted holes
+    /// (KOS-302). Backends without a usage journal return an empty map and
+    /// keep contiguous-only cursor advancement.
+    async fn usage_complete_through(&self) -> HashMap<String, u64> {
+        HashMap::new()
+    }
+
     fn filter_outgoing_entity(&self, entity: &SyncEntity) -> Option<SyncEntity> {
         Some(entity.clone())
     }
@@ -179,6 +188,32 @@ async fn load_version_vector(storage: &Arc<dyn StorageBackend>) -> VersionVector
 async fn save_version_vector(storage: &Arc<dyn StorageBackend>, vector: &VersionVector) {
     let json = serde_json::to_string(vector).unwrap_or_default();
     storage.set_kv(VERSION_VECTOR_KEY, &json).await;
+}
+
+/// Persist the pull-side version vector after a `SyncChanges` batch: merge
+/// the contiguous `@usage:` cursors that `apply_entity` wrote to storage,
+/// then — only on the sender's final page — raise them to its
+/// complete-through claims. Mid-pull claims would leapfrog refs still in
+/// flight, and a lost connection would leave the cursor past entities we
+/// never received; merging stored cursors first keeps the claims a floor,
+/// never a regression.
+pub(crate) async fn persist_pull_vector(
+    storage: &Arc<dyn StorageBackend>,
+    vector: &mut VersionVector,
+    vector_updated: bool,
+    is_last: bool,
+    usage_complete_through: Option<&HashMap<String, u64>>,
+) {
+    if !vector_updated && !(is_last && usage_complete_through.is_some()) {
+        return;
+    }
+    merge_usage_cursors(vector, &load_version_vector(storage).await);
+    if is_last {
+        if let Some(through) = usage_complete_through {
+            apply_usage_complete_through(vector, through);
+        }
+    }
+    save_version_vector(storage, vector).await;
 }
 
 async fn save_known_peers(storage: &Arc<dyn StorageBackend>, peers: &[PeerRecord]) {

@@ -8,6 +8,7 @@ mod classification;
 mod constructors;
 mod diagnostics;
 mod estimate;
+mod maintenance;
 mod risk;
 mod scan;
 // pub(crate): privileged::ntfs_scan reuses `path_contains_noisy_folder` so the

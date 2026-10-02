@@ -10,8 +10,11 @@ const INCLUDE_HIDDEN_KEY: &str = "include_hidden";
 const NTFS_ACCELERATED_KEY: &str = "ntfs_accelerated";
 
 pub struct FileStore {
-    conn: Mutex<Connection>,
-    db_path: PathBuf,
+    // pub(super): `file_index::maintenance` is the only sibling that needs the
+    // raw connection (chunked prune + VACUUM); every other consumer goes
+    // through the typed methods.
+    pub(super) conn: Mutex<Connection>,
+    pub(super) db_path: PathBuf,
 }
 
 #[derive(Debug, Clone)]
@@ -87,7 +90,7 @@ impl FileStore {
         })
     }
 
-    fn lock(&self) -> std::sync::MutexGuard<'_, Connection> {
+    pub(super) fn lock(&self) -> std::sync::MutexGuard<'_, Connection> {
         self.conn.lock().unwrap_or_else(|e| e.into_inner())
     }
 

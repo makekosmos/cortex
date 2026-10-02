@@ -199,13 +199,15 @@ impl RelaySync {
                 entities,
                 is_last,
                 origin_device_id,
+                usage_complete_through,
                 ..
             } => {
                 let origin = origin_device_id.unwrap_or(from_device_id);
                 if !self.is_authenticated_peer(&origin).await {
                     return;
                 }
-                self.apply_entities(&entities, is_last).await;
+                self.apply_entities(&entities, is_last, usage_complete_through.as_ref())
+                    .await;
             }
 
             LanSyncMessage::LiveChange {
@@ -217,7 +219,9 @@ impl RelaySync {
                 if !self.is_authenticated_peer(&origin).await {
                     return;
                 }
-                self.apply_entities(&[entity], true).await;
+                // A single live change is not a final sync page — no
+                // complete-through claims accompany it.
+                self.apply_entities(&[entity], true, None).await;
             }
 
             LanSyncMessage::SignedIntegrationFrame { frame } => {

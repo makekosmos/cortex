@@ -195,6 +195,15 @@
 
                                                 let mut local_vector =
                                                     load_version_vector(&storage).await;
+                                                // KOS-302: snapshot the
+                                                // completeness claims BEFORE
+                                                // the first page — computed
+                                                // later they could include a
+                                                // seq allocated mid-pull,
+                                                // moving the peer's cursor
+                                                // past an entry it never got.
+                                                let complete_through =
+                                                    storage.usage_complete_through().await;
                                                 let mut offset = 0;
                                                 loop {
                                                     let mut load_vector = local_vector.clone();
@@ -239,6 +248,7 @@
                                                                 entities: batch,
                                                                 is_last: false,
                                                                 origin_device_id: None,
+                                                                usage_complete_through: None,
                                                             },
                                                         );
                                                     }
@@ -251,6 +261,9 @@
                                                         entities: vec![],
                                                         is_last: true,
                                                         origin_device_id: None,
+                                                        usage_complete_through:
+                                                            (!complete_through.is_empty())
+                                                                .then_some(complete_through),
                                                     },
                                                 );
 
@@ -273,6 +286,7 @@
                                                 batch_id,
                                                 entities,
                                                 is_last,
+                                                usage_complete_through,
                                                 ..
                                             } => {
                                                 if !authenticated {
@@ -314,14 +328,14 @@
                                                     }
                                                 }
 
-                                                if vector_updated {
-                                                    merge_usage_cursors(
-                                                        &mut local_vector,
-                                                        &load_version_vector(&storage).await,
-                                                    );
-                                                    save_version_vector(&storage, &local_vector)
-                                                        .await;
-                                                }
+                                                crate::sync_server::persist_pull_vector(
+                                                    &storage,
+                                                    &mut local_vector,
+                                                    vector_updated,
+                                                    is_last,
+                                                    usage_complete_through.as_ref(),
+                                                )
+                                                .await;
                                                 send_msg(
                                                     &tx,
                                                     &LanSyncMessage::SyncAck { batch_id, accepted },

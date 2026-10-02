@@ -43,7 +43,7 @@ use engine::{
     protocol_usage::ProtocolUsageStore,
     protocol_version::{API_VERSION, API_VERSION_CURRENT, PROTOCOL_VERSION},
     singleton::SingletonGuard,
-    sync,
+    storage_maintenance, sync,
     usage_tracker::{self, UsageTrackerDiagnosticsState, UsageTrackerOpts},
     ws_server::WsServer,
 };
@@ -795,6 +795,10 @@ async fn setup() -> Result<SetupState, DynError> {
             "file_index initial rescan skipped"
         );
     }
+
+    // Storage maintenance (KOS-302): usage_sync_log compaction in ark.db +
+    // file-index.db prune/VACUUM, at most once per 24h, off the hot path.
+    storage_maintenance::spawn(ark.clone(), file_index.clone());
 
     Ok(SetupState {
         ark,

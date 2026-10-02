@@ -9,8 +9,9 @@ pub use auth::{
     compute_hello_auth_hmac, generate_auth_nonce, normalize_auth_secret, verify_hello_auth_hmac,
 };
 pub use vector::{
-    compute_local_excess, compute_vector_diff, is_usage_entity, merge_peer_records,
-    merge_usage_cursors, observe_non_usage_entity, should_send_entity, split_into_batches,
+    apply_usage_complete_through, compute_local_excess, compute_vector_diff, is_usage_entity,
+    merge_peer_records, merge_usage_cursors, observe_non_usage_entity, should_send_entity,
+    split_into_batches,
 };
 
 // ---------------------------------------------------------------------------
@@ -61,6 +62,15 @@ pub enum LanSyncMessage {
         is_last: bool,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         origin_device_id: Option<String>,
+        // Per usage origin device, the highest seq the sender can serve
+        // completely — its own contiguous `@usage:` coverage (compaction
+        // only deletes refs below it). Sent only on the final `is_last`
+        // batch: the receiver raises its `@usage:` cursors past compacted
+        // holes once the whole stream is applied. Optional so older peers
+        // (which ignore unknown fields) and older senders (field absent)
+        // keep today's contiguous-only cursor advancement. KOS-302.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        usage_complete_through: Option<std::collections::HashMap<String, u64>>,
     },
 
     #[serde(rename = "sync_ack")]

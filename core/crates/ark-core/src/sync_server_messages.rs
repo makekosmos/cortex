@@ -215,6 +215,12 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
 
             let mut local_vector = load_version_vector(storage).await;
 
+            // Hole-tolerant cursors (KOS-302): snapshot the completeness
+            // claims BEFORE the first page is read. Computed afterwards
+            // they could include a seq allocated mid-pull — the peer would
+            // advance its cursor past an entry it never received.
+            let complete_through = storage.usage_complete_through().await;
+
             let mut vector_updated = false;
             let mut offset = 0;
             loop {
@@ -245,6 +251,7 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                             entities: batch,
                             is_last: false,
                             origin_device_id: None,
+                            usage_complete_through: None,
                         },
                     );
                 }
@@ -259,6 +266,8 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                     entities: vec![],
                     is_last: true,
                     origin_device_id: None,
+                    usage_complete_through: (!complete_through.is_empty())
+                        .then_some(complete_through),
                 },
             );
 
@@ -288,6 +297,7 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
             batch_id,
             entities,
             is_last,
+            usage_complete_through,
             ..
         } => {
             let (tx, authenticated) = {
@@ -343,10 +353,14 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                 }
             }
 
-            if vector_updated {
-                merge_usage_cursors(&mut local_vector, &load_version_vector(storage).await);
-                save_version_vector(storage, &local_vector).await;
-            }
+            persist_pull_vector(
+                storage,
+                &mut local_vector,
+                vector_updated,
+                is_last,
+                usage_complete_through.as_ref(),
+            )
+            .await;
             send_msg(&tx, &LanSyncMessage::SyncAck { batch_id, accepted });
 
             if is_last {

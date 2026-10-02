@@ -318,6 +318,22 @@ pub(crate) enum Request {
         backup_id: String,
     },
 
+    /// KOS-302: один батч компакции `usage_sync_log` (правило — в
+    /// `db::compact_usage_sync_log`). Engine maintenance loop вызывает его
+    /// повторно: каждый вызов — короткая транзакция ≤ batch_limit строк,
+    /// worker остаётся отзывчивым между батчами.
+    CompactUsageSyncLog {
+        #[serde(default)]
+        older_than_days: Option<i64>,
+        #[serde(default)]
+        batch_limit: Option<i64>,
+        /// The device id our own usage writes are stamped with — own refs
+        /// are bounded by the journal head; anything else is bounded by our
+        /// contiguous cursor (rule 3 in `db::compact_usage_sync_log`).
+        #[serde(default)]
+        device_id: Option<String>,
+    },
+
     // --- Sync ops (new) ---
     StartSync(StartSyncParams),
     StopSync,

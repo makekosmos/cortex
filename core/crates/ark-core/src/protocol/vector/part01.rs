@@ -41,6 +41,29 @@ pub fn merge_usage_cursors(target: &mut VersionVector, source: &VersionVector) {
     }
 }
 
+/// Apply the sender's `usage_complete_through` claims after its final sync
+/// page: raise each `@usage:` cursor to the coverage the sender proved it
+/// can serve (compacted holes count as covered on the sender's side).
+/// Never lowers a cursor — the claim is a floor, not a reposition.
+pub fn apply_usage_complete_through(
+    vector: &mut VersionVector,
+    complete_through: &HashMap<String, u64>,
+) -> bool {
+    let mut changed = false;
+    for (device_id, seq) in complete_through {
+        let key = format!("@usage:{device_id}");
+        let current = vector
+            .get(&key)
+            .and_then(|value| value.parse::<u64>().ok())
+            .unwrap_or(0);
+        if *seq > current {
+            vector.insert(key, seq.to_string());
+            changed = true;
+        }
+    }
+    changed
+}
+
 /// Compute which entity IDs from `remote` are missing or outdated in `local`.
 pub fn compute_vector_diff(local: &VersionVector, remote: &VersionVector) -> HashSet<String> {
     let mut needed = HashSet::new();

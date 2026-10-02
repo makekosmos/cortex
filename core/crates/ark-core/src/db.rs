@@ -4,6 +4,7 @@ include!("db/legacy.rs");
 include!("db/objects.rs");
 include!("db/usage.rs");
 include!("db/sync.rs");
+include!("db/compact.rs");
 include!("db/load.rs");
 include!("db/backend.rs");
 include!("db/integration_replication_common.rs");

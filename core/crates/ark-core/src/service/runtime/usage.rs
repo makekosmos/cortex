@@ -117,6 +117,31 @@ pub(super) async fn upsert_usage_span(
     Ok(json!({ "usageDayIds": ids }))
 }
 
+/// Один батч компакции журнала usage-синка (правило — в
+/// `db::compact_usage_sync_log`). Возвращает `has_more`, чтобы Engine loop
+/// знал, когда остановиться.
+pub(super) async fn compact_usage_sync_log(
+    state: &Arc<ServiceState>,
+    older_than_days: Option<i64>,
+    batch_limit: Option<i64>,
+    device_id: Option<String>,
+) -> Result<Value, String> {
+    let days = older_than_days
+        .filter(|days| *days > 0)
+        .unwrap_or(db::USAGE_SYNC_LOG_RETENTION_DAYS);
+    let cutoff = (chrono::Utc::now() - chrono::Duration::days(days))
+        .format("%Y-%m-%dT%H:%M:%S%.3fZ")
+        .to_string();
+    let limit = batch_limit.unwrap_or(2_000).clamp(1, 50_000);
+    with_write_tx(state, |conn| {
+        let deleted = db::compact_usage_sync_log(conn, device_id.as_deref(), &cutoff, limit)?;
+        Ok(json!({
+            "deleted": deleted,
+            "has_more": deleted as i64 == limit,
+        }))
+    })
+}
+
 pub(super) async fn get_usage_title_total(
     state: &Arc<ServiceState>,
     query: String,
