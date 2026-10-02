@@ -17,6 +17,7 @@ use std::{
 use thiserror::Error;
 use zip::ZipArchive;
 
+mod identity;
 mod sweep;
 
 pub(crate) const MAX_ARCHIVE: u64 = 128 * 1024 * 1024;
@@ -151,10 +152,7 @@ impl PackageStore {
             .root
             .join("blobs")
             .join(format!("{}.kspkg", package.hash));
-        if !eq_hash(&hash_reader(fs::File::open(&blob)?)?, &package.hash) {
-            return Err(StoreError::HashMismatch);
-        }
-        let mut archive = ZipArchive::new(fs::File::open(blob)?)?;
+        let mut archive = ZipArchive::new(open_verified_blob(&blob, &package.hash)?)?;
         let archived_hash = hash_reader(archive.by_name(entry)?)?;
         if archived_hash != hash_reader(fs::File::open(&canonical)?)? {
             return Err(StoreError::HashMismatch);
@@ -176,11 +174,7 @@ impl PackageStore {
             .root
             .join("blobs")
             .join(format!("{}.kspkg", package.hash));
-        let mut blob_file = open_immutable_read(&blob)?;
-        if !eq_hash(&hash_reader(&mut blob_file)?, &package.hash) {
-            return Err(StoreError::HashMismatch);
-        }
-        blob_file.seek(SeekFrom::Start(0))?;
+        let blob_file = open_verified_blob(&blob, &package.hash)?;
         let mut archive = ZipArchive::new(blob_file)?;
         let file = archive
             .by_name(entry)
@@ -201,6 +195,24 @@ impl PackageStore {
 
     /// Re-check an unpacked entrypoint against its immutable archive bytes.
     /// The launcher calls this immediately before spawning a worker.
+    ///
+    /// Threat model (the blob lives at `<store>/blobs/<hash>.kspkg` under the
+    /// per-user data dir; the store tree is only writable by the owning user):
+    /// - Tampering with the stored blob after install (a same-user process;
+    ///   another user has no write access at all): detected by the recorded
+    ///   handle identity — file ID, size, write time and the non-settable
+    ///   change time — with the full SHA-256 as fallback when the identity
+    ///   cannot be trusted (see `identity`).
+    /// - TOCTOU between verification and the worker opening the entrypoint:
+    ///   the unpacked `.exe` itself is hashed on every launch (one archive
+    ///   entry, cheap), and the blob is held with write sharing denied for
+    ///   the whole read so it cannot be modified or swapped under the handle.
+    /// - A swapped file at the same path: the file ID changes, the identity
+    ///   misses, and the full hash re-runs, re-binding the record only if the
+    ///   bytes still are the verified blob.
+    /// - A hard link or junction redirecting the path: a link to the same
+    ///   file keeps its identity (still the verified bytes); a different
+    ///   file behind the path fails the identity check and re-verifies.
     pub(crate) fn verify_immutable_entrypoint_path(path: &Path) -> Result<(), StoreError> {
         let canonical = fs::canonicalize(path)?;
         let Some(hash_dir) = canonical.ancestors().find(|candidate| {
@@ -235,11 +247,7 @@ impl PackageStore {
             .and_then(Path::parent)
             .ok_or_else(|| StoreError::Archive("invalid worker entrypoint".into()))?;
         let blob = store_root.join("blobs").join(format!("{hash}.kspkg"));
-        let mut blob_file = open_immutable_read(&blob)?;
-        if !eq_hash(&hash_reader(&mut blob_file)?, hash) {
-            return Err(StoreError::HashMismatch);
-        }
-        blob_file.seek(SeekFrom::Start(0))?;
+        let blob_file = open_verified_blob(&blob, hash)?;
         let mut archive = ZipArchive::new(blob_file)?;
         let archived_hash = hash_reader(archive.by_name(&entrypoint)?)?;
         let unpacked_hash = hash_reader(fs::File::open(canonical)?)?;
@@ -376,6 +384,12 @@ impl PackageStore {
                 .join(format!(".{hash}.{}.tmp", std::process::id()));
             retry_io(|| fs::copy(archive, &blob_tmp))?;
             retry_io(|| fs::rename(&blob_tmp, &blob))?;
+        }
+        // Record the verified blob's identity so later opens can skip the
+        // re-hash (KOS-290). Failure degrades to the always-hash path, never
+        // to a weaker check, so it must not fail the install.
+        if let Ok(file) = open_immutable_read(&blob) {
+            let _ = identity::store(&blob, &file);
         }
         let unpacked = fs::canonicalize(self.root.join("unpacked"))?
             .join(expected_manifest.id())
@@ -741,6 +755,53 @@ fn hash_reader(mut reader: impl Read) -> Result<String, StoreError> {
         hash.update(&buffer[..read]);
     }
     Ok(hash.finalize().iter().map(|b| format!("{b:02x}")).collect())
+}
+
+/// Open an immutable blob deny-write and return a handle positioned at 0
+/// whose bytes are known to still be the verified `expected_hash` contents.
+///
+/// A blob with a matching recorded identity (see `identity`) skips the
+/// SHA-256 entirely; any doubt runs the full hash and repairs the record.
+fn open_verified_blob(blob: &Path, expected_hash: &str) -> Result<fs::File, StoreError> {
+    let mut file = open_immutable_read(blob)?;
+    let current = identity::of(&file).ok();
+    let recorded = identity::load(blob);
+    if let (Some(recorded), Some(current)) = (recorded, current.as_ref()) {
+        if recorded == *current {
+            return Ok(file);
+        }
+    }
+    #[cfg(test)]
+    FULL_BLOB_HASHES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .push(blob.to_path_buf());
+    if !eq_hash(&hash_reader(&mut file)?, expected_hash) {
+        return Err(StoreError::HashMismatch);
+    }
+    if current.is_some() {
+        let _ = identity::store(blob, &file);
+    }
+    file.seek(SeekFrom::Start(0))?;
+    Ok(file)
+}
+
+/// Test seam: which blob paths had to take the full-hash path, so tests can
+/// assert an unchanged blob was *not* re-hashed without relying on timing.
+#[cfg(test)]
+static FULL_BLOB_HASHES: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+
+#[cfg(test)]
+fn full_blob_hash_count(blob: &Path) -> usize {
+    // The launch path only sees the canonicalized store root, so recorded
+    // entries are verbatim (`\\?\`-prefixed) paths — compare canonical forms.
+    let canonical = fs::canonicalize(blob).unwrap_or_else(|_| blob.to_path_buf());
+    FULL_BLOB_HASHES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .iter()
+        .filter(|path| path.as_path() == blob || **path == canonical)
+        .count()
 }
 
 fn open_immutable_read(path: &Path) -> io::Result<fs::File> {
@@ -1321,6 +1382,109 @@ mod tests {
             Err(StoreError::Archive(message)) if message == "unsupported file type"
         ));
         assert!(!store.state_path().exists());
+    }
+
+    fn install_worker(dir: &Path, store: &PackageStore) -> (InstalledPackage, PathBuf) {
+        let VersionedManifest::V2(mut manifest) = manifest_v2() else {
+            panic!("expected v2 manifest")
+        };
+        manifest.kind = PackageKind::Source;
+        manifest.entrypoint = "worker.exe".into();
+        manifest.targets[0].runtime = crate::package_manifest::TargetRuntime::Worker;
+        manifest.targets[0].os = vec![
+            crate::package_manifest::TargetOs::Windows,
+            crate::package_manifest::TargetOs::Macos,
+            crate::package_manifest::TargetOs::Linux,
+        ];
+        manifest.targets[0].entrypoint = Some("worker.exe".into());
+        let archive_path = dir.join("worker.kspkg");
+        archive(&archive_path, &manifest, "worker.exe");
+        let bytes = fs::read(&archive_path).unwrap();
+        let hash = hex_hash(&bytes);
+        let installed = store
+            .install_versioned(
+                &archive_path,
+                bytes.len() as u64,
+                &hash,
+                &VersionedManifest::V2(manifest),
+                1,
+            )
+            .unwrap();
+        let entrypoint = store.immutable_entrypoint(&installed).unwrap();
+        (installed, entrypoint)
+    }
+
+    fn blob_path(dir: &Path, installed: &InstalledPackage) -> PathBuf {
+        dir.join("store")
+            .join("blobs")
+            .join(format!("{}.kspkg", installed.hash))
+    }
+
+    #[test]
+    fn entrypoint_verify_binds_identity_at_install_and_skips_rehash() {
+        let d = tempdir().unwrap();
+        let store = PackageStore::new(d.path().join("store")).unwrap();
+        let (installed, entrypoint) = install_worker(d.path(), &store);
+        let blob = blob_path(d.path(), &installed);
+        assert!(identity::record_path(&blob).is_file());
+        PackageStore::verify_immutable_entrypoint_path(&entrypoint).unwrap();
+        PackageStore::verify_immutable_entrypoint_path(&entrypoint).unwrap();
+        assert_eq!(full_blob_hash_count(&blob), 0);
+    }
+
+    #[test]
+    fn entrypoint_verify_full_hashes_once_when_identity_record_missing() {
+        let d = tempdir().unwrap();
+        let store = PackageStore::new(d.path().join("store")).unwrap();
+        let (installed, entrypoint) = install_worker(d.path(), &store);
+        let blob = blob_path(d.path(), &installed);
+        fs::remove_file(identity::record_path(&blob)).unwrap();
+        PackageStore::verify_immutable_entrypoint_path(&entrypoint).unwrap();
+        assert_eq!(full_blob_hash_count(&blob), 1);
+        assert!(identity::load(&blob).is_some());
+        PackageStore::verify_immutable_entrypoint_path(&entrypoint).unwrap();
+        assert_eq!(full_blob_hash_count(&blob), 1);
+    }
+
+    #[test]
+    fn entrypoint_verify_heals_corrupt_identity_record() {
+        let d = tempdir().unwrap();
+        let store = PackageStore::new(d.path().join("store")).unwrap();
+        let (installed, entrypoint) = install_worker(d.path(), &store);
+        let blob = blob_path(d.path(), &installed);
+        fs::write(identity::record_path(&blob), b"not json").unwrap();
+        PackageStore::verify_immutable_entrypoint_path(&entrypoint).unwrap();
+        assert_eq!(full_blob_hash_count(&blob), 1);
+        assert!(identity::load(&blob).is_some());
+    }
+
+    #[test]
+    fn entrypoint_verify_refuses_blob_tampered_after_install() {
+        let d = tempdir().unwrap();
+        let store = PackageStore::new(d.path().join("store")).unwrap();
+        let (installed, entrypoint) = install_worker(d.path(), &store);
+        fs::write(blob_path(d.path(), &installed), b"tampered").unwrap();
+        assert!(matches!(
+            PackageStore::verify_immutable_entrypoint_path(&entrypoint),
+            Err(StoreError::HashMismatch)
+        ));
+    }
+
+    #[test]
+    fn entrypoint_verify_reverifies_and_rebinds_swapped_blob() {
+        let d = tempdir().unwrap();
+        let store = PackageStore::new(d.path().join("store")).unwrap();
+        let (installed, entrypoint) = install_worker(d.path(), &store);
+        let blob = blob_path(d.path(), &installed);
+        // Same verified bytes behind a *different* file (new file ID): the
+        // recorded identity misses, the full hash re-runs and re-binds.
+        let copy = d.path().join("copy.kspkg");
+        fs::copy(&blob, &copy).unwrap();
+        fs::rename(&copy, &blob).unwrap();
+        PackageStore::verify_immutable_entrypoint_path(&entrypoint).unwrap();
+        assert_eq!(full_blob_hash_count(&blob), 1);
+        PackageStore::verify_immutable_entrypoint_path(&entrypoint).unwrap();
+        assert_eq!(full_blob_hash_count(&blob), 1);
     }
 
     #[test]

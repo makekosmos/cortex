@@ -8,6 +8,8 @@
 //! - `.{name}.tmp.{pid}` — `write_owner_only_json` temps (state.json,
 //!   bridge-config.json, …) and `<name>.json.tmp` from the catalog writer;
 //! - `.{hash}.{pid}.tmp` in `blobs/` — the blob copy temp before rename;
+//! - `.{hash}.identity.json.tmp.{pid}` in `blobs/` — `write_owner_only_json`
+//!   temps from blob-identity records (KOS-290);
 //! - `.staging-{hash}-{n}/` — crashed extract dirs in the store root.
 
 use std::path::Path;
@@ -25,7 +27,7 @@ pub(crate) fn sweep_stale_leftovers(root: &Path) {
         }
     });
     temp_sweep::sweep(&root.join("blobs"), LEFTOVER_GRACE, |name, is_dir| {
-        !is_dir && name.starts_with('.') && name.ends_with(".tmp")
+        !is_dir && name.starts_with('.') && (name.ends_with(".tmp") || name.contains(".tmp."))
     });
 }
 
@@ -54,9 +56,15 @@ mod tests {
         aged(root.path(), ".state.json.tmp.42");
         aged(root.path(), "catalog.json.tmp");
         aged(&root.path().join("blobs"), ".deadbeef.42.tmp");
+        aged(&root.path().join("blobs"), ".deadbeef.identity.json.tmp.42");
         fs::write(root.path().join("state.json"), b"{}").unwrap();
         fs::write(root.path().join("catalog.json"), b"{}").unwrap();
         fs::write(root.path().join("blobs").join("deadbeef.kspkg"), b"x").unwrap();
+        fs::write(
+            root.path().join("blobs").join("deadbeef.identity.json"),
+            b"{}",
+        )
+        .unwrap();
         // A file named like a leftover but sitting in `unpacked/` is out of
         // scope — only root and blobs/ are ours.
         fs::create_dir(root.path().join("unpacked")).unwrap();
@@ -78,7 +86,7 @@ mod tests {
             .path()
             .join("unpacked/.download-x-1.0.0.kspkg")
             .is_file());
-        assert_eq!(fs::read_dir(root.path().join("blobs")).unwrap().count(), 1);
+        assert_eq!(fs::read_dir(root.path().join("blobs")).unwrap().count(), 2);
     }
 
     #[test]
