@@ -488,22 +488,6 @@ async function main() {
       log(`  PASS  sha512 ✓  size ${actual.size} bytes ✓`);
     }
 
-    // Blockmap check (warning only, not a hard fail by itself)
-    const blockmapName = `${assetName}.blockmap`;
-    const blockmapUrl = `${assetBaseUrl}/${blockmapName}`;
-    try {
-      const probe = await fetch(blockmapUrl, { method: "HEAD" });
-      if (!probe.ok) {
-        warn(
-          `  ${blockmapName}: blockmap asset not found (HTTP ${probe.status}) — differential updates will not work`,
-        );
-      } else {
-        log(`  PASS  ${blockmapName} exists (differential updates OK)`);
-      }
-    } catch {
-      warn(`  ${blockmapName}: could not probe blockmap (network error)`);
-    }
-
     results.push({ name: assetName, pass: entryPass, sha512: actual.sha512, size: actual.size });
   }
 
@@ -519,11 +503,6 @@ async function main() {
       const ts = assetTimestamps.get(entry.url);
       if (ts) {
         times.push({ name: entry.url, updatedAt: new Date(ts.updated_at).getTime() });
-      }
-      const bmName = `${entry.url}.blockmap`;
-      const bmTs = assetTimestamps.get(bmName);
-      if (bmTs) {
-        times.push({ name: bmName, updatedAt: new Date(bmTs.updated_at).getTime() });
       }
     }
     const ymlTs = assetTimestamps.get(channelFile);
@@ -603,7 +582,7 @@ async function main() {
       `${LOG_PREFIX}      (which ends with: node scripts/build-desktop.mjs --platform win)`,
     );
     console.error(
-      `${LOG_PREFIX}   4. That produces an atomic set: installer + .blockmap + ${channelFile} from the same build.`,
+      `${LOG_PREFIX}   4. That produces an atomic set: installer + ${channelFile} from the same build.`,
     );
     console.error(
       `${LOG_PREFIX}   Alternatively: delete ALL assets from the broken release, then re-run the build.`,
