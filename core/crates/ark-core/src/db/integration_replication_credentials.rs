@@ -139,7 +139,7 @@ fn upsert_integration_credential_envelope_record(
                 "INSERT INTO integration_credential_envelopes
              (envelope_id, integration_id, recipient_node_id, grant_epoch,
               credential_generation, refresh_fencing_token, key_id, algorithm, nonce, \
-ciphertext,
+              ciphertext,
               authenticated_metadata_json, issuer_node_id, issued_at, revision, hlc)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
              ON CONFLICT(envelope_id) DO UPDATE SET

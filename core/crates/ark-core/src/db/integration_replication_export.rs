@@ -40,7 +40,7 @@ pub fn export_integration_replication(
                  FROM integration_credential_envelopes
                  WHERE integration_id = ?1 AND recipient_node_id = ?2
                    AND grant_epoch = (SELECT grant_epoch FROM authorized_nodes WHERE node_id = \
-?2)
+                   ?2)
                  ORDER BY credential_generation ASC",
             )
             .map_err(storage)?;

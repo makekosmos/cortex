@@ -20,7 +20,7 @@ fn phase2_pending_db() -> Connection {
          );
          CREATE INDEX idx_sync_pending_awaited_type ON sync_pending_objects(awaited_type_id);
          CREATE INDEX idx_sync_pending_awaited_type_version ON \
-sync_pending_objects(awaited_type_id, awaited_type_version);",
+         sync_pending_objects(awaited_type_id, awaited_type_version);",
     )
     .unwrap();
     conn

@@ -34,9 +34,9 @@ pub fn clear_all(conn: &Connection) -> Result<(), String> {
          DELETE FROM objects;
          DELETE FROM sync_pending_objects;
          DELETE FROM object_type_aliases WHERE canonical_type_id IN (SELECT id FROM \
-object_types WHERE system_locked = 0);
+         object_types WHERE system_locked = 0);
          DELETE FROM object_type_versions WHERE type_id IN (SELECT id FROM object_types WHERE \
-system_locked = 0);
+         system_locked = 0);
          DELETE FROM object_types WHERE system_locked = 0;
          DELETE FROM usage_days;
          DELETE FROM usage_events;

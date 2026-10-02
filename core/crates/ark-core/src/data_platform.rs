@@ -20,7 +20,7 @@ pub fn ensure_schema(conn: &Connection) -> Result<(), String> {
            last_pulled_at TEXT, last_pushed_at TEXT,
            conflict_state TEXT NOT NULL DEFAULT 'clean'
              CHECK(conflict_state IN ('clean','local_changed','remote_changed','conflict',\
-'missing','invalid','disabled')),
+             'missing','invalid','disabled')),
            PRIMARY KEY(connector_id,account_id,external_type,external_id)
          );
          CREATE UNIQUE INDEX IF NOT EXISTS external_refs_object_identity
@@ -28,7 +28,7 @@ pub fn ensure_schema(conn: &Connection) -> Result<(), String> {
          CREATE INDEX IF NOT EXISTS external_refs_object ON external_refs(object_id);
          CREATE TABLE IF NOT EXISTS sync_profiles (
            profile_id TEXT PRIMARY KEY CHECK(length(CAST(profile_id AS BLOB)) BETWEEN 1 AND \
-128),
+           128),
            device_id TEXT NOT NULL CHECK(length(CAST(device_id AS BLOB)) BETWEEN 1 AND 128),
            name TEXT NOT NULL CHECK(length(CAST(name AS BLOB)) BETWEEN 1 AND 128),
            active INTEGER NOT NULL DEFAULT 0 CHECK(active IN (0,1)),
@@ -36,14 +36,14 @@ pub fn ensure_schema(conn: &Connection) -> Result<(), String> {
            UNIQUE(device_id,name), UNIQUE(device_id,revision)
          );
          CREATE UNIQUE INDEX IF NOT EXISTS sync_profiles_one_default ON \
-sync_profiles(device_id) WHERE active = 1;
+         sync_profiles(device_id) WHERE active = 1;
          CREATE TABLE IF NOT EXISTS sync_profile_rules (
            profile_id TEXT NOT NULL REFERENCES sync_profiles(profile_id) ON DELETE CASCADE,
            resource_kind TEXT NOT NULL CHECK(resource_kind IN ('type','dataset','blob')),
            resource_id TEXT NOT NULL CHECK(length(CAST(resource_id AS BLOB)) BETWEEN 1 AND 128),
            mode TEXT NOT NULL CHECK(mode IN ('full','metadata','none')),
            filter_json TEXT NOT NULL DEFAULT '{}' CHECK(length(CAST(filter_json AS BLOB)) <= \
-131072),
+           131072),
            PRIMARY KEY(profile_id,resource_kind,resource_id)
          );",
     )
@@ -141,7 +141,7 @@ pub fn upsert_sync_profile(
             "INSERT INTO sync_profiles(profile_id,device_id,revision,name,active) \
              VALUES(?1,?2,?3,?4,?5)
              ON CONFLICT(profile_id) DO UPDATE SET revision=excluded.revision,\
-name=excluded.name,active=excluded.active",
+             name=excluded.name,active=excluded.active",
             params![profile_id, local_device_id, revision, name, active as i64],
         )
         .map_err(|e| e.to_string())?;

@@ -326,7 +326,7 @@ impl AgentsService {
              CREATE TABLE IF NOT EXISTS timeline (
                 id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL,
                 kind TEXT NOT NULL, payload_json TEXT NOT NULL, truncated INTEGER NOT NULL \
-DEFAULT 0, \
+                DEFAULT 0, \
                 created_at TEXT NOT NULL, updated_at TEXT NOT NULL
              );
              CREATE INDEX IF NOT EXISTS idx_timeline_session_id ON timeline(session_id, id);

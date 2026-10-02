@@ -16,26 +16,26 @@ fn db() -> Connection {
            system_locked INTEGER NOT NULL DEFAULT 0, owner_kind TEXT NOT NULL DEFAULT 'system',
            owner_id TEXT, current_version TEXT NOT NULL DEFAULT '0.0.0-legacy',
            status TEXT NOT NULL DEFAULT 'active', base_type_id TEXT REFERENCES \
-object_types(id));
+           object_types(id));
          CREATE TABLE object_type_versions (
            type_id TEXT NOT NULL REFERENCES object_types(id), version TEXT NOT NULL,
            schema_json TEXT NOT NULL, ui_schema_json TEXT NOT NULL,
            content_contract_json TEXT NOT NULL DEFAULT '{}', relations_json TEXT NOT NULL \
-DEFAULT '[]',
+           DEFAULT '[]',
            sync_policy_json TEXT NOT NULL DEFAULT '{}', schema_hash TEXT NOT NULL, created_at \
-TEXT NOT NULL,
+           TEXT NOT NULL,
            PRIMARY KEY(type_id, version));
          CREATE TABLE object_type_aliases (
            alias TEXT PRIMARY KEY, canonical_type_id TEXT NOT NULL REFERENCES object_types(id),\
  created_at TEXT NOT NULL);
          CREATE TABLE objects (id TEXT PRIMARY KEY, type_id TEXT NOT NULL REFERENCES \
-object_types(id), type_version TEXT NOT NULL,
+         object_types(id), type_version TEXT NOT NULL,
            title TEXT NOT NULL, content_json TEXT NOT NULL, props_json TEXT NOT NULL,
            created_at TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT);
          CREATE TABLE object_links (id TEXT PRIMARY KEY, source_object_id TEXT NOT NULL \
-REFERENCES objects(id),
+         REFERENCES objects(id),
            target_object_id TEXT NOT NULL REFERENCES objects(id), link_type TEXT NOT NULL, \
-created_at TEXT NOT NULL);
+           created_at TEXT NOT NULL);
         ",
     )
     .unwrap();

@@ -356,7 +356,7 @@ pub fn retire_legacy_planning_tables(conn: &Connection) -> Result<(usize, usize)
             return Err(MigrationError::Objects(format!(
                 "legacy planning archive incomplete \
  for {table}: {source_count} source rows, \
-{archive_count} archived"
+ {archive_count} archived"
             )));
         }
         let mut ids = conn

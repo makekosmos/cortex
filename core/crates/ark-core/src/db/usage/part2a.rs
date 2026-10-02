@@ -24,7 +24,7 @@ pub fn load_usage_analytics(
                     COALESCE(SUM(usage_sessions.idle_ms), 0) AS total_idle_ms,
                     MIN(usage_sessions.started_at) AS first_recorded_at,
                     MAX(COALESCE(usage_sessions.ended_at, usage_sessions.started_at)) AS \
-last_recorded_at
+                    last_recorded_at
              FROM tracked_apps
              LEFT JOIN usage_sessions ON usage_sessions.tracked_app_id = tracked_apps.id",
             [],
@@ -133,7 +133,7 @@ last_recorded_at
                     COALESCE(SUM(usage_sessions.idle_ms), 0) AS idle_ms,
                     COUNT(usage_sessions.id) AS sessions,
                     MAX(COALESCE(usage_sessions.ended_at, usage_sessions.started_at)) AS \
-last_seen_at
+                    last_seen_at
              FROM tracked_apps
              JOIN usage_sessions ON usage_sessions.tracked_app_id = tracked_apps.id
              GROUP BY tracked_apps.id",

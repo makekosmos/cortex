@@ -9,16 +9,16 @@ fn legacy_opaque_sync_cursor_is_scrubbed_before_configuration_load() {
     conn.execute_batch(
         "CREATE TABLE integration_configurations (
            integration_id TEXT PRIMARY KEY, provider TEXT NOT NULL, account_subject TEXT NOT \
-NULL,
+           NULL,
            public_scopes_json TEXT NOT NULL, public_settings_json TEXT NOT NULL, enabled \
-INTEGER NOT NULL,
+           INTEGER NOT NULL,
            sync_cursor TEXT, revision INTEGER NOT NULL, hlc TEXT NOT NULL
          );
          INSERT INTO integration_configurations VALUES
            ('opaque', 'fatsecret', 'a', '[]', '{}', 1, 'bearer-token', 1, \
-'2026-08-30T00:00:00.000Z:000001:node-a'),
+           '2026-08-30T00:00:00.000Z:000001:node-a'),
            ('numeric', 'fatsecret', 'b', '[]', '{}', 1, '42', 1, \
-'2026-08-30T00:00:00.000Z:000001:node-a');",
+           '2026-08-30T00:00:00.000Z:000001:node-a');",
     )
     .unwrap();
     assert_eq!(

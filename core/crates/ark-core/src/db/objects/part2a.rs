@@ -48,7 +48,7 @@ fn upsert_object_inner(conn: &Connection, object: &ArkObject) -> Result<(), Stri
         conn.execute(
             "INSERT INTO objects
                 (id, type_id, type_version, title, content_json, props_json, created_at, \
-updated_at, deleted_at)
+                updated_at, deleted_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
              ON CONFLICT(id) DO UPDATE SET
                 type_id = excluded.type_id,
