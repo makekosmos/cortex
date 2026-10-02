@@ -61,6 +61,14 @@ jobs:
       - name: Build workspace
         run: cargo build --locked --workspace --all-targets
 
+      # cargo test does not build required-feature bins. The local gate
+      # (runtime/scripts/test-lib.mjs) builds ark-markdown-bridge with
+      # markdown-bridge-fixture first; without that exe,
+      # signed_catalog_bridge_runs_through_service fails on a clean runner.
+      - name: Build engine test fixtures
+        if: runner.os == 'Windows'
+        run: cargo build -p engine --bin ark-markdown-bridge --locked --features markdown-bridge-fixture
+
       - name: Test workspace
         run: cargo test --locked --workspace
 
@@ -71,7 +79,10 @@ jobs:
       - name: Build and test Manager
         run: cargo test --locked --manifest-path manager-gpui/Cargo.toml
 
-      # No-op on Windows (the script exits before swiftc). On macOS it
-      # compiles runtime/native/macos/*.swift.
+      # No-op on Windows (the script exits before swiftc and before cargo).
+      # On macOS it compiles the Swift helpers, then release-builds the Engine
+      # and Manager with MUNDUS_PRODUCT_VERSION from release-versions.json.
+      # That second build is the product path the debug workspace build above
+      # does not exercise.
       - name: Build macOS native helpers
         run: node desktop/scripts/build-macos-native.mjs
