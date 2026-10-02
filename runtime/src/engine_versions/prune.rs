@@ -1,6 +1,6 @@
 //! Retention for `<engine_root>/versions/` (KOS-261).
 //!
-//! The installer (`install-engine.ps1`) extracts every new Engine into
+//! The installer (`mundus-engine install`) extracts every new Engine into
 //! `versions/<semver>/` and rewrites `current.json`; nothing ever removed the
 //! old dirs, so each update leaked ~70 MB. This module owns the single
 //! selection rule shared by both runners — the `prune-versions` CLI the
@@ -82,16 +82,16 @@ impl Report {
     }
 }
 
-/// Строгая `X.Y.Z` версия — тот же shape, что `$semver` в
-/// `install-engine.ps1` (`semver::Version` шире: принимает prerelease/build
+/// Строгая `X.Y.Z` версия — тот же shape, что проверяет `installer::manifest`
+/// (`semver::Version` шире: принимает prerelease/build
 /// суффиксы, которых installer никогда не пишет).
 fn strict_version(name: &str) -> Option<Version> {
     let version = Version::parse(name).ok()?;
     (version.pre.is_empty() && version.build.is_empty()).then_some(version)
 }
 
-/// `<v>.<pid>.tmp` — temp-директория `install-engine.ps1`
-/// (`versions/<version>.<pid>.tmp` между Expand-Archive и Move-Item).
+/// `<v>.<pid>.tmp` — temp-директория `mundus-engine install`
+/// (`versions/<version>.<pid>.tmp` между staging-копией и финальным rename).
 fn is_install_temp(name: &str) -> bool {
     let Some(stem) = name.strip_suffix(".tmp") else {
         return false;

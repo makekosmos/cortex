@@ -223,8 +223,11 @@ impl ManagerState {
     }
 }
 
+// pub(crate): the installer's `post-install` subcommand reuses the
+// StartupApproved marker layout and the Run/Approved subkey constants
+// (KOS-306).
 #[cfg(windows)]
-mod windows_autostart;
+pub(crate) mod windows_autostart;
 
 #[cfg(windows)]
 fn windows_autostart_enabled() -> bool {
