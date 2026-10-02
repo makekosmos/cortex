@@ -9,29 +9,16 @@ use crate::widgets::*;
 use mundus_gpui_kit::theme::*;
 
 pub fn load(app: &mut ManagerApp) {
-    // Only the snapshot is loaded passively. The pairing ticket is fetched
-    // by the explicit «Показать код для подключения» button — on a
-    // loopback-bound Engine that request escalates the bind, so the
-    // firewall prompt belongs to that click, not to opening this tab
-    // (KOS-269).
+    // Only snapshots are loaded passively — both are non-elevating reads.
+    // The pairing ticket is fetched by the explicit «Показать код для
+    // подключения» button — on a loopback-bound Engine that request
+    // escalates the bind, so the firewall prompt belongs to that click, not
+    // to opening this tab (KOS-269).
     app.call("sync.snapshot", "get_sync_snapshot", json!({}));
+    app.call("sync.privileged", "system.privileged.status", json!({}));
 }
 
-/// «Показать код для подключения» — the explicit LAN opt-in for the side
-/// that shares its code (KOS-269): `show_pairing_code` escalates a
-/// loopback-bound sync to LAN interfaces, which is when Windows may show
-/// the firewall prompt on this device.
-fn show_code_btn(cx: &mut Context<ManagerApp>) -> impl IntoElement {
-    btn(
-        "sync-show-code",
-        "Показать код для подключения",
-        true,
-        cx,
-        |this, _cx| {
-            this.call("sync.ticket", "show_pairing_code", json!({}));
-        },
-    )
-}
+mod pairing;
 
 pub fn render(
     app: &mut ManagerApp,
@@ -63,65 +50,8 @@ pub fn render(
         el.into_any_element()
     }));
 
-    col = col.child({
-        // The ticket slot is populated only by the explicit button —
-        // `sync.ticket` is absent until the user asks for the code.
-        let slot = app.slot("sync.ticket");
-        let mut el = card();
-        el = el.child(
-            div()
-                .text_size(px(12.))
-                .text_color(c(MUTED_FG()))
-                .child("Ваш код подключения"),
-        );
-        let code = match slot {
-            Some(Slot::Ready(v)) => {
-                let ticket = if v.is_null() {
-                    String::new()
-                } else {
-                    vstr(v, "ticket")
-                };
-                if ticket.is_empty() {
-                    vstr(v, "code")
-                } else {
-                    ticket
-                }
-            }
-            _ => String::new(),
-        };
-        match slot {
-            Some(Slot::Loading) => {
-                el = el.child(
-                    div()
-                        .text_size(px(13.))
-                        .text_color(c(MUTED_FG()))
-                        .child("Загрузка…"),
-                );
-            }
-            Some(Slot::Failed(e)) => {
-                el = el
-                    .child(
-                        div()
-                            .text_size(px(13.))
-                            .text_color(c(DESTRUCTIVE()))
-                            .child(e.clone()),
-                    )
-                    .child(show_code_btn(cx));
-            }
-            _ if code.is_empty() => {
-                el = el.child(show_code_btn(cx));
-            }
-            _ => {
-                el = el.child(
-                    div()
-                        .text_size(px(13.))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .child(code),
-                );
-            }
-        }
-        el.into_any_element()
-    });
+    col = col.child(pairing::ticket_card(app, cx));
+    col = col.child(pairing::privileged_card(app, cx));
 
     let ticket_in = app.input(
         "sync.peer",
@@ -142,9 +72,9 @@ pub fn render(
                 "При первом включении синхронизации Windows может один раз показать \
                          окно брандмауэра для Mundus Engine — нажмите «Разрешить доступ», \
                          чтобы устройства находили друг друга в локальной сети. \
-                         С «расширенными правами» это окно не появится снова даже после \
-                         обновлений; без них Windows может спросить ещё раз после \
-                         обновления приложения.",
+                         Чтобы окно не появлялось снова после обновлений, включите \
+                         «Расширенные права» кнопкой выше; без них Windows может \
+                         спросить ещё раз после обновления приложения.",
             ))
             .child(
                 div()
