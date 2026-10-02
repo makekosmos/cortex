@@ -362,6 +362,12 @@ pub(crate) enum Request {
     /// selected the iroh transport. `null`/error otherwise (e.g. relay
     /// selected or sync not running).
     GetOwnIrohTicket,
+    /// KOS-269: explicit "show my pairing code" — escalates a loopback-bound
+    /// runtime to `all_interfaces` (and the iroh transport) so the returned
+    /// ticket is LAN-reachable, then returns it. This is the user action
+    /// that owns the firewall prompt; `get_own_iroh_ticket` stays a passive
+    /// read and never changes the bind.
+    ShowPairingCode,
 
     #[serde(rename = "integration.persist_node_authorization")]
     IntegrationPersistNodeAuthorization {

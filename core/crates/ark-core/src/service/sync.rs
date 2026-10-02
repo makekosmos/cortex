@@ -5,10 +5,15 @@
 use super::*;
 
 mod events;
+mod pairing;
 mod start;
 use self::events::wire_relay_sync_events;
 // Re-exported so `service.rs` can import it as `self::sync::handle_start_sync`.
 pub(crate) use self::start::handle_start_sync;
+// The pairing handlers; the param builders are exercised by tests only.
+#[cfg(test)]
+pub(crate) use self::pairing::{build_pairing_restart_params, lan_opt_in_params};
+pub(crate) use self::pairing::{handle_connect_with_pairing_code, handle_show_pairing_code};
 
 /// Everything a spawned SyncClient needs: the shared server-side handles
 /// plus this node's identity material.
@@ -162,22 +167,6 @@ pub(super) async fn handle_start_sync_with_params(
         },
     )
     .await
-}
-
-pub(super) fn build_pairing_restart_params(
-    runtime: &SyncRuntime,
-    pairing_code: &str,
-) -> SyncStartParams {
-    let mut params = runtime.start_params.clone();
-    params.use_iroh = true;
-    params.iroh_peer_ticket = Some(pairing_code.trim().to_string());
-    // Pairing a device is the explicit "turn sync on" (KOS-269): a boot
-    // without paired peers starts loopback-only, and a loopback iroh
-    // endpoint cannot reach a remote ticket. Escalate to the LAN bind here —
-    // this is the one moment the Windows firewall prompt is expected to
-    // appear for an unprivileged Engine.
-    params.bind = SyncBind::AllInterfaces;
-    params
 }
 
 pub(super) async fn handle_broadcast_change(
@@ -351,43 +340,6 @@ pub(super) async fn handle_disconnect_peer(
     }));
     emit_event(json!({"event": "peer_list_updated"}));
     Ok(json!(true))
-}
-
-pub(super) async fn handle_connect_with_pairing_code(
-    state: &Arc<ServiceState>,
-    pairing_code: String,
-) -> Result<Value, String> {
-    let code = pairing_code.trim();
-    if code.is_empty() {
-        return Err("pairing code is empty".to_string());
-    }
-
-    let runtime = {
-        let guard = state.sync.lock().await;
-        match guard.as_ref() {
-            Some(r) => r.clone(),
-            None => return Err("Sync not running".to_string()),
-        }
-    };
-
-    let restart_params = build_pairing_restart_params(&runtime, code);
-    let restore_params = runtime.start_params.clone();
-
-    handle_stop_sync(state).await;
-    match handle_start_sync_with_params(state, restart_params).await {
-        Ok(result) => Ok(result),
-        Err(err) => {
-            if let Err(restore_err) = handle_start_sync_with_params(state, restore_params).await {
-                return Err(format!(
-                    "connect_with_pairing_code failed: {err}; restoring previous sync also failed: \
-                         {restore_err}"
-                ));
-            }
-            Err(format!(
-                "connect_with_pairing_code failed: {err}; previous sync restored"
-            ))
-        }
-    }
 }
 
 pub(super) async fn handle_get_connected_peers(state: &Arc<ServiceState>) -> Result<Value, String> {

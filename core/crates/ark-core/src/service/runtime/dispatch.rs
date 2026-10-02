@@ -179,6 +179,7 @@ pub(crate) async fn handle_request(
         Request::GetOwnAddresses { port } => system::own_addresses(state, port).await,
         Request::GetHostDeviceName => system::host_device_name(state).await,
         Request::GetOwnIrohTicket => system::get_own_iroh_ticket(state).await,
+        Request::ShowPairingCode => system::show_pairing_code(state).await,
 
         Request::IntegrationPersistNodeAuthorization {
             authorization_operation,
