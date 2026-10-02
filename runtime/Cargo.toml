@@ -168,6 +168,10 @@ windows = { version = "0.58", features = [
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
+[build-dependencies]
+# Shared with manager-gpui/build.rs — one resource script for every shipped exe.
+pe-version-info = { path = "crates/pe-version-info" }
+
 [dev-dependencies]
 tempfile.workspace = true
 httpmock = "0.7"

@@ -3,6 +3,7 @@ resolver = "2"
 members = [
   "runtime",
   "runtime/crates/package-protocol",
+  "runtime/crates/pe-version-info",
   "core/crates/ark-core",
 ]
 # Pinned sibling component checkouts cloned under desktop/.tmp (local builds)
