@@ -22,12 +22,6 @@ components = ["rustfmt", "clippy"]
 `;
 }
 
-export function pinnedChannel(toml) {
-  const match = toml.match(/^channel\s*=\s*"([^"]+)"\s*$/m);
-  if (!match) throw new Error(`${RUST_TOOLCHAIN_TOML} does not pin a channel`);
-  return match[1];
-}
-
 export function expectedChannel(toolchainJson) {
   const rust = String(JSON.parse(toolchainJson).rust ?? "");
   if (!/^\d+\.\d+\.\d+$/.test(rust)) throw new Error(`${TOOLCHAIN_JSON} has no semver "rust" pin`);
@@ -41,10 +35,13 @@ if (isMain) {
     await writeFile(RUST_TOOLCHAIN_TOML, renderRustToolchain(expected));
     console.log(`${RUST_TOOLCHAIN_TOML} regenerated from ${TOOLCHAIN_JSON}: ${expected}`);
   } else {
-    const actual = pinnedChannel(await readFile(RUST_TOOLCHAIN_TOML, "utf8"));
-    if (actual !== expected)
+    // The file is generated, so the whole body must match the render — a
+    // channel-only compare would let hand edits to profile/components or the
+    // header comment pass silently.
+    const actual = (await readFile(RUST_TOOLCHAIN_TOML, "utf8")).replace(/\r\n/g, "\n");
+    if (actual !== renderRustToolchain(expected))
       throw new Error(
-        `${RUST_TOOLCHAIN_TOML} pins ${actual} but ${TOOLCHAIN_JSON} pins ${expected}; ` +
+        `${RUST_TOOLCHAIN_TOML} does not match ${TOOLCHAIN_JSON} rust = ${expected}; ` +
           `run \`node scripts/check-toolchain.mjs --write\``,
       );
     console.log(`Toolchain pins agree: ${TOOLCHAIN_JSON} and ${RUST_TOOLCHAIN_TOML} = ${expected}`);
