@@ -147,6 +147,22 @@ fn a_same_version_rebuild_replaces_the_installed_engine() {
         b"fixture:mundus-engine.exe"
     );
 
+    let (_rebuild, rebuild_options) = same_version_rebuild(options);
+    assert_eq!(
+        install::install(&rebuild_options).unwrap()["action"],
+        "installed"
+    );
+    assert_eq!(
+        std::fs::read(&backend).unwrap(),
+        b"rebuild:mundus-engine.exe"
+    );
+    assert_eq!(current_version(&target_root), "1.2.3");
+}
+
+/// A same-version rebuild payload ("rebuild:*" bytes) for `options` —
+/// exercises the `versions/<v>` swap path. The TempDir must outlive the
+/// call to `install`.
+fn same_version_rebuild(options: install::Options) -> (TempDir, install::Options) {
     let rebuild = TempDir::new().unwrap();
     let payload = rebuild.path().join("payload");
     std::fs::create_dir_all(&payload).unwrap();
@@ -164,19 +180,13 @@ fn a_same_version_rebuild_replaces_the_installed_engine() {
             ("tray.ico", b"rebuild:tray.ico"),
         ],
     );
-    let rebuild_options = install::Options {
-        manifest,
-        ..options
-    };
-    assert_eq!(
-        install::install(&rebuild_options).unwrap()["action"],
-        "installed"
-    );
-    assert_eq!(
-        std::fs::read(&backend).unwrap(),
-        b"rebuild:mundus-engine.exe"
-    );
-    assert_eq!(current_version(&target_root), "1.2.3");
+    (
+        rebuild,
+        install::Options {
+            manifest,
+            ..options
+        },
+    )
 }
 
 #[test]
@@ -192,28 +202,8 @@ fn a_failed_move_in_restores_the_previous_install() {
         b"fixture:mundus-engine.exe"
     );
 
-    let rebuild = TempDir::new().unwrap();
-    let payload = rebuild.path().join("payload");
-    std::fs::create_dir_all(&payload).unwrap();
-    for (name, data) in [
-        ("mundus-engine.exe", b"rebuild:mundus-engine.exe".as_slice()),
-        ("tray.ico", b"rebuild:tray.ico".as_slice()),
-    ] {
-        std::fs::write(payload.join(name), data).unwrap();
-    }
-    let manifest = write_manifest(
-        &payload,
-        "1.2.3",
-        &[
-            ("mundus-engine.exe", b"rebuild:mundus-engine.exe"),
-            ("tray.ico", b"rebuild:tray.ico"),
-        ],
-    );
-    let rebuild_options = install::Options {
-        manifest,
-        ..options
-    };
-    install::FAIL_NEXT_MOVE_IN.store(true, std::sync::atomic::Ordering::SeqCst);
+    let (_rebuild, rebuild_options) = same_version_rebuild(options);
+    swap::FAIL_NEXT_MOVE_IN.store(true, std::sync::atomic::Ordering::SeqCst);
     assert!(install::install(&rebuild_options).is_err());
     assert_eq!(
         std::fs::read(&backend).unwrap(),
@@ -227,6 +217,27 @@ fn a_failed_move_in_restores_the_previous_install() {
             .join(format!("1.2.3.{}.old", std::process::id()))
             .exists(),
         "the aside dir is renamed back, not left behind"
+    );
+}
+
+#[test]
+fn a_failed_restore_reports_where_the_engine_stayed() {
+    // KOS-306 round 3: when even the restore rename fails, the error must
+    // name the aside dir — otherwise the previous Engine is silently lost.
+    let (_root, _payload, target_root, options) = fixture("1.2.3");
+    install::install(&options).unwrap();
+
+    let (_rebuild, rebuild_options) = same_version_rebuild(options);
+    swap::FAIL_NEXT_MOVE_IN.store(true, std::sync::atomic::Ordering::SeqCst);
+    swap::FAIL_NEXT_RESTORE.store(true, std::sync::atomic::Ordering::SeqCst);
+    let error = install::install(&rebuild_options).unwrap_err();
+    let aside = target_root
+        .join("versions")
+        .join(format!("1.2.3.{}.old", std::process::id()));
+    assert!(error.contains("previous Engine kept at"), "{error}");
+    assert!(
+        aside.join("mundus-engine.exe").is_file(),
+        "the previous Engine still exists at the reported aside path"
     );
 }
 

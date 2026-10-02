@@ -29,6 +29,7 @@ mod manifest;
 mod post_install;
 mod processes;
 pub(crate) mod registry;
+mod swap;
 
 #[cfg(test)]
 mod tests;
