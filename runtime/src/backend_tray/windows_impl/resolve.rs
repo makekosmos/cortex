@@ -44,3 +44,22 @@ pub fn resolve_component_executable(component: Component) -> Option<PathBuf> {
         .into_iter()
         .find(|path| path.is_file())
 }
+
+/// Manager exe resolution for *authorization* (the `/v1/rpc` caller-identity
+/// check). Unlike launch resolution, the `MUNDUS_MANAGER_EXECUTABLE` env
+/// override exists only in debug builds: in a release Engine an env var must
+/// never decide who may trigger the elevated install (KOS-269 round 4). The
+/// tray's launch path keeps honouring it — that is pre-existing behaviour
+/// and not an auth source.
+pub fn resolve_manager_for_auth() -> Option<PathBuf> {
+    #[cfg(debug_assertions)]
+    if let Some(path) = crate::brand::env_os(Component::Manager.env_override()) {
+        let path = PathBuf::from(path);
+        if path.is_file() {
+            return Some(path);
+        }
+    }
+    manager_executable_candidates(&install_roots())
+        .into_iter()
+        .find(|path| path.is_file())
+}

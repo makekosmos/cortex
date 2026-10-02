@@ -186,6 +186,17 @@ pub fn process_image_path(pid: u32) -> Result<std::path::PathBuf, AuthError> {
     }
 }
 
+/// Same-file check by *file identity* — volume serial number + file index —
+/// not by path spelling. `QueryFullProcessImageNameW` and the resolved
+/// Manager path may name the same file through different spellings (`\\?\`
+/// prefix, `..` segments, different case, 8.3 short names, junctions), so a
+/// string compare would deny the real Manager (KOS-269 round 4).
+/// Deny-closed: returns `false` when either path cannot be opened.
+#[cfg(windows)]
+pub fn same_file(a: &std::path::Path, b: &std::path::Path) -> bool {
+    same_file::is_same_file(a, b).unwrap_or(false)
+}
+
 #[cfg(unix)]
 pub fn validate_pid_belongs_to_current_user(pid: u32) -> Result<(), AuthError> {
     // kill(pid, 0) → 0  : процесс существует и мы имеем right послать signal (same user или root)

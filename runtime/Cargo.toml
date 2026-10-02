@@ -128,6 +128,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tracing-appender = "0.2"
 
 [target.'cfg(windows)'.dependencies]
+# File identity by volume serial + file index — the /v1/rpc Manager check
+# must not rely on path spelling (KOS-269 round 4).
+same-file = "1"
 ntfs-reader = "0.4.5"
 windows-service = "0.7"
 windows = { version = "0.58", features = [

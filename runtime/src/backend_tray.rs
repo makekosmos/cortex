@@ -47,14 +47,13 @@ pub fn start() -> (BackendTray, UnboundedReceiver<TrayEvent>) {
     (BackendTray { _events: events }, receiver)
 }
 
-/// The installed Manager executable (`resources/components/manager/
-/// Mundus Manager.exe`), or the `MUNDUS_MANAGER_EXECUTABLE` dev override —
-/// the same resolution the tray menu uses to launch it. `/v1/rpc` pins
-/// "this request came from the Manager" by comparing the caller PID's
-/// process image to this path (KOS-269 round 3).
+/// Manager exe path for the `/v1/rpc` caller-identity check: identical to
+/// the launch resolution in debug builds, but release builds ignore the
+/// `MUNDUS_MANAGER_EXECUTABLE` env override — an env var must not decide who
+/// may trigger the elevated install (KOS-269 round 4).
 #[cfg(windows)]
-pub(crate) fn manager_executable() -> Option<std::path::PathBuf> {
-    windows_impl::manager_executable()
+pub(crate) fn manager_executable_for_auth() -> Option<std::path::PathBuf> {
+    windows_impl::manager_executable_for_auth()
 }
 
 impl BackendTray {
