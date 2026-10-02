@@ -292,6 +292,10 @@ struct WorkerRuntime {
 }
 
 include!("package_service/core.rs");
+include!("package_service/core_snapshots.rs");
+include!("package_service/core_bridge.rs");
+include!("package_service/core_workers.rs");
+include!("package_service/core_state.rs");
 include!("package_service/native.rs");
 include!("package_service/native_install.rs");
 include!("package_service/native_migration.rs");
