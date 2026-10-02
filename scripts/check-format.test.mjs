@@ -89,10 +89,27 @@ test("format discovery ignores unstaged files and fails closed on an invalid bas
     const long = spawnSync(process.execPath, [script], { cwd });
     assert.equal(long.status, 1, "over-100-char .rs line must fail the gate");
     assert.match(String(long.stderr), /over 100 chars/);
+    rmSync(resolve(cwd, "long.rs"));
+
+    writeFileSync(
+      resolve(cwd, "flat.rs"),
+      'fn x() {\n    let s = "INSERT INTO t(a,b) VALUES(\\\nVALUES(1,2)";\n}\n',
+    );
+    git(cwd, "add", "flat.rs");
+    const flat = spawnSync(process.execPath, [script], { cwd });
+    assert.equal(flat.status, 1, "column-0 string continuation must fail the gate");
+    assert.match(String(flat.stderr), /column 0/);
+
+    writeFileSync(
+      resolve(cwd, "flat.rs"),
+      'fn x() {\n    let s = "INSERT INTO t(a,b) \\\n         VALUES(1,2)";\n}\n',
+    );
+    const indented = spawnSync(process.execPath, [script], { cwd });
+    assert.equal(indented.status, 0, "indented string continuation must pass");
 
     rmSync(resolve(cwd, "sample.ts"));
     rmSync(resolve(cwd, "bom.rs"));
-    rmSync(resolve(cwd, "long.rs"));
+    rmSync(resolve(cwd, "flat.rs"));
     const deleted = spawnSync(process.execPath, [script], { cwd });
     assert.equal(deleted.status, 0, "deleted files must not enter the format gate");
     const after = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" });

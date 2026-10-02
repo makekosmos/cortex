@@ -69,6 +69,31 @@ if (longLines.length) {
   console.error("Rust lines over 100 chars (rustfmt cannot format these regions):");
   for (const l of longLines) console.error(`  ${l}`);
 }
+
+// A `\`-continuation inside a string literal whose next line starts at
+// column 0 is the signature of a mechanical mid-token split: continuations
+// must be indented so the source stays readable.
+const flatConts = [];
+for (const file of changedRs) {
+  if (!existsSync(file)) continue;
+  const lines = readFileSync(file, "utf8").split("\n");
+  lines.forEach((line, i) => {
+    if (
+      line.endsWith("\\") &&
+      line.includes('"') &&
+      lines[i + 1] !== undefined &&
+      lines[i + 1] !== "" &&
+      !lines[i + 1].startsWith(" ") &&
+      !lines[i + 1].startsWith("\t")
+    )
+      flatConts.push(`${file}:${i + 1}`);
+  });
+}
+if (flatConts.length) {
+  failed = true;
+  console.error("Rust string continuations starting at column 0 (mid-token splits):");
+  for (const l of flatConts) console.error(`  ${l}`);
+}
 if (changedRs.length && existsSync("Cargo.toml")) {
   const fmt = spawnSync("cargo", ["fmt", "--all", "--", "--check"], {
     stdio: "inherit",
