@@ -104,6 +104,19 @@ ShowUninstDetails hide
 LangString FINISHPAGE_RUN_TEXT ${LANG_ENGLISH} "Launch ${APP_NAME}"
 LangString FINISHPAGE_RUN_TEXT ${LANG_RUSSIAN} "Запустить ${APP_NAME}"
 
+; Every user-facing failure message is a LangString pair — the installer is
+; bilingual, so no Abort/MessageBox may carry a literal string.
+LangString ABORT_STAGING_FAILED ${LANG_ENGLISH} "Mundus payload staging failed"
+LangString ABORT_STAGING_FAILED ${LANG_RUSSIAN} "Не удалось распаковать файлы Mundus"
+LangString ABORT_PAYLOAD_LOCKED ${LANG_ENGLISH} "Mundus files are still in use — close Mundus and retry"
+LangString ABORT_PAYLOAD_LOCKED ${LANG_RUSSIAN} "Файлы Mundus ещё используются — закройте Mundus и повторите установку"
+LangString ABORT_PAYLOAD_ROLLBACK ${LANG_ENGLISH} "Mundus payload update failed — the previous install was restored"
+LangString ABORT_PAYLOAD_ROLLBACK ${LANG_RUSSIAN} "Не удалось обновить файлы Mundus — предыдущая версия восстановлена"
+LangString ABORT_ENGINE_INSTALL ${LANG_ENGLISH} "Mundus Engine installation failed"
+LangString ABORT_ENGINE_INSTALL ${LANG_RUSSIAN} "Не удалось установить Mundus Engine"
+LangString MSG_PRIVILEGED_SVC_LEFT ${LANG_ENGLISH} "The Mundus privileged service is still installed. To remove it later, run as administrator:"
+LangString MSG_PRIVILEGED_SVC_LEFT ${LANG_RUSSIAN} "Служба Mundus всё ещё установлена. Чтобы удалить её позже, запустите от имени администратора:"
+
 ; The payload is extracted into `$INSTDIR\resources.next` *before* any
 ; product process is stopped, so the kill helper is always this build's
 ; exe — an older install's staged mundus-engine.exe does not carry the
@@ -138,7 +151,7 @@ LangString FINISHPAGE_RUN_TEXT ${LANG_RUSSIAN} "Запустить ${APP_NAME}"
   File /r "${STAGE_DIR}\resources\*"
   IfFileExists "$INSTDIR\resources.next\engine\mundus-engine.exe" 0 +2
     Goto stage_ok
-    Abort "Mundus payload staging failed"
+    Abort "$(ABORT_STAGING_FAILED)"
   stage_ok:
   nsExec::ExecToLog '"$INSTDIR\resources.next\engine\mundus-engine.exe" --shutdown'
   nsExec::ExecToStack '"$INSTDIR\resources.next\engine\mundus-engine.exe" kill-product-processes'
@@ -311,11 +324,11 @@ Section "Install"
   IfErrors payload_rollback
   Goto payload_swapped
 payload_locked:
-  Abort "Mundus files are still in use — close Mundus and retry"
+  Abort "$(ABORT_PAYLOAD_LOCKED)"
 payload_rollback:
   IfFileExists "$INSTDIR\resources.old\*.*" 0 +2
     Rename "$INSTDIR\resources.old" "$INSTDIR\resources"
-  Abort "Mundus payload update failed — the previous install was restored"
+  Abort "$(ABORT_PAYLOAD_ROLLBACK)"
 payload_swapped:
   IfFileExists "$INSTDIR\resources.old\*.*" 0 +2
     RMDir /r "$INSTDIR\resources.old"
@@ -327,7 +340,7 @@ payload_swapped:
   Pop $0
   Pop $1
   StrCmp $0 "0" engine_ready
-    Abort "Mundus Engine installation failed: $1"
+    Abort "$(ABORT_ENGINE_INSTALL): $1"
   engine_ready:
 
   ; The old Engine payload under %LOCALAPPDATA%\Kosmos\Engine is only removed
@@ -376,7 +389,7 @@ Function un.RemovePrivilegedService
       StrCmp $R0 "error" 0 done
         DetailPrint "Privileged service left installed (elevation declined)"
         IfSilent +2
-          MessageBox MB_ICONEXCLAMATION|MB_OK "The Mundus privileged service is still installed. To remove it later, run as administrator: $\r$\n${PRIVILEGED_SVC_EXE} privileged uninstall"
+          MessageBox MB_ICONEXCLAMATION|MB_OK "$(MSG_PRIVILEGED_SVC_LEFT) $\r$\n${PRIVILEGED_SVC_EXE} privileged uninstall"
   done:
 FunctionEnd
 
@@ -427,6 +440,10 @@ Section "Uninstall"
   ; %LOCALAPPDATA%\Mundus (including the Engine) is intentionally kept.
   RMDir /r "${APPS_ROOT}"
   RMDir /r "$INSTDIR\resources"
+  ; Crash leftovers of an aborted install — without these RMDir "$INSTDIR"
+  ; below would fail silently and the folder would stay.
+  RMDir /r "$INSTDIR\resources.next"
+  RMDir /r "$INSTDIR\resources.old"
   Delete "$INSTDIR\Uninstall.exe"
   RMDir "$INSTDIR"
 

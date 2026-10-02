@@ -198,6 +198,32 @@ test("the payload swap keeps the previous install until the new tree is in place
   expect(installSection).not.toContain('RMDir /r "$INSTDIR\\resources"');
 });
 
+// KOS-306 round 3: the installer is bilingual — a literal Abort/MessageBox
+// string would stay English for Russian users. Every such message goes
+// through a $(…) LangString.
+test("no Abort or MessageBox carries a literal message — all go through LangStrings", () => {
+  for (const line of installer.split("\n")) {
+    const trimmed = line.trim();
+    if (/^Abort\s/.test(trimmed)) expect(trimmed).toContain("$(");
+    if (/^\s*MessageBox\s/.test(line)) expect(line).toContain("$(");
+  }
+});
+
+// KOS-306 round 3: an aborted install leaves resources.next/.old behind —
+// the uninstaller must remove every directory the install section can
+// create under $INSTDIR, or the final RMDir "$INSTDIR" fails silently.
+test("uninstall removes every directory the install can create under $INSTDIR", () => {
+  const created = new Set(
+    (installer.match(/\$INSTDIR\\(resources(?:\.\w+)?)/g) ?? []).map((m) =>
+      m.replace("$INSTDIR\\", ""),
+    ),
+  );
+  expect(created).toEqual(new Set(["resources", "resources.next", "resources.old"]));
+  for (const dir of created) {
+    expect(uninstallSection).toContain(`RMDir /r "$INSTDIR\\${dir}"`);
+  }
+});
+
 test("uninstall removes the privileged service via one elevated runas call", () => {
   // Detection is unelevated (sc query), the actual teardown is delegated to
   // the stable service copy's `privileged uninstall` — NSIS stays thin.
