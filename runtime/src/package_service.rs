@@ -299,6 +299,11 @@ include!("package_service/dictation_app.rs");
 #[cfg(test)]
 include!("package_service/dictation_app_tests.rs");
 include!("package_service/operations.rs");
+include!("package_service/operations_apps.rs");
+include!("package_service/operations_catalog.rs");
+include!("package_service/operations_install.rs");
+include!("package_service/operations_state.rs");
+include!("package_service/operations_worker.rs");
 include!("package_service/launch.rs");
 include!("package_service/helpers.rs");
 include!("package_service/disclosure.rs");
