@@ -19,7 +19,12 @@ const COMMANDS_BY_CHECK = {
   "test:rust": ["pnpm", ["run", "test:rust"]],
   "runtime-staging": ["pnpm", ["--dir", "desktop", "run", "test:runtime-staging"]],
   "manager-gpui": ["pnpm", ["run", "check:manager-gpui"]],
+  "test:static": ["pnpm", ["run", "test:static"]],
 };
+
+// The full gate, defined once: `pnpm run check` is `check-plan --full --run`,
+// and a fail-closed plan executes the same list — the two cannot drift.
+const FULL_GATE = ["fast", "clippy", "test:static", "test:rust", "manager-gpui", "runtime-staging"];
 
 const FULL_CONTRACT_CHECKS = [];
 
@@ -36,11 +41,7 @@ function toolBin(name) {
 }
 
 function commandsFor(plan) {
-  if (plan.full)
-    return [
-      { name: "full", command: "pnpm", args: ["run", "check"] },
-      ...FULL_CONTRACT_CHECKS.map(commandFor),
-    ];
+  if (plan.full) return [...FULL_GATE, ...FULL_CONTRACT_CHECKS].map(commandFor);
   // The fast gate already includes the brand and source-size scans.
   if (plan.checks.includes("fast")) return [commandFor("fast")];
   const commands = [];

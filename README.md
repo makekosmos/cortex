@@ -97,10 +97,16 @@ it is derived from the checkout at HEAD — commit, release version, pnpm/Node/R
 pins, target, and Engine API — and ships as `release-bom.v2.json` next to the
 installer. `pnpm --dir desktop run build` runs the whole release build in one go.
 
-The affected-check planner is fail-closed: staged changes use `pre-commit`,
-the worktree plan includes tracked and untracked files, and pre-push input
-uses the pushed ref range. Missing, invalid, zero, shallow, or ambiguous
-revisions select the full check. Docs and isolated assets are a no-op, except
+The affected-check planner is fail-closed: every mode plans the diff of the
+revision under test against `merge-base(HEAD, origin/main)` — staged changes
+for `pre-commit`, tracked plus untracked disk changes for the worktree plan,
+and pre-push, regardless of whether the remote ref already exists, plans the
+union of every pushed commit's diff against its own merge base. A missing
+merge base, a shallow clone, a non-commit pushed object, or an empty or
+malformed push record selects the full check. Checks always run on the
+on-disk tree: when a pushed commit's tree differs from it, the hook prints a
+note that the run certified the working tree, not those commits — the push is
+not blocked, and the pushed commits are covered by CI. Docs and isolated assets are a no-op, except
 documents that tests read as contracts (`DOC_CONTRACTS` in
 `scripts/check-plan-manifest.mjs`), which select the checks reading them. A
 `package.json` edit that only changes known `"scripts"` entries selects the
@@ -125,7 +131,10 @@ downloads the pinned NSIS bundle when `MUNDUS_NSIS_DIR` is unset. It emits
 `publish-release.mjs` consumes only that receipt; it never builds or packages, and it
 re-derives the BOM from HEAD, so a receipt from any other commit is rejected.
 
-`pnpm run check` covers layout, source-size, lint, changed-file Oxfmt,
+`pnpm run check` is `check-plan --full --run`: the full plan's command list in
+`scripts/check-plan-commands.mjs` is the single definition of the gate, and
+the run records a "full" cache entry only when the tree is unchanged at the
+end. It covers layout, source-size, lint, changed-file Oxfmt,
 Rustfmt, workspace Clippy with warnings denied, complete workspace
 Rust tests, backend tests, and runtime staging. `pnpm install --frozen-lockfile`
 installs Lefthook hooks on a clean checkout; run `pnpm run prepare` if hooks are
@@ -133,9 +142,10 @@ missing. Pre-commit uses the planner against staged files but runs only the
 checks that finish in seconds: Clippy, Rust tests, runtime staging and the
 Manager gate are deferred, and a change that selects the full check runs
 `pnpm run check:fast` instead (`scripts/check-plan-commit.mjs`). Pre-push
-uses the Git-provided ref range when stdin is available and otherwise falls
-back to the full check, so every deferred check runs before anything leaves
-the machine; `--full` still runs everything at commit time.
+plans the same branch diff as check:affected — `merge-base(HEAD, origin/main)`
+to the pushed commit — and caches passes by on-disk tree hash, so a push right
+after `pnpm run check:affected` or `pnpm run check` (which records a "full"
+entry) skips what already ran; `--full` still runs everything at commit time.
 
 The Rust gate runs every workspace library, integration and Cortex binary test
 through [cargo-nextest](https://nexte.st) (`cargo install cargo-nextest

@@ -173,21 +173,23 @@ test("unknown planner modes fail closed", async () => {
   }
 });
 
-test("pre-push input parses one update and fails closed for new or ambiguous pushes", async () => {
+test("pre-push input parses every record; a malformed line fails the parse", async () => {
   const { parseNameStatus, parsePushInput } = await import("./check-plan.mjs");
-  assert.deepEqual(parsePushInput("refs/heads/feature abc refs/heads/main def\n"), {
-    localRef: "refs/heads/feature",
-    localSha: "abc",
-    remoteRef: "refs/heads/main",
-    remoteSha: "def",
-  });
-  assert.equal(
-    parsePushInput(
-      "refs/heads/feature abc refs/heads/main 0000000000000000000000000000000000000000\n",
-    ),
-    null,
+  assert.deepEqual(parsePushInput("refs/heads/feature abc refs/heads/main def\n"), [
+    { localRef: "refs/heads/feature", localSha: "abc", remoteRef: "refs/heads/main" },
+  ]);
+  // A new remote ref is a normal record: the remote sha is simply all zeros.
+  const zero = "0".repeat(40);
+  assert.deepEqual(
+    parsePushInput(`refs/heads/t abc refs/heads/t ${zero}\nrefs/tags/v1 abc refs/tags/v1 ${zero}\n`)
+      .length,
+    2,
   );
+  // A deletion keeps its zero local sha; the caller decides it pushes no code.
+  assert.equal(parsePushInput(`refs/heads/t ${zero} refs/heads/t abc\n`)[0].localSha, zero);
+  assert.deepEqual(parsePushInput(""), []);
   assert.equal(parsePushInput("one\ntwo\n"), null);
+  assert.equal(parsePushInput("refs/heads/t abc refs/heads/t def extra\n"), null);
   assert.deepEqual(parseNameStatus("R100\0old/path.ts\0new/path.ts\0"), [
     { path: "old/path.ts", status: "R" },
     { path: "new/path.ts", status: "R" },
@@ -198,15 +200,6 @@ test("pre-push input parses one update and fails closed for new or ambiguous pus
   ]);
   for (const status of ["T", "U", "X", "Z"])
     assert.equal(parseNameStatus(`${status}\0file\0`), null);
-});
-
-test("pre-push mode uses the pushed ref range from raw stdin", () => {
-  const sha = "4c1f2a139fcae92ac0cf995b40ea63a7713c3b63";
-  const result = invoke(["--mode", "pre-push"], {
-    input: `refs/heads/kos-15 ${sha} refs/heads/main ${sha}\n`,
-  });
-  assert.equal(result.status, 0, result.stderr);
-  assert.equal(JSON.parse(result.stdout).full, false);
 });
 
 test("command failures aggregate instead of stopping after the first selected group", async () => {
@@ -223,32 +216,52 @@ test("command failures aggregate instead of stopping after the first selected gr
   assert.deepEqual(seen, ["brand", "test-skips", "desktop-contracts", "manager-gpui"]);
 });
 
-test("full gate runs the root check", async () => {
+test("the full gate runs the same steps pnpm run check is made of", async () => {
   const { executePlan } = await import("./check-plan.mjs");
+  const check = JSON.parse(readFileSync(`${root}package.json`, "utf8")).scripts.check;
+  assert.equal(
+    check,
+    "node scripts/check-plan.mjs --full --run",
+    "check must run the planner's full plan so both share one gate definition",
+  );
   const seen = [];
   const status = executePlan(
     { mode: "worktree", full: true, checks: ["full"], changed: [], reasons: [] },
     (command) => {
-      seen.push(`${command.command} ${command.args.join(" ")}`);
+      seen.push(command.name);
       return 0;
     },
   );
   assert.equal(status, 0);
-  assert.deepEqual(seen, ["pnpm run check"]);
+  assert.deepEqual(seen, [
+    "fast",
+    "clippy",
+    "test:static",
+    "test:rust",
+    "manager-gpui",
+    "runtime-staging",
+  ]);
 });
 
-test("full gate still fails when the root check fails", async () => {
+test("the full gate aggregates failures instead of stopping at the first", async () => {
   const { executePlan } = await import("./check-plan.mjs");
   const seen = [];
   const status = executePlan(
     { mode: "worktree", full: true, checks: ["full"], changed: [], reasons: [] },
     (command) => {
       seen.push(command.name);
-      return command.name === "full" ? 1 : 0;
+      return command.name === "clippy" ? 1 : 0;
     },
   );
   assert.equal(status, 1);
-  assert.deepEqual(seen, ["full"]);
+  assert.deepEqual(seen, [
+    "fast",
+    "clippy",
+    "test:static",
+    "test:rust",
+    "manager-gpui",
+    "runtime-staging",
+  ]);
 });
 
 test("pre-commit retains the existing source-size safeguard through the planner", async () => {
