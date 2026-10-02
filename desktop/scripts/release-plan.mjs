@@ -16,7 +16,7 @@
 //   latestPublishedRelease(list)  → { tag, version, receiptAssetId } | null
 //   nextReleaseVersion(current, previous, changed) → "X.Y.Z" | null (skip)
 //   planRelease({ run, currentVersion, repo })     → plan object
-//   setWinVersion(version)        → writes release-versions.json
+//   setWinVersion(version)        → writes the win release version
 //
 // CLI:
 //   node scripts/release-plan.mjs plan
@@ -26,19 +26,17 @@
 //       existing tag's commit when an earlier run died between tag push and
 //       publish.
 //   node scripts/release-plan.mjs set <version>
-//       Idempotently writes <version> as release-versions.json["win"].
+//       Idempotently writes <version> as the win release version.
 
-import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { RELEASE_RECEIPT_FILE } from "./release-receipt.mjs";
 import { RELEASE_REPOS } from "./release-repos.mjs";
-import { readVersions } from "./release-version.mjs";
+import { readReleaseVersion, writeReleaseVersion } from "./release-version.mjs";
 
-const SHELL_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const REPO_ROOT = path.resolve(SHELL_ROOT, "..");
-const VERSIONS_FILE = path.join(SHELL_ROOT, "release-versions.json");
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 export const RELEASE_REPO = RELEASE_REPOS.win;
 
 const STABLE_TAG = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
@@ -88,9 +86,7 @@ export function nextReleaseVersion(current, previous, changed) {
   const previousParts = parseStableVersion(previous);
   const order = compareVersions(currentParts, previousParts);
   if (order < 0)
-    throw new Error(
-      `release-versions.json win ${current} is below the latest published ${previous}`,
-    );
+    throw new Error(`the pinned win version ${current} is below the latest published ${previous}`);
   if (!changed) return null;
   if (order > 0) return current;
   return `${currentParts.major}.${currentParts.minor}.${currentParts.patch + 1}`;
@@ -162,7 +158,7 @@ export function planRelease({ run = defaultRun, currentVersion, repo = RELEASE_R
         `publish the first one manually (publish-release.mjs --also-bridge-repo makekosmos/desktop)`,
     );
   const head = must(run("git", ["rev-parse", "HEAD"]), "git rev-parse HEAD").trim();
-  const current = currentVersion ?? readVersions().win;
+  const current = currentVersion ?? readReleaseVersion();
 
   const previousCommit = baselineCommit(run, repo, baseline);
   // Missing commits, rewritten history and Git errors must fail — they must
@@ -210,18 +206,17 @@ export function planRelease({ run = defaultRun, currentVersion, repo = RELEASE_R
   };
 }
 
-// writeVersions/readVersions read desktop/release-versions.json; tests pass a
-// temp file instead.
-export function setWinVersion(version, versionsFile) {
+// The version file is owned by release-version.mjs; `root` exists for tests
+// that point at a temp repo.
+export function setWinVersion(version, { root } = {}) {
   parseStableVersion(version);
-  const versions = JSON.parse(readFileSync(versionsFile ?? VERSIONS_FILE, "utf8"));
-  if (versions.win === version) {
+  const current = readReleaseVersion({ root });
+  if (current === version) {
     console.log(`[release-plan] win already at ${version}`);
     return false;
   }
-  const updated = { ...versions, win: version };
-  writeFileSync(versionsFile ?? VERSIONS_FILE, JSON.stringify(updated, null, 2) + "\n", "utf8");
-  console.log(`[release-plan] win: ${versions.win} -> ${version}`);
+  writeReleaseVersion(version, { root });
+  console.log(`[release-plan] win: ${current} -> ${version}`);
   return true;
 }
 

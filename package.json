@@ -2,7 +2,6 @@
   "name": "@mundus/shell",
   "private": true,
   "scripts": {
-    "workspace": "node scripts/workspace.mjs",
     "build:desktop": "node desktop/scripts/build-desktop.mjs --platform win",
     "build:installer:local": "pnpm --dir desktop run build:backend && pnpm --dir desktop run build:package-components -- --local && node desktop/scripts/build-desktop.mjs --platform win --local",
     "prepare": "lefthook install",
@@ -18,16 +17,15 @@
     "clippy": "cargo clippy --workspace --all-targets -- -D warnings",
     "test:rust": "node runtime/scripts/test-lib.mjs --workspace",
     "check:manager-gpui": "cargo fmt --manifest-path manager-gpui/Cargo.toml --all -- --check && cargo clippy --manifest-path manager-gpui/Cargo.toml --all-targets -- -D warnings && cargo test --manifest-path manager-gpui/Cargo.toml",
-    "test:static": "pnpm run test:source-size && pnpm run test:format && pnpm run test:workspace && pnpm run test:package-manager && pnpm run test:check-plan && pnpm run test:release-bom && pnpm run test:desktop-contracts && node --test runtime/scripts/test-lib.test.mjs runtime/src/engine_api/host_shim.test.mjs",
+    "test:static": "pnpm run test:source-size && pnpm run test:format && pnpm run test:package-manager && pnpm run test:check-plan && pnpm run test:release-bom && pnpm run test:desktop-contracts && node --test runtime/scripts/test-lib.test.mjs runtime/src/engine_api/host_shim.test.mjs",
     "test": "pnpm run test:static && pnpm run test:backend",
     "check:fast": "pnpm run check:layout && pnpm run check:core-pin && pnpm run check:brand && pnpm run check:test-skips && pnpm run check:source-size && pnpm run lint && pnpm run format:check && pnpm run rustfmt",
     "check": "pnpm run check:fast && pnpm run clippy && pnpm run test:static && pnpm run test:rust && pnpm run check:manager-gpui && pnpm --dir desktop run test:runtime-staging",
     "lint": "oxlint .",
     "test:source-size": "node --test scripts/check-source-size.test.mjs",
-    "test:workspace": "node --test scripts/workspace.test.mjs scripts/workspace-bridge.test.mjs scripts/argv.test.mjs",
-    "test:check-plan": "node --test scripts/check-plan.test.mjs scripts/check-plan-commands.test.mjs scripts/check-plan-cache.test.mjs scripts/check-plan-manifest.test.mjs scripts/check-plan-commit.test.mjs scripts/check-test-skips.test.mjs",
+    "test:check-plan": "node --test scripts/check-plan.test.mjs scripts/check-plan-commands.test.mjs scripts/check-plan-cache.test.mjs scripts/check-plan-manifest.test.mjs scripts/check-plan-commit.test.mjs scripts/check-test-skips.test.mjs scripts/argv.test.mjs",
     "test:format": "node --test scripts/check-format.test.mjs",
-    "test:release-bom": "node --test desktop/scripts/release-bom.test.mjs desktop/scripts/release-build-contract.test.mjs desktop/scripts/release-pipeline.test.mjs desktop/scripts/release-preflight.test.mjs desktop/scripts/release-channel-local.test.mjs desktop/scripts/release-plan.test.mjs",
+    "test:release-bom": "node --test desktop/scripts/release-bom.test.mjs desktop/scripts/release-build-contract.test.mjs desktop/scripts/release-pipeline.test.mjs desktop/scripts/release-preflight.test.mjs desktop/scripts/release-channel-local.test.mjs desktop/scripts/release-plan.test.mjs desktop/scripts/release-version.test.mjs",
     "test:backend": "node runtime/scripts/test-lib.mjs",
     "test:desktop-contracts": "node scripts/check-brand.mjs && node --experimental-transform-types --test --experimental-test-module-mocks --loader ./test-support/ts-loader.mjs desktop/build/installer-shortcut.test.mjs desktop/build/installer-script.test.mjs desktop/build/installer-cwd-contract.test.mjs desktop/scripts/engine-distribution.test.mjs desktop/scripts/installer-autostart-migration.test.mjs desktop/scripts/engine-bootstrap-contract.test.mjs desktop/scripts/build-package-components.test.ts",
     "test:package-manager": "node --test scripts/package-manager-migration.test.mjs scripts/spawn-shell-contract.test.mjs",
@@ -39,27 +37,5 @@
     "oxfmt": "latest",
     "oxlint": "1.80.0"
   },
-  "packageManager": "pnpm@12.4.1",
-  "mundus": {
-    "workspace": {
-      "imago": {
-        "repository": "makekosmos/imago",
-        "commit": "19bc855317e47a54ddcf0f74d1d247921ac699bc",
-        "package": {
-          "name": "@makekosmos/visuals",
-          "version": "0.1.4",
-          "integrity": "git:19bc855317e47a54ddcf0f74d1d247921ac699bc"
-        }
-      },
-      "arca-sdk": {
-        "repository": "makekosmos/arca-sdk",
-        "commit": "21c2f5e157944e3444d3c0604da5a0e041116077",
-        "package": {
-          "name": "@makekosmos/ark",
-          "version": "0.1.1",
-          "integrity": "git:21c2f5e157944e3444d3c0604da5a0e041116077"
-        }
-      }
-    }
-  }
+  "packageManager": "pnpm@12.4.1"
 }

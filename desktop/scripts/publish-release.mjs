@@ -90,7 +90,7 @@ export async function main() {
   const bomCopy = path.join(outputDir, RELEASE_BOM_FILE);
   if (documentHash(readFileSync(bomCopy)) !== bom.digest)
     die("release BOM copy does not match the BOM derived from HEAD");
-  verifyLocalReleaseChannel(outputDir, platform, version);
+  verifyLocalReleaseChannel(outputDir, version);
   assertExactArtifactSet(receipt, [
     ...provenance.artifacts.map(({ name }) => name),
     RELEASE_BOM_FILE,
@@ -130,8 +130,6 @@ export async function main() {
       process.execPath,
       [
         path.join(ROOT, "scripts", "verify-release-channel.mjs"),
-        "--platform",
-        platform,
         "--version",
         version,
         "--repo",
@@ -139,8 +137,7 @@ export async function main() {
       ],
       { cwd: ROOT, stdio: "inherit", windowsHide: true },
     );
-    if (verify.status !== 0)
-      die(`verify-release-channel failed for ${repository} ${platform} v${version}`);
+    if (verify.status !== 0) die(`verify-release-channel failed for ${repository} v${version}`);
   }
 }
 

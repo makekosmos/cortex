@@ -17,7 +17,7 @@ import { deriveReleaseBom, RELEASE_BOM_FILE } from "./release-bom.mjs";
 import { verifyLocalReleaseChannel } from "./release-channel-local.mjs";
 import { bytes, documentHash, writeAtomic } from "./release-utils.mjs";
 import { createReceipt, RELEASE_RECEIPT_FILE, writeReceipt } from "./release-receipt.mjs";
-import { getVersion } from "./release-version.mjs";
+import { readReleaseVersion } from "./release-version.mjs";
 import { ensureNsis } from "./ensure-nsis.mjs";
 import { env, MANAGER_EXE } from "./brand.mjs";
 import {
@@ -55,7 +55,7 @@ function collectArtifacts(outputDir, platform, version) {
 }
 
 async function emitProvenance(outputDir, platform, version, bom) {
-  verifyLocalReleaseChannel(outputDir, platform, version);
+  verifyLocalReleaseChannel(outputDir, version);
   const artifacts = collectArtifacts(outputDir, platform, version);
   const provenance = {
     schema_version: 1,
@@ -298,9 +298,9 @@ async function main() {
   let version;
   let bom = null;
   if (local) {
-    version = getVersion(platform);
+    version = readReleaseVersion();
   } else if (skipPreflight) {
-    version = getVersion(platform);
+    version = readReleaseVersion();
     bom = await deriveReleaseBom(path.resolve(SHELL_ROOT, ".."), platform, currentCommit());
   } else {
     ({ version, bom } = await runReleasePreflight({ platform }));

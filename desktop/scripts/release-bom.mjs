@@ -11,6 +11,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { bytes, documentHash, fail, readJson, semver } from "./release-utils.mjs";
+import { readReleaseVersion } from "./release-version.mjs";
 
 export const RELEASE_BOM_SCHEMA_VERSION = 2;
 export const RELEASE_BOM_FILE = `release-bom.v${RELEASE_BOM_SCHEMA_VERSION}.json`;
@@ -22,11 +23,10 @@ export async function deriveReleaseBom(root, platform, commit) {
   const target = TARGETS[platform] ?? fail(`Unknown platform "${platform}"`);
   if (!COMMIT.test(commit)) fail("commit must be a 40-character lowercase commit");
   const packageJson = await readJson(path.join(root, "package.json"));
-  const versions = await readJson(path.join(root, "desktop", "release-versions.json"));
   const toolchain = await readJson(path.join(root, "toolchain.json"));
   const protocol = await readFile(path.join(root, "runtime", "src", "protocol_version.rs"), "utf8");
 
-  const version = semver(versions[platform], `release-versions.json ${platform}`);
+  const version = readReleaseVersion({ root });
   const pnpm = /^pnpm@(\d+\.\d+\.\d+)$/.exec(String(packageJson.packageManager ?? ""))?.[1];
   const engineApi = /pub const API_VERSION: &str = "([^"]+)"/.exec(protocol)?.[1];
   const value = {

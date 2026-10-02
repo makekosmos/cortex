@@ -30,17 +30,6 @@ test("Cortex command and test contracts do not require Bun", () => {
   assert.doesNotMatch(contents, /\bbun(?:x)?\b|bun:test/, "desktop/package.json");
 });
 
-test("workspace doctor checks the Cortex pnpm toolchain", () => {
-  const source = read("scripts/workspace-inspect.mjs");
-  assert.match(source, /pnpm:\s*String\(packageJson\.packageManager/);
-  assert.doesNotMatch(source, /bun:\s*String\(packageJson\.packageManager/);
-});
-
-test("static checks include workspace contracts exactly once", () => {
-  const scripts = JSON.parse(read("package.json")).scripts;
-  assert.equal((scripts["test:static"].match(/test:workspace/g) ?? []).length, 1);
-});
-
 test("release BOM records the pnpm toolchain without changing Rust commands", () => {
   const source = read("desktop/scripts/release-bom.mjs");
   assert.match(source, /pnpm/);
@@ -48,12 +37,4 @@ test("release BOM records the pnpm toolchain without changing Rust commands", ()
   assert.match(read("package.json"), /cargo fmt --all -- --check/);
   assert.match(read("package.json"), /cargo clippy --workspace --all-targets/);
   assert.match(read("package.json"), /test:rust/);
-});
-
-test("Desktop and pinned Imago resolve Vue to one type identity", () => {
-  // Vue is gone from the shipped product; the shared Imago checkout remains a
-  // workspace pin only.
-  const workspace = JSON.parse(read("package.json")).mundus?.workspace;
-  assert.match(workspace?.imago?.repository ?? "", /^makekosmos\/imago$/);
-  assert.match(workspace?.imago?.commit ?? "", /^[0-9a-f]{40}$/);
 });

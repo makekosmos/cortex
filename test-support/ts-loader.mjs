@@ -1,19 +1,9 @@
 import path from "node:path";
-import { existsSync } from "node:fs";
-import { fileURLToPath, pathToFileURL } from "node:url";
-
-const arkSource = [
-  path.resolve(process.cwd(), "../arca-sdk/src/index.ts"),
-  path.resolve(process.cwd(), "../../arca-sdk/src/index.ts"),
-  path.resolve(process.cwd(), "../../../arca-sdk/src/index.ts"),
-].find(existsSync);
-const aliases = new Map(arkSource ? [["@kosmos/ark", pathToFileURL(arkSource).href]] : []);
+import { fileURLToPath } from "node:url";
 
 const extensions = [".ts", ".tsx", ".mjs", ".js"];
 
 export async function resolve(specifier, context, nextResolve) {
-  const alias = aliases.get(specifier);
-  if (alias) return nextResolve(alias, context);
   try {
     return await nextResolve(specifier, context);
   } catch (error) {
