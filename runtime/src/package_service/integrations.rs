@@ -85,7 +85,11 @@ impl PackageService {
         }))
     }
 
-    pub async fn complete_integration_login(&self, id: &str, _callback: &str) -> Result<(), PackageError> {
+    pub async fn complete_integration_login(
+        &self,
+        id: &str,
+        _callback: &str,
+    ) -> Result<(), PackageError> {
         // No provider-specific code exchanges remain in Engine (the Huawei
         // implementation moved out with the integration packages). The op
         // stays in the contract so hosts get a clean rejection.
@@ -160,10 +164,10 @@ impl PackageService {
         }
         // The client echoes the kind it rendered; the manifest kind is
         // authoritative — a mismatch means a stale or confused client.
-        if expected_kind.is_some_and(|expected| {
-            serde_json::to_value(&setting.kind).ok().and_then(|kind| kind.as_str().map(str::to_owned)).as_deref()
-                != Some(expected)
-        }) {
+        let actual_kind = serde_json::to_value(&setting.kind)
+            .ok()
+            .and_then(|kind| kind.as_str().map(str::to_owned));
+        if expected_kind.is_some_and(|expected| actual_kind.as_deref() != Some(expected)) {
             return Err(PackageError::Invalid);
         }
         // Storage follows the manifest-declared kind: public values (ник and
@@ -219,7 +223,8 @@ impl PackageService {
                     && matches!(
                         &package.manifest,
                         VersionedManifest::V2(manifest)
-                            if manifest.kind == PackageKind::Source && manifest.integration.is_some()
+                            if manifest.kind == PackageKind::Source
+                                && manifest.integration.is_some()
                     )
             })
             .collect::<Vec<_>>();
@@ -312,7 +317,8 @@ impl PackageService {
                 clear_package_integration_secret(&package.id, &package.version, &setting.key)?;
                 // Also drop rotated-secret leftovers written by retired provider
                 // login flows (`:huawei-refresh:*` from the removed Huawei login).
-                clear_package_integration_secret(&package.id, &package.version, &format!(":huawei-refresh:{}", setting.key))?;
+                let legacy_key = format!(":huawei-refresh:{}", setting.key);
+                clear_package_integration_secret(&package.id, &package.version, &legacy_key)?;
             }
         }
         Ok(())
