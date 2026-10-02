@@ -70,8 +70,12 @@ export function parsePushInput(input) {
 }
 
 // Every pushed ref gets its own diff against its own merge base with
-// origin/main; the plan is the union keyed by path (first record wins — the
-// checks classify by path, so a duplicate only re-derives the same verdict).
+// origin/main; the plan is the union over all of them. The dedupe key is the
+// (path, before, after) triple, not the path alone: a manifest change is
+// classified by content, and two pushed commits can disagree about the same
+// path — a scripts-only edit is narrow while a dependency edit on the same
+// manifest is full, and keeping both revision pairs means both verdicts
+// apply regardless of record order.
 // `trees` lists each pushed commit's tree: the disk-keyed cache may only hit
 // when every one of them is the tree the checks ran on.
 function pushFiles(records) {
@@ -84,21 +88,25 @@ function pushFiles(records) {
   }
   if (records === null) commits.push("HEAD");
   if (commits.length === 0) return { files: [], trees: [] };
-  const byPath = new Map();
+  const seen = new Set();
+  const files = [];
   const trees = [];
   for (const commit of commits) {
     const base = branchBase(commit);
     if (!base) return { full: `no merge base with origin/main for ${commit.slice(0, 12)}` };
-    const files = diffFiles([base, commit]);
-    if (!files) return { full: "unable to inspect the push diff" };
+    const diff = diffFiles([base, commit]);
+    if (!diff) return { full: "unable to inspect the push diff" };
     const tree = revParse(`${commit}^{tree}`);
     if (!tree) return { full: "unable to read the pushed tree" };
     if (!trees.includes(tree)) trees.push(tree);
-    for (const file of files)
-      if (!byPath.has(file.path))
-        byPath.set(file.path, { ...file, revisions: { before: base, after: commit } });
+    for (const file of diff) {
+      const key = `${file.path}${base}${commit}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      files.push({ ...file, revisions: { before: base, after: commit } });
+    }
   }
-  return { files: [...byPath.values()], trees };
+  return { files, trees };
 }
 
 export function filesForMode(mode) {

@@ -36,7 +36,7 @@ function failClosed(mode, reason, changed = []) {
     schemaVersion: 1,
     mode,
     full: true,
-    changed: changed.map((file) => file.path),
+    changed: [...new Set(changed.map((file) => file.path))],
     checks: ["full"],
     reasons: [reason],
   };
@@ -155,7 +155,8 @@ export function createPlan({ mode = "worktree", full = false, files } = {}) {
     schemaVersion: 1,
     mode,
     full: false,
-    changed: changed.map((file) => file.path),
+    // Display only: a push union can list one path with two revision pairs.
+    changed: [...new Set(changed.map((file) => file.path))],
     checks: ordered,
     reasons,
     // The trees whose checks a pass would certify. Only pre-push sets them —
@@ -205,12 +206,17 @@ function main() {
 export function runPlan(plan, options = {}, runner) {
   const cwd = process.cwd();
   const tree = diskTree(cwd);
+  const pushedMismatch = tree && (plan.trees ?? []).some((pushed) => pushed !== tree);
+  if (pushedMismatch)
+    process.stderr.write(
+      "note → the checks run on the working tree, which differs from the pushed commit(s); the pushed commits are covered by CI, not by this run\n",
+    );
   const consult =
     !options.noCache &&
     process.env.CHECK_PLAN_NO_CACHE !== "1" &&
     tree &&
     plan.checks.length &&
-    (plan.trees ?? []).every((pushed) => pushed === tree);
+    !pushedMismatch;
   if (consult && coveredByCache(cwd, tree, plan.checks)) {
     process.stderr.write(`cache → ${plan.checks.join(", ")} already passed on tree ${tree}\n`);
     return 0;

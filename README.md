@@ -103,7 +103,10 @@ for `pre-commit`, tracked plus untracked disk changes for the worktree plan,
 and pre-push, regardless of whether the remote ref already exists, plans the
 union of every pushed commit's diff against its own merge base. A missing
 merge base, a shallow clone, a non-commit pushed object, or an empty or
-malformed push record selects the full check. Docs and isolated assets are a no-op, except
+malformed push record selects the full check. Checks always run on the
+on-disk tree: when a pushed commit's tree differs from it, the hook prints a
+note that the run certified the working tree, not those commits — the push is
+not blocked, and the pushed commits are covered by CI. Docs and isolated assets are a no-op, except
 documents that tests read as contracts (`DOC_CONTRACTS` in
 `scripts/check-plan-manifest.mjs`), which select the checks reading them. A
 `package.json` edit that only changes known `"scripts"` entries selects the

@@ -225,3 +225,79 @@ test("a push of a commit that is not the disk tree cannot hit the disk cache", a
     "the earlier pass is still recorded for the disk tree itself",
   );
 });
+
+test("the same manifest in two pushed commits is classified by content, not order", (t) => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "check-plan-push-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const git = (...args) => {
+    const result = spawnSync("git", args, { cwd: dir, encoding: "utf8", env: gitEnv() });
+    assert.equal(result.status, 0, `${args.join(" ")}: ${result.stderr}`);
+    return result.stdout.trim();
+  };
+  git("init", "-q");
+  git("config", "user.email", "check-plan@example.invalid");
+  git("config", "user.name", "check-plan");
+  const manifest = (clippy, oxlint) =>
+    `${JSON.stringify({ scripts: { clippy }, devDependencies: { oxlint } }, null, 2)}\n`;
+  writeFileSync(path.join(dir, "package.json"), manifest("cargo clippy", "1.0.0"));
+  git("add", ".");
+  git("commit", "-qm", "base");
+  git("update-ref", "refs/remotes/origin/main", "HEAD");
+
+  // Branch a: scripts-only edit — narrow. Branch b: a dependency edit — full.
+  writeFileSync(path.join(dir, "package.json"), manifest("cargo clippy -D warnings", "1.0.0"));
+  git("add", "package.json");
+  git("commit", "-qm", "scripts only");
+  const a = git("rev-parse", "HEAD");
+  git("checkout", "-q", "-b", "b", "origin/main");
+  writeFileSync(path.join(dir, "package.json"), manifest("cargo clippy", "2.0.0"));
+  git("add", "package.json");
+  git("commit", "-qm", "dependency bump");
+  const b = git("rev-parse", "HEAD");
+
+  for (const input of [
+    `refs/heads/a ${a} refs/heads/a ${zero}\nrefs/heads/b ${b} refs/heads/b ${zero}\n`,
+    `refs/heads/b ${b} refs/heads/b ${zero}\nrefs/heads/a ${a} refs/heads/a ${zero}\n`,
+  ]) {
+    const plan = pushPlanIn(dir, input);
+    assert.equal(plan.full, true, input);
+    assert.deepEqual(plan.changed, ["package.json"], "the union still lists the path once");
+  }
+});
+
+function runPlanStderr(dir, plan) {
+  const writes = [];
+  const original = process.stderr.write;
+  process.stderr.write = (chunk) => (writes.push(String(chunk)), true);
+  const cwd = process.cwd();
+  process.chdir(dir);
+  try {
+    return import("./check-plan.mjs").then(({ runPlan }) => {
+      try {
+        return { status: runPlan(plan, {}, () => 0), stderr: writes.join("") };
+      } finally {
+        process.chdir(cwd);
+        process.stderr.write = original;
+      }
+    });
+  } catch (error) {
+    process.chdir(cwd);
+    process.stderr.write = original;
+    throw error;
+  }
+}
+
+test("a mismatch between pushed and on-disk trees says the checks ran on disk", async (t) => {
+  const { diskTree } = await import("./check-plan-cache.mjs");
+  const { dir } = branchRepo(t, { "docs/probe.md": "x\n" });
+  const plan = { mode: "pre-push", full: false, checks: ["lint"], changed: [] };
+
+  const same = await runPlanStderr(dir, { ...plan, trees: [diskTree(dir)] });
+  assert.equal(same.status, 0);
+  assert.doesNotMatch(same.stderr, /working tree/);
+
+  const other = "f".repeat(40);
+  const diff = await runPlanStderr(dir, { ...plan, trees: [other] });
+  assert.equal(diff.status, 0);
+  assert.match(diff.stderr, /checks run on the working tree/);
+});
