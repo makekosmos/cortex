@@ -195,7 +195,8 @@ pub fn render(
                                         "package_id": t.id,
                                         "version": t.version,
                                         "archive_path": t.archive_path.to_string_lossy(),
-                                    })),
+                                    }),
+                                ),
                                 Err(e) => this.error = Some(e),
                             }
                             cx.notify();

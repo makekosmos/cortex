@@ -18,7 +18,8 @@ pub fn load(app: &mut ManagerApp) {
         app.call(
             "data.list",
             "manager.data.list",
-            json!({"type_id": t, "limit": 200}));
+            json!({"type_id": t, "limit": 200}),
+        );
     }
 }
 
@@ -88,7 +89,8 @@ pub fn render(
                              Они не нужны для работы, но удаление необратимо.",
                             "manager.data.quarantine.clear",
                             json!({}),
-                            cx);
+                            cx,
+                        );
                     })
                 }));
             }
@@ -164,7 +166,8 @@ pub fn render(
                     this.call(
                         "data.list",
                         "manager.data.list",
-                        json!({"type_id": id, "limit": 200}));
+                        json!({"type_id": id, "limit": 200}),
+                    );
                     cx.notify();
                 }))
                 .role(Role::Button)

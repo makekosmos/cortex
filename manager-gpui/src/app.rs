@@ -254,7 +254,8 @@ impl ManagerApp {
         self.call(
             "pkg.open",
             "packages.open",
-            json!({ "package_id": id, "version": version }));
+            json!({ "package_id": id, "version": version }),
+        );
     }
 
     /// Destructive op behind the confirm modal.

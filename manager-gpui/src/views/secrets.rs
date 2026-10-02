@@ -55,7 +55,8 @@ pub fn render(
                         |this, checked, _| {
                             this.action(
                                 "dictation.update_config",
-                                json!({"providerEnabled": checked}));
+                                json!({"providerEnabled": checked}),
+                            );
                         },
                     )
                     .accessibility_label("Использовать Groq для диктовки"),
@@ -68,58 +69,85 @@ pub fn render(
     col = col.child(
         card()
             .child(
-                div().text_size(px(13.)).font_weight(FontWeight::SEMIBOLD).child("API-ключ Groq")
+                div()
+                    .text_size(px(13.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child("API-ключ Groq"),
             )
             .child(
                 div()
                     .flex()
                     .gap_2()
-                    .child(div().flex_1().child(Input::new(&key_in).aria_label("API-ключ Groq")))
-                    .child(btn("secrets-verify", "Проверить", false, cx, |this, cx| {
-                        let key = this.input_value("secrets.key", cx);
-                        if !key.is_empty() {
-                            this.call(
-                                "secrets.verify",
-                                "dictation.verify_api_key",
-                                json!({"key": key}));
-                        }
-                    }))
-                    .child(btn("secrets-save", "Сохранить", true, cx, |this, cx| {
-                        let verified = vbool(&this.data("secrets.verify"), "valid");
-                        let key = this.input_value("secrets.key", cx);
-                        if verified && !key.is_empty() {
-                            this.action("dictation.set_api_key", json!({"key": key}));
-                        } else {
-                            this.error =
-                                Some(concat!(
+                    .child(
+                        div()
+                            .flex_1()
+                            .child(Input::new(&key_in).aria_label("API-ключ Groq")),
+                    )
+                    .child(btn(
+                        "secrets-verify",
+                        "Проверить",
+                        false,
+                        cx,
+                        |this, cx| {
+                            let key = this.input_value("secrets.key", cx);
+                            if !key.is_empty() {
+                                this.call(
+                                    "secrets.verify",
+                                    "dictation.verify_api_key",
+                                    json!({"key": key}),
+                                );
+                            }
+                        },
+                    ))
+                    .child(btn(
+                        "secrets-save",
+                        "Сохранить",
+                        true,
+                        cx,
+                        |this, cx| {
+                            let verified = vbool(&this.data("secrets.verify"), "valid");
+                            let key = this.input_value("secrets.key", cx);
+                            if verified && !key.is_empty() {
+                                this.action("dictation.set_api_key", json!({"key": key}));
+                            } else {
+                                this.error = Some(
                                     concat!(
-                                        "Сначала проверьте ключ — сохранение разрешено только ",
-                                        "после успешной ",
-                                    ),
-                                    "проверки.",
-                                ).into());
-                        }
-                    }))
-                    .child(btn("secrets-clear", "Удалить", false, cx, |this, cx| {
-                        this.ask_confirm(
-                            "Удалить ключ",
-                            "Диктовка через Groq перестанет работать.",
-                            "dictation.clear_api_key",
-                            json!({}),
-                            cx);
-                    })),
+                                        concat!(
+                                            "Сначала проверьте ключ — сохранение разрешено только ",
+                                            "после успешной ",
+                                        ),
+                                        "проверки.",
+                                    )
+                                    .into(),
+                                );
+                            }
+                        },
+                    ))
+                    .child(btn(
+                        "secrets-clear",
+                        "Удалить",
+                        false,
+                        cx,
+                        |this, cx| {
+                            this.ask_confirm(
+                                "Удалить ключ",
+                                "Диктовка через Groq перестанет работать.",
+                                "dictation.clear_api_key",
+                                json!({}),
+                                cx,
+                            );
+                        },
+                    )),
             )
-            .child(
-                div().flex().gap_2().child(btn("secrets-test", concat!(
-                    "Тест соедине",
-                    "ния",
-                ), false, cx, |this, _| {
-                    this.call(
-                        "secrets.test",
-                        "dictation.test_connectivity",
-                        json!({}));
-                })),
-            ),
+            .child(div().flex().gap_2().child(btn(
+                "secrets-test",
+                concat!("Тест соедине", "ния",),
+                false,
+                cx,
+                |this, _| {
+                    this.call("secrets.test", "dictation.test_connectivity", json!({}));
+                },
+            ))),
     );
 
     let verify = app.data("secrets.verify");

@@ -15,7 +15,8 @@ pub fn load(app: &mut ManagerApp) {
     app.call(
         "about.logs",
         "manager.diagnostics.log_tail",
-        json!({"lines": 50}));
+        json!({"lines": 50}),
+    );
 }
 
 pub fn render(
@@ -184,7 +185,8 @@ pub fn render(
                             this.call(
                                 "@bundle",
                                 "manager.diagnostics.support_bundle.create",
-                                json!({}));
+                                json!({}),
+                            );
                             cx.notify();
                         })),
                 ),
@@ -214,7 +216,8 @@ pub fn render(
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     this.action(
                                         "manager.diagnostics.support_bundle.save",
-                                        json!({"handle": handle, "destination": path_str}));
+                                        json!({"handle": handle, "destination": path_str}),
+                                    );
                                     cx.notify();
                                 })),
                         )
@@ -226,7 +229,8 @@ pub fn render(
                                     if !h.is_empty() {
                                         this.action(
                                             "manager.diagnostics.support_bundle.cancel",
-                                            json!({"handle": h}));
+                                            json!({"handle": h}),
+                                        );
                                     }
                                     this.slots.remove("@bundle");
                                     cx.notify();
