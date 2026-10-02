@@ -84,7 +84,9 @@ pub(super) async fn dispatch_standard(
                     )
                     .map(|state| {
                         crate::dictation::DictationResponse::ok(serde_json::json!({
-                            "enabled": state.get("enabled").and_then(Value::as_bool).unwrap_or(false),
+                            "enabled": state.get(
+                                "enabled"
+                            ).and_then(Value::as_bool).unwrap_or(false),
                         }))
                     })
                     .unwrap_or_else(crate::dictation::DictationResponse::err)

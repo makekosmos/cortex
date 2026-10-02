@@ -11,7 +11,10 @@ fn launch_scoped_route(method: &Method, path: &str) -> bool {
     matches!(
         (method, op),
         (&Method::GET, "events")
-            | (&Method::POST, "bootstrap" | "ark" | "renew" | "release" | "revoke")
+            | (
+                &Method::POST,
+                "bootstrap" | "ark" | "renew" | "release" | "revoke"
+            )
     )
 }
 
@@ -119,20 +122,29 @@ async fn handle_authenticated_request(
             }),
         ),
         (&Method::POST, "/v1/rpc") => {
-            handle_rpc(request, client, correlation_id, dispatcher, request_timeout, operations,
-                protocol_usage).await
+            handle_rpc(
+                request,
+                client,
+                correlation_id,
+                dispatcher,
+                request_timeout,
+                operations,
+                protocol_usage,
+            )
+            .await
         }
-        (&Method::POST, "/v1/user-data") => {
-            handle_user_data(request, client, user_data).await
-        }
-        (&Method::PUT, "/v1/user-data") => {
-            handle_user_data_write(request, client, user_data).await
-        }
-        (&Method::POST, "/v1/apps/resolve") => {
-            handle_resolve(request, package_service).await
-        }
+        (&Method::POST, "/v1/user-data") => handle_user_data(request, client, user_data).await,
+        (&Method::PUT, "/v1/user-data") => handle_user_data_write(request, client, user_data).await,
+        (&Method::POST, "/v1/apps/resolve") => handle_resolve(request, package_service).await,
         (&Method::POST, "/v1/apps/launch") => {
-            handle_launch(request, package_service, dispatcher, launch_leases, http_port).await
+            handle_launch(
+                request,
+                package_service,
+                dispatcher,
+                launch_leases,
+                http_port,
+            )
+            .await
         }
         (&Method::POST, route)
             if route.starts_with("/v1/apps/launch/") && route.ends_with("/grants/directory") =>
@@ -142,12 +154,12 @@ async fn handle_authenticated_request(
         (&Method::DELETE, route) if route.starts_with("/v1/apps/launch/") => {
             handle_revoke(launch_leases, route)
         }
-        (&Method::GET, "/v1/rpc")
-        | (&Method::POST, "/v1/health")
-        | (&Method::POST, "/v1/info") => json_response(
-            StatusCode::METHOD_NOT_ALLOWED,
-            json!({ "ok": false, "error": "method not allowed" }),
-        ),
+        (&Method::GET, "/v1/rpc") | (&Method::POST, "/v1/health") | (&Method::POST, "/v1/info") => {
+            json_response(
+                StatusCode::METHOD_NOT_ALLOWED,
+                json!({ "ok": false, "error": "method not allowed" }),
+            )
+        }
         _ => json_response(
             StatusCode::NOT_FOUND,
             json!({ "ok": false, "error": "not found" }),
@@ -193,7 +205,13 @@ async fn handle_launch_scoped(
     } else if path.ends_with("/revoke") {
         handle_revoke_token(request, launch_leases, path).await
     } else if path.ends_with("/events") {
-        handle_launch_events(request, package_service, launch_leases, &launch_events, path)
+        handle_launch_events(
+            request,
+            package_service,
+            launch_leases,
+            &launch_events,
+            path,
+        )
     } else {
         json_response(
             StatusCode::NOT_FOUND,

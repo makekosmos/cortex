@@ -1,4 +1,4 @@
-﻿pub fn load_usage_game_playtime_summary(
+pub fn load_usage_game_playtime_summary(
     conn: &Connection,
     bindings: &[UsageGamePlaytimeBinding],
     range_start: Option<&str>,
@@ -20,7 +20,8 @@
         "SELECT tracked_apps.normalized_exe_path AS normalized_path,
                 LOWER(COALESCE(tracked_apps.process_name, '')) AS normalized_process_name,
                 CAST(SUM(usage_sessions.foreground_ms) / 1000 AS INTEGER) AS total_seconds,
-                SUM(CASE WHEN usage_sessions.foreground_ms > 0 THEN 1 ELSE 0 END) AS session_count,
+                SUM(CASE WHEN usage_sessions.foreground_ms > 0 THEN 1 ELSE 0 END) AS \
+                session_count,
                 MAX(COALESCE(usage_sessions.ended_at, usage_sessions.started_at)) AS last_played
          FROM usage_sessions
          JOIN tracked_apps ON tracked_apps.id = usage_sessions.tracked_app_id
@@ -102,12 +103,14 @@
         let daily_sql = format!(
             "SELECT tracked_apps.normalized_exe_path AS normalized_path,
                     LOWER(COALESCE(tracked_apps.process_name, '')) AS normalized_process_name,
-                    SUBSTR(COALESCE(usage_sessions.ended_at, usage_sessions.started_at), 1, 10) AS date,
+                    SUBSTR(COALESCE(usage_sessions.ended_at, usage_sessions.started_at), 1, \
+                    10) AS date,
                     CAST(SUM(usage_sessions.foreground_ms) / 1000 AS INTEGER) AS seconds
              FROM usage_sessions
              JOIN tracked_apps ON tracked_apps.id = usage_sessions.tracked_app_id
              {daily_where_sql}
-             GROUP BY tracked_apps.id, tracked_apps.normalized_exe_path, normalized_process_name, date
+             GROUP BY tracked_apps.id, tracked_apps.normalized_exe_path, \
+             normalized_process_name, date
              HAVING seconds > 0
              ORDER BY date ASC, tracked_apps.id ASC"
         );
@@ -165,4 +168,3 @@
         per_game_totals,
     })
 }
-

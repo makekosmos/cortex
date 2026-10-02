@@ -73,7 +73,10 @@ pub(super) async fn dispatch_special(
                                                     "source": source,
                                                     "size": size,
                                                     "rootRealpath": root_realpath,
-                                                    "rootIdentity": { "dev": root_dev, "ino": root_ino },
+                                                    "rootIdentity": {
+                                                        "dev": root_dev,
+                                                        "ino": root_ino,
+                                                    },
                                                 })),
                                                 Err(error) => LocalResponse::err(error.to_string()),
                                             },
@@ -130,9 +133,13 @@ pub(super) async fn dispatch_special(
                         provenance,
                         None,
                     ) {
-                        Ok((grant_id, _identity, persistent_id)) => LocalResponse::ok(
-                            serde_json::json!({"grantId": grant_id, "persistentGrantId": persistent_id, "exactFile": exact_file, "provenance": provenance.as_str()}),
-                        ),
+                        Ok((grant_id, _identity, persistent_id)) => {
+                            LocalResponse::ok(serde_json::json!(
+                                {"grantId": grant_id,
+                                "persistentGrantId": persistent_id,
+                                "exactFile": exact_file,
+                                "provenance": provenance.as_str()}))
+                        }
                         Err(_) => LocalResponse::err("grant authority denied"),
                     }
                 }
@@ -235,7 +242,9 @@ pub(super) async fn dispatch_special(
                                 Ok(bytes) => LocalResponse::ok(serde_json::json!({
                                     "handle": handle,
                                     "offset": offset,
-                                    "bytes": base64::engine::general_purpose::STANDARD.encode(bytes),
+                                    "bytes": base64::engine::general_purpose::STANDARD.encode(
+                                        bytes
+                                    ),
                                 })),
                                 Err(error) => LocalResponse::err(error.to_string()),
                             }

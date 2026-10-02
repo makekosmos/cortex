@@ -6,52 +6,98 @@ fn dotted_type_rpc_hits_real_handler_and_omitted_upsert_resolves_current() {
     let path = std::env::temp_dir().join(format!("ark-phase2-rpc-{}.db", std::process::id()));
     let runtime = tokio::runtime::Runtime::new().unwrap();
     runtime.block_on(async {
-        handle_request(&state, Request::Init { db_path: path.to_string_lossy().into_owned() }).await.unwrap();
+        let init = Request::Init {
+            db_path: path.to_string_lossy().into_owned(),
+        };
+        handle_request(&state, init).await.unwrap();
         let type_request: Request = serde_json::from_value(json!({
             "operation": "upsert_object_type",
-            "object_type": {"id":"rpc-phase2", "name":"RPC", "schemaJson":"{}", "uiSchemaJson":"{}", "createdAt":"c", "updatedAt":"u", "systemLocked":false}
-        })).unwrap();
+            "object_type": {
+                "id": "rpc-phase2", "name": "RPC", "schemaJson": "{}",
+                "uiSchemaJson": "{}", "createdAt": "c", "updatedAt": "u",
+                "systemLocked": false
+            }
+        }))
+        .unwrap();
         handle_request(&state, type_request).await.unwrap();
         let object_request: Request = serde_json::from_value(json!({
             "operation": "upsert_object",
-            "object": {"id":"rpc-object", "typeId":"rpc-phase2", "title":"x", "contentJson":{}, "propsJson":{}, "createdAt":"c", "updatedAt":"u", "deletedAt":null}
-        })).unwrap();
+            "object": {
+                "id": "rpc-object", "typeId": "rpc-phase2", "title": "x",
+                "contentJson": {}, "propsJson": {}, "createdAt": "c", "updatedAt": "u",
+                "deletedAt": null
+            }
+        }))
+        .unwrap();
         handle_request(&state, object_request).await.unwrap();
-        let stored = handle_request(&state, Request::GetObject { id: "rpc-object".into() }).await.unwrap();
+        let stored = handle_request(
+            &state,
+            Request::GetObject {
+                id: "rpc-object".into(),
+            },
+        )
+        .await
+        .unwrap();
         assert!(stored["typeVersion"]
             .as_str()
             .is_some_and(|version| version.starts_with("0.0.0+legacy.")));
         let mut event_rx = crate::events::subscribe();
         let before = with_conn(&state, |conn| {
             Ok((
-                conn.query_row("SELECT COUNT(*) FROM objects", [], |r| r.get::<_, i64>(0)).map_err(|e| e.to_string())?,
+                conn.query_row("SELECT COUNT(*) FROM objects", [], |r| r.get::<_, i64>(0))
+                    .map_err(|e| e.to_string())?,
                 db::get_sync_kv(conn, "lan_sync.version_vector")?,
             ))
-        }).unwrap();
+        })
+        .unwrap();
         let unknown_request: Request = serde_json::from_value(json!({
             "operation": "upsert_object",
-            "object": {"id":"rpc-unknown", "typeId":"rpc-phase2", "typeVersion":"9.9.9", "title":"unknown", "contentJson":{}, "propsJson":{}, "createdAt":"c", "updatedAt":"u", "deletedAt":null}
-        })).unwrap();
+            "object": {
+                "id": "rpc-unknown", "typeId": "rpc-phase2",
+                "typeVersion": "9.9.9", "title": "unknown", "contentJson": {},
+                "propsJson": {}, "createdAt": "c", "updatedAt": "u", "deletedAt": null
+            }
+        }))
+        .unwrap();
         assert!(handle_request(&state, unknown_request).await.is_err());
         let after = with_conn(&state, |conn| {
             Ok((
-                conn.query_row("SELECT COUNT(*) FROM objects", [], |r| r.get::<_, i64>(0)).map_err(|e| e.to_string())?,
+                conn.query_row("SELECT COUNT(*) FROM objects", [], |r| r.get::<_, i64>(0))
+                    .map_err(|e| e.to_string())?,
                 db::get_sync_kv(conn, "lan_sync.version_vector")?,
             ))
-        }).unwrap();
+        })
+        .unwrap();
         assert_eq!(before, after);
         assert!(!matches!(event_rx.try_recv(), Ok(event) if event["event"] == "object_upserted"));
-        let result = handle_request(&state, Request::TypesGet {
-            type_id: "rpc-phase2".into(),
-            version: None,
-        })
+        let result = handle_request(
+            &state,
+            Request::TypesGet {
+                type_id: "rpc-phase2".into(),
+                version: None,
+            },
+        )
         .await
         .unwrap();
         assert!(result["summary"].is_object());
         assert!(result["definition"].is_object());
-        let alias = handle_request(&state, Request::TypesResolveAlias { alias: "not-an-alias".into() }).await.unwrap();
+        let alias = handle_request(
+            &state,
+            Request::TypesResolveAlias {
+                alias: "not-an-alias".into(),
+            },
+        )
+        .await
+        .unwrap();
         assert!(alias.is_null());
-        let versions = handle_request(&state, Request::TypesListVersions { type_id: "missing".into() }).await.unwrap();
+        let versions = handle_request(
+            &state,
+            Request::TypesListVersions {
+                type_id: "missing".into(),
+            },
+        )
+        .await
+        .unwrap();
         assert_eq!(versions, json!([]));
     });
     drop(runtime);

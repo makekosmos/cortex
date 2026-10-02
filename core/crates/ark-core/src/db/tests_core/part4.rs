@@ -1,4 +1,4 @@
-﻿
+
     #[test]
     fn usage_game_playtime_summary_matches_bindings_and_range() {
         let conn = setup_db();
@@ -116,7 +116,11 @@
         let conn = setup_db();
         let object_type = make_object_type("crud_fixture_book_type", "РљРЅРёРіР°");
         upsert_object_type(&conn, &object_type).unwrap();
-        upsert_object_type(&conn, &make_object_type("crud_fixture_type", "Р—Р°РјРµС‚РєР°")).unwrap();
+        upsert_object_type(
+            &conn,
+            &make_object_type("crud_fixture_type", "Р—Р°РјРµС‚РєР°"),
+        )
+        .unwrap();
 
         let note = make_object("obj-1", "crud_fixture_type", "РџРµСЂРІР°СЏ Р·Р°РјРµС‚РєР°");
         let book = make_object("obj-2", "crud_fixture_book_type", "Clean Code");
@@ -169,7 +173,11 @@
         upsert_object_link(&conn, &make_object_link("link-out", "obj-note", "obj-task")).unwrap();
         upsert_object_link(&conn, &make_object_link("link-in", "obj-tag", "obj-note")).unwrap();
 
-        let mut updated_note = make_object("obj-note", "note_obj", "РћР±РЅРѕРІР»РµРЅРЅР°СЏ Р·Р°РјРµС‚РєР°");
+        let mut updated_note = make_object(
+            "obj-note",
+            "note_obj",
+            "РћР±РЅРѕРІР»РµРЅРЅР°СЏ Р·Р°РјРµС‚РєР°",
+        );
         updated_note.updated_at = "2026-01-02T00:00:00.000Z".to_string();
         upsert_object(&conn, &updated_note).unwrap();
 

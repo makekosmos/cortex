@@ -1,5 +1,8 @@
 use std::sync::Mutex;
 
+#[cfg(windows)]
+use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
+
 const DUCKED_VOLUME: f32 = 0.2;
 
 static ORIGINAL_VOLUME: Mutex<Option<f32>> = Mutex::new(None);
@@ -65,7 +68,7 @@ fn restore_inner() -> Result<(), String> {
 
 #[cfg(windows)]
 fn with_endpoint_volume<T>(
-    f: impl FnOnce(&windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume) -> Result<T, String>,
+    f: impl FnOnce(&IAudioEndpointVolume) -> Result<T, String>,
 ) -> Result<T, String> {
     use windows::Win32::Media::Audio::{
         eConsole, eRender, IMMDeviceEnumerator, MMDeviceEnumerator,

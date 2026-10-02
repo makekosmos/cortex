@@ -121,29 +121,24 @@ async fn handle_app_rpc(
         connection_id: None,
         desktop_authorized: false,
     };
-    let params = match authorize_app_request(
-        &operation,
-        params,
-        &typed_grant,
-        &dispatcher,
-        &app_client,
-    )
-    .await
-    {
-        Ok(params) => params,
-        Err(reason) => {
-            crate::observability::app_rpc::log_app_rpc_rejection(
-                &client_class,
-                &operation,
-                type_id.as_deref(),
-                crate::observability::app_rpc::RejectionReason::Site(reason),
-            );
-            return json_response(
-                StatusCode::FORBIDDEN,
-                json!({ "ok": false, "error": "forbidden" }),
-            );
-        }
-    };
+    let params =
+        match authorize_app_request(&operation, params, &typed_grant, &dispatcher, &app_client)
+            .await
+        {
+            Ok(params) => params,
+            Err(reason) => {
+                crate::observability::app_rpc::log_app_rpc_rejection(
+                    &client_class,
+                    &operation,
+                    type_id.as_deref(),
+                    crate::observability::app_rpc::RejectionReason::Site(reason),
+                );
+                return json_response(
+                    StatusCode::FORBIDDEN,
+                    json!({ "ok": false, "error": "forbidden" }),
+                );
+            }
+        };
     let owner = match dispatcher.allocate_owner() {
         Ok(owner) => owner,
         Err(_) => {
@@ -183,7 +178,9 @@ async fn handle_app_rpc(
         );
         return json_response(
             StatusCode::SERVICE_UNAVAILABLE,
-            json!({ "ok": false, "error": "HTTP operation capacity exhausted or server shutting down" }),
+            json!(
+                { "ok": false,
+                "error": "HTTP operation capacity exhausted or server shutting down" }),
         );
     };
     let response = match tokio::time::timeout(request_timeout, receiver).await {

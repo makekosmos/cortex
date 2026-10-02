@@ -437,7 +437,10 @@ impl FileStore {
         let conn = self.lock();
         let existing: Option<String> = conn
             .query_row(
-                "SELECT pattern FROM file_index_ignore_patterns WHERE lower(pattern) = lower(?) LIMIT 1",
+                concat!(
+                    "SELECT pattern FROM file_index_ignore_patterns WHERE lower(pattern) = lower(",
+                    "?) LIMIT 1"
+                ),
                 params![normalized],
                 |row| row.get(0),
             )

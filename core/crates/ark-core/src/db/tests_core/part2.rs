@@ -1,11 +1,15 @@
-﻿
+
     #[test]
     fn test_schema_creation() {
         let conn = setup_db();
         // Verify tables exist
         let count: i64 = conn
             .query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('todos','projects','tags','tracked_apps','usage_sessions','usage_events','sync_kv','sync_tombstones')",
+                concat!(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('todos',",
+                    "'projects','tags','tracked_apps','usage_sessions','usage_events','sync_kv',",
+                    "'sync_tombstones')"
+                ),
                 [],
                 |row| row.get(0),
             )
@@ -13,7 +17,10 @@
         assert_eq!(count, 8);
         let object_count: i64 = conn
             .query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('object_types', 'objects', 'object_links')",
+                concat!(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN (",
+                    "'object_types', 'objects', 'object_links')"
+                ),
                 [],
                 |row| row.get(0),
             )
@@ -193,10 +200,13 @@
                 meta_json TEXT NOT NULL DEFAULT '{}'
             );
             INSERT INTO tracked_apps
-                (id, platform, exe_path, normalized_exe_path, process_name, display_name, first_seen_at, last_seen_at)
+                (id, platform, exe_path, normalized_exe_path, process_name, display_name, \
+                first_seen_at, last_seen_at)
             VALUES
-                ('app-legacy', 'windows', 'C:\\Games\\Legacy\\legacy.exe', 'c:\\games\\legacy\\legacy.exe',
-                 'legacy.exe', 'Legacy', '2026-01-01T00:00:00.000Z', '2026-01-01T01:00:00.000Z');
+                ('app-legacy', 'windows', 'C:\\Games\\Legacy\\legacy.exe', \
+                'c:\\games\\legacy\\legacy.exe',
+                 'legacy.exe', 'Legacy', '2026-01-01T00:00:00.000Z', \
+                 '2026-01-01T01:00:00.000Z');
             INSERT INTO usage_sessions
                 (id, tracked_app_id, device_id, device_name, platform, started_at, ended_at,
                  foreground_ms, idle_ms, window_title, process_name, exe_path)

@@ -92,7 +92,10 @@ async fn op_capture_start(params: Value, host: &Arc<DictationHost>) -> Dictation
     if host.capture.lock().is_ok_and(|capture| capture.is_some()) {
         return DictationResponse::err("busy");
     }
-    let device_id = params.get("deviceId").and_then(Value::as_str).map(str::to_owned);
+    let device_id = params
+        .get("deviceId")
+        .and_then(Value::as_str)
+        .map(str::to_owned);
     let capture_id = uuid::Uuid::new_v4().to_string();
     let started = op_start_recording(host).await;
     if !started.ok {
@@ -152,11 +155,7 @@ async fn op_capture_stop(params: Value, host: &Arc<DictationHost>) -> DictationR
     if capture_id.is_empty() {
         return DictationResponse::err("capture.stop: invalid captureId");
     }
-    let session = host
-        .capture
-        .lock()
-        .expect("capture mutex poisoned")
-        .take();
+    let session = host.capture.lock().expect("capture mutex poisoned").take();
     let Some(session) = session else {
         return DictationResponse::err("capture.stop: capture not active");
     };
@@ -209,7 +208,11 @@ async fn op_speech_transcribe(params: Value, host: &Arc<DictationHost>) -> Dicta
 }
 
 async fn op_insert_text(params: Value, host: &DictationHost) -> DictationResponse {
-    let Some(text) = params.get("text").and_then(Value::as_str).map(str::to_owned) else {
+    let Some(text) = params
+        .get("text")
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+    else {
         return DictationResponse::err("input.insert_text: missing text");
     };
     let Some(target) = params.get("targetWindow").and_then(Value::as_str) else {
@@ -269,16 +272,17 @@ async fn preload_local_runtime_for_recording(host: &DictationHost) {
         let network_profile = cfg.network_profile.clone();
         let http_proxy = cfg.http_proxy.clone();
         tokio::spawn(async move {
-            let client = match network::build_download_client(
-                &network_profile,
-                http_proxy.as_deref(),
-            ) {
-                Ok(client) => client,
-                Err(e) => {
-                    tracing::warn!(error = %e, "dictation: whisper-server repair client build failed");
-                    return;
-                }
-            };
+            let client =
+                match network::build_download_client(&network_profile, http_proxy.as_deref()) {
+                    Ok(client) => client,
+                    Err(e) => {
+                        tracing::warn!(
+                            error = %e,
+                            "dictation: whisper-server repair client build failed",
+                        );
+                        return;
+                    }
+                };
             match local_models::ensure_whisper_cpp(&client, &data_dir).await {
                 Ok(_) => tracing::info!(
                     "dictation: whisper-server runtime repaired — warm GPU path enabled"
@@ -298,7 +302,12 @@ async fn preload_local_runtime_for_recording(host: &DictationHost) {
         match local::preload_server(&engine, model_path.as_deref(), command_path.as_deref()).await {
             Ok(warm) => {
                 let duration_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
-                tracing::info!(engine = %engine, warm, duration_ms, "dictation: local STT preload finished");
+                tracing::info!(
+                    engine = %engine,
+                    warm,
+                    duration_ms,
+                    "dictation: local STT preload finished",
+                );
             }
             Err(e) => {
                 tracing::warn!(error = %e, "dictation: local STT preload failed");

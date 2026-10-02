@@ -101,8 +101,8 @@ fn resolve_snapshot_path(db_path: &str, id: &str) -> Result<PathBuf, String> {
     if !candidate.exists() {
         return Err(format!("snapshot not found: {id}"));
     }
-    let dir_canonical = fs::canonicalize(&dir)
-        .map_err(|e| format!("backups dir is not accessible: {e}"))?;
+    let dir_canonical =
+        fs::canonicalize(&dir).map_err(|e| format!("backups dir is not accessible: {e}"))?;
     // Canonicalize самого файла: leaf-symlink наружу из backups dir
     // резолвится в чужой parent и отклоняется (no-follow open ниже —
     // вторая линия защиты от TOCTOU).
@@ -120,8 +120,7 @@ fn resolve_snapshot_path(db_path: &str, id: &str) -> Result<PathBuf, String> {
 /// На прочих платформах — `symlink_metadata` pre-check + post-open verify
 /// через metadata открытого handle.
 fn open_no_follow(path: &Path) -> Result<fs::File, String> {
-    let meta = fs::symlink_metadata(path)
-        .map_err(|e| format!("snapshot metadata failed: {e}"))?;
+    let meta = fs::symlink_metadata(path).map_err(|e| format!("snapshot metadata failed: {e}"))?;
     if !meta.file_type().is_file() {
         return Err("snapshot is not a regular file".to_string());
     }
@@ -165,14 +164,11 @@ fn open_no_follow_handle(path: &Path) -> Result<fs::File, String> {
 fn stage_snapshot(db_path: &str, id: &str) -> Result<PathBuf, String> {
     let src_path = resolve_snapshot_path(db_path, id)?;
     let mut src = open_no_follow(&src_path)?;
-    let staging = backups_dir(db_path).join(format!(
-        ".restore-src-{:016x}.db",
-        rand::random::<u64>()
-    ));
-    let mut dst = fs::File::create(&staging)
-        .map_err(|e| format!("staging create failed: {e}"))?;
-    let copied = io::copy(&mut src, &mut dst)
-        .map_err(|e| format!("snapshot staging copy failed: {e}"));
+    let staging =
+        backups_dir(db_path).join(format!(".restore-src-{:016x}.db", rand::random::<u64>()));
+    let mut dst = fs::File::create(&staging).map_err(|e| format!("staging create failed: {e}"))?;
+    let copied =
+        io::copy(&mut src, &mut dst).map_err(|e| format!("snapshot staging copy failed: {e}"));
     drop(dst);
     if let Err(e) = copied {
         let _ = fs::remove_file(&staging);

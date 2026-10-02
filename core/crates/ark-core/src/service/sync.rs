@@ -373,7 +373,8 @@ pub(super) async fn handle_connect_with_pairing_code(
         Err(err) => {
             if let Err(restore_err) = handle_start_sync_with_params(state, restore_params).await {
                 return Err(format!(
-                    "connect_with_pairing_code failed: {err}; restoring previous sync also failed: {restore_err}"
+                    "connect_with_pairing_code failed: {err}; restoring previous sync also failed: \
+                         {restore_err}"
                 ));
             }
             Err(format!(

@@ -121,7 +121,11 @@ fn canonical_task_object(type_version: Option<&str>, props_json: Value) -> ArkOb
         type_id: "com.kosmos.task".to_string(),
         type_version: type_version.map(str::to_owned),
         title: "Canonical task".to_string(),
-        content_json: json!({"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"hello"}]}]}),
+        content_json: json!(
+            {"type":"doc",
+            "content":[{"type":"paragraph",
+            "content":[{"type":"text",
+            "text":"hello"}]}]}),
         props_json,
         created_at: "2026-08-11T00:00:00.000Z".to_string(),
         updated_at: "2026-08-11T00:00:00.000Z".to_string(),
@@ -130,7 +134,17 @@ fn canonical_task_object(type_version: Option<&str>, props_json: Value) -> ArkOb
 }
 
 fn canonical_task_props() -> Value {
-    json!({"status":"todo","priority":"medium","scheduledAt":null,"dueAt":null,"reminderAt":null,"completedAt":null,"canceledAt":null,"recurrence":null,"checklist":[],"extensions":{"vendor":{"opaque":true}}})
+    json!(
+        {"status":"todo",
+        "priority":"medium",
+        "scheduledAt":null,
+        "dueAt":null,
+        "reminderAt":null,
+        "completedAt":null,
+        "canceledAt":null,
+        "recurrence":null,
+        "checklist":[],
+        "extensions":{"vendor":{"opaque":true}}})
 }
 
 mod canonical_rpc;

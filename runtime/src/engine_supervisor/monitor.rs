@@ -47,7 +47,9 @@ pub(super) async fn wait_for_child(child: &mut Child, control: &mut ControlServe
             }
             message = control.recv() => {
                 match message {
-                    Some(ControlMessage::RestartRequested) | Some(ControlMessage::ShutdownRequested) => {
+                    Some(
+                        ControlMessage::RestartRequested
+                    ) | Some(ControlMessage::ShutdownRequested) => {
                         return ChildResult::Control(message.expect("control message"));
                     }
                     Some(ControlMessage::CoreReady) | Some(ControlMessage::CoreStopping) => {}

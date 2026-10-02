@@ -69,7 +69,10 @@ fn issuer_key_lookup_returns_current_public_material_only() {
 
     let encoded = serde_json::to_string(&key).unwrap();
     for forbidden in ["ciphertext", "nonce", "authenticated_metadata", "opaque"] {
-        assert!(!encoded.contains(forbidden), "unexpected secret field: {forbidden}");
+        assert!(
+            !encoded.contains(forbidden),
+            "unexpected secret field: {forbidden}"
+        );
     }
 }
 
@@ -152,17 +155,15 @@ fn issuer_key_lookup_rejects_wrong_binding_rotation_and_revocation() {
     assert!(stale_key.contains("issuer_key_id"));
 
     let rotated = issuer
-        .reauthorize(
-            Reauthorization {
-                grant_epoch: 3,
-                key_fingerprint: "fp-b-rotated".into(),
-                signing_public_key: "sign-b-rotated".into(),
-                encryption_public_key: "enc-b-rotated".into(),
-                transport_public_key: None,
-                authorized_at: "2026-08-30T00:00:00Z".into(),
-                hlc: "2026-08-30T00:00:00.000Z:000003:node-b".into(),
-            },
-        )
+        .reauthorize(Reauthorization {
+            grant_epoch: 3,
+            key_fingerprint: "fp-b-rotated".into(),
+            signing_public_key: "sign-b-rotated".into(),
+            encryption_public_key: "enc-b-rotated".into(),
+            transport_public_key: None,
+            authorized_at: "2026-08-30T00:00:00Z".into(),
+            hlc: "2026-08-30T00:00:00.000Z:000003:node-b".into(),
+        })
         .unwrap();
     let mut rotated_grant = integration_grant();
     rotated_grant.node_id = "node-b".into();

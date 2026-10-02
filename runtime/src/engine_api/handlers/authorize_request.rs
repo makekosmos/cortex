@@ -5,16 +5,20 @@ async fn authorize_app_request(
     dispatcher: &crate::engine_dispatch::EngineDispatcher,
     client: &DispatchClient,
 ) -> Result<Value, &'static str> {
-    let map = params.as_object_mut().ok_or("app params must be an object")?;
+    let map = params
+        .as_object_mut()
+        .ok_or("app params must be an object")?;
     if let Some(denied) = crate::runtime_grants::scoped_capability_denied(operation, grant) {
         return Err(denied);
     }
     match operation {
         // dictation/focus/agents/filesystem already gated by scoped_capability_denied above
         operation if crate::runtime_grants::scoped_capability(operation).is_some() => {}
-        operation if crate::runtime_grants::app_network_operation_scope(operation).is_some() =>
-            crate::runtime_grants::require_app_network_scope(operation, grant)?,
-        operation if !operation.starts_with("agents.") && grant.allows_worker_operation(operation) => {}
+        operation if crate::runtime_grants::app_network_operation_scope(operation).is_some() => {
+            crate::runtime_grants::require_app_network_scope(operation, grant)?
+        }
+        operation
+            if !operation.starts_with("agents.") && grant.allows_worker_operation(operation) => {}
         "list_objects_by_type" | "list_object_summaries_by_type" => {
             let raw_type = map
                 .get("type_id")
@@ -194,22 +198,14 @@ async fn authorize_app_request(
                 .or_else(|| map.get("objectLink"))
                 .ok_or("object_link is required")?;
             let (source_id, target_id, relation) = link_parts(link)?;
-            let source = internal_app_lookup(
-                dispatcher,
-                client,
-                "get_object",
-                json!({ "id": source_id }),
-            )
-            .await
-            .ok_or("data grant denied")?;
-            let target = internal_app_lookup(
-                dispatcher,
-                client,
-                "get_object",
-                json!({ "id": target_id }),
-            )
-            .await
-            .ok_or("data grant denied")?;
+            let source =
+                internal_app_lookup(dispatcher, client, "get_object", json!({ "id": source_id }))
+                    .await
+                    .ok_or("data grant denied")?;
+            let target =
+                internal_app_lookup(dispatcher, client, "get_object", json!({ "id": target_id }))
+                    .await
+                    .ok_or("data grant denied")?;
             authorize_link(grant, &source, &target, relation, true)?;
         }
         "delete_object_link" => {
@@ -229,29 +225,20 @@ async fn authorize_app_request(
                 })
                 .ok_or("data grant denied")?;
             let (source_id, target_id, relation) = link_parts(link)?;
-            let source = internal_app_lookup(
-                dispatcher,
-                client,
-                "get_object",
-                json!({ "id": source_id }),
-            )
-            .await
-            .ok_or("data grant denied")?;
-            let target = internal_app_lookup(
-                dispatcher,
-                client,
-                "get_object",
-                json!({ "id": target_id }),
-            )
-            .await
-            .ok_or("data grant denied")?;
+            let source =
+                internal_app_lookup(dispatcher, client, "get_object", json!({ "id": source_id }))
+                    .await
+                    .ok_or("data grant denied")?;
+            let target =
+                internal_app_lookup(dispatcher, client, "get_object", json!({ "id": target_id }))
+                    .await
+                    .ok_or("data grant denied")?;
             authorize_link(grant, &source, &target, relation, true)?;
         }
         _ => return Err("unsupported app operation"),
     }
     Ok(params)
 }
-
 
 fn link_parts(link: &Value) -> Result<(&str, &str, &str), &'static str> {
     let source = param_str(link, "source_object_id", "sourceObjectId")

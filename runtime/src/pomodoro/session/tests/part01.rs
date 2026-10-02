@@ -25,7 +25,13 @@ fn cfg_threshold(threshold: u32) -> SessionConfig {
     }
 }
 
-fn expected_break(completed: u32, threshold: u32) -> Phase { if completed % threshold == 0 { Phase::LongBreak } else { Phase::ShortBreak } }
+fn expected_break(completed: u32, threshold: u32) -> Phase {
+    if completed % threshold == 0 {
+        Phase::LongBreak
+    } else {
+        Phase::ShortBreak
+    }
+}
 
 #[test]
 fn start_from_idle_enters_work() {
@@ -214,10 +220,7 @@ fn snapshot_phase_ends_at_ms_some_when_running() {
     let clock = Arc::new(MockClock::new(1_000_000));
     let mut s = Session::new(clock.clone());
     s.start(cfg_default());
-    assert_eq!(
-        s.snapshot().phase_ends_at_ms,
-        Some(1_000_000 + 25 * 60_000)
-    );
+    assert_eq!(s.snapshot().phase_ends_at_ms, Some(1_000_000 + 25 * 60_000));
 }
 
 #[test]

@@ -29,7 +29,13 @@ pub fn restore_snapshot(
     db_path: &str,
     id: &str,
 ) -> Result<RestoreReport, String> {
-    restore_snapshot_impl(conn, db_path, id, &default_post_verify, &default_rollback_restore)
+    restore_snapshot_impl(
+        conn,
+        db_path,
+        id,
+        &default_post_verify,
+        &default_rollback_restore,
+    )
 }
 
 fn restore_snapshot_impl(
@@ -97,9 +103,7 @@ fn restore_snapshot_impl(
         return Err(match rollback_result {
             Ok(()) => {
                 let _ = fs::remove_file(&rollback);
-                format!(
-                    "post-restore verification failed ({verify_err}); live DB rolled back"
-                )
+                format!("post-restore verification failed ({verify_err}); live DB rolled back")
             }
             Err(rollback_err) => format!(
                 "post-restore verification failed ({verify_err}); rollback failed: \

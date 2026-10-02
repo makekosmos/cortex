@@ -67,10 +67,7 @@ fn test_format_space_code_non_ascii_no_panic() {
     // cut point — must return the input unchanged instead of panicking.
     assert_eq!(format_space_code("ABCÉDE"), "ABCÉDE");
     assert_eq!(format_space_code("ABCÉDEFGHJK"), "ABCÉDEFGHJK");
-    assert_eq!(
-        format_space_code("ABCÜDEFGHJKMNPQRS"),
-        "ABCÜDEFGHJKMNPQRS"
-    );
+    assert_eq!(format_space_code("ABCÜDEFGHJKMNPQRS"), "ABCÜDEFGHJKMNPQRS");
 }
 
 #[test]

@@ -53,7 +53,11 @@ fn schema_is_idempotent_and_malformed_schema_fails_closed() {
         )
         .unwrap()
     );
-    conn.execute_batch("DROP TABLE canonical_migration_items; CREATE TABLE canonical_migration_items (contract_version TEXT PRIMARY KEY)").unwrap();
+    conn.execute_batch(concat!(
+        "DROP TABLE canonical_migration_items; CREATE TABLE ",
+        "canonical_migration_items (contract_version TEXT PRIMARY KEY)"
+    ))
+    .unwrap();
     assert!(ensure_ledger_schema(&conn).is_err());
     assert_eq!(
         conn.query_row(

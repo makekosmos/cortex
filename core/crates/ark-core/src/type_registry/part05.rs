@@ -1,6 +1,11 @@
-﻿
 pub fn ensure_builtin_versions(conn: &Connection) -> Result<(), String> {
-    let mut stmt=conn.prepare("SELECT id,schema_json,ui_schema_json,created_at FROM object_types WHERE NOT EXISTS (SELECT 1 FROM object_type_versions v WHERE v.type_id=object_types.id AND v.version=?1)").map_err(|e|e.to_string())?;
+    let mut stmt = conn
+        .prepare(concat!(
+            "SELECT id,schema_json,ui_schema_json,created_at FROM object_types WHERE NOT ",
+            "EXISTS (SELECT 1 FROM object_type_versions v WHERE ",
+            "v.type_id=object_types.id AND v.version=?1)"
+        ))
+        .map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map(params![LEGACY_VERSION], |r| {
             Ok((
@@ -41,8 +46,20 @@ fn insert_legacy_type_version(
         &json_empty(),
     )?;
     conn.execute(
-        "INSERT OR IGNORE INTO object_type_versions(type_id,version,schema_json,ui_schema_json,content_contract_json,relations_json,sync_policy_json,schema_hash,created_at) VALUES (?1,?2,?3,?4,'{}','[]','{}',?5,?6)",
-        params![type_id, LEGACY_VERSION, schema_json, ui_schema_json, hash, created_at],
-    ).map_err(|e| e.to_string())?;
+        concat!(
+            "INSERT OR IGNORE INTO object_type_versions(type_id,version,schema_json,",
+            "ui_schema_json,content_contract_json,relations_json,sync_policy_json,",
+            "schema_hash,created_at) VALUES (?1,?2,?3,?4,'{}','[]','{}',?5,?6)"
+        ),
+        params![
+            type_id,
+            LEGACY_VERSION,
+            schema_json,
+            ui_schema_json,
+            hash,
+            created_at
+        ],
+    )
+    .map_err(|e| e.to_string())?;
     Ok(())
 }

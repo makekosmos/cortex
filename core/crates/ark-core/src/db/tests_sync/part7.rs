@@ -52,8 +52,7 @@
         // Claims snapshot BEFORE the stream, exactly like the fixed send
         // path: anything appended mid-pull is excluded from both the data
         // and the completeness claim.
-        let through =
-            claims.then(|| usage_log_complete_through(server, None).unwrap());
+        let through = claims.then(|| usage_log_complete_through(server, None).unwrap());
         let remote = stored_vector(client);
         let mut offset = 0;
         let mut applied = 0;
@@ -111,7 +110,9 @@
             record_usage_sequence(&conn, "usage_session", id, "dev-a", seq, &hlc(seq), false)
                 .unwrap();
         }
-        let deleted = compact_usage_sync_log(&conn, Some("dev-a"), "2026-09-01T00:00:00.000Z", 1_000).unwrap();
+        let deleted =
+            compact_usage_sync_log(&conn, Some("dev-a"), "2026-09-01T00:00:00.000Z", 1_000)
+                .unwrap();
         assert_eq!(deleted, 3, "fixture must compact refs 1, 2 and 3");
         conn
     }
@@ -148,7 +149,8 @@
         });
 
         let deleted =
-            compact_usage_sync_log(&conn, Some("dev-a"), "2026-09-01T00:00:00.000Z", 1_000).unwrap();
+            compact_usage_sync_log(&conn, Some("dev-a"), "2026-09-01T00:00:00.000Z", 1_000)
+                .unwrap();
         assert_eq!(deleted, 1);
         assert_eq!(
             usage_log_refs(&conn)
@@ -188,7 +190,10 @@
         vector.remove("@usage:dev");
         save_stored_vector(&conn2, &vector);
         assert_eq!(usage_log_complete_through(&conn2, None).unwrap()["dev"], 0);
-        assert_eq!(usage_log_complete_through(&conn2, Some("dev")).unwrap()["dev"], 3);
+        assert_eq!(
+            usage_log_complete_through(&conn2, Some("dev")).unwrap()["dev"],
+            3
+        );
         // A foreign origin we only partially received can only be claimed
         // up to our own contiguous coverage of it.
         let conn3 = setup_db();
@@ -203,7 +208,10 @@
             vector.insert("@usage:remote".to_string(), "4".to_string());
             vector
         });
-        assert_eq!(usage_log_complete_through(&conn3, None).unwrap()["remote"], 4);
+        assert_eq!(
+            usage_log_complete_through(&conn3, None).unwrap()["remote"],
+            4
+        );
         assert_eq!(
             usage_log_complete_through(&conn3, Some("me")).unwrap()["remote"],
             4
@@ -236,9 +244,8 @@
         let remote = stored_vector(&client);
         // Apply exactly one small page, then stop — as a mid-pull batch
         // would. No claims yet, so no cursor jump past the hole.
-        let first_page = SqliteStorageBackend::collect_entities_page_blocking(
-            &server, &remote, "dev-a", 0, 2,
-        );
+        let first_page =
+            SqliteStorageBackend::collect_entities_page_blocking(&server, &remote, "dev-a", 0, 2);
         assert_eq!(first_page.len(), 2);
         for entity in &first_page {
             SqliteStorageBackend::apply_entity_blocking(&client, entity).unwrap();
@@ -290,7 +297,8 @@
         )
         .unwrap();
         assert_eq!(
-            compact_usage_sync_log(&relay_b, Some("dev-b"), "2026-09-01T00:00:00.000Z", 1_000).unwrap(),
+            compact_usage_sync_log(&relay_b, Some("dev-b"), "2026-09-01T00:00:00.000Z", 1_000)
+                .unwrap(),
             1
         );
 

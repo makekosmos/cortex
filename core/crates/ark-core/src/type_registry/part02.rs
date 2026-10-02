@@ -1,4 +1,3 @@
-﻿
 pub fn ensure_legacy_type_version(
     conn: &Connection,
     type_id: &str,
@@ -22,7 +21,10 @@ pub fn ensure_legacy_type_version(
     }
     let has_versions: bool = conn
         .query_row(
-            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='object_type_versions')",
+            concat!(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND ",
+                "name='object_type_versions')"
+            ),
             [],
             |row| row.get::<_, i64>(0),
         )
@@ -37,7 +39,11 @@ pub fn ensure_legacy_type_version(
     let relations = serde_json::json!([]);
     let hash = canonical_schema_hash(&schema, &ui_schema, &empty, &relations, &empty)?;
     conn.execute(
-        "INSERT OR IGNORE INTO object_type_versions (type_id,version,schema_json,ui_schema_json,content_contract_json,relations_json,sync_policy_json,schema_hash,created_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)",
+        concat!(
+            "INSERT OR IGNORE INTO object_type_versions (type_id,version,schema_json,",
+            "ui_schema_json,content_contract_json,relations_json,sync_policy_json,",
+            "schema_hash,created_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)"
+        ),
         params![
             type_id,
             LEGACY_VERSION,
@@ -100,7 +106,12 @@ pub fn resolve_object_type_version(
     resolve_object_type_identity(conn, type_id, requested).map(|(_, version)| version)
 }
 pub fn list_type_summaries(conn: &Connection) -> Result<Vec<TypeSummary>, String> {
-    let mut stmt = conn.prepare("SELECT id,owner_kind,owner_id,current_version,status,base_type_id FROM object_types ORDER BY id ASC").map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare(concat!(
+            "SELECT id,owner_kind,owner_id,current_version,status,base_type_id FROM ",
+            "object_types ORDER BY id ASC"
+        ))
+        .map_err(|e| e.to_string())?;
     let result = stmt
         .query_map([], |r| {
             Ok(TypeSummary {
@@ -120,7 +131,13 @@ pub fn list_type_summaries(conn: &Connection) -> Result<Vec<TypeSummary>, String
 
 pub fn list_all_type_versions(conn: &Connection) -> Result<Vec<TypeVersion>, String> {
     let mut values = Vec::new();
-    let mut stmt = conn.prepare("SELECT type_id,version,schema_json,ui_schema_json,content_contract_json,relations_json,sync_policy_json,schema_hash,created_at FROM object_type_versions ORDER BY type_id,version").map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare(concat!(
+            "SELECT type_id,version,schema_json,ui_schema_json,content_contract_json,",
+            "relations_json,sync_policy_json,schema_hash,created_at FROM ",
+            "object_type_versions ORDER BY type_id,version"
+        ))
+        .map_err(|e| e.to_string())?;
     for row in stmt
         .query_map([], |r| {
             Ok(TypeVersion {
@@ -172,7 +189,13 @@ pub fn list_aliases(conn: &Connection) -> Result<Vec<AliasRecord>, String> {
     result
 }
 pub fn list_type_versions(conn: &Connection, type_id: &str) -> Result<Vec<TypeVersion>, String> {
-    let mut stmt = conn.prepare("SELECT type_id,version,schema_json,ui_schema_json,content_contract_json,relations_json,sync_policy_json,schema_hash,created_at FROM object_type_versions WHERE type_id=?1").map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare(concat!(
+            "SELECT type_id,version,schema_json,ui_schema_json,content_contract_json,",
+            "relations_json,sync_policy_json,schema_hash,created_at FROM ",
+            "object_type_versions WHERE type_id=?1"
+        ))
+        .map_err(|e| e.to_string())?;
     let mut values = stmt
         .query_map(params![type_id], |r| {
             Ok(TypeVersion {

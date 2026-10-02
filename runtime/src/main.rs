@@ -289,7 +289,9 @@ async fn run_core_worker() -> ExitCode {
                                 electron_pid,
                             },
                         ).await {
-                            eprintln!("[mundus-engine] desktop lease acknowledgement failed: {error}");
+                            eprintln!(
+                                "[mundus-engine] desktop lease acknowledgement failed: {error}"
+                            );
                         }
                     }
                     Some(ControlMessage::DesktopLeaseRevoked { generation }) => {
@@ -328,7 +330,11 @@ async fn run_core_worker() -> ExitCode {
         agents.shutdown().await;
     }
     if let Err(error) = package_workers.stop_all().await {
-        tracing::error!(target: "package_worker", error, "package worker cleanup failed during shutdown");
+        tracing::error!(
+            target: "package_worker",
+            error,
+            "package worker cleanup failed during shutdown",
+        );
     }
 
     if matches!(
@@ -907,7 +913,9 @@ async fn probe_http_dispatch(port: u16, token: &str) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     let body = r#"{"_req_id":"readiness-http","operation":"diagnostics.snapshot"}"#;
     let request = format!(
-        "POST /v1/rpc HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer {token}\r\nx-kosmos-client-pid: {}\r\nx-kosmos-api-version: {API_VERSION}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        "POST /v1/rpc HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer \
+             {token}\r\nx-kosmos-client-pid: {}\r\nx-kosmos-api-version: \
+             {API_VERSION}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
         std::process::id(),
         body.len()
     );
@@ -989,7 +997,16 @@ mod tests {
         }
         socket
             .write_all(
-                b"GET / HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n",
+                concat!(
+                    "GET / HTTP/1.1\r\n",
+                    "Host: localhost\r\n",
+                    "Upgrade: websocket\r\n",
+                    "Connection: Upgrade\r\n",
+                    "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n",
+                    "Sec-WebSocket-Version: 13\r\n",
+                    "\r\n",
+                )
+                .as_bytes(),
             )
             .await
             .expect("raw WS upgrade");
@@ -1146,8 +1163,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn run_core_worker_readiness_requires_both_production_adapters_and_emits_authenticated_core_ready_once(
-    ) {
+    async fn run_core_worker_readiness_requires_both_adapters_and_emits_ready_once() {
         let dir = tempfile::tempdir().unwrap();
         let ark = Arc::new(
             ArkHost::open(&dir.path().join("ark.db").to_string_lossy())

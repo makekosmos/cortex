@@ -8,7 +8,10 @@ fn diagnostics_are_sorted_bounded_and_redacted() {
     let key = ("a".to_string(), "1".to_string());
     let workers = lock(&supervisor.inner.workers);
     let worker = workers.get(&key).expect("worker");
-    lock(&worker.stdout_tail).push("token=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa alice@example.com C:\\Users\\alice\\note.txt");
+    lock(&worker.stdout_tail).push(concat!(
+        "token=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ",
+        "alice@example.com C:\\Users\\alice\\note.txt"
+    ));
     lock(&worker.stderr_tail).push("scope=filesystem.read /home/alice/private");
     drop(workers);
     let diagnostics = supervisor.diagnostics();

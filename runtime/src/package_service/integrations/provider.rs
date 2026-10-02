@@ -48,20 +48,39 @@ impl PackageService {
                 "id": package.id,
                 "label": manifest.name,
                 "packageVersion": package.version,
-                "credentialLabel": first.map(|setting| setting.label.as_str()).unwrap_or("Данные подключения"),
-                "credentialUrl": integration.login.as_ref().map(|login| login.start_url.as_str()).unwrap_or(""),
+                "credentialLabel": first
+                    .map(|setting| setting.label.as_str())
+                    .unwrap_or("Данные подключения"),
+                "credentialUrl": integration
+                    .login
+                    .as_ref()
+                    .map(|login| login.start_url.as_str())
+                    .unwrap_or(""),
                 "hasCredential": has_credential,
                 "enabled": package.enabled,
                 "iconKey": manifest.id,
                 "iconPath": icon_path,
                 "packageManaged": true,
-                "authMode": if integration.login.is_some() { "browser_login" } else { "credential" },
-                "credentialInputType": if first.is_some_and(|setting| setting.kind.is_secret()) { "password" } else { "text" },
+                "authMode": if integration.login.is_some() {
+                    "browser_login"
+                } else {
+                    "credential"
+                },
+                "credentialInputType": if first.is_some_and(|setting| setting.kind.is_secret())
+                {
+                    "password"
+                } else {
+                    "text"
+                },
                 "loginCapability": integration.login.as_ref().map(|_| manifest.id.as_str()),
                 "settingSchema": integration.settings,
                 "settingValues": values,
                 "settings": {
-                    "intervalMinutes": integration.schedule.as_ref().map(|schedule| schedule.interval_seconds / 60).unwrap_or(0),
+                    "intervalMinutes": integration
+                        .schedule
+                        .as_ref()
+                        .map(|schedule| schedule.interval_seconds / 60)
+                        .unwrap_or(0),
                     "syncOnStartup": true,
                     "lastAttemptAt": null,
                     "lastSuccessAt": null,

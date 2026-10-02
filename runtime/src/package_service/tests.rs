@@ -308,9 +308,7 @@ pub(crate) mod tests {
             .unwrap_or_else(|| {
                 std::env::var_os("CARGO_TARGET_DIR")
                     .map(PathBuf::from)
-                    .unwrap_or_else(|| {
-                        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../target")
-                    })
+                    .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../target"))
                     .join("debug/ark-markdown-bridge.exe")
             });
         assert!(
@@ -446,8 +444,12 @@ pub(crate) mod tests {
     #[test]
     fn missing_compile_time_trust_fails_closed_without_blocking_engine() {
         let dir = tempdir().expect("tempdir");
-        let service =
-            PackageService::from_parts(dir.path().join("packages"), None, Some(dir.path().join("apps"))).expect("service");
+        let service = PackageService::from_parts(
+            dir.path().join("packages"),
+            None,
+            Some(dir.path().join("apps")),
+        )
+        .expect("service");
         assert!(!service.trust_summary().configured);
         assert_eq!(
             service.trust_summary().fault_code.as_deref(),
@@ -901,11 +903,9 @@ pub(crate) mod tests {
             PackageService::open_with_trust(dir.path(), trust_store).expect("service"),
         );
         let ark = std::sync::Arc::new(
-            crate::ark_host::ArkHost::open(
-                dir.path().join("ark.db").to_str().expect("db path"),
-            )
-            .await
-            .expect("ark host"),
+            crate::ark_host::ArkHost::open(dir.path().join("ark.db").to_str().expect("db path"))
+                .await
+                .expect("ark host"),
         );
         let dispatcher = package_definition_dispatcher(ark.clone());
         service.configure_package_definition_dispatcher(dispatcher.clone());
@@ -965,11 +965,9 @@ pub(crate) mod tests {
         let (trust_store, _, _) = trust();
         let restarted = PackageService::open_with_trust(dir.path(), trust_store).expect("restart");
         let ark = std::sync::Arc::new(
-            crate::ark_host::ArkHost::open(
-                dir.path().join("ark.db").to_str().expect("db path"),
-            )
-            .await
-            .expect("ARK restart"),
+            crate::ark_host::ArkHost::open(dir.path().join("ark.db").to_str().expect("db path"))
+                .await
+                .expect("ARK restart"),
         );
         let dispatcher = package_definition_dispatcher(ark.clone());
         let definitions = fs::read_to_string(&persisted).expect("definitions");
@@ -1049,17 +1047,39 @@ pub(crate) mod tests {
             .unwrap();
         service.enable(&prior.id, &prior.version).unwrap();
         let ark = std::sync::Arc::new(
-            crate::ark_host::ArkHost::open(
-                dir.path().join("ark.db").to_str().unwrap(),
-            )
-            .await
-            .unwrap(),
+            crate::ark_host::ArkHost::open(dir.path().join("ark.db").to_str().unwrap())
+                .await
+                .unwrap(),
         );
         service.configure_package_definition_dispatcher(package_definition_dispatcher(ark.clone()));
         let type_id = "com.kosmos.demo.journal";
-        assert!(ark.request("types.registerPackageDefinitions", serde_json::json!({"registrations":[{
-            "type_id":type_id,"name":"Foreign","schema_json":"{}","ui_schema_json":"{}","content_contract_json":"{}","relations_json":"[]","sync_policy_json":"{}","version":"1.0.0","schema_hash":"","owner_kind":"package","owner_id":"com.example.foreign","status":"active","base_type_id":null,"aliases":[],"created_at":"now"
-        }]})).await.unwrap().ok);
+        assert!(
+            ark.request(
+                "types.registerPackageDefinitions",
+                serde_json::json!({
+                    "registrations": [{
+                        "type_id": type_id,
+                        "name": "Foreign",
+                        "schema_json": "{}",
+                        "ui_schema_json": "{}",
+                        "content_contract_json": "{}",
+                        "relations_json": "[]",
+                        "sync_policy_json": "{}",
+                        "version": "1.0.0",
+                        "schema_hash": "",
+                        "owner_kind": "package",
+                        "owner_id": "com.example.foreign",
+                        "status": "active",
+                        "base_type_id": null,
+                        "aliases": [],
+                        "created_at": "now"
+                    }]
+                })
+            )
+            .await
+            .unwrap()
+            .ok
+        );
         let mut replacement = manifest_v2_with_canonical_access();
         replacement.id = prior.id.clone();
         replacement.version = prior.version.clone();
@@ -1320,9 +1340,8 @@ pub(crate) mod tests {
     fn dictation_package_manifest_has_only_the_required_engine_grants() {
         // Pinned from Dictation source 3225cea and artifact SHA256
         // a7eaf9c84ee63fc01799df531ba0469390a20c4a4df6e37f1c9901af8a4c5fd5.
-        let path =
-            Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("tests/fixtures/dictation-0.2.4.package.manifest.json");
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/dictation-0.2.4.package.manifest.json");
         let raw = fs::read_to_string(path).expect("Dictation package manifest");
         let VersionedManifest::V2(manifest) =
             PackageManifest::parse(&raw).expect("valid Dictation manifest")
@@ -1453,10 +1472,7 @@ pub(crate) mod tests {
     #[cfg(windows)]
     #[tokio::test]
     async fn signed_catalog_bridge_runs_through_service() {
-        use crate::{
-            ark_host::ArkHost,
-            package_worker_supervisor::PackageWorkerSupervisor,
-        };
+        use crate::{ark_host::ArkHost, package_worker_supervisor::PackageWorkerSupervisor};
         use std::sync::Arc;
         let dir = tempdir().unwrap();
         let vault = dir.path().join("vault");
@@ -1529,11 +1545,9 @@ pub(crate) mod tests {
             .install_from_path(&manifest.id, &manifest.version, archive)
             .unwrap();
         let ark = Arc::new(
-            ArkHost::open(
-                dir.path().join("ark.db").to_str().unwrap(),
-            )
-            .await
-            .unwrap(),
+            ArkHost::open(dir.path().join("ark.db").to_str().unwrap())
+                .await
+                .unwrap(),
         );
         let note_registration =
             ark_core::canonical_types::definitions::canonical_type_registrations()
@@ -1550,7 +1564,29 @@ pub(crate) mod tests {
             .unwrap()
             .ok
         );
-        assert!(ark.request("upsert_object", serde_json::json!({"object":{"id":"service-note","typeId":"com.kosmos.note","typeVersion":"1.0.0","title":"Service note","contentJson":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"from ark"}]}]},"propsJson":{"description":null,"extensions":{}},"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z","deletedAt":null},"device_id":"bridge-service"})).await.unwrap().ok);
+        assert!(
+            ark.request(
+                "upsert_object",
+                serde_json::json!(
+                    {"object":{"id":"service-note",
+                    "typeId":"com.kosmos.note",
+                    "typeVersion":"1.0.0",
+                    "title":"Service note",
+                    "contentJson":{"type":"doc",
+                    "content":[{"type":"paragraph",
+                    "content":[{"type":"text",
+                    "text":"from ark"}]}]},
+                    "propsJson":{"description":null,
+                    "extensions":{}},
+                    "createdAt":"2026-01-01T00:00:00Z",
+                    "updatedAt":"2026-01-01T00:00:00Z",
+                    "deletedAt":null},
+                    "device_id":"bridge-service"}),
+            )
+            .await
+            .unwrap()
+            .ok
+        );
         let objects = ark
             .request("list_objects", serde_json::Value::Null)
             .await

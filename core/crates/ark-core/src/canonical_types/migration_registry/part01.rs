@@ -1,4 +1,4 @@
-﻿// Phase 3 checkpoint C: exact canonical registry installation and legacy registry evidence.
+// Phase 3 checkpoint C: exact canonical registry installation and legacy registry evidence.
 // This module is deliberately independent from object migration and init wiring.
 
 use std::collections::BTreeMap;
@@ -133,7 +133,13 @@ fn registration_version(
 
 fn summary_json(conn: &Connection, type_id: &str) -> Result<String, RegistryError> {
     conn.query_row(
-        "SELECT json_object('id',id,'name',name,'schema_json',schema_json,'ui_schema_json',ui_schema_json,'created_at',created_at,'updated_at',updated_at,'system_locked',system_locked,'owner_kind',owner_kind,'owner_id',owner_id,'current_version',current_version,'status',status,'base_type_id',base_type_id) FROM object_types WHERE id=?1",
+        concat!(
+            "SELECT json_object('id',id,'name',name,'schema_json',schema_json,",
+            "'ui_schema_json',ui_schema_json,'created_at',created_at,'updated_at',",
+            "updated_at,'system_locked',system_locked,'owner_kind',owner_kind,'owner_id',",
+            "owner_id,'current_version',current_version,'status',status,'base_type_id',",
+            "base_type_id) FROM object_types WHERE id=?1"
+        ),
         [type_id],
         |row| row.get(0),
     )
@@ -142,7 +148,11 @@ fn summary_json(conn: &Connection, type_id: &str) -> Result<String, RegistryErro
 
 fn versions_json(conn: &Connection, type_id: &str) -> Result<String, RegistryError> {
     let mut statement = conn
-        .prepare("SELECT version,schema_json,ui_schema_json,content_contract_json,relations_json,sync_policy_json,schema_hash,created_at FROM object_type_versions WHERE type_id=?1")
+        .prepare(concat!(
+            "SELECT version,schema_json,ui_schema_json,content_contract_json,",
+            "relations_json,sync_policy_json,schema_hash,created_at FROM ",
+            "object_type_versions WHERE type_id=?1"
+        ))
         .map_err(storage)?;
     let mut versions = statement
         .query_map([type_id], |row| {
@@ -183,7 +193,10 @@ fn versions_json(conn: &Connection, type_id: &str) -> Result<String, RegistryErr
 
 fn inbound_aliases_json(conn: &Connection, type_id: &str) -> Result<String, RegistryError> {
     let mut statement = conn
-        .prepare("SELECT alias,canonical_type_id,created_at FROM object_type_aliases WHERE canonical_type_id=?1 ORDER BY alias")
+        .prepare(concat!(
+            "SELECT alias,canonical_type_id,created_at FROM object_type_aliases WHERE ",
+            "canonical_type_id=?1 ORDER BY alias"
+        ))
         .map_err(storage)?;
     let aliases = statement
         .query_map([type_id], |row| {
@@ -240,14 +253,36 @@ fn existing_archive(
         return Ok(None);
     }
     conn.query_row(
-        "SELECT summary_json,versions_json,inbound_aliases_json,source_hash,archived_at,canonical_type_id FROM legacy_type_definition_archive WHERE contract_version=?1 AND legacy_type_id=?2",
+        concat!(
+            "SELECT summary_json,versions_json,inbound_aliases_json,source_hash,",
+            "archived_at,canonical_type_id FROM legacy_type_definition_archive WHERE ",
+            "contract_version=?1 AND legacy_type_id=?2"
+        ),
         params![CONTRACT_VERSION, evidence.legacy_type_id],
-        |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, String>(3)?, row.get::<_, String>(4)?, row.get::<_, String>(5)?)),
+        |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, String>(5)?,
+            ))
+        },
     )
     .optional()
-    .map(|row| row.map(|(summary, versions, inbound, source_hash, archived_at, canonical)| {
-        summary == evidence.summary_json && versions == evidence.versions_json && inbound == evidence.inbound_aliases_json && source_hash == evidence.source_hash && archived_at == evidence.archived_at && canonical == evidence.canonical_type_id
-    }))
+    .map(|row| {
+        row.map(
+            |(summary, versions, inbound, source_hash, archived_at, canonical)| {
+                summary == evidence.summary_json
+                    && versions == evidence.versions_json
+                    && inbound == evidence.inbound_aliases_json
+                    && source_hash == evidence.source_hash
+                    && archived_at == evidence.archived_at
+                    && canonical == evidence.canonical_type_id
+            },
+        )
+    })
     .map_err(storage)
 }
 

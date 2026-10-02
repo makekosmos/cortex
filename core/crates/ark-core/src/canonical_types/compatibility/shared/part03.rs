@@ -1,4 +1,4 @@
-﻿pub fn camel(k: &str) -> String {
+pub fn camel(k: &str) -> String {
     let mut s = String::new();
     let mut up = false;
     for c in k.chars() {

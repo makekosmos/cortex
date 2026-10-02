@@ -161,7 +161,10 @@ fn autoselect_local_model(data_dir: &std::path::Path, cfg: &mut DictationConfig)
     cfg.local_model = Some(spec.id.to_owned());
     cfg.local_model_path = Some(model_path.to_string_lossy().into_owned());
     cfg.local_command_path = command_path.map(|p| p.to_string_lossy().into_owned());
-    tracing::info!(model = spec.id, "dictation: auto-selected downloaded local model");
+    tracing::info!(
+        model = spec.id,
+        "dictation: auto-selected downloaded local model"
+    );
     true
 }
 
@@ -596,7 +599,8 @@ async fn op_update_config(params: Value, host: &DictationHost) -> DictationRespo
         };
     }
     normalize_platform_local_engine(&mut cfg);
-    if !local_config_is_ready(&host.data_dir, &cfg) && !autoselect_local_model(&host.data_dir, &mut cfg)
+    if !local_config_is_ready(&host.data_dir, &cfg)
+        && !autoselect_local_model(&host.data_dir, &mut cfg)
     {
         clear_local_selection(&mut cfg);
     }

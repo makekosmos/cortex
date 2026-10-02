@@ -180,35 +180,39 @@ pub fn load_from(path: &Path) -> DictationConfig {
     }
     match read_config_file(path) {
         Ok(cfg) => cfg,
-        Err(primary_err) => match read_config_file(&backup_path(path)) {
-            Ok(cfg) => {
-                eprintln!(
+        Err(primary_err) => {
+            match read_config_file(&backup_path(path)) {
+                Ok(cfg) => {
+                    eprintln!(
                     "[dictation] WARN config load failed for {} ({primary_err}); restored backup",
                     path.display()
                 );
-                cfg
-            }
-            Err(backup_err) => {
-                // Last resort перед чистым default'ом: спасаем как можно больше
-                // полей по отдельности (особенно `hotkey`). Иначе одно
-                // bad/unknown-typed поле в JSON обнуляло бы весь конфиг, и
-                // пользовательский hotkey «откатывался» к Ctrl+Shift+;.
-                if let Some(cfg) = read_config_file_lenient(path)
-                    .or_else(|| read_config_file_lenient(&backup_path(path)))
-                {
+                    cfg
+                }
+                Err(backup_err) => {
+                    // Last resort перед чистым default'ом: спасаем как можно больше
+                    // полей по отдельности (особенно `hotkey`). Иначе одно
+                    // bad/unknown-typed поле в JSON обнуляло бы весь конфиг, и
+                    // пользовательский hotkey «откатывался» к Ctrl+Shift+;.
+                    if let Some(cfg) = read_config_file_lenient(path)
+                        .or_else(|| read_config_file_lenient(&backup_path(path)))
+                    {
+                        eprintln!(
+                            "[dictation] WARN config strict load failed for {} ({primary_err}); \
+                                 recovered fields field-by-field",
+                            path.display()
+                        );
+                        return cfg;
+                    }
                     eprintln!(
-                        "[dictation] WARN config strict load failed for {} ({primary_err}); recovered fields field-by-field",
+                        "[dictation] WARN config load failed for {} ({primary_err}); backup failed \
+                             ({backup_err}); using defaults",
                         path.display()
                     );
-                    return cfg;
+                    DictationConfig::default()
                 }
-                eprintln!(
-                    "[dictation] WARN config load failed for {} ({primary_err}); backup failed ({backup_err}); using defaults",
-                    path.display()
-                );
-                DictationConfig::default()
             }
-        },
+        }
     }
 }
 
@@ -492,7 +496,11 @@ mod tests {
         let path = tmp.path().join("legacy.json");
         std::fs::write(
             &path,
-            r#"{"hotkey":"Ctrl+Shift+;","trigger_mode":"toggle","language":"ru","inject_mode":"auto_paste","network_profile":{"kind":"system"},"provider":"groq","model":"whisper-large-v3"}"#,
+            concat!(
+                r#"{"hotkey":"Ctrl+Shift+;","trigger_mode":"toggle","language":"ru","#,
+                r#""inject_mode":"auto_paste","network_profile":{"kind":"system"},"#,
+                r#""provider":"groq","model":"whisper-large-v3"}"#
+            ),
         )
         .expect("write");
         let loaded = load_from(&path);
@@ -507,7 +515,11 @@ mod tests {
         let path = tmp.path().join("legacy.json");
         std::fs::write(
             &path,
-            r#"{"hotkey":"Ctrl+Shift+;","trigger_mode":"toggle","language":"ru","inject_mode":"auto_paste","network_profile":{"kind":"system"},"provider":"groq","model":"whisper-large-v3"}"#,
+            concat!(
+                r#"{"hotkey":"Ctrl+Shift+;","trigger_mode":"toggle","language":"ru","#,
+                r#""inject_mode":"auto_paste","network_profile":{"kind":"system"},"#,
+                r#""provider":"groq","model":"whisper-large-v3"}"#
+            ),
         )
         .expect("write");
         let loaded = load_from(&path);
@@ -575,7 +587,11 @@ mod tests {
         let path = tmp.path().join("cfg.json");
         std::fs::write(
             &path,
-            r#"{"hotkey":"Shift+PageUp","triggerMode":"toggle","provider":"local","model":"whisper-large-v3-turbo","injectMode":"clipboard_only","localIdleUnloadMs":"not-a-number"}"#,
+            concat!(
+                r#"{"hotkey":"Shift+PageUp","triggerMode":"toggle","provider":"local","#,
+                r#""model":"whisper-large-v3-turbo","injectMode":"clipboard_only","#,
+                r#""localIdleUnloadMs":"not-a-number"}"#
+            ),
         )
         .expect("write");
 

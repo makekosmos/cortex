@@ -30,7 +30,14 @@ impl PackageWorkerSupervisor {
         process_holder: WorkerProcessHolder,
     ) -> Result<PreparedLaunch, &'static str> {
         let deadline = Instant::now() + PROCESS_LAUNCH_DEADLINE;
-        tracing::info!(target: "package_worker", package_id = %key.0, version = %key.1, generation, restart_count, "worker start");
+        tracing::info!(
+            target: "package_worker",
+            package_id = %key.0,
+            version = %key.1,
+            generation,
+            restart_count,
+            "worker start",
+        );
         let LaunchSpec {
             manifest,
             executable,

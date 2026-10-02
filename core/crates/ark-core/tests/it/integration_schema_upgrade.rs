@@ -10,7 +10,8 @@ fn legacy_integration_columns_upgrade_idempotently_without_losing_envelopes() {
     conn.execute_batch(&legacy_schema).expect("legacy schema");
     conn.execute_batch(
         "INSERT INTO authorized_nodes VALUES
-         ('node', 'fingerprint', 'signing', 'encryption', 1, 'active', 'date', NULL, NULL, 1, 'hlc');
+         ('node', 'fingerprint', 'signing', 'encryption', 1, 'active', 'date', NULL, NULL, 1, \
+         'hlc');
          INSERT INTO integration_credential_envelopes VALUES
          ('envelope', 'integration', 'node', 1, 1, 'key', 'algorithm', 'nonce',
           'opaque-fixture', NULL, 'issuer', 'date', 1, 'hlc');",

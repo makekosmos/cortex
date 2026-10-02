@@ -68,10 +68,11 @@ pub trait StorageBackend: Send + Sync {
             expected_origin_node_id,
             transport_public_key,
         );
-        Err(
-            "signed integration outbound transport authorization is unsupported by this storage backend"
-                .into(),
+        Err(concat!(
+            "signed integration outbound transport authorization is unsupported by this ",
+            "storage backend"
         )
+        .into())
     }
     async fn load_entities(&self, vector: &VersionVector) -> Vec<SyncEntity>;
     async fn load_entities_page(

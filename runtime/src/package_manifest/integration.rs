@@ -145,14 +145,31 @@ fn validate_login(
             && login.start_url == "https://oauth-login.cloud.huawei.com/oauth2/v3/authorize"
             && login.completion_url == "hms://redirect_url"
             && login.allowed_cookie_names.is_empty()
-            && settings.iter().any(|setting| setting.key == login.secret_setting
-                && setting.kind == IntegrationSettingKind::Secret
-                && matches!(&setting.injection, Some(SecretInjection::Json { origins, body_fields, header_fields, .. })
+            && settings.iter().any(|setting| {
+                setting.key == login.secret_setting
+                    && setting.kind == IntegrationSettingKind::Secret
+                    && matches!(&setting.injection, Some(
+                    SecretInjection::Json { origins,
+                    body_fields,
+                    header_fields,
+                    .. },
+                )
                     if origins.iter().all(|origin| ["https://sportdata-dre.things.dbankcloud.com/",
-                        "https://sportdata-drru.things.dbankcloud.ru/", "https://sportdata-dra.things.dbankcloud.com/",
+                        concat!(
+                            "https://sportdata-drru",
+                            ".things.dbankcloud.ru/",
+                        ), concat!(
+                            "https://sportdata-dra.",
+                            "things.dbankcloud.com/",
+                        ),
                         "https://healthdata.dbankcloud.cn/"].contains(&origin.as_str()))
-                    && body_fields.len() == 1 && body_fields.get("token").is_some_and(|field| field == "accessToken")
-                    && header_fields.len() == 1 && header_fields.get("x-huid").is_some_and(|field| field == "uid")));
+                    && body_fields.len() == 1 && body_fields.get(
+                        "token"
+                    ).is_some_and(|field| field == "accessToken")
+                    && header_fields.len() == 1 && header_fields.get(
+                        "x-huid"
+                    ).is_some_and(|field| field == "uid"))
+            });
         return valid.then_some(()).ok_or(ManifestError::InvalidField(
             "integration.login.code_exchange",
         ));

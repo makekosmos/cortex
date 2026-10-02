@@ -54,9 +54,10 @@ impl AppStore {
 
     pub fn list_all(&self) -> Result<Vec<App>> {
         let conn = self.lock();
-        let mut stmt = conn.prepare(
-            "SELECT id, name, exec_path, icon_path, icon_source, kind, source, mtime FROM apps ORDER BY name COLLATE NOCASE ASC",
-        )?;
+        let mut stmt = conn.prepare(concat!(
+            "SELECT id, name, exec_path, icon_path, icon_source, kind, source, mtime ",
+            "FROM apps ORDER BY name COLLATE NOCASE ASC"
+        ))?;
         let rows = stmt.query_map([], |row| {
             let kind_str: String = row.get(5)?;
             let kind = parse_kind(&kind_str).map_err(|e| {
@@ -93,9 +94,10 @@ impl AppStore {
         tx.execute("DELETE FROM apps", [])?;
         let now = chrono::Utc::now().timestamp();
         {
-            let mut stmt = tx.prepare(
-                "INSERT INTO apps (id, name, exec_path, icon_path, icon_source, kind, source, mtime, last_indexed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            )?;
+            let mut stmt = tx.prepare(concat!(
+                "INSERT INTO apps (id, name, exec_path, icon_path, icon_source, kind, source,",
+                " mtime, last_indexed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            ))?;
             for a in apps {
                 let icon_source = serialize_icon_source(a.icon_source.as_ref())?;
                 stmt.execute(params![
@@ -117,7 +119,10 @@ impl AppStore {
 }
 
 fn is_duplicate_column_error(e: &rusqlite::Error) -> bool {
-    matches!(e, rusqlite::Error::SqliteFailure(_, Some(msg)) if msg.contains("duplicate column name"))
+    matches!(
+        e,
+        rusqlite::Error::SqliteFailure(_, Some(msg)) if msg.contains("duplicate column name"),
+    )
 }
 
 fn serialize_icon_source(source: Option<&IconSource>) -> rusqlite::Result<Option<String>> {

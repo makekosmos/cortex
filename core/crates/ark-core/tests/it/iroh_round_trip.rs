@@ -152,14 +152,14 @@ async fn iroh_round_trip() {
     transport_a.send(msg).expect("A send");
 
     // 5. Дренируем события B до нужного LiveChange.
-    let (from_device_id, received) = find_message(
-        &mut b_events_rx,
-        EVENT_GUARD,
-        |from, msg| {
-            from == "device-A"
-                && matches!(msg, LanSyncMessage::LiveChange { entity, .. } if entity.id == "test-entity-iroh-001")
-        },
-    )
+    let (from_device_id, received) = find_message(&mut b_events_rx, EVENT_GUARD, |from, msg| {
+        from == "device-A"
+            && matches!(
+                msg,
+                LanSyncMessage::LiveChange { entity,
+                .. } if entity.id == "test-entity-iroh-001",
+            )
+    })
     .await
     .expect("timed out waiting for iroh LiveChange on B");
 

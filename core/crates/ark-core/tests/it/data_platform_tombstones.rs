@@ -14,7 +14,10 @@ async fn deleted_object_tombstone_keeps_type_through_collection_filter_and_apply
     db::init_schema(&source_conn).unwrap();
     source_conn
         .execute(
-            "INSERT INTO objects(id,type_id,type_version,title,created_at,updated_at) VALUES('deleted-note','com.kosmos.note','1.0.0','Note','t','t')",
+            concat!(
+                "INSERT INTO objects(id,type_id,type_version,title,created_at,updated_at) ",
+                "VALUES('deleted-note','com.kosmos.note','1.0.0','Note','t','t')"
+            ),
             [],
         )
         .unwrap();
@@ -48,7 +51,10 @@ async fn deleted_object_tombstone_keeps_type_through_collection_filter_and_apply
     db::init_schema(&destination_conn).unwrap();
     destination_conn
         .execute(
-            "INSERT INTO objects(id,type_id,type_version,title,created_at,updated_at) VALUES('deleted-note','com.kosmos.note','1.0.0','Note','t','t')",
+            concat!(
+                "INSERT INTO objects(id,type_id,type_version,title,created_at,updated_at) ",
+                "VALUES('deleted-note','com.kosmos.note','1.0.0','Note','t','t')"
+            ),
             [],
         )
         .unwrap();

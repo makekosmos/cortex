@@ -10,8 +10,7 @@ fn peer_export_is_typed_ordered_and_filters_addressed_envelopes() {
     upsert_authorized_node(&conn, &node_a, "device-a").unwrap();
     upsert_integration_node_grant(&conn, &grant_a, "device-a").unwrap();
     acquire_integration_test_lease(&conn, "node-a");
-    publish_integration_credential_envelope(&conn, &integration_envelope(3), "node-a", 15)
-        .unwrap();
+    publish_integration_credential_envelope(&conn, &integration_envelope(3), "node-a", 15).unwrap();
 
     let node_b = AuthorizedNode {
         node_id: "node-b".into(),
@@ -73,8 +72,7 @@ fn peer_export_sends_no_envelope_to_revoked_or_mismatched_recipient() {
     upsert_authorized_node(&conn, &node, "device-a").unwrap();
     upsert_integration_node_grant(&conn, &grant, "device-a").unwrap();
     acquire_integration_test_lease(&conn, "node-a");
-    publish_integration_credential_envelope(&conn, &integration_envelope(3), "node-a", 15)
-        .unwrap();
+    publish_integration_credential_envelope(&conn, &integration_envelope(3), "node-a", 15).unwrap();
     let revoked = node.revoke(3, "2026-08-30T01:00:00Z").unwrap();
     upsert_authorized_node(&conn, &revoked, "device-a").unwrap();
     let changes = export_integration_replication(&conn, "integration-a", "node-a").unwrap();

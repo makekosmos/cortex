@@ -316,7 +316,8 @@ impl SyncServer {
                     result = listener.accept() => {
                         match result {
                             Ok((stream, _)) => {
-                                let peer_id = next_peer_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                let ordering = std::sync::atomic::Ordering::Relaxed;
+                                let peer_id = next_peer_id.fetch_add(1, ordering);
                                 let ws_stream = match accept_async(stream).await {
                                     Ok(ws) => ws,
                                     Err(e) => {
@@ -422,10 +423,18 @@ impl SyncServer {
                                     let mut peers_guard = peers_reader.lock().await;
                                     if let Some(peer) = peers_guard.remove(&peer_id) {
                                         if peer.authenticated {
-                                            eprintln!("{TAG} Peer disconnected: {} ({})", peer.device_name, peer.device_id);
-                                            let remaining = peers_guard.values().filter(|p| p.authenticated).count();
+                                            eprintln!(
+                                                "{TAG} Peer disconnected: {} ({})",
+                                                peer.device_name, peer.device_id
+                                            );
+                                            let remaining = peers_guard
+                                                .values()
+                                                .filter(|p| p.authenticated)
+                                                .count();
                                             drop(peers_guard);
-                                            if let Some(handler) = on_peer_disconnect_reader.lock().await.as_ref() {
+                                            let disconnect_reader =
+                                                on_peer_disconnect_reader.lock().await;
+                                            if let Some(handler) = disconnect_reader.as_ref() {
                                                 handler(peer.device_id, remaining);
                                             }
                                         }

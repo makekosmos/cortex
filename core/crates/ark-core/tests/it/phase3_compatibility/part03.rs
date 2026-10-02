@@ -1,4 +1,3 @@
-
 #[test]
 
 fn book_cover_links_require_known_image_context_and_reuse_existing_id() {
@@ -49,9 +48,13 @@ fn relation_alias_sets_ignore_order_and_duplicates_but_detect_real_set_conflicts
         "task_obj",
         json!({"tagIds":["t-1"], "tag_ids":["t-1","t-2"]}),
     );
-    assert!(
-        matches!(map_legacy(&conflict), Err(CompatibilityError::ConflictingFields { pointer, .. }) if pointer == "/props/tagIds")
-    );
+    assert!(matches!(
+        map_legacy(&conflict),
+        Err(
+            CompatibilityError::ConflictingFields { pointer,
+            .. },
+        ) if pointer == "/props/tagIds",
+    ));
 }
 
 #[test]
@@ -156,7 +159,15 @@ fn game_legacy_aggregates_are_local_and_not_shared_or_quarantined() {
 
 #[test]
 fn recursive_forbidden_fields_are_not_silently_dropped_and_secrets_in_arrays_fail() {
-    let mapped = map_legacy(&record("game_obj", json!({"custom": {"provider":"steam", "keep": 1}, "custom_array": [{"exe_path":"x", "keep":2}]}))).unwrap();
+    let mapped = map_legacy(&record(
+        "game_obj",
+        json!(
+            {"custom": {"provider":"steam",
+            "keep": 1},
+            "custom_array": [{"exe_path":"x",
+            "keep":2}]}),
+    ))
+    .unwrap();
     let serialized = mapped.object.props_json.to_string();
     assert!(!serialized.contains("provider"));
     assert!(!serialized.contains("exe_path"));
@@ -171,9 +182,13 @@ fn recursive_forbidden_fields_are_not_silently_dropped_and_secrets_in_arrays_fai
                 .any(|q| q.data_json.to_string().contains("exe_path"))
     );
     let secret = record("note_obj", json!({"nested": [{"api_token":"x"}]}));
-    assert!(
-        matches!(map_legacy(&secret), Err(CompatibilityError::SecretField { pointer, .. }) if pointer.contains("nested/0/api_token"))
-    );
+    assert!(matches!(
+        map_legacy(&secret),
+        Err(
+            CompatibilityError::SecretField { pointer,
+            .. },
+        ) if pointer.contains("nested/0/api_token"),
+    ));
 }
 
 #[test]
@@ -213,10 +228,34 @@ fn shared_task_parity_corpus_is_consumed_by_rust_mapper() {
         let raw = serde_json::to_vec(&source).unwrap();
         let actual = match map_legacy(&source) {
             Ok(m) => {
-                serde_json::json!({"ok":true,"value":{"object":{"id":m.object.id,"typeId":m.object.type_id,"typeVersion":m.object.type_version,"title":m.object.title,"contentJson":m.object.content_json,"propsJson":m.object.props_json,"createdAt":m.object.created_at,"updatedAt":m.object.updated_at,"deletedAt":m.object.deleted_at},"links":m.links,"localState":m.local_state.into_iter().map(|x| serde_json::json!({"dataJson":x.data_json})).collect::<Vec<_>>(),"quarantine":m.quarantine.into_iter().map(|x| serde_json::json!({"fieldsJson":x.fields_json})).collect::<Vec<_>>(),"rawSource":String::from_utf8(raw).unwrap()}})
+                serde_json::json!(
+                    {"ok":true,
+                    "value":{"object":{"id":m.object.id,
+                    "typeId":m.object.type_id,
+                    "typeVersion":m.object.type_version,
+                    "title":m.object.title,
+                    "contentJson":m.object.content_json,
+                    "propsJson":m.object.props_json,
+                    "createdAt":m.object.created_at,
+                    "updatedAt":m.object.updated_at,
+                    "deletedAt":m.object.deleted_at},
+                    "links":m.links,
+                    "localState":m.local_state.into_iter().map(
+                        |x| serde_json::json!({"dataJson":x.data_json})
+                    ).collect::<Vec<_>>(),
+                    "quarantine":m.quarantine.into_iter().map(
+                        |x| serde_json::json!({"fieldsJson":x.fields_json})
+                    ).collect::<Vec<_>>(),
+                    "rawSource":String::from_utf8(raw).unwrap()}})
             }
             Err(e) => {
-                serde_json::json!({"ok":false,"error":{"code":e.code(),"sourceKind":e.source_kind(),"sourceId":e.source_id(),"pointer":e.pointer(),"rawSource":String::from_utf8_lossy(e.raw_source()).to_string()}})
+                serde_json::json!(
+                    {"ok":false,
+                    "error":{"code":e.code(),
+                    "sourceKind":e.source_kind(),
+                    "sourceId":e.source_id(),
+                    "pointer":e.pointer(),
+                    "rawSource":String::from_utf8_lossy(e.raw_source()).to_string()}})
             }
         };
         assert_eq!(
@@ -227,4 +266,3 @@ fn shared_task_parity_corpus_is_consumed_by_rust_mapper() {
         );
     }
 }
-

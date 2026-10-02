@@ -263,4 +263,3 @@ pub fn is_canonical_version(type_id: &str, version: &str) -> bool {
         })
         .unwrap_or(false)
 }
-

@@ -1,15 +1,26 @@
-
 #[test]
 
 fn enforces_task_recurrence_and_checklist_bounds() {
     let mut props = valid_task_props();
-    props["recurrence"] = json!({"frequency":"weekly","interval":0,"recurrenceType":"fixed","daysOfWeek":[1,1],"endDate":null});
+    props["recurrence"] = json!(
+        {"frequency":"weekly",
+        "interval":0,
+        "recurrenceType":"fixed",
+        "daysOfWeek":[1,
+        1],
+        "endDate":null});
     assert_eq!(
         error("com.kosmos.task", props, valid_doc()).pointer,
         "/recurrence/interval"
     );
     let mut props = valid_task_props();
-    props["recurrence"] = json!({"frequency":"weekly","interval":1,"recurrenceType":"fixed","daysOfWeek":[1,1],"endDate":null});
+    props["recurrence"] = json!(
+        {"frequency":"weekly",
+        "interval":1,
+        "recurrenceType":"fixed",
+        "daysOfWeek":[1,
+        1],
+        "endDate":null});
     assert_eq!(
         error("com.kosmos.task", props, valid_doc()).pointer,
         "/recurrence/daysOfWeek"
@@ -24,7 +35,14 @@ fn enforces_task_recurrence_and_checklist_bounds() {
 
 #[test]
 fn enforces_numeric_bounds_and_integer_semantics() {
-    let mut game = json!({"playStatus":null,"userRating":11,"genres":[],"platforms":[],"released":null,"description":null,"extensions":{}});
+    let mut game = json!(
+        {"playStatus":null,
+        "userRating":11,
+        "genres":[],
+        "platforms":[],
+        "released":null,
+        "description":null,
+        "extensions":{}});
     assert_eq!(
         error("com.kosmos.game", game.clone(), json!({"shape":"object"})).pointer,
         "/userRating"
@@ -36,7 +54,15 @@ fn enforces_numeric_bounds_and_integer_semantics() {
         &json!({"shape":"object"})
     )
     .is_ok());
-    let mut image = json!({"fileName":null,"mimeType":null,"sizeBytes":-1,"width":null,"height":null,"resolution":null,"altText":"","extensions":{}});
+    let mut image = json!(
+        {"fileName":null,
+        "mimeType":null,
+        "sizeBytes":-1,
+        "width":null,
+        "height":null,
+        "resolution":null,
+        "altText":"",
+        "extensions":{}});
     assert_eq!(
         error("com.kosmos.image", image.clone(), json!({"shape":"object"})).pointer,
         "/sizeBytes"
@@ -50,7 +76,13 @@ fn enforces_numeric_bounds_and_integer_semantics() {
 
 #[test]
 fn format_is_annotation_but_rich_text_is_strict() {
-    let props = json!({"startedAt":"not-a-date","endedAt":null,"billable":false,"source":"manual","taskTitle":null,"extensions":{}});
+    let props = json!(
+        {"startedAt":"not-a-date",
+        "endedAt":null,
+        "billable":false,
+        "source":"manual",
+        "taskTitle":null,
+        "extensions":{}});
     assert!(
         validate_canonical(&registration("com.kosmos.time-entry"), &props, &valid_doc()).is_ok()
     );
@@ -98,7 +130,12 @@ fn validates_rich_text_attribute_types_and_bounds() {
         let doc = json!({"type":"doc","content":[node]});
         assert_eq!(error("com.kosmos.note", base.clone(), doc).pointer, pointer);
     }
-    let valid = json!({"type":"doc","content":[{"type":"heading","attrs":{"level":6},"content":[{"type":"text","text":"x"}]}]});
+    let valid = json!(
+        {"type":"doc",
+        "content":[{"type":"heading",
+        "attrs":{"level":6},
+        "content":[{"type":"text",
+        "text":"x"}]}]});
     assert!(validate_canonical(&registration("com.kosmos.note"), &base, &valid).is_ok());
 }
 
@@ -118,10 +155,7 @@ fn fails_closed_on_unsupported_schema_keyword() {
     assert_eq!(failure.pointer, "/unevaluatedProperties");
 }
 
-fn registration_at(
-    type_id: &str,
-    version: &str,
-) -> ark_core::type_registry::TypeRegistration {
+fn registration_at(type_id: &str, version: &str) -> ark_core::type_registry::TypeRegistration {
     canonical_type_registrations()
         .unwrap()
         .into_iter()
@@ -150,12 +184,22 @@ fn day_fields_enforce_date_on_the_current_contract() {
         assert_eq!(failure.keyword.as_deref(), Some("format"), "{bad}");
     }
     props["scheduledAt"] = json!("2026-05-15");
-    props["recurrence"] = json!({"frequency":"weekly","interval":1,"recurrenceType":"fixed","daysOfWeek":null,"endDate":"2026-06-01T00:00:00Z"});
+    props["recurrence"] = json!(
+        {"frequency":"weekly",
+        "interval":1,
+        "recurrenceType":"fixed",
+        "daysOfWeek":null,
+        "endDate":"2026-06-01T00:00:00Z"});
     let failure = validate_canonical(&task, &props, &valid_doc()).unwrap_err();
     assert_eq!(failure.pointer, "/recurrence/endDate");
 
     let project = registration_at("com.kosmos.project", "1.1.0");
-    let props = json!({"status":"active","scheduledAt":"2026-05-15T00:00:00Z","dueAt":null,"color":null,"extensions":{}});
+    let props = json!(
+        {"status":"active",
+        "scheduledAt":"2026-05-15T00:00:00Z",
+        "dueAt":null,
+        "color":null,
+        "extensions":{}});
     let failure = validate_canonical(&project, &props, &valid_doc()).unwrap_err();
     assert_eq!(failure.pointer, "/scheduledAt");
 
@@ -194,4 +238,3 @@ fn unknown_format_name_is_an_invariant_violation() {
     assert_eq!(failure.code, CanonicalValidationCode::InvariantViolation);
     assert_eq!(failure.pointer, "/properties/description/format");
 }
-

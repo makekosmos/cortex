@@ -1,5 +1,3 @@
-﻿
-
 fn enrich(
     failure: shared::CompatFailure,
     source_kind: &str,
@@ -185,12 +183,11 @@ fn map_value(
     // Legacy day fields (`scheduled_date`, `deadline`) may carry RFC 3339
     // stamps; the day-field contract stores bare dates, so coerce here — the
     // validation below still rejects genuinely malformed values.
-    let schema: Value =
-        serde_json::from_str(&registration.schema_json).map_err(|_| {
-            shared::CompatFailure::DataLossRisk {
-                pointer: "/schema".into(),
-            }
-        })?;
+    let schema: Value = serde_json::from_str(&registration.schema_json).map_err(|_| {
+        shared::CompatFailure::DataLossRisk {
+            pointer: "/schema".into(),
+        }
+    })?;
     crate::canonical_types::normalize::day_props(&schema, &mut out);
     let object = crate::types::ArkObject {
         id: record.id,

@@ -1,4 +1,3 @@
-﻿
 fn context(conn: &Connection) -> Result<MappingContext, String> {
     let regs = canonical_type_registrations()?;
     let aliases: BTreeMap<String, CanonicalIdentity> = regs
@@ -49,7 +48,17 @@ pub fn preflight_phase3(conn: &Connection) -> Result<MigrationPreflightReport, S
     records.sort_by(|a, b| {
         (a.source_kind.name(), &a.source_id).cmp(&(b.source_kind.name(), &b.source_id))
     });
-    let inventory_bytes = compact(&Value::Array(records.iter().map(|r| json!({"sourceKind":r.source_kind.name(),"sourceId":r.source_id,"sourceHash":r.source_hash})).collect()))?;
+    let inventory_bytes = compact(&Value::Array(
+        records
+            .iter()
+            .map(|r| {
+                json!(
+                    {"sourceKind":r.source_kind.name(),
+                    "sourceId":r.source_id,
+                    "sourceHash":r.source_hash})
+            })
+            .collect(),
+    ))?;
     let inventory_hash = hash_bytes(&inventory_bytes);
     let mut errors = blocked.clone();
     let ctx = context(conn)?;

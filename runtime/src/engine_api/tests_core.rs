@@ -165,9 +165,15 @@
             .push(crate::runtime_grants::ScopedCapability::WorkerInvoke {
                 operations: vec!["images.*".into()],
             });
-        assert!(authorize_app_request("images.fetch", params, &worker, &dispatcher, &DispatchClient::default())
-            .await
-            .is_err());
+        assert!(authorize_app_request(
+            "images.fetch",
+            params,
+            &worker,
+            &dispatcher,
+            &DispatchClient::default()
+        )
+        .await
+        .is_err());
     }
 
     fn agents_test_grant() -> LaunchGrant {
@@ -189,9 +195,11 @@
     #[test]
     fn launch_scoped_agents_rpc_requires_exact_declared_operation() {
         let mut grant = agents_test_grant();
-        grant.capabilities.push(crate::runtime_grants::ScopedCapability::WorkerInvoke {
-            operations: vec!["agents.*".into()],
-        });
+        grant
+            .capabilities
+            .push(crate::runtime_grants::ScopedCapability::WorkerInvoke {
+                operations: vec!["agents.*".into()],
+            });
         let parsed = parse_app_rpc(
             json!({"operation":"agents.projects.list", "params":{"include_archived":true}}),
             &grant,
@@ -605,8 +613,21 @@
     fn launch_scoped_filter_removes_ungranted_fields_and_types() {
         let grant = app_test_grant();
         let mut response = json!({"ok":true,"data":[
-            {"id":"n1","typeId":"com.kosmos.note","typeVersion":"1.0.0","title":"title","contentJson":{"secret":true},"propsJson":{"description":"ok","secret":"no"}},
-            {"id":"g1","typeId":"com.kosmos.game","typeVersion":"1.0.0","title":"private","propsJson":{}}
+            {
+                "id":"n1",
+                "typeId":"com.kosmos.note",
+                "typeVersion":"1.0.0",
+                "title":"title",
+                "contentJson":{"secret":true},
+                "propsJson":{"description":"ok","secret":"no"},
+            },
+            {
+                "id":"g1",
+                "typeId":"com.kosmos.game",
+                "typeVersion":"1.0.0",
+                "title":"private",
+                "propsJson":{},
+            }
         ]});
         filter_object_array(response.get_mut("data").unwrap(), &grant);
         assert_eq!(response["data"].as_array().unwrap().len(), 1);
@@ -1067,8 +1088,13 @@
         // workers keep their sockets alive (what a real desktop client does)
         // and read framed responses instead of waiting for close.
         let resolve_request = std::sync::Arc::new(
-            request(&token, "POST", "/v1/apps/resolve", r#"{"id":"com.kosmos.demo"}"#)
-                .replace("Connection: close\r\n", ""),
+            request(
+                &token,
+                "POST",
+                "/v1/apps/resolve",
+                r#"{"id":"com.kosmos.demo"}"#,
+            )
+            .replace("Connection: close\r\n", ""),
         );
         const RESOLVE_TOTAL: usize = 10_000;
         const RESOLVE_WORKERS: usize = 128;

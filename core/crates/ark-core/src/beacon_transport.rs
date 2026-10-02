@@ -277,4 +277,3 @@ mod tests {
         assert_eq!(back.a, vec!["192.168.1.1:21531".to_string()]);
     }
 }
-

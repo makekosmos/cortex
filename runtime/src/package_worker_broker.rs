@@ -1520,9 +1520,10 @@ mod tests {
             let error = fetch_with_secret_json_limit(&config, &origin, None, None, limit)
                 .await
                 .unwrap_err();
-            assert!(
-                matches!(error, BrokerError::Invalid(message) if message == "response exceeds limit")
-            );
+            assert!(matches!(
+                error,
+                BrokerError::Invalid(message) if message == "response exceeds limit",
+            ));
             server.await.unwrap();
         }
     }

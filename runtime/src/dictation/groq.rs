@@ -31,7 +31,12 @@ pub const GROQ_ENDPOINT: &str = "https://api.groq.com/openai/v1/audio/transcript
 /// Hardcoded prompt для Whisper. Короткий, с domain-терминами Mundus/Mundus
 /// + явно указывает что это русская речь с пунктуацией. Не описывает задачу
 ///   («ты транскрибатор…») — Whisper это копирует в выход. Только пример стиля.
-const HARDCODED_PROMPT: &str = "Привет! Это транскрипция русской речи с правильной пунктуацией — точками, запятыми, тире, вопросительными и восклицательными знаками. В тексте могут встречаться термины: API, Groq, Whisper, GPT, Anthropic, React, TypeScript. Сохраняй естественные паузы и интонацию говорящего.";
+const HARDCODED_PROMPT: &str = concat!(
+    "Привет! Это транскрипция русской речи с правильной пунктуацией — точками, ",
+    "запятыми, тире, вопросительными и восклицательными знаками. В тексте могут ",
+    "встречаться термины: API, Groq, Whisper, GPT, Anthropic, React, TypeScript. ",
+    "Сохраняй естественные паузы и интонацию говорящего."
+);
 
 /// Пороги фильтрации сегментов от Whisper. Откалиброваны под docs OpenAI
 /// (https://github.com/openai/whisper/discussions/1252 и др.).
@@ -406,9 +411,13 @@ mod tests {
                 when.method(POST).path("/openai/v1/audio/transcriptions");
                 then.status(200)
                     .header("content-type", "application/json")
-                    .body(
-                        r#"{"text":"привет мир","segments":[{"text":"привет мир","no_speech_prob":0.05,"avg_logprob":-0.3}]}"#,
-                    );
+                    .body(concat!(
+                        concat!(
+                            r#"{"text":"привет мир","segments":[{"text":"привет мир","#,
+                            r#""no_speech_prob":0.05,"#,
+                        ),
+                        r#""avg_logprob":-0.3}]}"#,
+                    ));
             })
             .await;
 
@@ -447,8 +456,10 @@ mod tests {
                         let body = String::from_utf8_lossy(req.body.as_deref().unwrap_or(&[]));
                         !body.contains("name=\"language\"")
                     });
-                then.status(200)
-                    .body(r#"{"text":"ok","segments":[{"text":"ok","no_speech_prob":0.1,"avg_logprob":-0.5}]}"#);
+                then.status(200).body(concat!(
+                    r#"{"text":"ok","segments":[{"text":"ok","no_speech_prob":0.1,"#,
+                    r#""avg_logprob":-0.5}]}"#
+                ));
             })
             .await;
 
@@ -486,9 +497,10 @@ mod tests {
                 when.method(POST).path("/openai/v1/audio/transcriptions");
                 then.status(200)
                     .header("content-type", "application/json")
-                    .body(
-                        r#"{"text":"часть","segments":[{"text":"часть","no_speech_prob":0.05,"avg_logprob":-0.3}]}"#,
-                    );
+                    .body(concat!(
+                        r#"{"text":"часть","segments":[{"text":"часть","no_speech_prob":0.05,"#,
+                        r#""avg_logprob":-0.3}]}"#
+                    ));
             })
             .await;
 

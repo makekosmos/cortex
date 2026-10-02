@@ -178,7 +178,8 @@ mod tests {
         );
         assert_eq!(
             strip_whisper_timestamps(
-                "[00:00:00.000 --> 00:00:01.280] first chunk\n[00:00:30.000 --> 00:00:31.000] second chunk"
+                "[00:00:00.000 --> 00:00:01.280] first chunk\n[00:00:30.000 --> 00:00:31.000] \
+                    second chunk"
             ),
             "first chunk second chunk"
         );
@@ -241,7 +242,10 @@ mod tests {
     #[test]
     fn parse_server_text_drops_no_speech_verbose_segments() {
         let err = parse_server_text(
-            r#"{"text":"Продолжение следует","segments":[{"text":"Продолжение следует","no_speech_prob":0.95,"avg_logprob":-0.4}]}"#,
+            concat!(
+                r#"{"text":"Продолжение следует","segments":[{"text":"Продолжение следует","#,
+                r#""no_speech_prob":0.95,"avg_logprob":-0.4}]}"#
+            ),
             Some("application/json"),
         )
         .unwrap_err();

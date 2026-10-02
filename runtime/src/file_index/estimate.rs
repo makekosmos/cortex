@@ -78,14 +78,18 @@ impl FileIndex {
             }
         }
 
-        let mut limitations = vec![
-            "Текущий file index индексирует только имя и путь файла; content indexing не используется."
-                .to_string(),
-        ];
+        let mut limitations = vec![concat!(
+            "Текущий file index индексирует только имя и путь файла; content indexing не ",
+            "используется."
+        )
+        .to_string()];
         if options.respect_gitignore {
             limitations.push(
-                "Файлы, отфильтрованные .gitignore/ignore walker-ом, считаются не полностью; ignored_or_skipped_files — нижняя оценка."
-                    .to_string(),
+                concat!(
+                    "Файлы, отфильтрованные .gitignore/ignore walker-ом, считаются не полностью; ",
+                    "ignored_or_skipped_files — нижняя оценка."
+                )
+                .to_string(),
             );
         }
         if truncated {

@@ -68,14 +68,25 @@ impl DeviceRegistry {
     }
 
     pub fn bind_authenticated(&self, device_id: &str, transport_public_key: &str) -> bool {
-        let Some(endpoint_id) = self.endpoint_id_for(device_id) else { return false; };
-        if endpoint_id.to_string() != transport_public_key { return false; }
-        self.trusted.lock().unwrap_or_else(|e| e.into_inner()).insert(device_id.to_string(), endpoint_id);
+        let Some(endpoint_id) = self.endpoint_id_for(device_id) else {
+            return false;
+        };
+        if endpoint_id.to_string() != transport_public_key {
+            return false;
+        }
+        self.trusted
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(device_id.to_string(), endpoint_id);
         true
     }
 
     pub fn authenticated_endpoint(&self, device_id: &str) -> Option<EndpointId> {
-        self.trusted.lock().unwrap_or_else(|e| e.into_inner()).get(device_id).copied()
+        self.trusted
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(device_id)
+            .copied()
     }
 
     pub fn remove_endpoint(&self, endpoint_id: &EndpointId) {

@@ -279,7 +279,10 @@ async fn native_update_keeps_previous_on_bad_sha() {
         .expect_err("bad sha must fail");
     assert!(matches!(err, PackageError::Integrity));
     assert_eq!(native_error_code(&err), "integrity");
-    let apps = service.native_apps_with(&dead_probe(), false).await.expect("list");
+    let apps = service
+        .native_apps_with(&dead_probe(), false)
+        .await
+        .expect("list");
     let row = apps
         .iter()
         .find(|row| row.id == "com.kosmos.agenda")
@@ -317,7 +320,10 @@ async fn native_update_rolls_back_on_bad_archive() {
     assert!(install_now(&service, &probe(&server2), agenda(), None)
         .await
         .is_err());
-    let apps = service.native_apps_with(&dead_probe(), false).await.expect("list");
+    let apps = service
+        .native_apps_with(&dead_probe(), false)
+        .await
+        .expect("list");
     let row = apps
         .iter()
         .find(|row| row.id == "com.kosmos.agenda")
@@ -344,7 +350,10 @@ async fn native_update_replaces_old_version() {
     install_now(&service, &probe(&server), agenda(), None)
         .await
         .expect("install latest");
-    let apps = service.native_apps_with(&probe(&server), false).await.expect("list");
+    let apps = service
+        .native_apps_with(&probe(&server), false)
+        .await
+        .expect("list");
     let row = apps
         .iter()
         .find(|row| row.id == "com.kosmos.agenda")
@@ -365,7 +374,10 @@ async fn native_list_offline_keeps_installed_state() {
     let dir = tempdir().expect("temp dir");
     let service = native_service(&dir);
     // Nothing installed, probe dead → every row reports offline.
-    let apps = service.native_apps_with(&dead_probe(), false).await.expect("list");
+    let apps = service
+        .native_apps_with(&dead_probe(), false)
+        .await
+        .expect("list");
     assert_eq!(apps.len(), crate::native_apps::NATIVE_APPS.len());
     assert!(apps.iter().all(|row| !row.installed));
     assert!(apps
@@ -390,7 +402,10 @@ async fn native_list_offline_keeps_installed_state() {
             &archive,
         )
         .unwrap();
-    let apps = service.native_apps_with(&dead_probe(), false).await.expect("list");
+    let apps = service
+        .native_apps_with(&dead_probe(), false)
+        .await
+        .expect("list");
     let row = apps
         .iter()
         .find(|row| row.id == "com.kosmos.agenda")
@@ -410,7 +425,10 @@ async fn failed_install_leaves_typed_row_state() {
         .await
         .expect_err("offline install must fail");
     assert!(matches!(err, PackageError::Offline));
-    let apps = service.native_apps_with(&dead_probe(), false).await.expect("list");
+    let apps = service
+        .native_apps_with(&dead_probe(), false)
+        .await
+        .expect("list");
     let row = apps
         .iter()
         .find(|row| row.id == "com.kosmos.agenda")
@@ -438,11 +456,12 @@ fn dropped_job_claim_records_failure_and_frees_the_slot() {
         Some(NativeJob::Failed("unavailable"))
     ));
     // The slot is free again for the next attempt.
-    let job = service.claim_native_job("com.kosmos.agenda").expect("re-claim");
+    let job = service
+        .claim_native_job("com.kosmos.agenda")
+        .expect("re-claim");
     job.finish(&Err(PackageError::Offline));
     assert!(matches!(
         service.current_job("com.kosmos.agenda"),
         Some(NativeJob::Failed("offline"))
     ));
 }
-

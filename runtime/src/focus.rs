@@ -148,9 +148,30 @@ pub fn validate_domain(raw: &str) -> Result<String, String> {
 fn blocklist_object_type_definition() -> Value {
     let schema = json!({
         "fields": [
-            { "id": "name", "label": "Название", "kind": "text", "required": true, "visible": true, "read_only": false },
-            { "id": "domains", "label": "Домены", "kind": "text", "required": false, "visible": true, "read_only": false },
-            { "id": "createdAt", "label": "Создан", "kind": "date", "required": false, "visible": true, "read_only": true }
+            {
+                "id": "name",
+                "label": "Название",
+                "kind": "text",
+                "required": true,
+                "visible": true,
+                "read_only": false,
+            },
+            {
+                "id": "domains",
+                "label": "Домены",
+                "kind": "text",
+                "required": false,
+                "visible": true,
+                "read_only": false,
+            },
+            {
+                "id": "createdAt",
+                "label": "Создан",
+                "kind": "date",
+                "required": false,
+                "visible": true,
+                "read_only": true,
+            }
         ]
     });
     let ui_schema = json!({
@@ -695,7 +716,10 @@ pub async fn handle_focus_op(subop: &str, params: Value, ark: &ArkHost) -> Focus
                         }
                     },
                     None => {
-                        tracing::warn!(target: "focus", "blocklist resolve failed; hosts sync skipped");
+                        tracing::warn!(
+                            target: "focus",
+                            "blocklist resolve failed; hosts sync skipped",
+                        );
                         FocusResponse::ok(json!({ "ok": true, "hosts_applied": false }))
                     }
                 },

@@ -1,9 +1,15 @@
-﻿
 fn native_inventory(conn: &Connection, out: &mut Vec<SourceRecord>) -> Result<(), String> {
     // Areas and headings are migrated as canonical project objects. Their
     // legacy kind, ordering and parent are carried in compatibility extensions
     // so the compatibility read view remains lossless after table retirement.
-    let mut todo = conn.prepare("SELECT id,title,notes,priority,scheduled_date,deadline,reminder_date,is_someday,is_completed,completed_at,is_cancelled,cancelled_at,heading_id,project_id,area_id,tag_ids,checklist_items,recurrence_rule,created_at FROM todos ORDER BY id").map_err(|e| e.to_string())?;
+    let mut todo = conn
+        .prepare(concat!(
+            "SELECT id,title,notes,priority,scheduled_date,deadline,reminder_date,",
+            "is_someday,is_completed,completed_at,is_cancelled,cancelled_at,heading_id,",
+            "project_id,area_id,tag_ids,checklist_items,recurrence_rule,created_at FROM ",
+            "todos ORDER BY id"
+        ))
+        .map_err(|e| e.to_string())?;
     for row in todo
         .query_map([], |r| {
             Ok((
@@ -107,7 +113,12 @@ fn native_inventory(conn: &Connection, out: &mut Vec<SourceRecord>) -> Result<()
             raw_source: bytes,
         });
     }
-    let mut projects=conn.prepare("SELECT id,title,notes,status,scheduled_date,deadline,color_tag,area_id,created_at FROM projects ORDER BY id").map_err(|e|e.to_string())?;
+    let mut projects = conn
+        .prepare(concat!(
+            "SELECT id,title,notes,status,scheduled_date,deadline,color_tag,area_id,",
+            "created_at FROM projects ORDER BY id"
+        ))
+        .map_err(|e| e.to_string())?;
     for row in projects
         .query_map([], |r| {
             Ok((
@@ -131,7 +142,13 @@ fn native_inventory(conn: &Connection, out: &mut Vec<SourceRecord>) -> Result<()
             source_kind: "project_obj",
             title,
             content: json!({"type":"doc","content":[{"type":"paragraph"}]}),
-            props: json!({"notes":notes,"status":status,"scheduled_date":scheduled,"deadline":deadline,"color_tag":color,"area_id":area}),
+            props: json!(
+                {"notes":notes,
+                "status":status,
+                "scheduled_date":scheduled,
+                "deadline":deadline,
+                "color_tag":color,
+                "area_id":area}),
             created: created.clone(),
             updated: created,
             deleted: None,
@@ -188,79 +205,79 @@ fn native_inventory(conn: &Connection, out: &mut Vec<SourceRecord>) -> Result<()
         .unwrap_or(false)
     };
     if has_table("areas") {
-      let mut areas = conn
-        .prepare("SELECT id,title,sort_order,created_at FROM areas ORDER BY id")
-        .map_err(|e| e.to_string())?;
-    for row in areas
-        .query_map([], |r| {
-            Ok((
-                r.get::<_, String>(0)?,
-                r.get::<_, String>(1)?,
-                r.get::<_, i64>(2)?,
-                r.get::<_, String>(3)?,
-            ))
-        })
-        .map_err(|e| e.to_string())?
-    {
-        let (id, title, sort_order, created) = row.map_err(|e| e.to_string())?;
-        let bytes = compact(&envelope(SourceEnvelope {
-            id: id.clone(),
-            source_kind: "project_obj",
-            title,
-            content: json!({"type":"doc","content":[{"type":"paragraph"}]}),
-            props: json!({"legacy_kind":"area","sort_order":sort_order}),
-            created: created.clone(),
-            updated: created,
-            deleted: None,
-        }))?;
-        out.push(SourceRecord {
-            source_kind: SourceKind::Native("areas".into()),
-            source_id: id,
-            source_hash: hash_bytes(&bytes),
-            canonical_bytes: bytes.clone(),
-            raw_source: bytes,
-        });
-    }
+        let mut areas = conn
+            .prepare("SELECT id,title,sort_order,created_at FROM areas ORDER BY id")
+            .map_err(|e| e.to_string())?;
+        for row in areas
+            .query_map([], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, i64>(2)?,
+                    r.get::<_, String>(3)?,
+                ))
+            })
+            .map_err(|e| e.to_string())?
+        {
+            let (id, title, sort_order, created) = row.map_err(|e| e.to_string())?;
+            let bytes = compact(&envelope(SourceEnvelope {
+                id: id.clone(),
+                source_kind: "project_obj",
+                title,
+                content: json!({"type":"doc","content":[{"type":"paragraph"}]}),
+                props: json!({"legacy_kind":"area","sort_order":sort_order}),
+                created: created.clone(),
+                updated: created,
+                deleted: None,
+            }))?;
+            out.push(SourceRecord {
+                source_kind: SourceKind::Native("areas".into()),
+                source_id: id,
+                source_hash: hash_bytes(&bytes),
+                canonical_bytes: bytes.clone(),
+                raw_source: bytes,
+            });
+        }
     }
     if has_table("headings") {
-    let mut headings = conn
-        .prepare("SELECT id,title,sort_order,project_id FROM headings ORDER BY id")
-        .map_err(|e| e.to_string())?;
-    for row in headings
-        .query_map([], |r| {
-            Ok((
-                r.get::<_, String>(0)?,
-                r.get::<_, String>(1)?,
-                r.get::<_, i64>(2)?,
-                r.get::<_, String>(3)?,
-            ))
-        })
-        .map_err(|e| e.to_string())?
-    {
-        let (id, title, sort_order, project) = row.map_err(|e| e.to_string())?;
-        let bytes = compact(&envelope(SourceEnvelope {
-            id: id.clone(),
-            source_kind: "project_obj",
-            title,
-            content: json!({"type":"doc","content":[{"type":"paragraph"}]}),
-            props: json!({
-            "legacy_kind":"heading",
-            "sort_order":sort_order,
-            "legacy_parent_project_id":project,
-            "related_ids":[project]
-        }),
-            created: "1970-01-01T00:00:00.000Z".into(),
-            updated: "1970-01-01T00:00:00.000Z".into(),
-            deleted: None,
-        }))?;
-        out.push(SourceRecord {
-            source_kind: SourceKind::Native("headings".into()),
-            source_id: id,
-            source_hash: hash_bytes(&bytes),
-            canonical_bytes: bytes.clone(),
-            raw_source: bytes,
-        });
-    }
+        let mut headings = conn
+            .prepare("SELECT id,title,sort_order,project_id FROM headings ORDER BY id")
+            .map_err(|e| e.to_string())?;
+        for row in headings
+            .query_map([], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, i64>(2)?,
+                    r.get::<_, String>(3)?,
+                ))
+            })
+            .map_err(|e| e.to_string())?
+        {
+            let (id, title, sort_order, project) = row.map_err(|e| e.to_string())?;
+            let bytes = compact(&envelope(SourceEnvelope {
+                id: id.clone(),
+                source_kind: "project_obj",
+                title,
+                content: json!({"type":"doc","content":[{"type":"paragraph"}]}),
+                props: json!({
+                    "legacy_kind":"heading",
+                    "sort_order":sort_order,
+                    "legacy_parent_project_id":project,
+                    "related_ids":[project]
+                }),
+                created: "1970-01-01T00:00:00.000Z".into(),
+                updated: "1970-01-01T00:00:00.000Z".into(),
+                deleted: None,
+            }))?;
+            out.push(SourceRecord {
+                source_kind: SourceKind::Native("headings".into()),
+                source_id: id,
+                source_hash: hash_bytes(&bytes),
+                canonical_bytes: bytes.clone(),
+                raw_source: bytes,
+            });
+        }
     }
     Ok(())
 }

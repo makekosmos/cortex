@@ -47,7 +47,11 @@ impl PackageService {
         let probe = match crate::native_apps::releases::ReleaseProbe::new() {
             Ok(probe) => probe,
             Err(error) => {
-                tracing::warn!(target: "native_apps", %error, "legacy app migration: no release probe");
+                tracing::warn!(
+                    target: "native_apps",
+                    %error,
+                    "legacy app migration: no release probe",
+                );
                 return;
             }
         };
@@ -69,26 +73,22 @@ impl PackageService {
         // The installer writes `legacy-components.json` next to the Apps dir
         // — under the Mundus local dir in production, under the test root in
         // unit tests.
-        let Some(apps_root) = self.native_apps.as_ref().map(|store| store.root().to_path_buf())
+        let Some(apps_root) = self
+            .native_apps
+            .as_ref()
+            .map(|store| store.root().to_path_buf())
         else {
             tracing::debug!(target: "native_apps", "legacy app migration: no apps root");
             return;
         };
         for desc in crate::native_apps::NATIVE_APPS {
             let id = desc.id;
-            if marker
-                .apps
-                .get(id)
-                .is_some_and(|outcome| outcome.resolved)
-            {
+            if marker.apps.get(id).is_some_and(|outcome| outcome.resolved) {
                 self.cleanup_legacy_records(id).await;
                 continue;
             }
             // A live native install settles the app regardless of evidence.
-            if self
-                .native_app_record(id)
-                .is_some()
-            {
+            if self.native_app_record(id).is_some() {
                 marker.apps.insert(
                     id.to_owned(),
                     MigrationOutcome {
@@ -118,8 +118,7 @@ impl PackageService {
                     continue;
                 }
             };
-            let Some(had_component) =
-                bundled_component_present(&apps_root, desc.legacy_component)
+            let Some(had_component) = bundled_component_present(&apps_root, desc.legacy_component)
             else {
                 tracing::warn!(
                     target: "native_apps",
@@ -162,7 +161,11 @@ impl PackageService {
                     );
                     self.write_marker(&marker_path, &marker);
                     self.cleanup_legacy_records(id).await;
-                    tracing::info!(target: "native_apps", %id, "migrated legacy app to native install");
+                    tracing::info!(
+                        target: "native_apps",
+                        %id,
+                        "migrated legacy app to native install",
+                    );
                 }
                 Err(error) => {
                     tracing::warn!(

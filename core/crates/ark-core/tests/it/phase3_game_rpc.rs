@@ -98,7 +98,15 @@ fn device_context_isolation_uses_exact_device_key() {
 fn quarantine_selection_is_exact_contract_not_arbitrary_row() {
     let conn = setup();
     upsert_game(&conn, command("g", "a"), "fallback").unwrap();
-    conn.execute("INSERT INTO object_migration_quarantine(object_id,contract_version,source_type_id,fields_json,source_hash,updated_at) VALUES('g','other','x','{\"fields\":[\"wrong\"]}','h','z')", []).unwrap();
+    conn.execute(
+        concat!(
+            "INSERT INTO object_migration_quarantine(object_id,contract_version,",
+            "source_type_id,fields_json,source_hash,updated_at) VALUES('g','other','x',",
+            "'{\"fields\":[\"wrong\"]}','h','z')"
+        ),
+        [],
+    )
+    .unwrap();
     assert_eq!(
         get_game(&conn, "g", "a").unwrap().quarantine.fields,
         vec!["legacy"]

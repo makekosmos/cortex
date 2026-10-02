@@ -98,7 +98,12 @@ impl ManagerState {
         });
         let components = json!([
             {"name": "rpc", "status": "ok", "state": "ok", "details": rpc_snapshot},
-            {"name": "usage_tracker", "status": usage_snapshot.status, "state": usage_snapshot.status, "details": usage_snapshot},
+            {
+                "name": "usage_tracker",
+                "status": usage_snapshot.status,
+                "state": usage_snapshot.status,
+                "details": usage_snapshot,
+            },
             {"name": "protocol_usage", "status": "ok", "state": "ok", "details": protocol_usage},
         ]);
         json!({"components": components, "workers": workers, "legacy_gate": legacy_gate})
@@ -202,7 +207,10 @@ impl ManagerState {
         // `<exe> --start` — headless engine at sign-in, no UI window.
         let available = cfg!(windows) && std::env::var_os("MUNDUS_TEST_MODE").is_none();
         let enabled = available && windows_autostart_enabled();
-        json!({"enabled": enabled, "available": available, "reason": if available { Value::Null } else { json!("unsupported-platform-or-test") }})
+        json!(
+            {"enabled": enabled,
+            "available": available,
+            "reason": if available { Value::Null } else { json!("unsupported-platform-or-test") }})
     }
 
     pub fn set_autostart(&self, enabled: bool) -> Result<Value, String> {

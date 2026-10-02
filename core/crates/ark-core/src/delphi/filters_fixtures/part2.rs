@@ -216,4 +216,3 @@ pub fn fixtures() -> Vec<TodoItem> {
     })
     .collect()
 }
-

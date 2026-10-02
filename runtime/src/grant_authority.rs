@@ -1070,7 +1070,13 @@ mod tests {
     fn malformed_records_abort_legacy_revoke_before_write_or_handle_clear() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("grant-authority.json");
-        let before = br#"[{"version":1,"persistent_grant_id":"legacy","extension_id":"eden","provenance":"native-dialog","exact_file":false,"selected_path":"/tmp","root_identity":{"dev":1,"ino":2},"exact_file_identity":null,"revoked":false},{"version":99}]"#;
+        let before = concat!(
+            r#"[{"version":1,"persistent_grant_id":"legacy","extension_id":"eden","#,
+            r#""provenance":"native-dialog","exact_file":false,"selected_path":"/tmp","#,
+            r#""root_identity":{"dev":1,"ino":2},"exact_file_identity":null,"revoked":false},"#,
+            r#"{"version":99}]"#,
+        )
+        .as_bytes();
         fs::write(&path, before).unwrap();
 
         let registry = GrantAuthorityRegistry::with_data_dir(dir.path().to_path_buf());
@@ -1169,7 +1175,12 @@ mod tests {
     fn invalid_scope_is_rejected_without_touching_persisted_records() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("grant-authority.json");
-        let before = br#"[{"version":1,"persistent_grant_id":"legacy","extension_id":"eden","provenance":"native-dialog","exact_file":false,"selected_path":"/tmp","root_identity":{"dev":1,"ino":2},"exact_file_identity":null,"revoked":false}]"#;
+        let before = concat!(
+            r#"[{"version":1,"persistent_grant_id":"legacy","extension_id":"eden","#,
+            r#""provenance":"native-dialog","exact_file":false,"selected_path":"/tmp","#,
+            r#""root_identity":{"dev":1,"ino":2},"exact_file_identity":null,"revoked":false}]"#,
+        )
+        .as_bytes();
         fs::write(&path, before).unwrap();
 
         let registry = GrantAuthorityRegistry::with_data_dir(dir.path().to_path_buf());

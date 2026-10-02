@@ -1,8 +1,8 @@
-use std::collections::HashSet;
 use crate::integration_replication::{
     verify_reserve_and_apply_signed_sync, IntegrationReplicationChange,
     IntegrationReplicationEntity, SignedSyncEnvelope, SignedSyncError,
 };
+use std::collections::HashSet;
 
 /// Applies an authenticated integration batch and its typed vector updates atomically.
 pub fn apply_signed_integration_changes(

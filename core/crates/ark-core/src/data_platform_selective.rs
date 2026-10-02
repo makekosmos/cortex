@@ -129,21 +129,42 @@ fn project_entity(entity: &crate::types::SyncEntity, mode: SyncMode) -> crate::t
         projected.data.retain(|key, _| {
             !matches!(
                 key.as_str(),
-                "localState" | "local_state" | "secret" | "secrets" | "credentials" | "credential" | "vaultRoot"
+                "localState"
+                    | "local_state"
+                    | "secret"
+                    | "secrets"
+                    | "credentials"
+                    | "credential"
+                    | "vaultRoot"
             )
         });
         if let Some(Value::Object(props)) = projected.data.get_mut("propsJson") {
             props.retain(|key, _| {
                 !matches!(
                     key.as_str(),
-                    "localState" | "local_state" | "secret" | "secrets" | "credentials" | "credential" | "vaultRoot"
+                    "localState"
+                        | "local_state"
+                        | "secret"
+                        | "secrets"
+                        | "credentials"
+                        | "credential"
+                        | "vaultRoot"
                 )
             });
         }
     }
     if mode == SyncMode::Metadata && entity.entity_type == "object" {
         projected.data.retain(|key, _| {
-            matches!(key.as_str(), "typeId" | "typeVersion" | "title" | "createdAt" | "updatedAt" | "deletedAt" | "propsJson")
+            matches!(
+                key.as_str(),
+                "typeId"
+                    | "typeVersion"
+                    | "title"
+                    | "createdAt"
+                    | "updatedAt"
+                    | "deletedAt"
+                    | "propsJson"
+            )
         });
     }
     projected
@@ -157,5 +178,10 @@ fn entity_sort_key(entity: &crate::types::SyncEntity) -> (u8, String, String, St
         _ if entity.entity_type.starts_with("usage_") => 3,
         _ => 1,
     };
-    (phase, entity.entity_type.clone(), entity.id.clone(), entity.hlc.clone())
+    (
+        phase,
+        entity.entity_type.clone(),
+        entity.id.clone(),
+        entity.hlc.clone(),
+    )
 }

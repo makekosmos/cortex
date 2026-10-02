@@ -98,7 +98,9 @@ async fn opaque_worker_root_binds_package_session_and_generation() {
                 token,
                 generation,
                 WorkerMethod::FilesystemRead,
-                serde_json::json!({"root_id": root_id.as_str(), "relative_path": "nested/note.txt"}),
+                serde_json::json!(
+                    {"root_id": root_id.as_str(),
+                    "relative_path": "nested/note.txt"}),
             ),
         )
         .await

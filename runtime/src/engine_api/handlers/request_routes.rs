@@ -66,7 +66,9 @@ async fn handle_rpc(
     else {
         return json_response(
             StatusCode::SERVICE_UNAVAILABLE,
-            json!({ "ok": false, "error": "HTTP operation capacity exhausted or server shutting down" }),
+            json!(
+                { "ok": false,
+                "error": "HTTP operation capacity exhausted or server shutting down" }),
         );
     };
     if let Err(error) = protocol_usage.record(

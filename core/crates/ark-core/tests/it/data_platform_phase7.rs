@@ -9,7 +9,14 @@ use std::sync::{Arc, Mutex};
 fn external_refs_are_additive_and_unique() {
     let conn = Connection::open_in_memory().unwrap();
     db::init_schema(&conn).unwrap();
-    conn.execute("INSERT INTO objects(id,type_id,type_version,title,created_at,updated_at) VALUES('note-1','com.kosmos.note','1.0.0','Note','now','now')",[]).unwrap();
+    conn.execute(
+        concat!(
+            "INSERT INTO objects(id,type_id,type_version,title,created_at,updated_at) ",
+            "VALUES('note-1','com.kosmos.note','1.0.0','Note','now','now')"
+        ),
+        [],
+    )
+    .unwrap();
     data_platform::upsert_external_ref(
         &conn,
         &data_platform::ExternalRefUpsert {
@@ -76,13 +83,27 @@ fn sync_profiles_store_frozen_modes_before_objects_and_cascade_rules() {
     let conn = Connection::open_in_memory().unwrap();
     conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
     data_platform::ensure_schema(&conn).unwrap();
-    conn.execute("INSERT INTO sync_profiles(profile_id,device_id,revision,name,active) VALUES('p1','d',1,'one',1)", []).unwrap();
+    conn.execute(
+        concat!(
+            "INSERT INTO sync_profiles(profile_id,device_id,revision,name,active) VALUES(",
+            "'p1','d',1,'one',1)"
+        ),
+        [],
+    )
+    .unwrap();
     for (kind, id, mode) in [
         ("type", "com.kosmos.note", "full"),
         ("dataset", "usage", "metadata"),
         ("blob", "attachments", "none"),
     ] {
-        conn.execute("INSERT INTO sync_profile_rules(profile_id,resource_kind,resource_id,mode) VALUES(?1,?2,?3,?4)", rusqlite::params!["p1", kind, id, mode]).unwrap();
+        conn.execute(
+            concat!(
+                "INSERT INTO sync_profile_rules(profile_id,resource_kind,resource_id,mode) ",
+                "VALUES(?1,?2,?3,?4)"
+            ),
+            rusqlite::params!["p1", kind, id, mode],
+        )
+        .unwrap();
     }
     let modes: Vec<String> = conn
         .prepare("SELECT mode FROM sync_profile_rules WHERE profile_id='p1' ORDER BY resource_kind")
@@ -92,7 +113,15 @@ fn sync_profiles_store_frozen_modes_before_objects_and_cascade_rules() {
         .collect::<Result<_, _>>()
         .unwrap();
     assert_eq!(modes, ["none", "metadata", "full"]);
-    assert!(conn.execute("INSERT INTO sync_profile_rules(profile_id,resource_kind,resource_id,mode) VALUES('p1','type','bad','secret')", []).is_err());
+    assert!(conn
+        .execute(
+            concat!(
+                "INSERT INTO sync_profile_rules(profile_id,resource_kind,resource_id,mode) ",
+                "VALUES('p1','type','bad','secret')"
+            ),
+            []
+        )
+        .is_err());
     conn.execute("DELETE FROM sync_profiles WHERE profile_id='p1'", [])
         .unwrap();
     assert_eq!(
@@ -122,12 +151,22 @@ fn selective_profile_projects_closure_in_order_and_keeps_local_copy_on_disable()
         entity(
             "object",
             "game",
-            json!({"typeId":"com.kosmos.game","typeVersion":"1.0.0","title":"Game","contentJson":{"body":"heavy"},"propsJson":{"localState":{"path":"C:/game"}}}),
+            json!(
+                {"typeId":"com.kosmos.game",
+                "typeVersion":"1.0.0",
+                "title":"Game",
+                "contentJson":{"body":"heavy"},
+                "propsJson":{"localState":{"path":"C:/game"}}}),
         ),
         entity(
             "object",
             "note",
-            json!({"typeId":"com.kosmos.note","typeVersion":"1.0.0","title":"Note","contentJson":{"body":"full"},"propsJson":{}}),
+            json!(
+                {"typeId":"com.kosmos.note",
+                "typeVersion":"1.0.0",
+                "title":"Note",
+                "contentJson":{"body":"full"},
+                "propsJson":{}}),
         ),
         entity(
             "object_link",
@@ -172,11 +211,41 @@ async fn selective_profile_is_used_by_backend_pages_and_replay_is_idempotent() {
     let conn = Connection::open_in_memory().unwrap();
     db::init_schema(&conn).unwrap();
     for (id, name) in [("com.example.note", "Note"), ("com.example.game", "Game")] {
-        conn.execute("INSERT INTO object_types(id,name,schema_json,ui_schema_json,created_at,updated_at) VALUES(?1,?2,'{}','{}','t','t')", rusqlite::params![id, name]).unwrap();
+        conn.execute(
+            concat!(
+                "INSERT INTO object_types(id,name,schema_json,ui_schema_json,created_at,",
+                "updated_at) VALUES(?1,?2,'{}','{}','t','t')"
+            ),
+            rusqlite::params![id, name],
+        )
+        .unwrap();
     }
-    conn.execute("INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,created_at,updated_at) VALUES('note','com.example.note','1.0.0','Note','{\"body\":\"full\"}','{}','t','t')", []).unwrap();
-    conn.execute("INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,created_at,updated_at) VALUES('game','com.example.game','1.0.0','Game','{\"body\":\"heavy\"}','{\"localState\":{\"path\":\"C:/game\"}}','t','t')", []).unwrap();
-    conn.execute("INSERT INTO object_links(id,source_object_id,target_object_id,link_type,created_at) VALUES('link','note','game','related','t')", []).unwrap();
+    conn.execute(
+        concat!(
+            "INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,",
+            "created_at,updated_at) VALUES('note','com.example.note','1.0.0','Note',",
+            "'{\"body\":\"full\"}','{}','t','t')"
+        ),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        concat!(
+            "INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,",
+            "created_at,updated_at) VALUES('game','com.example.game','1.0.0','Game',",
+            "'{\"body\":\"heavy\"}','{\"localState\":{\"path\":\"C:/game\"}}','t','t')"
+        ),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        concat!(
+            "INSERT INTO object_links(id,source_object_id,target_object_id,link_type,",
+            "created_at) VALUES('link','note','game','related','t')"
+        ),
+        [],
+    )
+    .unwrap();
     let backend = Arc::new(SqliteStorageBackend::new(Arc::new(Mutex::new(conn))));
     let mut profile = data_platform::SelectiveSyncProfile::default();
     profile.set_rule("type", "com.example.note", data_platform::SyncMode::Full);

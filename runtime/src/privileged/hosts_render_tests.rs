@@ -34,7 +34,8 @@ fn render_drops_foreign_ip_rows_inside_markers() {
     // A managed block that already contains an injected `6.6.6.6` row must
     // not adopt it: only `127.0.0.1 <host>` rows count as managed entries.
     let content = format!(
-        "{ORIGINAL}{BEGIN}\n127.0.0.1 ok.com\n6.6.6.6 login.live.com\n127.0.0.1 a b.example\n{END}\n"
+        "{ORIGINAL}{BEGIN}\n127.0.0.1 ok.com\n6.6.6.6 login.live.com\n\
+            127.0.0.1 a b.example\n{END}\n"
     );
     let parsed = parse(&content);
     assert_eq!(

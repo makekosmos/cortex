@@ -70,16 +70,32 @@ pub(super) async fn schedule_retry(
                     })
                 };
                 if !valid {
-                    tracing::info!(target: "package_worker", package_id = %key.0, version = %key.1, generation, "worker retry canceled");
+                    tracing::info!(
+                        target: "package_worker",
+                        package_id = %key.0,
+                        version = %key.1,
+                        generation,
+                        "worker retry canceled",
+                    );
                     return;
                 }
                 if let Some(store) = lock(&inner.store).clone() {
                     let Ok(installed) = store.installed(&key.0, &key.1) else {
-                        tracing::warn!(target: "package_worker", package_id = %key.0, version = %key.1, "worker retry package missing");
+                        tracing::warn!(
+                            target: "package_worker",
+                            package_id = %key.0,
+                            version = %key.1,
+                            "worker retry package missing",
+                        );
                         return;
                     };
                     let Ok(entrypoint) = store.immutable_entrypoint(&installed) else {
-                        tracing::warn!(target: "package_worker", package_id = %key.0, version = %key.1, "worker retry immutable entrypoint invalid");
+                        tracing::warn!(
+                            target: "package_worker",
+                            package_id = %key.0,
+                            version = %key.1,
+                            "worker retry immutable entrypoint invalid",
+                        );
                         return;
                     };
                     if !installed.enabled
@@ -87,7 +103,12 @@ pub(super) async fn schedule_retry(
                         || !installed.hash.eq_ignore_ascii_case(&spec.hash)
                         || entrypoint != spec.executable
                     {
-                        tracing::warn!(target: "package_worker", package_id = %key.0, version = %key.1, "worker retry package state invalid");
+                        tracing::warn!(
+                            target: "package_worker",
+                            package_id = %key.0,
+                            version = %key.1,
+                            "worker retry package state invalid",
+                        );
                         return;
                     }
                 }
@@ -116,7 +137,13 @@ pub(super) async fn schedule_retry(
                 if let Some(launch) = lock(&inner.typed_launches).get_mut(&key) {
                     launch.generation = next_generation;
                 }
-                tracing::info!(target: "package_worker", package_id = %key.0, version = %key.1, generation = next_generation, "worker retry");
+                tracing::info!(
+                    target: "package_worker",
+                    package_id = %key.0,
+                    version = %key.1,
+                    generation = next_generation,
+                    "worker retry",
+                );
                 inner.startups.reap_completed().await;
                 let start_result = tokio::select! {
                     _ = &mut retry_cancel => return,

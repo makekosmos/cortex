@@ -121,9 +121,7 @@ fn com_write_link(link: &Path, target: &Path) -> windows::core::Result<()> {
     }
     // IShellLink is a Both-threaded coclass — an apartment that already
     // exists (or an MTA forced by the host) still serves it.
-    let _com = ComInit(unsafe {
-        CoInitializeEx(None, COINIT_APARTMENTTHREADED).is_ok()
-    });
+    let _com = ComInit(unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED).is_ok() });
 
     let wide = |path: &Path| {
         path.as_os_str()

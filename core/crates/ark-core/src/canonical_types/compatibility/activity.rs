@@ -33,8 +33,26 @@ pub fn time_entry(
         string(m, "taskTitle", &["task_title"], u, true)?,
     );
     put_extensions(o);
-    relation_single_with_aliases(m, "taskId", &["task_id"], "for-task", LinkWrite { links: l, id, at, unknown: u })?;
-    relation_with_aliases(m, "tagIds", &["tag_ids"], "tag", LinkWrite { links: l, id, at, unknown: u })?;
+    relation_single_with_aliases(
+        m,
+        "taskId",
+        &["task_id"],
+        "for-task",
+        LinkWrite { links: l,
+        id,
+        at,
+        unknown: u },
+    )?;
+    relation_with_aliases(
+        m,
+        "tagIds",
+        &["tag_ids"],
+        "tag",
+        LinkWrite { links: l,
+        id,
+        at,
+        unknown: u },
+    )?;
     for k in [
         "provider",
         "accountId",
@@ -158,7 +176,34 @@ pub fn game(m: &Map<String, Value>, ctx: CompatCtx<'_>) -> Result<(), CompatFail
             q.insert(c.into(), v.clone());
         }
     }
-    relation_with_aliases(m, "noteIds", &["note_ids"], "note", LinkWrite { links: l, id, at, unknown: u })?;
-    relation_with_aliases(m, "taskIds", &["task_ids"], "task", LinkWrite { links: l, id, at, unknown: u })?;
-    relation_with_aliases(m, "tagIds", &["tag_ids"], "tag", LinkWrite { links: l, id, at, unknown: u })
+    relation_with_aliases(
+        m,
+        "noteIds",
+        &["note_ids"],
+        "note",
+        LinkWrite { links: l,
+        id,
+        at,
+        unknown: u },
+    )?;
+    relation_with_aliases(
+        m,
+        "taskIds",
+        &["task_ids"],
+        "task",
+        LinkWrite { links: l,
+        id,
+        at,
+        unknown: u },
+    )?;
+    relation_with_aliases(
+        m,
+        "tagIds",
+        &["tag_ids"],
+        "tag",
+        LinkWrite { links: l,
+        id,
+        at,
+        unknown: u },
+    )
 }
