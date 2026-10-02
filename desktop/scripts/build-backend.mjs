@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { copyFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -11,7 +11,7 @@ import {
   cleanBuildIntermediates,
 } from "./runtime-staging.mjs";
 import { buildEnginePayload } from "./engine-distribution.mjs";
-import { readReleaseVersion } from "./release-version.mjs";
+import { releaseBuildIdentity } from "./release-build-env.mjs";
 
 const shellRoot = fileURLToPath(new URL("..", import.meta.url));
 const releaseBuildLock = acquireBuildLock(shellRoot);
@@ -33,16 +33,7 @@ const cortexTargetDir = effectiveCargoTargetDir(
 // Both are baked into the binary at compile time via `option_env!`
 // (see runtime/src/build_info.rs), so they must be set before the `cargo build`
 // calls below, on every platform.
-const productVersion = readReleaseVersion();
-const sourceCommit = execFileSync("git", ["rev-parse", "HEAD"], {
-  cwd: shellRoot,
-  encoding: "utf8",
-}).trim();
-const cargoEnv = {
-  ...process.env,
-  MUNDUS_PRODUCT_VERSION: productVersion,
-  MUNDUS_ENGINE_SOURCE_COMMIT: sourceCommit,
-};
+const { productVersion, sourceCommit, env: cargoEnv } = releaseBuildIdentity(shellRoot);
 
 const cortexBuildArgs = ["build", "--release", "--manifest-path", "../Cargo.toml"];
 const buildMundus = spawnSync(

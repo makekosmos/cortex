@@ -93,13 +93,12 @@ test("writeReleaseVersion preserves the other channel", async () => {
   }
 });
 
-test("the checkout keeps the pre-KOS-275 mac pin beside win", () => {
+test("the mac pin is the same product version as win", () => {
   const root = path.resolve(import.meta.dirname, "..", "..");
   const win = readReleaseVersion({ root, platform: "win" });
-  assert.match(win, /^\d+\.\d+\.\d+$/);
-  // Restored as its own channel, not raised to the Windows version.
-  assert.equal(readReleaseVersion({ root, platform: "mac" }), "0.5.1");
-  assert.notEqual(win, "0.5.1");
+  // 0.5.1 was the last makekosmos/desktop-mac tag, not a second product.
+  assert.equal(readReleaseVersion({ root, platform: "mac" }), win);
+  assert.equal(win, "0.10.3");
 });
 
 // release-version.mjs is the single owner of desktop/release-versions.json:

@@ -265,17 +265,17 @@ test("nextBuildVersion is the pin when ahead, else latest+patch, else the pin al
   assert.throws(() => at(["v0.11.0"], "0.10.3"), /below/);
 });
 
-test("setWinVersion does not bump or drop the mac channel", async () => {
+test("setWinVersion moves an existing mac pin to the same product version", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "mundus-release-plan-mac-"));
   const file = path.join(dir, "desktop", "release-versions.json");
   await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, JSON.stringify({ win: "0.10.3", mac: "0.5.1" }, null, 2) + "\n");
+  await writeFile(file, JSON.stringify({ win: "0.10.3", mac: "0.10.3" }, null, 2) + "\n");
   try {
     assert.equal(setWinVersion("0.10.4", { root: dir }), true);
-    assert.deepEqual(JSON.parse(await readFile(file, "utf8")), { win: "0.10.4", mac: "0.5.1" });
-    assert.equal(setMacVersion("0.5.2", { root: dir }), true);
-    assert.deepEqual(JSON.parse(await readFile(file, "utf8")), { win: "0.10.4", mac: "0.5.2" });
-    assert.equal(setMacVersion("0.5.2", { root: dir }), false);
+    assert.deepEqual(JSON.parse(await readFile(file, "utf8")), { win: "0.10.4", mac: "0.10.4" });
+    assert.equal(setMacVersion("0.10.5", { root: dir }), true);
+    assert.deepEqual(JSON.parse(await readFile(file, "utf8")), { win: "0.10.4", mac: "0.10.5" });
+    assert.equal(setMacVersion("0.10.5", { root: dir }), false);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

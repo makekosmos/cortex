@@ -17,7 +17,8 @@
 //   nextReleaseVersion(current, previous, changed) → "X.Y.Z" | null (skip)
 //   nextBuildVersion({ run, currentVersion, repo }) → "X.Y.Z" — see below
 //   planRelease({ run, currentVersion, repo })     → plan object
-//   setWinVersion(version)        → writes the win release version, keeps mac
+//   setWinVersion(version)        → writes the product version to win, and to
+//                                   mac when that key already exists
 //   setMacVersion(version)        → writes the mac release version, keeps win
 //
 // CLI:
@@ -35,8 +36,9 @@
 //       unbumped pin can never make the "new" build equal the installed
 //       previous release.
 //   node scripts/release-plan.mjs set <version>
-//       Idempotently writes <version> as the win release version. The mac
-//       pin is preserved. Nightly calls this form.
+//       Idempotently writes <version> as the product version on win, and on
+//       mac when that key is already in the file. A missing mac key is not
+//       invented. Nightly calls this form and still publishes no mac artifact.
 //   node scripts/release-plan.mjs set --platform mac <version>
 //       Same for the independent mac channel. Does not touch win and does
 //       not plan or publish a Windows release.
@@ -47,7 +49,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { RELEASE_RECEIPT_FILE } from "./release-receipt.mjs";
 import { RELEASE_REPOS } from "./release-repos.mjs";
-import { readReleaseVersion, writeReleaseVersion } from "./release-version.mjs";
+import {
+  readReleaseVersion,
+  releasePlatformPresent,
+  writeReleaseVersion,
+} from "./release-version.mjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 export const RELEASE_REPO = RELEASE_REPOS.win;
@@ -256,7 +262,13 @@ function setPlatformVersion(platform, version, { root } = {}) {
 }
 
 export function setWinVersion(version, options) {
-  return setPlatformVersion("win", version, options);
+  // KOS-233: the mac pin is the same product version. Move it with win when
+  // it is already in the file. A file that has no mac key stays win-only —
+  // a Windows write must not invent a channel.
+  const changedWin = setPlatformVersion("win", version, options);
+  if (!releasePlatformPresent({ root: options?.root, platform: "mac" })) return changedWin;
+  const changedMac = setPlatformVersion("mac", version, options);
+  return changedWin || changedMac;
 }
 
 export function setMacVersion(version, options) {

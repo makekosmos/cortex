@@ -1,12 +1,14 @@
 #!/usr/bin/env node
-// Compiles the Swift dictation helpers in runtime/native/macos. Off macOS
-// this is a no-op: the Windows installer never ships these binaries, and a
+// macOS product build: Swift dictation helpers, then the Engine and Manager
+// with the product version baked in (release-build-env.mjs). Off macOS this
+// is a no-op — the Windows installer never ships these binaries, and a
 // Windows host has no swiftc. The desktop `build` script still invokes this
-// step so a Mac checkout produces the helpers without a second recipe.
+// step so a Mac checkout produces them without a second recipe.
 import { mkdirSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { releaseBuildIdentity } from "./release-build-env.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const desktopRoot = path.resolve(__dirname, "..");
@@ -77,3 +79,36 @@ for (const helper of helpers) {
     process.exit(result.status ?? 1);
   }
 }
+
+// The Swift helpers are not the product binary. Manager's About screen and
+// the Engine both read MUNDUS_PRODUCT_VERSION at compile time; without it
+// they report the crate's 0.1.0. Windows injects the same identity from
+// release-build-env.mjs. This is a host build: no windows-gui subsystem and
+// no cross target.
+const { env } = releaseBuildIdentity(cortexRoot);
+function cargo(args, cwd) {
+  const result = spawnSync("cargo", args, { cwd, stdio: "inherit", env });
+  if ((result.status ?? 1) !== 0) process.exit(result.status ?? 1);
+}
+cargo(
+  [
+    "build",
+    "--release",
+    "--locked",
+    "--manifest-path",
+    path.join(cortexRoot, "Cargo.toml"),
+    "--bin",
+    "mundus-engine",
+  ],
+  desktopRoot,
+);
+cargo(
+  [
+    "build",
+    "--release",
+    "--locked",
+    "--manifest-path",
+    path.join(cortexRoot, "manager-gpui", "Cargo.toml"),
+  ],
+  path.join(cortexRoot, "manager-gpui"),
+);

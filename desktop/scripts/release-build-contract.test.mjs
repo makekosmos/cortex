@@ -3,6 +3,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { test } from "node:test";
+import { releaseBuildIdentity } from "./release-build-env.mjs";
 
 const script = await readFile(path.join(import.meta.dirname, "build-desktop.mjs"), "utf8");
 const preflight = await readFile(path.join(import.meta.dirname, "release-preflight.mjs"), "utf8");
@@ -38,8 +39,7 @@ test("Engine ships from the same build and version as the GUI (KOS-233)", () => 
   assert.doesNotMatch(backend, /MUNDUS_ENGINE_RELEASE/);
   assert.doesNotMatch(backend, /consumeEngineArtifacts/);
   assert.doesNotMatch(backend, /releases\/download\/v/);
-  assert.match(backend, /MUNDUS_PRODUCT_VERSION: productVersion/);
-  assert.match(backend, /MUNDUS_ENGINE_SOURCE_COMMIT: sourceCommit/);
+  assert.match(backend, /releaseBuildIdentity\(shellRoot\)/);
   assert.match(backend, /buildEnginePayload\(stageDir, engineDir/);
   assert.doesNotMatch(script, /copyEngineRelease\(/);
   assert.doesNotMatch(script, /copyEngineManifest\(/);
@@ -55,8 +55,19 @@ test("shipped binaries read the product version only from the variable the build
     path.join(import.meta.dirname, "build-package-components.mjs"),
     "utf8",
   );
-  assert.match(backend, /MUNDUS_PRODUCT_VERSION: productVersion/);
-  assert.match(components, /MUNDUS_PRODUCT_VERSION: readReleaseVersion\(\)/);
+  const buildEnv = await readFile(path.join(import.meta.dirname, "release-build-env.mjs"), "utf8");
+  const macos = await readFile(path.join(import.meta.dirname, "build-macos-native.mjs"), "utf8");
+  assert.match(buildEnv, /MUNDUS_PRODUCT_VERSION: productVersion/);
+  assert.match(buildEnv, /MUNDUS_ENGINE_SOURCE_COMMIT: sourceCommit/);
+  assert.match(components, /releaseBuildIdentity\(root\)\.env/);
+  assert.match(macos, /releaseBuildIdentity\(cortexRoot\)/);
+  // A bare cargo build has no injected version. Both readers say "dev"
+  // rather than the crate's 0.1.0.
+  for (const file of ["runtime/src/build_info.rs", "manager-gpui/src/views/about.rs"]) {
+    const source = await readFile(path.join(repo, file), "utf8");
+    assert.match(source, /"dev"/, file);
+    assert.doesNotMatch(source, /CARGO_PKG_VERSION/, file);
+  }
   const readers = [];
   for (const dir of ["runtime/src", "manager-gpui/src", "core/crates"]) {
     for (const entry of readdirSync(path.join(repo, dir), { recursive: true })) {
@@ -68,6 +79,12 @@ test("shipped binaries read the product version only from the variable the build
   }
   assert.ok(readers.length > 0, "expected the product version to be read somewhere");
   for (const reader of readers) assert.match(reader, /: MUNDUS_PRODUCT_VERSION$/, reader);
+  const repoRoot = path.join(import.meta.dirname, "..", "..");
+  const identity = releaseBuildIdentity(repoRoot);
+  assert.equal(identity.productVersion, releaseVersions.win);
+  assert.equal(identity.env.MUNDUS_PRODUCT_VERSION, identity.productVersion);
+  assert.equal(identity.env.MUNDUS_ENGINE_SOURCE_COMMIT, identity.sourceCommit);
+  assert.match(identity.sourceCommit, /^[0-9a-f]{40}$/);
 });
 
 // KOS-306: Defender's first-sight ML flagged the 0.10.1 installer. These

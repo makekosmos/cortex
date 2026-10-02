@@ -3,14 +3,18 @@
 // contract test fails on any other mention of the file under scripts/ or in
 // Rust outside runtime/crates/pe-version-info.
 //
-// Shape: `{ "win": "x.y.z", "mac": "x.y.z" }`. The two pins are independent
-// channels. Windows nightly (`release-plan.mjs set`) updates only `win` and
-// must leave `mac` untouched — there is no shared parity bump, because a
-// mac pin must never block a Windows-only release and a Windows release
-// publishes no mac artifact. `mac` is the version on makekosmos/desktop-mac.
+// Shape: `{ "win": "x.y.z", "mac": "x.y.z" }`. One product, one version
+// (KOS-233): both pins carry the Mundus product version. They are still two
+// publish channels. `planRelease` reads only `win`, and a Windows nightly
+// publishes no mac artifact, so a mac repo can never block a Windows release.
+// `release-plan.mjs set` (no `--platform`) moves `mac` with `win` when the
+// key is already present, and does not invent it when it is absent. `mac` is
+// what a future makekosmos/desktop-mac publish would ship; 0.5.1 was only the
+// last tag on that repo before the channel was removed, not a second product.
 // The "win" key is what the nightly workflow, `runtime/crates/pe-version-info`
 // (product_version, used by runtime/build.rs and manager-gpui/build.rs) and
-// older checkouts read by name.
+// older checkouts read by name. Packaged builds inject it as
+// MUNDUS_PRODUCT_VERSION via release-build-env.mjs.
 //
 // Library API:
 //   readReleaseVersion({ root, platform = "win" } = {})
@@ -65,6 +69,14 @@ function readParsed(file) {
   if (Object.prototype.toString.call(parsed) !== "[object Object]")
     throw new Error(`cannot read ${file}: expected an object`);
   return parsed;
+}
+
+/** True when the pin file already has this channel. Does not invent a key. */
+export function releasePlatformPresent({ root, platform }) {
+  assertPlatform(platform);
+  const file = versionsPath(root);
+  if (!existsSync(file)) return false;
+  return Object.hasOwn(readParsed(file), platform);
 }
 
 /** Read one channel from desktop/release-versions.json. Defaults to win. */

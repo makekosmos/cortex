@@ -1,10 +1,11 @@
 // One product, one version (KOS-233): the Engine no longer carries its own
-// `0.1.x` release line. `desktop/scripts/build-backend.mjs` injects the
+// `0.1.x` release line. `desktop/scripts/release-build-env.mjs` injects the
 // Mundus Desktop product version (`desktop/release-versions.json`) and the
 // source commit it was built from as env vars at compile time; `option_env!`
 // bakes them into the binary. A dev build (`cargo build` outside the desktop
-// build script) has neither set, so both fall back to an empty string rather
-// than a stale or misleading version.
+// build scripts) has neither set. The raw fields stay empty so callers can
+// tell a dev build from a release. The string a person sees is `dev`: the
+// crate version 0.1.0 is the Cargo placeholder, not a product version.
 //
 // This is distinct from `protocol_version::API_VERSION`, which is the
 // Engine↔shell wire contract and does not move with the product version.
@@ -25,11 +26,11 @@ pub fn engine_source_commit() -> &'static str {
 }
 
 /// Product-facing version string: the injected Desktop version when available,
-/// otherwise the crate's own `CARGO_PKG_VERSION` (e.g. a bare `cargo build`).
+/// otherwise `dev` (a bare `cargo build`).
 pub fn display_version() -> &'static str {
     let injected = engine_version();
     if injected.is_empty() {
-        env!("CARGO_PKG_VERSION")
+        "dev"
     } else {
         injected
     }
@@ -44,21 +45,14 @@ mod tests {
         // This crate's own test build never sets MUNDUS_PRODUCT_VERSION /
         // MUNDUS_ENGINE_SOURCE_COMMIT, so the fallback path is what actually
         // runs here — assert it stays a valid (empty) string, never panics.
-        assert!(engine_version().is_empty() || engine_version().is_ascii());
-        assert!(
-            engine_source_commit().is_empty()
-                || engine_source_commit()
-                    .chars()
-                    .all(|c| c.is_ascii_hexdigit())
-        );
+        assert!(engine_version().is_empty());
+        assert!(engine_source_commit().is_empty());
     }
 
     #[test]
-    fn display_version_falls_back_to_cargo_pkg_version_when_not_injected() {
-        // In test builds no env is injected, so display_version must still
-        // return a non-empty, printable version string.
-        let v = display_version();
-        assert!(!v.is_empty());
-        assert!(v.is_ascii());
+    fn display_version_is_dev_when_the_product_version_is_not_injected() {
+        // This test build does not set MUNDUS_PRODUCT_VERSION. 0.1.0 would
+        // be the crate placeholder, which a release once shipped by mistake.
+        assert_eq!(display_version(), "dev");
     }
 }
