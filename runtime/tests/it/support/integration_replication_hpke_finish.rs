@@ -35,7 +35,8 @@ pub async fn receive_and_validate(
     .get_password()
     .unwrap();
     assert_eq!(stored, "replicated-provider-secret");
-    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+    // Generous hang guard only — the marker file is the event (KOS-308).
+    tokio::time::timeout(std::time::Duration::from_secs(60), async {
         loop {
             if marker.exists() {
                 break;

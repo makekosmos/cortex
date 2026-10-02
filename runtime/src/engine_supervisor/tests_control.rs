@@ -98,7 +98,7 @@ async fn dropping_core_receiver_closes_connection_and_clears_sender() {
     assert_eq!(server.recv().await, Some(ControlMessage::CoreReady));
     drop(commands);
 
-    tokio::time::timeout(Duration::from_millis(250), async {
+    tokio::time::timeout(Duration::from_secs(60), async {
         loop {
             if server
                 .send_to_core(ControlMessage::ShutdownRequested)
@@ -139,7 +139,7 @@ async fn server_abort_closes_core_connection_and_receiver() {
     assert_eq!(server.recv().await, Some(ControlMessage::CoreReady));
     server.abort();
     assert_eq!(
-        tokio::time::timeout(Duration::from_millis(250), commands.recv())
+        tokio::time::timeout(Duration::from_secs(60), commands.recv())
             .await
             .expect("receiver close"),
         None

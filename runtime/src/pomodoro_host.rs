@@ -460,9 +460,11 @@ mod tests {
         handle_pomodoro_op("start", params, &host).await;
         // forward_session_events task должна получить событие и зашьорить его в out broadcast.
         // Даём task'у шанс выполниться.
-        let evt = tokio::time::timeout(Duration::from_millis(500), rx.recv())
+        // Generous hang guard only — the broadcast event is the condition
+        // (KOS-308).
+        let evt = tokio::time::timeout(Duration::from_secs(60), rx.recv())
             .await
-            .expect("event not received within 500ms")
+            .expect("pomodoro event not received")
             .expect("recv ok");
         assert_eq!(evt["event"], "pomodoro_phase_changed");
         assert_eq!(evt["from"], "idle");

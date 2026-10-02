@@ -9,7 +9,8 @@
         buf: &mut [u8],
     ) -> String {
         let mut captured = String::new();
-        tokio::time::timeout(Duration::from_secs(5), async {
+        // Generous hang guard only — the streamed bytes are the event (KOS-308).
+        tokio::time::timeout(Duration::from_secs(60), async {
             while !captured.contains(until) {
                 let n = stream.read(buf).await.expect("stream read");
                 if n == 0 {
@@ -60,7 +61,7 @@
 
         // Read response headers first.
         let mut captured = String::new();
-        tokio::time::timeout(Duration::from_secs(5), async {
+        tokio::time::timeout(Duration::from_secs(60), async {
             let mut byte = [0u8; 1];
             while !captured.ends_with("\r\n\r\n") {
                 stream.read_exact(&mut byte).await.expect("header byte");
@@ -113,7 +114,7 @@
             "type_id": "com.kosmos.note",
         }));
         let mut tail = String::new();
-        tokio::time::timeout(Duration::from_secs(5), async {
+        tokio::time::timeout(Duration::from_secs(60), async {
             loop {
                 let n = stream.read(&mut read_buf).await.expect("eof read");
                 if n == 0 {

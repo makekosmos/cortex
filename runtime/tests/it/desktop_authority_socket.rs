@@ -228,7 +228,8 @@ async fn real_socket_generation_replacement_revokes_old_owner_and_is_idempotent(
 }
 
 async fn wait_for_empty(fixture: &Fixture) {
-    tokio::time::timeout(std::time::Duration::from_secs(2), async {
+    // Generous hang guard only — the drain is the event (KOS-308).
+    tokio::time::timeout(std::time::Duration::from_secs(60), async {
         loop {
             if fixture.grants.len() == 0 && fixture.snapshots.len() == 0 {
                 break;

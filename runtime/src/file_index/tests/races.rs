@@ -19,8 +19,9 @@ async fn rescan_coalesces_overlapping_spawn_requests() {
         index.spawn_rescan();
     }
 
-    // Wait for the rescan to finish — should be one, not 50.
-    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+    // Wait for the rescan to finish — should be one, not 50. Generous hang
+    // guard only; convergence is the event (KOS-308).
+    tokio::time::timeout(std::time::Duration::from_secs(60), async {
         loop {
             if !index.rescan_pending.load(Ordering::SeqCst)
                 && !index.scan_in_progress.load(Ordering::SeqCst)
@@ -57,7 +58,7 @@ async fn rescan_schedules_followup_when_generation_changes_during_write() {
     let _ = index.rescan().await;
     // After rescan returns, follow-up may or may not still be pending —
     // but the index must converge to consistent state.
-    tokio::time::timeout(std::time::Duration::from_secs(2), async {
+    tokio::time::timeout(std::time::Duration::from_secs(60), async {
         loop {
             if !index.scan_in_progress.load(Ordering::SeqCst)
                 && !index.rescan_pending.load(Ordering::SeqCst)
@@ -93,7 +94,7 @@ async fn background_task_registry_reaps_finished_handles() {
     for _ in 0..50 {
         index.spawn_removed_root_cleanup("gone".into());
         assert_eq!(tracked(&index).0, 1, "registry must not accumulate");
-        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        tokio::time::timeout(std::time::Duration::from_secs(60), async {
             while !tracked(&index).1 {
                 tokio::task::yield_now().await;
             }

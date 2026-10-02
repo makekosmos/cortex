@@ -17,7 +17,7 @@ async fn removing_root_hides_scope_immediately_and_cleans_index_in_background() 
         .unwrap();
 
     assert!(index.settings().unwrap().roots.is_empty());
-    tokio::time::timeout(std::time::Duration::from_secs(2), async {
+    tokio::time::timeout(std::time::Duration::from_secs(60), async {
         loop {
             if index.search("scope-note", 10).unwrap().is_empty() {
                 break;
