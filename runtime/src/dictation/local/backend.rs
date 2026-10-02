@@ -205,9 +205,7 @@ fn whisper_server_port() -> Result<u16, LocalError> {
         })
 }
 
-fn lock_child<'a>(
-    child: &'a Mutex<ProcessTree>,
-) -> Option<std::sync::MutexGuard<'a, ProcessTree>> {
+fn lock_child<'a>(child: &'a Mutex<ProcessTree>) -> Option<std::sync::MutexGuard<'a, ProcessTree>> {
     match child.lock() {
         Ok(guard) => Some(guard),
         Err(poisoned) => Some(poisoned.into_inner()),

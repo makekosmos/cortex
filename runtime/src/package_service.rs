@@ -292,6 +292,10 @@ struct WorkerRuntime {
 }
 
 include!("package_service/core.rs");
+include!("package_service/core_snapshots.rs");
+include!("package_service/core_bridge.rs");
+include!("package_service/core_workers.rs");
+include!("package_service/core_state.rs");
 include!("package_service/native.rs");
 include!("package_service/native_install.rs");
 include!("package_service/native_migration.rs");
@@ -299,6 +303,11 @@ include!("package_service/dictation_app.rs");
 #[cfg(test)]
 include!("package_service/dictation_app_tests.rs");
 include!("package_service/operations.rs");
+include!("package_service/operations_apps.rs");
+include!("package_service/operations_catalog.rs");
+include!("package_service/operations_install.rs");
+include!("package_service/operations_state.rs");
+include!("package_service/operations_worker.rs");
 include!("package_service/launch.rs");
 include!("package_service/helpers.rs");
 include!("package_service/disclosure.rs");
