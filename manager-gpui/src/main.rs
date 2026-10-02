@@ -5,6 +5,7 @@
 mod app;
 mod app_replies;
 mod components;
+mod consent;
 mod devpkg;
 mod fps;
 mod modals;

@@ -6,6 +6,7 @@ use imago_gpui::button;
 use serde_json::Value;
 
 use crate::app::{Confirm, ManagerApp};
+use crate::consent::consent_body;
 use mundus_gpui_kit::fields::vopt;
 use mundus_gpui_kit::theme::*;
 
@@ -84,11 +85,15 @@ fn detail_text(d: &Value) -> String {
 }
 
 pub fn render_overlay(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> impl IntoElement {
-    let (title, body) = if let Some(d) = &app.disclosure {
-        (
-            "Требуемые разрешения".to_string(),
-            serde_json::to_string_pretty(d).unwrap_or_default(),
-        )
+    let consent = app.disclosure.as_ref().map(consent_body);
+    let (title, body) = if let Some(result) = &consent {
+        match result {
+            Ok(text) => ("Требуемые разрешения".to_string(), text.clone()),
+            Err(block) => (
+                "Требуемые разрешения".to_string(),
+                block.message().to_string(),
+            ),
+        }
     } else {
         let d = app.detail.clone().unwrap_or(Value::Null);
         // Curated fields only — the raw listing payload would dump the
@@ -156,22 +161,27 @@ pub fn render_overlay(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> imp
                                     cx.notify();
                                 })),
                         )
-                        .when(app.pending_install.is_some(), |d| {
-                            d.child(
-                                button::primary("consent-install")
-                                    .label("Установить")
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        if let Some(pid) = this.pending_install.take() {
-                                            this.disclosure = None;
-                                            this.action(
-                                                "packages.install",
-                                                serde_json::json!({"package_id": pid}),
-                                            );
-                                        }
-                                        cx.notify();
-                                    })),
-                            )
-                        }),
+                        // Install only when the full permission list could be
+                        // rendered — an unrenderable contract is not consent.
+                        .when(
+                            app.pending_install.is_some() && !matches!(consent, Some(Err(_))),
+                            |d| {
+                                d.child(
+                                    button::primary("consent-install")
+                                        .label("Установить")
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            if let Some(pid) = this.pending_install.take() {
+                                                this.disclosure = None;
+                                                this.action(
+                                                    "packages.install",
+                                                    serde_json::json!({"package_id": pid}),
+                                                );
+                                            }
+                                            cx.notify();
+                                        })),
+                                )
+                            },
+                        ),
                 ),
         )
 }
