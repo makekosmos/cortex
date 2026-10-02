@@ -123,6 +123,139 @@ async fn spawn_runs_cmd_shim_from_path() {
         .unwrap();
 }
 
+/// Holder half of `parent_death_kills_job_child` (KOS-312): run as a separate
+/// process — the same test binary with `MUNDUS_TEST_JOB_HOLDER_DIR` set — it
+/// spawns a sleeper child inside the KILL_ON_JOB_CLOSE job, publishes the
+/// child pid, and then simply waits to be killed. In a normal suite run the
+/// env var is absent and this test returns instantly.
+#[cfg(windows)]
+#[tokio::test]
+async fn job_holder_mode() {
+    let Ok(dir) = std::env::var("MUNDUS_TEST_JOB_HOLDER_DIR") else {
+        return;
+    };
+    let mut command = Command::new("cmd.exe");
+    command.args(["/C", "ping -n 300 127.0.0.1 > nul"]);
+    let tree = ProcessTree::spawn(&mut command, 0).await.unwrap();
+    let pid = tree.child().id().unwrap();
+    std::fs::write(
+        std::path::Path::new(&dir).join("child.pid"),
+        pid.to_string(),
+    )
+    .unwrap();
+    // `tree` must stay alive for the job to exist; park until the harness
+    // kills us.
+    loop {
+        std::thread::sleep(Duration::from_secs(60));
+    }
+}
+
+/// KOS-312 regression: the process holding the job is killed → the child in
+/// the job is gone within a bounded deadline. `terminate_kills_grandchild`
+/// covers an explicit `terminate_and_wait`; this covers the *involuntary*
+/// path — process death closes the job handle and the kernel applies
+/// KILL_ON_JOB_CLOSE. `job_holder_mode` stands in for the Engine process and
+/// `cmd /c ping` for whisper-server.
+#[cfg(windows)]
+#[test]
+fn parent_death_kills_job_child() {
+    use std::time::Instant;
+
+    let dir = tempfile::tempdir().unwrap();
+    let exe = std::env::current_exe().unwrap();
+    let mut holder = std::process::Command::new(exe)
+        .args([
+            "--exact",
+            "process_tree_tests::job_holder_mode",
+            "--nocapture",
+        ])
+        .env("MUNDUS_TEST_JOB_HOLDER_DIR", dir.path())
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .unwrap();
+    let holder_pid = holder.id();
+    let mut child_pid = None;
+
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        // The holder process needs a moment to boot and spawn its child.
+        let deadline = Instant::now() + Duration::from_secs(30);
+        let pid = loop {
+            if let Ok(text) = std::fs::read_to_string(dir.path().join("child.pid")) {
+                if let Ok(pid) = text.trim().parse::<u32>() {
+                    break pid;
+                }
+            }
+            assert!(
+                Instant::now() < deadline,
+                "holder never published a child pid"
+            );
+            std::thread::sleep(Duration::from_millis(50));
+        };
+        child_pid = Some(pid);
+        assert!(process_alive(pid), "job child {pid} died before the parent");
+
+        kill_process(holder_pid);
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while process_alive(pid) {
+            assert!(
+                Instant::now() < deadline,
+                "job child {pid} survived the death of the job owner"
+            );
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }));
+
+    // Cleanup even on assertion failure: kill only the two pids this test
+    // started.
+    kill_process(holder_pid);
+    let _ = holder.wait();
+    if let Some(pid) = child_pid {
+        if process_alive(pid) {
+            kill_process(pid);
+        }
+    }
+    outcome.unwrap();
+}
+
+/// STILL_ACTIVE (259): the exit code of a process that has not exited. The
+/// `windows` crate exports it only as an NTSTATUS constant, so spell it out.
+#[cfg(windows)]
+fn process_alive(pid: u32) -> bool {
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Threading::{
+        GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+    unsafe {
+        let Ok(handle) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) else {
+            return false;
+        };
+        if handle.is_invalid() {
+            return false;
+        }
+        let mut code = 0u32;
+        let alive = GetExitCodeProcess(handle, &mut code).is_ok() && code == 259;
+        let _ = CloseHandle(handle);
+        alive
+    }
+}
+
+/// Terminate a process this test started. A missing or dead pid is fine.
+#[cfg(windows)]
+fn kill_process(pid: u32) {
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Threading::{OpenProcess, TerminateProcess, PROCESS_TERMINATE};
+    unsafe {
+        if let Ok(handle) = OpenProcess(PROCESS_TERMINATE, false, pid) {
+            if !handle.is_invalid() {
+                let _ = TerminateProcess(handle, 1);
+                let _ = CloseHandle(handle);
+            }
+        }
+    }
+}
+
 /// Failure paths fail closed: a pid that owns no threads must not be resumed,
 /// and a nonexistent process cannot join the job. These exercise the same
 /// errors `spawn` hits when job assignment or resume goes wrong.

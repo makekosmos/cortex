@@ -206,8 +206,8 @@ fn whisper_server_port() -> Result<u16, LocalError> {
 }
 
 fn lock_child<'a>(
-    child: &'a Mutex<tokio::process::Child>,
-) -> Option<std::sync::MutexGuard<'a, tokio::process::Child>> {
+    child: &'a Mutex<ProcessTree>,
+) -> Option<std::sync::MutexGuard<'a, ProcessTree>> {
     match child.lock() {
         Ok(guard) => Some(guard),
         Err(poisoned) => Some(poisoned.into_inner()),
@@ -424,26 +424,18 @@ struct ServerProcessKey {
 struct WhisperServerProcess {
     key: ServerProcessKey,
     port: u16,
-    child: Mutex<tokio::process::Child>,
+    // ProcessTree, not a bare Child: the KILL_ON_JOB_CLOSE job (Unix: process
+    // group) is what kills whisper-server when the Engine dies — installer
+    // kill, crash, Task Manager — instead of leaving it holding the tools dir
+    // and its port (KOS-312). Dropping it also covers our own stop path.
+    child: Mutex<ProcessTree>,
 }
 
 impl WhisperServerProcess {
     fn is_running(&self) -> bool {
         lock_child(&self.child)
-            .map(|mut child| match child.try_wait() {
-                Ok(None) => true,
-                Ok(Some(_)) => false,
-                Err(_) => false,
-            })
+            .map(|mut tree| matches!(tree.child_mut().try_wait(), Ok(None)))
             .unwrap_or(false)
-    }
-}
-
-impl Drop for WhisperServerProcess {
-    fn drop(&mut self) {
-        if let Some(mut child) = lock_child(&self.child) {
-            let _ = child.start_kill();
-        }
     }
 }
 
@@ -525,17 +517,23 @@ async fn start_whisper_server(
     apply_whisper_quality_args(&mut command, profile);
     apply_whisper_accelerator_args(&mut command, accelerator);
     apply_whisper_vad_args(&mut command, command_path);
+    // Creation flags go through ProcessTree::spawn, not CommandExt: it ORs
+    // CREATE_SUSPENDED in and assigns the job before the primary thread runs,
+    // so the child can never execute a single instruction outside the job.
     #[cfg(windows)]
-    command.creation_flags(CREATE_NO_WINDOW);
-
-    let child = command.spawn().map_err(|e| {
-        LocalError::CommandFailed(format!("не удалось запустить whisper-server: {e}"))
-    })?;
+    let creation_flags = CREATE_NO_WINDOW;
+    #[cfg(not(windows))]
+    let creation_flags = 0;
+    let tree = ProcessTree::spawn(&mut command, creation_flags)
+        .await
+        .map_err(|e| {
+            LocalError::CommandFailed(format!("не удалось запустить whisper-server: {e}"))
+        })?;
 
     let server = Arc::new(WhisperServerProcess {
         key: server_process_key(command_path, model_path, accelerator, profile),
         port,
-        child: Mutex::new(child),
+        child: Mutex::new(tree),
     });
 
     wait_for_whisper_server_ready(&server).await?;
