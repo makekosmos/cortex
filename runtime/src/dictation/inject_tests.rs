@@ -43,12 +43,6 @@ impl OsAdapter for FakeAdapter {
         self.paste_calls += 1;
         Ok(())
     }
-
-    #[cfg(target_os = "macos")]
-    fn send_paste(&mut self) -> Result<(), InjectError> {
-        self.paste_calls += 1;
-        Ok(())
-    }
 }
 
 #[test]

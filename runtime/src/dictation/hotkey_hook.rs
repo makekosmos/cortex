@@ -28,7 +28,8 @@
 // `GetMessageW` loop — Windows требует чтобы hook жил на thread'е с
 // message-pump'ом. Замена hotkey идёт через atomic swap'ы в `MATCHER`/`SENDER`.
 //
-// Linux/macOS: модуль no-op'ит (stub функции). PTT в Phase 1 — Windows-only.
+// Off Windows this module is not compiled (`#![cfg(windows)]` below).
+// PTT in Phase 1 is Windows-only.
 
 #![cfg(windows)]
 #![allow(unsafe_code)]

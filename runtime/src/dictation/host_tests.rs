@@ -1477,7 +1477,7 @@
             platform_local_engine_for_os("windows"),
             DEFAULT_LOCAL_ENGINE
         );
-        assert_eq!(platform_local_engine_for_os("macos"), DEFAULT_LOCAL_ENGINE);
+        assert_eq!(platform_local_engine_for_os("linux"), DEFAULT_LOCAL_ENGINE);
     }
 
     #[test]

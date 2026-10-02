@@ -36,7 +36,6 @@ const GRANDFATHERED = new Set([
   "runtime/src/dictation/local_models.rs",
   "runtime/src/dictation/local_sidecar.rs",
   "runtime/src/dictation/local_whisper_dll.rs",
-  "runtime/src/dictation/macos_native.rs",
   "runtime/src/dictation/network.rs",
   "runtime/src/engine_api/server.rs",
   "runtime/src/engine_api/tests_core.rs",

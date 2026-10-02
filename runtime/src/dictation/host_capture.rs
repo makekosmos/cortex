@@ -17,20 +17,8 @@ fn apply_ptt_hook(cfg: &DictationConfig, _tx: &broadcast::Sender<Value>) {
     }
     #[cfg(not(windows))]
     {
-        #[cfg(target_os = "macos")]
-        {
-            if let Err(e) = crate::dictation::macos_native::set_hotkey_active(
-                &cfg.hotkey,
-                cfg.trigger_mode,
-                _tx.clone(),
-            ) {
-                eprintln!("[dictation::host] macOS hotkey helper unavailable: {e}");
-            }
-        }
-        #[cfg(not(target_os = "macos"))]
-        {
-            let _ = cfg;
-        }
+        // PTT hook is Windows-only. Other hosts keep the config and ignore it.
+        let _ = cfg;
     }
 }
 

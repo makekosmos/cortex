@@ -99,26 +99,6 @@ fn send_paste_shortcut(shortcut: PasteShortcut) -> Result<(), InjectError> {
     Ok(())
 }
 
-#[cfg(target_os = "macos")]
-fn send_macos_paste() -> Result<(), InjectError> {
-    let script = r#"tell application "System Events" to keystroke "v" using command down"#;
-    let status = std::process::Command::new("/usr/bin/osascript")
-        .args(["-e", script])
-        .status()
-        .map_err(|_| InjectError::SendInput {
-            injected: 0,
-            expected: 1,
-        })?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err(InjectError::SendInput {
-            injected: 0,
-            expected: 1,
-        })
-    }
-}
-
 pub(crate) struct SystemOsAdapter;
 
 impl OsAdapter for SystemOsAdapter {
@@ -169,11 +149,6 @@ impl OsAdapter for SystemOsAdapter {
     fn send_paste(&mut self, shortcut: PasteShortcut) -> Result<(), InjectError> {
         send_paste_shortcut(shortcut)
     }
-
-    #[cfg(target_os = "macos")]
-    fn send_paste(&mut self) -> Result<(), InjectError> {
-        send_macos_paste()
-    }
 }
 
 pub(crate) fn inject_with_adapter(
@@ -189,83 +164,64 @@ pub(crate) fn inject_with_adapter(
         });
     }
 
-    #[cfg(target_os = "macos")]
-    {
-        let _ = prev_hwnd;
-        if let Err(error) = adapter.send_paste() {
-            return Ok(DeliveryResult {
-                delivery: Delivery::ClipboardFallback {
-                    reason: error.safe_reason(),
-                },
-            });
-        }
-        std::thread::sleep(std::time::Duration::from_millis(80));
+    let Some(hwnd) = prev_hwnd else {
         return Ok(DeliveryResult {
-            delivery: Delivery::Pasted,
+            delivery: Delivery::ClipboardFallback {
+                reason: InjectError::MissingTarget.safe_reason(),
+            },
+        });
+    };
+    if let Err(error) = adapter.restore_foreground_window(hwnd) {
+        return Ok(DeliveryResult {
+            delivery: Delivery::ClipboardFallback {
+                reason: error.safe_reason(),
+            },
         });
     }
 
-    #[cfg(not(target_os = "macos"))]
-    {
-        let Some(hwnd) = prev_hwnd else {
-            return Ok(DeliveryResult {
-                delivery: Delivery::ClipboardFallback {
-                    reason: InjectError::MissingTarget.safe_reason(),
-                },
-            });
-        };
-        if let Err(error) = adapter.restore_foreground_window(hwnd) {
-            return Ok(DeliveryResult {
-                delivery: Delivery::ClipboardFallback {
-                    reason: error.safe_reason(),
-                },
-            });
-        }
-
-        std::thread::sleep(std::time::Duration::from_millis(80));
-        if adapter.foreground_window() != Some(hwnd) {
-            return Ok(DeliveryResult {
-                delivery: Delivery::ClipboardFallback {
-                    reason: InjectError::TargetChanged.safe_reason(),
-                },
-            });
-        }
-
-        #[cfg(windows)]
-        let shortcut = adapter
-            .window_class_name(hwnd)
-            .map(|class| paste_shortcut_for_window_class(&class))
-            .unwrap_or(PasteShortcut::CtrlV);
-        if adapter.foreground_window() != Some(hwnd) {
-            return Ok(DeliveryResult {
-                delivery: Delivery::ClipboardFallback {
-                    reason: InjectError::TargetChanged.safe_reason(),
-                },
-            });
-        }
-
-        #[cfg(windows)]
-        if let Err(error) = adapter.send_paste(shortcut) {
-            return Ok(DeliveryResult {
-                delivery: Delivery::ClipboardFallback {
-                    reason: error.safe_reason(),
-                },
-            });
-        }
-
-        #[cfg(not(windows))]
+    std::thread::sleep(std::time::Duration::from_millis(80));
+    if adapter.foreground_window() != Some(hwnd) {
         return Ok(DeliveryResult {
             delivery: Delivery::ClipboardFallback {
-                reason: "paste_unavailable",
+                reason: InjectError::TargetChanged.safe_reason(),
             },
         });
+    }
 
-        #[cfg(windows)]
-        {
-            std::thread::sleep(std::time::Duration::from_millis(80));
-            Ok(DeliveryResult {
-                delivery: Delivery::Pasted,
-            })
-        }
+    #[cfg(windows)]
+    let shortcut = adapter
+        .window_class_name(hwnd)
+        .map(|class| paste_shortcut_for_window_class(&class))
+        .unwrap_or(PasteShortcut::CtrlV);
+    if adapter.foreground_window() != Some(hwnd) {
+        return Ok(DeliveryResult {
+            delivery: Delivery::ClipboardFallback {
+                reason: InjectError::TargetChanged.safe_reason(),
+            },
+        });
+    }
+
+    #[cfg(windows)]
+    if let Err(error) = adapter.send_paste(shortcut) {
+        return Ok(DeliveryResult {
+            delivery: Delivery::ClipboardFallback {
+                reason: error.safe_reason(),
+            },
+        });
+    }
+
+    #[cfg(not(windows))]
+    return Ok(DeliveryResult {
+        delivery: Delivery::ClipboardFallback {
+            reason: "paste_unavailable",
+        },
+    });
+
+    #[cfg(windows)]
+    {
+        std::thread::sleep(std::time::Duration::from_millis(80));
+        Ok(DeliveryResult {
+            delivery: Delivery::Pasted,
+        })
     }
 }

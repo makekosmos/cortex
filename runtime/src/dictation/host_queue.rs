@@ -668,14 +668,7 @@ async fn op_begin_hotkey_capture(host: &DictationHost) -> DictationResponse {
         hotkey_hook::set_capture_mode(true, Some(host.events_tx.clone()));
         DictationResponse::ok(json!({ "ok": true }))
     }
-    #[cfg(target_os = "macos")]
-    {
-        match crate::dictation::macos_native::begin_capture(host.events_tx.clone()) {
-            Ok(()) => DictationResponse::ok(json!({ "ok": true })),
-            Err(e) => DictationResponse::err(format!("begin_hotkey_capture: {e}")),
-        }
-    }
-    #[cfg(not(any(windows, target_os = "macos")))]
+    #[cfg(not(windows))]
     {
         let _ = host;
         DictationResponse::err("begin_hotkey_capture: unsupported platform")
@@ -689,13 +682,7 @@ async fn op_end_hotkey_capture(host: &DictationHost) -> DictationResponse {
         hotkey_hook::set_capture_mode(false, None);
         DictationResponse::ok(json!({ "ok": true }))
     }
-    #[cfg(target_os = "macos")]
-    {
-        let _ = host;
-        crate::dictation::macos_native::end_capture();
-        DictationResponse::ok(json!({ "ok": true }))
-    }
-    #[cfg(not(any(windows, target_os = "macos")))]
+    #[cfg(not(windows))]
     {
         let _ = host;
         DictationResponse::ok(json!({ "ok": true }))

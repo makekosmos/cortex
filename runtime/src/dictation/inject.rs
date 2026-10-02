@@ -87,8 +87,6 @@ pub(crate) trait OsAdapter {
     fn window_class_name(&mut self, raw: isize) -> Option<String>;
     #[cfg(windows)]
     fn send_paste(&mut self, shortcut: PasteShortcut) -> Result<(), InjectError>;
-    #[cfg(target_os = "macos")]
-    fn send_paste(&mut self) -> Result<(), InjectError>;
 }
 
 pub(crate) trait Injector: Send + Sync {

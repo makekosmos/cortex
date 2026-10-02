@@ -77,11 +77,11 @@ fn platform_local_engine() -> &'static str {
     }
 }
 
-fn platform_local_engine_for_os(os: &str) -> &'static str {
-    match os {
-        "macos" => DEFAULT_LOCAL_ENGINE,
-        _ => DEFAULT_LOCAL_ENGINE,
-    }
+fn platform_local_engine_for_os(_os: &str) -> &'static str {
+    // Windows and Linux share one local engine (whisper.cpp). The argument is
+    // the host `std::env::consts::OS`, so tests can pin the policy without
+    // reading the machine they run on.
+    DEFAULT_LOCAL_ENGINE
 }
 
 fn normalize_platform_local_engine(cfg: &mut DictationConfig) -> bool {
