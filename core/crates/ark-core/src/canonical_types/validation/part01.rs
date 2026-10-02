@@ -123,7 +123,7 @@ fn check_schema(schema: &Value, pointer: &str, root: bool) -> Result<(), Canonic
                 }
             }
             "minLength" => {
-                if !value.as_u64().is_some() {
+                if value.as_u64().is_none() {
                     return Err(invariant(&key_pointer, "minLength"));
                 }
             }

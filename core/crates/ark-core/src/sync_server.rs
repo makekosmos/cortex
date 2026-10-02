@@ -205,7 +205,7 @@ pub(crate) async fn persist_pull_vector(
     is_last: bool,
     usage_complete_through: Option<&HashMap<String, u64>>,
 ) {
-    if !vector_updated && !(is_last && usage_complete_through.is_some()) {
+    if !(vector_updated || is_last && usage_complete_through.is_some()) {
         return;
     }
     merge_usage_cursors(vector, &load_version_vector(storage).await);
