@@ -207,11 +207,8 @@ mod tests {
         assert!(res.errors.is_empty(), "errors: {:?}", res.errors);
         assert_eq!(res.files_written.len(), 1);
         let content = std::fs::read_to_string(&res.files_written[0]).unwrap();
-        assert!(content.starts_with(
-            "id,title,started_at,ended_at,\
-duration_minutes,task_id,\
-source"
-        ));
+        let header = "id,title,started_at,ended_at,duration_minutes,task_id,source";
+        assert!(content.starts_with(header));
         assert!(
             content.contains("e1,Coding,2026-05-18T09:00:00Z,2026-05-18T10:30:00Z,90,t1,pomodoro")
         );

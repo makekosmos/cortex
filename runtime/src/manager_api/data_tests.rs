@@ -6,10 +6,10 @@ use super::*;
 /// with FK checks off — exactly how the legacy writer produced them.
 fn seed_object(conn: &rusqlite::Connection, id: &str, type_id: &str, deleted_at: Option<&str>) {
     conn.execute(
-        "INSERT INTO objects (id,type_id,type_version,title,content_json,props_json,created_at,\
-updated_at,deleted_at)
-             VALUES (?1,?2,'0.0.0-legacy',?1,'{}','{}','2026-01-01T00:00:00.000Z',\
-'2026-01-02T00:00:00.000Z',?3)",
+        "INSERT INTO objects (id,type_id,type_version,title,content_json,props_json,created_at,
+         updated_at,deleted_at)
+         VALUES (?1,?2,'0.0.0-legacy',?1,'{}','{}','2026-01-01T00:00:00.000Z',
+         '2026-01-02T00:00:00.000Z',?3)",
         rusqlite::params![id, type_id, deleted_at],
     )
     .unwrap();

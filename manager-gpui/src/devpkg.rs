@@ -255,7 +255,7 @@ mod tests {
             assert!(
                 resolve(&path).is_err(),
                 "cd_name_len={cd_name_len} cd_compressed={cd_compressed} \
-lfh_name_len={lfh_name_len}"
+                    lfh_name_len={lfh_name_len}"
             );
         }
     }

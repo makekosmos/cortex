@@ -10,12 +10,12 @@ use crate::phase3_legacy_fixtures;
 
 // Pre-migration retired-planning shape plus shared seed row; three tests use it.
 const LEGACY_AREAS_HEADINGS_SCHEMA: &str =
-    "CREATE TABLE areas (id TEXT PRIMARY KEY, title TEXT NOT NULL, sort_order INTEGER NOT NULL \
-DEFAULT 0, created_at TEXT NOT NULL);
-         CREATE TABLE headings (id TEXT PRIMARY KEY, title TEXT NOT NULL, sort_order INTEGER \
-NOT NULL DEFAULT 0, project_id TEXT NOT NULL);
-         INSERT INTO areas(id,title,sort_order,created_at) VALUES('area-1','Work',7,\
-'2026-01-01T00:00:00Z');";
+    "CREATE TABLE areas (id TEXT PRIMARY KEY, title TEXT NOT NULL, sort_order INTEGER NOT NULL
+     DEFAULT 0, created_at TEXT NOT NULL);
+     CREATE TABLE headings (id TEXT PRIMARY KEY, title TEXT NOT NULL, sort_order INTEGER NOT NULL
+     DEFAULT 0, project_id TEXT NOT NULL);
+     INSERT INTO areas(id,title,sort_order,created_at) VALUES('area-1','Work',7,
+     '2026-01-01T00:00:00Z');";
 
 fn table_exists(conn: &Connection, name: &str) -> bool {
     conn.query_row(
@@ -41,13 +41,13 @@ fn phase9_retires_planning_tables_after_lossless_canonical_migration() {
     init_schema_prerequisites_for_phase3(&conn).unwrap();
     conn.execute_batch(LEGACY_AREAS_HEADINGS_SCHEMA).unwrap();
     conn.execute_batch(
-        "INSERT INTO projects(id,title,notes,status,sort_order,color_tag,area_id,created_at) \
-VALUES('project-1','Project','Keep','active',2,'blue','area-1','2026-01-02T00:00:00Z');
-         INSERT INTO headings(id,title,sort_order,project_id) VALUES('heading-1','Section',3,\
-'project-1');
-         INSERT INTO todos(id,title,priority,heading_id,project_id,area_id,tag_ids,checklist_i\
-tems,created_at) VALUES('todo-1','Task',2,'heading-1','project-1','area-1','[]','[]','2026-01-\
-03T00:00:00Z');",
+        "INSERT INTO projects(id,title,notes,status,sort_order,color_tag,area_id,created_at)
+         VALUES('project-1','Project','Keep','active',2,'blue','area-1','2026-01-02T00:00:00Z');
+         INSERT INTO headings(id,title,sort_order,project_id) VALUES('heading-1','Section',3,
+         'project-1');
+         INSERT INTO todos(id,title,priority,heading_id,project_id,area_id,tag_ids,checklist_items,
+         created_at) VALUES('todo-1','Task',2,'heading-1','project-1','area-1','[]','[]',
+         '2026-01-03T00:00:00Z');",
     )
     .unwrap();
 
@@ -115,25 +115,25 @@ fn phase9_retirement_refuses_archive_or_semantic_mismatch_and_rolls_back_drop_ba
     init_schema_prerequisites_for_phase3(&conn).unwrap();
     conn.execute_batch(LEGACY_AREAS_HEADINGS_SCHEMA).unwrap();
     conn.execute_batch(
-        "INSERT INTO projects(id,title,status,area_id,created_at) VALUES('project-1','Project',\
-'active','area-1','2026-01-02T00:00:00Z');
-         INSERT INTO headings(id,title,sort_order,project_id) VALUES('heading-1','Section',3,\
-'project-1');",
+        "INSERT INTO projects(id,title,status,area_id,created_at) VALUES('project-1','Project',
+         'active','area-1','2026-01-02T00:00:00Z');
+         INSERT INTO headings(id,title,sort_order,project_id) VALUES('heading-1','Section',3,
+         'project-1');",
     )
     .unwrap();
     migrate_phase3(&conn).unwrap();
 
     let original_raw: Vec<u8> = conn
         .query_row(
-            "SELECT raw_source FROM canonical_migration_source_archive WHERE \
-source_kind='native:areas' AND source_id='area-1'",
+            "SELECT raw_source FROM canonical_migration_source_archive WHERE
+             source_kind='native:areas' AND source_id='area-1'",
             [],
             |row| row.get(0),
         )
         .unwrap();
     conn.execute(
-        "UPDATE canonical_migration_source_archive SET raw_source=?1 WHERE \
-source_kind='native:areas' AND source_id='area-1'",
+        "UPDATE canonical_migration_source_archive SET raw_source=?1 WHERE
+         source_kind='native:areas' AND source_id='area-1'",
         [b"tampered".as_slice()],
     )
     .unwrap();
@@ -141,8 +141,8 @@ source_kind='native:areas' AND source_id='area-1'",
     assert!(table_exists(&conn, "areas"));
     assert!(table_exists(&conn, "headings"));
     conn.execute(
-        "UPDATE canonical_migration_source_archive SET raw_source=?1 WHERE \
-source_kind='native:areas' AND source_id='area-1'",
+        "UPDATE canonical_migration_source_archive SET raw_source=?1 WHERE
+         source_kind='native:areas' AND source_id='area-1'",
         [original_raw.as_slice()],
     )
     .unwrap();
@@ -196,10 +196,10 @@ fn init_schema_tolerates_blocked_phase3_plan_and_keeps_legacy_tables() {
     phase3_legacy_fixtures::seed_historical_legacy_authorities(&conn);
     conn.execute_batch(LEGACY_AREAS_HEADINGS_SCHEMA).unwrap();
     conn.execute_batch(
-        "INSERT INTO \
-objects(id,type_id,type_version,title,content_json,props_json,created_at,updated_at) \
-VALUES('dangling-note','note_obj','0.0.0-legacy','n','{}','{\"relatedNotes\":[\"missing-target\
-\"]}','2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z');",
+        "INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,created_at,
+         updated_at) VALUES('dangling-note','note_obj','0.0.0-legacy','n','{}',
+         '{\"relatedNotes\":[\"missing-target\"]}','2026-01-01T00:00:00.000Z',
+         '2026-01-01T00:00:00.000Z');",
     )
     .unwrap();
 
@@ -311,21 +311,20 @@ fn clear_all_removes_ephemeral_rows_but_keeps_locked_registry_and_archive() {
     let conn = Connection::open_in_memory().unwrap();
     init_schema(&conn).unwrap();
     conn.execute_batch(
-        "INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,created_at,\
-updated_at) VALUES('obj-marker','com.kosmos.note','1.0.0','marker','{}','{}','now','now');INSE\
-RT INTO object_links(id,source_object_id,target_object_id,link_type,created_at) \
-VALUES('link-marker','obj-marker','obj-marker','marker','now');INSERT INTO \
-object_local_state(object_id,device_id,data_json,updated_at) \
-VALUES('obj-marker','dev','local-marker','now');INSERT INTO \
-object_sync_versions(object_id,hlc,deleted) VALUES('obj-marker','marker-hlc',0);INSERT INTO \
-object_migration_quarantine(object_id,contract_version,source_type_id,fields_json,source_hash,\
-updated_at) VALUES('obj-marker','phase3-canonical-v1','com.kosmos.note','quarantine-marker','h\
-ash','now')",
+        "INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,created_at,
+         updated_at) VALUES('obj-marker','com.kosmos.note','1.0.0','marker','{}','{}','now',
+         'now');INSERT INTO object_links(id,source_object_id,target_object_id,link_type,created_at)
+         VALUES('link-marker','obj-marker','obj-marker','marker','now');INSERT INTO
+         object_local_state(object_id,device_id,data_json,updated_at) VALUES('obj-marker','dev',
+         'local-marker','now');INSERT INTO object_sync_versions(object_id,hlc,deleted)
+         VALUES('obj-marker','marker-hlc',0);INSERT INTO object_migration_quarantine(object_id,
+         contract_version,source_type_id,fields_json,source_hash,updated_at) VALUES('obj-marker',
+         'phase3-canonical-v1','com.kosmos.note','quarantine-marker','hash','now')",
     )
     .unwrap();
     conn.execute(
-        "INSERT INTO canonical_migration_items(contract_version,source_kind,source_id,source_h\
-ash,raw_source,status,updated_at) VALUES(?1,?2,?3,?4,?5,'unchanged','now')",
+        "INSERT INTO canonical_migration_items(contract_version,source_kind,source_id,source_hash,
+         raw_source,status,updated_at) VALUES(?1,?2,?3,?4,?5,'unchanged','now')",
         params!["phase3-canonical-v1", "marker", "marker", "hash", b"marker"],
     )
     .unwrap();
@@ -355,37 +354,35 @@ fn internal_markers_are_not_exposed_by_load_all() {
     let conn = Connection::open_in_memory().unwrap();
     init_schema(&conn).unwrap();
     conn.execute(
-        "INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,created_at,\
-updated_at) VALUES('obj-public','com.kosmos.note','1.0.0','Public \
-object','{}','{}','now','now')",
+        "INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,created_at,
+         updated_at) VALUES('obj-public','com.kosmos.note','1.0.0','Public object','{}','{}','now',
+         'now')",
         [],
     )
     .unwrap();
     conn.execute(
-        "INSERT INTO object_local_state(object_id,device_id,data_json,updated_at) \
-VALUES('obj-public','dev','LOCAL_INTERNAL_MARKER','now')",
+        "INSERT INTO object_local_state(object_id,device_id,data_json,updated_at)
+         VALUES('obj-public','dev','LOCAL_INTERNAL_MARKER','now')",
         [],
     )
     .unwrap();
     conn.execute(
-        "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES('obj-public',\
-'SYNC_INTERNAL_MARKER',0)",
+        "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES('obj-public',
+         'SYNC_INTERNAL_MARKER',0)",
         [],
     )
     .unwrap();
     conn.execute(
-        "INSERT INTO object_migration_quarantine(object_id,contract_version,source_type_id,fie\
-lds_json,source_hash,updated_at) \
-VALUES('obj-public','phase3-canonical-v1','com.kosmos.note','QUARANTINE_INTERNAL_MARKER','hash\
-','now')",
+        "INSERT INTO object_migration_quarantine(object_id,contract_version,source_type_id,
+         fields_json,source_hash,updated_at) VALUES('obj-public','phase3-canonical-v1',
+         'com.kosmos.note','QUARANTINE_INTERNAL_MARKER','hash','now')",
         [],
     )
     .unwrap();
     conn.execute(
-        "INSERT INTO canonical_migration_items(contract_version,source_kind,source_id,source_h\
-ash,raw_source,status,updated_at) \
-VALUES('phase3-canonical-v1','marker','marker','hash',X'4c45444745525f494e5445524e414c5f4d4152\
-4b4552','unchanged','now')",
+        "INSERT INTO canonical_migration_items(contract_version,source_kind,source_id,source_hash,
+         raw_source,status,updated_at) VALUES('phase3-canonical-v1','marker','marker','hash',
+         X'4c45444745525f494e5445524e414c5f4d41524b4552','unchanged','now')",
         [],
     )
     .unwrap();
@@ -427,8 +424,8 @@ fn raw_backup_preserves_nonempty_internal_blobs_and_schema() {
     let conn = open_db(source.to_str().unwrap()).unwrap();
     init_schema(&conn).unwrap();
     conn.execute(
-        "INSERT INTO canonical_migration_items(contract_version,source_kind,source_id,source_h\
-ash,raw_source,status,updated_at) VALUES(?1,?2,?3,?4,?5,'unchanged','now')",
+        "INSERT INTO canonical_migration_items(contract_version,source_kind,source_id,source_hash,
+         raw_source,status,updated_at) VALUES(?1,?2,?3,?4,?5,'unchanged','now')",
         params![
             "phase3-canonical-v1",
             "marker",
@@ -439,8 +436,8 @@ ash,raw_source,status,updated_at) VALUES(?1,?2,?3,?4,?5,'unchanged','now')",
     )
     .unwrap();
     conn.execute(
-        "INSERT INTO object_local_state(object_id,device_id,data_json,updated_at) \
-SELECT id,'backup-device','BACKUP_LOCAL_MARKER','now' FROM objects LIMIT 1",
+        "INSERT INTO object_local_state(object_id,device_id,data_json,updated_at) SELECT id,
+         'backup-device','BACKUP_LOCAL_MARKER','now' FROM objects LIMIT 1",
         [],
     )
     .unwrap();

@@ -688,8 +688,8 @@ fn untracked_patch(path: &str, content: &str) -> String {
         .map(|line| format!("+{line}\n"))
         .collect::<String>();
     format!(
-        "\ndiff --git a/{normalized} b/{normalized}\nnew file mode 100644\n--- \
-/dev/null\n+++ b/{normalized}\n@@ -0,0 +1,{line_count} @@\n{body}"
+        "\ndiff --git a/{normalized} b/{normalized}\nnew file mode 100644\n--- /dev/null\n+++\
+             b/{normalized}\n@@ -0,0 +1,{line_count} @@\n{body}"
     )
 }
 fn git_dirty(path: &Path) -> bool {

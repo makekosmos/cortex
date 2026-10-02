@@ -43,9 +43,8 @@ fn type_id_in_clause(ids: &[String]) -> String {
 pub fn list_objects_by_type(conn: &Connection, type_id: &str) -> Result<Vec<ArkObject>, String> {
     let type_ids = query_type_ids(conn, type_id)?;
     let sql = format!(
-        "SELECT id, type_id, type_version, title, content_json, props_json, created_at, \
-updated_at, \
-deleted_at
+        "SELECT id, type_id, type_version, title, content_json, props_json, created_at, updated_at,
+         deleted_at
          FROM objects
          WHERE {}
          ORDER BY updated_at DESC, created_at DESC",
@@ -97,13 +96,12 @@ pub fn list_running_time_entries(
 ) -> Result<Vec<ArkObject>, String> {
     let time_entry_type_ids = query_type_ids(conn, "time_entry_obj")?;
     let base_sql = format!(
-        "SELECT id, type_id, type_version, title, content_json, props_json, created_at, \
-updated_at, \
-deleted_at
+        "SELECT id, type_id, type_version, title, content_json, props_json, created_at, updated_at,
+         deleted_at
          FROM objects
          WHERE {}
-           AND deleted_at IS NULL
-           AND json_extract(props_json, '$.endedAt') IS NULL",
+         AND deleted_at IS NULL
+         AND json_extract(props_json, '$.endedAt') IS NULL",
         type_id_in_clause(&time_entry_type_ids)
     );
     let order = " ORDER BY json_extract(props_json, '$.startedAt') DESC";
@@ -143,9 +141,8 @@ pub fn get_objects_by_ids(conn: &Connection, ids: &[String]) -> Result<Vec<ArkOb
         .collect::<Vec<_>>()
         .join(", ");
     let sql = format!(
-        "SELECT id, type_id, type_version, title, content_json, props_json, created_at, \
-updated_at, \
-deleted_at
+        "SELECT id, type_id, type_version, title, content_json, props_json, created_at, updated_at,
+         deleted_at
          FROM objects
          WHERE id IN ({placeholders})
          ORDER BY updated_at DESC, created_at DESC"
@@ -160,9 +157,8 @@ deleted_at
 
 pub fn get_object(conn: &Connection, id: &str) -> Result<Option<ArkObject>, String> {
     conn.query_row(
-        "SELECT id, type_id, type_version, title, content_json, props_json, created_at, \
-updated_at, \
-deleted_at
+        "SELECT id, type_id, type_version, title, content_json, props_json, created_at, updated_at,
+         deleted_at
          FROM objects
          WHERE id = ?1",
         params![id],

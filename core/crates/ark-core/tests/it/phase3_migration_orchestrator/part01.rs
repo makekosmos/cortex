@@ -109,10 +109,10 @@ fn populated_fixture_reaches_real_orchestrator_and_preserves_source_only_rows() 
         legacy(&conn, id, alias, props);
     }
     conn.execute_batch(
-        "CREATE TABLE areas (id TEXT PRIMARY KEY, title TEXT NOT NULL, sort_order INTEGER NOT NULL \
-DEFAULT 0, created_at TEXT NOT NULL);
-         CREATE TABLE headings (id TEXT PRIMARY KEY, title TEXT NOT NULL, sort_order INTEGER \
-NOT NULL DEFAULT 0, project_id TEXT NOT NULL);",
+        "CREATE TABLE areas (id TEXT PRIMARY KEY, title TEXT NOT NULL, sort_order INTEGER NOT NULL
+         DEFAULT 0, created_at TEXT NOT NULL);
+         CREATE TABLE headings (id TEXT PRIMARY KEY, title TEXT NOT NULL, sort_order INTEGER NOT
+         NULL DEFAULT 0, project_id TEXT NOT NULL);",
     )
     .unwrap();
     conn.execute(

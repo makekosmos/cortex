@@ -1152,9 +1152,8 @@
         assert_eq!(body["data"]["size_bytes"], 7);
 
         let stat = format!(
-            "{{\"operation\":\"stat\",\"root_id\":\"{root_id}\",\"app_id\":\
-\"com.kosmos.agenda\",\
-\"key\":\"attachments/task-1.bin\"}}"
+            "{{\"operation\":\"stat\",\"root_id\":\"{root_id}\",\"app_id\":\"com.kosmos.agenda\",\
+                \"key\":\"attachments/task-1.bin\"}}"
         );
         let body = response_json(
             &raw_http(
@@ -1173,9 +1172,8 @@
         assert_eq!(body["data"]["size_bytes"], 7);
 
         let read = format!(
-            "{{\"operation\":\"read\",\"root_id\":\"{root_id}\",\"app_id\":\
-\"com.kosmos.agenda\",\
-\"key\":\"attachments/task-1.bin\"}}"
+            "{{\"operation\":\"read\",\"root_id\":\"{root_id}\",\"app_id\":\"com.kosmos.agenda\",\
+                \"key\":\"attachments/task-1.bin\"}}"
         );
         let body = response_json(
             &raw_http(
@@ -1203,9 +1201,8 @@
         );
 
         let traversal = format!(
-            "{{\"operation\":\"read\",\"root_id\":\"{root_id}\",\"app_\
-id\":\"com.kosmos.agenda\",\
-\"key\":\"../escape\"}}"
+            "{{\"operation\":\"read\",\"root_id\":\"{root_id}\",\"app_id\":\"com.kosmos.agenda\",\
+                \"key\":\"../escape\"}}"
         );
         let body = response_json(
             &raw_http(
@@ -1225,9 +1222,8 @@ id\":\"com.kosmos.agenda\",\
         assert_eq!(body["error"], "invalid-key");
 
         let delete = format!(
-            "{{\"operation\":\"delete\",\"root_id\":\"{root_id}\",\"app_i\
-d\":\"com.kosmos.agenda\",\
-\"key\":\"attachments/task-1.bin\"}}"
+            "{{\"operation\":\"delete\",\"root_id\":\"{root_id}\",\"app_id\":\"com.kosmos.agenda\",\
+                \"key\":\"attachments/task-1.bin\"}}"
         );
         let body = response_json(
             &raw_http(
@@ -1510,8 +1506,8 @@ d\":\"com.kosmos.agenda\",\
         .replace(
             "Content-Length:",
             &format!(
-                "X-Kosmos-Client-Class: {class}\r\nX-Kosmos-Client-Version: \
-{version}\r\nContent-Length:"
+                "X-Kosmos-Client-Class: {class}\r\nX-Kosmos-Client-Version:\
+                     {version}\r\nContent-Length:"
             ),
         )
     }

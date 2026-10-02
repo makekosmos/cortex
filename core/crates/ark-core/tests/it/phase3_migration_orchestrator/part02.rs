@@ -68,10 +68,9 @@ fn completed_rerun_is_exact_noop_and_source_or_canonical_changes_conflict() {
     assert_eq!(
         snapshot,
         conn.query_row(
-            "SELECT (SELECT COUNT(*) FROM canonical_migration_items), (SELECT started_at \
-FROM canonical_migration_runs), (SELECT completed_at FROM \
-canonical_migration_runs), (SELECT COALESCE(SUM(attempt),0) FROM \
-canonical_migration_items)",
+            "SELECT (SELECT COUNT(*) FROM canonical_migration_items), (SELECT started_at FROM
+             canonical_migration_runs), (SELECT completed_at FROM canonical_migration_runs), (SELECT
+             COALESCE(SUM(attempt),0) FROM canonical_migration_items)",
             [],
             |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
         )
@@ -282,8 +281,8 @@ fn durable_resume_reopens_committed_partial_ledger_without_duplicates() {
     assert_eq!(
         reopened
             .query_row(
-                "SELECT status FROM canonical_migration_items WHERE source_kind LIKE \
-'native:%' AND source_id='resume-source'",
+                "SELECT status FROM canonical_migration_items WHERE source_kind LIKE 'native:%' AND
+                 source_id='resume-source'",
                 [],
                 |r| r.get::<_, String>(0)
             )
@@ -293,8 +292,8 @@ fn durable_resume_reopens_committed_partial_ledger_without_duplicates() {
     assert_eq!(
         reopened
             .query_row(
-                "SELECT attempt FROM canonical_migration_items WHERE source_kind LIKE \
-'native:%' AND source_id='resume-source'",
+                "SELECT attempt FROM canonical_migration_items WHERE source_kind LIKE 'native:%' AND
+                 source_id='resume-source'",
                 [],
                 |r| r.get::<_, i64>(0)
             )

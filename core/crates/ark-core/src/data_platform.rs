@@ -273,12 +273,12 @@ pub fn upsert_external_ref(conn: &Connection, r: &ExternalRefUpsert) -> Result<(
         return Err("invalid external ref".into());
     }
     conn.execute(
-        "INSERT INTO external_refs(connector_id,account_id,external_type,external_id,object_id,\
-external_revision,content_hash,conflict_state)
+        "INSERT INTO external_refs(connector_id,account_id,external_type,external_id,object_id,
+         external_revision,content_hash,conflict_state)
          VALUES(?1,?2,?3,?4,?5,?6,?7,?8)
-         ON CONFLICT(connector_id,account_id,external_type,external_id) DO UPDATE SET \
-object_id=excluded.object_id,external_revision=excluded.external_revision,\
-content_hash=excluded.content_hash,conflict_state=excluded.conflict_state",
+         ON CONFLICT(connector_id,account_id,external_type,external_id) DO UPDATE SET
+         object_id=excluded.object_id,external_revision=excluded.external_revision,
+         content_hash=excluded.content_hash,conflict_state=excluded.conflict_state",
         params![
             r.connector_id,
             r.account_id,

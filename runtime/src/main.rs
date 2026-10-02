@@ -913,9 +913,9 @@ async fn probe_http_dispatch(port: u16, token: &str) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     let body = r#"{"_req_id":"readiness-http","operation":"diagnostics.snapshot"}"#;
     let request = format!(
-        "POST /v1/rpc HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer \
-{token}\r\nx-kosmos-client-pid: {}\r\nx-kosmos-api-version: \
-{API_VERSION}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        "POST /v1/rpc HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer\
+             {token}\r\nx-kosmos-client-pid: {}\r\nx-kosmos-api-version:\
+             {API_VERSION}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
         std::process::id(),
         body.len()
     );

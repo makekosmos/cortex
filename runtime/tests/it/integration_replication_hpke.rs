@@ -235,8 +235,8 @@ async fn signed_hpke_replication_reaches_offline_provider_and_rejects_stale_inpu
             .unwrap();
             assert!(
                 response.ok && persisted.is_some(),
-                "recipient did not persist the signed HPKE envelope: response={:?} db={:?} \
-panics={}",
+                "recipient did not persist the signed HPKE envelope: \
+                    response={:?} db={:?} panics={}",
                 response.error,
                 persisted,
                 recipient_host.panic_count()

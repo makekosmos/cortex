@@ -820,10 +820,9 @@ DEFAULT 0, \
             .map(str::to_string);
         self.db()
             .execute(
-                "INSERT INTO sessions(id,project_id,title,prompt,mode,model,status,\
-branch,worktree_path,\
-base_commit,created_at,updated_at)
-             VALUES(?1,?2,?3,?4,?5,?6,'starting',?7,?8,?9,?10,?10)",
+                "INSERT INTO sessions(id,project_id,title,prompt,mode,model,status,branch,
+                 worktree_path,base_commit,created_at,updated_at)
+                 VALUES(?1,?2,?3,?4,?5,?6,'starting',?7,?8,?9,?10,?10)",
                 params![
                     id,
                     project_id,

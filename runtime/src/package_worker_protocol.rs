@@ -754,14 +754,14 @@ mod tests {
         assert!(matches!(
             parse_json_line(
                 "{\"method\":\"worker.call\",\"id\":\"1\",\"generation\":1,\"token\":\"x\",\
-\"operation\":\"ark.read\",\"params\":{}}"
+                    \"operation\":\"ark.read\",\"params\":{}}"
                     .as_bytes()
             ),
             Ok(WorkerMessage::Call(_))
         ));
         assert!(parse_json_line(
             "{\"method\":\"ark.read\",\"id\":\"1\",\"generation\":1,\"token\":\"x\",\
-\"operation\":\"ark.read\",\"params\":{}}"
+                \"operation\":\"ark.read\",\"params\":{}}"
                 .as_bytes()
         )
         .is_err());

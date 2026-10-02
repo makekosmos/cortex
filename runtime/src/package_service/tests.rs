@@ -1053,16 +1053,33 @@ pub(crate) mod tests {
         );
         service.configure_package_definition_dispatcher(package_definition_dispatcher(ark.clone()));
         let type_id = "com.kosmos.demo.journal";
-        assert!(ark.request("types.registerPa\
-ckageDefinitions", serde_json::json!({"registration\
-s":[{
-            "type_id":type_id,"name":"Foreign","schema_json":"{}","ui_schema_js\
-on":"{}","content_cont\
-ract_json":"{}","relations_js\
-on":"[]","sync_policy_\
-json":"{}","version":"1.0.0","schema_hash":"","owner_kind":"package","owner_id":"com.example.\
-foreign","status":"active","base_type_id":null,"aliases":[],"created_at":"now"
-        }]})).await.unwrap().ok);
+        assert!(
+            ark.request(
+                "types.registerPackageDefinitions",
+                serde_json::json!({
+                    "registrations": [{
+                        "type_id": type_id,
+                        "name": "Foreign",
+                        "schema_json": "{}",
+                        "ui_schema_json": "{}",
+                        "content_contract_json": "{}",
+                        "relations_json": "[]",
+                        "sync_policy_json": "{}",
+                        "version": "1.0.0",
+                        "schema_hash": "",
+                        "owner_kind": "package",
+                        "owner_id": "com.example.foreign",
+                        "status": "active",
+                        "base_type_id": null,
+                        "aliases": [],
+                        "created_at": "now"
+                    }]
+                })
+            )
+            .await
+            .unwrap()
+            .ok
+        );
         let mut replacement = manifest_v2_with_canonical_access();
         replacement.id = prior.id.clone();
         replacement.version = prior.version.clone();

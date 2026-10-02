@@ -354,7 +354,7 @@ pub fn retire_legacy_planning_tables(conn: &Connection) -> Result<(usize, usize)
             .map_err(|e| MigrationError::Storage(e.to_string()))?;
         if source_count != archive_count {
             return Err(MigrationError::Objects(format!(
-                "legacy planning archive incomplete\
+                "legacy planning archive incomplete \\
  for {table}: {source_count} source rows, \
 {archive_count} archived"
             )));

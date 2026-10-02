@@ -288,8 +288,8 @@ fn phase3_pending_replay_and_delete_are_exact_tuple_isolated() {
     );
     assert_eq!(
         conn.query_row(
-            "SELECT COUNT(*) FROM sync_pending_objects WHERE id='o1' AND \
-awaited_type_version='2.0.0'",
+            "SELECT COUNT(*) FROM sync_pending_objects WHERE id='o1' AND
+             awaited_type_version='2.0.0'",
             [],
             |r| r.get::<_, i64>(0)
         )

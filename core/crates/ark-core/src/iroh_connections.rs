@@ -235,8 +235,8 @@ async fn handle_connection(params: ConnectionParams) {
                                 .insert_untrusted(remote_endpoint_id, device_id.clone())
                             {
                                 eprintln!(
-                                    "[iroh] rejected Hello remap for trusted endpoint \
-{remote_endpoint_id}"
+                                    "[iroh] rejected Hello remap for trusted endpoint\
+                                         {remote_endpoint_id}"
                                 );
                                 continue;
                             }
@@ -250,8 +250,8 @@ async fn handle_connection(params: ConnectionParams) {
                             .unwrap_or_default();
 
                         eprintln!(
-                            "[iroh] ← recv {variant} from={from_device_id} ({role}) \
-remote={remote_endpoint_id}"
+                            "[iroh] ← recv {variant} from={from_device_id} ({role})\
+                                 remote={remote_endpoint_id}"
                         );
 
                         let _ =

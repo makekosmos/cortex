@@ -876,7 +876,7 @@ mod tests {
             "\"access\":[]",
             &format!(
                 "\"access\":[{{\"type\":\"com.kosmos.note\",\"versions\":\"{}\",\
-\"actions\":[\"read\"],\"fields\":{{\"read\":[],\"write\":[]}}}}]",
+                    \"actions\":[\"read\"],\"fields\":{{\"read\":[],\"write\":[]}}}}]",
                 "x".repeat(129)
             ),
         );

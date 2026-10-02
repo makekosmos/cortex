@@ -93,7 +93,7 @@
                                         if authenticated {
                                             eprintln!(
                                                 "{TAG} Rejecting repeated hello on an \
-authenticated connection"
+                                                    authenticated connection"
                                             );
                                             break;
                                         }
@@ -136,8 +136,8 @@ authenticated connection"
                                             && server_device_id == device_id
                                         {
                                             eprintln!(
-                                                "{TAG} Rejecting self-connect to \
-{server_device_name} ({server_device_id})"
+                                                "{TAG} Rejecting self-connect to\
+                                                     {server_device_name} ({server_device_id})"
                                             );
                                             // The winning address
                                             // looped back to us — drop
@@ -176,8 +176,8 @@ authenticated connection"
                                             p.device_name = server_device_name.clone();
                                         }
                                         eprintln!(
-                                            "{TAG} Authenticated with {server_device_name} (\
-{server_device_id})"
+                                            "{TAG} Authenticated with {server_device_name}\
+                                                 ({server_device_id})"
                                         );
                                         if let Some(handler) = on_connected.lock().await.as_ref() {
                                             handler(server_device_id, server_device_name);
@@ -319,8 +319,8 @@ authenticated connection"
                                                     }
                                                     Err(e) => {
                                                         eprintln!(
-                                                            "{TAG} Failed to apply \
-sync entity {}:{}: {e}",
+                                                            "{TAG} Failed to apply sync entity\
+                                                                 {}:{}: {e}",
                                                             entity.entity_type, entity.id
                                                         );
                                                     }
@@ -420,8 +420,8 @@ sync entity {}:{}: {e}",
                                                 }
                                                 Err(e) => {
                                                     eprintln!(
-                                                        "{TAG} Failed to apply live \
-sync entity {}:{}: {e}",
+                                                        "{TAG} Failed to apply live sync entity\
+                                                             {}:{}: {e}",
                                                         entity.entity_type, entity.id
                                                     );
                                                 }

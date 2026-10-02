@@ -180,8 +180,8 @@ fn builtin_startup_does_not_rewrite_existing_definition_or_timestamp() {
     );
     assert_eq!(
         conn.query_row(
-            "SELECT schema_hash FROM object_type_versions WHERE \
-type_id='com.kosmos.note' AND version='1.0.0'",
+            "SELECT schema_hash FROM object_type_versions WHERE type_id='com.kosmos.note' AND
+             version='1.0.0'",
             [],
             |r| r.get::<_, String>(0)
         )

@@ -176,8 +176,8 @@ fn generated_legacy_definition_at_canonical_id_is_promoted_losslessly() {
     );
     assert_eq!(
         conn.query_row(
-            "SELECT count(*) FROM legacy_type_definition_archive WHERE \
-legacy_type_id='com.kosmos.note'",
+            "SELECT count(*) FROM legacy_type_definition_archive WHERE
+             legacy_type_id='com.kosmos.note'",
             [],
             |row| row.get::<_, i64>(0)
         )

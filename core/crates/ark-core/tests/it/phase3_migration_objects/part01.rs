@@ -169,10 +169,10 @@ fn populated_generic_fixture_maps_all_nine_aliases_and_applies_exact_envelope() 
 fn native_adapters_migrate_area_heading_identity_and_hierarchy() {
     let conn = db();
     conn.execute_batch(
-        "CREATE TABLE areas (id TEXT PRIMARY KEY, title TEXT NOT NULL, sort_order INTEGER NOT NULL \
-DEFAULT 0, created_at TEXT NOT NULL);
-         CREATE TABLE headings (id TEXT PRIMARY KEY, title TEXT NOT NULL, sort_order INTEGER \
-NOT NULL DEFAULT 0, project_id TEXT NOT NULL);",
+        "CREATE TABLE areas (id TEXT PRIMARY KEY, title TEXT NOT NULL, sort_order INTEGER NOT NULL
+         DEFAULT 0, created_at TEXT NOT NULL);
+         CREATE TABLE headings (id TEXT PRIMARY KEY, title TEXT NOT NULL, sort_order INTEGER NOT
+         NULL DEFAULT 0, project_id TEXT NOT NULL);",
     )
     .unwrap();
     conn.execute(
@@ -231,8 +231,8 @@ NOT NULL DEFAULT 0, project_id TEXT NOT NULL);",
     );
     assert_eq!(
         conn.query_row::<i64, _, _>(
-            "SELECT COUNT(*) FROM object_links WHERE source_object_id='heading-1' AND \
-link_type='related' AND target_object_id='project-1'",
+            "SELECT COUNT(*) FROM object_links WHERE source_object_id='heading-1' AND
+             link_type='related' AND target_object_id='project-1'",
             [],
             |r| r.get(0)
         )

@@ -1115,8 +1115,8 @@ async fn secret_bearing_worker_failure_is_redacted_end_to_end() {
     );
     let panic = std::thread::spawn(|| {
         panic!(
-            "WORKER_SECRET_UNIQUE ARK_MARKDOWN_BODY_UNIQUE RAW_REQUEST_PAYLOAD_UNIQUE \
-C:\\Users\\secret-user\\vault\\private-note.md"
+            "WORKER_SECRET_UNIQUE ARK_MARKDOWN_BODY_UNIQUE RAW_REQUEST_PAYLOAD_UNIQUE \\
+                 C:\\Users\\secret-user\\vault\\private-note.md"
         )
     })
     .join();

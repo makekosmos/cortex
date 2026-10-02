@@ -178,9 +178,8 @@ mod tests {
         );
         assert_eq!(
             strip_whisper_timestamps(
-                "[00:00:00.000 --> 00:00:01.280] first chunk\n[00:00:\
-30.000 --> \
-00:00:31.000] second chunk"
+                "[00:00:00.000 --> 00:00:01.280] first chunk\n[00:00:30.000 --> 00:00:31.000] \
+                    second chunk"
             ),
             "first chunk second chunk"
         );

@@ -134,9 +134,8 @@ fn map_ark_object_summary_row(row: &Row<'_>) -> rusqlite::Result<ArkObjectSummar
 pub fn list_objects(conn: &Connection) -> Result<Vec<ArkObject>, String> {
     let mut stmt = conn
         .prepare(
-            "SELECT id, type_id, type_version, title, content_json, props_json, created_at, \
-updated_at, \
-deleted_at
+            "SELECT id, type_id, type_version, title, content_json, props_json, created_at,
+             updated_at, deleted_at
              FROM objects
              ORDER BY updated_at DESC, created_at DESC",
         )
