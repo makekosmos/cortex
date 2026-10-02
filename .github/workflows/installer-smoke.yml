@@ -118,6 +118,12 @@ jobs:
 
           # Poll for the Engine that --start-engine / the Run key brings up —
           # it must run from the installed versions\<v> dir at FileVersion v.
+          function Show-ProductProcesses {
+            Get-Process -ErrorAction SilentlyContinue |
+              Where-Object { 'mundus-engine','Mundus Manager','Mundus','agenda-gpui','memoria-gpui','dictation-gpui' -contains $_.Name } |
+              ForEach-Object { Write-Host "  proc $($_.Name) pid=$($_.Id) path='$($_.Path)' fv='$($_.VersionInfo.FileVersion)'" }
+          }
+
           function Assert-EngineRunning {
             $want = "$env:LOCALAPPDATA\Mundus\Engine\versions\$env:VERSION\mundus-engine.exe"
             $deadline = (Get-Date).AddSeconds(60)
@@ -127,6 +133,7 @@ jobs:
               if ($hit) { return }
               Start-Sleep -Milliseconds 500
             } while ((Get-Date) -lt $deadline)
+            Show-ProductProcesses
             throw "engine not running from $want at version $env:VERSION"
           }
 
@@ -218,6 +225,7 @@ jobs:
               if ($engine) { return $procs }
               Start-Sleep -Milliseconds 500
             } while ((Get-Date) -lt $deadline)
+            $procs | ForEach-Object { Write-Host "  proc $($_.Name) pid=$($_.Id) path='$($_.Path)' fv='$($_.VersionInfo.FileVersion)'" }
             throw "no mundus-engine at version $ExpectVersion running from versions\"
           }
 
