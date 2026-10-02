@@ -10,8 +10,9 @@
 //! terminate step: a real one would kill every process sharing this binary's
 //! image name, including sibling test processes running in parallel.
 
+use std::io::{BufReader, Read};
 use std::path::Path;
-use std::process::{Child, Command};
+use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 
 use super::processes::{
@@ -113,6 +114,92 @@ fn a_failed_kill_is_reported_with_the_pid() {
         "{report:?}"
     );
     assert!(!processes::report_ok(&report));
+}
+
+/// Helper: spawn B (sleep_helper), write its pid to the file named by
+/// MUNDUS_TEST_PIPE_PIDFILE, exit. B keeps running — dropping `Child`
+/// detaches, it never kills. (A pid file, not stdout: libtest captures test
+/// output, so the pipe would carry harness noise, not the pid.)
+#[test]
+fn pipe_spawn_helper() {
+    let Some(pidfile) = std::env::var_os("MUNDUS_TEST_PIPE_PIDFILE") else {
+        return;
+    };
+    // Deliberately NOT ChildGuard: B must outlive this process — the drop
+    // guard would kill it. The zombie is reaped by the calling test's
+    // PidGuard.
+    let exe = std::env::current_exe().unwrap();
+    #[allow(clippy::zombie_processes)] // B must outlive us — that's the test.
+    let child = Command::new(exe)
+        .args([
+            "--exact",
+            "installer::processes_tests::sleep_helper",
+            "--test-threads=1",
+        ])
+        .env("MUNDUS_TEST_SLEEP_CHILD", "1")
+        .spawn()
+        .unwrap();
+    std::fs::write(&pidfile, child.id().to_string()).unwrap();
+}
+
+/// Proves why `--start-engine` must run via ExecWait, not nsExec::ExecToLog:
+/// B — spawned with the default (inherit) stdio — inherits A's stdout, which
+/// is our pipe's write end, so the pipe stays open while B lives even after
+/// A exits. ExecToLog waits for pipe EOF: under an installer whose last step
+/// spawns a long-lived Engine it would block forever.
+#[test]
+fn grandchildren_hold_our_piped_stdout_open() {
+    let pidfile = tempfile::NamedTempFile::new().unwrap();
+    let exe = std::env::current_exe().unwrap();
+    let mut a = Command::new(exe)
+        .args([
+            "--exact",
+            "installer::processes_tests::pipe_spawn_helper",
+            "--test-threads=1",
+        ])
+        .env("MUNDUS_TEST_PIPE_PIDFILE", pidfile.path())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    a.wait().unwrap();
+    let b_pid: u32 = std::fs::read_to_string(pidfile.path())
+        .unwrap()
+        .trim()
+        .parse()
+        .unwrap();
+    let _b_guard = PidGuard(b_pid);
+    let mut reader = BufReader::new(a.stdout.take().unwrap());
+
+    // A is gone, B still runs — B inherited A's stdout (the pipe's write
+    // end), so the pipe must NOT reach EOF. The read runs on a thread and
+    // reports back through a channel; no sleep needed.
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let mut sink = Vec::new();
+        let _ = reader.read_to_end(&mut sink);
+        let _ = tx.send(());
+    });
+    assert!(
+        rx.recv_timeout(Duration::from_secs(3)).is_err(),
+        "pipe reached EOF while grandchild B (pid {b_pid}) still runs — \
+         B did not inherit A's stdout, so ExecToLog would have been safe"
+    );
+
+    // Only B's death releases the handle — killed through the same
+    // terminate-and-wait path the installer uses; only then EOF.
+    assert_eq!(terminate_and_wait(b_pid).unwrap(), KillOutcome::Gone);
+    rx.recv_timeout(Duration::from_secs(30))
+        .expect("pipe did not reach EOF after the grandchild exited");
+}
+
+/// Kills a not-our-child pid on drop — the spawn belongs to the helper
+/// process, so `ChildGuard` cannot reach it.
+struct PidGuard(u32);
+
+impl Drop for PidGuard {
+    fn drop(&mut self) {
+        let _ = terminate_and_wait(self.0);
+    }
 }
 
 #[test]
