@@ -44,8 +44,25 @@ pub struct IntegrationSetting {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum IntegrationSettingKind {
+    /// Public login name (ник) — plain integration config, shown unmasked.
+    Username,
+    /// Generic non-secret value — plain integration config.
     Text,
+    /// User-pasted API key — credential vault.
+    #[serde(rename = "api_key")]
+    ApiKey,
+    /// Session or access token — credential vault.
+    Token,
+    /// Opaque secret that does not fit a more specific kind — credential vault.
     Secret,
+}
+
+impl IntegrationSettingKind {
+    /// Vault-bound kinds. Everything else is stored as plain integration
+    /// config (`integration-settings.json`) and may be rendered unmasked.
+    pub fn is_secret(&self) -> bool {
+        matches!(self, Self::ApiKey | Self::Token | Self::Secret)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -93,7 +110,7 @@ impl IntegrationManifest {
                 })
                 || !keys.insert(&setting.key)
                 || setting.injection.as_ref().is_some_and(|injection| {
-                    !matches!(setting.kind, IntegrationSettingKind::Secret)
+                    !setting.kind.is_secret()
                         || injection.validate().is_err()
                         || injection.origins().iter().any(|origin| {
                             !manifest.permissions.iter().any(|permission| {
@@ -170,7 +187,7 @@ fn validate_login(
             "integration.login.secret_setting",
         ));
     };
-    if !matches!(setting.kind, IntegrationSettingKind::Secret) {
+    if !setting.kind.is_secret() {
         return Err(ManifestError::InvalidField(
             "integration.login.secret_setting",
         ));

@@ -13,21 +13,19 @@ pub(super) fn has_integration_credential(
     version: &str,
     values: &HashMap<String, String>,
 ) -> bool {
-    let configured = integration.settings.iter().any(|setting| match setting.kind {
-        crate::package_manifest::IntegrationSettingKind::Text => values.contains_key(&setting.key),
-        crate::package_manifest::IntegrationSettingKind::Secret => {
+    let configured = integration.settings.iter().any(|setting| {
+        if setting.kind.is_secret() {
             read_package_integration_secret(id, version, &setting.key).is_some()
+        } else {
+            values.contains_key(&setting.key)
         }
     });
     configured
         && integration.settings.iter().filter(|setting| setting.required).all(|setting| {
-            match setting.kind {
-                crate::package_manifest::IntegrationSettingKind::Text => {
-                    values.contains_key(&setting.key)
-                }
-                crate::package_manifest::IntegrationSettingKind::Secret => {
-                    read_package_integration_secret(id, version, &setting.key).is_some()
-                }
+            if setting.kind.is_secret() {
+                read_package_integration_secret(id, version, &setting.key).is_some()
+            } else {
+                values.contains_key(&setting.key)
             }
         })
 }

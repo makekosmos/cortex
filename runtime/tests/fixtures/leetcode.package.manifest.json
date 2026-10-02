@@ -71,7 +71,7 @@
       {
         "key": "session",
         "label": "Сессия LeetCode",
-        "kind": "secret",
+        "kind": "token",
         "description": "Сессионные cookies LeetCode.",
         "required": true,
         "injection": {

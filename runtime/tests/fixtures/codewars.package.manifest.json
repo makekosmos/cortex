@@ -70,9 +70,9 @@
     "settings": [
       {
         "key": "username",
-        "label": "Имя пользователя",
-        "kind": "text",
-        "description": "Публичное имя пользователя Codewars.",
+        "label": "Ник",
+        "kind": "username",
+        "description": "Ник на Codewars — публичный, не секрет.",
         "required": true
       }
     ],
