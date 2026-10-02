@@ -9,7 +9,7 @@ const installer = readFileSync(path.join(buildDir, "installer.nsi"), "utf8");
 const installSection =
   installer.split('Section "Install"')[1]?.split('Section "Uninstall"')[0] ?? "";
 const uninstallSection = installer.split('Section "Uninstall"')[1] ?? "";
-const macroSection = installer.split("!macro KillProductProcesses")[1] ?? "";
+const macroSection = installer.split("!macro StopProductProcesses")[1] ?? "";
 
 const runKey = "${RUN_KEY}";
 
@@ -156,22 +156,72 @@ test("removes old autostart Run values unconditionally on install", () => {
   expect(insertAt).toBeLessThan(legacyProgramDirAt);
 });
 
-test("stops product processes — bundled, store apps and legacy names", () => {
-  expect(uninstallSection).toContain("!insertmacro KillProductProcesses");
-  expect(installSection).toContain("!insertmacro KillProductProcesses");
-  expect(macroSection).toContain("taskkill /F /IM mundus-engine.exe");
-  expect(macroSection).toContain('taskkill /F /IM "Mundus Manager.exe"');
-  // Store-installed apps must be stopped before their dir is removed or
-  // replaced.
-  for (const exe of ["agenda-gpui.exe", "memoria-gpui.exe", "dictation-gpui.exe"]) {
-    expect(macroSection).toContain(`taskkill /F /IM ${exe}`);
-  }
-  // MIGRATION(KOS-267): the running pre-upgrade processes carry old names.
-  expect(macroSection).toContain("taskkill /F /IM kepler-backend.exe");
-  expect(macroSection).toContain("taskkill /F /IM ark-core-rpc.exe");
-  expect(macroSection).toContain('taskkill /F /IM "Kosmos Manager.exe"');
-  expect(macroSection).toContain("taskkill /F /IM Kosmos.exe");
+// KOS-306: a single staged-engine call stops the product — graceful
+// `--shutdown` first, then the `kill-product-processes` subcommand for the
+// leftovers (store apps, 0.9.x/Electron-era names). No taskkill, no
+// per-name spawns; the name list lives in runtime/src/installer/processes.rs.
+test("stops product processes via the staged engine subcommand", () => {
+  expect(installSection).toContain("!insertmacro StopProductProcesses");
+  expect(macroSection).toContain("--shutdown");
+  expect(macroSection).toContain("kill-product-processes");
+  // KOS-306 round 2: the helper runs from $INSTDIR\resources.next — the
+  // payload staged inside the install dir, never an exe out of %TEMP%.
+  expect(macroSection).toContain('"$INSTDIR\\resources.next\\engine\\mundus-engine.exe"');
   expect(macroSection).toContain("Sleep 500");
+  expect(uninstallSection).toContain('mundus-engine.exe" --shutdown');
+  expect(uninstallSection).toContain('mundus-engine.exe" kill-product-processes');
+  expect(installer).not.toContain("taskkill");
+});
+
+// KOS-306: "installer drops an exe into %TEMP% and runs it" is the dropper
+// feature this ticket removes — nothing under $PLUGINSDIR may execute, and
+// the payload moves by rename, not a second copy.
+test("the installer never executes from $PLUGINSDIR and never copies the payload twice", () => {
+  for (const line of installer.split("\n")) {
+    if (/\b(nsExec|Exec|ExecWait|ExecShell)\b/.test(line)) {
+      expect(line).not.toContain("$PLUGINSDIR");
+    }
+  }
+  expect(installer).not.toContain("CopyFiles");
+});
+
+test("the payload swap keeps the previous install until the new tree is in place", () => {
+  // resources -> resources.old, resources.next -> resources, delete .old —
+  // a failed rename-aside aborts, a failed rename-in restores .old.
+  expect(installer).toContain('Rename "$INSTDIR\\resources" "$INSTDIR\\resources.old"');
+  expect(installer).toContain('Rename "$INSTDIR\\resources.next" "$INSTDIR\\resources"');
+  expect(installer).toContain('Rename "$INSTDIR\\resources.old" "$INSTDIR\\resources"');
+  expect(installer).toContain("payload_locked:");
+  expect(installer).toContain("payload_rollback:");
+  // The live tree is renamed aside, never deleted before the new one is in
+  // — the uninstaller still owns `RMDir /r` on resources.
+  expect(installSection).not.toContain('RMDir /r "$INSTDIR\\resources"');
+});
+
+// KOS-306 round 3: the installer is bilingual — a literal Abort/MessageBox
+// string would stay English for Russian users. Every such message goes
+// through a $(…) LangString.
+test("no Abort or MessageBox carries a literal message — all go through LangStrings", () => {
+  for (const line of installer.split("\n")) {
+    const trimmed = line.trim();
+    if (/^Abort\s/.test(trimmed)) expect(trimmed).toContain("$(");
+    if (/^\s*MessageBox\s/.test(line)) expect(line).toContain("$(");
+  }
+});
+
+// KOS-306 round 3: an aborted install leaves resources.next/.old behind —
+// the uninstaller must remove every directory the install section can
+// create under $INSTDIR, or the final RMDir "$INSTDIR" fails silently.
+test("uninstall removes every directory the install can create under $INSTDIR", () => {
+  const created = new Set(
+    (installer.match(/\$INSTDIR\\(resources(?:\.\w+)?)/g) ?? []).map((m) =>
+      m.replace("$INSTDIR\\", ""),
+    ),
+  );
+  expect(created).toEqual(new Set(["resources", "resources.next", "resources.old"]));
+  for (const dir of created) {
+    expect(uninstallSection).toContain(`RMDir /r "$INSTDIR\\${dir}"`);
+  }
 });
 
 test("uninstall removes the privileged service via one elevated runas call", () => {
@@ -186,21 +236,10 @@ test("uninstall removes the privileged service via one elevated runas call", () 
   expect(uninstallSection).toContain("Call un.RemovePrivilegedService");
 });
 
-test("always starts the Engine at the end of install", () => {
-  const postInstall = readFileSync(path.join(buildDir, "engine-post-install.ps1"), "utf8");
-  expect(postInstall).toContain("mundus-engine.exe");
-  expect(postInstall).toContain("'Mundus Engine'");
-  expect(postInstall).toContain("--start");
-  expect(postInstall).toContain("Start-Process");
-  expect(installer).toContain("engine-post-install.ps1");
-});
-
-test("starts the Engine unconditionally at end of install; Manager only via finish page", () => {
+test("always starts the Engine at the end of install; Manager only via finish page", () => {
   expect(installer).toContain("Function StartEngine");
   expect(installSection).toContain("Call StartEngine");
-  expect(installer).toContain(
-    'nsExec::ExecToLog \'"$R5" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\\resources\\engine-post-install.ps1" -StartEngine\'',
-  );
+  expect(installer).toContain("post-install --start-engine");
   // The Manager is launched only by the MUI finish-page checkbox, not by a
   // silent Exec in the install section.
   expect(installSection).not.toContain(
@@ -219,7 +258,7 @@ test("the Install section never writes or shortcuts a bundled app component", ()
     expect(installSection).not.toContain(`components\\${component}\\`);
     expect(installSection).not.toContain(`CreateShortCut "$SMPROGRAMS\\${component}`);
   }
-  expect(installSection).toContain('RMDir /r "$INSTDIR\\resources"');
+  expect(installSection).toContain('Rename "$INSTDIR\\resources.next" "$INSTDIR\\resources"');
 });
 
 // MIGRATION(KOS-267): remove after 2026-11-01.
@@ -247,12 +286,13 @@ test("records bundled components before wiping the old payloads", () => {
   expect(skipAt).toBeLessThan(marker.indexOf("FileOpen"));
   const recordAt = installSection.indexOf("Call RecordLegacyComponents");
   const kosmosWipeAt = installSection.indexOf('RMDir /r "$LOCALAPPDATA\\Programs\\Kosmos"');
-  const resourcesWipeAt = installSection.indexOf('RMDir /r "$INSTDIR\\resources"');
+  // KOS-306 round 2: the payload is swapped in by rename, not wiped.
+  const resourcesSwapAt = installSection.indexOf('Rename "$INSTDIR\\resources"');
   expect(recordAt >= 0).toBeTruthy();
   expect(kosmosWipeAt >= 0).toBeTruthy();
-  expect(resourcesWipeAt >= 0).toBeTruthy();
+  expect(resourcesSwapAt >= 0).toBeTruthy();
   expect(recordAt).toBeLessThan(kosmosWipeAt);
-  expect(recordAt).toBeLessThan(resourcesWipeAt);
+  expect(recordAt).toBeLessThan(resourcesSwapAt);
 });
 
 test("uninstall removes the store payload dir but never user data", () => {
@@ -262,20 +302,20 @@ test("uninstall removes the store payload dir but never user data", () => {
   expect(uninstallSection).not.toContain('RMDir /r "$LOCALAPPDATA\\Mundus"');
 });
 
-test("migrates autostart via shipped script and never using the Desktop VERSION", () => {
+test("migrates autostart via the staged engine and never using the Desktop VERSION", () => {
   expect(installer).not.toContain("versions\\${VERSION}\\mundus-engine.exe");
   expect(installSection).not.toContain('WriteRegStr HKCU "${RUN_KEY}" "Mundus Engine"');
-  expect(installer).toContain(
-    '-File "$INSTDIR\\resources\\engine-post-install.ps1" -MigrateAutostart',
-  );
+  expect(installer).toContain("post-install --migrate-autostart");
 });
 
-test("post-install logic ships as a script file, never inline -Command", () => {
+// KOS-306: no script host anywhere in the installer — every former
+// PowerShell step is an `install`/`post-install`/`kill-product-processes`
+// subcommand of the staged mundus-engine.exe.
+test("the installer never spawns PowerShell or a shell script", () => {
+  expect(installer.toLowerCase()).not.toContain("powershell");
+  expect(installer).not.toContain("ExecutionPolicy");
   expect(installer).not.toContain("-Command");
-  expect(installer).toContain(
-    '-File "$INSTDIR\\resources\\engine-post-install.ps1" -MigrateAutostart',
-  );
-  expect(installer).toContain('-File "$INSTDIR\\resources\\engine-post-install.ps1" -StartEngine');
+  expect(installer).not.toContain(".ps1");
 });
 
 test("no NSIS single-quoted string contains '' (NSIS has no doubled-quote escape)", () => {

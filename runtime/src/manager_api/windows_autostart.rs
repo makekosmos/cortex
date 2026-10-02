@@ -12,9 +12,8 @@ use windows::Win32::System::Registry::{
     RRF_RT_ANY, RRF_RT_REG_BINARY,
 };
 
-const RUN_SUBKEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
-const APPROVED_SUBKEY: &str =
-    r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
+// Shared with the installer's post-install subcommand (KOS-306).
+pub(crate) use crate::installer::registry::{APPROVED_SUBKEY, RUN_SUBKEY};
 
 fn wide(value: &str) -> Vec<u16> {
     value.encode_utf16().chain(std::iter::once(0)).collect()
@@ -33,7 +32,7 @@ fn win32_status(status: WIN32_ERROR) -> Result<(), String> {
 /// the same layout makes an `engine.autostart.set` opt-out
 /// indistinguishable from an OS-level disable — and the installer's
 /// migration honors both.
-pub(super) fn approved_marker(disabled: bool) -> [u8; 12] {
+pub(crate) fn approved_marker(disabled: bool) -> [u8; 12] {
     let mut marker = [0u8; 12];
     marker[0] = if disabled { 3 } else { 2 };
     let filetime = (SystemTime::now()

@@ -18,8 +18,6 @@ export const CONFIG_DIR_NAME = PRODUCT_NAME;
 export const LOCAL_DIR_NAME = PRODUCT_NAME;
 
 export const ENGINE_BINARY = "mundus-engine.exe";
-export const ENGINE_ARCHIVE = "Mundus-Engine.zip";
-export const ENGINE_ARCHIVE_STAGED = "Mundus Engine.zip";
 export const ENGINE_MANIFEST_PRODUCT = "mundus-engine";
 /** Packaged Manager executable name (GPUI binary is renamed on stage). */
 export const MANAGER_EXE = "Mundus Manager.exe";

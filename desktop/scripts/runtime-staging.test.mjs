@@ -43,10 +43,11 @@ test("non-default Cargo runtime is the one mapped into the Windows package", () 
     // separate `MUNDUS_ENGINE_RELEASE` line downloaded from a publish step.
     assert.doesNotMatch(backendBuild, /MUNDUS_ENGINE_RELEASE/);
     assert.doesNotMatch(backendBuild, /engine-version\.json/);
-    // The NSIS staging in build-desktop.mjs maps the engine manifest and
-    // archive into resources/ the same way extraResources did.
+    // The NSIS staging in build-desktop.mjs maps the unpacked engine payload
+    // (manifest + exe) into resources/engine/ (KOS-306).
     assert.match(desktopBuild, /engine-manifest\.json/);
-    assert.match(desktopBuild, /Mundus-Engine\.zip/);
+    assert.match(desktopBuild, /mundus-engine\.exe/);
+    assert.doesNotMatch(desktopBuild, /Mundus-Engine\.zip/);
     assert.equal(
       readFileSync(path.join(stageDir, "mundus-engine.exe"), "utf8"),
       "fresh:mundus-engine",
@@ -72,4 +73,3 @@ test("build retention clears only disposable next outputs and protects active bu
     rmSync(root, { recursive: true, force: true });
   }
 });
-

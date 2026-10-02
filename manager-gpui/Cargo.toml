@@ -21,11 +21,13 @@ uuid = { version = "1.26.1", features = ["v4"] }
 ureq = { version = "2.12", default-features = false, features = ["json"] }
 flate2 = "1.1"
 
-# Unconditional: build.rs resolves embed_resource at compile time and gates
-# actual resource embedding on CARGO_CFG_TARGET_OS, so cross-compiles from
-# non-Windows hosts (cargo-xwin) still embed icon + VERSIONINFO.
+# Unconditional: build.rs resolves embed_resource (through pe-version-info)
+# at compile time and the helper gates actual resource embedding on
+# CARGO_CFG_TARGET_OS, so cross-compiles from non-Windows hosts (cargo-xwin)
+# still embed icon + VERSIONINFO. The helper lives in the cortex workspace
+# so both shipped exes share one resource script (KOS-306).
 [build-dependencies]
-embed-resource = "=3.0.11"
+pe-version-info = { path = "../runtime/crates/pe-version-info" }
 
 # Dev builds: keep debug info but optimize — unoptimized taffy/cosmic-text/
 # gpui (and our own render path) make even modest UIs run at ~20fps.

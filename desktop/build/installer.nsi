@@ -2,6 +2,11 @@
 ; Agenda, Memoria and Dictation are native apps installed by the Engine from
 ; their GitHub releases (KOS-265); only components\manager ships here.
 ;
+; KOS-306: this script spawns no script host and no per-image process kills —
+; both look like dropper behaviour to Defender's first-sight ML. Everything
+; they used to do is a subcommand of the staged mundus-engine.exe (`install`,
+; `post-install`, `kill-product-processes`), invoked via nsExec.
+;
 ; Usage:
 ;   makensis.exe /DVERSION=1.2.3 /DSTAGE_DIR=C:\...\installer-stage /DOUT_FILE=C:\...\Mundus-Setup-1.2.3.exe installer.nsi
 
@@ -21,7 +26,7 @@
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\Mundus"
 !define RUN_KEY "Software\Microsoft\Windows\CurrentVersion\Run"
 !define RUN_VALUE "Mundus Engine"
-!define ENGINE_ARCHIVE "Mundus Engine.zip"
+!define ENGINE_STAGED "$INSTDIR\resources\engine"
 !define ENGINE_ROOT "$LOCALAPPDATA\Mundus\Engine"
 !define APPS_ROOT "$LOCALAPPDATA\Mundus\Apps"
 ; MANAGER_EXE is supplied by the build script via /DMANAGER_EXE (see
@@ -32,6 +37,17 @@
 ; brand::SYSTEM_SERVICE_NAME in the Engine — keep in sync.
 !define PRIVILEGED_SVC_NAME "MundusSystemSvc"
 !define PRIVILEGED_SVC_EXE "$PROGRAMFILES64\Mundus\Service\mundus-privileged-service.exe"
+
+; KOS-306: the setup exe itself must carry real version metadata — bare
+; installers with an empty VERSIONINFO are exactly what the ML flags.
+; VIProductVersion takes four numeric parts; VERSION is X.Y.Z.
+VIProductVersion "${VERSION}.0"
+VIAddVersionKey "ProductName" "${APP_NAME}"
+VIAddVersionKey "CompanyName" "${PUBLISHER}"
+VIAddVersionKey "FileDescription" "${APP_NAME} Setup"
+VIAddVersionKey "FileVersion" "${VERSION}"
+VIAddVersionKey "ProductVersion" "${VERSION}"
+VIAddVersionKey "LegalCopyright" "Copyright (C) Kazui"
 
 ; Unicode so the Russian strings render on any system code page; the build
 ; passes /INPUTCHARSET UTF8 because this file is UTF-8 without a BOM.
@@ -88,28 +104,59 @@ ShowUninstDetails hide
 LangString FINISHPAGE_RUN_TEXT ${LANG_ENGLISH} "Launch ${APP_NAME}"
 LangString FINISHPAGE_RUN_TEXT ${LANG_RUSSIAN} "Запустить ${APP_NAME}"
 
-; Current process names plus the ones a 0.9.x/Electron-era install may have
-; left running. MIGRATION(KOS-267): remove the legacy names after 2026-11-01.
-!macro KillProductProcesses
-  nsExec::ExecToLog 'taskkill /F /IM Mundus.exe'
-  nsExec::ExecToLog 'taskkill /F /IM mundus-engine.exe'
-  nsExec::ExecToLog 'taskkill /F /IM "Mundus Manager.exe"'
-  ; Store-installed native apps (KOS-265) — must not hold their dir while the
-  ; Engine or an uninstall replaces/removes it.
-  nsExec::ExecToLog 'taskkill /F /IM agenda-gpui.exe'
-  nsExec::ExecToLog 'taskkill /F /IM memoria-gpui.exe'
-  nsExec::ExecToLog 'taskkill /F /IM dictation-gpui.exe'
-  nsExec::ExecToLog 'taskkill /F /IM "Agenda.exe"'                    ; MIGRATION(KOS-267)
-  nsExec::ExecToLog 'taskkill /F /IM "Memoria.exe"'                   ; MIGRATION(KOS-267)
-  nsExec::ExecToLog 'taskkill /F /IM "Dictation.exe"'                 ; MIGRATION(KOS-267)
-  ; 0.9.x installs leave an orphaned ark-core-rpc.exe child holding the DB.
-  nsExec::ExecToLog 'taskkill /F /IM ark-core-rpc.exe'            ; MIGRATION(KOS-267)
-  nsExec::ExecToLog 'taskkill /F /IM Kosmos.exe'                  ; MIGRATION(KOS-267)
-  nsExec::ExecToLog 'taskkill /F /IM kepler-backend.exe'          ; MIGRATION(KOS-267)
-  nsExec::ExecToLog 'taskkill /F /IM "Kosmos Manager.exe"'        ; MIGRATION(KOS-267)
-  nsExec::ExecToLog 'taskkill /F /IM "Kosmos Agenda.exe"'         ; MIGRATION(KOS-267)
-  nsExec::ExecToLog 'taskkill /F /IM "Kosmos Memoria.exe"'        ; MIGRATION(KOS-267)
-  nsExec::ExecToLog 'taskkill /F /IM "Kosmos Dictation.exe"'      ; MIGRATION(KOS-267)
+; Every user-facing failure message is a LangString pair — the installer is
+; bilingual, so no Abort/MessageBox may carry a literal string.
+LangString ABORT_STAGING_FAILED ${LANG_ENGLISH} "Mundus payload staging failed"
+LangString ABORT_STAGING_FAILED ${LANG_RUSSIAN} "Не удалось распаковать файлы Mundus"
+LangString ABORT_PAYLOAD_LOCKED ${LANG_ENGLISH} "Mundus files are still in use — close Mundus and retry"
+LangString ABORT_PAYLOAD_LOCKED ${LANG_RUSSIAN} "Файлы Mundus ещё используются — закройте Mundus и повторите установку"
+LangString ABORT_PAYLOAD_ROLLBACK ${LANG_ENGLISH} "Mundus payload update failed — the previous install was restored"
+LangString ABORT_PAYLOAD_ROLLBACK ${LANG_RUSSIAN} "Не удалось обновить файлы Mundus — предыдущая версия восстановлена"
+LangString ABORT_ENGINE_INSTALL ${LANG_ENGLISH} "Mundus Engine installation failed"
+LangString ABORT_ENGINE_INSTALL ${LANG_RUSSIAN} "Не удалось установить Mundus Engine"
+LangString MSG_PRIVILEGED_SVC_LEFT ${LANG_ENGLISH} "The Mundus privileged service is still installed. To remove it later, run as administrator:"
+LangString MSG_PRIVILEGED_SVC_LEFT ${LANG_RUSSIAN} "Служба Mundus всё ещё установлена. Чтобы удалить её позже, запустите от имени администратора:"
+
+; The payload is extracted into `$INSTDIR\resources.next` *before* any
+; product process is stopped, so the kill helper is always this build's
+; exe — an older install's staged mundus-engine.exe does not carry the
+; subcommands yet and must never be invoked. Staging inside the install
+; dir (never %TEMP%/$PLUGINSDIR) keeps "installer drops and runs an exe
+; out of %TEMP%" — the dropper feature this ticket removes — out of the
+; NSIS side too, and renames within $INSTDIR stay atomic same-volume
+; moves.
+;
+; Order: `--shutdown` asks the running Engine to exit gracefully on its own
+; control path; `kill-product-processes` then force-kills whatever is left —
+; current product names plus the 0.9.x/Electron-era ones (the subcommand
+; skips its own pid, so the helper never kills itself).
+; MIGRATION(KOS-267): the legacy names live inside the subcommand, marked
+; for removal after 2026-11-01.
+!macro StopProductProcesses
+  ; Repair leftovers of a crashed previous run: an orphaned resources.old
+  ; is the last good payload — restore it when resources is gone; stale
+  ; .next/.old dirs are deleted before staging.
+  IfFileExists "$INSTDIR\resources.next\*.*" 0 +2
+    RMDir /r "$INSTDIR\resources.next"
+  IfFileExists "$INSTDIR\resources.old\*.*" 0 stale_done
+    IfFileExists "$INSTDIR\resources\*.*" 0 stale_orphaned
+      RMDir /r "$INSTDIR\resources.old"
+      Goto stale_done
+    stale_orphaned:
+      Rename "$INSTDIR\resources.old" "$INSTDIR\resources"
+  stale_done:
+  SetOutPath "$INSTDIR\resources.next"
+  ; Only `resources` is payload: installer-assets are compile-time MUI
+  ; bitmaps already baked into this exe, not runtime files.
+  File /r "${STAGE_DIR}\resources\*"
+  IfFileExists "$INSTDIR\resources.next\engine\mundus-engine.exe" 0 +2
+    Goto stage_ok
+    Abort "$(ABORT_STAGING_FAILED)"
+  stage_ok:
+  nsExec::ExecToLog '"$INSTDIR\resources.next\engine\mundus-engine.exe" --shutdown'
+  nsExec::ExecToStack '"$INSTDIR\resources.next\engine\mundus-engine.exe" kill-product-processes'
+  Pop $R8
+  Pop $R9
   Sleep 500
 !macroend
 
@@ -140,30 +187,20 @@ select_russian:
 select_done:
 FunctionEnd
 
-; Seeds or migrates Engine autostart unconditionally. The script checks
+; Seeds or migrates Engine autostart unconditionally. The subcommand checks
 ; StartupApproved\Run for a disabled marker under the current and all legacy
 ; product names; only an explicit opt-out skips writing the Run value. Uses
-; the Engine version actually installed by install-engine.ps1, never the
-; Desktop VERSION.
+; the Engine version actually installed by `install`, never the Desktop
+; VERSION.
 Function SeedOrMigrateAutostart
-  StrCpy $R5 "$WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe"
-  IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 +2
-    StrCpy $R5 "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe"
-
-  ; Post-install logic lives in a shipped script: NSIS single-quoted strings
-  ; cannot contain inline PowerShell safely.
-  nsExec::ExecToLog '"$R5" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\resources\engine-post-install.ps1" -MigrateAutostart'
+  nsExec::ExecToLog '"${ENGINE_STAGED}\mundus-engine.exe" post-install --migrate-autostart'
 FunctionEnd
 
 ; Always start the installed Engine at the end of the install. The Manager
 ; launch lives on the MUI finish page instead — the checked "Launch Mundus"
 ; checkbox runs it only on interactive installs.
 Function StartEngine
-  StrCpy $R5 "$WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe"
-  IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 +2
-    StrCpy $R5 "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe"
-
-  nsExec::ExecToLog '"$R5" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\resources\engine-post-install.ps1" -StartEngine'
+  nsExec::ExecToLog '"${ENGINE_STAGED}\mundus-engine.exe" post-install --start-engine'
 FunctionEnd
 
 
@@ -216,18 +253,14 @@ Section "Install"
   ; not the deleted directories.
   Call RecordLegacyComponents                                                       ; MIGRATION(KOS-267)
 
-  StrCpy $R0 "$WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe"
-  IfFileExists "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe" 0 +2
-    StrCpy $R0 "$WINDIR\Sysnative\WindowsPowerShell\v1.0\powershell.exe"
-
   ; Stop all product processes (current and legacy names) before touching
   ; files or registry.
-  !insertmacro KillProductProcesses
+  !insertmacro StopProductProcesses
 
   ; MIGRATION(KOS-267): remove after 2026-11-01. Old autostart values are
   ; stale regardless of whether the legacy payload survived; the user's
   ; preference is carried by StartupApproved markers, which
-  ; engine-post-install.ps1 -MigrateAutostart reads.
+  ; `post-install --migrate-autostart` reads.
   !insertmacro DeleteOldRunValues
 
   ; MIGRATION(KOS-267): upgrade from Electron or Kosmos-era installs: remove the old program
@@ -274,23 +307,40 @@ Section "Install"
   Delete "$SMPROGRAMS\Kosmos\.kosmos-desktop-host-shortcuts.json"  ; MIGRATION(KOS-267)
   RMDir "$SMPROGRAMS\Kosmos"                                       ; MIGRATION(KOS-267)
 
-  ; Replace the shipped application payload only. User data lives in
-  ; %APPDATA%\Mundus and %LOCALAPPDATA%\Mundus and is never touched here.
-  IfFileExists "$INSTDIR\resources\*.*" 0 +2
-    RMDir /r "$INSTDIR\resources"
+  ; Swap the payload in place: everything was extracted into resources.next
+  ; by StopProductProcesses, so the live `resources` is renamed aside and
+  ; the new tree renamed in — never `RMDir /r` on the live tree first.
+  ; A failed rename-in restores the old tree; a failed rename-aside means a
+  ; leftover process still holds the dir, so abort with the old install
+  ; intact.
   Delete "$INSTDIR\Uninstall.exe"
-  SetOutPath "$INSTDIR"
-  CreateDirectory "$INSTDIR"
-  File /r "${STAGE_DIR}\*"
+  ClearErrors
+  IfFileExists "$INSTDIR\resources\*.*" 0 swap_in
+    Rename "$INSTDIR\resources" "$INSTDIR\resources.old"
+    IfErrors payload_locked
+  swap_in:
+  ClearErrors
+  Rename "$INSTDIR\resources.next" "$INSTDIR\resources"
+  IfErrors payload_rollback
+  Goto payload_swapped
+payload_locked:
+  Abort "$(ABORT_PAYLOAD_LOCKED)"
+payload_rollback:
+  IfFileExists "$INSTDIR\resources.old\*.*" 0 +2
+    Rename "$INSTDIR\resources.old" "$INSTDIR\resources"
+  Abort "$(ABORT_PAYLOAD_ROLLBACK)"
+payload_swapped:
+  IfFileExists "$INSTDIR\resources.old\*.*" 0 +2
+    RMDir /r "$INSTDIR\resources.old"
 
-  ; KOS-233: install the Engine bundled with this build. The script is
+  ; KOS-233: install the Engine bundled with this build. The subcommand is
   ; monotonic and refuses to downgrade a newer Engine left by a later
-  ; Desktop version.
-  nsExec::ExecToStack '"$R0" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\resources\install-engine.ps1" -Archive "$INSTDIR\resources\${ENGINE_ARCHIVE}" -Manifest "$INSTDIR\resources\engine-manifest.json" -TargetRoot "${ENGINE_ROOT}"'
+  ; Desktop version; KOS-306 moved it off the script host into the staged exe.
+  nsExec::ExecToStack '"${ENGINE_STAGED}\mundus-engine.exe" install --manifest "${ENGINE_STAGED}\engine-manifest.json" --target-root "${ENGINE_ROOT}"'
   Pop $0
   Pop $1
   StrCmp $0 "0" engine_ready
-    Abort "Mundus Engine installation failed: $1"
+    Abort "$(ABORT_ENGINE_INSTALL): $1"
   engine_ready:
 
   ; The old Engine payload under %LOCALAPPDATA%\Kosmos\Engine is only removed
@@ -339,7 +389,7 @@ Function un.RemovePrivilegedService
       StrCmp $R0 "error" 0 done
         DetailPrint "Privileged service left installed (elevation declined)"
         IfSilent +2
-          MessageBox MB_ICONEXCLAMATION|MB_OK "The Mundus privileged service is still installed. To remove it later, run as administrator: $\r$\n${PRIVILEGED_SVC_EXE} privileged uninstall"
+          MessageBox MB_ICONEXCLAMATION|MB_OK "$(MSG_PRIVILEGED_SVC_LEFT) $\r$\n${PRIVILEGED_SVC_EXE} privileged uninstall"
   done:
 FunctionEnd
 
@@ -347,8 +397,17 @@ Section "Uninstall"
   SetShellVarContext current
 
   ; Stop processes (current and legacy names) before deleting files so
-  ; nothing is locked.
-  !insertmacro KillProductProcesses
+  ; nothing is locked. The staged engine exe ships the subcommand and still
+  ; exists at this point — it is deleted with resources below. When it is
+  ; already gone the install was partially removed by hand; there is no
+  ; shipped exe left to run, so the mop-up degrades to a log line.
+  IfFileExists "${ENGINE_STAGED}\mundus-engine.exe" 0 un_kill_done
+    nsExec::ExecToLog '"${ENGINE_STAGED}\mundus-engine.exe" --shutdown'
+    nsExec::ExecToStack '"${ENGINE_STAGED}\mundus-engine.exe" kill-product-processes'
+    Pop $R8
+    Pop $R9
+    Sleep 500
+  un_kill_done:
 
   ; One UAC prompt to remove the service before files are cleaned.
   Call un.RemovePrivilegedService
@@ -381,6 +440,10 @@ Section "Uninstall"
   ; %LOCALAPPDATA%\Mundus (including the Engine) is intentionally kept.
   RMDir /r "${APPS_ROOT}"
   RMDir /r "$INSTDIR\resources"
+  ; Crash leftovers of an aborted install — without these RMDir "$INSTDIR"
+  ; below would fail silently and the folder would stay.
+  RMDir /r "$INSTDIR\resources.next"
+  RMDir /r "$INSTDIR\resources.old"
   Delete "$INSTDIR\Uninstall.exe"
   RMDir "$INSTDIR"
 

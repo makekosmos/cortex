@@ -29,7 +29,7 @@
     "test:format": "node --test scripts/check-format.test.mjs",
     "test:release-bom": "node --test desktop/scripts/release-bom.test.mjs desktop/scripts/release-build-contract.test.mjs desktop/scripts/release-pipeline.test.mjs desktop/scripts/release-preflight.test.mjs desktop/scripts/release-channel-local.test.mjs desktop/scripts/release-plan.test.mjs",
     "test:backend": "node runtime/scripts/test-lib.mjs",
-    "test:desktop-contracts": "node scripts/check-brand.mjs && node --experimental-transform-types --test --experimental-test-module-mocks --loader ./test-support/ts-loader.mjs desktop/build/installer-shortcut.test.mjs desktop/build/installer-script.test.mjs desktop/build/engine-post-install-headless.test.mjs desktop/scripts/engine-install-headless.test.mjs desktop/scripts/engine-bootstrap-contract.test.mjs desktop/scripts/build-package-components.test.ts",
+    "test:desktop-contracts": "node scripts/check-brand.mjs && node --experimental-transform-types --test --experimental-test-module-mocks --loader ./test-support/ts-loader.mjs desktop/build/installer-shortcut.test.mjs desktop/build/installer-script.test.mjs desktop/scripts/engine-distribution.test.mjs desktop/scripts/installer-autostart-migration.test.mjs desktop/scripts/engine-bootstrap-contract.test.mjs desktop/scripts/build-package-components.test.ts",
     "test:package-manager": "node --test scripts/package-manager-migration.test.mjs scripts/spawn-shell-contract.test.mjs",
     "test:desktop-tooling": "node --test desktop/scripts/build-package-components.e2e.test.mjs"
   },

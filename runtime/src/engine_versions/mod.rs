@@ -2,10 +2,10 @@
 //! itself lives in [`prune`]; this module only hosts the two runners that
 //! share it:
 //!
-//!   * `mundus-engine prune-versions` — one-shot CLI mode that
-//!     `desktop/build/install-engine.ps1` invokes on the just-installed exe
-//!     after switching `current.json`, so the selection rule is not
-//!     duplicated in PowerShell;
+//!   * `mundus-engine prune-versions` — one-shot CLI mode for direct
+//!     invocation (the installer itself calls [`prune_at`] in-process after
+//!     switching `current.json`, so the selection rule is never
+//!     duplicated — KOS-306);
 //!   * [`prune_self_install`] — the startup pass `setup()` runs once the
 //!     singleton is held, cleaning what existing users already accumulated.
 //!
@@ -17,12 +17,20 @@ mod prune;
 
 pub use prune::{engine_root_of_exe, Report};
 
+/// Apply the retention rule to an explicit engine root — the `install`
+/// subcommand calls this in-process after switching `current.json`
+/// (KOS-306; previously a separate `prune-versions` child process from
+/// install-engine.ps1).
+pub(crate) fn prune_at(engine_root: &std::path::Path) -> Result<Option<Report>, String> {
+    prune::prune(engine_root)
+}
+
 use std::process::ExitCode;
 
 /// Called first from `main` — when argv starts with `prune-versions` the
 /// whole process is dedicated to the cleanup and never starts the Engine
 /// (same shape as `privileged::cli::run_if_privileged`). Prints one JSON
-/// outcome line for the calling installer.
+/// outcome line for a calling installer.
 pub fn run_if_prune_versions(args: &[String]) -> Option<ExitCode> {
     if args.first().map(String::as_str) != Some("prune-versions") {
         return None;

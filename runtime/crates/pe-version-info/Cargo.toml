@@ -1,0 +1,11 @@
+[package]
+name = "pe-version-info"
+version = "0.1.0"
+edition = "2021"
+description = "Build-time helper: embeds icon + VERSIONINFO + application manifest into shipped Windows exes (KOS-306)"
+
+[dependencies]
+embed-resource = "=3.0.11"
+
+[lints]
+workspace = true

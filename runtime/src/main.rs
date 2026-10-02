@@ -130,9 +130,15 @@ fn main() -> ExitCode {
     if let Some(code) = engine::privileged::cli::run_if_privileged(&args) {
         return code;
     }
-    // `prune-versions` — one-shot version-dir cleanup for install-engine.ps1
-    // (KOS-261); dedicated process, never starts the Engine runtime.
+    // `prune-versions` — one-shot version-dir cleanup kept for an Engine
+    // invoked directly (KOS-261); dedicated process, never starts the Engine
+    // runtime.
     if let Some(code) = engine::engine_versions::run_if_prune_versions(&args) {
+        return code;
+    }
+    // `install` / `post-install` / `kill-product-processes` — the NSIS
+    // installer's one-shot modes (KOS-306); never starts the Engine runtime.
+    if let Some(code) = engine::installer::run_if_installer(&args) {
         return code;
     }
     run(args)

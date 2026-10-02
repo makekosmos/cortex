@@ -76,24 +76,65 @@ async function emitProvenance(outputDir, platform, version, bom) {
   };
 }
 
-function stageInstaller() {
+// KOS-306: every exe the installer ships (or the Engine installs) must carry
+// a VERSIONINFO resource — bare exes are a Defender first-sight ML feature.
+// Read on the build machine via Get-Item; fails the build on any gap.
+function assertVersionInfo(file, expectedVersion) {
+  const probe = spawnSync(
+    "powershell",
+    [
+      "-NoProfile",
+      "-Command",
+      `(Get-Item -LiteralPath '${file.replaceAll("'", "''")}').VersionInfo | ConvertTo-Json`,
+    ],
+    { encoding: "utf8" },
+  );
+  if (probe.status !== 0) die(`cannot read VERSIONINFO of ${file}: ${probe.stderr}`);
+  const info = JSON.parse(probe.stdout);
+  for (const key of ["CompanyName", "ProductName", "FileDescription"]) {
+    if (!info[key]) die(`${file}: VERSIONINFO ${key} is empty`);
+  }
+  if (info.ProductName !== "Mundus") die(`${file}: ProductName ${info.ProductName} != Mundus`);
+  if (info.LegalCopyright !== "Copyright (C) Kazui")
+    die(`${file}: LegalCopyright ${info.LegalCopyright} != Copyright (C) Kazui`);
+  if (String(info.FileVersion).trim() !== expectedVersion)
+    die(`${file}: FileVersion ${info.FileVersion} != ${expectedVersion}`);
+}
+
+// KOS-306 round 2: every shipped exe must carry exactly one application
+// manifest with requestedExecutionLevel asInvoker — the Engine's comes from
+// pe-version-info, the Manager's from gpui-pre's windows-manifest feature.
+function assertApplicationManifest(file) {
+  const data = readFileSync(file);
+  const marker = Buffer.from("urn:schemas-microsoft-com:asm.v1");
+  let hits = 0;
+  for (let i = data.indexOf(marker); i !== -1; i = data.indexOf(marker, i + 1)) hits++;
+  if (hits !== 1) die(`${file}: expected exactly one application manifest, found ${hits}`);
+  if (!data.includes('requestedExecutionLevel level="asInvoker"'))
+    die(`${file}: application manifest lacks requestedExecutionLevel asInvoker`);
+}
+
+function assertNoPowerShellPayload(stage) {
+  const staged = readdirSync(stage, { recursive: true }).map(String);
+  const offenders = staged.filter((name) => name.toLowerCase().endsWith(".ps1"));
+  if (offenders.length) die(`staged payload must not contain .ps1: ${offenders.join(", ")}`);
+}
+
+function stageInstaller(version) {
   const stage = path.join(SHELL_ROOT, ".tmp", "installer-stage");
   rmSync(stage, { recursive: true, force: true });
   const resources = path.join(stage, "resources");
   mkdirSync(resources, { recursive: true });
 
+  // KOS-306: the Engine payload is staged unpacked — the installer runs the
+  // staged exe's `install` subcommand in place of the removed PowerShell
+  // scripts.
   const engineDir = path.join(SHELL_ROOT, ".tmp", "engine.next");
-  for (const [sourceName, targetName] of [
-    ["Mundus-Engine.zip", "Mundus Engine.zip"],
-    ["engine-manifest.json", "engine-manifest.json"],
-  ]) {
-    const source = path.join(engineDir, sourceName);
+  for (const name of ["mundus-engine.exe", "tray.ico", "engine-manifest.json"]) {
+    const source = path.join(engineDir, name);
     if (!existsSync(source)) die(`missing engine artifact: ${source}`);
-    copyFileSync(source, path.join(resources, targetName));
   }
-  for (const script of ["install-engine.ps1", "engine-post-install.ps1"]) {
-    copyFileSync(path.join(SHELL_ROOT, "build", script), path.join(resources, script));
-  }
+  cpSync(engineDir, path.join(resources, "engine"), { recursive: true });
   copyFileSync(path.join(SHELL_ROOT, "build", "icon.ico"), path.join(resources, "icon.ico"));
   copyFileSync(path.join(SHELL_ROOT, "build", "tray.ico"), path.join(resources, "tray.ico"));
   cpSync(path.join(SHELL_ROOT, "build", "installer-assets"), path.join(stage, "installer-assets"), {
@@ -117,7 +158,43 @@ function stageInstaller() {
       `staged manager payload must contain exactly ${MANAGER_EXE}; found: ${exeFiles.join(", ")}`,
     );
   }
+
+  // KOS-306: fail the build when a shipped exe lacks VERSIONINFO, and never
+  // let a .ps1 back into the payload.
+  assertNoPowerShellPayload(stage);
+  for (const exe of [
+    path.join(resources, "engine", "mundus-engine.exe"),
+    path.join(managerDir, MANAGER_EXE),
+  ]) {
+    assertVersionInfo(exe, version);
+    assertApplicationManifest(exe);
+  }
   return stage;
+}
+
+// KOS-306: static Defender gate. `-ScanType 3 -File` is a read-only custom
+// scan — it catches static signatures and the local ML model, but NOT the
+// cloud first-sight verdict that flagged 0.10.1 (an unknown hash has no
+// reputation yet). The unpacked-payload + VERSIONINFO work is what fixes the
+// cloud verdict; this gate just keeps the local model clean.
+function defenderGate(outFile) {
+  const mpCmdRun = path.join(
+    process.env["ProgramFiles"] ?? "C:\\Program Files",
+    "Windows Defender",
+    "MpCmdRun.exe",
+  );
+  if (!existsSync(mpCmdRun)) {
+    log(`Defender gate skipped: ${mpCmdRun} not found (non-Windows host?)`);
+    return;
+  }
+  log(`Defender gate: ${mpCmdRun} -Scan -ScanType 3 -File ${outFile}`);
+  const scan = spawnSync(
+    mpCmdRun,
+    ["-Scan", "-ScanType", "3", "-File", outFile, "-DisableRemediation"],
+    { stdio: "inherit", windowsHide: true },
+  );
+  if ((scan.status ?? 1) !== 0)
+    die(`Defender scan reported a detection in ${outFile} (exit ${scan.status})`);
 }
 
 function sha512Base64(file) {
@@ -127,7 +204,7 @@ function sha512Base64(file) {
 }
 
 async function buildWindows(version) {
-  const stage = stageInstaller();
+  const stage = stageInstaller(version);
   const releaseDir = path.join(SHELL_ROOT, "release");
   mkdirSync(releaseDir, { recursive: true });
   const outFile = path.join(releaseDir, `Mundus-Setup-${version}.exe`);
@@ -156,6 +233,12 @@ async function buildWindows(version) {
     console.error(`[build-desktop] makensis exited with code ${result.status ?? "(signal)"}`);
     process.exit(result.status ?? 1);
   }
+
+  // KOS-306: the installer itself ships with VERSIONINFO too, then the
+  // static/local-ML Defender scan gates the artifact.
+  assertVersionInfo(outFile, version);
+  assertApplicationManifest(outFile);
+  defenderGate(outFile);
 
   // electron-updater / Engine updater channel file.
   const installerSha512 = sha512Base64(outFile);
@@ -243,7 +326,7 @@ async function main() {
     return;
   }
   if (packageDir) {
-    const stage = stageInstaller();
+    const stage = stageInstaller(version);
     log(`Staged installer payload at ${stage}`);
     return;
   }

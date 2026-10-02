@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync, spawnSync } from "node:child_process";
 import path from "node:path";
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   effectiveCargoTargetDir,
@@ -10,7 +10,7 @@ import {
   acquireBuildLock,
   cleanBuildIntermediates,
 } from "./runtime-staging.mjs";
-import { buildEngineArchive } from "./engine-distribution.mjs";
+import { buildEnginePayload } from "./engine-distribution.mjs";
 
 const shellRoot = fileURLToPath(new URL("..", import.meta.url));
 const releaseBuildLock = acquireBuildLock(shellRoot);
@@ -74,23 +74,17 @@ try {
 }
 // KOS-233: the Windows Desktop installer ships the Engine it was built with —
 // packaged from this same `stageDir`/commit, never downloaded from a
-// published release. The zip stays only because the NSIS install step
-// (build/install-engine.ps1) needs a single local archive to hand to
-// Expand-Archive; its contents are always this build's binaries.
+// published release. KOS-306: the payload is staged unpacked (a directory of
+// the manifest-listed files plus engine-manifest.json) — the installer runs
+// the staged exe's `install` subcommand directly, no zip and no PowerShell.
 let engineVersion = null;
 if (process.platform === "win32") {
   engineVersion = productVersion;
   const engineDir = path.join(shellRoot, ".tmp", "engine.next");
-  mkdirSync(engineDir, { recursive: true });
-  const engineArchive = path.join(engineDir, "Mundus-Engine.zip");
-  const engineManifest = buildEngineArchive(stageDir, engineArchive, {
+  buildEnginePayload(stageDir, engineDir, {
     version: engineVersion,
     sourceCommit,
   });
-  writeFileSync(
-    path.join(engineDir, "engine-manifest.json"),
-    JSON.stringify(engineManifest, null, 2) + "\n",
-  );
 }
 console.log(`[build-backend] staged Cortex and ARK runtime binaries`);
 if (engineVersion) console.log(`[build-backend] staged Engine ${engineVersion} (built from tree)`);

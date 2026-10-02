@@ -223,8 +223,11 @@ impl ManagerState {
     }
 }
 
+// pub(crate): the installer's `post-install` subcommand reuses the
+// StartupApproved marker layout and the Run/Approved subkey constants
+// (KOS-306).
 #[cfg(windows)]
-mod windows_autostart;
+pub(crate) mod windows_autostart;
 
 #[cfg(windows)]
 fn windows_autostart_enabled() -> bool {
@@ -275,7 +278,10 @@ mod tests {
         assert!(!production.contains("Command::new"));
         assert!(!autostart.contains("Command::new"));
         assert!(autostart.contains("RegSetKeyValueW"));
-        assert!(autostart.contains("Explorer\\StartupApproved\\Run"));
+        // The subkey constants live in installer::registry, shared with the
+        // post-install subcommand (KOS-306).
+        let registry = include_str!("installer/registry.rs");
+        assert!(registry.contains("Explorer\\StartupApproved\\Run"));
     }
 
     #[test]

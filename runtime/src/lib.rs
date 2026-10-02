@@ -71,6 +71,7 @@ pub mod file_index;
 pub mod focus;
 pub mod grant_authority;
 pub mod handle_relative_fs;
+pub mod installer;
 pub mod integrations;
 pub mod lock_file;
 pub mod manager_api;
@@ -104,4 +105,6 @@ mod test_links;
 pub mod updater;
 pub mod usage_tracker;
 pub mod user_data;
+#[cfg(windows)]
+pub(crate) mod win32;
 pub mod ws_server;
