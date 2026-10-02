@@ -67,7 +67,8 @@
             executable.clone(),
             owner.clone(),
         ));
-        tokio::time::timeout(Duration::from_secs(5), gate.ready())
+        // Generous hang guard only — the gate is the event (KOS-308).
+        tokio::time::timeout(Duration::from_secs(60), gate.ready())
             .await
             .expect("cleanup wait gate");
         assert_eq!(owner.lock().state, OwnerState::Cleaning);

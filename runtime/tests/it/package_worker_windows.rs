@@ -39,6 +39,13 @@ use zip::{write::FileOptions, ZipWriter};
 // must outlive the test that installs it.
 static CRASH_TEST_ROOT: OnceLock<tempfile::TempDir> = OnceLock::new();
 
+/// Generous hang guard for event waits: correctness always comes from the
+/// awaited event itself, never from elapsed time; this cap only fails a
+/// genuinely wedged worker earlier than nextest's slow-timeout would. Worker
+/// spawn/handshake under full-gate parallel load is slow but finite (KOS-308),
+/// so anything tighter is a timing assertion by another name.
+const HANG_GUARD: Duration = Duration::from_secs(60);
+
 /// Fixture env vars are process-wide and other test modules in this binary set
 /// the same ones, so the env owns the engine's worker test lock while it exists.
 struct FixtureEnv {
@@ -286,17 +293,16 @@ async fn fixture_workers_validate_protocol_and_fail_closed() {
             )
             .await
     });
-    tokio::time::timeout(Duration::from_secs(3), barrier.suspended_ready())
-        .await
-        .expect("resume barrier");
+    // The barrier fires inside the worker's pre-resume hook — the event is the
+    // synchronization, no wall-clock cap needed (KOS-308).
+    barrier.suspended_ready().await;
     assert!(!launch.is_finished());
     assert!(!markers.entry.exists());
     assert!(!markers.bootstrap.exists());
     assert_eq!(test_support::resume_count(), 0);
     barrier.release();
-    tokio::time::timeout(Duration::from_secs(3), launch)
+    launch
         .await
-        .expect("normal start timeout")
         .expect("start task")
         .expect("normal worker start");
     assert_eq!(test_support::resume_count(), 1);
@@ -335,7 +341,7 @@ async fn fixture_workers_validate_protocol_and_fail_closed() {
     let m = manifest("fixture.wrong-token");
     let started = Instant::now();
     let result = tokio::time::timeout(
-        Duration::from_secs(10),
+        HANG_GUARD,
         supervisor.start(
             &m,
             fixture(),
@@ -400,7 +406,25 @@ async fn stop_suppresses_initial_failure_retries() {
             )
             .await
     });
-    tokio::time::sleep(std::time::Duration::from_millis(1200)).await;
+    // Wait on the real event — generation 2 means the first attempt failed and
+    // the 400 ms retry was consumed — instead of a fixed sleep that CPU
+    // starvation can delay past the point it was meant to observe (KOS-308).
+    // The 3 s second delay is then the window `stop` must cancel.
+    tokio::time::timeout(HANG_GUARD, async {
+        loop {
+            if supervisor
+                .diagnostics()
+                .into_iter()
+                .find(|worker| worker.id == m.id)
+                .is_some_and(|worker| worker.generation >= 2)
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    })
+    .await
+    .expect("first retry never started");
     supervisor
         .stop(&m.id, &m.version)
         .await
@@ -453,7 +477,7 @@ async fn worker_ark_write_uses_host_and_advances_sync_state() {
         )
         .await
         .expect("worker start");
-    let object_type = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+    let object_type = tokio::time::timeout(HANG_GUARD, async {
         loop {
             let response = ark
                 .request(
@@ -598,7 +622,7 @@ async fn fake_provider_collection_uses_keyring_secret_and_broker_injection() {
         .run_now("fixture.fake-provider", "1.0.0")
         .expect("sync now");
 
-    let collection = tokio::time::timeout(Duration::from_secs(5), async {
+    let collection = tokio::time::timeout(HANG_GUARD, async {
         loop {
             if result_marker.is_file() {
                 break;
@@ -775,7 +799,7 @@ async fn signed_bridge_worker_projects_real_ark_and_restarts_idempotently() {
         .await
         .expect("bridge start");
     let markdown_path = vault.join("Bridge note-bridge-note.md");
-    let projected = tokio::time::timeout(Duration::from_secs(8), async {
+    let projected = tokio::time::timeout(HANG_GUARD, async {
         while !markdown_path.exists() {
             tokio::time::sleep(Duration::from_millis(50)).await;
         }
@@ -786,7 +810,7 @@ async fn signed_bridge_worker_projects_real_ark_and_restarts_idempotently() {
         "projection diagnostics: {:?}",
         supervisor.diagnostics()
     );
-    tokio::time::timeout(Duration::from_secs(5), async {
+    tokio::time::timeout(HANG_GUARD, async {
         while !state.join("state.json").exists() {
             tokio::time::sleep(Duration::from_millis(25)).await;
         }
@@ -798,7 +822,7 @@ async fn signed_bridge_worker_projects_real_ark_and_restarts_idempotently() {
     let markdown = std::fs::read_to_string(&markdown_path).expect("markdown");
     assert!(markdown.contains("ark_id: \"bridge-note\""));
     std::fs::write(&markdown_path, markdown.replace("from ark", "from vault")).expect("edit vault");
-    let round_trip = tokio::time::timeout(Duration::from_secs(8), async {
+    let round_trip = tokio::time::timeout(HANG_GUARD, async {
         loop {
             let response = ark
                 .request("get_object", serde_json::json!({"id":"bridge-note"}))
@@ -843,7 +867,24 @@ async fn signed_bridge_worker_projects_real_ark_and_restarts_idempotently() {
         )
         .await
         .expect("bridge restart");
-    tokio::time::sleep(Duration::from_millis(600)).await;
+    // The restarted worker reports `bridge_status` in its first heartbeat only
+    // after completing a full sync pass, so Some(..) proves the projection ran
+    // — no fixed sleep that CPU starvation could stretch or compress (KOS-308).
+    tokio::time::timeout(HANG_GUARD, async {
+        loop {
+            if supervisor
+                .diagnostics()
+                .into_iter()
+                .find(|worker| worker.id == manifest.id)
+                .is_some_and(|worker| worker.bridge_status.is_some())
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .expect("restarted bridge never completed a sync pass");
     assert_eq!(
         std::fs::read(&markdown_path).expect("restarted bytes"),
         after_first
@@ -888,7 +929,7 @@ async fn activated_worker_restarts_once_and_stop_cancels_more_retries() {
         .await
         .expect("initial start");
     assert!(supervisor.activate(&worker_manifest.id, &worker_manifest.version));
-    let retried = tokio::time::timeout(std::time::Duration::from_secs(4), async {
+    let retried = tokio::time::timeout(HANG_GUARD, async {
         loop {
             let diagnostic = supervisor
                 .diagnostics()
@@ -954,7 +995,7 @@ async fn secret_bearing_worker_failure_is_redacted_end_to_end() {
         .expect("secret fixture should complete authenticated hello");
     assert!(supervisor.activate(&worker_manifest.id, &worker_manifest.version));
 
-    tokio::time::timeout(Duration::from_secs(3), async {
+    tokio::time::timeout(HANG_GUARD, async {
         loop {
             if supervisor
                 .health(&worker_manifest.id, &worker_manifest.version)
@@ -1363,7 +1404,7 @@ async fn cancellation_after_process_publication_reaps_without_losing_holder() {
             )
             .await
     });
-    tokio::time::timeout(Duration::from_secs(5), gate.ready())
+    tokio::time::timeout(HANG_GUARD, gate.ready())
         .await
         .expect("after-launch gate");
     assert!(!launch.is_finished());
@@ -1403,13 +1444,13 @@ async fn cancellation_after_process_publication_reaps_without_losing_holder() {
 
     gate.release();
     assert!(matches!(
-        tokio::time::timeout(Duration::from_secs(10), launch)
+        tokio::time::timeout(HANG_GUARD, launch)
             .await
             .expect("launch cleanup")
             .expect("launch task"),
         Err("worker-unavailable")
     ));
-    tokio::time::timeout(Duration::from_secs(10), cancel)
+    tokio::time::timeout(HANG_GUARD, cancel)
         .await
         .expect("startup cancellation")
         .expect("cancellation task");
