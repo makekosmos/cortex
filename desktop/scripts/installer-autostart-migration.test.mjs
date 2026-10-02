@@ -17,14 +17,13 @@ const LEGACY_AUTOSTART_NAMES = [
   "KosmosKepler",
 ];
 
-test("installer autostart delegates to engine-post-install.ps1 and never writes Run inline", () => {
-  // The Engine binary path is resolved from current.json; the Run value is
-  // written by the shipped PowerShell script, not by NSIS inline registry
-  // commands, so there is no version string interpolation hazard.
+test("installer autostart delegates to the staged engine post-install and never writes Run inline", () => {
+  // The Engine binary path is resolved from current.json by the
+  // `post-install --migrate-autostart` subcommand (KOS-306), not by NSIS
+  // inline registry commands, so there is no version string interpolation
+  // hazard.
   expect(installer).not.toContain('WriteRegStr HKCU "${RUN_KEY}" "Mundus Engine"');
-  expect(installer).toContain(
-    '-File "$INSTDIR\\resources\\engine-post-install.ps1" -MigrateAutostart',
-  );
+  expect(installer).toContain("post-install --migrate-autostart");
   expect(installer).toContain("Function SeedOrMigrateAutostart");
 });
 

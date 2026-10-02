@@ -19,13 +19,14 @@ This runs the same three stages as a release build, but without the preflight,
 BOM, receipt, and publish gates:
 
 ```text
-pnpm --dir desktop run build:backend        # cargo release build + engine archive
+pnpm --dir desktop run build:backend        # cargo release build + engine payload
 pnpm --dir desktop run build:package-components   # GPUI component staging
 pnpm run build:desktop -- --local           # NSIS installer (no BOM/publish)
 ```
 
-`pnpm run build:desktop -- --local` stages the Engine archive and every built
-GPUI component under `desktop/.tmp/installer-stage`, compiles
+`pnpm run build:desktop -- --local` stages the unpacked Engine payload
+(`resources\engine\`) and every built GPUI component under
+`desktop/.tmp/installer-stage`, compiles
 `desktop/build/installer.nsi` with `makensis` (downloaded on demand into
 `desktop/.tmp/nsis`), and writes `desktop/release/Mundus-Setup-<ver>.exe` plus
 `desktop/release/latest.yml`. It never publishes and never touches the

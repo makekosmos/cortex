@@ -40,7 +40,7 @@ test("Engine ships from the same build and version as the GUI (KOS-233)", () => 
   assert.doesNotMatch(backend, /releases\/download\/v/);
   assert.match(backend, /MUNDUS_PRODUCT_VERSION: productVersion/);
   assert.match(backend, /MUNDUS_ENGINE_SOURCE_COMMIT: sourceCommit/);
-  assert.match(backend, /buildEngineArchive\(stageDir, engineArchive/);
+  assert.match(backend, /buildEnginePayload\(stageDir, engineDir/);
   assert.doesNotMatch(script, /copyEngineRelease\(/);
   assert.doesNotMatch(script, /copyEngineManifest\(/);
 });
@@ -68,4 +68,60 @@ test("shipped binaries read the product version only from the variable the build
   }
   assert.ok(readers.length > 0, "expected the product version to be read somewhere");
   for (const reader of readers) assert.match(reader, /: MUNDUS_PRODUCT_VERSION$/, reader);
+});
+
+// KOS-306: Defender's first-sight ML flagged the 0.10.1 installer. These
+// contracts pin the fixes: no script host, no per-image kills, unpacked
+// engine payload, VERSIONINFO on the installer and every shipped exe, and a
+// static Defender gate in the build.
+test("installer.nsi contains no powershell, no ExecutionPolicy and no taskkill", async () => {
+  const nsi = await readFile(
+    path.join(import.meta.dirname, "..", "build", "installer.nsi"),
+    "utf8",
+  );
+  assert.doesNotMatch(nsi, /powershell/i);
+  assert.doesNotMatch(nsi, /ExecutionPolicy/);
+  assert.doesNotMatch(nsi, /taskkill/i);
+});
+
+test("the staged installer payload contains no .ps1", async () => {
+  // KOS-306: enforced at build time inside stageInstaller — pin both the
+  // check and the absence of staged scripts in the tree.
+  assert.match(script, /assertNoPowerShellPayload\(stage\)/);
+  const buildDir = path.join(import.meta.dirname, "..", "build");
+  for (const entry of readdirSync(buildDir)) {
+    assert.ok(!entry.endsWith(".ps1"), `staged script left behind: ${entry}`);
+  }
+});
+
+test("the installer and every shipped exe get VERSIONINFO", async () => {
+  const nsi = await readFile(
+    path.join(import.meta.dirname, "..", "build", "installer.nsi"),
+    "utf8",
+  );
+  assert.match(nsi, /VIProductVersion "\$\{VERSION\}\.0"/);
+  for (const key of [
+    "ProductName",
+    "CompanyName",
+    "FileDescription",
+    "FileVersion",
+    "ProductVersion",
+    "LegalCopyright",
+  ]) {
+    assert.match(nsi, new RegExp(`VIAddVersionKey "${key}"`));
+  }
+  // The post-build check fails the build when a shipped exe reports empty
+  // CompanyName/ProductName/FileDescription or a FileVersion that is not
+  // the product version — installer included.
+  assert.match(script, /assertVersionInfo\(outFile, version\)/);
+  assert.match(script, /mundus-engine\.exe/);
+  assert.match(script, /MANAGER_EXE/);
+});
+
+test("the build runs a static Defender scan on the finished installer", () => {
+  assert.match(script, /MpCmdRun\.exe/);
+  assert.match(
+    script,
+    /"-Scan",\s*"-ScanType",\s*"3",\s*"-File",\s*outFile,\s*"-DisableRemediation"/,
+  );
 });

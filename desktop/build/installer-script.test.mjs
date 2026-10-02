@@ -9,7 +9,7 @@ const installer = readFileSync(path.join(buildDir, "installer.nsi"), "utf8");
 const installSection =
   installer.split('Section "Install"')[1]?.split('Section "Uninstall"')[0] ?? "";
 const uninstallSection = installer.split('Section "Uninstall"')[1] ?? "";
-const macroSection = installer.split("!macro KillProductProcesses")[1] ?? "";
+const macroSection = installer.split("!macro StopProductProcesses")[1] ?? "";
 
 const runKey = "${RUN_KEY}";
 
@@ -156,22 +156,19 @@ test("removes old autostart Run values unconditionally on install", () => {
   expect(insertAt).toBeLessThan(legacyProgramDirAt);
 });
 
-test("stops product processes — bundled, store apps and legacy names", () => {
-  expect(uninstallSection).toContain("!insertmacro KillProductProcesses");
-  expect(installSection).toContain("!insertmacro KillProductProcesses");
-  expect(macroSection).toContain("taskkill /F /IM mundus-engine.exe");
-  expect(macroSection).toContain('taskkill /F /IM "Mundus Manager.exe"');
-  // Store-installed apps must be stopped before their dir is removed or
-  // replaced.
-  for (const exe of ["agenda-gpui.exe", "memoria-gpui.exe", "dictation-gpui.exe"]) {
-    expect(macroSection).toContain(`taskkill /F /IM ${exe}`);
-  }
-  // MIGRATION(KOS-267): the running pre-upgrade processes carry old names.
-  expect(macroSection).toContain("taskkill /F /IM kepler-backend.exe");
-  expect(macroSection).toContain("taskkill /F /IM ark-core-rpc.exe");
-  expect(macroSection).toContain('taskkill /F /IM "Kosmos Manager.exe"');
-  expect(macroSection).toContain("taskkill /F /IM Kosmos.exe");
+// KOS-306: a single staged-engine call stops the product — graceful
+// `--shutdown` first, then the `kill-product-processes` subcommand for the
+// leftovers (store apps, 0.9.x/Electron-era names). No taskkill, no
+// per-name spawns; the name list lives in runtime/src/installer/processes.rs.
+test("stops product processes via the staged engine subcommand", () => {
+  expect(installSection).toContain("!insertmacro StopProductProcesses");
+  expect(macroSection).toContain("--shutdown");
+  expect(macroSection).toContain("kill-product-processes");
+  expect(macroSection).toContain('"$PLUGINSDIR\\stage\\resources\\engine\\mundus-engine.exe"');
   expect(macroSection).toContain("Sleep 500");
+  expect(uninstallSection).toContain('mundus-engine.exe" --shutdown');
+  expect(uninstallSection).toContain('mundus-engine.exe" kill-product-processes');
+  expect(installer).not.toContain("taskkill");
 });
 
 test("uninstall removes the privileged service via one elevated runas call", () => {
@@ -186,21 +183,10 @@ test("uninstall removes the privileged service via one elevated runas call", () 
   expect(uninstallSection).toContain("Call un.RemovePrivilegedService");
 });
 
-test("always starts the Engine at the end of install", () => {
-  const postInstall = readFileSync(path.join(buildDir, "engine-post-install.ps1"), "utf8");
-  expect(postInstall).toContain("mundus-engine.exe");
-  expect(postInstall).toContain("'Mundus Engine'");
-  expect(postInstall).toContain("--start");
-  expect(postInstall).toContain("Start-Process");
-  expect(installer).toContain("engine-post-install.ps1");
-});
-
-test("starts the Engine unconditionally at end of install; Manager only via finish page", () => {
+test("always starts the Engine at the end of install; Manager only via finish page", () => {
   expect(installer).toContain("Function StartEngine");
   expect(installSection).toContain("Call StartEngine");
-  expect(installer).toContain(
-    'nsExec::ExecToLog \'"$R5" -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\\resources\\engine-post-install.ps1" -StartEngine\'',
-  );
+  expect(installer).toContain("post-install --start-engine");
   // The Manager is launched only by the MUI finish-page checkbox, not by a
   // silent Exec in the install section.
   expect(installSection).not.toContain(
@@ -262,20 +248,20 @@ test("uninstall removes the store payload dir but never user data", () => {
   expect(uninstallSection).not.toContain('RMDir /r "$LOCALAPPDATA\\Mundus"');
 });
 
-test("migrates autostart via shipped script and never using the Desktop VERSION", () => {
+test("migrates autostart via the staged engine and never using the Desktop VERSION", () => {
   expect(installer).not.toContain("versions\\${VERSION}\\mundus-engine.exe");
   expect(installSection).not.toContain('WriteRegStr HKCU "${RUN_KEY}" "Mundus Engine"');
-  expect(installer).toContain(
-    '-File "$INSTDIR\\resources\\engine-post-install.ps1" -MigrateAutostart',
-  );
+  expect(installer).toContain("post-install --migrate-autostart");
 });
 
-test("post-install logic ships as a script file, never inline -Command", () => {
+// KOS-306: no script host anywhere in the installer — every former
+// PowerShell step is an `install`/`post-install`/`kill-product-processes`
+// subcommand of the staged mundus-engine.exe.
+test("the installer never spawns PowerShell or a shell script", () => {
+  expect(installer.toLowerCase()).not.toContain("powershell");
+  expect(installer).not.toContain("ExecutionPolicy");
   expect(installer).not.toContain("-Command");
-  expect(installer).toContain(
-    '-File "$INSTDIR\\resources\\engine-post-install.ps1" -MigrateAutostart',
-  );
-  expect(installer).toContain('-File "$INSTDIR\\resources\\engine-post-install.ps1" -StartEngine');
+  expect(installer).not.toContain(".ps1");
 });
 
 test("no NSIS single-quoted string contains '' (NSIS has no doubled-quote escape)", () => {
