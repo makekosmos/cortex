@@ -108,10 +108,16 @@ pub(super) fn render_native_apps(
         );
         for item in items {
             let id = vstr(item, "id");
-            let name = vopt(item, "name").unwrap_or_else(|| id.clone());
+            // The app id is an internal key — never a headline or caption
+            // (KOS-279). The badge already carries the version/status.
+            let name = vopt(item, "name").unwrap_or_else(|| "Приложение".into());
             let (status, color) = native_status(item);
-            let mut r = entry_row(icon_file(vopt(item, "icon_path")), name.clone(), id.clone())
-                .child(badge(status, color));
+            let mut r = entry_row(
+                icon_file(vopt(item, "icon_path")),
+                name.clone(),
+                String::new(),
+            )
+            .child(badge(status, color));
             for action_kind in native_actions(item) {
                 let aid = id.clone();
                 let aname = name.clone();

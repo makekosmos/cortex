@@ -95,8 +95,6 @@ use registry::*;
 use retry::*;
 
 #[cfg(windows)]
-use crate::package_manifest::IntegrationSettingKind;
-#[cfg(windows)]
 use crate::package_worker_protocol::{BootstrapMessage, IntegrationBootstrapConfig};
 #[cfg(windows)]
 use tasks::*;

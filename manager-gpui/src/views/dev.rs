@@ -161,6 +161,7 @@ pub fn render(
     let path_in = app.input(
         "dev.path",
         "Путь к release/*.kspkg или папке пакета…",
+        false,
         window,
         cx,
     );
@@ -229,8 +230,10 @@ pub fn render(
             el = el.child(
                 entry_row(
                     icon_file(vopt(&p, "icon_path")),
-                    vopt(&p, "name").unwrap_or_else(|| id.clone()),
-                    format!("{id} · v{}", vstr(&p, "version")),
+                    // The manifest name is required; the package id stays an
+                    // internal key, never a caption (KOS-279).
+                    vopt(&p, "name").unwrap_or_else(|| "Dev-пакет".into()),
+                    format!("v{}", vstr(&p, "version")),
                 )
                 .child(btn_id(&format!("dev-un-{id}"), "Удалить", {
                     cx.listener(move |this, _, _, cx| {

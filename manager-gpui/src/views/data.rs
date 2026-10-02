@@ -106,7 +106,7 @@ pub fn render(
         list.into_any_element()
     }));
 
-    let search = app.input("data.search", "Поиск объектов…", window, cx);
+    let search = app.input("data.search", "Поиск объектов…", false, window, cx);
     col = col.child(
         div()
             .flex()
@@ -140,8 +140,10 @@ pub fn render(
         let name = vstr(&t, "name");
         let count = vnum(&t, "count");
         let selected = app.data_type.as_deref() == Some(id.as_str());
+        // A type without a display name still must not render its id
+        // (`coding_profile_obj` & co. are internal keys — KOS-279).
         let row_name = if name.is_empty() {
-            id.clone()
+            "Тип данных".to_string()
         } else {
             name.clone()
         };
@@ -200,16 +202,13 @@ pub fn render(
     for item in items.iter().take(200) {
         let title = {
             let t = vopt(item, "title").or_else(|| vopt(item, "name"));
+            // An opaque object id is not a title (KOS-279).
             t.filter(|s| !s.is_empty())
-                .unwrap_or_else(|| vstr(item, "id"))
+                .unwrap_or_else(|| "Без названия".into())
         };
-        let sub = format!(
-            "{} · {}",
-            vstr(item, "type_id"),
-            vopt(item, "updated_at")
-                .or_else(|| vopt(item, "modified_at"))
-                .unwrap_or_default()
-        );
+        let sub = vopt(item, "updated_at")
+            .or_else(|| vopt(item, "modified_at"))
+            .unwrap_or_default();
         list = list.child(row(title, sub));
     }
     right = right.child(list);

@@ -56,7 +56,7 @@
       {
         "key": "session",
         "label": "Сессия GreatFrontEnd",
-        "kind": "secret",
+        "kind": "token",
         "description": "Секретная browser-сессия GreatFrontEnd.",
         "required": true,
         "injection": {

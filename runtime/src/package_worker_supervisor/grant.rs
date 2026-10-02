@@ -96,42 +96,39 @@ impl PackageWorkerSupervisor {
             .as_ref()
             .map(|config| {
                 if config.secrets.keys().any(|key| {
-                    !config.manifest.settings.iter().any(|setting| {
-                        setting.key == *key && setting.kind == IntegrationSettingKind::Secret
-                    })
+                    !config
+                        .manifest
+                        .settings
+                        .iter()
+                        .any(|setting| setting.key == *key && setting.kind.is_secret())
                 }) {
                     return Err("grant-failed");
                 }
                 let mut handles = HashMap::new();
                 for setting in &config.manifest.settings {
-                    match setting.kind {
-                        IntegrationSettingKind::Text
-                            if config.secrets.contains_key(&setting.key) =>
-                        {
+                    // A value stored on the wrong side of the secret/config
+                    // boundary for its declared kind means corrupted state —
+                    // refuse the grant instead of leaking it to the worker.
+                    if setting.kind.is_secret() {
+                        if config.values.contains_key(&setting.key) {
                             return Err("grant-failed");
                         }
-                        IntegrationSettingKind::Secret
-                            if config.values.contains_key(&setting.key) =>
-                        {
-                            return Err("grant-failed");
+                        if let Some(secret) = config.secrets.get(&setting.key) {
+                            let handle = self
+                                .inner
+                                .secrets
+                                .issue(
+                                    &manifest.id,
+                                    &manifest.version,
+                                    generation,
+                                    &setting.key,
+                                    secret.clone(),
+                                )
+                                .map_err(|_| "grant-failed")?;
+                            handles.insert(setting.key.clone(), handle.token());
                         }
-                        IntegrationSettingKind::Secret => {
-                            if let Some(secret) = config.secrets.get(&setting.key) {
-                                let handle = self
-                                    .inner
-                                    .secrets
-                                    .issue(
-                                        &manifest.id,
-                                        &manifest.version,
-                                        generation,
-                                        &setting.key,
-                                        secret.clone(),
-                                    )
-                                    .map_err(|_| "grant-failed")?;
-                                handles.insert(setting.key.clone(), handle.token());
-                            }
-                        }
-                        IntegrationSettingKind::Text => {}
+                    } else if config.secrets.contains_key(&setting.key) {
+                        return Err("grant-failed");
                     }
                 }
                 let bootstrap = IntegrationBootstrapConfig {

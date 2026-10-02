@@ -56,7 +56,7 @@
       {
         "key": "api_token",
         "label": "API-токен",
-        "kind": "secret",
+        "kind": "token",
         "description": "API-токен Toggl Track из профиля пользователя.",
         "required": true,
         "injection": {

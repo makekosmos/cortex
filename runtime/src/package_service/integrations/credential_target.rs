@@ -22,20 +22,20 @@ impl PackageService {
             .map(|login| login.secret_setting.as_str())
             .or_else(|| {
                 integration.settings.iter().find(|setting| {
-                    setting.required
-                        && setting.kind == crate::package_manifest::IntegrationSettingKind::Secret
+                    setting.required && setting.kind.is_secret()
                 }).map(|setting| setting.key.as_str())
             })
             .or_else(|| {
                 integration.settings.iter().find(|setting| {
-                    setting.kind == crate::package_manifest::IntegrationSettingKind::Secret
+                    setting.kind.is_secret()
                 }).map(|setting| setting.key.as_str())
             })
             .ok_or(PackageError::Invalid)?;
-        if !integration.settings.iter().any(|candidate| {
-            candidate.key == setting
-                && candidate.kind == crate::package_manifest::IntegrationSettingKind::Secret
-        }) {
+        if !integration
+            .settings
+            .iter()
+            .any(|candidate| candidate.key == setting && candidate.kind.is_secret())
+        {
             return Err(PackageError::Invalid);
         }
         Ok((package.version, setting.to_owned()))
@@ -60,10 +60,11 @@ impl PackageService {
             return Err(PackageError::Invalid);
         };
         let integration = manifest.integration.as_ref().ok_or(PackageError::Invalid)?;
-        if !integration.settings.iter().any(|candidate| {
-            candidate.key == setting
-                && candidate.kind == crate::package_manifest::IntegrationSettingKind::Secret
-        }) {
+        if !integration
+            .settings
+            .iter()
+            .any(|candidate| candidate.key == setting && candidate.kind.is_secret())
+        {
             return Err(PackageError::Invalid);
         }
         worker.supervisor.stop(id, version).await.map_err(|_| PackageError::Persistence)?;

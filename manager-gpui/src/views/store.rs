@@ -147,12 +147,23 @@ pub(crate) fn is_development(p: &Value) -> bool {
     p.get("catalog_sequence").and_then(Value::as_u64) == Some(0)
 }
 
-/// Display name first, package id second — the name the user knows the app
-/// by, never the `com.kosmos.*` identifier as the headline.
+/// Display name only — the package id (`com.kosmos.*`) is an internal key
+/// and never reaches the screen, not even as a fallback (KOS-279).
 fn entry_title(p: &Value) -> String {
     vopt(p, "name")
         .filter(|name| !name.is_empty())
-        .unwrap_or_else(|| vstr(p, "id"))
+        .unwrap_or_else(|| "Без названия".into())
+}
+
+/// Package `kind` → Russian UI text for catalog captions.
+fn kind_text(kind: &str) -> &'static str {
+    match kind {
+        "app" => "Приложение",
+        "source" => "Источник данных",
+        "bridge" => "Мост",
+        "widget" => "Виджет",
+        _ => "Пакет",
+    }
 }
 
 /// App-kind rows from `packages.list` for the «Приложения» card. An app
@@ -173,8 +184,8 @@ pub(crate) fn package_open_disabled(p: &Value) -> bool {
     !vbool(p, "enabled")
 }
 
-/// One installed package row: icon, display name, `id · v<version>`
-/// caption, status badge, enable toggle and Удалить.
+/// One installed package row: icon, display name, `v<version>` caption,
+/// status badge, enable toggle and Удалить.
 fn package_row(p: &Value, cx: &mut Context<ManagerApp>) -> Div {
     let id = vstr(p, "id");
     let name = entry_title(p);
@@ -189,7 +200,7 @@ fn package_row(p: &Value, cx: &mut Context<ManagerApp>) -> Div {
     let mut r = entry_row(
         icon_file(vopt(p, "icon_path")),
         name.clone(),
-        format!("{id} · v{}", vstr(p, "version")),
+        format!("v{}", vstr(p, "version")),
     );
     if is_development(p) {
         r = r.child(badge("В разработке", WARN()));
@@ -264,15 +275,12 @@ fn render_catalog(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElem
             let desc = vopt(item, "description").unwrap_or_default();
             let ver = vstr(item, "version");
             let kind = vstr(item, "kind");
-            // The id is the constant secondary caption. A description carries
-            // the meaning and wins the slot; the listing kind is only the
-            // fallback when no description exists — printing both reads as
-            // noise next to the id.
-            let detail = if desc.is_empty() { kind } else { desc };
-            let caption = if detail.is_empty() {
-                id.clone()
+            // The caption carries meaning: the description, else the kind
+            // translated to Russian. The package id never shows (KOS-279).
+            let caption = if desc.is_empty() {
+                kind_text(&kind).to_string()
             } else {
-                format!("{id} · {detail}")
+                desc
             };
             let mut r = entry_row(icon_url(vopt(item, "icon_url")), name.clone(), caption);
             r = r.child(badge(format!("v{ver}"), MUTED_FG()));
@@ -372,17 +380,18 @@ mod tests {
     }
 
     #[test]
-    fn display_name_wins_over_the_package_id() {
-        // KOS-285: «Ordo» is the headline; «com.kosmos.focus» is the caption.
+    fn display_name_wins_and_the_id_never_leaks() {
+        // KOS-285: «Ordo» is the headline. KOS-279: a missing name degrades
+        // to a neutral placeholder, never to the internal package id.
         let p = json!({"id": "com.kosmos.focus", "name": "Ordo"});
         assert_eq!(entry_title(&p), "Ordo");
         assert_eq!(
             entry_title(&json!({"id": "com.kosmos.focus"})),
-            "com.kosmos.focus"
+            "Без названия"
         );
         assert_eq!(
             entry_title(&json!({"id": "com.kosmos.focus", "name": ""})),
-            "com.kosmos.focus"
+            "Без названия"
         );
     }
 }

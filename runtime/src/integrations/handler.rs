@@ -101,7 +101,12 @@ pub async fn handle_operation(
                 .filter(|value| !value.is_empty())
                 .ok_or_else(|| "Укажите данные подключения".to_string())?;
             packages
-                .set_integration_value(id, params.get("setting").and_then(Value::as_str), value)
+                .set_integration_value(
+                    id,
+                    params.get("setting").and_then(Value::as_str),
+                    params.get("kind").and_then(Value::as_str),
+                    value,
+                )
                 .await
                 .map_err(|_| "Не удалось сохранить настройку интеграции".to_string())?;
             snapshot(data_dir, packages)

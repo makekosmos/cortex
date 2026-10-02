@@ -1,8 +1,6 @@
 //! Worker JSON-lines protocol and in-memory capability grants.
 
-use crate::package_manifest::{
-    IntegrationSchedule, IntegrationSetting, IntegrationSettingKind, PackageManifest,
-};
+use crate::package_manifest::{IntegrationSchedule, IntegrationSetting, PackageManifest};
 use rand::RngCore;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
@@ -92,9 +90,10 @@ impl IntegrationBootstrapConfig {
         }
         for (key, value) in &self.values {
             if !keys.contains(key)
-                || self.settings.iter().any(|setting| {
-                    setting.key == *key && setting.kind == IntegrationSettingKind::Secret
-                })
+                || self
+                    .settings
+                    .iter()
+                    .any(|setting| setting.key == *key && setting.kind.is_secret())
                 || value.is_empty()
                 || value.len() > 4096
                 || value.trim() != value
@@ -105,9 +104,10 @@ impl IntegrationBootstrapConfig {
         }
         for (key, token) in &self.secret_handles {
             if !keys.contains(key)
-                || self.settings.iter().any(|setting| {
-                    setting.key == *key && setting.kind != IntegrationSettingKind::Secret
-                })
+                || self
+                    .settings
+                    .iter()
+                    .any(|setting| setting.key == *key && !setting.kind.is_secret())
                 || token.len() != 64
                 || !token.bytes().all(|byte| byte.is_ascii_hexdigit())
             {
@@ -118,9 +118,10 @@ impl IntegrationBootstrapConfig {
             if !setting.required {
                 continue;
             }
-            let present = match setting.kind {
-                IntegrationSettingKind::Text => self.values.contains_key(&setting.key),
-                IntegrationSettingKind::Secret => self.secret_handles.contains_key(&setting.key),
+            let present = if setting.kind.is_secret() {
+                self.secret_handles.contains_key(&setting.key)
+            } else {
+                self.values.contains_key(&setting.key)
             };
             if !present {
                 return Err("invalid-request");

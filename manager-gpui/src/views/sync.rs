@@ -26,7 +26,11 @@ pub fn render(
         let device = vget(v, "local_device");
         let mut el = card();
         el = el.child(
-            row("Статус", format!("Транспорт: {}", vstr(v, "transport"))).child(badge(
+            row(
+                "Статус",
+                format!("Транспорт: {}", transport_text(&vstr(v, "transport"))),
+            )
+            .child(badge(
                 if running {
                     "Запущена"
                 } else {
@@ -36,7 +40,6 @@ pub fn render(
             )),
         );
         el = el.child(kv("Устройство", vstr(device, "device_name")));
-        el = el.child(kv("ID устройства", vstr(device, "device_id")));
         el.into_any_element()
     }));
 
@@ -71,7 +74,13 @@ pub fn render(
         el.into_any_element()
     }));
 
-    let ticket_in = app.input("sync.peer", "Код устройства для подключения…", window, cx);
+    let ticket_in = app.input(
+        "sync.peer",
+        "Код устройства для подключения…",
+        false,
+        window,
+        cx,
+    );
     col = col.child(
         card()
             .child(
@@ -116,33 +125,57 @@ pub fn render(
             el = el.child(empty("Нет связанных устройств"));
         }
         for p in peers {
-            let id = vstr(p, "peer_id");
+            // Engine sends `device_id`/`device_name`; `peer_id` was never
+            // populated, so the row showed an empty name and the disconnect
+            // call carried an empty id.
+            let id = vstr(p, "device_id");
             let name = {
                 let n = vopt(p, "device_name")
                     .or_else(|| vopt(p, "name"))
                     .unwrap_or_default();
                 if n.is_empty() {
-                    id.clone()
+                    "Устройство".to_string()
                 } else {
                     n
                 }
             };
-            let status = vopt(p, "status").unwrap_or_else(|| "unknown".into());
-            el = el.child(row(name, format!("{id} · {status}")).child(btn_id(
-                &format!("disc-{id}"),
-                "Отключить",
-                cx.listener(move |this, _, _, cx| {
-                    this.ask_confirm(
-                        "Отключить устройство",
-                        "Устройство будет удалено из списка синхронизации.",
-                        "disconnect_peer",
-                        json!({"peer_id": id}),
-                        cx,
-                    );
-                }),
-            )));
+            let peer_name = name.clone();
+            el = el.child(
+                row(name, peer_status_text(&vstr(p, "status"))).child(btn_id(
+                    &format!("disc-{id}"),
+                    "Отключить",
+                    cx.listener(move |this, _, _, cx| {
+                        this.ask_confirm(
+                            "Отключить устройство",
+                            format!("«{peer_name}» будет удалено из списка синхронизации."),
+                            "disconnect_peer",
+                            json!({"device_id": id}),
+                            cx,
+                        );
+                    }),
+                )),
+            );
         }
         el.into_any_element()
     }));
     col.into_any_element()
+}
+
+/// Peer `status` from the sync snapshot — mapped to Russian text in one place.
+fn peer_status_text(status: &str) -> &'static str {
+    match status {
+        "online" => "В сети",
+        "offline" => "Не в сети",
+        _ => "Статус неизвестен",
+    }
+}
+
+/// `transport` from the sync snapshot — the raw enum values stay off-screen.
+fn transport_text(transport: &str) -> &'static str {
+    match transport {
+        "iroh" => "Iroh (P2P)",
+        "relay" => "Через сервер",
+        "lan" => "Локальная сеть",
+        _ => "Неизвестно",
+    }
 }

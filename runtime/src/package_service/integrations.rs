@@ -103,19 +103,14 @@ impl PackageService {
         let Some(integration) = manifest.integration.clone() else {
             return Ok(None);
         };
+        let mut state = self.read_integration_settings();
+        self.migrate_vaulted_public_values(package, &integration, &mut state)?;
         let key = Self::bridge_key(&package.id, &package.version);
-        let values = self
-            .read_integration_settings()
-            .values
-            .get(&key)
-            .cloned()
-            .unwrap_or_default();
+        let values = state.values.get(&key).cloned().unwrap_or_default();
         let secrets = integration
             .settings
             .iter()
-            .filter(|setting| {
-                setting.kind == crate::package_manifest::IntegrationSettingKind::Secret
-            })
+            .filter(|setting| setting.kind.is_secret())
             .filter_map(|setting| {
                 read_package_integration_secret(&package.id, &package.version, &setting.key)
                     .map(|secret| (setting.key.clone(), secret))
@@ -132,14 +127,19 @@ impl PackageService {
         &self,
         id: &str,
         setting_key: Option<&str>,
+        expected_kind: Option<&str>,
         value: &str,
     ) -> Result<(), PackageError> {
         if !valid_integration_value(value) { return Err(PackageError::Invalid); }
-        self.set_integration_value_unlocked(id, setting_key, value).await
+        self.set_integration_value_unlocked(id, setting_key, expected_kind, value).await
     }
 
     async fn set_integration_value_unlocked(
-        &self, id: &str, setting_key: Option<&str>, value: &str,
+        &self,
+        id: &str,
+        setting_key: Option<&str>,
+        expected_kind: Option<&str>,
+        value: &str,
     ) -> Result<(), PackageError> {
         let package = self.integration_package(id)?;
         let VersionedManifest::V2(manifest) = &package.manifest else {
@@ -158,25 +158,33 @@ impl PackageService {
         if !valid_integration_value(value) {
             return Err(PackageError::Invalid);
         }
-        match setting.kind {
-            crate::package_manifest::IntegrationSettingKind::Text => {
-                let mut state = self.read_integration_settings();
-                state
-                    .values
-                    .entry(Self::bridge_key(&package.id, &package.version))
-                    .or_default()
-                    .insert(setting.key.clone(), value.to_owned());
-                write_owner_only_json(&self.integration_settings_path(), &state)
-                    .map_err(|_| PackageError::Persistence)?;
-            }
-            crate::package_manifest::IntegrationSettingKind::Secret => {
-                save_package_integration_secret(
-                    &package.id,
-                    &package.version,
-                    &setting.key,
-                    value,
-                )?;
-            }
+        // The client echoes the kind it rendered; the manifest kind is
+        // authoritative — a mismatch means a stale or confused client.
+        if expected_kind.is_some_and(|expected| {
+            serde_json::to_value(&setting.kind).ok().and_then(|kind| kind.as_str().map(str::to_owned)).as_deref()
+                != Some(expected)
+        }) {
+            return Err(PackageError::Invalid);
+        }
+        // Storage follows the manifest-declared kind: public values (ник and
+        // other plain text) live in integration-settings.json, secrets go to
+        // the OS credential vault.
+        if setting.kind.is_secret() {
+            save_package_integration_secret(
+                &package.id,
+                &package.version,
+                &setting.key,
+                value,
+            )?;
+        } else {
+            let mut state = self.read_integration_settings();
+            state
+                .values
+                .entry(Self::bridge_key(&package.id, &package.version))
+                .or_default()
+                .insert(setting.key.clone(), value.to_owned());
+            write_owner_only_json(&self.integration_settings_path(), &state)
+                .map_err(|_| PackageError::Persistence)?;
         }
         if package.enabled {
             self.set_enabled(&package.id, &package.version, false).await?;
@@ -232,6 +240,49 @@ impl PackageService {
         Ok(())
     }
 
+    /// A setting that older manifests declared `secret` may still hold a
+    /// value in the credential vault after the manifest switched it to a
+    /// public kind (`username`/`text`). Move it to plain config once and
+    /// delete the vault entry — public values must not sit in the keyring.
+    /// Idempotent; called from `integration_provider_snapshots`.
+    fn migrate_vaulted_public_values(
+        &self,
+        package: &InstalledPackage,
+        integration: &crate::package_manifest::IntegrationManifest,
+        state: &mut PackageIntegrationSettings,
+    ) -> Result<(), PackageError> {
+        let bridge = Self::bridge_key(&package.id, &package.version);
+        let mut dirty = false;
+        for setting in &integration.settings {
+            if setting.kind.is_secret() {
+                continue;
+            }
+            let Some(value) =
+                read_package_integration_secret(&package.id, &package.version, &setting.key)
+            else {
+                continue;
+            };
+            if !state
+                .values
+                .get(&bridge)
+                .is_some_and(|values| values.contains_key(&setting.key))
+            {
+                state
+                    .values
+                    .entry(bridge.clone())
+                    .or_default()
+                    .insert(setting.key.clone(), value);
+                dirty = true;
+            }
+            clear_package_integration_secret(&package.id, &package.version, &setting.key)?;
+        }
+        if dirty {
+            write_owner_only_json(&self.integration_settings_path(), state)
+                .map_err(|_| PackageError::Persistence)?;
+        }
+        Ok(())
+    }
+
     pub fn sync_integration_now(&self, id: &str) -> Result<(), PackageError> {
         let package = self.integration_package(id)?;
         self.worker
@@ -257,7 +308,7 @@ impl PackageService {
         write_owner_only_json(&self.integration_settings_path(), &state)
             .map_err(|_| PackageError::Persistence)?;
         for setting in &integration.settings {
-            if setting.kind == crate::package_manifest::IntegrationSettingKind::Secret {
+            if setting.kind.is_secret() {
                 clear_package_integration_secret(&package.id, &package.version, &setting.key)?;
                 // Also drop rotated-secret leftovers written by retired provider
                 // login flows (`:huawei-refresh:*` from the removed Huawei login).
