@@ -137,7 +137,7 @@ struct StreamBuffer {
 }
 
 struct AppServerStartup {
-    process_tree: process_tree::ProcessTree,
+    process_tree: crate::process_tree::ProcessTree,
     stdin: tokio::process::ChildStdin,
     lines: Lines<BufReader<ChildStdout>>,
     thread_id: String,

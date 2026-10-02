@@ -1,5 +1,9 @@
-use super::process_tree::{resolve_command, ProcessTree};
-use super::*;
+use std::process::Stdio;
+use std::time::Duration;
+
+use tokio::process::Command;
+
+use crate::process_tree::{resolve_command, ProcessTree};
 
 #[tokio::test]
 async fn terminate_and_wait_is_idempotent() {
@@ -125,7 +129,7 @@ async fn spawn_runs_cmd_shim_from_path() {
 #[cfg(windows)]
 #[test]
 fn spawn_primitives_fail_closed_on_bad_pid() {
-    use super::process_tree::win32;
+    use crate::process_tree::win32;
     let error = win32::resume_primary_thread(0).unwrap_err();
     assert!(
         error.to_string().contains("expected exactly one"),
