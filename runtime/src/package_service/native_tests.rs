@@ -213,6 +213,10 @@ async fn concurrent_install_of_same_app_reports_busy() {
     ));
     await_job(&service, &probe(&server), agenda().id).await;
     assert!(service.native_app_executable(agenda()).is_ok());
+    // KOS-314: the row settles before the task returns — only draining the
+    // joined task proves its Arc<PackageService> is released.
+    service.drain_background().await;
+    assert_eq!(Arc::strong_count(&service), 1);
 }
 
 #[tokio::test]

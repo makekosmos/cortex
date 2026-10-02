@@ -41,6 +41,9 @@ use crate::{
     store_catalog::{EffectiveGrantProjection, InstalledListing, Role},
 };
 
+/// Bound for joining a background install/migration task at shutdown before
+/// it is aborted — long enough for a settle, never a hang (KOS-314).
+const BACKGROUND_JOIN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 const MAX_DOCUMENT: usize = 1024 * 1024;
 const MAX_ENVELOPE: u64 = 2 * 1024 * 1024;
 const MAX_LISTED_PACKAGES: usize = 1024;
@@ -267,6 +270,12 @@ pub struct PackageService {
     package_registrations: PackageRegistrationRegistry,
     package_definition_dispatcher:
         Mutex<Option<std::sync::Weak<crate::engine_dispatch::EngineDispatcher>>>,
+    /// Spawned jobs that hold `Arc<PackageService>` — native installs, the
+    /// startup migration, the shortcut reconcile. Their completion signal
+    /// (job row, marker) precedes the task's return, so only a join proves
+    /// the Arc — and any file I/O into `root`/`Apps` — is gone (KOS-314).
+    /// Pruned on push; drained by `drain_background` at Engine shutdown.
+    background_tasks: crate::background_task::TaskRegistry,
     /// Launch-lease registry + HTTP port owned by the Engine API server and
     /// shared in via `configure_launch_surface` — `packages.open` mints
     /// through the same registry `/v1/apps/launch` uses.

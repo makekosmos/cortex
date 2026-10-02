@@ -115,6 +115,7 @@ impl PackageService {
             typed_grants: Mutex::new(HashMap::new()),
             package_registrations,
             package_definition_dispatcher: Mutex::new(None),
+            background_tasks: Mutex::new(Vec::new()),
             launch_surface: Mutex::new(None),
             typed_registry: Mutex::new(typed_registry),
             grants: std::sync::Arc::new(GrantAuthorityRegistry::with_data_dir(data_dir)),
@@ -124,6 +125,25 @@ impl PackageService {
         let _ = service.rebuild_typed_grants();
         service.replay();
         Ok(service)
+    }
+
+    /// Register a spawned task that holds `Arc<PackageService>` — the
+    /// registry prunes completed handles on push, so it stays bounded by the
+    /// number of live tasks. Used by the service's own install jobs and by
+    /// the Engine for its one-shot startup tasks so `drain_background` can
+    /// join them at shutdown.
+    pub fn track_background_task(
+        &self,
+        label: impl Into<String>,
+        task: tokio::task::JoinHandle<()>,
+    ) {
+        crate::background_task::track_task(&self.background_tasks, label, task);
+    }
+
+    /// Join every tracked background task. Called at Engine shutdown so no
+    /// install/migration write into the data dir outlives the service.
+    pub async fn drain_background(&self) {
+        crate::background_task::drain_tasks(&self.background_tasks, BACKGROUND_JOIN_TIMEOUT).await;
     }
 
     pub fn build_engine_snapshot(
