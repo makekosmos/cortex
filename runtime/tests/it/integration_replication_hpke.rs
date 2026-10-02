@@ -63,11 +63,11 @@ async fn signed_hpke_replication_reaches_offline_provider_and_rejects_stale_inpu
         "origin-correlation".into(),
     );
     origin_packages
-        .set_integration_value(PACKAGE_ID, Some("endpoint"), &endpoint)
+        .set_integration_value(PACKAGE_ID, Some("endpoint"), None, &endpoint)
         .await
         .unwrap();
     origin_packages
-        .set_integration_value(PACKAGE_ID, Some(SETTING), "origin-secret")
+        .set_integration_value(PACKAGE_ID, Some(SETTING), None, "origin-secret")
         .await
         .unwrap();
     let mut recipient_packages =
@@ -84,11 +84,11 @@ async fn signed_hpke_replication_reaches_offline_provider_and_rejects_stale_inpu
         "recipient-correlation".into(),
     );
     recipient_packages
-        .set_integration_value(PACKAGE_ID, Some("endpoint"), &endpoint)
+        .set_integration_value(PACKAGE_ID, Some("endpoint"), None, &endpoint)
         .await
         .unwrap();
     recipient_packages
-        .set_integration_value(PACKAGE_ID, Some(SETTING), "bootstrap-placeholder")
+        .set_integration_value(PACKAGE_ID, Some(SETTING), None, "bootstrap-placeholder")
         .await
         .unwrap();
     // Both isolated hosts share the test machine keyring namespace. Restore
@@ -96,7 +96,12 @@ async fn signed_hpke_replication_reaches_offline_provider_and_rejects_stale_inpu
     // intended source credential; receive overwrites it with the decrypted
     // value before the provider run.
     origin_packages
-        .set_integration_value(PACKAGE_ID, Some(SETTING), "replicated-provider-secret")
+        .set_integration_value(
+            PACKAGE_ID,
+            Some(SETTING),
+            None,
+            "replicated-provider-secret",
+        )
         .await
         .unwrap();
 
