@@ -11,13 +11,28 @@ import { execSync } from "node:child_process";
 
 const MODE = process.argv.includes("--check") ? "check" : "write";
 
-// collect include targets
-const all = execSync('git ls-files "*.rs"', { encoding: "utf8" }).split("\n").filter(Boolean);
+// collect include targets; vendor/ is third-party and out of scope
+const all = execSync('git ls-files "*.rs"', { encoding: "utf8" })
+  .split("\n")
+  .filter((f) => f && !f.startsWith("vendor/") && !f.includes("/vendor/"));
 const targets = new Set();
+const unresolvable = [];
 for (const f of all) {
   const src = readFileSync(f, "utf8");
-  for (const m of src.matchAll(/include!\(\s*"([^"]+)"/g))
+  for (const m of src.matchAll(/include!\s*\(\s*(?:"([^"]+)"|([^)]+))\)/g)) {
+    if (m[1] === undefined) {
+      // non-literal include! (concat!/env!-style) — the gate cannot resolve
+      // it, so it must fail loudly instead of silently skipping the file
+      unresolvable.push(`${f}: include!(${m[2].trim()})`);
+      continue;
+    }
     targets.add(posix.normalize(posix.join(posix.dirname(f), m[1])));
+  }
+}
+if (unresolvable.length) {
+  console.error("include! calls this tool cannot resolve (extend it or rewrite the call):");
+  for (const u of unresolvable) console.error(`  ${u}`);
+  process.exit(1);
 }
 
 function rustfmt(text, tmp) {
@@ -38,12 +53,14 @@ function rustfmt(text, tmp) {
 
 const tmp = mkdtempSync(join(tmpdir(), "fmtinc-"));
 const bad = [],
-  unformattable = [];
+  unformattable = [],
+  missing = [];
 for (const t of [...targets].sort()) {
   let src;
   try {
     src = readFileSync(t, "utf8");
   } catch {
+    missing.push(t);
     continue;
   }
   const first = src.split("\n").find((l) => l.trim());
@@ -100,9 +117,14 @@ for (const t of [...targets].sort()) {
   }
 }
 rmSync(tmp, { recursive: true, force: true });
-console.log(`targets=${targets.size} changed=${bad.length} unformattable=${unformattable.length}`);
+console.log(
+  `targets=${targets.size} changed=${bad.length} unformattable=${unformattable.length} missing=${missing.length}`,
+);
 unformattable.forEach((f) => console.log("UNFORMATTABLE", f));
+missing.forEach((f) => console.error("MISSING TARGET", f));
+if (missing.length) process.exit(1);
 if (MODE === "check") {
   bad.forEach((f) => console.log("NEEDS FMT", f));
   process.exit(bad.length || unformattable.length ? 1 : 0);
 }
+process.exit(unformattable.length ? 1 : 0);
