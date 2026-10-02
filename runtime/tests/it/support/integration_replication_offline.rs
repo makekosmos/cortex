@@ -33,7 +33,7 @@ pub async fn wait_for_peer(host: &ArkHost, device_id: &str) {
         }
         assert!(
             tokio::time::Instant::now() < deadline,
-            "Core did not authenticate peer {device_id} within 10s"
+            "Core did not authenticate peer {device_id}"
         );
         tokio::time::sleep(Duration::from_millis(100)).await;
     }

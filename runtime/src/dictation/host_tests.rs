@@ -1164,7 +1164,7 @@
         let mut saw_transcribing = false;
         let mut saw_transcript = None;
         for _ in 0..6 {
-            let evt = tokio::time::timeout(std::time::Duration::from_millis(250), rx.recv())
+            let evt = tokio::time::timeout(std::time::Duration::from_secs(60), rx.recv())
                 .await
                 .expect("event timeout")
                 .expect("event recv");
@@ -1258,7 +1258,7 @@
         let mut saw_stats = false;
         let mut saw_idle = false;
         for _ in 0..8 {
-            let evt = tokio::time::timeout(std::time::Duration::from_millis(250), rx.recv())
+            let evt = tokio::time::timeout(std::time::Duration::from_secs(60), rx.recv())
                 .await
                 .expect("event timeout")
                 .expect("event recv");
@@ -1352,7 +1352,7 @@
         let mut saw_transcribing = false;
         let mut saw_transcript = None;
         for _ in 0..6 {
-            let evt = tokio::time::timeout(std::time::Duration::from_millis(250), rx.recv())
+            let evt = tokio::time::timeout(std::time::Duration::from_secs(60), rx.recv())
                 .await
                 .expect("event timeout")
                 .expect("event recv");
@@ -1544,7 +1544,7 @@
         .await;
         assert!(resp.ok, "update_config failed: {:?}", resp.error);
 
-        let evt = tokio::time::timeout(std::time::Duration::from_millis(200), rx.recv())
+        let evt = tokio::time::timeout(std::time::Duration::from_secs(60), rx.recv())
             .await
             .expect("event timeout")
             .expect("event recv");

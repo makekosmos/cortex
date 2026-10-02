@@ -25,6 +25,10 @@ use ark_core::sync_bind::SyncBind;
 use ark_core::sync_transport::{SyncTransport, TransportEvent};
 use iroh::RelayMode;
 
+/// Generous hang guard for event drains — the awaited message is the real
+/// condition; the cap only bounds a wedged transport under load (KOS-308).
+const EVENT_GUARD: Duration = Duration::from_secs(60);
+
 /// Дренирует события до нужного типа или таймаута.
 async fn find_message<F>(
     rx: &mut mpsc::UnboundedReceiver<TransportEvent>,
@@ -115,11 +119,11 @@ async fn iroh_round_trip() {
     // 3. Ждём подтверждения рукопожатия: B должна получить auto-Hello от A.
     // Это гарантирует, что dial-соединение A установлено и broadcast-подписчик
     // (handle_connection задача A) уже активен и готов принимать send().
-    find_message(&mut b_events_rx, Duration::from_secs(5), |from, msg| {
+    find_message(&mut b_events_rx, EVENT_GUARD, |from, msg| {
         from == "device-A" && matches!(msg, LanSyncMessage::Hello { .. })
     })
     .await
-    .expect("B must receive Hello from A (auto-injected) within 5s — connection not established");
+    .expect("B must receive Hello from A (auto-injected) — connection not established");
 
     // 4. A отправляет live_change с тестовой entity.
     let test_entity = ark_core::types::SyncEntity {
@@ -148,17 +152,16 @@ async fn iroh_round_trip() {
     transport_a.send(msg).expect("A send");
 
     // 5. Дренируем события B до нужного LiveChange.
-    let (from_device_id, received) =
-        find_message(&mut b_events_rx, Duration::from_secs(5), |from, msg| {
-            from == "device-A"
-                && matches!(
-                    msg,
-                    LanSyncMessage::LiveChange { entity,
-                    .. } if entity.id == "test-entity-iroh-001",
-                )
-        })
-        .await
-        .expect("timed out waiting for iroh LiveChange on B");
+    let (from_device_id, received) = find_message(&mut b_events_rx, EVENT_GUARD, |from, msg| {
+        from == "device-A"
+            && matches!(
+                msg,
+                LanSyncMessage::LiveChange { entity,
+                .. } if entity.id == "test-entity-iroh-001",
+            )
+    })
+    .await
+    .expect("timed out waiting for iroh LiveChange on B");
 
     assert_eq!(from_device_id, "device-A");
     assert!(

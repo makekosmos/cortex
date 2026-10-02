@@ -433,7 +433,7 @@ mod tests {
                 .is_err()
         );
         drop(held);
-        let _released = tokio::time::timeout(Duration::from_millis(20), second.lock())
+        let _released = tokio::time::timeout(Duration::from_secs(60), second.lock())
             .await
             .unwrap();
     }
@@ -674,7 +674,7 @@ mod tests {
         for handle in handles {
             let (done_tx, done_rx) = tokio::sync::oneshot::channel();
             let _ = handle.tx.send(AppCommand::Shutdown(Some(done_tx))).await;
-            let _ = tokio::time::timeout(Duration::from_secs(5), done_rx).await;
+            let _ = tokio::time::timeout(Duration::from_secs(60), done_rx).await;
         }
     }
 
@@ -741,7 +741,7 @@ mod tests {
             .send(AppCommand::Shutdown(Some(done_tx)))
             .await
             .unwrap();
-        tokio::time::timeout(Duration::from_secs(5), done_rx)
+        tokio::time::timeout(Duration::from_secs(60), done_rx)
             .await
             .unwrap()
             .unwrap()

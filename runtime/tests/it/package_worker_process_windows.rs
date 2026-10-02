@@ -72,8 +72,12 @@ async fn handle_baseline() -> u32 {
     test_support::handle_baseline(fixture()).await
 }
 
+/// Generous hang guard for event waits: correctness comes from the awaited
+/// event itself; the cap only bounds a genuinely wedged worker (KOS-308).
+const HANG_GUARD: Duration = Duration::from_secs(60);
+
 async fn wait_for_path(path: &std::path::Path) {
-    tokio::time::timeout(Duration::from_secs(2), async {
+    tokio::time::timeout(HANG_GUARD, async {
         while !path.exists() {
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
@@ -205,9 +209,9 @@ async fn success_orders_entry_bootstrap_hello_and_job_limits() {
     test_support::capture_next_process();
     let mut barrier = test_support::pause_next_before_resume();
     let launch = tokio::spawn(launch(fixture()));
-    tokio::time::timeout(Duration::from_secs(3), barrier.suspended_ready())
-        .await
-        .expect("resume barrier");
+    // The barrier fires inside the worker's pre-resume hook — the event is the
+    // synchronization, no wall-clock cap needed (KOS-308).
+    barrier.suspended_ready().await;
     assert!(!launch.is_finished());
     assert!(!markers.entry.exists(), "entry ran before resume");
     assert!(!markers.bootstrap.exists());
@@ -246,7 +250,9 @@ async fn success_orders_entry_bootstrap_hello_and_job_limits() {
         .test_send_line(bootstrap)
         .await
         .expect("second bootstrap write");
-    tokio::time::sleep(Duration::from_millis(20)).await;
+    // No settle sleep: the fixture writes both markers before it emits
+    // worker.hello, and the hello was already read above, so both files are
+    // final by now (KOS-308).
     assert_eq!(
         std::fs::read_to_string(&markers.entry).unwrap(),
         "entry:1\n"

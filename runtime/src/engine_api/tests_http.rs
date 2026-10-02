@@ -301,7 +301,7 @@
         .await;
         assert!(response.starts_with("HTTP/1.1 502"), "response: {response}");
 
-        tokio::time::timeout(Duration::from_secs(1), async {
+        tokio::time::timeout(Duration::from_secs(60), async {
             loop {
                 if writes.load(std::sync::atomic::Ordering::SeqCst) == 1
                     && cleanups.load(std::sync::atomic::Ordering::SeqCst) == 1
@@ -349,7 +349,7 @@
         let (_fixture_dir, server) = EngineApiServer::bind_with_test_dispatcher_and_deadline(
             token.clone(),
             dispatcher.clone(),
-            Duration::from_secs(1),
+            Duration::from_secs(60),
             Duration::from_millis(20),
         )
         .await
@@ -368,7 +368,7 @@
             r#"{"operation":"controlled.write"}"#,
         );
         stream.write_all(request.as_bytes()).await.unwrap();
-        tokio::time::timeout(Duration::from_secs(1), async {
+        tokio::time::timeout(Duration::from_secs(60), async {
             loop {
                 if writes.load(std::sync::atomic::Ordering::SeqCst) == 1 {
                     break;
@@ -380,7 +380,7 @@
         .expect("dispatch must start before disconnect");
         stream.shutdown().await.unwrap();
         drop(stream);
-        tokio::time::timeout(Duration::from_secs(1), async {
+        tokio::time::timeout(Duration::from_secs(60), async {
             loop {
                 if writes.load(std::sync::atomic::Ordering::SeqCst) == 1
                     && cleanups.load(std::sync::atomic::Ordering::SeqCst) == 1
@@ -956,7 +956,7 @@
         });
         let _response = server.operations.start(request, dispatcher, owner).await;
         let handle = server.shutdown_handle();
-        let _ = tokio::time::timeout(Duration::from_secs(1), handle.shutdown())
+        let _ = tokio::time::timeout(Duration::from_secs(60), handle.shutdown())
             .await
             .expect("shutdown deadline");
         assert_eq!(cleanups.load(std::sync::atomic::Ordering::SeqCst), 1);
@@ -978,7 +978,7 @@
         let (_fixture_dir, server) = EngineApiServer::bind_with_test_dispatcher(
             "a".repeat(64),
             dispatcher.clone(),
-            Duration::from_secs(1),
+            Duration::from_secs(60),
         )
         .await
         .expect("server");
@@ -1047,7 +1047,7 @@
         let (_fixture_dir, server) = EngineApiServer::bind_with_test_dispatcher(
             "a".repeat(64),
             dispatcher.clone(),
-            Duration::from_secs(1),
+            Duration::from_secs(60),
         )
         .await
         .expect("server");

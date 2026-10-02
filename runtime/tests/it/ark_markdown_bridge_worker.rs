@@ -601,8 +601,9 @@ fn worker_projects_and_imports_only_through_broker_stdio() {
     )
     .unwrap();
     input.flush().unwrap();
+    // Generous hang guard only — process exit is the event (KOS-308).
     assert!(child
-        .wait_timeout(Duration::from_secs(5))
+        .wait_timeout(Duration::from_secs(60))
         .unwrap()
         .is_some());
 }

@@ -42,10 +42,10 @@ async fn production_ws_shutdown_reaps_authenticated_and_stalled_lifecycles() {
         ))
         .await
         .unwrap();
-    let _ = tokio::time::timeout(Duration::from_secs(1), socket.next())
+    let _ = tokio::time::timeout(Duration::from_secs(60), socket.next())
         .await
         .unwrap();
-    tokio::time::timeout(Duration::from_secs(1), async {
+    tokio::time::timeout(Duration::from_secs(60), async {
         while bus.registration_count_sync() != 1 {
             tokio::time::sleep(Duration::from_millis(5)).await;
         }
@@ -60,7 +60,7 @@ async fn production_ws_shutdown_reaps_authenticated_and_stalled_lifecycles() {
         .await
         .unwrap();
     let _ = (&mut raw, &mut no_hello);
-    tokio::time::timeout(Duration::from_secs(1), async {
+    tokio::time::timeout(Duration::from_secs(60), async {
         while shutdown.task_count() < 3 {
             tokio::time::sleep(Duration::from_millis(5)).await;
         }
@@ -70,7 +70,7 @@ async fn production_ws_shutdown_reaps_authenticated_and_stalled_lifecycles() {
 
     shutdown.begin_shutdown().await;
     task.await.unwrap().unwrap();
-    assert!(tokio::time::timeout(Duration::from_secs(1), socket.next())
+    assert!(tokio::time::timeout(Duration::from_secs(60), socket.next())
         .await
         .is_ok());
     let first_shutdown = shutdown.shutdown().await;
@@ -99,7 +99,7 @@ async fn production_ws_capacity_rejects_the_next_raw_socket_and_restores_capacit
                 .unwrap(),
         );
     }
-    tokio::time::timeout(Duration::from_secs(2), async {
+    tokio::time::timeout(Duration::from_secs(60), async {
         while shutdown.task_count() != MAX_ACTIVE_WS_CONNECTIONS {
             tokio::time::sleep(Duration::from_millis(5)).await;
         }
@@ -109,7 +109,7 @@ async fn production_ws_capacity_rejects_the_next_raw_socket_and_restores_capacit
     let mut rejected = sockets.pop().unwrap();
     let mut byte = [0u8; 1];
     assert_eq!(
-        tokio::time::timeout(Duration::from_secs(1), rejected.read(&mut byte))
+        tokio::time::timeout(Duration::from_secs(60), rejected.read(&mut byte))
             .await
             .unwrap()
             .unwrap(),

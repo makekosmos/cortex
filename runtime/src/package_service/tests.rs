@@ -1629,7 +1629,9 @@ pub(crate) mod tests {
             .join(&manifest.id)
             .join(&manifest.version)
             .join("state.json");
-        tokio::time::timeout(std::time::Duration::from_secs(8), async {
+        // Generous hang guard only — the files appearing are the event; the
+        // cap must outlast worker spawn under parallel gate load (KOS-308).
+        tokio::time::timeout(std::time::Duration::from_secs(60), async {
             // Wait for durable provenance before editing the first snapshot;
             // otherwise the worker can classify the edit as initial state.
             while !markdown.exists() || !bridge_state.exists() {
@@ -1645,7 +1647,7 @@ pub(crate) mod tests {
         });
         let content = fs::read_to_string(&markdown).unwrap();
         fs::write(&markdown, content.replace("from ark", "from vault")).unwrap();
-        tokio::time::timeout(std::time::Duration::from_secs(8), async {
+        tokio::time::timeout(std::time::Duration::from_secs(60), async {
             loop {
                 let current = ark
                     .request("get_object", serde_json::json!({"id":"service-note"}))

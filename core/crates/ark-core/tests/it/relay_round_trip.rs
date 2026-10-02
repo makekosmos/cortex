@@ -191,8 +191,10 @@ async fn relay_round_trip() {
     let text = serialize_message(&msg);
     ws_a_tx.send(Message::Text(text)).await.unwrap();
 
-    // 6. Assert B receives the message within 5 seconds.
-    let received = tokio::time::timeout(Duration::from_secs(5), received_rx.recv())
+    // 6. Assert B receives the message. The cap is only a hang guard — the
+    // message itself is the event; under parallel gate load 5 s was not enough
+    // headroom (KOS-308).
+    let received = tokio::time::timeout(Duration::from_secs(60), received_rx.recv())
         .await
         .expect("timed out waiting for relay message")
         .expect("channel closed");

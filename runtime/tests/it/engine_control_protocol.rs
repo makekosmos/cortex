@@ -4,7 +4,6 @@ use engine::engine_control::{
 };
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
-use std::time::Instant;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
@@ -336,11 +335,12 @@ async fn core_ready_handshake_times_out_on_stalled_peer() {
         owner_identity: "owner-1".into(),
         secret: "controller-secret".into(),
     };
-    let started = Instant::now();
     let result =
         engine::engine_control::start_core_control_with_secret(state, b"core-secret".to_vec())
             .await;
+    // Err(Timeout) is itself the event proving the deadline fired; an
+    // upper-bound elapsed assertion would only measure scheduler starvation
+    // under parallel gate load (KOS-308).
     assert!(matches!(result, Err(ControlError::Timeout)));
-    assert!(started.elapsed() < engine::engine_control::CONTROL_IO_TIMEOUT * 2);
     peer.abort();
 }

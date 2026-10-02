@@ -228,6 +228,10 @@ fn set_recipient_transport_key(
         .unwrap();
 }
 
+/// Generous hang guard for event drains — the awaited message is the real
+/// condition; the cap only bounds a wedged transport under load (KOS-308).
+const EVENT_GUARD: Duration = Duration::from_secs(60);
+
 /// Вспомогательная функция: дренирует события из `rx` до тех пор, пока не
 /// найдёт `MessageReceived` с нужным условием, либо не истечёт таймаут.
 /// Пропускает `Connected`/`Disconnected` и `MessageReceived` других типов.

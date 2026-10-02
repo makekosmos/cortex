@@ -177,7 +177,8 @@ pub async fn wait_for_recipient_state_named(
     path: &str,
     integration_id: &str,
 ) -> Result<(), String> {
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+    // Generous hang guard only — the persisted lease is the event (KOS-308).
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(60);
     let mut last_seen = None;
     loop {
         if let Ok(conn) = Connection::open(path) {

@@ -282,7 +282,7 @@ mod tests {
             .unwrap();
         let mut rx = host.subscribe_events();
         host.emit_event(serde_json::json!({"event": "ark_host_test_event"}));
-        let (name, _) = tokio::time::timeout(std::time::Duration::from_secs(2), rx.recv())
+        let (name, _) = tokio::time::timeout(std::time::Duration::from_secs(60), rx.recv())
             .await
             .unwrap()
             .unwrap();

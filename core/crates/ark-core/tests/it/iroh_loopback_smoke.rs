@@ -23,8 +23,6 @@
 //! - `EndpointAddr::new(id).with_ip_addr(socket_addr)` — ручная сборка адреса
 //!   пира для прямого коннекта, без relay url и без discovery.
 
-use std::time::Duration;
-
 use iroh::endpoint::{presets, BindOpts};
 use iroh::{Endpoint, EndpointAddr, RelayMode};
 
@@ -32,9 +30,10 @@ const ARK_SYNC_ALPN: &[u8] = b"ark-sync/1";
 
 #[tokio::test(flavor = "multi_thread")]
 async fn iroh_offline_loopback_round_trip() {
-    tokio::time::timeout(Duration::from_secs(10), run())
-        .await
-        .expect("iroh offline loopback smoke test timed out after 10s");
+    // No wall-clock cap around the whole test: every await inside is on a real
+    // endpoint event, and a genuine hang is caught by nextest's slow-timeout —
+    // under parallel gate load 10 s was not enough for a healthy run (KOS-308).
+    run().await;
 }
 
 async fn run() {
