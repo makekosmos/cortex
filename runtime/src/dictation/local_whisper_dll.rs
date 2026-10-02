@@ -464,7 +464,7 @@ fn wav_pcm16_to_f32_16k_mono(wav: &[u8]) -> Result<Vec<f32>, LocalError> {
     let bits = u16::from_le_bytes([wav[34], wav[35]]);
     if sample_rate != 16_000 || bits != 16 || channels == 0 {
         return Err(LocalError::CommandFailed(format!(
-            "whisper.dll path expects 16kHz 16-bit PCM WAV, got {sample_rate}Hz {bits}-bit\
+            "whisper.dll path expects 16kHz 16-bit PCM WAV, got {sample_rate}Hz {bits}-bit \
                  {channels}ch"
         )));
     }

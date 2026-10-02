@@ -958,7 +958,7 @@ async fn download_file(
                 Ok(chunk) => chunk,
                 Err(e) => {
                     let message = format!(
-                        "{request_url}: stream read failed after {downloaded_bytes} bytes\
+                        "{request_url}: stream read failed after {downloaded_bytes} bytes \
                              ({content_type}, encoding {content_encoding}): {e}"
                     );
                     tracing::warn!(

@@ -223,7 +223,7 @@ fn ensure_backups_dir(data_dir: &Path) -> Result<PathBuf, String> {
 fn enforce_retention(backups_dir: &Path) {
     match retention::enforce(backups_dir, retain_count()) {
         Ok(report) if report.total_removed() > 0 => eprintln!(
-            "[db-backup] retention: {} rotated, {} sidecars, {} pre-restore, {} restore temps \\
+            "[db-backup] retention: {} rotated, {} sidecars, {} pre-restore, {} restore temps \
                  removed",
             report.rotated_backups,
             report.removed_sidecars,

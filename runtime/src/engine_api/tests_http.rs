@@ -1506,7 +1506,7 @@
         .replace(
             "Content-Length:",
             &format!(
-                "X-Kosmos-Client-Class: {class}\r\nX-Kosmos-Client-Version:\
+                "X-Kosmos-Client-Class: {class}\r\nX-Kosmos-Client-Version: \
                      {version}\r\nContent-Length:"
             ),
         )

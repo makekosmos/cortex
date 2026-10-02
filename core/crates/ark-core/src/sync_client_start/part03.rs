@@ -136,7 +136,7 @@
                                             && server_device_id == device_id
                                         {
                                             eprintln!(
-                                                "{TAG} Rejecting self-connect to\
+                                                "{TAG} Rejecting self-connect to \
                                                      {server_device_name} ({server_device_id})"
                                             );
                                             // The winning address
@@ -176,7 +176,7 @@
                                             p.device_name = server_device_name.clone();
                                         }
                                         eprintln!(
-                                            "{TAG} Authenticated with {server_device_name}\
+                                            "{TAG} Authenticated with {server_device_name} \
                                                  ({server_device_id})"
                                         );
                                         if let Some(handler) = on_connected.lock().await.as_ref() {
@@ -319,7 +319,7 @@
                                                     }
                                                     Err(e) => {
                                                         eprintln!(
-                                                            "{TAG} Failed to apply sync entity\
+                                                            "{TAG} Failed to apply sync entity \
                                                                  {}:{}: {e}",
                                                             entity.entity_type, entity.id
                                                         );
@@ -420,7 +420,7 @@
                                                 }
                                                 Err(e) => {
                                                     eprintln!(
-                                                        "{TAG} Failed to apply live sync entity\
+                                                        "{TAG} Failed to apply live sync entity \
                                                              {}:{}: {e}",
                                                         entity.entity_type, entity.id
                                                     );
