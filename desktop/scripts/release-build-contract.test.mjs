@@ -56,7 +56,7 @@ test("shipped binaries read the product version only from the variable the build
     "utf8",
   );
   assert.match(backend, /MUNDUS_PRODUCT_VERSION: productVersion/);
-  assert.match(components, /MUNDUS_PRODUCT_VERSION: getVersion\("win"\)/);
+  assert.match(components, /MUNDUS_PRODUCT_VERSION: readReleaseVersion\(\)/);
   const readers = [];
   for (const dir of ["runtime/src", "manager-gpui/src", "core/crates"]) {
     for (const entry of readdirSync(path.join(repo, dir), { recursive: true })) {

@@ -10,14 +10,8 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { flag } from "./argv.mjs";
 import { gitEnv } from "./git-env.mjs";
-import { loadWorkspace } from "./workspace-config.mjs";
-import { planBootstrap } from "./workspace.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const WORKSPACE_OUTPUTS = {
-  imago: ["index.ts", "theme/css-variables.css", "dist/index.css"],
-  "arca-sdk": ["dist/index.js"],
-};
 
 const arg = (name) => flag(process.argv, name);
 const reportPath = path.resolve(repoRoot, arg("--report") ?? ".tmp/linux-smoke-report.md");
@@ -68,44 +62,11 @@ const runGate = async (gate, blockedBy, body) => {
 };
 await runGate("preflight", [], () => {
   if (process.platform !== "linux") throw new Error("Linux only");
-  for (const tool of ["node", "pnpm", "cargo", "git", "bun"]) {
+  for (const tool of ["node", "pnpm", "cargo", "git"]) {
     if (step("which", [tool]).status !== 0) throw new Error(`missing tool: ${tool}`);
     tools[tool] = must(step(tool, ["--version"]), tool).split(/\r?\n/)[0];
   }
-  return `node ${tools.node}, pnpm ${tools.pnpm}, cargo ${tools.cargo}, bun ${tools.bun}`;
-});
-await runGate("workspace-deps", ["preflight"], async () => {
-  const { pins } = await loadWorkspace(repoRoot);
-  // planBootstrap prepares only on an exact package-manager version match
-  // (arca-sdk pins bun@1.3.14); fall back to manual clone + build otherwise.
-  const boot = await planBootstrap(repoRoot)
-    .then((r) => r.actions.map((a) => `${a.action}:${a.name}`).join(",") || "noop")
-    .catch((error) => `partial: ${error.message}`);
-  for (const name of Object.keys(WORKSPACE_OUTPUTS)) {
-    const checkout = path.join(repoRoot, ".tmp", "workspace", name);
-    if (!fs.existsSync(path.join(checkout, ".git"))) {
-      const repo = pins[name].repository;
-      must(
-        git(path.dirname(checkout), ["clone", `https://github.com/${repo}.git`, name]),
-        `${name} clone`,
-      );
-      must(git(checkout, ["fetch", "origin", pins[name].commit]), `${name} fetch`);
-      must(git(checkout, ["checkout", "--detach", pins[name].commit]), `${name} checkout`);
-    }
-    const head = must(git(checkout, ["rev-parse", "HEAD"]), `${name} HEAD`).trim();
-    if (head !== pins[name].commit) throw new Error(`${name} HEAD ${head} != pin`);
-    const absent = WORKSPACE_OUTPUTS[name].filter(
-      (file) => !fs.existsSync(path.join(checkout, file)),
-    );
-    if (!absent.length) continue;
-    const manager = name === "imago" ? "pnpm" : "bun";
-    if (step(manager, ["install", "--frozen-lockfile"], { cwd: checkout }).status !== 0)
-      must(step(manager, ["install"], { cwd: checkout }), `${name} install`);
-    must(step(manager, ["run", "build"], { cwd: checkout }), `${name} build`);
-    const still = absent.filter((file) => !fs.existsSync(path.join(checkout, file)));
-    if (still.length) throw new Error(`${name} outputs missing: ${still.join(",")}`);
-  }
-  return `${boot}; imago@${pins.imago.commit.slice(0, 7)} arca-sdk@${pins["arca-sdk"].commit.slice(0, 7)}`;
+  return `node ${tools.node}, pnpm ${tools.pnpm}, cargo ${tools.cargo}`;
 });
 await runGate("engine-bootstrap", ["preflight"], async () => {
   const target = JSON.parse(

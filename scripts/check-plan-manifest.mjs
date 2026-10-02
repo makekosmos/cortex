@@ -1,6 +1,6 @@
 // package.json edits that only touch "scripts" select the checks exercising
 // the edited entries. Everything else in a manifest (dependencies, engines,
-// packageManager, workspace pins, ...) still requires the full check, as does
+// packageManager, ...) still requires the full check, as does
 // any revision that cannot be read or parsed.
 
 // Every script in both manifests is asserted Bun-free by
@@ -25,7 +25,6 @@ const SCRIPT_CHECKS = {
     "test:desktop-contracts": ["desktop-contracts"],
     "test:release-bom": ["release-bom"],
     "test:package-manager": ["package-manager"],
-    workspace: [],
     "build:desktop": [],
     "build:installer:local": [],
     "test:backend": [],
@@ -39,7 +38,6 @@ const SCRIPT_CHECKS = {
     "package:dir": ["release-bom"],
     "build:backend": [],
     "build:backend:dev": [],
-    "build:native:macos": [],
     "build:package-components": [],
     "verify:channel": [],
   },

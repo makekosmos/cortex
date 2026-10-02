@@ -9,5 +9,4 @@
 // clients still polling its `latest` endpoint find the cortex-feed build.
 export const RELEASE_REPOS = {
   win: "makekosmos/cortex",
-  mac: "makekosmos/desktop-mac",
 };
