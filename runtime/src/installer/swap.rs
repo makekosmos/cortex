@@ -59,11 +59,14 @@ fn move_in(temp: &Path, version_root: &Path) -> std::io::Result<()> {
     std::fs::rename(temp, version_root)
 }
 
-/// Test seam: `FAIL_NEXT_MOVE_IN` makes the next move-in fail once, so the
-/// rollback path can be exercised without holding a real file lock.
+/// Test seam: [`FailNextMoveIn`] makes the next move-in on this thread fail
+/// once, so the rollback path can be exercised without holding a real file lock.
 #[cfg(test)]
 fn move_in(temp: &Path, version_root: &Path) -> std::io::Result<()> {
-    if FAIL_NEXT_MOVE_IN.swap(false, std::sync::atomic::Ordering::SeqCst) {
+    // Thread-local, not a process atomic: `cargo test` runs these tests in
+    // one process, and a shared flag is consumed by whichever install runs
+    // first. nextest (one process per test) hides that.
+    if FAIL_NEXT_MOVE_IN.with(|flag| flag.replace(false)) {
         return Err(std::io::Error::new(
             std::io::ErrorKind::PermissionDenied,
             "test seam",
@@ -77,11 +80,11 @@ fn restore_aside(aside: &Path, version_root: &Path) -> std::io::Result<()> {
     std::fs::rename(aside, version_root)
 }
 
-/// Same seam as `move_in`: `FAIL_NEXT_RESTORE` makes the restore rename
-/// fail once so the "no Engine left" error path is testable.
+/// Same seam as `move_in`: [`FailNextRestore`] makes the restore rename on
+/// this thread fail once so the "no Engine left" error path is testable.
 #[cfg(test)]
 fn restore_aside(aside: &Path, version_root: &Path) -> std::io::Result<()> {
-    if FAIL_NEXT_RESTORE.swap(false, std::sync::atomic::Ordering::SeqCst) {
+    if FAIL_NEXT_RESTORE.with(|flag| flag.replace(false)) {
         return Err(std::io::Error::new(
             std::io::ErrorKind::PermissionDenied,
             "test seam",
@@ -91,9 +94,92 @@ fn restore_aside(aside: &Path, version_root: &Path) -> std::io::Result<()> {
 }
 
 #[cfg(test)]
-pub(crate) static FAIL_NEXT_MOVE_IN: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
+thread_local! {
+    static FAIL_NEXT_MOVE_IN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static FAIL_NEXT_RESTORE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Arms the next `move_in` on this thread only. Drop disarms it so a
+/// panicked test cannot leak the seam onto a reused test thread.
+#[cfg(test)]
+pub(crate) struct FailNextMoveIn;
 
 #[cfg(test)]
-pub(crate) static FAIL_NEXT_RESTORE: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
+impl FailNextMoveIn {
+    pub(crate) fn arm() -> Self {
+        FAIL_NEXT_MOVE_IN.with(|flag| flag.set(true));
+        Self
+    }
+}
+
+#[cfg(test)]
+impl Drop for FailNextMoveIn {
+    fn drop(&mut self) {
+        FAIL_NEXT_MOVE_IN.with(|flag| flag.set(false));
+    }
+}
+
+/// Arms the next restore rename on this thread only. See [`FailNextMoveIn`].
+#[cfg(test)]
+pub(crate) struct FailNextRestore;
+
+#[cfg(test)]
+impl FailNextRestore {
+    pub(crate) fn arm() -> Self {
+        FAIL_NEXT_RESTORE.with(|flag| flag.set(true));
+        Self
+    }
+}
+
+#[cfg(test)]
+impl Drop for FailNextRestore {
+    fn drop(&mut self) {
+        FAIL_NEXT_RESTORE.with(|flag| flag.set(false));
+    }
+}
+
+#[cfg(test)]
+mod seam_tests {
+    use super::{move_in, restore_aside, FailNextMoveIn, FailNextRestore};
+
+    #[test]
+    fn move_in_seam_stays_on_the_arming_thread() {
+        let root = tempfile::tempdir().unwrap();
+        let other_temp = root.path().join("other-temp");
+        let other_dest = root.path().join("other-dest");
+        std::fs::create_dir(&other_temp).unwrap();
+        let own_temp = root.path().join("own-temp");
+        let own_dest = root.path().join("own-dest");
+        std::fs::create_dir(&own_temp).unwrap();
+
+        let _guard = FailNextMoveIn::arm();
+        let other_dest_check = other_dest.clone();
+        let other = std::thread::spawn(move || move_in(&other_temp, &other_dest));
+        assert!(
+            other.join().unwrap().is_ok(),
+            "a shared flag would fail the other thread's rename"
+        );
+        assert!(other_dest_check.is_dir());
+        assert!(move_in(&own_temp, &own_dest).is_err());
+        assert!(!own_dest.exists());
+    }
+
+    #[test]
+    fn restore_seam_stays_on_the_arming_thread() {
+        let root = tempfile::tempdir().unwrap();
+        let other_aside = root.path().join("other-aside");
+        let other_dest = root.path().join("other-live");
+        std::fs::create_dir(&other_aside).unwrap();
+        let own_aside = root.path().join("own-aside");
+        let own_dest = root.path().join("own-live");
+        std::fs::create_dir(&own_aside).unwrap();
+
+        let _guard = FailNextRestore::arm();
+        let other_dest_check = other_dest.clone();
+        let other = std::thread::spawn(move || restore_aside(&other_aside, &other_dest));
+        assert!(other.join().unwrap().is_ok());
+        assert!(other_dest_check.is_dir());
+        assert!(restore_aside(&own_aside, &own_dest).is_err());
+        assert!(!own_dest.exists());
+    }
+}

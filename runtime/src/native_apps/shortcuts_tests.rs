@@ -75,6 +75,18 @@ fn link_points_at_matches_its_target_only() {
 
 #[cfg(windows)]
 #[test]
+fn same_path_matches_a_file_to_its_canonical_spelling() {
+    // `\\?\` from canonicalize and the 8.3 TEMP path are the same file.
+    // A case-only compare reports that the shortcut points somewhere else.
+    let dir = TempDir::new().unwrap();
+    let file = dir.path().join("Agenda.exe");
+    fs::write(&file, b"MZ").unwrap();
+    let canonical = fs::canonicalize(&file).unwrap();
+    assert!(same_path(&file, &canonical), "{file:?} vs {canonical:?}");
+}
+
+#[cfg(windows)]
+#[test]
 fn sync_writes_and_repoints_the_real_lnk() {
     let dir = TempDir::new().unwrap();
     let programs = dir.path().join("Programs");
