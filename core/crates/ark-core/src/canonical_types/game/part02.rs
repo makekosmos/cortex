@@ -1,4 +1,4 @@
-﻿
+
 fn links_for(conn: &Connection, id: &str) -> Result<Vec<GameLink>, String> {
     Ok(db::list_object_links(conn)?
         .into_iter()

@@ -1,4 +1,4 @@
-﻿
+
 pub fn apply_legacy_compat_entity(conn: &Connection, entity: &SyncEntity) -> Result<(), String> {
     let current: Option<String> = conn
         .query_row(

@@ -1,4 +1,4 @@
-﻿use ark_core::canonical_types::pending::{
+use ark_core::canonical_types::pending::{
     insert_pending_object, migrate_phase2_to_v3, replay_pending_for_type,
 };
 use ark_core::db::{init_schema, init_schema_prerequisites_for_phase3};

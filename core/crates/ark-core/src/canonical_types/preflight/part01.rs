@@ -1,4 +1,4 @@
-﻿// Read-only Phase 3 source inventory and mapper preflight.
+// Read-only Phase 3 source inventory and mapper preflight.
 use std::collections::BTreeMap;
 
 use rusqlite::Connection;

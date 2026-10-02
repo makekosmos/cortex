@@ -1,4 +1,4 @@
-﻿
+
     fn phase2_make_object_type(id: &str, name: &str) -> ObjectType {
         ObjectType {
             id: id.to_string(),

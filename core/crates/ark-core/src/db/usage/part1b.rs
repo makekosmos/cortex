@@ -1,4 +1,4 @@
-﻿
+
 fn upsert_usage_day_fragment(
     conn: &Connection,
     write: &UsageSpanWrite,

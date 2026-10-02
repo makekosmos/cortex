@@ -1,4 +1,4 @@
-﻿
+
     #[test]
     fn usage_game_playtime_summary_matches_bindings_and_range() {
         let conn = setup_db();

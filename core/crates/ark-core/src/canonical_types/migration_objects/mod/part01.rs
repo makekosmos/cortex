@@ -1,4 +1,4 @@
-﻿// Checkpoint D: read-only all-source planning and narrow per-item application.
+// Checkpoint D: read-only all-source planning and narrow per-item application.
 #[path = "../apply.rs"] mod apply;
 #[path = "../native.rs"] mod native;
 

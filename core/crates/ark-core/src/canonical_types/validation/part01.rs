@@ -1,4 +1,4 @@
-﻿// Pure validation for the frozen canonical props/content subset.
+// Pure validation for the frozen canonical props/content subset.
 
 use crate::canonical_types::definitions::canonical_type_registrations;
 use crate::type_registry::TypeRegistration;

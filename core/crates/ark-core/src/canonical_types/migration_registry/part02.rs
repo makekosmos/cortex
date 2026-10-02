@@ -1,4 +1,4 @@
-﻿
+
 type LegacyDefinitionRow = (
     String,
     String,

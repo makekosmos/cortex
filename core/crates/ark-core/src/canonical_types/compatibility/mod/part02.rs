@@ -1,4 +1,4 @@
-﻿
+
 
 fn enrich(
     failure: shared::CompatFailure,

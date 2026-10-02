@@ -1,4 +1,4 @@
-﻿
+
 pub fn ensure_builtin_versions(conn: &Connection) -> Result<(), String> {
     let mut stmt=conn.prepare("SELECT id,schema_json,ui_schema_json,created_at FROM object_types WHERE NOT EXISTS (SELECT 1 FROM object_type_versions v WHERE v.type_id=object_types.id AND v.version=?1)").map_err(|e|e.to_string())?;
     let rows = stmt

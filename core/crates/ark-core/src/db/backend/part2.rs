@@ -1,4 +1,4 @@
-﻿
+
 pub struct SqliteStorageBackend {
     conn: Arc<Mutex<rusqlite::Connection>>,
     device_id: Arc<Mutex<String>>,

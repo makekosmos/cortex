@@ -1,4 +1,4 @@
-﻿
+
 pub fn upsert_object_link(conn: &Connection, link: &ObjectLink) -> Result<(), String> {
     // Do not use SQLite REPLACE here: it deletes the old row first.
     // РЎРј. postmortems.md В§ 2026-06-04.

@@ -1,4 +1,4 @@
-﻿
+
 pub fn insert_pending_object(
     conn: &Connection,
     entity: &SyncEntity,

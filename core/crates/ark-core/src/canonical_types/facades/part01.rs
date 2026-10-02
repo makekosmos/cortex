@@ -1,4 +1,4 @@
-﻿// Engine-owned typed canonical read/write facades.
+// Engine-owned typed canonical read/write facades.
 use crate::canonical_types::definitions::canonical_type_registrations;
 use crate::canonical_types::validation::validate_canonical;
 use crate::db;

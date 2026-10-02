@@ -1,4 +1,4 @@
-﻿pub fn load_usage_game_playtime_summary(
+pub fn load_usage_game_playtime_summary(
     conn: &Connection,
     bindings: &[UsageGamePlaytimeBinding],
     range_start: Option<&str>,

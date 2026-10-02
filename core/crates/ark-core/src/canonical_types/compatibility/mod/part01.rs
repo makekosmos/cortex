@@ -1,4 +1,4 @@
-﻿// Pure Phase 3 compatibility facade. No persistence, clocks, events, or registry mutation.
+// Pure Phase 3 compatibility facade. No persistence, clocks, events, or registry mutation.
 #[path = "../activity.rs"] mod activity;
 #[path = "../content.rs"] mod content;
 #[path = "../planning.rs"] pub mod planning;

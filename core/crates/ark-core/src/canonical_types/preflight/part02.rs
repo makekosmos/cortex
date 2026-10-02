@@ -1,4 +1,4 @@
-﻿
+
 fn native_inventory(conn: &Connection, out: &mut Vec<SourceRecord>) -> Result<(), String> {
     // Areas and headings are migrated as canonical project objects. Their
     // legacy kind, ordering and parent are carried in compatibility extensions

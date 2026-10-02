@@ -1,4 +1,4 @@
-﻿
+
 /// The full write bundle threaded through the kind mappers that need every
 /// accumulator: canonical `out`, unknown-field sink, links, local-state and
 /// quarantine maps, plus the record identity pair.

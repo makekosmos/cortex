@@ -1,4 +1,4 @@
-﻿    fn setup_db() -> Connection {
+    fn setup_db() -> Connection {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(
             "PRAGMA journal_mode = WAL;

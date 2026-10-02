@@ -1,4 +1,4 @@
-﻿// Additive Phase 3 migration ledger and child-savepoint ownership.
+// Additive Phase 3 migration ledger and child-savepoint ownership.
 
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};

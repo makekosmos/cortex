@@ -1,4 +1,4 @@
-﻿fn load_items(conn: &Connection, contract: &str) -> Result<Vec<LedgerItem>, LedgerError> {
+fn load_items(conn: &Connection, contract: &str) -> Result<Vec<LedgerItem>, LedgerError> {
     let mut s=conn.prepare("SELECT contract_version,source_kind,source_id,source_hash,raw_source,status,canonical_hash,result_json,error_code,attempt,checkpoint,updated_at FROM canonical_migration_items WHERE contract_version=?1 ORDER BY source_kind,source_id").map_err(storage)?;
     let rows = s
         .query_map([contract], |r| {

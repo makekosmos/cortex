@@ -1,4 +1,4 @@
-﻿
+
 pub fn resolve_alias(conn: &Connection, alias: &str) -> Result<Option<String>, String> {
     conn.query_row(
         "SELECT canonical_type_id FROM object_type_aliases WHERE alias=?1",

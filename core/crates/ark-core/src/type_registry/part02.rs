@@ -1,4 +1,4 @@
-﻿
+
 pub fn ensure_legacy_type_version(
     conn: &Connection,
     type_id: &str,

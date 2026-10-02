@@ -1,4 +1,4 @@
-﻿
+
 impl SqliteStorageBackend {
     pub fn set_selective_sync_profile(
         &self,

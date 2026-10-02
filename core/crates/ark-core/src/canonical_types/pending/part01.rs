@@ -1,4 +1,4 @@
-﻿use std::cmp::Ordering;
+use std::cmp::Ordering;
 
 use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension};

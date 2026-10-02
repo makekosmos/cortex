@@ -1,4 +1,4 @@
-﻿// Integrated Phase 3 migration orchestration.
+// Integrated Phase 3 migration orchestration.
 //
 // This facade owns sequencing and the outer rollback boundary.  Inventory,
 // compatibility, ledger, registry, and object persistence remain owned by

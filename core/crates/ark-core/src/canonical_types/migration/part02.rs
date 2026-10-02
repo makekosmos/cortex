@@ -1,4 +1,4 @@
-﻿
+
 fn run_status(conn: &Connection) -> Result<Option<String>, MigrationError> {
     let exists: bool = conn
         .query_row(

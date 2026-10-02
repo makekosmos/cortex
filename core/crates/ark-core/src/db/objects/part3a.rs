@@ -1,4 +1,4 @@
-﻿
+
 fn search_objects_with_fts(
     conn: &Connection,
     fts_query: &str,

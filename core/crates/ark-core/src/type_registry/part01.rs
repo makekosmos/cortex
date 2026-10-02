@@ -1,4 +1,4 @@
-﻿use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension};
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};

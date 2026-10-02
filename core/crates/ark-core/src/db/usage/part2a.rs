@@ -1,4 +1,4 @@
-﻿/// `windows_dir` is the real OS system dir (resolved engine-side via
+/// `windows_dir` is the real OS system dir (resolved engine-side via
 /// `GetSystemWindowsDirectoryW`); `None` marks nothing as system — ark-core
 /// must not guess host paths from the environment.
 pub fn load_usage_analytics(

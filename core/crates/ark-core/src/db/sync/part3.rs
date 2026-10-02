@@ -1,4 +1,4 @@
-﻿
+
 pub fn record_sync_tombstone(
     conn: &Connection,
     entity_type: &str,

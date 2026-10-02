@@ -1,4 +1,4 @@
-﻿
+
 fn record_usage_sequence(
     conn: &Connection,
     entity_type: &str,

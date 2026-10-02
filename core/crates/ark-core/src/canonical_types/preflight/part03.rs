@@ -1,4 +1,4 @@
-﻿
+
 fn context(conn: &Connection) -> Result<MappingContext, String> {
     let regs = canonical_type_registrations()?;
     let aliases: BTreeMap<String, CanonicalIdentity> = regs

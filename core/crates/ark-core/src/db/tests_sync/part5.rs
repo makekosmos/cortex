@@ -1,4 +1,4 @@
-﻿    #[tokio::test]
+    #[tokio::test]
     async fn storage_backend_versioned_object_matrix_holds_unknown_payload_and_replays_exactly() {
         let backend = make_backend();
         let conn = backend.conn.clone();

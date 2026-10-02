@@ -1,4 +1,4 @@
-﻿
+
 fn archive_and_promote(
     conn: &Connection,
     registration: &TypeRegistration,

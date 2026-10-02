@@ -1,4 +1,4 @@
-﻿
+
 
 pub fn apply_plan_with_failure(
     conn: &Connection,

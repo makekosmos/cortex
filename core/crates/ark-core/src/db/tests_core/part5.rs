@@ -1,4 +1,4 @@
-﻿
+
     #[test]
     fn object_summary_queries_skip_body_and_filter_by_type() {
         let conn = setup_db();

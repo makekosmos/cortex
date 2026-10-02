@@ -1,4 +1,4 @@
-﻿// Phase 3 checkpoint C: exact canonical registry installation and legacy registry evidence.
+// Phase 3 checkpoint C: exact canonical registry installation and legacy registry evidence.
 // This module is deliberately independent from object migration and init wiring.
 
 use std::collections::BTreeMap;

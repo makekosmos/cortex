@@ -1,4 +1,4 @@
-﻿
+
 pub fn upsert_object(conn: &Connection, object: &ArkObject) -> Result<(), String> {
     let registry_ready: bool = conn
         .query_row(

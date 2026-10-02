@@ -1,4 +1,4 @@
-﻿
+
 /// Atomically set, replace, or remove the Book's sole canonical cover link.
 ///
 /// This boundary never materializes an Image. `source_ref` is retained in the

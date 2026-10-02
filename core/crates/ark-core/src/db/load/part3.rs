@@ -1,4 +1,4 @@
-﻿
+
 fn load_all_usage_sessions(conn: &Connection) -> Result<Vec<UsageSession>, String> {
     load_usage_sessions_page(conn, -1, 0)
 }

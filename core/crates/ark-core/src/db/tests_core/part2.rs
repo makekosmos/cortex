@@ -1,4 +1,4 @@
-﻿
+
     #[test]
     fn test_schema_creation() {
         let conn = setup_db();

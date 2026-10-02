@@ -1,4 +1,4 @@
-﻿
+
 /// Every stored type_id that answers a by-type query: the canonical id plus
 /// all registered aliases. Objects written before a type was canonicalised
 /// keep the alias in `objects.type_id`; matching only the canonical id makes

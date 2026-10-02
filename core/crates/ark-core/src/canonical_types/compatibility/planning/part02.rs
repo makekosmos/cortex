@@ -1,4 +1,4 @@
-﻿fn status(
+fn status(
     m: &Map<String, Value>,
     u: &mut BTreeSet<String>,
 ) -> Result<(String, Option<String>), CompatFailure> {

@@ -1,4 +1,4 @@
-﻿// Generic object model CRUD
+// Generic object model CRUD
 // ---------------------------------------------------------------------------
 
 fn serialize_json(value: &Value) -> Result<String, String> {

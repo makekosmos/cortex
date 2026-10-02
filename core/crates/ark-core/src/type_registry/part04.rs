@@ -1,4 +1,4 @@
-﻿
+
 pub fn register_type(conn: &Connection, registration: &TypeRegistration) -> Result<(), String> {
     validate_id(&registration.type_id, "type id")?;
     if registration.owner_kind.trim().is_empty() {
