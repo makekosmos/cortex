@@ -173,6 +173,9 @@ test("stops product processes via the staged engine subcommand", () => {
   expect(macroSection).toContain('Abort "$(ABORT_KILL_FAILED)"');
   expect(uninstallSection).toContain('mundus-engine.exe" --shutdown');
   expect(uninstallSection).toContain('mundus-engine.exe" kill-product-processes');
+  // KOS-309: a survivor aborts the uninstall before anything is deleted —
+  // under /S a DetailPrint would leave a half-removed install unnoticed.
+  expect(uninstallSection).toContain('Abort "$(ABORT_KILL_FAILED)"');
   expect(installer).not.toContain("taskkill");
 });
 

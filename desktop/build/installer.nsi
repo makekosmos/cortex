@@ -213,10 +213,12 @@ FunctionEnd
 ; Always start the installed Engine at the end of the install. The Manager
 ; launch lives on the MUI finish page instead — the checked "Launch Mundus"
 ; checkbox runs it only on interactive installs.
-; KOS-309: ExecWait, not nsExec — nsExec waits for the child's output pipe
-; to hit EOF, and the Engine spawned here inherits that pipe handle, so
-; ExecToLog would block forever on a healthy Engine. ExecWait waits on the
-; process handle only.
+; KOS-309: ExecWait, not nsExec — ExecToLog waits for the child's output
+; pipe to hit EOF, and the Engine spawned here inherits the post-install
+; process' std handles (default stdio is inherit), so it holds the pipe's
+; write end open forever. Proven by grandchildren_hold_our_piped_stdout_open
+; in runtime/src/installer/processes_tests.rs. ExecWait waits on the process
+; handle only.
 Function StartEngine
   ExecWait '"${ENGINE_STAGED}\mundus-engine.exe" post-install --start-engine' $0
   ; Engine start failure is logged but not fatal: the Run key written by
@@ -432,12 +434,13 @@ Section "Uninstall"
   IfFileExists "${ENGINE_STAGED}\mundus-engine.exe" 0 un_kill_done
     nsExec::ExecToLog '"${ENGINE_STAGED}\mundus-engine.exe" --shutdown'
     nsExec::ExecToStack '"${ENGINE_STAGED}\mundus-engine.exe" kill-product-processes'
-    ; A non-zero exit means a survivor — the uninstall continues (the user
-    ; asked to remove the app) but the leftover shows up in the log.
+    ; KOS-309: a survivor means the deletes below would half-fail under /S
+    ; with nobody watching the log — abort before anything is removed, so
+    ; the install is either fully gone or fully intact.
     Pop $R8
     Pop $R9
-    IntCmp $R8 0 +2
-      DetailPrint "kill-product-processes exited $R8 — some files may be left behind"
+    IntCmp $R8 0 un_kill_done
+      Abort "$(ABORT_KILL_FAILED)"
   un_kill_done:
 
   ; One UAC prompt to remove the service before files are cleaned.
