@@ -47,7 +47,7 @@ VIAddVersionKey "CompanyName" "${PUBLISHER}"
 VIAddVersionKey "FileDescription" "${APP_NAME} Setup"
 VIAddVersionKey "FileVersion" "${VERSION}"
 VIAddVersionKey "ProductVersion" "${VERSION}"
-VIAddVersionKey "LegalCopyright" "© Kazui"
+VIAddVersionKey "LegalCopyright" "Copyright (C) Kazui"
 
 ; Unicode so the Russian strings render on any system code page; the build
 ; passes /INPUTCHARSET UTF8 because this file is UTF-8 without a BOM.
@@ -104,11 +104,14 @@ ShowUninstDetails hide
 LangString FINISHPAGE_RUN_TEXT ${LANG_ENGLISH} "Launch ${APP_NAME}"
 LangString FINISHPAGE_RUN_TEXT ${LANG_RUSSIAN} "Запустить ${APP_NAME}"
 
-; The whole payload is extracted into the fresh per-run $PLUGINSDIR\stage
-; dir *before* any product process is stopped, so the kill helper is always
-; this build's exe — an older install's staged mundus-engine.exe does not
-; carry the subcommands yet and must never be invoked. CopyFiles then moves
-; the payload into $INSTDIR once nothing of ours is left running.
+; The payload is extracted into `$INSTDIR\resources.next` *before* any
+; product process is stopped, so the kill helper is always this build's
+; exe — an older install's staged mundus-engine.exe does not carry the
+; subcommands yet and must never be invoked. Staging inside the install
+; dir (never %TEMP%/$PLUGINSDIR) keeps "installer drops and runs an exe
+; out of %TEMP%" — the dropper feature this ticket removes — out of the
+; NSIS side too, and renames within $INSTDIR stay atomic same-volume
+; moves.
 ;
 ; Order: `--shutdown` asks the running Engine to exit gracefully on its own
 ; control path; `kill-product-processes` then force-kills whatever is left —
@@ -117,10 +120,28 @@ LangString FINISHPAGE_RUN_TEXT ${LANG_RUSSIAN} "Запустить ${APP_NAME}"
 ; MIGRATION(KOS-267): the legacy names live inside the subcommand, marked
 ; for removal after 2026-11-01.
 !macro StopProductProcesses
-  SetOutPath "$PLUGINSDIR\stage"
-  File /r "${STAGE_DIR}\*"
-  nsExec::ExecToLog '"$PLUGINSDIR\stage\resources\engine\mundus-engine.exe" --shutdown'
-  nsExec::ExecToStack '"$PLUGINSDIR\stage\resources\engine\mundus-engine.exe" kill-product-processes'
+  ; Repair leftovers of a crashed previous run: an orphaned resources.old
+  ; is the last good payload — restore it when resources is gone; stale
+  ; .next/.old dirs are deleted before staging.
+  IfFileExists "$INSTDIR\resources.next\*.*" 0 +2
+    RMDir /r "$INSTDIR\resources.next"
+  IfFileExists "$INSTDIR\resources.old\*.*" 0 stale_done
+    IfFileExists "$INSTDIR\resources\*.*" 0 stale_orphaned
+      RMDir /r "$INSTDIR\resources.old"
+      Goto stale_done
+    stale_orphaned:
+      Rename "$INSTDIR\resources.old" "$INSTDIR\resources"
+  stale_done:
+  SetOutPath "$INSTDIR\resources.next"
+  ; Only `resources` is payload: installer-assets are compile-time MUI
+  ; bitmaps already baked into this exe, not runtime files.
+  File /r "${STAGE_DIR}\resources\*"
+  IfFileExists "$INSTDIR\resources.next\engine\mundus-engine.exe" 0 +2
+    Goto stage_ok
+    Abort "Mundus payload staging failed"
+  stage_ok:
+  nsExec::ExecToLog '"$INSTDIR\resources.next\engine\mundus-engine.exe" --shutdown'
+  nsExec::ExecToStack '"$INSTDIR\resources.next\engine\mundus-engine.exe" kill-product-processes'
   Pop $R8
   Pop $R9
   Sleep 500
@@ -273,20 +294,31 @@ Section "Install"
   Delete "$SMPROGRAMS\Kosmos\.kosmos-desktop-host-shortcuts.json"  ; MIGRATION(KOS-267)
   RMDir "$SMPROGRAMS\Kosmos"                                       ; MIGRATION(KOS-267)
 
-  ; Replace the shipped application payload only. User data lives in
-  ; %APPDATA%\Mundus and %LOCALAPPDATA%\Mundus and is never touched here.
-  ; The payload was extracted into $PLUGINSDIR\stage by StopProductProcesses
-  ; above; nothing of ours can still hold these files open.
-  IfFileExists "$INSTDIR\resources\*.*" 0 +2
-    RMDir /r "$INSTDIR\resources"
+  ; Swap the payload in place: everything was extracted into resources.next
+  ; by StopProductProcesses, so the live `resources` is renamed aside and
+  ; the new tree renamed in — never `RMDir /r` on the live tree first.
+  ; A failed rename-in restores the old tree; a failed rename-aside means a
+  ; leftover process still holds the dir, so abort with the old install
+  ; intact.
   Delete "$INSTDIR\Uninstall.exe"
-  SetOutPath "$INSTDIR"
-  CreateDirectory "$INSTDIR"
-  CopyFiles /SILENT "$PLUGINSDIR\stage\*" "$INSTDIR"
-  ; CopyFiles reports no error — fail closed on a missing payload instead.
-  IfFileExists "${ENGINE_STAGED}\mundus-engine.exe" payload_ready
-    Abort "Mundus payload copy failed"
-  payload_ready:
+  ClearErrors
+  IfFileExists "$INSTDIR\resources\*.*" 0 swap_in
+    Rename "$INSTDIR\resources" "$INSTDIR\resources.old"
+    IfErrors payload_locked
+  swap_in:
+  ClearErrors
+  Rename "$INSTDIR\resources.next" "$INSTDIR\resources"
+  IfErrors payload_rollback
+  Goto payload_swapped
+payload_locked:
+  Abort "Mundus files are still in use — close Mundus and retry"
+payload_rollback:
+  IfFileExists "$INSTDIR\resources.old\*.*" 0 +2
+    Rename "$INSTDIR\resources.old" "$INSTDIR\resources"
+  Abort "Mundus payload update failed — the previous install was restored"
+payload_swapped:
+  IfFileExists "$INSTDIR\resources.old\*.*" 0 +2
+    RMDir /r "$INSTDIR\resources.old"
 
   ; KOS-233: install the Engine bundled with this build. The subcommand is
   ; monotonic and refuses to downgrade a newer Engine left by a later

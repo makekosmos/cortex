@@ -94,8 +94,24 @@ function assertVersionInfo(file, expectedVersion) {
   for (const key of ["CompanyName", "ProductName", "FileDescription"]) {
     if (!info[key]) die(`${file}: VERSIONINFO ${key} is empty`);
   }
+  if (info.ProductName !== "Mundus") die(`${file}: ProductName ${info.ProductName} != Mundus`);
+  if (info.LegalCopyright !== "Copyright (C) Kazui")
+    die(`${file}: LegalCopyright ${info.LegalCopyright} != Copyright (C) Kazui`);
   if (String(info.FileVersion).trim() !== expectedVersion)
     die(`${file}: FileVersion ${info.FileVersion} != ${expectedVersion}`);
+}
+
+// KOS-306 round 2: every shipped exe must carry exactly one application
+// manifest with requestedExecutionLevel asInvoker — the Engine's comes from
+// pe-version-info, the Manager's from gpui-pre's windows-manifest feature.
+function assertApplicationManifest(file) {
+  const data = readFileSync(file);
+  const marker = Buffer.from("urn:schemas-microsoft-com:asm.v1");
+  let hits = 0;
+  for (let i = data.indexOf(marker); i !== -1; i = data.indexOf(marker, i + 1)) hits++;
+  if (hits !== 1) die(`${file}: expected exactly one application manifest, found ${hits}`);
+  if (!data.includes('requestedExecutionLevel level="asInvoker"'))
+    die(`${file}: application manifest lacks requestedExecutionLevel asInvoker`);
 }
 
 function assertNoPowerShellPayload(stage) {
@@ -151,6 +167,7 @@ function stageInstaller(version) {
     path.join(managerDir, MANAGER_EXE),
   ]) {
     assertVersionInfo(exe, version);
+    assertApplicationManifest(exe);
   }
   return stage;
 }
@@ -220,6 +237,7 @@ async function buildWindows(version) {
   // KOS-306: the installer itself ships with VERSIONINFO too, then the
   // static/local-ML Defender scan gates the artifact.
   assertVersionInfo(outFile, version);
+  assertApplicationManifest(outFile);
   defenderGate(outFile);
 
   // electron-updater / Engine updater channel file.

@@ -164,11 +164,38 @@ test("stops product processes via the staged engine subcommand", () => {
   expect(installSection).toContain("!insertmacro StopProductProcesses");
   expect(macroSection).toContain("--shutdown");
   expect(macroSection).toContain("kill-product-processes");
-  expect(macroSection).toContain('"$PLUGINSDIR\\stage\\resources\\engine\\mundus-engine.exe"');
+  // KOS-306 round 2: the helper runs from $INSTDIR\resources.next — the
+  // payload staged inside the install dir, never an exe out of %TEMP%.
+  expect(macroSection).toContain('"$INSTDIR\\resources.next\\engine\\mundus-engine.exe"');
   expect(macroSection).toContain("Sleep 500");
   expect(uninstallSection).toContain('mundus-engine.exe" --shutdown');
   expect(uninstallSection).toContain('mundus-engine.exe" kill-product-processes');
   expect(installer).not.toContain("taskkill");
+});
+
+// KOS-306: "installer drops an exe into %TEMP% and runs it" is the dropper
+// feature this ticket removes — nothing under $PLUGINSDIR may execute, and
+// the payload moves by rename, not a second copy.
+test("the installer never executes from $PLUGINSDIR and never copies the payload twice", () => {
+  for (const line of installer.split("\n")) {
+    if (/\b(nsExec|Exec|ExecWait|ExecShell)\b/.test(line)) {
+      expect(line).not.toContain("$PLUGINSDIR");
+    }
+  }
+  expect(installer).not.toContain("CopyFiles");
+});
+
+test("the payload swap keeps the previous install until the new tree is in place", () => {
+  // resources -> resources.old, resources.next -> resources, delete .old —
+  // a failed rename-aside aborts, a failed rename-in restores .old.
+  expect(installer).toContain('Rename "$INSTDIR\\resources" "$INSTDIR\\resources.old"');
+  expect(installer).toContain('Rename "$INSTDIR\\resources.next" "$INSTDIR\\resources"');
+  expect(installer).toContain('Rename "$INSTDIR\\resources.old" "$INSTDIR\\resources"');
+  expect(installer).toContain("payload_locked:");
+  expect(installer).toContain("payload_rollback:");
+  // The live tree is renamed aside, never deleted before the new one is in
+  // — the uninstaller still owns `RMDir /r` on resources.
+  expect(installSection).not.toContain('RMDir /r "$INSTDIR\\resources"');
 });
 
 test("uninstall removes the privileged service via one elevated runas call", () => {
@@ -205,7 +232,7 @@ test("the Install section never writes or shortcuts a bundled app component", ()
     expect(installSection).not.toContain(`components\\${component}\\`);
     expect(installSection).not.toContain(`CreateShortCut "$SMPROGRAMS\\${component}`);
   }
-  expect(installSection).toContain('RMDir /r "$INSTDIR\\resources"');
+  expect(installSection).toContain('Rename "$INSTDIR\\resources.next" "$INSTDIR\\resources"');
 });
 
 // MIGRATION(KOS-267): remove after 2026-11-01.
@@ -233,12 +260,13 @@ test("records bundled components before wiping the old payloads", () => {
   expect(skipAt).toBeLessThan(marker.indexOf("FileOpen"));
   const recordAt = installSection.indexOf("Call RecordLegacyComponents");
   const kosmosWipeAt = installSection.indexOf('RMDir /r "$LOCALAPPDATA\\Programs\\Kosmos"');
-  const resourcesWipeAt = installSection.indexOf('RMDir /r "$INSTDIR\\resources"');
+  // KOS-306 round 2: the payload is swapped in by rename, not wiped.
+  const resourcesSwapAt = installSection.indexOf('Rename "$INSTDIR\\resources"');
   expect(recordAt >= 0).toBeTruthy();
   expect(kosmosWipeAt >= 0).toBeTruthy();
-  expect(resourcesWipeAt >= 0).toBeTruthy();
+  expect(resourcesSwapAt >= 0).toBeTruthy();
   expect(recordAt).toBeLessThan(kosmosWipeAt);
-  expect(recordAt).toBeLessThan(resourcesWipeAt);
+  expect(recordAt).toBeLessThan(resourcesSwapAt);
 });
 
 test("uninstall removes the store payload dir but never user data", () => {

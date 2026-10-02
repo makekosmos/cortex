@@ -114,8 +114,51 @@ test("the installer and every shipped exe get VERSIONINFO", async () => {
   // CompanyName/ProductName/FileDescription or a FileVersion that is not
   // the product version — installer included.
   assert.match(script, /assertVersionInfo\(outFile, version\)/);
+  assert.match(script, /assertApplicationManifest\(outFile\)/);
   assert.match(script, /mundus-engine\.exe/);
   assert.match(script, /MANAGER_EXE/);
+});
+
+// KOS-306 round 2: the VERSIONINFO brand strings live in three places —
+// pe-version-info (exes), desktop/scripts/brand.mjs and installer.nsi. Pin
+// them to each other so a rebrand never splits them.
+test("the VERSIONINFO brand strings share one source across pe-version-info, brand.mjs and installer.nsi", async () => {
+  const helper = await readFile(
+    path.join(
+      import.meta.dirname,
+      "..",
+      "..",
+      "runtime",
+      "crates",
+      "pe-version-info",
+      "src",
+      "lib.rs",
+    ),
+    "utf8",
+  );
+  const brand = await readFile(path.join(import.meta.dirname, "brand.mjs"), "utf8");
+  const runtimeBrand = await readFile(
+    path.join(import.meta.dirname, "..", "..", "runtime", "src", "brand.rs"),
+    "utf8",
+  );
+  const nsi = await readFile(
+    path.join(import.meta.dirname, "..", "build", "installer.nsi"),
+    "utf8",
+  );
+  assert.match(helper, /pub const PRODUCT_NAME: &str = "Mundus"/);
+  assert.match(helper, /pub const COMPANY_NAME: &str = "Kazui"/);
+  assert.match(helper, /pub const LEGAL_COPYRIGHT: &str = "Copyright \(C\) Kazui"/);
+  assert.match(brand, /PRODUCT_NAME = "Mundus"/);
+  assert.match(brand, /PUBLISHER = "Kazui"/);
+  assert.match(runtimeBrand, /PRODUCT_NAME: &str = "Mundus"/);
+  assert.match(nsi, /!define APP_NAME "Mundus"/);
+  assert.match(nsi, /!define PUBLISHER "Kazui"/);
+  assert.match(nsi, /VIAddVersionKey "ProductName" "\$\{APP_NAME\}"/);
+  assert.match(nsi, /VIAddVersionKey "CompanyName" "\$\{PUBLISHER\}"/);
+  assert.match(nsi, /VIAddVersionKey "LegalCopyright" "Copyright \(C\) Kazui"/);
+  // The build-time check compares the stamped strings to the same constants.
+  assert.match(script, /ProductName !== "Mundus"/);
+  assert.match(script, /LegalCopyright !== "Copyright \(C\) Kazui"/);
 });
 
 test("the build runs a static Defender scan on the finished installer", () => {
