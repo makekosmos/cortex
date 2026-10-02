@@ -90,10 +90,14 @@ fn strict_version(name: &str) -> Option<Version> {
     (version.pre.is_empty() && version.build.is_empty()).then_some(version)
 }
 
-/// `<v>.<pid>.tmp` — temp-директория `mundus-engine install`
-/// (`versions/<version>.<pid>.tmp` между staging-копией и финальным rename).
+/// `<v>.<pid>.tmp` / `<v>.<pid>.old` — temp-директории `mundus-engine
+/// install` (staging-копия между файловой проверкой и rename, отодвинутая
+/// старая версия при same-version replace).
 fn is_install_temp(name: &str) -> bool {
-    let Some(stem) = name.strip_suffix(".tmp") else {
+    let Some(stem) = name
+        .strip_suffix(".tmp")
+        .or_else(|| name.strip_suffix(".old"))
+    else {
         return false;
     };
     let Some((version, pid)) = stem.rsplit_once('.') else {

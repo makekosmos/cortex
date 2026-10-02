@@ -180,6 +180,57 @@ fn a_same_version_rebuild_replaces_the_installed_engine() {
 }
 
 #[test]
+fn a_failed_move_in_restores_the_previous_install() {
+    // KOS-306 round 2: the second rename of a same-version replace is forced
+    // to fail through the move_in seam — the previously installed Engine
+    // must still be intact afterwards, not deleted.
+    let (_root, _payload, target_root, options) = fixture("1.2.3");
+    install::install(&options).unwrap();
+    let backend = target_root.join("versions/1.2.3/mundus-engine.exe");
+    assert_eq!(
+        std::fs::read(&backend).unwrap(),
+        b"fixture:mundus-engine.exe"
+    );
+
+    let rebuild = TempDir::new().unwrap();
+    let payload = rebuild.path().join("payload");
+    std::fs::create_dir_all(&payload).unwrap();
+    for (name, data) in [
+        ("mundus-engine.exe", b"rebuild:mundus-engine.exe".as_slice()),
+        ("tray.ico", b"rebuild:tray.ico".as_slice()),
+    ] {
+        std::fs::write(payload.join(name), data).unwrap();
+    }
+    let manifest = write_manifest(
+        &payload,
+        "1.2.3",
+        &[
+            ("mundus-engine.exe", b"rebuild:mundus-engine.exe"),
+            ("tray.ico", b"rebuild:tray.ico"),
+        ],
+    );
+    let rebuild_options = install::Options {
+        manifest,
+        ..options
+    };
+    install::FAIL_NEXT_MOVE_IN.store(true, std::sync::atomic::Ordering::SeqCst);
+    assert!(install::install(&rebuild_options).is_err());
+    assert_eq!(
+        std::fs::read(&backend).unwrap(),
+        b"fixture:mundus-engine.exe",
+        "previous install must survive a failed replace"
+    );
+    assert_eq!(current_version(&target_root), "1.2.3");
+    assert!(
+        !target_root
+            .join("versions")
+            .join(format!("1.2.3.{}.old", std::process::id()))
+            .exists(),
+        "the aside dir is renamed back, not left behind"
+    );
+}
+
+#[test]
 fn tampered_payload_blocks_installation() {
     let (_root, payload, target_root, options) = fixture("1.2.3");
     std::fs::write(payload.join("mundus-engine.exe"), b"tampered").unwrap();

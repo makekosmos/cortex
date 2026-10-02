@@ -12,13 +12,26 @@ use std::path::PathBuf;
 pub(crate) const LEGACY_UNINSTALL_KEY: &str =
     r"Software\Microsoft\Windows\CurrentVersion\Uninstall\KosmosEngine"; // MIGRATION(KOS-267)
 
-/// `%APPDATA%\Microsoft\Windows\Start Menu\Programs` — the folder
-/// `[Environment]::GetFolderPath('Programs')` returned to the script.
-fn programs_dir() -> PathBuf {
-    std::env::var("APPDATA")
-        .map(PathBuf::from)
-        .unwrap_or_default()
-        .join(r"Microsoft\Windows\Start Menu\Programs")
+/// The user's Start Menu Programs folder, the same
+/// `[Environment]::GetFolderPath('Programs')` the script used — resolved via
+/// the known-folder API (`FOLDERID_Programs`), never guessed from %APPDATA%
+/// (a missing env var would silently produce a CWD-relative path).
+/// Same call as `native_apps::shortcuts`.
+#[cfg(windows)]
+fn programs_dir() -> Result<PathBuf, String> {
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::System::Com::CoTaskMemFree;
+    use windows::Win32::UI::Shell::{FOLDERID_Programs, SHGetKnownFolderPath, KNOWN_FOLDER_FLAG};
+    unsafe {
+        let path =
+            SHGetKnownFolderPath(&FOLDERID_Programs, KNOWN_FOLDER_FLAG(0), HANDLE::default())
+                .map_err(|e| format!("SHGetKnownFolderPath(FOLDERID_Programs): {e}"))?;
+        let text = path
+            .to_string()
+            .map_err(|e| format!("FOLDERID_Programs path: {e}"))?;
+        CoTaskMemFree(Some(path.0.cast()));
+        Ok(PathBuf::from(text))
+    }
 }
 
 #[cfg(windows)]
@@ -50,7 +63,10 @@ mod imp {
         if !registry::key_exists(key)? {
             return Ok(false);
         }
-        let shortcut = shortcut.unwrap_or_else(|| programs_dir().join("Kosmos Engine.lnk")); // MIGRATION(KOS-267)
+        let shortcut = match shortcut {
+            Some(path) => path,
+            None => programs_dir()?.join("Kosmos Engine.lnk"), // MIGRATION(KOS-267)
+        };
 
         // Snapshot before changing anything; restore on failure — never
         // leave a half-migrated registration.
