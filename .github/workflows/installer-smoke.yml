@@ -137,8 +137,10 @@ jobs:
           $instdir = "$env:LOCALAPPDATA\Programs\Mundus"
           $engine = "$instdir\resources\engine\mundus-engine.exe"
           if (!(Test-Path $engine)) { throw "engine payload missing: $engine" }
-          if ((Get-Item $engine).VersionInfo.FileVersion -ne $VERSION) {
-            throw "engine FileVersion != $VERSION"
+          $engineVersion = (Get-Item $engine).VersionInfo.FileVersion
+          Write-Host "installed engine FileVersion: '$engineVersion' (want '$VERSION')"
+          if ($engineVersion -ne $VERSION) {
+            throw "engine FileVersion '$engineVersion' != '$VERSION'"
           }
           if (Test-Path "$instdir\resources.next") { throw "resources.next left behind" }
           if (Test-Path "$instdir\resources.old") { throw "resources.old left behind" }
@@ -235,7 +237,11 @@ jobs:
             if (!$prev) { continue }
             $p = Start-Process -FilePath $prev.FullName -ArgumentList '/S' -PassThru
             if (-not $p.WaitForExit(300000)) { Write-Host "$($rel.tagName) install timed out — trying older"; continue }
-            if ($p.ExitCode -eq 0) { $prevInstalled = $true; break }
+            if ($p.ExitCode -eq 0) {
+              $prevInstalled = $true
+              Write-Host "previous release: $($rel.tagName)"
+              break
+            }
             Write-Host "release $($rel.tagName) does not install cleanly (exit $($p.ExitCode)) — trying older"
           }
           if (!$prevInstalled) {
@@ -244,20 +250,35 @@ jobs:
           }
 
           # Real product processes must run when the upgrade starts — the
-          # leftover-process failure mode only shows then. The installer's
-          # own --start-engine may already have the Engine up; wait for it,
-          # then also start the previous Manager when the payload has one.
+          # leftover-process failure mode only shows then. Older releases
+          # predate the resources\engine staging layout, so the previous
+          # Engine is located where install put it: any versions\<v> dir.
           $prevEngine = "$instdir\resources\engine\mundus-engine.exe"
-          if (!(Test-Path $prevEngine)) { throw "previous install has no engine at $prevEngine" }
+          if (!(Test-Path $prevEngine)) {
+            $prevEngine = Get-ChildItem "$env:LOCALAPPDATA\Mundus\Engine\versions\*\mundus-engine.exe" -ErrorAction SilentlyContinue |
+              Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
+          }
+          if (!$prevEngine) { throw "previous install has no engine anywhere" }
+          Write-Host "previous engine: $prevEngine"
           $prevVersion = (Get-Item $prevEngine).VersionInfo.FileVersion
-          if ($prevVersion -eq $VERSION) { throw "previous release is already $VERSION" }
+          # Equal is fine only when the "previous" install IS this build —
+          # the fallback bootstrap still exercises kill + swap paths.
+          if ($prevInstalled -and $prevVersion -eq $VERSION) {
+            throw "previous release is already $VERSION"
+          }
           if (!(Get-Process -Name 'mundus-engine' -ErrorAction SilentlyContinue)) {
             Start-Process -FilePath $prevEngine -ArgumentList '--start'
           }
           $manager = Get-ChildItem "$instdir\resources\components\manager\*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
           if ($manager) { Start-Process -FilePath $manager.FullName }
-          $before = Wait-ProductProcesses $prevVersion
-          Write-Host "previous processes running: $($before.Name -join ', ') @ $prevVersion"
+          # Poll for any mundus-engine process — the previous release's
+          # engine may not run from a versions\<v> path.
+          $deadline = (Get-Date).AddSeconds(60)
+          while (!(Get-Process -Name 'mundus-engine' -ErrorAction SilentlyContinue)) {
+            if ((Get-Date) -gt $deadline) { throw "previous engine never came up" }
+            Start-Sleep -Milliseconds 500
+          }
+          Write-Host "previous engine running @ $prevVersion"
 
           Invoke-Installer $newSetup
 
