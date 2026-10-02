@@ -9,7 +9,8 @@
     "build:backend": "node scripts/build-backend.mjs",
     "build:backend:dev": "node scripts/build-backend-dev.mjs",
     "test:runtime-staging": "node --test scripts/runtime-staging.test.mjs",
-    "build": "pnpm run build:backend && node scripts/release-preflight.mjs --platform win && pnpm run build:package-components && node scripts/build-desktop.mjs --platform win --skip-preflight",
+    "build:native:macos": "node scripts/build-macos-native.mjs",
+    "build": "pnpm run build:backend && node scripts/release-preflight.mjs --platform win && pnpm run build:native:macos && pnpm run build:package-components && node scripts/build-desktop.mjs --platform win --skip-preflight",
     "verify:channel": "node scripts/verify-release-channel.mjs",
     "package:dir": "pnpm run build:backend && node scripts/release-preflight.mjs --platform win && pnpm run build:package-components && node scripts/build-desktop.mjs --platform win --skip-preflight --package-dir",
     "build:package-components": "node scripts/build-package-components.mjs"

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -10,6 +10,7 @@ import {
   parseStableVersion,
   planRelease,
   RELEASE_REPO,
+  setMacVersion,
   setWinVersion,
 } from "./release-plan.mjs";
 import { RELEASE_RECEIPT_FILE } from "./release-receipt.mjs";
@@ -262,6 +263,22 @@ test("nextBuildVersion is the pin when ahead, else latest+patch, else the pin al
   );
   // A pin below the latest published release is a broken state, not a bump.
   assert.throws(() => at(["v0.11.0"], "0.10.3"), /below/);
+});
+
+test("setWinVersion does not bump or drop the mac channel", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "mundus-release-plan-mac-"));
+  const file = path.join(dir, "desktop", "release-versions.json");
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(file, JSON.stringify({ win: "0.10.3", mac: "0.5.1" }, null, 2) + "\n");
+  try {
+    assert.equal(setWinVersion("0.10.4", { root: dir }), true);
+    assert.deepEqual(JSON.parse(await readFile(file, "utf8")), { win: "0.10.4", mac: "0.5.1" });
+    assert.equal(setMacVersion("0.5.2", { root: dir }), true);
+    assert.deepEqual(JSON.parse(await readFile(file, "utf8")), { win: "0.10.4", mac: "0.5.2" });
+    assert.equal(setMacVersion("0.5.2", { root: dir }), false);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test("nextReleaseVersion mirrors the manual release bump rules", () => {

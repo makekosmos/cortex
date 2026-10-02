@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { releaseTarget } from "./release-repos.mjs";
 
 function scalar(value) {
   return value.trim().replace(/^(?:"([^"]*)"|'([^']*)')$/, "$1$2");
@@ -10,10 +11,12 @@ function sha512(file) {
   return createHash("sha512").update(readFileSync(file)).digest("base64");
 }
 
-// Windows is the only released platform, so the channel file is always
-// latest.yml.
-export function verifyLocalReleaseChannel(outputDir, expectedVersion) {
-  const channelName = "latest.yml";
+// `platform` defaults to win so the Windows publish path (publish-release.mjs,
+// build-desktop.mjs) keeps checking latest.yml and nothing else. Mac checks
+// latest-mac.yml in its own output directory; this function never looks at
+// the other platform's file.
+export function verifyLocalReleaseChannel(outputDir, expectedVersion, platform = "win") {
+  const { channelFile: channelName } = releaseTarget(platform);
   const document = readFileSync(path.join(outputDir, channelName), "utf8");
   const version = /^version:\s*(.+?)\s*$/m.exec(document)?.[1];
   const primaryName = /^path:\s*(.+?)\s*$/m.exec(document)?.[1];

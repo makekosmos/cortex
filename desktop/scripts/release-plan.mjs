@@ -17,7 +17,8 @@
 //   nextReleaseVersion(current, previous, changed) → "X.Y.Z" | null (skip)
 //   nextBuildVersion({ run, currentVersion, repo }) → "X.Y.Z" — see below
 //   planRelease({ run, currentVersion, repo })     → plan object
-//   setWinVersion(version)        → writes the win release version
+//   setWinVersion(version)        → writes the win release version, keeps mac
+//   setMacVersion(version)        → writes the mac release version, keeps win
 //
 // CLI:
 //   node scripts/release-plan.mjs plan
@@ -34,7 +35,11 @@
 //       unbumped pin can never make the "new" build equal the installed
 //       previous release.
 //   node scripts/release-plan.mjs set <version>
-//       Idempotently writes <version> as the win release version.
+//       Idempotently writes <version> as the win release version. The mac
+//       pin is preserved. Nightly calls this form.
+//   node scripts/release-plan.mjs set --platform mac <version>
+//       Same for the independent mac channel. Does not touch win and does
+//       not plan or publish a Windows release.
 
 import { appendFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -182,6 +187,8 @@ export function planRelease({ run = defaultRun, currentVersion, repo = RELEASE_R
         `publish the first one manually (publish-release.mjs --also-bridge-repo makekosmos/desktop)`,
     );
   const head = must(run("git", ["rev-parse", "HEAD"]), "git rev-parse HEAD").trim();
+  // Windows channel only. The mac pin is a different repo and is not an input,
+  // so a stale or missing mac version cannot skip or block this plan.
   const current = currentVersion ?? readReleaseVersion();
 
   const previousCommit = baselineCommit(run, repo, baseline);
@@ -236,16 +243,24 @@ export function planRelease({ run = defaultRun, currentVersion, repo = RELEASE_R
 
 // The version file is owned by release-version.mjs; `root` exists for tests
 // that point at a temp repo.
-export function setWinVersion(version, { root } = {}) {
+function setPlatformVersion(platform, version, { root } = {}) {
   parseStableVersion(version);
-  const current = readReleaseVersion({ root });
+  const current = readReleaseVersion({ root, platform });
   if (current === version) {
-    console.log(`[release-plan] win already at ${version}`);
+    console.log(`[release-plan] ${platform} already at ${version}`);
     return false;
   }
-  writeReleaseVersion(version, { root });
-  console.log(`[release-plan] win: ${current} -> ${version}`);
+  writeReleaseVersion(version, { root, platform });
+  console.log(`[release-plan] ${platform}: ${current} -> ${version}`);
   return true;
+}
+
+export function setWinVersion(version, options) {
+  return setPlatformVersion("win", version, options);
+}
+
+export function setMacVersion(version, options) {
+  return setPlatformVersion("mac", version, options);
 }
 
 function cli() {
@@ -281,11 +296,22 @@ function cli() {
     return;
   }
   if (command === "set") {
-    if (rest.length !== 1) throw new Error("usage: release-plan.mjs set <version>");
-    setWinVersion(rest[0]);
+    let platform = "win";
+    const positional = [];
+    for (let i = 0; i < rest.length; i++) {
+      if (rest[i] === "--platform") {
+        platform = rest[++i];
+      } else {
+        positional.push(rest[i]);
+      }
+    }
+    if (positional.length !== 1 || (platform !== "win" && platform !== "mac"))
+      throw new Error("usage: release-plan.mjs set [--platform win|mac] <version>");
+    if (platform === "mac") setMacVersion(positional[0]);
+    else setWinVersion(positional[0]);
     return;
   }
-  throw new Error("usage: release-plan.mjs plan | build-version | set <version>");
+  throw new Error("usage: release-plan.mjs plan | build-version | set [--platform win|mac] <version>");
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

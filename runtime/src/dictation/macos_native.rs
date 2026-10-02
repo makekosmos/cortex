@@ -1,9 +1,8 @@
 // macOS native dictation helpers.
 //
 // Rust owns lifecycle/state and Swift owns low-level macOS APIs. Helpers are
-// line-oriented JSON executables copied from sample/SuperCmd-main, compiled
-// from `runtime/native/macos/*.swift`. There is no macOS product build any
-// more, so nothing compiles them today.
+// line-oriented JSON executables copied from sample/SuperCmd-main and built by
+// `desktop/scripts/build-macos-native.mjs` (a no-op off macOS).
 
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader};

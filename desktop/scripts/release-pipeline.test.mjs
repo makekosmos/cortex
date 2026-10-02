@@ -13,6 +13,13 @@ test("release builds materialize runtime before preflight", async () => {
   for (const script of [desktop.scripts.build, desktop.scripts["package:dir"]]) {
     assert.ok(script.indexOf("build:backend") < script.indexOf("release-preflight"));
   }
+  // Swift helpers run on the release `build` chain and no-op off macOS.
+  // package:dir stays the Windows staging recipe and does not grow a mac step.
+  const build = desktop.scripts.build;
+  const native = build.indexOf("build:native:macos");
+  assert.ok(native > build.indexOf("release-preflight"));
+  assert.ok(native < build.indexOf("build:package-components"));
+  assert.equal(desktop.scripts["package:dir"].includes("build:native:macos"), false);
   // Preflight must run before any cargo component build — both markers
   // must actually be present for the comparison to mean anything.
   const pre = component.indexOf("release-preflight");

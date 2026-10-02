@@ -69,6 +69,39 @@ test("writeReleaseVersion writes only the win entry and validates first", async 
   }
 });
 
+// KOS-307: the two pins are independent. A Windows write must not invent,
+// drop, or rewrite mac — that was the parity-bump failure mode, and it
+// would block a Windows-only nightly on the mac channel.
+test("writeReleaseVersion preserves the other channel", async () => {
+  const root = await tempRepo();
+  try {
+    const file = path.join(root, "desktop", "release-versions.json");
+    await writeFile(file, JSON.stringify({ win: "0.10.3", mac: "0.5.1" }, null, 2) + "\n");
+    writeReleaseVersion("0.10.4", { root, platform: "win" });
+    assert.deepEqual(JSON.parse(await readFile(file, "utf8")), { win: "0.10.4", mac: "0.5.1" });
+    writeReleaseVersion("0.5.2", { root, platform: "mac" });
+    assert.deepEqual(JSON.parse(await readFile(file, "utf8")), { win: "0.10.4", mac: "0.5.2" });
+    assert.equal(readReleaseVersion({ root, platform: "win" }), "0.10.4");
+    assert.equal(readReleaseVersion({ root, platform: "mac" }), "0.5.2");
+    await writeFile(file, JSON.stringify({ win: "0.10.4", mac: "0.5.x" }) + "\n");
+    assert.throws(() => writeReleaseVersion("0.10.5", { root }), /release-versions\.json mac/);
+    await writeFile(file, JSON.stringify({ win: "0.10.4", linux: "1.0.0" }) + "\n");
+    assert.throws(() => writeReleaseVersion("0.10.5", { root }), /unknown key/);
+    assert.throws(() => readReleaseVersion({ root, platform: "linux" }), /Unknown platform/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("the checkout keeps the pre-KOS-275 mac pin beside win", () => {
+  const root = path.resolve(import.meta.dirname, "..", "..");
+  const win = readReleaseVersion({ root, platform: "win" });
+  assert.match(win, /^\d+\.\d+\.\d+$/);
+  // Restored as its own channel, not raised to the Windows version.
+  assert.equal(readReleaseVersion({ root, platform: "mac" }), "0.5.1");
+  assert.notEqual(win, "0.5.1");
+});
+
 // release-version.mjs is the single owner of desktop/release-versions.json:
 // no other script may read or write it. Test files are exempt — they build
 // fixture copies under temp roots and read the real file as a contract input.
