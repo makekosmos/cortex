@@ -192,7 +192,7 @@ mod tests {
 
     #[test]
     fn resource_script_carries_every_required_versioninfo_key() {
-        let out = tempfile_dir();
+        let out = TempDir::new();
         let rc = resource_script(
             &ExeInfo {
                 description: "Mundus Engine",
@@ -201,7 +201,7 @@ mod tests {
                 icon: Some(PathBuf::from(r"C:\icons\app.ico")),
                 manifest: true,
             },
-            &out,
+            out.path(),
         );
         for key in [
             "CompanyName",
@@ -220,14 +220,14 @@ mod tests {
         assert!(rc.contains(r#"VALUE "ProductName", "Mundus""#));
         // RT_MANIFEST (resource type 24) references the manifest file.
         assert!(rc.contains("1 24"));
-        let manifest = fs::read_to_string(out.join("mundus-engine.exe.manifest")).unwrap();
+        let manifest = fs::read_to_string(out.path().join("mundus-engine.exe.manifest")).unwrap();
         assert!(manifest.contains(r#"level="asInvoker""#));
         assert!(manifest.contains("8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a"));
     }
 
     #[test]
     fn manifest_is_optional_for_exes_whose_dependencies_ship_one() {
-        let out = tempfile_dir();
+        let out = TempDir::new();
         let rc = resource_script(
             &ExeInfo {
                 description: "Mundus Manager",
@@ -236,7 +236,7 @@ mod tests {
                 icon: None,
                 manifest: false,
             },
-            &out,
+            out.path(),
         );
         assert!(!rc.contains("1 24"));
     }
@@ -250,22 +250,35 @@ mod tests {
 
     #[test]
     fn win_version_reads_the_release_file() {
-        let dir = tempfile_dir();
-        let file = dir.join("release-versions.json");
+        let dir = TempDir::new();
+        let file = dir.path().join("release-versions.json");
         fs::write(&file, r#"{"win":"0.9.8","mac":"0.9.9"}"#).unwrap();
         assert_eq!(win_version(&file), "0.9.8");
     }
 
-    fn tempfile_dir() -> PathBuf {
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        static NEXT: AtomicUsize = AtomicUsize::new(0);
-        let dir = env::temp_dir().join(format!(
-            "pe-version-info-test-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::SeqCst)
-        ));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
-        dir
+    /// Temp dir that removes itself on drop — the pre-push gate fails on
+    /// leaked tmp entries.
+    struct TempDir(PathBuf);
+    impl TempDir {
+        fn new() -> Self {
+            use std::sync::atomic::{AtomicUsize, Ordering};
+            static NEXT: AtomicUsize = AtomicUsize::new(0);
+            let dir = env::temp_dir().join(format!(
+                "pe-version-info-test-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::SeqCst)
+            ));
+            let _ = fs::remove_dir_all(&dir);
+            fs::create_dir_all(&dir).unwrap();
+            Self(dir)
+        }
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
     }
 }
