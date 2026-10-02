@@ -43,7 +43,7 @@ const INTERACTIVE_ROLES: &[&str] = &[
 /// Builds the same view tree as `main.rs` — ManagerApp inside
 /// `gpui_component::Root` — on the deterministic test platform. The Engine
 /// worker just fails to connect in the background; slots stay empty.
-fn launch(cx: &mut TestAppContext) -> (Entity<ManagerApp>, &mut VisualTestContext) {
+pub(crate) fn launch(cx: &mut TestAppContext) -> (Entity<ManagerApp>, &mut VisualTestContext) {
     cx.update(gpui_component::init);
     cx.update(imago_gpui::theme::apply);
     let slot: Rc<RefCell<Option<Entity<ManagerApp>>>> = Rc::new(RefCell::new(None));
@@ -165,17 +165,14 @@ async fn a11y_tree_shell_exposes_russian_names(cx: &mut TestAppContext) {
         })
         .collect();
 
-    // Sidebar navigation, titlebar refresh and window chrome — stable
+    // Sidebar navigation and window chrome — stable
     // Russian names suitable as locators.
     for expected in [
         "Данные",
         "Затреканное время",
         "Маркетплейс",
         "Настройки",
-        "Обновить",
         "Боковая панель",
-        "Свернуть",
-        "Закрыть",
     ] {
         assert!(
             labels.contains_key(expected),
@@ -184,8 +181,18 @@ async fn a11y_tree_shell_exposes_russian_names(cx: &mut TestAppContext) {
         );
     }
     assert_eq!(labels["Данные"], "Button");
-    assert_eq!(labels["Обновить"], "Button");
-    assert_eq!(labels["Свернуть"], "Button");
+    assert!(
+        !labels.contains_key("Обновить"),
+        "no refresh button in titlebar"
+    );
+    if cfg!(target_os = "macos") {
+        // Native traffic lights are owned by AppKit, not the GPUI subtree.
+        assert!(!labels.contains_key("Свернуть"));
+        assert!(!labels.contains_key("Закрыть"));
+    } else {
+        assert_eq!(labels["Свернуть"], "Button");
+        assert_eq!(labels["Закрыть"], "Button");
+    }
     assert_eq!(labels["Боковая панель"], "Switch");
 }
 
@@ -283,7 +290,14 @@ async fn a11y_tree_matches_snapshot(cx: &mut TestAppContext) {
     let tree = a11y_tree(cx);
     let actual = snapshot_lines(&tree).join("\n") + "\n";
 
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/a11y-shell.txt");
+    let path = if cfg!(target_os = "macos") {
+        concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/snapshots/a11y-shell-macos.txt"
+        )
+    } else {
+        concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/a11y-shell.txt")
+    };
     if std::env::var("A11Y_BLESS").is_ok() {
         std::fs::create_dir_all(std::path::Path::new(path).parent().unwrap())
             .expect("create snapshots dir");

@@ -1,7 +1,7 @@
 //! Настройки — автозапуск (Host-owned) + резервные копии БД
 //! manager.db_backups.* (SettingsView.vue parity).
+use crate::button;
 use ::gpui::{prelude::*, *};
-use imago_gpui::button;
 use serde_json::json;
 
 use crate::app::ManagerApp;

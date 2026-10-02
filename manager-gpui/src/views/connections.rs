@@ -162,7 +162,7 @@ fn render_provider(
             let dname = name.clone();
             actions = actions
                 .child(
-                    imago_gpui::button::primary(SharedString::from(format!("sync-{id}")))
+                    crate::button::primary(SharedString::from(format!("sync-{id}")))
                         .label("Синхронизировать")
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.action(
@@ -173,7 +173,7 @@ fn render_provider(
                         })),
                 )
                 .child(
-                    imago_gpui::button::danger(SharedString::from(format!("disc-{id}")))
+                    crate::button::danger(SharedString::from(format!("disc-{id}")))
                         .label("Отключить")
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.ask_confirm(
@@ -193,7 +193,7 @@ fn render_provider(
             if browser_login {
                 let lid = id.clone();
                 actions = actions.child(
-                    imago_gpui::button::primary(SharedString::from(format!("login-{id}")))
+                    crate::button::primary(SharedString::from(format!("login-{id}")))
                         .label("Подключить")
                         .on_click(cx.listener(move |this, _, _, _| {
                             this.call(
@@ -236,7 +236,7 @@ fn render_provider(
                 let pid = id.clone();
                 let schema = settings.clone();
                 actions = actions.child(
-                    imago_gpui::button::primary(SharedString::from(format!("save-{id}")))
+                    crate::button::primary(SharedString::from(format!("save-{id}")))
                         .label("Подключить")
                         .on_click(cx.listener(move |this, _, _, cx| {
                             submit_credentials(this, &pid, &schema, cx);
@@ -248,7 +248,7 @@ fn render_provider(
             if state == IntegrationState::Configured {
                 let did = id.clone();
                 actions = actions.child(
-                    imago_gpui::button::ghost(SharedString::from(format!("clr-{id}")))
+                    crate::button::ghost(SharedString::from(format!("clr-{id}")))
                         .label("Удалить данные")
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.ask_confirm(

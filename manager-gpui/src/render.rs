@@ -9,6 +9,12 @@ use crate::views;
 use crate::widgets::*;
 use mundus_gpui_kit::theme::*;
 
+const PAGE_MAX_WIDTH: f32 = 760.0;
+
+#[cfg(test)]
+#[path = "layout_tests.rs"]
+mod tests;
+
 impl Render for ManagerApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.sync_theme(window, cx);
@@ -24,7 +30,7 @@ impl Render for ManagerApp {
             .font_family("Inter")
             .text_size(px(13.))
             .line_height(px(20.))
-            .child(render_sidebar(self, sidebar_p, cx))
+            .child(render_sidebar(self, sidebar_p, window, cx))
             .child(
                 div()
                     .flex_1()
@@ -33,19 +39,38 @@ impl Render for ManagerApp {
                     .flex()
                     .flex_col()
                     .overflow_hidden()
-                    .child(render_titlebar(self, sidebar_p, cx))
+                    .child(render_titlebar(sidebar_p, window))
                     .child(
                         div()
+                            .id("page-content")
+                            .debug_selector(|| "page-content".into())
                             .flex_1()
                             .overflow_y_scrollbar()
                             .p_6()
                             .flex()
                             .flex_col()
                             .gap_4()
-                            .child(active),
+                            .child(
+                                div()
+                                    .id("page-column")
+                                    .debug_selector(|| "page-column".into())
+                                    .w_full()
+                                    .max_w(px(PAGE_MAX_WIDTH))
+                                    .mx_auto()
+                                    .min_w_0()
+                                    .flex()
+                                    .flex_col()
+                                    .when(self.view == views::View::Usage, |column| {
+                                        column.flex_1().min_h_0()
+                                    })
+                                    .when(self.view != views::View::Usage, |column| {
+                                        column.flex_none()
+                                    })
+                                    .child(active),
+                            ),
                     ),
             )
-            .child(render_sidebar_toggle(self.sidebar_target > 0.5, cx));
+            .child(render_sidebar_toggle(self.sidebar_target > 0.5, window, cx));
         if self.dev_fps {
             root = root.child(
                 div()

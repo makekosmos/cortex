@@ -1,8 +1,8 @@
 //! Modal layers: destructive-action confirm, package disclosure consent,
 //! store listing detail.
+use crate::button;
 use ::gpui::{prelude::*, *};
 use gpui_component::scroll::ScrollableElement;
-use imago_gpui::button;
 use serde_json::Value;
 
 use crate::app::{Confirm, ManagerApp};

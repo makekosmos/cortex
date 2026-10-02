@@ -3,12 +3,20 @@
 #![windows_subsystem = "windows"]
 
 mod app;
+mod app_actions;
 mod app_replies;
+mod assets;
+mod async_fields;
+mod boot;
+mod button;
 mod components;
 mod consent;
+mod device_info;
 mod devpkg;
 mod fps;
 mod modals;
+#[cfg(target_os = "macos")]
+mod native_menu;
 mod render;
 mod views;
 mod widgets;
@@ -34,8 +42,23 @@ fn window_bounds(cx: &mut App) -> Bounds<gpui::Pixels> {
 }
 
 fn main() {
+    if let Err(error) = boot::ensure_engine() {
+        eprintln!("{error}");
+        #[cfg(target_os = "macos")]
+        if !std::env::args().any(|arg| arg == "--check-engine") {
+            // Pass the message as argv, not interpolated AppleScript source.
+            let _ = std::process::Command::new("/usr/bin/osascript")
+                .args(["-e", "on run argv\ndisplay alert \"Не удалось запустить Cortex\" message (item 1 of argv) as critical\nend run", &error])
+                .status();
+        }
+        std::process::exit(1);
+    }
+    if std::env::args().any(|arg| arg == "--check-engine") {
+        println!("Engine ready");
+        return;
+    }
     gpui::application()
-        .with_assets(imago_gpui::assets::Assets)
+        .with_assets(assets::Assets)
         .run(|cx: &mut App| {
             gpui_component::init(cx);
             cx.text_system()
@@ -55,10 +78,13 @@ fn main() {
                 },
                 |window, cx| {
                     let manager = cx.new(|cx| ManagerApp::new(window, cx));
+                    app_actions::register(cx, manager.downgrade());
                     cx.new(|cx| gpui_component::Root::new(manager, window, cx))
                 },
             )
             .unwrap();
+            #[cfg(target_os = "macos")]
+            native_menu::install(cx);
             if std::env::var("MANAGER_GPUI_OFFSCREEN").is_err() {
                 cx.activate(true);
             }

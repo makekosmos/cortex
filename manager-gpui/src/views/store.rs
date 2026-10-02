@@ -7,7 +7,6 @@
 //! Every row shows the product icon (manifest `icon` → `icon_path`,
 //! catalog `icon_url`) and the display name; the package id is the caption.
 use ::gpui::{prelude::*, *};
-use gpui_component::Disableable;
 use serde_json::{json, Value};
 
 use crate::app::ManagerApp;

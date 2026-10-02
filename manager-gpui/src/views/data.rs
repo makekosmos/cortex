@@ -6,6 +6,7 @@ use gpui_component::input::Input;
 use serde_json::json;
 
 use crate::app::ManagerApp;
+use crate::async_fields::field_text;
 use crate::widgets::*;
 use mundus_gpui_kit::theme::*;
 
@@ -63,48 +64,54 @@ pub fn render(
             .into_any_element()
     }));
 
-    col = col.child(slot_or(app, "data.storage", |v| {
-        let mut list = card();
-        list = list.child(
-            div()
-                .flex()
-                .items_baseline()
-                .gap_2()
-                .child(div().text_size(px(13.)).child("Хранилище на диске"))
-                .child(
-                    div()
-                        .text_size(px(12.))
-                        .text_color(c(MUTED_FG()))
-                        .child(format!("всего {}", fmt_bytes(vnum(v, "total_bytes")))),
-                ),
-        );
-        for cat in varr(v, "categories") {
-            let mut cat_row = row(vstr(cat, "label"), fmt_bytes(vnum(cat, "bytes")));
-            if vstr(cat, "id") == "legacy_quarantine" {
-                cat_row = cat_row.child(btn_id("quarantine-clear", "Очистить", {
-                    cx.listener(|this, _, _, cx| {
-                        this.ask_confirm(
-                            "Удалить устаревшие данные?",
-                            "Это файлы, оставшиеся от старой версии приложения. \
+    let total = field_text(app.slots.get("data.storage"), |v| {
+        fmt_bytes(vnum(v, "total_bytes"))
+    });
+    col = col.child(
+        card()
+            .child(
+                div()
+                    .flex()
+                    .items_baseline()
+                    .gap_2()
+                    .child(div().text_size(px(13.)).child("Хранилище на диске"))
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .text_color(c(MUTED_FG()))
+                            .child(format!("всего {total}")),
+                    ),
+            )
+            .child(slot_or(app, "data.storage", |v| {
+                let mut list = div().flex().flex_col().gap_2();
+                for cat in varr(v, "categories") {
+                    let mut cat_row = row(vstr(cat, "label"), fmt_bytes(vnum(cat, "bytes")));
+                    if vstr(cat, "id") == "legacy_quarantine" {
+                        cat_row = cat_row.child(btn_id("quarantine-clear", "Очистить", {
+                            cx.listener(|this, _, _, cx| {
+                                this.ask_confirm(
+                                    "Удалить устаревшие данные?",
+                                    "Это файлы, оставшиеся от старой версии приложения. \
                              Они не нужны для работы, но удаление необратимо.",
-                            "manager.data.quarantine.clear",
-                            json!({}),
-                            cx,
+                                    "manager.data.quarantine.clear",
+                                    json!({}),
+                                    cx,
+                                );
+                            })
+                        }));
+                    }
+                    list = list.child(cat_row);
+                    for part in varr(cat, "detail") {
+                        list = list.child(
+                            div()
+                                .pl_4()
+                                .child(row(vstr(part, "label"), fmt_bytes(vnum(part, "bytes")))),
                         );
-                    })
-                }));
-            }
-            list = list.child(cat_row);
-            for part in varr(cat, "detail") {
-                list = list.child(
-                    div()
-                        .pl_4()
-                        .child(row(vstr(part, "label"), fmt_bytes(vnum(part, "bytes")))),
-                );
-            }
-        }
-        list.into_any_element()
-    }));
+                    }
+                }
+                list.into_any_element()
+            })),
+    );
 
     let search = app.input("data.search", "Поиск объектов…", false, window, cx);
     col = col.child(

@@ -1,10 +1,11 @@
 //! Движок — engine.settings.get / engine.settings.set
 //! (EngineSettingsView.vue parity: warm timeout + usage tracker).
 use ::gpui::{prelude::*, *};
-use gpui_component::input::Input;
+use gpui_component::{input::Input, Disableable};
 use serde_json::json;
 
 use crate::app::ManagerApp;
+use crate::async_fields::field_row;
 use crate::widgets::*;
 use mundus_gpui_kit::theme::*;
 
@@ -20,27 +21,38 @@ pub fn render(
     let mut col = div().flex().flex_col().gap_4().w_full();
     col = col.child(section("Движок", "Настройки запуска"));
 
-    col = col.child(slot_or(app, "engine.settings", |v| {
-        let warm = vnum(vget(v, "desktop_host"), "warm_timeout_seconds");
-        let tracker = vbool(vget(v, "usage_tracker"), "enabled");
-        let mut el = card();
-        el = el.child(
-            div()
-                .text_size(px(12.))
-                .text_color(c(MUTED_FG()))
-                .child("Текущие значения"),
-        );
-        el = el.child(kv("Тёплый таймаут", format!("{warm:.0} сек.")));
-        el = el.child(kv(
-            "Счётчик использования",
-            if tracker {
-                "Включён"
-            } else {
-                "Выключен"
-            },
-        ));
-        el.into_any_element()
-    }));
+    col = col.child(
+        card()
+            .child(
+                div()
+                    .text_size(px(12.))
+                    .text_color(c(MUTED_FG()))
+                    .child("Текущие значения"),
+            )
+            .child(field_row(
+                app,
+                "engine.settings",
+                "Тёплый таймаут",
+                |v| {
+                    format!(
+                        "{:.0} сек.",
+                        vnum(vget(v, "desktop_host"), "warm_timeout_seconds")
+                    )
+                },
+            ))
+            .child(field_row(
+                app,
+                "engine.settings",
+                "Счётчик использования",
+                |v| {
+                    if vbool(vget(v, "usage_tracker"), "enabled") {
+                        "Включён".into()
+                    } else {
+                        "Выключен".into()
+                    }
+                },
+            )),
+    );
 
     let warm_in = app.input("engine.warm", "Таймаут в секундах…", false, window, cx);
     col = col.child(
@@ -100,7 +112,11 @@ pub fn render(
                         json!({"usage_tracker": {"enabled": checked}}),
                     );
                 })
-                .accessibility_label("Счётчик использования"),
+                .accessibility_label("Счётчик использования")
+                .disabled(!matches!(
+                    app.slots.get("engine.settings"),
+                    Some(crate::app::Slot::Ready(_))
+                )),
             ),
         ),
     );

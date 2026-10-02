@@ -26,12 +26,12 @@ pub fn render(
     {
         let active = app.theme_mode == index as u8;
         mode = mode.child(
-            imago_gpui::button::button(
+            crate::button::button(
                 SharedString::from(format!("theme-mode-{index}")),
                 if active {
-                    imago_gpui::button::ButtonKind::Primary
+                    crate::button::ButtonKind::Primary
                 } else {
-                    imago_gpui::button::ButtonKind::Ghost
+                    crate::button::ButtonKind::Ghost
                 },
             )
             .label(*label)

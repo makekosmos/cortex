@@ -61,6 +61,7 @@ pub mod crash_reporter;
 pub mod data_dir;
 pub mod db_backup;
 pub mod desktop_authority;
+pub(crate) mod device_name;
 pub mod diagnostics;
 pub mod dictation;
 pub mod engine_api;
