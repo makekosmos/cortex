@@ -148,19 +148,8 @@ fn write_link(_link: &Path, _target: &Path) -> Result<()> {
 
 #[cfg(windows)]
 fn programs_folder() -> Option<PathBuf> {
-    use windows::Win32::Foundation::HANDLE;
-    use windows::Win32::System::Com::CoTaskMemFree;
-    use windows::Win32::UI::Shell::{
-        FOLDERID_Programs, SHGetKnownFolderPath, KNOWN_FOLDER_FLAG,
-    };
-    unsafe {
-        let path =
-            SHGetKnownFolderPath(&FOLDERID_Programs, KNOWN_FOLDER_FLAG(0), HANDLE::default())
-                .ok()?;
-        let text = path.to_string().ok()?;
-        CoTaskMemFree(Some(path.0.cast()));
-        Some(PathBuf::from(text))
-    }
+    // Known-folder lookup shared with `installer::legacy`.
+    crate::win32::known_folder(&windows::Win32::UI::Shell::FOLDERID_Programs).ok()
 }
 
 #[cfg(not(windows))]

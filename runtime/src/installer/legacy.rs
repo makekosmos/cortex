@@ -16,22 +16,10 @@ pub(crate) const LEGACY_UNINSTALL_KEY: &str =
 /// `[Environment]::GetFolderPath('Programs')` the script used — resolved via
 /// the known-folder API (`FOLDERID_Programs`), never guessed from %APPDATA%
 /// (a missing env var would silently produce a CWD-relative path).
-/// Same call as `native_apps::shortcuts`.
+/// Shared with `native_apps::shortcuts` via `crate::win32::known_folder`.
 #[cfg(windows)]
 fn programs_dir() -> Result<PathBuf, String> {
-    use windows::Win32::Foundation::HANDLE;
-    use windows::Win32::System::Com::CoTaskMemFree;
-    use windows::Win32::UI::Shell::{FOLDERID_Programs, SHGetKnownFolderPath, KNOWN_FOLDER_FLAG};
-    unsafe {
-        let path =
-            SHGetKnownFolderPath(&FOLDERID_Programs, KNOWN_FOLDER_FLAG(0), HANDLE::default())
-                .map_err(|e| format!("SHGetKnownFolderPath(FOLDERID_Programs): {e}"))?;
-        let text = path
-            .to_string()
-            .map_err(|e| format!("FOLDERID_Programs path: {e}"))?;
-        CoTaskMemFree(Some(path.0.cast()));
-        Ok(PathBuf::from(text))
-    }
+    crate::win32::known_folder(&windows::Win32::UI::Shell::FOLDERID_Programs)
 }
 
 #[cfg(windows)]

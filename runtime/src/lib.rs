@@ -105,4 +105,6 @@ mod test_links;
 pub mod updater;
 pub mod usage_tracker;
 pub mod user_data;
+#[cfg(windows)]
+pub(crate) mod win32;
 pub mod ws_server;
