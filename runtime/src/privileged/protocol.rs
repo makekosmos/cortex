@@ -43,6 +43,15 @@ pub enum Request {
         root: String,
         exclude_noisy: bool,
     },
+    /// Keep the managed inbound firewall rule pointed at the *caller's*
+    /// Engine exe (KOS-269). Carries no parameters: the service derives the
+    /// program path from the pipe client's own process image, so a request
+    /// can never name an arbitrary binary to open the firewall for.
+    /// Additive change — no `PROTOCOL_VERSION` bump: an older service
+    /// answers with a clean "invalid request: unknown variant" error that
+    /// the client treats as "unsupported" and falls back from.
+    #[cfg(windows)]
+    EnsureEngineAllow,
 }
 
 /// Serialize a request with the protocol version stamped in.
@@ -127,6 +136,11 @@ impl Response {
         r
     }
 
+    /// Plain success with no payload.
+    pub fn ok() -> Self {
+        Self::base(true)
+    }
+
     #[cfg(windows)]
     pub fn files(files: Vec<crate::privileged::ntfs_scan::NtfsScanEntry>) -> Self {
         let mut r = Self::base(true);
@@ -181,6 +195,10 @@ pub fn dispatch(req: Request, hosts_path: &Path) -> Response {
         },
         #[cfg(windows)]
         Request::NtfsScan { .. } => Response::err("ntfs_scan requires a pipe connection"),
+        #[cfg(windows)]
+        Request::EnsureEngineAllow => {
+            Response::err("ensure_engine_allow requires a pipe connection")
+        }
     }
 }
 

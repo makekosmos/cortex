@@ -203,3 +203,7 @@ pub(super) async fn host_device_name(_state: &Arc<ServiceState>) -> Result<Value
 pub(super) async fn get_own_iroh_ticket(state: &Arc<ServiceState>) -> Result<Value, String> {
     handle_get_own_iroh_ticket(state).await
 }
+
+pub(super) async fn show_pairing_code(state: &Arc<ServiceState>) -> Result<Value, String> {
+    handle_show_pairing_code(state).await
+}

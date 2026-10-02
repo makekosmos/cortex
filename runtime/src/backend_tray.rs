@@ -47,6 +47,15 @@ pub fn start() -> (BackendTray, UnboundedReceiver<TrayEvent>) {
     (BackendTray { _events: events }, receiver)
 }
 
+/// Manager exe path for the `/v1/rpc` caller-identity check: identical to
+/// the launch resolution in debug builds, but release builds ignore the
+/// `MUNDUS_MANAGER_EXECUTABLE` env override — an env var must not decide who
+/// may trigger the elevated install (KOS-269 round 4).
+#[cfg(windows)]
+pub(crate) fn manager_executable_for_auth() -> Option<std::path::PathBuf> {
+    windows_impl::manager_executable_for_auth()
+}
+
 impl BackendTray {
     pub fn stop(self) {
         #[cfg(windows)]

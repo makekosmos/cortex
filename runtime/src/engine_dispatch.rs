@@ -173,6 +173,13 @@ pub struct DispatchClient {
     pub correlation_id: Option<String>,
     pub connection_id: Option<u64>,
     pub desktop_authorized: bool,
+    /// The caller's process image (queried by its same-user PID, never
+    /// self-declared) is the resolved Manager executable. This is the
+    /// Manager's trust level — equivalent to the WS desktop-authority lease
+    /// for ops a trusted local UI may trigger (`system.privileged.enable`),
+    /// without widening `desktop_authorized` to also cover `grant.*`,
+    /// consents and package snapshots.
+    pub manager_process: bool,
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]

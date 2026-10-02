@@ -37,6 +37,29 @@ pub fn with_client_impersonation(pipe: HANDLE, f: impl FnOnce() -> bool) -> bool
     }
 }
 
+/// PID of the process on the other end of the pipe. No impersonation needed —
+/// the pipe itself reports the client's identity, so this is trustworthy for
+/// security checks.
+pub fn client_process_id(pipe: HANDLE) -> Result<u32, String> {
+    let mut pid = 0u32;
+    unsafe {
+        windows::Win32::System::Pipes::GetNamedPipeClientProcessId(pipe, &mut pid)
+            .map_err(|e| format!("pipe client pid query failed: {e}"))?;
+    }
+    if pid == 0 {
+        return Err("pipe client pid unavailable".to_string());
+    }
+    Ok(pid)
+}
+
+/// Filesystem image path of the pipe client process. Combined with
+/// `client_profile_dir` this pins down "which exe is asking" without ever
+/// trusting a path the client sent (KOS-269 firewall rule).
+pub fn client_image_path(pipe: HANDLE) -> Result<PathBuf, String> {
+    let pid = client_process_id(pipe)?;
+    crate::auth::process_image_path(pid).map_err(|e| e.to_string())
+}
+
 fn client_profile_dir_impersonated() -> Result<PathBuf, String> {
     unsafe {
         let mut token = HANDLE::default();

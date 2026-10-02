@@ -22,7 +22,11 @@ pub(in crate::ws_server) async fn handle_system_op(
             }
         }
         "privileged.enable" => {
-            if !client.desktop_authorized {
+            // Two trusted callers: the bound WS desktop shell, and a `/v1/rpc`
+            // client whose *process image* is the installed Manager exe
+            // (the lock token alone is not Manager identity — any same-user
+            // process can read engine.lock.json).
+            if !(client.desktop_authorized || client.manager_process) {
                 return LocalResponse::err("system.privileged.enable: unauthorized client");
             }
             match tokio::task::spawn_blocking(crate::privileged::client::enable).await {
@@ -35,5 +39,29 @@ pub(in crate::ws_server) async fn handle_system_op(
             }
         }
         other => LocalResponse::err(format!("system.{other}: unknown-operation")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The UAC grant is limited to the two trusted channels — the bound WS
+    /// desktop and the authenticated Manager HTTP channel. A bare client is
+    /// denied *before* `enable()` could spawn the elevated install (the
+    /// allow path itself is untestable: it would trigger a real UAC prompt).
+    #[tokio::test]
+    async fn privileged_enable_requires_a_trusted_client() {
+        let response = handle_system_op(
+            "privileged.enable",
+            serde_json::Value::Null,
+            &crate::engine_dispatch::DispatchClient::default(),
+        )
+        .await;
+        assert!(!response.ok);
+        assert_eq!(
+            response.error.as_deref(),
+            Some("system.privileged.enable: unauthorized client")
+        );
     }
 }

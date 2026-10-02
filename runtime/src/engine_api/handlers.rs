@@ -9,3 +9,4 @@ include!("handlers/authorization.rs");
 include!("handlers/authorize_request.rs");
 include!("handlers/response_filter.rs");
 include!("handlers/auth.rs");
+include!("handlers/manager_identity.rs");

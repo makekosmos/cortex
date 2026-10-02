@@ -76,7 +76,7 @@ use self::sync::build_pairing_restart_params;
 use self::sync::{
     handle_add_seed_peer, handle_broadcast_change, handle_connect_with_pairing_code,
     handle_disconnect_peer, handle_get_connected_peers, handle_get_own_iroh_ticket,
-    handle_get_sync_snapshot, handle_start_sync, handle_stop_sync,
+    handle_get_sync_snapshot, handle_show_pairing_code, handle_start_sync, handle_stop_sync,
 };
 
 /// Per-service state — what used to be the sidecar's process-wide globals

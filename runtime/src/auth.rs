@@ -152,6 +152,51 @@ unsafe fn get_process_user_sid(
     Ok(sid_copy)
 }
 
+/// Executable image path of a same-user process, queried by PID —
+/// trustworthy process identity, unlike self-declared client headers.
+/// Used to pin `/v1/rpc` callers that claim to be the Manager
+/// (KOS-269 round 3).
+#[cfg(windows)]
+pub fn process_image_path(pid: u32) -> Result<std::path::PathBuf, AuthError> {
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Threading::{
+        OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_FORMAT,
+        PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+
+    unsafe {
+        let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
+            .map_err(|_| AuthError::PidNotFound { pid })?;
+        let result = (|| {
+            let mut buf = vec![0u16; 1024];
+            let mut size = buf.len() as u32;
+            QueryFullProcessImageNameW(
+                process,
+                PROCESS_NAME_FORMAT(0),
+                windows::core::PWSTR(buf.as_mut_ptr()),
+                &mut size,
+            )
+            .map_err(|e| AuthError::Other(format!("process image query failed: {e}")))?;
+            Ok(std::path::PathBuf::from(String::from_utf16_lossy(
+                &buf[..size as usize],
+            )))
+        })();
+        let _ = CloseHandle(process);
+        result
+    }
+}
+
+/// Same-file check by *file identity* — volume serial number + file index —
+/// not by path spelling. `QueryFullProcessImageNameW` and the resolved
+/// Manager path may name the same file through different spellings (`\\?\`
+/// prefix, `..` segments, different case, 8.3 short names, junctions), so a
+/// string compare would deny the real Manager (KOS-269 round 4).
+/// Deny-closed: returns `false` when either path cannot be opened.
+#[cfg(windows)]
+pub fn same_file(a: &std::path::Path, b: &std::path::Path) -> bool {
+    same_file::is_same_file(a, b).unwrap_or(false)
+}
+
 #[cfg(unix)]
 pub fn validate_pid_belongs_to_current_user(pid: u32) -> Result<(), AuthError> {
     // kill(pid, 0) → 0  : процесс существует и мы имеем right послать signal (same user или root)

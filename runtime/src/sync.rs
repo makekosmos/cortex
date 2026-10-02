@@ -4,7 +4,8 @@
 
 use std::path::Path;
 
-use serde_json::json;
+use ark_core::SyncBind;
+use serde_json::{json, Value};
 
 use crate::ark_host::ArkHost;
 use crate::auth;
@@ -66,11 +67,16 @@ fn resolve_use_iroh_by_default() -> bool {
     )
 }
 
+// Boot-time listener bind choice (KOS-269) lives in `sync::bind`.
+mod bind;
+pub use bind::lan_bind_at_boot;
+
 pub async fn start_lan_sync(
     ark: &ArkHost,
     space_id: &str,
     device_id: &str,
     device_name: &str,
+    bind: SyncBind,
 ) -> Result<(), DynError> {
     let mut params = json!({
         "space_id": space_id,
@@ -79,6 +85,7 @@ pub async fn start_lan_sync(
         "port": null,
         "seed_addresses": null,
         "use_iroh": resolve_use_iroh_by_default(),
+        "bind": serde_json::to_value(bind).unwrap_or(Value::Null),
     });
 
     if let Some(url) = crate::brand::env("RELAY_URL") {

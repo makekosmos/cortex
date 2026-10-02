@@ -60,6 +60,10 @@ async fn handle_rpc(
         correlation_id: Some(correlation_id.as_ref().clone()),
         connection_id: Some(owner.id()),
         desktop_authorized: false,
+        // The lock token alone is NOT Manager identity — any same-user
+        // process can read engine.lock.json. What proves the Manager is the
+        // caller's process image matching the installed Manager exe.
+        manager_process: is_manager_process(client.pid),
     });
     let Some((_operation_id, receiver, mut response_guard)) =
         operations.start(request, dispatcher, owner).await

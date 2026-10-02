@@ -4,7 +4,7 @@
 //! and env overrides come straight from `native_apps::NATIVE_APPS`, so this
 //! file holds no second copy of that table.
 
-use engine::native_apps::NativeAppDescriptor;
+use crate::native_apps::NativeAppDescriptor;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Component {
@@ -16,7 +16,7 @@ impl Component {
     /// Manager first, then every store app in descriptor order.
     pub fn all() -> impl Iterator<Item = Component> {
         std::iter::once(Component::Manager)
-            .chain(engine::native_apps::NATIVE_APPS.iter().map(Component::App))
+            .chain(crate::native_apps::NATIVE_APPS.iter().map(Component::App))
     }
 
     /// The store descriptor for apps; `None` for the bundled Manager.

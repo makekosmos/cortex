@@ -180,6 +180,28 @@ fn sync_managed_block_via_pipe(_block: &str, _domains: &[String]) -> Result<(), 
     Err("privileged operations are Windows-only".to_string())
 }
 
+// ---------- firewall rule for the current Engine exe (KOS-269) ----------
+
+/// Ask the installed service to point its managed inbound allow rule at the
+/// exe calling it (the service derives the path from the pipe client). An
+/// older service answers "unknown variant" — that is a clean "unsupported"
+/// the caller falls back from, not a failure worth retrying.
+#[cfg(windows)]
+pub fn ensure_engine_firewall_rule() -> Result<(), String> {
+    use crate::privileged::pipe;
+    let resp = pipe::request(&Request::EnsureEngineAllow)?;
+    if resp.ok {
+        Ok(())
+    } else {
+        Err(resp.error.unwrap_or_else(|| "service error".into()))
+    }
+}
+
+#[cfg(not(windows))]
+pub fn ensure_engine_firewall_rule() -> Result<(), String> {
+    Err("privileged operations are Windows-only".to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

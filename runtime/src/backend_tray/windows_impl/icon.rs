@@ -56,7 +56,7 @@ pub fn load_icon(path: &Path) -> Option<HICON> {
 }
 
 pub fn notify_data(window: HWND, icon: HICON) -> NOTIFYICONDATAW {
-    let tip = wide(engine::brand::PRODUCT_NAME);
+    let tip = wide(crate::brand::PRODUCT_NAME);
     let mut data = NOTIFYICONDATAW {
         cbSize: std::mem::size_of::<NOTIFYICONDATAW>() as u32,
         hWnd: window,

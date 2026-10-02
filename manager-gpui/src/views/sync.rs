@@ -1,4 +1,4 @@
-//! Синхронизация — get_sync_snapshot, get_own_iroh_ticket,
+//! Синхронизация — get_sync_snapshot, show_pairing_code,
 //! connect_with_pairing_code, disconnect_peer (SyncView.vue parity).
 use ::gpui::{prelude::*, *};
 use gpui_component::input::Input;
@@ -9,9 +9,16 @@ use crate::widgets::*;
 use mundus_gpui_kit::theme::*;
 
 pub fn load(app: &mut ManagerApp) {
+    // Only snapshots are loaded passively — both are non-elevating reads.
+    // The pairing ticket is fetched by the explicit «Показать код для
+    // подключения» button — on a loopback-bound Engine that request
+    // escalates the bind, so the firewall prompt belongs to that click, not
+    // to opening this tab (KOS-269).
     app.call("sync.snapshot", "get_sync_snapshot", json!({}));
-    app.call("sync.ticket", "get_own_iroh_ticket", json!({}));
+    app.call("sync.privileged", "system.privileged.status", json!({}));
 }
+
+mod pairing;
 
 pub fn render(
     app: &mut ManagerApp,
@@ -43,36 +50,8 @@ pub fn render(
         el.into_any_element()
     }));
 
-    col = col.child(slot_or(app, "sync.ticket", |v| {
-        let ticket = if v.is_null() {
-            String::new()
-        } else {
-            vstr(v, "ticket")
-        };
-        let code = if ticket.is_empty() {
-            vstr(v, "code")
-        } else {
-            ticket
-        };
-        let mut el = card();
-        el = el.child(
-            div()
-                .text_size(px(12.))
-                .text_color(c(MUTED_FG()))
-                .child("Ваш код подключения"),
-        );
-        if code.is_empty() {
-            el = el.child(empty("Код недоступен — синхронизация не готова"));
-        } else {
-            el = el.child(
-                div()
-                    .text_size(px(13.))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child(code),
-            );
-        }
-        el.into_any_element()
-    }));
+    col = col.child(pairing::ticket_card(app, cx));
+    col = col.child(pairing::privileged_card(app, cx));
 
     let ticket_in = app.input(
         "sync.peer",
@@ -89,6 +68,14 @@ pub fn render(
                     .text_color(c(MUTED_FG()))
                     .child("Подключить устройство"),
             )
+            .child(div().text_size(px(12.)).text_color(c(MUTED_FG())).child(
+                "При первом включении синхронизации Windows может один раз показать \
+                         окно брандмауэра для Mundus Engine — нажмите «Разрешить доступ», \
+                         чтобы устройства находили друг друга в локальной сети. \
+                         Чтобы окно не появлялось снова после обновлений, включите \
+                         «Расширенные права» кнопкой выше; без них Windows может \
+                         спросить ещё раз после обновления приложения.",
+            ))
             .child(
                 div()
                     .flex()

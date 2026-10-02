@@ -26,6 +26,13 @@ use components::Component;
 use icon::{load_icon, notify_data, remove_tray_icon, resolve_icon_path, WM_TRAY_CALLBACK};
 use menu::{build_menu, MenuAction, MenuPresence};
 use resolve::resolve_component_executable;
+
+/// Manager exe path for *authorization* only — in release builds this never
+/// honours the `MUNDUS_MANAGER_EXECUTABLE` env override (`resolve.rs`
+/// explains why; KOS-269 round 4).
+pub(crate) fn manager_executable_for_auth() -> Option<std::path::PathBuf> {
+    resolve::resolve_manager_for_auth()
+}
 use wide::wide;
 
 static EVENTS: std::sync::OnceLock<UnboundedSender<TrayEvent>> = std::sync::OnceLock::new();

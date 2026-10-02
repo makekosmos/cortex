@@ -5,8 +5,6 @@
 )]
 #![allow(dead_code, clippy::useless_conversion)]
 
-mod backend_tray;
-
 // Mundus backend — native runtime and Windows tray owner.
 //
 // По умолчанию запускается как самостоятельный native supervisor. Внутренний
@@ -30,7 +28,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use engine::{
     ark_host::ArkHost,
-    auth, crash_reporter, db_backup,
+    auth, backend_tray, crash_reporter, db_backup,
     dictation::DictationHost,
     engine_api::EngineApiServer,
     engine_control::{self, ControlMessage},
@@ -744,7 +742,12 @@ async fn setup() -> Result<SetupState, DynError> {
                 }
             };
             let device_name = sync::resolve_device_name();
-            match sync::start_lan_sync(&ark_for_sync, &space_id, &device_id, &device_name).await {
+            // KOS-269: the bind choice decides whether Windows shows a
+            // firewall prompt for this exe path. Resolved before start_sync.
+            let bind = sync::lan_bind_at_boot(&ark_for_sync, &device_id).await;
+            match sync::start_lan_sync(&ark_for_sync, &space_id, &device_id, &device_name, bind)
+                .await
+            {
                 Ok(()) => {
                     tracing::info!(
                         space_id = %space_id,

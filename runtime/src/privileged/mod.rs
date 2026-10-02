@@ -18,6 +18,7 @@
 pub mod brand;
 pub mod cli;
 pub mod client;
+pub mod firewall;
 pub mod hosts;
 mod hosts_render;
 pub mod protocol;

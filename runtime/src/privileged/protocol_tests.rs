@@ -172,6 +172,30 @@ fn reset_clears_everything() {
     assert!(!fs::read_to_string(&hosts).unwrap().contains("engine:"));
 }
 
+/// The firewall op is parameterless on the wire by design — the service
+/// derives the program path from the pipe client, so nothing a caller sends
+/// can widen the grant (KOS-269).
+#[cfg(windows)]
+#[test]
+fn ensure_engine_allow_is_parameterless_and_pipe_only() {
+    let req = Request::EnsureEngineAllow;
+    let wire = encode_request(&req);
+    let value: Value = serde_json::from_str(&wire).unwrap();
+    assert_eq!(value["op"], "ensure_engine_allow");
+    assert_eq!(value.as_object().unwrap().len(), 2); // op + protocol_version only
+
+    // Direct dispatch (no pipe) must refuse — the handler needs the
+    // connection to identify the caller.
+    let (_d, hosts) = setup();
+    let resp = handle_raw(r#"{"op":"ensure_engine_allow"}"#, &hosts);
+    assert!(!resp.ok);
+    assert!(resp
+        .error
+        .as_deref()
+        .unwrap()
+        .contains("requires a pipe connection"));
+}
+
 #[test]
 fn response_serializes_without_none_fields() {
     let resp = Response::ok_domains(vec!["a.com".into()]);
