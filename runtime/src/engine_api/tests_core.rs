@@ -1391,7 +1391,7 @@
     }
 
     async fn wait_for_lease_count(leases: &Arc<Mutex<LaunchLeaseRegistry>>, expected: usize) {
-        tokio::time::timeout(Duration::from_secs(5), async {
+        tokio::time::timeout(Duration::from_secs(60), async {
             loop {
                 let count = leases
                     .lock()

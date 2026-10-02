@@ -75,7 +75,7 @@ async fn production_ws_disconnect_cancels_stalled_request_without_replay() {
         ))
         .await
         .unwrap();
-    tokio::time::timeout(Duration::from_secs(1), async {
+    tokio::time::timeout(Duration::from_secs(60), async {
         while shutdown.request_task_count() != 1 {
             tokio::time::sleep(Duration::from_millis(1)).await;
         }
@@ -92,7 +92,7 @@ async fn production_ws_disconnect_cancels_stalled_request_without_replay() {
         ))
         .await
         .unwrap();
-    let busy = tokio::time::timeout(Duration::from_secs(1), socket.next())
+    let busy = tokio::time::timeout(Duration::from_secs(60), socket.next())
         .await
         .unwrap()
         .unwrap()
@@ -100,7 +100,7 @@ async fn production_ws_disconnect_cancels_stalled_request_without_replay() {
     let busy: serde_json::Value = serde_json::from_str(busy.to_text().unwrap()).unwrap();
     assert_eq!(busy["ok"], false);
     assert_eq!(busy["error"], "WS request busy");
-    tokio::time::timeout(Duration::from_secs(1), async {
+    tokio::time::timeout(Duration::from_secs(60), async {
         while entered.load(Ordering::SeqCst) != 1 {
             tokio::time::sleep(Duration::from_millis(1)).await;
         }
@@ -108,7 +108,7 @@ async fn production_ws_disconnect_cancels_stalled_request_without_replay() {
     .await
     .unwrap();
     drop(socket);
-    tokio::time::timeout(Duration::from_secs(1), async {
+    tokio::time::timeout(Duration::from_secs(60), async {
         while shutdown.request_task_count() != 0 || dispatcher.live_owner_count() != 0 {
             tokio::time::sleep(Duration::from_millis(1)).await;
         }

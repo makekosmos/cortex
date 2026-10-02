@@ -67,14 +67,28 @@ async fn relay_with_stub() -> (Arc<RelaySync>, mpsc::UnboundedSender<TransportEv
     (relay, tx)
 }
 
+/// Generous hang guard for event waits — the peer list state is the real
+/// condition; the cap only bounds a wedged relay under load (KOS-308).
+const EVENT_GUARD: Duration = Duration::from_secs(60);
+
 async fn wait_for_peer(relay: &RelaySync) {
-    tokio::time::timeout(Duration::from_secs(1), async {
+    tokio::time::timeout(EVENT_GUARD, async {
         while relay.get_connected_peer_entries().await.is_empty() {
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
     })
     .await
-    .expect("peer never registered within 1 s");
+    .expect("peer never registered");
+}
+
+async fn wait_for_no_peers(relay: &RelaySync) {
+    tokio::time::timeout(EVENT_GUARD, async {
+        while !relay.get_connected_peer_entries().await.is_empty() {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("peers never evicted");
 }
 
 fn send_hello(tx: &mpsc::UnboundedSender<TransportEvent>) {
@@ -108,13 +122,9 @@ async fn transport_dropped_evicts_all_peers() {
     // it emitted Disconnected{our own id}, which evicted nothing and left
     // stale authenticated peers — reconnects never re-fired on_peer_connect.
     tx.send(TransportEvent::TransportDropped).unwrap();
-    tokio::time::sleep(Duration::from_millis(200)).await;
-
-    assert!(
-        relay.get_connected_peer_entries().await.is_empty(),
-        "peers must be evicted on transport-level disconnect; got {:?}",
-        relay.get_connected_peer_entries().await
-    );
+    // Wait on the eviction itself — a fixed sleep both flakes under load and
+    // can pass before the event is even processed (KOS-308).
+    wait_for_no_peers(&relay).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

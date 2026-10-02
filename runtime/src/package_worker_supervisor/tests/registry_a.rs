@@ -126,11 +126,15 @@ async fn owned_registry_keeps_completed_calls_until_explicit_reap() {
         id: "call-1".into(),
     };
     let (start_rx, _cancel_rx) = registry.reserve(key.clone()).expect("reservation");
+    let (done_tx, done_rx) = oneshot::channel::<()>();
     let task = tokio::spawn(async move {
         assert!(start_rx.await.expect("start gate"));
+        let _ = done_tx.send(());
     });
     registry.install(&key, task).expect("install");
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    // The completed entry must stay until an explicit reap — wait on the
+    // task's own completion signal, not a sleep (KOS-308).
+    done_rx.await.expect("installed task completes");
     assert_eq!(registry.len(), 1);
     registry.reap_completed().await;
     assert_eq!(registry.len(), 0);

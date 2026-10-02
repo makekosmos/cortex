@@ -203,7 +203,9 @@ async fn signed_hpke_replication_reaches_offline_provider_and_rejects_stale_inpu
     )
     .await
     .unwrap();
-    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(10);
+    // Generous hang guard only — the replicated envelope is the event
+    // (KOS-308).
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
     loop {
         let response = recipient_host
             .request(

@@ -1,7 +1,12 @@
 use super::*;
 
-pub(super) const HELLO_DEADLINE: Duration = Duration::from_secs(10);
-pub(super) const BOOTSTRAP_DEADLINE: Duration = Duration::from_secs(10);
+// These deadlines only guard against a wedged worker that never completes a
+// stage; a slow-but-healthy worker under heavy parallel load (the pre-push
+// gate runs every test alongside builds) routinely stretches a sub-second
+// handshake past 10 s, which surfaced as flaky "worker-unavailable" failures
+// (KOS-308). 60 s stays a real hang guard while leaving ample headroom.
+pub(super) const HELLO_DEADLINE: Duration = Duration::from_secs(60);
+pub(super) const BOOTSTRAP_DEADLINE: Duration = Duration::from_secs(60);
 pub(super) const HEARTBEAT_DEADLINE: Duration = Duration::from_secs(60);
 #[cfg(not(test))]
 pub(super) const STOP_DEADLINE: Duration = Duration::from_secs(10);
@@ -13,7 +18,7 @@ mod windows;
 pub(super) use windows::*;
 #[cfg(test)]
 pub(super) const STOP_DEADLINE: Duration = Duration::from_secs(2);
-pub(super) const PROCESS_LAUNCH_DEADLINE: Duration = Duration::from_secs(10);
+pub(super) const PROCESS_LAUNCH_DEADLINE: Duration = Duration::from_secs(60);
 pub(super) const MAX_IN_FLIGHT: u32 = 4;
 pub(super) const RESTART_DELAYS: [Duration; 3] = [
     Duration::from_secs(1),

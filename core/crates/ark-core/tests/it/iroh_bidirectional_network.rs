@@ -40,21 +40,21 @@ async fn iroh_bidirectional_hello_and_reverse_send() {
         .await
         .expect("transport A start");
     let (b_got_hello_from, _b_hello_msg) =
-        find_message(&mut b_events_rx, Duration::from_secs(5), |_from, msg| {
+        find_message(&mut b_events_rx, EVENT_GUARD, |_from, msg| {
             matches!(msg, LanSyncMessage::Hello { .. })
         })
         .await
-        .expect("B must receive a Hello from A (auto-injected by transport) within 5 s");
+        .expect("B must receive a Hello from A (auto-injected by transport)");
     assert_eq!(
         b_got_hello_from, "device-A",
         "B должна получить Hello с from_device_id == device-A"
     );
     let (a_got_hello_from, _a_hello_msg) =
-        find_message(&mut a_events_rx, Duration::from_secs(5), |_from, msg| {
+        find_message(&mut a_events_rx, EVENT_GUARD, |_from, msg| {
             matches!(msg, LanSyncMessage::Hello { .. })
         })
         .await
-        .expect("A must receive a Hello from B (auto-injected by transport) within 5 s");
+        .expect("A must receive a Hello from B (auto-injected by transport)");
     assert_eq!(
         a_got_hello_from, "device-B",
         "A должна получить Hello с from_device_id == device-B"
@@ -84,12 +84,11 @@ async fn iroh_bidirectional_hello_and_reverse_send() {
     transport_b
         .send(live_change)
         .expect("B send LiveChange to A");
-    let (a_got_from, a_msg) =
-        find_message(&mut a_events_rx, Duration::from_secs(5), |_from, msg| {
-            matches!(msg, LanSyncMessage::LiveChange { .. })
-        })
-        .await
-        .expect("A must receive LiveChange from B within 5 s (reverse direction)");
+    let (a_got_from, a_msg) = find_message(&mut a_events_rx, EVENT_GUARD, |_from, msg| {
+        matches!(msg, LanSyncMessage::LiveChange { .. })
+    })
+    .await
+    .expect("A must receive LiveChange from B (reverse direction)");
     assert_eq!(
         a_got_from, "device-B",
         "from_device_id должен быть device-B (резолвится через реестр или Hello)"
@@ -150,7 +149,7 @@ async fn iroh_bidirectional_hello_and_reverse_send() {
         .send_to("device-A", LanSyncMessage::SignedIntegrationFrame { frame })
         .await
         .expect("B should address an integration frame to authenticated A");
-    let (_, addressed) = find_message(&mut a_events_rx, Duration::from_secs(5), |_from, msg| {
+    let (_, addressed) = find_message(&mut a_events_rx, EVENT_GUARD, |_from, msg| {
         matches!(msg, LanSyncMessage::SignedIntegrationFrame { .. })
     })
     .await

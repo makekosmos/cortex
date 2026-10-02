@@ -157,8 +157,10 @@ async fn iroh_bidirectional_burst_no_desync() {
 
     // ── 3. Wait for the mutual Hello handshake before bursting. ───────────────
     // We need both connections to be established so the broadcast subscriber is
-    // active on both sides before we fire the burst.
-    let hello_timeout = Duration::from_secs(10);
+    // active on both sides before we fire the burst. The deadline is only a
+    // hang guard — the Hello event is the real condition; under parallel gate
+    // load a healthy handshake can be arbitrarily slow (KOS-308).
+    let hello_timeout = Duration::from_secs(60);
 
     // Wait for B to receive A's Hello.
     let b_got_hello = {
@@ -255,7 +257,9 @@ async fn iroh_bidirectional_burst_no_desync() {
     }
 
     // ── 6. Collect and assert ALL messages arrived. ────────────────────────────
-    let collect_timeout = Duration::from_secs(20);
+    // Hang guard only — receiving every change_id is the real assertion
+    // (KOS-308).
+    let collect_timeout = Duration::from_secs(120);
 
     // B should receive everything A sent.
     let b_received = collect_change_ids(&mut b_events_rx, BURST_COUNT, collect_timeout).await;
