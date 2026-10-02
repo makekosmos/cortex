@@ -4,7 +4,8 @@
 
 use std::path::Path;
 
-use serde_json::json;
+use ark_core::SyncBind;
+use serde_json::{json, Value};
 
 use crate::ark_host::ArkHost;
 use crate::auth;
@@ -66,11 +67,16 @@ fn resolve_use_iroh_by_default() -> bool {
     )
 }
 
+// Boot-time listener bind choice (KOS-269) lives in `sync::bind`.
+mod bind;
+pub use bind::lan_bind_at_boot;
+
 pub async fn start_lan_sync(
     ark: &ArkHost,
     space_id: &str,
     device_id: &str,
     device_name: &str,
+    bind: SyncBind,
 ) -> Result<(), DynError> {
     let mut params = json!({
         "space_id": space_id,
@@ -79,6 +85,7 @@ pub async fn start_lan_sync(
         "port": null,
         "seed_addresses": null,
         "use_iroh": resolve_use_iroh_by_default(),
+        "bind": serde_json::to_value(bind).unwrap_or(Value::Null),
     });
 
     if let Some(url) = crate::brand::env("RELAY_URL") {
@@ -160,5 +167,46 @@ pub async fn print_iroh_pairing_code_if_enabled(ark: &ArkHost) {
         Err(e) => {
             tracing::warn!(error = %e, "get_own_iroh_ticket request failed");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// KOS-269 regression: an Engine whose user never paired a device and
+    /// has no privileged firewall rule must not ask the OS for a firewall
+    /// exception at boot.
+    #[test]
+    fn sync_not_enabled_binds_loopback() {
+        assert_eq!(boot_bind(false, false), SyncBind::Loopback);
+        assert_eq!(SyncBind::Loopback.ws_bind_addr(21531), "127.0.0.1:21531");
+        assert!(!SyncBind::Loopback.discovery_supported());
+    }
+
+    #[test]
+    fn paired_or_rule_ok_binds_lan() {
+        assert_eq!(boot_bind(true, false), SyncBind::AllInterfaces);
+        assert_eq!(boot_bind(false, true), SyncBind::AllInterfaces);
+        assert_eq!(boot_bind(true, true), SyncBind::AllInterfaces);
+    }
+
+    #[test]
+    fn paired_peers_ignores_self_and_removed() {
+        let known = serde_json::json!([
+            {"device_id": "self", "device_name": "Me"},
+            {"device_id": "laptop", "device_name": "Laptop"},
+        ])
+        .to_string();
+        assert!(has_paired_peers(Some(&known), None, "self"));
+
+        let removed = serde_json::json!(["laptop"]).to_string();
+        // The only real peer was disconnected — back to "sync not enabled".
+        assert!(!has_paired_peers(Some(&known), Some(&removed), "self"));
+
+        let only_self = serde_json::json!([{ "device_id": "self" }]).to_string();
+        assert!(!has_paired_peers(Some(&only_self), None, "self"));
+        assert!(!has_paired_peers(None, None, "self"));
+        assert!(!has_paired_peers(Some("not json"), None, "self"));
     }
 }
