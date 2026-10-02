@@ -25,7 +25,7 @@ pub(super) fn create_temp_file(
         };
         #[cfg(not(windows))]
         let result = {
-            let mut options = OpenOptions::new();
+            let mut options = fs::OpenOptions::new();
             options.write(true).create_new(true);
             options.open(&path).map(|file| (path.clone(), file))
         };

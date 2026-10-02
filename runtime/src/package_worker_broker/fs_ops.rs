@@ -1,7 +1,11 @@
 //! Broker filesystem operations: create/read/write/delete/list under
 //! the configured roots.
 
-use super::fs_atomic::{atomic_replace, create_temp_file, delete_temp_file, is_reparse_point};
+use super::fs_atomic::{atomic_replace, create_temp_file, is_reparse_point};
+// Windows deletes the failed temp through the open handle. Other hosts
+// unlink the temp path, so `delete_temp_file` does not exist there.
+#[cfg(windows)]
+use super::fs_atomic::delete_temp_file;
 use super::fs_safety::{
     open_existing_target, open_parent_dir, path_is_under, reject_path, relative_components,
     validate_open_file,
