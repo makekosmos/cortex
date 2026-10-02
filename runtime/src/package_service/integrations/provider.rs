@@ -2,7 +2,7 @@ use super::*;
 
 impl PackageService {
     pub fn integration_provider_snapshots(&self) -> Result<Vec<Value>, PackageError> {
-        let state = self.read_integration_settings();
+        let mut state = self.read_integration_settings();
         let mut providers = Vec::new();
         let mut packages = HashMap::<String, InstalledPackage>::new();
         for package in self.store.list()?.into_iter().filter(|package| !package.revoked) {
@@ -26,6 +26,7 @@ impl PackageService {
             let Some(integration) = &manifest.integration else {
                 continue;
             };
+            self.migrate_vaulted_public_values(&package, integration, &mut state)?;
             let key = Self::bridge_key(&package.id, &package.version);
             let values = state.values.get(&key).cloned().unwrap_or_default();
             let first = integration.settings.first();
@@ -55,7 +56,7 @@ impl PackageService {
                 "iconPath": icon_path,
                 "packageManaged": true,
                 "authMode": if integration.login.is_some() { "browser_login" } else { "credential" },
-                "credentialInputType": if first.is_some_and(|setting| setting.kind == crate::package_manifest::IntegrationSettingKind::Text) { "text" } else { "password" },
+                "credentialInputType": if first.is_some_and(|setting| setting.kind.is_secret()) { "password" } else { "text" },
                 "loginCapability": integration.login.as_ref().map(|_| manifest.id.as_str()),
                 "settingSchema": integration.settings,
                 "settingValues": values,

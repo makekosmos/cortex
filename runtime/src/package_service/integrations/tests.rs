@@ -9,6 +9,16 @@ use tempfile::tempdir;
 use zip::write::FileOptions;
 
 fn integration_manifest(version: &str) -> VersionedManifest {
+    integration_manifest_with(version, IntegrationSettingKind::Text, false)
+}
+
+fn integration_manifest_with(
+    version: &str,
+    username_kind: IntegrationSettingKind,
+    // A required-but-unset secret keeps `has_integration_credential` false so
+    // `set_integration_value` stays below the worker-enable path in tests.
+    session_required: bool,
+) -> VersionedManifest {
     VersionedManifest::V2(ManifestV2 {
         schema_version: 2,
         id: "com.kosmos.provider".into(),
@@ -37,7 +47,7 @@ fn integration_manifest(version: &str) -> VersionedManifest {
                 IntegrationSetting {
                     key: "username".into(),
                     label: "Username".into(),
-                    kind: IntegrationSettingKind::Text,
+                    kind: username_kind,
                     description: None,
                     required: false,
                     injection: None,
@@ -47,7 +57,7 @@ fn integration_manifest(version: &str) -> VersionedManifest {
                     label: "Session".into(),
                     kind: IntegrationSettingKind::Secret,
                     description: None,
-                    required: false,
+                    required: session_required,
                     injection: None,
                 },
             ],
@@ -58,7 +68,15 @@ fn integration_manifest(version: &str) -> VersionedManifest {
 }
 
 fn install_integration_package(root: &Path, service: &PackageService, version: &str) {
-    let manifest = integration_manifest(version);
+    install_integration_manifest(root, service, integration_manifest(version));
+}
+
+fn install_integration_manifest(
+    root: &Path,
+    service: &PackageService,
+    manifest: VersionedManifest,
+) {
+    let version = manifest.version().to_owned();
     let archive = root.join(format!("{version}.kspkg"));
     let mut zip = zip::ZipWriter::new(fs::File::create(&archive).unwrap());
     zip.start_file("manifest.json", FileOptions::default()).unwrap();
@@ -225,5 +243,122 @@ fn uninstall_clears_only_the_exact_integration_version() {
     assert_eq!(
         read_package_integration_secret("com.kosmos.provider", "4.0.0", "session").as_deref(),
         Some("new-secret")
+    );
+}
+
+fn configured_service(dir: &tempfile::TempDir) -> PackageService {
+    let mut service =
+        PackageService::from_parts(dir.path().join("packages"), None, Some(dir.path().join("apps")))
+            .unwrap();
+    service.configure_workers(
+        PackageWorkerSupervisor::new(1),
+        Vec::new(),
+        "test".into(),
+    );
+    service
+}
+
+/// KOS-279: a username is public data — it must land in
+/// integration-settings.json, never in the credential vault.
+#[tokio::test]
+async fn username_kind_value_is_stored_as_config_not_vault() {
+    let dir = tempdir().unwrap();
+    let service = configured_service(&dir);
+    install_integration_manifest(
+        dir.path(),
+        &service,
+        integration_manifest_with("1.0.0", IntegrationSettingKind::Username, true),
+    );
+
+    service
+        .set_integration_value(
+            "com.kosmos.provider",
+            Some("username"),
+            Some("username"),
+            "public-nick",
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        service
+            .read_integration_settings()
+            .values
+            .get("com.kosmos.provider@1.0.0")
+            .and_then(|values| values.get("username"))
+            .map(String::as_str),
+        Some("public-nick")
+    );
+    assert!(
+        read_package_integration_secret("com.kosmos.provider", "1.0.0", "username").is_none(),
+        "a public username must not enter the credential vault"
+    );
+}
+
+/// KOS-279: `set_credential` echoes the kind the UI rendered; the manifest
+/// kind is authoritative, so a mismatched kind is rejected.
+#[tokio::test]
+async fn set_integration_value_rejects_a_kind_mismatch() {
+    let dir = tempdir().unwrap();
+    let service = configured_service(&dir);
+    install_integration_manifest(
+        dir.path(),
+        &service,
+        integration_manifest_with("1.0.0", IntegrationSettingKind::Username, true),
+    );
+
+    assert!(service
+        .set_integration_value(
+            "com.kosmos.provider",
+            Some("username"),
+            Some("api_key"),
+            "public-nick",
+        )
+        .await
+        .is_err());
+    assert!(!service
+        .read_integration_settings()
+        .values
+        .contains_key("com.kosmos.provider@1.0.0"));
+}
+
+/// KOS-279: a value vaulted while an older manifest declared the setting
+/// `secret` is moved to plain config and deleted from the vault once the
+/// manifest marks the setting public (`username`/`text`).
+#[tokio::test]
+async fn vaulted_username_moves_to_config_after_manifest_relabels_it() {
+    let dir = tempdir().unwrap();
+    let service = configured_service(&dir);
+    install_integration_manifest(
+        dir.path(),
+        &service,
+        integration_manifest_with("1.0.0", IntegrationSettingKind::Username, false),
+    );
+    // Simulate the old manifest generation that kept the username in the
+    // credential vault.
+    save_package_integration_secret("com.kosmos.provider", "1.0.0", "username", "old-nick")
+        .unwrap();
+
+    let providers = service.integration_provider_snapshots().unwrap();
+
+    assert!(
+        read_package_integration_secret("com.kosmos.provider", "1.0.0", "username").is_none(),
+        "the migrated value must leave the vault"
+    );
+    let provider = providers
+        .iter()
+        .find(|p| p.get("id").and_then(Value::as_str) == Some("com.kosmos.provider"))
+        .expect("provider snapshot");
+    assert_eq!(
+        provider
+            .get("settingValues")
+            .and_then(|v| v.get("username"))
+            .and_then(Value::as_str),
+        Some("old-nick")
+    );
+    // The migrated config value counts towards `hasCredential`.
+    assert_eq!(
+        provider.get("hasCredential").and_then(Value::as_bool),
+        Some(true)
     );
 }
