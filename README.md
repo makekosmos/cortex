@@ -97,42 +97,6 @@ it is derived from the checkout at HEAD — commit, release version, pnpm/Node/R
 pins, target, and Engine API — and ships as `release-bom.v2.json` next to the
 installer. `pnpm --dir desktop run build` runs the whole release build in one go.
 
-## Shared workspace checkouts
-
-The root `package.json` `mundus.workspace` object is the single source of truth
-for the pinned Imago and arca-sdk commits, package names, versions, and git
-integrity values. Core remains derived from `runtime/Cargo.toml`, the ARK
-sidecar pin, and the root `toolchain.json` toolchain pins.
-
-```text
-# Read-only, pinned by default:
-node scripts/workspace.mjs doctor
-
-# Prepare ignored .tmp/workspace checkouts without changing them first:
-node scripts/workspace.mjs bootstrap --dry-run
-node scripts/workspace.mjs bootstrap
-
-# Explicit local development only; sibling directories are never discovered:
-MUNDUS_WORKSPACE_MODE=local \
-MUNDUS_IMAGO_PATH=/work/imago \
-MUNDUS_ARCA_SDK_PATH=/work/arca-sdk \
-node scripts/workspace.mjs doctor
-```
-
-Local bootstrap creates the same managed `.tmp/workspace` paths as pinned
-mode, using a directory junction on Windows or symlink on Unix. It never
-replaces an existing managed checkout or link with the wrong target.
-
-Pinned bootstrap runs each checkout's declared package manager with its frozen
-lockfile, builds it, and writes one `.tmp/workspace/prepared.json` stamp with
-HEAD, package/lock, and exported-output hashes. Doctor rejects missing or
-tampered stamps; matching bootstrap skips the work.
-
-To update a pin, change its commit, package version, and `git:<commit>`
-integrity together in `package.json`, then run `doctor` and the release-BOM
-tests. Bootstrap never resets, stashes, or overwrites a dirty checkout; remove
-`.tmp/workspace` yourself when a prepared checkout is no longer needed.
-
 The affected-check planner is fail-closed: staged changes use `pre-commit`,
 the worktree plan includes tracked and untracked files, and pre-push input
 uses the pushed ref range. Missing, invalid, zero, shallow, or ambiguous
@@ -141,7 +105,7 @@ documents that tests read as contracts (`DOC_CONTRACTS` in
 `scripts/check-plan-manifest.mjs`), which select the checks reading them. A
 `package.json` edit that only changes known `"scripts"` entries selects the
 checks running those scripts; any other manifest change (dependencies,
-engines, packageManager, workspace pins), an unmapped script, or an
+engines, packageManager), an unmapped script, or an
 unparseable revision selects the full check, as do shared, lockfile, build,
 workflow, hook, and unknown changes.
 

@@ -60,12 +60,8 @@ contour. Run it from the repository root; it isolates
 `XDG_CONFIG_HOME`/`XDG_CACHE_HOME`/`XDG_DATA_HOME` under a per-run `/tmp`
 root, then runs the gates in order:
 
-1. `preflight` — Linux plus node/pnpm/cargo/git/bun on `PATH`.
-2. `workspace-deps` — the `workspace.mjs bootstrap` planner pins
-   `.tmp/workspace/{imago,arca-sdk}` to the `mundus.workspace` commits
-   (with a manual clone + install + build fallback when the planner cannot
-   run) and verifies the built outputs the workspace consumes.
-3. `engine-bootstrap` — builds `mundus-engine`, starts the
+1. `preflight` — Linux plus node/pnpm/cargo/git on `PATH`.
+2. `engine-bootstrap` — builds `mundus-engine`, starts the
    Engine against an isolated `MUNDUS_DATA_DIR`, and asserts
    `engine.lock.json` plus authenticated `GET /v1/health` → 200 before
    shutting it down.
