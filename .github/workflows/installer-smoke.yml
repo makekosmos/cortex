@@ -1,0 +1,186 @@
+name: Installer smoke
+
+# KOS-309: v0.10.2 shipped an installer that aborted on every upgrade — the
+# script-level tests only ever read the NSIS text. This job builds the
+# installer the same way the release does and actually runs it: fresh
+# install, upgrade over the last published release with live product
+# processes, then uninstall.
+#
+# Upgrade source: the newest published release whose installer exits 0 is
+# used as the "previous" install — a broken release (0.10.2) must not block
+# this gate. If none of the last five install cleanly, the "previous" step
+# falls back to installing the just-built installer twice, which still
+# exercises the swap and kill paths.
+on:
+  workflow_call:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "desktop/build/**"
+      - "runtime/src/installer/**"
+      - "desktop/scripts/**"
+      - ".github/workflows/installer-smoke.yml"
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  smoke:
+    runs-on: windows-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Read toolchain pins
+        shell: bash
+        run: node -p 'const t = require("./toolchain.json"); `NODE_VERSION=${t.node}\nRUST_VERSION=${t.rust}`' >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Bootstrap pnpm and install
+        shell: bash
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+          pnpm --dir desktop install --frozen-lockfile
+
+      - name: Install Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install "$RUST_VERSION" --profile minimal
+          rustup default "$RUST_VERSION"
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: |
+            . -> target
+            core -> target
+            manager-gpui -> target
+
+      # Same recipe as the release's "Build installer" step, minus the
+      # receipt/preflight (--local): identical NSIS compile and staging.
+      - name: Build installer
+        run: pnpm run build:installer:local
+
+      - name: Fresh install
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = (Get-Content desktop/release-versions.json | ConvertFrom-Json).win
+          $setup = "$PWD/desktop/release/Mundus-Setup-$version.exe"
+          if (!(Test-Path $setup)) { throw "installer not built: $setup" }
+          $proc = Start-Process -FilePath $setup -ArgumentList '/S' -Wait -PassThru
+          if ($proc.ExitCode -ne 0) { throw "fresh install exited $($proc.ExitCode)" }
+
+          $instdir = "$env:LOCALAPPDATA\Programs\Mundus"
+          $engine = "$instdir\resources\engine\mundus-engine.exe"
+          if (!(Test-Path $engine)) { throw "engine payload missing: $engine" }
+          $fileVersion = (Get-Item $engine).VersionInfo.FileVersion
+          if ($fileVersion -ne $version) { throw "engine FileVersion $fileVersion != $version" }
+          if (Test-Path "$instdir\resources.next") { throw "resources.next left behind" }
+          if (Test-Path "$instdir\resources.old") { throw "resources.old left behind" }
+          if (!(Test-Path "$env:LOCALAPPDATA\Mundus\Engine\versions\$version")) {
+            throw "engine versions\$version missing"
+          }
+          if (!(Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'Mundus Engine' -ErrorAction SilentlyContinue)) {
+            throw "Run value missing"
+          }
+          if (!(Test-Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Mundus')) {
+            throw "uninstall key missing"
+          }
+
+      - name: Upgrade over the previous published release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = (Get-Content desktop/release-versions.json | ConvertFrom-Json).win
+          $newSetup = "$PWD/desktop/release/Mundus-Setup-$version.exe"
+          $instdir = "$env:LOCALAPPDATA\Programs\Mundus"
+
+          # Pick the newest published installer that actually installs —
+          # 0.10.2 aborts on install (KOS-309) and must not gate this job.
+          $prevInstalled = $false
+          $releases = gh release list --repo makekosmos/cortex --limit 5 --json tagName | ConvertFrom-Json
+          foreach ($rel in $releases) {
+            $dir = "$env:TEMP\prev-setup"
+            Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
+            gh release download $rel.tagName --repo makekosmos/cortex --pattern 'Mundus-Setup-*.exe' --dir $dir
+            $prev = Get-ChildItem $dir -Filter 'Mundus-Setup-*.exe' | Select-Object -First 1
+            if (!$prev) { continue }
+            $proc = Start-Process -FilePath $prev.FullName -ArgumentList '/S' -Wait -PassThru
+            if ($proc.ExitCode -eq 0) { $prevInstalled = $true; break }
+            Write-Host "release $($rel.tagName) does not install cleanly (exit $($proc.ExitCode)) — trying older"
+          }
+          if (!$prevInstalled) {
+            Write-Host "no published release installs cleanly — bootstrapping with the current build"
+            $proc = Start-Process -FilePath $newSetup -ArgumentList '/S' -Wait -PassThru
+            if ($proc.ExitCode -ne 0) { throw "bootstrap install exited $($proc.ExitCode)" }
+          }
+
+          # Real product processes must be running when the upgrade starts:
+          # the stale-CWD + leftover-process failure mode only shows then.
+          $engine = "$instdir\resources\engine\mundus-engine.exe"
+          $engineProc = Start-Process -FilePath $engine -ArgumentList '--start' -PassThru
+          Start-Sleep -Seconds 5
+          if (!(Get-Process -Name 'mundus-engine' -ErrorAction SilentlyContinue)) {
+            throw "previous install's engine is not running"
+          }
+
+          $proc = Start-Process -FilePath $newSetup -ArgumentList '/S' -Wait -PassThru
+          if ($proc.ExitCode -ne 0) { throw "upgrade install exited $($proc.ExitCode)" }
+
+          $fileVersion = (Get-Item "$instdir\resources\engine\mundus-engine.exe").VersionInfo.FileVersion
+          if ($fileVersion -ne $version) { throw "engine FileVersion $fileVersion != $version" }
+          if (Test-Path "$instdir\resources.next") { throw "resources.next left behind" }
+          if (Test-Path "$instdir\resources.old") { throw "resources.old left behind" }
+          if (!(Test-Path "$env:LOCALAPPDATA\Mundus\Engine\versions\$version")) {
+            throw "engine versions\$version missing"
+          }
+          # The installer's own post-install --start-engine restarts the new
+          # Engine; a surviving process from the previous install must not
+          # exist. Wait briefly for the restart, then check what's running.
+          Start-Sleep -Seconds 5
+          foreach ($p in (Get-Process -Name 'mundus-engine' -ErrorAction SilentlyContinue)) {
+            $path = $p.Path
+            if ($path -and $path -notlike "$instdir*" -and $path -notlike "$env:LOCALAPPDATA\Mundus\Engine\versions\$version*") {
+              throw "stale engine still running from $path"
+            }
+          }
+
+      - name: Uninstall keeps user data
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $instdir = "$env:LOCALAPPDATA\Programs\Mundus"
+          # A sentinel under the user-data root the uninstaller must keep.
+          $sentinelDir = "$env:APPDATA\Mundus"
+          New-Item -ItemType Directory -Force -Path $sentinelDir | Out-Null
+          $sentinel = "$sentinelDir\smoke-sentinel.txt"
+          Set-Content $sentinel 'keep me'
+
+          $proc = Start-Process -FilePath "$instdir\Uninstall.exe" -ArgumentList '/S' -Wait -PassThru
+          if ($proc.ExitCode -ne 0) { throw "uninstall exited $($proc.ExitCode)" }
+          if (Test-Path $instdir) { throw "$instdir left behind" }
+          if (Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Mundus") {
+            throw "Start Menu folder left behind"
+          }
+          if (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'Mundus Engine' -ErrorAction SilentlyContinue) {
+            throw "Run value left behind"
+          }
+          if (Test-Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Mundus') {
+            throw "uninstall key left behind"
+          }
+          # User data stays: %APPDATA%\Mundus (sentinel) and the Engine tree
+          # under %LOCALAPPDATA%\Mundus are intentionally not removed.
+          if (!(Test-Path $sentinel)) { throw "user data was deleted" }
+          if (!(Test-Path "$env:LOCALAPPDATA\Mundus")) { throw "%LOCALAPPDATA%\Mundus was deleted" }
