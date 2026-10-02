@@ -125,11 +125,13 @@ jobs:
           }
 
           function Assert-EngineRunning {
+            # Process.VersionInfo is empty for a running image here — read
+            # the version from the file behind $_.Path instead.
             $want = "$env:LOCALAPPDATA\Mundus\Engine\versions\$env:VERSION\mundus-engine.exe"
             $deadline = (Get-Date).AddSeconds(60)
             do {
               $hit = Get-Process -Name 'mundus-engine' -ErrorAction SilentlyContinue |
-                Where-Object { $_.Path -eq $want -and $_.VersionInfo.FileVersion -eq $env:VERSION }
+                Where-Object { $_.Path -eq $want -and (Get-Item $_.Path).VersionInfo.FileVersion -eq $env:VERSION }
               if ($hit) { return }
               Start-Sleep -Milliseconds 500
             } while ((Get-Date) -lt $deadline)
@@ -220,7 +222,7 @@ jobs:
               $engine = $procs | Where-Object {
                 $_.Name -eq 'mundus-engine' -and
                 $_.Path -like "$env:LOCALAPPDATA\Mundus\Engine\versions\*" -and
-                $_.VersionInfo.FileVersion -eq $ExpectVersion
+                (Get-Item $_.Path).VersionInfo.FileVersion -eq $ExpectVersion
               }
               if ($engine) { return $procs }
               Start-Sleep -Milliseconds 500
@@ -303,7 +305,7 @@ jobs:
           # still alive must be the new version — an old one anywhere fails.
           $after = Wait-ProductProcesses $env:VERSION
           foreach ($p in $after) {
-            if ($p.VersionInfo.FileVersion -ne $env:VERSION) {
-              throw "stale $($p.Name) (pid $($p.Id)) from $($p.Path) at FileVersion $($p.VersionInfo.FileVersion)"
+            if ((Get-Item $p.Path).VersionInfo.FileVersion -ne $env:VERSION) {
+              throw "stale $($p.Name) (pid $($p.Id)) from $($p.Path) at FileVersion $((Get-Item $p.Path).VersionInfo.FileVersion)"
             }
           }
