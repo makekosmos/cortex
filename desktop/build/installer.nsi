@@ -114,6 +114,8 @@ LangString ABORT_PAYLOAD_ROLLBACK ${LANG_ENGLISH} "Mundus payload update failed 
 LangString ABORT_PAYLOAD_ROLLBACK ${LANG_RUSSIAN} "Не удалось обновить файлы Mundus — предыдущая версия восстановлена"
 LangString ABORT_ENGINE_INSTALL ${LANG_ENGLISH} "Mundus Engine installation failed"
 LangString ABORT_ENGINE_INSTALL ${LANG_RUSSIAN} "Не удалось установить Mundus Engine"
+LangString ABORT_KILL_FAILED ${LANG_ENGLISH} "Could not close Mundus. Close the program and run the installer again."
+LangString ABORT_KILL_FAILED ${LANG_RUSSIAN} "Не удалось закрыть Mundus. Закройте программу и запустите установку снова."
 LangString MSG_PRIVILEGED_SVC_LEFT ${LANG_ENGLISH} "The Mundus privileged service is still installed. To remove it later, run as administrator:"
 LangString MSG_PRIVILEGED_SVC_LEFT ${LANG_RUSSIAN} "Служба Mundus всё ещё установлена. Чтобы удалить её позже, запустите от имени администратора:"
 
@@ -153,11 +155,23 @@ LangString MSG_PRIVILEGED_SVC_LEFT ${LANG_RUSSIAN} "Служба Mundus всё �
     Goto stage_ok
     Abort "$(ABORT_STAGING_FAILED)"
   stage_ok:
+  ; KOS-309: SetOutPath also changes the installer process' own working
+  ; directory, and Windows refuses to rename a directory that is some
+  ; process' CWD. Leaving it at resources.next made the resources.next ->
+  ; resources rename below always fail with an in-use error. Move the CWD
+  ; back to the parent before the swap.
+  SetOutPath "$INSTDIR"
   nsExec::ExecToLog '"$INSTDIR\resources.next\engine\mundus-engine.exe" --shutdown'
   nsExec::ExecToStack '"$INSTDIR\resources.next\engine\mundus-engine.exe" kill-product-processes'
+  ; ExecToStack pushes exit code first. A survivor still pins files, so a
+  ; non-zero exit aborts the install — the staged payload is removed again
+  ; so a retry starts clean.
   Pop $R8
   Pop $R9
-  Sleep 500
+  IntCmp $R8 0 kill_done
+    RMDir /r "$INSTDIR\resources.next"
+    Abort "$(ABORT_KILL_FAILED)"
+  kill_done:
 !macroend
 
 ; MIGRATION(KOS-267): remove after 2026-11-01.
@@ -396,6 +410,12 @@ FunctionEnd
 Section "Uninstall"
   SetShellVarContext current
 
+  ; KOS-309: the uninstaller runs from $INSTDIR, so its own working
+  ; directory sits inside the tree it deletes — a directory cannot be
+  ; removed while it is a process' CWD, and the final `RMDir "$INSTDIR"`
+  ; would fail silently. Park the CWD in $TEMP; no File commands follow.
+  SetOutPath "$TEMP"
+
   ; Stop processes (current and legacy names) before deleting files so
   ; nothing is locked. The staged engine exe ships the subcommand and still
   ; exists at this point — it is deleted with resources below. When it is
@@ -404,9 +424,12 @@ Section "Uninstall"
   IfFileExists "${ENGINE_STAGED}\mundus-engine.exe" 0 un_kill_done
     nsExec::ExecToLog '"${ENGINE_STAGED}\mundus-engine.exe" --shutdown'
     nsExec::ExecToStack '"${ENGINE_STAGED}\mundus-engine.exe" kill-product-processes'
+    ; A non-zero exit means a survivor — the uninstall continues (the user
+    ; asked to remove the app) but the leftover shows up in the log.
     Pop $R8
     Pop $R9
-    Sleep 500
+    IntCmp $R8 0 +2
+      DetailPrint "kill-product-processes exited $R8 — some files may be left behind"
   un_kill_done:
 
   ; One UAC prompt to remove the service before files are cleaned.

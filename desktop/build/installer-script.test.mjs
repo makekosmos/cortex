@@ -167,7 +167,10 @@ test("stops product processes via the staged engine subcommand", () => {
   // KOS-306 round 2: the helper runs from $INSTDIR\resources.next — the
   // payload staged inside the install dir, never an exe out of %TEMP%.
   expect(macroSection).toContain('"$INSTDIR\\resources.next\\engine\\mundus-engine.exe"');
-  expect(macroSection).toContain("Sleep 500");
+  // KOS-309: the kill waits on process handles now — the fixed Sleep that
+  // papered over process teardown is gone, and a non-zero exit aborts.
+  expect(macroSection).not.toContain("Sleep");
+  expect(macroSection).toContain('Abort "$(ABORT_KILL_FAILED)"');
   expect(uninstallSection).toContain('mundus-engine.exe" --shutdown');
   expect(uninstallSection).toContain('mundus-engine.exe" kill-product-processes');
   expect(installer).not.toContain("taskkill");
