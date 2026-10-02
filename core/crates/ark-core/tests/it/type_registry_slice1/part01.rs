@@ -53,7 +53,7 @@ fn legacy_db() -> Connection {
              "updatedAt":"updated"},
              "hlc":"pending-hlc"}',
              'legacy',
-             'pending-time',
+             'pending-time'
          );"#,
     ))
     .unwrap();
