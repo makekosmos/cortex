@@ -12,6 +12,36 @@ struct ConnectionParams {
     outbound_storage: Arc<tokio::sync::RwLock<Option<OutboundStorage>>>,
 }
 
+// Checks that the addressed transport peer still owns this connection and that
+// the outbound storage allows the signed frame for this transport endpoint.
+async fn authorize_signed_integration_frame(
+    registry: &DeviceRegistry,
+    outbound_storage: &tokio::sync::RwLock<Option<OutboundStorage>>,
+    frame: &crate::integration_replication::SignedSyncEnvelope,
+    remote_endpoint_id: &EndpointId,
+) -> Result<(), String> {
+    let target_is_current = registry
+        .authenticated_endpoint(&frame.recipient_node_id)
+        .is_some_and(|endpoint| endpoint == *remote_endpoint_id);
+    if !target_is_current {
+        return Err("iroh addressed transport peer is no longer authorized".into());
+    }
+    match outbound_storage.read().await.clone() {
+        Some(context) => {
+            context
+                .storage
+                .validate_outbound_signed_integration_frame_with_transport(
+                    frame,
+                    &context.space_id,
+                    &context.origin_node_id,
+                    &remote_endpoint_id.to_string(),
+                )
+                .await
+        }
+        None => Err("iroh outbound integration authorization is unavailable".into()),
+    }
+}
+
 async fn handle_connection(params: ConnectionParams) {
     let ConnectionParams {
         conn,
@@ -94,7 +124,9 @@ async fn handle_connection(params: ConnectionParams) {
 
                 _ = writer_notify.notified() => {
                     // Reader ended — tear down writer.
-                    eprintln!("[iroh] writer notified of reader end ({role}) remote={remote_endpoint_id}");
+                    eprintln!(
+                        "[iroh] writer notified of reader end ({role}) remote={remote_endpoint_id}"
+                    );
                     let _ = send.finish();
                     break;
                 }
@@ -106,28 +138,26 @@ async fn handle_connection(params: ConnectionParams) {
                                 continue;
                             }
                             let variant = message_variant_name(&outgoing.msg);
-                            let authorization = if let LanSyncMessage::SignedIntegrationFrame { frame } = &outgoing.msg {
-                                let target_is_current = writer_registry.authenticated_endpoint(&frame.recipient_node_id)
-                                    .is_some_and(|endpoint| endpoint == remote_endpoint_id);
-                                if !target_is_current {
-                                    Err("iroh addressed transport peer is no longer authorized".into())
-                                } else {
-                                    match outbound_storage.read().await.clone() {
-                                        Some(context) => context.storage
-                                            .validate_outbound_signed_integration_frame_with_transport(
-                                                frame, &context.space_id, &context.origin_node_id,
-                                                &remote_endpoint_id.to_string(),
-                                            )
-                                            .await,
-                                        None => Err("iroh outbound integration authorization is unavailable".into()),
-                                    }
-                                }
+                            let authorization = if let LanSyncMessage::SignedIntegrationFrame {
+                                frame
+                            } = &outgoing.msg {
+                                authorize_signed_integration_frame(
+                                    &writer_registry,
+                                    &outbound_storage,
+                                    frame,
+                                    &remote_endpoint_id,
+                                )
+                                .await
                             } else {
                                 Ok(())
                             };
                             if let Err(error) = authorization {
                                 if let Some(completion) = outgoing.completion {
-                                    if let Some(tx) = completion.lock().unwrap_or_else(|e| e.into_inner()).take() {
+                                    if let Some(
+                                        tx
+                                    ) = completion.lock().unwrap_or_else(
+                                        |e| e.into_inner()
+                                    ).take() {
                                         let _ = tx.send(Err(error));
                                     }
                                 }
@@ -136,7 +166,11 @@ async fn handle_connection(params: ConnectionParams) {
                             let payload = serialize_message(&outgoing.msg);
                             if let Err(e) = write_frame(&mut send, payload.as_bytes()).await {
                                 if let Some(completion) = outgoing.completion {
-                                    if let Some(tx) = completion.lock().unwrap_or_else(|e| e.into_inner()).take() {
+                                    if let Some(
+                                        tx
+                                    ) = completion.lock().unwrap_or_else(
+                                        |e| e.into_inner()
+                                    ).take() {
                                         let _ = tx.send(Err(e.to_string()));
                                     }
                                 }
@@ -144,11 +178,15 @@ async fn handle_connection(params: ConnectionParams) {
                                 break;
                             }
                             if let Some(completion) = outgoing.completion {
-                                if let Some(tx) = completion.lock().unwrap_or_else(|e| e.into_inner()).take() {
+                                if let Some(
+                                    tx
+                                ) = completion.lock().unwrap_or_else(|e| e.into_inner()).take() {
                                     let _ = tx.send(Ok(()));
                                 }
                             }
-                            eprintln!("[iroh] → sent {variant} ({role}) remote={remote_endpoint_id}");
+                            eprintln!(
+                                "[iroh] → sent {variant} ({role}) remote={remote_endpoint_id}"
+                            );
                         }
                         Err(broadcast::error::RecvError::Lagged(n)) => {
                             // Burst превысил ёмкость — пропускаем; VV-обмен
@@ -197,7 +235,8 @@ async fn handle_connection(params: ConnectionParams) {
                                 .insert_untrusted(remote_endpoint_id, device_id.clone())
                             {
                                 eprintln!(
-                                    "[iroh] rejected Hello remap for trusted endpoint {remote_endpoint_id}"
+                                    "[iroh] rejected Hello remap for trusted endpoint \
+{remote_endpoint_id}"
                                 );
                                 continue;
                             }
@@ -211,14 +250,16 @@ async fn handle_connection(params: ConnectionParams) {
                             .unwrap_or_default();
 
                         eprintln!(
-                            concat!("[iroh] ← recv {variant} from={from_device_id} ({role}) ","remote={remote_endpoint_id}")
+                            "[iroh] ← recv {variant} from={from_device_id} ({role}) \
+remote={remote_endpoint_id}"
                         );
 
-                        let _ = reader_event_tx.send(TransportEvent::MessageReceivedFromTransport {
-                            from_device_id,
-                            transport_public_key: remote_endpoint_id.to_string(),
-                            msg,
-                        });
+                        let _ =
+                            reader_event_tx.send(TransportEvent::MessageReceivedFromTransport {
+                                from_device_id,
+                                transport_public_key: remote_endpoint_id.to_string(),
+                                msg,
+                            });
                     }
                 }
                 Err(e) => {

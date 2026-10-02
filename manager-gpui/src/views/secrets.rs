@@ -55,8 +55,7 @@ pub fn render(
                         |this, checked, _| {
                             this.action(
                                 "dictation.update_config",
-                                json!({"providerEnabled": checked}),
-                            );
+                                json!({"providerEnabled": checked}));
                         },
                     )
                     .accessibility_label("Использовать Groq для диктовки"),
@@ -68,7 +67,9 @@ pub fn render(
     let key_in = app.input("secrets.key", "gsk_…", true, window, cx);
     col = col.child(
         card()
-            .child(div().text_size(px(13.)).font_weight(FontWeight::SEMIBOLD).child("API-ключ Groq"))
+            .child(
+                div().text_size(px(13.)).font_weight(FontWeight::SEMIBOLD).child("API-ключ Groq")
+            )
             .child(
                 div()
                     .flex()
@@ -80,8 +81,7 @@ pub fn render(
                             this.call(
                                 "secrets.verify",
                                 "dictation.verify_api_key",
-                                json!({"key": key}),
-                            );
+                                json!({"key": key}));
                         }
                     }))
                     .child(btn("secrets-save", "Сохранить", true, cx, |this, cx| {
@@ -91,7 +91,13 @@ pub fn render(
                             this.action("dictation.set_api_key", json!({"key": key}));
                         } else {
                             this.error =
-                                Some(concat!("Сначала проверьте ключ — сохранение разрешено только после успешной ","проверки.").into());
+                                Some(concat!(
+                                    concat!(
+                                        "Сначала проверьте ключ — сохранение разрешено только ",
+                                        "после успешной ",
+                                    ),
+                                    "проверки.",
+                                ).into());
                         }
                     }))
                     .child(btn("secrets-clear", "Удалить", false, cx, |this, cx| {
@@ -100,17 +106,18 @@ pub fn render(
                             "Диктовка через Groq перестанет работать.",
                             "dictation.clear_api_key",
                             json!({}),
-                            cx,
-                        );
+                            cx);
                     })),
             )
             .child(
-                div().flex().gap_2().child(btn("secrets-test", "Тест соединения", false, cx, |this, _| {
+                div().flex().gap_2().child(btn("secrets-test", concat!(
+                    "Тест соедине",
+                    "ния",
+                ), false, cx, |this, _| {
                     this.call(
                         "secrets.test",
                         "dictation.test_connectivity",
-                        json!({}),
-                    );
+                        json!({}));
                 })),
             ),
     );

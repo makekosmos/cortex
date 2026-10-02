@@ -270,7 +270,13 @@ impl WsShutdownHandle {
         let connection_tasks = self.task_count();
         let request_tasks = self.request_task_count();
         if deadline_breached || connection_tasks != 0 || request_tasks != 0 {
-            tracing::error!(?deadline, elapsed = ?started.elapsed(), connection_tasks, request_tasks, "WS shutdown exceeded its bounded cleanup lifecycle");
+            tracing::error!(
+                ?deadline,
+                elapsed = ?started.elapsed(),
+                connection_tasks,
+                request_tasks,
+                "WS shutdown exceeded its bounded cleanup lifecycle",
+            );
             Err("WS shutdown exceeded its deadline")
         } else {
             Ok(())

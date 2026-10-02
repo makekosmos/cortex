@@ -166,7 +166,19 @@ async fn real_socket_global_token_and_spoofed_class_cannot_reserve_snapshot() {
     let authority = fixture.authority.clone();
     let task = tokio::spawn(server.run());
     let (mut socket, _) = connect(fixture.address, std::process::id()).await;
-    let denied = rpc(&mut socket, "reserve", "package.snapshot.reserve", json!({"packageId":"x","source":"bundled","root":"/secret","path":"/secret","identity":{"dev":1,"ino":2}})).await;
+    let denied = rpc(
+        &mut socket,
+        "reserve",
+        "package.snapshot.reserve",
+        json!(
+            {"packageId":"x",
+            "source":"bundled",
+            "root":"/secret",
+            "path":"/secret",
+            "identity":{"dev":1,
+            "ino":2}}),
+    )
+    .await;
     assert_eq!(denied["ok"], false);
     assert_eq!(authority.len(), 0);
     let _ = shutdown.shutdown().await;
@@ -316,7 +328,11 @@ async fn real_socket_authorized_grant_and_snapshot_are_opaque_and_disconnect_cle
         &mut socket,
         "grant",
         "grant.authority.register",
-        json!({"extensionId":"ext","root":root.to_str().unwrap(),"provenance":"native-dialog","exactFile":false}),
+        json!(
+            {"extensionId":"ext",
+            "root":root.to_str().unwrap(),
+            "provenance":"native-dialog",
+            "exactFile":false}),
     )
     .await;
     assert_eq!(registered["ok"], true);

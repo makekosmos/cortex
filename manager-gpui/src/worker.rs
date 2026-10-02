@@ -109,8 +109,7 @@ fn usage_report(engine: &Engine) -> Result<Value, EngineError> {
             "range_days": 3650,
             "top_apps_limit": 500,
             "recent_sessions_limit": 1,
-        }),
-    )?;
+        }))?;
     let apps = engine
         .rpc("app_index.list_all", json!({ "limit": 1000 }))
         .ok()

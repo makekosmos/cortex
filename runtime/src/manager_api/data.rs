@@ -313,21 +313,41 @@ fn safe_row(row: &Value, query: Option<&str>) -> Option<Value> {
                 .map(|_| title)
         })
         .unwrap_or(title);
-    let links = row.get("links").and_then(Value::as_array).map(|links| {
-        links.iter().filter_map(|link| {
-            let target = link.get("target_object_id").or_else(|| link.get("targetObjectId")).and_then(Value::as_str)?;
-            let link_type = link.get("link_type").or_else(|| link.get("linkType")).and_then(Value::as_str)?;
-            Some(json!({"id": link.get("id").and_then(Value::as_str).unwrap_or_default(), "target_object_id": target, "link_type": link_type}))
-        }).collect::<Vec<_>>()
-    }).unwrap_or_default();
+    let links = row
+        .get("links")
+        .and_then(Value::as_array)
+        .map(|links| {
+            links
+                .iter()
+                .filter_map(|link| {
+                    let target = link
+                        .get("target_object_id")
+                        .or_else(|| link.get("targetObjectId"))
+                        .and_then(Value::as_str)?;
+                    let link_type = link
+                        .get("link_type")
+                        .or_else(|| link.get("linkType"))
+                        .and_then(Value::as_str)?;
+                    Some(json!(
+                        {"id": link.get("id").and_then(Value::as_str).unwrap_or_default(),
+                        "target_object_id": target,
+                        "link_type": link_type}))
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
     Some(json!({
         "id": id,
         "type_id": type_id,
         "type_version": type_version,
         "title": crate::observability::redact_text(title),
         "fields": fields,
-        "created_at": row.get("created_at").or_else(|| row.get("createdAt")).and_then(Value::as_str),
-        "updated_at": row.get("updated_at").or_else(|| row.get("updatedAt")).and_then(Value::as_str),
+        "created_at": row.get(
+            "created_at"
+        ).or_else(|| row.get("createdAt")).and_then(Value::as_str),
+        "updated_at": row.get(
+            "updated_at"
+        ).or_else(|| row.get("updatedAt")).and_then(Value::as_str),
         "excerpt": crate::observability::redact_text(excerpt).chars().take(256).collect::<String>(),
         "links": links,
     }))

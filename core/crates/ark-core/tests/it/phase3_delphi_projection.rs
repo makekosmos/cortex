@@ -24,8 +24,16 @@ fn props(status: &str, extensions: serde_json::Value) -> serde_json::Value {
         "scheduledAt": "2026-05-15T08:00:00.000Z",
         "dueAt": null,
         "reminderAt": null,
-        "completedAt": if status == "done" { json!("2026-05-15T09:00:00.000Z") } else { json!(null) },
-        "canceledAt": if status == "canceled" { json!("2026-05-15T09:30:00.000Z") } else { json!(null) },
+        "completedAt": if status == "done" {
+            json!("2026-05-15T09:00:00.000Z")
+        } else {
+            json!(null)
+        },
+        "canceledAt": if status == "canceled" {
+            json!("2026-05-15T09:30:00.000Z")
+        } else {
+            json!(null)
+        },
         "recurrence": null,
         "checklist": [],
         "extensions": extensions,
@@ -49,7 +57,9 @@ fn projects_canonical_task_fields_and_sole_project_link() {
         props(
             "done",
             json!({
-                "compatibility": {"planning": {"isToday": true, "isEvening": true, "sortOrder": 42}},
+                "compatibility": {
+                    "planning": {"isToday": true, "isEvening": true, "sortOrder": 42}
+                },
                 "kosmos": {"taskBucket": "backlog"}
             }),
         ),

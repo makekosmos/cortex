@@ -104,8 +104,7 @@ pub fn render(
                             if !code.is_empty() {
                                 this.action(
                                     "connect_with_pairing_code",
-                                    json!({"ticket": code, "pairing_code": code}),
-                                );
+                                    json!({"ticket": code, "pairing_code": code}));
                             }
                         },
                     )),

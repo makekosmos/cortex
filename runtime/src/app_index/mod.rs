@@ -218,7 +218,12 @@ impl AppIndex {
         let icon_path = match icons::ensure_icon(&self.icon_cache_dir, &app) {
             Ok(path) => Some(path),
             Err(error) => {
-                tracing::warn!(target: "app_index", path = %exec_path, %error, "exe_info icon extraction failed");
+                tracing::warn!(
+                    target: "app_index",
+                    path = %exec_path,
+                    %error,
+                    "exe_info icon extraction failed",
+                );
                 None
             }
         };

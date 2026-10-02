@@ -40,7 +40,8 @@ impl AppSource for UwpSource {
             AppIndexError::Discover("uwp".into(), format!("PackageManager::new: {e}"))
         })?;
 
-        // Empty HSTRING = current user. Main = только user-launchable, без Framework/Resource/Bundle.
+        // Empty HSTRING = current user. Main = только user-launchable,
+        // без Framework/Resource/Bundle.
         let empty = HSTRING::new();
         let packages = pm
             .FindPackagesByUserSecurityIdWithPackageTypes(&empty, PackageTypes::Main)
@@ -81,7 +82,8 @@ fn collect_entries_from_package(pkg: &Package, out: &mut Vec<App>) -> Result<()>
         return Ok(());
     }
     // Status() возвращает PackageStatus; если получить не можем — скипаем.
-    // У PackageStatus есть метод VerifyIsOK() → Result, который ошибочен если NotAvailable/Tampered/etc.
+    // У PackageStatus есть метод VerifyIsOK() → Result,
+    // который ошибочен если NotAvailable/Tampered/etc.
     match pkg.Status() {
         Ok(status) => {
             if status.VerifyIsOK().is_err() {

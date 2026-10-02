@@ -3,7 +3,8 @@
 // сериализуются и форвардятся всем connected WS-клиентам через broadcast.
 //
 // Wire format flat (см. запреты forbidden.md: никаких nested {kind,type,payload}):
-//   {"event":"pomodoro_tick", "phase":"work", "remainingMs":..., "phaseEndsAtMs":<unix ms|null>, ...state}
+//   {"event":"pomodoro_tick", "phase":"work", "remainingMs":...,
+//    "phaseEndsAtMs":<unix ms|null>, ...state}
 //   {"event":"pomodoro_phase_changed", "from":"work", "to":"shortBreak", ...state}
 //   {"event":"pomodoro_finished", "finished":"work", ...state}
 //

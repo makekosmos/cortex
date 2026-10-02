@@ -379,7 +379,8 @@ pub fn migrate_legacy_assets(data_dir: &Path) -> io::Result<bool> {
                 let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
                     continue;
                 };
-                let is_dev_dir = name.starts_with("Mundus-dev") || name.starts_with("Kosmos-dev"); // MIGRATION(KOS-267): pre-rename dev worktrees
+                // MIGRATION(KOS-267): pre-rename dev worktrees
+                let is_dev_dir = name.starts_with("Mundus-dev") || name.starts_with("Kosmos-dev");
                 if path.is_dir() && is_dev_dir {
                     roots.push(path);
                 }
@@ -956,11 +957,16 @@ async fn download_file(
             let chunk = match response.chunk().await {
                 Ok(chunk) => chunk,
                 Err(e) => {
-                    let message = format!(concat!(
-                        "{request_url}: stream read failed after {downloaded_bytes} bytes (",
-                        "{content_type}, encoding {content_encoding}): {e}"
-                    ));
-                    tracing::warn!(phase, attempt, error = %message, "dictation local model download chunk failed");
+                    let message = format!(
+                        "{request_url}: stream read failed after {downloaded_bytes} bytes (\
+{content_type}, encoding {content_encoding}): {e}"
+                    );
+                    tracing::warn!(
+                        phase,
+                        attempt,
+                        error = %message,
+                        "dictation local model download chunk failed",
+                    );
                     last_error = Some(message);
                     break;
                 }

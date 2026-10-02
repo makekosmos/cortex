@@ -823,7 +823,7 @@ mod tests {
         assert!(m.validate().is_ok());
         assert!(serde_json::from_str::<PackageManifest>(concat!(
             r#"{"schema_version":1,"id":"x","name":"x","version":"1.0.0","kind":"app","#,
-            r#""engine_api":"*","entrypoint":"x","publisher":"kosmos","nope":1}"#
+            r#""engine_api":"*","entrypoint":"x","publisher":"kosmos","nope":1}"#,
         ))
         .is_err());
     }
@@ -847,12 +847,17 @@ mod tests {
     #[test]
     fn v2_rejects_unsafe_or_non_windows_icon_paths() {
         for icon in ["../icon.ico", "icon.svg", "icon.ico/extra"] {
-            let input = format!(concat!(
-                r#"{{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.2.3","#,
-                r#""kind":"app","engine_api":"*","entrypoint":"index.html","icon":"{icon}","#,
-                r#""publisher":"kosmos","targets":[{{"runtime":"kosmos-host","os":["linux"]}}],"#,
-                r#""data":{{"access":[],"defines":[],"mappings":[]}}}}"#
-            ));
+            let input = format!(
+                concat!(
+                    r#"{{"schema_version":2,"id":"com.kosmos.demo","#,
+                    r#""name":"Demo","version":"1.2.3","#,
+                    r#""kind":"app","engine_api":"*","entrypoint":"index.html","icon":"{icon}","#,
+                    r#""publisher":"kosmos","#,
+                    r#""targets":[{{"runtime":"kosmos-host","os":["linux"]}}],"#,
+                    r#""data":{{"access":[],"defines":[],"mappings":[]}}}}"#
+                ),
+                icon = icon
+            );
             assert!(PackageManifest::parse(&input).is_err(), "{icon}");
         }
     }
@@ -870,10 +875,8 @@ mod tests {
         let long = base.replace(
             "\"access\":[]",
             &format!(
-                concat!(
-                    "\"access\":[{{\"type\":\"com.kosmos.note\",\"versions\":\"{}\",",
-                    "\"actions\":[\"read\"],\"fields\":{{\"read\":[],\"write\":[]}}}}]"
-                ),
+                "\"access\":[{{\"type\":\"com.kosmos.note\",\"versions\":\"{}\",\
+\"actions\":[\"read\"],\"fields\":{{\"read\":[],\"write\":[]}}}}]",
                 "x".repeat(129)
             ),
         );

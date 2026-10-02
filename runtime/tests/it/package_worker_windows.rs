@@ -748,8 +748,39 @@ async fn signed_bridge_worker_projects_real_ark_and_restarts_idempotently() {
         .await
         .expect("ark host"),
     );
-    assert!(ark.request("upsert_object_type", serde_json::json!({"object_type":{"id":"note","name":"Note","schemaJson":"{}","uiSchemaJson":"{}","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z","systemLocked":false},"device_id":"bridge-e2e"})).await.expect("type").ok);
-    let object = ark.request("upsert_object", serde_json::json!({"object":{"id":"bridge-note","typeId":"note","title":"Bridge note","contentJson":{},"propsJson":{"body":"from ark"},"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z","deletedAt":null},"device_id":"bridge-e2e"})).await.expect("object");
+    assert!(
+        ark.request(
+            "upsert_object_type",
+            serde_json::json!(
+                {"object_type":{"id":"note",
+                "name":"Note",
+                "schemaJson":"{}",
+                "uiSchemaJson":"{}",
+                "createdAt":"2026-01-01T00:00:00Z",
+                "updatedAt":"2026-01-01T00:00:00Z",
+                "systemLocked":false},
+                "device_id":"bridge-e2e"}),
+        )
+        .await
+        .expect("type")
+        .ok
+    );
+    let object = ark
+        .request(
+            "upsert_object",
+            serde_json::json!(
+                {"object":{"id":"bridge-note",
+                "typeId":"note",
+                "title":"Bridge note",
+                "contentJson":{},
+                "propsJson":{"body":"from ark"},
+                "createdAt":"2026-01-01T00:00:00Z",
+                "updatedAt":"2026-01-01T00:00:00Z",
+                "deletedAt":null},
+                "device_id":"bridge-e2e"}),
+        )
+        .await
+        .expect("object");
     assert!(object.ok, "{:?}", object.error);
     let supervisor = PackageWorkerSupervisor::with_ark(1, ark.clone());
     supervisor.bind_store(store);
@@ -1040,7 +1071,10 @@ async fn secret_bearing_worker_failure_is_redacted_end_to_end() {
     let handle = manager
         .create_bundle(
             snapshot,
-            serde_json::json!({"worker_stdout": worker.stdout_tail, "worker_stderr": worker.stderr_tail}),
+            serde_json::json!(
+                {"worker_stdout": worker.stdout_tail,
+                "worker_stderr": worker.stderr_tail},
+            ),
         )
         .await
         .expect("create support bundle")["handle"]
@@ -1080,10 +1114,10 @@ async fn secret_bearing_worker_failure_is_redacted_end_to_end() {
         "00000000-0000-4000-8000-000000000001".into(),
     );
     let panic = std::thread::spawn(|| {
-        panic!(concat!(
-            "WORKER_SECRET_UNIQUE ARK_MARKDOWN_BODY_UNIQUE RAW_REQUEST_PAYLOAD_UNIQUE ",
-            "C:\\Users\\secret-user\\vault\\private-note.md"
-        ))
+        panic!(
+            "WORKER_SECRET_UNIQUE ARK_MARKDOWN_BODY_UNIQUE RAW_REQUEST_PAYLOAD_UNIQUE \
+C:\\Users\\secret-user\\vault\\private-note.md"
+        )
     })
     .join();
     // The hook is process-wide and deliberately drops panic messages; every

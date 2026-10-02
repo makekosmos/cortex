@@ -15,20 +15,27 @@ fn db() -> Connection {
            ui_schema_json TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
            system_locked INTEGER NOT NULL DEFAULT 0, owner_kind TEXT NOT NULL DEFAULT 'system',
            owner_id TEXT, current_version TEXT NOT NULL DEFAULT '0.0.0-legacy',
-           status TEXT NOT NULL DEFAULT 'active', base_type_id TEXT REFERENCES object_types(id));
+           status TEXT NOT NULL DEFAULT 'active', base_type_id TEXT REFERENCES \
+object_types(id));
          CREATE TABLE object_type_versions (
            type_id TEXT NOT NULL REFERENCES object_types(id), version TEXT NOT NULL,
            schema_json TEXT NOT NULL, ui_schema_json TEXT NOT NULL,
-           content_contract_json TEXT NOT NULL DEFAULT '{}', relations_json TEXT NOT NULL DEFAULT '[]',
-           sync_policy_json TEXT NOT NULL DEFAULT '{}', schema_hash TEXT NOT NULL, created_at TEXT NOT NULL,
+           content_contract_json TEXT NOT NULL DEFAULT '{}', relations_json TEXT NOT NULL \
+DEFAULT '[]',
+           sync_policy_json TEXT NOT NULL DEFAULT '{}', schema_hash TEXT NOT NULL, created_at \
+TEXT NOT NULL,
            PRIMARY KEY(type_id, version));
          CREATE TABLE object_type_aliases (
-           alias TEXT PRIMARY KEY, canonical_type_id TEXT NOT NULL REFERENCES object_types(id), created_at TEXT NOT NULL);
-         CREATE TABLE objects (id TEXT PRIMARY KEY, type_id TEXT NOT NULL REFERENCES object_types(id), type_version TEXT NOT NULL,
+           alias TEXT PRIMARY KEY, canonical_type_id TEXT NOT NULL REFERENCES object_types(id),\
+ created_at TEXT NOT NULL);
+         CREATE TABLE objects (id TEXT PRIMARY KEY, type_id TEXT NOT NULL REFERENCES \
+object_types(id), type_version TEXT NOT NULL,
            title TEXT NOT NULL, content_json TEXT NOT NULL, props_json TEXT NOT NULL,
            created_at TEXT NOT NULL, updated_at TEXT NOT NULL, deleted_at TEXT);
-         CREATE TABLE object_links (id TEXT PRIMARY KEY, source_object_id TEXT NOT NULL REFERENCES objects(id),
-           target_object_id TEXT NOT NULL REFERENCES objects(id), link_type TEXT NOT NULL, created_at TEXT NOT NULL);
+         CREATE TABLE object_links (id TEXT PRIMARY KEY, source_object_id TEXT NOT NULL \
+REFERENCES objects(id),
+           target_object_id TEXT NOT NULL REFERENCES objects(id), link_type TEXT NOT NULL, \
+created_at TEXT NOT NULL);
         ",
     )
     .unwrap();
@@ -91,9 +98,10 @@ fn mismatch_is_read_only_and_structured() {
     )
     .unwrap();
     let err = preflight_registry(&conn).unwrap_err();
-    assert!(
-        matches!(err, RegistryError::CanonicalConflict { ref type_id } if type_id == "com.kosmos.note")
-    );
+    assert!(matches!(
+        err,
+        RegistryError::CanonicalConflict { ref type_id } if type_id == "com.kosmos.note",
+    ));
     assert_eq!(
         conn.query_row("SELECT count(*) FROM object_types", [], |r| r
             .get::<_, i64>(0))
@@ -168,10 +176,8 @@ fn generated_legacy_definition_at_canonical_id_is_promoted_losslessly() {
     );
     assert_eq!(
         conn.query_row(
-            concat!(
-                "SELECT count(*) FROM legacy_type_definition_archive WHERE ",
-                "legacy_type_id='com.kosmos.note'"
-            ),
+            "SELECT count(*) FROM legacy_type_definition_archive WHERE \
+legacy_type_id='com.kosmos.note'",
             [],
             |row| row.get::<_, i64>(0)
         )

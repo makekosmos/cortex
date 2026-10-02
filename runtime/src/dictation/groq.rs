@@ -411,9 +411,13 @@ mod tests {
                 when.method(POST).path("/openai/v1/audio/transcriptions");
                 then.status(200)
                     .header("content-type", "application/json")
-                    .body(
-                        concat!(r#"{"text":"привет мир","segments":[{"text":"привет мир","no_speech_prob":0.05,"#,r#""avg_logprob":-0.3}]}"#),
-                    );
+                    .body(concat!(
+                        concat!(
+                            r#"{"text":"привет мир","segments":[{"text":"привет мир","#,
+                            r#""no_speech_prob":0.05,"#,
+                        ),
+                        r#""avg_logprob":-0.3}]}"#,
+                    ));
             })
             .await;
 

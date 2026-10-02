@@ -51,10 +51,43 @@ fn worker_projects_and_imports_only_through_broker_stdio() {
         .unwrap();
     let mut input = child.stdin.take().unwrap();
     let mut output = BufReader::new(child.stdout.take().unwrap());
-    writeln!(input, "{}", json!({"method":"worker.bootstrap","package_id":"ark-markdown-bridge","version":"1.0.0","hash":"a","pid":1,"api_version":1,"generation":1,"correlation_id":"test","token":"token","bridge_config":{"vault_root":vault_root,"state_root":state_root,"selected_types":["com.kosmos.note"],"editable_fields":["title","body"],"readonly_fields":[]}})).unwrap();
+    writeln!(
+        input,
+        "{}",
+        json!(
+            {"method":"worker.bootstrap",
+            "package_id":"ark-markdown-bridge",
+            "version":"1.0.0",
+            "hash":"a",
+            "pid":1,
+            "api_version":1,
+            "generation":1,
+            "correlation_id":"test",
+            "token":"token",
+            "bridge_config":{"vault_root":vault_root,
+            "state_root":state_root,
+            "selected_types":["com.kosmos.note"],
+            "editable_fields":["title",
+            "body"],
+            "readonly_fields":[]}}),
+    )
+    .unwrap();
     input.flush().unwrap();
     assert_eq!(next(&mut output)["method"], "worker.hello");
-    let object = json!({"id":"note-1","type_id":"com.kosmos.note","type_version":"1.0.0","title":"One","props_json":{"description":null,"extensions":{}},"content_json":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"From ARK"}]}]},"created_at":"x","updated_at":"x","deleted_at":null});
+    let object = json!(
+        {"id":"note-1",
+        "type_id":"com.kosmos.note",
+        "type_version":"1.0.0",
+        "title":"One",
+        "props_json":{"description":null,
+        "extensions":{}},
+        "content_json":{"type":"doc",
+        "content":[{"type":"paragraph",
+        "content":[{"type":"text",
+        "text":"From ARK"}]}]},
+        "created_at":"x",
+        "updated_at":"x",
+        "deleted_at":null});
     let state_read = call(&mut output);
     assert_eq!(state_read["operation"], "filesystem.read");
     reply(&mut input, &state_read, false, Value::Null);
@@ -150,7 +183,20 @@ fn worker_projects_and_imports_only_through_broker_stdio() {
     let get = call(&mut output);
     assert_eq!(get["operation"], "ark.read");
     assert_eq!(get["params"]["operation"], "get_object");
-    let updated = json!({"id":"note-1","type_id":"com.kosmos.note","type_version":"1.0.0","title":"One","props_json":{"description":null,"extensions":{}},"content_json":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"From vault"}]}]},"created_at":"x","updated_at":"y","deleted_at":null});
+    let updated = json!(
+        {"id":"note-1",
+        "type_id":"com.kosmos.note",
+        "type_version":"1.0.0",
+        "title":"One",
+        "props_json":{"description":null,
+        "extensions":{}},
+        "content_json":{"type":"doc",
+        "content":[{"type":"paragraph",
+        "content":[{"type":"text",
+        "text":"From vault"}]}]},
+        "created_at":"x",
+        "updated_at":"y",
+        "deleted_at":null});
     reply(&mut input, &get, true, updated.clone());
     let provenance = call(&mut output);
     assert_eq!(provenance["operation"], "ark.write");
@@ -197,7 +243,21 @@ fn worker_projects_and_imports_only_through_broker_stdio() {
         json!({"bytes":STANDARD.encode(markdown.replace("From ARK", "From vault").as_bytes())}),
     );
     let ark = call(&mut output);
-    let server = json!({"id":"note-1","type_id":"com.kosmos.note","type_version":"1.0.0","title":"One","props_json":{"description":null,"extensions":{}},"content_json":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"From server"}]}]},"created_at":"x","updated_at":"server","deleted_at":null});
+    let server = json!(
+        {"id":"note-1",
+        "type_id":"com.kosmos.note",
+        "type_version":"1.0.0",
+        "title":"One",
+        "props_json":{"description":null,
+        "extensions":{}},
+        "content_json":{"type":"doc",
+        "content":[{"type":"paragraph",
+        "content":[{"type":"text",
+        "text":"From server"}]}]},
+        "created_at":"x",
+        "updated_at":"server",
+        "deleted_at":null},
+    );
     reply(&mut input, &ark, true, json!([server]));
     let compare = call(&mut output);
     assert_eq!(compare["operation"], "filesystem.read");
@@ -322,7 +382,8 @@ fn worker_projects_and_imports_only_through_broker_stdio() {
     let state_write = call(&mut output);
     reply(&mut input, &state_write, true, Value::Null);
 
-    // Divergent ARK and Markdown edits create a bounded sibling artifact, never overwrite either side.
+    // Divergent ARK and Markdown edits create a bounded sibling artifact,
+    // never overwrite either side.
     writeln!(input, "{}", json!({"method":"worker.tick"})).unwrap();
     input.flush().unwrap();
     let state_read = call(&mut output);
@@ -354,7 +415,20 @@ fn worker_projects_and_imports_only_through_broker_stdio() {
         json!({"bytes":STANDARD.encode(markdown.replace("From ARK", "Local conflict").as_bytes())}),
     );
     let ark = call(&mut output);
-    let remote = json!({"id":"note-1","type_id":"com.kosmos.note","type_version":"1.0.0","title":"One","props_json":{"description":null,"extensions":{}},"content_json":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Remote conflict"}]}]},"created_at":"x","updated_at":"z","deleted_at":null});
+    let remote = json!(
+        {"id":"note-1",
+        "type_id":"com.kosmos.note",
+        "type_version":"1.0.0",
+        "title":"One",
+        "props_json":{"description":null,
+        "extensions":{}},
+        "content_json":{"type":"doc",
+        "content":[{"type":"paragraph",
+        "content":[{"type":"text",
+        "text":"Remote conflict"}]}]},
+        "created_at":"x",
+        "updated_at":"z",
+        "deleted_at":null});
     reply(&mut input, &ark, true, json!([remote]));
     let conflict = call(&mut output);
     assert_eq!(conflict["operation"], "filesystem.write");
@@ -490,7 +564,17 @@ fn worker_projects_and_imports_only_through_broker_stdio() {
         &mut input,
         &get,
         true,
-        json!({"id":"note-1","type_id":"com.kosmos.note","type_version":"1.0.0","title":"One","props_json":{"description":null,"extensions":{}},"content_json":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Deliberate"}]}]}}),
+        json!(
+            {"id":"note-1",
+            "type_id":"com.kosmos.note",
+            "type_version":"1.0.0",
+            "title":"One",
+            "props_json":{"description":null,
+            "extensions":{}},
+            "content_json":{"type":"doc",
+            "content":[{"type":"paragraph",
+            "content":[{"type":"text",
+            "text":"Deliberate"}]}]}}),
     );
     let provenance = call(&mut output);
     assert_eq!(provenance["operation"], "ark.write");

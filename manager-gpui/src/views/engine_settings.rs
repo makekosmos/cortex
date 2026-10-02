@@ -97,8 +97,7 @@ pub fn render(
                 toggle("engine-tracker", tracker_on, cx, |this, checked, _| {
                     this.action(
                         "engine.settings.set",
-                        json!({"usage_tracker": {"enabled": checked}}),
-                    );
+                        json!({"usage_tracker": {"enabled": checked}}));
                 })
                 .accessibility_label("Счётчик использования"),
             ),

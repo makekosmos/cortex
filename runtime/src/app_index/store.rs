@@ -119,7 +119,10 @@ impl AppStore {
 }
 
 fn is_duplicate_column_error(e: &rusqlite::Error) -> bool {
-    matches!(e, rusqlite::Error::SqliteFailure(_, Some(msg)) if msg.contains("duplicate column name"))
+    matches!(
+        e,
+        rusqlite::Error::SqliteFailure(_, Some(msg)) if msg.contains("duplicate column name"),
+    )
 }
 
 fn serialize_icon_source(source: Option<&IconSource>) -> rusqlite::Result<Option<String>> {

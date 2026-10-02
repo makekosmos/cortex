@@ -14,8 +14,26 @@ pub fn note(
         string(m, "description", &[], u, true)?,
     );
     put_extensions(o);
-    relation_with_aliases(m, "relatedNotes", &["related_notes"], "related", LinkWrite { links: l, id, at, unknown: u })?;
-    relation_with_aliases(m, "tagIds", &["tag_ids"], "tag", LinkWrite { links: l, id, at, unknown: u })
+    relation_with_aliases(
+        m,
+        "relatedNotes",
+        &["related_notes"],
+        "related",
+        LinkWrite { links: l,
+        id,
+        at,
+        unknown: u },
+    )?;
+    relation_with_aliases(
+        m,
+        "tagIds",
+        &["tag_ids"],
+        "tag",
+        LinkWrite { links: l,
+        id,
+        at,
+        unknown: u },
+    )
 }
 pub fn person(
     m: &Map<String, Value>,
@@ -34,7 +52,16 @@ pub fn person(
         o.insert(c.into(), string(m, c, &[a], u, true)?);
     }
     put_extensions(o);
-    relation_single_with_aliases(m, "photoId", &["photo_id"], "photo", LinkWrite { links: l, id, at, unknown: u })
+    relation_single_with_aliases(
+        m,
+        "photoId",
+        &["photo_id"],
+        "photo",
+        LinkWrite { links: l,
+        id,
+        at,
+        unknown: u },
+    )
 }
 pub fn image(
     m: &Map<String, Value>,
@@ -127,6 +154,24 @@ pub fn book(
     if let Some(v) = val(m, "coverImage", &["cover_image"], u)? {
         q.insert("coverImage".into(), v.clone());
     }
-    relation_with_aliases(m, "tagIds", &["tag_ids"], "tag", LinkWrite { links: l, id, at, unknown: u })?;
-    relation_with_aliases(m, "authorPersonIds", &["author_person_ids"], "author-person", LinkWrite { links: l, id, at, unknown: u })
+    relation_with_aliases(
+        m,
+        "tagIds",
+        &["tag_ids"],
+        "tag",
+        LinkWrite { links: l,
+        id,
+        at,
+        unknown: u },
+    )?;
+    relation_with_aliases(
+        m,
+        "authorPersonIds",
+        &["author_person_ids"],
+        "author-person",
+        LinkWrite { links: l,
+        id,
+        at,
+        unknown: u },
+    )
 }

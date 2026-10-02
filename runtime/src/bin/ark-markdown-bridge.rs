@@ -82,17 +82,25 @@ impl Client {
     }
 
     fn heartbeat(&self, status: Option<&BridgeStatus>) {
-        let _ = Self::send(
-            json!({"method":"worker.heartbeat","generation":self.generation,"token":self.token,"bridge_status":status}),
-        );
+        let _ = Self::send(json!({
+            "method": "worker.heartbeat",
+            "generation": self.generation,
+            "token": self.token,
+            "bridge_status": status,
+        }));
     }
 
     fn call(&mut self, operation: &str, params: Value) -> Result<Value, ()> {
         let id = format!("bridge-{}", self.next_id);
         self.next_id = self.next_id.saturating_add(1);
-        Self::send(
-            json!({"method":"worker.call","id":id,"generation":self.generation,"token":self.token,"operation":operation,"params":params}),
-        )?;
+        Self::send(json!({
+            "method": "worker.call",
+            "id": id,
+            "generation": self.generation,
+            "token": self.token,
+            "operation": operation,
+            "params": params,
+        }))?;
         let deadline = Instant::now() + Duration::from_secs(30);
         loop {
             let left = deadline.saturating_duration_since(Instant::now());
@@ -941,7 +949,18 @@ pub(crate) fn main() {
         .get("generation")
         .and_then(Value::as_u64)
         .unwrap_or_default();
-    if Client::send(json!({"method":"worker.hello","package_id":bootstrap["package_id"],"version":bootstrap["version"],"hash":bootstrap["hash"],"pid":bootstrap["pid"],"api_version":bootstrap["api_version"],"token":token})).is_err() { return; }
+    if Client::send(json!(
+        {"method":"worker.hello",
+        "package_id":bootstrap["package_id"],
+        "version":bootstrap["version"],
+        "hash":bootstrap["hash"],
+        "pid":bootstrap["pid"],
+        "api_version":bootstrap["api_version"],
+        "token":token}))
+    .is_err()
+    {
+        return;
+    }
     let (sender, receiver) = mpsc::channel();
     thread::spawn(move || {
         for line in std::io::stdin().lock().lines().map_while(Result::ok) {
@@ -997,7 +1016,17 @@ mod tests {
     #[allow(clippy::unwrap_used)]
     #[test]
     fn format_keeps_stable_identity_and_rejects_other_types() {
-        let object = json!({"id":"id-1","type_id":"com.kosmos.note","type_version":"1.0.0","title":"Hello","props_json":{"description":null,"extensions":{}},"content_json":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Body"}]}]}});
+        let object = json!(
+            {"id":"id-1",
+            "type_id":"com.kosmos.note",
+            "type_version":"1.0.0",
+            "title":"Hello",
+            "props_json":{"description":null,
+            "extensions":{}},
+            "content_json":{"type":"doc",
+            "content":[{"type":"paragraph",
+            "content":[{"type":"text",
+            "text":"Body"}]}]}});
         let markdown = render(&object, &config()).unwrap();
         assert!(markdown.contains("ark_id: \"id-1\""));
         assert!(!markdown.contains("secret"));
@@ -1079,7 +1108,17 @@ mod tests {
     #[allow(clippy::unwrap_used)]
     #[test]
     fn canonical_body_survives_import_and_export_byte_roundtrip() {
-        let object = json!({"id":"note-1","type_id":"com.kosmos.note","type_version":"1.0.0","title":"One","props_json":{"description":null,"extensions":{}},"content_json":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"From ARK"}]}]}});
+        let object = json!(
+            {"id":"note-1",
+            "type_id":"com.kosmos.note",
+            "type_version":"1.0.0",
+            "title":"One",
+            "props_json":{"description":null,
+            "extensions":{}},
+            "content_json":{"type":"doc",
+            "content":[{"type":"paragraph",
+            "content":[{"type":"text",
+            "text":"From ARK"}]}]}});
         let markdown = render(&object, &config()).unwrap();
         let edited = markdown.replace("From ARK", "From server");
         let (id, kind, fields, body) = parse(&edited, &config()).unwrap();
@@ -1096,7 +1135,11 @@ mod tests {
     #[allow(clippy::unwrap_used)]
     #[test]
     fn parsed_rendered_body_has_no_bridge_terminal_newline() {
-        let object = json!({"id":"id-1","type_id":"custom.note","title":"Hello","props_json":{"body":"Body"}});
+        let object = json!(
+            {"id":"id-1",
+            "type_id":"custom.note",
+            "title":"Hello",
+            "props_json":{"body":"Body"}});
         let custom_config = Config {
             selected_types: vec!["custom.note".into()],
             ..config()
@@ -1108,7 +1151,19 @@ mod tests {
     #[allow(clippy::unwrap_used)]
     #[test]
     fn canonical_markdown_roundtrip_preserves_paragraph_boundaries() {
-        let object = json!({"id":"note-1","type_id":"com.kosmos.note","type_version":"1.0.0","title":"One","props_json":{"description":null},"content_json":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"First"}]},{"type":"paragraph","content":[{"type":"text","text":"Second"}]}]}});
+        let object = json!(
+            {"id":"note-1",
+            "type_id":"com.kosmos.note",
+            "type_version":"1.0.0",
+            "title":"One",
+            "props_json":{"description":null},
+            "content_json":{"type":"doc",
+            "content":[{"type":"paragraph",
+            "content":[{"type":"text",
+            "text":"First"}]},
+            {"type":"paragraph",
+            "content":[{"type":"text",
+            "text":"Second"}]}]}});
         let markdown = render(&object, &config()).unwrap();
         let edited = markdown.replace("First\n\nSecond", "First edited\n\nSecond edited");
         let (_, _, fields, body) = parse(&edited, &config()).unwrap();

@@ -184,10 +184,11 @@ impl SyncTransport for RelayTransport {
                                                 let from =
                                                     message_origin_device_id(&lan_msg)
                                                         .unwrap_or_default();
-                                                let _ = event_tx.send(TransportEvent::MessageReceived {
+                                                let event = TransportEvent::MessageReceived {
                                                     from_device_id: from,
                                                     msg: lan_msg,
-                                                });
+                                                };
+                                                let _ = event_tx.send(event);
                                             }
                                         }
                                         Some(Ok(Message::Close(_))) | None => break,

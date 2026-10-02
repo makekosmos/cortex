@@ -151,7 +151,11 @@ fn integration_values_are_validated_before_persistence() {
 #[tokio::test]
 async fn clearing_provider_credentials_clears_and_disables_all_versions() {
     let dir = tempdir().unwrap();
-    let mut service = PackageService::from_parts(dir.path().join("packages"), None, Some(dir.path().join("apps"))).unwrap();
+    let mut service = PackageService::from_parts(
+        dir.path().join("packages"),
+        None,
+        Some(dir.path().join("apps")),
+    ).unwrap();
     install_integration_package(dir.path(), &service, "1.0.0");
     install_integration_package(dir.path(), &service, "2.0.0");
     service.store.enable_worker("com.kosmos.provider", "1.0.0").unwrap();
@@ -181,9 +185,18 @@ async fn clearing_provider_credentials_clears_and_disables_all_versions() {
     save_package_integration_secret("com.kosmos.provider", "2.0.0", "session", "new-secret")
         .unwrap();
 
-    save_package_integration_secret("com.kosmos.provider", "1.0.0", ":huawei-refresh:session", "rotated-secret").unwrap();
+    save_package_integration_secret(
+        "com.kosmos.provider",
+        "1.0.0",
+        ":huawei-refresh:session",
+        "rotated-secret",
+    ).unwrap();
     service.clear_integration_values("com.kosmos.provider").await.unwrap();
-    assert!(read_package_integration_secret("com.kosmos.provider", "1.0.0", ":huawei-refresh:session").is_none());
+    assert!(read_package_integration_secret(
+        "com.kosmos.provider",
+        "1.0.0",
+        ":huawei-refresh:session",
+    ).is_none());
 
     assert!(service.read_integration_settings().values.is_empty());
     assert!(read_package_integration_secret("com.kosmos.provider", "1.0.0", "session").is_none());
@@ -199,7 +212,11 @@ async fn clearing_provider_credentials_clears_and_disables_all_versions() {
 #[test]
 fn uninstall_clears_only_the_exact_integration_version() {
     let dir = tempdir().unwrap();
-    let service = PackageService::from_parts(dir.path().join("packages"), None, Some(dir.path().join("apps"))).unwrap();
+    let service = PackageService::from_parts(
+        dir.path().join("packages"),
+        None,
+        Some(dir.path().join("apps")),
+    ).unwrap();
     install_integration_package(dir.path(), &service, "3.0.0");
     install_integration_package(dir.path(), &service, "4.0.0");
 

@@ -18,7 +18,9 @@ impl WsServer {
                             continue;
                         }
                     };
-                    let _admission = shutdown.lifecycle.admission.lock().unwrap_or_else(|p| p.into_inner());
+                    let _admission = shutdown.lifecycle.admission.lock().unwrap_or_else(
+                        |p| p.into_inner()
+                    );
                     if self.lifecycle.closed.load(Ordering::Acquire) {
                         drop(permit);
                         drop(_admission);

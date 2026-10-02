@@ -469,7 +469,16 @@ mod tests {
     fn absent_optional_contracts_remain_valid_and_legacy_records_deserialize() {
         let dir = tempdir().unwrap();
         let registry = PackageRegistrationRegistry::open(dir.path()).unwrap();
-        let raw = r#"{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.0.0","kind":"app","engine_api":"*","entrypoint":"index.html","publisher":"kosmos","targets":[{"runtime":"standalone","os":["linux"]}],"data":{"access":[],"defines":[{"type":"com.kosmos.demo.note","version":"1.0.0","schema":"schema.json"}],"mappings":[]}}"#;
+        let raw = concat!(
+            r#"{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.0.0","#,
+            r#""kind":"app","engine_api":"*","entrypoint":"index.html","publisher":"kosmos","#,
+            r#""targets":[{"runtime":"standalone","os":["linux"]}],"data":{"access":[],"#,
+            concat!(
+                r#""defines":[{"type":"com.kosmos.demo.note","version":"1.0.0","#,
+                r#""schema":"schema.json"}],"#,
+            ),
+            r#""mappings":[]}}"#,
+        );
         let crate::package_manifest::VersionedManifest::V2(manifest) =
             PackageManifest::parse(raw).unwrap()
         else {
@@ -482,7 +491,11 @@ mod tests {
             )
             .unwrap();
         assert_eq!(registry.definitions().unwrap().len(), 1);
-        let legacy = br#"{"definitions":{"com.kosmos.demo.note@1.0.0":{"type_id":"com.kosmos.demo.note","version":"1.0.0","owner_id":"com.kosmos.demo","schema_hash":"old"}}}"#;
+        let legacy = concat!(
+            r#"{"definitions":{"com.kosmos.demo.note@1.0.0":{"type_id":"com.kosmos.demo.note","#,
+            r#""version":"1.0.0","owner_id":"com.kosmos.demo","schema_hash":"old"}}}"#,
+        )
+        .as_bytes();
         let parsed: RegistryState = serde_json::from_slice(legacy).unwrap();
         assert_eq!(
             parsed.definitions["com.kosmos.demo.note@1.0.0"].content_contract_hash,
@@ -494,7 +507,11 @@ mod tests {
     fn legacy_definition_is_replaced_only_by_verified_archive_documents() {
         let dir = tempdir().unwrap();
         let registry = PackageRegistrationRegistry::open(dir.path()).unwrap();
-        let legacy = br#"{"definitions":{"com.kosmos.demo.note@1.0.0":{"type_id":"com.kosmos.demo.note","version":"1.0.0","owner_id":"com.kosmos.demo","schema_hash":"old"}}}"#;
+        let legacy = concat!(
+            r#"{"definitions":{"com.kosmos.demo.note@1.0.0":{"type_id":"com.kosmos.demo.note","#,
+            r#""version":"1.0.0","owner_id":"com.kosmos.demo","schema_hash":"old"}}}"#,
+        )
+        .as_bytes();
         fs::write(dir.path().join("definitions.json"), legacy).unwrap();
         let mut docs = BTreeMap::new();
         docs.insert("schema.json".into(), br#"{"type":"object"}"#.to_vec());
@@ -511,7 +528,11 @@ mod tests {
     fn incomplete_legacy_definition_is_not_replayed_without_archive() {
         let dir = tempdir().unwrap();
         let registry = PackageRegistrationRegistry::open(dir.path()).unwrap();
-        let legacy = br#"{"definitions":{"com.kosmos.demo.note@1.0.0":{"type_id":"com.kosmos.demo.note","version":"1.0.0","owner_id":"com.kosmos.demo","schema_hash":"old"}}}"#;
+        let legacy = concat!(
+            r#"{"definitions":{"com.kosmos.demo.note@1.0.0":{"type_id":"com.kosmos.demo.note","#,
+            r#""version":"1.0.0","owner_id":"com.kosmos.demo","schema_hash":"old"}}}"#,
+        )
+        .as_bytes();
         fs::write(dir.path().join("definitions.json"), legacy).unwrap();
         assert!(registry.type_registrations().unwrap().is_empty());
     }

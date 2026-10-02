@@ -19,30 +19,35 @@ pub fn ensure_schema(conn: &Connection) -> Result<(), String> {
            external_revision TEXT, external_url TEXT, content_hash TEXT,
            last_pulled_at TEXT, last_pushed_at TEXT,
            conflict_state TEXT NOT NULL DEFAULT 'clean'
-             CHECK(conflict_state IN ('clean','local_changed','remote_changed','conflict','missing','invalid','disabled')),
+             CHECK(conflict_state IN ('clean','local_changed','remote_changed','conflict',\
+'missing','invalid','disabled')),
            PRIMARY KEY(connector_id,account_id,external_type,external_id)
          );
          CREATE UNIQUE INDEX IF NOT EXISTS external_refs_object_identity
            ON external_refs(connector_id,account_id,object_id,external_type);
          CREATE INDEX IF NOT EXISTS external_refs_object ON external_refs(object_id);
          CREATE TABLE IF NOT EXISTS sync_profiles (
-           profile_id TEXT PRIMARY KEY CHECK(length(CAST(profile_id AS BLOB)) BETWEEN 1 AND 128),
+           profile_id TEXT PRIMARY KEY CHECK(length(CAST(profile_id AS BLOB)) BETWEEN 1 AND \
+128),
            device_id TEXT NOT NULL CHECK(length(CAST(device_id AS BLOB)) BETWEEN 1 AND 128),
            name TEXT NOT NULL CHECK(length(CAST(name AS BLOB)) BETWEEN 1 AND 128),
            active INTEGER NOT NULL DEFAULT 0 CHECK(active IN (0,1)),
            revision INTEGER NOT NULL CHECK(revision >= 1),
            UNIQUE(device_id,name), UNIQUE(device_id,revision)
          );
-         CREATE UNIQUE INDEX IF NOT EXISTS sync_profiles_one_default ON sync_profiles(device_id) WHERE active = 1;
+         CREATE UNIQUE INDEX IF NOT EXISTS sync_profiles_one_default ON \
+sync_profiles(device_id) WHERE active = 1;
          CREATE TABLE IF NOT EXISTS sync_profile_rules (
            profile_id TEXT NOT NULL REFERENCES sync_profiles(profile_id) ON DELETE CASCADE,
            resource_kind TEXT NOT NULL CHECK(resource_kind IN ('type','dataset','blob')),
            resource_id TEXT NOT NULL CHECK(length(CAST(resource_id AS BLOB)) BETWEEN 1 AND 128),
            mode TEXT NOT NULL CHECK(mode IN ('full','metadata','none')),
-           filter_json TEXT NOT NULL DEFAULT '{}' CHECK(length(CAST(filter_json AS BLOB)) <= 131072),
+           filter_json TEXT NOT NULL DEFAULT '{}' CHECK(length(CAST(filter_json AS BLOB)) <= \
+131072),
            PRIMARY KEY(profile_id,resource_kind,resource_id)
-         );"
-    ).map_err(|e| e.to_string())
+         );",
+    )
+    .map_err(|e| e.to_string())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -133,10 +138,13 @@ pub fn upsert_sync_profile(
         .map_err(|e| e.to_string())?;
     let result = (|| {
         conn.execute(
-            "INSERT INTO sync_profiles(profile_id,device_id,revision,name,active) VALUES(?1,?2,?3,?4,?5)
-             ON CONFLICT(profile_id) DO UPDATE SET revision=excluded.revision,name=excluded.name,active=excluded.active",
+            "INSERT INTO sync_profiles(profile_id,device_id,revision,name,active) \
+             VALUES(?1,?2,?3,?4,?5)
+             ON CONFLICT(profile_id) DO UPDATE SET revision=excluded.revision,\
+name=excluded.name,active=excluded.active",
             params![profile_id, local_device_id, revision, name, active as i64],
-        ).map_err(|e| e.to_string())?;
+        )
+        .map_err(|e| e.to_string())?;
         conn.execute(
             "DELETE FROM sync_profile_rules WHERE profile_id=?1",
             [profile_id],
@@ -265,9 +273,23 @@ pub fn upsert_external_ref(conn: &Connection, r: &ExternalRefUpsert) -> Result<(
         return Err("invalid external ref".into());
     }
     conn.execute(
-        "INSERT INTO external_refs(connector_id,account_id,external_type,external_id,object_id,external_revision,content_hash,conflict_state)
+        "INSERT INTO external_refs(connector_id,account_id,external_type,external_id,object_id,\
+external_revision,content_hash,conflict_state)
          VALUES(?1,?2,?3,?4,?5,?6,?7,?8)
-         ON CONFLICT(connector_id,account_id,external_type,external_id) DO UPDATE SET object_id=excluded.object_id,external_revision=excluded.external_revision,content_hash=excluded.content_hash,conflict_state=excluded.conflict_state",
-        params![r.connector_id,r.account_id,r.external_type,r.external_id,r.object_id,r.revision,r.hash,r.state],
-    ).map_err(|e| e.to_string()).map(|_| ())
+         ON CONFLICT(connector_id,account_id,external_type,external_id) DO UPDATE SET \
+object_id=excluded.object_id,external_revision=excluded.external_revision,\
+content_hash=excluded.content_hash,conflict_state=excluded.conflict_state",
+        params![
+            r.connector_id,
+            r.account_id,
+            r.external_type,
+            r.external_id,
+            r.object_id,
+            r.revision,
+            r.hash,
+            r.state
+        ],
+    )
+    .map_err(|e| e.to_string())
+    .map(|_| ())
 }

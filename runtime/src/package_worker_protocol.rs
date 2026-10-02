@@ -137,7 +137,21 @@ impl IntegrationBootstrapConfig {
         Ok(())
     }
 }
-msg!(BootstrapMessage { pub method: String, pub package_id: String, pub version: String, pub hash: String, pub pid: u32, pub api_version: u32, pub generation: u64, pub correlation_id: String, pub token: String, #[serde(default)] pub bridge_config: Option<BridgeWorkerConfig>, #[serde(default, skip_serializing_if = "Option::is_none")] pub integration: Option<IntegrationBootstrapConfig> });
+msg!(BootstrapMessage {
+    pub method: String,
+    pub package_id: String,
+    pub version: String,
+    pub hash: String,
+    pub pid: u32,
+    pub api_version: u32,
+    pub generation: u64,
+    pub correlation_id: String,
+    pub token: String,
+    #[serde(default)]
+    pub bridge_config: Option<BridgeWorkerConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub integration: Option<IntegrationBootstrapConfig>,
+});
 msg!(RunMessage { pub method: String, pub generation: u64, pub run_id: String });
 impl RunMessage {
     fn validate(&self) -> Result<(), &'static str> {
@@ -148,13 +162,49 @@ impl RunMessage {
         .ok_or("invalid-request")
     }
 }
-msg!(HelloMessage { pub method: String, pub package_id: String, pub version: String, pub hash: String, pub pid: u32, pub api_version: u32, pub token: String });
-msg!(HeartbeatMessage { pub method: String, pub generation: u64, pub token: String, #[serde(default)] pub bridge_status: Option<BridgeStatus> });
-msg!(CallMessage { pub method: String, pub id: String, pub generation: u64, pub token: String, pub operation: WorkerMethod, pub params: serde_json::Value });
-msg!(InvokeMessage { pub method: String, pub id: String, pub generation: u64, pub operation: String, pub params: serde_json::Value });
+msg!(HelloMessage {
+    pub method: String,
+    pub package_id: String,
+    pub version: String,
+    pub hash: String,
+    pub pid: u32,
+    pub api_version: u32,
+    pub token: String,
+});
+msg!(HeartbeatMessage {
+    pub method: String,
+    pub generation: u64,
+    pub token: String,
+    #[serde(default)] pub bridge_status: Option<BridgeStatus>,
+});
+msg!(CallMessage {
+    pub method: String,
+    pub id: String,
+    pub generation: u64,
+    pub token: String,
+    pub operation: WorkerMethod,
+    pub params: serde_json::Value,
+});
+msg!(InvokeMessage {
+    pub method: String,
+    pub id: String,
+    pub generation: u64,
+    pub operation: String,
+    pub params: serde_json::Value,
+});
 msg!(StopMessage { pub method: String, pub generation: u64, pub reason: String });
-msg!(ResultMessage { pub method: String, pub id: String, pub ok: bool, pub result: Option<serde_json::Value>, pub error: Option<String> });
-msg!(EventMessage { pub method: String, pub event: String, #[serde(default)] pub data: Option<serde_json::Value> });
+msg!(ResultMessage {
+    pub method: String,
+    pub id: String,
+    pub ok: bool,
+    pub result: Option<serde_json::Value>,
+    pub error: Option<String>,
+});
+msg!(EventMessage {
+    pub method: String,
+    pub event: String,
+    #[serde(default)] pub data: Option<serde_json::Value>,
+});
 msg!(ErrorMessage { pub method: String, pub error: String });
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -703,12 +753,16 @@ mod tests {
         assert!(parse_json_line(b"{}").is_err());
         assert!(matches!(
             parse_json_line(
-                br#"{"method":"worker.call","id":"1","generation":1,"token":"x","operation":"ark.read","params":{}}"#
+                "{\"method\":\"worker.call\",\"id\":\"1\",\"generation\":1,\"token\":\"x\",\
+\"operation\":\"ark.read\",\"params\":{}}"
+                    .as_bytes()
             ),
             Ok(WorkerMessage::Call(_))
         ));
         assert!(parse_json_line(
-            br#"{"method":"ark.read","id":"1","generation":1,"token":"x","operation":"ark.read","params":{}}"#
+            "{\"method\":\"ark.read\",\"id\":\"1\",\"generation\":1,\"token\":\"x\",\
+\"operation\":\"ark.read\",\"params\":{}}"
+                .as_bytes()
         )
         .is_err());
         assert!(matches!(
@@ -732,7 +786,9 @@ mod tests {
                 {"key": "api_key", "label": "API key", "kind": "secret"}
             ],
             "values": {"username": "bigfrontend-user"},
-            "secret_handles": {"api_key": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},
+            "secret_handles": {
+                "api_key": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+            },
             "schedule": {"interval_seconds": 3600}
         });
         let mut config: IntegrationBootstrapConfig = serde_json::from_value(value).unwrap();
@@ -832,7 +888,12 @@ mod tests {
     #[test]
     fn opaque_root_open_is_a_strict_worker_call() {
         let message = parse_json_line(
-            br#"{"method":"worker.call","id":"1","generation":7,"token":"token","operation":"filesystem.root.open","params":{"persistent_grant_id":"00000000-0000-4000-8000-000000000001"}}"#,
+            concat!(
+                r#"{"method":"worker.call","id":"1","generation":7,"token":"token","#,
+                r#""operation":"filesystem.root.open","params":{"persistent_grant_id":"#,
+                r#""00000000-0000-4000-8000-000000000001"}}"#
+            )
+            .as_bytes(),
         )
         .unwrap();
         assert!(matches!(

@@ -171,16 +171,18 @@ async fn upsert_object_broadcasts_live_change_to_peers() {
 
     let msgs = captured.lock().await;
     let live_change = msgs.iter().find(|m| {
-            matches!(m, crate::protocol::LanSyncMessage::LiveChange { entity, .. }
-                if entity.id == "live-obj-1" && entity.entity_type == "object" && entity.deleted.is_none())
-        });
+        matches!(m, crate::protocol::LanSyncMessage::LiveChange { entity, .. }
+                if entity.id == "live-obj-1" && entity.entity_type == "object" &&
+                    entity.deleted.is_none())
+    });
     assert!(
-            live_change.is_some(),
-            "UpsertObject должен рассылать LiveChange(entity_type=object, id=live-obj-1, deleted=None); \
+        live_change.is_some(),
+        "UpsertObject должен рассылать LiveChange(entity_type=object, id=live-obj-1, \
+             deleted=None); \
              получено сообщений: {}, содержимое: {:?}",
-            msgs.len(),
-            msgs.iter().map(|m| format!("{m:?}")).collect::<Vec<_>>()
-        );
+        msgs.len(),
+        msgs.iter().map(|m| format!("{m:?}")).collect::<Vec<_>>()
+    );
 
     handle_request(&state, Request::StopSync).await.unwrap();
 }

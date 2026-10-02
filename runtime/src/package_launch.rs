@@ -416,7 +416,12 @@ pub(crate) fn launch_payload(
         "id": package.id,
         "version": package.version,
         "name": package.manifest.name(),
-        "launch_url": format!("http://{}:{http_port}/v1/apps/assets/{}/{}", package_origin_host(&package.id), lease.asset_token, package.manifest.entrypoint()),
+        "launch_url": format!(
+            "http://{}:{http_port}/v1/apps/assets/{}/{}",
+            package_origin_host(&package.id),
+            lease.asset_token,
+            package.manifest.entrypoint(),
+        ),
         "permissions": package.manifest.permissions(),
         "launch_id": lease.launch_id,
         "asset_token": lease.asset_token,

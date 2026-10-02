@@ -52,10 +52,16 @@ impl Converter for TagJsonConverter {
                 return result;
             }
         };
-        let rows = envelopes.into_iter().filter(|e| e.object.deleted_at.is_none()).map(|e| serde_json::json!({
+        let rows = envelopes.into_iter().filter(
+            |e| e.object.deleted_at.is_none()
+        ).map(|e| serde_json::json!({
             "id": e.object.id, "typeId": e.object.type_id, "typeVersion": e.object.type_version,
-            "name": e.object.title, "color": e.object.props_json.get("color").cloned().unwrap_or(serde_json::Value::Null),
-            "parent": e.links.iter().find(|l| l.link_type == "parent").map(|l| l.target_object_id.clone()),
+            "name": e.object.title, "color": e.object.props_json.get(
+                "color"
+            ).cloned().unwrap_or(serde_json::Value::Null),
+            "parent": e.links.iter().find(
+                |l| l.link_type == "parent"
+            ).map(|l| l.target_object_id.clone()),
         })).collect::<Vec<_>>();
         let path = dest_dir.join("tags.json");
         match serde_json::to_vec_pretty(&rows) {

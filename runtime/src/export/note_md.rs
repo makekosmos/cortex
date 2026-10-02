@@ -99,10 +99,8 @@ impl Converter for NoteMdConverter {
                 .and_then(Value::as_str)
                 .unwrap_or("");
             let mut content = format!(
-                concat!(
-                    "---\nid: {}\ntype: {}\ntypeVersion: {}\ntitle: {}\ntags: [{}]\nrelated: ",
-                    "[{}]\ncreatedAt: {}\nupdatedAt: {}\n---\n\n"
-                ),
+                "---\nid: {}\ntype: {}\ntypeVersion: {}\ntitle: {}\ntags: [{}]\nrelated: \
+[{}]\ncreatedAt: {}\nupdatedAt: {}\n---\n\n",
                 yaml_scalar(&obj.id),
                 yaml_scalar(&obj.type_id),
                 yaml_scalar(&obj.type_version),

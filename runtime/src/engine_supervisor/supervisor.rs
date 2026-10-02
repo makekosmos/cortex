@@ -115,9 +115,10 @@ pub async fn run_supervisor() -> ExitCode {
             );
             match monitor_existing_core(&engine_lock_path).await {
                 MonitorResult::Shutdown => {
-                    crate::observability::stderr(
-                        "[mundus-engine] cannot stop an existing core without authenticated ownership",
-                    );
+                    crate::observability::stderr(concat!(
+                        "[mundus-engine] cannot stop an existing core without authenticated ",
+                        "ownership",
+                    ));
                     cleanup_state(&state_path);
                     cleanup_state(&control_state_path);
                     return ExitCode::from(1);

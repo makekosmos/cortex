@@ -198,15 +198,18 @@ pub fn load_from(path: &Path) -> DictationConfig {
                         .or_else(|| read_config_file_lenient(&backup_path(path)))
                     {
                         eprintln!(
-                        concat!("[dictation] WARN config strict load failed for {} ({primary_err}); ","recovered fields field-by-field"),
-                        path.display()
-                    );
+                            "[dictation] WARN config strict load failed for {} ({primary_err}); \
+recovered fields field-by-field",
+                            path.display()
+                        );
                         return cfg;
                     }
                     eprintln!(
-                    concat!("[dictation] WARN config load failed for {} ({primary_err}); backup failed (","{backup_err}); using defaults"),
-                    path.display()
-                );
+                        "[dictation] WARN config load failed for {} ({primary_err}); backup \
+failed (\
+{backup_err}); using defaults",
+                        path.display()
+                    );
                     DictationConfig::default()
                 }
             }

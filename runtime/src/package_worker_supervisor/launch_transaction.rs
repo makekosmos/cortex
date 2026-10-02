@@ -204,7 +204,13 @@ impl PackageWorkerSupervisor {
             startup_wait(&mut cancel_rx, time::timeout(HELLO_DEADLINE, hello_rx)).await;
         match hello_result {
             Ok(Ok(Ok(Ok(())))) => {
-                tracing::info!(target: "package_worker", package_id = %key.0, version = %key.1, generation, "worker hello");
+                tracing::info!(
+                    target: "package_worker",
+                    package_id = %key.0,
+                    version = %key.1,
+                    generation,
+                    "worker hello",
+                );
                 let inner = self.inner.clone();
                 let heartbeat_key = key.clone();
                 let heartbeat_task =

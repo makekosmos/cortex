@@ -92,11 +92,9 @@ impl Converter for TaskMdConverter {
                 .map(|l| l.target_object_id.clone())
                 .collect::<Vec<_>>();
             let mut out = format!(
-                concat!(
-                    "---\nid: {}\ntype: {}\ntypeVersion: {}\ntitle: {}\nstatus: {}\npriority: ",
-                    "{}\nscheduledAt: {}\ndueAt: {}\ncompletedAt: {}\ncanceledAt: {}\ntags: ",
-                    "[{}]\n---\n\n"
-                ),
+                "---\nid: {}\ntype: {}\ntypeVersion: {}\ntitle: {}\nstatus: {}\npriority: \
+{}\nscheduledAt: {}\ndueAt: {}\ncompletedAt: {}\ncanceledAt: {}\ntags: \
+[{}]\n---\n\n",
                 yaml(&o.id),
                 yaml(&o.type_id),
                 yaml(&o.type_version),

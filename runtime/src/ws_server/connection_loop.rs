@@ -35,7 +35,8 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
                             "event": "commands_changed",
                             "commands": list,
                         });
-                        if send_message(&mut sink, Message::Text(payload.to_string()), &shutdown).await.is_err() {
+                        let text = Message::Text(payload.to_string());
+                        if send_message(&mut sink, text, &shutdown).await.is_err() {
                             break;
                         }
                     }
@@ -45,7 +46,8 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
                             "id": id,
                             "params": params,
                         });
-                        if send_message(&mut sink, Message::Text(payload.to_string()), &shutdown).await.is_err() {
+                        let text = Message::Text(payload.to_string());
+                        if send_message(&mut sink, text, &shutdown).await.is_err() {
                             break;
                         }
                     }
@@ -60,7 +62,8 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
             aevt = ark_evt_rx.recv() => {
                 match aevt {
                     Ok((_name, payload)) => {
-                        if send_message(&mut sink, Message::Text(payload.to_string()), &shutdown).await.is_err() {
+                        let text = Message::Text(payload.to_string());
+                        if send_message(&mut sink, text, &shutdown).await.is_err() {
                             break;
                         }
                     }
@@ -73,7 +76,8 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
             agent_evt = agents_rx.recv() => {
                 match agent_evt {
                     Ok(payload) => {
-                        if send_message(&mut sink, Message::Text(payload.to_string()), &shutdown).await.is_err() { break; }
+                        let text = Message::Text(payload.to_string());
+                        if send_message(&mut sink, text, &shutdown).await.is_err() { break; }
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
                     Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
@@ -84,7 +88,8 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
             pevt = pomo_rx.recv() => {
                 match pevt {
                     Ok(payload) => {
-                        if send_message(&mut sink, Message::Text(payload.to_string()), &shutdown).await.is_err() {
+                        let text = Message::Text(payload.to_string());
+                        if send_message(&mut sink, text, &shutdown).await.is_err() {
                             break;
                         }
                     }
@@ -97,7 +102,8 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
             devt = dict_rx.recv() => {
                 match devt {
                     Ok(payload) => {
-                        if send_message(&mut sink, Message::Text(payload.to_string()), &shutdown).await.is_err() {
+                        let text = Message::Text(payload.to_string());
+                        if send_message(&mut sink, text, &shutdown).await.is_err() {
                             break;
                         }
                     }
@@ -124,7 +130,11 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
                     }
                     Ok(_) => continue, // binary/pong — игнор
                     Err(error) => {
-                        tracing::warn!(client_id, error = %error, "Engine WebSocket receive failed");
+                        tracing::warn!(
+                            client_id,
+                            error = %error,
+                            "Engine WebSocket receive failed"
+                        );
                         break;
                     }
                 };
@@ -154,15 +164,26 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
                         "id": request_value.get("id").cloned().unwrap_or(Value::Null),
                         "ok": bound,
                         "data": if bound { serde_json::json!({ "ok": true }) } else { Value::Null },
-                        "code": if bound { Value::Null } else { Value::String("DESKTOP_AUTHORITY_BIND_DENIED".into()) },
-                        "error": if bound { Value::Null } else { Value::String("desktop authority denied".into()) },
+                        "code": if bound {
+                            Value::Null
+                        } else {
+                            Value::String("DESKTOP_AUTHORITY_BIND_DENIED".into())
+                        },
+                        "error": if bound {
+                            Value::Null
+                        } else {
+                            Value::String("desktop authority denied".into())
+                        },
                     });
-                    if send_message(&mut sink, Message::Text(response.to_string()), &shutdown).await.is_err() {
+                    let text = Message::Text(response.to_string());
+                    if send_message(&mut sink, text, &shutdown).await.is_err() {
                         break;
                     }
                     continue;
                 }
-                let request = match crate::engine_dispatch::DispatchRequest::from_wire(request_value) {
+                let request = match crate::engine_dispatch::DispatchRequest::from_wire(
+                    request_value,
+                ) {
                     Ok(request) => request.with_client(crate::engine_dispatch::DispatchClient {
                         pid: hello.pid,
                         class: hello.client_class.clone(),
@@ -190,15 +211,24 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
                 let permit = match shutdown.lifecycle.request_capacity.clone().try_acquire_owned() {
                     Ok(permit) => Arc::new(Mutex::new(Some(permit))),
                     Err(_) => {
-                        let payload = serde_json::json!({"id": request_id_value, "ok": false, "error": "WS request capacity exhausted"});
-                        if send_message(&mut sink, Message::Text(payload.to_string()), &shutdown).await.is_err() { break; }
+                        let payload = serde_json::json!({
+                            "id": request_id_value,
+                            "ok": false,
+                            "error": "WS request capacity exhausted",
+                        });
+                        let text = Message::Text(payload.to_string());
+                        if send_message(&mut sink, text, &shutdown).await.is_err() { break; }
                         continue;
                     }
                 };
                 let request_id = shutdown.lifecycle.next_request.fetch_add(1, Ordering::Relaxed);
                 let task_shutdown = shutdown.clone();
                 let task_dispatcher = dispatcher.clone();
-                let task = shutdown.install_request(request_id, permit.clone(), cancel.clone(), move |start_receiver| {
+                let task = shutdown.install_request(
+                    request_id,
+                    permit.clone(),
+                    cancel.clone(),
+                    move |start_receiver| {
                     tokio::spawn(async move {
                         if start_receiver.await.is_err() {
                             return;
@@ -209,13 +239,20 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
                         // Metadata only, never payload values.
                         let client_class = request.client.class.clone();
                         let operation = request.operation.as_str().to_owned();
-                        let type_id = crate::observability::app_rpc::app_rpc_type_id(&request.params)
-                            .map(str::to_owned);
+                        let type_id = crate::observability::app_rpc::app_rpc_type_id(
+                            &request.params,
+                        )
+                        .map(str::to_owned);
                         let dispatch = task_dispatcher.dispatch(request);
                         let result = tokio::select! {
-                            _ = task_shutdown.cancelled() => Err("server shutting down".to_string()),
+                            _ = task_shutdown.cancelled() => {
+                                Err("server shutting down".to_string())
+                            }
                             _ = cancel_receiver => Err("request cancelled".to_string()),
-                            result = tokio::time::timeout(task_shutdown.response_deadline(), dispatch) => match result {
+                            result = tokio::time::timeout(
+                                task_shutdown.response_deadline(),
+                                dispatch,
+                            ) => match result {
                                 Ok(Ok(value)) => Ok(value),
                                 Ok(Err(error)) => {
                                     crate::observability::app_rpc::log_app_rpc_rejection(
@@ -253,8 +290,14 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
                         result = &mut result_receiver => {
                             break match result {
                                 Ok(Ok(payload)) => payload,
-                                Ok(Err(error)) => serde_json::json!({"id": request_id_value, "ok": false, "error": error}),
-                                Err(_) => serde_json::json!({"id": request_id_value, "ok": false, "error": "dispatch task failed"}),
+                                Ok(Err(error)) => serde_json::json!({
+                                    "id": request_id_value, "ok": false, "error": error
+                                }),
+                                Err(_) => serde_json::json!({
+                                    "id": request_id_value,
+                                    "ok": false,
+                                    "error": "dispatch task failed",
+                                }),
                             };
                         }
                         _ = shutdown.cancelled() => {
@@ -268,12 +311,17 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
                                     return Ok(());
                                 }
                                 Some(Err(error)) => {
-                                    tracing::warn!(client_id, error = %error, "Engine WebSocket receive failed during request");
+                                    tracing::warn!(
+                                        client_id,
+                                        error = %error,
+                                        "Engine WebSocket receive failed during request"
+                                    );
                                     shutdown.finish_request(request_id, true).await;
                                     return Ok(());
                                 }
                                 Some(Ok(Message::Ping(p))) => {
-                                    if send_message(&mut sink, Message::Pong(p), &shutdown).await.is_err() {
+                                    let pong = Message::Pong(p);
+                                    if send_message(&mut sink, pong, &shutdown).await.is_err() {
                                         shutdown.finish_request(request_id, true).await;
                                         return Ok(());
                                     }
@@ -282,8 +330,13 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
                                 | Some(Ok(Message::Binary(_)))
                                 | Some(Ok(Message::Pong(_)))
                                 | Some(Ok(Message::Frame(_))) => {
-                                    let busy = serde_json::json!({"id": serde_json::Value::Null, "ok": false, "error": "WS request busy"});
-                                    if send_message(&mut sink, Message::Text(busy.to_string()), &shutdown).await.is_err() {
+                                    let busy = serde_json::json!({
+                                        "id": serde_json::Value::Null,
+                                        "ok": false,
+                                        "error": "WS request busy",
+                                    });
+                                    let text = Message::Text(busy.to_string());
+                                    if send_message(&mut sink, text, &shutdown).await.is_err() {
                                         shutdown.finish_request(request_id, true).await;
                                         return Ok(());
                                     }
@@ -293,7 +346,8 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
                     }
                 };
                 shutdown.finish_request(request_id, false).await;
-                if send_message(&mut sink, Message::Text(payload.to_string()), &shutdown).await.is_err() {
+                let text = Message::Text(payload.to_string());
+                if send_message(&mut sink, text, &shutdown).await.is_err() {
                     break;
                 }
             }

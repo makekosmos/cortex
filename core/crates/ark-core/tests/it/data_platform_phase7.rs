@@ -151,12 +151,22 @@ fn selective_profile_projects_closure_in_order_and_keeps_local_copy_on_disable()
         entity(
             "object",
             "game",
-            json!({"typeId":"com.kosmos.game","typeVersion":"1.0.0","title":"Game","contentJson":{"body":"heavy"},"propsJson":{"localState":{"path":"C:/game"}}}),
+            json!(
+                {"typeId":"com.kosmos.game",
+                "typeVersion":"1.0.0",
+                "title":"Game",
+                "contentJson":{"body":"heavy"},
+                "propsJson":{"localState":{"path":"C:/game"}}}),
         ),
         entity(
             "object",
             "note",
-            json!({"typeId":"com.kosmos.note","typeVersion":"1.0.0","title":"Note","contentJson":{"body":"full"},"propsJson":{}}),
+            json!(
+                {"typeId":"com.kosmos.note",
+                "typeVersion":"1.0.0",
+                "title":"Note",
+                "contentJson":{"body":"full"},
+                "propsJson":{}}),
         ),
         entity(
             "object_link",
