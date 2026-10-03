@@ -46,9 +46,10 @@ pub struct MaintenanceReport {
     pub vacuumed: bool,
 }
 
-/// Roots lowercased and normalized to end in a separator, so a cheap
-/// `starts_with` decides "under this root". The drive root ("c:\") already
-/// ends in a separator; anything else gets one appended.
+/// Roots lowercased and normalized to end in the platform separator, so a
+/// cheap `starts_with` decides "under this root". The drive root ("c:\")
+/// already ends in a separator; anything else gets one appended. Appending
+/// a literal `\` broke the check on unix, where stored paths use `/`.
 fn normalized_roots(roots: &[String]) -> Vec<String> {
     roots
         .iter()
@@ -57,7 +58,7 @@ fn normalized_roots(roots: &[String]) -> Vec<String> {
             if lower.ends_with(['\\', '/']) {
                 lower
             } else {
-                format!("{lower}\\")
+                format!("{lower}{}", std::path::MAIN_SEPARATOR)
             }
         })
         .collect()

@@ -80,6 +80,17 @@ fn terminate_and_wait_reports_gone_only_after_the_process_exits() {
 }
 
 #[test]
+fn an_already_exited_process_counts_as_gone() {
+    // The graceful `--shutdown` can finish between the snapshot and our
+    // OpenProcess — the pid is then dead before TerminateProcess ever runs.
+    // The kill sweep must call that success, not abort the install.
+    let child = spawn_sleeping_child();
+    let pid = child.0.id();
+    drop(child); // kill + reap: the pid is fully dead before we try.
+    assert_eq!(terminate_and_wait(pid).unwrap(), KillOutcome::Gone);
+}
+
+#[test]
 fn a_surviving_process_is_reported_and_fails_the_report() {
     let mut child = spawn_sleeping_child();
     let pid = child.0.id();
@@ -205,12 +216,9 @@ impl Drop for PidGuard {
 #[test]
 fn whisper_server_scope_matches_only_our_tools_dir() {
     let tools = Path::new(r"C:\Users\u\AppData\Roaming\Mundus\tools\dictation");
-    assert!(is_under(
-        Path::new(
-            r"C:\Users\u\AppData\Roaming\Mundus\tools\dictation\whisper.cpp\Release\whisper-server.exe"
-        ),
-        tools
-    ));
+    let ours =
+        r"C:\Users\u\AppData\Roaming\Mundus\tools\dictation\whisper.cpp\Release\whisper-server.exe";
+    assert!(is_under(Path::new(ours), tools));
     // Another vendor's whisper-server under a foreign root is not ours.
     assert!(!is_under(
         Path::new(r"C:\Program Files\OtherApp\whisper-server.exe"),

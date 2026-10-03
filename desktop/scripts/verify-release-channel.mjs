@@ -13,8 +13,10 @@
 // latest.yml still described build A. This script detects that exact scenario.
 //
 // Usage:
-//   node scripts/verify-release-channel.mjs                  # version from the pinned release version
-//   node scripts/verify-release-channel.mjs 0.5.3            # explicit version (positional, backward-compat)
+//   node scripts/verify-release-channel.mjs                  # win, version from the pinned release version
+//   node scripts/verify-release-channel.mjs 0.5.3            # win, explicit version (positional, backward-compat)
+//   node scripts/verify-release-channel.mjs --platform win
+//   node scripts/verify-release-channel.mjs --platform mac   # desktop-mac / latest-mac.yml
 //   node scripts/verify-release-channel.mjs --version 0.5.3
 //   node scripts/verify-release-channel.mjs --repo owner/name   # bridge-run override
 //   pnpm run verify:channel
@@ -23,13 +25,13 @@
 // Version resolution order:
 //   1. --version flag
 //   2. positional argument (backward-compat)
-//   3. the pinned release version (release-version.mjs)
+//   3. the pinned release version for that platform (release-version.mjs)
 //   4. package.json.version (last fallback)
 //
-// Repo resolution: release-repos.mjs (win → makekosmos/cortex), overridable
-// with --repo for bridge runs.
-//
-// Channel file: latest.yml
+// Repo and channel file come from release-repos.mjs (win → makekosmos/cortex
+// / latest.yml, mac → makekosmos/desktop-mac / latest-mac.yml). --repo
+// overrides the repo for bridge runs and does not change the channel file.
+// Omitting --platform stays on win, which is what publish-release.mjs calls.
 //
 // Exit codes:
 //   0  — all checks PASS
@@ -48,8 +50,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { env } from "./brand.mjs";
-import { RELEASE_REPOS } from "./release-repos.mjs";
 import { readReleaseVersion } from "./release-version.mjs";
+import { resolveVerifyTarget } from "./verify-release-target.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -308,40 +310,17 @@ async function fetchTextWithRetry(url, maxRetries, delayMs) {
   throw lastErr;
 }
 
-// ─── Arg parsing ──────────────────────────────────────────────────────────────
-
-/**
- * Parse CLI args.
- * Supports:
- *   --version <x.y.z>
- *   --repo <owner/name>  (default: the release repo; bridge publishes pass
- *                         the second repo explicitly)
- *   <x.y.z>  (positional, backward-compat)
- */
-function parseArgs(argv) {
-  const result = { version: null, repo: null, positional: null };
-  const args = argv.slice(2);
-
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--version") {
-      result.version = args[++i];
-    } else if (args[i] === "--repo") {
-      result.repo = args[++i];
-    } else if (!args[i].startsWith("--")) {
-      // Positional arg (backward-compat: bare version string)
-      result.positional = args[i];
-    }
-  }
-
-  return result;
-}
-
 // ─── Main verification logic ──────────────────────────────────────────────────
 
 async function main() {
-  // Windows is the only released platform; the channel file is latest.yml.
-  const parsed = parseArgs(process.argv);
-  const channelFile = "latest.yml";
+  let request;
+  try {
+    request = resolveVerifyTarget(process.argv);
+  } catch (error) {
+    die(error instanceof Error ? error.message : String(error));
+  }
+  const { platform, channelFile } = request;
+  const ownerRepo = request.repo;
 
   // ── 2. Determine version & publish config ────────────────────────────────
   const pkgPath = path.join(SHELL_ROOT, "package.json");
@@ -350,12 +329,12 @@ async function main() {
   // Version resolution order:
   //   1. --version flag
   //   2. positional arg (backward-compat)
-  //   3. the pinned release version
+  //   3. the pinned release version for this platform
   //   4. package.json.version (last fallback)
-  let version = parsed.version ?? parsed.positional ?? null;
+  let version = request.version;
   if (!version) {
     try {
-      version = readReleaseVersion();
+      version = readReleaseVersion({ platform });
     } catch {
       // the pinned version file may not exist on very old checkouts
     }
@@ -364,13 +343,11 @@ async function main() {
     version = pkg.version ?? null;
   }
   if (!version) {
-    die("Cannot determine version — pass --version <v> or bump the win release version");
+    die(`Cannot determine version — pass --version <v> or bump the ${platform} release version`);
   }
 
-  // The release repository is fixed for this product line; --repo exists
-  // for the one-time bridge publish that lands on the legacy feed too.
-  const ownerRepo = parsed.repo ?? RELEASE_REPOS.win;
   const tag = `v${version}`;
+  log(`Platform:     ${platform}`);
   log(`Verifying release ${tag} on ${ownerRepo}`);
   log(`Channel file: ${channelFile}`);
   log("");
@@ -385,7 +362,10 @@ async function main() {
   } catch (err) {
     die(
       `Failed to download ${channelFile} after ${MAX_RETRIES} attempts: ${err.message}\n\n` +
-        `Fix: ensure the release ${tag} exists on ${ownerRepo} and ${channelFile} was published.`,
+        `Fix: ensure the release ${tag} exists on ${ownerRepo} and ${channelFile} was published.` +
+        (platform === "mac"
+          ? `\nNote: makekosmos/desktop-mac is a separate repo from the Windows feed.`
+          : ``),
     );
   }
 
@@ -574,13 +554,22 @@ async function main() {
     console.error(
       `${LOG_PREFIX}   2. Bump a new patch version (e.g. ${version} → ${bumpPatch(version)}).`,
     );
-    console.error(`${LOG_PREFIX}   3. Run one clean build+publish:  pnpm run build`);
-    console.error(
-      `${LOG_PREFIX}      (which ends with: node scripts/build-desktop.mjs --platform win)`,
-    );
-    console.error(
-      `${LOG_PREFIX}   4. That produces an atomic set: installer + ${channelFile} from the same build.`,
-    );
+    if (platform === "win") {
+      console.error(`${LOG_PREFIX}   3. Run one clean build+publish:  pnpm run build`);
+      console.error(
+        `${LOG_PREFIX}      (which ends with: node scripts/build-desktop.mjs --platform win)`,
+      );
+      console.error(
+        `${LOG_PREFIX}   4. That produces an atomic set: installer + ${channelFile} from the same build.`,
+      );
+    } else {
+      console.error(
+        `${LOG_PREFIX}   3. Republish ${tag} on ${ownerRepo} as one atomic upload of ${channelFile} and its artifacts.`,
+      );
+      console.error(
+        `${LOG_PREFIX}      The Windows installer build does not produce this channel.`,
+      );
+    }
     console.error(
       `${LOG_PREFIX}   Alternatively: delete ALL assets from the broken release, then re-run the build.`,
     );
@@ -598,7 +587,10 @@ function bumpPatch(version) {
   return `${parts[0]}.${parts[1]}.${parseInt(parts[2], 10) + 1}`;
 }
 
-main().catch((e) => {
-  console.error(`${LOG_PREFIX} Unhandled error:`, e?.stack ?? String(e));
-  process.exit(1);
-});
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(__filename);
+if (isMain) {
+  main().catch((e) => {
+    console.error(`${LOG_PREFIX} Unhandled error:`, e?.stack ?? String(e));
+    process.exit(1);
+  });
+}

@@ -3,24 +3,37 @@
 // contract test fails on any other mention of the file under scripts/ or in
 // Rust outside runtime/crates/pe-version-info.
 //
-// The file shape `{ "win": "x.y.z" }` is contractual — the "win" key is read
-// by name by the nightly workflow, `runtime/crates/pe-version-info`
+// Shape: `{ "win": "x.y.z", "mac": "x.y.z" }`. One product, one version
+// (KOS-233): both pins carry the Mundus product version. They are still two
+// publish channels. `planRelease` reads only `win`, and a Windows nightly
+// publishes no mac artifact, so a mac repo can never block a Windows release.
+// `release-plan.mjs set` (no `--platform`) moves `mac` with `win` when the
+// key is already present, and does not invent it when it is absent. `mac` is
+// what a future makekosmos/desktop-mac publish would ship; 0.5.1 was only the
+// last tag on that repo before the channel was removed, not a second product.
+// The "win" key is what the nightly workflow, `runtime/crates/pe-version-info`
 // (product_version, used by runtime/build.rs and manager-gpui/build.rs) and
-// older checkouts. Windows is the only released platform.
+// older checkouts read by name. Packaged builds inject it as
+// MUNDUS_PRODUCT_VERSION via release-build-env.mjs.
 //
 // Library API:
-//   readReleaseVersion({ root } = {})            → "x.y.z" (semver-validated)
-//   writeReleaseVersion(version, { root } = {})   → writes { "win": version }
+//   readReleaseVersion({ root, platform = "win" } = {})
+//       → "x.y.z" for that channel (semver-validated)
+//   writeReleaseVersion(version, { root, platform = "win" } = {})
+//       → updates that one key and preserves the other
 //
 // `root` is the repository root; it defaults to this checkout's root and
 // exists for tests that work on a temp repo.
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const STABLE_VERSION = /^\d+\.\d+\.\d+$/;
+
+// Key order is contractual for diffs: win, then mac.
+export const RELEASE_PLATFORMS = ["win", "mac"];
 
 function versionsPath(root) {
   return path.join(root ?? REPO_ROOT, "desktop", "release-versions.json");
@@ -39,29 +52,70 @@ function assertStableVersion(version, context) {
   return version;
 }
 
-/** Read desktop/release-versions.json and return the validated win version. */
-export function readReleaseVersion({ root } = {}) {
-  // KOS-322: MUNDUS_SMOKE_VERSION overrides the pin for the installer smoke
-  // only — its build must be strictly newer than the latest published release
-  // without committing a version bump. The release pipeline never sets it
-  // (release-plan.mjs owns the pin there), so it can never leak into a real
-  // release. The installer smoke sets it to `release-plan.mjs build-version`
-  // output — see the "Read toolchain pins and resolve the smoke version"
-  // step in .github/workflows/installer-smoke.yml.
-  const smoke = process.env.MUNDUS_SMOKE_VERSION;
-  if (smoke !== undefined) return assertStableVersion(smoke, "MUNDUS_SMOKE_VERSION");
-  const file = versionsPath(root);
+function assertPlatform(platform) {
+  if (!RELEASE_PLATFORMS.includes(platform))
+    throw new Error(`Unknown platform "${platform ?? ""}"`);
+  return platform;
+}
+
+function readParsed(file) {
   let parsed;
   try {
     parsed = JSON.parse(readFileSync(file, "utf8"));
   } catch (error) {
     throw new Error(`cannot read ${file}: ${error.message}`);
   }
-  return assertStableVersion(parsed?.win, `release-versions.json win`);
+  // JSON.parse accepts arrays and null; only a plain object is a version map.
+  if (Object.prototype.toString.call(parsed) !== "[object Object]")
+    throw new Error(`cannot read ${file}: expected an object`);
+  return parsed;
 }
 
-/** Write { "win": version } back to release-versions.json (2-space + newline). */
-export function writeReleaseVersion(version, { root } = {}) {
+/** True when the pin file already has this channel. Does not invent a key. */
+export function releasePlatformPresent({ root, platform }) {
+  assertPlatform(platform);
+  const file = versionsPath(root);
+  if (!existsSync(file)) return false;
+  return Object.hasOwn(readParsed(file), platform);
+}
+
+/** Read one channel from desktop/release-versions.json. Defaults to win. */
+export function readReleaseVersion({ root, platform = "win" } = {}) {
+  assertPlatform(platform);
+  // KOS-322: MUNDUS_SMOKE_VERSION overrides the win pin for the installer
+  // smoke only — its build must be strictly newer than the latest published
+  // release without committing a version bump. The release pipeline never
+  // sets it (release-plan.mjs owns the pin there), so it can never leak into
+  // a real release. The installer smoke sets it to `release-plan.mjs
+  // build-version` output — see the "Read toolchain pins and resolve the
+  // smoke version" step in .github/workflows/installer-smoke.yml.
+  const smoke = process.env.MUNDUS_SMOKE_VERSION;
+  if (platform === "win" && smoke !== undefined)
+    return assertStableVersion(smoke, "MUNDUS_SMOKE_VERSION");
+  const file = versionsPath(root);
+  const parsed = readParsed(file);
+  return assertStableVersion(parsed[platform], `release-versions.json ${platform}`);
+}
+
+/**
+ * Update one channel. A missing file gains only that key — a Windows write
+ * must not invent a mac version. An existing sibling key is preserved as-is
+ * after validation, so the nightly win bump cannot drop or rewrite mac.
+ */
+export function writeReleaseVersion(version, { root, platform = "win" } = {}) {
+  assertPlatform(platform);
   assertStableVersion(version, "release version");
-  writeFileSync(versionsPath(root), JSON.stringify({ win: version }, null, 2) + "\n", "utf8");
+  const file = versionsPath(root);
+  const parsed = existsSync(file) ? readParsed(file) : {};
+  for (const key of Object.keys(parsed)) {
+    if (!RELEASE_PLATFORMS.includes(key))
+      throw new Error(`release-versions.json has unknown key ${JSON.stringify(key)}`);
+    if (key !== platform) assertStableVersion(parsed[key], `release-versions.json ${key}`);
+  }
+  parsed[platform] = version;
+  const ordered = {};
+  for (const key of RELEASE_PLATFORMS) {
+    if (Object.hasOwn(parsed, key)) ordered[key] = parsed[key];
+  }
+  writeFileSync(file, JSON.stringify(ordered, null, 2) + "\n", "utf8");
 }

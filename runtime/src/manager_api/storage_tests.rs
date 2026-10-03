@@ -127,8 +127,13 @@ fn storage_breakdown_does_not_descend_into_symlinks() {
     crate::test_links::link_dir(&root.join("real"), &root.join("link")).expect("junction");
     let breakdown = storage_breakdown(root, &root.join("packages"));
     let other = bytes_of(&breakdown, "other");
+    // The link contributes only its own record: on unix a symlink's
+    // metadata length is the target path's length, on Windows a junction
+    // reports 0 — never the target's payload again.
+    let link_len = std::fs::symlink_metadata(root.join("link")).unwrap().len();
     assert_eq!(
-        other, 64,
+        other,
+        64 + link_len,
         "link counted once, target payload not doubled: {breakdown}"
     );
     // The walk completing at all is the point — a descent into `link` would

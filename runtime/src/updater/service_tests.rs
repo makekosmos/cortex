@@ -7,7 +7,10 @@ fn hash(bytes: &[u8]) -> String {
     base64::engine::general_purpose::STANDARD.encode(Sha512::digest(bytes))
 }
 
-async fn service_with_manifest(manifest: String) -> (tempfile::TempDir, Arc<UpdaterService>) {
+async fn service_with_manifest(
+    manifest: String,
+    current_version: &str,
+) -> (tempfile::TempDir, Arc<UpdaterService>) {
     let server = MockServer::start_async().await;
     server
         .mock_async(|when, then| {
@@ -16,16 +19,20 @@ async fn service_with_manifest(manifest: String) -> (tempfile::TempDir, Arc<Upda
         })
         .await;
     let dir = tempfile::tempdir().unwrap();
-    let service = UpdaterService::with_feed_base(dir.path().to_path_buf(), server.base_url());
+    let service = UpdaterService::with_feed_base(
+        dir.path().to_path_buf(),
+        server.base_url(),
+        current_version,
+    );
     (dir, service)
 }
 
 #[tokio::test]
 async fn equal_and_older_versions_are_not_available() {
-    for candidate in [version::current_version(), "0.0.1".into()] {
+    for candidate in ["0.5.0", "0.0.1"] {
         let manifest =
             format!("version: {candidate}\nfiles:\n  - url: a.exe\n    sha512: AAA\n    size: 1\n");
-        let (_dir, service) = service_with_manifest(manifest).await;
+        let (_dir, service) = service_with_manifest(manifest, "0.5.0").await;
         assert_eq!(service.check().await["state"], "not-available");
     }
 }
@@ -33,8 +40,11 @@ async fn equal_and_older_versions_are_not_available() {
 #[tokio::test]
 async fn feed_failure_is_an_error_state() {
     let dir = tempfile::tempdir().unwrap();
-    let service =
-        UpdaterService::with_feed_base(dir.path().to_path_buf(), "http://127.0.0.1:1".into());
+    let service = UpdaterService::with_feed_base(
+        dir.path().to_path_buf(),
+        "http://127.0.0.1:1".into(),
+        "0.5.0",
+    );
     assert_eq!(service.check().await["state"], "error");
 }
 
@@ -61,7 +71,8 @@ async fn check_downloads_and_verifies_update_in_background() {
         })
         .await;
     let dir = tempfile::tempdir().unwrap();
-    let service = UpdaterService::with_feed_base(dir.path().to_path_buf(), server.base_url());
+    let service =
+        UpdaterService::with_feed_base(dir.path().to_path_buf(), server.base_url(), "0.5.0");
 
     assert_eq!(service.check().await["state"], "available");
     for _ in 0..200 {
@@ -145,12 +156,14 @@ async fn check_replacing_pending_drops_the_superseded_installer() {
     let updates = dir.path().join("updates");
     std::fs::create_dir(&updates).unwrap();
 
-    let service = UpdaterService::with_feed_base(dir.path().to_path_buf(), server.base_url());
+    let service =
+        UpdaterService::with_feed_base(dir.path().to_path_buf(), server.base_url(), "0.5.0");
     // A payload staged by a previous pending (construction already swept
     // anything older); check() must drop it once pending moves to 99.0.0.
     std::fs::write(updates.join("Mundus-Setup-98.0.0.exe"), b"old").unwrap();
     service.check().await;
 
+    assert_eq!(service.status()["newVersion"], "99.0.0");
     assert!(!updates.join("Mundus-Setup-98.0.0.exe").exists());
 }
 

@@ -80,12 +80,22 @@ fn link_points_at(link: &Path, target: &Path) -> bool {
     existing.is_some_and(|existing| same_path(Path::new(&existing), target))
 }
 
-/// Windows paths compare case-insensitively; the link stores absolute
-/// targets, so a normalized-string compare is the honest check.
+/// Windows paths compare case-insensitively, and an existing path also
+/// compares equal to its `\\?\` / 8.3 spelling. `IShellLink::SetPath`
+/// stores the long path; the install record keeps the path we were given.
 fn same_path(left: &Path, right: &Path) -> bool {
-    left.as_os_str()
-        .to_string_lossy()
-        .eq_ignore_ascii_case(&right.to_string_lossy())
+    path_key(left) == path_key(right)
+}
+
+fn path_key(path: &Path) -> String {
+    #[cfg(windows)]
+    {
+        return crate::win32::windows_path_key(path);
+    }
+    #[cfg(not(windows))]
+    {
+        path.as_os_str().to_string_lossy().to_ascii_lowercase()
+    }
 }
 
 #[cfg(windows)]

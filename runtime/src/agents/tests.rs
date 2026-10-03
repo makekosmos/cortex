@@ -72,6 +72,32 @@ mod tests {
         std::env::remove_var("DAEDALUS_FAKE_APP_SERVER_SCRIPT");
     }
 
+    // `cargo test` runs every agents test in one process. These two tests
+    // used to set and clear the process environment independently, so one
+    // test's cleanup made the other's restore spawn `codex` (absent on the
+    // runner) and mark the session failed. nextest does not share a process,
+    // which is why the suite passes locally. The guard clears the variables
+    // before the lock is released, including on panic.
+    fn fake_app_server_lock() -> &'static tokio::sync::Mutex<()> {
+        static LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+        &LOCK
+    }
+
+    struct FakeAppServerEnv;
+
+    impl FakeAppServerEnv {
+        fn arm() -> Self {
+            fake_app_server_env();
+            Self
+        }
+    }
+
+    impl Drop for FakeAppServerEnv {
+        fn drop(&mut self) {
+            clear_fake_app_server_env();
+        }
+    }
+
     #[test]
     fn git_fixture_rejects_a_cwd_that_would_fall_back_to_the_outer_repo() {
         let dir = tempfile::tempdir().unwrap();
@@ -673,7 +699,8 @@ mod tests {
 
     #[tokio::test]
     async fn fake_app_server_recovers_session_and_expires_stale_approval() {
-        fake_app_server_env();
+        let _lock = fake_app_server_lock().lock().await;
+        let _env = FakeAppServerEnv::arm();
 
         let dir = tempfile::tempdir().unwrap();
         let repo = configured_repo(&dir);
@@ -775,8 +802,6 @@ mod tests {
         assert_eq!(Arc::strong_count(&reopened), 1);
         drop(reopened);
         dir.close().unwrap();
-
-        clear_fake_app_server_env();
     }
 
     #[tokio::test]
@@ -827,7 +852,8 @@ mod tests {
         // KOS-314 contract: the Shutdown ack precedes the runtime task's
         // teardown, so only a joined task proves the Arc<AgentsService> — and
         // the SQLite connection inside the data dir — is released.
-        fake_app_server_env();
+        let _lock = fake_app_server_lock().lock().await;
+        let _env = FakeAppServerEnv::arm();
 
         let dir = tempfile::tempdir().unwrap();
         let repo = configured_repo(&dir);
@@ -847,7 +873,5 @@ mod tests {
         assert_eq!(Arc::strong_count(&service), 1);
         drop(service);
         dir.close().unwrap();
-
-        clear_fake_app_server_env();
     }
 }

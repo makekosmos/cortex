@@ -185,7 +185,9 @@ mod imp {
     /// pids of live processes whose image name is one of `names` and whose
     /// exe path is exactly `path`. Errors when a matching-named process'
     /// path cannot be determined — silently replacing a file a live Engine
-    /// has mapped is how corrupt installs happen.
+    /// has mapped is how corrupt installs happen. A process that is already
+    /// dying is not "running from" anywhere: its path query can fail while
+    /// teardown finishes, so wait it out and exclude it.
     fn pids_at(path: &Path, names: &[&str]) -> Result<Vec<u32>, String> {
         let target = normalize(path);
         let mut pids = Vec::new();
@@ -193,11 +195,16 @@ mod imp {
             if !names.iter().any(|n| n.eq_ignore_ascii_case(&image)) {
                 continue;
             }
-            let Some(running) = exe_path(pid) else {
-                return Err("cannot determine the running Engine path".into());
-            };
-            if normalize(&running).eq_ignore_ascii_case(&target) {
-                pids.push(pid);
+            match exe_path(pid) {
+                Some(running) if normalize(&running).eq_ignore_ascii_case(&target) => {
+                    pids.push(pid);
+                }
+                Some(_) => {}
+                None => {
+                    if gone_after_teardown(pid).is_none() {
+                        return Err("cannot determine the running Engine path".into());
+                    }
+                }
             }
         }
         Ok(pids)
@@ -227,14 +234,44 @@ mod imp {
         path.starts_with(&format!("{dir}\\"))
     }
 
+    /// The pid exited between our snapshot and now — or it is still in
+    /// teardown (the graceful `--shutdown` won the race against
+    /// TerminateProcess). A full-access OpenProcess can then fail while a
+    /// SYNCHRONIZE handle still works, so wait for the kernel to report the
+    /// process gone. `None` means the process outlasted the bound and the
+    /// caller's original error stands.
+    fn gone_after_teardown(pid: u32) -> Option<KillOutcome> {
+        unsafe {
+            let Ok(handle) = OpenProcess(PROCESS_SYNCHRONIZE, false, pid) else {
+                // Dead pids cannot be opened — the process is gone.
+                return Some(KillOutcome::Gone);
+            };
+            let event = WaitForSingleObject(handle, PROCESS_EXIT_TIMEOUT.as_millis() as u32);
+            let _ = CloseHandle(handle);
+            (event == WAIT_OBJECT_0).then_some(KillOutcome::Gone)
+        }
+    }
+
     /// Terminate `pid` and wait on the process handle until the kernel
     /// reports it gone or [`PROCESS_EXIT_TIMEOUT`] elapses.
     pub(crate) fn terminate_and_wait(pid: u32) -> Result<KillOutcome, String> {
         unsafe {
-            let handle = OpenProcess(PROCESS_TERMINATE | PROCESS_SYNCHRONIZE, false, pid)
-                .map_err(|e| format!("OpenProcess: {e}"))?;
+            let handle = match OpenProcess(PROCESS_TERMINATE | PROCESS_SYNCHRONIZE, false, pid) {
+                Ok(handle) => handle,
+                Err(e) => {
+                    return match gone_after_teardown(pid) {
+                        Some(outcome) => Ok(outcome),
+                        None => Err(format!("OpenProcess: {e}")),
+                    };
+                }
+            };
             let result = (|| {
-                TerminateProcess(handle, 1).map_err(|e| format!("TerminateProcess: {e}"))?;
+                if let Err(e) = TerminateProcess(handle, 1) {
+                    return match gone_after_teardown(pid) {
+                        Some(outcome) => Ok(outcome),
+                        None => Err(format!("TerminateProcess: {e}")),
+                    };
+                }
                 let event = WaitForSingleObject(handle, PROCESS_EXIT_TIMEOUT.as_millis() as u32);
                 if event == WAIT_OBJECT_0 {
                     Ok(KillOutcome::Gone)
@@ -274,11 +311,16 @@ mod imp {
                     Some(_) => continue,
                     // Path unreadable: we cannot prove it is ours to kill,
                     // but if it is ours it still pins files — report, don't
-                    // kill, don't pretend it's gone.
+                    // kill, don't pretend it's gone. A process already in
+                    // teardown cannot be ours to kill — it is already going
+                    // away, so wait it out and exclude it instead.
                     None => {
-                        report.failed.push(format!(
-                            "{image} (pid {pid}): image path unreadable — cannot prove it is ours"
-                        ));
+                        if gone_after_teardown(pid).is_none() {
+                            report.failed.push(format!(
+                                "{image} (pid {pid}): image path unreadable — \
+                                 cannot prove it is ours"
+                            ));
+                        }
                         continue;
                     }
                 }

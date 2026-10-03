@@ -1066,7 +1066,8 @@ mod tests {
             r#""publisher":"kosmos","targets":[{"runtime":"kosmos-host","os":["windows"]},"#,
             r#"{"runtime":"worker","os":["windows"],"arch":["x86_64"],"#,
             r#""entrypoint":"worker-windows.exe"},{"runtime":"worker","os":["linux"],"#,
-            r#""arch":["x86_64"],"entrypoint":"worker-linux.exe"}],"data":{"access":[],"#,
+            r#""arch":["x86_64"],"entrypoint":"worker-linux.exe"},{"runtime":"worker","#,
+            r#""os":["macos"],"entrypoint":"worker-macos.exe"}],"data":{"access":[],"#,
             r#""defines":[],"mappings":[]}}"#
         );
         let manifest = PackageManifest::parse(input).unwrap();
@@ -1074,6 +1075,8 @@ mod tests {
             Some("worker-windows.exe")
         } else if cfg!(target_os = "linux") {
             Some("worker-linux.exe")
+        } else if cfg!(target_os = "macos") {
+            Some("worker-macos.exe")
         } else {
             None
         };
@@ -1082,6 +1085,6 @@ mod tests {
             panic!()
         };
         assert!(manifest.supports_current_platform());
-        assert_eq!(manifest.declared_worker_entrypoints().len(), 2);
+        assert_eq!(manifest.declared_worker_entrypoints().len(), 3);
     }
 }

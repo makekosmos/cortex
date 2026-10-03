@@ -203,7 +203,7 @@ fn a_failed_move_in_restores_the_previous_install() {
     );
 
     let (_rebuild, rebuild_options) = same_version_rebuild(options);
-    swap::FAIL_NEXT_MOVE_IN.store(true, std::sync::atomic::Ordering::SeqCst);
+    let _fail_move = swap::FailNextMoveIn::arm();
     assert!(install::install(&rebuild_options).is_err());
     assert_eq!(
         std::fs::read(&backend).unwrap(),
@@ -228,8 +228,8 @@ fn a_failed_restore_reports_where_the_engine_stayed() {
     install::install(&options).unwrap();
 
     let (_rebuild, rebuild_options) = same_version_rebuild(options);
-    swap::FAIL_NEXT_MOVE_IN.store(true, std::sync::atomic::Ordering::SeqCst);
-    swap::FAIL_NEXT_RESTORE.store(true, std::sync::atomic::Ordering::SeqCst);
+    let _fail_move = swap::FailNextMoveIn::arm();
+    let _fail_restore = swap::FailNextRestore::arm();
     let error = install::install(&rebuild_options).unwrap_err();
     let aside = target_root
         .join("versions")
@@ -344,7 +344,11 @@ fn installed_root(version: &str) -> TempDir {
 fn valid_current_json_resolves_the_installed_engine_exe() {
     let root = installed_root("2.4.6");
     let exe = post_install::resolve_engine_exe(root.path()).unwrap();
-    assert!(exe.ends_with(r"versions\2.4.6\mundus-engine.exe"));
+    assert!(exe.ends_with(
+        std::path::Path::new("versions")
+            .join("2.4.6")
+            .join("mundus-engine.exe")
+    ));
 }
 
 #[test]

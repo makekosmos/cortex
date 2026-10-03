@@ -1,6 +1,6 @@
 //! О приложении — /v1/health, /v1/info, diagnostics snapshot + log tail +
-//! support bundle (AboutView.vue parity). Version is the crate version plus
-//! whatever the Engine reports.
+//! support bundle (AboutView.vue parity). The Mundus line is the injected
+//! product version, or "dev" when this binary was not packaged.
 use ::gpui::{prelude::*, *};
 use serde_json::json;
 
@@ -28,11 +28,12 @@ pub fn render(
     col = col.child(section("О приложении", "Версия и сведения о Mundus"));
 
     let mut el = card();
-    // The Mundus product version injected by build-package-components.mjs;
-    // a bare `cargo build` falls back to the crate version.
+    // Packaged builds inject MUNDUS_PRODUCT_VERSION (release-build-env.mjs).
+    // A bare `cargo build` must not show the crate's 0.1.0: that number is
+    // not a Mundus release. Same fallback as runtime/src/build_info.rs.
     el = el.child(kv(
         "Mundus",
-        option_env!("MUNDUS_PRODUCT_VERSION").unwrap_or(env!("CARGO_PKG_VERSION")),
+        option_env!("MUNDUS_PRODUCT_VERSION").unwrap_or("dev"),
     ));
     col = col.child(el);
 

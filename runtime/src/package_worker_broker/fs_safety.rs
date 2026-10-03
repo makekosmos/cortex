@@ -158,20 +158,36 @@ pub(super) fn is_under_configured_root(config: &BrokerConfig, path: &Path) -> bo
 
 #[cfg(windows)]
 pub(super) fn path_is_under(root: &Path, path: &Path) -> bool {
-    fn normalize(path: &Path) -> String {
-        let mut value = path.to_string_lossy().replace('/', "\\");
-        if let Some(rest) = value.strip_prefix(r"\\?\") {
-            value = rest.to_owned();
-        }
-        value.trim_end_matches('\\').to_ascii_lowercase()
-    }
-    let root = normalize(root);
-    let path = normalize(path);
+    // Both sides go through the long-path key. The configured root is stored
+    // canonical (`\\?\C:\Users\runneradmin\...`) while the caller's path is
+    // often the 8.3 form tempfile produced (`C:\Users\RUNNER~1\...`).
+    // `GetLongPathNameW` only resolves existing paths, so a not-yet-created
+    // path first resolves its longest existing ancestor.
+    let root = crate::win32::windows_path_key(root);
+    let path = crate::win32::windows_path_key(&resolve_lexical(path));
     path == root || path.starts_with(&(root + "\\"))
+}
+
+/// Canonicalize the deepest existing ancestor of `path` and re-append the
+/// missing tail. `filesystem_roots` are stored canonical, but callers pass
+/// raw paths — on macOS `tempfile` lives under `/var`, a symlink to
+/// `/private/var`, and on Windows it can carry 8.3 short names — so a
+/// textual compare rejects every file under a configured root.
+/// Non-existent paths (a `create_directory` target) canonicalize their
+/// longest existing prefix instead.
+pub(super) fn resolve_lexical(path: &Path) -> PathBuf {
+    if let Ok(canonical) = std::fs::canonicalize(path) {
+        return canonical;
+    }
+    match (path.parent(), path.file_name()) {
+        (Some(parent), Some(name)) => resolve_lexical(parent).join(name),
+        _ => path.to_path_buf(),
+    }
 }
 
 #[cfg(not(windows))]
 pub(super) fn path_is_under(root: &Path, path: &Path) -> bool {
+    let path = resolve_lexical(path);
     path == root || path.starts_with(root)
 }
 
@@ -216,5 +232,25 @@ fn canonical_under_root(config: &BrokerConfig, path: &Path) -> Result<PathBuf, B
         Ok(canonical)
     } else {
         Err(BrokerError::Invalid("path escapes configured roots".into()))
+    }
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use super::path_is_under;
+
+    #[test]
+    fn canonical_root_contains_the_path_tempfile_returned() {
+        // Regression: GitHub runners canonicalize to the long name and
+        // tempfile keeps the 8.3 name. A spelling compare rejected every
+        // file under the configured root.
+        let td = tempfile::tempdir().unwrap();
+        let child = td.path().join("pkg");
+        std::fs::create_dir(&child).unwrap();
+        let root = std::fs::canonicalize(td.path()).unwrap();
+        assert!(
+            path_is_under(&root, &child),
+            "root {root:?} does not contain {child:?}"
+        );
     }
 }

@@ -1,0 +1,88 @@
+name: Build
+
+# KOS-307: both supported platforms compile on every pull request and on main.
+# The previous gpui-build.yml only ran on the dead branch `kos-132` and built
+# kepler-backend, so macOS cfg code and the Swift helpers rotted with no gate.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Read toolchain pins
+        shell: bash
+        run: node -p 'const t = require("./toolchain.json"); `NODE_VERSION=${t.node}\nRUST_VERSION=${t.rust}`' >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install "$RUST_VERSION" --profile minimal
+          rustup default "$RUST_VERSION"
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: |
+            . -> target
+            core -> target
+            manager-gpui -> target
+
+      # Workspace members (engine, package-protocol, pe-version-info, ark-core)
+      # build on both OSes. Windows-only dependencies are already
+      # `target.'cfg(windows)'` and are not excluded. manager-gpui is a
+      # separate workspace; its build.rs is the manifest step below.
+      - name: Build workspace
+        run: cargo build --locked --workspace --all-targets
+
+      # cargo test does not build required-feature bins. The local gate
+      # (runtime/scripts/test-lib.mjs) builds ark-markdown-bridge with
+      # markdown-bridge-fixture first; without that exe,
+      # signed_catalog_bridge_runs_through_service fails on a clean runner.
+      - name: Build engine test fixtures
+        if: runner.os == 'Windows'
+        run: cargo build -p engine --bin ark-markdown-bridge --locked --features markdown-bridge-fixture
+
+      - name: Test workspace
+        run: cargo test --locked --workspace
+
+      # Runs manager-gpui/build.rs, which embeds the Windows VERSIONINFO
+      # manifest only when the target OS is Windows (pe-version-info no-ops
+      # elsewhere). Tests are included: gpui's test platform does not need
+      # a desktop session.
+      - name: Build and test Manager
+        run: cargo test --locked --manifest-path manager-gpui/Cargo.toml
+
+      # No-op on Windows (the script exits before swiftc and before cargo).
+      # On macOS it compiles the Swift helpers, then release-builds the Engine
+      # and Manager with MUNDUS_PRODUCT_VERSION from release-versions.json.
+      # That second build is the product path the debug workspace build above
+      # does not exercise.
+      - name: Build macOS native helpers
+        run: node desktop/scripts/build-macos-native.mjs

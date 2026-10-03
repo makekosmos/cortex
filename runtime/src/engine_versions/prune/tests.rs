@@ -175,22 +175,22 @@ fn tombstone_names_do_not_collide_with_leftovers() {
 fn engine_root_derived_only_from_installed_layout() {
     assert_eq!(
         engine_root_of_exe(Path::new(
-            r"C:\Mundus\Engine\versions\1.2.3\mundus-engine.exe"
+            "C:/Mundus/Engine/versions/1.2.3/mundus-engine.exe"
         )),
-        Some(PathBuf::from(r"C:\Mundus\Engine"))
+        Some(PathBuf::from("C:/Mundus/Engine"))
     );
     // Dev-сборка: имя родительской директории — не semver.
     assert_eq!(
-        engine_root_of_exe(Path::new(r"C:\repo\target\debug\mundus-engine.exe")),
+        engine_root_of_exe(Path::new("C:/repo/target/debug/mundus-engine.exe")),
         None
     );
     // Нет уровня `versions` или чужое имя exe.
     assert_eq!(
-        engine_root_of_exe(Path::new(r"C:\Mundus\Engine\1.2.3\mundus-engine.exe")),
+        engine_root_of_exe(Path::new("C:/Mundus/Engine/1.2.3/mundus-engine.exe")),
         None
     );
     assert_eq!(
-        engine_root_of_exe(Path::new(r"C:\Mundus\Engine\versions\1.2.3\other.exe")),
+        engine_root_of_exe(Path::new("C:/Mundus/Engine/versions/1.2.3/other.exe")),
         None
     );
 }

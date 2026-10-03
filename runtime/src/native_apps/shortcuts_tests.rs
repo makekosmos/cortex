@@ -41,8 +41,11 @@ fn link(dir: &TempDir) -> PathBuf {
 fn link_lives_under_the_product_subfolder() {
     // The path must stay inside `<Programs>\Mundus\` — the installer's flat
     // legacy deletes (`$SMPROGRAMS\Agenda.lnk`) can never reach it.
-    let link = link_path(Path::new("C:\\Programs"), agenda());
-    assert_eq!(link, Path::new("C:\\Programs\\Mundus\\Agenda.lnk"));
+    let link = link_path(Path::new("Programs"), agenda());
+    assert_eq!(
+        link,
+        Path::new("Programs").join("Mundus").join("Agenda.lnk")
+    );
 }
 
 #[test]
@@ -71,6 +74,18 @@ fn link_points_at_matches_its_target_only() {
     let garbage = dir.path().join("Agenda.lnk");
     fs::write(&garbage, b"not a link").unwrap();
     assert!(!link_points_at(&garbage, Path::new("C:\\anywhere.exe")));
+}
+
+#[cfg(windows)]
+#[test]
+fn same_path_matches_a_file_to_its_canonical_spelling() {
+    // `\\?\` from canonicalize and the 8.3 TEMP path are the same file.
+    // A case-only compare reports that the shortcut points somewhere else.
+    let dir = TempDir::new().unwrap();
+    let file = dir.path().join("Agenda.exe");
+    fs::write(&file, b"MZ").unwrap();
+    let canonical = fs::canonicalize(&file).unwrap();
+    assert!(same_path(&file, &canonical), "{file:?} vs {canonical:?}");
 }
 
 #[cfg(windows)]

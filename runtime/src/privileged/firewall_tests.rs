@@ -2,7 +2,9 @@
 //! firewall — `FakePolicy` is an in-memory [`FirewallPolicy`].
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(windows)]
+use std::path::PathBuf;
 
 use super::*;
 
@@ -195,15 +197,21 @@ fn remove_targets_only_our_rule_names() {
 }
 
 // ------------------------- path validation -------------------------
+// These fixtures are Windows path forms: drive letters, `\` separators and
+// case-insensitive comparison — the shapes a real pipe client image takes.
+// On unix a `C:\` literal is a single component, so they can only run there.
 
+#[cfg(windows)]
 fn profile() -> PathBuf {
     PathBuf::from(r"C:\Users\anna")
 }
 
+#[cfg(windows)]
 fn good_image() -> PathBuf {
     profile().join(r"AppData\Local\Mundus\Engine\versions\0.10.3\mundus-engine.exe")
 }
 
+#[cfg(windows)]
 #[test]
 fn versioned_engine_of_the_calling_user_is_accepted() {
     let exe = validated_engine_image(&profile(), &good_image()).unwrap();
@@ -215,6 +223,7 @@ fn versioned_engine_of_the_calling_user_is_accepted() {
     assert!(validated_engine_image(&profile(), &upper).is_ok());
 }
 
+#[cfg(windows)]
 #[test]
 fn other_users_install_is_rejected() {
     let image = PathBuf::from(
@@ -223,6 +232,7 @@ fn other_users_install_is_rejected() {
     assert!(validated_engine_image(&profile(), &image).is_err());
 }
 
+#[cfg(windows)]
 #[test]
 fn paths_outside_versions_semver_are_rejected() {
     for image in [
@@ -239,6 +249,7 @@ fn paths_outside_versions_semver_are_rejected() {
     }
 }
 
+#[cfg(windows)]
 #[test]
 fn foreign_exe_names_are_rejected() {
     for image in [
@@ -253,6 +264,7 @@ fn foreign_exe_names_are_rejected() {
     }
 }
 
+#[cfg(windows)]
 #[test]
 fn traversal_and_unc_paths_are_rejected() {
     for image in [

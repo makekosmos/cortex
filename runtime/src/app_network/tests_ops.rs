@@ -118,9 +118,12 @@ async fn fetch_page_caps_body_and_rejects_non_html() {
 
 #[tokio::test]
 async fn fetch_page_limits_redirects_and_blocks_plain_http_in_prod() {
+    // Relative redirects stay on this server. An absolute `http://localhost/N`
+    // leaves it for port 80, which is closed on a dev machine (unavailable)
+    // and answers 404 on a GitHub runner (not-found).
     let origin = spawn_server(Arc::new(|path: &str| {
         let next = path.trim_start_matches('/').parse::<u32>().unwrap_or(0) + 1;
-        redirect(&format!("http://localhost/{next}"))
+        redirect(&format!("/{next}"))
     }))
     .await;
     let test_ctx = ctx(std::env::temp_dir(), None);

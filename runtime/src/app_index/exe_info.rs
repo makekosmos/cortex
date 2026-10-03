@@ -133,7 +133,7 @@ mod tests {
     #[test]
     fn file_stem_is_the_last_resort() {
         assert_eq!(
-            file_stem("c:\\apps\\discord\\app-1.0.2\\Discord.exe"),
+            file_stem("c:/apps/discord/app-1.0.2/Discord.exe"),
             Some("Discord".to_string())
         );
     }

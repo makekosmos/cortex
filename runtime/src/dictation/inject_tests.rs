@@ -8,6 +8,8 @@ struct FakeAdapter {
     foreground: Option<isize>,
     restore_fails: bool,
     restore_stale: bool,
+    #[cfg(target_os = "macos")]
+    paste_fails: bool,
 }
 
 impl OsAdapter for FakeAdapter {
@@ -47,7 +49,14 @@ impl OsAdapter for FakeAdapter {
     #[cfg(target_os = "macos")]
     fn send_paste(&mut self) -> Result<(), InjectError> {
         self.paste_calls += 1;
-        Ok(())
+        if self.paste_fails {
+            Err(InjectError::SendInput {
+                injected: 0,
+                expected: 1,
+            })
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -69,6 +78,9 @@ fn clipboard_only_never_restores_or_sends_input() {
     assert_eq!(adapter.paste_calls, 0);
 }
 
+// The foreground-restore flow below only exists on Windows — on macOS the
+// OS restores focus when the pill hides and inject sends Cmd+V straight.
+#[cfg(windows)]
 #[test]
 fn missing_target_falls_back_without_restoring_or_sending_input() {
     let mut adapter = FakeAdapter::default();
@@ -84,6 +96,7 @@ fn missing_target_falls_back_without_restoring_or_sending_input() {
     assert_eq!(adapter.paste_calls, 0);
 }
 
+#[cfg(windows)]
 #[test]
 fn failed_restore_falls_back_without_sending_input() {
     let mut adapter = FakeAdapter {
@@ -103,6 +116,7 @@ fn failed_restore_falls_back_without_sending_input() {
     assert_eq!(adapter.paste_calls, 0);
 }
 
+#[cfg(windows)]
 #[test]
 fn elevated_target_mismatch_falls_back_without_sending_input() {
     // SetForegroundWindow is expected to fail when the target is elevated
@@ -123,6 +137,7 @@ fn elevated_target_mismatch_falls_back_without_sending_input() {
     assert_eq!(adapter.paste_calls, 0);
 }
 
+#[cfg(windows)]
 #[test]
 fn stale_target_falls_back_without_sending_input() {
     let mut adapter = FakeAdapter {
@@ -142,6 +157,7 @@ fn stale_target_falls_back_without_sending_input() {
     assert_eq!(adapter.paste_calls, 0);
 }
 
+#[cfg(windows)]
 #[test]
 fn target_switch_falls_back_without_sending_input() {
     let mut adapter = FakeAdapter {
@@ -158,6 +174,28 @@ fn target_switch_falls_back_without_sending_input() {
         }
     );
     assert_eq!(adapter.paste_calls, 0);
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn failed_paste_falls_back_to_clipboard() {
+    // The macOS inject path has no foreground restore: a failed Cmd+V is
+    // the only fallback, and the text stays on the clipboard.
+    let mut adapter = FakeAdapter {
+        paste_fails: true,
+        ..Default::default()
+    };
+    let result =
+        inject_with_adapter("hello", InjectMode::AutoPaste, Some(7), &mut adapter).unwrap();
+
+    assert_eq!(
+        result.delivery,
+        Delivery::ClipboardFallback {
+            reason: "paste_failed"
+        }
+    );
+    assert_eq!(adapter.clipboard_calls, 1);
+    assert_eq!(adapter.paste_calls, 1);
 }
 
 #[cfg(windows)]

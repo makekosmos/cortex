@@ -190,7 +190,8 @@ fn repeated_root_listings_and_walks_do_not_consume_the_directory_stream() {
     assert_eq!(list_relative(&root, &[], 16).unwrap(), first);
 }
 
-#[cfg(unix)]
+// /proc/self/fd exists on Linux only — there is no portable fd count.
+#[cfg(target_os = "linux")]
 #[test]
 fn repeated_malformed_walks_do_not_leak_fds() {
     let (_td, root) = fixture();

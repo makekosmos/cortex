@@ -115,14 +115,20 @@ export function assertBuildingFromMain(
 }
 
 export async function runReleasePreflight({ platform, local = false }) {
-  if (platform !== "win") throw new Error(`Unknown platform "${platform}"`);
-  const version = readReleaseVersion();
+  if (platform !== "win" && platform !== "mac") throw new Error(`Unknown platform "${platform}"`);
+  // Each channel reads its own pin. A mac preflight never loads the win
+  // version, and the win path below never loads mac.
+  const version = readReleaseVersion({ platform });
   ensureCleanSource();
   const commit = currentCommit();
   if (!local) {
     assertBuildingFromMain(path.resolve(SHELL_ROOT, ".."));
     await assertVersionIsPublishable({ platform, version });
   }
+  // The Windows installer is the only packaged artifact. Mac stops after the
+  // channel pin check: there is no mac Engine payload and no mac BOM, so a
+  // mac version can never fail the Windows build that calls this with "win".
+  if (platform === "mac") return { platform, version, currentCommit: commit, bom: null };
   const bom = await deriveReleaseBom(path.resolve(SHELL_ROOT, ".."), platform, commit);
   verifyEngineArtifact(version, commit);
   return { platform, version, currentCommit: commit, bom };
