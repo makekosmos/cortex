@@ -167,17 +167,8 @@ pub(crate) fn hex_hash(bytes: &[u8]) -> String {
     h.update(bytes);
     h.finalize().iter().map(|b| format!("{b:02x}")).collect()
 }
-fn hash_reader(mut reader: impl Read) -> Result<String, StoreError> {
-    let mut hash = Sha256::new();
-    let mut buffer = [0; 64 * 1024];
-    loop {
-        let read = reader.read(&mut buffer)?;
-        if read == 0 {
-            break;
-        }
-        hash.update(&buffer[..read]);
-    }
-    Ok(hash.finalize().iter().map(|b| format!("{b:02x}")).collect())
+fn hash_reader(reader: impl Read) -> Result<String, StoreError> {
+    Ok(crate::file_hash::sha256_reader(reader)?)
 }
 
 pub(crate) fn eq_hash(a: &str, b: &str) -> bool {

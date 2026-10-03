@@ -17,13 +17,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use thiserror::Error;
 use zip::ZipArchive;
 
 use crate::lock_file::{retry_io, write_owner_only_json};
 use crate::package_store::{
-    eq_hash, is_reserved_name, normalize_path, MAX_ARCHIVE, MAX_ENTRIES, MAX_EXPANDED,
+    is_reserved_name, normalize_path, MAX_ARCHIVE, MAX_ENTRIES, MAX_EXPANDED,
 };
 
 const STATE_FORMAT_VERSION: u32 = 1;
@@ -40,15 +39,6 @@ pub(crate) fn unique_temp_name(prefix: &str) -> String {
         .map(|d| d.subsec_nanos())
         .unwrap_or(0);
     format!("{prefix}{}{counter}-{nanos:x}", std::process::id())
-}
-
-/// Streamed sha256 — reads the archive in chunks instead of buffering it
-/// whole.
-fn file_sha256(path: &Path) -> Result<String> {
-    let mut file = retry_io(|| fs::File::open(path))?;
-    let mut hasher = Sha256::new();
-    io::copy(&mut file, &mut hasher)?;
-    Ok(format!("{:x}", hasher.finalize()))
 }
 
 #[derive(Debug, Error)]

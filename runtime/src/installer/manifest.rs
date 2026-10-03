@@ -3,11 +3,9 @@
 //! install-engine.ps1 (KOS-306). The manifest is written by
 //! `desktop/scripts/engine-distribution.mjs` next to the staged payload.
 
-use std::io::Read;
 use std::path::Path;
 
 use semver::Version;
-use sha2::Digest;
 
 // MIGRATION(KOS-267): 'kosmos-engine' manifests exist in installed Engine
 // roots written by 0.9.x installers; accept both until cleanup.
@@ -87,30 +85,17 @@ pub fn load(path: &Path) -> Result<Manifest, String> {
 }
 
 pub fn sha256_hex(path: &Path) -> Result<String, String> {
-    let mut file = std::fs::File::open(path).map_err(|e| format!("open {path:?}: {e}"))?;
-    let mut hasher = sha2::Sha256::new();
-    let mut buffer = [0u8; 64 * 1024];
-    loop {
-        let read = file
-            .read(&mut buffer)
-            .map_err(|e| format!("read {path:?}: {e}"))?;
-        if read == 0 {
-            break;
-        }
-        hasher.update(&buffer[..read]);
-    }
-    Ok(format!("{:x}", hasher.finalize()))
+    crate::file_hash::file_sha256(path).map_err(|e| format!("hash {path:?}: {e}"))
 }
 
 /// Size+sha256 equality — the "file untampered" check for both the staged
 /// payload and the installed copy.
 pub fn verify_file(path: &Path, file: &ManifestFile) -> Result<(), String> {
-    let meta =
-        std::fs::metadata(path).map_err(|e| format!("engine file missing: {} ({e})", file.name))?;
-    if meta.len() != file.size || sha256_hex(path)? != file.sha256 {
-        return Err(format!("engine file mismatch: {}", file.name));
-    }
-    Ok(())
+    std::fs::metadata(path).map_err(|e| format!("engine file missing: {} ({e})", file.name))?;
+    crate::file_hash::verify_size_and_sha256(path, file.size, &file.sha256).map_err(|e| match e {
+        crate::file_hash::VerifyError::Io(e) => format!("hash {path:?}: {e}"),
+        _ => format!("engine file mismatch: {}", file.name),
+    })
 }
 
 /// All manifest files verified under `root` — the `Test-InstalledEngine`
