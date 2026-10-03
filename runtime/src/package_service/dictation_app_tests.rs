@@ -4,6 +4,8 @@
 mod dictation_app_tests {
     use super::*;
     use crate::native_apps::{NativeAppStore, NativeInstallSpec};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use tempfile::tempdir;
 
     fn service(dir: &tempfile::TempDir) -> PackageService {
         PackageService::from_parts(dir.path().join("packages"), Some(dir.path().join("apps")))
