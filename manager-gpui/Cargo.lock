@@ -3884,7 +3884,6 @@ dependencies = [
  "serde_json",
  "tracing",
  "ureq",
- "uuid",
 ]
 
 [[package]]

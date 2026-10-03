@@ -10,7 +10,6 @@ mod assets;
 mod async_fields;
 mod boot;
 mod button;
-mod components;
 mod consent;
 mod device_info;
 mod devpkg;
@@ -104,9 +103,6 @@ fn main() {
             }
         });
 }
-
-#[allow(dead_code)]
-fn _sig(_: &mut Window, _: &mut Context<ManagerApp>) {}
 
 #[cfg(test)]
 mod a11y_tests;

@@ -11,8 +11,6 @@
 // GC: на app start удалить items старше N дней ИЛИ если их больше M штук
 // (LRU, по created_at). См. forbidden.md § Dictation.
 
-#![allow(dead_code)] // wired в host.rs в task #11
-
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};

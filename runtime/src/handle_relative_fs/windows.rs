@@ -27,10 +27,8 @@ const OBJ_CASE_INSENSITIVE: u32 = 0x40;
 const FILE_READ_ATTRIBUTES: u32 = 0x0000_0080;
 const SYNCHRONIZE: u32 = 0x0010_0000;
 const DELETE: u32 = 0x0001_0000;
-const FILE_ADD_FILE: u32 = 0x0002;
 const FILE_ADD_SUBDIRECTORY: u32 = 0x0004;
 const FILE_CREATE: u32 = 2;
-const FILE_OPEN_REPARSE_POINT_OPTIONS: u32 = 0x0020_0060;
 const FILE_ID_EXTD_DIR_INFORMATION_CLASS: u32 = 60;
 const FILE_ATTRIBUTE_DIRECTORY: u32 = 0x10;
 const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
@@ -198,12 +196,6 @@ impl Drop for OwnedHandle {
         }
     }
 }
-impl RootHandle {
-    pub(super) fn windows_handle(&self) -> Handle {
-        self.handle.raw()
-    }
-}
-
 impl Identity {
     pub(super) fn volume_serial(&self) -> u64 {
         self.volume_serial

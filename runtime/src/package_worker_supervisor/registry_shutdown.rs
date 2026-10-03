@@ -131,11 +131,6 @@ impl TaskRegistry {
             .await
     }
 
-    pub(super) async fn cancel_keys(&self, keys: &[TaskKey]) -> bool {
-        self.cancel_keys_until(keys, Instant::now() + STOP_DEADLINE)
-            .await
-    }
-
     pub(super) async fn join_key_until(&self, key: &TaskKey, deadline: Instant) -> bool {
         self.reap_completed_until(deadline).await;
         if lock(&self.quarantine).contains_key(key) {

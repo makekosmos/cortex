@@ -156,11 +156,6 @@ pub fn default_store() -> Result<NativeAppStore> {
 /// A running executable cannot be opened for write on Windows — the loader
 /// maps the image with sharing that denies it. Anything else (including a
 /// missing file) is not treated as "in use".
-/// Public for the service's early (pre-download) running check.
-pub(crate) fn executable_in_use(path: &Path) -> bool {
-    exe_in_use(path)
-}
-
 #[cfg(windows)]
 fn exe_in_use(path: &Path) -> bool {
     use std::os::windows::fs::OpenOptionsExt;

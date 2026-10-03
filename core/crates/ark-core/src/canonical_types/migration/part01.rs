@@ -10,7 +10,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
-use super::{migration_ledger, migration_objects, migration_registry, pending, preflight};
+use super::{migration_objects, migration_registry, pending, preflight};
 
 pub const CONTRACT_VERSION: &str = "phase3-canonical-v1";
 const MIGRATION_TIME: &str = "1970-01-01T00:00:00.000Z";
