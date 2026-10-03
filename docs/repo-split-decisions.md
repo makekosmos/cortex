@@ -278,3 +278,11 @@ private, `main` @ `80ced30`, локально `C:\Users\kirill\Coding\makekosmos
 - ark-markdown-bridge: pin `git+rev` на cortex активируется после мержа `chore/worker-protocol-crate` в kos-137 и пуша.
 - Junction `C:\mk\cortex` → `cortex-rm-vue-manager` — нужен host e2e; снять после интеграции (может перенаправить чужие тесты).
 - E2E-фикстуры `C:\mk\{agenda,arcadia,dictation,memoria,ordo}` — detached worktrees для тестов; держать пока идёт ветка.
+
+### KOS-320: один каталог в integrations, без подписи (2026-10-03)
+
+- `integrations` + `package-index` + `store` слиты в одну трубу: `makekosmos/integrations` собирает `.kspkg`, пишет один неподписанный `catalog.json` (пакеты + storefront + `external_apps` + `revoked` + monotonic `sequence`) и `SHA256SUMS.txt`, публикует GitHub Release только `GITHUB_TOKEN`.
+- Engine читает `https://github.com/makekosmos/integrations/releases/latest/download/catalog.json`; доверие — HTTPS + GitHub Releases + `size`/`sha256` пины из каталога, проверка общим `runtime/src/file_hash.rs` (тот же путь, что updater и native apps). `package_trust.rs`, envelopes, trusted keys, key transitions и подписанные revocation удалены полностью.
+- Storefront-метаданные живут в `store`-блоке каждого `manifest.json`; внешние приложения — в `external_apps` массиве каталога. Manager рендерит `StoreListing`, производные от того же документа.
+- Старые релизы `package-index` и `store` не удаляются: Engines ≤0.10.x продолжают читать подписанные каталоги оттуда.
+- Установленные пакеты переживают апгрейд: trust-файлы (`transition-*.json`, `revocation-*.json`, подписанный `catalog.json`/envelope) вычищаются при старте, `state.json`/blobs/unpacked-деревья не трогаются.

@@ -11,7 +11,7 @@
     },
     {
       "pattern": "kosmos-(release|root)-2026",
-      "reason": "Signing key id baked into signed catalogs on package-index and into users' installed trust state. KOS-265 rotates it."
+      "reason": "Signing key id baked into the signed catalogs the retired package-index releases still serve to Engines <=0.10.x, and into users' installed trust state; the unsigned pipeline publishes no key ids. KOS-320."
     },
     {
       "pattern": "[\"']kosmos[\"']",
