@@ -52,7 +52,7 @@ impl View {
         match self {
             View::Data => "Данные",
             View::Usage => "Затреканное время",
-            View::Sync => "Синхронизация",
+            View::Sync => "Девайсы",
             View::Packages => "Маркетплейс",
             View::Engine => "Движок",
             View::Settings => "Настройки",
@@ -69,7 +69,7 @@ impl View {
         let path = match self {
             View::Data => "icons/database.svg",
             View::Usage => "icons/cpu.svg",
-            View::Sync => "icons/sync.svg",
+            View::Sync => "icons/device-monitor.svg",
             View::Packages => "icons/store.svg",
             View::Engine => "icons/cpu.svg",
             View::Settings => "icons/settings.svg",

@@ -3,7 +3,7 @@ Window ""
   Button "Затреканное время" selected=false
   Button "Маркетплейс" selected=false
   Button "Браузер" selected=false
-  Button "Синхронизация" selected=false
+  Button "Девайсы" selected=false
   Button "Интеграции" selected=false
   Button "Ключи" selected=false
   Button "Настройки" selected=false
