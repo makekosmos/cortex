@@ -26,10 +26,7 @@ mod views;
 mod widgets;
 mod worker;
 
-use gpui::{
-    px, size, App, AppContext, Bounds, Context, SharedString, Styled, Window, WindowBounds,
-    WindowOptions,
-};
+use gpui::{px, size, App, AppContext, Bounds, SharedString, Styled, WindowBounds, WindowOptions};
 
 use app::ManagerApp;
 
