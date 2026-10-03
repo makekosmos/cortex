@@ -219,39 +219,9 @@ mod imp {
     }
 }
 
-#[cfg(not(windows))]
-mod imp {
-    use super::RegValue;
-    const WINDOWS_ONLY: &str = "installer registry access is Windows-only";
-
-    pub(super) fn wide(_value: &str) -> Vec<u16> {
-        Vec::new()
-    }
-    pub fn key_exists(_subkey: &str) -> Result<bool, String> {
-        Err(WINDOWS_ONLY.into())
-    }
-    pub fn create_key(_subkey: &str) -> Result<(), String> {
-        Err(WINDOWS_ONLY.into())
-    }
-    pub fn delete_tree(_subkey: &str) -> Result<(), String> {
-        Err(WINDOWS_ONLY.into())
-    }
-    pub fn read(_subkey: &str, _name: &str) -> Result<Option<RegValue>, String> {
-        Err(WINDOWS_ONLY.into())
-    }
-    pub fn read_sz(_subkey: &str, _name: &str) -> Option<String> {
-        None
-    }
-    pub fn write(_subkey: &str, _name: &str, _value: &RegValue) -> Result<(), String> {
-        Err(WINDOWS_ONLY.into())
-    }
-    pub fn write_sz(_subkey: &str, _name: &str, _text: &str) -> Result<(), String> {
-        Err(WINDOWS_ONLY.into())
-    }
-    pub fn write_binary(_subkey: &str, _name: &str, _bytes: &[u8]) -> Result<(), String> {
-        Err(WINDOWS_ONLY.into())
-    }
-    pub fn delete_value(_subkey: &str, _name: &str) {}
-}
-
+// No non-Windows stub: every caller (autostart, legacy migration, tests) is
+// already `cfg(windows)`-gated — registry writes are a Windows-only
+// operation, and a stub that answers "Windows-only" at runtime would only
+// mask a call site that forgot the gate.
+#[cfg(windows)]
 pub(crate) use imp::*;

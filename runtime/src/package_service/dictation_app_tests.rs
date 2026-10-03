@@ -1,4 +1,6 @@
-#[cfg(test)]
+// Every test here exercises process spawn/kill semantics that only exist on
+// Windows; gating each test left dead helpers and unused imports on macOS.
+#[cfg(all(test, windows))]
 mod dictation_app_tests {
     use super::*;
     use crate::native_apps::{NativeAppStore, NativeInstallSpec};
