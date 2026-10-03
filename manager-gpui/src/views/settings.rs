@@ -1,170 +1,109 @@
-//! Настройки — автозапуск (Host-owned) + резервные копии БД
-//! manager.db_backups.* (SettingsView.vue parity).
+//! System controls; appearance has its own page and independent persistence.
+use crate::app::{ManagerApp, Slot};
+use crate::async_fields::field_text;
+use crate::theme::*;
+use crate::widgets::*;
 use ::gpui::{prelude::*, *};
-use imago_gpui::button;
+use gpui_component::Disableable;
 use serde_json::json;
 
-use crate::app::ManagerApp;
-use crate::widgets::*;
-use mundus_gpui_kit::theme::*;
-
 pub fn load(app: &mut ManagerApp) {
-    app.call("backups.list", "manager.db_backups.list", json!({}));
     app.call("engine.autostart", "engine.autostart.get", json!({}));
+    super::engine_settings::load(app);
+    super::browser::load(app);
+    if app.settings_developer_open {
+        super::dev::load(app);
+    }
 }
 
 pub fn render(
     app: &mut ManagerApp,
-    _window: &mut Window,
+    window: &mut Window,
     cx: &mut Context<ManagerApp>,
 ) -> AnyElement {
-    let mut col = div().flex().flex_col().gap_4().w_full();
-    col = col.child(section("Настройки", "Запуск Mundus"));
-
-    // Engine-owned autostart: registers `mundus-engine --start` in the HKCU
-    // Run key — headless Engine at sign-in, no UI window (the standalone
-    // Dictation app has its own Run entry and relies on Engine being up).
-    col = col.child(slot_or(app, "engine.autostart", |v| {
-        let available = vbool(v, "available");
-        let enabled = vbool(v, "enabled");
-        let mut row_el = row(
-            "Автозапуск при входе",
-            "Engine стартует с входом в Windows без UI (mundus-engine --start)",
-        );
-        if available {
-            row_el = row_el.child(
-                toggle("engine-autostart", enabled, cx, |this, on, cx| {
-                    this.action("engine.autostart.set", json!({ "enabled": on }));
+    let status = app.data("engine.autostart");
+    let ready = matches!(app.slots.get("engine.autostart"), Some(Slot::Ready(_)));
+    let mut startup = row(
+        "Запуск при входе",
+        "Запускается только Engine, без окна Manager.",
+    );
+    if ready && vbool(&status, "available") {
+        startup = startup.child(
+            toggle(
+                "engine-autostart",
+                vbool(&status, "enabled"),
+                cx,
+                |this, on, cx| {
+                    this.action("engine.autostart.set", json!({"enabled":on}));
                     cx.notify();
-                })
-                .accessibility_label("Автозапуск при входе"),
-            );
-        } else {
-            row_el = row_el.child(badge(
-                &vopt(v, "reason").unwrap_or_else(|| "недоступно".into()),
-                MUTED_FG(),
-            ));
-        }
-        card().child(row_el).into_any_element()
-    }));
-
-    col = col.child(slot_or(app, "backups.list", |v| {
-        let backups = varr(v, "backups");
-        let mut el = card();
-        el = el.child(
-            row(
-                "Резервные копии базы данных",
-                format!(
-                    "Последний снимок: {}",
-                    backups
-                        .first()
-                        .map(|b| fmt_ms((js_now_ms() - vnum(b, "modified_ms")).max(0.0)))
-                        .unwrap_or_else(|| "нет снимков".into())
-                ),
+                },
             )
-            .child(
-                div()
-                    .flex()
-                    .gap_2()
-                    .child(
-                        button::secondary("mk-backup")
-                            .label("Сделать бэкап сейчас")
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.action("manager.db_backups.create", json!({}));
-                                cx.notify();
-                            })),
+            .accessibility_label("Автозапуск при входе"),
+        );
+    } else {
+        startup = startup.child(badge(
+            field_text(app.slots.get("engine.autostart"), |v| {
+                vopt(v, "reason").unwrap_or_else(|| "Недоступно".into())
+            }),
+            MUTED_FG(),
+        ));
+    }
+    let mut col = page_sections()
+        .child(section("Настройки", "Запуск, система и приватность"))
+        .child(
+            section_group()
+                .id("settings-general-group")
+                .debug_selector(|| "settings-general-group".into())
+                .child(
+                    section("Общие", "")
+                        .id("settings-general-heading")
+                        .debug_selector(|| "settings-general-heading".into()),
+                )
+                .child(
+                    card()
+                        .id("settings-startup-card")
+                        .debug_selector(|| "settings-startup-card".into())
+                        .child(startup),
+                ),
+        )
+        .child(super::engine_settings::render_body(app, window, cx))
+        .child(super::browser::render_body(app, window, cx));
+    let mut developer = section_group()
+        .id("settings-developer-group")
+        .debug_selector(|| "settings-developer-group".into())
+        .child(section(
+            "Разработка",
+            "Дополнительные инструменты, выключены по умолчанию",
+        ))
+        .child(
+            card()
+                .id("settings-developer-card")
+                .debug_selector(|| "settings-developer-card".into())
+                .child(
+                    row(
+                        "Инструменты разработчика",
+                        "Локальные пакеты, параметры инстанса и FPS.",
                     )
                     .child(
-                        button::ghost("open-backups")
-                            .label("Открыть папку")
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                match mundus_gpui_kit::engine::data_dir().map(|d| d.join("backups"))
-                                {
-                                    Ok(dir) => {
-                                        std::fs::create_dir_all(&dir).ok();
-                                        if let Err(e) = mundus_gpui_kit::engine::open_path(&dir) {
-                                            this.error = Some(e);
-                                        }
-                                    }
-                                    Err(e) => this.error = Some(e.message()),
-                                }
-                                cx.notify();
-                            })),
-                    ),
-            ),
-        );
-        for b in backups {
-            let id = vstr(b, "id");
-            let vid = id.clone();
-            let rid = id.clone();
-            el = el.child(
-                row(
-                    id.clone(),
-                    format!(
-                        "{} · {}",
-                        fmt_bytes(vnum(b, "size_bytes")),
-                        fmt_ms((js_now_ms() - vnum(b, "modified_ms")).max(0.0))
-                    ),
-                )
-                .child(btn_id(&format!("val-{id}"), "Проверить", {
-                    cx.listener(move |this, _, _, cx| {
-                        this.call(
-                            "backup.check",
-                            "manager.db_backups.validate",
-                            json!({"backup_id": vid}),
-                        );
-                        cx.notify();
-                    })
-                }))
-                .child(btn_id(&format!("res-{id}"), "Восстановить", {
-                    cx.listener(move |this, _, _, cx| {
-                        this.ask_confirm(
-                            "Восстановить резервную копию",
-                            "Текущая база будет заменена снимком. Engine перезапустит данные.",
-                            "manager.db_backups.restore",
-                            json!({"backup_id": rid}),
+                        toggle(
+                            "settings-developer",
+                            app.settings_developer_open,
                             cx,
-                        );
-                    })
-                })),
-            );
-        }
-        el.into_any_element()
-    }));
-
-    // Validation result of the last check (if any).
-    let check = app.data("backup.check");
-    if !check.is_null() {
-        let ok = vbool(&check, "ok");
-        let reason = vopt(&check, "reason").unwrap_or_default();
-        col = col.child(
-            card().child(
-                row(
-                    "Результат проверки",
-                    if reason.is_empty() {
-                        if ok {
-                            "Снимок целостен.".into()
-                        } else {
-                            "Снимок повреждён.".into()
-                        }
-                    } else {
-                        reason
-                    },
-                )
-                .child(badge(
-                    if ok { "OK" } else { "Ошибка" },
-                    if ok { SUCCESS() } else { DESTRUCTIVE() },
-                )),
-            ),
+                            |this, open, _| {
+                                this.settings_developer_open = open;
+                                if open {
+                                    super::dev::load(this);
+                                }
+                            },
+                        )
+                        .accessibility_label("Инструменты разработчика")
+                        .disabled(app.action_busy),
+                    ),
+                ),
         );
+    if app.settings_developer_open {
+        developer = developer.child(super::dev::render_tools(app, window, cx));
     }
-
+    col = col.child(developer);
     col.into_any_element()
-}
-
-fn js_now_ms() -> f64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as f64)
-        .unwrap_or(0.0)
 }

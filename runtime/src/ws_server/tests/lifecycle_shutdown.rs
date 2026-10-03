@@ -1,4 +1,24 @@
 use super::*;
+
+/// Loopback connect bursts can exceed the platform accept backlog (macOS
+/// somaxconn is 128) and get RST before the server drains it; capacity
+/// logic under test is unrelated, so the test retries.
+async fn connect_retrying(port: u16) -> tokio::net::TcpStream {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
+    loop {
+        match tokio::net::TcpStream::connect(("127.0.0.1", port)).await {
+            Ok(stream) => return stream,
+            Err(error) => {
+                assert!(
+                    tokio::time::Instant::now() < deadline,
+                    "loopback connect: {error}"
+                );
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        }
+    }
+}
+
 #[tokio::test]
 async fn production_ws_shutdown_reaps_authenticated_and_stalled_lifecycles() {
     let (_dir, server) = production_ws_fixture().await;
@@ -86,21 +106,21 @@ async fn production_ws_shutdown_reaps_authenticated_and_stalled_lifecycles() {
 
 #[tokio::test]
 async fn production_ws_capacity_rejects_the_next_raw_socket_and_restores_capacity() {
+    // Small limit: fd exhaustion, not semaphore saturation, is what a
+    // 129-socket burst would exercise on a 256-fd host.
+    const TEST_CAPACITY: usize = 8;
     let (_dir, server) = production_ws_fixture().await;
+    let server = server.with_test_capacity(TEST_CAPACITY);
     let port = server.port();
     let dispatcher = server.dispatcher();
     let shutdown = server.shutdown_handle();
     let task = tokio::spawn(server.run());
-    let mut sockets = Vec::with_capacity(MAX_ACTIVE_WS_CONNECTIONS + 1);
-    for _ in 0..=MAX_ACTIVE_WS_CONNECTIONS {
-        sockets.push(
-            tokio::net::TcpStream::connect(("127.0.0.1", port))
-                .await
-                .unwrap(),
-        );
+    let mut sockets = Vec::with_capacity(TEST_CAPACITY + 1);
+    for _ in 0..=TEST_CAPACITY {
+        sockets.push(connect_retrying(port).await);
     }
     tokio::time::timeout(Duration::from_secs(60), async {
-        while shutdown.task_count() != MAX_ACTIVE_WS_CONNECTIONS {
+        while shutdown.task_count() != TEST_CAPACITY {
             tokio::time::sleep(Duration::from_millis(5)).await;
         }
     })
@@ -119,5 +139,5 @@ async fn production_ws_capacity_rejects_the_next_raw_socket_and_restores_capacit
     task.await.unwrap().unwrap();
     assert_eq!(shutdown.task_count(), 0);
     assert_eq!(dispatcher.live_owner_count(), 0);
-    assert_eq!(shutdown.available_capacity(), MAX_ACTIVE_WS_CONNECTIONS);
+    assert_eq!(shutdown.available_capacity(), TEST_CAPACITY);
 }

@@ -1,208 +1,279 @@
-//! Ключи — dictation.get_config/verify_api_key/set_api_key/clear_api_key/
-//! test_connectivity + stats (SecretsView.vue parity).
-use ::gpui::{prelude::*, *};
-use gpui_component::input::Input;
+//! Company keys in one settings card. The row opens a modal; Check becomes
+//! Save only after that exact key is accepted.
+use ::gpui::{prelude::*, AnimationExt, *};
 use serde_json::json;
+use std::time::Duration;
 
-use crate::app::ManagerApp;
+use crate::app::{ManagerApp, Slot};
+use crate::theme::*;
 use crate::widgets::*;
-use mundus_gpui_kit::theme::*;
+
+struct Company {
+    id: &'static str,
+    name: &'static str,
+    icon: &'static str,
+    stores_key: bool,
+}
+
+const COMPANIES: &[Company] = &[
+    Company {
+        id: "groq",
+        name: "Groq",
+        icon: "icons/providers/groq.svg",
+        stores_key: true,
+    },
+    Company {
+        id: "openai",
+        name: "OpenAI",
+        icon: "icons/providers/openai.svg",
+        stores_key: false,
+    },
+    Company {
+        id: "nvidia",
+        name: "NVIDIA",
+        icon: "icons/providers/nvidia.svg",
+        stores_key: false,
+    },
+];
 
 pub fn load(app: &mut ManagerApp) {
     app.call("secrets.config", "dictation.get_config", json!({}));
-    app.call("secrets.stats", "dictation.get_stats", json!({}));
 }
 
 pub fn render(
     app: &mut ManagerApp,
+    _window: &mut Window,
+    cx: &mut Context<ManagerApp>,
+) -> AnyElement {
+    let mut rows = card()
+        .id("keys-card")
+        .debug_selector(|| "keys-card".into())
+        .px(px(0.))
+        .py(px(0.))
+        .gap(px(0.));
+    for (index, company) in COMPANIES.iter().enumerate() {
+        rows = rows.child(company_row(app, company, index == 0, cx));
+    }
+    page_sections()
+        .child(section("Ключи", "Поддерживаемые компании"))
+        .child(rows)
+        .into_any_element()
+}
+
+fn company_row(
+    _app: &mut ManagerApp,
+    company: &Company,
+    first: bool,
+    cx: &mut Context<ManagerApp>,
+) -> Stateful<Div> {
+    let id = company.id;
+    div()
+        .id(SharedString::from(format!("key-company-{id}")))
+        .debug_selector(move || {
+            if id == "groq" {
+                "integration-access-card".into()
+            } else {
+                format!("key-company-{id}")
+            }
+        })
+        .mx(px(16.))
+        .py(px(12.))
+        .min_h(px(52.))
+        .when(!first, |row| {
+            row.border_t_1().border_color(fade(BORDER(), 0.6))
+        })
+        .flex()
+        .items_center()
+        .gap(px(12.))
+        .when(company.stores_key, |row| {
+            row.cursor_pointer()
+                .role(Role::Button)
+                .aria_label(format!("Ключ {}", company.name))
+                .on_click(cx.listener(move |app, _, _, cx| open_editor(app, id, cx)))
+        })
+        .when(!company.stores_key, |row| row.opacity(0.4))
+        .child(
+            svg()
+                .path(company.icon)
+                .size(px(18.))
+                .flex_none()
+                .text_color(c(FG())),
+        )
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .text_size(ui_px(13.))
+                .line_height(ui_px(17.))
+                .font_weight(FontWeight::MEDIUM)
+                .child(company.name),
+        )
+        .when(company.stores_key, |row| {
+            row.child(
+                svg()
+                    .path("icons/alt-arrow-right.svg")
+                    .size(px(16.))
+                    .flex_none()
+                    .text_color(c(MUTED_FG())),
+            )
+        })
+}
+
+fn open_editor(app: &mut ManagerApp, id: &'static str, cx: &mut Context<ManagerApp>) {
+    app.slots.remove("secrets.verify");
+    app.key_checked = None;
+    app.key_editor = Some(id.to_owned());
+    cx.notify();
+}
+
+pub fn render_modal(
+    app: &mut ManagerApp,
     window: &mut Window,
     cx: &mut Context<ManagerApp>,
 ) -> AnyElement {
-    let mut col = div().flex().flex_col().gap_4().w_full();
-    col = col.child(section("Ключи", "API-ключи и провайдеры"));
-
-    col = col.child(slot_or(app, "secrets.config", |v| {
-        let cfg = vget(v, "config");
-        let has_key = vbool(v, "hasApiKey") || vbool(cfg, "hasApiKey");
-        let mut el = card();
-        el = el.child(
-            row("Диктовка — Groq", "API-ключ для облачной расшифровки речи").child(badge(
-                if has_key {
-                    "Ключ задан"
-                } else {
-                    "Ключ не задан"
-                },
-                if has_key { SUCCESS() } else { WARN() },
-            )),
-        );
-        el = el.child(kv("Провайдер", vstr(cfg, "provider")));
-        el = el.child(kv("Язык", vstr(cfg, "language")));
-        el = el.child(kv("Горячая клавиша", vstr(cfg, "hotkey")));
-        el.into_any_element()
-    }));
-
-    let config_slot = app.data("secrets.config");
-    let cfg = vget(&config_slot, "config");
-    let has_key = vbool(&config_slot, "hasApiKey") || vbool(cfg, "hasApiKey");
-    if has_key {
-        col = col.child(
-            card().child(
-                row("Использовать Groq для диктовки", "").child(
-                    toggle(
-                        "secrets-provider",
-                        vbool(cfg, "providerEnabled"),
-                        cx,
-                        |this, checked, _| {
-                            this.action(
-                                "dictation.update_config",
-                                json!({"providerEnabled": checked}),
-                            );
-                        },
-                    )
-                    .accessibility_label("Использовать Groq для диктовки"),
-                ),
-            ),
-        );
-    }
-
-    let key_in = app.input("secrets.key", "gsk_…", true, window, cx);
-    col = col.child(
-        card()
-            .child(
-                div()
-                    .text_size(px(13.))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child("API-ключ Groq"),
-            )
-            .child(
-                div()
-                    .flex()
-                    .gap_2()
-                    .child(
-                        div()
-                            .flex_1()
-                            .child(Input::new(&key_in).aria_label("API-ключ Groq")),
-                    )
-                    .child(btn(
-                        "secrets-verify",
-                        "Проверить",
-                        false,
-                        cx,
-                        |this, cx| {
-                            let key = this.input_value("secrets.key", cx);
-                            if !key.is_empty() {
-                                this.call(
-                                    "secrets.verify",
-                                    "dictation.verify_api_key",
-                                    json!({"key": key}),
-                                );
-                            }
-                        },
-                    ))
-                    .child(btn(
-                        "secrets-save",
-                        "Сохранить",
-                        true,
-                        cx,
-                        |this, cx| {
-                            let verified = vbool(&this.data("secrets.verify"), "valid");
-                            let key = this.input_value("secrets.key", cx);
-                            if verified && !key.is_empty() {
-                                this.action("dictation.set_api_key", json!({"key": key}));
-                            } else {
-                                this.error = Some(
-                                    concat!(
-                                        concat!(
-                                            "Сначала проверьте ключ — сохранение разрешено только ",
-                                            "после успешной ",
-                                        ),
-                                        "проверки.",
-                                    )
-                                    .into(),
-                                );
-                            }
-                        },
-                    ))
-                    .child(btn(
-                        "secrets-clear",
-                        "Удалить",
-                        false,
-                        cx,
-                        |this, cx| {
-                            this.ask_confirm(
-                                "Удалить ключ",
-                                "Диктовка через Groq перестанет работать.",
-                                "dictation.clear_api_key",
-                                json!({}),
-                                cx,
-                            );
-                        },
-                    )),
-            )
-            .child(div().flex().gap_2().child(btn(
-                "secrets-test",
-                concat!("Тест соедине", "ния",),
-                false,
-                cx,
-                |this, _| {
-                    this.call("secrets.test", "dictation.test_connectivity", json!({}));
-                },
-            ))),
-    );
-
-    let verify = app.data("secrets.verify");
-    if !verify.is_null() {
-        let ok = vbool(&verify, "valid");
-        let msg = vopt(&verify, "message").unwrap_or_else(|| {
-            if ok {
-                "Ключ принят.".into()
-            } else {
-                "Ключ отклонён.".into()
-            }
-        });
-        col = col.child(card().child(row("Проверка ключа", msg).child(badge(
-            if ok { "OK" } else { "Отклонён" },
-            if ok { SUCCESS() } else { DESTRUCTIVE() },
-        ))));
-    }
-    let test = app.data("secrets.test");
-    if !test.is_null() {
-        let ok = vbool(&test, "ok") || vbool(&test, "reachable");
-        col = col.child(
-            card().child(
-                row(
-                    "Тест соединения",
-                    vopt(&test, "message")
-                        .unwrap_or_else(|| serde_json::to_string(&test).unwrap_or_default()),
+    let Some(id) = app.key_editor.clone() else {
+        return div().into_any_element();
+    };
+    let Some(company) = COMPANIES.iter().find(|company| company.id == id) else {
+        return div().into_any_element();
+    };
+    let key_in = app.input("secrets.key", "Вставьте ключ", true, window, cx);
+    let typed = app.input_value("secrets.key", cx);
+    let checking = matches!(app.slots.get("secrets.verify"), Some(Slot::Loading));
+    let verified = company.stores_key
+        && app.key_checked.as_deref() == Some(typed.as_str())
+        && !typed.is_empty()
+        && vbool(&app.data("secrets.verify"), "valid");
+    let failure = if company.stores_key
+        && app.key_checked.as_deref() == Some(typed.as_str())
+        && matches!(app.slots.get("secrets.verify"), Some(Slot::Ready(_)))
+        && !verified
+    {
+        vopt(&app.data("secrets.verify"), "message").unwrap_or_else(|| "Ключ отклонён.".into())
+    } else {
+        String::new()
+    };
+    let body = div()
+        .id("key-modal-scrim")
+        .absolute()
+        .size_full()
+        .bg(fade(0x000000, 0.5))
+        .flex()
+        .items_center()
+        .justify_center()
+        .occlude()
+        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .on_click(cx.listener(|app, _, _, cx| {
+            // Close on release, after this layer has already taken the press.
+            // Mouse-down removal lets the release activate a control behind.
+            app.key_editor = None;
+            cx.stop_propagation();
+            cx.notify();
+        }))
+        .child(
+            div()
+                .id("key-modal-card")
+                .w_full()
+                .max_w(px(420.))
+                .mx(px(24.))
+                .p(px(16.))
+                .rounded(px(12.))
+                .bg(c(POPOVER()))
+                .flex()
+                .flex_col()
+                .gap(px(12.))
+                .occlude()
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .on_click(|_, _, cx| cx.stop_propagation())
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .child(svg().path(company.icon).size(px(18.)).text_color(c(FG())))
+                        .child(
+                            div()
+                                .text_size(ui_px(15.))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .child(company.name),
+                        ),
                 )
-                .child(badge(
-                    if ok {
-                        "Доступен"
-                    } else {
-                        "Недоступен"
-                    },
-                    if ok { SUCCESS() } else { DESTRUCTIVE() },
-                )),
-            ),
+                .child(input_field(&key_in).aria_label(format!("API-ключ {}", company.name)))
+                .when(!company.stores_key, |body| {
+                    body.child(empty("Хранение ключа этой компании ещё не подключено."))
+                })
+                .when(!failure.is_empty(), |body| body.child(empty(&failure)))
+                .child(
+                    div()
+                        .flex()
+                        .justify_between()
+                        .gap(px(8.))
+                        .child(
+                            crate::button::ghost("key-cancel")
+                                .label("Закрыть")
+                                .on_click(cx.listener(|app, _, _, cx| {
+                                    cx.stop_propagation();
+                                    app.key_editor = None;
+                                    cx.notify();
+                                })),
+                        )
+                        .when(company.stores_key, |row| {
+                            row.child(action_button(app, verified, checking, cx))
+                        }),
+                ),
         );
+    body.into_any_element()
+}
+
+fn action_button(
+    _app: &ManagerApp,
+    verified: bool,
+    checking: bool,
+    cx: &mut Context<ManagerApp>,
+) -> impl IntoElement {
+    let label = if checking {
+        "Проверяем…"
+    } else if verified {
+        "Сохранить"
+    } else {
+        "Проверить"
+    };
+    let button = if verified {
+        crate::button::primary("secrets-save")
+    } else {
+        crate::button::secondary("secrets-verify")
     }
-
-    col = col.child(slot_or(app, "secrets.stats", |v| {
-        card()
-            .child(
-                div()
-                    .text_size(px(12.))
-                    .text_color(c(MUTED_FG()))
-                    .child("Статистика диктовки"),
-            )
-            .child(kv("Сессий", vstr(v, "totalSessions")))
-            .child(kv("Слов", vstr(v, "totalWords")))
-            .child(kv(
-                "Записано",
-                format!("{:.0} сек.", vnum(v, "totalRecordSeconds")),
-            ))
-            .into_any_element()
+    .label(label)
+    .disabled(checking)
+    .on_click(cx.listener(move |app, _, _, cx| {
+        let key = app.input_value("secrets.key", cx);
+        if key.is_empty() {
+            return;
+        }
+        if verified {
+            app.action("dictation.set_api_key", json!({"key": key}));
+            app.key_editor = None;
+            app.key_checked = None;
+        } else {
+            app.key_checked = Some(key.clone());
+            app.slots.insert("secrets.verify".into(), Slot::Loading);
+            app.call(
+                "secrets.verify",
+                "dictation.verify_api_key",
+                json!({"key": key}),
+            );
+        }
+        cx.notify();
     }));
-
-    col.into_any_element()
+    if !verified {
+        return button.into_any_element();
+    }
+    div()
+        .with_animation(
+            "key-save-reveal",
+            Animation::new(Duration::from_millis(180)).with_easing(|t| 1. - (1. - t).powi(3)),
+            |element, progress| element.opacity(0.4 + 0.6 * progress),
+        )
+        .child(button)
+        .into_any_element()
 }

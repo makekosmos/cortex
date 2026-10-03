@@ -3,14 +3,23 @@
 //! controls live in `mundus_gpui_kit` (re-exported for the views). Modals
 //! live in `modals.rs`. Shell pieces come from `imago_gpui::chrome`.
 use ::gpui::{prelude::*, *};
-use gpui_component::Sizable;
+#[cfg(target_os = "macos")]
+use gpui_component::InteractiveElementExt;
 use imago_gpui::chrome::{self, SIDEBAR_W};
 
+pub use crate::button::{btn, btn_id};
+pub use crate::page_layout::{
+    card, empty, input_field, kv, page_sections, page_stack, row, row_copy, section, section_group,
+};
 pub use mundus_gpui_kit::widgets::*;
 
 use crate::app::ManagerApp;
+use crate::theme::*;
 use crate::views;
-use mundus_gpui_kit::theme::*;
+
+#[cfg(test)]
+#[path = "chrome_tests.rs"]
+mod chrome_tests;
 
 // --- Store/list entries ------------------------------------------------------
 
@@ -40,30 +49,20 @@ pub fn icon_url(url: Option<String>) -> Option<ImageSource> {
 /// hole in the row.
 pub fn app_icon(source: Option<ImageSource>, name: &str) -> Div {
     let mut icon = div()
-        .w(px(20.))
-        .h(px(20.))
+        .size(px(32.))
         .flex_none()
-        .relative()
-        .rounded_md()
         .overflow_hidden()
-        .bg(fade(FG(), 0.06))
-        .child(
-            div()
-                .size_full()
-                .flex()
-                .items_center()
-                .justify_center()
-                .text_size(px(11.))
-                .text_color(c(MUTED_FG()))
-                .child(icon_letter(name)),
-        );
+        .rounded_md();
     if let Some(source) = source {
-        icon = icon.child(
-            div()
-                .absolute()
-                .inset_0()
-                .child(img(source).w(px(20.)).h(px(20.))),
-        );
+        icon = icon.child(img(source).size(px(32.)));
+    } else {
+        icon = icon
+            .flex()
+            .items_center()
+            .justify_center()
+            .text_size(ui_px(13.))
+            .text_color(c(MUTED_FG()))
+            .child(icon_letter(name));
     }
     icon
 }
@@ -73,32 +72,40 @@ pub fn app_icon(source: Option<ImageSource>, name: &str) -> Div {
 pub fn entry_row(icon: Option<ImageSource>, title: String, caption: String) -> Div {
     div()
         .w_full()
-        .min_h_10()
+        .min_w_0()
+        .min_h(px(36.))
         .flex()
         .items_center()
-        .gap_3()
+        .gap(px(crate::page_layout::GAP))
         .child(app_icon(icon, &title))
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .flex()
-                .flex_col()
-                .child(div().text_size(px(13.)).child(title))
-                .child(
-                    div()
-                        .text_size(px(12.))
-                        .text_color(c(MUTED_FG()))
-                        .child(caption),
-                ),
-        )
+        .child(row_copy(title, caption))
 }
 
 // --- Chrome -----------------------------------------------------------------
 
+/// Keep the overlay toggle past native macOS traffic lights. Fullscreen hides
+/// them, so reclaim the inset (same layout rule as Zeron's titlebar cluster).
+fn toggle_left(is_macos: bool, fullscreen: bool) -> f32 {
+    if is_macos && !fullscreen {
+        88.0
+    } else {
+        12.0
+    }
+}
+
+fn drag_inset(is_macos: bool, fullscreen: bool) -> f32 {
+    toggle_left(is_macos, fullscreen) + 40.0
+}
+
+fn content_inset(progress: f32, is_macos: bool, fullscreen: bool) -> f32 {
+    let closed = drag_inset(is_macos, fullscreen);
+    closed + (11.0 - closed) * progress.clamp(0.0, 1.0)
+}
+
 pub fn render_sidebar(
     app: &mut ManagerApp,
     progress: f32,
+    window: &Window,
     cx: &mut Context<ManagerApp>,
 ) -> impl IntoElement {
     let mut nav = chrome::sidebar_body().gap(px(16.));
@@ -116,7 +123,10 @@ pub fn render_sidebar(
                 )
                 .on_click(move |_, _, cx| {
                     weak.update(cx, |this, cx| this.set_view(*view, cx)).ok();
-                }),
+                })
+                .into_element()
+                .text_size(ui_px(13.))
+                .line_height(ui_px(15.)),
             );
         }
         nav = nav.child(group);
@@ -136,10 +146,14 @@ pub fn render_sidebar(
                 .w(px(SIDEBAR_W))
                 .child(
                     chrome::sidebar()
+                        .bg(sidebar_fill())
                         .child(
                             chrome::sidebar_titlebar().child(
                                 div()
-                                    .ml(px(40.))
+                                    .ml(px(drag_inset(
+                                        cfg!(target_os = "macos"),
+                                        window.is_fullscreen(),
+                                    ) - 12.0))
                                     .flex_1()
                                     .h_full()
                                     .window_control_area(WindowControlArea::Drag),
@@ -150,64 +164,55 @@ pub fn render_sidebar(
         )
 }
 
-pub fn render_titlebar(
-    app: &ManagerApp,
-    sidebar_progress: f32,
-    cx: &mut Context<ManagerApp>,
-) -> impl IntoElement {
-    let left = 52.0 + (11.0 - 52.0) * sidebar_progress;
+pub fn render_titlebar(sidebar_progress: f32, window: &Window) -> impl IntoElement {
+    let left = content_inset(
+        sidebar_progress,
+        cfg!(target_os = "macos"),
+        window.is_fullscreen(),
+    );
+    #[allow(unused_mut)]
+    let mut drag = div()
+        .id("titlebar-drag")
+        .flex_1()
+        .h_full()
+        .min_w_0()
+        .flex()
+        .items_center()
+        .window_control_area(WindowControlArea::Drag);
+    #[cfg(target_os = "macos")]
+    {
+        drag = drag.on_double_click(|_, window, _| window.titlebar_double_click());
+    }
     chrome::titlebar()
+        .bg(if is_glass() {
+            crate::theme::rgba(0, 0.)
+        } else {
+            c(BG())
+        })
         .p_0()
         .child(div().w(px(left)).h_full().flex_none())
-        .child(
-            div()
-                .flex_1()
-                .h_full()
-                .min_w_0()
-                .flex()
-                .items_center()
-                .gap_1p5()
-                .window_control_area(WindowControlArea::Drag)
-                .child(app.view.icon().with_size(px(18.)))
-                .child(
-                    div()
-                        .text_size(px(13.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .child(app.view.label()),
-                ),
-        )
-        .child(
-            div()
-                .id("refresh")
-                .h_7()
-                .px_2()
-                .flex()
-                .items_center()
-                .rounded_md()
-                .text_size(px(12.))
-                .cursor_pointer()
-                .hover(|style| style.bg(fade(FG(), 0.08)))
-                .child("Обновить")
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.load_current();
-                    cx.notify();
-                }))
-                .role(Role::Button)
-                .aria_label("Обновить")
-                .accessibility_id("refresh"),
-        )
-        // Same frameless min/close row as mundus_gpui_kit's helper, but with
-        // AccessKit role + Russian names (KOS-142).
-        .child(chrome::window_controls())
+        .child(drag)
+        // macOS owns its native traffic lights; do not duplicate min/close.
+        .when(cfg!(target_os = "macos"), |bar| bar.pr_3())
+        .when(!cfg!(target_os = "macos"), |bar| {
+            bar.child(chrome::window_controls())
+        })
 }
 
-pub fn render_sidebar_toggle(open: bool, cx: &mut Context<ManagerApp>) -> impl IntoElement {
+pub fn render_sidebar_toggle(
+    open: bool,
+    window: &Window,
+    cx: &mut Context<ManagerApp>,
+) -> impl IntoElement {
     let weak = cx.weak_entity();
     div()
         .id("sidebar-toggle")
         .absolute()
         .top_0()
-        .left(px(12.))
+        .left(px(toggle_left(
+            cfg!(target_os = "macos"),
+            window.is_fullscreen(),
+        )))
         .h(px(chrome::TITLEBAR_H))
         .flex()
         .items_center()
@@ -247,11 +252,7 @@ pub fn render_banner(
     sidebar_progress: f32,
     cx: &mut Context<ManagerApp>,
 ) -> impl IntoElement {
-    let text = if app.error.is_some() {
-        app.error.clone().unwrap_or_default()
-    } else {
-        "Запрос выполняется…".into()
-    };
+    let text = app.error.clone().unwrap_or_default();
     div()
         .absolute()
         .bottom_3()
@@ -268,7 +269,7 @@ pub fn render_banner(
         .child(div().flex_1().text_size(px(13.)).child(text))
         .when(app.error.is_some(), |d| {
             d.child(
-                imago_gpui::button::secondary("retry")
+                crate::button::secondary("retry")
                     .label("Обновить")
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.error = None;

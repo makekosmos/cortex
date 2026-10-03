@@ -1558,12 +1558,18 @@
         String::from_utf8(response).unwrap()
     }
 
-    async fn read_http_response(stream: &mut tokio::net::TcpStream) -> String {
+    async fn try_read_http_response(stream: &mut tokio::net::TcpStream) -> std::io::Result<String> {
+        use tokio::io::AsyncReadExt;
         let mut response = Vec::new();
         let header_end = loop {
             let mut chunk = [0_u8; 1024];
-            let count = stream.read(&mut chunk).await.expect("HTTP response");
-            assert!(count > 0, "HTTP socket closed before response");
+            let count = stream.read(&mut chunk).await?;
+            if count == 0 {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::UnexpectedEof,
+                    "HTTP socket closed before response",
+                ));
+            }
             response.extend_from_slice(&chunk[..count]);
             if let Some(end) = response.windows(4).position(|window| window == b"\r\n\r\n") {
                 break end + 4;
@@ -1581,9 +1587,18 @@
             .expect("content length");
         while response.len() < header_end + length {
             let mut chunk = [0_u8; 1024];
-            let count = stream.read(&mut chunk).await.expect("HTTP body");
-            assert!(count > 0, "HTTP socket closed before body");
+            let count = stream.read(&mut chunk).await?;
+            if count == 0 {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::UnexpectedEof,
+                    "HTTP socket closed before body",
+                ));
+            }
             response.extend_from_slice(&chunk[..count]);
         }
-        String::from_utf8(response).expect("HTTP response text")
+        Ok(String::from_utf8(response).expect("HTTP response text"))
+    }
+
+    async fn read_http_response(stream: &mut tokio::net::TcpStream) -> String {
+        try_read_http_response(stream).await.expect("HTTP response")
     }

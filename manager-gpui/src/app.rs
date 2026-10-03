@@ -15,6 +15,12 @@ use crate::worker::{Command, Worker};
 
 pub use mundus_gpui_kit::fields::Slot;
 
+#[cfg(test)]
+#[path = "cache_tests.rs"]
+mod cache_tests;
+#[path = "app_polls.rs"]
+mod polls;
+
 pub struct Confirm {
     pub title: String,
     pub body: String,
@@ -24,16 +30,19 @@ pub struct Confirm {
 
 pub struct ManagerApp {
     pub view: View,
+    pub local_device: crate::device_info::LocalDevice,
     pub sidebar_t: f32,
     pub sidebar_target: f32,
     pub sidebar_stamp: Instant,
-    pub theme_mode: u8,
-    pub theme_idx: usize,
+    pub appearance: crate::appearance_state::Appearance,
     pub dev_fps: bool,
     pub fps_view: Entity<FpsOverlay>,
-    applied_theme: Option<(u8, usize, bool)>,
     worker: Worker,
     pub slots: HashMap<String, Slot>,
+    /// Navigation reads existing snapshots; explicit refreshes still hit Engine.
+    navigation_load: bool,
+    /// A successful mutation makes cached snapshots stale until reloaded.
+    invalidated_slots: std::collections::HashSet<String>,
     pub inputs: HashMap<String, Entity<InputState>>,
     /// Transient success line; cleared on the next action.
     pub notice: Option<String>,
@@ -42,7 +51,15 @@ pub struct ManagerApp {
     /// Object type selected inside Данные.
     pub data_type: Option<String>,
     pub store_tab: StoreTab,
+    pub settings_developer_open: bool,
+    pub sync_pairing_open: bool,
+    pub sync_code_copied: bool,
+    pub about_support_open: bool,
     pub confirm: Option<Confirm>,
+    /// Company whose key modal is open.
+    pub key_editor: Option<String>,
+    /// Key value that passed verification in the open modal.
+    pub key_checked: Option<String>,
     /// packages.disclosure payload waiting for install consent.
     pub disclosure: Option<Value>,
     /// package_id the disclosure was fetched for — install proceeds on consent.
@@ -63,6 +80,8 @@ pub struct ManagerApp {
     worker_dead: bool,
     next_updater_poll: Instant,
     next_store_poll: Instant,
+    next_sync_poll: Instant,
+    next_about_poll: Instant,
     /// Slots whose replies came from a background `refresh` — they must not
     /// clear a visible error banner (that's for the user's own clicks).
     background_slots: std::collections::HashSet<String>,
@@ -73,25 +92,32 @@ impl ManagerApp {
         let data_dir = mundus_gpui_kit::engine::data_dir().ok();
         let mut this = Self {
             view: View::Data,
+            local_device: crate::device_info::LocalDevice::read(),
             sidebar_t: 1.0,
             sidebar_target: 1.0,
             sidebar_stamp: Instant::now(),
-            theme_mode: 1,
-            theme_idx: 0,
+            appearance: crate::appearance_state::Appearance::new(cx),
             dev_fps: std::env::var("MANAGER_FPS").is_ok(),
             fps_view: {
                 let manager = cx.weak_entity();
                 cx.new(|_| FpsOverlay::new(manager))
             },
-            applied_theme: None,
             worker: Worker::start(data_dir),
             slots: HashMap::new(),
+            navigation_load: false,
+            invalidated_slots: std::collections::HashSet::new(),
             inputs: HashMap::new(),
             notice: None,
             error: None,
             data_type: None,
-            store_tab: StoreTab::Catalog,
+            store_tab: StoreTab::Installed,
+            settings_developer_open: false,
+            sync_pairing_open: false,
+            sync_code_copied: false,
+            about_support_open: false,
             confirm: None,
+            key_editor: None,
+            key_checked: None,
             disclosure: None,
             pending_install: None,
             detail: None,
@@ -105,8 +131,11 @@ impl ManagerApp {
             worker_dead: false,
             next_updater_poll: Instant::now(),
             next_store_poll: Instant::now(),
+            next_sync_poll: Instant::now(),
+            next_about_poll: Instant::now(),
             background_slots: std::collections::HashSet::new(),
         };
+        this.call("appearance", "appearance.get", json!({}));
         this.load_current();
         cx.spawn(async move |this, cx| loop {
             cx.background_executor()
@@ -122,28 +151,14 @@ impl ManagerApp {
     }
 
     pub fn sync_theme(&mut self, window: &Window, cx: &mut Context<Self>) {
-        let system_dark = matches!(
-            window.appearance(),
-            WindowAppearance::Dark | WindowAppearance::VibrantDark
-        );
-        let dark = match self.theme_mode {
-            0 => false,
-            2 => system_dark,
-            _ => true,
-        };
-        let selected = (self.theme_mode, self.theme_idx, dark);
-        if self.applied_theme == Some(selected) {
-            return;
+        if let Some(Slot::Ready(value)) = self.slots.get("appearance") {
+            self.appearance.ingest(value);
         }
-        self.applied_theme = Some(selected);
-        imago_gpui::theme::set_mode(dark);
-        imago_gpui::theme::set_theme(self.theme_idx);
-        imago_gpui::theme::apply(cx);
-        cx.set_window_appearance(match self.theme_mode {
-            0 => Some(WindowAppearance::Light),
-            1 => Some(WindowAppearance::Dark),
-            _ => None,
-        });
+        let selected = self.appearance.resolve(window);
+        if self.appearance.applied.as_ref() != Some(&selected) {
+            crate::theme::apply(&selected, window, cx);
+            self.appearance.applied = Some(selected);
+        }
     }
 
     pub fn sidebar_progress(&mut self, window: &Window) -> f32 {
@@ -157,9 +172,19 @@ impl ManagerApp {
         imago_gpui::theme::ease_emphasized(self.sidebar_t.clamp(0.0, 1.0))
     }
 
+    fn reuse_navigation_slot(&self, slot: &str) -> bool {
+        self.navigation_load
+            && (matches!(self.slots.get(slot), Some(Slot::Loading))
+                || (!self.invalidated_slots.contains(slot)
+                    && matches!(self.slots.get(slot), Some(Slot::Ready(_)))))
+    }
+
     /// Queue an Engine op into a named slot; the reply overwrites it.
     pub fn call(&mut self, slot: impl Into<String>, op: &'static str, params: Value) {
         let slot = slot.into();
+        if self.reuse_navigation_slot(&slot) {
+            return;
+        }
         self.slots.insert(slot.clone(), Slot::Loading);
         if self
             .worker
@@ -192,6 +217,9 @@ impl ManagerApp {
     /// named slot; the reply overwrites it.
     pub fn usage_report(&mut self, slot: impl Into<String>) {
         let slot = slot.into();
+        if self.reuse_navigation_slot(&slot) {
+            return;
+        }
         self.slots.insert(slot.clone(), Slot::Loading);
         if self
             .worker
@@ -207,6 +235,9 @@ impl ManagerApp {
     /// Queue a GET /v1/<path> status surface into a named slot.
     pub fn status(&mut self, slot: impl Into<String>, path: &'static str) {
         let slot = slot.into();
+        if self.reuse_navigation_slot(&slot) {
+            return;
+        }
         self.slots.insert(slot.clone(), Slot::Loading);
         if self
             .worker
@@ -214,6 +245,26 @@ impl ManagerApp {
             .send(Command::Get { slot, path })
             .is_err()
         {
+            self.worker_dead = true;
+            self.error = Some("Соединение с Engine завершено. Перезапустите приложение.".into());
+        }
+    }
+
+    /// Background status check: keep the current value visible while fetching.
+    pub fn refresh_status(&mut self, slot: &str, path: &'static str) {
+        if !self.background_slots.insert(slot.into()) {
+            return;
+        }
+        if self
+            .worker
+            .commands
+            .send(Command::Get {
+                slot: slot.into(),
+                path,
+            })
+            .is_err()
+        {
+            self.background_slots.remove(slot);
             self.worker_dead = true;
             self.error = Some("Соединение с Engine завершено. Перезапустите приложение.".into());
         }
@@ -289,7 +340,10 @@ impl ManagerApp {
         self.detail = None;
         self.disclosure = None;
         self.confirm = None;
-        self.load_current();
+        self.notice = None;
+        self.navigation_load = true;
+        views::load(self.view, self);
+        self.navigation_load = false;
         cx.notify();
     }
 
@@ -343,11 +397,22 @@ impl ManagerApp {
                     break;
                 }
             };
-            if reply.slot == "@action" {
+            if reply.slot == "appearance.set" {
+                self.background_slots.remove("appearance.set");
+                match reply.result {
+                    Ok(value) => {
+                        if self.appearance.ingest(&value) {
+                            self.slots.insert("appearance".into(), Slot::Ready(value));
+                        }
+                    }
+                    Err(error) => self.error = Some(error),
+                }
+            } else if reply.slot == "@action" {
                 self.action_busy = false;
                 match reply.result {
                     Ok(_) => {
                         self.notice = Some("Выполнено.".into());
+                        self.invalidated_slots.extend(self.slots.keys().cloned());
                         views::load(self.view, self);
                     }
                     Err(e) => self.error = Some(e),
@@ -379,6 +444,7 @@ impl ManagerApp {
                     slot.clone(),
                     match reply.result {
                         Ok(v) => {
+                            self.invalidated_slots.remove(&slot);
                             if !background && self.error.is_some() {
                                 self.error = None;
                             }
@@ -396,38 +462,7 @@ impl ManagerApp {
             }
             cx.notify();
         }
-        // Native app installs run as Engine-side background jobs — poll
-        // apps.list while the Store shows an in-flight row so progress and
-        // the settled state appear without a full reload.
-        if self.view == View::Packages && Instant::now() >= self.next_store_poll {
-            self.next_store_poll = Instant::now() + std::time::Duration::from_secs(1);
-            let installing = self
-                .data("store.apps")
-                .get("apps")
-                .and_then(Value::as_array)
-                .is_some_and(|apps| {
-                    apps.iter()
-                        .any(|a| a.get("state").and_then(Value::as_str) == Some("installing"))
-                });
-            if installing {
-                self.refresh("store.apps", "apps.list", json!({}));
-            }
-        }
-        if self.view == View::Updates && Instant::now() >= self.next_updater_poll {
-            self.next_updater_poll = Instant::now() + std::time::Duration::from_secs(1);
-            if self
-                .worker
-                .commands
-                .send(Command::Rpc {
-                    slot: "upd.mundus".into(),
-                    op: "updater.status",
-                    params: json!({}),
-                })
-                .is_err()
-            {
-                self.worker_dead = true;
-            }
-        }
+        self.poll_views();
     }
 }
 

@@ -1,12 +1,11 @@
 //! Интеграции — integrations.list/set_credential/clear_credential/sync_now +
 //! login_contract (ConnectionsView.vue parity).
 use ::gpui::{prelude::*, *};
-use gpui_component::input::Input;
 use serde_json::{json, Value};
 
 use crate::app::ManagerApp;
+use crate::theme::*;
 use crate::widgets::*;
-use mundus_gpui_kit::theme::*;
 
 pub fn load(app: &mut ManagerApp) {
     app.call("conn.list", "integrations.list", json!({}));
@@ -98,20 +97,22 @@ pub fn render(
     window: &mut Window,
     cx: &mut Context<ManagerApp>,
 ) -> AnyElement {
-    let mut col = div().flex().flex_col().gap_4().w_full();
+    let mut col = page_stack();
     col = col.child(section("Интеграции", "Источники данных"));
 
     let snapshot = app.data("conn.list");
     let mut el = div().flex().flex_col().gap_3();
     let providers = varr(&snapshot, "providers").to_vec();
     if providers.is_empty() {
-        el = el.child(card().child(empty("Нет доступных интеграций")));
+        let text = crate::async_fields::field_text(app.slots.get("conn.list"), |_| {
+            "Нет доступных интеграций".into()
+        });
+        el = el.child(card().child(empty(&text)));
     }
     for p in &providers {
         el = el.child(render_provider(app, p, window, cx));
     }
-    col = col.child(el);
-    col.into_any_element()
+    col.child(el).into_any_element()
 }
 
 fn render_provider(
@@ -154,7 +155,13 @@ fn render_provider(
         }
     }
 
-    let mut actions = div().flex().gap_2().items_center();
+    let mut actions = div()
+        .w_full()
+        .flex()
+        .flex_wrap()
+        .gap_2()
+        .items_center()
+        .justify_end();
     match state {
         IntegrationState::Connected => {
             let sid = id.clone();
@@ -162,7 +169,7 @@ fn render_provider(
             let dname = name.clone();
             actions = actions
                 .child(
-                    imago_gpui::button::primary(SharedString::from(format!("sync-{id}")))
+                    crate::button::primary(SharedString::from(format!("sync-{id}")))
                         .label("Синхронизировать")
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.action(
@@ -173,7 +180,7 @@ fn render_provider(
                         })),
                 )
                 .child(
-                    imago_gpui::button::danger(SharedString::from(format!("disc-{id}")))
+                    crate::button::danger(SharedString::from(format!("disc-{id}")))
                         .label("Отключить")
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.ask_confirm(
@@ -193,7 +200,7 @@ fn render_provider(
             if browser_login {
                 let lid = id.clone();
                 actions = actions.child(
-                    imago_gpui::button::primary(SharedString::from(format!("login-{id}")))
+                    crate::button::primary(SharedString::from(format!("login-{id}")))
                         .label("Подключить")
                         .on_click(cx.listener(move |this, _, _, _| {
                             this.call(
@@ -226,17 +233,17 @@ fn render_provider(
                             .gap_1()
                             .child(
                                 div()
-                                    .text_size(px(12.))
+                                    .text_size(crate::theme::ui_px(12.))
                                     .text_color(c(MUTED_FG()))
                                     .child(label.clone()),
                             )
-                            .child(Input::new(&input).aria_label(label).mask_toggle()),
+                            .child(input_field(&input).aria_label(label).mask_toggle()),
                     );
                 }
                 let pid = id.clone();
                 let schema = settings.clone();
                 actions = actions.child(
-                    imago_gpui::button::primary(SharedString::from(format!("save-{id}")))
+                    crate::button::primary(SharedString::from(format!("save-{id}")))
                         .label("Подключить")
                         .on_click(cx.listener(move |this, _, _, cx| {
                             submit_credentials(this, &pid, &schema, cx);
@@ -248,7 +255,7 @@ fn render_provider(
             if state == IntegrationState::Configured {
                 let did = id.clone();
                 actions = actions.child(
-                    imago_gpui::button::ghost(SharedString::from(format!("clr-{id}")))
+                    crate::button::ghost(SharedString::from(format!("clr-{id}")))
                         .label("Удалить данные")
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.ask_confirm(

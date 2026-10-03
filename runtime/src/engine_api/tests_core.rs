@@ -1105,16 +1105,35 @@
                 + usize::from(worker < RESOLVE_TOTAL % RESOLVE_WORKERS);
             resolve_workers.spawn(async move {
                 use tokio::io::AsyncWriteExt;
-                let mut stream = tokio::net::TcpStream::connect(("127.0.0.1", port))
-                    .await
-                    .expect("resolve connection");
-                for _ in 0..share {
-                    stream
-                        .write_all(resolve_request.as_bytes())
-                        .await
-                        .expect("resolve write");
-                    let resolved = response_json(&read_http_response(&mut stream).await);
-                    assert!(resolved["data"].get("launch_id").is_none());
+                // A 128-way loopback connect burst can exceed the platform
+                // accept backlog (macOS somaxconn is 128) and take an RST
+                // before the server drains it; a dropped permit also resets
+                // the socket — either way the worker just reconnects, the
+                // assertion under test is elsewhere.
+                let mut sent = 0usize;
+                'outer: while sent < share {
+                    let mut stream = None;
+                    for _ in 0..50 {
+                        match tokio::net::TcpStream::connect(("127.0.0.1", port)).await {
+                            Ok(connected) => {
+                                stream = Some(connected);
+                                break;
+                            }
+                            Err(_) => tokio::time::sleep(Duration::from_millis(10)).await,
+                        }
+                    }
+                    let mut stream = stream.expect("resolve connection");
+                    while sent < share {
+                        if stream.write_all(resolve_request.as_bytes()).await.is_err() {
+                            continue 'outer;
+                        }
+                        let Ok(response) = try_read_http_response(&mut stream).await else {
+                            continue 'outer;
+                        };
+                        let resolved = response_json(&response);
+                        assert!(resolved["data"].get("launch_id").is_none());
+                        sent += 1;
+                    }
                 }
             });
         }

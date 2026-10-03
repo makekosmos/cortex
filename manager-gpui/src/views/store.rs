@@ -7,13 +7,12 @@
 //! Every row shows the product icon (manifest `icon` → `icon_path`,
 //! catalog `icon_url`) and the display name; the package id is the caption.
 use ::gpui::{prelude::*, *};
-use gpui_component::Disableable;
 use serde_json::{json, Value};
 
 use crate::app::ManagerApp;
+use crate::theme::*;
 use crate::views::StoreTab;
 use crate::widgets::*;
-use mundus_gpui_kit::theme::*;
 
 pub fn load(app: &mut ManagerApp) {
     app.call("store.catalog", "store.catalog", json!({}));
@@ -29,14 +28,14 @@ pub fn render(
     cx: &mut Context<ManagerApp>,
 ) -> AnyElement {
     let _ = window;
-    let mut col = div().flex().flex_col().gap_4().w_full();
-    col = col.child(section("Маркетплейс", "Приложения и интеграции"));
+    let mut col = page_stack();
+    col = col.child(section("Приложения", "Установленные приложения и каталог"));
 
     // Tab row: Каталог / Установленные
-    let mut tabs = div().flex().gap_2();
+    let mut tabs = div().flex().flex_wrap().items_center().gap_2();
     for (tab, label) in [
-        (StoreTab::Catalog, "Каталог"),
         (StoreTab::Installed, "Установленные"),
+        (StoreTab::Catalog, "Каталог"),
     ] {
         let active = app.store_tab == tab;
         tabs = tabs.child(
@@ -48,7 +47,7 @@ pub fn render(
                 .items_center()
                 .rounded_md()
                 .cursor_pointer()
-                .text_size(px(13.))
+                .text_size(crate::theme::ui_px(13.))
                 .when(active, |d| d.bg(fade(ACCENT(), 0.18)))
                 .when(!active, |d| d.hover(|s| s.bg(fade(FG(), 0.06))))
                 .child(label)
@@ -88,55 +87,49 @@ pub fn render(
         ));
     col = col.child(tabs);
 
-    col = col.child(slot_or(app, "store.status", |v| {
-        let catalog = vget(v, "catalog");
-        let fault = vopt(v, "fault");
-        let loaded = catalog.is_object();
-        let mut el = card();
-        el = el.child(
-            row(
-                "Каталог интеграций",
-                "Загружается с GitHub, пакеты проверяются по контрольным суммам",
-            )
-            .child(badge(
-                if loaded {
-                    "Загружен"
-                } else {
-                    "Не загружен"
-                },
-                if loaded { SUCCESS() } else { WARN() },
-            )),
-        );
-        el = el.child(kv("Версия каталога", vstr(catalog, "sequence")));
-        el = el.child(kv("Отозванные пакеты", vstr(catalog, "revoked_count")));
-        if let Some(fault) = fault {
-            if !fault.is_empty() {
-                el = el.child(kv("Состояние", fault));
-            }
-        }
-        el.into_any_element()
-    }));
-
     match app.store_tab {
         StoreTab::Catalog => {
             col = col.child(render_catalog(app, cx));
-            col = col.child(super::store_apps::render_native_apps(
-                app,
-                cx,
-                false,
-                vec![],
-            ));
+            if let Some(native) = super::store_apps::render_native_apps(app, cx, false, vec![]) {
+                col = col.child(native);
+            }
+            col = col.child(slot_or(app, "store.status", |v| {
+                let catalog = vget(v, "catalog");
+                let fault = vopt(v, "fault");
+                let loaded = catalog.is_object();
+                let mut el = card();
+                el = el.child(
+                    row(
+                        "Каталог интеграций",
+                        "Загружается с GitHub, пакеты проверяются по контрольным суммам",
+                    )
+                    .child(badge(
+                        if loaded {
+                            "Загружен"
+                        } else {
+                            "Не загружен"
+                        },
+                        if loaded { SUCCESS() } else { WARN() },
+                    )),
+                );
+                el = el.child(kv("Версия каталога", vstr(catalog, "sequence")));
+                el = el.child(kv("Отозванные пакеты", vstr(catalog, "revoked_count")));
+                if let Some(fault) = fault {
+                    if !fault.is_empty() {
+                        el = el.child(kv("Состояние", fault));
+                    }
+                }
+                el.into_any_element()
+            }));
         }
         // Native apps belong on both tabs — Installed shows just the live
         // ones, alongside the app-kind .kspkg packages in the same card.
         StoreTab::Installed => {
             let package_apps = app_package_rows(app, cx);
-            col = col.child(super::store_apps::render_native_apps(
-                app,
-                cx,
-                true,
-                package_apps,
-            ));
+            if let Some(native) = super::store_apps::render_native_apps(app, cx, true, package_apps)
+            {
+                col = col.child(native);
+            }
             col = col.child(render_installed(app, cx));
         }
     }
@@ -301,7 +294,7 @@ fn render_catalog(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElem
                     div()
                         .id(SharedString::from(format!("listing-{id}")))
                         .cursor_pointer()
-                        .text_size(px(13.))
+                        .text_size(crate::theme::ui_px(13.))
                         .text_color(c(ACCENT()))
                         .child("Подробнее")
                         .on_click(cx.listener(move |this, _, _, cx| {
@@ -340,7 +333,7 @@ fn render_installed(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> AnyEl
         let mut el = card();
         el = el.child(
             div()
-                .text_size(px(12.))
+                .text_size(crate::theme::ui_px(12.))
                 .text_color(c(MUTED_FG()))
                 .child(format!("Установленные пакеты ({})", items.len())),
         );

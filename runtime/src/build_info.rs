@@ -28,12 +28,12 @@ pub fn engine_source_commit() -> &'static str {
 /// Product-facing version string: the injected Desktop version when available,
 /// otherwise `dev` (a bare `cargo build`).
 pub fn display_version() -> &'static str {
-    let injected = engine_version();
-    if injected.is_empty() {
-        "dev"
-    } else {
-        injected
-    }
+    crate::build_metadata::compiled().version
+}
+
+/// Explicit channel: an unversioned Cargo build is always dev, even optimized.
+pub fn channel() -> &'static str {
+    crate::build_metadata::compiled().channel
 }
 
 #[cfg(test)]
@@ -50,9 +50,11 @@ mod tests {
     }
 
     #[test]
-    fn display_version_is_dev_when_the_product_version_is_not_injected() {
-        // This test build does not set MUNDUS_PRODUCT_VERSION. 0.1.0 would
-        // be the crate placeholder, which a release once shipped by mistake.
-        assert_eq!(display_version(), "dev");
+    fn uninjected_build_is_semver_on_the_dev_channel() {
+        // This test build does not set MUNDUS_PRODUCT_VERSION: the version
+        // stays the crate version (semver for the updater), while the "dev"
+        // channel keeps the UI label honest with a "(dev)" suffix (KOS-278).
+        assert!(semver::Version::parse(display_version()).is_ok());
+        assert_eq!(channel(), "dev");
     }
 }

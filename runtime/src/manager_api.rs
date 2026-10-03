@@ -1,3 +1,4 @@
+use crate::appearance::AppearanceStore;
 use crate::diagnostics::SharedRpcDiagnostics;
 use crate::engine_settings;
 use crate::package_service::PackageService;
@@ -22,6 +23,7 @@ pub struct ManagerState {
     data_dir: Arc<PathBuf>,
     bundles: Arc<Mutex<HashMap<String, BundleEntry>>>,
     updater: Arc<UpdaterService>,
+    appearance: Arc<AppearanceStore>,
 }
 
 struct BundleEntry {
@@ -33,6 +35,7 @@ impl ManagerState {
     pub fn new(data_dir: PathBuf) -> Self {
         Self {
             updater: UpdaterService::new(data_dir.clone()),
+            appearance: Arc::new(AppearanceStore::new(data_dir.clone())),
             data_dir: Arc::new(data_dir),
             bundles: Arc::new(Mutex::new(HashMap::new())),
         }
@@ -44,6 +47,10 @@ impl ManagerState {
 
     pub fn data_dir(&self) -> &Path {
         &self.data_dir
+    }
+
+    pub fn appearance(&self) -> &AppearanceStore {
+        &self.appearance
     }
 
     pub async fn diagnostics_snapshot(

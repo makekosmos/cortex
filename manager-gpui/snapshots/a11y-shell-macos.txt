@@ -1,0 +1,16 @@
+Window ""
+  Button "Приложения" selected=false
+  Button "Данные" selected=true
+  Button "Активность" selected=false
+  Button "Девайсы" selected=false
+  Button "Интеграции" selected=false
+  Button "Ключи" selected=false
+  Button "Настройки" selected=false
+  Button "Внешний вид" selected=false
+  Button "Обновления" selected=false
+  Button "О приложении" selected=false
+  TextInput "Поиск объектов…"
+  Button "Найти"
+  Button "Создать копию"
+  Button "Открыть папку"
+  Switch "Боковая панель" toggled=True

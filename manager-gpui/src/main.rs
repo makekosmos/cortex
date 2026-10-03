@@ -3,19 +3,33 @@
 #![windows_subsystem = "windows"]
 
 mod app;
+mod app_actions;
 mod app_replies;
+mod appearance_state;
+mod assets;
+mod async_fields;
+mod boot;
+mod button;
 mod components;
 mod consent;
+mod device_info;
 mod devpkg;
 mod fps;
 mod modals;
+#[cfg(target_os = "macos")]
+mod native_menu;
+#[cfg(test)]
+mod navigation_tests;
+mod page_layout;
 mod render;
+mod theme;
 mod views;
 mod widgets;
 mod worker;
 
 use gpui::{
-    px, size, App, AppContext, Bounds, Context, SharedString, Window, WindowBounds, WindowOptions,
+    px, size, App, AppContext, Bounds, Context, SharedString, Styled, Window, WindowBounds,
+    WindowOptions,
 };
 
 use app::ManagerApp;
@@ -34,8 +48,31 @@ fn window_bounds(cx: &mut App) -> Bounds<gpui::Pixels> {
 }
 
 fn main() {
+    if let Err(error) = boot::ensure_engine() {
+        eprintln!("{error}");
+        #[cfg(target_os = "macos")]
+        if !std::env::args().any(|arg| arg == "--check-engine") {
+            // Pass the message as argv, not interpolated AppleScript source.
+            let _ = std::process::Command::new("/usr/bin/osascript")
+                .args([
+                    "-e",
+                    concat!(
+                        "on run argv\n",
+                        "display alert \"Не удалось запустить Cortex\" ",
+                        "message (item 1 of argv) as critical\nend run"
+                    ),
+                    &error,
+                ])
+                .status();
+        }
+        std::process::exit(1);
+    }
+    if std::env::args().any(|arg| arg == "--check-engine") {
+        println!("Engine ready");
+        return;
+    }
     gpui::application()
-        .with_assets(imago_gpui::assets::Assets)
+        .with_assets(assets::Assets)
         .run(|cx: &mut App| {
             gpui_component::init(cx);
             cx.text_system()
@@ -47,7 +84,7 @@ fn main() {
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
                     titlebar: Some(gpui::TitlebarOptions {
-                        title: Some(SharedString::from("Mundus Manager")),
+                        title: Some(SharedString::from("Mundus")),
                         appears_transparent: true,
                         traffic_light_position: Some(gpui::point(px(12.), px(14.))),
                     }),
@@ -55,10 +92,13 @@ fn main() {
                 },
                 |window, cx| {
                     let manager = cx.new(|cx| ManagerApp::new(window, cx));
-                    cx.new(|cx| gpui_component::Root::new(manager, window, cx))
+                    app_actions::register(cx, manager.downgrade());
+                    cx.new(|cx| gpui_component::Root::new(manager, window, cx).bg(gpui::rgba(0)))
                 },
             )
             .unwrap();
+            #[cfg(target_os = "macos")]
+            native_menu::install(cx);
             if std::env::var("MANAGER_GPUI_OFFSCREEN").is_err() {
                 cx.activate(true);
             }

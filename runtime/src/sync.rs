@@ -24,9 +24,7 @@ pub fn resolve_device_name() -> String {
             return n;
         }
     }
-    std::env::var("COMPUTERNAME")
-        .or_else(|_| std::env::var("HOSTNAME"))
-        .unwrap_or_else(|_| "Mundus Host".to_string())
+    crate::device_name::system_device_name()
 }
 
 pub fn resolve_device_id(lock_dir: &Path) -> std::io::Result<String> {

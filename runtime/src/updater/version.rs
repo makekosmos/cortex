@@ -39,6 +39,13 @@ mod tests {
     }
 
     #[test]
+    fn dev_display_suffix_never_enters_semver_and_real_release_comparison() {
+        assert!(Version::parse(&current_version()).is_ok());
+        assert!(is_newer("0.10.3", "0.10.2"));
+        assert!(!is_newer("0.10.3", "0.10.3"));
+    }
+
+    #[test]
     fn strictly_greater_numeric_versions_are_newer() {
         assert!(is_newer("0.5.4", "0.5.3"));
         assert!(is_newer("0.6.0", "0.5.9"));

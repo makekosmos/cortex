@@ -3,6 +3,8 @@
   "private": true,
   "scripts": {
     "build:desktop": "node desktop/scripts/build-desktop.mjs --platform win",
+    "build:native": "node desktop/scripts/build-native-components.mjs",
+    "test:native-build": "node --test desktop/scripts/build-native-components.test.mjs",
     "build:installer:local": "pnpm --dir desktop run build:backend && pnpm --dir desktop run build:package-components -- --local && node desktop/scripts/build-desktop.mjs --platform win --local",
     "prepare": "lefthook install",
     "check:plan": "node scripts/check-plan.mjs --mode worktree",
@@ -18,7 +20,7 @@
     "clippy": "cargo clippy --workspace --all-targets -- -D warnings",
     "test:rust": "node runtime/scripts/test-lib.mjs --workspace",
     "check:manager-gpui": "cargo fmt --manifest-path manager-gpui/Cargo.toml --all -- --check && cargo clippy --manifest-path manager-gpui/Cargo.toml --all-targets -- -D warnings && cargo test --manifest-path manager-gpui/Cargo.toml",
-    "test:static": "pnpm run test:source-size && pnpm run test:format && pnpm run test:package-manager && pnpm run test:check-plan && pnpm run test:release-bom && pnpm run test:desktop-contracts && node --test runtime/scripts/test-lib.test.mjs runtime/src/engine_api/host_shim.test.mjs scripts/check-toolchain.test.mjs",
+    "test:static": "pnpm run test:source-size && pnpm run test:format && pnpm run test:package-manager && pnpm run test:check-plan && pnpm run test:release-bom && pnpm run test:desktop-contracts && pnpm run test:native-build && node --test runtime/scripts/test-lib.test.mjs runtime/src/engine_api/host_shim.test.mjs scripts/check-toolchain.test.mjs",
     "test": "pnpm run test:static && pnpm run test:backend",
     "check:fast": "pnpm run check:layout && pnpm run check:core-pin && pnpm run check:toolchain && pnpm run check:brand && pnpm run check:test-skips && pnpm run check:source-size && pnpm run lint && pnpm run format:check && pnpm run rustfmt",
     "check": "node scripts/check-plan.mjs --full --run",

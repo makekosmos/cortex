@@ -236,7 +236,16 @@ impl EngineApiServer {
         cleanup.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         loop {
             let stream = tokio::select! {
-                accept = self.listener.accept() => Some(accept?),
+                accept = self.listener.accept() => match accept {
+                    Ok(accepted) => Some(accepted),
+                    // A burst can leave aborted entries in the accept queue
+                    // (BSD/macOS report them, Linux does not) — a dropped
+                    // socket must not kill the whole listener.
+                    Err(_) => {
+                        tokio::time::sleep(Duration::from_millis(5)).await;
+                        continue;
+                    }
+                },
                 _ = self.connections.cancelled() => return Ok(()),
                 _ = cleanup.tick() => {
                     self.launch_leases

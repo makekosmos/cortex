@@ -110,10 +110,10 @@ async fn handle_authenticated_request(
                 "ok": true,
                 "api_version": API_VERSION,
                 "legacy_protocol_version": PROTOCOL_VERSION,
-                // KOS-233: Engine version is the Mundus Desktop product
-                // version it shipped with (empty for a dev build not built
-                // through build-backend.mjs), not a separate 0.1.x line.
-                "version": crate::build_info::engine_version(),
+                // Product metadata, not a separate Engine release line.
+                // Bare Cargo versions remain usable but explicitly dev.
+                "version": crate::build_info::display_version(),
+                "channel": crate::build_info::channel(),
                 "build": crate::build_info::engine_source_commit(),
                 "pid": std::process::id(),
                 "ws_port": ws_port,

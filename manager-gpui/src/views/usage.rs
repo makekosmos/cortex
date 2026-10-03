@@ -12,8 +12,8 @@ use ::gpui::{prelude::*, *};
 use gpui_component::v_virtual_list;
 
 use crate::app::ManagerApp;
+use crate::theme::*;
 use crate::widgets::*;
-use mundus_gpui_kit::theme::*;
 
 mod rows;
 pub use rows::{build_usage_rows, UsageColumn, UsageRow, UsageSort};
@@ -37,7 +37,7 @@ pub fn render(
     let scroll = app.usage_scroll.clone();
     let mut col = div().flex().flex_col().gap_4().w_full().h_full();
     col = col.child(section(
-        "Затреканное время",
+        "Активность",
         "Сколько времени приложение было активно — в фокусе и не в простое",
     ));
     col = col.child(
@@ -53,7 +53,7 @@ pub fn render(
             )
             .child(
                 div()
-                    .text_size(px(12.))
+                    .text_size(crate::theme::ui_px(12.))
                     .text_color(c(MUTED_FG()))
                     .child("Показывать системные процессы"),
             ),
@@ -117,7 +117,7 @@ fn head_cell(
         .id(SharedString::from(format!("usage-sort-{text}")))
         .w(px(width))
         .flex_none()
-        .text_size(px(11.))
+        .text_size(crate::theme::ui_px(11.))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(c(MUTED_FG()))
         .whitespace_nowrap()
@@ -142,7 +142,7 @@ fn head_grow(
         .id(SharedString::from(format!("usage-sort-{text}")))
         .flex_1()
         .min_w_0()
-        .text_size(px(11.))
+        .text_size(crate::theme::ui_px(11.))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(c(MUTED_FG()))
         .whitespace_nowrap()
@@ -166,7 +166,7 @@ fn header_row(sort: UsageSort, cx: &mut Context<ManagerApp>) -> Div {
         .pb_2()
         .border_b_1()
         .border_color(c(BORDER()))
-        .child(div().w(px(20.)).flex_none())
+        .child(div().w(px(32.)).flex_none())
         .child(head_grow("Приложение", UsageColumn::Name, sort, cx))
         .child(head_cell("Активно", 110., UsageColumn::Active, sort, cx))
         .child(head_cell("Запусков", 76., UsageColumn::Sessions, sort, cx))
@@ -184,14 +184,14 @@ fn metric(text: String, width: f32) -> Div {
     div()
         .w(px(width))
         .flex_none()
-        .text_size(px(13.))
+        .text_size(crate::theme::ui_px(13.))
         .whitespace_nowrap()
         .overflow_hidden()
         .child(text)
 }
 
 fn usage_row(ix: usize, entry: &UsageRow) -> Stateful<Div> {
-    // 20px icon slot: cached PNG via app_index.icon_path / exe_info, letter
+    // Shared 32px icon slot: cached PNG via app_index.icon_path / exe_info, letter
     // badge underneath when the cache has nothing or the file fails to load.
     let icon = app_icon(icon_file(entry.icon_path.clone()), &entry.name);
 
@@ -209,7 +209,7 @@ fn usage_row(ix: usize, entry: &UsageRow) -> Stateful<Div> {
             div()
                 .flex_1()
                 .min_w_0()
-                .text_size(px(13.))
+                .text_size(crate::theme::ui_px(13.))
                 .font_weight(FontWeight::MEDIUM)
                 .whitespace_nowrap()
                 .text_ellipsis()
@@ -223,7 +223,7 @@ fn usage_row(ix: usize, entry: &UsageRow) -> Stateful<Div> {
             div()
                 .flex_1()
                 .min_w_0()
-                .text_size(px(12.))
+                .text_size(crate::theme::ui_px(12.))
                 .text_color(fade(FG(), 0.65))
                 .whitespace_nowrap()
                 .text_ellipsis()

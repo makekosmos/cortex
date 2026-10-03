@@ -43,7 +43,7 @@ const INTERACTIVE_ROLES: &[&str] = &[
 /// Builds the same view tree as `main.rs` — ManagerApp inside
 /// `gpui_component::Root` — on the deterministic test platform. The Engine
 /// worker just fails to connect in the background; slots stay empty.
-fn launch(cx: &mut TestAppContext) -> (Entity<ManagerApp>, &mut VisualTestContext) {
+pub(crate) fn launch(cx: &mut TestAppContext) -> (Entity<ManagerApp>, &mut VisualTestContext) {
     cx.update(gpui_component::init);
     cx.update(imago_gpui::theme::apply);
     let slot: Rc<RefCell<Option<Entity<ManagerApp>>>> = Rc::new(RefCell::new(None));
@@ -59,7 +59,7 @@ fn launch(cx: &mut TestAppContext) -> (Entity<ManagerApp>, &mut VisualTestContex
 
 /// Draw a pending frame (product handlers don't always `notify`, so force a
 /// redraw), then read the accesskit tree captured at end of frame.
-fn a11y_tree(cx: &mut VisualTestContext) -> Value {
+pub(crate) fn a11y_tree(cx: &mut VisualTestContext) -> Value {
     cx.update(|_, cx| cx.refresh_windows());
     cx.run_until_parked();
     let json = cx
@@ -125,6 +125,53 @@ fn snapshot_lines(tree: &Value) -> Vec<String> {
 }
 
 #[gpui::test]
+fn every_reorganized_page_names_its_controls(cx: &mut TestAppContext) {
+    let (manager, cx) = launch(cx);
+    cx.simulate_resize(gpui::size(gpui::px(1440.), gpui::px(3000.)));
+    manager.update(cx, |app, cx| {
+        app.slots.insert(
+            "appearance".into(),
+            crate::app::Slot::Ready(json!({"settings":{
+            "accent_source":"custom","accent_color":"#FFFFFF","font_size":18}})),
+        );
+        app.appearance.font_menu_open = true;
+        cx.notify();
+    });
+    for view in crate::views::NAV_GROUPS
+        .iter()
+        .flat_map(|group| group.iter())
+    {
+        for expanded in [false, true] {
+            manager.update(cx, |app, cx| {
+                app.view = *view;
+                app.settings_developer_open = expanded;
+                cx.notify();
+            });
+            let tree = a11y_tree(cx);
+            for (role, node) in nodes(&tree) {
+                if INTERACTIVE_ROLES.contains(&role.as_str()) {
+                    assert!(
+                        node["aria"]["label"]
+                            .as_str()
+                            .is_some_and(|v| !v.trim().is_empty()),
+                        "unnamed {role} on {view:?}, developer={expanded}"
+                    );
+                }
+            }
+        }
+    }
+    manager.update(cx, |app, cx| {
+        app.slots.insert(
+            "appearance".into(),
+            crate::app::Slot::Ready(json!({
+            "settings":crate::appearance_state::Settings::default()})),
+        );
+        cx.notify();
+    });
+    cx.update(|_, cx| cx.refresh_windows());
+}
+
+#[gpui::test]
 async fn a11y_tree_has_no_unnamed_interactive_nodes(cx: &mut TestAppContext) {
     let (_app, cx) = launch(cx);
     let tree = a11y_tree(cx);
@@ -165,17 +212,14 @@ async fn a11y_tree_shell_exposes_russian_names(cx: &mut TestAppContext) {
         })
         .collect();
 
-    // Sidebar navigation, titlebar refresh and window chrome — stable
+    // Sidebar navigation and window chrome — stable
     // Russian names suitable as locators.
     for expected in [
         "Данные",
-        "Затреканное время",
-        "Маркетплейс",
+        "Активность",
+        "Приложения",
         "Настройки",
-        "Обновить",
         "Боковая панель",
-        "Свернуть",
-        "Закрыть",
     ] {
         assert!(
             labels.contains_key(expected),
@@ -184,8 +228,18 @@ async fn a11y_tree_shell_exposes_russian_names(cx: &mut TestAppContext) {
         );
     }
     assert_eq!(labels["Данные"], "Button");
-    assert_eq!(labels["Обновить"], "Button");
-    assert_eq!(labels["Свернуть"], "Button");
+    assert!(
+        !labels.contains_key("Обновить"),
+        "no refresh button in titlebar"
+    );
+    if cfg!(target_os = "macos") {
+        // Native traffic lights are owned by AppKit, not the GPUI subtree.
+        assert!(!labels.contains_key("Свернуть"));
+        assert!(!labels.contains_key("Закрыть"));
+    } else {
+        assert_eq!(labels["Свернуть"], "Button");
+        assert_eq!(labels["Закрыть"], "Button");
+    }
     assert_eq!(labels["Боковая панель"], "Switch");
 }
 
@@ -283,7 +337,14 @@ async fn a11y_tree_matches_snapshot(cx: &mut TestAppContext) {
     let tree = a11y_tree(cx);
     let actual = snapshot_lines(&tree).join("\n") + "\n";
 
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/a11y-shell.txt");
+    let path = if cfg!(target_os = "macos") {
+        concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/snapshots/a11y-shell-macos.txt"
+        )
+    } else {
+        concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/a11y-shell.txt")
+    };
     if std::env::var("A11Y_BLESS").is_ok() {
         std::fs::create_dir_all(std::path::Path::new(path).parent().unwrap())
             .expect("create snapshots dir");

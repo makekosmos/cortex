@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use ::gpui::{prelude::*, *};
 
 use crate::app::ManagerApp;
-use mundus_gpui_kit::theme::*;
+use crate::theme::*;
 pub struct FpsOverlay {
     manager: WeakEntity<ManagerApp>,
     armed: bool,
@@ -184,7 +184,7 @@ impl Render for FpsOverlay {
                     .flex_col()
                     .child(
                         div()
-                            .text_size(px(12.))
+                            .text_size(crate::theme::ui_px(12.))
                             .font_weight(FontWeight::SEMIBOLD)
                             .child(if warming {
                                 "прогрев…".into()
@@ -194,7 +194,7 @@ impl Render for FpsOverlay {
                     )
                     .child(
                         div()
-                            .text_size(px(9.))
+                            .text_size(crate::theme::ui_px(9.))
                             .text_color(c(MUTED_FG()))
                             .child(if warming {
                                 "замер начнётся после загрузки".into()

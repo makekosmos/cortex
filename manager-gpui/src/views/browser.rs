@@ -4,8 +4,8 @@
 use ::gpui::{prelude::*, *};
 
 use crate::app::ManagerApp;
+use crate::theme::*;
 use crate::widgets::*;
-use mundus_gpui_kit::theme::*;
 
 pub fn load(app: &mut ManagerApp) {
     app.slots.insert(
@@ -35,13 +35,15 @@ fn write_persist(enabled: bool) -> Result<(), String> {
         .map_err(|e| format!("Не удалось записать browser.json: {e}"))
 }
 
-pub fn render(
+pub fn render_body(
     app: &mut ManagerApp,
     _window: &mut Window,
     cx: &mut Context<ManagerApp>,
 ) -> AnyElement {
-    let mut col = div().flex().flex_col().gap_4().w_full();
-    col = col.child(section("Браузер", "Сессии и данные сайтов"));
+    let mut col = section_group()
+        .id("settings-privacy-group")
+        .debug_selector(|| "settings-privacy-group".into())
+        .child(section("Приватность", "Данные встроенного браузера"));
 
     let persist = vbool(&app.data("browser.persist"), "value");
     col = col.child(
@@ -70,7 +72,7 @@ pub fn render(
             )
             .child(
                 div()
-                    .text_size(px(12.))
+                    .text_size(crate::theme::ui_px(12.))
                     .text_color(c(MUTED_FG()))
                     .child(format!(
                         "Файл: {}",
