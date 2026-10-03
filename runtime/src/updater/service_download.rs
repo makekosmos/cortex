@@ -53,7 +53,7 @@ impl UpdaterService {
             Ok(()) => {
                 self.set_status(UpdaterStatus {
                     phase: Phase::Downloaded,
-                    current_version: version::current_version(),
+                    current_version: self.current_version.clone(),
                     new_version: Some(pending.version),
                     percent: Some(100),
                     message: None,
@@ -70,7 +70,7 @@ impl UpdaterService {
     fn update_progress(&self, pending: &PendingUpdate, percent: u32) {
         self.set_status(UpdaterStatus {
             phase: Phase::Downloading,
-            current_version: version::current_version(),
+            current_version: self.current_version.clone(),
             new_version: Some(pending.version.clone()),
             percent: Some(percent),
             message: None,

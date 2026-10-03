@@ -28,17 +28,29 @@ pub struct UpdaterService {
     feed_base: String,
     downloads_dir: PathBuf,
     client: reqwest::Client,
+    // Baked-in product version this binary runs as, fixed for the life of
+    // the service; tests inject their own since a test build has no
+    // MUNDUS_PRODUCT_VERSION and reports `dev`, which is not semver.
+    current_version: String,
     inner: Mutex<Inner>,
     downloading: AtomicBool,
 }
 
 impl UpdaterService {
     pub fn new(data_dir: PathBuf) -> Arc<Self> {
-        Self::try_with_feed_base(data_dir, feed::DEFAULT_FEED_BASE.to_string())
-            .expect("updater HTTP client")
+        Self::try_with_feed_base(
+            data_dir,
+            feed::DEFAULT_FEED_BASE.to_string(),
+            version::current_version(),
+        )
+        .expect("updater HTTP client")
     }
 
-    fn try_with_feed_base(data_dir: PathBuf, feed_base: String) -> Result<Arc<Self>, UpdaterError> {
+    fn try_with_feed_base(
+        data_dir: PathBuf,
+        feed_base: String,
+        current_version: String,
+    ) -> Result<Arc<Self>, UpdaterError> {
         let downloads_dir = data_dir.join("updates");
         // KOS-301: a fresh service has no pending update and no live download,
         // so every payload in `updates/` is a leftover from a previous run
@@ -55,8 +67,9 @@ impl UpdaterService {
             feed_base,
             downloads_dir,
             client: feed::build_client()?,
+            current_version: current_version.clone(),
             inner: Mutex::new(Inner {
-                status: UpdaterStatus::idle(version::current_version()),
+                status: UpdaterStatus::idle(current_version),
                 pending: None,
             }),
             downloading: AtomicBool::new(false),
@@ -64,8 +77,8 @@ impl UpdaterService {
     }
 
     #[cfg(test)]
-    fn with_feed_base(data_dir: PathBuf, feed_base: String) -> Arc<Self> {
-        Self::try_with_feed_base(data_dir, feed_base).unwrap()
+    fn with_feed_base(data_dir: PathBuf, feed_base: String, current_version: &str) -> Arc<Self> {
+        Self::try_with_feed_base(data_dir, feed_base, current_version.to_string()).unwrap()
     }
 
     fn set_status(&self, status: UpdaterStatus) -> Value {
@@ -89,7 +102,7 @@ impl UpdaterService {
             phase: Phase::Checking,
             ..self.snapshot()
         });
-        let current = version::current_version();
+        let current = self.current_version.clone();
         let result = feed::fetch_manifest(&self.client, &self.feed_base)
             .await
             .and_then(|manifest| {
@@ -178,7 +191,7 @@ impl UpdaterService {
     fn set_error(&self, error: UpdaterError, checked_at_ms: Option<i64>) -> Value {
         self.set_status(UpdaterStatus {
             phase: Phase::Error,
-            current_version: version::current_version(),
+            current_version: self.current_version.clone(),
             new_version: None,
             percent: None,
             message: Some(error.to_string()),
