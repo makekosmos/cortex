@@ -40,8 +40,8 @@ use crate::runtime_grants::{DataRequest, FieldInput, LaunchGrant};
 const MAX_HTTP_BODY_BYTES: usize = 32 * 1024 * 1024;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 // Wire header names stay `x-kosmos-*`: pinned component builds
-// (agenda/memoria/dictation and kosmos-gpui-kit) send exactly these names —
-// persisted contract, see docs/brand-legacy-identifiers.md.
+// (agenda/memoria/dictation and imago's mundus-gpui-kit) send exactly these
+// names — persisted contract, see docs/brand-legacy-identifiers.md.
 const CLIENT_PID_HEADER: &str = "x-kosmos-client-pid";
 const API_VERSION_HEADER: &str = "x-kosmos-api-version";
 const CLIENT_CLASS_HEADER: &str = "x-kosmos-client-class";
