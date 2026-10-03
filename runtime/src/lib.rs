@@ -54,6 +54,7 @@ pub mod backend_tray;
 pub(crate) mod background_task;
 pub mod brand;
 pub mod build_info;
+pub mod build_metadata;
 pub mod calculator;
 pub mod catalog;
 pub mod command_bus;

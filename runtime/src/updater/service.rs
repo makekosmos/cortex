@@ -25,6 +25,9 @@ struct Inner {
 }
 
 pub struct UpdaterService {
+    // The current installer is Windows-only. UI consumes this capability,
+    // never guesses it from its own OS, and other hosts don't download .exe.
+    install_supported: bool,
     feed_base: String,
     downloads_dir: PathBuf,
     client: reqwest::Client,
@@ -42,6 +45,7 @@ impl UpdaterService {
             data_dir,
             feed::DEFAULT_FEED_BASE.to_string(),
             version::current_version(),
+            cfg!(windows),
         )
         .expect("updater HTTP client")
     }
@@ -50,6 +54,7 @@ impl UpdaterService {
         data_dir: PathBuf,
         feed_base: String,
         current_version: String,
+        install_supported: bool,
     ) -> Result<Arc<Self>, UpdaterError> {
         let downloads_dir = data_dir.join("updates");
         // KOS-301: a fresh service has no pending update and no live download,
@@ -64,6 +69,7 @@ impl UpdaterService {
             );
         }
         Ok(Arc::new(Self {
+            install_supported,
             feed_base,
             downloads_dir,
             client: feed::build_client()?,
@@ -78,11 +84,22 @@ impl UpdaterService {
 
     #[cfg(test)]
     fn with_feed_base(data_dir: PathBuf, feed_base: String, current_version: &str) -> Arc<Self> {
-        Self::try_with_feed_base(data_dir, feed_base, current_version.to_string()).unwrap()
+        Self::try_with_feed_base(data_dir, feed_base, current_version.to_string(), true).unwrap()
+    }
+
+    fn status_json(&self, status: &UpdaterStatus) -> Value {
+        let mut value = status.to_json();
+        value["canInstall"] = self.install_supported.into();
+        if !self.install_supported {
+            value["installUnavailableReason"] =
+                "Автоматическая установка обновлений для этого пакета пока не поддерживается."
+                    .into();
+        }
+        value
     }
 
     fn set_status(&self, status: UpdaterStatus) -> Value {
-        let json = status.to_json();
+        let json = self.status_json(&status);
         self.inner
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -91,7 +108,7 @@ impl UpdaterService {
     }
 
     pub(crate) fn status(&self) -> Value {
-        self.snapshot().to_json()
+        self.status_json(&self.snapshot())
     }
 
     pub(crate) async fn check(self: &Arc<Self>) -> Value {
@@ -135,7 +152,9 @@ impl UpdaterService {
                     message: None,
                     checked_at_ms: Some(checked_at_ms),
                 });
-                self.start_download();
+                if self.install_supported {
+                    self.start_download();
+                }
                 json
             }
             Ok(_) => {
@@ -156,6 +175,12 @@ impl UpdaterService {
     }
 
     pub(crate) fn download(self: &Arc<Self>) -> Value {
+        if !self.install_supported {
+            return self.set_error(
+                UpdaterError::UnsupportedPlatform,
+                self.snapshot().checked_at_ms,
+            );
+        }
         if matches!(
             self.snapshot().phase,
             Phase::Downloading | Phase::Downloaded
@@ -173,6 +198,12 @@ impl UpdaterService {
     }
 
     pub(crate) fn install(&self) -> Value {
+        if !self.install_supported {
+            return self.set_error(
+                UpdaterError::UnsupportedPlatform,
+                self.snapshot().checked_at_ms,
+            );
+        }
         let Some(pending) = self.snapshot_pending() else {
             return self.set_error(
                 UpdaterError::NoUpdateAvailable,

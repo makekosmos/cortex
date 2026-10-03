@@ -6,6 +6,12 @@ GPUI-реализация Mundus Manager — панель управления E
 
 ## Запуск
 
+Native release-сборка Engine и Manager с единой продуктовой версией из release
+метаданных: `pnpm run build:native` в корне Cortex. `pnpm run build:native --dev`
+собирает оптимизированный dev-пакет; обычный Cargo без метаданных тоже помечается
+`(dev)`, а не выдаётся за production. Сборка не устанавливает приложение и не
+включает автозапуск. Предложение организации страниц: [NAVIGATION_PROPOSAL.md](NAVIGATION_PROPOSAL.md).
+
 ```bash
 cargo run --manifest-path manager-gpui/Cargo.toml
 ```
@@ -54,7 +60,7 @@ Manager без готового Engine.
 Accessible name задаётся отдельно от визуальной подписи. Не используйте прямые
 Imago/GPUI button constructors в views: тест проверяет этот общий маршрут.
 
-Синхронизация показывает отдельные блоки текущего и связанных устройств.
+Раздел «Девайсы» показывает отдельные блоки текущего и связанных устройств.
 Имя текущего компьютера берётся из ОС один раз при запуске Manager; на macOS
 используется `scutil --get ComputerName`. Та же реализация используется Engine
 для advertised sync name (явный `MUNDUS_DEVICE_NAME` в Engine остаётся приоритетным).
@@ -77,12 +83,19 @@ UI также понимает legacy-объекты с `ticket` / `code`. По�
 фоне раз в 5 секунд. Диагностический журнал и snapshot больше не запрашиваются
 при открытии страницы. Инструменты поддержки раскрываются отдельно по кнопке.
 
+Обновления используют `currentVersion` / `channel` / `newVersion` из Engine,
+не версию Cargo и не локальную догадку об ОС. `/v1/info` тоже отдаёт версию и
+канал. Суффикс `(dev)` добавляется только при отображении, не к semver в API.
+Engine возвращает `canInstall` и `installUnavailableReason`; текущий установщик
+Windows-only. Другие платформы могут узнать о новой версии продукта, но не
+скачивают Windows installer и не объявляют его доступным для автоустановки.
+
 ## Покрытие (Vue → GPUI)
 
 | Раздел | Операции |
 | --- | --- |
 | Данные | `manager.data.summary/types/list/search/storage` |
-| Синхронизация | `get_sync_snapshot`, `get_own_iroh_ticket`, `connect_with_pairing_code`, `disconnect_peer` |
+| Девайсы | `get_sync_snapshot`, `show_pairing_code`, `connect_with_pairing_code`, `disconnect_peer`, `system.privileged.status/enable` |
 | Маркетплейс | `store.catalog/refresh`, `packages.list/install/set_enabled/uninstall/catalog_status/disclosure/refresh_catalog` |
 | Движок | `engine.settings.get/set` (warm timeout, usage tracker) |
 | Настройки | `manager.db_backups.list/create/validate/restore`, автозапуск (Host) |

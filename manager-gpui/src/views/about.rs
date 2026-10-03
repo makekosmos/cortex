@@ -28,9 +28,8 @@ pub fn render(
     let mut el = card()
         .id("about-product-card")
         .debug_selector(|| "about-product-card".into());
-    // The Mundus product version injected by build-package-components.mjs;
-    // a bare `cargo build` falls back to the crate version.
-    el = el.child(kv("Mundus", crate::device_info::PRODUCT_VERSION));
+    // Shared build metadata is known immediately; bare Cargo is explicitly dev.
+    el = el.child(kv("Cortex", crate::device_info::product_version_label()));
     col = col.child(el);
 
     // KOS-137: sibling component entry point — Agenda GPUI launches on the
@@ -103,7 +102,13 @@ pub fn render(
         ("channel", "Канал"),
     ] {
         engine = engine.child(
-            field_row(app, "about.info", label, |v| vstr(v, key))
+            field_row(app, "about.info", label, |v| {
+                if key == "version" {
+                    crate::device_info::version_label(&vstr(v, key), &vstr(v, "channel"))
+                } else {
+                    vstr(v, key)
+                }
+            })
                 .id(format!("about-field-{key}"))
                 .debug_selector(move || format!("about-field-{key}")),
         );

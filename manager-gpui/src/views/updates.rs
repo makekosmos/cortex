@@ -21,7 +21,7 @@ pub fn render(
         .flex_col()
         .gap_4()
         .w_full()
-        .child(section("Обновления", "Mundus и приложения"))
+        .child(section("Обновления", "Cortex и приложения"))
         .child(render_mundus(app, cx))
         .child(
             card().child(row("Каталог", "Свежесть списка пакетов и цен").child(btn(
@@ -41,20 +41,17 @@ pub fn render(
 
 fn render_mundus(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {
     let status = app.data("upd.mundus");
-    if status.is_null() {
-        return card()
-            .child(row("Mundus", "Получение статуса обновления…"))
-            .into_any_element();
-    }
     let state = vstr(&status, "state");
-    let current = vstr(&status, "currentVersion");
+    let current = crate::async_fields::field_text(app.slots.get("upd.mundus"), |value| {
+        crate::device_info::version_label(&vstr(value, "currentVersion"), &vstr(value, "channel"))
+    });
     let next = vstr(&status, "newVersion");
-    let detail = mundus_status(&status);
+    let detail = crate::async_fields::field_text(app.slots.get("upd.mundus"), mundus_status);
     let mut content = div()
         .flex()
         .flex_col()
         .gap_3()
-        .child(row("Mundus", detail).child(badge(&current, MUTED_FG())));
+        .child(row("Cortex", detail).child(badge(&current, MUTED_FG())));
 
     if state == "downloading" {
         let percent = vnum(&status, "percent").clamp(0.0, 100.0);
@@ -84,6 +81,13 @@ fn render_mundus(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {
         content = content.child(kv("Версии", format!("{current} → {next}")));
     }
 
+    content = content.child(crate::async_fields::field_row(app, "upd.mundus", "Установка", |value| {
+        match value.get("canInstall").and_then(Value::as_bool) {
+            Some(true) => "Автоматически".into(),
+            Some(false) => vstr(value, "installUnavailableReason"),
+            None => String::new(),
+        }
+    }));
     let button = if state == "downloaded" {
         btn(
             "mundus-install",
@@ -91,7 +95,7 @@ fn render_mundus(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {
             true,
             cx,
             |this, _| this.action("updater.install", json!({})),
-        )
+        ).disabled(status.get("canInstall").and_then(Value::as_bool) == Some(false))
     } else {
         btn(
             "mundus-check",
@@ -101,8 +105,14 @@ fn render_mundus(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {
             |this, _| this.action("updater.check", json!({})),
         )
     };
-    card().child(content.child(button)).into_any_element()
+    card().id("updates-product-card")
+        .debug_selector(|| "updates-product-card".into())
+        .child(content.child(button)).into_any_element()
 }
+
+#[cfg(test)]
+#[path = "updates_tests.rs"]
+mod tests;
 
 fn mundus_status(status: &Value) -> String {
     match vstr(status, "state").as_str() {

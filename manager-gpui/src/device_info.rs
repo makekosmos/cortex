@@ -5,10 +5,13 @@ use serde_json::Value;
 #[path = "../../runtime/src/device_name.rs"]
 mod system_name;
 
-pub const PRODUCT_VERSION: &str = match option_env!("MUNDUS_PRODUCT_VERSION") {
-    Some(version) => version,
-    None => env!("CARGO_PKG_VERSION"),
-};
+#[path = "../../runtime/src/build_metadata.rs"]
+mod build_metadata;
+pub use build_metadata::version_label;
+
+pub fn product_version_label() -> String {
+    build_metadata::compiled().label()
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Platform {
@@ -68,8 +71,9 @@ impl LocalDevice {
 
     pub fn caption(&self) -> String {
         format!(
-            "{} / {PRODUCT_VERSION}",
-            self.platform.label().unwrap_or("ОС не указана")
+            "{} / {}",
+            self.platform.label().unwrap_or("ОС не указана"),
+            product_version_label()
         )
     }
 }

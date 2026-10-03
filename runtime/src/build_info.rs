@@ -28,12 +28,12 @@ pub fn engine_source_commit() -> &'static str {
 /// Product-facing version string: the injected Desktop version when available,
 /// otherwise `dev` (a bare `cargo build`).
 pub fn display_version() -> &'static str {
-    let injected = engine_version();
-    if injected.is_empty() {
-        "dev"
-    } else {
-        injected
-    }
+    crate::build_metadata::compiled().version
+}
+
+/// Explicit channel: an unversioned Cargo build is always dev, even optimized.
+pub fn channel() -> &'static str {
+    crate::build_metadata::compiled().channel
 }
 
 #[cfg(test)]

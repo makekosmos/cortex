@@ -57,6 +57,7 @@ impl UpdaterStatus {
         let mut out = json!({
             "state": self.phase.as_str(),
             "currentVersion": self.current_version,
+            "channel": crate::build_info::channel(),
         });
         let map = out.as_object_mut().expect("object literal");
         if let Some(version) = &self.new_version {
@@ -84,7 +85,10 @@ mod tests {
         let status = UpdaterStatus::idle("0.5.3".into());
         assert_eq!(
             status.to_json(),
-            json!({ "state": "idle", "currentVersion": "0.5.3" })
+            json!({
+                "state": "idle", "currentVersion": "0.5.3",
+                "channel": crate::build_info::channel()
+            })
         );
     }
 
@@ -103,6 +107,7 @@ mod tests {
             json!({
                 "state": "downloading",
                 "currentVersion": "0.5.3",
+                "channel": crate::build_info::channel(),
                 "newVersion": "0.5.4",
                 "percent": 42,
             })

@@ -38,6 +38,51 @@ async fn equal_and_older_versions_are_not_available() {
 }
 
 #[tokio::test]
+async fn unsupported_package_reports_release_without_downloading_foreign_installer() {
+    let server = MockServer::start_async().await;
+    server
+        .mock_async(|when, then| {
+            when.method(httpmock::Method::GET).path("/latest.yml");
+            then.status(200)
+                .body("version: 99.0.0\nfiles:\n  - url: a.exe\n    sha512: AAA\n    size: 1\n");
+        })
+        .await;
+    let payload = server
+        .mock_async(|when, then| {
+            when.method(httpmock::Method::GET).path("/a.exe");
+            then.status(200).body("x");
+        })
+        .await;
+    let dir = tempfile::tempdir().unwrap();
+    let service =
+        UpdaterService::try_with_feed_base(
+            dir.path().to_owned(),
+            server.base_url(),
+            crate::build_info::display_version().to_string(),
+            false,
+        )
+            .unwrap();
+    let status = service.check().await;
+    assert_eq!(status["state"], "available");
+    assert_eq!(status["newVersion"], "99.0.0");
+    assert_eq!(
+        status["currentVersion"],
+        crate::build_info::display_version()
+    );
+    assert_eq!(status["channel"], crate::build_info::channel());
+    assert_eq!(status["canInstall"], false);
+    assert!(!status["installUnavailableReason"]
+        .as_str()
+        .unwrap()
+        .is_empty());
+    assert!(!service.downloading.load(Ordering::SeqCst));
+    assert_eq!(service.download()["state"], "error");
+    assert_eq!(service.install()["state"], "error");
+    payload.assert_hits_async(0).await;
+    assert!(!dir.path().join("updates/a.exe").exists());
+}
+
+#[tokio::test]
 async fn feed_failure_is_an_error_state() {
     let dir = tempfile::tempdir().unwrap();
     let service = UpdaterService::with_feed_base(
