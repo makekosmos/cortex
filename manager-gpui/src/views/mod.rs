@@ -5,6 +5,7 @@ use gpui_component::Icon;
 use crate::app::ManagerApp;
 
 pub mod about;
+pub mod appearance;
 pub mod backups;
 pub mod browser;
 pub mod connections;
@@ -26,6 +27,7 @@ pub enum View {
     Sync,
     Packages,
     Settings,
+    Appearance,
     Connections,
     About,
     Updates,
@@ -40,7 +42,7 @@ pub enum StoreTab {
 pub const NAV_GROUPS: &[&[View]] = &[
     &[View::Packages, View::Data, View::Usage],
     &[View::Sync, View::Connections],
-    &[View::Settings, View::Updates, View::About],
+    &[View::Settings, View::Appearance, View::Updates, View::About],
 ];
 
 impl View {
@@ -51,6 +53,7 @@ impl View {
             View::Sync => "Девайсы",
             View::Packages => "Приложения",
             View::Settings => "Настройки",
+            View::Appearance => "Внешний вид",
             View::Connections => "Интеграции",
             View::About => "О приложении",
             View::Updates => "Обновления",
@@ -64,6 +67,7 @@ impl View {
             View::Sync => "icons/device-monitor.svg",
             View::Packages => "icons/store.svg",
             View::Settings => "icons/settings.svg",
+            View::Appearance => "icons/appearance.svg",
             View::Connections => "icons/connections.svg",
             View::About => "icons/help-circle.svg",
             View::Updates => "icons/download.svg",
@@ -80,6 +84,7 @@ pub fn load(view: View, app: &mut ManagerApp) {
         View::Sync => sync::load(app),
         View::Packages => store::load(app),
         View::Settings => settings::load(app),
+        View::Appearance => appearance::load(app),
         View::Connections => connections::load(app),
         View::About => about::load(app),
         View::Updates => updates::load(app),
@@ -98,6 +103,7 @@ pub fn render(
         View::Sync => sync::render(app, window, cx),
         View::Packages => store::render(app, window, cx),
         View::Settings => settings::render(app, window, cx),
+        View::Appearance => appearance::render(app, window, cx),
         View::Connections => connections::render(app, window, cx),
         View::About => about::render(app, window, cx),
         View::Updates => updates::render(app, window, cx),

@@ -1,10 +1,10 @@
-//! User settings compose the existing controls without changing their operations.
+//! System controls; appearance has its own page and independent persistence.
 use crate::app::{ManagerApp, Slot};
 use crate::async_fields::field_text;
+use crate::theme::*;
 use crate::widgets::*;
 use ::gpui::{prelude::*, *};
 use gpui_component::Disableable;
-use mundus_gpui_kit::theme::*;
 use serde_json::json;
 
 pub fn load(app: &mut ManagerApp) {
@@ -21,12 +21,6 @@ pub fn render(
     window: &mut Window,
     cx: &mut Context<ManagerApp>,
 ) -> AnyElement {
-    let mut col = page_stack()
-        .child(section(
-            "Настройки",
-            "Запуск, внешний вид, система и приватность",
-        ))
-        .child(section("Общие", ""));
     let status = app.data("engine.autostart");
     let ready = matches!(app.slots.get("engine.autostart"), Some(Slot::Ready(_)));
     let mut startup = row(
@@ -54,45 +48,62 @@ pub fn render(
             MUTED_FG(),
         ));
     }
-    col = col
+    let mut col = page_sections()
+        .child(section("Настройки", "Запуск, система и приватность"))
         .child(
-            card()
-                .id("settings-startup-card")
-                .debug_selector(|| "settings-startup-card".into())
-                .child(startup),
-        )
-        .child(section("Внешний вид", ""))
-        .child(super::dev::render_appearance(app, window, cx))
-        .child(super::engine_settings::render_body(app, window, cx))
-        .child(super::browser::render_body(app, window, cx));
-    col = col.child(
-        card()
-            .id("settings-developer-card")
-            .debug_selector(|| "settings-developer-card".into())
-            .child(
-                row(
-                    "Инструменты разработчика",
-                    "Локальные пакеты, параметры инстанса и FPS.",
+            section_group()
+                .id("settings-general-group")
+                .debug_selector(|| "settings-general-group".into())
+                .child(
+                    section("Общие", "")
+                        .id("settings-general-heading")
+                        .debug_selector(|| "settings-general-heading".into()),
                 )
                 .child(
-                    toggle(
-                        "settings-developer",
-                        app.settings_developer_open,
-                        cx,
-                        |this, open, _| {
-                            this.settings_developer_open = open;
-                            if open {
-                                super::dev::load(this);
-                            }
-                        },
-                    )
-                    .accessibility_label("Инструменты разработчика")
-                    .disabled(app.action_busy),
+                    card()
+                        .id("settings-startup-card")
+                        .debug_selector(|| "settings-startup-card".into())
+                        .child(startup),
                 ),
-            ),
-    );
+        )
+        .child(super::engine_settings::render_body(app, window, cx))
+        .child(super::browser::render_body(app, window, cx));
+    let mut developer = section_group()
+        .id("settings-developer-group")
+        .debug_selector(|| "settings-developer-group".into())
+        .child(section(
+            "Разработка",
+            "Дополнительные инструменты, выключены по умолчанию",
+        ))
+        .child(
+            card()
+                .id("settings-developer-card")
+                .debug_selector(|| "settings-developer-card".into())
+                .child(
+                    row(
+                        "Инструменты разработчика",
+                        "Локальные пакеты, параметры инстанса и FPS.",
+                    )
+                    .child(
+                        toggle(
+                            "settings-developer",
+                            app.settings_developer_open,
+                            cx,
+                            |this, open, _| {
+                                this.settings_developer_open = open;
+                                if open {
+                                    super::dev::load(this);
+                                }
+                            },
+                        )
+                        .accessibility_label("Инструменты разработчика")
+                        .disabled(app.action_busy),
+                    ),
+                ),
+        );
     if app.settings_developer_open {
-        col = col.child(super::dev::render_tools(app, window, cx));
+        developer = developer.child(super::dev::render_tools(app, window, cx));
     }
+    col = col.child(developer);
     col.into_any_element()
 }

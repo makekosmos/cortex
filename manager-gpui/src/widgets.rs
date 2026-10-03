@@ -8,12 +8,14 @@ use gpui_component::InteractiveElementExt;
 use imago_gpui::chrome::{self, SIDEBAR_W};
 
 pub use crate::button::{btn, btn_id};
-pub use crate::page_layout::{card, empty, input_field, kv, page_stack, row, row_copy, section};
+pub use crate::page_layout::{
+    card, empty, input_field, kv, page_sections, page_stack, row, row_copy, section, section_group,
+};
 pub use mundus_gpui_kit::widgets::*;
 
 use crate::app::ManagerApp;
+use crate::theme::*;
 use crate::views;
-use mundus_gpui_kit::theme::*;
 
 #[cfg(test)]
 #[path = "chrome_tests.rs"]
@@ -63,7 +65,7 @@ pub fn app_icon(source: Option<ImageSource>, name: &str) -> Div {
                 .flex()
                 .items_center()
                 .justify_center()
-                .text_size(px(11.))
+                .text_size(ui_px(11.))
                 .text_color(c(MUTED_FG()))
                 .child(icon_letter(name)),
         );
@@ -137,7 +139,10 @@ pub fn render_sidebar(
                 )
                 .on_click(move |_, _, cx| {
                     weak.update(cx, |this, cx| this.set_view(*view, cx)).ok();
-                }),
+                })
+                .into_element()
+                .text_size(ui_px(13.))
+                .line_height(ui_px(15.)),
             );
         }
         nav = nav.child(group);
@@ -157,6 +162,7 @@ pub fn render_sidebar(
                 .w(px(SIDEBAR_W))
                 .child(
                     chrome::sidebar()
+                        .bg(window_surface(SIDEBAR_BG()))
                         .child(
                             chrome::sidebar_titlebar().child(
                                 div()
@@ -194,6 +200,7 @@ pub fn render_titlebar(sidebar_progress: f32, window: &Window) -> impl IntoEleme
         drag = drag.on_double_click(|_, window, _| window.titlebar_double_click());
     }
     chrome::titlebar()
+        .bg(window_surface(BG()))
         .p_0()
         .child(div().w(px(left)).h_full().flex_none())
         .child(drag)

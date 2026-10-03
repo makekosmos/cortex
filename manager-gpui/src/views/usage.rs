@@ -12,8 +12,8 @@ use ::gpui::{prelude::*, *};
 use gpui_component::v_virtual_list;
 
 use crate::app::ManagerApp;
+use crate::theme::*;
 use crate::widgets::*;
-use mundus_gpui_kit::theme::*;
 
 mod rows;
 pub use rows::{build_usage_rows, UsageColumn, UsageRow, UsageSort};
@@ -53,7 +53,7 @@ pub fn render(
             )
             .child(
                 div()
-                    .text_size(px(12.))
+                    .text_size(crate::theme::ui_px(12.))
                     .text_color(c(MUTED_FG()))
                     .child("Показывать системные процессы"),
             ),
@@ -117,7 +117,7 @@ fn head_cell(
         .id(SharedString::from(format!("usage-sort-{text}")))
         .w(px(width))
         .flex_none()
-        .text_size(px(11.))
+        .text_size(crate::theme::ui_px(11.))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(c(MUTED_FG()))
         .whitespace_nowrap()
@@ -142,7 +142,7 @@ fn head_grow(
         .id(SharedString::from(format!("usage-sort-{text}")))
         .flex_1()
         .min_w_0()
-        .text_size(px(11.))
+        .text_size(crate::theme::ui_px(11.))
         .font_weight(FontWeight::SEMIBOLD)
         .text_color(c(MUTED_FG()))
         .whitespace_nowrap()
@@ -184,7 +184,7 @@ fn metric(text: String, width: f32) -> Div {
     div()
         .w(px(width))
         .flex_none()
-        .text_size(px(13.))
+        .text_size(crate::theme::ui_px(13.))
         .whitespace_nowrap()
         .overflow_hidden()
         .child(text)
@@ -209,7 +209,7 @@ fn usage_row(ix: usize, entry: &UsageRow) -> Stateful<Div> {
             div()
                 .flex_1()
                 .min_w_0()
-                .text_size(px(13.))
+                .text_size(crate::theme::ui_px(13.))
                 .font_weight(FontWeight::MEDIUM)
                 .whitespace_nowrap()
                 .text_ellipsis()
@@ -223,7 +223,7 @@ fn usage_row(ix: usize, entry: &UsageRow) -> Stateful<Div> {
             div()
                 .flex_1()
                 .min_w_0()
-                .text_size(px(12.))
+                .text_size(crate::theme::ui_px(12.))
                 .text_color(fade(FG(), 0.65))
                 .whitespace_nowrap()
                 .text_ellipsis()

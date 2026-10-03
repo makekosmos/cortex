@@ -13,6 +13,7 @@ fn all_pages_share_centered_width_with_sidebar_open_or_closed(cx: &mut TestAppCo
                 View::Sync,
                 View::Packages,
                 View::Settings,
+                View::Appearance,
                 View::Connections,
                 View::About,
                 View::Updates,

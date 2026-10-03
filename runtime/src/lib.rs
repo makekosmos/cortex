@@ -48,6 +48,7 @@ compile_error!(
 pub mod agents;
 pub mod app_index;
 pub(crate) mod app_network;
+pub mod appearance;
 pub mod ark_host;
 pub mod auth;
 pub mod backend_tray;

@@ -3,6 +3,15 @@ use super::*;
 
 impl ManagerApp {
     pub(super) fn poll_views(&mut self) {
+        if Instant::now() >= self.appearance.next_poll {
+            self.appearance.next_poll = Instant::now() + std::time::Duration::from_secs(2);
+            if !self.action_busy
+                && !self.background_slots.contains("appearance")
+                && !matches!(self.slots.get("appearance"), Some(Slot::Loading))
+            {
+                self.refresh("appearance", "appearance.get", json!({}));
+            }
+        }
         if self.view == View::About && Instant::now() >= self.next_about_poll {
             self.next_about_poll = Instant::now() + std::time::Duration::from_secs(5);
             if !matches!(self.slots.get("about.health"), Some(Slot::Loading)) {

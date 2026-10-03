@@ -63,7 +63,7 @@ fn cards_rows_inputs_and_actions_share_exact_grid(cx: &mut TestAppContext) {
     let b = cx.debug_bounds("ruler-card-b").unwrap();
     assert_eq!(a.origin.x, b.origin.x);
     assert_eq!(a.size.width, b.size.width);
-    assert_eq!(b.origin.y - a.bottom(), px(16.));
+    assert_eq!(b.origin.y - a.bottom(), px(24.));
     for (row, control) in [
         ("ruler-row-a", "ruler-control-a"),
         ("ruler-row-b", "ruler-control-b"),

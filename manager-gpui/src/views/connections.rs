@@ -4,8 +4,8 @@ use ::gpui::{prelude::*, *};
 use serde_json::{json, Value};
 
 use crate::app::ManagerApp;
+use crate::theme::*;
 use crate::widgets::*;
-use mundus_gpui_kit::theme::*;
 
 pub fn load(app: &mut ManagerApp) {
     super::secrets::load(app);
@@ -236,7 +236,7 @@ fn render_provider(
                             .gap_1()
                             .child(
                                 div()
-                                    .text_size(px(12.))
+                                    .text_size(crate::theme::ui_px(12.))
                                     .text_color(c(MUTED_FG()))
                                     .child(label.clone()),
                             )

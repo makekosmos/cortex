@@ -5,6 +5,7 @@ Window ""
   Button "Девайсы" selected=false
   Button "Интеграции" selected=false
   Button "Настройки" selected=false
+  Button "Внешний вид" selected=false
   Button "Обновления" selected=false
   Button "О приложении" selected=false
   Button "Свернуть"

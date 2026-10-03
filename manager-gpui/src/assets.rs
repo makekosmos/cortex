@@ -5,6 +5,10 @@ use std::borrow::Cow;
 pub struct Assets;
 const ICONS: &[(&str, &[u8])] = &[
     (
+        "icons/appearance.svg",
+        include_bytes!("../assets/icons/appearance.svg"),
+    ),
+    (
         "icons/device-laptop.svg",
         include_bytes!("../assets/icons/device-laptop.svg"),
     ),
@@ -54,7 +58,7 @@ mod tests {
             let bytes = Assets.load(name).unwrap().unwrap();
             let svg = std::str::from_utf8(&bytes).unwrap();
             assert!(svg.contains("viewBox=\"0 0 24 24\""));
-            assert!(svg.contains("stroke-width=\"1.5\""));
+            assert!(svg.contains("stroke-width=\"1.5\""), "{name}");
         }
         assert!(Assets.load("icons/sidebar-left.svg").unwrap().is_some());
         assert!(Assets.list("icons/device-").unwrap().len() == 4);

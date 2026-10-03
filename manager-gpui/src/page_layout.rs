@@ -1,10 +1,11 @@
-//! Shared page grid: pixel-based spacing, typography and control alignment.
+//! Physical layout grid, semantic spacing and independently scaled typography.
+use crate::theme::*;
 use ::gpui::{prelude::*, *};
-use mundus_gpui_kit::theme::*;
 
 pub const PAGE_WIDTH: f32 = 760.;
 pub const INSET: f32 = 16.;
 pub const GAP: f32 = 12.;
+pub const SECTION_GAP: f32 = 32.;
 pub const LABEL_WIDTH: f32 = 180.;
 
 #[cfg(test)]
@@ -16,8 +17,8 @@ pub fn input_field(
 ) -> gpui_component::input::Input {
     gpui_component::input::Input::new(state)
         .h(px(32.))
-        .text_size(px(13.))
-        .line_height(px(18.))
+        .text_size(ui_px(13.))
+        .line_height(ui_px(18.))
 }
 
 pub fn empty(text: &str) -> Div {
@@ -25,14 +26,29 @@ pub fn empty(text: &str) -> Div {
         .w_full()
         .min_w_0()
         .py(px(12.))
-        .text_size(px(13.))
-        .line_height(px(18.))
+        .text_size(ui_px(13.))
+        .line_height(ui_px(18.))
         .text_color(c(MUTED_FG()))
         .child(text.to_owned())
 }
 
+/// Ordinary adjacent cards; semantic groups use page_sections instead.
 pub fn page_stack() -> Div {
-    div().w_full().min_w_0().flex().flex_col().gap(px(16.))
+    div().w_full().min_w_0().flex().flex_col().gap(px(24.))
+}
+
+/// More space before a new subject, not between its heading and controls.
+pub fn page_sections() -> Div {
+    div()
+        .w_full()
+        .min_w_0()
+        .flex()
+        .flex_col()
+        .gap(px(SECTION_GAP))
+}
+
+pub fn section_group() -> Div {
+    div().w_full().min_w_0().flex().flex_col().gap(px(GAP))
 }
 
 pub fn section(title: &str, hint: &str) -> Div {
@@ -44,16 +60,16 @@ pub fn section(title: &str, hint: &str) -> Div {
         .gap(px(4.))
         .child(
             div()
-                .text_size(px(15.))
-                .line_height(px(20.))
+                .text_size(ui_px(15.))
+                .line_height(ui_px(20.))
                 .font_weight(FontWeight::SEMIBOLD)
                 .child(title.to_owned()),
         )
         .when(!hint.is_empty(), |d| {
             d.child(
                 div()
-                    .text_size(px(12.))
-                    .line_height(px(16.))
+                    .text_size(ui_px(12.))
+                    .line_height(ui_px(16.))
                     .text_color(c(MUTED_FG()))
                     .child(hint.to_owned()),
             )
@@ -85,8 +101,8 @@ pub fn row_copy(label: impl Into<String>, sub: impl Into<String>) -> Div {
         .gap(px(2.))
         .child(
             div()
-                .text_size(px(13.))
-                .line_height(px(18.))
+                .text_size(ui_px(13.))
+                .line_height(ui_px(18.))
                 .font_weight(FontWeight::MEDIUM)
                 .whitespace_nowrap()
                 .overflow_hidden()
@@ -96,8 +112,8 @@ pub fn row_copy(label: impl Into<String>, sub: impl Into<String>) -> Div {
         .when(!sub.is_empty(), |d| {
             d.child(
                 div()
-                    .text_size(px(12.))
-                    .line_height(px(16.))
+                    .text_size(ui_px(12.))
+                    .line_height(ui_px(16.))
                     .text_color(c(MUTED_FG()))
                     .child(sub),
             )
@@ -119,8 +135,8 @@ fn key_column(key: &str) -> Div {
     div()
         .w(px(LABEL_WIDTH))
         .flex_none()
-        .text_size(px(13.))
-        .line_height(px(18.))
+        .text_size(ui_px(13.))
+        .line_height(ui_px(18.))
         .text_color(c(MUTED_FG()))
         .child(key.to_owned())
 }
@@ -137,8 +153,8 @@ pub fn kv(key: &str, value: impl Into<String>) -> Div {
             div()
                 .flex_1()
                 .min_w_0()
-                .text_size(px(13.))
-                .line_height(px(18.))
+                .text_size(ui_px(13.))
+                .line_height(ui_px(18.))
                 .child(value.into()),
         )
 }

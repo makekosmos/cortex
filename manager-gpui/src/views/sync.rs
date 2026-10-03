@@ -5,8 +5,8 @@ use serde_json::{json, Value};
 
 use crate::app::ManagerApp;
 use crate::device_info::{peer_caption, peer_platform, Platform};
+use crate::theme::*;
 use crate::widgets::*;
-use mundus_gpui_kit::theme::*;
 
 mod pairing;
 #[cfg(test)]
@@ -148,7 +148,7 @@ fn presence(label: &str, color: u32) -> Div {
         .flex()
         .items_center()
         .gap_2()
-        .text_size(px(12.))
+        .text_size(crate::theme::ui_px(12.))
         .text_color(c(color))
         .child(div().size(px(6.)).rounded_full().bg(c(color)))
         .child(label.to_owned())
@@ -156,7 +156,7 @@ fn presence(label: &str, color: u32) -> Div {
 
 pub(super) fn section_label(label: &str) -> Div {
     div()
-        .text_size(px(12.))
+        .text_size(crate::theme::ui_px(12.))
         .font_weight(FontWeight::MEDIUM)
         .text_color(c(MUTED_FG()))
         .child(label.to_owned())

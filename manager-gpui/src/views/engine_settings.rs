@@ -6,8 +6,8 @@ use serde_json::json;
 
 use crate::app::ManagerApp;
 use crate::async_fields::field_row;
+use crate::theme::*;
 use crate::widgets::*;
-use mundus_gpui_kit::theme::*;
 
 pub fn load(app: &mut ManagerApp) {
     app.call("engine.settings", "engine.settings.get", json!({}));
@@ -18,13 +18,16 @@ pub fn render_body(
     window: &mut Window,
     cx: &mut Context<ManagerApp>,
 ) -> AnyElement {
-    let mut col = page_stack().child(section("Система и производительность", "Параметры Engine"));
+    let mut col = section_group()
+        .id("settings-system-group")
+        .debug_selector(|| "settings-system-group".into())
+        .child(section("Система и производительность", "Параметры Engine"));
 
     col = col.child(
         card()
             .child(
                 div()
-                    .text_size(px(12.))
+                    .text_size(crate::theme::ui_px(12.))
                     .text_color(c(MUTED_FG()))
                     .child("Текущие значения"),
             )
@@ -58,13 +61,13 @@ pub fn render_body(
         card()
             .child(
                 div()
-                    .text_size(px(13.))
+                    .text_size(crate::theme::ui_px(13.))
                     .font_weight(FontWeight::SEMIBOLD)
                     .child("Тёплый таймаут"),
             )
             .child(
                 div()
-                    .text_size(px(12.))
+                    .text_size(crate::theme::ui_px(12.))
                     .text_color(c(MUTED_FG()))
                     .child("Через сколько секунд Engine выгружает неактивный хост."),
             )

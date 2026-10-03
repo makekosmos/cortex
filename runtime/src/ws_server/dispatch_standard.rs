@@ -45,6 +45,15 @@ pub(super) async fn dispatch_standard(
             )
             .await,
         )
+    } else if crate::appearance::is_appearance_operation(&operation) {
+        let appearance = manager_state.appearance();
+        match operation.as_str() {
+            "appearance.get" => appearance.get(&params).await,
+            "appearance.set" => appearance.set(&params).await,
+            _ => unreachable!(),
+        }
+        .map(LocalResponse::ok)
+        .unwrap_or_else(LocalResponse::err)
     } else if let Some(rest) = operation.strip_prefix("agents.") {
         match agents
             .get_or_try_init(|| async {

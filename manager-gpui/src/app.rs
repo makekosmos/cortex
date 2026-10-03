@@ -34,11 +34,9 @@ pub struct ManagerApp {
     pub sidebar_t: f32,
     pub sidebar_target: f32,
     pub sidebar_stamp: Instant,
-    pub theme_mode: u8,
-    pub theme_idx: usize,
+    pub appearance: crate::appearance_state::Appearance,
     pub dev_fps: bool,
     pub fps_view: Entity<FpsOverlay>,
-    applied_theme: Option<(u8, usize, bool)>,
     worker: Worker,
     pub slots: HashMap<String, Slot>,
     /// Navigation reads existing snapshots; explicit refreshes still hit Engine.
@@ -94,14 +92,12 @@ impl ManagerApp {
             sidebar_t: 1.0,
             sidebar_target: 1.0,
             sidebar_stamp: Instant::now(),
-            theme_mode: 1,
-            theme_idx: 0,
+            appearance: crate::appearance_state::Appearance::new(cx),
             dev_fps: std::env::var("MANAGER_FPS").is_ok(),
             fps_view: {
                 let manager = cx.weak_entity();
                 cx.new(|_| FpsOverlay::new(manager))
             },
-            applied_theme: None,
             worker: Worker::start(data_dir),
             slots: HashMap::new(),
             navigation_load: false,
@@ -133,6 +129,7 @@ impl ManagerApp {
             next_about_poll: Instant::now(),
             background_slots: std::collections::HashSet::new(),
         };
+        this.call("appearance", "appearance.get", json!({}));
         this.load_current();
         cx.spawn(async move |this, cx| loop {
             cx.background_executor()
@@ -148,28 +145,14 @@ impl ManagerApp {
     }
 
     pub fn sync_theme(&mut self, window: &Window, cx: &mut Context<Self>) {
-        let system_dark = matches!(
-            window.appearance(),
-            WindowAppearance::Dark | WindowAppearance::VibrantDark
-        );
-        let dark = match self.theme_mode {
-            0 => false,
-            2 => system_dark,
-            _ => true,
-        };
-        let selected = (self.theme_mode, self.theme_idx, dark);
-        if self.applied_theme == Some(selected) {
-            return;
+        if let Some(Slot::Ready(value)) = self.slots.get("appearance") {
+            self.appearance.ingest(value);
         }
-        self.applied_theme = Some(selected);
-        imago_gpui::theme::set_mode(dark);
-        imago_gpui::theme::set_theme(self.theme_idx);
-        imago_gpui::theme::apply(cx);
-        cx.set_window_appearance(match self.theme_mode {
-            0 => Some(WindowAppearance::Light),
-            1 => Some(WindowAppearance::Dark),
-            _ => None,
-        });
+        let selected = self.appearance.resolve(window);
+        if self.appearance.applied.as_ref() != Some(&selected) {
+            crate::theme::apply(&selected, window, cx);
+            self.appearance.applied = Some(selected);
+        }
     }
 
     pub fn sidebar_progress(&mut self, window: &Window) -> f32 {

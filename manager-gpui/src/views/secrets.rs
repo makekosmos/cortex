@@ -4,8 +4,8 @@ use ::gpui::{prelude::*, *};
 use serde_json::json;
 
 use crate::app::ManagerApp;
+use crate::theme::*;
 use crate::widgets::*;
-use mundus_gpui_kit::theme::*;
 
 pub fn load(app: &mut ManagerApp) {
     app.call("secrets.config", "dictation.get_config", json!({}));
@@ -82,7 +82,7 @@ pub fn render_body(
         card()
             .child(
                 div()
-                    .text_size(px(13.))
+                    .text_size(crate::theme::ui_px(13.))
                     .font_weight(FontWeight::SEMIBOLD)
                     .child("API-ключ Groq"),
             )
@@ -204,7 +204,7 @@ pub fn render_body(
         card()
             .child(
                 div()
-                    .text_size(px(12.))
+                    .text_size(crate::theme::ui_px(12.))
                     .text_color(c(MUTED_FG()))
                     .child("Статистика диктовки"),
             )

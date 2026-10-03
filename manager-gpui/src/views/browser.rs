@@ -4,8 +4,8 @@
 use ::gpui::{prelude::*, *};
 
 use crate::app::ManagerApp;
+use crate::theme::*;
 use crate::widgets::*;
-use mundus_gpui_kit::theme::*;
 
 pub fn load(app: &mut ManagerApp) {
     app.slots.insert(
@@ -40,7 +40,10 @@ pub fn render_body(
     _window: &mut Window,
     cx: &mut Context<ManagerApp>,
 ) -> AnyElement {
-    let mut col = page_stack().child(section("Приватность", "Данные встроенного браузера"));
+    let mut col = section_group()
+        .id("settings-privacy-group")
+        .debug_selector(|| "settings-privacy-group".into())
+        .child(section("Приватность", "Данные встроенного браузера"));
 
     let persist = vbool(&app.data("browser.persist"), "value");
     col = col.child(
@@ -69,7 +72,7 @@ pub fn render_body(
             )
             .child(
                 div()
-                    .text_size(px(12.))
+                    .text_size(crate::theme::ui_px(12.))
                     .text_color(c(MUTED_FG()))
                     .child(format!(
                         "Файл: {}",

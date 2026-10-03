@@ -2,8 +2,8 @@ use ::gpui::{prelude::*, *};
 use serde_json::{json, Value};
 
 use crate::app::ManagerApp;
+use crate::theme::*;
 use crate::widgets::*;
-use mundus_gpui_kit::theme::*;
 
 pub fn load(app: &mut ManagerApp) {
     app.call("upd.mundus", "updater.status", json!({}));
@@ -153,7 +153,7 @@ fn render_package_updates(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> Any
     }
     let mut element = card().child(
         div()
-            .text_size(px(12.))
+            .text_size(crate::theme::ui_px(12.))
             .text_color(c(MUTED_FG()))
             .child(format!("Доступные обновления ({})", updates.len())),
     );

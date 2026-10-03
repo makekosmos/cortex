@@ -5,128 +5,11 @@ use ::gpui::{prelude::*, *};
 use serde_json::json;
 
 use crate::app::ManagerApp;
+use crate::theme::*;
 use crate::widgets::*;
-use mundus_gpui_kit::theme::*;
 
 pub fn load(app: &mut ManagerApp) {
     app.call("dev.packages", "packages.list", json!({}));
-}
-
-pub fn render_appearance(
-    app: &mut ManagerApp,
-    window: &mut Window,
-    cx: &mut Context<ManagerApp>,
-) -> AnyElement {
-    let mut mode = div().flex().gap_2();
-    for (index, label) in ["Светлая", "Тёмная", "Системная"].iter().enumerate()
-    {
-        let active = app.theme_mode == index as u8;
-        mode = mode.child(
-            crate::button::button(
-                SharedString::from(format!("theme-mode-{index}")),
-                if active {
-                    crate::button::ButtonKind::Primary
-                } else {
-                    crate::button::ButtonKind::Ghost
-                },
-            )
-            .label(*label)
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.theme_mode = index as u8;
-                cx.notify();
-            })),
-        );
-    }
-    let system_dark = matches!(
-        window.appearance(),
-        WindowAppearance::Dark | WindowAppearance::VibrantDark
-    );
-    let dark = match app.theme_mode {
-        0 => false,
-        2 => system_dark,
-        _ => true,
-    };
-    let mut themes = div().grid().grid_cols(2).gap_2().w_full().min_w_0();
-    for (index, definition) in imago_gpui::THEMES.iter().enumerate() {
-        let active = app.theme_idx == index;
-        let palette = if dark {
-            &definition.dark
-        } else {
-            &definition.light
-        };
-        let mut swatches = div().flex().items_center().gap_1();
-        for color in [palette.accent, palette.card, palette.fg] {
-            swatches = swatches.child(
-                div()
-                    .size_3()
-                    .rounded_full()
-                    .border_1()
-                    .border_color(c(BORDER()))
-                    .bg(c(color)),
-            );
-        }
-        themes = themes.child(
-            div()
-                .id(SharedString::from(format!("theme-{index}")))
-                .flex()
-                .items_center()
-                .justify_between()
-                .min_w_0()
-                .px(px(crate::page_layout::INSET))
-                .py(px(12.))
-                .rounded_md()
-                .border_1()
-                .border_color(if active {
-                    fade(ACCENT(), 0.5)
-                } else {
-                    fade(FG(), 0.10)
-                })
-                .bg(if active {
-                    fade(ACCENT(), 0.08)
-                } else {
-                    fade(FG(), 0.02)
-                })
-                .cursor_pointer()
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .flex()
-                        .flex_col()
-                        .gap_0p5()
-                        .child(
-                            div()
-                                .text_size(px(13.))
-                                .line_height(px(18.))
-                                .text_ellipsis()
-                                .whitespace_nowrap()
-                                .overflow_hidden()
-                                .child(definition.name),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(12.))
-                                .line_height(px(16.))
-                                .text_color(c(MUTED_FG()))
-                                .child(definition.desc),
-                        ),
-                )
-                .child(swatches)
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    this.theme_idx = index;
-                    cx.notify();
-                }))
-                .role(Role::Button)
-                .aria_label(format!("Тема: {}", definition.name))
-                .aria_selected(active),
-        );
-    }
-    card()
-        .id("settings-appearance-card")
-        .debug_selector(|| "settings-appearance-card".into())
-        .child(row("Режим", "Светлая, тёмная или системная тема").child(mode))
-        .child(themes)
-        .into_any_element()
 }
 
 pub fn render_tools(
@@ -154,7 +37,7 @@ pub fn render_tools(
         card()
             .child(
                 div()
-                    .text_size(px(13.))
+                    .text_size(crate::theme::ui_px(13.))
                     .font_weight(FontWeight::SEMIBOLD)
                     .child("Инстанс"),
             )
@@ -182,7 +65,7 @@ pub fn render_tools(
         card()
             .child(
                 div()
-                    .text_size(px(13.))
+                    .text_size(crate::theme::ui_px(13.))
                     .font_weight(FontWeight::SEMIBOLD)
                     .child("Установить dev-пакет"),
             )
@@ -230,7 +113,7 @@ pub fn render_tools(
         let mut el = card();
         el = el.child(
             div()
-                .text_size(px(12.))
+                .text_size(crate::theme::ui_px(12.))
                 .text_color(c(MUTED_FG()))
                 .child(format!("Dev-пакеты ({})", dev.len())),
         );

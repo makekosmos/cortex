@@ -5,8 +5,8 @@ use serde_json::json;
 
 use crate::app::ManagerApp;
 use crate::async_fields::{field_row, field_text};
+use crate::theme::*;
 use crate::widgets::*;
-use mundus_gpui_kit::theme::*;
 
 #[cfg(test)]
 #[path = "about_tests.rs"]
@@ -91,7 +91,7 @@ pub fn render(
         .debug_selector(|| "about-engine-card".into())
         .child(
             div()
-                .text_size(px(12.))
+                .text_size(crate::theme::ui_px(12.))
                 .text_color(c(MUTED_FG()))
                 .child("Engine"),
         );
@@ -151,7 +151,7 @@ pub fn render(
             card()
                 .child(
                     div()
-                        .text_size(px(13.))
+                        .text_size(crate::theme::ui_px(13.))
                         .font_weight(FontWeight::SEMIBOLD)
                         .child("Инструменты поддержки"),
                 )
@@ -200,7 +200,7 @@ pub fn render(
                 )
                 .child(
                     div()
-                        .text_size(px(12.))
+                        .text_size(crate::theme::ui_px(12.))
                         .text_color(c(MUTED_FG()))
                         .child("Снимок поддержки собирается Engine и сохраняется в файл."),
                 )

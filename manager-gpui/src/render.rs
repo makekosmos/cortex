@@ -5,9 +5,9 @@ use gpui_component::scroll::ScrollableElement;
 
 use crate::app::ManagerApp;
 use crate::modals::{render_confirm, render_overlay};
+use crate::theme::*;
 use crate::views;
 use crate::widgets::*;
-use mundus_gpui_kit::theme::*;
 
 const PAGE_MAX_WIDTH: f32 = crate::page_layout::PAGE_WIDTH;
 
@@ -25,11 +25,11 @@ impl Render for ManagerApp {
             .flex()
             .relative()
             .overflow_hidden()
-            .bg(c(BG()))
+            .bg(window_surface(BG()))
             .text_color(c(FG()))
-            .font_family("Inter")
-            .text_size(px(13.))
-            .line_height(px(20.))
+            .font_family(self.appearance.resolve(window).font_family)
+            .text_size(ui_px(13.))
+            .line_height(ui_px(20.))
             .child(render_sidebar(self, sidebar_p, window, cx))
             .child(
                 div()

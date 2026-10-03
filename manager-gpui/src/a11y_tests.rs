@@ -59,7 +59,7 @@ pub(crate) fn launch(cx: &mut TestAppContext) -> (Entity<ManagerApp>, &mut Visua
 
 /// Draw a pending frame (product handlers don't always `notify`, so force a
 /// redraw), then read the accesskit tree captured at end of frame.
-fn a11y_tree(cx: &mut VisualTestContext) -> Value {
+pub(crate) fn a11y_tree(cx: &mut VisualTestContext) -> Value {
     cx.update(|_, cx| cx.refresh_windows());
     cx.run_until_parked();
     let json = cx
@@ -127,7 +127,16 @@ fn snapshot_lines(tree: &Value) -> Vec<String> {
 #[gpui::test]
 fn every_reorganized_page_names_its_controls(cx: &mut TestAppContext) {
     let (manager, cx) = launch(cx);
-    cx.simulate_resize(gpui::size(gpui::px(1440.), gpui::px(2000.)));
+    cx.simulate_resize(gpui::size(gpui::px(1440.), gpui::px(3000.)));
+    manager.update(cx, |app, cx| {
+        app.slots.insert(
+            "appearance".into(),
+            crate::app::Slot::Ready(json!({"settings":{
+            "accent_source":"custom","accent_color":"#FFFFFF","font_size":18}})),
+        );
+        app.appearance.font_menu_open = true;
+        cx.notify();
+    });
     for view in crate::views::NAV_GROUPS
         .iter()
         .flat_map(|group| group.iter())
@@ -151,6 +160,15 @@ fn every_reorganized_page_names_its_controls(cx: &mut TestAppContext) {
             }
         }
     }
+    manager.update(cx, |app, cx| {
+        app.slots.insert(
+            "appearance".into(),
+            crate::app::Slot::Ready(json!({
+            "settings":crate::appearance_state::Settings::default()})),
+        );
+        cx.notify();
+    });
+    cx.update(|_, cx| cx.refresh_windows());
 }
 
 #[gpui::test]

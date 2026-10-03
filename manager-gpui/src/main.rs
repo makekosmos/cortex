@@ -5,6 +5,7 @@
 mod app;
 mod app_actions;
 mod app_replies;
+mod appearance_state;
 mod assets;
 mod async_fields;
 mod boot;
@@ -21,12 +22,14 @@ mod native_menu;
 mod navigation_tests;
 mod page_layout;
 mod render;
+mod theme;
 mod views;
 mod widgets;
 mod worker;
 
 use gpui::{
-    px, size, App, AppContext, Bounds, Context, SharedString, Window, WindowBounds, WindowOptions,
+    px, size, App, AppContext, Bounds, Context, SharedString, Styled, Window, WindowBounds,
+    WindowOptions,
 };
 
 use app::ManagerApp;
@@ -90,7 +93,7 @@ fn main() {
                 |window, cx| {
                     let manager = cx.new(|cx| ManagerApp::new(window, cx));
                     app_actions::register(cx, manager.downgrade());
-                    cx.new(|cx| gpui_component::Root::new(manager, window, cx))
+                    cx.new(|cx| gpui_component::Root::new(manager, window, cx).bg(gpui::rgba(0)))
                 },
             )
             .unwrap();

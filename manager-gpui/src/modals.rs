@@ -7,8 +7,8 @@ use serde_json::Value;
 
 use crate::app::{Confirm, ManagerApp};
 use crate::consent::consent_body;
+use crate::theme::*;
 use mundus_gpui_kit::fields::vopt;
-use mundus_gpui_kit::theme::*;
 
 pub fn render_confirm(confirm: &Confirm, cx: &mut Context<ManagerApp>) -> impl IntoElement {
     div()
@@ -33,13 +33,13 @@ pub fn render_confirm(confirm: &Confirm, cx: &mut Context<ManagerApp>) -> impl I
                 .gap_3()
                 .child(
                     div()
-                        .text_size(px(13.))
+                        .text_size(crate::theme::ui_px(13.))
                         .font_weight(FontWeight::SEMIBOLD)
                         .child(confirm.title.clone()),
                 )
                 .child(
                     div()
-                        .text_size(px(13.))
+                        .text_size(crate::theme::ui_px(13.))
                         .text_color(c(MUTED_FG()))
                         .child(confirm.body.clone()),
                 )
@@ -138,7 +138,7 @@ pub fn render_overlay(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> imp
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .child(
                     div()
-                        .text_size(px(13.))
+                        .text_size(crate::theme::ui_px(13.))
                         .font_weight(FontWeight::SEMIBOLD)
                         .child(title),
                 )
@@ -146,7 +146,7 @@ pub fn render_overlay(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> imp
                     div()
                         .flex_1()
                         .overflow_y_scrollbar()
-                        .text_size(px(12.))
+                        .text_size(crate::theme::ui_px(12.))
                         .text_color(c(MUTED_FG()))
                         .child(body),
                 )

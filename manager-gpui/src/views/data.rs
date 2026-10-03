@@ -6,8 +6,8 @@ use serde_json::json;
 
 use crate::app::ManagerApp;
 use crate::async_fields::field_text;
+use crate::theme::*;
 use crate::widgets::*;
-use mundus_gpui_kit::theme::*;
 
 pub fn load(app: &mut ManagerApp) {
     super::backups::load(app);
@@ -38,19 +38,19 @@ pub fn render(
                     .min_w_0()
                     .child(
                         div()
-                            .text_size(px(12.))
+                            .text_size(crate::theme::ui_px(12.))
                             .text_color(c(MUTED_FG()))
                             .child(vstr(t, "name")),
                     )
                     .child(
                         div()
-                            .text_lg()
+                            .text_size(crate::theme::ui_px(18.))
                             .font_weight(FontWeight::SEMIBOLD)
                             .child(vstr(t, "count")),
                     )
                     .child(
                         div()
-                            .text_size(px(12.))
+                            .text_size(crate::theme::ui_px(12.))
                             .text_color(c(MUTED_FG()))
                             .child(fmt_bytes(vnum(t, "logical_bytes"))),
                     ),
@@ -74,10 +74,14 @@ pub fn render(
                     .flex()
                     .items_baseline()
                     .gap_2()
-                    .child(div().text_size(px(13.)).child("Хранилище на диске"))
                     .child(
                         div()
-                            .text_size(px(12.))
+                            .text_size(crate::theme::ui_px(13.))
+                            .child("Хранилище на диске"),
+                    )
+                    .child(
+                        div()
+                            .text_size(crate::theme::ui_px(12.))
                             .text_color(c(MUTED_FG()))
                             .child(format!("всего {total}")),
                     ),
@@ -132,7 +136,7 @@ pub fn render(
     let mut types = card().w(px(260.)).flex_none();
     types = types.child(
         div()
-            .text_size(px(12.))
+            .text_size(crate::theme::ui_px(12.))
             .text_color(c(MUTED_FG()))
             .child("Типы объектов"),
     );
@@ -170,8 +174,8 @@ pub fn render(
                     div()
                         .flex_1()
                         .min_w_0()
-                        .text_size(px(13.))
-                        .line_height(px(18.))
+                        .text_size(crate::theme::ui_px(13.))
+                        .line_height(crate::theme::ui_px(18.))
                         .overflow_hidden()
                         .whitespace_nowrap()
                         .text_ellipsis()
@@ -211,7 +215,7 @@ pub fn render(
     let mut list = card().min_w_0();
     list = list.child(
         div()
-            .text_size(px(12.))
+            .text_size(crate::theme::ui_px(12.))
             .text_color(c(MUTED_FG()))
             .child(header),
     );

@@ -10,9 +10,9 @@ use ::gpui::{prelude::*, *};
 use serde_json::{json, Value};
 
 use crate::app::ManagerApp;
+use crate::theme::*;
 use crate::views::StoreTab;
 use crate::widgets::*;
-use mundus_gpui_kit::theme::*;
 
 pub fn load(app: &mut ManagerApp) {
     app.call("store.catalog", "store.catalog", json!({}));
@@ -47,7 +47,7 @@ pub fn render(
                 .items_center()
                 .rounded_md()
                 .cursor_pointer()
-                .text_size(px(13.))
+                .text_size(crate::theme::ui_px(13.))
                 .when(active, |d| d.bg(fade(ACCENT(), 0.18)))
                 .when(!active, |d| d.hover(|s| s.bg(fade(FG(), 0.06))))
                 .child(label)
@@ -302,7 +302,7 @@ fn render_catalog(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElem
                     div()
                         .id(SharedString::from(format!("listing-{id}")))
                         .cursor_pointer()
-                        .text_size(px(13.))
+                        .text_size(crate::theme::ui_px(13.))
                         .text_color(c(ACCENT()))
                         .child("Подробнее")
                         .on_click(cx.listener(move |this, _, _, cx| {
@@ -341,7 +341,7 @@ fn render_installed(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> AnyEl
         let mut el = card();
         el = el.child(
             div()
-                .text_size(px(12.))
+                .text_size(crate::theme::ui_px(12.))
                 .text_color(c(MUTED_FG()))
                 .child(format!("Установленные пакеты ({})", items.len())),
         );

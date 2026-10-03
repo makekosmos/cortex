@@ -6,8 +6,8 @@ use ::gpui::{prelude::*, *};
 use serde_json::json;
 
 use crate::app::ManagerApp;
+use crate::theme::*;
 use crate::widgets::*;
-use mundus_gpui_kit::theme::*;
 
 /// Row actions for a native app entry — the state machine behind
 /// Установить/Обновить/Открыть/Удалить. Kept pure so row states are unit-testable.
@@ -102,7 +102,7 @@ pub(super) fn render_native_apps(
         let mut el = card();
         el = el.child(
             div()
-                .text_size(px(12.))
+                .text_size(crate::theme::ui_px(12.))
                 .text_color(c(MUTED_FG()))
                 .child("Приложения"),
         );

@@ -52,8 +52,8 @@ fn caption(text: SharedString) -> Div {
         .whitespace_nowrap()
         .overflow_hidden()
         .text_ellipsis()
-        .text_size(px(LABEL_SIZE))
-        .line_height(px(LABEL_LINE_HEIGHT))
+        .text_size(crate::theme::ui_px(LABEL_SIZE))
+        .line_height(crate::theme::ui_px(LABEL_LINE_HEIGHT))
         .child(text)
 }
 
