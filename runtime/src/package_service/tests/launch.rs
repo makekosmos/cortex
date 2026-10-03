@@ -50,9 +50,11 @@ fn v2_grants_compile_from_canonical_registry_and_survive_restart() {
         expires_at: "2030-01-01T00:00:00Z".into(),
         packages: vec![CatalogEntry {
             manifest: versioned,
-            archive_url: "https://packages.kosmos.dev/demo-v2.kspkg".into(),
-            sha256: hash,
-            size,
+            archives: vec![catalog_archive(
+                "https://packages.kosmos.dev/demo-v2.kspkg",
+                hash,
+                size,
+            )],
         }],
         external_apps: vec![],
         revoked: vec![],
@@ -158,9 +160,11 @@ async fn package_definitions_are_archive_bound_registered_in_ark_and_survive_uni
         expires_at: "2030-01-01T00:00:00Z".into(),
         packages: vec![CatalogEntry {
             manifest: versioned,
-            archive_url: "https://packages.kosmos.dev/defined.kspkg".into(),
-            sha256: hash,
-            size,
+            archives: vec![catalog_archive(
+                "https://packages.kosmos.dev/defined.kspkg",
+                hash,
+                size,
+            )],
         }],
         external_apps: vec![],
         revoked: vec![],
@@ -253,9 +257,11 @@ async fn ark_conflict_rolls_back_to_the_enabled_package() {
         expires_at: "2030-01-01T00:00:00Z".into(),
         packages: vec![CatalogEntry {
             manifest: prior_versioned,
-            archive_url: "https://packages.kosmos.dev/prior.kspkg".into(),
-            sha256: prior_hash.clone(),
-            size: prior_size,
+            archives: vec![catalog_archive(
+                "https://packages.kosmos.dev/prior.kspkg",
+                prior_hash.clone(),
+                prior_size,
+            )],
         }],
         external_apps: vec![],
         revoked: vec![],
@@ -324,9 +330,11 @@ async fn ark_conflict_rolls_back_to_the_enabled_package() {
         expires_at: "2030-01-01T00:00:00Z".into(),
         packages: vec![CatalogEntry {
             manifest: VersionedManifest::V2(replacement),
-            archive_url: "https://packages.kosmos.dev/update.kspkg".into(),
-            sha256: hash,
-            size,
+            archives: vec![catalog_archive(
+                "https://packages.kosmos.dev/update.kspkg",
+                hash,
+                size,
+            )],
         }],
         external_apps: vec![],
         revoked: vec![],

@@ -118,10 +118,7 @@ impl PackageService {
             .entry(id, version)
             .cloned()
             .ok_or(PackageError::Invalid)?;
-        if catalog
-            .document
-            .is_revoked(entry.manifest.id(), entry.manifest.version(), &entry.sha256)
-        {
+        if catalog.document.entry_revoked(&entry) {
             return Err(PackageError::Invalid);
         }
         VersionReq::parse(entry.manifest.engine_api())

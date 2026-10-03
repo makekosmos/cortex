@@ -181,10 +181,11 @@ impl PackageService {
             // any direct caller that bypasses it.
             return Err(PackageError::Persistence);
         }
+        let archive = entry.archive().ok_or(PackageError::Invalid)?;
         let package = self.store.install_versioned(
             path,
-            entry.size,
-            &entry.sha256,
+            archive.size,
+            &archive.sha256,
             &entry.manifest,
             sequence,
         )?;
@@ -405,7 +406,8 @@ impl PackageService {
         let (url, expected_size, expected_sha256) = {
             let mut state = Self::lock(&self.state);
             let entry = Self::current_entry(&mut state, id, version)?;
-            (entry.archive_url, entry.size, entry.sha256)
+            let archive = entry.archive().ok_or(PackageError::Invalid)?;
+            (archive.url.clone(), archive.size, archive.sha256.clone())
         };
         let parsed = reqwest::Url::parse(&url).map_err(|_| PackageError::Invalid)?;
         // Debug/test builds may install from `file://` fixture archives; the
@@ -441,7 +443,7 @@ impl PackageService {
             {
                 return Err(PackageError::Invalid);
             }
-            let bytes = response.bytes().await.map_err(|_| PackageError::Invalid)?;
+            let bytes = read_body_bounded(response, expected_size).await?;
             fs::write(&path, &bytes).map_err(|_| PackageError::Persistence)?;
             self.install_downloaded(id, version, &path, expected_size, &expected_sha256)
                 .await

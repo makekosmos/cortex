@@ -90,6 +90,22 @@ fn manifest_v2_with_canonical_access() -> ManifestV2 {
     }
 }
 
+/// A catalog archive row for whatever platform the test runs on — fixture
+/// manifests declare every OS so the catalog validates on macOS CI too.
+fn catalog_archive(
+    url: impl Into<String>,
+    sha256: String,
+    size: u64,
+) -> crate::catalog::CatalogArchive {
+    crate::catalog::CatalogArchive {
+        os: crate::package_manifest::TargetOs::current(),
+        arch: crate::package_manifest::TargetArch::current(),
+        url: url.into(),
+        sha256,
+        size,
+    }
+}
+
 fn catalog(sequence: u64, hash: String, size: u64, expires_at: &str) -> CatalogDocument {
     CatalogDocument {
         schema_version: 1,
@@ -98,9 +114,11 @@ fn catalog(sequence: u64, hash: String, size: u64, expires_at: &str) -> CatalogD
         expires_at: expires_at.into(),
         packages: vec![CatalogEntry {
             manifest: VersionedManifest::V2(manifest()),
-            archive_url: "https://packages.kosmos.dev/demo.kspkg".into(),
-            sha256: hash,
-            size,
+            archives: vec![catalog_archive(
+                "https://packages.kosmos.dev/demo.kspkg",
+                hash,
+                size,
+            )],
         }],
         external_apps: vec![],
         revoked: vec![],

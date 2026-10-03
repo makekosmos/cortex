@@ -21,7 +21,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::package_manifest::{PackageKind, TargetOs, VersionedManifest};
+use crate::package_manifest::{PackageKind, TargetArch, TargetOs, VersionedManifest};
 
 pub(crate) const MAX_DOCUMENT: usize = 1024 * 1024;
 const MAX_PACKAGES: usize = 2_000;
@@ -73,9 +73,31 @@ pub struct CatalogDocument {
 #[serde(deny_unknown_fields)]
 pub struct CatalogEntry {
     pub manifest: VersionedManifest,
-    pub archive_url: String,
+    /// One artifact per published platform — the same manifest, different
+    /// bytes. Install selects the archive matching the current platform.
+    pub archives: Vec<CatalogArchive>,
+}
+
+/// A platform-specific `.kspkg` artifact of one package release.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct CatalogArchive {
+    pub os: TargetOs,
+    pub arch: TargetArch,
+    pub url: String,
     pub sha256: String,
     pub size: u64,
+}
+
+impl CatalogEntry {
+    /// The artifact for the platform this Engine runs on, if published.
+    pub fn archive(&self) -> Option<&CatalogArchive> {
+        let os = TargetOs::current();
+        let arch = TargetArch::current();
+        self.archives
+            .iter()
+            .find(|archive| archive.os == os && archive.arch == arch)
+    }
 }
 
 /// Storefront-only third-party app an integration connects to.
@@ -171,20 +193,40 @@ impl CatalogDocument {
         let mut seen = BTreeSet::new();
         for entry in &self.packages {
             entry.manifest.validate()?;
-            let archive_url = reqwest::Url::parse(&entry.archive_url).ok();
-            // Debug/test builds additionally accept `file://` archive URLs so
-            // fixture catalogs can point at a zip on disk; the pinned
-            // sha256/size still gates the bytes. Release builds require HTTPS.
-            if !archive_url.is_some_and(|url| {
-                (url.scheme() == "https" && url.host_str().is_some())
-                    || (cfg!(debug_assertions) && url.scheme() == "file")
-            }) || !valid_sha256(&entry.sha256)
-                || entry.size == 0
-                || !seen.insert((
-                    entry.manifest.id().to_owned(),
-                    entry.manifest.version().to_owned(),
-                ))
-            {
+            if entry.archives.is_empty() || entry.archives.len() > 8 {
+                return Err(CatalogError::Invalid("catalog entry"));
+            }
+            let mut platforms = BTreeSet::new();
+            for archive in &entry.archives {
+                let url = reqwest::Url::parse(&archive.url).ok();
+                // Debug/test builds additionally accept `file://` archive URLs
+                // so fixture catalogs can point at a zip on disk; the pinned
+                // sha256/size still gates the bytes. Release builds require
+                // HTTPS. An archive may only serve a platform the manifest
+                // declares — v1 manifests predate targets and are unchecked.
+                let declared = entry.manifest.targets().is_empty()
+                    || entry.manifest.targets().iter().any(|target| {
+                        target.os.contains(&archive.os)
+                            && target
+                                .arch
+                                .as_ref()
+                                .is_none_or(|arches| arches.contains(&archive.arch))
+                    });
+                if !url.is_some_and(|url| {
+                    (url.scheme() == "https" && url.host_str().is_some())
+                        || (cfg!(debug_assertions) && url.scheme() == "file")
+                }) || !valid_sha256(&archive.sha256)
+                    || archive.size == 0
+                    || !declared
+                    || !platforms.insert((archive.os.clone(), archive.arch.clone()))
+                {
+                    return Err(CatalogError::Invalid("catalog entry"));
+                }
+            }
+            if !seen.insert((
+                entry.manifest.id().to_owned(),
+                entry.manifest.version().to_owned(),
+            )) {
                 return Err(CatalogError::Invalid("catalog entry"));
             }
             // A `connects_to` reference must resolve to a listed external app.
@@ -232,6 +274,20 @@ impl CatalogDocument {
         self.packages
             .iter()
             .find(|entry| entry.manifest.id() == id && entry.manifest.version() == version)
+    }
+
+    /// Whether this entry's release is revoked on the current platform. With
+    /// no platform archive, a revoked row for any artifact still counts, so a
+    /// foreign-platform package cannot hide behind its own platform.
+    pub fn entry_revoked(&self, entry: &CatalogEntry) -> bool {
+        let (id, version) = (entry.manifest.id(), entry.manifest.version());
+        match entry.archive() {
+            Some(archive) => self.is_revoked(id, version, &archive.sha256),
+            None => entry
+                .archives
+                .iter()
+                .any(|archive| self.is_revoked(id, version, &archive.sha256)),
+        }
     }
 
     pub fn is_revoked(&self, id: &str, version: &str, sha256: &str) -> bool {
@@ -371,107 +427,4 @@ fn parse_utc(value: &str) -> Result<DateTime<Utc>, CatalogError> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn document_json() -> serde_json::Value {
-        serde_json::json!({
-            "schema_version": 1,
-            "sequence": 1,
-            "issued_at": "2026-10-03T00:00:00Z",
-            "expires_at": "2027-10-03T00:00:00Z",
-            "packages": [{
-                "manifest": {
-                    "schema_version": 2, "id": "com.kosmos.demo", "name": "Demo",
-                    "version": "1.0.0", "kind": "source", "engine_api": "*",
-                    "entrypoint": "w.exe", "publisher": "kosmos",
-                    "targets": [{"runtime": "worker", "os": ["windows"]}],
-                    "data": {"access": [], "defines": [], "mappings": []},
-                    "store": {
-                        "categories": ["integrations"],
-                        "connects_to": "external.demo",
-                        "data_compatibility": [{
-                            "type": "com.kosmos.note", "versions": "*",
-                            "roles": ["import"], "via": "external.demo",
-                            "fidelity": "lossless"
-                        }]
-                    }
-                },
-                "archive_url": "https://github.com/makekosmos/integrations/releases/download/catalog-1/demo.kspkg",
-                "sha256": "a".repeat(64),
-                "size": 123
-            }],
-            "external_apps": [{
-                "id": "external.demo", "name": "Demo", "publisher": "Demo Inc",
-                "publisher_tier": "verified", "description": "d",
-                "categories": ["education"], "platforms": ["windows"],
-                "official_url": "https://demo.example", "icon_url": null,
-                "data_compatibility": []
-            }],
-            "revoked": []
-        })
-    }
-
-    fn now() -> DateTime<Utc> {
-        DateTime::parse_from_rfc3339("2026-10-04T00:00:00Z")
-            .unwrap()
-            .with_timezone(&Utc)
-    }
-
-    #[test]
-    fn a_real_shaped_catalog_parses_and_lists() {
-        let bytes = serde_json::to_vec(&document_json()).unwrap();
-        let document = CatalogDocument::parse(&bytes, now(), 0).unwrap();
-        assert_eq!(document.sequence, 1);
-        let listings = document.listings();
-        assert_eq!(listings.len(), 2);
-        let package = listings.iter().find(|l| l.id == "com.kosmos.demo").unwrap();
-        assert_eq!(package.kind, ListingKind::Integration);
-        assert_eq!(
-            package.distribution,
-            Distribution::Integration {
-                package_id: "com.kosmos.demo".into(),
-                version: "1.0.0".into(),
-                connects_to: "external.demo".into(),
-            }
-        );
-        assert!(document
-            .external_url("external.demo")
-            .is_some_and(|url| url == "https://demo.example"));
-    }
-
-    #[test]
-    fn unresolvable_connects_to_and_bad_hashes_are_rejected() {
-        let mut broken = document_json();
-        broken["external_apps"] = serde_json::json!([]);
-        let bytes = serde_json::to_vec(&broken).unwrap();
-        assert!(matches!(
-            CatalogDocument::parse(&bytes, now(), 0),
-            Err(CatalogError::Invalid("connects_to"))
-        ));
-
-        let mut bad = document_json();
-        bad["packages"][0]["sha256"] = serde_json::json!("deadbeef");
-        let bytes = serde_json::to_vec(&bad).unwrap();
-        assert!(matches!(
-            CatalogDocument::parse(&bytes, now(), 0),
-            Err(CatalogError::Invalid("catalog entry"))
-        ));
-
-        let mut replay = document_json();
-        replay["sequence"] = serde_json::json!(2);
-        let bytes = serde_json::to_vec(&replay).unwrap();
-        assert!(matches!(
-            CatalogDocument::parse(&bytes, now(), 2),
-            Err(CatalogError::Replay)
-        ));
-
-        let mut expired = document_json();
-        expired["expires_at"] = serde_json::json!("2026-10-03T00:00:01Z");
-        let bytes = serde_json::to_vec(&expired).unwrap();
-        assert!(matches!(
-            CatalogDocument::parse(&bytes, now(), 0),
-            Err(CatalogError::Expired)
-        ));
-    }
-}
+mod tests;

@@ -14,7 +14,8 @@ impl PackageService {
             return false;
         };
         entry.manifest.kind() == expected_kind
-            && !catalog.document.is_revoked(id, version, &entry.sha256)
+            && entry.archive().is_some()
+            && !catalog.document.entry_revoked(entry)
     }
 
     pub fn catalog_packages(
@@ -37,12 +38,8 @@ impl PackageService {
                 name: entry.manifest.name().to_owned(),
                 kind: entry.manifest.kind().clone(),
                 publisher: entry.manifest.publisher().to_owned(),
-                archive_size: entry.size,
-                revoked: catalog.document.is_revoked(
-                    entry.manifest.id(),
-                    entry.manifest.version(),
-                    &entry.sha256,
-                ),
+                archive_size: entry.archive().map_or(0, |archive| archive.size),
+                revoked: catalog.document.entry_revoked(entry),
             })
             .collect())
     }
@@ -76,11 +73,7 @@ impl PackageService {
             if !response.status().is_success() {
                 return Err(PackageError::Invalid);
             }
-            response
-                .bytes()
-                .await
-                .map_err(|_| PackageError::Invalid)?
-                .to_vec()
+            read_body_bounded(response, crate::catalog::MAX_DOCUMENT as u64).await?
         };
         self.apply_catalog(&body)
     }
@@ -138,34 +131,6 @@ impl PackageService {
         state.catalog = Some(CatalogState { document });
         state.fault = None;
         Ok(summary)
-    }
-
-    /// Stop the workers a new catalog revokes before applying it — a revoked
-    /// package must not keep running past the catalog flip.
-    pub async fn apply_catalog_with_worker_stop(
-        &self,
-        bytes: &[u8],
-    ) -> Result<CatalogSummary, PackageError> {
-        let targets = {
-            let document: CatalogDocument =
-                serde_json::from_slice(bytes).map_err(|_| PackageError::Invalid)?;
-            document
-                .revoked
-                .into_iter()
-                .map(|item| (item.id, item.version))
-                .collect::<Vec<_>>()
-        };
-        if let Some(worker) = self.worker.as_ref() {
-            let _worker_mutation = worker.mutation.lock().await;
-            for (id, version) in &targets {
-                worker
-                    .supervisor
-                    .stop(id, version)
-                    .await
-                    .map_err(|_| PackageError::Persistence)?;
-            }
-        }
-        self.apply_catalog(bytes)
     }
 
     /// Storefront projection for Manager — listings derived from the one

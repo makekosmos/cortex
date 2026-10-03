@@ -91,9 +91,11 @@ async fn catalog_bridge_runs_through_service() {
         expires_at: "2030-01-01T00:00:00Z".into(),
         packages: vec![CatalogEntry {
             manifest: VersionedManifest::V2(manifest.clone()),
-            archive_url: "https://packages.kosmos.dev/bridge.kspkg".into(),
-            sha256: hash,
-            size,
+            archives: vec![catalog_archive(
+                "https://packages.kosmos.dev/bridge.kspkg",
+                hash,
+                size,
+            )],
         }],
         external_apps: vec![],
         revoked: vec![],
@@ -236,9 +238,11 @@ async fn catalog_bridge_runs_through_service() {
         expires_at: "2030-01-01T00:00:00Z".into(),
         packages: vec![CatalogEntry {
             manifest: VersionedManifest::V2(replacement.clone()),
-            archive_url: "https://packages.kosmos.dev/bridge-update.kspkg".into(),
-            sha256: replacement_hash,
-            size: replacement_size,
+            archives: vec![catalog_archive(
+                "https://packages.kosmos.dev/bridge-update.kspkg",
+                replacement_hash,
+                replacement_size,
+            )],
         }],
         external_apps: vec![],
         revoked: vec![],
@@ -281,9 +285,11 @@ async fn catalog_bridge_runs_through_service() {
         expires_at: "2030-01-01T00:00:00Z".into(),
         packages: vec![CatalogEntry {
             manifest: VersionedManifest::V2(broken.clone()),
-            archive_url: "https://packages.kosmos.dev/bridge-broken.kspkg".into(),
-            sha256: broken_hash,
-            size: broken_size,
+            archives: vec![catalog_archive(
+                "https://packages.kosmos.dev/bridge-broken.kspkg",
+                broken_hash,
+                broken_size,
+            )],
         }],
         external_apps: vec![],
         revoked: vec![],

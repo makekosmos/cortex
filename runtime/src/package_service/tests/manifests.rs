@@ -28,9 +28,11 @@ fn six_provider_manifests_install_with_typed_grants() {
             archive_with_versioned_manifest(&package_dir, &VersionedManifest::V2(manifest.clone()));
         packages.push(CatalogEntry {
             manifest: VersionedManifest::V2(manifest.clone()),
-            archive_url: format!("https://packages.kosmos.dev/{package}.kspkg"),
-            sha256: hash,
-            size,
+            archives: vec![catalog_archive(
+                format!("https://packages.kosmos.dev/{package}.kspkg"),
+                hash,
+                size,
+            )],
         });
         archives.push((manifest.id, manifest.version, archive));
     }

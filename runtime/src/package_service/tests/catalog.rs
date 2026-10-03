@@ -98,7 +98,7 @@ async fn install_from_catalog_verifies_size_and_sha256() {
     let (archive_path, hash, size) = archive(dir.path());
     let service = PackageService::open_for_test(dir.path()).expect("service");
     let mut doc = catalog(1, hash.clone(), size, "2030-01-01T00:00:00Z");
-    doc.packages[0].archive_url = reqwest::Url::from_file_path(&archive_path)
+    doc.packages[0].archives[0].url = reqwest::Url::from_file_path(&archive_path)
         .expect("archive url")
         .to_string();
     service
@@ -118,7 +118,7 @@ async fn install_from_catalog_verifies_size_and_sha256() {
     let (archive2, hash2, _) = archive(dir2.path());
     let service2 = PackageService::open_for_test(dir2.path()).expect("service2");
     let mut doc2 = catalog(1, hash2, size + 1, "2030-01-01T00:00:00Z");
-    doc2.packages[0].archive_url = reqwest::Url::from_file_path(&archive2)
+    doc2.packages[0].archives[0].url = reqwest::Url::from_file_path(&archive2)
         .expect("archive url")
         .to_string();
     service2
@@ -134,7 +134,7 @@ async fn install_from_catalog_verifies_size_and_sha256() {
     let (archive3, _, size3) = archive(dir3.path());
     let service3 = PackageService::open_for_test(dir3.path()).expect("service3");
     let mut doc3 = catalog(1, "0".repeat(64), size3, "2030-01-01T00:00:00Z");
-    doc3.packages[0].archive_url = reqwest::Url::from_file_path(&archive3)
+    doc3.packages[0].archives[0].url = reqwest::Url::from_file_path(&archive3)
         .expect("archive url")
         .to_string();
     service3
@@ -308,5 +308,72 @@ fn store_catalog_lists_packages_and_external_apps() {
             .store_external_url("external.demo")
             .expect("external url"),
         "https://demo.example"
+    );
+}
+
+#[tokio::test]
+async fn refresh_download_is_bounded_before_and_during_read() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    // One-shot raw HTTP server: `content_length: None` leaves the body
+    // close-delimited, exercising the streaming cap.
+    async fn serve(body: Vec<u8>, content_length: Option<usize>) -> reqwest::Response {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("listener");
+        let port = listener.local_addr().expect("addr").port();
+        tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.expect("accept");
+            let mut request = [0u8; 512];
+            let _ = socket.read(&mut request).await;
+            let mut head = b"HTTP/1.1 200 OK
+Connection: close
+"
+            .to_vec();
+            if let Some(length) = content_length {
+                head.extend_from_slice(
+                    format!(
+                        "Content-Length: {length}
+"
+                    )
+                    .as_bytes(),
+                );
+            }
+            head.extend_from_slice(
+                b"
+",
+            );
+            socket.write_all(&head).await.expect("head");
+            socket.write_all(&body).await.expect("body");
+        });
+        reqwest::get(format!("http://127.0.0.1:{port}/"))
+            .await
+            .expect("response")
+    }
+
+    // A declared Content-Length over the limit fails on the header alone.
+    let over = crate::catalog::MAX_DOCUMENT + 1;
+    let response = serve(Vec::new(), Some(over)).await;
+    assert!(
+        super::read_body_bounded(response, crate::catalog::MAX_DOCUMENT as u64)
+            .await
+            .is_err()
+    );
+
+    // Without Content-Length the stream is cut off at the same cap.
+    let response = serve(vec![0u8; over], None).await;
+    assert!(
+        super::read_body_bounded(response, crate::catalog::MAX_DOCUMENT as u64)
+            .await
+            .is_err()
+    );
+
+    // A small close-delimited body still reads through.
+    let response = serve(b"{}".to_vec(), None).await;
+    assert_eq!(
+        super::read_body_bounded(response, crate::catalog::MAX_DOCUMENT as u64)
+            .await
+            .expect("body"),
+        b"{}"
     );
 }

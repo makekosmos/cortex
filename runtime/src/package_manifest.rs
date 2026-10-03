@@ -88,7 +88,7 @@ pub enum TargetOs {
     Macos,
     Linux,
 }
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum TargetArch {
     X86_64,
@@ -398,6 +398,14 @@ impl VersionedManifest {
         }
     }
 
+    /// Declared platform targets; a v1 manifest predates the target list.
+    pub fn targets(&self) -> &[ManifestTarget] {
+        match self {
+            Self::V1(_) => &[],
+            Self::V2(manifest) => &manifest.targets,
+        }
+    }
+
     /// Unique target operating systems in manifest order — the Store listing
     /// `availability.platforms` vocabulary is derived from these.
     pub fn target_platforms(&self) -> Vec<TargetOs> {
@@ -492,23 +500,33 @@ impl ManifestV2 {
 
 impl ManifestTarget {
     fn supports_current(&self) -> bool {
-        let os = if cfg!(windows) {
-            TargetOs::Windows
-        } else if cfg!(target_os = "macos") {
-            TargetOs::Macos
-        } else {
-            TargetOs::Linux
-        };
-        let arch = if cfg!(target_arch = "aarch64") {
-            TargetArch::Arm64
-        } else {
-            TargetArch::X86_64
-        };
-        self.os.contains(&os)
+        self.os.contains(&TargetOs::current())
             && self
                 .arch
                 .as_ref()
-                .is_none_or(|arches| arches.contains(&arch))
+                .is_none_or(|arches| arches.contains(&TargetArch::current()))
+    }
+}
+
+impl TargetOs {
+    pub fn current() -> Self {
+        if cfg!(windows) {
+            Self::Windows
+        } else if cfg!(target_os = "macos") {
+            Self::Macos
+        } else {
+            Self::Linux
+        }
+    }
+}
+
+impl TargetArch {
+    pub fn current() -> Self {
+        if cfg!(target_arch = "aarch64") {
+            Self::Arm64
+        } else {
+            Self::X86_64
+        }
     }
 }
 

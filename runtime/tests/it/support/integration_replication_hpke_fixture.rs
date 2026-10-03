@@ -1,10 +1,10 @@
 use super::*;
 use engine::{
-    catalog::{CatalogDocument, CatalogEntry},
+    catalog::{CatalogArchive, CatalogDocument, CatalogEntry},
     package_manifest::{
         IntegrationManifest, IntegrationSetting, IntegrationSettingKind, ManifestData,
-        ManifestTarget, ManifestV2, PackageKind, PermissionRequest, SecretInjection, TargetOs,
-        TargetRuntime, VersionedManifest,
+        ManifestTarget, ManifestV2, PackageKind, PermissionRequest, SecretInjection, TargetArch,
+        TargetOs, TargetRuntime, VersionedManifest,
     },
 };
 use sha2::{Digest, Sha256};
@@ -78,7 +78,7 @@ pub fn manifest(origin: &str) -> VersionedManifest {
         }],
         targets: vec![ManifestTarget {
             runtime: TargetRuntime::Worker,
-            os: vec![TargetOs::Windows],
+            os: vec![TargetOs::Windows, TargetOs::Macos, TargetOs::Linux],
             arch: None,
             entrypoint: Some("package-worker-fixture.exe".into()),
         }],
@@ -145,9 +145,13 @@ pub fn catalog(origin: &str, size: u64, hash: &str) -> Vec<u8> {
         expires_at: "2027-09-07T00:00:00Z".into(),
         packages: vec![CatalogEntry {
             manifest: manifest(origin),
-            archive_url: "https://test.invalid/hpke-replication.kspkg".into(),
-            sha256: hash.into(),
-            size,
+            archives: vec![CatalogArchive {
+                os: TargetOs::current(),
+                arch: TargetArch::current(),
+                url: "https://test.invalid/hpke-replication.kspkg".into(),
+                sha256: hash.into(),
+                size,
+            }],
         }],
         external_apps: vec![],
         revoked: vec![],
