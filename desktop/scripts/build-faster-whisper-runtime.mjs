@@ -14,7 +14,7 @@ import { spawnSync } from "node:child_process";
 
 const desktopRoot = path.resolve(import.meta.dirname, "..");
 const repoRoot = path.resolve(desktopRoot, "..", "..");
-const outRoot = path.join(repoRoot, ".tmp", "local-ai-runtimes");
+const outRoot = path.join(repoRoot, ".tmp", "engine-addons");
 
 const PYTHON_VERSION = "3.11.9";
 const FASTER_WHISPER_VERSION = "1.2.1";
