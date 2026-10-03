@@ -54,6 +54,10 @@ jobs:
     uses: ./.github/workflows/installer-smoke.yml
     with:
       version: ${{ needs.plan.outputs.build_version }}
+      # The smoke must test the exact commit the release builds: HEAD
+      # normally, the already-tagged commit on a retry — never a main HEAD
+      # that may have moved since the trigger.
+      ref: ${{ needs.plan.outputs.sha }}
 
   release:
     needs: [plan, smoke]
