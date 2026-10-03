@@ -1,6 +1,5 @@
 //! Engine-owned, fail-closed Package v1 service.
 
-use base64::{engine::general_purpose::STANDARD, Engine as _};
 use chrono::{DateTime, Utc};
 use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
@@ -17,20 +16,19 @@ use std::{
 use thiserror::Error;
 use zip::ZipArchive;
 
+use crate::catalog::{EffectiveGrantProjection, InstalledListing, Role};
 pub use crate::package_manifest::{
     DataAction, DefinitionSnapshotReader, IntegrationManifest, ManifestV2, MappingDirection,
     MappingFidelity, PackageKind, PackageManifest, PermissionRequest, VersionedManifest,
 };
 use crate::{
+    catalog::{CatalogDocument, CatalogEntry, CatalogError, MAX_DOCUMENT},
     grant_authority::GrantAuthorityRegistry,
     lock_file::{
         ensure_owner_only_directory, read_owner_only_json, retry_io, write_owner_only_json,
     },
     package_registration::PackageRegistrationRegistry,
     package_store::{InstalledPackage, PackageStore, StoreError},
-    package_trust::{
-        CatalogDocument, CatalogEntry, SignatureSet, TrustError, TrustStore, TrustedKey,
-    },
     package_worker_broker::{read_snapshot_tree, BrokerConfig, PackageSnapshotFile},
     package_worker_protocol::{BridgeStatus, BridgeWorkerConfig},
     package_worker_supervisor::{
@@ -38,41 +36,21 @@ use crate::{
     },
     protocol_version::API_VERSION_CURRENT,
     runtime_grants::{compile_manifest_v2, LaunchGrant, RegisteredType, RegistrySnapshot},
-    store_catalog::{EffectiveGrantProjection, InstalledListing, Role},
 };
 
 /// Bound for joining a background install/migration task at shutdown before
 /// it is aborted — long enough for a settle, never a hang (KOS-314).
 const BACKGROUND_JOIN_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
-const MAX_DOCUMENT: usize = 1024 * 1024;
-const MAX_ENVELOPE: u64 = 2 * 1024 * 1024;
 const MAX_LISTED_PACKAGES: usize = 1024;
-const PRODUCTION_CATALOG_URL: &str =
-    "https://github.com/makekosmos/package-index/releases/latest/download/catalog.envelope.json";
-
-fn production_trust() -> Option<TrustStore> {
-    TrustStore::new(
-        TrustedKey {
-            // Persisted signed-catalog key id — see docs/brand-legacy-identifiers.md.
-            key_id: "kosmos-root-2026".into(),
-            public_key: "Si7FgOdf6Xnmpa+0LGZL9pRCeAtLhGpCjga89j4tsaY=".into(),
-        },
-        vec![TrustedKey {
-            key_id: "kosmos-release-2026".into(),
-            public_key: "Mr7fRkGegxRpquVQPEeMxFRMPB3tT9pDJ49ydDmomDQ=".into(),
-        }],
-    )
-    .ok()
-}
 
 #[derive(Debug, Error)]
 pub enum PackageError {
-    #[error("package trust is unavailable")]
-    TrustUnavailable,
+    #[error("package catalog is unavailable")]
+    CatalogUnavailable,
     #[error("package request is invalid")]
     Invalid,
-    #[error("package trust: {0}")]
-    Trust(#[from] TrustError),
+    #[error("package catalog: {0}")]
+    Catalog(#[from] CatalogError),
     #[error("package store: {0}")]
     Store(#[from] StoreError),
     #[error("package persistence failed")]
@@ -92,13 +70,6 @@ pub enum PackageError {
     Integrity,
     #[error("no published asset for this platform")]
     Unsupported,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Envelope {
-    bytes: String,
-    signatures: SignatureSet,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -141,24 +112,12 @@ pub struct AppLaunch {
     pub grant: LaunchGrant,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct TrustSummary {
-    pub trusted_release_keys: usize,
-    pub revoked_release_keys: usize,
-    pub revoked_packages: usize,
-    pub sequence: u64,
-    pub configured: bool,
-    pub fault_code: Option<String>,
-    pub catalog_sequence: u64,
-    pub transition_sequence: u64,
-    pub revocation_sequence: u64,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CatalogSummary {
     pub sequence: u64,
     pub expires_at: String,
     pub package_count: usize,
+    pub revoked_count: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -235,11 +194,9 @@ struct BridgeConfigState {
 
 struct CatalogState {
     document: CatalogDocument,
-    signatures: SignatureSet,
 }
 
 struct State {
-    trust: Option<TrustStore>,
     fault: Option<String>,
     catalog: Option<CatalogState>,
 }

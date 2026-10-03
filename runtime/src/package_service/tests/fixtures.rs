@@ -1,25 +1,3 @@
-fn key(seed: u8, id: &str) -> (SigningKey, TrustedKey) {
-    let signing = SigningKey::from_bytes(&[seed; 32]);
-    let public_key = STANDARD.encode(signing.verifying_key().as_bytes());
-    (
-        signing,
-        TrustedKey {
-            key_id: id.into(),
-            public_key,
-        },
-    )
-}
-
-fn trust() -> (TrustStore, SigningKey, SigningKey) {
-    let (root_signing, root) = key(1, "root");
-    let (release_signing, release) = key(2, "release-1");
-    (
-        TrustStore::new(root, vec![release]).expect("test trust"),
-        root_signing,
-        release_signing,
-    )
-}
-
 fn manifest() -> ManifestV2 {
     ManifestV2 {
         schema_version: 2,
@@ -49,6 +27,7 @@ fn manifest() -> ManifestV2 {
             mappings: vec![],
         },
         integration: None,
+        store: None,
     }
 }
 
@@ -107,6 +86,7 @@ fn manifest_v2_with_canonical_access() -> ManifestV2 {
             mappings: vec![],
         },
         integration: None,
+        store: None,
     }
 }
 
@@ -122,23 +102,14 @@ fn catalog(sequence: u64, hash: String, size: u64, expires_at: &str) -> CatalogD
             sha256: hash,
             size,
         }],
+        external_apps: vec![],
+        revoked: vec![],
     }
 }
 
-fn signed<T: Serialize>(document: &T, key_id: &str, key: &SigningKey) -> (Vec<u8>, SignatureSet) {
-    let bytes = serde_json::to_vec(document).expect("test json");
-    let signature = DetachedSignature {
-        key_id: key_id.into(),
-        algorithm: "ed25519".into(),
-        signature: STANDARD.encode(key.sign(&bytes).to_bytes()),
-    };
-    (
-        bytes,
-        SignatureSet {
-            schema_version: 1,
-            signatures: vec![signature],
-        },
-    )
+/// Serialize the document the way `apply_catalog` receives it off the wire.
+fn document_bytes(document: &CatalogDocument) -> Vec<u8> {
+    serde_json::to_vec(document).expect("test json")
 }
 
 fn archive(root: &Path) -> (PathBuf, String, u64) {
@@ -261,11 +232,11 @@ fn archive_bridge_binary(
 
 pub(crate) fn enabled_app_service(dir: &Path) -> (PackageService, PathBuf, String) {
     let (archive, hash, size) = archive(dir);
-    let (trust, _, release) = trust();
-    let service = PackageService::open_with_trust(dir, trust).expect("service");
+    let service = PackageService::open_for_test(dir).expect("service");
     let doc = catalog(1, hash.clone(), size, "2030-01-01T00:00:00Z");
-    let (bytes, signatures) = signed(&doc, "release-1", &release);
-    service.apply_catalog(bytes, signatures).expect("catalog");
+    service
+        .apply_catalog(document_bytes(&doc))
+        .expect("catalog");
     service
         .install_from_path("com.kosmos.demo", "1.0.0", &archive)
         .expect("install");
@@ -281,12 +252,12 @@ pub(crate) fn enabled_filesystem_app_service(dir: &Path) -> PackageService {
     });
     let versioned = VersionedManifest::V2(package_manifest);
     let (archive, hash, size) = archive_with_versioned_manifest(dir, &versioned);
-    let (trust, _, release) = trust();
-    let service = PackageService::open_with_trust(dir, trust).expect("service");
+    let service = PackageService::open_for_test(dir).expect("service");
     let mut doc = catalog(1, hash, size, "2030-01-01T00:00:00Z");
     doc.packages[0].manifest = versioned;
-    let (bytes, signatures) = signed(&doc, "release-1", &release);
-    service.apply_catalog(bytes, signatures).expect("catalog");
+    service
+        .apply_catalog(document_bytes(&doc))
+        .expect("catalog");
     service
         .install_from_path("com.kosmos.demo", "1.0.0", &archive)
         .expect("install");
@@ -310,8 +281,7 @@ pub(crate) fn enabled_note_write_app_service(dir: &Path) -> PackageService {
             .collect();
     let versioned = VersionedManifest::V2(package_manifest);
     let (archive, _, _) = archive_with_versioned_manifest(dir, &versioned);
-    let (trust, _, _) = trust();
-    let service = PackageService::open_with_trust(dir, trust).expect("service");
+    let service = PackageService::open_for_test(dir).expect("service");
     service
         .install_development_app_from_path("com.kosmos.demo", "2.0.0", &archive)
         .expect("development install");

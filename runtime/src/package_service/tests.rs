@@ -2,10 +2,9 @@
 pub(crate) mod tests {
     use super::*;
     use crate::{
+        catalog::PackageRevocation,
         package_manifest::{PermissionRequest, TargetOs, TargetRuntime},
-        package_trust::{DetachedSignature, KeyTransitionDocument, PackageRevocation},
     };
-    use ed25519_dalek::{Signer, SigningKey};
     use sha2::{Digest, Sha256};
     use std::{fs::File, io::Write};
     use tempfile::tempdir;

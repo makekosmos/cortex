@@ -252,7 +252,6 @@ fn valid_bridge_name(value: &str) -> bool {
 }
 
 fn latest_update_version(state: &State, package: &InstalledPackage) -> Option<String> {
-    let trust = state.trust.as_ref()?;
     let catalog = state.catalog.as_ref()?;
     let installed = Version::parse(&package.version).ok()?;
     catalog
@@ -260,7 +259,13 @@ fn latest_update_version(state: &State, package: &InstalledPackage) -> Option<St
         .packages
         .iter()
         .filter(|entry| entry.manifest.id() == package.id)
-        .filter(|entry| trust.ensure_package_allowed(entry).is_ok())
+        .filter(|entry| {
+            !catalog.document.is_revoked(
+                entry.manifest.id(),
+                entry.manifest.version(),
+                &entry.sha256,
+            )
+        })
         .filter_map(|entry| {
             let version = Version::parse(entry.manifest.version()).ok()?;
             (version > installed).then_some((version, entry.manifest.version().to_owned()))

@@ -110,7 +110,6 @@ arboard = "3"
 keyring = { version = "3", features = ["windows-native", "apple-native"] }
 hickory-resolver = { version = "0.24", features = ["dns-over-https-rustls"] }
 base64 = "0.22"
-ed25519-dalek = "2"
 hpke = { version = "=0.14.1", default-features = false, features = [
   "alloc",
   "getrandom",
@@ -179,6 +178,9 @@ pe-version-info = { path = "crates/pe-version-info" }
 [dev-dependencies]
 tempfile.workspace = true
 httpmock = "0.7"
+# Test-only: the replication fixtures sign their own documents; the package
+# catalog path carries no Ed25519 code.
+ed25519-dalek = "2"
 
 [lints]
 workspace = true

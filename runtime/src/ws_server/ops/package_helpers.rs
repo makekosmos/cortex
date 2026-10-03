@@ -1,16 +1,4 @@
 use super::*;
-pub(in crate::ws_server) fn package_signatures(
-    params: &serde_json::Value,
-) -> Result<SignatureSet, LocalResponse> {
-    params
-        .get("signatures")
-        .cloned()
-        .ok_or_else(|| LocalResponse::err("packages: invalid-request"))
-        .and_then(|value| {
-            serde_json::from_value(value)
-                .map_err(|_| LocalResponse::err("packages: invalid-request"))
-        })
-}
 
 pub(in crate::ws_server) fn package_id_version<'a>(
     subop: &str,
@@ -57,7 +45,7 @@ pub(in crate::ws_server) fn package_response<T: serde::Serialize>(
 
 pub(in crate::ws_server) fn package_error_code(error: &PackageError) -> &'static str {
     match error {
-        PackageError::TrustUnavailable => "trust-unavailable",
+        PackageError::CatalogUnavailable => "catalog-unavailable",
         PackageError::Invalid => "invalid-request",
         PackageError::Persistence => "persistence-failed",
         PackageError::Worker(code) => match *code {
@@ -65,10 +53,9 @@ pub(in crate::ws_server) fn package_error_code(error: &PackageError) -> &'static
             | "unavailable" => code,
             _ => "unavailable",
         },
-        PackageError::Trust(TrustError::Expired) => "catalog-expired",
-        PackageError::Trust(TrustError::Replay) => "replay-rejected",
-        PackageError::Trust(TrustError::RevokedKey | TrustError::RevokedPackage) => "revoked",
-        PackageError::Trust(_) => "trust-rejected",
+        PackageError::Catalog(crate::catalog::CatalogError::Expired) => "catalog-expired",
+        PackageError::Catalog(crate::catalog::CatalogError::Replay) => "replay-rejected",
+        PackageError::Catalog(_) => "catalog-rejected",
         PackageError::Store(_) => "store-rejected",
         // apps.* outcomes — unreachable via packages.*, mapped for totality.
         PackageError::NotFound => "not-found",

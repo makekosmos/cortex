@@ -103,12 +103,8 @@ async fn stub_release(
 
 fn native_service(dir: &tempfile::TempDir) -> Arc<PackageService> {
     Arc::new(
-        PackageService::from_parts(
-            dir.path().join("packages"),
-            None,
-            Some(dir.path().join("apps")),
-        )
-        .expect("service"),
+        PackageService::from_parts(dir.path().join("packages"), Some(dir.path().join("apps")))
+            .expect("service"),
     )
 }
 

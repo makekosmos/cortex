@@ -42,18 +42,14 @@ async fn signed_hpke_replication_reaches_offline_provider_and_rejects_stale_inpu
         .await;
     let versioned = fixture::manifest(&origin);
     let (archive, size, hash) = fixture::archive(dir.path(), &versioned);
-    let (catalog, signatures, root, release) = fixture::signed_catalog(&origin, size, &hash);
+    let catalog = fixture::catalog(&origin, size, &hash);
     let setup = support::new_setup_named(PACKAGE_ID).unwrap();
 
     let (origin_host, recipient_host) = fixture::start_hosts(&setup).await;
     let origin_dir = dir.path().join("origin-runtime");
     let recipient_dir = dir.path().join("recipient-runtime");
-    let mut origin_packages =
-        PackageService::open_with_test_trust(&origin_dir, root.clone(), vec![release.clone()])
-            .unwrap();
-    origin_packages
-        .apply_catalog(&catalog, signatures.clone())
-        .unwrap();
+    let mut origin_packages = PackageService::open_for_test(&origin_dir).unwrap();
+    origin_packages.apply_catalog(&catalog).unwrap();
     origin_packages
         .install_from_path(PACKAGE_ID, PACKAGE_VERSION, &archive)
         .unwrap();
@@ -70,11 +66,8 @@ async fn signed_hpke_replication_reaches_offline_provider_and_rejects_stale_inpu
         .set_integration_value(PACKAGE_ID, Some(SETTING), None, "origin-secret")
         .await
         .unwrap();
-    let mut recipient_packages =
-        PackageService::open_with_test_trust(&recipient_dir, root, vec![release]).unwrap();
-    recipient_packages
-        .apply_catalog(&catalog, signatures)
-        .unwrap();
+    let mut recipient_packages = PackageService::open_for_test(&recipient_dir).unwrap();
+    recipient_packages.apply_catalog(&catalog).unwrap();
     recipient_packages
         .install_from_path(PACKAGE_ID, PACKAGE_VERSION, &archive)
         .unwrap();

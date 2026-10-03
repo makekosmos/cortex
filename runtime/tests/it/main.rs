@@ -22,7 +22,6 @@ mod package_worker_process_windows;
 mod package_worker_windows;
 mod phase5_runtime_grants;
 mod snapshot_registry_fds;
-mod store_catalog_runtime;
 
 // Shared by the integration_replication_* tests.
 #[allow(clippy::unwrap_used)]

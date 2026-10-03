@@ -14,7 +14,6 @@ pub(super) async fn dispatch_special(
     _rpc_diagnostics: SharedRpcDiagnostics,
     _protocol_usage: Arc<ProtocolUsageStore>,
     package_service: Arc<PackageService>,
-    _store_catalog: Option<Arc<StoreCatalogService>>,
     snapshots: Arc<crate::package_worker_broker::SnapshotRegistry>,
     grants: Arc<GrantAuthorityRegistry>,
     desktop_authority: Arc<crate::desktop_authority::DesktopAuthorityRegistry>,

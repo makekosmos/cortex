@@ -1,6 +1,6 @@
 // Native app operations (`apps.*` RPCs). The app list is hardcoded in
 // `native_apps::NATIVE_APPS`; update checks and downloads go straight to
-// each app's GitHub Releases (`native_apps::releases`) — the package-index
+// each app's GitHub Releases (`native_apps::releases`) — the integrations
 // catalog plays no part in native apps.
 
 use std::time::Duration;

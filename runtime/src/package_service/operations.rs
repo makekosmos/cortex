@@ -94,42 +94,6 @@ impl PackageService {
             .unwrap_or_default()
     }
 
-    pub fn trust_summary(&self) -> TrustSummary {
-        let state = Self::lock(&self.state);
-        let catalog_seq = state
-            .catalog
-            .as_ref()
-            .map_or(0, |catalog| catalog.document.sequence);
-        let Some(trust) = state.trust.as_ref() else {
-            return TrustSummary {
-                trusted_release_keys: 0,
-                revoked_release_keys: 0,
-                revoked_packages: 0,
-                sequence: 0,
-                configured: false,
-                fault_code: state.fault.clone(),
-                catalog_sequence: catalog_seq,
-                transition_sequence: 0,
-                revocation_sequence: 0,
-            };
-        };
-        let summary = trust.summary();
-        TrustSummary {
-            trusted_release_keys: summary.trusted_release_key_ids.len(),
-            revoked_release_keys: summary.revoked_release_key_ids.len(),
-            revoked_packages: summary.revoked_package_count,
-            sequence: summary
-                .catalog_sequence
-                .max(summary.transition_sequence)
-                .max(summary.revocation_sequence),
-            configured: true,
-            fault_code: state.fault.clone(),
-            catalog_sequence: summary.catalog_sequence,
-            transition_sequence: summary.transition_sequence,
-            revocation_sequence: summary.revocation_sequence,
-        }
-    }
-
     pub fn catalog_summary(&self) -> Option<CatalogSummary> {
         Self::lock(&self.state)
             .catalog
@@ -138,7 +102,12 @@ impl PackageService {
                 sequence: catalog.document.sequence,
                 expires_at: catalog.document.expires_at.clone(),
                 package_count: catalog.document.packages.len(),
+                revoked_count: catalog.document.revoked.len(),
             })
+    }
+
+    pub fn catalog_fault(&self) -> Option<String> {
+        Self::lock(&self.state).fault.clone()
     }
 
     pub fn storage_root(&self) -> &Path {

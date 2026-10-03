@@ -1,13 +1,11 @@
 use super::*;
-use base64::{engine::general_purpose::STANDARD, Engine as _};
-use ed25519_dalek::{Signer, SigningKey};
 use engine::{
+    catalog::{CatalogDocument, CatalogEntry},
     package_manifest::{
         IntegrationManifest, IntegrationSetting, IntegrationSettingKind, ManifestData,
         ManifestTarget, ManifestV2, PackageKind, PermissionRequest, SecretInjection, TargetOs,
         TargetRuntime, VersionedManifest,
     },
-    package_trust::{CatalogDocument, CatalogEntry, DetachedSignature, SignatureSet, TrustedKey},
 };
 use sha2::{Digest, Sha256};
 use std::io::Write;
@@ -115,6 +113,7 @@ pub fn manifest(origin: &str) -> VersionedManifest {
             login: None,
             schedule: None,
         }),
+        store: None,
     })
 }
 
@@ -136,21 +135,9 @@ pub fn archive(dir: &Path, versioned: &VersionedManifest) -> (std::path::PathBuf
     (path, bytes.len() as u64, hash)
 }
 
-pub fn signed_catalog(
-    origin: &str,
-    size: u64,
-    hash: &str,
-) -> (Vec<u8>, SignatureSet, TrustedKey, TrustedKey) {
-    let signing = SigningKey::from_bytes(&[77; 32]);
-    let release = TrustedKey {
-        key_id: "mundus-test-release".into(),
-        public_key: STANDARD.encode(signing.verifying_key().as_bytes()),
-    };
-    let root_signing = SigningKey::from_bytes(&[78; 32]);
-    let root = TrustedKey {
-        key_id: "mundus-test-root".into(),
-        public_key: STANDARD.encode(root_signing.verifying_key().as_bytes()),
-    };
+/// Serialized catalog document for the fixture package — the catalog is
+/// unsigned now, so this is plain JSON.
+pub fn catalog(origin: &str, size: u64, hash: &str) -> Vec<u8> {
     let document = CatalogDocument {
         schema_version: 1,
         sequence: 1,
@@ -162,17 +149,10 @@ pub fn signed_catalog(
             sha256: hash.into(),
             size,
         }],
+        external_apps: vec![],
+        revoked: vec![],
     };
-    let bytes = serde_json::to_vec(&document).unwrap();
-    let signatures = SignatureSet {
-        schema_version: 1,
-        signatures: vec![DetachedSignature {
-            key_id: release.key_id.clone(),
-            algorithm: "ed25519".into(),
-            signature: STANDARD.encode(signing.sign(&bytes).to_bytes()),
-        }],
-    };
-    (bytes, signatures, root, release)
+    serde_json::to_vec(&document).unwrap()
 }
 
 pub async fn start_sync(host: &ArkHost, device: &str, port: u16, ticket: Option<&str>) {

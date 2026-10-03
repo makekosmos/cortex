@@ -27,11 +27,9 @@ use crate::grant_authority::{GrantAuthorityRegistry, GrantOwner, GrantProvenance
 use crate::integrations;
 use crate::manager_api::ManagerState;
 use crate::package_service::{PackageError, PackageService};
-use crate::package_trust::{SignatureSet, TrustError};
 use crate::pomodoro_host::{handle_pomodoro_op, PomodoroHost};
 use crate::protocol_usage::{ProtocolUsageStore, TransportKind};
 use crate::protocol_version::{Compatibility, ProtocolVersion, API_VERSION, API_VERSION_CURRENT};
-use crate::store_catalog::{CatalogDto, PackageIndexLookup, StoreCatalogService};
 use crate::usage_tracker::UsageTrackerDiagnosticsState;
 use base64::Engine as _;
 

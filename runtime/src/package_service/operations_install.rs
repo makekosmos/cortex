@@ -153,7 +153,7 @@ impl PackageService {
             .catalog
             .as_ref()
             .map(|catalog| catalog.document.sequence)
-            .ok_or(PackageError::TrustUnavailable)?;
+            .ok_or(PackageError::CatalogUnavailable)?;
         let definition_documents = match &entry.manifest {
             VersionedManifest::V2(manifest) if !manifest.data.defines.is_empty() => {
                 let documents = definition_documents_from_archive(path, manifest)?;
@@ -402,46 +402,68 @@ impl PackageService {
         id: &str,
         version: &str,
     ) -> Result<PackageSummary, PackageError> {
-        let (url, expected_size) = {
+        let (url, expected_size, expected_sha256) = {
             let mut state = Self::lock(&self.state);
             let entry = Self::current_entry(&mut state, id, version)?;
-            (entry.archive_url, entry.size)
+            (entry.archive_url, entry.size, entry.sha256)
         };
         let parsed = reqwest::Url::parse(&url).map_err(|_| PackageError::Invalid)?;
-        if parsed.scheme() != "https"
+        // Debug/test builds may install from `file://` fixture archives; the
+        // pinned sha256/size gates the bytes either way.
+        if parsed.scheme() != "https" && !(cfg!(debug_assertions) && parsed.scheme() == "file")
             || parsed.username() != ""
             || parsed.password().is_some()
             || parsed.fragment().is_some()
         {
             return Err(PackageError::Invalid);
         }
-        let response = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(60))
-            .build()
-            .map_err(|_| PackageError::Invalid)?
-            .get(parsed)
-            .send()
-            .await
-            .map_err(|_| PackageError::Invalid)?;
-        if !response.status().is_success() {
-            return Err(PackageError::Invalid);
-        }
-        if response
-            .content_length()
-            .is_some_and(|size| size != expected_size)
-        {
-            return Err(PackageError::Invalid);
-        }
-        let bytes = response.bytes().await.map_err(|_| PackageError::Invalid)?;
-        if bytes.len() as u64 != expected_size {
-            return Err(PackageError::Invalid);
-        }
         let path = self.root.join(format!(".download-{id}-{version}.kspkg"));
-        fs::write(&path, &bytes).map_err(|_| PackageError::Persistence)?;
-        let result = self
-            .install_from_path_with_worker_stop(id, version, &path)
-            .await;
+        let result = if cfg!(debug_assertions) && parsed.scheme() == "file" {
+            let source = parsed.to_file_path().map_err(|_| PackageError::Invalid)?;
+            fs::copy(&source, &path).map_err(|_| PackageError::Invalid)?;
+            self.install_downloaded(id, version, &path, expected_size, &expected_sha256)
+                .await
+        } else {
+            let response = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(60))
+                .build()
+                .map_err(|_| PackageError::Invalid)?
+                .get(parsed)
+                .send()
+                .await
+                .map_err(|_| PackageError::Invalid)?;
+            if !response.status().is_success() {
+                return Err(PackageError::Invalid);
+            }
+            if response
+                .content_length()
+                .is_some_and(|size| size != expected_size)
+            {
+                return Err(PackageError::Invalid);
+            }
+            let bytes = response.bytes().await.map_err(|_| PackageError::Invalid)?;
+            fs::write(&path, &bytes).map_err(|_| PackageError::Persistence)?;
+            self.install_downloaded(id, version, &path, expected_size, &expected_sha256)
+                .await
+        };
         let _ = fs::remove_file(path);
         result
+    }
+
+    /// The catalog is the only authority for archive bytes: an install runs
+    /// only when the downloaded file matches the pinned size and sha256
+    /// (`file_hash` — the shared verify helper every download path uses).
+    async fn install_downloaded(
+        &self,
+        id: &str,
+        version: &str,
+        path: &Path,
+        expected_size: u64,
+        expected_sha256: &str,
+    ) -> Result<PackageSummary, PackageError> {
+        crate::file_hash::verify_size_and_sha256(path, expected_size, expected_sha256)
+            .map_err(|_| PackageError::Invalid)?;
+        self.install_from_path_with_worker_stop(id, version, path)
+            .await
     }
 }

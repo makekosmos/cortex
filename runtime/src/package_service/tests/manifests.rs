@@ -35,17 +35,18 @@ fn six_provider_manifests_install_with_typed_grants() {
         archives.push((manifest.id, manifest.version, archive));
     }
 
-    let (trust_store, _, release) = trust();
-    let service = PackageService::open_with_trust(dir.path(), trust_store).expect("service");
+    let service = PackageService::open_for_test(dir.path()).expect("service");
     let catalog = CatalogDocument {
         schema_version: 1,
         sequence: 1,
         issued_at: "2029-01-01T00:00:00Z".into(),
         expires_at: "2030-01-01T00:00:00Z".into(),
         packages,
+        external_apps: vec![],
+        revoked: vec![],
     };
-    let (bytes, signatures) = signed(&catalog, "release-1", &release);
-    service.apply_catalog(bytes, signatures).expect("catalog");
+    let bytes = document_bytes(&catalog);
+    service.apply_catalog(&bytes).expect("catalog");
     for (id, version, archive) in archives {
         service
             .install_from_path(&id, &version, archive)

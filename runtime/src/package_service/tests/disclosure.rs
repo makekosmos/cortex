@@ -20,8 +20,7 @@ fn package_summary_exposes_a_verified_icon_path() {
 #[test]
 fn summaries_contain_no_sensitive_package_fields() {
     let dir = tempdir().expect("tempdir");
-    let (trust, _, _) = trust();
-    let service = PackageService::open_with_trust(dir.path(), trust).expect("service");
+    let service = PackageService::open_for_test(dir.path()).expect("service");
     let json = serde_json::to_string(&service.list().expect("list")).expect("json");
     for forbidden in [
         "sha256",
@@ -37,14 +36,13 @@ fn summaries_contain_no_sensitive_package_fields() {
 }
 
 #[test]
-fn disclosure_projects_the_signed_manifest_contract() {
+fn disclosure_projects_the_catalog_manifest_contract() {
     use crate::package_manifest::{
         DataAccessRule, DataAction, FieldAccess, ManifestMapping, MappingDirection,
         MappingFidelity, RelationAccess,
     };
     let dir = tempdir().expect("tempdir");
-    let (trust_store, _, release) = trust();
-    let service = PackageService::open_with_trust(dir.path(), trust_store).expect("service");
+    let service = PackageService::open_for_test(dir.path()).expect("service");
     let mut package_manifest = manifest();
     package_manifest.permissions = vec![PermissionRequest {
         capability: "network".into(),
@@ -71,8 +69,8 @@ fn disclosure_projects_the_signed_manifest_contract() {
     }];
     let mut doc = catalog(1, "a".repeat(64), 1, "2030-01-01T00:00:00Z");
     doc.packages[0].manifest = VersionedManifest::V2(package_manifest);
-    let (bytes, signatures) = signed(&doc, "release-1", &release);
-    service.apply_catalog(bytes, signatures).expect("catalog");
+    let bytes = document_bytes(&doc);
+    service.apply_catalog(&bytes).expect("catalog");
 
     let disclosure = service
         .disclosure("com.kosmos.demo", "1.0.0")

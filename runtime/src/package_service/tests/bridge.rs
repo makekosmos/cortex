@@ -28,7 +28,7 @@ fn bridge_config_requires_one_real_vault_and_persists_owner_state() {
 
 #[cfg(windows)]
 #[tokio::test]
-async fn signed_catalog_bridge_runs_through_service() {
+async fn catalog_bridge_runs_through_service() {
     use crate::{ark_host::ArkHost, package_worker_supervisor::PackageWorkerSupervisor};
     use std::sync::Arc;
     let dir = tempdir().unwrap();
@@ -79,11 +79,11 @@ async fn signed_catalog_bridge_runs_through_service() {
             mappings: vec![],
         },
         integration: None,
+        store: None,
     };
     let versioned = VersionedManifest::V2(manifest.clone());
     let (archive, hash, size) = archive_bridge_binary(dir.path(), &versioned);
-    let (trust, _, release) = trust();
-    let mut service = PackageService::open_with_trust(dir.path(), trust).unwrap();
+    let mut service = PackageService::open_for_test(dir.path()).unwrap();
     let catalog = CatalogDocument {
         schema_version: 1,
         sequence: 1,
@@ -95,9 +95,11 @@ async fn signed_catalog_bridge_runs_through_service() {
             sha256: hash,
             size,
         }],
+        external_apps: vec![],
+        revoked: vec![],
     };
-    let (bytes, signatures) = signed(&catalog, "release-1", &release);
-    service.apply_catalog(bytes, signatures).unwrap();
+    let bytes = document_bytes(&catalog);
+    service.apply_catalog(&bytes).unwrap();
     service
         .install_from_path(&manifest.id, &manifest.version, archive)
         .unwrap();
@@ -238,9 +240,11 @@ async fn signed_catalog_bridge_runs_through_service() {
             sha256: replacement_hash,
             size: replacement_size,
         }],
+        external_apps: vec![],
+        revoked: vec![],
     };
-    let (bytes, signatures) = signed(&update, "release-1", &release);
-    service.apply_catalog(bytes, signatures).unwrap();
+    let bytes = document_bytes(&update);
+    service.apply_catalog(&bytes).unwrap();
     let updated = service
         .install_from_path_with_worker_stop(
             &replacement.id,
@@ -281,9 +285,11 @@ async fn signed_catalog_bridge_runs_through_service() {
             sha256: broken_hash,
             size: broken_size,
         }],
+        external_apps: vec![],
+        revoked: vec![],
     };
-    let (bytes, signatures) = signed(&broken_update, "release-1", &release);
-    service.apply_catalog(bytes, signatures).unwrap();
+    let bytes = document_bytes(&broken_update);
+    service.apply_catalog(&bytes).unwrap();
     supervisor.test_fail_next_start();
     let failed_update = service
         .install_from_path_with_worker_stop(&broken.id, &broken.version, broken_archive)
