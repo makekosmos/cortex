@@ -55,6 +55,7 @@ fn manifest() -> ManifestV2 {
                 interval_seconds: 3600,
             }),
         }),
+        store: None,
     }
 }
 

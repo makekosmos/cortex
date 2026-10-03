@@ -25,6 +25,8 @@ const MAX_TARGETS: usize = 16;
 const MAX_ACCESS: usize = 64;
 const MAX_DEFINES: usize = 64;
 const MAX_MAPPINGS: usize = 64;
+const MAX_STORE_CATEGORIES: usize = 32;
+const MAX_STORE_COMPATIBILITY: usize = 64;
 
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum ManifestError {
@@ -79,7 +81,7 @@ pub enum TargetRuntime {
     Standalone,
     Web,
 }
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum TargetOs {
     Windows,
@@ -183,6 +185,52 @@ pub struct ManifestData {
     #[serde(default)]
     pub mappings: Vec<ManifestMapping>,
 }
+/// Storefront metadata carried inside the manifest — the single source of
+/// truth the catalog's Store listing is derived from. Optional so packages
+/// that never appear in the Store stay valid.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ManifestStore {
+    /// Store-facing description; falls back to `description` when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub categories: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub connects_to: Option<String>,
+    #[serde(default)]
+    pub data_compatibility: Vec<DataCompatibility>,
+}
+
+/// A canonical-data compatibility row shown on a Store listing.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct DataCompatibility {
+    #[serde(rename = "type")]
+    pub type_id: String,
+    pub versions: String,
+    pub roles: std::collections::BTreeSet<Role>,
+    pub via: String,
+    pub fidelity: Fidelity,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "lowercase")]
+pub enum Role {
+    Read,
+    Edit,
+    Import,
+    Export,
+    Sync,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "kebab-case")]
+pub enum Fidelity {
+    Native,
+    Lossless,
+    Lossy,
+    MetadataOnly,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct ManifestV2 {
@@ -204,6 +252,8 @@ pub struct ManifestV2 {
     pub data: ManifestData,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub integration: Option<IntegrationManifest>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub store: Option<ManifestStore>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(untagged)]
@@ -307,7 +357,8 @@ impl VersionedManifest {
             Self::V2(manifest) => manifest
                 .targets
                 .iter()
-                .find(|target| target.runtime == TargetRuntime::Worker && target.supports_current())
+                .filter(|target| target.runtime == TargetRuntime::Worker)
+                .find(|target| target.supports_current())
                 .and_then(|target| target.entrypoint.as_deref())
                 .or_else(|| {
                     (matches!(manifest.kind, PackageKind::Source | PackageKind::Bridge)
@@ -327,27 +378,50 @@ impl VersionedManifest {
         }
     }
 
+    pub fn store(&self) -> Option<&ManifestStore> {
+        match self {
+            Self::V1(_) => None,
+            Self::V2(manifest) => manifest.store.as_ref(),
+        }
+    }
+
+    /// Store-facing description: the `store` block wins over the plain
+    /// manifest description.
+    pub fn store_description(&self) -> Option<&str> {
+        match self {
+            Self::V1(_) => None,
+            Self::V2(manifest) => manifest
+                .store
+                .as_ref()
+                .and_then(|store| store.description.as_deref())
+                .or(manifest.description.as_deref()),
+        }
+    }
+
+    /// Unique target operating systems in manifest order — the Store listing
+    /// `availability.platforms` vocabulary is derived from these.
+    pub fn target_platforms(&self) -> Vec<TargetOs> {
+        match self {
+            Self::V1(_) => vec![],
+            Self::V2(manifest) => {
+                let mut seen = std::collections::BTreeSet::new();
+                let mut platforms = Vec::new();
+                for target in &manifest.targets {
+                    for os in &target.os {
+                        if seen.insert(os.clone()) {
+                            platforms.push(os.clone());
+                        }
+                    }
+                }
+                platforms
+            }
+        }
+    }
+
     pub fn permissions(&self) -> &[PermissionRequest] {
         match self {
             Self::V1(manifest) => &manifest.permissions,
             Self::V2(manifest) => &manifest.permissions,
-        }
-    }
-}
-
-/// Trusted-install evidence for legacy v1 compatibility. Parsing itself does
-/// not prove signatures or first-party ownership.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct V1TrustContext {
-    pub signature_verified: bool,
-    pub first_party_package: bool,
-}
-
-impl V1TrustContext {
-    pub fn verified_first_party() -> Self {
-        Self {
-            signature_verified: true,
-            first_party_package: true,
         }
     }
 }
@@ -439,19 +513,6 @@ impl ManifestTarget {
 }
 
 impl PackageManifest {
-    pub fn parse_with_v1_trust(
-        input: &str,
-        trust: &V1TrustContext,
-    ) -> Result<VersionedManifest, ManifestError> {
-        let parsed = Self::parse(input)?;
-        if matches!(parsed, VersionedManifest::V1(_))
-            && (!trust.signature_verified || !trust.first_party_package)
-        {
-            return Err(ManifestError::InvalidField("v1_trust"));
-        }
-        Ok(parsed)
-    }
-
     pub fn parse(input: &str) -> Result<VersionedManifest, ManifestError> {
         let value: serde_json::Value =
             serde_json::from_str(input).map_err(|e| ManifestError::Parse(e.to_string()))?;
@@ -692,6 +753,37 @@ fn validate_v2(m: &ManifestV2) -> Result<(), ManifestError> {
     if let Some(integration) = &m.integration {
         integration.validate(m)?;
     }
+    if let Some(store) = &m.store {
+        if store.description.as_ref().is_some_and(|d| {
+            d.is_empty() || d.len() > MAX_DESCRIPTION || d.chars().any(char::is_control)
+        }) || store.categories.len() > MAX_STORE_CATEGORIES
+            || unique_len(&store.categories) != store.categories.len()
+            || store.categories.iter().any(|c| {
+                c.is_empty()
+                    || c.len() > 64
+                    || !c
+                        .bytes()
+                        .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+            })
+            || store.connects_to.as_ref().is_some_and(|id| {
+                id.len() > 128 || !id.starts_with("external.") || !valid_type_id(id)
+            })
+            || store.data_compatibility.len() > MAX_STORE_COMPATIBILITY
+        {
+            return Err(ManifestError::InvalidField("store"));
+        }
+        for row in &store.data_compatibility {
+            if !valid_type_id(&row.type_id)
+                || row.type_id.len() > 128
+                || row.versions.len() > 128
+                || VersionReq::parse(&row.versions).is_err()
+                || row.roles.is_empty()
+                || !valid_type_id(&row.via)
+            {
+                return Err(ManifestError::InvalidField("store.data_compatibility"));
+            }
+        }
+    }
     Ok(())
 }
 fn validate_lists(
@@ -755,12 +847,11 @@ fn known_capability(value: &str) -> bool {
     )
 }
 fn safe_operation_scope(scope: &str) -> bool {
+    fn valid_byte(byte: u8) -> bool {
+        byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'.' | b'_' | b'-')
+    }
     let operation = scope.strip_suffix(".*").unwrap_or(scope);
-    !operation.is_empty()
-        && operation.len() <= 128
-        && operation.bytes().all(|byte| {
-            byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'.' | b'_' | b'-')
-        })
+    !operation.is_empty() && operation.len() <= 128 && operation.bytes().all(valid_byte)
 }
 fn safe_package_id(value: &str) -> bool {
     value.len() <= MAX_ID
@@ -909,24 +1000,44 @@ mod tests {
     }
 
     #[test]
-    fn v1_trust_is_explicit_and_schema_versions_are_not_shared() {
-        let input = serde_json::to_string(&valid()).unwrap();
-        assert!(PackageManifest::parse_with_v1_trust(
-            &input,
-            &V1TrustContext::verified_first_party()
-        )
-        .is_ok());
-        assert!(PackageManifest::parse_with_v1_trust(
-            &input,
-            &V1TrustContext {
-                signature_verified: false,
-                first_party_package: true,
-            }
-        )
-        .is_err());
+    fn schema_versions_are_not_shared() {
         let mut wrong = valid();
         wrong.schema_version = 2;
         assert!(wrong.validate().is_err());
+    }
+
+    #[test]
+    fn v2_store_metadata_validates() {
+        let s = concat!(
+            r#"{"schema_version":2,"id":"com.kosmos.demo","name":"Demo","version":"1.2.3","#,
+            r#""kind":"source","engine_api":"*","entrypoint":"w.exe","#,
+            r#""publisher":"kosmos","targets":[{"runtime":"worker","os":["windows"]}],"#,
+            r#""data":{"access":[],"defines":[],"mappings":[]},"#,
+            r#""store":{"description":"d","categories":["integrations"],"#,
+            r#""connects_to":"external.demo","data_compatibility":[{"type":"com.kosmos.note","#,
+            r#""versions":"*","roles":["import"],"via":"com.kosmos.demo","#,
+            r#""fidelity":"lossless"}]}}"#
+        );
+        assert!(PackageManifest::parse(s).is_ok());
+        for bad in [
+            r#""connects_to":"not-external""#,
+            r#""categories":["UPPER"]"#,
+            concat!(
+                r#""data_compatibility":[{"type":"com.kosmos.note","versions":"*","#,
+                r#""roles":[],"via":"com.kosmos.demo","fidelity":"lossless"}]"#
+            ),
+        ] {
+            let broken = s.replacen(
+                match bad {
+                    r#""connects_to":"not-external""# => r#""connects_to":"external.demo""#,
+                    r#""categories":["UPPER"]"# => r#""categories":["integrations"]"#,
+                    _ => r#""roles":["import"]"#,
+                },
+                bad,
+                1,
+            );
+            assert!(PackageManifest::parse(&broken).is_err(), "{bad}");
+        }
     }
 
     #[test]

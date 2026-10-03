@@ -141,6 +141,7 @@
                 mappings: vec![],
             },
             integration: None,
+            store: None,
         };
         let pe = minimal_pe();
         let file = std::fs::File::create(&archive).expect("archive");

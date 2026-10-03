@@ -71,6 +71,7 @@ fn opaque_manifest(
             mappings: vec![],
         },
         integration: None,
+        store: None,
     };
     (common, VersionedManifest::V2(v2))
 }
