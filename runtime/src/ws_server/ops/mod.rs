@@ -30,7 +30,6 @@ mod apps;
 mod calculator;
 mod command;
 mod diagnostics;
-mod export;
 mod file_index;
 mod filesystem;
 #[cfg(test)]
@@ -49,7 +48,6 @@ pub(super) use apps::*;
 pub(super) use calculator::*;
 pub(super) use command::*;
 pub(super) use diagnostics::*;
-pub(super) use export::*;
 pub(super) use file_index::*;
 pub(super) use filesystem::*;
 pub(super) use games::*;

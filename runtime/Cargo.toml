@@ -70,8 +70,6 @@ uuid.workspace = true
 # usage_tracker module (Phase E1) — sha2 для tracked_app_id хеша.
 sha2.workspace = true
 hmac = "0.12"
-# Phase 7 — export module: CSV для task/time_entry конвертеров.
-csv = "1"
 reqwest = { version = "0.12", default-features = false, features = [
   "json",
   "rustls-tls",

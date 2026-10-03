@@ -121,8 +121,6 @@ pub(super) async fn dispatch_standard(
         }
     } else if let Some(rest) = operation.strip_prefix("filesystem.") {
         handle_filesystem_op(rest, params, &client, &grants).await
-    } else if let Some(rest) = operation.strip_prefix("export.") {
-        handle_export_op(rest, params, &ark_host).await
     } else if let Some(rest) = operation.strip_prefix("arrancador.") {
         handle_games_op(rest, params, &package_service).await
     } else if let Some(rest) = operation.strip_prefix("games.") {
