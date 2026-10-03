@@ -1,6 +1,6 @@
 use super::PackageError;
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "package-worker-fixture")))]
 fn package_integration_entry(id: &str, version: &str, setting: &str) -> Option<keyring::Entry> {
     keyring::Entry::new(
         crate::brand::KEYRING_SERVICE,
@@ -9,7 +9,7 @@ fn package_integration_entry(id: &str, version: &str, setting: &str) -> Option<k
     .ok()
 }
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "package-worker-fixture")))]
 pub(crate) fn read_package_integration_secret(
     id: &str,
     version: &str,
@@ -18,7 +18,7 @@ pub(crate) fn read_package_integration_secret(
     package_integration_entry(id, version, setting)?.get_password().ok()
 }
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "package-worker-fixture")))]
 pub(crate) fn save_package_integration_secret(
     id: &str,
     version: &str,
@@ -31,7 +31,7 @@ pub(crate) fn save_package_integration_secret(
         .map_err(|_| PackageError::Persistence)
 }
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "package-worker-fixture")))]
 pub(crate) fn clear_package_integration_secret(
     id: &str,
     version: &str,
@@ -46,7 +46,7 @@ pub(crate) fn clear_package_integration_secret(
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "package-worker-fixture"))]
 mod test_store {
     use super::*;
     use std::{collections::HashMap, sync::{Mutex, OnceLock}};
@@ -87,7 +87,7 @@ mod test_store {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "package-worker-fixture"))]
 pub(crate) fn read_package_integration_secret(
     id: &str,
     version: &str,
@@ -96,7 +96,7 @@ pub(crate) fn read_package_integration_secret(
     test_store::read(id, version, setting)
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "package-worker-fixture"))]
 pub(crate) fn save_package_integration_secret(
     id: &str,
     version: &str,
@@ -106,7 +106,7 @@ pub(crate) fn save_package_integration_secret(
     test_store::save(id, version, setting, value)
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "package-worker-fixture"))]
 pub(crate) fn clear_package_integration_secret(
     id: &str,
     version: &str,

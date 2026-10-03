@@ -38,12 +38,6 @@ pub fn accent_foreground(accent: u32) -> u32 {
         0xffffff
     }
 }
-pub fn ACCENT_FG() -> u32 {
-    ACCENT_OVERRIDE
-        .with(Cell::get)
-        .map(accent_foreground)
-        .unwrap_or_else(imago_gpui::theme::ACCENT_FG)
-}
 /// Zeron glass is a surface recipe, not a single window flag. macOS and
 /// Windows blur the desktop; Linux stays solid because compositor blur is not
 /// guaranteed.

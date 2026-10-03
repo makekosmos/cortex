@@ -70,8 +70,8 @@ fn cards_rows_inputs_and_actions_share_exact_grid(cx: &mut TestAppContext) {
     ] {
         let row = cx.debug_bounds(row).unwrap();
         let control = cx.debug_bounds(control).unwrap();
-        assert_eq!(row.origin.x - a.origin.x, px(INSET + 1.));
-        assert_eq!(a.right() - control.right(), px(INSET + 1.));
+        assert_eq!(row.origin.x - a.origin.x, px(INSET));
+        assert_eq!(a.right() - control.right(), px(INSET));
         assert_eq!(row.center().y, control.center().y);
         assert_eq!(control.size.height, px(32.));
         assert_eq!(

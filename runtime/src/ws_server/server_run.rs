@@ -9,7 +9,13 @@ impl WsServer {
             tokio::select! {
                 _ = shutdown.cancelled() => break,
                 accepted = self.listener.accept() => {
-                    let (stream, _peer) = accepted?;
+                    // A burst can leave aborted entries in the accept queue
+                    // (BSD/macOS report them, Linux does not) — a dropped
+                    // socket must not kill the whole listener.
+                    let Ok((stream, _peer)) = accepted else {
+                        tokio::time::sleep(Duration::from_millis(5)).await;
+                        continue;
+                    };
                     let permit = match self.lifecycle.capacity.clone().try_acquire_owned() {
                         Ok(permit) => permit,
                         Err(_) => {

@@ -20,6 +20,9 @@ pub fn version_label(version: &str, channel: &str) -> String {
     }
 }
 
+// KOS-278: the version always stays semver — the updater parses it — while
+// an uninjected build marks itself on the "dev" channel, so the UI labels
+// it "0.1.0 (dev)" instead of presenting a release version.
 pub fn from_inputs(
     product: Option<&'static str>,
     channel: Option<&'static str>,

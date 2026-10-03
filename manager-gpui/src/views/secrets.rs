@@ -153,7 +153,7 @@ pub fn render_modal(
     } else {
         String::new()
     };
-    let mut body = div()
+    let body = div()
         .id("key-modal-scrim")
         .absolute()
         .size_full()

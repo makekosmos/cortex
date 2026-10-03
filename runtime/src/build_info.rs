@@ -50,9 +50,11 @@ mod tests {
     }
 
     #[test]
-    fn display_version_is_dev_when_the_product_version_is_not_injected() {
-        // This test build does not set MUNDUS_PRODUCT_VERSION. 0.1.0 would
-        // be the crate placeholder, which a release once shipped by mistake.
-        assert_eq!(display_version(), "dev");
+    fn uninjected_build_is_semver_on_the_dev_channel() {
+        // This test build does not set MUNDUS_PRODUCT_VERSION: the version
+        // stays the crate version (semver for the updater), while the "dev"
+        // channel keeps the UI label honest with a "(dev)" suffix (KOS-278).
+        assert!(semver::Version::parse(display_version()).is_ok());
+        assert_eq!(channel(), "dev");
     }
 }

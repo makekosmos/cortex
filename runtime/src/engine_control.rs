@@ -401,7 +401,12 @@ async fn accept_loop(
     loop {
         tokio::select! {
             accepted = listener.accept() => {
-                let Ok((stream, _)) = accepted else { break };
+                // Aborted queue entries are reported by accept on BSD/macOS;
+                // a dropped socket must not kill the control listener.
+                let Ok((stream, _)) = accepted else {
+                    tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+                    continue;
+                };
                 let state = Arc::clone(&state);
                 let sender = sender.clone();
                 let core_commands = Arc::clone(&core_commands);

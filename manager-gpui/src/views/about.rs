@@ -29,6 +29,8 @@ pub fn render(
         .id("about-product-card")
         .debug_selector(|| "about-product-card".into());
     // Shared build metadata is known immediately; bare Cargo is explicitly dev.
+    // A bare `cargo build` has no injected product version and reports "dev"
+    // here — never the crate's 0.1.0 placeholder (KOS-278).
     el = el.child(kv("Mundus", crate::device_info::product_version_label()));
     col = col.child(el);
 

@@ -117,6 +117,17 @@ impl WsServer {
         })
     }
 
+    /// Test hook: shrink the connection semaphore so capacity tests need a
+    /// handful of sockets instead of `MAX_ACTIVE_WS_CONNECTIONS + 1` —
+    /// 129 concurrent loopback fds exceed macOS's default 256-fd limit.
+    #[cfg(test)]
+    pub(super) fn with_test_capacity(mut self, connections: usize) -> Self {
+        if let Some(lifecycle) = Arc::get_mut(&mut self.lifecycle) {
+            lifecycle.capacity = Arc::new(tokio::sync::Semaphore::new(connections));
+        }
+        self
+    }
+
     #[allow(
         clippy::result_large_err,
         reason = "public API returns the local server error enum"

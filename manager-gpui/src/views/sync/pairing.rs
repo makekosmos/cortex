@@ -1,9 +1,7 @@
 use ::gpui::{prelude::*, *};
 use serde_json::json;
 
-use super::{
-    block, block_row, device_identity, pairing_code, presence, section_label,
-};
+use super::{block, block_row, device_identity, pairing_code, presence, section_label};
 use crate::app::ManagerApp;
 use crate::widgets::*;
 use mundus_gpui_kit::theme::*;
@@ -134,30 +132,33 @@ fn privileged_row(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement 
         && vbool(&status, "running")
         && vbool(&status, "pipe_ok")
         && vbool(&status, "compatible");
-    block().child(
-        block_row(true)
-            .child(device_identity(
-                "Расширенные права",
-                if granted {
-                    "Включены — обновления приложения больше не будут показывать окно брандмауэра."
-                } else {
-                    "Один раз позволяет службе следить за обновлениями — окно брандмауэра после обновлений больше не появится."
-                },
-            ))
-            .child(if granted {
-                presence("Включены", SUCCESS()).into_any_element()
-            } else {
-                btn(
-                    "sync-enable-privileged",
-                    "Включить",
-                    true,
-                    cx,
-                    |this, _cx| {
-                        this.call("sync.privileged", "system.privileged.enable", json!({}));
+    block()
+        .child(
+            block_row(true)
+                .child(device_identity(
+                    "Расширенные права",
+                    if granted {
+                        "Включены — обновления приложения больше не будут \
+                     показывать окно брандмауэра."
+                    } else {
+                        "Один раз позволяет службе следить за обновлениями — окно \
+                     брандмауэра после обновлений больше не появится."
                     },
-                )
-                .into_any_element()
-            }),
-    )
-    .into_any_element()
+                ))
+                .child(if granted {
+                    presence("Включены", SUCCESS()).into_any_element()
+                } else {
+                    btn(
+                        "sync-enable-privileged",
+                        "Включить",
+                        true,
+                        cx,
+                        |this, _cx| {
+                            this.call("sync.privileged", "system.privileged.enable", json!({}));
+                        },
+                    )
+                    .into_any_element()
+                }),
+        )
+        .into_any_element()
 }

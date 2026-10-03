@@ -54,14 +54,13 @@ async fn unsupported_package_reports_release_without_downloading_foreign_install
         })
         .await;
     let dir = tempfile::tempdir().unwrap();
-    let service =
-        UpdaterService::try_with_feed_base(
-            dir.path().to_owned(),
-            server.base_url(),
-            crate::build_info::display_version().to_string(),
-            false,
-        )
-            .unwrap();
+    let service = UpdaterService::try_with_feed_base(
+        dir.path().to_owned(),
+        server.base_url(),
+        crate::build_info::display_version().to_string(),
+        false,
+    )
+    .unwrap();
     let status = service.check().await;
     assert_eq!(status["state"], "available");
     assert_eq!(status["newVersion"], "99.0.0");
