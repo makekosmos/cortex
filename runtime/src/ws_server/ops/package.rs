@@ -65,16 +65,6 @@ pub(in crate::ws_server) async fn handle_package_op(
             Err(response) => return response,
         },
         "refresh_catalog" => package_response(subop, service.refresh_catalog().await),
-        "catalog_apply" => {
-            let Some(document) = params.get("document").and_then(serde_json::Value::as_str) else {
-                return LocalResponse::err("packages.catalog_apply: invalid-request");
-            };
-            let document = document.as_bytes().to_vec();
-            package_response(
-                subop,
-                service.apply_catalog_with_worker_stop(&document).await,
-            )
-        }
         "revoke_legacy_grants" => {
             let Some(source_ids) = params.get("source_ids").and_then(Value::as_array) else {
                 return LocalResponse::err("packages.revoke_legacy_grants: invalid-request");
