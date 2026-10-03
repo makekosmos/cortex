@@ -61,6 +61,7 @@ pub enum AppearanceMenu {
     DarkTheme,
     FontFamily,
     FontSize,
+    Material,
 }
 
 pub struct Appearance {

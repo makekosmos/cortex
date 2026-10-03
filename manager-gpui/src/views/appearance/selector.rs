@@ -60,6 +60,7 @@ fn commit(
             };
             json!({"font_size": size})
         }
+        AppearanceMenu::Material => json!({"material": option.value}),
     };
     patch(app, params, cx);
 }
@@ -412,7 +413,7 @@ pub(super) fn select(
             .border_1()
             .border_color(c(BORDER()))
             .shadow_lg()
-            .bg(c(CARD()))
+            .bg(menu_fill())
             .p(px(4.))
             .font_family(".SystemUIFont")
             .flex()

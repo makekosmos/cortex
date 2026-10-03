@@ -5,8 +5,8 @@ impl ManagerApp {
     pub(super) fn poll_views(&mut self) {
         if Instant::now() >= self.appearance.next_poll {
             self.appearance.next_poll = Instant::now() + std::time::Duration::from_secs(2);
-            if !self.action_busy
-                && !self.background_slots.contains("appearance")
+            if !self.background_slots.contains("appearance")
+                && !self.background_slots.contains("appearance.set")
                 && !matches!(self.slots.get("appearance"), Some(Slot::Loading))
             {
                 self.refresh("appearance", "appearance.get", json!({}));

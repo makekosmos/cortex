@@ -7,8 +7,6 @@ use crate::widgets::*;
 
 pub fn load(app: &mut ManagerApp) {
     app.call("upd.mundus", "updater.status", json!({}));
-    app.call("upd.catalog", "store.catalog", json!({}));
-    app.call("upd.installed", "packages.list", json!({}));
 }
 
 pub fn render(
@@ -17,21 +15,8 @@ pub fn render(
     cx: &mut Context<ManagerApp>,
 ) -> AnyElement {
     page_stack()
-        .child(section("Обновления", "Cortex и приложения"))
+        .child(section("Обновления", "Только это приложение"))
         .child(render_mundus(app, cx))
-        .child(
-            card().child(row("Каталог", "Свежесть списка пакетов и цен").child(btn(
-                "upd-refresh",
-                "Проверить пакеты",
-                true,
-                cx,
-                |this, _| {
-                    this.action("store.refresh", json!({}));
-                    this.action("packages.refresh_catalog", json!({}));
-                },
-            ))),
-        )
-        .child(render_package_updates(app, cx))
         .into_any_element()
 }
 
@@ -47,7 +32,7 @@ fn render_mundus(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {
         .flex()
         .flex_col()
         .gap_3()
-        .child(row("Cortex", detail).child(badge(&current, MUTED_FG())));
+        .child(row("Mundus", detail).child(badge(&current, MUTED_FG())));
 
     if state == "downloading" {
         let percent = vnum(&status, "percent").clamp(0.0, 100.0);
@@ -127,51 +112,4 @@ fn mundus_status(status: &Value) -> String {
         "error" => format!("Не удалось проверить: {}", vstr(status, "message")),
         _ => "Статус недоступен".into(),
     }
-}
-
-fn render_package_updates(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {
-    let catalog = app.data("upd.catalog");
-    let installed = app.data("upd.installed");
-    if catalog.is_null() && installed.is_null() {
-        return empty("Загрузка…").into_any_element();
-    }
-    let mut updates = Vec::new();
-    for package in varr(&installed, "packages") {
-        let id = vstr(package, "id");
-        let current = vstr(package, "version");
-        let latest = varr(&catalog, "listings")
-            .iter()
-            .find(|listing| vstr(listing, "id") == id)
-            .map(|listing| vstr(vget(listing, "distribution"), "version"))
-            .unwrap_or_default();
-        if !latest.is_empty() && latest != current {
-            let name = vopt(package, "name")
-                .filter(|name| !name.is_empty())
-                .unwrap_or_else(|| "Пакет".into());
-            updates.push((id, name, vopt(package, "icon_path"), current, latest));
-        }
-    }
-    let mut element = card().child(
-        div()
-            .text_size(crate::theme::ui_px(12.))
-            .text_color(c(MUTED_FG()))
-            .child(format!("Доступные обновления ({})", updates.len())),
-    );
-    if updates.is_empty() {
-        element = element.child(empty("Все пакеты актуальны"));
-    }
-    for (id, name, icon_path, current, latest) in updates {
-        let package_id = id.clone();
-        element = element.child(
-            entry_row(icon_file(icon_path), name, format!("{current} → {latest}")).child(btn_id(
-                &format!("upd-{id}"),
-                "Обновить",
-                cx.listener(move |this, _, _, cx| {
-                    this.action("packages.install", json!({"package_id": package_id}));
-                    cx.notify();
-                }),
-            )),
-        );
-    }
-    element.into_any_element()
 }

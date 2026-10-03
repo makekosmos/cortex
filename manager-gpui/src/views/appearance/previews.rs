@@ -11,58 +11,50 @@ fn bar(fraction: f32, color: Hsla) -> Div {
         .bg(color)
 }
 
-#[derive(Clone, Copy)]
-enum Corners {
-    All,
-    Left,
-    Right,
-}
-
-fn miniature(palette: &Palette, corners: Corners) -> Div {
+fn miniature(palette: &Palette) -> Div {
     let line = fade(palette.fg, 0.22);
     let strong = fade(palette.fg, 0.34);
-    let root = div().size_full().flex().bg(c(palette.card));
-    let root = match corners {
-        Corners::All => root.rounded(px(6.)),
-        Corners::Left => root.rounded_tl(px(6.)).rounded_bl(px(6.)),
-        Corners::Right => root.rounded_tr(px(6.)).rounded_br(px(6.)),
-    };
-    root.child(
-        div()
-            .w(px(44.))
-            .h_full()
-            .flex_none()
-            .overflow_hidden()
-            .flex()
-            .flex_col()
-            .gap(px(7.))
-            .px(px(8.))
-            .pt(px(14.))
-            .child(bar(0.70, strong))
-            .child(bar(1., line))
-            .child(bar(0.85, line))
-            .child(bar(1., line)),
-    )
-    .child(
-        div()
-            .flex_1()
-            .min_w_0()
-            .my(px(8.))
-            .mr(px(8.))
-            .rounded(px(6.))
-            .border_1()
-            .border_color(c(palette.border))
-            .bg(c(palette.bg))
-            .overflow_hidden()
-            .flex()
-            .flex_col()
-            .gap(px(7.))
-            .p(px(10.))
-            .child(bar(0.62, strong))
-            .child(bar(0.88, line))
-            .child(bar(0.76, line))
-            .child(bar(0.52, line)),
-    )
+    div()
+        .size_full()
+        .flex()
+        .rounded(px(6.))
+        .bg(c(palette.card))
+        .child(
+            div()
+                .w(px(44.))
+                .h_full()
+                .flex_none()
+                .overflow_hidden()
+                .flex()
+                .flex_col()
+                .gap(px(7.))
+                .px(px(8.))
+                .pt(px(14.))
+                .child(bar(0.70, strong))
+                .child(bar(1., line))
+                .child(bar(0.85, line))
+                .child(bar(1., line)),
+        )
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .my(px(8.))
+                .mr(px(8.))
+                .rounded(px(6.))
+                .border_1()
+                .border_color(c(palette.border))
+                .bg(c(palette.bg))
+                .overflow_hidden()
+                .flex()
+                .flex_col()
+                .gap(px(7.))
+                .p(px(10.))
+                .child(bar(0.62, strong))
+                .child(bar(0.88, line))
+                .child(bar(0.76, line))
+                .child(bar(0.52, line)),
+        )
 }
 
 fn mode_card(
@@ -153,70 +145,76 @@ pub(super) fn modes(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> Div {
         .iter()
         .find(|t| t.key == app.appearance.settings.dark_theme)
         .unwrap_or(&themes[0]);
+    // One preview, split down the middle: light on the left, dark on the
+    // right. Two full miniatures read as four inner panels.
     let split = div()
         .size_full()
         .flex()
+        .rounded(px(6.))
+        .overflow_hidden()
         .child(
             div()
                 .w_1_2()
                 .h_full()
-                .overflow_hidden()
-                .child(miniature(&light.light, Corners::Left)),
-        )
-        .child(
-            div()
-                .w_1_2()
-                .h_full()
-                .overflow_hidden()
-                .child(miniature(&dark.dark, Corners::Right)),
-        );
-    section_group()
-        .child(section(
-            "Режим темы",
-            "Системная тема следует светлому или тёмному режиму ОС",
-        ))
-        .child(
-            div()
-                .w_full()
+                .bg(c(light.light.bg))
+                .p(px(10.))
                 .flex()
-                .items_start()
-                .gap(px(16.))
-                .child(mode_card(
-                    app,
-                    "system",
-                    "Системная",
-                    "icons/monitor.svg",
-                    split,
-                    cx,
-                ))
-                .child(mode_card(
-                    app,
-                    "light",
-                    "Светлая",
-                    "icons/sun.svg",
-                    miniature(&light.light, Corners::All),
-                    cx,
-                ))
-                .child(mode_card(
-                    app,
-                    "dark",
-                    "Тёмная",
-                    "icons/moon.svg",
-                    miniature(&dark.dark, Corners::All),
-                    cx,
-                )),
+                .flex_col()
+                .gap(px(7.))
+                .child(bar(0.62, fade(light.light.fg, 0.34)))
+                .child(bar(0.88, fade(light.light.fg, 0.22)))
+                .child(bar(0.7, fade(light.light.fg, 0.22))),
         )
+        .child(
+            div()
+                .w_1_2()
+                .h_full()
+                .bg(c(dark.dark.bg))
+                .p(px(10.))
+                .flex()
+                .flex_col()
+                .gap(px(7.))
+                .child(bar(0.62, fade(dark.dark.fg, 0.34)))
+                .child(bar(0.88, fade(dark.dark.fg, 0.22)))
+                .child(bar(0.7, fade(dark.dark.fg, 0.22))),
+        );
+    div()
+        .w_full()
+        .flex()
+        .items_start()
+        .gap(px(16.))
+        .child(mode_card(
+            app,
+            "system",
+            "Системная",
+            "icons/monitor.svg",
+            split,
+            cx,
+        ))
+        .child(mode_card(
+            app,
+            "light",
+            "Светлая",
+            "icons/sun.svg",
+            miniature(&light.light),
+            cx,
+        ))
+        .child(mode_card(
+            app,
+            "dark",
+            "Тёмная",
+            "icons/moon.svg",
+            miniature(&dark.dark),
+            cx,
+        ))
 }
 
-pub(super) fn palettes(
+pub(super) fn theme_rows(
     app: &mut ManagerApp,
     window: &mut Window,
     cx: &mut Context<ManagerApp>,
-) -> Div {
-    let mut rows = card()
-        .id("appearance-theme-card")
-        .debug_selector(|| "appearance-theme-card".into())
-        .gap(px(0.));
+) -> Vec<AnyElement> {
+    let mut rows = Vec::new();
     for (ix, (kind, title, field, dark)) in [
         (
             AppearanceMenu::LightTheme,
@@ -269,31 +267,13 @@ pub(super) fn palettes(
             window,
             cx,
         );
-        rows = rows.child(
-            div()
-                .min_h(px(60.))
-                .py(px(12.))
-                .when(ix != 0, |row| row.border_t_1().border_color(c(BORDER())))
-                .flex()
-                .flex_wrap()
-                .items_center()
-                .gap(px(16.))
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w(px(160.))
-                        .text_size(ui_px(13.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .child(title),
-                )
+        rows.push(
+            card_row(ix == 0)
+                .child(div().flex_1().min_w(px(160.)).child(row_title(title)))
                 .child(selector)
-                .debug_selector(move || format!("appearance-{field}-row")),
+                .debug_selector(move || format!("appearance-{field}-row"))
+                .into_any_element(),
         );
     }
-    section_group()
-        .child(section(
-            "Цветовые темы",
-            "Отдельная палитра для каждого режима",
-        ))
-        .child(rows)
+    rows
 }

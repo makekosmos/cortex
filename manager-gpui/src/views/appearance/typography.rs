@@ -60,58 +60,35 @@ pub(super) fn render(
         window,
         cx,
     );
-    let mut card = card()
-        .id("appearance-font-card")
-        .debug_selector(|| "appearance-font-card".into())
-        .child(
-            div()
-                .min_h(px(60.))
-                .py(px(12.))
-                .flex()
-                .flex_wrap()
-                .items_center()
-                .gap(px(16.))
-                .child(
-                    div()
-                        .min_w(px(160.))
-                        .flex_1()
-                        .flex()
-                        .flex_col()
-                        .gap(px(2.))
-                        .child(
-                            div()
-                                .text_size(ui_px(13.))
-                                .line_height(ui_px(17.))
-                                .font_weight(FontWeight::MEDIUM)
-                                .child("Шрифт интерфейса"),
-                        )
-                        .child(
-                            div()
-                                .text_size(ui_px(12.))
-                                .line_height(ui_px(16.))
-                                .text_color(c(MUTED_FG()))
-                                .child("Список шрифтов, доступных на этом устройстве."),
-                        ),
-                )
-                .child(
-                    div()
-                        .flex_none()
-                        .max_w_full()
-                        .flex()
-                        .flex_wrap()
-                        .items_center()
-                        .gap(px(8.))
-                        .child(font)
-                        .child(size),
-                ),
-        );
+    let mut block = section_block(
+        "Шрифты",
+        settings_card()
+            .id("appearance-font-card")
+            .debug_selector(|| "appearance-font-card".into())
+            .child(
+                card_row(true)
+                    .child(
+                        div()
+                            .min_w(px(160.))
+                            .flex_1()
+                            .child(row_title("Шрифт интерфейса"))
+                            .child(row_meta("Меню и текст интерфейса.")),
+                    )
+                    .child(
+                        div()
+                            .flex_none()
+                            .max_w_full()
+                            .flex()
+                            .flex_wrap()
+                            .items_center()
+                            .gap(px(8.))
+                            .child(font)
+                            .child(size),
+                    ),
+            ),
+    );
     if app.appearance.ready && !app.appearance.fonts.contains(&family) {
-        card = card.child(empty("Выбранный шрифт недоступен; используется системный."));
+        block = block.child(empty("Выбранный шрифт недоступен; используется системный."));
     }
-    section_group()
-        .child(section(
-            "Типографика",
-            "Шрифт и размер текста, без изменения сетки отступов",
-        ))
-        .child(card)
+    block
 }

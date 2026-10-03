@@ -16,37 +16,86 @@ pub fn load(app: &mut ManagerApp) {
 }
 
 pub(super) fn editable(app: &ManagerApp) -> bool {
-    !app.action_busy
-        && app.appearance.ready
-        && matches!(app.slots.get("appearance"), Some(Slot::Ready(_)))
+    app.appearance.ready && matches!(app.slots.get("appearance"), Some(Slot::Ready(_)))
 }
 
 pub(super) fn patch(app: &mut ManagerApp, params: Value, cx: &mut Context<ManagerApp>) {
-    if editable(app) {
-        app.action("appearance.set", params);
-        cx.notify();
+    if !editable(app) {
+        return;
     }
+    // Keep the current page in place. A global action would show a bottom
+    // banner and reload the view, which shifts the whole window.
+    if let Some(Slot::Ready(value)) = app.slots.get_mut("appearance") {
+        if let (Some(settings), Some(patch)) = (
+            value.get_mut("settings").and_then(Value::as_object_mut),
+            params.as_object(),
+        ) {
+            for (key, item) in patch {
+                settings.insert(key.clone(), item.clone());
+            }
+        }
+        let snapshot = value.clone();
+        app.appearance.ingest(&snapshot);
+    }
+    app.refresh("appearance.set", "appearance.set", params);
+    cx.notify();
 }
 
-pub(super) fn choice(
-    app: &ManagerApp,
-    id: String,
-    label: &str,
-    selected: bool,
-    params: Value,
-    cx: &mut Context<ManagerApp>,
-) -> crate::button::Button {
-    crate::button::button(
-        SharedString::from(id),
-        if selected {
-            crate::button::ButtonKind::Primary
-        } else {
-            crate::button::ButtonKind::Ghost
-        },
-    )
-    .label(label.to_owned())
-    .disabled(!editable(app))
-    .on_click(cx.listener(move |app, _, _, cx| patch(app, params.clone(), cx)))
+pub(super) fn section_label(label: &'static str) -> Div {
+    div()
+        .px(px(8.))
+        .text_size(px(13.))
+        .line_height(px(17.))
+        .text_color(c(MUTED_FG()))
+        .child(label)
+}
+
+pub(super) fn section_block(label: &'static str, block: impl IntoElement) -> Div {
+    div()
+        .mt(px(32.))
+        .flex()
+        .flex_col()
+        .gap(px(8.))
+        .child(section_label(label))
+        .child(block)
+}
+
+pub(super) fn settings_card() -> Div {
+    card().px(px(0.)).py(px(0.)).gap(px(0.))
+}
+
+pub(super) fn card_row(first: bool) -> Div {
+    div()
+        .mx(px(16.))
+        .py(px(12.))
+        .min_h(px(60.))
+        .when(!first, |row| {
+            row.border_t_1().border_color(fade(BORDER(), 0.6))
+        })
+        .flex()
+        .flex_wrap()
+        .items_center()
+        .gap(px(16.))
+}
+
+pub(super) fn row_title(title: &'static str) -> Div {
+    div()
+        .min_w_0()
+        .text_size(px(13.))
+        .line_height(px(17.))
+        .font_weight(FontWeight::MEDIUM)
+        .text_color(c(FG()))
+        .child(title)
+}
+
+pub(super) fn row_meta(text: &str) -> Div {
+    div()
+        .mt(px(2.))
+        .min_w_0()
+        .text_size(px(12.))
+        .line_height(px(16.))
+        .text_color(fade(MUTED_FG(), 0.65))
+        .child(text.to_owned())
 }
 
 pub(super) fn watched_input(
@@ -79,18 +128,31 @@ pub fn render(
         }
         _ => "Загрузка настроек внешнего вида…",
     };
-    let mut body = page_sections().child(section(
-        "Внешний вид",
-        "Темы, цвет, материалы и типографика",
-    ));
-    if !status.is_empty() {
-        body = body.child(empty(status));
-    }
-    body = body
-        .child(previews::modes(app, cx))
-        .child(previews::palettes(app, window, cx))
-        .child(colors::render(app, window, cx));
     let enabled = editable(app);
+    let wallpaper = app.appearance.ready && app.appearance.settings.accent_source == "wallpaper";
+    let wallpaper_control = if app.appearance.ready {
+        toggle(
+            "wallpaper-theme-colors",
+            wallpaper,
+            cx,
+            |app, enabled, cx| {
+                patch(
+                    app,
+                    if enabled {
+                        json!({"accent_source":"wallpaper"})
+                    } else {
+                        json!({"accent_source":"theme","accent_color":Value::Null})
+                    },
+                    cx,
+                );
+            },
+        )
+        .accessibility_label("Цвета обоев")
+        .disabled(!enabled || !app.appearance.wallpaper_supported)
+        .into_any_element()
+    } else {
+        badge("Загрузка…", MUTED_FG()).into_any_element()
+    };
     let follow = app.appearance.settings.follow_apps;
     let follow_control = if app.appearance.ready {
         toggle("appearance-follow-apps", follow, cx, |app, follow, cx| {
@@ -100,65 +162,118 @@ pub fn render(
         .disabled(!enabled)
         .into_any_element()
     } else {
-        badge(
-            if matches!(app.slots.get("appearance"), Some(Slot::Failed(_))) {
-                "Недоступно"
-            } else {
-                "Загрузка…"
-            },
-            MUTED_FG(),
-        )
-        .into_any_element()
+        badge("Загрузка…", MUTED_FG()).into_any_element()
     };
-    body = body.child(
-        section_group()
-            .child(section("Приложения", "Одна настройка — общий стиль"))
-            .child(
-                card()
-                    .id("appearance-apps-card")
-                    .debug_selector(|| "appearance-apps-card".into())
-                    .child(
-                        row(
-                            "Единый стиль приложений",
-                            "Приложения используют этот стиль. Выключите для отдельных настроек.",
-                        )
-                        .child(follow_control),
-                    )
-                    .child(empty(
-                        "Agenda поддерживает общий стиль. Остальным клиентам нужен API Engine.",
-                    )),
-            ),
-    );
-    let mut materials = div().flex().flex_wrap().gap(px(8.));
-    for (key, label) in [
+    let material = app.appearance.settings.material.clone();
+    let material_options = [
         ("default", "Цвета темы"),
         ("frosted", "Матовое стекло"),
         ("opaque", "Непрозрачный"),
         ("acrylic", "Acrylic"),
         ("mica", "Mica"),
-    ] {
-        if app.appearance.materials.iter().any(|item| item == key) {
-            materials = materials.child(choice(
-                app,
-                format!("material-{key}"),
-                label,
-                app.appearance.ready && app.appearance.settings.material == key,
-                json!({"material":key}),
-                cx,
-            ));
-        }
-    }
-    body.child(
-        section_group()
-            .child(section("Материал", "Доступные эффекты сообщает Engine"))
-            .child(
-                card()
-                    .id("appearance-material-card")
-                    .debug_selector(|| "appearance-material-card".into())
-                    .child(materials)
-                    .child(empty("Нативный фон окна; карточки остаются непрозрачными.")),
-            ),
-    )
-    .child(typography::render(app, window, cx))
-    .into_any_element()
+    ]
+    .into_iter()
+    .filter(|(key, _)| app.appearance.materials.iter().any(|item| item == key))
+    .map(|(key, label)| selector::OptionItem::new(label, key))
+    .collect();
+    let material_select = selector::select(
+        app,
+        selector::SelectSpec {
+            kind: crate::appearance_state::AppearanceMenu::Material,
+            id: "appearance-surface",
+            aria_label: "Стекло",
+            current: material.clone(),
+            options: material_options,
+            trigger_width: 148.,
+            menu_width: 160.,
+            heading: None,
+        },
+        window,
+        cx,
+    );
+    let color_card = settings_card()
+        .id("appearance-theme-card")
+        .debug_selector(|| "appearance-theme-card".into())
+        .children(previews::theme_rows(app, window, cx))
+        .child(
+            card_row(false)
+                .debug_selector(|| "appearance-accent-card".into())
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w(px(160.))
+                        .child(row_title("Акцентный цвет"))
+                        .child(row_meta(if wallpaper {
+                            "Цвета обоев включены; этот акцент используется, когда они выключены."
+                        } else {
+                            "Цвет темы или один из образцов."
+                        })),
+                )
+                .child(colors::accent_controls(app, cx)),
+        )
+        .child(
+            card_row(false)
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w(px(160.))
+                        .child(row_title("Цвета обоев"))
+                        .child(row_meta(colors::wallpaper_meta(app))),
+                )
+                .child(wallpaper_control),
+        );
+    div()
+        .w_full()
+        .flex()
+        .flex_col()
+        .child(section("Внешний вид", "Темы, цвет, материал и шрифт"))
+        .when(!status.is_empty(), |page| page.child(empty(status)))
+        .child(
+            div()
+                .mt(px(24.))
+                .flex()
+                .flex_col()
+                .gap(px(12.))
+                .child(section_label("Цветовая схема"))
+                .child(previews::modes(app, cx)),
+        )
+        .child(color_card.mt(px(16.)))
+        .child(section_block(
+            "Материал",
+            settings_card()
+                .id("appearance-material-card")
+                .debug_selector(|| "appearance-material-card".into())
+                .child(
+                    card_row(true)
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w(px(160.))
+                                .child(row_title("Стекло"))
+                                .child(row_meta(match material.as_str() {
+                                    "frosted" | "acrylic" | "mica" => "Прозрачные поверхности.",
+                                    "opaque" => "Сплошные поверхности.",
+                                    _ => "Цвета темы: сплошные поверхности.",
+                                })),
+                        )
+                        .child(material_select),
+                )
+                .child(
+                    card_row(false)
+                        .id("appearance-apps-card")
+                        .debug_selector(|| "appearance-apps-card".into())
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w(px(160.))
+                                .child(row_title("Единый стиль приложений"))
+                                .child(row_meta(
+                                    "Agenda использует этот стиль. Остальным нужен API Engine.",
+                                )),
+                        )
+                        .child(follow_control),
+                ),
+        ))
+        .child(typography::render(app, window, cx))
+        .into_any_element()
 }

@@ -19,6 +19,10 @@ const ICONS: &[(&str, &[u8])] = &[
         include_bytes!("../assets/icons/alt-arrow-down.svg"),
     ),
     (
+        "icons/alt-arrow-right.svg",
+        include_bytes!("../assets/icons/alt-arrow-right.svg"),
+    ),
+    (
         "icons/check.svg",
         include_bytes!("../assets/icons/check.svg"),
     ),
@@ -37,6 +41,18 @@ const ICONS: &[(&str, &[u8])] = &[
     (
         "icons/device-iphone.svg",
         include_bytes!("../assets/icons/device-iphone.svg"),
+    ),
+    (
+        "icons/providers/groq.svg",
+        include_bytes!("../assets/icons/providers/groq.svg"),
+    ),
+    (
+        "icons/providers/openai.svg",
+        include_bytes!("../assets/icons/providers/openai.svg"),
+    ),
+    (
+        "icons/providers/nvidia.svg",
+        include_bytes!("../assets/icons/providers/nvidia.svg"),
     ),
 ];
 
@@ -71,7 +87,11 @@ mod tests {
         for (name, _) in ICONS {
             let bytes = Assets.load(name).unwrap().unwrap();
             let svg = std::str::from_utf8(&bytes).unwrap();
-            assert!(svg.contains("viewBox=\"0 0 24 24\"") || *name == "icons/check.svg");
+            assert!(
+                svg.contains("viewBox=\"0 0 24 24\"")
+                    || *name == "icons/check.svg"
+                    || name.starts_with("icons/providers/")
+            );
             assert!(svg.contains("stroke") || svg.contains("fill"), "{name}");
         }
         assert!(Assets.load("icons/sidebar-left.svg").unwrap().is_some());

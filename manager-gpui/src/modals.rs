@@ -18,6 +18,8 @@ pub fn render_confirm(confirm: &Confirm, cx: &mut Context<ManagerApp>) -> impl I
         .flex()
         .items_center()
         .justify_center()
+        .occlude()
+        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .child(
             div()
                 .w_full()
@@ -106,20 +108,21 @@ pub fn render_overlay(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> imp
         )
     };
     div()
+        .id("overlay-scrim")
         .absolute()
         .size_full()
         .bg(fade(0x000000, 0.5))
         .flex()
         .items_center()
         .justify_center()
-        .on_mouse_down(
-            MouseButton::Left,
-            cx.listener(|this, _, _, cx| {
-                this.detail = None;
-                this.disclosure = None;
-                cx.notify();
-            }),
-        )
+        .occlude()
+        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .on_click(cx.listener(|this, _, _, cx| {
+            this.detail = None;
+            this.disclosure = None;
+            cx.stop_propagation();
+            cx.notify();
+        }))
         .child(
             div()
                 .id("overlay-card")
@@ -135,7 +138,9 @@ pub fn render_overlay(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> imp
                 .flex()
                 .flex_col()
                 .gap_3()
+                .occlude()
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .on_click(|_, _, cx| cx.stop_propagation())
                 .child(
                     div()
                         .text_size(crate::theme::ui_px(13.))

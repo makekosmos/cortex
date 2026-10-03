@@ -87,57 +87,49 @@ pub fn render(
         ));
     col = col.child(tabs);
 
-    if app.store_tab == StoreTab::Catalog {
-        col = col.child(slot_or(app, "store.status", |v| {
-            let catalog = vget(v, "catalog");
-            let fault = vopt(v, "fault");
-            let loaded = catalog.is_object();
-            let mut el = card();
-            el = el.child(
-                row(
-                    "Каталог интеграций",
-                    "Загружается с GitHub, пакеты проверяются по контрольным суммам",
-                )
-                .child(badge(
-                    if loaded {
-                        "Загружен"
-                    } else {
-                        "Не загружен"
-                    },
-                    if loaded { SUCCESS() } else { WARN() },
-                )),
-            );
-            el = el.child(kv("Версия каталога", vstr(catalog, "sequence")));
-            el = el.child(kv("Отозванные пакеты", vstr(catalog, "revoked_count")));
-            if let Some(fault) = fault {
-                if !fault.is_empty() {
-                    el = el.child(kv("Состояние", fault));
-                }
-            }
-            el.into_any_element()
-        }));
-    }
-
     match app.store_tab {
         StoreTab::Catalog => {
             col = col.child(render_catalog(app, cx));
-            col = col.child(super::store_apps::render_native_apps(
-                app,
-                cx,
-                false,
-                vec![],
-            ));
+            if let Some(native) = super::store_apps::render_native_apps(app, cx, false, vec![]) {
+                col = col.child(native);
+            }
+            col = col.child(slot_or(app, "store.status", |v| {
+                let catalog = vget(v, "catalog");
+                let fault = vopt(v, "fault");
+                let loaded = catalog.is_object();
+                let mut el = card();
+                el = el.child(
+                    row(
+                        "Каталог интеграций",
+                        "Загружается с GitHub, пакеты проверяются по контрольным суммам",
+                    )
+                    .child(badge(
+                        if loaded {
+                            "Загружен"
+                        } else {
+                            "Не загружен"
+                        },
+                        if loaded { SUCCESS() } else { WARN() },
+                    )),
+                );
+                el = el.child(kv("Версия каталога", vstr(catalog, "sequence")));
+                el = el.child(kv("Отозванные пакеты", vstr(catalog, "revoked_count")));
+                if let Some(fault) = fault {
+                    if !fault.is_empty() {
+                        el = el.child(kv("Состояние", fault));
+                    }
+                }
+                el.into_any_element()
+            }));
         }
         // Native apps belong on both tabs — Installed shows just the live
         // ones, alongside the app-kind .kspkg packages in the same card.
         StoreTab::Installed => {
             let package_apps = app_package_rows(app, cx);
-            col = col.child(super::store_apps::render_native_apps(
-                app,
-                cx,
-                true,
-                package_apps,
-            ));
+            if let Some(native) = super::store_apps::render_native_apps(app, cx, true, package_apps)
+            {
+                col = col.child(native);
+            }
             col = col.child(render_installed(app, cx));
         }
     }

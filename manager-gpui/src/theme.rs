@@ -10,6 +10,8 @@ thread_local! {
     static ACCENT_OVERRIDE: Cell<Option<u32>> = const { Cell::new(None) };
     static FONT_SCALE: Cell<f32> = const { Cell::new(1.) };
     static TRANSLUCENT: Cell<bool> = const { Cell::new(false) };
+    static WINDOW_CHROME: Cell<Option<(WindowBackgroundAppearance, Option<WindowAppearance>)>> =
+        const { Cell::new(None) };
 }
 
 pub fn ui_px(base: f32) -> Pixels {
@@ -42,15 +44,49 @@ pub fn ACCENT_FG() -> u32 {
         .map(accent_foreground)
         .unwrap_or_else(imago_gpui::theme::ACCENT_FG)
 }
-pub fn window_surface(color: u32) -> Hsla {
-    rgba(
-        color,
-        if TRANSLUCENT.with(Cell::get) {
-            0.82
-        } else {
-            1.
-        },
-    )
+/// Zeron glass is a surface recipe, not a single window flag. macOS and
+/// Windows blur the desktop; Linux stays solid because compositor blur is not
+/// guaranteed.
+pub fn is_glass() -> bool {
+    TRANSLUCENT.with(Cell::get) && cfg!(any(target_os = "macos", target_os = "windows"))
+}
+
+/// Shell tint over the blurred desktop: the sidebar tone at Zeron's 0.80 glass
+/// alpha. Opaque material keeps the solid page background.
+pub fn shell_fill() -> Hsla {
+    if is_glass() {
+        rgba(SIDEBAR_BG(), 0.80)
+    } else {
+        c(BG())
+    }
+}
+
+/// The sidebar sits directly on the frost shell. Opaque material paints its
+/// own solid tone.
+pub fn sidebar_fill() -> Hsla {
+    if is_glass() {
+        rgba(0, 0.)
+    } else {
+        c(SIDEBAR_BG())
+    }
+}
+
+/// Main panel over the shell. Zeron uses the page color at 0.40 so content
+/// stays readable without becoming a solid slab.
+pub fn panel_fill() -> Hsla {
+    if is_glass() {
+        rgba(BG(), 0.40)
+    } else {
+        rgba(0, 0.)
+    }
+}
+
+pub fn menu_fill() -> Hsla {
+    if is_glass() {
+        rgba(CARD(), 0.72)
+    } else {
+        c(CARD())
+    }
 }
 
 pub fn apply(profile: &Resolved, window: &Window, cx: &mut App) {
@@ -59,19 +95,35 @@ pub fn apply(profile: &Resolved, window: &Window, cx: &mut App) {
     imago_gpui::theme::apply(cx);
     ACCENT_OVERRIDE.with(|slot| slot.set(profile.accent));
     FONT_SCALE.with(|slot| slot.set(profile.font_size / 13.));
-    let translucent = matches!(profile.material.as_str(), "frosted" | "acrylic" | "mica");
-    TRANSLUCENT.with(|slot| slot.set(translucent));
-    let background = match profile.material.as_str() {
-        "frosted" | "acrylic" => WindowBackgroundAppearance::Blurred,
-        "mica" => WindowBackgroundAppearance::MicaBackdrop,
-        _ => WindowBackgroundAppearance::Opaque,
+    let glass = matches!(profile.material.as_str(), "frosted" | "acrylic" | "mica")
+        && cfg!(any(target_os = "macos", target_os = "windows"));
+    TRANSLUCENT.with(|slot| slot.set(glass));
+    let background = if !glass {
+        WindowBackgroundAppearance::Opaque
+    } else if profile.material == "mica" {
+        WindowBackgroundAppearance::MicaBackdrop
+    } else {
+        WindowBackgroundAppearance::Blurred
     };
-    window.set_background_appearance(background);
-    cx.set_window_appearance(match profile.mode.as_str() {
+    let appearance = match profile.mode.as_str() {
         "light" => Some(WindowAppearance::Light),
         "dark" => Some(WindowAppearance::Dark),
         _ => None,
-    });
+    };
+    // Repeating these native calls on every accent or font change resizes the
+    // window chrome. Update them only when the requested chrome changes.
+    if WINDOW_CHROME.with(|slot| {
+        let next = (background, appearance);
+        if slot.get() == Some(next) {
+            false
+        } else {
+            slot.set(Some(next));
+            true
+        }
+    }) {
+        window.set_background_appearance(background);
+        cx.set_window_appearance(appearance);
+    }
     let theme = gpui_component::Theme::global_mut(cx);
     theme.font_family = profile.font_family.clone().into();
     // Rem geometry stays physical and aligned; explicit typography scales independently.
@@ -100,4 +152,7 @@ pub fn apply(profile: &Resolved, window: &Window, cx: &mut App) {
         colors.sidebar_primary = color;
         colors.sidebar_primary_foreground = foreground;
     }
+    // Switches, checks and tabs read `tokens`, not the legacy color fields.
+    // Theme changes rebuild both; an accent-only change must do the same.
+    theme.tokens = gpui_component::ThemeTokens::from(&theme.colors);
 }

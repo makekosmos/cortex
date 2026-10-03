@@ -76,14 +76,15 @@ pub fn section(title: &str, hint: &str) -> Div {
         })
 }
 
+/// Shared settings plaque: 12px radius, soft ink wash, no border. Pages that
+/// pad their own rows clear the default inset with `px(0)` / `py(0)`.
 pub fn card() -> Div {
     div()
         .w_full()
         .min_w_0()
         .rounded(px(12.))
-        .border_1()
-        .border_color(c(BORDER()))
-        .bg(c(CARD()))
+        .overflow_hidden()
+        .bg(fade(FG(), 0.045))
         .px(px(INSET))
         .py(px(12.))
         .flex()

@@ -29,6 +29,7 @@ pub enum View {
     Settings,
     Appearance,
     Connections,
+    Keys,
     About,
     Updates,
 }
@@ -41,7 +42,7 @@ pub enum StoreTab {
 
 pub const NAV_GROUPS: &[&[View]] = &[
     &[View::Packages, View::Data, View::Usage],
-    &[View::Sync, View::Connections],
+    &[View::Sync, View::Connections, View::Keys],
     &[View::Settings, View::Appearance, View::Updates, View::About],
 ];
 
@@ -55,6 +56,7 @@ impl View {
             View::Settings => "Настройки",
             View::Appearance => "Внешний вид",
             View::Connections => "Интеграции",
+            View::Keys => "Ключи",
             View::About => "О приложении",
             View::Updates => "Обновления",
         }
@@ -69,6 +71,7 @@ impl View {
             View::Settings => "icons/settings.svg",
             View::Appearance => "icons/appearance.svg",
             View::Connections => "icons/connections.svg",
+            View::Keys => "icons/key.svg",
             View::About => "icons/help-circle.svg",
             View::Updates => "icons/download.svg",
         };
@@ -86,6 +89,7 @@ pub fn load(view: View, app: &mut ManagerApp) {
         View::Settings => settings::load(app),
         View::Appearance => appearance::load(app),
         View::Connections => connections::load(app),
+        View::Keys => secrets::load(app),
         View::About => about::load(app),
         View::Updates => updates::load(app),
     }
@@ -105,6 +109,7 @@ pub fn render(
         View::Settings => settings::render(app, window, cx),
         View::Appearance => appearance::render(app, window, cx),
         View::Connections => connections::render(app, window, cx),
+        View::Keys => secrets::render(app, window, cx),
         View::About => about::render(app, window, cx),
         View::Updates => updates::render(app, window, cx),
     }

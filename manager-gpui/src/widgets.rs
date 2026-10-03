@@ -49,36 +49,20 @@ pub fn icon_url(url: Option<String>) -> Option<ImageSource> {
 /// hole in the row.
 pub fn app_icon(source: Option<ImageSource>, name: &str) -> Div {
     let mut icon = div()
-        .w(px(32.))
-        .h(px(32.))
-        .flex()
-        .items_center()
-        .justify_center()
+        .size(px(32.))
         .flex_none()
-        .relative()
-        .rounded_md()
         .overflow_hidden()
-        .bg(fade(FG(), 0.06))
-        .child(
-            div()
-                .size_full()
-                .flex()
-                .items_center()
-                .justify_center()
-                .text_size(ui_px(11.))
-                .text_color(c(MUTED_FG()))
-                .child(icon_letter(name)),
-        );
+        .rounded_md();
     if let Some(source) = source {
-        icon = icon.child(
-            div()
-                .absolute()
-                .inset_0()
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(img(source).w(px(20.)).h(px(20.))),
-        );
+        icon = icon.child(img(source).size(px(32.)));
+    } else {
+        icon = icon
+            .flex()
+            .items_center()
+            .justify_center()
+            .text_size(ui_px(13.))
+            .text_color(c(MUTED_FG()))
+            .child(icon_letter(name));
     }
     icon
 }
@@ -162,7 +146,7 @@ pub fn render_sidebar(
                 .w(px(SIDEBAR_W))
                 .child(
                     chrome::sidebar()
-                        .bg(window_surface(SIDEBAR_BG()))
+                        .bg(sidebar_fill())
                         .child(
                             chrome::sidebar_titlebar().child(
                                 div()
@@ -200,7 +184,11 @@ pub fn render_titlebar(sidebar_progress: f32, window: &Window) -> impl IntoEleme
         drag = drag.on_double_click(|_, window, _| window.titlebar_double_click());
     }
     chrome::titlebar()
-        .bg(window_surface(BG()))
+        .bg(if is_glass() {
+            crate::theme::rgba(0, 0.)
+        } else {
+            c(BG())
+        })
         .p_0()
         .child(div().w(px(left)).h_full().flex_none())
         .child(drag)
@@ -264,11 +252,7 @@ pub fn render_banner(
     sidebar_progress: f32,
     cx: &mut Context<ManagerApp>,
 ) -> impl IntoElement {
-    let text = if app.error.is_some() {
-        app.error.clone().unwrap_or_default()
-    } else {
-        "Запрос выполняется…".into()
-    };
+    let text = app.error.clone().unwrap_or_default();
     div()
         .absolute()
         .bottom_3()

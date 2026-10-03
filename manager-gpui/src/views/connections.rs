@@ -8,7 +8,6 @@ use crate::theme::*;
 use crate::widgets::*;
 
 pub fn load(app: &mut ManagerApp) {
-    super::secrets::load(app);
     app.call("conn.list", "integrations.list", json!({}));
 }
 
@@ -113,9 +112,7 @@ pub fn render(
     for p in &providers {
         el = el.child(render_provider(app, p, window, cx));
     }
-    col = col.child(el);
-    col.child(super::secrets::render_body(app, window, cx))
-        .into_any_element()
+    col.child(el).into_any_element()
 }
 
 fn render_provider(

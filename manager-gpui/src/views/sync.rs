@@ -163,15 +163,7 @@ pub(super) fn section_label(label: &str) -> Div {
 }
 
 pub(super) fn block() -> Div {
-    div()
-        .w_full()
-        .flex()
-        .flex_col()
-        .rounded_xl()
-        .overflow_hidden()
-        .bg(fade(FG(), 0.025))
-        .border_1()
-        .border_color(c(BORDER()))
+    card().px(px(0.)).py(px(0.)).gap(px(0.))
 }
 
 pub(super) fn block_row(first: bool) -> Div {

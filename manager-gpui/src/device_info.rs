@@ -10,7 +10,32 @@ mod build_metadata;
 pub use build_metadata::version_label;
 
 pub fn product_version_label() -> String {
-    build_metadata::compiled().label()
+    // The installed app's bundle version is the product version. Cargo's
+    // 0.1.0 is only a crate number and must not be shown as Mundus.
+    bundle_short_version().unwrap_or_else(|| build_metadata::compiled().label())
+}
+
+fn bundle_short_version() -> Option<String> {
+    static CACHED: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    CACHED
+        .get_or_init(|| {
+            let exe = std::env::current_exe().ok()?;
+            let plist = exe.parent()?.parent()?.join("Info.plist");
+            let output = std::process::Command::new("/usr/libexec/PlistBuddy")
+                .args([
+                    "-c",
+                    "Print :CFBundleShortVersionString",
+                    plist.to_str()?,
+                ])
+                .output()
+                .ok()?;
+            if !output.status.success() {
+                return None;
+            }
+            let version = String::from_utf8(output.stdout).ok()?.trim().to_string();
+            (!version.is_empty()).then_some(version)
+        })
+        .clone()
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

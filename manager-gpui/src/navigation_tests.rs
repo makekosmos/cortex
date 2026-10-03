@@ -16,6 +16,7 @@ fn sidebar_contains_only_task_oriented_top_level_pages() {
             View::Usage,
             View::Sync,
             View::Connections,
+            View::Keys,
             View::Settings,
             View::Appearance,
             View::Updates,
@@ -40,6 +41,9 @@ fn relocated_controls_load_their_data_and_development_remains_opt_in(cx: &mut Te
         views::data::load(app);
         assert!(app.slots.contains_key("backups.list"));
         views::connections::load(app);
+        assert!(app.slots.contains_key("conn.list"));
+        assert!(!app.slots.contains_key("secrets.config"));
+        views::secrets::load(app);
         assert!(app.slots.contains_key("secrets.config"));
         app.settings_developer_open = true;
         views::settings::load(app);
@@ -90,10 +94,12 @@ fn relocated_static_cards_remain_visible_when_values_are_pending_or_failed(
         cx.update(|_, cx| cx.refresh_windows());
         assert!(cx.debug_bounds("data-backups-card").is_some());
         manager.update(cx, |app, cx| {
-            app.view = View::Connections;
+            app.view = View::Keys;
             cx.notify();
         });
         cx.update(|_, cx| cx.refresh_windows());
         assert!(cx.debug_bounds("integration-access-card").is_some());
+        assert!(cx.debug_bounds("key-company-openai").is_some());
+        assert!(cx.debug_bounds("key-company-nvidia").is_some());
     }
 }

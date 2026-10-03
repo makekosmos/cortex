@@ -25,7 +25,7 @@ impl Render for ManagerApp {
             .flex()
             .relative()
             .overflow_hidden()
-            .bg(window_surface(BG()))
+            .bg(shell_fill())
             .text_color(c(FG()))
             .font_family(self.appearance.resolve(window).font_family)
             .text_size(ui_px(13.))
@@ -39,6 +39,7 @@ impl Render for ManagerApp {
                     .flex()
                     .flex_col()
                     .overflow_hidden()
+                    .bg(panel_fill())
                     .child(render_titlebar(sidebar_p, window))
                     .child(
                         div()
@@ -80,11 +81,14 @@ impl Render for ManagerApp {
                     .child(self.fps_view.clone()),
             );
         }
-        if self.error.is_some() || self.action_busy {
+        if self.error.is_some() {
             root = root.child(render_banner(self, sidebar_p, cx));
         }
         if let Some(confirm) = &self.confirm {
             root = root.child(render_confirm(confirm, cx));
+        }
+        if self.key_editor.is_some() {
+            root = root.child(views::secrets::render_modal(self, window, cx));
         }
         if self.disclosure.is_some() || self.detail.is_some() {
             root = root.child(render_overlay(self, cx));

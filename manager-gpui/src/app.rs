@@ -56,6 +56,10 @@ pub struct ManagerApp {
     pub sync_code_copied: bool,
     pub about_support_open: bool,
     pub confirm: Option<Confirm>,
+    /// Company whose key modal is open.
+    pub key_editor: Option<String>,
+    /// Key value that passed verification in the open modal.
+    pub key_checked: Option<String>,
     /// packages.disclosure payload waiting for install consent.
     pub disclosure: Option<Value>,
     /// package_id the disclosure was fetched for — install proceeds on consent.
@@ -112,6 +116,8 @@ impl ManagerApp {
             sync_code_copied: false,
             about_support_open: false,
             confirm: None,
+            key_editor: None,
+            key_checked: None,
             disclosure: None,
             pending_install: None,
             detail: None,
@@ -391,7 +397,17 @@ impl ManagerApp {
                     break;
                 }
             };
-            if reply.slot == "@action" {
+            if reply.slot == "appearance.set" {
+                self.background_slots.remove("appearance.set");
+                match reply.result {
+                    Ok(value) => {
+                        if self.appearance.ingest(&value) {
+                            self.slots.insert("appearance".into(), Slot::Ready(value));
+                        }
+                    }
+                    Err(error) => self.error = Some(error),
+                }
+            } else if reply.slot == "@action" {
                 self.action_busy = false;
                 match reply.result {
                     Ok(_) => {

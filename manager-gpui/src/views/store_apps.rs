@@ -88,17 +88,26 @@ pub(super) fn render_native_apps(
     cx: &mut Context<ManagerApp>,
     installed_only: bool,
     extra: Vec<Div>,
-) -> AnyElement {
-    slot_or(app, "store.apps", |v| {
-        let items: Vec<&serde_json::Value> = varr(v, "apps")
+) -> Option<AnyElement> {
+    let ready = matches!(
+        app.slots.get("store.apps"),
+        Some(crate::app::Slot::Ready(_))
+    );
+    if ready {
+        let data = app.data("store.apps");
+        let items: Vec<&serde_json::Value> = varr(&data, "apps")
             .iter()
             .filter(|item| !installed_only || vbool(item, "installed"))
             .collect();
         if items.is_empty() && extra.is_empty() {
-            // Nothing to show — render nothing rather than a blank padded
-            // card.
-            return div().into_any_element();
+            return None;
         }
+    }
+    Some(slot_or(app, "store.apps", |v| {
+        let items: Vec<&serde_json::Value> = varr(v, "apps")
+            .iter()
+            .filter(|item| !installed_only || vbool(item, "installed"))
+            .collect();
         let mut el = card();
         el = el.child(
             div()
@@ -165,7 +174,7 @@ pub(super) fn render_native_apps(
             el = el.child(row);
         }
         el.into_any_element()
-    })
+    }))
 }
 
 #[cfg(test)]

@@ -23,68 +23,14 @@ pub fn render(
     cx: &mut Context<ManagerApp>,
 ) -> AnyElement {
     let mut col = page_stack();
-    col = col.child(section("О приложении", "Версия и сведения о Mundus"));
+    col = col.child(section("О приложении", "Версия и сведения"));
 
     let mut el = card()
         .id("about-product-card")
         .debug_selector(|| "about-product-card".into());
     // Shared build metadata is known immediately; bare Cargo is explicitly dev.
-    el = el.child(kv("Cortex", crate::device_info::product_version_label()));
+    el = el.child(kv("Mundus", crate::device_info::product_version_label()));
     col = col.child(el);
-
-    // KOS-137: sibling component entry point — Agenda GPUI launches on the
-    // same data dir / engine.lock.json as this Manager.
-    col = col.child(
-        card()
-            .child(row("Agenda", "Задачи и календарь · нативная оболочка GPUI"))
-            .child(if mundus_gpui_kit::engine::agenda_executable().is_some() {
-                div()
-                    .flex()
-                    .gap_2()
-                    .child(
-                        crate::button::secondary("open-agenda")
-                            .label("Открыть Agenda")
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                let dir = mundus_gpui_kit::engine::data_dir().ok();
-                                match mundus_gpui_kit::engine::open_agenda(dir.as_deref()) {
-                                    Ok(()) => this.notice = Some("Agenda запущена.".into()),
-                                    Err(e) => this.error = Some(e),
-                                }
-                                cx.notify();
-                            })),
-                    )
-                    .into_any_element()
-            } else {
-                empty("Agenda не входит в эту сборку Mundus").into_any_element()
-            }),
-    );
-
-    // KOS-156: sibling component entry point — Memoria GPUI launches on the
-    // same data dir / engine.lock.json as this Manager.
-    col = col.child(
-        card()
-            .child(row("Memoria", "Заметки и дневник · нативная оболочка GPUI"))
-            .child(if crate::components::memoria_executable().is_some() {
-                div()
-                    .flex()
-                    .gap_2()
-                    .child(
-                        crate::button::secondary("open-memoria")
-                            .label("Открыть Memoria")
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                let dir = mundus_gpui_kit::engine::data_dir().ok();
-                                match crate::components::open_memoria(dir.as_deref()) {
-                                    Ok(()) => this.notice = Some("Memoria запущена.".into()),
-                                    Err(e) => this.error = Some(e),
-                                }
-                                cx.notify();
-                            })),
-                    )
-                    .into_any_element()
-            } else {
-                empty("Memoria не входит в эту сборку Mundus").into_any_element()
-            }),
-    );
 
     let mut engine = card()
         .id("about-engine-card")

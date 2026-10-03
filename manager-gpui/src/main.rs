@@ -84,7 +84,7 @@ fn main() {
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(bounds)),
                     titlebar: Some(gpui::TitlebarOptions {
-                        title: Some(SharedString::from("Mundus Manager")),
+                        title: Some(SharedString::from("Mundus")),
                         appears_transparent: true,
                         traffic_light_position: Some(gpui::point(px(12.), px(14.))),
                     }),

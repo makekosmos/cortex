@@ -170,6 +170,14 @@ fn actual_typography_and_accent_follow_engine_not_just_root_font(cx: &mut TestAp
             gpui_component::Theme::global(cx).colors.primary,
             crate::theme::c(0x123abc)
         );
+        assert_eq!(
+            gpui_component::Theme::global(cx).tokens.primary.color,
+            crate::theme::c(0x123abc)
+        );
+        assert_eq!(
+            gpui_component::Theme::global(cx).tokens.switch.color,
+            crate::theme::c(0x123abc)
+        );
     });
     manager.update(cx, |app, cx| {
         app.slots.insert(
