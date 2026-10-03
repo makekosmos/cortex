@@ -30,7 +30,9 @@ jobs:
       # nightly-release.yml reads the same pins, so CI cannot drift from it.
       - name: Read toolchain pins
         shell: bash
-        run: node -p 'const t = require("./toolchain.json"); `NODE_VERSION=${t.node}\nRUST_VERSION=${t.rust}`' >> "$GITHUB_ENV"
+        # String concatenation, not a `${}` template: a dollar expansion
+        # inside single quotes trips shellcheck SC2016 under actionlint.
+        run: node -e 'const t=require("./toolchain.json");console.log("NODE_VERSION="+t.node+"\nRUST_VERSION="+t.rust)' >> "$GITHUB_ENV"
 
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
