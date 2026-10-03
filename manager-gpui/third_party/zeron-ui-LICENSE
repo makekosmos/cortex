@@ -1,0 +1,36 @@
+Zeron settings UI source adaptation
+Source: https://github.com/zeronsh/zeron
+Reference revision: 1f7b74a7fc97b0ca1d0379e77141075d73db8adf
+Adapted: crates/ui/src/settings/{appearance,widgets}.rs and crates/ui/src/popover.rs
+No Zeron palettes or bundled fonts are copied by this adaptation.
+
+Appearance control icons copied from the same reference:
+assets/icons/{sun,moon,monitor,alt-arrow-down,check}.svg
+
+Solar Icons (Linear weight) by 480 Design
+https://www.figma.com/community/file/1166831539721848736
+Licensed under Creative Commons Attribution 4.0 International (CC BY 4.0):
+https://creativecommons.org/licenses/by/4.0/
+Attribution: "Solar Icons by 480 Design".
+
+MIT License
+
+Copyright (c) 2026 Wing
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

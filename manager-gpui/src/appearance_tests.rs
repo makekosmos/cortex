@@ -127,10 +127,15 @@ fn appearance_is_a_static_separate_page_even_before_engine_values(cx: &mut TestA
             );
         }
         for selector in [
+            "appearance-theme-card",
             "appearance-accent-card",
             "appearance-apps-card",
             "appearance-material-card",
             "appearance-font-card",
+            "light-theme-selector",
+            "dark-theme-selector",
+            "appearance-font-picker",
+            "appearance-font-size-dropdown",
         ] {
             assert!(
                 cx.debug_bounds(selector).is_some(),
@@ -175,4 +180,35 @@ fn actual_typography_and_accent_follow_engine_not_just_root_font(cx: &mut TestAp
     });
     cx.update(|_, cx| cx.refresh_windows());
     cx.update(|_, _| assert_eq!(crate::theme::ui_px(13.), px(13.)));
+}
+
+#[gpui::test]
+fn zeron_theme_and_font_selectors_keep_source_geometry(cx: &mut TestAppContext) {
+    let (manager, cx) = crate::a11y_tests::launch(cx);
+    cx.simulate_resize(size(px(1440.), px(3000.)));
+    manager.update(cx, |app, cx| {
+        app.view = View::Appearance;
+        app.slots.insert(
+            "appearance".into(),
+            Slot::Ready(json!({"settings":Settings::default()})),
+        );
+        cx.notify();
+    });
+    cx.update(|_, cx| cx.refresh_windows());
+    let mode = cx.debug_bounds("appearance-mode-system").unwrap();
+    assert_eq!(mode.size.height, px(148. + 8. + 16.));
+    for (selector, width) in [
+        ("light-theme-selector", 218.),
+        ("dark-theme-selector", 218.),
+        ("appearance-font-picker", 220.),
+        ("appearance-font-size-dropdown", 128.),
+    ] {
+        let bounds = cx.debug_bounds(selector).unwrap();
+        assert_eq!(bounds.size, size(px(width), px(32.)), "{selector}");
+    }
+    let trigger = cx.debug_bounds("appearance-font-picker").unwrap();
+    cx.simulate_click(trigger.center(), gpui::Modifiers::none());
+    let menu = cx.debug_bounds("appearance-font-picker-list").unwrap();
+    assert!(menu.size.width >= px(180.) && menu.size.width <= px(220.));
+    assert!(menu.size.height > px(0.));
 }

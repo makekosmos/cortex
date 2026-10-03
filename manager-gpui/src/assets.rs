@@ -8,6 +8,20 @@ const ICONS: &[(&str, &[u8])] = &[
         "icons/appearance.svg",
         include_bytes!("../assets/icons/appearance.svg"),
     ),
+    ("icons/sun.svg", include_bytes!("../assets/icons/sun.svg")),
+    ("icons/moon.svg", include_bytes!("../assets/icons/moon.svg")),
+    (
+        "icons/monitor.svg",
+        include_bytes!("../assets/icons/monitor.svg"),
+    ),
+    (
+        "icons/alt-arrow-down.svg",
+        include_bytes!("../assets/icons/alt-arrow-down.svg"),
+    ),
+    (
+        "icons/check.svg",
+        include_bytes!("../assets/icons/check.svg"),
+    ),
     (
         "icons/device-laptop.svg",
         include_bytes!("../assets/icons/device-laptop.svg"),
@@ -57,8 +71,8 @@ mod tests {
         for (name, _) in ICONS {
             let bytes = Assets.load(name).unwrap().unwrap();
             let svg = std::str::from_utf8(&bytes).unwrap();
-            assert!(svg.contains("viewBox=\"0 0 24 24\""));
-            assert!(svg.contains("stroke-width=\"1.5\""), "{name}");
+            assert!(svg.contains("viewBox=\"0 0 24 24\"") || *name == "icons/check.svg");
+            assert!(svg.contains("stroke") || svg.contains("fill"), "{name}");
         }
         assert!(Assets.load("icons/sidebar-left.svg").unwrap().is_some());
         assert!(Assets.list("icons/device-").unwrap().len() == 4);

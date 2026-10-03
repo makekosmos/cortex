@@ -54,6 +54,15 @@ pub struct Resolved {
     pub mode: String,
 }
 
+/// Transient selector state; the Engine snapshot remains the sole source of values.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum AppearanceMenu {
+    LightTheme,
+    DarkTheme,
+    FontFamily,
+    FontSize,
+}
+
 pub struct Appearance {
     pub settings: Settings,
     pub ready: bool,
@@ -63,6 +72,11 @@ pub struct Appearance {
     pub wallpaper_error: Option<String>,
     pub fonts: Vec<String>,
     pub font_menu_open: bool,
+    pub open_menu: Option<AppearanceMenu>,
+    pub menu_highlighted: usize,
+    pub menu_dismissed_at: Option<(AppearanceMenu, Instant)>,
+    pub menu_query: String,
+    pub menu_generation: u64,
     pub tile_focus: HashMap<String, FocusHandle>,
     pub applied: Option<Resolved>,
     pub next_poll: Instant,
@@ -83,6 +97,11 @@ impl Appearance {
             wallpaper_error: None,
             fonts,
             font_menu_open: false,
+            open_menu: None,
+            menu_highlighted: 0,
+            menu_dismissed_at: None,
+            menu_query: String::new(),
+            menu_generation: 0,
             tile_focus: HashMap::new(),
             applied: None,
             next_poll: Instant::now(),

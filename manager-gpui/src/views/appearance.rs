@@ -8,6 +8,7 @@ use serde_json::{json, Value};
 
 mod colors;
 mod previews;
+mod selector;
 mod typography;
 
 pub fn load(app: &mut ManagerApp) {
@@ -87,7 +88,7 @@ pub fn render(
     }
     body = body
         .child(previews::modes(app, cx))
-        .child(previews::palettes(app, cx))
+        .child(previews::palettes(app, window, cx))
         .child(colors::render(app, window, cx));
     let enabled = editable(app);
     let follow = app.appearance.settings.follow_apps;
