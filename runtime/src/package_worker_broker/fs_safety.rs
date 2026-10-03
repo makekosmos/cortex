@@ -161,18 +161,20 @@ pub(super) fn path_is_under(root: &Path, path: &Path) -> bool {
     // Both sides go through the long-path key. The configured root is stored
     // canonical (`\\?\C:\Users\runneradmin\...`) while the caller's path is
     // often the 8.3 form tempfile produced (`C:\Users\RUNNER~1\...`).
+    // `GetLongPathNameW` only resolves existing paths, so a not-yet-created
+    // path first resolves its longest existing ancestor.
     let root = crate::win32::windows_path_key(root);
-    let path = crate::win32::windows_path_key(path);
+    let path = crate::win32::windows_path_key(&resolve_lexical(path));
     path == root || path.starts_with(&(root + "\\"))
 }
 
 /// Canonicalize the deepest existing ancestor of `path` and re-append the
 /// missing tail. `filesystem_roots` are stored canonical, but callers pass
 /// raw paths — on macOS `tempfile` lives under `/var`, a symlink to
-/// `/private/var`, so a textual compare rejects every file under a
-/// configured root. Non-existent paths (a `create_directory` target)
-/// canonicalize their longest existing prefix instead.
-#[cfg(not(windows))]
+/// `/private/var`, and on Windows it can carry 8.3 short names — so a
+/// textual compare rejects every file under a configured root.
+/// Non-existent paths (a `create_directory` target) canonicalize their
+/// longest existing prefix instead.
 pub(super) fn resolve_lexical(path: &Path) -> PathBuf {
     if let Ok(canonical) = std::fs::canonicalize(path) {
         return canonical;
