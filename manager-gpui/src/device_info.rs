@@ -22,11 +22,7 @@ fn bundle_short_version() -> Option<String> {
             let exe = std::env::current_exe().ok()?;
             let plist = exe.parent()?.parent()?.join("Info.plist");
             let output = std::process::Command::new("/usr/libexec/PlistBuddy")
-                .args([
-                    "-c",
-                    "Print :CFBundleShortVersionString",
-                    plist.to_str()?,
-                ])
+                .args(["-c", "Print :CFBundleShortVersionString", plist.to_str()?])
                 .output()
                 .ok()?;
             if !output.status.success() {

@@ -56,8 +56,10 @@
         );
 
         let cache = &store.wallpaper;
-        let mut settings = AppearanceSettings::default();
-        settings.accent_source = "wallpaper".into();
+        let settings = AppearanceSettings {
+            accent_source: "wallpaper".into(),
+            ..AppearanceSettings::default()
+        };
         let first = store.response(settings).await;
         assert!(first["wallpaper_accent"].is_null());
         assert_eq!(first["wallpaper_error"], WALLPAPER_PENDING);
