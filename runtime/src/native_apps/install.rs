@@ -29,16 +29,16 @@ impl NativeAppStore {
         // Same-volume temp file contract: the caller downloads into the app
         // dir; verify archive size + sha256 against the release's
         // SHA256SUMS.txt line before touching the zip.
-        let metadata = fs::metadata(archive)?;
-        if metadata.len() != spec.size {
-            return Err(NativeAppError::SizeMismatch);
-        }
-        if metadata.len() > MAX_ARCHIVE {
+        if fs::metadata(archive)?.len() > MAX_ARCHIVE {
             return Err(NativeAppError::Archive("archive too large"));
         }
-        if !eq_hash(&file_sha256(archive)?, &spec.sha256) {
-            return Err(NativeAppError::HashMismatch);
-        }
+        crate::file_hash::verify_size_and_sha256(archive, spec.size, &spec.sha256).map_err(
+            |error| match error {
+                crate::file_hash::VerifyError::Size { .. } => NativeAppError::SizeMismatch,
+                crate::file_hash::VerifyError::Hash { .. } => NativeAppError::HashMismatch,
+                crate::file_hash::VerifyError::Io(error) => NativeAppError::Io(error),
+            },
+        )?;
 
         let app_dir = self.app_dir(&spec.id);
         fs::create_dir_all(&app_dir)?;

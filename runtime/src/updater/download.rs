@@ -1,8 +1,8 @@
 use std::path::Path;
 
 use base64::Engine as _;
-use sha2::{Digest, Sha512};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use sha2::Sha512;
+use tokio::io::AsyncWriteExt;
 
 use super::UpdaterError;
 
@@ -84,17 +84,15 @@ pub(crate) async fn verify_file(
     let expected = base64::engine::general_purpose::STANDARD
         .decode(expected_sha512_b64)
         .map_err(|_| UpdaterError::MalformedManifest)?;
-    let mut file = tokio::fs::File::open(path).await.map_err(io_error)?;
-    let mut hasher = Sha512::new();
-    let mut buffer = vec![0; 256 * 1024];
-    loop {
-        let read = file.read(&mut buffer).await.map_err(io_error)?;
-        if read == 0 {
-            break;
-        }
-        hasher.update(&buffer[..read]);
-    }
-    if hasher.finalize().as_slice() == expected.as_slice() {
+    // Shared digest implementation (crate::file_hash) is blocking file I/O —
+    // hash a multi-MB installer on the blocking pool, not a tokio worker.
+    let path = path.to_path_buf();
+    let actual =
+        tokio::task::spawn_blocking(move || crate::file_hash::file_digest::<Sha512>(&path))
+            .await
+            .map_err(|error| io_error(std::io::Error::other(error)))?
+            .map_err(io_error)?;
+    if actual.as_slice() == expected.as_slice() {
         Ok(())
     } else {
         Err(UpdaterError::HashMismatch)
