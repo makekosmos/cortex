@@ -1,0 +1,128 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A new push to a PR cancels the stale run; main runs to completion so a
+# merge never loses its signal to a queued dispatch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      # toolchain.json is the single source for the Rust/Node versions —
+      # nightly-release.yml reads the same pins, so CI cannot drift from it.
+      - name: Read toolchain pins
+        shell: bash
+        run: node -p 'const t = require("./toolchain.json"); `NODE_VERSION=${t.node}\nRUST_VERSION=${t.rust}`' >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install "$RUST_VERSION" --profile minimal --component rustfmt --component clippy
+          rustup default "$RUST_VERSION"
+
+      # rust-toolchain.toml is generated from toolchain.json; the repo check
+      # enforces the agreement rather than comparing two regexes here.
+      - name: Toolchain pins agree
+        shell: bash
+        run: node scripts/check-toolchain.mjs
+
+      # Two cargo workspaces: the root workspace and standalone manager-gpui.
+      - name: Rustfmt
+        shell: bash
+        run: |
+          cargo fmt --all -- --check
+          cargo fmt --manifest-path manager-gpui/Cargo.toml --all -- --check
+
+      - name: Actionlint
+        uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2
+
+  build:
+    name: Check (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      # Same toolchain source as the release: toolchain.json, installed via
+      # rustup the same way nightly-release.yml does.
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install "$(node -p 'require("./toolchain.json").rust')" --profile minimal --component rustfmt --component clippy
+          rustup default "$(node -p 'require("./toolchain.json").rust')"
+
+      # gpui needs the Metal shader compiler; macos-15 runners no longer
+      # ship it by default.
+      - name: macOS Metal compiler
+        if: runner.os == 'macOS'
+        run: |
+          if ! xcrun --find metal; then
+            xcodebuild -downloadComponent MetalToolchain
+          fi
+
+      # The local gate runs engine tests through cargo-nextest (see
+      # runtime/scripts/test-lib.mjs); same install action as the nightly.
+      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2
+        with:
+          tool: cargo-nextest
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          key: ${{ matrix.os }}
+          workspaces: |
+            . -> target
+            core -> target
+            manager-gpui -> target
+          save-if: ${{ github.event_name != 'pull_request' }}
+
+      # Mirrors `pnpm run clippy` from the local gate, plus --locked so a
+      # lockfile drift cannot reach main.
+      - name: Clippy (Engine workspace)
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+
+      # `pnpm run test:rust` locally; the script builds the test fixtures
+      # and runs nextest across the workspace.
+      - name: Engine tests
+        run: node runtime/scripts/test-lib.mjs --workspace
+
+      # manager-gpui is a standalone Cargo workspace — the root sweep does
+      # not cover it, so it gets the same clippy/test/build the local
+      # `pnpm run check:manager-gpui` runs, plus a release-shape build.
+      - name: Clippy (manager-gpui)
+        run: cargo clippy --locked --manifest-path manager-gpui/Cargo.toml --all-targets -- -D warnings
+
+      - name: Tests (manager-gpui)
+        run: cargo test --locked --manifest-path manager-gpui/Cargo.toml
+
+      - name: Build (manager-gpui)
+        run: cargo build --locked --manifest-path manager-gpui/Cargo.toml
