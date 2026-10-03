@@ -15,6 +15,7 @@
 //   parseStableVersion(v)         → { major, minor, patch } | throws
 //   latestPublishedRelease(list)  → { tag, version, receiptAssetId } | null
 //   nextReleaseVersion(current, previous, changed) → "X.Y.Z" | null (skip)
+//   nextBuildVersion({ run, currentVersion, repo }) → "X.Y.Z" — see below
 //   planRelease({ run, currentVersion, repo })     → plan object
 //   setWinVersion(version)        → writes the win release version
 //
@@ -22,9 +23,16 @@
 //   node scripts/release-plan.mjs plan
 //       Prints `key=value` lines to $GITHUB_OUTPUT (when set) and a human line
 //       to stdout. Keys: release, version, sha, previous_tag, previous_commit,
-//       bumped, retry. `sha` is the commit to build — HEAD normally, the
-//       existing tag's commit when an earlier run died between tag push and
-//       publish.
+//       bumped, retry, build_version. `sha` is the commit to build — HEAD
+//       normally, the existing tag's commit when an earlier run died between
+//       tag push and publish.
+//   node scripts/release-plan.mjs build-version
+//       Prints the version a build right now must carry: the release plan's
+//       version when one is planned, else the would-be next release (pin when
+//       it is already ahead of the latest published release, else patch+1).
+//       KOS-322: the installer smoke builds exactly this version, so an
+//       unbumped pin can never make the "new" build equal the installed
+//       previous release.
 //   node scripts/release-plan.mjs set <version>
 //       Idempotently writes <version> as the win release version.
 
@@ -139,7 +147,7 @@ function baselineCommit(run, repo, baseline) {
   return commit;
 }
 
-export function planRelease({ run = defaultRun, currentVersion, repo = RELEASE_REPO } = {}) {
+function listReleases(run, repo) {
   const pages = JSON.parse(
     must(
       run("gh", ["api", "--paginate", "--slurp", `repos/${repo}/releases?per_page=100`]),
@@ -147,8 +155,24 @@ export function planRelease({ run = defaultRun, currentVersion, repo = RELEASE_R
     ),
   );
   // --slurp wraps each page in its own array.
-  const releases = pages.flat();
-  const baseline = latestPublishedRelease(releases);
+  return pages.flat();
+}
+
+// The version any build must carry right now — the same bump rule the
+// release planner applies, so a smoke build and a real release never
+// disagree about what "next" means. Unlike planRelease this works before the
+// first published release: with no baseline the pin wins.
+export function nextBuildVersion({ run = defaultRun, currentVersion, repo = RELEASE_REPO } = {}) {
+  const baseline = latestPublishedRelease(listReleases(run, repo));
+  return nextReleaseVersion(
+    currentVersion ?? readReleaseVersion(),
+    baseline?.version ?? null,
+    true,
+  );
+}
+
+export function planRelease({ run = defaultRun, currentVersion, repo = RELEASE_REPO } = {}) {
+  const baseline = latestPublishedRelease(listReleases(run, repo));
   // No baseline means the repo has never seen a release — the planner must not
   // guess a starting point or fall back to the legacy makekosmos/desktop feed.
   // The first cortex release is the manual KOS-304 bridge publish.
@@ -198,6 +222,10 @@ export function planRelease({ run = defaultRun, currentVersion, repo = RELEASE_R
   return {
     release: version !== null,
     version: version ?? "",
+    // The version a build of this tree must carry (KOS-322): the planned
+    // release version when one exists, else the would-be next release, so the
+    // installer smoke always tests a build strictly newer than the baseline.
+    buildVersion: version ?? nextReleaseVersion(current, baseline.version, true),
     sha,
     previousTag: baseline.tag,
     previousCommit,
@@ -232,6 +260,7 @@ function cli() {
       previous_commit: plan.previousCommit,
       bumped: String(plan.bumped),
       retry: String(plan.retry),
+      build_version: plan.buildVersion,
     };
     if (process.env.GITHUB_OUTPUT)
       appendFileSync(
@@ -247,12 +276,16 @@ function cli() {
     );
     return;
   }
+  if (command === "build-version") {
+    process.stdout.write(`${nextBuildVersion()}\n`);
+    return;
+  }
   if (command === "set") {
     if (rest.length !== 1) throw new Error("usage: release-plan.mjs set <version>");
     setWinVersion(rest[0]);
     return;
   }
-  throw new Error("usage: release-plan.mjs plan | set <version>");
+  throw new Error("usage: release-plan.mjs plan | build-version | set <version>");
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

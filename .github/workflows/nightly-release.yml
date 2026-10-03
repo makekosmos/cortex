@@ -22,13 +22,45 @@ env:
   CARGO_INCREMENTAL: "0"
 
 jobs:
+  # The plan runs before the smoke (KOS-322): the smoke must build and test
+  # exactly the version the release will publish — or, when no release is
+  # planned, the would-be next bugfix — never the stale release pin.
+  plan:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    outputs:
+      release: ${{ steps.plan.outputs.release }}
+      version: ${{ steps.plan.outputs.version }}
+      sha: ${{ steps.plan.outputs.sha }}
+      build_version: ${{ steps.plan.outputs.build_version }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Plan release
+        id: plan
+        shell: bash
+        env:
+          # Read-only on this repo's releases; the job token suffices.
+          GH_TOKEN: ${{ github.token }}
+        run: node desktop/scripts/release-plan.mjs plan
+
   # KOS-309: the installer must actually install before a release publishes —
   # 0.10.2 passed every script-text test and aborted on every real install.
   smoke:
+    needs: plan
     uses: ./.github/workflows/installer-smoke.yml
+    with:
+      version: ${{ needs.plan.outputs.build_version }}
+      # The smoke must test the exact commit the release builds: HEAD
+      # normally, the already-tagged commit on a retry — never a main HEAD
+      # that may have moved since the trigger.
+      ref: ${{ needs.plan.outputs.sha }}
 
   release:
-    needs: smoke
+    needs: [plan, smoke]
     runs-on: windows-latest
     timeout-minutes: 300
     # Releases live in this repo (makekosmos/cortex) — the job's own
@@ -85,23 +117,16 @@ jobs:
             core -> target
             manager-gpui -> target
 
-      - name: Plan release
-        id: plan
-        shell: bash
-        env:
-          # Read-only on this repo's releases; the job token suffices.
-          GH_TOKEN: ${{ github.token }}
-        run: node desktop/scripts/release-plan.mjs plan
-
-      # plan.outputs.sha is HEAD normally, or the already-tagged commit when
-      # retrying a run that died between tag push and publish — the release
-      # must be built from exactly that commit.
+      # The plan ran in the `plan` job before the smoke. Its sha is HEAD
+      # normally, or the already-tagged commit when retrying a run that died
+      # between tag push and publish — the release must be built from exactly
+      # that commit.
       - name: Prepare release commit
-        if: steps.plan.outputs.release == 'true'
+        if: needs.plan.outputs.release == 'true'
         shell: bash
         env:
-          VERSION: ${{ steps.plan.outputs.version }}
-          RELEASE_SHA: ${{ steps.plan.outputs.sha }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          RELEASE_SHA: ${{ needs.plan.outputs.sha }}
         run: |
           set -euo pipefail
           # The release preflight requires branch "main" checked out; the
@@ -123,17 +148,17 @@ jobs:
 
       # Full gate on the release commit before anything is published.
       - name: Full gate
-        if: steps.plan.outputs.release == 'true'
+        if: needs.plan.outputs.release == 'true'
         run: pnpm run check
 
       # Same recipe as `pnpm run build:installer:local`, minus --local:
       # Engine from this tree + Manager + NSIS installer + receipt.
       - name: Build installer
-        if: steps.plan.outputs.release == 'true'
+        if: needs.plan.outputs.release == 'true'
         run: pnpm --dir desktop run build
 
       - name: Publish dry run
-        if: steps.plan.outputs.release == 'true'
+        if: needs.plan.outputs.release == 'true'
         run: node desktop/scripts/publish-release.mjs --platform win --receipt desktop/release/release-receipt.v2.json --dry-run
 
       # Push the bump commit and tag only after the gate and build passed, so
@@ -141,11 +166,11 @@ jobs:
       # run already pushed them (publish died afterwards), the release commit
       # is already part of origin/main and only a missing piece is pushed.
       - name: Push release commit and tag
-        if: steps.plan.outputs.release == 'true'
+        if: needs.plan.outputs.release == 'true'
         shell: bash
         env:
-          VERSION: ${{ steps.plan.outputs.version }}
-          BASE_SHA: ${{ steps.plan.outputs.sha }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          BASE_SHA: ${{ needs.plan.outputs.sha }}
         run: |
           set -euo pipefail
           head=$(git rev-parse HEAD)
@@ -174,11 +199,11 @@ jobs:
           fi
 
       - name: Publish release
-        if: steps.plan.outputs.release == 'true'
+        if: needs.plan.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: node desktop/scripts/publish-release.mjs --platform win --receipt desktop/release/release-receipt.v2.json
 
       - name: Verify release channel
-        if: steps.plan.outputs.release == 'true'
+        if: needs.plan.outputs.release == 'true'
         run: pnpm --dir desktop run verify:channel

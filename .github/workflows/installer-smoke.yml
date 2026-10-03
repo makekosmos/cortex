@@ -13,6 +13,15 @@ name: Installer smoke
 # falls back to installing the just-built installer twice, which still
 # exercises the swap and kill paths.
 #
+# Build version (KOS-322): the smoke build must be strictly newer than the
+# latest published release or the upgrade asserts nothing — a pin equal to
+# that release used to die on "previous release is already X". The version
+# comes from `release-plan.mjs build-version` — the same bump rule the
+# release planner applies (pin if already ahead, else latest+patch+1) — or,
+# when the nightly calls this workflow, from the release plan itself via the
+# `version` input. Either way it reaches the binaries through
+# MUNDUS_SMOKE_VERSION; the release-versions.json pin is never modified.
+#
 # Notes for maintainers:
 #  - `Start-Process -Wait` also waits for the process' *descendants* — the
 #    installer starts the Engine, which runs forever, so -Wait hangs. Use
@@ -22,6 +31,22 @@ name: Installer smoke
 #    is nothing to upload; the step output is the record.
 on:
   workflow_call:
+    inputs:
+      # Version the build must carry. The nightly release passes its plan's
+      # build_version so the smoke tests exactly what will be published; PRs
+      # leave it empty and resolve it via `release-plan.mjs build-version`.
+      version:
+        type: string
+        required: false
+        default: ""
+      # Commit to build. The nightly passes plan.outputs.sha so the smoke
+      # tests exactly the tree the release builds — on a retry that is the
+      # already-tagged commit, not main HEAD. Empty keeps the default
+      # checkout ref (PR merge commit / dispatch ref).
+      ref:
+        type: string
+        required: false
+        default: ""
   workflow_dispatch:
   pull_request:
     paths:
@@ -47,13 +72,22 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
+          # A caller-supplied ref wins; empty falls back to the trigger's
+          # default (the PR merge commit), identical to omitting `ref`.
+          ref: ${{ inputs.ref || github.ref }}
 
-      - name: Read toolchain pins
+      - name: Read toolchain pins and resolve the smoke version
         id: version
         shell: bash
+        env:
+          # Read-only on this repo's releases; the job token suffices. Only
+          # needed when the caller left `version` empty (PRs, dispatch).
+          GH_TOKEN: ${{ github.token }}
+          CALLER_VERSION: ${{ inputs.version }}
         run: |
           node -p 'const t = require("./toolchain.json"); `NODE_VERSION=${t.node}\nRUST_VERSION=${t.rust}`' >> "$GITHUB_ENV"
-          node -p '"version=" + require("./desktop/release-versions.json").win' >> "$GITHUB_OUTPUT"
+          version="${CALLER_VERSION:-$(node desktop/scripts/release-plan.mjs build-version)}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
@@ -81,7 +115,11 @@ jobs:
 
       # Same recipe as the release's "Build installer" step, minus the
       # receipt/preflight (--local): identical NSIS compile and staging.
+      # MUNDUS_SMOKE_VERSION stamps the resolved smoke version into every
+      # binary, versions\<V> and the installer — the pin file stays untouched.
       - name: Build installer
+        env:
+          MUNDUS_SMOKE_VERSION: ${{ steps.version.outputs.version }}
         run: pnpm run build:installer:local
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
