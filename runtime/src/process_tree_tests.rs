@@ -1,9 +1,14 @@
+// resolve_command and Stdio are used only by the Windows-gated tests below;
+// the unix side builds `sh -c sleep` directly.
+#[cfg(windows)]
 use std::process::Stdio;
 use std::time::Duration;
 
 use tokio::process::Command;
 
-use crate::process_tree::{resolve_command, ProcessTree};
+#[cfg(windows)]
+use crate::process_tree::resolve_command;
+use crate::process_tree::ProcessTree;
 
 #[tokio::test]
 async fn terminate_and_wait_is_idempotent() {

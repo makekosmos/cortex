@@ -1,0 +1,160 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A new push to a PR cancels the stale run; main runs to completion so a
+# merge never loses its signal to a queued dispatch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      # toolchain.json is the single source for the Rust/Node versions —
+      # nightly-release.yml reads the same pins, so CI cannot drift from it.
+      - name: Read toolchain pins
+        shell: bash
+        # String concatenation, not a `${}` template: a dollar expansion
+        # inside single quotes trips shellcheck SC2016 under actionlint.
+        run: node -e 'const t=require("./toolchain.json");console.log("NODE_VERSION="+t.node+"\nRUST_VERSION="+t.rust)' >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install "$RUST_VERSION" --profile minimal --component rustfmt --component clippy
+          rustup default "$RUST_VERSION"
+
+      # rust-toolchain.toml is generated from toolchain.json; the repo check
+      # enforces the agreement rather than comparing two regexes here.
+      - name: Toolchain pins agree
+        shell: bash
+        run: node scripts/check-toolchain.mjs
+
+      # Two cargo workspaces: the root workspace and standalone manager-gpui.
+      - name: Rustfmt
+        shell: bash
+        run: |
+          cargo fmt --all -- --check
+          cargo fmt --manifest-path manager-gpui/Cargo.toml --all -- --check
+
+      - name: Actionlint
+        uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2
+
+  check:
+    name: Check (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      # Floating pins, matching installer-smoke.yml and nightly-release.yml:
+      # these runners build what releases ship, so image upgrades must break
+      # here first — a pinned year-version would drift from the release path.
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      # Same toolchain source as the release: toolchain.json, installed via
+      # rustup the same way nightly-release.yml does. Node is set up for
+      # test-lib.mjs and build-macos-native.mjs below.
+      - name: Read toolchain pins
+        run: node -e 'const t=require("./toolchain.json");console.log("NODE_VERSION="+t.node+"\nRUST_VERSION="+t.rust)' >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install "$RUST_VERSION" --profile minimal --component rustfmt --component clippy
+          rustup default "$RUST_VERSION"
+
+      # gpui needs the Metal shader compiler; recent macOS runners no longer
+      # ship it by default.
+      - name: macOS Metal compiler
+        if: runner.os == 'macOS'
+        run: |
+          if ! xcrun --find metal; then
+            xcodebuild -downloadComponent MetalToolchain
+          fi
+
+      # The local gate runs engine tests through cargo-nextest (see
+      # runtime/scripts/test-lib.mjs); same install action as the nightly.
+      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2
+        with:
+          tool: cargo-nextest
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          key: ${{ matrix.os }}
+          workspaces: |
+            . -> target
+            core -> target
+            manager-gpui -> target
+          save-if: ${{ github.event_name != 'pull_request' }}
+
+      # Mirrors `pnpm run clippy` from the local gate, plus --locked so a
+      # lockfile drift cannot reach main.
+      - name: Clippy (Engine workspace)
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+
+      # Real codegen+link for every target — clippy only type-checks and
+      # nextest only builds test binaries, so without this step the shipped
+      # bins' link path is never exercised (KOS-307).
+      - name: Build workspace
+        run: cargo build --locked --workspace --all-targets
+
+      # `pnpm run test:rust` locally: the script builds the fixture bins
+      # (ark-markdown-bridge et al.) first — `cargo test` skips
+      # required-feature bins and catalog_bridge_runs_through_service would
+      # fail on a clean runner — then runs nextest across the workspace.
+      # Nextest rather than `cargo test` because the local gate runs nextest
+      # (.config/nextest.toml pins the version, timeouts and test groups);
+      # a different runner here could pass what the gate fails.
+      - name: Engine tests
+        run: node runtime/scripts/test-lib.mjs --workspace
+
+      # manager-gpui is a standalone Cargo workspace — the root sweep does
+      # not cover it, so it gets the same clippy/test/build the local
+      # `pnpm run check:manager-gpui` runs. Plain `cargo test`, not nextest:
+      # the local gate uses cargo test here (a single unittests binary), so
+      # there is no second profile to keep in sync.
+      - name: Clippy (manager-gpui)
+        run: cargo clippy --locked --manifest-path manager-gpui/Cargo.toml --all-targets -- -D warnings
+
+      - name: Test and build Manager
+        run: |
+          cargo test --locked --manifest-path manager-gpui/Cargo.toml
+          cargo build --locked --manifest-path manager-gpui/Cargo.toml
+
+      # No-op on Windows (the script exits before swiftc). On macOS it
+      # compiles the Swift helpers, then release-builds the Engine and
+      # Manager with MUNDUS_PRODUCT_VERSION — the product path the debug
+      # workspace build above does not exercise.
+      - name: Build macOS native helpers
+        run: node desktop/scripts/build-macos-native.mjs

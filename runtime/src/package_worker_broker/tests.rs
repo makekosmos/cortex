@@ -1,3 +1,6 @@
+// fs_atomic items are only reached by the Windows-gated tests below; on
+// other hosts the glob import is unused and trips -D warnings.
+#[cfg(windows)]
 use super::fs_atomic::*;
 use super::fs_ops::*;
 use super::fs_safety::*;
