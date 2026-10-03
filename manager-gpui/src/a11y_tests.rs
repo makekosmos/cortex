@@ -169,8 +169,8 @@ async fn a11y_tree_shell_exposes_russian_names(cx: &mut TestAppContext) {
     // Russian names suitable as locators.
     for expected in [
         "Данные",
-        "Затреканное время",
-        "Маркетплейс",
+        "Активность",
+        "Приложения",
         "Настройки",
         "Боковая панель",
     ] {

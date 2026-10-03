@@ -5,6 +5,7 @@ use gpui_component::Icon;
 use crate::app::ManagerApp;
 
 pub mod about;
+pub mod backups;
 pub mod browser;
 pub mod connections;
 pub mod data;
@@ -24,14 +25,10 @@ pub enum View {
     Usage,
     Sync,
     Packages,
-    Engine,
     Settings,
     Connections,
     About,
     Updates,
-    Secrets,
-    Browser,
-    Dev,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -41,27 +38,22 @@ pub enum StoreTab {
 }
 
 pub const NAV_GROUPS: &[&[View]] = &[
-    &[View::Data, View::Usage, View::Packages, View::Browser],
-    &[View::Sync, View::Connections, View::Secrets],
-    &[View::Settings, View::Engine, View::Dev],
-    &[View::Updates, View::About],
+    &[View::Packages, View::Data, View::Usage],
+    &[View::Sync, View::Connections],
+    &[View::Settings, View::Updates, View::About],
 ];
 
 impl View {
     pub fn label(self) -> &'static str {
         match self {
             View::Data => "Данные",
-            View::Usage => "Затреканное время",
+            View::Usage => "Активность",
             View::Sync => "Девайсы",
-            View::Packages => "Маркетплейс",
-            View::Engine => "Движок",
+            View::Packages => "Приложения",
             View::Settings => "Настройки",
             View::Connections => "Интеграции",
             View::About => "О приложении",
             View::Updates => "Обновления",
-            View::Secrets => "Ключи",
-            View::Browser => "Браузер",
-            View::Dev => "Разработка",
         }
     }
 
@@ -71,14 +63,10 @@ impl View {
             View::Usage => "icons/cpu.svg",
             View::Sync => "icons/device-monitor.svg",
             View::Packages => "icons/store.svg",
-            View::Engine => "icons/cpu.svg",
             View::Settings => "icons/settings.svg",
             View::Connections => "icons/connections.svg",
             View::About => "icons/help-circle.svg",
             View::Updates => "icons/download.svg",
-            View::Secrets => "icons/key.svg",
-            View::Browser => "icons/globe.svg",
-            View::Dev => "icons/code.svg",
         };
         Icon::default().path(path)
     }
@@ -91,14 +79,10 @@ pub fn load(view: View, app: &mut ManagerApp) {
         View::Usage => usage::load(app),
         View::Sync => sync::load(app),
         View::Packages => store::load(app),
-        View::Engine => engine_settings::load(app),
         View::Settings => settings::load(app),
         View::Connections => connections::load(app),
         View::About => about::load(app),
         View::Updates => updates::load(app),
-        View::Secrets => secrets::load(app),
-        View::Browser => browser::load(app),
-        View::Dev => dev::load(app),
     }
 }
 
@@ -113,13 +97,9 @@ pub fn render(
         View::Usage => usage::render(app, window, cx),
         View::Sync => sync::render(app, window, cx),
         View::Packages => store::render(app, window, cx),
-        View::Engine => engine_settings::render(app, window, cx),
         View::Settings => settings::render(app, window, cx),
         View::Connections => connections::render(app, window, cx),
         View::About => about::render(app, window, cx),
         View::Updates => updates::render(app, window, cx),
-        View::Secrets => secrets::render(app, window, cx),
-        View::Browser => browser::render(app, window, cx),
-        View::Dev => dev::render(app, window, cx),
     }
 }

@@ -1,5 +1,4 @@
 use ::gpui::{prelude::*, *};
-use gpui_component::input::Input;
 use serde_json::json;
 
 use super::{
@@ -89,7 +88,7 @@ pub(super) fn render(
                         .flex()
                         .items_center()
                         .gap_2()
-                        .child(div().flex_1().min_w_0().child(Input::new(&input)))
+                        .child(div().flex_1().min_w_0().child(input_field(&input)))
                         .child(
                             btn(
                                 "sync-connect",

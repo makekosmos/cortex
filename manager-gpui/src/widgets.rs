@@ -8,6 +8,7 @@ use gpui_component::InteractiveElementExt;
 use imago_gpui::chrome::{self, SIDEBAR_W};
 
 pub use crate::button::{btn, btn_id};
+pub use crate::page_layout::{card, empty, input_field, kv, page_stack, row, row_copy, section};
 pub use mundus_gpui_kit::widgets::*;
 
 use crate::app::ManagerApp;
@@ -46,8 +47,11 @@ pub fn icon_url(url: Option<String>) -> Option<ImageSource> {
 /// hole in the row.
 pub fn app_icon(source: Option<ImageSource>, name: &str) -> Div {
     let mut icon = div()
-        .w(px(20.))
-        .h(px(20.))
+        .w(px(32.))
+        .h(px(32.))
+        .flex()
+        .items_center()
+        .justify_center()
         .flex_none()
         .relative()
         .rounded_md()
@@ -68,6 +72,9 @@ pub fn app_icon(source: Option<ImageSource>, name: &str) -> Div {
             div()
                 .absolute()
                 .inset_0()
+                .flex()
+                .items_center()
+                .justify_center()
                 .child(img(source).w(px(20.)).h(px(20.))),
         );
     }
@@ -79,25 +86,13 @@ pub fn app_icon(source: Option<ImageSource>, name: &str) -> Div {
 pub fn entry_row(icon: Option<ImageSource>, title: String, caption: String) -> Div {
     div()
         .w_full()
-        .min_h_10()
+        .min_w_0()
+        .min_h(px(36.))
         .flex()
         .items_center()
-        .gap_3()
+        .gap(px(crate::page_layout::GAP))
         .child(app_icon(icon, &title))
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .flex()
-                .flex_col()
-                .child(div().text_size(px(13.)).child(title))
-                .child(
-                    div()
-                        .text_size(px(12.))
-                        .text_color(c(MUTED_FG()))
-                        .child(caption),
-                ),
-        )
+        .child(row_copy(title, caption))
 }
 
 // --- Chrome -----------------------------------------------------------------

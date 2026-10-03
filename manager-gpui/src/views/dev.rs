@@ -2,7 +2,6 @@
 //! (DevPanelView.vue parity). Dev package discovery stays Host-owned
 //! (dev-packages.json is repo-local); GPUI installs by explicit path.
 use ::gpui::{prelude::*, *};
-use gpui_component::input::Input;
 use serde_json::json;
 
 use crate::app::ManagerApp;
@@ -13,14 +12,11 @@ pub fn load(app: &mut ManagerApp) {
     app.call("dev.packages", "packages.list", json!({}));
 }
 
-pub fn render(
+pub fn render_appearance(
     app: &mut ManagerApp,
     window: &mut Window,
     cx: &mut Context<ManagerApp>,
 ) -> AnyElement {
-    let mut col = div().flex().flex_col().gap_4().w_full();
-    col = col.child(section("Разработка", "Локальные пакеты и инстанс"));
-
     let mut mode = div().flex().gap_2();
     for (index, label) in ["Светлая", "Тёмная", "Системная"].iter().enumerate()
     {
@@ -50,7 +46,7 @@ pub fn render(
         2 => system_dark,
         _ => true,
     };
-    let mut themes = div().flex().flex_col().gap_2();
+    let mut themes = div().grid().grid_cols(2).gap_2().w_full().min_w_0();
     for (index, definition) in imago_gpui::THEMES.iter().enumerate() {
         let active = app.theme_idx == index;
         let palette = if dark {
@@ -75,8 +71,9 @@ pub fn render(
                 .flex()
                 .items_center()
                 .justify_between()
-                .px_3()
-                .py_2()
+                .min_w_0()
+                .px(px(crate::page_layout::INSET))
+                .py(px(12.))
                 .rounded_md()
                 .border_1()
                 .border_color(if active {
@@ -92,13 +89,24 @@ pub fn render(
                 .cursor_pointer()
                 .child(
                     div()
+                        .flex_1()
+                        .min_w_0()
                         .flex()
                         .flex_col()
                         .gap_0p5()
-                        .child(div().text_size(px(13.)).child(definition.name))
                         .child(
                             div()
-                                .text_size(px(11.))
+                                .text_size(px(13.))
+                                .line_height(px(18.))
+                                .text_ellipsis()
+                                .whitespace_nowrap()
+                                .overflow_hidden()
+                                .child(definition.name),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(12.))
+                                .line_height(px(16.))
                                 .text_color(c(MUTED_FG()))
                                 .child(definition.desc),
                         ),
@@ -113,28 +121,33 @@ pub fn render(
                 .aria_selected(active),
         );
     }
+    card()
+        .id("settings-appearance-card")
+        .debug_selector(|| "settings-appearance-card".into())
+        .child(row("Режим", "Светлая, тёмная или системная тема").child(mode))
+        .child(themes)
+        .into_any_element()
+}
+
+pub fn render_tools(
+    app: &mut ManagerApp,
+    window: &mut Window,
+    cx: &mut Context<ManagerApp>,
+) -> AnyElement {
+    let mut col = page_stack();
     col = col.child(
-        card()
-            .child(
-                div()
-                    .text_size(px(13.))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child("Интерфейс"),
+        card().child(
+            row(
+                "FPS-счётчик",
+                "График, средний FPS, 1% и 0.1% low в правом нижнем углу.",
             )
-            .child(row("Режим", "Светлая, тёмная или системная тема").child(mode))
-            .child(themes)
             .child(
-                row(
-                    "FPS-счётчик",
-                    "График, средний FPS, 1% и 0.1% low в правом нижнем углу.",
-                )
-                .child(
-                    toggle("dev-fps", app.dev_fps, cx, |this, checked, _| {
-                        this.dev_fps = checked;
-                    })
-                    .accessibility_label("FPS-счётчик"),
-                ),
+                toggle("dev-fps", app.dev_fps, cx, |this, checked, _| {
+                    this.dev_fps = checked;
+                })
+                .accessibility_label("FPS-счётчик"),
             ),
+        ),
     );
 
     col = col.child(
@@ -177,7 +190,7 @@ pub fn render(
                 div()
                     .flex()
                     .gap_2()
-                    .child(div().flex_1().child(Input::new(&path_in)))
+                    .child(div().flex_1().min_w_0().child(input_field(&path_in)))
                     .child(btn(
                         "dev-install",
                         "Установить",

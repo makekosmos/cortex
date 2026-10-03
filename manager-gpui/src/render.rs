@@ -9,7 +9,7 @@ use crate::views;
 use crate::widgets::*;
 use mundus_gpui_kit::theme::*;
 
-const PAGE_MAX_WIDTH: f32 = 760.0;
+const PAGE_MAX_WIDTH: f32 = crate::page_layout::PAGE_WIDTH;
 
 #[cfg(test)]
 #[path = "layout_tests.rs"]

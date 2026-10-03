@@ -17,6 +17,9 @@ mod fps;
 mod modals;
 #[cfg(target_os = "macos")]
 mod native_menu;
+#[cfg(test)]
+mod navigation_tests;
+mod page_layout;
 mod render;
 mod views;
 mod widgets;
@@ -48,7 +51,15 @@ fn main() {
         if !std::env::args().any(|arg| arg == "--check-engine") {
             // Pass the message as argv, not interpolated AppleScript source.
             let _ = std::process::Command::new("/usr/bin/osascript")
-                .args(["-e", "on run argv\ndisplay alert \"Не удалось запустить Cortex\" message (item 1 of argv) as critical\nend run", &error])
+                .args([
+                    "-e",
+                    concat!(
+                        "on run argv\n",
+                        "display alert \"Не удалось запустить Cortex\" ",
+                        "message (item 1 of argv) as critical\nend run"
+                    ),
+                    &error,
+                ])
                 .status();
         }
         std::process::exit(1);

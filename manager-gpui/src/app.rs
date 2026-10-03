@@ -53,6 +53,7 @@ pub struct ManagerApp {
     /// Object type selected inside Данные.
     pub data_type: Option<String>,
     pub store_tab: StoreTab,
+    pub settings_developer_open: bool,
     pub sync_pairing_open: bool,
     pub sync_code_copied: bool,
     pub about_support_open: bool,
@@ -109,7 +110,8 @@ impl ManagerApp {
             notice: None,
             error: None,
             data_type: None,
-            store_tab: StoreTab::Catalog,
+            store_tab: StoreTab::Installed,
+            settings_developer_open: false,
             sync_pairing_open: false,
             sync_code_copied: false,
             about_support_open: false,

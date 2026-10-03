@@ -16,11 +16,7 @@ pub fn render(
     _window: &mut Window,
     cx: &mut Context<ManagerApp>,
 ) -> AnyElement {
-    div()
-        .flex()
-        .flex_col()
-        .gap_4()
-        .w_full()
+    page_stack()
         .child(section("Обновления", "Cortex и приложения"))
         .child(render_mundus(app, cx))
         .child(
@@ -81,13 +77,16 @@ fn render_mundus(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {
         content = content.child(kv("Версии", format!("{current} → {next}")));
     }
 
-    content = content.child(crate::async_fields::field_row(app, "upd.mundus", "Установка", |value| {
-        match value.get("canInstall").and_then(Value::as_bool) {
+    content = content.child(crate::async_fields::field_row(
+        app,
+        "upd.mundus",
+        "Установка",
+        |value| match value.get("canInstall").and_then(Value::as_bool) {
             Some(true) => "Автоматически".into(),
             Some(false) => vstr(value, "installUnavailableReason"),
             None => String::new(),
-        }
-    }));
+        },
+    ));
     let button = if state == "downloaded" {
         btn(
             "mundus-install",
@@ -95,7 +94,8 @@ fn render_mundus(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {
             true,
             cx,
             |this, _| this.action("updater.install", json!({})),
-        ).disabled(status.get("canInstall").and_then(Value::as_bool) == Some(false))
+        )
+        .disabled(status.get("canInstall").and_then(Value::as_bool) == Some(false))
     } else {
         btn(
             "mundus-check",
@@ -105,9 +105,11 @@ fn render_mundus(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {
             |this, _| this.action("updater.check", json!({})),
         )
     };
-    card().id("updates-product-card")
+    card()
+        .id("updates-product-card")
         .debug_selector(|| "updates-product-card".into())
-        .child(content.child(button)).into_any_element()
+        .child(content.child(button))
+        .into_any_element()
 }
 
 #[cfg(test)]

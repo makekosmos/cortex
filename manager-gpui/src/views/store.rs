@@ -28,14 +28,14 @@ pub fn render(
     cx: &mut Context<ManagerApp>,
 ) -> AnyElement {
     let _ = window;
-    let mut col = div().flex().flex_col().gap_4().w_full();
-    col = col.child(section("Маркетплейс", "Приложения и интеграции"));
+    let mut col = page_stack();
+    col = col.child(section("Приложения", "Установленные приложения и каталог"));
 
     // Tab row: Каталог / Установленные
-    let mut tabs = div().flex().gap_2();
+    let mut tabs = div().flex().flex_wrap().items_center().gap_2();
     for (tab, label) in [
-        (StoreTab::Catalog, "Каталог"),
         (StoreTab::Installed, "Установленные"),
+        (StoreTab::Catalog, "Каталог"),
     ] {
         let active = app.store_tab == tab;
         tabs = tabs.child(
@@ -87,34 +87,36 @@ pub fn render(
         ));
     col = col.child(tabs);
 
-    col = col.child(slot_or(app, "store.status", |v| {
-        let catalog = vget(v, "catalog");
-        let fault = vopt(v, "fault");
-        let loaded = catalog.is_object();
-        let mut el = card();
-        el = el.child(
-            row(
-                "Каталог интеграций",
-                "Загружается с GitHub, пакеты проверяются по контрольным суммам",
-            )
-            .child(badge(
-                if loaded {
-                    "Загружен"
-                } else {
-                    "Не загружен"
-                },
-                if loaded { SUCCESS() } else { WARN() },
-            )),
-        );
-        el = el.child(kv("Версия каталога", vstr(catalog, "sequence")));
-        el = el.child(kv("Отозванные пакеты", vstr(catalog, "revoked_count")));
-        if let Some(fault) = fault {
-            if !fault.is_empty() {
-                el = el.child(kv("Состояние", fault));
+    if app.store_tab == StoreTab::Catalog {
+        col = col.child(slot_or(app, "store.status", |v| {
+            let catalog = vget(v, "catalog");
+            let fault = vopt(v, "fault");
+            let loaded = catalog.is_object();
+            let mut el = card();
+            el = el.child(
+                row(
+                    "Каталог интеграций",
+                    "Загружается с GitHub, пакеты проверяются по контрольным суммам",
+                )
+                .child(badge(
+                    if loaded {
+                        "Загружен"
+                    } else {
+                        "Не загружен"
+                    },
+                    if loaded { SUCCESS() } else { WARN() },
+                )),
+            );
+            el = el.child(kv("Версия каталога", vstr(catalog, "sequence")));
+            el = el.child(kv("Отозванные пакеты", vstr(catalog, "revoked_count")));
+            if let Some(fault) = fault {
+                if !fault.is_empty() {
+                    el = el.child(kv("Состояние", fault));
+                }
             }
-        }
-        el.into_any_element()
-    }));
+            el.into_any_element()
+        }));
+    }
 
     match app.store_tab {
         StoreTab::Catalog => {

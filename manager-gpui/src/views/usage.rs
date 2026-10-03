@@ -37,7 +37,7 @@ pub fn render(
     let scroll = app.usage_scroll.clone();
     let mut col = div().flex().flex_col().gap_4().w_full().h_full();
     col = col.child(section(
-        "Затреканное время",
+        "Активность",
         "Сколько времени приложение было активно — в фокусе и не в простое",
     ));
     col = col.child(
@@ -166,7 +166,7 @@ fn header_row(sort: UsageSort, cx: &mut Context<ManagerApp>) -> Div {
         .pb_2()
         .border_b_1()
         .border_color(c(BORDER()))
-        .child(div().w(px(20.)).flex_none())
+        .child(div().w(px(32.)).flex_none())
         .child(head_grow("Приложение", UsageColumn::Name, sort, cx))
         .child(head_cell("Активно", 110., UsageColumn::Active, sort, cx))
         .child(head_cell("Запусков", 76., UsageColumn::Sessions, sort, cx))
@@ -191,7 +191,7 @@ fn metric(text: String, width: f32) -> Div {
 }
 
 fn usage_row(ix: usize, entry: &UsageRow) -> Stateful<Div> {
-    // 20px icon slot: cached PNG via app_index.icon_path / exe_info, letter
+    // Shared 32px icon slot: cached PNG via app_index.icon_path / exe_info, letter
     // badge underneath when the cache has nothing or the file fails to load.
     let icon = app_icon(icon_file(entry.icon_path.clone()), &entry.name);
 

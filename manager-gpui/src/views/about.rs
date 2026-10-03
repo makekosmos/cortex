@@ -22,7 +22,7 @@ pub fn render(
     _window: &mut Window,
     cx: &mut Context<ManagerApp>,
 ) -> AnyElement {
-    let mut col = div().flex().flex_col().gap_4().w_full();
+    let mut col = page_stack();
     col = col.child(section("О приложении", "Версия и сведения о Mundus"));
 
     let mut el = card()
@@ -109,8 +109,8 @@ pub fn render(
                     vstr(v, key)
                 }
             })
-                .id(format!("about-field-{key}"))
-                .debug_selector(move || format!("about-field-{key}")),
+            .id(format!("about-field-{key}"))
+            .debug_selector(move || format!("about-field-{key}")),
         );
     }
     col = col.child(engine);

@@ -27,15 +27,8 @@ pub fn render(
     window: &mut Window,
     cx: &mut Context<ManagerApp>,
 ) -> AnyElement {
-    div()
-        .w_full()
-        .flex()
-        .flex_col()
-        .gap_5()
-        .child(section(
-            "Девайсы",
-            "Ваши устройства и подключение по коду",
-        ))
+    page_stack()
+        .child(section("Девайсы", "Ваши устройства и подключение по коду"))
         .child(
             div()
                 .flex()
@@ -129,29 +122,7 @@ fn device_name(device: &Value) -> String {
 }
 
 fn device_identity(name: &str, detail: &str) -> Div {
-    div()
-        .flex_1()
-        .min_w_0()
-        .flex()
-        .flex_col()
-        .gap(px(2.))
-        .child(
-            div()
-                .text_size(px(13.))
-                .line_height(px(18.))
-                .font_weight(FontWeight::MEDIUM)
-                .whitespace_nowrap()
-                .overflow_hidden()
-                .text_ellipsis()
-                .child(name.to_owned()),
-        )
-        .child(
-            div()
-                .text_size(px(12.))
-                .line_height(px(16.))
-                .text_color(c(MUTED_FG()))
-                .child(detail.to_owned()),
-        )
+    row_copy(name, detail)
 }
 
 fn device_avatar(platform: Platform) -> Div {

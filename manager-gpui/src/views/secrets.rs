@@ -1,7 +1,6 @@
 //! Ключи — dictation.get_config/verify_api_key/set_api_key/clear_api_key/
 //! test_connectivity + stats (SecretsView.vue parity).
 use ::gpui::{prelude::*, *};
-use gpui_component::input::Input;
 use serde_json::json;
 
 use crate::app::ManagerApp;
@@ -13,33 +12,46 @@ pub fn load(app: &mut ManagerApp) {
     app.call("secrets.stats", "dictation.get_stats", json!({}));
 }
 
-pub fn render(
+pub fn render_body(
     app: &mut ManagerApp,
     window: &mut Window,
     cx: &mut Context<ManagerApp>,
 ) -> AnyElement {
-    let mut col = div().flex().flex_col().gap_4().w_full();
-    col = col.child(section("Ключи", "API-ключи и провайдеры"));
-
-    col = col.child(slot_or(app, "secrets.config", |v| {
-        let cfg = vget(v, "config");
-        let has_key = vbool(v, "hasApiKey") || vbool(cfg, "hasApiKey");
-        let mut el = card();
-        el = el.child(
-            row("Диктовка — Groq", "API-ключ для облачной расшифровки речи").child(badge(
-                if has_key {
-                    "Ключ задан"
-                } else {
-                    "Ключ не задан"
-                },
-                if has_key { SUCCESS() } else { WARN() },
-            )),
+    let mut col = page_stack().child(section(
+        "Доступы и API-ключи",
+        "Ключи сгруппированы по назначению",
+    ));
+    let key_status = crate::async_fields::field_text(app.slots.get("secrets.config"), |v| {
+        let global = v.get("hasApiKey").and_then(serde_json::Value::as_bool);
+        let nested = vget(v, "config")
+            .get("hasApiKey")
+            .and_then(serde_json::Value::as_bool);
+        match (global, nested) {
+            (Some(true), _) | (_, Some(true)) => "Ключ задан".into(),
+            (Some(false), _) | (_, Some(false)) => "Ключ не задан".into(),
+            _ => String::new(),
+        }
+    });
+    let mut config = card()
+        .id("integration-access-card")
+        .debug_selector(|| "integration-access-card".into())
+        .child(
+            row("Диктовка — Groq", "API-ключ для облачной расшифровки речи")
+                .child(badge(key_status, MUTED_FG())),
         );
-        el = el.child(kv("Провайдер", vstr(cfg, "provider")));
-        el = el.child(kv("Язык", vstr(cfg, "language")));
-        el = el.child(kv("Горячая клавиша", vstr(cfg, "hotkey")));
-        el.into_any_element()
-    }));
+    for (key, label) in [
+        ("provider", "Провайдер"),
+        ("language", "Язык"),
+        ("hotkey", "Горячая клавиша"),
+    ] {
+        config = config.child(crate::async_fields::field_row(
+            app,
+            "secrets.config",
+            label,
+            |v| vstr(vget(v, "config"), key),
+        ));
+    }
+    col = col.child(config);
 
     let config_slot = app.data("secrets.config");
     let cfg = vget(&config_slot, "config");
@@ -81,7 +93,8 @@ pub fn render(
                     .child(
                         div()
                             .flex_1()
-                            .child(Input::new(&key_in).aria_label("API-ключ Groq")),
+                            .min_w_0()
+                            .child(input_field(&key_in).aria_label("API-ключ Groq")),
                     )
                     .child(btn(
                         "secrets-verify",

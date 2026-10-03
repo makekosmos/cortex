@@ -1,7 +1,6 @@
 //! Интеграции — integrations.list/set_credential/clear_credential/sync_now +
 //! login_contract (ConnectionsView.vue parity).
 use ::gpui::{prelude::*, *};
-use gpui_component::input::Input;
 use serde_json::{json, Value};
 
 use crate::app::ManagerApp;
@@ -9,6 +8,7 @@ use crate::widgets::*;
 use mundus_gpui_kit::theme::*;
 
 pub fn load(app: &mut ManagerApp) {
+    super::secrets::load(app);
     app.call("conn.list", "integrations.list", json!({}));
 }
 
@@ -98,20 +98,24 @@ pub fn render(
     window: &mut Window,
     cx: &mut Context<ManagerApp>,
 ) -> AnyElement {
-    let mut col = div().flex().flex_col().gap_4().w_full();
+    let mut col = page_stack();
     col = col.child(section("Интеграции", "Источники данных"));
 
     let snapshot = app.data("conn.list");
     let mut el = div().flex().flex_col().gap_3();
     let providers = varr(&snapshot, "providers").to_vec();
     if providers.is_empty() {
-        el = el.child(card().child(empty("Нет доступных интеграций")));
+        let text = crate::async_fields::field_text(app.slots.get("conn.list"), |_| {
+            "Нет доступных интеграций".into()
+        });
+        el = el.child(card().child(empty(&text)));
     }
     for p in &providers {
         el = el.child(render_provider(app, p, window, cx));
     }
     col = col.child(el);
-    col.into_any_element()
+    col.child(super::secrets::render_body(app, window, cx))
+        .into_any_element()
 }
 
 fn render_provider(
@@ -154,7 +158,13 @@ fn render_provider(
         }
     }
 
-    let mut actions = div().flex().gap_2().items_center();
+    let mut actions = div()
+        .w_full()
+        .flex()
+        .flex_wrap()
+        .gap_2()
+        .items_center()
+        .justify_end();
     match state {
         IntegrationState::Connected => {
             let sid = id.clone();
@@ -230,7 +240,7 @@ fn render_provider(
                                     .text_color(c(MUTED_FG()))
                                     .child(label.clone()),
                             )
-                            .child(Input::new(&input).aria_label(label).mask_toggle()),
+                            .child(input_field(&input).aria_label(label).mask_toggle()),
                     );
                 }
                 let pid = id.clone();

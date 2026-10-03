@@ -35,13 +35,12 @@ fn write_persist(enabled: bool) -> Result<(), String> {
         .map_err(|e| format!("Не удалось записать browser.json: {e}"))
 }
 
-pub fn render(
+pub fn render_body(
     app: &mut ManagerApp,
     _window: &mut Window,
     cx: &mut Context<ManagerApp>,
 ) -> AnyElement {
-    let mut col = div().flex().flex_col().gap_4().w_full();
-    col = col.child(section("Браузер", "Сессии и данные сайтов"));
+    let mut col = page_stack().child(section("Приватность", "Данные встроенного браузера"));
 
     let persist = vbool(&app.data("browser.persist"), "value");
     col = col.child(

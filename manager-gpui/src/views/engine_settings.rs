@@ -1,7 +1,7 @@
 //! Движок — engine.settings.get / engine.settings.set
 //! (EngineSettingsView.vue parity: warm timeout + usage tracker).
 use ::gpui::{prelude::*, *};
-use gpui_component::{input::Input, Disableable};
+use gpui_component::Disableable;
 use serde_json::json;
 
 use crate::app::ManagerApp;
@@ -13,13 +13,12 @@ pub fn load(app: &mut ManagerApp) {
     app.call("engine.settings", "engine.settings.get", json!({}));
 }
 
-pub fn render(
+pub fn render_body(
     app: &mut ManagerApp,
     window: &mut Window,
     cx: &mut Context<ManagerApp>,
 ) -> AnyElement {
-    let mut col = div().flex().flex_col().gap_4().w_full();
-    col = col.child(section("Движок", "Настройки запуска"));
+    let mut col = page_stack().child(section("Система и производительность", "Параметры Engine"));
 
     col = col.child(
         card()
@@ -74,7 +73,7 @@ pub fn render(
                     .flex()
                     .gap_2()
                     .items_center()
-                    .child(div().w(px(200.)).child(Input::new(&warm_in)))
+                    .child(div().flex_1().min_w_0().child(input_field(&warm_in)))
                     .child(btn(
                         "engine-warm-save",
                         "Сохранить",
@@ -103,7 +102,7 @@ pub fn render(
         card().child(
             row(
                 "Счётчик использования",
-                "Анонимная статистика запусков для приоритизации разработки.",
+                "Учитывать активность приложений. Настройка сохраняется в Engine.",
             )
             .child(
                 toggle("engine-tracker", tracker_on, cx, |this, checked, _| {

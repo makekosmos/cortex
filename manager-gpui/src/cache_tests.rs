@@ -11,7 +11,7 @@ fn revisiting_page_keeps_cached_data_visible(cx: &mut TestAppContext) {
             app.slots
                 .insert(slot.into(), Slot::Ready(json!({"cached": true})));
         }
-        app.set_view(View::Engine, cx);
+        app.set_view(View::Settings, cx);
         app.set_view(View::Data, cx);
         for slot in ["data.summary", "data.types", "data.storage"] {
             assert!(matches!(app.slots.get(slot), Some(Slot::Ready(v)) if v["cached"] == true));
@@ -25,7 +25,7 @@ fn explicit_refresh_and_invalidated_cache_still_reload(cx: &mut TestAppContext) 
     manager.update(cx, |app, cx| {
         app.slots
             .insert("engine.settings".into(), Slot::Ready(json!({})));
-        app.set_view(View::Engine, cx);
+        app.set_view(View::Settings, cx);
         assert!(matches!(
             app.slots.get("engine.settings"),
             Some(Slot::Ready(_))
@@ -39,7 +39,7 @@ fn explicit_refresh_and_invalidated_cache_still_reload(cx: &mut TestAppContext) 
             .insert("engine.settings".into(), Slot::Ready(json!({})));
         app.invalidated_slots.insert("engine.settings".into());
         app.set_view(View::Data, cx);
-        app.set_view(View::Engine, cx);
+        app.set_view(View::Settings, cx);
         assert!(matches!(
             app.slots.get("engine.settings"),
             Some(Slot::Loading)
