@@ -31,8 +31,8 @@ pub fn apply_legacy_compat_entity(conn: &Connection, entity: &SyncEntity) -> Res
         .and_then(|v| v.as_str().map(str::to_owned))
         .unwrap_or_default();
     props.retain(|key, value| {
-        !value.is_null()
-            && !(matches!(
+        !(value.is_null()
+            || matches!(
                 key.as_str(),
                 "is_completed"
                     | "isCompleted"

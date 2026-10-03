@@ -12,7 +12,7 @@ and package-contract development, not Electron/Vue development.
 ## Toolchain
 
 ```text
-rustup toolchain install 1.95.0          # workspace requires >= 1.88
+rustup toolchain install 1.95.0          # pinned by rust-toolchain.toml / toolchain.json
 sudo apt-get install build-essential pkg-config libssl-dev
 node --version                           # Node 20+
 corepack prepare pnpm@12.4.1 --activate  # pinned packageManager

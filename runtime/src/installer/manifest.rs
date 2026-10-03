@@ -42,6 +42,10 @@ fn valid_file_name(name: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
 }
 
+fn valid_sha256(hex: &str) -> bool {
+    hex.len() == 64 && hex.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
 pub fn load(path: &Path) -> Result<Manifest, String> {
     let raw: serde_json::Value =
         serde_json::from_slice(&std::fs::read(path).map_err(|e| format!("read {path:?}: {e}"))?)
@@ -67,10 +71,7 @@ pub fn load(path: &Path) -> Result<Manifest, String> {
         let sha256 = file.get("sha256").and_then(|v| v.as_str()).unwrap_or("");
         // as_u64 rejects floats like the PowerShell int/long check did.
         let size = file.get("size").and_then(|v| v.as_u64());
-        if !valid_file_name(name)
-            || !(sha256.len() == 64 && sha256.bytes().all(|b| b.is_ascii_hexdigit()))
-            || size.is_none()
-        {
+        if !valid_file_name(name) || !valid_sha256(sha256) || size.is_none() {
             return Err("invalid engine manifest file".into());
         }
         parsed.push(ManifestFile {
