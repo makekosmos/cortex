@@ -20,29 +20,6 @@ fn app_index_entry_uses_icon_ref_without_inline_data_url() {
 }
 
 #[tokio::test]
-async fn calculator_op_returns_result_or_quiet_null() {
-    let data_dir = tempfile::tempdir().unwrap();
-    let result = handle_calculator_op(
-        "evaluate",
-        serde_json::json!({ "query": "1200 * 1.2" }),
-        data_dir.path(),
-    )
-    .await;
-    assert!(result.ok);
-    assert_eq!(result.data["result"], "1440");
-    assert_eq!(result.data["expression"], "1200 * 1.2");
-
-    let search_text = handle_calculator_op(
-        "evaluate",
-        serde_json::json!({ "query": "settings" }),
-        data_dir.path(),
-    )
-    .await;
-    assert!(search_text.ok);
-    assert!(search_text.data["result"].is_null());
-}
-
-#[tokio::test]
 async fn file_index_diagnostics_op_returns_enriched_payload() {
     let data = tempfile::tempdir().unwrap();
     let root = tempfile::tempdir().unwrap();
