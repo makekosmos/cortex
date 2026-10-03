@@ -125,6 +125,35 @@ fn snapshot_lines(tree: &Value) -> Vec<String> {
 }
 
 #[gpui::test]
+fn every_reorganized_page_names_its_controls(cx: &mut TestAppContext) {
+    let (manager, cx) = launch(cx);
+    cx.simulate_resize(gpui::size(gpui::px(1440.), gpui::px(2000.)));
+    for view in crate::views::NAV_GROUPS
+        .iter()
+        .flat_map(|group| group.iter())
+    {
+        for expanded in [false, true] {
+            manager.update(cx, |app, cx| {
+                app.view = *view;
+                app.settings_developer_open = expanded;
+                cx.notify();
+            });
+            let tree = a11y_tree(cx);
+            for (role, node) in nodes(&tree) {
+                if INTERACTIVE_ROLES.contains(&role.as_str()) {
+                    assert!(
+                        node["aria"]["label"]
+                            .as_str()
+                            .is_some_and(|v| !v.trim().is_empty()),
+                        "unnamed {role} on {view:?}, developer={expanded}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[gpui::test]
 async fn a11y_tree_has_no_unnamed_interactive_nodes(cx: &mut TestAppContext) {
     let (_app, cx) = launch(cx);
     let tree = a11y_tree(cx);
