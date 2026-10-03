@@ -183,14 +183,6 @@ pub(super) async fn dispatch_standard(
             "engine.settings.set" => manager_state
                 .set_settings_patch(
                     params
-                        .get("warm_timeout_seconds")
-                        .and_then(Value::as_u64)
-                        .or_else(|| {
-                            params
-                                .pointer("/desktop_host/warm_timeout_seconds")
-                                .and_then(Value::as_u64)
-                        }),
-                    params
                         .get("usage_tracker_enabled")
                         .and_then(Value::as_bool)
                         .or_else(|| {

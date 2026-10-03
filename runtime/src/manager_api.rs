@@ -197,16 +197,8 @@ impl ManagerState {
         Ok(engine_settings::read_settings(&self.data_dir))
     }
 
-    pub fn set_settings(&self, timeout: u64) -> Result<Value, String> {
-        engine_settings::update_settings(&self.data_dir, Some(timeout), None)
-    }
-
-    pub fn set_settings_patch(
-        &self,
-        timeout: Option<u64>,
-        usage_tracker_enabled: Option<bool>,
-    ) -> Result<Value, String> {
-        engine_settings::update_settings(&self.data_dir, timeout, usage_tracker_enabled)
+    pub fn set_settings_patch(&self, usage_tracker_enabled: Option<bool>) -> Result<Value, String> {
+        engine_settings::update_settings(&self.data_dir, usage_tracker_enabled)
     }
 
     pub fn autostart(&self) -> Value {
@@ -303,15 +295,12 @@ mod tests {
     fn settings_are_two_state_and_persisted() {
         let dir = tempfile::tempdir().unwrap();
         let s = ManagerState::new(dir.path().to_path_buf());
+        assert_eq!(s.settings().unwrap()["usage_tracker"]["enabled"], true);
         assert_eq!(
-            s.settings().unwrap()["desktop_host"]["warm_timeout_seconds"],
-            300
+            s.set_settings_patch(Some(false)).unwrap()["usage_tracker"]["enabled"],
+            false
         );
-        assert!(s.set_settings(1).is_err());
-        assert_eq!(
-            s.set_settings(0).unwrap()["desktop_host"]["warm_timeout_seconds"],
-            0
-        );
+        assert_eq!(s.settings().unwrap()["usage_tracker"]["enabled"], false);
     }
 
     #[tokio::test]

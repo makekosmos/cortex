@@ -7,7 +7,6 @@ pub const SETTINGS_FILE_NAME: &str = "engine-manager-settings.json";
 // MIGRATION(KOS-267): remove after 2026-11-01. Settings file written by the
 // Electron shell; it lands in the renamed data dir under its old name.
 pub const LEGACY_SHELL_SETTINGS_FILE_NAME: &str = "kepler-shell-settings.json";
-pub const DEFAULT_WARM_TIMEOUT_SECONDS: u64 = 300;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UsageTrackerSettingSource {
@@ -131,22 +130,6 @@ pub fn resolve_usage_tracker(
 
 pub fn read_settings(data_dir: &Path) -> Value {
     let mut object = read_object(&settings_path(data_dir)).unwrap_or_default();
-    let timeout = object
-        .get("desktop_host")
-        .and_then(Value::as_object)
-        .and_then(|host| host.get("warm_timeout_seconds"))
-        .and_then(Value::as_u64)
-        .filter(|value| *value == 0 || *value == DEFAULT_WARM_TIMEOUT_SECONDS)
-        .unwrap_or(DEFAULT_WARM_TIMEOUT_SECONDS);
-    object
-        .entry("desktop_host")
-        .or_insert_with(|| Value::Object(Map::new()));
-    if let Some(host) = object
-        .get_mut("desktop_host")
-        .and_then(Value::as_object_mut)
-    {
-        host.insert("warm_timeout_seconds".into(), Value::from(timeout));
-    }
     let enabled = object
         .get("usage_tracker")
         .and_then(Value::as_object)
@@ -167,29 +150,10 @@ pub fn read_settings(data_dir: &Path) -> Value {
 
 pub fn update_settings(
     data_dir: &Path,
-    warm_timeout_seconds: Option<u64>,
     usage_tracker_enabled: Option<bool>,
 ) -> Result<Value, String> {
-    if let Some(timeout) = warm_timeout_seconds {
-        if timeout != 0 && timeout != DEFAULT_WARM_TIMEOUT_SECONDS {
-            return Err("warm_timeout_seconds must be 0 or 300".into());
-        }
-    }
     let path = settings_path(data_dir);
     let mut object = read_object(&path).unwrap_or_default();
-    if let Some(timeout) = warm_timeout_seconds {
-        let host = object
-            .entry("desktop_host")
-            .or_insert_with(|| Value::Object(Map::new()));
-        if let Some(host) = host.as_object_mut() {
-            host.insert("warm_timeout_seconds".into(), Value::from(timeout));
-        } else {
-            *host = Value::Object(Map::from_iter([(
-                "warm_timeout_seconds".into(),
-                Value::from(timeout),
-            )]));
-        }
-    }
     if let Some(enabled) = usage_tracker_enabled {
         let tracker = object
             .entry("usage_tracker")
@@ -231,15 +195,14 @@ mod tests {
         std::fs::write(
             settings_path(dir.path()),
             concat!(
-                r#"{"desktop_host":{"warm_timeout_seconds":0,"future":7},"#,
-                r#""future_root":{"x":true},"usage_tracker":{"enabled":true}}"#
+                r#"{"future_root":{"x":true,"future":7},"#,
+                r#""usage_tracker":{"enabled":true}}"#
             ),
         )
         .unwrap();
         assert!(resolve_usage_tracker(dir.path(), None).enabled);
-        let result = update_settings(dir.path(), None, Some(false)).unwrap();
-        assert_eq!(result["desktop_host"]["warm_timeout_seconds"], 0);
-        assert_eq!(result["desktop_host"]["future"], 7);
+        let result = update_settings(dir.path(), Some(false)).unwrap();
+        assert_eq!(result["future_root"]["future"], 7);
         assert_eq!(result["future_root"]["x"], true);
         assert_eq!(result["usage_tracker"]["enabled"], false);
     }
