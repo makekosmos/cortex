@@ -42,8 +42,7 @@ fn v2_grants_compile_from_canonical_registry_and_survive_restart() {
     let versioned = VersionedManifest::V2(manifest.clone());
     let (archive, hash, size) = archive_with_versioned_manifest(dir.path(), &versioned);
     let expected_hash = hash.clone();
-    let (trust_store, _, release) = trust();
-    let service = PackageService::open_with_trust(dir.path(), trust_store).expect("service");
+    let service = PackageService::open_for_test(dir.path()).expect("service");
     let catalog = CatalogDocument {
         schema_version: 1,
         sequence: 1,
@@ -51,13 +50,17 @@ fn v2_grants_compile_from_canonical_registry_and_survive_restart() {
         expires_at: "2030-01-01T00:00:00Z".into(),
         packages: vec![CatalogEntry {
             manifest: versioned,
-            archive_url: "https://packages.kosmos.dev/demo-v2.kspkg".into(),
-            sha256: hash,
-            size,
+            archives: vec![catalog_archive(
+                "https://packages.kosmos.dev/demo-v2.kspkg",
+                hash,
+                size,
+            )],
         }],
+        external_apps: vec![],
+        revoked: vec![],
     };
-    let (bytes, signatures) = signed(&catalog, "release-1", &release);
-    service.apply_catalog(bytes, signatures).expect("catalog");
+    let bytes = document_bytes(&catalog);
+    service.apply_catalog(&bytes).expect("catalog");
     service
         .install_from_path(&manifest.id, &manifest.version, &archive)
         .expect("install");
@@ -85,8 +88,7 @@ fn v2_grants_compile_from_canonical_registry_and_survive_restart() {
     );
 
     drop(service);
-    let (trust_store, _, _) = trust();
-    let restarted = PackageService::open_with_trust(dir.path(), trust_store).expect("restart");
+    let restarted = PackageService::open_for_test(dir.path()).expect("restart");
     let listing = restarted
         .store_installed_listings()
         .expect("restarted listing");
@@ -143,10 +145,7 @@ async fn package_definitions_are_archive_bound_registered_in_ark_and_survive_uni
     probe
         .validate_manifest(&manifest, &docs)
         .expect("definition contract");
-    let (trust_store, _, release) = trust();
-    let service = std::sync::Arc::new(
-        PackageService::open_with_trust(dir.path(), trust_store).expect("service"),
-    );
+    let service = std::sync::Arc::new(PackageService::open_for_test(dir.path()).expect("service"));
     let ark = std::sync::Arc::new(
         crate::ark_host::ArkHost::open(dir.path().join("ark.db").to_str().expect("db path"))
             .await
@@ -161,13 +160,17 @@ async fn package_definitions_are_archive_bound_registered_in_ark_and_survive_uni
         expires_at: "2030-01-01T00:00:00Z".into(),
         packages: vec![CatalogEntry {
             manifest: versioned,
-            archive_url: "https://packages.kosmos.dev/defined.kspkg".into(),
-            sha256: hash,
-            size,
+            archives: vec![catalog_archive(
+                "https://packages.kosmos.dev/defined.kspkg",
+                hash,
+                size,
+            )],
         }],
+        external_apps: vec![],
+        revoked: vec![],
     };
-    let (bytes, signatures) = signed(&catalog, "release-1", &release);
-    service.apply_catalog(bytes, signatures).expect("catalog");
+    let bytes = document_bytes(&catalog);
+    service.apply_catalog(&bytes).expect("catalog");
     {
         let service = service.clone();
         let id = manifest.id.clone();
@@ -207,8 +210,7 @@ async fn package_definitions_are_archive_bound_registered_in_ark_and_survive_uni
     drop(service);
     drop(dispatcher);
     drop(ark);
-    let (trust_store, _, _) = trust();
-    let restarted = PackageService::open_with_trust(dir.path(), trust_store).expect("restart");
+    let restarted = PackageService::open_for_test(dir.path()).expect("restart");
     let ark = std::sync::Arc::new(
         crate::ark_host::ArkHost::open(dir.path().join("ark.db").to_str().expect("db path"))
             .await
@@ -247,9 +249,7 @@ async fn ark_conflict_rolls_back_to_the_enabled_package() {
     let prior_versioned = VersionedManifest::V2(prior.clone());
     let (prior_archive, prior_hash, prior_size) =
         archive_with_versioned_manifest(dir.path(), &prior_versioned);
-    let (trust_store, _, release) = trust();
-    let service =
-        std::sync::Arc::new(PackageService::open_with_trust(dir.path(), trust_store).unwrap());
+    let service = std::sync::Arc::new(PackageService::open_for_test(dir.path()).unwrap());
     let initial = CatalogDocument {
         schema_version: 1,
         sequence: 1,
@@ -257,13 +257,17 @@ async fn ark_conflict_rolls_back_to_the_enabled_package() {
         expires_at: "2030-01-01T00:00:00Z".into(),
         packages: vec![CatalogEntry {
             manifest: prior_versioned,
-            archive_url: "https://packages.kosmos.dev/prior.kspkg".into(),
-            sha256: prior_hash.clone(),
-            size: prior_size,
+            archives: vec![catalog_archive(
+                "https://packages.kosmos.dev/prior.kspkg",
+                prior_hash.clone(),
+                prior_size,
+            )],
         }],
+        external_apps: vec![],
+        revoked: vec![],
     };
-    let (bytes, signatures) = signed(&initial, "release-1", &release);
-    service.apply_catalog(bytes, signatures).unwrap();
+    let bytes = document_bytes(&initial);
+    service.apply_catalog(&bytes).unwrap();
     service
         .install_from_path(&prior.id, &prior.version, &prior_archive)
         .unwrap();
@@ -326,13 +330,17 @@ async fn ark_conflict_rolls_back_to_the_enabled_package() {
         expires_at: "2030-01-01T00:00:00Z".into(),
         packages: vec![CatalogEntry {
             manifest: VersionedManifest::V2(replacement),
-            archive_url: "https://packages.kosmos.dev/update.kspkg".into(),
-            sha256: hash,
-            size,
+            archives: vec![catalog_archive(
+                "https://packages.kosmos.dev/update.kspkg",
+                hash,
+                size,
+            )],
         }],
+        external_apps: vec![],
+        revoked: vec![],
     };
-    let (bytes, signatures) = signed(&update, "release-1", &release);
-    service.apply_catalog(bytes, signatures).unwrap();
+    let bytes = document_bytes(&update);
+    service.apply_catalog(&bytes).unwrap();
     let install = {
         let service = service.clone();
         let id = prior.id.clone();

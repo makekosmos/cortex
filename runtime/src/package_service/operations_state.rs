@@ -13,7 +13,10 @@ impl PackageService {
             .into_iter()
             .find(|package| package.id == id && package.version == version)
             .ok_or(PackageError::Invalid)?;
-        if !installed.hash.eq_ignore_ascii_case(&entry.sha256) {
+        if entry
+            .archive()
+            .is_none_or(|archive| !installed.hash.eq_ignore_ascii_case(&archive.sha256))
+        {
             return Err(PackageError::Invalid);
         }
         if installed.manifest.worker_entrypoint().is_some() {

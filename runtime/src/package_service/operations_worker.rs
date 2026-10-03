@@ -25,7 +25,10 @@ impl PackageService {
         }
         if require_current_catalog {
             let entry = Self::current_entry(&mut state, id, version)?;
-            if !installed.hash.eq_ignore_ascii_case(&entry.sha256) {
+            if entry
+                .archive()
+                .is_none_or(|archive| !installed.hash.eq_ignore_ascii_case(&archive.sha256))
+            {
                 return Err(PackageError::Invalid);
             }
         }
@@ -230,8 +233,11 @@ impl PackageService {
         }
         let catalog_matches = if require_current_catalog {
             let mut state = Self::lock(&self.state);
-            Self::current_entry(&mut state, id, version)
-                .is_ok_and(|entry| launch.expected.hash.eq_ignore_ascii_case(&entry.sha256))
+            Self::current_entry(&mut state, id, version).is_ok_and(|entry| {
+                entry.archive().is_some_and(|archive| {
+                    launch.expected.hash.eq_ignore_ascii_case(&archive.sha256)
+                })
+            })
         } else {
             true
         };

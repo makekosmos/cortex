@@ -130,7 +130,7 @@ fn render_package_updates(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> Any
         let latest = varr(&catalog, "listings")
             .iter()
             .find(|listing| vstr(listing, "id") == id)
-            .map(|listing| vstr(listing, "version"))
+            .map(|listing| vstr(vget(listing, "distribution"), "version"))
             .unwrap_or_default();
         if !latest.is_empty() && latest != current {
             let name = vopt(package, "name")

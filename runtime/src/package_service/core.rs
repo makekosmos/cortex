@@ -1,19 +1,10 @@
 impl PackageService {
-    /// Test-only constructor for signed fixture catalogs. Production builds
-    /// cannot select writable trust roots; the fixture feature is compiled
-    /// only for the local worker acceptance harness.
-    #[cfg(feature = "package-worker-fixture")]
-    pub fn open_with_test_trust(
-        data_dir: impl AsRef<Path>,
-        root_key: TrustedKey,
-        release_keys: Vec<TrustedKey>,
-    ) -> Result<Self, PackageError> {
-        let trust = TrustStore::new(root_key, release_keys).map_err(PackageError::Trust)?;
-        // Test/fixture constructors scope every product root — including the
-        // Apps dir — to the passed data_dir so nothing touches real user dirs.
+    /// Test-only constructor: scopes every product root — including the Apps
+    /// dir — to the passed data_dir so nothing touches real user dirs.
+    #[cfg(any(test, feature = "package-worker-fixture"))]
+    pub fn open_for_test(data_dir: impl AsRef<Path>) -> Result<Self, PackageError> {
         Self::from_parts(
             data_dir.as_ref().join("packages"),
-            Some(trust),
             Some(data_dir.as_ref().join("apps")),
         )
     }
@@ -21,43 +12,17 @@ impl PackageService {
     pub fn open(data_dir: impl AsRef<Path>) -> Result<Self, PackageError> {
         let root = data_dir.as_ref().join("packages");
         retry_io(|| fs::create_dir_all(&root)).map_err(|_| PackageError::Persistence)?;
-        let trust = match (
-            option_env!("MUNDUS_PACKAGE_ROOT_KEY_JSON"),
-            option_env!("MUNDUS_PACKAGE_RELEASE_KEYS_JSON"),
-        ) {
-            (Some(root_json), Some(releases)) => serde_json::from_str::<TrustedKey>(root_json)
-                .ok()
-                .and_then(|root_key| {
-                    serde_json::from_str::<Vec<TrustedKey>>(releases)
-                        .ok()
-                        .and_then(|keys| TrustStore::new(root_key, keys).ok())
-                }),
-            _ => production_trust(),
-        };
         // Apps root — single source: `native_apps::native_apps_root()` (the
         // product-local Mundus dir, honoring the env override).
-        Self::from_parts(root, trust, crate::native_apps::native_apps_root().ok())
-    }
-    #[cfg(test)]
-    pub fn open_with_trust(
-        data_dir: impl AsRef<Path>,
-        trust: TrustStore,
-    ) -> Result<Self, PackageError> {
-        Self::from_parts(
-            data_dir.as_ref().join("packages"),
-            Some(trust),
-            Some(data_dir.as_ref().join("apps")),
-        )
+        Self::from_parts(root, crate::native_apps::native_apps_root().ok())
     }
 
     /// Crate-internal constructor — the dispatcher tests and the native
-    /// tests build minimal services without a trust store.
+    /// tests build minimal services.
     pub(crate) fn from_parts(
         root: PathBuf,
-        trust: Option<TrustStore>,
         apps_root: Option<PathBuf>,
     ) -> Result<Self, PackageError> {
-        let unavailable = trust.is_none();
         let data_dir = root
             .parent()
             .ok_or(PackageError::Persistence)?
@@ -105,8 +70,7 @@ impl PackageService {
             release_failures: Mutex::new(HashMap::new()),
             native_jobs: std::sync::Arc::new(Mutex::new(HashMap::new())),
             state: Mutex::new(State {
-                trust,
-                fault: unavailable.then(|| "package_trust_unavailable".into()),
+                fault: None,
                 catalog: None,
             }),
             mutation: Mutex::new(()),

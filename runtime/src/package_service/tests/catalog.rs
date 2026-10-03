@@ -1,44 +1,22 @@
 #[test]
-fn missing_compile_time_trust_fails_closed_without_blocking_engine() {
+fn fresh_service_opens_catalog_free_and_ready() {
     let dir = tempdir().expect("tempdir");
-    let service = PackageService::from_parts(
-        dir.path().join("packages"),
-        None,
-        Some(dir.path().join("apps")),
-    )
-    .expect("service");
-    assert!(!service.trust_summary().configured);
-    assert_eq!(
-        service.trust_summary().fault_code.as_deref(),
-        Some("package_trust_unavailable")
-    );
+    let service = PackageService::open_for_test(dir.path()).expect("service");
+    assert!(service.catalog_summary().is_none());
+    assert!(service.catalog_fault().is_none());
+    assert!(matches!(
+        service.catalog_packages(None),
+        Err(PackageError::CatalogUnavailable)
+    ));
 }
 
 #[test]
-fn production_open_uses_pinned_trust() {
+fn catalog_applies_and_replay_or_tamper_fails() {
     let dir = tempdir().expect("tempdir");
-    let summary = PackageService::open(dir.path())
-        .expect("service")
-        .trust_summary();
-    assert!(summary.configured);
-    assert_eq!(summary.trusted_release_keys, 1);
-    assert_eq!(summary.revoked_release_keys, 0);
-}
-
-#[test]
-fn signed_catalog_applies_and_replay_or_tamper_fails() {
-    let dir = tempdir().expect("tempdir");
-    let (trust_store, _, release) = trust();
-    let service = PackageService::open_with_trust(dir.path(), trust_store).expect("service");
+    let service = PackageService::open_for_test(dir.path()).expect("service");
     let doc = catalog(1, "a".repeat(64), 1, "2030-01-01T00:00:00Z");
-    let (bytes, signatures) = signed(&doc, "release-1", &release);
-    assert_eq!(
-        service
-            .apply_catalog(&bytes, signatures.clone())
-            .expect("catalog")
-            .sequence,
-        1
-    );
+    let bytes = document_bytes(&doc);
+    assert_eq!(service.apply_catalog(&bytes).expect("catalog").sequence, 1);
     let app_catalog = service
         .catalog_packages(Some(&PackageKind::App))
         .expect("app catalog");
@@ -48,124 +26,56 @@ fn signed_catalog_applies_and_replay_or_tamper_fails() {
         .catalog_packages(Some(&PackageKind::Source))
         .expect("source catalog")
         .is_empty());
+    // Re-fetching the same document is an idempotent no-op, not a replay.
+    assert_eq!(service.apply_catalog(&bytes).expect("re-apply").sequence, 1);
+    // An older document is rejected as a rollback.
+    let older = catalog(0, "b".repeat(64), 1, "2030-01-01T00:00:00Z");
     assert!(matches!(
-        service.apply_catalog(&bytes, signatures),
-        Err(PackageError::Trust(TrustError::Replay))
+        service.apply_catalog(document_bytes(&older)),
+        Err(PackageError::Catalog(CatalogError::Replay))
+            | Err(PackageError::Catalog(CatalogError::Invalid(_)))
     ));
     let mut tampered = bytes;
     tampered[0] ^= 1;
-    let (_, signatures) = signed(&doc, "release-1", &release);
-    assert!(service.apply_catalog(tampered, signatures).is_err());
+    assert!(service.apply_catalog(tampered).is_err());
 }
 
 #[test]
-fn expired_or_revoked_catalog_clears_cache_but_accepts_fresh_catalog() {
+fn expired_catalog_is_rejected() {
     let dir = tempdir().expect("tempdir");
-    let (trust_store, root, release) = trust();
-    let service = PackageService::open_with_trust(dir.path(), trust_store).expect("service");
+    let service = PackageService::open_for_test(dir.path()).expect("service");
     let mut expired = catalog(1, "a".repeat(64), 1, "2025-01-01T00:00:00Z");
     expired.issued_at = "2024-01-01T00:00:00Z".into();
-    let (expired_bytes, expired_signatures) = signed(&expired, "release-1", &release);
-    assert!(service
-        .apply_catalog(&expired_bytes, expired_signatures)
-        .is_err());
-    let (release_two, release_two_key) = key(3, "release-2");
-    let transition = KeyTransitionDocument {
-        schema_version: 1,
-        sequence: 1,
-        issued_at: "2029-01-01T00:00:00Z".into(),
-        expires_at: "2030-01-01T00:00:00Z".into(),
-        old_key_id: "release-1".into(),
-        new_key: release_two_key,
-    };
-    let (transition_bytes, mut transition_signatures) = signed(&transition, "release-1", &release);
-    transition_signatures.signatures.push(DetachedSignature {
-        key_id: "release-2".into(),
-        algorithm: "ed25519".into(),
-        signature: STANDARD.encode(release_two.sign(&transition_bytes).to_bytes()),
-    });
-    service
-        .apply_transition(&transition_bytes, transition_signatures)
-        .expect("transition");
-    let valid = catalog(2, "b".repeat(64), 1, "2030-01-01T00:00:00Z");
-    let (valid_bytes, valid_signatures) = signed(&valid, "release-1", &release);
-    service
-        .apply_catalog(&valid_bytes, valid_signatures)
-        .expect("valid catalog");
-    let revoke = crate::package_trust::RevocationDocument {
-        schema_version: 1,
-        sequence: 1,
-        issued_at: "2029-01-01T00:00:00Z".into(),
-        revoked_release_keys: vec!["release-1".into()],
-        revoked_packages: vec![],
-    };
-    let (revoke_bytes, revoke_signatures) = signed(&revoke, "root", &root);
-    service
-        .apply_revocations(&revoke_bytes, revoke_signatures)
-        .expect("revocation");
+    assert!(matches!(
+        service.apply_catalog(document_bytes(&expired)),
+        Err(PackageError::Catalog(CatalogError::Expired))
+    ));
     assert!(service.catalog_summary().is_none());
-    assert_eq!(
-        service.trust_summary().fault_code.as_deref(),
-        Some("catalog_unavailable")
-    );
-    let fresh = catalog(3, "c".repeat(64), 1, "2030-01-01T00:00:00Z");
-    let (fresh_bytes, fresh_signatures) = signed(&fresh, "release-2", &release_two);
-    assert_eq!(
-        service
-            .apply_catalog(fresh_bytes, fresh_signatures)
-            .expect("fresh catalog")
-            .sequence,
-        3
-    );
 }
 
 #[test]
-fn transition_and_revocation_replay_are_rejected() {
+fn persisted_catalog_reloads_on_restart() {
     let dir = tempdir().expect("tempdir");
-    let (trust_store, root, release) = trust();
-    let service = PackageService::open_with_trust(dir.path(), trust_store).expect("service");
-    let (release_two, release_two_key) = key(3, "release-2");
-    let transition = KeyTransitionDocument {
-        schema_version: 1,
-        sequence: 1,
-        issued_at: "2029-01-01T00:00:00Z".into(),
-        expires_at: "2030-01-01T00:00:00Z".into(),
-        old_key_id: "release-1".into(),
-        new_key: release_two_key,
-    };
-    let (bytes, mut signatures) = signed(&transition, "release-1", &release);
-    signatures.signatures.push(DetachedSignature {
-        key_id: "release-2".into(),
-        algorithm: "ed25519".into(),
-        signature: STANDARD.encode(release_two.sign(&bytes).to_bytes()),
-    });
+    let service = PackageService::open_for_test(dir.path()).expect("service");
+    let doc = catalog(1, "a".repeat(64), 1, "2030-01-01T00:00:00Z");
     service
-        .apply_transition(&bytes, signatures.clone())
-        .expect("transition");
-    assert!(service.apply_transition(&bytes, signatures).is_err());
-    let revocation = crate::package_trust::RevocationDocument {
-        schema_version: 1,
-        sequence: 1,
-        issued_at: "2029-01-01T00:00:00Z".into(),
-        revoked_release_keys: vec!["release-1".into()],
-        revoked_packages: vec![],
-    };
-    let (bytes, signatures) = signed(&revocation, "root", &root);
-    service
-        .apply_revocations(&bytes, signatures.clone())
-        .expect("revocation");
-    assert!(service.apply_revocations(&bytes, signatures).is_err());
+        .apply_catalog(document_bytes(&doc))
+        .expect("catalog");
+    drop(service);
+    let restarted = PackageService::open_for_test(dir.path()).expect("restart");
+    assert_eq!(restarted.catalog_summary().expect("summary").sequence, 1);
+    assert_eq!(restarted.catalog_packages(None).expect("packages").len(), 1);
 }
 
 #[test]
 fn catalog_bound_archive_installs_and_enable_refuses_hash_mismatch() {
     let dir = tempdir().expect("tempdir");
     let (archive, hash, size) = archive(dir.path());
-    let (trust_store, _, release) = trust();
-    let service = PackageService::open_with_trust(dir.path(), trust_store).expect("service");
+    let service = PackageService::open_for_test(dir.path()).expect("service");
     let doc = catalog(1, hash.clone(), size, "2030-01-01T00:00:00Z");
-    let (bytes, signatures) = signed(&doc, "release-1", &release);
-    service.apply_catalog(bytes, signatures).expect("catalog");
+    service
+        .apply_catalog(document_bytes(&doc))
+        .expect("catalog");
     assert_eq!(
         service
             .install_from_path("com.kosmos.demo", "1.0.0", &archive)
@@ -176,42 +86,294 @@ fn catalog_bound_archive_installs_and_enable_refuses_hash_mismatch() {
     service.enable("com.kosmos.demo", "1.0.0").expect("enable");
 
     let replacement = catalog(2, "c".repeat(64), size, "2030-01-01T00:00:00Z");
-    let (bytes, signatures) = signed(&replacement, "release-1", &release);
     service
-        .apply_catalog(bytes, signatures)
+        .apply_catalog(document_bytes(&replacement))
         .expect("replacement catalog");
     assert!(service.enable("com.kosmos.demo", "1.0.0").is_err());
 }
 
+#[tokio::test]
+async fn install_from_catalog_verifies_size_and_sha256() {
+    let dir = tempdir().expect("tempdir");
+    let (archive_path, hash, size) = archive(dir.path());
+    let service = PackageService::open_for_test(dir.path()).expect("service");
+    let mut doc = catalog(1, hash.clone(), size, "2030-01-01T00:00:00Z");
+    doc.packages[0].archives[0].url = reqwest::Url::from_file_path(&archive_path)
+        .expect("archive url")
+        .to_string();
+    service
+        .apply_catalog(document_bytes(&doc))
+        .expect("catalog");
+    assert_eq!(
+        service
+            .install_from_catalog("com.kosmos.demo", "1.0.0")
+            .await
+            .expect("install")
+            .id,
+        "com.kosmos.demo"
+    );
+
+    // A catalog whose size does not match the bytes must refuse the install.
+    let dir2 = tempdir().expect("tempdir2");
+    let (archive2, hash2, _) = archive(dir2.path());
+    let service2 = PackageService::open_for_test(dir2.path()).expect("service2");
+    let mut doc2 = catalog(1, hash2, size + 1, "2030-01-01T00:00:00Z");
+    doc2.packages[0].archives[0].url = reqwest::Url::from_file_path(&archive2)
+        .expect("archive url")
+        .to_string();
+    service2
+        .apply_catalog(document_bytes(&doc2))
+        .expect("catalog2");
+    assert!(service2
+        .install_from_catalog("com.kosmos.demo", "1.0.0")
+        .await
+        .is_err());
+
+    // And a sha256 mismatch too.
+    let dir3 = tempdir().expect("tempdir3");
+    let (archive3, _, size3) = archive(dir3.path());
+    let service3 = PackageService::open_for_test(dir3.path()).expect("service3");
+    let mut doc3 = catalog(1, "0".repeat(64), size3, "2030-01-01T00:00:00Z");
+    doc3.packages[0].archives[0].url = reqwest::Url::from_file_path(&archive3)
+        .expect("archive url")
+        .to_string();
+    service3
+        .apply_catalog(document_bytes(&doc3))
+        .expect("catalog3");
+    assert!(service3
+        .install_from_catalog("com.kosmos.demo", "1.0.0")
+        .await
+        .is_err());
+}
+
 #[test]
-fn root_signed_exact_revocation_marks_installed_package() {
+fn catalog_revocation_marks_installed_package_across_restart() {
     let dir = tempdir().expect("tempdir");
     let (archive, hash, size) = archive(dir.path());
-    let (trust_store, root, release) = trust();
-    let service = PackageService::open_with_trust(dir.path(), trust_store).expect("service");
+    let service = PackageService::open_for_test(dir.path()).expect("service");
     let doc = catalog(1, hash.clone(), size, "2030-01-01T00:00:00Z");
-    let (bytes, signatures) = signed(&doc, "release-1", &release);
-    service.apply_catalog(bytes, signatures).expect("catalog");
+    service
+        .apply_catalog(document_bytes(&doc))
+        .expect("catalog");
     service
         .install_from_path("com.kosmos.demo", "1.0.0", archive)
         .expect("install");
-    let revoke = crate::package_trust::RevocationDocument {
-        schema_version: 1,
-        sequence: 1,
-        issued_at: "2029-01-01T00:00:00Z".into(),
-        revoked_release_keys: vec![],
-        revoked_packages: vec![PackageRevocation {
-            id: "com.kosmos.demo".into(),
-            version: "1.0.0".into(),
-            sha256: hash,
-        }],
-    };
-    let (bytes, signatures) = signed(&revoke, "root", &root);
+    let mut revoked = catalog(2, hash.clone(), size, "2030-01-01T00:00:00Z");
+    revoked.revoked = vec![PackageRevocation {
+        id: "com.kosmos.demo".into(),
+        version: "1.0.0".into(),
+        sha256: hash,
+        reason: Some("test".into()),
+    }];
     service
-        .apply_revocations(&bytes, signatures)
-        .expect("revoke");
+        .apply_catalog(document_bytes(&revoked))
+        .expect("revoking catalog");
     assert!(service.list().expect("list").packages[0].revoked);
-    let (fresh_trust, _, _) = trust();
-    let restarted = PackageService::open_with_trust(dir.path(), fresh_trust).expect("restart");
+    drop(service);
+    let restarted = PackageService::open_for_test(dir.path()).expect("restart");
     assert!(restarted.list().expect("restarted list").packages[0].revoked);
+}
+
+/// KOS-320 migration: a data dir written by the signed-catalog engine keeps
+/// every installed package while the trust files are dropped on sight.
+#[test]
+fn legacy_trust_state_is_dropped_but_installed_packages_survive() {
+    let dir = tempdir().expect("tempdir");
+    // Build an installed state with the current engine, then plant the files
+    // the signed pipeline persisted.
+    let service = PackageService::open_for_test(dir.path()).expect("service");
+    let (archive, hash, size) = archive(dir.path());
+    let doc = catalog(1, hash.clone(), size, "2030-01-01T00:00:00Z");
+    service
+        .apply_catalog(document_bytes(&doc))
+        .expect("catalog");
+    service
+        .install_from_path("com.kosmos.demo", "1.0.0", archive)
+        .expect("install");
+    service.enable("com.kosmos.demo", "1.0.0").expect("enable");
+    drop(service);
+
+    let root = dir.path().join("packages");
+    // Old signed envelope persisted as catalog.json, plus per-document
+    // transition/revocation envelopes and the store dir's signed catalog.
+    let envelope = serde_json::json!({
+        "bytes": "dGVzdA==",
+        "signatures": {"schema_version": 1, "signatures": [{
+            "key_id": "old-release-key",
+            "algorithm": "ed25519",
+            "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        }]}
+    });
+    fs::write(
+        root.join("catalog.json"),
+        serde_json::to_vec(&envelope).unwrap(),
+    )
+    .expect("legacy catalog");
+    fs::write(
+        root.join("transition-00000000000000000001.json"),
+        serde_json::to_vec(&envelope).unwrap(),
+    )
+    .expect("legacy transition");
+    fs::write(
+        root.join("revocation-00000000000000000001.json"),
+        serde_json::to_vec(&envelope).unwrap(),
+    )
+    .expect("legacy revocation");
+    fs::create_dir_all(dir.path().join("store")).expect("store dir");
+    fs::write(
+        dir.path().join("store").join("catalog.json"),
+        serde_json::to_vec(&envelope).unwrap(),
+    )
+    .expect("legacy store catalog");
+
+    let restarted = PackageService::open_for_test(dir.path()).expect("restart");
+    // Installed package is untouched: still enabled, still listed.
+    let installed = restarted
+        .store
+        .installed("com.kosmos.demo", "1.0.0")
+        .expect("installed");
+    assert!(installed.enabled);
+    assert!(!installed.revoked);
+    // Every trust-era file is gone; no catalog is loaded.
+    for name in [
+        "catalog.json",
+        "transition-00000000000000000001.json",
+        "revocation-00000000000000000001.json",
+    ] {
+        assert!(!root.join(name).exists(), "{name} must be dropped");
+    }
+    assert!(!dir.path().join("store").join("catalog.json").exists());
+    assert!(restarted.catalog_summary().is_none());
+    assert!(matches!(
+        restarted.enable("com.kosmos.demo", "1.0.0"),
+        Err(PackageError::CatalogUnavailable)
+    ));
+    // A fresh catalog applies cleanly on top of the migrated state.
+    let doc = catalog(1, hash, size, "2030-01-01T00:00:00Z");
+    restarted
+        .apply_catalog(document_bytes(&doc))
+        .expect("new catalog");
+    assert_eq!(restarted.catalog_summary().expect("summary").sequence, 1);
+}
+
+#[test]
+fn store_catalog_lists_packages_and_external_apps() {
+    let dir = tempdir().expect("tempdir");
+    let service = PackageService::open_for_test(dir.path()).expect("service");
+    let mut doc = catalog(1, "a".repeat(64), 1, "2030-01-01T00:00:00Z");
+    doc.packages[0].manifest = {
+        let mut manifest = manifest();
+        manifest.icon = Some("icon.png".into());
+        manifest.store = Some(crate::package_manifest::ManifestStore {
+            description: Some("Демо".into()),
+            categories: vec!["integrations".into()],
+            connects_to: Some("external.demo".into()),
+            data_compatibility: vec![],
+        });
+        VersionedManifest::V2(manifest)
+    };
+    doc.external_apps = vec![crate::catalog::ExternalAppListing {
+        id: "external.demo".into(),
+        name: "Demo".into(),
+        publisher: "Demo Inc".into(),
+        publisher_tier: crate::catalog::PublisherTier::Verified,
+        description: "d".into(),
+        categories: vec!["education".into()],
+        platforms: vec![crate::catalog::Platform::Windows],
+        official_url: "https://demo.example".into(),
+        icon_url: None,
+        data_compatibility: vec![],
+    }];
+    service
+        .apply_catalog(document_bytes(&doc))
+        .expect("catalog");
+    let dto = service.store_catalog(Utc::now(), vec![]);
+    assert_eq!(dto.state, "fresh");
+    assert_eq!(dto.listings.len(), 2);
+    let listing = dto
+        .listings
+        .iter()
+        .find(|l| l.id == "com.kosmos.demo")
+        .expect("package listing");
+    assert_eq!(listing.description, "Демо");
+    assert_eq!(
+        listing.icon_url.as_deref(),
+        Some(concat!(
+            "https://github.com/makekosmos/integrations",
+            "/releases/latest/download/icon-com.kosmos.demo.png"
+        ))
+    );
+    assert_eq!(
+        service
+            .store_external_url("external.demo")
+            .expect("external url"),
+        "https://demo.example"
+    );
+}
+
+#[tokio::test]
+async fn refresh_download_is_bounded_before_and_during_read() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    // One-shot raw HTTP server: `content_length: None` leaves the body
+    // close-delimited, exercising the streaming cap.
+    async fn serve(body: Vec<u8>, content_length: Option<usize>) -> reqwest::Response {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("listener");
+        let port = listener.local_addr().expect("addr").port();
+        tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.expect("accept");
+            let mut request = [0u8; 512];
+            let _ = socket.read(&mut request).await;
+            let mut head = b"HTTP/1.1 200 OK
+Connection: close
+"
+            .to_vec();
+            if let Some(length) = content_length {
+                head.extend_from_slice(
+                    format!(
+                        "Content-Length: {length}
+"
+                    )
+                    .as_bytes(),
+                );
+            }
+            head.extend_from_slice(
+                b"
+",
+            );
+            socket.write_all(&head).await.expect("head");
+            socket.write_all(&body).await.expect("body");
+        });
+        reqwest::get(format!("http://127.0.0.1:{port}/"))
+            .await
+            .expect("response")
+    }
+
+    // A declared Content-Length over the limit fails on the header alone.
+    let over = crate::catalog::MAX_DOCUMENT + 1;
+    let response = serve(Vec::new(), Some(over)).await;
+    assert!(
+        super::read_body_bounded(response, crate::catalog::MAX_DOCUMENT as u64)
+            .await
+            .is_err()
+    );
+
+    // Without Content-Length the stream is cut off at the same cap.
+    let response = serve(vec![0u8; over], None).await;
+    assert!(
+        super::read_body_bounded(response, crate::catalog::MAX_DOCUMENT as u64)
+            .await
+            .is_err()
+    );
+
+    // A small close-delimited body still reads through.
+    let response = serve(b"{}".to_vec(), None).await;
+    assert_eq!(
+        super::read_body_bounded(response, crate::catalog::MAX_DOCUMENT as u64)
+            .await
+            .expect("body"),
+        b"{}"
+    );
 }

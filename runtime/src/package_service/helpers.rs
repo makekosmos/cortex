@@ -252,7 +252,6 @@ fn valid_bridge_name(value: &str) -> bool {
 }
 
 fn latest_update_version(state: &State, package: &InstalledPackage) -> Option<String> {
-    let trust = state.trust.as_ref()?;
     let catalog = state.catalog.as_ref()?;
     let installed = Version::parse(&package.version).ok()?;
     catalog
@@ -260,11 +259,36 @@ fn latest_update_version(state: &State, package: &InstalledPackage) -> Option<St
         .packages
         .iter()
         .filter(|entry| entry.manifest.id() == package.id)
-        .filter(|entry| trust.ensure_package_allowed(entry).is_ok())
+        .filter(|entry| !catalog.document.entry_revoked(entry))
         .filter_map(|entry| {
             let version = Version::parse(entry.manifest.version()).ok()?;
             (version > installed).then_some((version, entry.manifest.version().to_owned()))
         })
         .max_by(|left, right| left.0.cmp(&right.0))
         .map(|(_, version)| version)
+}
+
+/// Buffer a response body with a hard cap: a declared `Content-Length` over
+/// `limit` fails before any bytes are read, and a server without one is cut
+/// off the moment the body would exceed `limit`. An unbounded `bytes()` here
+/// would let a hostile endpoint exhaust memory before validation ever ran.
+async fn read_body_bounded(
+    response: reqwest::Response,
+    limit: u64,
+) -> Result<Vec<u8>, PackageError> {
+    if response
+        .content_length()
+        .is_some_and(|length| length > limit)
+    {
+        return Err(PackageError::Invalid);
+    }
+    let mut body = Vec::new();
+    let mut response = response;
+    while let Some(chunk) = response.chunk().await.map_err(|_| PackageError::Invalid)? {
+        if body.len() + chunk.len() > limit as usize {
+            return Err(PackageError::Invalid);
+        }
+        body.extend_from_slice(&chunk);
+    }
+    Ok(body)
 }

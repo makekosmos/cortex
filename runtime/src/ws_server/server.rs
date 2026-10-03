@@ -74,9 +74,6 @@ impl WsServer {
         let agents = Arc::new(tokio::sync::OnceCell::new());
         let agents_data_dir = Arc::new(data_dir.clone());
         let rpc_diagnostics: SharedRpcDiagnostics = Arc::new(RpcDiagnostics::new());
-        let store_catalog = StoreCatalogService::open_compiled(&data_dir)
-            .ok()
-            .map(Arc::new);
         let snapshots = Arc::new(crate::package_worker_broker::SnapshotRegistry::new());
         let grants = package_service.grant_authority();
         let desktop_authority = Arc::new(crate::desktop_authority::DesktopAuthorityRegistry::new());
@@ -94,7 +91,6 @@ impl WsServer {
             rpc_diagnostics.clone(),
             protocol_usage.clone(),
             package_service.clone(),
-            store_catalog,
             snapshots.clone(),
             grants.clone(),
             desktop_authority.clone(),
@@ -199,7 +195,6 @@ fn make_dispatcher(
     rpc_diagnostics: SharedRpcDiagnostics,
     protocol_usage: Arc<ProtocolUsageStore>,
     package_service: Arc<PackageService>,
-    store_catalog: Option<Arc<StoreCatalogService>>,
     snapshots: Arc<crate::package_worker_broker::SnapshotRegistry>,
     grants: Arc<GrantAuthorityRegistry>,
     desktop_authority: Arc<crate::desktop_authority::DesktopAuthorityRegistry>,
@@ -222,7 +217,6 @@ fn make_dispatcher(
             let rpc_diagnostics = rpc_diagnostics.clone();
             let protocol_usage = protocol_usage.clone();
             let package_service = package_service.clone();
-            let store_catalog = store_catalog.clone();
             let snapshots = snapshots.clone();
             let grants = grants.clone();
             let desktop_authority = desktop_authority.clone();
@@ -245,7 +239,6 @@ fn make_dispatcher(
                     rpc_diagnostics,
                     protocol_usage,
                     package_service,
-                    store_catalog,
                     snapshots,
                     grants,
                     desktop_authority,

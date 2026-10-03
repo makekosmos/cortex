@@ -1,6 +1,5 @@
 impl PackageService {
-    /// Store listings may only reference a currently trusted Package Index
-    /// release. Catalog metadata never becomes package authority.
+    /// Whether the catalog currently lists this exact package release.
     pub fn has_catalog_release(
         &self,
         id: &str,
@@ -8,13 +7,15 @@ impl PackageService {
         expected_kind: &crate::package_manifest::PackageKind,
     ) -> bool {
         let state = Self::lock(&self.state);
-        let (Some(trust), Some(catalog)) = (state.trust.as_ref(), state.catalog.as_ref()) else {
+        let Some(catalog) = state.catalog.as_ref() else {
             return false;
         };
-        let Some(entry) = trust.catalog_entry(&catalog.document, id, version) else {
+        let Some(entry) = catalog.document.entry(id, version) else {
             return false;
         };
-        entry.manifest.kind() == expected_kind && trust.ensure_package_allowed(entry).is_ok()
+        entry.manifest.kind() == expected_kind
+            && entry.archive().is_some()
+            && !catalog.document.entry_revoked(entry)
     }
 
     pub fn catalog_packages(
@@ -25,7 +26,7 @@ impl PackageService {
         let catalog = state
             .catalog
             .as_ref()
-            .ok_or(PackageError::TrustUnavailable)?;
+            .ok_or(PackageError::CatalogUnavailable)?;
         Ok(catalog
             .document
             .packages
@@ -37,18 +38,18 @@ impl PackageService {
                 name: entry.manifest.name().to_owned(),
                 kind: entry.manifest.kind().clone(),
                 publisher: entry.manifest.publisher().to_owned(),
-                archive_size: entry.size,
-                revoked: state
-                    .trust
-                    .as_ref()
-                    .is_none_or(|trust| trust.ensure_package_allowed(entry).is_err()),
+                archive_size: entry.archive().map_or(0, |archive| archive.size),
+                revoked: catalog.document.entry_revoked(entry),
             })
             .collect())
     }
 
+    /// Fetch the catalog from its one published location. `MUNDUS_PACKAGE_CATALOG_URL`
+    /// overrides the URL for tests and diagnostics; debug/test builds may
+    /// point it at a `file://` fixture — release builds require HTTPS.
     pub async fn refresh_catalog(&self) -> Result<CatalogSummary, PackageError> {
         let url = std::env::var("MUNDUS_PACKAGE_CATALOG_URL")
-            .unwrap_or_else(|_| PRODUCTION_CATALOG_URL.to_string());
+            .unwrap_or_else(|_| crate::catalog::PRODUCTION_CATALOG_URL.to_string());
         let parsed = reqwest::Url::parse(&url).map_err(|_| PackageError::Invalid)?;
         if parsed.scheme() != "https" && !(cfg!(debug_assertions) && parsed.scheme() == "file")
             || parsed.username() != ""
@@ -57,184 +58,154 @@ impl PackageService {
         {
             return Err(PackageError::Invalid);
         }
-        // Debug/test builds accept file:// catalog URLs for signed fixtures.
-        if cfg!(debug_assertions) && parsed.scheme() == "file" {
+        let body = if cfg!(debug_assertions) && parsed.scheme() == "file" {
             let path = parsed.to_file_path().map_err(|_| PackageError::Invalid)?;
-            let body = fs::read(path).map_err(|_| PackageError::Invalid)?;
-            if body.len() > MAX_ENVELOPE as usize {
+            fs::read(path).map_err(|_| PackageError::Invalid)?
+        } else {
+            let response = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .map_err(|_| PackageError::Invalid)?
+                .get(parsed)
+                .send()
+                .await
+                .map_err(|_| PackageError::Invalid)?;
+            if !response.status().is_success() {
                 return Err(PackageError::Invalid);
             }
-            let envelope: Envelope =
-                serde_json::from_slice(&body).map_err(|_| PackageError::Invalid)?;
-            let bytes = STANDARD
-                .decode(envelope.bytes)
-                .map_err(|_| PackageError::Invalid)?;
-            return self.apply_catalog(bytes, envelope.signatures);
-        }
-        let response = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(30))
-            .build()
-            .map_err(|_| PackageError::Invalid)?
-            .get(parsed)
-            .send()
-            .await
-            .map_err(|_| PackageError::Invalid)?;
-        if !response.status().is_success() {
-            return Err(PackageError::Invalid);
-        }
-        let body = response.bytes().await.map_err(|_| PackageError::Invalid)?;
-        if body.len() > MAX_ENVELOPE as usize {
-            return Err(PackageError::Invalid);
-        }
-        let envelope: Envelope =
-            serde_json::from_slice(&body).map_err(|_| PackageError::Invalid)?;
-        let bytes = STANDARD
-            .decode(envelope.bytes)
-            .map_err(|_| PackageError::Invalid)?;
-        self.apply_catalog(bytes, envelope.signatures)
+            read_body_bounded(response, crate::catalog::MAX_DOCUMENT as u64).await?
+        };
+        self.apply_catalog(&body)
     }
 
-    pub fn apply_catalog(
-        &self,
-        bytes: impl AsRef<[u8]>,
-        signatures: SignatureSet,
-    ) -> Result<CatalogSummary, PackageError> {
+    /// Apply one catalog document: validate, persist, then reconcile
+    /// revocations against the installed set. A catalog identical to the
+    /// current one is an idempotent success — refresh is not a replay attack.
+    pub fn apply_catalog(&self, bytes: impl AsRef<[u8]>) -> Result<CatalogSummary, PackageError> {
         let _mutation = Self::lock(&self.mutation);
         let bytes = bytes.as_ref();
-        if bytes.len() > MAX_DOCUMENT {
+        if bytes.len() > crate::catalog::MAX_DOCUMENT {
             return Err(PackageError::Invalid);
         }
         let mut state = Self::lock(&self.state);
-        let trust = state.trust.as_ref().ok_or(PackageError::TrustUnavailable)?;
-        let verified = trust.verify_catalog(bytes, signatures.clone())?;
-        trust.apply_catalog(bytes, signatures.clone())?;
-        if self.persist("catalog.json", bytes, &signatures).is_err() {
-            Self::disable_trust(&mut state);
-            return Err(PackageError::Persistence);
-        }
-        state.catalog = Some(CatalogState {
-            document: verified.document.clone(),
-            signatures,
-        });
-        state.fault = None;
-        Ok(CatalogSummary {
-            sequence: verified.document.sequence,
-            expires_at: verified.document.expires_at,
-            package_count: verified.document.packages.len(),
-        })
-    }
-
-    pub fn apply_transition(
-        &self,
-        bytes: &[u8],
-        signatures: SignatureSet,
-    ) -> Result<(), PackageError> {
-        let _mutation = Self::lock(&self.mutation);
-        if bytes.len() > MAX_DOCUMENT {
-            return Err(PackageError::Invalid);
-        }
-        let mut state = Self::lock(&self.state);
-        let trust = state.trust.as_ref().ok_or(PackageError::TrustUnavailable)?;
-        let verified = trust.verify_key_transition(bytes, signatures.clone())?;
-        if trust
-            .apply_key_transition(bytes, signatures.clone())
-            .is_err()
-        {
-            Self::disable_trust(&mut state);
-            return Err(PackageError::TrustUnavailable);
-        }
-        if self
-            .persist(
-                &format!("transition-{:020}.json", verified.document.sequence),
-                bytes,
-                &signatures,
-            )
-            .is_err()
-        {
-            Self::disable_trust(&mut state);
-            return Err(PackageError::Persistence);
-        }
-        Ok(())
-    }
-
-    pub fn apply_revocations(
-        &self,
-        bytes: &[u8],
-        signatures: SignatureSet,
-    ) -> Result<(), PackageError> {
-        let _mutation = Self::lock(&self.mutation);
-        if bytes.len() > MAX_DOCUMENT {
-            return Err(PackageError::Invalid);
-        }
-        let mut state = Self::lock(&self.state);
-        let trust = state.trust.as_ref().ok_or(PackageError::TrustUnavailable)?;
-        let verified = trust.verify_revocations(bytes, signatures.clone())?;
-        if trust.apply_revocations(bytes, signatures.clone()).is_err() {
-            Self::disable_trust(&mut state);
-            return Err(PackageError::TrustUnavailable);
-        }
-        let revoked = verified.document.revoked_packages.iter().map(|package| {
-            (
-                package.id.as_str(),
-                package.version.as_str(),
-                package.sha256.as_str(),
-            )
-        });
-        if self.store.reconcile_revocations(revoked).is_err() {
-            Self::disable_trust(&mut state);
-            return Err(PackageError::TrustUnavailable);
-        }
-        if self
-            .persist(
-                &format!("revocation-{:020}.json", verified.document.sequence),
-                bytes,
-                &signatures,
-            )
-            .is_err()
-        {
-            Self::disable_trust(&mut state);
-            return Err(PackageError::Persistence);
-        }
-        let catalog_untrusted = state.catalog.as_ref().is_some_and(|catalog| {
-            catalog
-                .signatures
-                .signatures
-                .iter()
-                .all(|signature| !trust.is_release_key_trusted(&signature.key_id))
-        });
-        if catalog_untrusted {
-            Self::disable_catalog(&mut state);
-        }
-        Ok(())
-    }
-
-    pub async fn apply_revocations_with_worker_stop(
-        &self,
-        bytes: &[u8],
-        signatures: SignatureSet,
-    ) -> Result<(), PackageError> {
-        let targets = {
-            let state = Self::lock(&self.state);
-            let trust = state.trust.as_ref().ok_or(PackageError::TrustUnavailable)?;
-            trust
-                .verify_revocations(bytes, signatures.clone())?
-                .document
-                .revoked_packages
-                .into_iter()
-                .map(|package| (package.id, package.version))
-                .collect::<Vec<_>>()
-        };
-        if let Some(worker) = self.worker.as_ref() {
-            let _worker_mutation = worker.mutation.lock().await;
-            for (id, version) in &targets {
-                worker
-                    .supervisor
-                    .stop(id, version)
-                    .await
-                    .map_err(|_| PackageError::Persistence)?;
+        let min_sequence = state
+            .catalog
+            .as_ref()
+            .map_or(0, |catalog| catalog.document.sequence);
+        let document = match CatalogDocument::parse(bytes, Utc::now(), min_sequence) {
+            Ok(document) => document,
+            Err(CatalogError::Replay)
+                if serde_json::from_slice::<CatalogDocument>(bytes)
+                    .ok()
+                    .as_ref()
+                    == state.catalog.as_ref().map(|catalog| &catalog.document) =>
+            {
+                return Ok(catalog_summary(state.catalog.as_ref().expect("catalog")));
             }
-            return self.apply_revocations(bytes, signatures);
+            Err(error) => return Err(error.into()),
+        };
+        if self.persist_catalog(&document).is_err() {
+            Self::disable_catalog(&mut state);
+            return Err(PackageError::Persistence);
         }
-        self.apply_revocations(bytes, signatures)
+        if self
+            .store
+            .reconcile_revocations(document.revoked.iter().map(|item| {
+                (
+                    item.id.as_str(),
+                    item.version.as_str(),
+                    item.sha256.as_str(),
+                )
+            }))
+            .is_err()
+        {
+            Self::disable_catalog(&mut state);
+            return Err(PackageError::Persistence);
+        }
+        let summary = CatalogSummary {
+            sequence: document.sequence,
+            expires_at: document.expires_at.clone(),
+            package_count: document.packages.len(),
+            revoked_count: document.revoked.len(),
+        };
+        state.catalog = Some(CatalogState { document });
+        state.fault = None;
+        Ok(summary)
+    }
+
+    /// Storefront projection for Manager — listings derived from the one
+    /// document plus the installed state the caller supplies.
+    pub fn store_catalog(
+        &self,
+        now: DateTime<Utc>,
+        installed: Vec<InstalledListing>,
+    ) -> crate::catalog::CatalogDto {
+        let state = Self::lock(&self.state);
+        match state.catalog.as_ref() {
+            Some(catalog) => {
+                let fresh = catalog
+                    .document
+                    .expires_at()
+                    .is_some_and(|expiry| expiry > now);
+                crate::catalog::CatalogDto {
+                    state: if fresh {
+                        "fresh".into()
+                    } else {
+                        "expired".into()
+                    },
+                    platform: crate::catalog::Platform::current(),
+                    sequence: Some(catalog.document.sequence),
+                    issued_at: Some(catalog.document.issued_at.clone()),
+                    expires_at: Some(catalog.document.expires_at.clone()),
+                    listings: catalog.document.listings(),
+                    installed,
+                }
+            }
+            None => crate::catalog::CatalogDto {
+                state: "unavailable".into(),
+                platform: crate::catalog::Platform::current(),
+                sequence: None,
+                issued_at: None,
+                expires_at: None,
+                listings: Vec::new(),
+                installed,
+            },
+        }
+    }
+
+    /// Resolve a Store-provided external-app URL. Stale and unavailable
+    /// catalogs are intentionally unusable.
+    pub fn store_external_url(&self, listing_id: &str) -> Result<String, PackageError> {
+        if listing_id.is_empty()
+            || listing_id.len() > 128
+            || listing_id.chars().any(char::is_control)
+        {
+            return Err(PackageError::Invalid);
+        }
+        let state = Self::lock(&self.state);
+        let catalog = state
+            .catalog
+            .as_ref()
+            .ok_or(PackageError::CatalogUnavailable)?;
+        if catalog
+            .document
+            .expires_at()
+            .is_none_or(|expiry| expiry <= Utc::now())
+        {
+            return Err(PackageError::CatalogUnavailable);
+        }
+        catalog
+            .document
+            .external_url(listing_id)
+            .ok_or(PackageError::Invalid)
+    }
+}
+
+fn catalog_summary(catalog: &CatalogState) -> CatalogSummary {
+    CatalogSummary {
+        sequence: catalog.document.sequence,
+        expires_at: catalog.document.expires_at.clone(),
+        package_count: catalog.document.packages.len(),
+        revoked_count: catalog.document.revoked.len(),
     }
 }

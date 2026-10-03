@@ -6,12 +6,8 @@ mod dictation_app_tests {
     use tempfile::tempdir;
 
     fn service(dir: &tempfile::TempDir) -> PackageService {
-        PackageService::from_parts(
-            dir.path().join("packages"),
-            None,
-            Some(dir.path().join("apps")),
-        )
-        .expect("service")
+        PackageService::from_parts(dir.path().join("packages"), Some(dir.path().join("apps")))
+            .expect("service")
     }
 
     fn dictation() -> &'static NativeAppDescriptor {

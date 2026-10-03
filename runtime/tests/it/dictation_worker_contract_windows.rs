@@ -108,6 +108,7 @@ fn app_manifest() -> VersionedManifest {
             mappings: vec![],
         },
         integration: None,
+        store: None,
     })
 }
 

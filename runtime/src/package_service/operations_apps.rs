@@ -148,7 +148,10 @@ impl PackageService {
             return Err(PackageError::Invalid);
         }
         let entry = Self::current_entry(&mut state, id, version)?;
-        if entry.manifest != package.manifest || !entry.sha256.eq_ignore_ascii_case(&package.hash) {
+        let catalog_match = entry
+            .archive()
+            .is_some_and(|archive| archive.sha256.eq_ignore_ascii_case(&package.hash));
+        if entry.manifest != package.manifest || !catalog_match {
             return Err(PackageError::Invalid);
         }
         // `installed` verifies manifest.json; these explicit reads also prove

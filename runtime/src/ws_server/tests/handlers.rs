@@ -85,7 +85,7 @@ async fn package_api_returns_bounded_metadata_without_trust_material_or_paths() 
     let data = tempfile::tempdir().unwrap();
     let service = Arc::new(PackageService::open(data.path()).unwrap());
 
-    let status = handle_package_op("trust_status", serde_json::Value::Null, &service).await;
+    let status = handle_package_op("catalog_status", serde_json::Value::Null, &service).await;
     assert!(status.ok);
     let status_json = status.data.to_string();
     for forbidden in [

@@ -1,5 +1,5 @@
 //! Маркетплейс — store.catalog/refresh/external_url + packages.list/install/
-//! set_enabled/uninstall/trust_status/disclosure (StoreView+PackagesView parity).
+//! set_enabled/uninstall/catalog_status/disclosure (StoreView+PackagesView parity).
 //!
 //! KOS-283/285: installed packages split by the manifest `kind` the Engine
 //! already serves (`PackageSummary.kind`): `app` rows join the «Приложения»
@@ -18,7 +18,7 @@ use mundus_gpui_kit::theme::*;
 pub fn load(app: &mut ManagerApp) {
     app.call("store.catalog", "store.catalog", json!({}));
     app.call("store.installed", "packages.list", json!({}));
-    app.call("store.trust", "packages.trust_status", json!({}));
+    app.call("store.status", "packages.catalog_status", json!({}));
     // KOS-265 native GPUI apps — separate install path from .kspkg packages.
     app.call("store.apps", "apps.list", json!({}));
 }
@@ -88,22 +88,32 @@ pub fn render(
         ));
     col = col.child(tabs);
 
-    col = col.child(slot_or(app, "store.trust", |v| {
-        let trust = vget(v, "trust");
-        let configured = vbool(trust, "configured");
+    col = col.child(slot_or(app, "store.status", |v| {
+        let catalog = vget(v, "catalog");
+        let fault = vopt(v, "fault");
+        let loaded = catalog.is_object();
         let mut el = card();
         el = el.child(
-            row("Доверие каталога", "Ключи выпуска и отзывы").child(badge(
-                if configured {
-                    "Настроено"
+            row(
+                "Каталог интеграций",
+                "Загружается с GitHub, пакеты проверяются по контрольным суммам",
+            )
+            .child(badge(
+                if loaded {
+                    "Загружен"
                 } else {
-                    "Не настроено"
+                    "Не загружен"
                 },
-                if configured { SUCCESS() } else { WARN() },
+                if loaded { SUCCESS() } else { WARN() },
             )),
         );
-        el = el.child(kv("Доверенные ключи", vstr(trust, "trusted_release_keys")));
-        el = el.child(kv("Отозванные пакеты", vstr(trust, "revoked_packages")));
+        el = el.child(kv("Версия каталога", vstr(catalog, "sequence")));
+        el = el.child(kv("Отозванные пакеты", vstr(catalog, "revoked_count")));
+        if let Some(fault) = fault {
+            if !fault.is_empty() {
+                el = el.child(kv("Состояние", fault));
+            }
+        }
         el.into_any_element()
     }));
 
@@ -273,7 +283,7 @@ fn render_catalog(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElem
             let id = vstr(item, "id");
             let name = entry_title(item);
             let desc = vopt(item, "description").unwrap_or_default();
-            let ver = vstr(item, "version");
+            let ver = vstr(vget(item, "distribution"), "version");
             let kind = vstr(item, "kind");
             // The caption carries meaning: the description, else the kind
             // translated to Russian. The package id never shows (KOS-279).

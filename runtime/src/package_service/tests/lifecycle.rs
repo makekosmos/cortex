@@ -3,8 +3,7 @@ fn development_app_install_uses_the_validated_archive_manifest() {
     let dir = tempdir().expect("temp dir");
     let manifest = VersionedManifest::V2(manifest_v2_with_canonical_access());
     let (archive, _, _) = archive_with_versioned_manifest(dir.path(), &manifest);
-    let (trust_store, _, _) = trust();
-    let service = PackageService::open_with_trust(dir.path(), trust_store).expect("service");
+    let service = PackageService::open_for_test(dir.path()).expect("service");
 
     let installed = service
         .install_development_app_from_path("com.kosmos.demo", "2.0.0", &archive)
@@ -20,8 +19,7 @@ async fn development_app_can_be_disabled_and_re_enabled_without_catalog() {
     let dir = tempdir().expect("temp dir");
     let manifest = VersionedManifest::V2(manifest_v2_with_canonical_access());
     let (archive, _, _) = archive_with_versioned_manifest(dir.path(), &manifest);
-    let (trust_store, _, _) = trust();
-    let service = PackageService::open_with_trust(dir.path(), trust_store).expect("service");
+    let service = PackageService::open_for_test(dir.path()).expect("service");
 
     service
         .install_development_app_from_path("com.kosmos.demo", "2.0.0", &archive)
@@ -92,38 +90,22 @@ fn failed_update_restores_revoked_record_without_reenabling_it() {
     let prior_versioned = VersionedManifest::V2(prior.clone());
     let (prior_archive, prior_hash, prior_size) =
         archive_with_versioned_manifest(dir.path(), &prior_versioned);
-    let (trust_store, root, release) = trust();
-    let service = PackageService::open_with_trust(dir.path(), trust_store).unwrap();
-    let initial = CatalogDocument {
-        schema_version: 1,
-        sequence: 1,
-        issued_at: "2029-01-01T00:00:00Z".into(),
-        expires_at: "2030-01-01T00:00:00Z".into(),
-        packages: vec![CatalogEntry {
-            manifest: prior_versioned,
-            archive_url: "https://packages.kosmos.dev/prior.kspkg".into(),
-            sha256: prior_hash.clone(),
-            size: prior_size,
-        }],
-    };
-    let (bytes, signatures) = signed(&initial, "release-1", &release);
-    service.apply_catalog(bytes, signatures).unwrap();
+    let service = PackageService::open_for_test(dir.path()).unwrap();
+    let mut initial = catalog(1, prior_hash.clone(), prior_size, "2030-01-01T00:00:00Z");
+    initial.packages[0].manifest = prior_versioned;
+    service.apply_catalog(document_bytes(&initial)).unwrap();
     service
         .install_from_path(&prior.id, &prior.version, &prior_archive)
         .unwrap();
-    let revocation = crate::package_trust::RevocationDocument {
-        schema_version: 1,
-        sequence: 1,
-        issued_at: "2029-01-01T00:00:00Z".into(),
-        revoked_release_keys: vec![],
-        revoked_packages: vec![PackageRevocation {
-            id: prior.id.clone(),
-            version: prior.version.clone(),
-            sha256: prior_hash,
-        }],
-    };
-    let (bytes, signatures) = signed(&revocation, "root", &root);
-    service.apply_revocations(&bytes, signatures).unwrap();
+    let mut revoking = initial;
+    revoking.sequence = 2;
+    revoking.revoked = vec![PackageRevocation {
+        id: prior.id.clone(),
+        version: prior.version.clone(),
+        sha256: prior_hash,
+        reason: Some("test".into()),
+    }];
+    service.apply_catalog(document_bytes(&revoking)).unwrap();
     let before = service.store.installed(&prior.id, &prior.version).unwrap();
     assert!(before.revoked);
     assert!(!before.enabled);
@@ -133,20 +115,14 @@ fn failed_update_restores_revoked_record_without_reenabling_it() {
     let replacement_versioned = VersionedManifest::V2(replacement.clone());
     let (replacement_archive, replacement_hash, replacement_size) =
         archive_with_versioned_manifest(dir.path(), &replacement_versioned);
-    let update = CatalogDocument {
-        schema_version: 1,
-        sequence: 2,
-        issued_at: "2029-01-01T00:00:00Z".into(),
-        expires_at: "2030-01-01T00:00:00Z".into(),
-        packages: vec![CatalogEntry {
-            manifest: replacement_versioned,
-            archive_url: "https://packages.kosmos.dev/replacement.kspkg".into(),
-            sha256: replacement_hash,
-            size: replacement_size,
-        }],
-    };
-    let (bytes, signatures) = signed(&update, "release-1", &release);
-    service.apply_catalog(bytes, signatures).unwrap();
+    let mut update = catalog(
+        3,
+        replacement_hash,
+        replacement_size,
+        "2030-01-01T00:00:00Z",
+    );
+    update.packages[0].manifest = replacement_versioned;
+    service.apply_catalog(document_bytes(&update)).unwrap();
 
     assert!(service
         .install_from_path(&replacement.id, &replacement.version, replacement_archive)
@@ -191,8 +167,7 @@ fn invalid_installed_v2_contract_does_not_brick_restart() {
     manifest.data.access[0].type_id = "com.kosmos.unknown".into();
     let versioned = VersionedManifest::V2(manifest.clone());
     let (archive, hash, size) = archive_with_versioned_manifest(dir.path(), &versioned);
-    let (trust_store, _, _) = trust();
-    let service = PackageService::open_with_trust(dir.path(), trust_store).expect("service");
+    let service = PackageService::open_for_test(dir.path()).expect("service");
     service
         .store
         .install_versioned(&archive, size, &hash, &versioned, 1)
@@ -203,8 +178,7 @@ fn invalid_installed_v2_contract_does_not_brick_restart() {
         .expect("enable fixture");
     drop(service);
 
-    let (trust_store, _, _) = trust();
-    let restarted = PackageService::open_with_trust(dir.path(), trust_store).expect("restart");
+    let restarted = PackageService::open_for_test(dir.path()).expect("restart");
     assert!(!restarted.list().expect("list").packages[0].enabled);
     assert!(restarted.store_installed_listings().expect("listing")[0]
         .effective_grants
@@ -217,23 +191,11 @@ fn legacy_v1_package_cannot_launch_or_survive_restart_enabled() {
     let dir = tempdir().expect("tempdir");
     let legacy = legacy_manifest();
     let (archive, hash, size) = archive_with_manifest(dir.path(), &legacy);
-    let (trust_store, _, release) = trust();
-    let service = PackageService::open_with_trust(dir.path(), trust_store).expect("service");
-    let legacy_catalog = CatalogDocument {
-        schema_version: 1,
-        sequence: 1,
-        issued_at: "2029-01-01T00:00:00Z".into(),
-        expires_at: "2030-01-01T00:00:00Z".into(),
-        packages: vec![CatalogEntry {
-            manifest: VersionedManifest::V1(legacy.clone()),
-            archive_url: "https://packages.kosmos.dev/demo.kspkg".into(),
-            sha256: hash.clone(),
-            size,
-        }],
-    };
-    let (bytes, signatures) = signed(&legacy_catalog, "release-1", &release);
+    let service = PackageService::open_for_test(dir.path()).expect("service");
+    let mut legacy_catalog = catalog(1, hash.clone(), size, "2030-01-01T00:00:00Z");
+    legacy_catalog.packages[0].manifest = VersionedManifest::V1(legacy.clone());
     service
-        .apply_catalog(bytes, signatures)
+        .apply_catalog(document_bytes(&legacy_catalog))
         .expect("legacy catalog");
     assert!(service
         .install_from_path("com.kosmos.demo", "1.0.0", &archive)

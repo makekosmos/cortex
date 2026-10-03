@@ -19,7 +19,6 @@ pub(super) async fn dispatch_standard(
     rpc_diagnostics: SharedRpcDiagnostics,
     protocol_usage: Arc<ProtocolUsageStore>,
     package_service: Arc<PackageService>,
-    store_catalog: Option<Arc<StoreCatalogService>>,
     _snapshots: Arc<crate::package_worker_broker::SnapshotRegistry>,
     grants: Arc<GrantAuthorityRegistry>,
     _desktop_authority: Arc<crate::desktop_authority::DesktopAuthorityRegistry>,
@@ -154,7 +153,7 @@ pub(super) async fn dispatch_standard(
     } else if let Some(rest) = operation.strip_prefix("commands.") {
         handle_command_op(rest, params, &command_bus, connection_id).await
     } else if let Some(rest) = operation.strip_prefix("store.") {
-        handle_store_op(rest, params, &package_service, store_catalog.as_deref()).await
+        handle_store_op(rest, params, &package_service).await
     } else if let Some(rest) = operation.strip_prefix("packages.") {
         handle_package_op(rest, params, &package_service).await
     } else if let Some(rest) = operation.strip_prefix("apps.") {

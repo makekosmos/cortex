@@ -64,6 +64,7 @@ fn integration_manifest_with(
             login: None,
             schedule: None,
         }),
+        store: None,
     })
 }
 
@@ -153,7 +154,6 @@ async fn clearing_provider_credentials_clears_and_disables_all_versions() {
     let dir = tempdir().unwrap();
     let mut service = PackageService::from_parts(
         dir.path().join("packages"),
-        None,
         Some(dir.path().join("apps")),
     ).unwrap();
     install_integration_package(dir.path(), &service, "1.0.0");
@@ -214,7 +214,6 @@ fn uninstall_clears_only_the_exact_integration_version() {
     let dir = tempdir().unwrap();
     let service = PackageService::from_parts(
         dir.path().join("packages"),
-        None,
         Some(dir.path().join("apps")),
     ).unwrap();
     install_integration_package(dir.path(), &service, "3.0.0");
@@ -265,7 +264,7 @@ fn uninstall_clears_only_the_exact_integration_version() {
 
 fn configured_service(dir: &tempfile::TempDir) -> PackageService {
     let mut service =
-        PackageService::from_parts(dir.path().join("packages"), None, Some(dir.path().join("apps")))
+        PackageService::from_parts(dir.path().join("packages"), Some(dir.path().join("apps")))
             .unwrap();
     service.configure_workers(
         PackageWorkerSupervisor::new(1),

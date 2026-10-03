@@ -4,8 +4,8 @@
 // installer as `release-bom.v2.json`, and its digest is bound into the
 // provenance and the verification receipt.
 //
-// Store packages are not part of it: the Engine reads the signed
-// package-index catalog at runtime and native apps come from their own
+// Store packages are not part of it: the Engine reads the unsigned
+// integrations catalog at runtime and native apps come from their own
 // GitHub Releases, so no package bytes ride in the installer.
 
 import { readFile } from "node:fs/promises";

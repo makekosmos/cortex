@@ -184,6 +184,7 @@ fn versioned_manifest(manifest: &PackageManifest) -> VersionedManifest {
             mappings: vec![],
         },
         integration: None,
+        store: None,
     })
 }
 
