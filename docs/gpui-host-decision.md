@@ -27,7 +27,7 @@ The three KOS-131 blockers are resolved or rescoped:
    `components/{manager,agenda}` and run against the production Engine;
    `dictation-gpui` (repo `makekosmos/dictation`) ships a standalone
    always-on-top overlay driven by Engine WS events.
-   `kosmos-gpui-kit` carries the shared theme/widgets/Engine client
+   imago's `mundus-gpui-kit` crate carries the shared theme/widgets/Engine client
    (including the WS subscriber that was the last dictation blocker).
 3. **«Risk profile differs by layer»** — the Electron surface has already
    been cut down: Launcher, Vue Dashboard, Vue Manager, Focus/Pomodoro UI
