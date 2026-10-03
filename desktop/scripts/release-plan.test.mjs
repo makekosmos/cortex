@@ -5,6 +5,7 @@ import path from "node:path";
 import { test } from "node:test";
 import {
   latestPublishedRelease,
+  nextBuildVersion,
   nextReleaseVersion,
   parseStableVersion,
   planRelease,
@@ -70,6 +71,9 @@ test("no changes since the published release skips with a clear plan", () => {
   assert.equal(plan.version, "");
   assert.equal(plan.previousTag, "v0.10.0");
   assert.equal(plan.previousCommit, BASE_COMMIT);
+  // KOS-322: even with no release planned, a build of this tree must carry
+  // the would-be next version so the installer smoke upgrades 0.10.0 -> 0.10.1.
+  assert.equal(plan.buildVersion, "0.10.1");
 });
 
 test("changes with an unbumped version bump the patch", () => {
@@ -78,6 +82,7 @@ test("changes with an unbumped version bump the patch", () => {
   assert.deepEqual(plan, {
     release: true,
     version: "0.10.1",
+    buildVersion: "0.10.1",
     sha: HEAD,
     previousTag: "v0.10.0",
     previousCommit: BASE_COMMIT,
@@ -224,6 +229,39 @@ test("setWinVersion writes only the win entry and stays idempotent", async () =>
   assert.deepEqual(JSON.parse(await readFile(file, "utf8")), { win: "0.10.1" });
   assert.equal(setWinVersion("0.10.1", { root: dir }), false);
   assert.throws(() => setWinVersion("0.10.x", { root: dir }), /MAJOR\.MINOR\.PATCH/);
+});
+
+// KOS-322: the installer smoke builds this version — it must be strictly
+// newer than the latest published release, or the upgrade job installs the
+// current release over itself and asserts nothing.
+test("nextBuildVersion is the pin when ahead, else latest+patch, else the pin alone", () => {
+  const releases = (tags) => ({
+    stdout: JSON.stringify([tags.map((tag) => release(tag))]),
+  });
+  const at = (tags, pin) =>
+    nextBuildVersion({
+      run: fakeRun([[`gh api --paginate --slurp repos/${RELEASE_REPO}/releases`, releases(tags)]])
+        .run,
+      currentVersion: pin,
+    });
+  assert.equal(at(["v0.10.3"], "0.10.3"), "0.10.4");
+  assert.equal(at(["v0.10.3"], "0.11.0"), "0.11.0");
+  assert.equal(at([], "0.10.3"), "0.10.3");
+  // Drafts and prereleases never move the baseline.
+  assert.equal(
+    nextBuildVersion({
+      run: fakeRun([
+        [
+          `gh api --paginate --slurp repos/${RELEASE_REPO}/releases`,
+          { stdout: JSON.stringify([[release("v0.11.0", { draft: true })]]) },
+        ],
+      ]).run,
+      currentVersion: "0.10.3",
+    }),
+    "0.10.3",
+  );
+  // A pin below the latest published release is a broken state, not a bump.
+  assert.throws(() => at(["v0.11.0"], "0.10.3"), /below/);
 });
 
 test("nextReleaseVersion mirrors the manual release bump rules", () => {
