@@ -41,6 +41,13 @@ function assertStableVersion(version, context) {
 
 /** Read desktop/release-versions.json and return the validated win version. */
 export function readReleaseVersion({ root } = {}) {
+  // KOS-322: MUNDUS_SMOKE_VERSION overrides the pin for the installer smoke
+  // only — its build must be strictly newer than the latest published release
+  // without committing a version bump. The release pipeline never sets it
+  // (release-plan.mjs owns the pin there), so it can never leak into a real
+  // release. Set it via smoke-version.mjs, which resolves the value.
+  const smoke = process.env.MUNDUS_SMOKE_VERSION;
+  if (smoke !== undefined) return assertStableVersion(smoke, "MUNDUS_SMOKE_VERSION");
   const file = versionsPath(root);
   let parsed;
   try {

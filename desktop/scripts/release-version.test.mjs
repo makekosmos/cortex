@@ -31,6 +31,29 @@ test("readReleaseVersion returns the validated win version", async () => {
   }
 });
 
+// KOS-322: the installer smoke stamps a version newer than the latest
+// published release without touching the pin file. The override is a single
+// env var the release pipeline never sets; an invalid value is rejected with
+// the same validation as the pin.
+test("MUNDUS_SMOKE_VERSION overrides the pin and is validated", async () => {
+  const root = await tempRepo();
+  try {
+    const file = path.join(root, "desktop", "release-versions.json");
+    await writeFile(file, JSON.stringify({ win: "0.10.3" }) + "\n");
+    process.env.MUNDUS_SMOKE_VERSION = "0.10.4";
+    try {
+      assert.equal(readReleaseVersion({ root }), "0.10.4");
+      process.env.MUNDUS_SMOKE_VERSION = "0.10.x";
+      assert.throws(() => readReleaseVersion({ root }), /MUNDUS_SMOKE_VERSION/);
+    } finally {
+      delete process.env.MUNDUS_SMOKE_VERSION;
+    }
+    assert.equal(readReleaseVersion({ root }), "0.10.3");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("writeReleaseVersion writes only the win entry and validates first", async () => {
   const root = await tempRepo();
   try {
