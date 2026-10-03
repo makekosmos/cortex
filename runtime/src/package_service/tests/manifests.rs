@@ -1,3 +1,8 @@
+// The pinned provider manifests are real Windows-only packages — on macOS a
+// catalog row for the host platform would rightly fail validation ("an
+// archive may only serve a platform the manifest declares"), so the install
+// assertions below can only run where the packages actually install.
+#[cfg(windows)]
 #[test]
 fn six_provider_manifests_install_with_typed_grants() {
     let dir = tempdir().expect("tempdir");
