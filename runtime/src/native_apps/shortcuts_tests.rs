@@ -41,8 +41,11 @@ fn link(dir: &TempDir) -> PathBuf {
 fn link_lives_under_the_product_subfolder() {
     // The path must stay inside `<Programs>\Mundus\` — the installer's flat
     // legacy deletes (`$SMPROGRAMS\Agenda.lnk`) can never reach it.
-    let link = link_path(Path::new("C:\\Programs"), agenda());
-    assert_eq!(link, Path::new("C:\\Programs\\Mundus\\Agenda.lnk"));
+    let link = link_path(Path::new("Programs"), agenda());
+    assert_eq!(
+        link,
+        Path::new("Programs").join("Mundus").join("Agenda.lnk")
+    );
 }
 
 #[test]

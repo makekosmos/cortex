@@ -79,13 +79,41 @@ pub(crate) fn process_matches_current_executable(pid: u32) -> bool {
     }
 }
 
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 pub(crate) fn process_matches_current_executable(pid: u32) -> bool {
     let expected = match std::env::current_exe().and_then(std::fs::canonicalize) {
         Ok(path) => path,
         Err(_) => return false,
     };
     std::fs::canonicalize(format!("/proc/{pid}/exe"))
+        .map(|path| path == expected)
+        .unwrap_or(false)
+}
+
+// macOS has no /proc; libproc's proc_pidpath is the equivalent.
+#[cfg(target_os = "macos")]
+pub(crate) fn process_matches_current_executable(pid: u32) -> bool {
+    let expected = match std::env::current_exe().and_then(std::fs::canonicalize) {
+        Ok(path) => path,
+        Err(_) => return false,
+    };
+    let mut buffer = vec![0u8; libc::PROC_PIDPATHINFO_MAXSIZE as usize];
+    let len = unsafe {
+        libc::proc_pidpath(
+            pid as libc::c_int,
+            buffer.as_mut_ptr().cast(),
+            buffer.len() as u32,
+        )
+    };
+    if len <= 0 {
+        return false;
+    }
+    buffer.truncate(len as usize);
+    let actual = match String::from_utf8(buffer) {
+        Ok(path) => std::path::PathBuf::from(path),
+        Err(_) => return false,
+    };
+    std::fs::canonicalize(actual)
         .map(|path| path == expected)
         .unwrap_or(false)
 }

@@ -162,8 +162,9 @@ mod tests {
         );
         assert_eq!(fs::read(link.join("inside.txt")).unwrap(), b"data");
 
-        // remove_dir deletes the reparse point itself, never the target.
-        fs::remove_dir(&link).unwrap();
+        // Removing the link must delete the link itself, never the target
+        // (remove_dir_all does not descend into links).
+        fs::remove_dir_all(&link).unwrap();
         assert!(target.join("inside.txt").exists());
     }
 }

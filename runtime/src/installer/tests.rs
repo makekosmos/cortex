@@ -344,7 +344,11 @@ fn installed_root(version: &str) -> TempDir {
 fn valid_current_json_resolves_the_installed_engine_exe() {
     let root = installed_root("2.4.6");
     let exe = post_install::resolve_engine_exe(root.path()).unwrap();
-    assert!(exe.ends_with(r"versions\2.4.6\mundus-engine.exe"));
+    assert!(exe.ends_with(
+        std::path::Path::new("versions")
+            .join("2.4.6")
+            .join("mundus-engine.exe")
+    ));
 }
 
 #[test]

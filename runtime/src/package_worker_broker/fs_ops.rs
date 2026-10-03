@@ -6,6 +6,8 @@ use super::fs_atomic::{atomic_replace, create_temp_file, is_reparse_point};
 // unlink the temp path, so `delete_temp_file` does not exist there.
 #[cfg(windows)]
 use super::fs_atomic::delete_temp_file;
+#[cfg(not(windows))]
+use super::fs_safety::resolve_lexical;
 use super::fs_safety::{
     open_existing_target, open_parent_dir, path_is_under, reject_path, relative_components,
     validate_open_file,
@@ -17,6 +19,10 @@ use std::{fs, io, path::Path};
 
 pub fn create_directory(config: &BrokerConfig, path: &Path) -> Result<(), BrokerError> {
     reject_path(path)?;
+    // The raw path may contain symlink components (macOS /var →
+    // /private/var); the roots are canonical, so resolve before comparing.
+    #[cfg(not(windows))]
+    let path = &resolve_lexical(path);
     let root = config
         .filesystem_roots
         .iter()
@@ -58,7 +64,7 @@ pub fn read_file(config: &BrokerConfig, path: &Path) -> Result<Vec<u8>, BrokerEr
         return Ok(bytes);
     }
     #[cfg(not(windows))]
-    let path = path.to_path_buf();
+    let path = resolve_lexical(path);
     #[cfg(not(windows))]
     let configured = config
         .filesystem_roots

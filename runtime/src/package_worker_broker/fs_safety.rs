@@ -166,8 +166,26 @@ pub(super) fn path_is_under(root: &Path, path: &Path) -> bool {
     path == root || path.starts_with(&(root + "\\"))
 }
 
+/// Canonicalize the deepest existing ancestor of `path` and re-append the
+/// missing tail. `filesystem_roots` are stored canonical, but callers pass
+/// raw paths — on macOS `tempfile` lives under `/var`, a symlink to
+/// `/private/var`, so a textual compare rejects every file under a
+/// configured root. Non-existent paths (a `create_directory` target)
+/// canonicalize their longest existing prefix instead.
+#[cfg(not(windows))]
+pub(super) fn resolve_lexical(path: &Path) -> PathBuf {
+    if let Ok(canonical) = std::fs::canonicalize(path) {
+        return canonical;
+    }
+    match (path.parent(), path.file_name()) {
+        (Some(parent), Some(name)) => resolve_lexical(parent).join(name),
+        _ => path.to_path_buf(),
+    }
+}
+
 #[cfg(not(windows))]
 pub(super) fn path_is_under(root: &Path, path: &Path) -> bool {
+    let path = resolve_lexical(path);
     path == root || path.starts_with(root)
 }
 
