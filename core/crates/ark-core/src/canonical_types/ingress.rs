@@ -12,7 +12,7 @@ pub struct CanonicalIngressError {
 }
 
 impl CanonicalIngressError {
-    fn invalid(code: &'static str) -> Self {
+    pub(crate) fn invalid(code: &'static str) -> Self {
         Self {
             category: "invalid_request",
             code,
@@ -20,7 +20,7 @@ impl CanonicalIngressError {
         }
     }
 
-    fn invariant(code: &'static str) -> Self {
+    pub(crate) fn invariant(code: &'static str) -> Self {
         Self {
             category: "definition_invariant",
             code,

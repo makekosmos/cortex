@@ -14,7 +14,7 @@ pub fn stable_link_id(source: &str, kind: &str, target: &str) -> String {
     format!("lnk*{:x}", h.finalize())
 }
 
-fn canonical_json(v: &Value) -> Value {
+pub(crate) fn canonical_json(v: &Value) -> Value {
     match v {
         Value::Object(map) => Value::Object(
             map.iter()
@@ -112,17 +112,16 @@ pub(crate) fn apply_one(
                     object.type_id,
                     object.type_version,
                     object.title,
-                    String::from_utf8(
-                        json_bytes(&object.content_json)?
-                    ).map_err(|error| ObjectPlanError::Storage(error.to_string()))?,
-                    String::from_utf8(
-                        json_bytes(&object.props_json)?
-                    ).map_err(|error| ObjectPlanError::Storage(error.to_string()))?,
+                    String::from_utf8(json_bytes(&object.content_json)?)
+                        .map_err(|error| ObjectPlanError::Storage(error.to_string()))?,
+                    String::from_utf8(json_bytes(&object.props_json)?)
+                        .map_err(|error| ObjectPlanError::Storage(error.to_string()))?,
                     object.created_at,
                     object.updated_at,
                     object.deleted_at,
                 ],
-            ).map_err(|error| ObjectPlanError::Storage(error.to_string()))?;
+            )
+            .map_err(|error| ObjectPlanError::Storage(error.to_string()))?;
         } else if !exact {
             return Err(ObjectPlanError::CanonicalConflict {
                 source_kind: item.source_kind.clone(),
@@ -140,12 +139,10 @@ pub(crate) fn apply_one(
                 object.type_id,
                 object.type_version,
                 object.title,
-                String::from_utf8(
-                    json_bytes(&object.content_json)?
-                ).map_err(|error| ObjectPlanError::Storage(error.to_string()))?,
-                String::from_utf8(
-                    json_bytes(&object.props_json)?
-                ).map_err(|error| ObjectPlanError::Storage(error.to_string()))?,
+                String::from_utf8(json_bytes(&object.content_json)?)
+                    .map_err(|error| ObjectPlanError::Storage(error.to_string()))?,
+                String::from_utf8(json_bytes(&object.props_json)?)
+                    .map_err(|error| ObjectPlanError::Storage(error.to_string()))?,
                 object.created_at,
                 object.updated_at,
                 object.deleted_at,
@@ -253,7 +250,13 @@ pub(crate) fn apply_one(
                 "source_hash=excluded.source_hash,updated_at=excluded.updated_at WHERE ",
                 "fields_json<>excluded.fields_json OR source_hash<>excluded.source_hash",
             ),
-            params![object.id, object.type_id, fields, item.source_hash, object.updated_at],
+            params![
+                object.id,
+                object.type_id,
+                fields,
+                item.source_hash,
+                object.updated_at
+            ],
         )
         .map_err(|error| ObjectPlanError::Storage(error.to_string()))?;
     }
@@ -264,7 +267,11 @@ pub(crate) fn apply_one(
             "CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=excluded.deleted ",
             "WHERE hlc<>excluded.hlc OR deleted<>excluded.deleted",
         ),
-        params![object.id, object.updated_at, i64::from(object.deleted_at.is_some())],
+        params![
+            object.id,
+            object.updated_at,
+            i64::from(object.deleted_at.is_some())
+        ],
     )
     .map_err(|error| ObjectPlanError::Storage(error.to_string()))?;
     Ok(canonical_hash)
