@@ -102,8 +102,9 @@ function assertVersionInfo(file, expectedVersion) {
 }
 
 // KOS-306 round 2: every shipped exe must carry exactly one application
-// manifest with requestedExecutionLevel asInvoker — the Engine's comes from
-// pe-version-info, the Manager's from gpui-pre's windows-manifest feature.
+// manifest with requestedExecutionLevel asInvoker — both the Engine's and
+// the Manager's come from pe-version-info (KOS-347: the imago gpui pin no
+// longer ships a `windows-manifest` feature).
 function assertApplicationManifest(file) {
   const data = readFileSync(file);
   const marker = Buffer.from("urn:schemas-microsoft-com:asm.v1");

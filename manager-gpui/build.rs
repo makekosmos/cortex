@@ -16,10 +16,11 @@ fn main() {
         exe_name: "Mundus Manager.exe",
         version: pe_version_info::product_version(&manifest_dir),
         icon: Some(icon_path),
-        // gpui-pre's `windows-manifest` feature already embeds the
-        // application manifest (asInvoker, Win10, PerMonitorV2, SegmentHeap,
-        // Common-Controls v6) — embedding a second RT_MANIFEST here would be
-        // a duplicate resource.
-        manifest: false,
+        // KOS-347: the imago gpui pin no longer carries the `windows-manifest`
+        // feature (agenda embeds its own), so the Manager manifest comes from
+        // pe-version-info like the Engine's. Embedding a second RT_MANIFEST
+        // would be a duplicate resource — do not re-enable gpui-pre's
+        // `windows-manifest`.
+        manifest: true,
     });
 }

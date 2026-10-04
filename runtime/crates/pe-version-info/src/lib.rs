@@ -56,11 +56,11 @@ pub struct ExeInfo<'a> {
     pub version: [u32; 3],
     /// Optional `.ico` embedded as the exe's icon.
     pub icon: Option<PathBuf>,
-    /// Embed [`APPLICATION_MANIFEST`]. `false` when a dependency already
-    /// ships one — `Mundus Manager.exe` gets its manifest (asInvoker +
-    /// Win10 + PerMonitorV2 + SegmentHeap + Common-Controls v6) from
-    /// `gpui-pre`'s `windows-manifest` feature; embedding a second
-    /// RT_MANIFEST would be a duplicate resource.
+    /// Embed [`APPLICATION_MANIFEST`]. Both shipped exes set this: the
+    /// imago gpui pin dropped the `windows-manifest` feature (KOS-347), so
+    /// `Mundus Manager.exe` no longer gets a manifest from a dependency.
+    /// `false` only for an exe whose dependency provably ships its own
+    /// RT_MANIFEST — embedding a second would be a duplicate resource.
     pub manifest: bool,
 }
 
@@ -226,12 +226,12 @@ mod tests {
     }
 
     #[test]
-    fn manifest_is_optional_for_exes_whose_dependencies_ship_one() {
+    fn manifest_is_optional_only_when_a_dependency_ships_one() {
         let out = TempDir::new();
         let rc = resource_script(
             &ExeInfo {
-                description: "Mundus Manager",
-                exe_name: "Mundus Manager.exe",
+                description: "Some Helper",
+                exe_name: "helper.exe",
                 version: [1, 2, 3],
                 icon: None,
                 manifest: false,
