@@ -144,8 +144,6 @@ pub(super) async fn dispatch_standard(
         }
     } else if let Some(rest) = operation.strip_prefix("app_index.") {
         handle_app_index_op(rest, params, &app_index).await
-    } else if let Some(rest) = operation.strip_prefix("calculator.") {
-        handle_calculator_op(rest, params, &agents_data_dir).await
     } else if crate::app_network::is_app_network_op(&operation) {
         handle_app_network_op(&operation, &params).await
     } else if let Some(rest) = operation.strip_prefix("integrations.") {
@@ -182,14 +180,6 @@ pub(super) async fn dispatch_standard(
                 .unwrap_or_else(LocalResponse::err),
             "engine.settings.set" => manager_state
                 .set_settings_patch(
-                    params
-                        .get("warm_timeout_seconds")
-                        .and_then(Value::as_u64)
-                        .or_else(|| {
-                            params
-                                .pointer("/desktop_host/warm_timeout_seconds")
-                                .and_then(Value::as_u64)
-                        }),
                     params
                         .get("usage_tracker_enabled")
                         .and_then(Value::as_bool)

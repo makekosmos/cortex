@@ -66,7 +66,7 @@ pub fn render(
                         .child(startup),
                 ),
         )
-        .child(super::engine_settings::render_body(app, window, cx))
+        .child(super::engine_settings::render_body(app, cx))
         .child(super::browser::render_body(app, window, cx));
     let mut developer = section_group()
         .id("settings-developer-group")

@@ -77,8 +77,6 @@ reqwest = { version = "0.12", default-features = false, features = [
   "socks",
 ] }
 async-trait = "0.1"
-fend-core = "1.5.8"
-quick-xml = "0.39"
 zip = { version = "0.6", default-features = false, features = ["deflate"] }
 flate2 = "1"
 tar = "0.4"

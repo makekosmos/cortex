@@ -1,5 +1,5 @@
 //! Движок — engine.settings.get / engine.settings.set
-//! (EngineSettingsView.vue parity: warm timeout + usage tracker).
+//! (EngineSettingsView.vue parity: usage tracker).
 use ::gpui::{prelude::*, *};
 use gpui_component::Disableable;
 use serde_json::json;
@@ -13,11 +13,7 @@ pub fn load(app: &mut ManagerApp) {
     app.call("engine.settings", "engine.settings.get", json!({}));
 }
 
-pub fn render_body(
-    app: &mut ManagerApp,
-    window: &mut Window,
-    cx: &mut Context<ManagerApp>,
-) -> AnyElement {
+pub fn render_body(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {
     let mut col = section_group()
         .id("settings-system-group")
         .debug_selector(|| "settings-system-group".into())
@@ -34,17 +30,6 @@ pub fn render_body(
             .child(field_row(
                 app,
                 "engine.settings",
-                "Тёплый таймаут",
-                |v| {
-                    format!(
-                        "{:.0} сек.",
-                        vnum(vget(v, "desktop_host"), "warm_timeout_seconds")
-                    )
-                },
-            ))
-            .child(field_row(
-                app,
-                "engine.settings",
                 "Счётчик использования",
                 |v| {
                     if vbool(vget(v, "usage_tracker"), "enabled") {
@@ -54,47 +39,6 @@ pub fn render_body(
                     }
                 },
             )),
-    );
-
-    let warm_in = app.input("engine.warm", "Таймаут в секундах…", false, window, cx);
-    col = col.child(
-        card()
-            .child(
-                div()
-                    .text_size(crate::theme::ui_px(13.))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child("Тёплый таймаут"),
-            )
-            .child(
-                div()
-                    .text_size(crate::theme::ui_px(12.))
-                    .text_color(c(MUTED_FG()))
-                    .child("Через сколько секунд Engine выгружает неактивный хост."),
-            )
-            .child(
-                div()
-                    .flex()
-                    .gap_2()
-                    .items_center()
-                    .child(div().flex_1().min_w_0().child(input_field(&warm_in)))
-                    .child(btn(
-                        "engine-warm-save",
-                        "Сохранить",
-                        true,
-                        cx,
-                        |this, cx| {
-                            let raw = this.input_value("engine.warm", cx);
-                            if let Ok(secs) = raw.parse::<u64>() {
-                                this.action(
-                                    "engine.settings.set",
-                                    json!({"desktop_host": {"warm_timeout_seconds": secs}}),
-                                );
-                            } else {
-                                this.error = Some("Введите число секунд.".into());
-                            }
-                        },
-                    )),
-            ),
     );
 
     let tracker_on = vbool(
