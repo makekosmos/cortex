@@ -18,6 +18,9 @@ const cortex = resolve(import.meta.dirname, "..");
 // Longest prefix first: runtime/crates/* must win over runtime/.
 const CRATE_MAP = [
   { prefix: "runtime/crates/engine-base/", packages: ["engine-base", "engine"] },
+  { prefix: "runtime/crates/engine-dictation/", packages: ["engine-dictation", "engine"] },
+  { prefix: "runtime/crates/engine-indexes/", packages: ["engine-indexes", "engine"] },
+  { prefix: "runtime/crates/engine-packages/", packages: ["engine-packages", "engine"] },
   { prefix: "runtime/crates/package-protocol/", packages: ["package-protocol"] },
   { prefix: "runtime/crates/pe-version-info/", packages: ["pe-version-info"] },
   { prefix: "core/crates/ark-core/", packages: ["ark-core"] },
@@ -87,8 +90,15 @@ const ENGINE_FEATURES = [
   "engine/package-worker-fixture,engine/markdown-bridge-fixture",
 ];
 
+// KOS-337: default builds skip the ONNX stack, so the local backend only
+// compiles with the feature — mirror the full gate, which builds with it.
+const PACKAGE_FEATURES = {
+  engine: ENGINE_FEATURES,
+  "engine-dictation": ["--features", "local-dictation"],
+};
+
 for (const pkg of packages) {
-  const features = pkg === "engine" ? ENGINE_FEATURES : [];
+  const features = PACKAGE_FEATURES[pkg] ?? [];
   run(["check", "-p", pkg, "--all-targets", ...features]);
 }
 if (manager) {
@@ -97,7 +107,7 @@ if (manager) {
 
 if (!checkOnly) {
   for (const pkg of packages) {
-    const features = pkg === "engine" ? ENGINE_FEATURES : [];
+    const features = PACKAGE_FEATURES[pkg] ?? [];
     run(["nextest", "run", "-p", pkg, ...features, ...filterArgs]);
   }
   if (manager) {
