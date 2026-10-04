@@ -113,7 +113,10 @@ fn git_fixture_rejects_a_cwd_that_would_fall_back_to_the_outer_repo() {
     // Regression: 2026-08-15. A failed fixture init must never let Git
     // discover the implementation repository and mutate it.
     let error = git_cwd_is_isolated(&nested).unwrap_err();
-    assert!(error.contains("escaped requested fixture") || error.contains("not a git"));
+    assert!(
+        error.to_string().contains("escaped requested fixture")
+            || error.to_string().contains("not a git")
+    );
     dir.close().unwrap();
 }
 
@@ -217,6 +220,7 @@ fn full_access_consent_rejects_every_changed_binding_and_expiry() {
     assert!(registry
         .consume_at(&token, &binding, now + FULL_ACCESS_CONSENT_TTL)
         .unwrap_err()
+        .to_string()
         .contains("expired"));
 }
 
@@ -344,7 +348,7 @@ async fn full_access_consent_fails_closed_when_audit_storage_fails() {
             },
         )
         .unwrap_err();
-    assert!(error.contains("security audit failed"));
+    assert!(error.to_string().contains("security audit failed"));
     assert!(service
         .full_access_consents
         .lock()

@@ -5,7 +5,7 @@ pub(crate) async fn run_app_server(
     session: Session,
     generation: u64,
     mut rx: mpsc::Receiver<AppCommand>,
-    ready: tokio::sync::oneshot::Sender<Result<(), String>>,
+    ready: tokio::sync::oneshot::Sender<Result<(), AgentsError>>,
 ) {
     let resumed = session.codex_thread_id.is_some();
     let result = start_app_server(&session).await;
@@ -22,7 +22,7 @@ pub(crate) async fn run_app_server(
             .terminate_and_wait(Duration::from_secs(5))
             .await
             .map(|_| ())
-            .map_err(|error| error.to_string());
+            .map_err(AgentsError::internal);
         let deadline = tokio::time::Instant::now() + Duration::from_secs(4);
         loop {
             match tokio::time::timeout_at(deadline, rx.recv()).await {
@@ -33,16 +33,16 @@ pub(crate) async fn run_app_server(
                     break;
                 }
                 Ok(Some(AppCommand::Interrupt { done, .. })) => {
-                    let _ = done.send(Err("runtime was replaced during startup".into()));
+                    let _ = done.send(Err(AgentsError::RuntimeReplaced));
                 }
                 Ok(Some(AppCommand::Approval { done, .. })) => {
-                    let _ = done.send(Err("runtime was replaced during startup".into()));
+                    let _ = done.send(Err(AgentsError::RuntimeReplaced));
                 }
                 Ok(Some(AppCommand::Send { .. })) => {}
                 Ok(None) | Err(_) => break,
             }
         }
-        let _ = ready.send(Err("runtime was replaced during startup".into()));
+        let _ = ready.send(Err(AgentsError::RuntimeReplaced));
         return;
     }
     let next_id = AtomicI64::new(100);
@@ -110,7 +110,11 @@ pub(crate) async fn run_app_server(
                     .await;
                     if let Err(error) = send {
                         let _ = service
-                            .append_and_emit(&session.id, "error", json!({ "message": error }));
+                            .append_and_emit(
+                                &session.id,
+                                "error",
+                                json!({ "message": error.to_string() }),
+                            );
                     } else {
                         pending_turn_requests.insert(request_id);
                     }
@@ -118,9 +122,9 @@ pub(crate) async fn run_app_server(
                 Some(AppCommand::Interrupt { expected_turn_id, done }) => {
                     let current = active_turn.lock().await.clone();
                     if current.as_deref() != Some(expected_turn_id.as_str()) {
-                        let _ = done.send(Err("active turn changed before interrupt".into()));
+                        let _ = done.send(Err(AgentsError::TurnChangedBeforeInterrupt));
                     } else if pending_interrupt.is_some() {
-                        let _ = done.send(Err("interrupt already pending".into()));
+                        let _ = done.send(Err(AgentsError::InterruptPending));
                     } else {
                         let request_id = next_id.fetch_add(1, Ordering::Relaxed);
                         let sent = send_rpc(
@@ -151,14 +155,14 @@ pub(crate) async fn run_app_server(
                 }
                 Some(AppCommand::Shutdown(done)) => {
                     if let Some((_, _, interrupt_done)) = pending_interrupt.take() {
-                        let _ = interrupt_done.send(Err("runtime stopped".into()));
+                        let _ = interrupt_done.send(Err(AgentsError::RuntimeStopped));
                     }
                     let result = startup
                         .process_tree
                         .terminate_and_wait(Duration::from_secs(5))
                         .await
                         .map(|_| ())
-                        .map_err(|error| error.to_string());
+                        .map_err(AgentsError::internal);
                     if let Some(done) = done {
                         let _ = done.send(result);
                     }
@@ -182,7 +186,9 @@ pub(crate) async fn run_app_server(
                             == Some(*request_id);
                         if answered && message.get("error").is_some() {
                             if let Some((_, _, done)) = pending_interrupt.take() {
-                                let _ = done.send(Err(message["error"].to_string()));
+                                let _ = done.send(Err(AgentsError::Rpc(
+                                    message["error"].to_string(),
+                                )));
                             }
                         }
                     }
@@ -231,7 +237,7 @@ pub(crate) async fn run_app_server(
                             let result = if acknowledged {
                                 Ok(())
                             } else {
-                                Err("active turn did not acknowledge interrupt".into())
+                                Err(AgentsError::InterruptNotAcked)
                             };
                             let _ = done.send(result);
                         }
@@ -239,7 +245,7 @@ pub(crate) async fn run_app_server(
                 },
                 Ok(None) | Err(_) => {
                     if let Some((_, _, done)) = pending_interrupt.take() {
-                        let _ = done.send(Err("app-server pipe closed".into()));
+                        let _ = done.send(Err(AgentsError::AppServerPipeClosed));
                     }
                     let active = service
                         .get_session(&session.id)
@@ -268,11 +274,11 @@ pub(crate) async fn run_app_server(
     service.remove_runtime(&session.id, generation);
 }
 
-async fn start_app_server(session: &Session) -> Result<AppServerStartup, String> {
+async fn start_app_server(session: &Session) -> Result<AppServerStartup, AgentsError> {
     // codex is an npm `codex.cmd` shim on Windows: resolve it before setting
     // stdio, which a rebuilt command would drop.
     let mut command = crate::process_tree::resolve_command(codex_command())
-        .map_err(|e| format!("Не удалось запустить Codex CLI: {e}"))?;
+        .map_err(|e| AgentsError::CodexCliSpawn(e))?;
     command
         .args(["app-server", "--stdio"])
         .current_dir(&session.worktree_path)
@@ -281,17 +287,17 @@ async fn start_app_server(session: &Session) -> Result<AppServerStartup, String>
         .stderr(Stdio::null());
     let mut process_tree = crate::process_tree::ProcessTree::spawn(&mut command, 0)
         .await
-        .map_err(|e| format!("Не удалось запустить Codex CLI: {e}"))?;
+        .map_err(|e| AgentsError::CodexCliSpawn(e))?;
     let mut stdin = process_tree
         .child_mut()
         .stdin
         .take()
-        .ok_or("Codex stdin недоступен")?;
+        .ok_or(AgentsError::CodexStdinUnavailable)?;
     let stdout = process_tree
         .child_mut()
         .stdout
         .take()
-        .ok_or("Codex stdout недоступен")?;
+        .ok_or(AgentsError::CodexStdoutUnavailable)?;
     let mut lines = BufReader::new(stdout).lines();
     let (init, mut buffered) = rpc_call(
         &mut stdin,
@@ -309,7 +315,7 @@ async fn start_app_server(session: &Session) -> Result<AppServerStartup, String>
     )
     .await?;
     if init.get("error").is_some() {
-        return Err(format!("Codex initialize: {}", init["error"]));
+        return Err(AgentsError::CodexInitialize(init["error"].to_string()));
     }
     write_json(&mut stdin, &json!({"method":"initialized","params":{}})).await?;
     let (sandbox, approval_policy, reviewer) = mode_params(&session.mode);
@@ -343,7 +349,7 @@ async fn start_app_server(session: &Session) -> Result<AppServerStartup, String>
     let thread_id = response
         .pointer("/result/thread/id")
         .and_then(Value::as_str)
-        .ok_or_else(|| format!("Codex thread/start не вернул thread id: {response}"))?
+        .ok_or_else(|| AgentsError::CodexThreadStart(response.to_string()))?
         .to_string();
     let last_turn = response
         .pointer("/result/thread/turns")
@@ -478,22 +484,22 @@ async fn rpc_call(
     id: i64,
     method: &str,
     params_value: Value,
-) -> Result<(Value, Vec<Value>), String> {
+) -> Result<(Value, Vec<Value>), AgentsError> {
     send_rpc(stdin, id, method, params_value).await?;
     let deadline = tokio::time::Instant::now() + Duration::from_secs(45);
     let mut buffered = Vec::new();
     while let Some(line) = tokio::time::timeout_at(deadline, lines.next_line())
         .await
-        .map_err(|_| format!("Codex {method}: timeout"))?
-        .map_err(|e| e.to_string())?
+        .map_err(|_| AgentsError::CodexTimeout(method.to_string()))?
+        .map_err(AgentsError::internal)?
     {
-        let value: Value = serde_json::from_str(&line).map_err(|e| e.to_string())?;
+        let value: Value = serde_json::from_str(&line).map_err(AgentsError::internal)?;
         if value.get("id").and_then(Value::as_i64) == Some(id) {
             return Ok((value, buffered));
         }
         buffered.push(value);
     }
-    Err("Codex app-server закрыл stdout".into())
+    Err(AgentsError::AppServerStdoutClosed)
 }
 
 async fn send_turn(
@@ -504,7 +510,7 @@ async fn send_turn(
     model: Option<&str>,
     mode: &str,
     active_turn_id: Option<&str>,
-) -> Result<(), String> {
+) -> Result<(), AgentsError> {
     if let Some(turn_id) = active_turn_id {
         return send_rpc(
             stdin,
@@ -540,24 +546,30 @@ async fn send_rpc(
     id: i64,
     method: &str,
     params_value: Value,
-) -> Result<(), String> {
+) -> Result<(), AgentsError> {
     write_json(
         stdin,
         &json!({"id":id,"method":method,"params":params_value}),
     )
     .await
 }
-async fn write_json(stdin: &mut tokio::process::ChildStdin, value: &Value) -> Result<(), String> {
+async fn write_json(
+    stdin: &mut tokio::process::ChildStdin,
+    value: &Value,
+) -> Result<(), AgentsError> {
     stdin
         .write_all(format!("{value}\n").as_bytes())
         .await
-        .map_err(|e| e.to_string())?;
-    stdin.flush().await.map_err(|e| e.to_string())
+        .map_err(AgentsError::internal)?;
+    stdin.flush().await.map_err(AgentsError::internal)
 }
 
-pub(crate) async fn codex_one_shot(method: &str, params_value: Value) -> Result<Value, String> {
+pub(crate) async fn codex_one_shot(
+    method: &str,
+    params_value: Value,
+) -> Result<Value, AgentsError> {
     let mut command =
-        crate::process_tree::resolve_command(codex_command()).map_err(|e| e.to_string())?;
+        crate::process_tree::resolve_command(codex_command()).map_err(AgentsError::internal)?;
     let mut child = command
         .args(["app-server", "--stdio"])
         .stdin(Stdio::piped())
@@ -565,9 +577,15 @@ pub(crate) async fn codex_one_shot(method: &str, params_value: Value) -> Result<
         .stderr(Stdio::null())
         .kill_on_drop(true)
         .spawn()
-        .map_err(|e| e.to_string())?;
-    let mut stdin = child.stdin.take().ok_or("Codex stdin недоступен")?;
-    let stdout = child.stdout.take().ok_or("Codex stdout недоступен")?;
+        .map_err(AgentsError::internal)?;
+    let mut stdin = child
+        .stdin
+        .take()
+        .ok_or(AgentsError::CodexStdinUnavailable)?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or(AgentsError::CodexStdoutUnavailable)?;
     let mut lines = BufReader::new(stdout).lines();
     let _ = rpc_call(
         &mut stdin,
@@ -586,7 +604,7 @@ pub(crate) async fn codex_one_shot(method: &str, params_value: Value) -> Result<
     response
         .get("result")
         .cloned()
-        .ok_or_else(|| format!("Codex {method}: {response}"))
+        .ok_or_else(|| AgentsError::CodexRpc(method.to_string(), response.to_string()))
 }
 
 pub(crate) fn mode_params(mode: &str) -> (&'static str, &'static str, &'static str) {
@@ -634,22 +652,22 @@ pub(crate) fn new_consent_token() -> String {
     rand::rngs::OsRng.fill_bytes(&mut bytes);
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
-pub(crate) fn canonical_project_path(project: &Project) -> Result<String, String> {
+pub(crate) fn canonical_project_path(project: &Project) -> Result<String, AgentsError> {
     Path::new(&project.path)
         .canonicalize()
         .map(|path| path.to_string_lossy().into_owned())
-        .map_err(|error| format!("project path is unavailable: {error}"))
+        .map_err(|error| AgentsError::ProjectPath(error))
 }
-pub(crate) fn required_str(value: &Value, key: &str) -> Result<String, String> {
+pub(crate) fn required_str(value: &Value, key: &str) -> Result<String, AgentsError> {
     value
         .get(key)
         .and_then(Value::as_str)
         .filter(|v| !v.trim().is_empty())
         .map(str::to_string)
-        .ok_or_else(|| format!("missing '{key}'"))
+        .ok_or_else(|| AgentsError::MissingParam(key.to_string()))
 }
-pub(crate) fn path_str(path: &Path) -> Result<&str, String> {
-    path.to_str().ok_or_else(|| "Путь не является UTF-8".into())
+pub(crate) fn path_str(path: &Path) -> Result<&str, AgentsError> {
+    path.to_str().ok_or_else(|| AgentsError::NonUtf8Path)
 }
 pub(crate) fn hex_hash(value: &str) -> String {
     format!("{:x}", Sha256::digest(value.as_bytes()))
@@ -714,60 +732,70 @@ pub(crate) fn is_binary(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-pub(crate) async fn git_output(cwd: &Path, args: &[&str]) -> Result<String, String> {
+pub(crate) async fn git_output(cwd: &Path, args: &[&str]) -> Result<String, AgentsError> {
     git_cwd_is_isolated(cwd)?;
     let output = isolated_async_git()
         .args(args)
         .current_dir(cwd)
         .output()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AgentsError::internal)?;
     if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+        return Err(AgentsError::Internal(
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        ));
     }
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
-pub(crate) fn git_cwd_is_isolated(cwd: &Path) -> Result<(), String> {
+pub(crate) fn git_cwd_is_isolated(cwd: &Path) -> Result<(), AgentsError> {
     let requested = cwd
         .canonicalize()
-        .map_err(|error| format!("Git working directory is unavailable: {error}"))?;
+        .map_err(|error| AgentsError::GitCwdUnavailable(error))?;
     let output = isolated_std_git()
         .args(["rev-parse", "--show-toplevel"])
         .current_dir(&requested)
         .output()
-        .map_err(|error| format!("Git repository probe failed: {error}"))?;
+        .map_err(|error| AgentsError::Internal(format!("Git repository probe failed: {error}")))?;
     if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+        return Err(AgentsError::Internal(
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        ));
     }
     let root = PathBuf::from(String::from_utf8_lossy(&output.stdout).trim())
         .canonicalize()
-        .map_err(|error| format!("Git repository root is unavailable: {error}"))?;
+        .map_err(|error| {
+            AgentsError::Internal(format!("Git repository root is unavailable: {error}"))
+        })?;
     if requested != root {
-        return Err(format!(
+        return Err(AgentsError::Internal(format!(
             "Git repository escaped requested fixture: {} -> {}",
             requested.display(),
             root.display()
-        ));
+        )));
     }
     Ok(())
 }
 
-pub(crate) fn git_repository_root(path: &Path) -> Result<PathBuf, String> {
-    let requested = path
-        .canonicalize()
-        .map_err(|error| format!("Git repository path is unavailable: {error}"))?;
+pub(crate) fn git_repository_root(path: &Path) -> Result<PathBuf, AgentsError> {
+    let requested = path.canonicalize().map_err(|error| {
+        AgentsError::Internal(format!("Git repository path is unavailable: {error}"))
+    })?;
     let output = isolated_std_git()
         .args(["rev-parse", "--show-toplevel"])
         .current_dir(&requested)
         .output()
-        .map_err(|error| format!("Git repository probe failed: {error}"))?;
+        .map_err(|error| AgentsError::Internal(format!("Git repository probe failed: {error}")))?;
     if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+        return Err(AgentsError::Internal(
+            String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        ));
     }
     PathBuf::from(String::from_utf8_lossy(&output.stdout).trim())
         .canonicalize()
-        .map_err(|error| format!("Git repository root is unavailable: {error}"))
+        .map_err(|error| {
+            AgentsError::Internal(format!("Git repository root is unavailable: {error}"))
+        })
 }
 
 pub(crate) fn isolated_std_git() -> std::process::Command {
@@ -803,7 +831,7 @@ fn isolated_async_git() -> Command {
     }
     command
 }
-pub(crate) async fn git_status(cwd: &Path, args: &[&str]) -> Result<(), String> {
+pub(crate) async fn git_status(cwd: &Path, args: &[&str]) -> Result<(), AgentsError> {
     git_output(cwd, args).await.map(|_| ())
 }
 pub(crate) async fn command_available(command: &str) -> bool {

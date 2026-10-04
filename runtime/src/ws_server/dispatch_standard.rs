@@ -69,7 +69,7 @@ pub(super) async fn dispatch_standard(
                 .await
                 .map(LocalResponse::ok)
                 .unwrap_or_else(LocalResponse::err),
-            Err(error) => LocalResponse::err(error.clone()),
+            Err(error) => LocalResponse::err(error.to_string()),
         }
     } else if let Some(rest) = operation.strip_prefix("dictation.") {
         {
