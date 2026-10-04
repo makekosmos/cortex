@@ -55,18 +55,21 @@ pub use engine_base::*;
 // runtime grants, grant authority, worker secrets) plus the in-process ARK
 // host live in the `engine-packages` crate; re-exported per-module so
 // `crate::<module>` paths keep working unchanged.
+// KOS-338: the dispatch hub (`engine_dispatch`) and `auth` moved to
+// `engine-base` (re-exported by the glob above); package_service plus its
+// support modules (catalog, package_launch, package_registration,
+// background_task, native_apps) moved to `engine-packages`.
 pub use engine_packages::{
-    ark_host, grant_authority, package_store, package_worker_broker, package_worker_process,
-    package_worker_protocol, package_worker_secrets, package_worker_supervisor, runtime_grants,
+    ark_host, background_task, catalog, grant_authority, native_apps, package_launch,
+    package_registration, package_service, package_store, package_worker_broker,
+    package_worker_process, package_worker_protocol, package_worker_secrets,
+    package_worker_supervisor, runtime_grants,
 };
 
 pub mod agents;
 pub(crate) mod app_network;
 pub mod appearance;
-pub mod auth;
 pub mod backend_tray;
-pub(crate) mod background_task;
-pub mod catalog;
 pub mod command_bus;
 pub mod crash_reporter;
 pub mod db_backup;
@@ -80,7 +83,6 @@ pub use engine_dictation as dictation;
 pub use engine_indexes::{app_index, file_index, privileged};
 pub mod engine_api;
 pub mod engine_control;
-pub mod engine_dispatch;
 pub mod engine_settings;
 pub mod engine_supervisor;
 pub mod engine_versions;
@@ -89,10 +91,6 @@ pub mod installer;
 pub mod integrations;
 pub mod manager_api;
 pub mod markdown_vault;
-pub mod native_apps;
-pub(crate) mod package_launch;
-pub mod package_registration;
-pub mod package_service;
 pub mod pomodoro;
 pub mod pomodoro_host;
 pub mod protocol_usage;

@@ -28,6 +28,7 @@
 //! application layer; `engine` re-exports them wholesale via
 //! `pub use engine_base::*` so existing `crate::<module>` paths keep working.
 
+pub mod auth;
 pub mod brand;
 pub mod build_info;
 pub mod build_metadata;
@@ -43,5 +44,9 @@ pub mod process_tree;
 mod process_tree_tests;
 pub mod protocol_version;
 pub mod singleton;
+// KOS-338: dispatch hub API (request/handler/dispatcher) extracted from
+// engine so both the `engine-packages` registrants and the engine
+// transports (engine_api/ws_server) share one boundary crate.
+pub mod engine_dispatch;
 #[cfg(windows)]
 pub mod win32;

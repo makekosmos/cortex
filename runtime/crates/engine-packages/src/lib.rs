@@ -36,8 +36,8 @@
 pub(crate) use engine_base::win32;
 #[allow(unused_imports)]
 pub(crate) use engine_base::{
-    brand, data_dir, file_hash, handle_relative_fs, lock_file, observability, package_manifest,
-    process_tree,
+    auth, brand, data_dir, engine_dispatch, file_hash, handle_relative_fs, lock_file,
+    observability, package_manifest, priority, process_tree, protocol_version,
 };
 
 // `crate::dictation::*` inside supervisor::engine_capability resolves to the
@@ -45,7 +45,13 @@ pub(crate) use engine_base::{
 pub(crate) use engine_dictation as dictation;
 
 pub mod ark_host;
+pub mod background_task;
+pub mod catalog;
 pub mod grant_authority;
+pub mod native_apps;
+pub mod package_launch;
+pub mod package_registration;
+pub mod package_service;
 pub mod package_store;
 pub mod package_worker_broker;
 pub mod package_worker_process;
