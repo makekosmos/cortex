@@ -670,7 +670,7 @@ async fn op_begin_hotkey_capture(host: &DictationHost) -> DictationResponse {
     }
     #[cfg(target_os = "macos")]
     {
-        match crate::dictation::macos_native::begin_capture(host.events_tx.clone()) {
+        match crate::macos_native::begin_capture(host.events_tx.clone()) {
             Ok(()) => DictationResponse::ok(json!({ "ok": true })),
             Err(e) => DictationResponse::err(format!("begin_hotkey_capture: {e}")),
         }
@@ -692,7 +692,7 @@ async fn op_end_hotkey_capture(host: &DictationHost) -> DictationResponse {
     #[cfg(target_os = "macos")]
     {
         let _ = host;
-        crate::dictation::macos_native::end_capture();
+        crate::macos_native::end_capture();
         DictationResponse::ok(json!({ "ok": true }))
     }
     #[cfg(not(any(windows, target_os = "macos")))]

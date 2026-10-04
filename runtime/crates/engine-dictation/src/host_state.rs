@@ -128,8 +128,8 @@ impl DictationHost {
 
     /// Тестовый конструктор — изолированный data_dir и custom Groq endpoint.
     /// НЕ читает реальный конфиг с диска и НЕ трогает PTT hook.
-    #[cfg(test)]
-    pub(crate) fn new_for_test(
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn new_for_test(
         data_dir: std::path::PathBuf,
         groq_endpoint: String,
         cfg: DictationConfig,
@@ -327,14 +327,14 @@ pub struct DictationResponse {
 }
 
 impl DictationResponse {
-    pub(crate) fn ok(data: Value) -> Self {
+    pub fn ok(data: Value) -> Self {
         Self {
             ok: true,
             data,
             error: None,
         }
     }
-    pub(crate) fn err(msg: impl Into<String>) -> Self {
+    pub fn err(msg: impl Into<String>) -> Self {
         Self {
             ok: false,
             data: Value::Null,

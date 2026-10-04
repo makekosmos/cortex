@@ -1097,7 +1097,6 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 name = "engine"
 version = "0.1.0"
 dependencies = [
- "arboard",
  "ark-core",
  "async-trait",
  "base64 0.22.1",
@@ -1105,10 +1104,10 @@ dependencies = [
  "chrono",
  "ed25519-dalek",
  "engine-base",
+ "engine-dictation",
  "flate2",
  "futures-util",
  "globset",
- "hickory-resolver",
  "hmac 0.12.1",
  "hpke",
  "http-body-util",
@@ -1119,11 +1118,9 @@ dependencies = [
  "image",
  "keyring",
  "libc",
- "libloading 0.8.9",
  "lnk",
  "notify",
  "ntfs-reader",
- "ort",
  "package-protocol",
  "pe-version-info",
  "rand 0.8.7",
@@ -1143,7 +1140,6 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
- "transcribe-rs",
  "uuid",
  "walkdir",
  "windows 0.58.0",
@@ -1172,6 +1168,35 @@ dependencies = [
  "url",
  "uuid",
  "windows 0.58.0",
+]
+
+[[package]]
+name = "engine-dictation"
+version = "0.1.0"
+dependencies = [
+ "arboard",
+ "base64 0.22.1",
+ "chrono",
+ "engine-base",
+ "flate2",
+ "hickory-resolver",
+ "httpmock",
+ "keyring",
+ "libloading 0.8.9",
+ "ort",
+ "rand 0.8.7",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "tar",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "transcribe-rs",
+ "uuid",
+ "windows 0.58.0",
+ "zip",
 ]
 
 [[package]]

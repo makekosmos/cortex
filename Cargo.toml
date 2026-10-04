@@ -5,6 +5,7 @@ members = [
   "runtime/crates/package-protocol",
   "runtime/crates/pe-version-info",
   "runtime/crates/engine-base",
+  "runtime/crates/engine-dictation",
   "core/crates/ark-core",
 ]
 # Pinned sibling component checkouts cloned under desktop/.tmp (local builds)

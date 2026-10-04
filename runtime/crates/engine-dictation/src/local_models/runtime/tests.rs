@@ -1,6 +1,6 @@
 use super::install::extract_whisper_runtime;
 use super::*;
-use crate::dictation::local_models::command_path;
+use crate::local_models::command_path;
 
 fn touch(path: &Path) {
     fs::create_dir_all(path.parent().expect("parent")).expect("parent dir");
