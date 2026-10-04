@@ -1,7 +1,7 @@
 use super::{ManifestError, ManifestV2, PackageKind};
-use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use url::Url;
 
 mod secret_injection;
 pub use secret_injection::{CookieHeaderInjection, IntegrationRequestMethod, SecretInjection};
@@ -84,7 +84,7 @@ pub struct IntegrationSchedule {
 }
 
 impl IntegrationManifest {
-    pub(crate) fn validate(&self, manifest: &ManifestV2) -> Result<(), ManifestError> {
+    pub fn validate(&self, manifest: &ManifestV2) -> Result<(), ManifestError> {
         if !matches!(manifest.kind, PackageKind::Source | PackageKind::App)
             || manifest.declared_worker_entrypoints().is_empty()
         {

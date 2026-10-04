@@ -31,7 +31,7 @@ const cortexTargetDir = effectiveCargoTargetDir(
 // per-Engine version config file — it reports the Mundus Desktop product
 // version (read via `release-version.mjs`) and the commit it was built from.
 // Both are baked into the binary at compile time via `option_env!`
-// (see runtime/src/build_info.rs), so they must be set before the `cargo build`
+// (see runtime/crates/engine-base/src/build_info.rs), so they must be set before the `cargo build`
 // calls below, on every platform.
 const { productVersion, sourceCommit, env: cargoEnv } = releaseBuildIdentity(shellRoot);
 

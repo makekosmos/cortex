@@ -17,6 +17,7 @@ const cortex = resolve(import.meta.dirname, "..");
 
 // Longest prefix first: runtime/crates/* must win over runtime/.
 const CRATE_MAP = [
+  { prefix: "runtime/crates/engine-base/", packages: ["engine-base", "engine"] },
   { prefix: "runtime/crates/package-protocol/", packages: ["package-protocol"] },
   { prefix: "runtime/crates/pe-version-info/", packages: ["pe-version-info"] },
   { prefix: "core/crates/ark-core/", packages: ["ark-core"] },
@@ -64,9 +65,7 @@ const filesFlag = argv.indexOf("--files");
 const files =
   filesFlag === -1
     ? changedFiles()
-    : argv
-        .slice(filesFlag + 1)
-        .map((f) => (f.startsWith("/") ? f.slice(cortex.length + 1) : f));
+    : argv.slice(filesFlag + 1).map((f) => (f.startsWith("/") ? f.slice(cortex.length + 1) : f));
 // Filters are positional args before --files.
 const filterArgs = [];
 for (let i = 0; i < argv.length; i++) {

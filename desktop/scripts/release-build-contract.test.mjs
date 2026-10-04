@@ -63,13 +63,16 @@ test("shipped binaries read the product version only from the variable the build
   assert.match(macos, /releaseBuildIdentity\(cortexRoot\)/);
   // A bare cargo build has no injected version. Both readers say "dev"
   // rather than the crate's 0.1.0.
-  for (const file of ["runtime/src/build_info.rs", "manager-gpui/src/views/about.rs"]) {
+  for (const file of [
+    "runtime/crates/engine-base/src/build_info.rs",
+    "manager-gpui/src/views/about.rs",
+  ]) {
     const source = await readFile(path.join(repo, file), "utf8");
     assert.match(source, /"dev"/, file);
     assert.doesNotMatch(source, /CARGO_PKG_VERSION/, file);
   }
   const readers = [];
-  for (const dir of ["runtime/src", "manager-gpui/src", "core/crates"]) {
+  for (const dir of ["runtime/src", "runtime/crates", "manager-gpui/src", "core/crates"]) {
     for (const entry of readdirSync(path.join(repo, dir), { recursive: true })) {
       if (!entry.endsWith(".rs")) continue;
       const source = await readFile(path.join(repo, dir, entry), "utf8");
@@ -155,7 +158,16 @@ test("the VERSIONINFO brand strings share one source across pe-version-info, bra
   );
   const brand = await readFile(path.join(import.meta.dirname, "brand.mjs"), "utf8");
   const runtimeBrand = await readFile(
-    path.join(import.meta.dirname, "..", "..", "runtime", "src", "brand.rs"),
+    path.join(
+      import.meta.dirname,
+      "..",
+      "..",
+      "runtime",
+      "crates",
+      "engine-base",
+      "src",
+      "brand.rs",
+    ),
     "utf8",
   );
   const nsi = await readFile(

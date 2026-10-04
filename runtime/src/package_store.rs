@@ -171,9 +171,7 @@ fn hash_reader(reader: impl Read) -> Result<String, StoreError> {
     Ok(crate::file_hash::sha256_reader(reader)?)
 }
 
-pub(crate) fn eq_hash(a: &str, b: &str) -> bool {
-    a.eq_ignore_ascii_case(b) && b.len() == 64 && b.bytes().all(|c| c.is_ascii_hexdigit())
-}
+pub(crate) use crate::file_hash::eq_hash;
 fn is_hash(value: &str) -> bool {
     value.len() == 64 && value.bytes().all(|c| c.is_ascii_hexdigit())
 }

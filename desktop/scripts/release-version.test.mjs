@@ -106,7 +106,7 @@ test("the mac pin is the same product version as win", () => {
 // fixture copies under temp roots and read the real file as a contract input.
 // On the Rust side the only reader is runtime/crates/pe-version-info
 // (product_version, consumed by runtime/build.rs and manager-gpui/build.rs);
-// runtime/src/build_info.rs is exempted explicitly — it only doc-comments the
+// runtime/crates/engine-base/src/build_info.rs is exempted explicitly — it only doc-comments the
 // file name while describing where MUNDUS_PRODUCT_VERSION comes from.
 test("only release-version.mjs and pe-version-info touch release-versions.json", async () => {
   const repoRoot = path.resolve(import.meta.dirname, "..", "..");
@@ -132,7 +132,7 @@ test("only release-version.mjs and pe-version-info touch release-versions.json",
       const file = path.join(dir, entry);
       if (
         file.startsWith(path.join("runtime", "crates", "pe-version-info")) ||
-        file === path.join("runtime", "src", "build_info.rs")
+        file === path.join("runtime", "crates", "engine-base", "src", "build_info.rs")
       )
         continue;
       const source = await readFile(path.join(repoRoot, file), "utf8");

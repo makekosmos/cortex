@@ -1,6 +1,6 @@
-use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use url::Url;
 
 const MAX_HEADER_NAME: usize = 64;
 const MAX_AFFIX: usize = 128;
@@ -130,7 +130,7 @@ impl SecretInjection {
         }
     }
 
-    pub(crate) fn origins(&self) -> &[String] {
+    pub fn origins(&self) -> &[String] {
         match self {
             Self::Header { origins, .. }
             | Self::Basic { origins, .. }
@@ -140,7 +140,7 @@ impl SecretInjection {
         }
     }
 
-    pub(crate) fn request_method(&self) -> IntegrationRequestMethod {
+    pub fn request_method(&self) -> IntegrationRequestMethod {
         match self {
             Self::Cookies { method, .. } => *method,
             Self::Json { .. } => IntegrationRequestMethod::PostJson,
@@ -148,14 +148,14 @@ impl SecretInjection {
         }
     }
 
-    pub(crate) fn fixed_headers(&self) -> Option<&BTreeMap<String, String>> {
+    pub fn fixed_headers(&self) -> Option<&BTreeMap<String, String>> {
         match self {
             Self::Cookies { headers, .. } => Some(headers),
             _ => None,
         }
     }
 
-    pub(crate) fn cookie_header(&self) -> Option<&CookieHeaderInjection> {
+    pub fn cookie_header(&self) -> Option<&CookieHeaderInjection> {
         match self {
             Self::Cookies {
                 header_from_cookie, ..
@@ -188,9 +188,9 @@ fn valid_header(name: &str, value: &str) -> bool {
             | "te"
             | "trailer"
             | "upgrade"
-    ) && reqwest::header::HeaderName::from_bytes(name.as_bytes()).is_ok()
+    ) && http::header::HeaderName::from_bytes(name.as_bytes()).is_ok()
         && value.len() <= 1024
-        && reqwest::header::HeaderValue::from_str(value).is_ok()
+        && http::header::HeaderValue::from_str(value).is_ok()
 }
 
 fn valid_cookie_name(value: &str) -> bool {

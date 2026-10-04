@@ -1,7 +1,7 @@
 // One compile-time identity for every packaged cargo build: the Windows
 // installer scripts and the mac bundle. A bare `cargo build` does not go
 // through here, so it does not claim a product version (the binaries then
-// report "dev" — see runtime/src/build_info.rs).
+// report "dev" — see runtime/crates/engine-base/src/build_info.rs).
 import { execFileSync } from "node:child_process";
 import { readReleaseVersion } from "./release-version.mjs";
 
@@ -14,7 +14,9 @@ export function releaseBuildIdentity(cwd, baseEnv = process.env) {
     encoding: "utf8",
   }).trim();
   if (!SOURCE_COMMIT.test(sourceCommit))
-    throw new Error(`engine source commit must be 40 hex chars, got ${JSON.stringify(sourceCommit)}`);
+    throw new Error(
+      `engine source commit must be 40 hex chars, got ${JSON.stringify(sourceCommit)}`,
+    );
   return {
     productVersion,
     sourceCommit,

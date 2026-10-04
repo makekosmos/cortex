@@ -112,17 +112,23 @@ pub fn app_rpc_type_id(params: &serde_json::Value) -> Option<&str> {
         .and_then(serde_json::Value::as_str)
 }
 
-// pub(crate) so the end-to-end rejection test in engine_api can capture
+// pub so the end-to-end rejection test in engine_api can capture
 // log lines emitted inside the spawned server task.
-#[cfg(test)]
-pub(crate) mod tests {
+// `test` for this crate's own tests; `test-support` lets the engine crate's
+// integration tests (dev-dep feature) reuse CaptureBuf.
+#[cfg(any(test, feature = "test-support"))]
+// Under `test-support` the module compiles without cfg(test), so the
+// crate-level cfg_attr(test, allow(unwrap_used)) does not apply.
+#[cfg_attr(not(test), allow(clippy::unwrap_used))]
+pub mod tests {
+    #[allow(unused_imports)]
     use super::*;
 
     /// Shared-buffer writer for asserting on emitted log lines. The
     /// workspace's only other tracing test hook is `with_test_writer`
     /// (tests/it), which writes to stdout and cannot be asserted on.
     #[derive(Clone, Default)]
-    pub(crate) struct CaptureBuf(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+    pub struct CaptureBuf(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
 
     impl std::io::Write for CaptureBuf {
         fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
@@ -145,7 +151,7 @@ pub(crate) mod tests {
     }
 
     impl CaptureBuf {
-        pub(crate) fn text(&self) -> String {
+        pub fn text(&self) -> String {
             String::from_utf8(self.0.lock().unwrap_or_else(|e| e.into_inner()).clone()).unwrap()
         }
     }

@@ -5,7 +5,7 @@ use serde_json::Value;
 #[path = "../../runtime/src/device_name.rs"]
 mod system_name;
 
-#[path = "../../runtime/src/build_metadata.rs"]
+#[path = "../../runtime/crates/engine-base/src/build_metadata.rs"]
 mod build_metadata;
 pub use build_metadata::version_label;
 

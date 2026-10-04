@@ -69,7 +69,7 @@ test("core/ is first-party and checked like everything else", async () => {
 test("only the explicit debt baseline is grandfathered", async () => {
   const result = await runFixture({
     "runtime/src/main.rs": lines(501),
-    "runtime/src/package_manifest.rs": lines(501),
+    "runtime/crates/engine-base/src/package_manifest.rs": lines(501),
     "runtime/src/focus.rs": lines(501),
   });
   assert.equal(result.status, 0, result.stderr);

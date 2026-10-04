@@ -32,6 +32,7 @@ export function ensureCleanSource() {
       "desktop/build",
       "manager-gpui",
       "runtime/src",
+      "runtime/crates",
     ],
     { cwd: repoRoot, encoding: "utf8" },
   ).trim();

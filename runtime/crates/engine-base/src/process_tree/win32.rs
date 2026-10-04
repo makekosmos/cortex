@@ -33,7 +33,7 @@ impl Drop for OwnedHandle {
 
 /// The KILL_ON_JOB_CLOSE job owning a spawned child. Dropping the handle
 /// kills the whole tree, which is what `Drop for ProcessTree` relies on.
-pub(crate) struct JobHandle(OwnedHandle);
+pub struct JobHandle(OwnedHandle);
 
 unsafe impl Send for JobHandle {}
 
@@ -43,7 +43,7 @@ impl JobHandle {
     }
 
     /// Creates the job and assigns `pid` to it while the process is suspended.
-    pub(crate) fn for_process(pid: u32) -> io::Result<Self> {
+    pub fn for_process(pid: u32) -> io::Result<Self> {
         use windows::Win32::System::JobObjects::{
             AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
             SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
@@ -87,7 +87,7 @@ impl JobHandle {
 /// so the thread is found again through a Toolhelp32 snapshot filtered on the
 /// owner pid. A suspended newborn process must have exactly one thread; any
 /// other count fails closed rather than resuming an ambiguous thread.
-pub(crate) fn resume_primary_thread(pid: u32) -> io::Result<()> {
+pub fn resume_primary_thread(pid: u32) -> io::Result<()> {
     use windows::Win32::System::Diagnostics::ToolHelp::{
         CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD, THREADENTRY32,
     };

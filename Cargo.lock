@@ -1104,6 +1104,7 @@ dependencies = [
  "bytes",
  "chrono",
  "ed25519-dalek",
+ "engine-base",
  "flate2",
  "futures-util",
  "globset",
@@ -1148,6 +1149,29 @@ dependencies = [
  "windows 0.58.0",
  "windows-service",
  "zip",
+]
+
+[[package]]
+name = "engine-base"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "http 1.5.0",
+ "libc",
+ "regex",
+ "rusqlite",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "uuid",
+ "windows 0.58.0",
 ]
 
 [[package]]
