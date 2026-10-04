@@ -51,6 +51,7 @@ package-protocol = { path = "crates/package-protocol" }
 engine-base = { path = "crates/engine-base" }
 engine-dictation = { path = "crates/engine-dictation" }
 engine-packages = { path = "crates/engine-packages" }
+engine-indexes = { path = "crates/engine-indexes" }
 rusqlite.workspace = true
 tokio = { version = "1", features = [
   "rt-multi-thread",
@@ -90,15 +91,9 @@ async-trait = "0.1"
 zip = { version = "0.6", default-features = false, features = ["deflate"] }
 flate2 = "1"
 tar = "0.4"
-# App Index (2026-05-22): .lnk parsing для Start Menu sources.
+# native_apps shortcuts: .lnk parsing (app_index's copy moved to
+# engine-indexes, KOS-335).
 lnk = "0.5"
-# App Index: fs-watch для invalidation cache.
-notify = "6"
-# App Index: рекурсивный walk Start Menu directories.
-walkdir = "2"
-# File Index: user-mode traversal with .gitignore support + user globs.
-ignore = "0.4"
-globset = "0.4"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 # Dictation deps (arboard, transcribe-rs/ort, hickory-resolver, libloading,
 # enigo notes) moved with the code to runtime/crates/engine-dictation (KOS-334).
@@ -127,15 +122,11 @@ tracing-appender = "0.2"
 # File identity by volume serial + file index — the /v1/rpc Manager check
 # must not rely on path spelling (KOS-269 round 4).
 same-file = "1"
-ntfs-reader = "0.4.5"
-windows-service = "0.7"
 windows = { version = "0.58", features = [
   "Win32_Foundation",
   "Win32_Security",
-  "Win32_Security_Authorization",
   "Win32_System_Threading",
   "Win32_System_Diagnostics_ToolHelp",
-  "Win32_System_Pipes",
   "Win32_System_JobObjects",
   "Win32_System_Com",
   "Win32_System_SystemInformation",
@@ -143,26 +134,14 @@ windows = { version = "0.58", features = [
   "Win32_System_LibraryLoader",
   "Win32_System_IO",
   "Win32_System_Ioctl",
-  "Win32_System_WindowsProgramming",
   "Win32_System_Registry",
   "Win32_UI_Input_KeyboardAndMouse",
   "Win32_UI_WindowsAndMessaging",
   "Win32_UI_Accessibility",
-  "Win32_Media_Audio",
-  "Win32_Media_Audio_Endpoints",
   "Win32_Storage_FileSystem",
-  "Win32_NetworkManagement_WindowsFirewall",
-  # App Index icons (2026-05-22): ExtractIconExW + GDI DIB → PNG conversion.
   "Win32_UI_Shell",
-  "Win32_Graphics_Gdi",
-  # App Index UWP source (2026-05-22): PackageManager / AppListEntry для UWP enum.
-  "Management_Deployment",
-  "ApplicationModel",
-  "ApplicationModel_Core",
-  "Foundation",
-  "Foundation_Collections",
-  "Storage",
-  "Storage_Streams",
+  # Index-only features (UWP/GDI/Firewall/Pipes/Media) moved to
+  # engine-indexes and engine-dictation (KOS-334/335).
 ] }
 
 [target.'cfg(unix)'.dependencies]

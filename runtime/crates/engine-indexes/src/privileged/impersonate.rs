@@ -57,7 +57,7 @@ pub fn client_process_id(pipe: HANDLE) -> Result<u32, String> {
 /// trusting a path the client sent (KOS-269 firewall rule).
 pub fn client_image_path(pipe: HANDLE) -> Result<PathBuf, String> {
     let pid = client_process_id(pipe)?;
-    crate::auth::process_image_path(pid).map_err(|e| e.to_string())
+    crate::process_image::process_image_path(pid).map_err(|e| e.to_string())
 }
 
 fn client_profile_dir_impersonated() -> Result<PathBuf, String> {

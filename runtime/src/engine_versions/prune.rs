@@ -35,7 +35,6 @@ use std::time::{Duration, SystemTime};
 use semver::Version;
 use serde::Serialize;
 
-use crate::brand;
 use crate::data_dir::temp_sweep::LEFTOVER_GRACE;
 
 /// Sibling name a victim dir is renamed to before removal.
@@ -300,23 +299,9 @@ fn remove_version_dir(versions_dir: &Path, entry: Entry, report: &mut Report) {
     }
 }
 
-/// Корень установки Engine (`<root>` в `<root>/versions/<v>/mundus-engine.exe`),
-/// выведенный из пути запущенного exe. Возвращает None при любом отклонении
-/// от формата — в частности, для dev-сборки из `target/` (`debug`/`release`
-/// не являются semver), поэтому dev-run никогда ничего не чистит.
-pub fn engine_root_of_exe(exe_path: &Path) -> Option<PathBuf> {
-    let file_name = exe_path.file_name()?.to_str()?;
-    if !file_name.eq_ignore_ascii_case(&format!("{}.exe", brand::ENGINE_BINARY_STEM)) {
-        return None;
-    }
-    let version_dir = exe_path.parent()?;
-    strict_version(version_dir.file_name()?.to_str()?)?;
-    let versions_dir = version_dir.parent()?;
-    if versions_dir.file_name()?.to_str()? != "versions" {
-        return None;
-    }
-    Some(versions_dir.parent()?.to_path_buf())
-}
+/// Moved to `engine-indexes` (KOS-335): `privileged::firewall::validation`
+/// resolves the calling user's install root from the same rule.
+pub use engine_indexes::install_layout::engine_root_of_exe;
 
 #[cfg(test)]
 #[path = "prune/tests.rs"]

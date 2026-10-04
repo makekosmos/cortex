@@ -7,6 +7,7 @@ members = [
   "runtime/crates/engine-base",
   "runtime/crates/engine-dictation",
   "runtime/crates/engine-packages",
+  "runtime/crates/engine-indexes",
   "core/crates/ark-core",
 ]
 # Pinned sibling component checkouts cloned under desktop/.tmp (local builds)

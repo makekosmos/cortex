@@ -156,34 +156,17 @@ unsafe fn get_process_user_sid(
 /// trustworthy process identity, unlike self-declared client headers.
 /// Used to pin `/v1/rpc` callers that claim to be the Manager
 /// (KOS-269 round 3).
+///
+/// Implementation lives in `engine-indexes` (KOS-335) so the privileged
+/// pipe server can use it without a back-edge into engine.
 #[cfg(windows)]
 pub fn process_image_path(pid: u32) -> Result<std::path::PathBuf, AuthError> {
-    use windows::Win32::Foundation::CloseHandle;
-    use windows::Win32::System::Threading::{
-        OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_FORMAT,
-        PROCESS_QUERY_LIMITED_INFORMATION,
-    };
-
-    unsafe {
-        let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
-            .map_err(|_| AuthError::PidNotFound { pid })?;
-        let result = (|| {
-            let mut buf = vec![0u16; 1024];
-            let mut size = buf.len() as u32;
-            QueryFullProcessImageNameW(
-                process,
-                PROCESS_NAME_FORMAT(0),
-                windows::core::PWSTR(buf.as_mut_ptr()),
-                &mut size,
-            )
-            .map_err(|e| AuthError::Other(format!("process image query failed: {e}")))?;
-            Ok(std::path::PathBuf::from(String::from_utf16_lossy(
-                &buf[..size as usize],
-            )))
-        })();
-        let _ = CloseHandle(process);
-        result
-    }
+    engine_indexes::process_image::process_image_path(pid).map_err(|e| match e {
+        engine_indexes::process_image::ProcessImageError::PidNotFound { pid } => {
+            AuthError::PidNotFound { pid }
+        }
+        engine_indexes::process_image::ProcessImageError::Other(msg) => AuthError::Other(msg),
+    })
 }
 
 /// Same-file check by *file identity* — volume serial number + file index —
