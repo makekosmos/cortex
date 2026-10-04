@@ -26,7 +26,7 @@ fn hydrate_empty_scopes(
 }
 
 impl PackageWorkerSupervisor {
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     pub(super) fn prepare_grant(
         &self,
         key: &(String, String),

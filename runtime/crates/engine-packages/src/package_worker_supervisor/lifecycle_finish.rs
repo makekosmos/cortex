@@ -22,7 +22,7 @@ pub(super) async fn finish_inner_until(
     if deadline <= Instant::now() {
         return;
     }
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     let retained_holder = {
         let workers = lock(&inner.workers);
         let Some(worker) = workers.get(key) else {
@@ -35,11 +35,11 @@ pub(super) async fn finish_inner_until(
             .cleanup_started
             .then(|| worker.process_holder.clone())
     };
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     let retained_cleanup_retry = retained_holder.is_some();
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "macos")))]
     let retained_cleanup_retry = false;
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     if let Some(holder) = retained_holder {
         if !cleanup_process_holder_until(holder, deadline).await {
             if let Some(worker) = lock(&inner.workers)
@@ -116,7 +116,7 @@ pub(super) async fn finish_inner_until(
             worker.io_keys.clone(),
         )
     };
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     let process_holder = lock(&inner.workers)
         .get(key)
         .filter(|worker| worker.generation == generation)
@@ -138,7 +138,7 @@ pub(super) async fn finish_inner_until(
     if !inner.worker_io.cancel_keys_until(&io_keys, deadline).await {
         cleanup_ok = false;
     }
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     if let Some(holder) = process_holder {
         let Some(mut process) = lock_holder_until(&holder, deadline).await else {
             return;

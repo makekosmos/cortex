@@ -19,7 +19,7 @@ pub(super) fn failed_worker() -> LiveWorker {
         last_heartbeat: Instant::now(),
         grant: None,
         bootstrap_token_hash: None,
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "macos"))]
         process_holder: Arc::new(AsyncMutex::new(None)),
         stdin: None,
         io_keys: [

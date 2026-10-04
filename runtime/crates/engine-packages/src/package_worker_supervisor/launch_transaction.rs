@@ -1,7 +1,7 @@
 use super::*;
 
 impl PackageWorkerSupervisor {
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     pub(super) async fn start_windows_transaction(
         &self,
         key: (String, String),

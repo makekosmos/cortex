@@ -16,6 +16,11 @@ pub(super) const STOP_DEADLINE: Duration = Duration::from_secs(10);
 mod windows;
 #[cfg(windows)]
 pub(super) use windows::*;
+#[cfg(target_os = "macos")]
+#[path = "types/macos.rs"]
+mod macos;
+#[cfg(target_os = "macos")]
+pub(super) use macos::*;
 #[cfg(test)]
 pub(super) const STOP_DEADLINE: Duration = Duration::from_secs(2);
 pub(super) const PROCESS_LAUNCH_DEADLINE: Duration = Duration::from_secs(60);
@@ -126,7 +131,7 @@ pub(super) struct LiveWorker {
     pub(super) last_heartbeat: Instant,
     pub(super) grant: Option<Grant>,
     pub(super) bootstrap_token_hash: Option<[u8; 32]>,
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     pub(super) process_holder: WorkerProcessHolder,
     pub(super) stdin: Option<mpsc::UnboundedSender<Vec<u8>>>,
     pub(super) io_keys: [TaskKey; 3],
@@ -147,7 +152,7 @@ pub(super) struct LiveWorker {
     pub(super) lifecycle_reason: Option<String>,
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 pub(super) struct LaunchTransaction {
     pub(super) inner: Arc<SupervisorInner>,
     pub(super) lifecycle_key: TaskKey,
@@ -155,10 +160,10 @@ pub(super) struct LaunchTransaction {
     pub(super) process_holder: WorkerProcessHolder,
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 pub(super) type WorkerProcessHolder = Arc<AsyncMutex<Option<WorkerProcess>>>;
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 pub(super) async fn cancellation_pending(cancel: &mut oneshot::Receiver<()>) -> bool {
     tokio::select! {
         _ = cancel => true,
@@ -166,7 +171,7 @@ pub(super) async fn cancellation_pending(cancel: &mut oneshot::Receiver<()>) -> 
     }
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 pub(super) async fn startup_wait<T, F>(
     cancel: &mut oneshot::Receiver<()>,
     future: F,
@@ -180,7 +185,7 @@ where
     }
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 impl LaunchTransaction {
     pub(super) async fn rollback_error(
         self,
@@ -281,8 +286,8 @@ pub(super) struct TaskSlot {
     pub(super) start: Option<oneshot::Sender<bool>>,
     pub(super) cancel: Option<oneshot::Sender<()>>,
     pub(super) task: Option<tokio::task::JoinHandle<()>>,
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     pub(super) owner: Option<Arc<LaunchCleanupOwner>>,
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     pub(super) process_holder: Option<WorkerProcessHolder>,
 }

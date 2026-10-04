@@ -46,7 +46,7 @@ impl PackageWorkerSupervisor {
                 ));
             (worker.generation, worker.io_keys.clone(), stopped)
         };
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "macos"))]
         if stopped
             && self
                 .exact_generation_is_clean(&key, generation, deadline)
@@ -54,7 +54,7 @@ impl PackageWorkerSupervisor {
         {
             return Ok(());
         }
-        #[cfg(not(windows))]
+        #[cfg(not(any(windows, target_os = "macos")))]
         if stopped {
             return Ok(());
         }
@@ -120,7 +120,7 @@ impl PackageWorkerSupervisor {
             version: version.to_owned(),
             generation,
         };
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "macos"))]
         let monitor_present = self.inner.lifecycles.contains(&monitor_key);
         let monitor_joined = self
             .inner
@@ -130,7 +130,7 @@ impl PackageWorkerSupervisor {
         if !monitor_joined {
             return Err("cleanup-failed");
         }
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "macos"))]
         if !monitor_present
             && !self
                 .exact_generation_is_clean(&key, generation, deadline)
@@ -145,7 +145,7 @@ impl PackageWorkerSupervisor {
             )
             .await;
         }
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "macos"))]
         if !self
             .exact_generation_is_clean(&key, generation, deadline)
             .await

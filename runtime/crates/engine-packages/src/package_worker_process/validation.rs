@@ -9,23 +9,29 @@ fn hold_executable(path: &Path) -> Result<fs::File, WorkerProcessError> {
 }
 
 fn validate_executable(path: &Path) -> Result<(), WorkerProcessError> {
-    if !path.is_absolute()
-        || !path
-            .extension()
-            .and_then(|extension| extension.to_str())
-            .is_some_and(|extension| extension.eq_ignore_ascii_case("exe"))
-        || !path.is_file()
+    #[cfg(target_os = "macos")]
+    return validate_macos_executable(path);
+    #[cfg(not(target_os = "macos"))]
     {
-        return Err(WorkerProcessError::InvalidExecutable);
+        if !path.is_absolute()
+            || !path
+                .extension()
+                .and_then(|extension| extension.to_str())
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("exe"))
+            || !path.is_file()
+        {
+            return Err(WorkerProcessError::InvalidExecutable);
+        }
+        if is_package_entrypoint(path)
+            && PackageStore::verify_immutable_entrypoint_path(path).is_err()
+        {
+            return Err(WorkerProcessError::InvalidExecutable);
+        }
+        if !is_windows_pe(path) {
+            return Err(WorkerProcessError::InvalidExecutable);
+        }
+        Ok(())
     }
-    if is_package_entrypoint(path) && PackageStore::verify_immutable_entrypoint_path(path).is_err()
-    {
-        return Err(WorkerProcessError::InvalidExecutable);
-    }
-    if !is_windows_pe(path) {
-        return Err(WorkerProcessError::InvalidExecutable);
-    }
-    Ok(())
 }
 
 fn is_package_entrypoint(path: &Path) -> bool {

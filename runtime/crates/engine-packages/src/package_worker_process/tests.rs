@@ -10,4 +10,6 @@ mod tests {
 
     include!("tests_validation.rs");
     include!("tests_windows.rs");
+    #[cfg(target_os = "macos")]
+    include!("tests_macos.rs");
 }

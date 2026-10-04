@@ -29,7 +29,7 @@ pub(super) struct SupervisorInner {
     /// [`PackageWorkerSupervisor::with_restart_delays`] so retry exhaustion
     /// does not wait on real backoff. Read only by the Windows retry path —
     /// package workers do not launch on other targets.
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     pub(super) restart_delays: Vec<Duration>,
     #[cfg(any(test, feature = "test-support"))]
     pub(super) fail_next_start: std::sync::atomic::AtomicBool,
@@ -170,7 +170,7 @@ impl PackageWorkerSupervisor {
     ) -> Self {
         // The schedule only feeds Windows retry paths; elsewhere the
         // parameter keeps the constructor signature uniform.
-        #[cfg(not(windows))]
+        #[cfg(not(any(windows, target_os = "macos")))]
         let _ = restart_delays;
         Self {
             inner: Arc::new(SupervisorInner {
@@ -190,7 +190,7 @@ impl PackageWorkerSupervisor {
                 network_responses: package_worker_broker::SnapshotRegistry::network_responses(),
                 network_slots: tokio::sync::Semaphore::new(4),
                 grants: Mutex::new(None),
-                #[cfg(windows)]
+                #[cfg(any(windows, target_os = "macos"))]
                 restart_delays,
                 #[cfg(any(test, feature = "test-support"))]
                 fail_next_start: std::sync::atomic::AtomicBool::new(false),
@@ -209,7 +209,7 @@ impl PackageWorkerSupervisor {
     /// Integration tests inject short delays so exhaust-retry cases finish
     /// without sleeping through the production backoff. Test-only surface —
     /// `package-worker-fixture` refuses to compile into a release build.
-    #[cfg(feature = "package-worker-fixture")]
+    #[cfg(any(test, feature = "package-worker-fixture"))]
     pub fn with_restart_delays(api_major: u32, restart_delays: Vec<Duration>) -> Self {
         Self::build(api_major, None, Arc::new(UnavailableArk), restart_delays)
     }

@@ -11,10 +11,12 @@ use thiserror::Error;
 
 #[cfg(all(windows, any(test, feature = "package-worker-fixture")))]
 use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU64, AtomicU8, AtomicUsize, Ordering};
+#[cfg(any(windows, target_os = "macos"))]
+use std::sync::Arc;
+#[cfg(windows)]
+use std::sync::Mutex;
 #[cfg(all(windows, any(test, feature = "package-worker-fixture")))]
 use std::sync::OnceLock;
-#[cfg(windows)]
-use std::sync::{Arc, Mutex};
 
 #[cfg_attr(not(windows), allow(dead_code))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,6 +51,16 @@ pub struct WorkerProcess {
     stderr: Option<WorkerPipe>,
     #[cfg(windows)]
     job: JobHandle,
+    #[cfg(target_os = "macos")]
+    child: tokio::process::Child,
+    #[cfg(target_os = "macos")]
+    group: i32,
+    #[cfg(target_os = "macos")]
+    stdin: Option<tokio::process::ChildStdin>,
+    #[cfg(target_os = "macos")]
+    stdout: Option<tokio::process::ChildStdout>,
+    #[cfg(target_os = "macos")]
+    stderr: Option<tokio::process::ChildStderr>,
 }
 
 impl std::fmt::Debug for WorkerProcess {
@@ -63,11 +75,33 @@ impl WorkerProcess {
     /// Windows launch is server-owned: the caller must provide the durable
     /// owner retained by the Startup registry. There is intentionally no
     /// Windows local-owner convenience path.
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "macos")))]
     pub async fn launch(executable: impl Into<PathBuf>) -> Result<Self, WorkerProcessError> {
         let executable = executable.into();
         validate_executable(&executable)?;
         Err(WorkerProcessError::UnsupportedPlatform)
+    }
+
+    #[cfg(target_os = "macos")]
+    pub async fn launch(executable: impl Into<PathBuf>) -> Result<Self, WorkerProcessError> {
+        let executable = executable.into();
+        validate_executable(&executable)?;
+        launch_macos(&executable, None)
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(crate) async fn launch_with_owner_until_in_state_root(
+        executable: impl Into<PathBuf>,
+        _owner: Arc<LaunchCleanupOwner>,
+        state_root: PathBuf,
+        deadline: Instant,
+    ) -> Result<Self, WorkerProcessError> {
+        if Instant::now() >= deadline {
+            return Err(WorkerProcessError::Setup);
+        }
+        let executable = executable.into();
+        validate_executable(&executable)?;
+        launch_macos(&executable, Some(&state_root))
     }
 
     #[cfg(windows)]
@@ -112,15 +146,33 @@ impl WorkerProcess {
             }
             Some(self.process.id)
         }
-        #[cfg(not(windows))]
+        #[cfg(target_os = "macos")]
+        {
+            self.child.id()
+        }
+        #[cfg(not(any(windows, target_os = "macos")))]
         {
             None
         }
     }
 
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     pub(crate) fn has_all_pipes(&self) -> bool {
         self.stdin.is_some() && self.stdout.is_some() && self.stderr.is_some()
+    }
+
+    #[cfg(target_os = "macos")]
+    pub(crate) fn take_all_pipes(
+        &mut self,
+    ) -> Option<(
+        tokio::process::ChildStdin,
+        tokio::process::ChildStdout,
+        tokio::process::ChildStderr,
+    )> {
+        if !self.has_all_pipes() {
+            return None;
+        }
+        Some((self.stdin.take()?, self.stdout.take()?, self.stderr.take()?))
     }
 
     #[cfg(windows)]
@@ -178,7 +230,29 @@ impl WorkerProcess {
         }
     }
 
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    pub async fn stop_until(&mut self, deadline: Instant) -> Result<(), WorkerProcessError> {
+        while self.kill_group().is_err() {
+            if Instant::now() >= deadline {
+                return Err(WorkerProcessError::Cleanup);
+            }
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+        if Instant::now() >= deadline {
+            return Err(WorkerProcessError::Cleanup);
+        }
+        tokio::time::timeout(
+            deadline.saturating_duration_since(Instant::now()),
+            self.child.wait(),
+        )
+        .await
+        .map_err(|_| WorkerProcessError::Cleanup)?
+        .map_err(|_| WorkerProcessError::Cleanup)?;
+        self.group = 0;
+        Ok(())
+    }
+
+    #[cfg(not(any(windows, target_os = "macos")))]
     pub async fn stop_until(&mut self, _deadline: Instant) -> Result<(), WorkerProcessError> {
         Ok(())
     }

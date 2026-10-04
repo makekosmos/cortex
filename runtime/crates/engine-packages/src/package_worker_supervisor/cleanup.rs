@@ -1,7 +1,7 @@
 use super::*;
 
 impl PackageWorkerSupervisor {
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     pub(super) async fn cleanup_published_generation(
         &self,
         key: &(String, String),
@@ -46,7 +46,7 @@ impl PackageWorkerSupervisor {
         Err(original)
     }
 
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     pub(super) async fn exact_generation_has_live_resources(
         &self,
         key: &(String, String),
@@ -69,7 +69,7 @@ impl PackageWorkerSupervisor {
         !holder_empty_until(holder, deadline).await
     }
 
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     pub(super) async fn exact_generation_is_clean(
         &self,
         key: &(String, String),

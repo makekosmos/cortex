@@ -18,7 +18,7 @@ pub(super) struct PreparedLaunch {
 }
 
 impl PackageWorkerSupervisor {
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     pub(super) async fn prepare_launch(
         &self,
         key: &(String, String),

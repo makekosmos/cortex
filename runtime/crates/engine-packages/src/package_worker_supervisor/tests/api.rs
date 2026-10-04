@@ -216,7 +216,7 @@ fn restart_policy_uses_bounded_backoff() {
     assert_eq!(restart_delay(&RESTART_DELAYS, 4), None);
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 #[tokio::test]
 async fn start_is_unsupported_on_non_windows_and_records_failure() {
     let supervisor = PackageWorkerSupervisor::new(1);

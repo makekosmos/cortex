@@ -1,7 +1,7 @@
 use super::*;
 
 impl PackageWorkerSupervisor {
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     pub(super) async fn start_initial_windows(
         &self,
         key: (String, String),

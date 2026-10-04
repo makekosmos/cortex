@@ -1,8 +1,8 @@
 //! Engine-owned, fail-closed stdio supervision for first-party package workers.
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 use crate::package_worker_process::WorkerProcess;
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 use crate::package_worker_process::{LaunchCleanupOwner, WorkerProcessError};
 use crate::{
     ark_host::ArkHost,
@@ -21,9 +21,9 @@ use crate::{
 use async_trait::async_trait;
 use base64::Engine as _;
 use sha2::{Digest, Sha256};
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 use std::future::Future;
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 use std::pin::Pin;
 use std::{
     collections::HashMap,
@@ -34,9 +34,9 @@ use std::{
     },
     time::{Duration, Instant},
 };
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 use tokio::io::{AsyncWrite, AsyncWriteExt};
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 use tokio::sync::Mutex as AsyncMutex;
 use tokio::{
     io::{AsyncRead, AsyncReadExt, BufReader},
@@ -45,23 +45,23 @@ use tokio::{
 };
 
 mod authority;
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 mod boxed;
 mod calls_dispatch;
 mod calls_spawn;
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 mod cleanup;
 #[path = "authority/engine_capability.rs"]
 mod engine_capability;
 #[cfg(all(windows, feature = "package-worker-fixture"))]
 mod fixtures;
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 mod grant;
 mod grant_authority;
 mod io;
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 mod launch_prepare;
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 mod launch_transaction;
 mod lifecycle_finish;
 mod lifecycle_watch;
@@ -72,12 +72,12 @@ mod registry_reap;
 mod registry_shutdown;
 mod retry;
 mod shutdown;
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 mod start_initial;
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 mod start_windows;
 mod stop;
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 mod tasks;
 #[cfg(test)]
 mod tests;
@@ -86,17 +86,17 @@ mod types;
 use calls_dispatch::*;
 use calls_spawn::*;
 use io::*;
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 use launch_prepare::*;
-#[cfg(any(windows, test))]
+#[cfg(any(windows, target_os = "macos", test))]
 use lifecycle_finish::*;
 use lifecycle_watch::*;
 use registry::*;
 use retry::*;
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 use crate::package_worker_protocol::{BootstrapMessage, IntegrationBootstrapConfig};
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 use tasks::*;
 use types::*;
 

@@ -1,6 +1,6 @@
 use super::*;
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 pub(super) struct SpawnedTasks {
     pub(super) stdin_tx: mpsc::UnboundedSender<Vec<u8>>,
     pub(super) lifecycle_tx: mpsc::UnboundedSender<WorkerLifecycleEvent>,
@@ -12,7 +12,7 @@ pub(super) struct SpawnedTasks {
 }
 
 impl PackageWorkerSupervisor {
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     pub(super) async fn spawn_worker_tasks<I, O, E>(
         &self,
         key: &(String, String),

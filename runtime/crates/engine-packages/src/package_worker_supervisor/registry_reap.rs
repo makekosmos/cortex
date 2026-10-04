@@ -50,40 +50,40 @@ impl TaskRegistry {
         }
 
         for key in &startup_keys {
-            #[cfg(windows)]
+            #[cfg(any(windows, target_os = "macos"))]
             let owner = {
                 let quarantine = lock(&self.quarantine);
                 quarantine.get(&key).and_then(|slot| slot.owner.clone())
             };
-            #[cfg(windows)]
+            #[cfg(any(windows, target_os = "macos"))]
             let owner_ok = match owner {
                 Some(owner) if !owner.is_armed() => true,
                 Some(owner) => cleanup_owner_async(owner, deadline).await.is_ok(),
                 None => true,
             };
-            #[cfg(windows)]
+            #[cfg(any(windows, target_os = "macos"))]
             let holder = lock(&self.quarantine)
                 .get(&key)
                 .and_then(|slot| slot.process_holder.clone());
-            #[cfg(windows)]
+            #[cfg(any(windows, target_os = "macos"))]
             let holder_ok = match holder {
                 Some(holder) => cleanup_process_holder_until(holder, deadline).await,
                 None => true,
             };
-            #[cfg(windows)]
+            #[cfg(any(windows, target_os = "macos"))]
             let cleanup_ok = owner_ok && holder_ok;
-            #[cfg(not(windows))]
+            #[cfg(not(any(windows, target_os = "macos")))]
             let cleanup_ok = true;
-            #[cfg(windows)]
+            #[cfg(any(windows, target_os = "macos"))]
             let holder = lock(&self.quarantine)
                 .get(&key)
                 .and_then(|slot| slot.process_holder.clone());
-            #[cfg(windows)]
+            #[cfg(any(windows, target_os = "macos"))]
             let holder_empty = match holder {
                 Some(holder) => holder_empty_until(holder, deadline).await,
                 None => true,
             };
-            #[cfg(not(windows))]
+            #[cfg(not(any(windows, target_os = "macos")))]
             let holder_empty = true;
             let task_done = lock(&self.quarantine)
                 .get(&key)
@@ -114,40 +114,40 @@ impl TaskRegistry {
             .cloned()
             .collect::<Vec<_>>();
         for key in keys {
-            #[cfg(windows)]
+            #[cfg(any(windows, target_os = "macos"))]
             let owner = {
                 let quarantine = lock(&self.quarantine);
                 quarantine.get(&key).and_then(|slot| slot.owner.clone())
             };
-            #[cfg(windows)]
+            #[cfg(any(windows, target_os = "macos"))]
             let owner_ok = match owner {
                 Some(owner) if !owner.is_armed() => true,
                 Some(owner) => cleanup_owner_async(owner, deadline).await.is_ok(),
                 None => true,
             };
-            #[cfg(windows)]
+            #[cfg(any(windows, target_os = "macos"))]
             let holder = lock(&self.quarantine)
                 .get(&key)
                 .and_then(|slot| slot.process_holder.clone());
-            #[cfg(windows)]
+            #[cfg(any(windows, target_os = "macos"))]
             let holder_ok = match holder {
                 Some(holder) => cleanup_process_holder_until(holder, deadline).await,
                 None => true,
             };
-            #[cfg(windows)]
+            #[cfg(any(windows, target_os = "macos"))]
             let cleanup_ok = owner_ok && holder_ok;
-            #[cfg(not(windows))]
+            #[cfg(not(any(windows, target_os = "macos")))]
             let cleanup_ok = true;
-            #[cfg(windows)]
+            #[cfg(any(windows, target_os = "macos"))]
             let holder = lock(&self.quarantine)
                 .get(&key)
                 .and_then(|slot| slot.process_holder.clone());
-            #[cfg(windows)]
+            #[cfg(any(windows, target_os = "macos"))]
             let holder_empty = match holder {
                 Some(holder) => holder_empty_until(holder, deadline).await,
                 None => true,
             };
-            #[cfg(not(windows))]
+            #[cfg(not(any(windows, target_os = "macos")))]
             let holder_empty = true;
             let task_done = lock(&self.quarantine)
                 .get(&key)

@@ -9,5 +9,7 @@ include!("process_creation.rs");
 include!("launch.rs");
 include!("job.rs");
 include!("failures.rs");
+#[cfg(target_os = "macos")]
+include!("macos.rs");
 include!("test_support.rs");
 include!("tests.rs");

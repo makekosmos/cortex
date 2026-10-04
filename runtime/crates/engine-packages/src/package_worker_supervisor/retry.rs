@@ -7,14 +7,14 @@ pub(super) async fn schedule_retry(
     generation: u64,
     failures: u8,
 ) {
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "macos")))]
     {
         // Package workers are intentionally unsupported on Unix; leave the
         // failed state recorded rather than attempting a Windows launch.
         let _ = (inner, key, spec, generation, failures);
         return;
     }
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     {
         if restart_delay(&inner.restart_delays, failures).is_some() {
             let retry_inner = inner.clone();

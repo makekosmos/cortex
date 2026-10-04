@@ -254,6 +254,15 @@ impl PackageStore {
         if !found_icon {
             return Err(StoreError::Archive("icon missing".into()));
         }
+        // ZIP modes are untrusted (and our deterministic archives omit them).
+        // Only validated, declared workers get owner execute permission.
+        #[cfg(unix)]
+        if let VersionedManifest::V2(manifest) = expected {
+            use std::os::unix::fs::PermissionsExt;
+            for entrypoint in manifest.declared_worker_entrypoints() {
+                fs::set_permissions(staging.join(entrypoint), fs::Permissions::from_mode(0o700))?;
+            }
+        }
         Ok(())
     }
 }

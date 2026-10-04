@@ -171,18 +171,18 @@ async fn quarantine_insert_is_non_overwriting() {
         start: Some(old_start),
         cancel: None,
         task: Some(tokio::spawn(async {})),
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "macos"))]
         owner: None,
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "macos"))]
         process_holder: None,
     };
     let incoming = TaskSlot {
         start: Some(new_start),
         cancel: None,
         task: Some(tokio::spawn(async {})),
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "macos"))]
         owner: None,
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "macos"))]
         process_holder: None,
     };
     let mut quarantine = HashMap::new();

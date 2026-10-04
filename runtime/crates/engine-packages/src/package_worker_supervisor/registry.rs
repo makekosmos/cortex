@@ -44,16 +44,16 @@ impl TaskRegistry {
                 start: Some(start_tx),
                 cancel: Some(cancel_tx),
                 task: None,
-                #[cfg(windows)]
+                #[cfg(any(windows, target_os = "macos"))]
                 owner: None,
-                #[cfg(windows)]
+                #[cfg(any(windows, target_os = "macos"))]
                 process_holder: None,
             },
         );
         Some((start_rx, cancel_rx))
     }
 
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     pub(super) fn reserve_startup(
         &self,
         key: TaskKey,
@@ -102,7 +102,7 @@ impl TaskRegistry {
         Ok(())
     }
 
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     pub(super) fn detach_process_holder(&self, key: &TaskKey) -> bool {
         let mut slots = lock(&self.slots);
         let Some(slot) = slots.get_mut(key) else {
@@ -112,7 +112,7 @@ impl TaskRegistry {
         true
     }
 
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "macos"))]
     pub(super) async fn release_clean_startup(&self, key: &TaskKey) -> bool {
         let (owner, holder) = {
             let slots = lock(&self.slots);

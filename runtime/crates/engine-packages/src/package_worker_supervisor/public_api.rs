@@ -258,7 +258,7 @@ impl PackageWorkerSupervisor {
             self.stop(&key.0, &key.1).await?;
             lock(&self.inner.workers).remove(&key);
         }
-        #[cfg(not(windows))]
+        #[cfg(not(any(windows, target_os = "macos")))]
         {
             let _ = (
                 executable,
@@ -272,7 +272,7 @@ impl PackageWorkerSupervisor {
             self.insert_failed(key);
             return Err("unsupported-platform");
         }
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "macos"))]
         {
             self.start_initial_windows(
                 key,

@@ -1,5 +1,7 @@
 mod install;
 mod lifecycle;
+#[cfg(unix)]
+mod unix;
 mod verify;
 
 use super::*;
