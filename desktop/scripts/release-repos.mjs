@@ -9,10 +9,6 @@
 // electron-updater channel file is latest-mac.yml. A failure on one repo
 // cannot gate the other: each preflight and verifier looks up only its own
 // entry here.
-//
-// Releases lived in makekosmos/desktop until 0.10.1; that repo is now only a
-// one-time migration bridge (publish-release.mjs --also-bridge-repo) so
-// clients still polling its `latest` endpoint find the cortex-feed build.
 export const RELEASE_REPOS = {
   win: "makekosmos/cortex",
   mac: "makekosmos/desktop-mac",

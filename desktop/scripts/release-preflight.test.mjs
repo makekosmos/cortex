@@ -57,10 +57,9 @@ test("assertVersionIsPublishable requires a strictly newer version than the late
   );
 });
 
-// KOS-304: a release repo that exists but has never published — cortex before
-// the bridge release — has no baseline to beat, so any version is publishable.
-// Only the list endpoint can tell this apart from a missing repo (which stays
-// a hard error).
+// A release repo that exists but has never published has no baseline to beat,
+// so any version is publishable. Only the list endpoint can tell this apart
+// from a missing repo (which stays a hard error).
 test("assertVersionIsPublishable passes when the repo has no releases yet", async () => {
   const fetchImpl = async (url) => {
     assert.equal(url, "https://api.github.com/repos/makekosmos/cortex/releases?per_page=100");
@@ -69,25 +68,6 @@ test("assertVersionIsPublishable passes when the repo has no releases yet", asyn
   await assert.doesNotReject(() =>
     assertVersionIsPublishable({ platform: "win", version: "0.10.1", fetchImpl }),
   );
-});
-
-test("assertVersionIsPublishable can check a bridge repository override", async () => {
-  const seen = [];
-  const fetchImpl = async (url) => {
-    seen.push(url);
-    return { ok: true, json: async () => [{ tag_name: "v0.10.0" }] };
-  };
-  await assert.rejects(
-    () =>
-      assertVersionIsPublishable({
-        platform: "win",
-        version: "0.10.0",
-        repository: "makekosmos/desktop",
-        fetchImpl,
-      }),
-    /must be greater than the latest published 0\.10\.0 on makekosmos\/desktop/,
-  );
-  assert.match(seen[0], /repos\/makekosmos\/desktop\//);
 });
 
 test("mac publishability is the desktop-mac repo and does not consult cortex", async () => {
