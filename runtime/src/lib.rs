@@ -61,7 +61,6 @@ pub use engine_packages::{
 };
 
 pub mod agents;
-pub mod app_index;
 pub(crate) mod app_network;
 pub mod appearance;
 pub mod auth;
@@ -75,13 +74,16 @@ pub mod desktop_authority;
 pub(crate) mod device_name;
 pub mod diagnostics;
 pub use engine_dictation as dictation;
+// KOS-335: file_index + app_index + privileged live in the
+// `engine-indexes` crate (one crate keeps the file_index<->privileged NTFS
+// cycle internal); re-exported so `crate::<module>` paths keep working.
+pub use engine_indexes::{app_index, file_index, privileged};
 pub mod engine_api;
 pub mod engine_control;
 pub mod engine_dispatch;
 pub mod engine_settings;
 pub mod engine_supervisor;
 pub mod engine_versions;
-pub mod file_index;
 pub mod focus;
 pub mod installer;
 pub mod integrations;
@@ -93,7 +95,6 @@ pub mod package_registration;
 pub mod package_service;
 pub mod pomodoro;
 pub mod pomodoro_host;
-pub mod privileged;
 pub mod protocol_usage;
 pub mod storage_maintenance;
 pub mod sync;

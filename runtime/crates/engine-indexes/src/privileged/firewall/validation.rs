@@ -6,7 +6,7 @@
 use std::path::{Component, Path, PathBuf};
 
 use crate::brand;
-use crate::engine_versions::engine_root_of_exe;
+use crate::install_layout::engine_root_of_exe;
 
 /// `<profile>\AppData\Local\<Brand>\Engine` — the only install root whose
 /// `versions\<semver>\mundus-engine.exe` the service may open the firewall

@@ -1,0 +1,74 @@
+[package]
+name = "engine-indexes"
+version = "0.1.0"
+edition.workspace = true
+description = "Engine indexes — file_index (filename search), app_index (installed apps), privileged (admin service: hosts/NTFS scan/firewall)"
+
+[lib]
+name = "engine_indexes"
+path = "src/lib.rs"
+doctest = false
+
+[features]
+default = []
+
+[dependencies]
+engine-base = { path = "../engine-base" }
+# File Index: user-mode traversal with .gitignore support + user globs.
+ignore = "0.4"
+globset = "0.4"
+# App Index + File Index: fs-watch for cache/index invalidation.
+notify = "6"
+# App Index: рекурсивный walk Start Menu directories.
+walkdir = "2"
+# App Index (2026-05-22): .lnk parsing для Start Menu sources.
+lnk = "0.5"
+# Indexes persist in per-instance SQLite DBs (file-index.db / app-index.db).
+rusqlite.workspace = true
+# App Index icons: ICO/GDI bitmap → PNG.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+# install_layout::engine_root_of_exe — strict X.Y.Z version shape check.
+semver = "1"
+# Shared workspace deps.
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+chrono.workspace = true
+sha2.workspace = true
+tokio = { version = "1", features = ["rt", "macros", "sync", "time"] }
+tracing = "0.1"
+
+[target.'cfg(windows)'.dependencies]
+# Fast whole-drive listing via the NTFS MFT (file_index local fast path +
+# privileged service scan).
+ntfs-reader = "0.4.5"
+# SCM install/status + service dispatcher for the privileged service.
+windows-service = "0.7"
+windows = { version = "0.58", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_Security_Authorization",
+  "Win32_System_Threading",
+  "Win32_System_Pipes",
+  "Win32_System_Com",
+  "Win32_Storage_FileSystem",
+  "Win32_NetworkManagement_WindowsFirewall",
+  "Win32_UI_Shell",
+  "Win32_UI_WindowsAndMessaging",
+  "Win32_Graphics_Gdi",
+  # App Index UWP source (2026-05-22): PackageManager / AppListEntry.
+  "Management_Deployment",
+  "ApplicationModel",
+  "ApplicationModel_Core",
+  "Foundation",
+  "Foundation_Collections",
+  "Storage",
+  "Storage_Streams",
+] }
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+[lints]
+workspace = true

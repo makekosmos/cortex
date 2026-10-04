@@ -1,9 +1,9 @@
-use super::{path_contains_noisy_folder, IndexedFile};
-use ntfs_reader::file_info::{FileInfo, VecCache};
+use super::IndexedFile;
 use ntfs_reader::mft::Mft;
 use ntfs_reader::volume::Volume;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
+use crate::ntfs_common::{mft_to_entries, volume_path};
 use crate::privileged::brand;
 use crate::privileged::ntfs_scan::NtfsScanEntry;
 use crate::privileged::pipe;
@@ -25,7 +25,14 @@ pub fn scan_drive_root(root: &Path, exclude_noisy: bool) -> Result<Vec<IndexedFi
     let volume =
         Volume::new(volume_path(drive)).map_err(|e| format!("open NTFS volume failed: {e}"))?;
     let mft = Mft::new(volume).map_err(|e| format!("read NTFS MFT failed: {e}"))?;
-    Ok(mft_to_files(&mft, drive, exclude_noisy))
+    Ok(mft_to_entries(&mft, drive, exclude_noisy)
+        .into_iter()
+        .map(|entry| IndexedFile {
+            path: entry.path,
+            name: entry.name,
+            mtime: entry.mtime,
+        })
+        .collect())
 }
 
 /// Service fast path: primary pipe first, then the legacy pipe names so a
@@ -66,34 +73,6 @@ fn wire_to_indexed(file: NtfsScanEntry) -> IndexedFile {
     }
 }
 
-fn mft_to_files(mft: &Mft, drive: char, exclude_noisy: bool) -> Vec<IndexedFile> {
-    let mut cache = VecCache::default();
-    let mut out = Vec::new();
-
-    for file in mft.files() {
-        let info = FileInfo::with_cache(mft, &file, &mut cache);
-        if info.is_directory || info.name.is_empty() || info.path.as_os_str().is_empty() {
-            continue;
-        }
-
-        let path = user_path(&info.path, drive);
-        if exclude_noisy && path_contains_noisy_folder(&path) {
-            continue;
-        }
-
-        out.push(IndexedFile {
-            path: path.to_string_lossy().into_owned(),
-            name: info.name,
-            mtime: info
-                .modified
-                .map(|modified| modified.unix_timestamp())
-                .unwrap_or_default(),
-        });
-    }
-
-    out
-}
-
 fn drive_letter(root: &Path) -> Result<char, String> {
     let raw = root.to_string_lossy();
     raw.chars()
@@ -101,52 +80,4 @@ fn drive_letter(root: &Path) -> Result<char, String> {
         .filter(|letter| letter.is_ascii_alphabetic())
         .map(|letter| letter.to_ascii_uppercase())
         .ok_or_else(|| format!("invalid drive root: {}", root.to_string_lossy()))
-}
-
-fn volume_path(drive: char) -> String {
-    format!(r"\\.\{}:", drive)
-}
-
-fn user_path(path: &Path, drive: char) -> PathBuf {
-    let raw = path.to_string_lossy();
-    let device_prefix = volume_path(drive);
-    let verbatim_prefix = format!(r"\\?\{}:", drive);
-    if let Some(user) = strip_volume_prefix(&raw, &device_prefix, drive) {
-        return PathBuf::from(user);
-    }
-    if let Some(user) = strip_volume_prefix(&raw, &verbatim_prefix, drive) {
-        return PathBuf::from(user);
-    }
-    path.to_path_buf()
-}
-
-fn strip_volume_prefix(raw: &str, prefix: &str, drive: char) -> Option<String> {
-    if raw.len() < prefix.len() || !raw[..prefix.len()].eq_ignore_ascii_case(prefix) {
-        return None;
-    }
-    let suffix = &raw[prefix.len()..];
-    if suffix.is_empty() {
-        return Some(format!("{drive}:\\"));
-    }
-    if suffix.starts_with(['\\', '/']) {
-        return Some(format!("{drive}:{suffix}"));
-    }
-    Some(format!(r"{drive}:\{suffix}"))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn converts_nt_device_paths_to_user_paths() {
-        assert_eq!(
-            user_path(Path::new(r"\\.\C:\Users\Kirill\note.md"), 'C'),
-            PathBuf::from(r"C:\Users\Kirill\note.md")
-        );
-        assert_eq!(
-            user_path(Path::new(r"\\?\D:\Projects\mundus\README.md"), 'D'),
-            PathBuf::from(r"D:\Projects\mundus\README.md")
-        );
-    }
 }

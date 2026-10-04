@@ -34,7 +34,7 @@ pub const RULE_NAME: &str = "Mundus Engine — LAN sync";
 /// The allow rule covers Domain+Private only, so on a Public network the
 /// Engine matched no rule at all and Windows prompted again after every
 /// update — the very bug KOS-269 removes. Per [MS-FASP] Appendix B
-/// (<https://learn.microsoft.com/openspecs/windows_protocols/ms-fasp/1da2ee70-a6ae-4f76-b08f-fdc25c77d8a0>)
+/// (learn.microsoft.com/openspecs MS-FASP doc 1da2ee70-a6ae-4f76-b08f-fdc25c77d8a0)
 /// the "allow access" notification fires only when no `FW_RULE` object has
 /// a matching `wszLocalApplication` — a matching block rule suppresses it
 /// too, keeping Public networks closed *and* prompt-free.
