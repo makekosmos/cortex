@@ -1434,9 +1434,7 @@ impl AgentsService {
         let mut unified = String::new();
         let mut files = Vec::new();
         let mut changed = BTreeMap::<String, String>::new();
-        for record in status.split('\0').filter(|entry| entry.len() >= 4) {
-            changed.insert(record[3..].to_string(), record[..2].to_string());
-        }
+        collect_status_entries(&status, &mut changed);
         let mut fields = base_status.split('\0').filter(|entry| !entry.is_empty());
         while let (Some(state), Some(first_path)) = (fields.next(), fields.next()) {
             let path = if state.starts_with('R') || state.starts_with('C') {

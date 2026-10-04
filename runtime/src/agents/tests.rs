@@ -394,6 +394,20 @@ fn untracked_text_has_unified_patch() {
     assert!(patch.contains("+two"));
 }
 #[test]
+fn status_entries_consume_rename_origin_field() {
+    // `git status --porcelain=v1 -z` emits staged renames as
+    // `XY <to>\0<from>\0`; the <from> field is not a record.
+    let status = "R  renamed.txt\0tracked.txt\0 M modified.txt\0?? new.txt\0\0";
+    let mut changed = std::collections::BTreeMap::new();
+    collect_status_entries(status, &mut changed);
+    assert_eq!(changed.get("renamed.txt").unwrap(), "R ");
+    assert_eq!(changed.get("modified.txt").unwrap(), " M");
+    assert_eq!(changed.get("new.txt").unwrap(), "??");
+    assert!(!changed.contains_key("tracked.txt"));
+    assert!(!changed.contains_key("acked.txt"));
+    assert_eq!(changed.len(), 3);
+}
+#[test]
 fn persistence_round_trip_keeps_pending_approval() {
     let dir = tempfile::tempdir().unwrap();
     let service = AgentsService::new(dir.path()).unwrap();

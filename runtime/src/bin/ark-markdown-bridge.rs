@@ -165,12 +165,18 @@ fn join(root: &str, leaf: &str) -> String {
 fn scalar(value: &str) -> String {
     serde_json::to_string(value).unwrap_or_else(|_| "\"\"".into())
 }
+/// Object ids are caller-chosen strings (imports, synced peers), not just
+/// ASCII UUIDs — `&id[..12]` panics when byte 12 splits a multi-byte char.
+/// Take 12 *chars* instead, same as `truncate_utf8` in app_server.
+fn id_suffix(id: &str) -> String {
+    id.chars().take(12).collect()
+}
 fn safe_name(title: &str, id: &str) -> String {
     let stem = safe_stem(title);
     format!(
         "{}-{}.md",
         if stem.is_empty() { "untitled" } else { &stem },
-        &id[..id.len().min(12)]
+        id_suffix(id)
     )
 }
 fn safe_stem(title: &str) -> String {
@@ -192,7 +198,7 @@ fn collision_safe_name(title: &str, id: &str) -> String {
     format!(
         "{}-{}-{}.md",
         if stem.is_empty() { "untitled" } else { &stem },
-        &id[..id.len().min(12)],
+        id_suffix(id),
         suffix
     )
 }
@@ -203,7 +209,7 @@ fn collision_key(title: &str, id: &str) -> String {
     format!(
         "{}-{}",
         safe_stem(title).to_lowercase(),
-        id[..id.len().min(12)].to_lowercase()
+        id_suffix(id).to_lowercase()
     )
 }
 
@@ -1103,6 +1109,20 @@ mod tests {
             collision_key("Foo", "abcdefghijkl-1"),
             collision_key("foo", "abcdefghijkl-2")
         );
+    }
+
+    #[test]
+    fn non_ascii_object_id_does_not_panic() {
+        // 11 ASCII bytes + 'é': byte 12 splits the two-byte char, so the old
+        // `&id[..id.len().min(12)]` panicked on imported/synced non-ASCII ids.
+        let id = "aaaaaaaaaaaéééééé";
+        let name = safe_name("Title", id);
+        assert!(name.ends_with(".md"));
+        assert_eq!(
+            collision_safe_name("Title", id),
+            collision_safe_name("Title", id)
+        );
+        let _ = collision_key("Title", id);
     }
 
     #[allow(clippy::unwrap_used)]

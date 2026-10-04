@@ -713,6 +713,26 @@ pub(crate) fn untracked_patch(path: &str, content: &str) -> String {
              b/{normalized}\n@@ -0,0 +1,{line_count} @@\n{body}"
     )
 }
+/// Merge `git status --porcelain=v1 -z` records into `path -> XY`.
+/// Rename/copy entries occupy two NUL-separated fields (`XY <to>\0<from>`):
+/// the `<from>` field must be consumed or it is mis-parsed as a record and
+/// shows up as a bogus `path -> <first-two-chars-of-from>` entry.
+pub(crate) fn collect_status_entries(
+    status: &str,
+    changed: &mut std::collections::BTreeMap<String, String>,
+) {
+    let mut fields = status.split('\0').filter(|record| !record.is_empty());
+    while let Some(record) = fields.next() {
+        if record.len() < 4 {
+            continue;
+        }
+        let state = &record[..2];
+        changed.insert(record[3..].to_string(), state.to_string());
+        if state.contains('R') || state.contains('C') {
+            fields.next();
+        }
+    }
+}
 pub(crate) fn git_dirty(path: &Path) -> bool {
     if git_cwd_is_isolated(path).is_err() {
         return false;
