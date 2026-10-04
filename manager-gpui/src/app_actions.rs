@@ -34,6 +34,7 @@ mod tests {
         let (manager, cx) = crate::a11y_tests::launch(cx);
         cx.update(|_, cx| register(cx, manager.downgrade()));
         manager.update(cx, |app, _| {
+            app.view = crate::views::View::Data;
             app.slots
                 .insert("data.summary".into(), Slot::Ready(json!({})));
         });

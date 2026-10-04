@@ -28,10 +28,11 @@ pub enum View {
     Packages,
     Settings,
     Appearance,
+    Browser,
     Connections,
     Keys,
     About,
-    Updates,
+    Dev,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -41,9 +42,10 @@ pub enum StoreTab {
 }
 
 pub const NAV_GROUPS: &[&[View]] = &[
+    &[View::About],
     &[View::Packages, View::Data, View::Usage],
     &[View::Sync, View::Connections, View::Keys],
-    &[View::Settings, View::Appearance, View::Updates, View::About],
+    &[View::Settings, View::Appearance, View::Browser, View::Dev],
 ];
 
 impl View {
@@ -55,11 +57,47 @@ impl View {
             View::Packages => "Приложения",
             View::Settings => "Настройки",
             View::Appearance => "Внешний вид",
+            View::Browser => "Браузер",
+            View::Dev => "Разработчикам",
             View::Connections => "Интеграции",
             View::Keys => "Ключи",
             View::About => "О приложении",
-            View::Updates => "Обновления",
         }
+    }
+
+    /// Stable persistence key for the last-opened page.
+    pub fn key(self) -> &'static str {
+        match self {
+            View::Data => "data",
+            View::Usage => "usage",
+            View::Sync => "sync",
+            View::Packages => "packages",
+            View::Settings => "settings",
+            View::Appearance => "appearance",
+            View::Browser => "browser",
+            View::Connections => "connections",
+            View::Keys => "keys",
+            View::About => "about",
+            View::Dev => "dev",
+        }
+    }
+
+    pub fn from_key(key: &str) -> Option<View> {
+        Some(match key {
+            "data" => View::Data,
+            "usage" => View::Usage,
+            "sync" => View::Sync,
+            "packages" => View::Packages,
+            "settings" => View::Settings,
+            "appearance" => View::Appearance,
+            "browser" => View::Browser,
+            "connections" => View::Connections,
+            "keys" => View::Keys,
+            "about" => View::About,
+            "updates" => View::About,
+            "dev" => View::Dev,
+            _ => return None,
+        })
     }
 
     pub fn icon(self) -> Icon {
@@ -70,10 +108,11 @@ impl View {
             View::Packages => "icons/store.svg",
             View::Settings => "icons/settings.svg",
             View::Appearance => "icons/appearance.svg",
+            View::Browser => "icons/globe.svg",
+            View::Dev => "icons/code.svg",
             View::Connections => "icons/connections.svg",
             View::Keys => "icons/key.svg",
             View::About => "icons/help-circle.svg",
-            View::Updates => "icons/download.svg",
         };
         Icon::default().path(path)
     }
@@ -88,10 +127,11 @@ pub fn load(view: View, app: &mut ManagerApp) {
         View::Packages => store::load(app),
         View::Settings => settings::load(app),
         View::Appearance => appearance::load(app),
+        View::Browser => browser::load(app),
+        View::Dev => dev::load(app),
         View::Connections => connections::load(app),
         View::Keys => secrets::load(app),
         View::About => about::load(app),
-        View::Updates => updates::load(app),
     }
 }
 
@@ -108,9 +148,10 @@ pub fn render(
         View::Packages => store::render(app, window, cx),
         View::Settings => settings::render(app, window, cx),
         View::Appearance => appearance::render(app, window, cx),
+        View::Browser => browser::render(app, window, cx),
+        View::Dev => dev::render(app, window, cx),
         View::Connections => connections::render(app, window, cx),
         View::Keys => secrets::render(app, window, cx),
         View::About => about::render(app, window, cx),
-        View::Updates => updates::render(app, window, cx),
     }
 }

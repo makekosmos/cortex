@@ -97,8 +97,7 @@ pub fn render(
     window: &mut Window,
     cx: &mut Context<ManagerApp>,
 ) -> AnyElement {
-    let mut col = page_stack();
-    col = col.child(section("Интеграции", "Источники данных"));
+    let col = page_stack();
 
     let snapshot = app.data("conn.list");
     let mut el = div().flex().flex_col().gap_3();

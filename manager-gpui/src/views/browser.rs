@@ -35,6 +35,16 @@ fn write_persist(enabled: bool) -> Result<(), String> {
         .map_err(|e| format!("Не удалось записать browser.json: {e}"))
 }
 
+pub fn render(
+    app: &mut ManagerApp,
+    window: &mut Window,
+    cx: &mut Context<ManagerApp>,
+) -> AnyElement {
+    page_sections()
+        .child(render_body(app, window, cx))
+        .into_any_element()
+}
+
 pub fn render_body(
     app: &mut ManagerApp,
     _window: &mut Window,

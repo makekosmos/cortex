@@ -131,7 +131,7 @@ Windows-only. Другие платформы могут узнать о нов�
 | --- | --- |
 | Данные | `manager.data.summary/types/list/search/storage` |
 | Девайсы | `get_sync_snapshot`, `show_pairing_code`, `connect_with_pairing_code`, `disconnect_peer`, `system.privileged.status/enable` |
-| Маркетплейс | `store.catalog/refresh`, `packages.list/install/set_enabled/uninstall/catalog_status/disclosure/refresh_catalog` |
+| Маркетплейс | `store.catalog/refresh`, `packages.list/install/set_enabled/uninstall/disclosure/refresh_catalog` |
 | Движок | `engine.settings.get/set` (usage tracker) |
 | Настройки | `manager.db_backups.list/create/validate/restore`, автозапуск (Host) |
 | Интеграции | `integrations.list/set_credential/clear_credential/sync_now` |

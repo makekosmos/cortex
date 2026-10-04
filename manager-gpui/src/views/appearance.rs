@@ -226,11 +226,9 @@ pub fn render(
         .w_full()
         .flex()
         .flex_col()
-        .child(section("Внешний вид", "Темы, цвет, материал и шрифт"))
         .when(!status.is_empty(), |page| page.child(empty(status)))
         .child(
             div()
-                .mt(px(24.))
                 .flex()
                 .flex_col()
                 .gap(px(12.))

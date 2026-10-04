@@ -4,21 +4,16 @@ use crate::async_fields::field_text;
 use crate::theme::*;
 use crate::widgets::*;
 use ::gpui::{prelude::*, *};
-use gpui_component::Disableable;
 use serde_json::json;
 
 pub fn load(app: &mut ManagerApp) {
     app.call("engine.autostart", "engine.autostart.get", json!({}));
     super::engine_settings::load(app);
-    super::browser::load(app);
-    if app.settings_developer_open {
-        super::dev::load(app);
-    }
 }
 
 pub fn render(
     app: &mut ManagerApp,
-    window: &mut Window,
+    _window: &mut Window,
     cx: &mut Context<ManagerApp>,
 ) -> AnyElement {
     let status = app.data("engine.autostart");
@@ -48,8 +43,7 @@ pub fn render(
             MUTED_FG(),
         ));
     }
-    let mut col = page_sections()
-        .child(section("Настройки", "Запуск, система и приватность"))
+    let col = page_sections()
         .child(
             section_group()
                 .id("settings-general-group")
@@ -66,44 +60,6 @@ pub fn render(
                         .child(startup),
                 ),
         )
-        .child(super::engine_settings::render_body(app, cx))
-        .child(super::browser::render_body(app, window, cx));
-    let mut developer = section_group()
-        .id("settings-developer-group")
-        .debug_selector(|| "settings-developer-group".into())
-        .child(section(
-            "Разработка",
-            "Дополнительные инструменты, выключены по умолчанию",
-        ))
-        .child(
-            card()
-                .id("settings-developer-card")
-                .debug_selector(|| "settings-developer-card".into())
-                .child(
-                    row(
-                        "Инструменты разработчика",
-                        "Локальные пакеты, параметры инстанса и FPS.",
-                    )
-                    .child(
-                        toggle(
-                            "settings-developer",
-                            app.settings_developer_open,
-                            cx,
-                            |this, open, _| {
-                                this.settings_developer_open = open;
-                                if open {
-                                    super::dev::load(this);
-                                }
-                            },
-                        )
-                        .accessibility_label("Инструменты разработчика")
-                        .disabled(app.action_busy),
-                    ),
-                ),
-        );
-    if app.settings_developer_open {
-        developer = developer.child(super::dev::render_tools(app, window, cx));
-    }
-    col = col.child(developer);
+        .child(super::engine_settings::render_body(app, cx));
     col.into_any_element()
 }

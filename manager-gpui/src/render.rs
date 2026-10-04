@@ -67,7 +67,25 @@ impl Render for ManagerApp {
                                     .when(self.view != views::View::Usage, |column| {
                                         column.flex_none()
                                     })
-                                    .child(active),
+                                    .gap(px(24.))
+                                    .when(self.view != views::View::About, |column| {
+                                        column.child(
+                                            section(self.view.label(), "")
+                                                .id("page-heading")
+                                                .debug_selector(|| "page-heading".into()),
+                                        )
+                                    })
+                                    .child(
+                                        div()
+                                            .id("page-body")
+                                            .debug_selector(|| "page-body".into())
+                                            .w_full()
+                                            .min_w_0()
+                                            .when(self.view == views::View::Usage, |body| {
+                                                body.flex_1().min_h_0()
+                                            })
+                                            .child(active),
+                                    ),
                             ),
                     ),
             )

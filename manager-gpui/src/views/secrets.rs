@@ -54,10 +54,7 @@ pub fn render(
     for (index, company) in COMPANIES.iter().enumerate() {
         rows = rows.child(company_row(app, company, index == 0, cx));
     }
-    page_sections()
-        .child(section("Ключи", "Поддерживаемые компании"))
-        .child(rows)
-        .into_any_element()
+    page_sections().child(rows).into_any_element()
 }
 
 fn company_row(

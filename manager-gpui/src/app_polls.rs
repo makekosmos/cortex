@@ -48,7 +48,7 @@ impl ManagerApp {
                 self.refresh("store.apps", "apps.list", json!({}));
             }
         }
-        if self.view == View::Updates && Instant::now() >= self.next_updater_poll {
+        if self.view == View::About && Instant::now() >= self.next_updater_poll {
             self.next_updater_poll = Instant::now() + std::time::Duration::from_secs(1);
             if self
                 .worker

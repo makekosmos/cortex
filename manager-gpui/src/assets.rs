@@ -54,6 +54,12 @@ const ICONS: &[(&str, &[u8])] = &[
         "icons/providers/nvidia.svg",
         include_bytes!("../assets/icons/providers/nvidia.svg"),
     ),
+    // Product mark — the white tray glyph (f35eebb4, formerly
+    // desktop/build/tray.svg).
+    (
+        "icons/mundus.svg",
+        include_bytes!("../assets/icons/mundus.svg"),
+    ),
 ];
 
 impl AssetSource for Assets {
@@ -90,6 +96,7 @@ mod tests {
             assert!(
                 svg.contains("viewBox=\"0 0 24 24\"")
                     || *name == "icons/check.svg"
+                    || *name == "icons/mundus.svg"
                     || name.starts_with("icons/providers/")
             );
             assert!(svg.contains("stroke") || svg.contains("fill"), "{name}");

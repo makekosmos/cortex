@@ -13,11 +13,7 @@ fn semantic_sections_have_more_space_than_their_heading_to_card(cx: &mut TestApp
         cx.notify();
     });
     cx.update(|_, cx| cx.refresh_windows());
-    for (previous, next) in [
-        ("settings-general-group", "settings-system-group"),
-        ("settings-system-group", "settings-privacy-group"),
-        ("settings-privacy-group", "settings-developer-group"),
-    ] {
+    for (previous, next) in [("settings-general-group", "settings-system-group")] {
         let previous = cx.debug_bounds(previous).unwrap();
         let next = cx.debug_bounds(next).unwrap();
         assert_eq!(next.origin.y - previous.bottom(), px(32.));

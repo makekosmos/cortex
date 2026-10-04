@@ -8,6 +8,7 @@ default-run = "manager-gpui"
 [dependencies]
 gpui = { package = "gpui-kit", version = "=0.6.2" }
 gpui-component = "=0.6.2"
+gpui-base = "=0.6.4"
 # Imago GPUI shared palette/chrome (KOS-132). Pinned by rev; the crate
 # lives in crates/imago-gpui inside the imago repo workspace.
 imago-gpui = { git = "https://github.com/makekosmos/imago.git", rev = "f3e783705796a7a9d02e3baac4d2c6c8bd5c9929" }
@@ -26,6 +27,10 @@ flate2 = "1.1"
 # CARGO_CFG_TARGET_OS, so cross-compiles from non-Windows hosts (cargo-xwin)
 # still embed icon + VERSIONINFO. The helper lives in the cortex workspace
 # so both shipped exes share one resource script (KOS-306).
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.3"
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSHapticFeedback"] }
+
 [build-dependencies]
 pe-version-info = { path = "../runtime/crates/pe-version-info" }
 

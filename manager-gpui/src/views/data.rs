@@ -9,6 +9,9 @@ use crate::async_fields::field_text;
 use crate::theme::*;
 use crate::widgets::*;
 
+#[path = "data_storage.rs"]
+mod storage;
+
 pub fn load(app: &mut ManagerApp) {
     super::backups::load(app);
     app.call("data.summary", "manager.data.summary", json!({}));
@@ -29,7 +32,7 @@ pub fn render(
     window: &mut Window,
     cx: &mut Context<ManagerApp>,
 ) -> AnyElement {
-    let mut col = page_stack().child(section("Данные", "Хранилище, объекты и резервные копии"));
+    let mut col = page_stack().child(storage::render(app, cx));
     col = col.child(slot_or(app, "data.summary", |v| {
         let mut cards = div().grid().grid_cols(3).gap_3().w_full();
         for t in varr(v, "types") {
@@ -63,59 +66,6 @@ pub fn render(
             .child(cards)
             .into_any_element()
     }));
-
-    let total = field_text(app.slots.get("data.storage"), |v| {
-        fmt_bytes(vnum(v, "total_bytes"))
-    });
-    col = col.child(
-        card()
-            .child(
-                div()
-                    .flex()
-                    .items_baseline()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_size(crate::theme::ui_px(13.))
-                            .child("Хранилище на диске"),
-                    )
-                    .child(
-                        div()
-                            .text_size(crate::theme::ui_px(12.))
-                            .text_color(c(MUTED_FG()))
-                            .child(format!("всего {total}")),
-                    ),
-            )
-            .child(slot_or(app, "data.storage", |v| {
-                let mut list = div().flex().flex_col().gap_2();
-                for cat in varr(v, "categories") {
-                    let mut cat_row = row(vstr(cat, "label"), fmt_bytes(vnum(cat, "bytes")));
-                    if vstr(cat, "id") == "legacy_quarantine" {
-                        cat_row = cat_row.child(btn_id("quarantine-clear", "Очистить", {
-                            cx.listener(|this, _, _, cx| {
-                                this.ask_confirm(
-                                    "Удалить устаревшие данные?",
-                                    "Это файлы, оставшиеся от старой версии приложения. \
-                             Они не нужны для работы, но удаление необратимо.",
-                                    "manager.data.quarantine.clear",
-                                    json!({}),
-                                    cx,
-                                );
-                            })
-                        }));
-                    }
-                    list = list.child(cat_row);
-                    for part in varr(cat, "detail") {
-                        list = list.child(
-                            div()
-                                .pl_4()
-                                .child(row(vstr(part, "label"), fmt_bytes(vnum(part, "bytes")))),
-                        );
-                    }
-                }
-                list.into_any_element()
-            })),
-    );
 
     let search = app.input("data.search", "Поиск объектов…", false, window, cx);
     col = col.child(

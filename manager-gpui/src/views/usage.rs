@@ -36,10 +36,6 @@ pub fn render(
     let rows = app.usage_rows.clone();
     let scroll = app.usage_scroll.clone();
     let mut col = div().flex().flex_col().gap_4().w_full().h_full();
-    col = col.child(section(
-        "Активность",
-        "Сколько времени приложение было активно — в фокусе и не в простое",
-    ));
     col = col.child(
         div()
             .flex()

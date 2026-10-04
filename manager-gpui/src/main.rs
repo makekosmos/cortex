@@ -10,6 +10,7 @@ mod assets;
 mod async_fields;
 mod boot;
 mod button;
+mod toggle;
 mod consent;
 mod device_info;
 mod devpkg;

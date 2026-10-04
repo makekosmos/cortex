@@ -8,41 +8,34 @@ fn static_about_fields_exist_before_engine_values_arrive(cx: &mut TestAppContext
     let (manager, cx) = crate::a11y_tests::launch(cx);
     manager.update(cx, |app, cx| {
         app.view = View::About;
-        app.slots.insert("about.info".into(), Slot::Loading);
         app.slots.insert("about.health".into(), Slot::Loading);
+        app.slots.insert("about.catalog".into(), Slot::Loading);
         cx.notify();
     });
     cx.update(|_, cx| cx.refresh_windows());
-    for selector in [
-        "about-product-card",
-        "about-engine-card",
-        "about-field-version",
-        "about-field-api_version",
-        "about-field-build",
-        "about-field-channel",
-    ] {
+    for selector in ["about-hero", "about-diagnostics-card", "about-updates-card"] {
         assert!(
             cx.debug_bounds(selector).is_some(),
             "missing static field {selector}"
         );
     }
-    let before = cx.debug_bounds("about-engine-card").unwrap();
+    let before = cx.debug_bounds("about-diagnostics-card").unwrap();
     manager.update(cx, |app, cx| {
-        app.slots.insert("about.info".into(), Slot::Ready(json!({"version":"1.2.3", "api_version":"1.0.0", "build":"abc123", "channel":"stable"})));
+        app.slots.insert(
+            "about.health".into(),
+            Slot::Ready(json!({"status":"ready"})),
+        );
+        app.slots.insert(
+            "about.catalog".into(),
+            Slot::Ready(json!({"catalog":{"sequence":1}})),
+        );
         cx.notify();
     });
     cx.update(|_, cx| cx.refresh_windows());
     assert_eq!(
-        cx.debug_bounds("about-engine-card").unwrap().size,
+        cx.debug_bounds("about-diagnostics-card").unwrap().size,
         before.size
     );
-    manager.update(cx, |app, cx| {
-        app.slots
-            .insert("about.info".into(), Slot::Failed("offline".into()));
-        cx.notify();
-    });
-    cx.update(|_, cx| cx.refresh_windows());
-    assert!(cx.debug_bounds("about-field-api_version").is_some());
 }
 
 #[gpui::test]
@@ -50,8 +43,9 @@ fn opening_about_never_fetches_diagnostic_snapshot_or_logs(cx: &mut TestAppConte
     let (manager, cx) = crate::a11y_tests::launch(cx);
     manager.update(cx, |app, _| {
         about::load(app);
-        assert!(app.slots.contains_key("about.info"));
+        assert!(app.slots.contains_key("upd.mundus"));
         assert!(app.slots.contains_key("about.health"));
+        assert!(app.slots.contains_key("about.catalog"));
         assert!(!app.slots.contains_key("about.diag"));
         assert!(!app.slots.contains_key("about.logs"));
         assert!(!app.slots.contains_key("@bundle"));

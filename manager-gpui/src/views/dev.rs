@@ -12,6 +12,16 @@ pub fn load(app: &mut ManagerApp) {
     app.call("dev.packages", "packages.list", json!({}));
 }
 
+pub fn render(
+    app: &mut ManagerApp,
+    window: &mut Window,
+    cx: &mut Context<ManagerApp>,
+) -> AnyElement {
+    page_sections()
+        .child(render_tools(app, window, cx))
+        .into_any_element()
+}
+
 pub fn render_tools(
     app: &mut ManagerApp,
     window: &mut Window,

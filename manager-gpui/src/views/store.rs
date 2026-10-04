@@ -1,5 +1,5 @@
 //! Маркетплейс — store.catalog/refresh/external_url + packages.list/install/
-//! set_enabled/uninstall/catalog_status/disclosure (StoreView+PackagesView parity).
+//! set_enabled/uninstall/disclosure (StoreView+PackagesView parity).
 //!
 //! KOS-283/285: installed packages split by the manifest `kind` the Engine
 //! already serves (`PackageSummary.kind`): `app` rows join the «Приложения»
@@ -17,7 +17,6 @@ use crate::widgets::*;
 pub fn load(app: &mut ManagerApp) {
     app.call("store.catalog", "store.catalog", json!({}));
     app.call("store.installed", "packages.list", json!({}));
-    app.call("store.status", "packages.catalog_status", json!({}));
     // KOS-265 native GPUI apps — separate install path from .kspkg packages.
     app.call("store.apps", "apps.list", json!({}));
 }
@@ -29,7 +28,6 @@ pub fn render(
 ) -> AnyElement {
     let _ = window;
     let mut col = page_stack();
-    col = col.child(section("Приложения", "Установленные приложения и каталог"));
 
     // Tab row: Каталог / Установленные
     let mut tabs = div().flex().flex_wrap().items_center().gap_2();
@@ -93,34 +91,6 @@ pub fn render(
             if let Some(native) = super::store_apps::render_native_apps(app, cx, false, vec![]) {
                 col = col.child(native);
             }
-            col = col.child(slot_or(app, "store.status", |v| {
-                let catalog = vget(v, "catalog");
-                let fault = vopt(v, "fault");
-                let loaded = catalog.is_object();
-                let mut el = card();
-                el = el.child(
-                    row(
-                        "Каталог интеграций",
-                        "Загружается с GitHub, пакеты проверяются по контрольным суммам",
-                    )
-                    .child(badge(
-                        if loaded {
-                            "Загружен"
-                        } else {
-                            "Не загружен"
-                        },
-                        if loaded { SUCCESS() } else { WARN() },
-                    )),
-                );
-                el = el.child(kv("Версия каталога", vstr(catalog, "sequence")));
-                el = el.child(kv("Отозванные пакеты", vstr(catalog, "revoked_count")));
-                if let Some(fault) = fault {
-                    if !fault.is_empty() {
-                        el = el.child(kv("Состояние", fault));
-                    }
-                }
-                el.into_any_element()
-            }));
         }
         // Native apps belong on both tabs — Installed shows just the live
         // ones, alongside the app-kind .kspkg packages in the same card.

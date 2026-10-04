@@ -28,6 +28,41 @@ pub struct Confirm {
     pub params: Value,
 }
 
+/// Last-opened page, persisted in the Host userData dir (browser.json parity).
+/// First launch falls back to О приложении.
+fn saved_view() -> View {
+    // Tests must not read the developer's own manager.json — deterministic.
+    #[cfg(test)]
+    {
+        View::About
+    }
+    #[cfg(not(test))]
+    {
+        mundus_gpui_kit::engine::host_user_data()
+            .and_then(|d| std::fs::read_to_string(d.join("manager.json")).ok())
+            .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+            .and_then(|v| v.get("last_view")?.as_str().map(str::to_owned))
+            .and_then(|k| View::from_key(&k))
+            .unwrap_or(View::About)
+    }
+}
+
+fn save_view(view: View) {
+    #[cfg(test)]
+    {
+        let _ = view;
+        return;
+    }
+    #[allow(unreachable_code)]
+    if let Some(dir) = mundus_gpui_kit::engine::host_user_data() {
+        let _ = std::fs::create_dir_all(&dir);
+        let _ = std::fs::write(
+            dir.join("manager.json"),
+            json!({"last_view": view.key()}).to_string(),
+        );
+    }
+}
+
 pub struct ManagerApp {
     pub view: View,
     pub local_device: crate::device_info::LocalDevice,
@@ -51,10 +86,12 @@ pub struct ManagerApp {
     /// Object type selected inside Данные.
     pub data_type: Option<String>,
     pub store_tab: StoreTab,
-    pub settings_developer_open: bool,
     pub sync_pairing_open: bool,
     pub sync_code_copied: bool,
     pub about_support_open: bool,
+    /// Диагностика: развёрнут ли список проверок.
+    pub about_diag_open: bool,
+    pub data_storage_open: bool,
     pub confirm: Option<Confirm>,
     /// Company whose key modal is open.
     pub key_editor: Option<String>,
@@ -91,7 +128,7 @@ impl ManagerApp {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let data_dir = mundus_gpui_kit::engine::data_dir().ok();
         let mut this = Self {
-            view: View::Data,
+            view: saved_view(),
             local_device: crate::device_info::LocalDevice::read(),
             sidebar_t: 1.0,
             sidebar_target: 1.0,
@@ -111,10 +148,11 @@ impl ManagerApp {
             error: None,
             data_type: None,
             store_tab: StoreTab::Installed,
-            settings_developer_open: false,
             sync_pairing_open: false,
             sync_code_copied: false,
             about_support_open: false,
+            about_diag_open: false,
+            data_storage_open: false,
             confirm: None,
             key_editor: None,
             key_checked: None,
@@ -344,6 +382,7 @@ impl ManagerApp {
         self.navigation_load = true;
         views::load(self.view, self);
         self.navigation_load = false;
+        save_view(view);
         cx.notify();
     }
 
@@ -383,87 +422,6 @@ impl ManagerApp {
             _ => Value::Null,
         }
     }
-
-    fn drain(&mut self, cx: &mut Context<Self>) {
-        loop {
-            let reply = match self.worker.replies.try_recv() {
-                Ok(reply) => reply,
-                Err(TryRecvError::Empty) => break,
-                Err(TryRecvError::Disconnected) => {
-                    self.worker_dead = true;
-                    self.error =
-                        Some("Соединение с Engine завершено. Перезапустите приложение.".into());
-                    cx.notify();
-                    break;
-                }
-            };
-            if reply.slot == "appearance.set" {
-                self.background_slots.remove("appearance.set");
-                match reply.result {
-                    Ok(value) => {
-                        if self.appearance.ingest(&value) {
-                            self.slots.insert("appearance".into(), Slot::Ready(value));
-                        }
-                    }
-                    Err(error) => self.error = Some(error),
-                }
-            } else if reply.slot == "@action" {
-                self.action_busy = false;
-                match reply.result {
-                    Ok(_) => {
-                        self.notice = Some("Выполнено.".into());
-                        self.invalidated_slots.extend(self.slots.keys().cloned());
-                        views::load(self.view, self);
-                    }
-                    Err(e) => self.error = Some(e),
-                }
-            } else if reply.slot == "pkg.open" {
-                self.open_reply(reply.result);
-            } else if reply.slot == "conn.login" {
-                self.login_reply(reply.result);
-            } else if reply.slot == "apps.op" {
-                // A background app install/update just started (or failed to
-                // start) — pull the fresh row set so progress or the typed
-                // failure shows immediately.
-                match reply.result {
-                    Ok(_) => self.refresh("store.apps", "apps.list", json!({})),
-                    Err(e) => self.error = Some(e),
-                }
-            } else if reply.slot == "disclosure" {
-                // packages.disclosure → consent overlay before install.
-                match reply.result {
-                    Ok(v) => self.disclosure = Some(v),
-                    Err(e) => self.error = Some(e),
-                }
-            } else if reply.slot == "store.ext" {
-                self.external_url_reply(reply.result);
-            } else {
-                let slot = reply.slot.clone();
-                let background = self.background_slots.remove(&slot);
-                self.slots.insert(
-                    slot.clone(),
-                    match reply.result {
-                        Ok(v) => {
-                            self.invalidated_slots.remove(&slot);
-                            if !background && self.error.is_some() {
-                                self.error = None;
-                            }
-                            Slot::Ready(v)
-                        }
-                        Err(e) => {
-                            self.error = Some(e.clone());
-                            Slot::Failed(e)
-                        }
-                    },
-                );
-                if slot == "usage.report" {
-                    self.rebuild_usage_rows();
-                }
-            }
-            cx.notify();
-        }
-        self.poll_views();
-    }
 }
 
 /// Exposes the named data slots to `mundus_gpui_kit::fields::slot_or`.
@@ -472,6 +430,9 @@ impl mundus_gpui_kit::fields::Slots for ManagerApp {
         self.slots.get(key)
     }
 }
+
+#[path = "app_drain.rs"]
+mod drain;
 
 fn advance_sidebar(current: f32, target: f32, dt: f32) -> f32 {
     let step = dt / 0.33;

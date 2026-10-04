@@ -141,22 +141,19 @@ fn every_reorganized_page_names_its_controls(cx: &mut TestAppContext) {
         .iter()
         .flat_map(|group| group.iter())
     {
-        for expanded in [false, true] {
-            manager.update(cx, |app, cx| {
-                app.view = *view;
-                app.settings_developer_open = expanded;
-                cx.notify();
-            });
-            let tree = a11y_tree(cx);
-            for (role, node) in nodes(&tree) {
-                if INTERACTIVE_ROLES.contains(&role.as_str()) {
-                    assert!(
-                        node["aria"]["label"]
-                            .as_str()
-                            .is_some_and(|v| !v.trim().is_empty()),
-                        "unnamed {role} on {view:?}, developer={expanded}"
-                    );
-                }
+        manager.update(cx, |app, cx| {
+            app.view = *view;
+            cx.notify();
+        });
+        let tree = a11y_tree(cx);
+        for (role, node) in nodes(&tree) {
+            if INTERACTIVE_ROLES.contains(&role.as_str()) {
+                assert!(
+                    node["aria"]["label"]
+                        .as_str()
+                        .is_some_and(|v| !v.trim().is_empty()),
+                    "unnamed {role} on {view:?}"
+                );
             }
         }
     }

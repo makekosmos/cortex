@@ -9,30 +9,105 @@ pub fn load(app: &mut ManagerApp) {
     app.call("upd.mundus", "updater.status", json!({}));
 }
 
-pub fn render(
-    app: &mut ManagerApp,
-    _window: &mut Window,
-    cx: &mut Context<ManagerApp>,
-) -> AnyElement {
-    page_stack()
-        .child(section("Обновления", "Только это приложение"))
-        .child(render_mundus(app, cx))
-        .into_any_element()
-}
-
-fn render_mundus(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {
+/// Compact updates section on the About page, matching its diagnostics group.
+pub fn render(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {
     let status = app.data("upd.mundus");
     let state = vstr(&status, "state");
     let current = crate::async_fields::field_text(app.slots.get("upd.mundus"), |value| {
         crate::device_info::version_label(&vstr(value, "currentVersion"), &vstr(value, "channel"))
     });
     let next = vstr(&status, "newVersion");
-    let detail = crate::async_fields::field_text(app.slots.get("upd.mundus"), mundus_status);
-    let mut content = div()
-        .flex()
-        .flex_col()
-        .gap_3()
-        .child(row("Mundus", detail).child(badge(&current, MUTED_FG())));
+    let busy = app.action_busy || matches!(state.as_str(), "checking" | "downloading");
+    let button = if matches!(state.as_str(), "available" | "downloading" | "downloaded") {
+        crate::button::button("mundus-install", crate::button::ButtonKind::Success)
+            // Keep the semantic success tint when the installer is unavailable;
+            // the component's default disabled style replaces it with gray.
+            .bg(fade(SUCCESS(), 0.20))
+            .text_color(c(SUCCESS()))
+            .hover(|style| style.bg(fade(SUCCESS(), 0.28)))
+            .border_0()
+            .label("Установить обновление")
+            .disabled(busy || status.get("canInstall").and_then(Value::as_bool) == Some(false))
+            .on_click(cx.listener(|this, _, _, cx| {
+                let state = vstr(&this.data("upd.mundus"), "state");
+                this.action(
+                    if state == "downloaded" {
+                        "updater.install"
+                    } else {
+                        "updater.download"
+                    },
+                    json!({}),
+                );
+                cx.notify();
+            }))
+    } else {
+        crate::button::secondary("mundus-check")
+            .label(if state == "checking" {
+                "Проверяем…"
+            } else {
+                "Проверить обновления"
+            })
+            .disabled(busy)
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.action("updater.check", json!({}));
+                cx.notify();
+            }))
+    };
+    let version = if next.is_empty() {
+        current
+    } else {
+        format!("{current} → {next}")
+    };
+    let mut content = card()
+        .id("about-updates-card")
+        .debug_selector(|| "about-updates-card".into())
+        .child(
+            div()
+                .w_full()
+                .min_w_0()
+                .min_h(px(36.))
+                .flex()
+                .items_center()
+                .gap(px(12.))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .flex_col()
+                        .gap(px(2.))
+                        .child(
+                            div()
+                                .text_size(crate::theme::ui_px(13.))
+                                .line_height(crate::theme::ui_px(18.))
+                                .font_weight(FontWeight::MEDIUM)
+                                .child("Обновления Mundus"),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(4.))
+                                .text_size(crate::theme::ui_px(12.))
+                                .line_height(crate::theme::ui_px(16.))
+                                .text_color(c(MUTED_FG()))
+                                .child(
+                                    gpui_component::Icon::default()
+                                        .path("icons/mundus.svg")
+                                        .size(px(12.))
+                                        .text_color(c(ACCENT())),
+                                )
+                                .child(version),
+                        ),
+                )
+                .child(
+                    div()
+                        .flex_none()
+                        .id("about-updates-action")
+                        .debug_selector(|| "about-updates-action".into())
+                        .child(button),
+                ),
+        );
 
     if state == "downloading" {
         let percent = vnum(&status, "percent").clamp(0.0, 100.0);
@@ -58,58 +133,16 @@ fn render_mundus(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {
                 ),
         );
     }
-    if !next.is_empty() {
-        content = content.child(kv("Версии", format!("{current} → {next}")));
-    }
-
-    content = content.child(crate::async_fields::field_row(
-        app,
-        "upd.mundus",
-        "Установка",
-        |value| match value.get("canInstall").and_then(Value::as_bool) {
-            Some(true) => "Автоматически".into(),
-            Some(false) => vstr(value, "installUnavailableReason"),
-            None => String::new(),
-        },
-    ));
-    let button = if state == "downloaded" {
-        btn(
-            "mundus-install",
-            "Обновить и перезапустить",
-            true,
-            cx,
-            |this, _| this.action("updater.install", json!({})),
+    section_group()
+        .child(
+            div()
+                .text_size(crate::theme::ui_px(13.))
+                .child("Обновления"),
         )
-        .disabled(status.get("canInstall").and_then(Value::as_bool) == Some(false))
-    } else {
-        btn(
-            "mundus-check",
-            "Проверить обновления",
-            !matches!(state.as_str(), "checking" | "downloading"),
-            cx,
-            |this, _| this.action("updater.check", json!({})),
-        )
-    };
-    card()
-        .id("updates-product-card")
-        .debug_selector(|| "updates-product-card".into())
-        .child(content.child(button))
+        .child(content)
         .into_any_element()
 }
 
 #[cfg(test)]
 #[path = "updates_tests.rs"]
 mod tests;
-
-fn mundus_status(status: &Value) -> String {
-    match vstr(status, "state").as_str() {
-        "idle" => "Готов к проверке".into(),
-        "checking" => "Проверяем новую версию…".into(),
-        "available" => "Доступна новая версия".into(),
-        "downloading" => "Новая версия загружается".into(),
-        "downloaded" => "Обновление готово к установке".into(),
-        "not-available" => "Установлена актуальная версия".into(),
-        "error" => format!("Не удалось проверить: {}", vstr(status, "message")),
-        _ => "Статус недоступен".into(),
-    }
-}

@@ -28,7 +28,6 @@ pub fn render(
     cx: &mut Context<ManagerApp>,
 ) -> AnyElement {
     page_stack()
-        .child(section("Девайсы", "Ваши устройства и подключение по коду"))
         .child(
             div()
                 .flex()

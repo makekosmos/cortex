@@ -11,6 +11,7 @@ fn sidebar_contains_only_task_oriented_top_level_pages() {
     assert_eq!(
         pages,
         vec![
+            View::About,
             View::Packages,
             View::Data,
             View::Usage,
@@ -19,25 +20,29 @@ fn sidebar_contains_only_task_oriented_top_level_pages() {
             View::Keys,
             View::Settings,
             View::Appearance,
-            View::Updates,
-            View::About
+            View::Browser,
+            View::Dev
         ]
     );
 }
 
 #[gpui::test]
-fn relocated_controls_load_their_data_and_development_remains_opt_in(cx: &mut TestAppContext) {
+fn relocated_controls_load_their_data_on_their_own_pages(cx: &mut TestAppContext) {
     let (manager, cx) = crate::a11y_tests::launch(cx);
     manager.update(cx, |app, _| {
         assert!(app.store_tab == StoreTab::Installed);
-        assert!(!app.settings_developer_open);
         app.slots.clear();
         views::settings::load(app);
-        for slot in ["engine.autostart", "engine.settings", "browser.persist"] {
+        for slot in ["engine.autostart", "engine.settings"] {
             assert!(app.slots.contains_key(slot), "missing settings slot {slot}");
         }
+        assert!(!app.slots.contains_key("browser.persist"));
         assert!(!app.slots.contains_key("backups.list"));
         assert!(!app.slots.contains_key("dev.packages"));
+        views::browser::load(app);
+        assert!(app.slots.contains_key("browser.persist"));
+        views::dev::load(app);
+        assert!(app.slots.contains_key("dev.packages"));
         views::data::load(app);
         assert!(app.slots.contains_key("backups.list"));
         views::connections::load(app);
@@ -45,9 +50,6 @@ fn relocated_controls_load_their_data_and_development_remains_opt_in(cx: &mut Te
         assert!(!app.slots.contains_key("secrets.config"));
         views::secrets::load(app);
         assert!(app.slots.contains_key("secrets.config"));
-        app.settings_developer_open = true;
-        views::settings::load(app);
-        assert!(app.slots.contains_key("dev.packages"));
     });
 }
 
@@ -73,7 +75,7 @@ fn relocated_static_cards_remain_visible_when_values_are_pending_or_failed(
             cx.notify();
         });
         cx.update(|_, cx| cx.refresh_windows());
-        for selector in ["settings-startup-card", "settings-developer-card"] {
+        for selector in ["settings-startup-card"] {
             assert!(
                 cx.debug_bounds(selector).is_some(),
                 "missing static card {selector}"
@@ -102,4 +104,9 @@ fn relocated_static_cards_remain_visible_when_values_are_pending_or_failed(
         assert!(cx.debug_bounds("key-company-openai").is_some());
         assert!(cx.debug_bounds("key-company-nvidia").is_some());
     }
+}
+
+#[test]
+fn saved_updates_page_redirects_to_about() {
+    assert_eq!(View::from_key("updates"), Some(View::About));
 }

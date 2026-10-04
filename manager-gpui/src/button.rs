@@ -34,6 +34,11 @@ impl Button {
         self
     }
 
+    pub fn hover(mut self, style: impl FnOnce(StyleRefinement) -> StyleRefinement) -> Self {
+        self.inner = self.inner.hover(style);
+        self
+    }
+
     pub fn disabled(mut self, disabled: bool) -> Self {
         self.inner = self.inner.disabled(disabled);
         self
