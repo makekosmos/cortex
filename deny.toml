@@ -1,0 +1,126 @@
+# cargo-deny configuration (KOS-346).
+#
+# Purpose: stop new duplicate dependency versions from creeping back into the
+# lockfile after the dupe-cleanup work under KOS-340, and keep advisory checks
+# available in CI.
+#
+#   cargo deny check bans        # duplicates (what CI gates on)
+#   cargo deny check advisories  # RustSec advisories
+#
+# `multiple-versions = "deny"` fails the check when a *new* duplicate appears.
+# The `skip` entries below are the duplicates that already exist in Cargo.lock
+# and are outside our control (transitive deps of iroh/netdev/windows crate
+# chains, the gpui vendor tree, competing crypto ecosystems, etc.). Each entry
+# skips the whole crate name so the lockfile can keep every pinned version.
+#
+# When a cleanup PR removes a duplicate, delete its skip entry in the same PR —
+# cargo-deny warns on skip entries that no longer match anything, so the list
+# cannot silently rot. When adding a skip for a new unavoidable duplicate,
+# document which upstream dep forces it.
+
+[graph]
+# Evaluate the targets CI ships for, not just the host, so Windows/macOS-only
+# duplicates are checked too and the skip entries below match on all CI OSes.
+targets = [
+    "x86_64-pc-windows-msvc",
+    "aarch64-pc-windows-msvc",
+    "x86_64-apple-darwin",
+    "aarch64-apple-darwin",
+    "x86_64-unknown-linux-gnu",
+    # Mobile triples cover Android/iOS-only deps (jni, security-framework, ...)
+    # so their skip entries are exercised instead of warning as unmatched.
+    "aarch64-linux-android",
+    "aarch64-apple-ios",
+]
+
+[advisories]
+version = 2
+# Advisories currently fail on pre-existing issues in the iroh/noq and crypto
+# stacks; those upgrades are sibling work under KOS-340. CI runs this check
+# non-blocking until the backlog clears.
+yanked = "warn"
+
+[bans]
+multiple-versions = "deny"
+wildcards = "warn"
+highlight = "all"
+skip = [
+    # --- windows crate chains -------------------------------------------------
+    # Multiple generations of the windows/-sys/-targets family are pulled in by
+    # different upstream deps (iroh/netwatch, netdev, gpui, wmi, etc.). Not
+    # controllable until the upstreams converge.
+    { name = "windows" },
+    { name = "windows-core" },
+    { name = "windows-implement" },
+    { name = "windows-interface" },
+    { name = "windows-result" },
+    { name = "windows-strings" },
+    { name = "windows-sys" },
+    { name = "windows-targets" },
+    { name = "windows_aarch64_msvc" },
+    { name = "windows_x86_64_gnu" },
+    { name = "windows_x86_64_msvc" },
+
+    # --- crypto ecosystems ----------------------------------------------------
+    # RustCrypto (aead/cipher/digest/...) and dalek crates exist in two major
+    # generations because ed25519-dalek 3.0.0-rc, hpke 0.14, and the iroh stack
+    # pin different majors.
+    { name = "aead" },
+    { name = "block-buffer" },
+    { name = "cipher" },
+    { name = "const-oid" },
+    { name = "crypto-common" },
+    { name = "curve25519-dalek" },
+    { name = "der" },
+    { name = "digest" },
+    { name = "ed25519" },
+    { name = "ed25519-dalek" },
+    { name = "hmac" },
+    { name = "inout" },
+    { name = "pkcs8" },
+    { name = "rustls" },
+    { name = "rustls-webpki" },
+    { name = "security-framework" },
+    { name = "sha2" },
+    { name = "signature" },
+    { name = "spki" },
+    { name = "tokio-rustls" },
+    { name = "universal-hash" },
+
+    # --- rand family ----------------------------------------------------------
+    # rand 0.8 is our workspace dep; 0.9/0.10 come from transitive deps.
+    { name = "rand" },
+    { name = "rand_chacha" },
+    { name = "rand_core" },
+    { name = "getrandom" },
+
+    # --- http/hyper ecosystem -------------------------------------------------
+    # reqwest/hyper/iroh span the 0.14->1.x and pre-1.0 generations.
+    { name = "h2" },
+    { name = "http" },
+    { name = "http-body" },
+    { name = "hyper" },
+    { name = "reqwest" },
+    { name = "base64" },
+
+    # --- platform / misc transitive --------------------------------------------
+    # Split mostly by upstream majors we do not control (netdev/netlink for
+    # interface enumeration, jni for Android bits, iroh's async stack, ...).
+    { name = "bitflags" },
+    { name = "core-foundation" },
+    { name = "cpufeatures" },
+    { name = "hashbrown" },
+    { name = "jni" },
+    { name = "jni-sys" },
+    { name = "mio" },
+    { name = "netdev" },
+    { name = "netlink-packet-core" },
+    { name = "netlink-packet-route" },
+    { name = "netlink-sys" },
+    { name = "quick-error" },
+    { name = "socket2" },
+    { name = "spin" },
+    { name = "syn" },
+    { name = "thiserror" },
+    { name = "thiserror-impl" },
+]
