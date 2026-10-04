@@ -29,13 +29,16 @@ flate2 = "1.1"
 [build-dependencies]
 pe-version-info = { path = "../runtime/crates/pe-version-info" }
 
-# Dev builds: keep debug info but optimize — unoptimized taffy/cosmic-text/
-# gpui (and our own render path) make even modest UIs run at ~20fps.
+# Dev builds: own code compiles fast (opt-level 1, line-table debuginfo);
+# dependencies stay fully optimized without debuginfo — unoptimized
+# taffy/cosmic-text/gpui makes even modest UIs run at ~20fps (KOS-328).
 [profile.dev]
-opt-level = 3
+opt-level = 1
+debug = "line-tables-only"
 
 [profile.dev.package."*"]
 opt-level = 3
+debug = false
 debug-assertions = false
 overflow-checks = false
 
@@ -50,10 +53,11 @@ debug-assertions = false
 gpui = { package = "gpui-kit", version = "=0.6.2", features = ["test-support"] }
 
 [patch.crates-io]
-# Vendored gpui-pre 0.3.6 whose TestWindow activates the a11y pipeline so
-# `Window::debug_a11y_tree_json` works in #[gpui::test] runs.
-# See vendor/gpui-pre-0.3.6-patched/PATCH.md.
-gpui-pre = { path = "vendor/gpui-pre-0.3.6-patched" }
+# One patched gpui revision shared by all three GPUI apps (KOS-328):
+# gpui-pre 0.3.6 in imago carries the a11y TestWindow patch that makes
+# `Window::debug_a11y_tree_json` work in #[gpui::test] runs, plus the
+# agenda window fixes. See crates/gpui-pre/PATCH.md in that rev.
+gpui-pre = { git = "https://github.com/makekosmos/imago.git", rev = "a0d6ee3feb0e35935483df050fe0df9be7f2fa5f" }
 
 # Standalone crate: the Manager GPUI shell carries heavyweight UI deps that
 # the runtime workspace must not inherit (mirrors how agenda-gpui ships).

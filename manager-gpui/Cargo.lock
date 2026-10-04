@@ -2390,6 +2390,7 @@ dependencies = [
 [[package]]
 name = "gpui-pre"
 version = "0.3.6"
+source = "git+https://github.com/makekosmos/imago.git?rev=a0d6ee3feb0e35935483df050fe0df9be7f2fa5f#a0d6ee3feb0e35935483df050fe0df9be7f2fa5f"
 dependencies = [
  "accesskit",
  "anyhow",
