@@ -1,8 +1,14 @@
 use super::authority::ArkRequestExecutor;
 use crate::dictation::{handle_dictation_op, DictationHost};
-use crate::manager_api::ManagerState;
 use async_trait::async_trait;
 use std::sync::Arc;
+
+/// Host-side autostart toggle used by `dictation.lifecycle.set_autostart`.
+/// Implemented by `ManagerState` in the engine crate (KOS-336: the executor
+/// lives here while ManagerState stays behind the manager_api boundary).
+pub trait AutostartControl: Send + Sync {
+    fn set_autostart(&self, enabled: bool) -> Result<serde_json::Value, String>;
+}
 
 /// Routes worker calls through the same Engine-owned capabilities used by
 /// Host clients. Dictation workers never receive a direct microphone or
@@ -10,14 +16,14 @@ use std::sync::Arc;
 pub struct EngineCapabilityExecutor {
     ark: Arc<dyn ArkRequestExecutor>,
     dictation: Arc<DictationHost>,
-    manager: ManagerState,
+    manager: Arc<dyn AutostartControl>,
 }
 
 impl EngineCapabilityExecutor {
     pub fn new(
         ark: Arc<dyn ArkRequestExecutor>,
         dictation: Arc<DictationHost>,
-        manager: ManagerState,
+        manager: Arc<dyn AutostartControl>,
     ) -> Self {
         Self {
             ark,
@@ -64,6 +70,14 @@ mod tests {
         operations: Mutex<Vec<String>>,
     }
 
+    struct NoopAutostart;
+
+    impl AutostartControl for NoopAutostart {
+        fn set_autostart(&self, enabled: bool) -> Result<serde_json::Value, String> {
+            Ok(json!({"enabled": enabled}))
+        }
+    }
+
     #[async_trait]
     impl ArkRequestExecutor for RecordingArk {
         async fn request(
@@ -89,7 +103,7 @@ mod tests {
                 "http://localhost/".into(),
                 DictationConfig::default(),
             ),
-            ManagerState::new(data_dir.path().to_path_buf()),
+            Arc::new(NoopAutostart),
         );
 
         let state = executor

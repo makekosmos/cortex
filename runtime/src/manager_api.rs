@@ -2,6 +2,7 @@ use crate::appearance::AppearanceStore;
 use crate::diagnostics::SharedRpcDiagnostics;
 use crate::engine_settings;
 use crate::package_service::PackageService;
+use crate::package_worker_supervisor::AutostartControl;
 use crate::protocol_usage::ProtocolUsageStore;
 use crate::updater::UpdaterService;
 use crate::usage_tracker::UsageTrackerDiagnosticsState;
@@ -218,6 +219,15 @@ impl ManagerState {
             return Err("autostart-readback-failed".into());
         }
         Ok(state)
+    }
+}
+
+// KOS-336: EngineCapabilityExecutor lives in engine-packages; ManagerState
+// satisfies its autostart boundary here so worker calls route through the
+// same host-side toggle.
+impl AutostartControl for ManagerState {
+    fn set_autostart(&self, enabled: bool) -> Result<Value, String> {
+        ManagerState::set_autostart(self, enabled)
     }
 }
 

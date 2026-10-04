@@ -27,12 +27,14 @@ mod verify;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use paths::{is_reserved_name, normalize_path};
+// `pub` (not pub(crate)): engine's native_apps consumes these via the
+// `crate::package_store::*` facade path (KOS-336).
+pub use paths::{is_reserved_name, normalize_path};
 
-pub(crate) const MAX_ARCHIVE: u64 = 128 * 1024 * 1024;
-pub(crate) const MAX_EXPANDED: u64 = 512 * 1024 * 1024;
-pub(crate) const MAX_ENTRIES: usize = 512;
-pub(crate) const MAX_ASSET_BYTES: u64 = 16 * 1024 * 1024;
+pub const MAX_ARCHIVE: u64 = 128 * 1024 * 1024;
+pub const MAX_EXPANDED: u64 = 512 * 1024 * 1024;
+pub const MAX_ENTRIES: usize = 512;
+pub const MAX_ASSET_BYTES: u64 = 16 * 1024 * 1024;
 const STATE_FORMAT_VERSION: u32 = 1;
 #[derive(Debug, Error)]
 pub enum StoreError {
@@ -171,7 +173,7 @@ fn hash_reader(reader: impl Read) -> Result<String, StoreError> {
     Ok(crate::file_hash::sha256_reader(reader)?)
 }
 
-pub(crate) use crate::file_hash::eq_hash;
+pub use crate::file_hash::eq_hash;
 fn is_hash(value: &str) -> bool {
     value.len() == 64 && value.bytes().all(|c| c.is_ascii_hexdigit())
 }

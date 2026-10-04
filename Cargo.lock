@@ -1105,6 +1105,7 @@ dependencies = [
  "ed25519-dalek",
  "engine-base",
  "engine-dictation",
+ "engine-packages",
  "flate2",
  "futures-util",
  "globset",
@@ -1194,6 +1195,33 @@ dependencies = [
  "tokio",
  "tracing",
  "transcribe-rs",
+ "uuid",
+ "windows 0.58.0",
+ "zip",
+]
+
+[[package]]
+name = "engine-packages"
+version = "0.1.0"
+dependencies = [
+ "ark-core",
+ "async-trait",
+ "base64 0.22.1",
+ "chrono",
+ "engine-base",
+ "engine-dictation",
+ "libc",
+ "package-protocol",
+ "rand 0.8.7",
+ "reqwest 0.12.28",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
  "uuid",
  "windows 0.58.0",
  "zip",

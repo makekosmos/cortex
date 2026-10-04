@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-pub(crate) fn normalize_path(path: &Path) -> Option<String> {
+pub fn normalize_path(path: &Path) -> Option<String> {
     let value = path.to_string_lossy().replace('\\', "/");
     let value = value.trim_end_matches('/');
     let mut components = Vec::new();
@@ -39,7 +39,7 @@ pub(super) fn safe_asset_path(value: &str) -> bool {
         })
 }
 
-pub(crate) fn is_reserved_name(component: &str) -> bool {
+pub fn is_reserved_name(component: &str) -> bool {
     let component = component.split('.').next().unwrap_or(component);
     matches!(
         component

@@ -1,0 +1,82 @@
+[package]
+name = "engine-packages"
+version = "0.1.0"
+edition.workspace = true
+description = "Engine packages — package store, worker process/broker/supervisor/protocol, runtime grants, grant authority, ark host"
+
+[lib]
+name = "engine_packages"
+path = "src/lib.rs"
+doctest = false
+
+[features]
+default = []
+# Test-only escape hatch mirroring the engine feature of the same name:
+# relaxes the broker's HTTPS-only origin check to allow loopback http
+# origins and exposes worker failure hooks. A release build refuses to
+# compile with it (see the compile_error in runtime/src/lib.rs).
+package-worker-fixture = []
+# Exposes #[cfg(test)]-style helpers to downstream crates' test builds via
+# dev-dependency feature unification (mirrors engine-base/engine-dictation).
+test-support = ["engine-dictation/test-support"]
+
+[dependencies]
+# handle-relative-fs-serde mirrors engine's default feature: grant_authority
+# persists RootIdentity via serde unconditionally.
+engine-base = { path = "../engine-base", features = ["handle-relative-fs-serde"] }
+engine-dictation = { path = "../engine-dictation" }
+package-protocol = { path = "../package-protocol" }
+ark-core = { path = "../../../core/crates/ark-core", package = "ark-core" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+rand.workspace = true
+sha2.workspace = true
+semver.workspace = true
+base64 = "0.22"
+async-trait = "0.1"
+reqwest = { version = "0.12", default-features = false, features = [
+  "json",
+  "rustls-tls",
+  "multipart",
+  "socks",
+] }
+zip = { version = "0.6", default-features = false, features = ["deflate"] }
+tokio = { version = "1", features = [
+  "rt",
+  "macros",
+  "net",
+  "time",
+  "sync",
+  "io-util",
+  "process",
+  "fs",
+] }
+tracing = "0.1"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_Storage_FileSystem",
+  "Win32_System_Threading",
+  "Win32_System_JobObjects",
+  "Win32_System_SystemInformation",
+  "Win32_System_Com",
+] }
+
+[dev-dependencies]
+# Unit tests exercise DictationHost::new_for_test; the dev-dep unifies the
+# test-support feature into engine-dictation's build for this crate's tests
+# without leaking it into downstream normal builds.
+engine-dictation = { path = "../engine-dictation", features = ["test-support"] }
+tempfile.workspace = true
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+[lints]
+workspace = true
