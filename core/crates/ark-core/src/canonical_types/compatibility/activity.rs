@@ -38,20 +38,24 @@ pub fn time_entry(
         "taskId",
         &["task_id"],
         "for-task",
-        LinkWrite { links: l,
-        id,
-        at,
-        unknown: u },
+        LinkWrite {
+            links: l,
+            id,
+            at,
+            unknown: u,
+        },
     )?;
     relation_with_aliases(
         m,
         "tagIds",
         &["tag_ids"],
         "tag",
-        LinkWrite { links: l,
-        id,
-        at,
-        unknown: u },
+        LinkWrite {
+            links: l,
+            id,
+            at,
+            unknown: u,
+        },
     )?;
     for k in [
         "provider",
@@ -181,29 +185,35 @@ pub fn game(m: &Map<String, Value>, ctx: CompatCtx<'_>) -> Result<(), CompatFail
         "noteIds",
         &["note_ids"],
         "note",
-        LinkWrite { links: l,
-        id,
-        at,
-        unknown: u },
+        LinkWrite {
+            links: l,
+            id,
+            at,
+            unknown: u,
+        },
     )?;
     relation_with_aliases(
         m,
         "taskIds",
         &["task_ids"],
         "task",
-        LinkWrite { links: l,
-        id,
-        at,
-        unknown: u },
+        LinkWrite {
+            links: l,
+            id,
+            at,
+            unknown: u,
+        },
     )?;
     relation_with_aliases(
         m,
         "tagIds",
         &["tag_ids"],
         "tag",
-        LinkWrite { links: l,
-        id,
-        at,
-        unknown: u },
+        LinkWrite {
+            links: l,
+            id,
+            at,
+            unknown: u,
+        },
     )
 }

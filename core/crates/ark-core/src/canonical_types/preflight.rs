@@ -1,3 +1,6 @@
-include!("preflight/part01.rs");
-include!("preflight/part02.rs");
-include!("preflight/part03.rs");
+mod inventory;
+mod native_sources;
+mod report;
+pub use inventory::*;
+pub use native_sources::*;
+pub use report::*;

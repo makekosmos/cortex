@@ -1,3 +1,5 @@
+use super::*;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Project {
@@ -23,7 +25,7 @@ pub enum SessionStatus {
 }
 
 impl SessionStatus {
-    fn as_str(&self) -> &'static str {
+    pub(crate) fn as_str(&self) -> &'static str {
         match self {
             Self::Starting => "starting",
             Self::Running => "running",
@@ -96,10 +98,10 @@ pub struct AgentsEvent {
 }
 
 #[derive(Debug)]
-struct RuntimeHandle {
-    tx: mpsc::Sender<AppCommand>,
-    generation: u64,
-    task: tokio::task::JoinHandle<()>,
+pub(crate) struct RuntimeHandle {
+    pub(crate) tx: mpsc::Sender<AppCommand>,
+    pub(crate) generation: u64,
+    pub(crate) task: tokio::task::JoinHandle<()>,
 }
 
 impl RuntimeHandle {
@@ -107,7 +109,7 @@ impl RuntimeHandle {
     /// is still unwinding, and its Arc<AgentsService> — the SQLite connection
     /// inside the data dir — is released only when the task returns. Without
     /// the join a TempDir fixture can outrace the teardown (KOS-314).
-    async fn stop(self, session_id: &str) -> Result<(), String> {
+    pub(crate) async fn stop(self, session_id: &str) -> Result<(), AgentsError> {
         let (done_tx, done_rx) = tokio::sync::oneshot::channel();
         let result = if self
             .tx
@@ -116,12 +118,12 @@ impl RuntimeHandle {
             .is_err()
         {
             // The receiver is gone — the task is already exiting.
-            Err("Codex app-server недоступен во время остановки".to_string())
+            Err(AgentsError::AppServerUnavailableForStop)
         } else {
             match tokio::time::timeout(RUNTIME_ACK_TIMEOUT, done_rx).await {
                 Ok(Ok(result)) => result,
-                Ok(Err(_)) => Err("Codex app-server закрыл канал остановки".to_string()),
-                Err(_) => Err("Codex app-server не подтвердил остановку".to_string()),
+                Ok(Err(_)) => Err(AgentsError::AppServerStopChannelClosed),
+                Err(_) => Err(AgentsError::AppServerStopNotAcked),
             }
         };
         crate::background_task::join_task(session_id, self.task, RUNTIME_JOIN_TIMEOUT).await;
@@ -130,71 +132,71 @@ impl RuntimeHandle {
 }
 
 #[derive(Debug, Clone)]
-struct StreamBuffer {
-    event: TimelineEvent,
-    last_emit: Instant,
-    pending: bool,
+pub(crate) struct StreamBuffer {
+    pub(crate) event: TimelineEvent,
+    pub(crate) last_emit: Instant,
+    pub(crate) pending: bool,
 }
 
-struct AppServerStartup {
-    process_tree: crate::process_tree::ProcessTree,
-    stdin: tokio::process::ChildStdin,
-    lines: Lines<BufReader<ChildStdout>>,
-    thread_id: String,
-    active_turn_id: Option<String>,
-    status: SessionStatus,
-    buffered: Vec<Value>,
+pub(crate) struct AppServerStartup {
+    pub(crate) process_tree: crate::process_tree::ProcessTree,
+    pub(crate) stdin: tokio::process::ChildStdin,
+    pub(crate) lines: Lines<BufReader<ChildStdout>>,
+    pub(crate) thread_id: String,
+    pub(crate) active_turn_id: Option<String>,
+    pub(crate) status: SessionStatus,
+    pub(crate) buffered: Vec<Value>,
 }
 
 #[derive(Debug)]
-enum AppCommand {
+pub(crate) enum AppCommand {
     Send {
         text: String,
     },
     Interrupt {
         expected_turn_id: String,
-        done: tokio::sync::oneshot::Sender<Result<(), String>>,
+        done: tokio::sync::oneshot::Sender<Result<(), AgentsError>>,
     },
     Approval {
         request_id: Value,
         result: Value,
-        done: tokio::sync::oneshot::Sender<Result<(), String>>,
+        done: tokio::sync::oneshot::Sender<Result<(), AgentsError>>,
     },
-    Shutdown(Option<tokio::sync::oneshot::Sender<Result<(), String>>>),
+    Shutdown(Option<tokio::sync::oneshot::Sender<Result<(), AgentsError>>>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct FullAccessConsentBinding {
-    package_id: String,
-    package_version: String,
-    project_id: String,
-    project_path: String,
-    mode: String,
-    model: Option<String>,
-    prompt_hash: String,
-    connection_id: Option<u64>,
+pub(crate) struct FullAccessConsentBinding {
+    pub(crate) package_id: String,
+    pub(crate) package_version: String,
+    pub(crate) project_id: String,
+    pub(crate) project_path: String,
+    pub(crate) mode: String,
+    pub(crate) model: Option<String>,
+    pub(crate) prompt_hash: String,
+    pub(crate) connection_id: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
-struct FullAccessConsent {
-    token: String,
-    token_hash: [u8; 32],
-    binding: FullAccessConsentBinding,
-    expires_at: Instant,
-    approved: bool,
+pub(crate) struct FullAccessConsent {
+    pub(crate) token: String,
+    pub(crate) token_hash: [u8; 32],
+    pub(crate) binding: FullAccessConsentBinding,
+    pub(crate) expires_at: Instant,
+    pub(crate) approved: bool,
 }
 
 #[derive(Debug, Default)]
-struct FullAccessConsentRegistry {
-    pending: HashMap<String, FullAccessConsent>,
+pub(crate) struct FullAccessConsentRegistry {
+    pub(crate) pending: HashMap<String, FullAccessConsent>,
 }
 
 impl FullAccessConsentRegistry {
-    fn issue(&mut self, binding: FullAccessConsentBinding) -> Value {
+    pub(crate) fn issue(&mut self, binding: FullAccessConsentBinding) -> Value {
         self.issue_at(binding, Instant::now())
     }
 
-    fn issue_at(&mut self, binding: FullAccessConsentBinding, now: Instant) -> Value {
+    pub(crate) fn issue_at(&mut self, binding: FullAccessConsentBinding, now: Instant) -> Value {
         self.purge_at(now);
         let request_id = Uuid::new_v4().to_string();
         let token = new_consent_token();
@@ -225,78 +227,82 @@ impl FullAccessConsentRegistry {
         })
     }
 
-    fn binding(&self, request_id: &str) -> Option<FullAccessConsentBinding> {
+    pub(crate) fn binding(&self, request_id: &str) -> Option<FullAccessConsentBinding> {
         self.pending
             .get(request_id)
             .map(|consent| consent.binding.clone())
     }
 
-    fn approve(
+    pub(crate) fn approve(
         &mut self,
         request_id: &str,
         approved: bool,
         connection_id: Option<u64>,
-    ) -> Result<Option<String>, String> {
+    ) -> Result<Option<String>, AgentsError> {
         self.approve_at(request_id, approved, connection_id, Instant::now())
     }
 
-    fn approve_at(
+    pub(crate) fn approve_at(
         &mut self,
         request_id: &str,
         approved: bool,
         connection_id: Option<u64>,
         now: Instant,
-    ) -> Result<Option<String>, String> {
+    ) -> Result<Option<String>, AgentsError> {
         self.purge_at(now);
         let consent = self
             .pending
             .get_mut(request_id)
-            .ok_or_else(|| "full-access consent request expired or not found".to_string())?;
+            .ok_or_else(|| AgentsError::ConsentRequestMissing)?;
         if consent.binding.connection_id != connection_id {
-            return Err("full-access consent belongs to another connection".into());
+            return Err(AgentsError::ConsentOtherConnection);
         }
         if !approved {
             self.pending.remove(request_id);
             return Ok(None);
         }
         if consent.approved {
-            return Err("full-access consent already approved".into());
+            return Err(AgentsError::ConsentAlreadyApproved);
         }
         consent.approved = true;
         Ok(Some(consent.token.clone()))
     }
 
-    fn consume(&mut self, token: &str, binding: &FullAccessConsentBinding) -> Result<(), String> {
+    pub(crate) fn consume(
+        &mut self,
+        token: &str,
+        binding: &FullAccessConsentBinding,
+    ) -> Result<(), AgentsError> {
         self.consume_at(token, binding, Instant::now())
     }
 
-    fn consume_at(
+    pub(crate) fn consume_at(
         &mut self,
         token: &str,
         binding: &FullAccessConsentBinding,
         now: Instant,
-    ) -> Result<(), String> {
+    ) -> Result<(), AgentsError> {
         let token_hash: [u8; 32] = Sha256::digest(token.as_bytes()).into();
         let request_id = self.pending.iter().find_map(|(request_id, consent)| {
             (constant_time_equal(&consent.token_hash, &token_hash)).then_some(request_id.clone())
         });
         let Some(request_id) = request_id else {
-            return Err("full-access consent token denied".into());
+            return Err(AgentsError::ConsentDenied);
         };
         let consent = self
             .pending
             .remove(&request_id)
             .expect("consent found before removal");
         if consent.expires_at <= now {
-            return Err("full-access consent token expired".into());
+            return Err(AgentsError::ConsentExpired);
         }
         if !consent.approved || consent.binding != *binding {
-            return Err("full-access consent token does not match this operation".into());
+            return Err(AgentsError::ConsentMismatch);
         }
         Ok(())
     }
 
-    fn purge_at(&mut self, now: Instant) {
+    pub(crate) fn purge_at(&mut self, now: Instant) {
         self.pending.retain(|_, consent| consent.expires_at > now);
     }
 }
@@ -309,29 +315,29 @@ fn constant_time_equal(left: &[u8; 32], right: &[u8; 32]) -> bool {
 }
 
 pub struct AgentsService {
-    root: PathBuf,
-    db: Mutex<Connection>,
-    runtimes: Mutex<HashMap<String, RuntimeHandle>>,
+    pub(crate) root: PathBuf,
+    pub(crate) db: Mutex<Connection>,
+    pub(crate) runtimes: Mutex<HashMap<String, RuntimeHandle>>,
     /// Tasks whose handle left `runtimes` without being joined (a task
     /// deregisters itself at the end of run_app_server). Kept so shutdown()
     /// can still wait for their last instructions — the Arc<AgentsService>
     /// they hold keeps the SQLite connection open until the task returns.
     /// Entries are pruned on push, so the vec is bounded by live tasks.
-    finished_tasks: crate::background_task::TaskRegistry,
-    lifecycle_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
-    next_runtime_generation: AtomicU64,
-    events: broadcast::Sender<Value>,
-    seq: AtomicU64,
-    event_order: Mutex<()>,
-    recent_events: Mutex<VecDeque<Value>>,
-    restored: AtomicBool,
-    restore_lock: tokio::sync::Mutex<()>,
-    streams: Mutex<HashMap<(String, String), StreamBuffer>>,
-    full_access_consents: Mutex<FullAccessConsentRegistry>,
+    pub(crate) finished_tasks: crate::background_task::TaskRegistry,
+    pub(crate) lifecycle_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
+    pub(crate) next_runtime_generation: AtomicU64,
+    pub(crate) events: broadcast::Sender<Value>,
+    pub(crate) seq: AtomicU64,
+    pub(crate) event_order: Mutex<()>,
+    pub(crate) recent_events: Mutex<VecDeque<Value>>,
+    pub(crate) restored: AtomicBool,
+    pub(crate) restore_lock: tokio::sync::Mutex<()>,
+    pub(crate) streams: Mutex<HashMap<(String, String), StreamBuffer>>,
+    pub(crate) full_access_consents: Mutex<FullAccessConsentRegistry>,
 }
 
 impl AgentsService {
-    pub fn new(data_dir: &Path) -> Result<Arc<Self>, String> {
+    pub fn new(data_dir: &Path) -> Result<Arc<Self>, AgentsError> {
         let (events, _) = broadcast::channel(512);
         Self::new_with_events(data_dir, events)
     }
@@ -339,12 +345,12 @@ impl AgentsService {
     pub fn new_with_events(
         data_dir: &Path,
         events: broadcast::Sender<Value>,
-    ) -> Result<Arc<Self>, String> {
+    ) -> Result<Arc<Self>, AgentsError> {
         let root = data_dir.join("extensions-data").join("daedalus");
-        std::fs::create_dir_all(root.join("worktrees")).map_err(|e| e.to_string())?;
-        let conn = Connection::open(root.join("daedalus.db")).map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(root.join("worktrees")).map_err(AgentsError::internal)?;
+        let conn = Connection::open(root.join("daedalus.db")).map_err(AgentsError::internal)?;
         conn.pragma_update(None, "journal_mode", "WAL")
-            .map_err(|e| e.to_string())?;
+            .map_err(AgentsError::internal)?;
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS projects (
                 id TEXT PRIMARY KEY, name TEXT NOT NULL, path TEXT NOT NULL UNIQUE,
@@ -387,7 +393,7 @@ impl AgentsService {
              );
              INSERT OR IGNORE INTO runtime_meta(key,value) VALUES('event_seq',0);",
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(AgentsError::internal)?;
         let initial_seq = conn
             .query_row(
                 "SELECT value FROM runtime_meta WHERE key='event_seq'",
@@ -442,19 +448,19 @@ impl AgentsService {
         crate::background_task::drain_tasks(&self.finished_tasks, RUNTIME_JOIN_TIMEOUT).await;
     }
 
-    fn db(&self) -> MutexGuard<'_, Connection> {
+    pub(crate) fn db(&self) -> MutexGuard<'_, Connection> {
         self.db
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
-    fn runtimes(&self) -> MutexGuard<'_, HashMap<String, RuntimeHandle>> {
+    pub(crate) fn runtimes(&self) -> MutexGuard<'_, HashMap<String, RuntimeHandle>> {
         self.runtimes
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
-    fn lifecycle_lock(&self, session_id: &str) -> Arc<tokio::sync::Mutex<()>> {
+    pub(crate) fn lifecycle_lock(&self, session_id: &str) -> Arc<tokio::sync::Mutex<()>> {
         self.lifecycle_locks
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -463,13 +469,13 @@ impl AgentsService {
             .clone()
     }
 
-    fn runtime_is_current(&self, session_id: &str, generation: u64) -> bool {
+    pub(crate) fn runtime_is_current(&self, session_id: &str, generation: u64) -> bool {
         self.runtimes()
             .get(session_id)
             .is_some_and(|runtime| runtime.generation == generation)
     }
 
-    fn remove_runtime(&self, session_id: &str, generation: u64) {
+    pub(crate) fn remove_runtime(&self, session_id: &str, generation: u64) {
         let mut runtimes = self.runtimes();
         if runtimes
             .get(session_id)
@@ -485,7 +491,7 @@ impl AgentsService {
         }
     }
 
-    fn emit(&self, kind: &str, session_id: &str, payload: Value) {
+    pub(crate) fn emit(&self, kind: &str, session_id: &str, payload: Value) {
         let _order = self.event_order.lock().unwrap_or_else(|p| p.into_inner());
         let seq = self
             .db()
@@ -519,6 +525,17 @@ impl AgentsService {
         params: Value,
         client: crate::engine_dispatch::DispatchClient,
     ) -> Result<Value, String> {
+        self.handle_typed(op, params, client)
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    async fn handle_typed(
+        self: &Arc<Self>,
+        op: &str,
+        params: Value,
+        client: crate::engine_dispatch::DispatchClient,
+    ) -> Result<Value, AgentsError> {
         self.restore_active_sessions().await;
         match op {
             "projects.list" => Ok(json!(self.list_projects()?)),
@@ -558,11 +575,11 @@ impl AgentsService {
             "editors.list" => self.editors().await,
             "editors.open" => self.open_editor(params).await,
             "snapshot" => self.snapshot(params),
-            _ => Err(format!("agents.{op}: unknown sub-operation")),
+            _ => Err(AgentsError::UnknownOp(op.to_string())),
         }
     }
 
-    async fn restore_active_sessions(self: &Arc<Self>) {
+    pub(crate) async fn restore_active_sessions(self: &Arc<Self>) {
         let _guard = self.restore_lock.lock().await;
         if self.restored.load(Ordering::Acquire) {
             return;
@@ -627,11 +644,11 @@ impl AgentsService {
         self.restored.store(true, Ordering::Release);
     }
 
-    fn list_projects(&self) -> Result<Vec<Project>, String> {
+    pub(crate) fn list_projects(&self) -> Result<Vec<Project>, AgentsError> {
         let db = self.db();
         let mut statement = db
             .prepare("SELECT id,name,path,created_at FROM projects ORDER BY created_at")
-            .map_err(|e| e.to_string())?;
+            .map_err(AgentsError::internal)?;
         let rows = statement
             .query_map([], |row| {
                 let path: String = row.get(2)?;
@@ -643,12 +660,12 @@ impl AgentsService {
                     created_at: row.get(3)?,
                 })
             })
-            .map_err(|e| e.to_string())?;
+            .map_err(AgentsError::internal)?;
         rows.collect::<Result<Vec<_>, _>>()
-            .map_err(|e| e.to_string())
+            .map_err(AgentsError::internal)
     }
 
-    async fn add_project(&self, raw_path: &str) -> Result<Value, String> {
+    pub(crate) async fn add_project(&self, raw_path: &str) -> Result<Value, AgentsError> {
         let requested = PathBuf::from(raw_path);
         let canonical = git_repository_root(&requested)?;
         let path = canonical.to_string_lossy().into_owned();
@@ -665,16 +682,16 @@ impl AgentsService {
              ON CONFLICT(path) DO UPDATE SET name=excluded.name",
                 params![id, name, path, created_at],
             )
-            .map_err(|e| e.to_string())?;
+            .map_err(AgentsError::internal)?;
         let project = self
             .list_projects()?
             .into_iter()
             .find(|p| p.id == id)
-            .ok_or("project was not persisted")?;
+            .ok_or(AgentsError::ProjectNotPersisted)?;
         Ok(json!(project))
     }
 
-    fn remove_project(&self, id: &str) -> Result<Value, String> {
+    pub(crate) fn remove_project(&self, id: &str) -> Result<Value, AgentsError> {
         let active: i64 = self
             .db()
             .query_row(
@@ -682,17 +699,20 @@ impl AgentsService {
                 [id],
                 |r| r.get(0),
             )
-            .map_err(|e| e.to_string())?;
+            .map_err(AgentsError::internal)?;
         if active > 0 {
-            return Err("Нельзя удалить проект с активными сессиями".into());
+            return Err(AgentsError::ProjectHasActiveSessions);
         }
         self.db()
             .execute("DELETE FROM projects WHERE id=?1", [id])
-            .map_err(|e| e.to_string())?;
+            .map_err(AgentsError::internal)?;
         Ok(json!(true))
     }
 
-    fn list_sessions(&self, include_archived: bool) -> Result<Vec<Session>, String> {
+    pub(crate) fn list_sessions(
+        &self,
+        include_archived: bool,
+    ) -> Result<Vec<Session>, AgentsError> {
         let sql = if include_archived {
             concat!(
                 "SELECT id,project_id,title,prompt,mode,model,status,branch,worktree_path,",
@@ -707,15 +727,15 @@ impl AgentsService {
             )
         };
         let db = self.db();
-        let mut statement = db.prepare(sql).map_err(|e| e.to_string())?;
+        let mut statement = db.prepare(sql).map_err(AgentsError::internal)?;
         let rows = statement
             .query_map([], session_from_row)
-            .map_err(|e| e.to_string())?;
+            .map_err(AgentsError::internal)?;
         rows.collect::<Result<Vec<_>, _>>()
-            .map_err(|e| e.to_string())
+            .map_err(AgentsError::internal)
     }
 
-    fn get_session(&self, id: &str) -> Result<Session, String> {
+    pub(crate) fn get_session(&self, id: &str) -> Result<Session, AgentsError> {
         self.db()
             .query_row(
                 concat!(
@@ -727,20 +747,23 @@ impl AgentsService {
                 session_from_row,
             )
             .optional()
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| "Сессия не найдена".into())
+            .map_err(AgentsError::internal)?
+            .ok_or_else(|| AgentsError::SessionNotFound)
     }
 
-    async fn create_session(self: &Arc<Self>, input: Value) -> Result<Value, String> {
+    pub(crate) async fn create_session(
+        self: &Arc<Self>,
+        input: Value,
+    ) -> Result<Value, AgentsError> {
         self.create_session_with_client(input, &crate::engine_dispatch::DispatchClient::default())
             .await
     }
 
-    async fn create_session_with_client(
+    pub(crate) async fn create_session_with_client(
         self: &Arc<Self>,
         input: Value,
         client: &crate::engine_dispatch::DispatchClient,
-    ) -> Result<Value, String> {
+    ) -> Result<Value, AgentsError> {
         let project_id = required_str(&input, "project_id")?;
         let prompt = required_str(&input, "prompt")?;
         let package_id = input
@@ -757,13 +780,13 @@ impl AgentsService {
             .unwrap_or("default")
             .to_string();
         if !matches!(mode.as_str(), "default" | "auto-review" | "full-access") {
-            return Err("Неизвестный режим".into());
+            return Err(AgentsError::UnknownMode);
         }
         let project = self
             .list_projects()?
             .into_iter()
             .find(|p| p.id == project_id)
-            .ok_or("Проект не найден")?;
+            .ok_or(AgentsError::ProjectNotFoundRu)?;
         let project_path = canonical_project_path(&project)?;
         if mode == "full-access" {
             let nonce = match input
@@ -787,12 +810,13 @@ impl AgentsService {
                         connection_id: client.connection_id,
                     };
                     self.audit_security("consent_consume", "denied", Some(&binding))?;
-                    return Err("full-access consent required".into());
+                    return Err(AgentsError::ConsentRequired);
                 }
             };
             let expected = FullAccessConsentBinding {
-                package_id: package_id.ok_or("full-access package_id required")?,
-                package_version: package_version.ok_or("full-access package_version required")?,
+                package_id: package_id.ok_or(AgentsError::ConsentPackageIdRequired)?,
+                package_version: package_version
+                    .ok_or(AgentsError::ConsentPackageVersionRequired)?,
                 project_id: project_id.clone(),
                 project_path: project_path.clone(),
                 mode: mode.clone(),
@@ -808,9 +832,9 @@ impl AgentsService {
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             if let Err(error) = consents.consume(nonce, &expected) {
-                let event = if error.contains("expired") {
+                let event = if error.to_string().contains("expired") {
                     "consent_expiry"
-                } else if error.contains("match") {
+                } else if error.to_string().contains("match") {
                     "consent_mismatch"
                 } else {
                     "consent_replay"
@@ -834,7 +858,7 @@ impl AgentsService {
             .join(hex_hash(&project_path))
             .join(&id);
         if let Some(parent) = worktree.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            std::fs::create_dir_all(parent).map_err(AgentsError::internal)?;
         }
         git_status(
             &repo,
@@ -878,27 +902,27 @@ impl AgentsService {
                     timestamp,
                 ],
             )
-            .map_err(|e| e.to_string())?;
+            .map_err(AgentsError::internal)?;
         self.append_timeline(&id, "user_message", json!({"text": prompt}), false)?;
         let session = self.get_session(&id)?;
         self.emit("session_updated", &id, json!(session));
         if let Err(error) = self.spawn_runtime(session.clone()).await {
             self.set_status(&id, SessionStatus::Failed)?;
-            self.append_timeline(&id, "error", json!({"message": error}), false)?;
+            self.append_timeline(&id, "error", json!({"message": error.to_string()}), false)?;
             self.emit("session_updated", &id, json!(self.get_session(&id)?));
             return Err(error);
         }
         Ok(json!(self.get_session(&id)?))
     }
 
-    fn issue_full_access_consent(
+    pub(crate) fn issue_full_access_consent(
         &self,
         input: Value,
         client: &crate::engine_dispatch::DispatchClient,
-    ) -> Result<Value, String> {
+    ) -> Result<Value, AgentsError> {
         if !client.desktop_authorized {
             self.audit_security("consent_issuance", "denied", None)?;
-            return Err("desktop authority denied".into());
+            return Err(AgentsError::DesktopAuthorityDenied);
         }
         let binding = self.full_access_consent_binding(&input, client)?;
         let result = self
@@ -919,20 +943,20 @@ impl AgentsService {
         Ok(result)
     }
 
-    fn approve_full_access_consent(
+    pub(crate) fn approve_full_access_consent(
         &self,
         input: Value,
         client: &crate::engine_dispatch::DispatchClient,
-    ) -> Result<Value, String> {
+    ) -> Result<Value, AgentsError> {
         if !client.desktop_authorized {
             self.audit_security("consent_approval", "denied", None)?;
-            return Err("desktop authority denied".into());
+            return Err(AgentsError::DesktopAuthorityDenied);
         }
         let request_id = required_str(&input, "request_id")?;
         let approved = input
             .get("approved")
             .and_then(Value::as_bool)
-            .ok_or("missing 'approved'")?;
+            .ok_or(AgentsError::MissingApproved)?;
         let mut consents = self
             .full_access_consents
             .lock()
@@ -966,21 +990,21 @@ impl AgentsService {
         }
     }
 
-    fn full_access_consent_binding(
+    pub(crate) fn full_access_consent_binding(
         &self,
         input: &Value,
         client: &crate::engine_dispatch::DispatchClient,
-    ) -> Result<FullAccessConsentBinding, String> {
+    ) -> Result<FullAccessConsentBinding, AgentsError> {
         let mode = required_str(input, "mode")?;
         if mode != "full-access" {
-            return Err("full-access consent requires mode full-access".into());
+            return Err(AgentsError::ConsentModeMismatch);
         }
         let project_id = required_str(input, "project_id")?;
         let project = self
             .list_projects()?
             .into_iter()
             .find(|project| project.id == project_id)
-            .ok_or("project not found")?;
+            .ok_or(AgentsError::ProjectNotFound)?;
         Ok(FullAccessConsentBinding {
             package_id: required_str(input, "package_id")?,
             package_version: required_str(input, "package_version")?,
@@ -996,12 +1020,12 @@ impl AgentsService {
         })
     }
 
-    fn audit_security(
+    pub(crate) fn audit_security(
         &self,
         event: &str,
         result: &str,
         binding: Option<&FullAccessConsentBinding>,
-    ) -> Result<(), String> {
+    ) -> Result<(), AgentsError> {
         self.db()
             .execute(
                 concat!(
@@ -1023,10 +1047,13 @@ impl AgentsService {
                 ],
             )
             .map(|_| ())
-            .map_err(|error| format!("security audit failed: {error}"))
+            .map_err(|error| AgentsError::SecurityAudit(error.to_string()))
     }
 
-    async fn spawn_runtime(self: &Arc<Self>, session: Session) -> Result<(), String> {
+    pub(crate) async fn spawn_runtime(
+        self: &Arc<Self>,
+        session: Session,
+    ) -> Result<(), AgentsError> {
         let (tx, rx) = mpsc::channel(64);
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let generation = self.next_runtime_generation.fetch_add(1, Ordering::Relaxed);
@@ -1053,14 +1080,18 @@ impl AgentsService {
         }
         let result = ready_rx
             .await
-            .map_err(|_| "Codex app-server завершился при запуске".to_string())?;
+            .map_err(|_| AgentsError::AppServerExitedAtStartup)?;
         if result.is_err() {
             self.remove_runtime(&id, generation);
         }
         result
     }
 
-    async fn send(self: &Arc<Self>, session_id: &str, text: &str) -> Result<Value, String> {
+    pub(crate) async fn send(
+        self: &Arc<Self>,
+        session_id: &str,
+        text: &str,
+    ) -> Result<Value, AgentsError> {
         let lifecycle = self.lifecycle_lock(session_id);
         let _guard = lifecycle.lock().await;
         let session = self.get_session(session_id)?;
@@ -1069,14 +1100,14 @@ impl AgentsService {
             "interrupting" | "stopping" | "archived"
         ) || session.archived_at.is_some()
         {
-            return Err("Сессия останавливается или уже архивирована".into());
+            return Err(AgentsError::SessionStoppingOrArchived);
         }
         let mut tx = self.runtimes().get(session_id).map(|h| h.tx.clone());
         if tx.is_none() {
             self.spawn_runtime(session).await?;
             tx = self.runtimes().get(session_id).map(|h| h.tx.clone());
         }
-        let tx = tx.ok_or("Сессия Codex не запущена")?;
+        let tx = tx.ok_or(AgentsError::SessionNotRunning)?;
         let event =
             self.append_timeline(session_id, "user_message", json!({"text": text}), false)?;
         self.emit("timeline_appended", session_id, json!(event));
@@ -1084,21 +1115,21 @@ impl AgentsService {
             text: text.to_string(),
         })
         .await
-        .map_err(|_| "Codex app-server недоступен".to_string())?;
+        .map_err(|_| AgentsError::AppServerUnavailable)?;
         Ok(json!(true))
     }
 
-    async fn interrupt(&self, session_id: &str) -> Result<Value, String> {
+    pub(crate) async fn interrupt(&self, session_id: &str) -> Result<Value, AgentsError> {
         let lifecycle = self.lifecycle_lock(session_id);
         let _guard = lifecycle.lock().await;
         let Some(turn_id) = self.get_session(session_id)?.active_turn_id else {
-            return Err("У сессии нет активного хода".into());
+            return Err(AgentsError::SessionNoActiveTurn);
         };
         let tx = self
             .runtimes()
             .get(session_id)
             .map(|h| h.tx.clone())
-            .ok_or("Сессия Codex не запущена")?;
+            .ok_or(AgentsError::SessionNotRunning)?;
         self.set_status(session_id, SessionStatus::Interrupting)?;
         self.emit(
             "session_updated",
@@ -1129,7 +1160,7 @@ impl AgentsService {
                 session_id,
                 json!(self.get_session(session_id)?),
             );
-            return Err("Codex app-server недоступен".into());
+            return Err(AgentsError::AppServerUnavailable);
         }
         let (acknowledged, reason) =
             match tokio::time::timeout(INTERRUPT_ACK_TIMEOUT, done_rx).await {
@@ -1178,7 +1209,7 @@ impl AgentsService {
         Ok(json!(true))
     }
 
-    async fn archive(&self, session_id: &str) -> Result<Value, String> {
+    pub(crate) async fn archive(&self, session_id: &str) -> Result<Value, AgentsError> {
         let lifecycle = self.lifecycle_lock(session_id);
         let _guard = lifecycle.lock().await;
         if self.get_session(session_id)?.archived_at.is_some() {
@@ -1223,7 +1254,7 @@ impl AgentsService {
         Ok(json!(true))
     }
 
-    fn mark_archived(&self, session_id: &str) -> Result<(), String> {
+    pub(crate) fn mark_archived(&self, session_id: &str) -> Result<(), AgentsError> {
         let timestamp = now();
         self.db()
             .execute(
@@ -1233,39 +1264,39 @@ impl AgentsService {
                 ),
                 params![session_id, timestamp],
             )
-            .map_err(|e| e.to_string())?;
+            .map_err(AgentsError::internal)?;
         Ok(())
     }
 
-    async fn stop_runtime(&self, session_id: &str) -> Result<(), String> {
+    pub(crate) async fn stop_runtime(&self, session_id: &str) -> Result<(), AgentsError> {
         let Some(handle) = self.runtimes().remove(session_id) else {
             return Ok(());
         };
         handle.stop(session_id).await
     }
 
-    async fn remove_worktree(&self, session_id: &str) -> Result<Value, String> {
+    pub(crate) async fn remove_worktree(&self, session_id: &str) -> Result<Value, AgentsError> {
         let lifecycle = self.lifecycle_lock(session_id);
         let _guard = lifecycle.lock().await;
         let session = self.get_session(session_id)?;
         if session.archived_at.is_none() {
-            return Err("Сначала архивируйте сессию".into());
+            return Err(AgentsError::ArchiveSessionFirst);
         }
         if session.active_turn_id.is_some() {
-            return Err("Нельзя удалить worktree активной сессии".into());
+            return Err(AgentsError::ActiveWorktreeRemovalDenied);
         }
         if !session.worktree_exists {
             return Ok(json!(true));
         }
         if git_dirty(Path::new(&session.worktree_path)) {
-            return Err("Worktree содержит незакоммиченные изменения".into());
+            return Err(AgentsError::WorktreeDirty);
         }
         self.stop_runtime(session_id).await?;
         let project = self
             .list_projects()?
             .into_iter()
             .find(|project| project.id == session.project_id)
-            .ok_or("Проект не найден")?;
+            .ok_or(AgentsError::ProjectNotFoundRu)?;
         git_status(
             Path::new(&project.path),
             &["worktree", "remove", &session.worktree_path],
@@ -1279,7 +1310,7 @@ impl AgentsService {
         Ok(json!(true))
     }
 
-    fn timeline(&self, input: Value) -> Result<Value, String> {
+    pub(crate) fn timeline(&self, input: Value) -> Result<Value, AgentsError> {
         let session_id = required_str(&input, "session_id")?;
         let cursor = input
             .get("cursor")
@@ -1296,19 +1327,19 @@ impl AgentsService {
                 "SELECT id,session_id,kind,payload_json,created_at,updated_at,truncated FROM ",
                 "timeline WHERE session_id=?1 AND id<?2 ORDER BY id DESC LIMIT ?3"
             ))
-            .map_err(|e| e.to_string())?;
+            .map_err(AgentsError::internal)?;
         let rows = statement
             .query_map(params![session_id, cursor, limit], timeline_from_row)
-            .map_err(|e| e.to_string())?;
+            .map_err(AgentsError::internal)?;
         let mut events = rows
             .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| e.to_string())?;
+            .map_err(AgentsError::internal)?;
         events.reverse();
         let next_cursor = events.first().map(|event| event.id);
         Ok(json!({"events":events,"nextCursor":next_cursor}))
     }
 
-    async fn respond_approval(&self, input: Value) -> Result<Value, String> {
+    pub(crate) async fn respond_approval(&self, input: Value) -> Result<Value, AgentsError> {
         let approval_id = required_str(&input, "approval_id")?;
         let decision = input
             .get("decision")
@@ -1319,13 +1350,13 @@ impl AgentsService {
         let _guard = lifecycle.lock().await;
         let approval = self.get_approval(&approval_id)?;
         if approval.status != "pending" {
-            return Err("Approval уже обработан".into());
+            return Err(AgentsError::ApprovalAlreadyHandled);
         }
         if matches!(
             self.get_session(&approval.session_id)?.status.as_str(),
             "interrupting" | "stopping" | "archived"
         ) {
-            return Err("Сессия останавливается или уже архивирована".into());
+            return Err(AgentsError::SessionStoppingOrArchived);
         }
         let result = if approval.method == "item/tool/requestUserInput" {
             json!({"answers": input.get("answers").cloned().unwrap_or_else(|| json!({}))})
@@ -1346,7 +1377,7 @@ impl AgentsService {
             .runtimes()
             .get(&approval.session_id)
             .map(|h| h.tx.clone())
-            .ok_or("Сессия Codex не запущена")?;
+            .ok_or(AgentsError::SessionNotRunning)?;
         let (done_tx, done_rx) = tokio::sync::oneshot::channel();
         tx.send(AppCommand::Approval {
             request_id: approval.request_id.clone(),
@@ -1354,11 +1385,11 @@ impl AgentsService {
             done: done_tx,
         })
         .await
-        .map_err(|_| "Codex app-server недоступен".to_string())?;
+        .map_err(|_| AgentsError::AppServerUnavailable)?;
         tokio::time::timeout(Duration::from_secs(5), done_rx)
             .await
-            .map_err(|_| "Codex app-server не подтвердил ответ".to_string())?
-            .map_err(|_| "Codex app-server завершился".to_string())??;
+            .map_err(|_| AgentsError::AppServerResponseNotAcked)?
+            .map_err(|_| AgentsError::AppServerExited)??;
         let timestamp = now();
         self.db()
             .execute(
@@ -1368,7 +1399,7 @@ impl AgentsService {
                 ),
                 params![approval_id, result.to_string(), timestamp],
             )
-            .map_err(|e| e.to_string())?;
+            .map_err(AgentsError::internal)?;
         let remaining: i64 = self
             .db()
             .query_row(
@@ -1376,7 +1407,7 @@ impl AgentsService {
                 [&approval.session_id],
                 |row| row.get(0),
             )
-            .map_err(|error| error.to_string())?;
+            .map_err(AgentsError::internal)?;
         self.set_status(
             &approval.session_id,
             if remaining == 0 {
@@ -1393,10 +1424,10 @@ impl AgentsService {
         Ok(json!(true))
     }
 
-    async fn diff(&self, session_id: &str) -> Result<Value, String> {
+    pub(crate) async fn diff(&self, session_id: &str) -> Result<Value, AgentsError> {
         let session = self.get_session(session_id)?;
         let cwd = PathBuf::from(&session.worktree_path);
-        let canonical_cwd = std::fs::canonicalize(&cwd).map_err(|error| error.to_string())?;
+        let canonical_cwd = std::fs::canonicalize(&cwd).map_err(AgentsError::internal)?;
         let status = git_output(&cwd, &["status", "--porcelain=v1", "-z"]).await?;
         let base_status =
             git_output(&cwd, &["diff", "--name-status", "-z", &session.base_commit]).await?;
@@ -1480,12 +1511,12 @@ impl AgentsService {
             "truncated":truncated}))
     }
 
-    async fn models(&self) -> Result<Value, String> {
+    pub(crate) async fn models(&self) -> Result<Value, AgentsError> {
         let output = codex_one_shot("model/list", json!({"limit":100})).await?;
         Ok(output)
     }
 
-    async fn editors(&self) -> Result<Value, String> {
+    pub(crate) async fn editors(&self) -> Result<Value, AgentsError> {
         let mut editors = Vec::new();
         for (id, label, command) in [
             ("code", "Visual Studio Code", "code"),
@@ -1500,7 +1531,7 @@ impl AgentsService {
         Ok(json!(editors))
     }
 
-    async fn open_editor(&self, input: Value) -> Result<Value, String> {
+    pub(crate) async fn open_editor(&self, input: Value) -> Result<Value, AgentsError> {
         let session = self.get_session(&required_str(&input, "session_id")?)?;
         let editor = input
             .get("editor_id")
@@ -1511,10 +1542,10 @@ impl AgentsService {
             "code" => "code",
             "cursor" => "cursor",
             "windsurf" => "windsurf",
-            _ => return Err("Неизвестный редактор".into()),
+            _ => return Err(AgentsError::UnknownEditor),
         };
         if editor != "explorer" && !command_available(executable).await {
-            return Err("Редактор не установлен".into());
+            return Err(AgentsError::EditorMissing);
         }
         let mut command = Command::new(executable);
         command
@@ -1523,11 +1554,11 @@ impl AgentsService {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
-            .map_err(|e| format!("Не удалось открыть редактор: {e}"))?;
+            .map_err(|e| AgentsError::EditorOpen(e))?;
         Ok(json!(true))
     }
 
-    fn snapshot(&self, input: Value) -> Result<Value, String> {
+    pub(crate) fn snapshot(&self, input: Value) -> Result<Value, AgentsError> {
         let after_seq = input.get("after_seq").and_then(Value::as_u64).unwrap_or(0);
         let approvals = self.pending_approvals()?;
         let recent_events = self
@@ -1547,13 +1578,13 @@ impl AgentsService {
             "approvals":approvals}))
     }
 
-    fn append_timeline(
+    pub(crate) fn append_timeline(
         &self,
         session_id: &str,
         kind: &str,
         mut payload: Value,
         mut truncated: bool,
-    ) -> Result<TimelineEvent, String> {
+    ) -> Result<TimelineEvent, AgentsError> {
         if let Some(text) = payload
             .get_mut("text")
             .and_then(|value| value.as_str())
@@ -1594,7 +1625,7 @@ impl AgentsService {
                 timestamp
             ],
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(AgentsError::internal)?;
         let id = db.last_insert_rowid();
         Ok(TimelineEvent {
             id,
@@ -1607,7 +1638,12 @@ impl AgentsService {
         })
     }
 
-    fn append_and_emit(&self, session_id: &str, kind: &str, payload: Value) -> Result<(), String> {
+    pub(crate) fn append_and_emit(
+        &self,
+        session_id: &str,
+        kind: &str,
+        payload: Value,
+    ) -> Result<(), AgentsError> {
         if matches!(
             kind,
             "message_delta" | "reasoning_delta" | "command_output" | "file_change_delta"
@@ -1620,12 +1656,12 @@ impl AgentsService {
         Ok(())
     }
 
-    fn append_stream_delta(
+    pub(crate) fn append_stream_delta(
         &self,
         session_id: &str,
         kind: &str,
         payload: Value,
-    ) -> Result<(), String> {
+    ) -> Result<(), AgentsError> {
         let delta = payload
             .get("delta")
             .or_else(|| payload.get("text"))
@@ -1660,7 +1696,7 @@ impl AgentsService {
                         buffer.event.updated_at
                     ],
                 )
-                .map_err(|e| e.to_string())?;
+                .map_err(AgentsError::internal)?;
             if buffer.last_emit.elapsed() >= Duration::from_millis(50) {
                 self.emit("timeline_updated", session_id, json!(buffer.event));
                 buffer.last_emit = Instant::now();
@@ -1683,7 +1719,7 @@ impl AgentsService {
         Ok(())
     }
 
-    fn flush_streams(&self, session_id: &str) {
+    pub(crate) fn flush_streams(&self, session_id: &str) {
         let mut streams = self.streams.lock().unwrap_or_else(|p| p.into_inner());
         let keys = streams
             .keys()
@@ -1699,7 +1735,11 @@ impl AgentsService {
         }
     }
 
-    fn set_status(&self, session_id: &str, status: SessionStatus) -> Result<(), String> {
+    pub(crate) fn set_status(
+        &self,
+        session_id: &str,
+        status: SessionStatus,
+    ) -> Result<(), AgentsError> {
         self.db()
             .execute(
                 concat!(
@@ -1708,16 +1748,16 @@ impl AgentsService {
                 ),
                 params![session_id, status.as_str(), now()],
             )
-            .map_err(|e| e.to_string())?;
+            .map_err(AgentsError::internal)?;
         Ok(())
     }
 
-    fn update_codex_ids(
+    pub(crate) fn update_codex_ids(
         &self,
         session_id: &str,
         thread_id: Option<&str>,
         turn_id: Option<&str>,
-    ) -> Result<(), String> {
+    ) -> Result<(), AgentsError> {
         self.db()
             .execute(
                 concat!(
@@ -1726,17 +1766,17 @@ impl AgentsService {
                 ),
                 params![session_id, thread_id, turn_id, now()],
             )
-            .map_err(|e| e.to_string())?;
+            .map_err(AgentsError::internal)?;
         Ok(())
     }
 
-    fn save_approval(
+    pub(crate) fn save_approval(
         &self,
         session_id: &str,
         request_id: Value,
         method: &str,
         params_value: Value,
-    ) -> Result<Approval, String> {
+    ) -> Result<Approval, AgentsError> {
         let request_id_json = request_id.to_string();
         if let Some(existing) = self
             .db()
@@ -1751,7 +1791,7 @@ impl AgentsService {
                 approval_from_row,
             )
             .optional()
-            .map_err(|e| e.to_string())?
+            .map_err(AgentsError::internal)?
         {
             return Ok(existing);
         }
@@ -1781,12 +1821,12 @@ impl AgentsService {
                     approval.created_at
                 ],
             )
-            .map_err(|e| e.to_string())?;
+            .map_err(AgentsError::internal)?;
         self.set_status(session_id, SessionStatus::WaitingApproval)?;
         Ok(approval)
     }
 
-    fn get_approval(&self, id: &str) -> Result<Approval, String> {
+    pub(crate) fn get_approval(&self, id: &str) -> Result<Approval, AgentsError> {
         self.db()
             .query_row(
                 concat!(
@@ -1797,11 +1837,11 @@ impl AgentsService {
                 approval_from_row,
             )
             .optional()
-            .map_err(|e| e.to_string())?
-            .ok_or_else(|| "Approval не найден".into())
+            .map_err(AgentsError::internal)?
+            .ok_or_else(|| AgentsError::ApprovalNotFound)
     }
 
-    fn pending_approvals(&self) -> Result<Vec<Approval>, String> {
+    pub(crate) fn pending_approvals(&self) -> Result<Vec<Approval>, AgentsError> {
         let db = self.db();
         let mut statement = db
             .prepare(concat!(
@@ -1809,26 +1849,30 @@ impl AgentsService {
                 "response_json,created_at,resolved_at FROM approvals WHERE status='pending' ",
                 "ORDER BY created_at"
             ))
-            .map_err(|e| e.to_string())?;
+            .map_err(AgentsError::internal)?;
         let rows = statement
             .query_map([], approval_from_row)
-            .map_err(|e| e.to_string())?;
+            .map_err(AgentsError::internal)?;
         rows.collect::<Result<Vec<_>, _>>()
-            .map_err(|e| e.to_string())
+            .map_err(AgentsError::internal)
     }
 
-    fn expire_pending_approvals(&self, session_id: &str, reason: &str) -> Result<(), String> {
+    pub(crate) fn expire_pending_approvals(
+        &self,
+        session_id: &str,
+        reason: &str,
+    ) -> Result<(), AgentsError> {
         let timestamp = now();
         let approval_ids = {
             let db = self.db();
             let mut statement = db
                 .prepare("SELECT id FROM approvals WHERE session_id=?1 AND status='pending'")
-                .map_err(|error| error.to_string())?;
+                .map_err(AgentsError::internal)?;
             let ids = statement
                 .query_map([session_id], |row| row.get::<_, String>(0))
-                .map_err(|error| error.to_string())?
+                .map_err(AgentsError::internal)?
                 .collect::<Result<Vec<_>, _>>()
-                .map_err(|error| error.to_string())?;
+                .map_err(AgentsError::internal)?;
             ids
         };
         self.db()
@@ -1843,7 +1887,7 @@ impl AgentsService {
                     timestamp
                 ],
             )
-            .map_err(|error| error.to_string())?;
+            .map_err(AgentsError::internal)?;
         if !approval_ids.is_empty() {
             for approval_id in &approval_ids {
                 self.emit(
@@ -1866,7 +1910,11 @@ impl AgentsService {
         Ok(())
     }
 
-    fn resolve_server_request(&self, session_id: &str, request_id: &Value) -> Result<(), String> {
+    pub(crate) fn resolve_server_request(
+        &self,
+        session_id: &str,
+        request_id: &Value,
+    ) -> Result<(), AgentsError> {
         let approval_id = self
             .db()
             .query_row(
@@ -1878,7 +1926,7 @@ impl AgentsService {
                 |row| row.get::<_, String>(0),
             )
             .optional()
-            .map_err(|error| error.to_string())?;
+            .map_err(AgentsError::internal)?;
         if let Some(approval_id) = approval_id {
             let timestamp = now();
             self.db()
@@ -1893,7 +1941,7 @@ impl AgentsService {
                         timestamp
                     ],
                 )
-                .map_err(|error| error.to_string())?;
+                .map_err(AgentsError::internal)?;
             self.emit(
                 "approval_resolved",
                 session_id,

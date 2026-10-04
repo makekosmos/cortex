@@ -1,3 +1,6 @@
-include!("validation/part01.rs");
-include!("validation/part02.rs");
-include!("validation/part03.rs");
+mod content;
+mod rich_text;
+mod schema;
+pub(crate) use content::*;
+pub(crate) use rich_text::*;
+pub use schema::*;

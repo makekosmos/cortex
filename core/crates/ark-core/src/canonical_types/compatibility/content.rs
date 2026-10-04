@@ -19,20 +19,24 @@ pub fn note(
         "relatedNotes",
         &["related_notes"],
         "related",
-        LinkWrite { links: l,
-        id,
-        at,
-        unknown: u },
+        LinkWrite {
+            links: l,
+            id,
+            at,
+            unknown: u,
+        },
     )?;
     relation_with_aliases(
         m,
         "tagIds",
         &["tag_ids"],
         "tag",
-        LinkWrite { links: l,
-        id,
-        at,
-        unknown: u },
+        LinkWrite {
+            links: l,
+            id,
+            at,
+            unknown: u,
+        },
     )
 }
 pub fn person(
@@ -57,10 +61,12 @@ pub fn person(
         "photoId",
         &["photo_id"],
         "photo",
-        LinkWrite { links: l,
-        id,
-        at,
-        unknown: u },
+        LinkWrite {
+            links: l,
+            id,
+            at,
+            unknown: u,
+        },
     )
 }
 pub fn image(
@@ -159,19 +165,23 @@ pub fn book(
         "tagIds",
         &["tag_ids"],
         "tag",
-        LinkWrite { links: l,
-        id,
-        at,
-        unknown: u },
+        LinkWrite {
+            links: l,
+            id,
+            at,
+            unknown: u,
+        },
     )?;
     relation_with_aliases(
         m,
         "authorPersonIds",
         &["author_person_ids"],
         "author-person",
-        LinkWrite { links: l,
-        id,
-        at,
-        unknown: u },
+        LinkWrite {
+            links: l,
+            id,
+            at,
+            unknown: u,
+        },
     )
 }

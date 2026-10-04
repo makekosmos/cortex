@@ -1,2 +1,4 @@
-include!("game/part01.rs");
-include!("game/part02.rs");
+mod model;
+mod store;
+pub use model::*;
+pub use store::*;
