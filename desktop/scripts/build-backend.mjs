@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 import path from "node:path";
-import { copyFileSync } from "node:fs";
+import { copyFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   effectiveCargoTargetDir,
@@ -57,6 +57,15 @@ try {
     stageRuntimeBinary(bin, path.join(cortexTargetDir, "release"), stageDir);
   }
   copyFileSync(path.join(shellRoot, "build", "tray.ico"), path.join(stageDir, "tray.ico"));
+  // KOS-345: ort uses load-dynamic — onnxruntime.dll is provisioned out of
+  // band (ONNXRUNTIME_DLL env or desktop/vendor/onnxruntime/onnxruntime.dll,
+  // see docs/onnxruntime.md). When present it is staged so the engine payload
+  // ships it next to mundus-engine.exe, hashed into engine-manifest.json.
+  const onnxruntimeDll =
+    process.env.ONNXRUNTIME_DLL ?? path.join(shellRoot, "vendor", "onnxruntime", "onnxruntime.dll");
+  if (existsSync(onnxruntimeDll)) {
+    copyFileSync(onnxruntimeDll, path.join(stageDir, "onnxruntime.dll"));
+  }
 } catch (error) {
   console.error(`[build-backend] ${error instanceof Error ? error.message : String(error)}`);
   process.exit(1);

@@ -10,3 +10,4 @@ release/
 # NSIS buildResources live under build/ — the root build/ is ignored;
 # explicitly whitelist the required files.
 !build/
+vendor/
