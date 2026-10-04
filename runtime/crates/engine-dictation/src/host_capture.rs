@@ -9,7 +9,8 @@ fn apply_ptt_hook(cfg: &DictationConfig, _tx: &broadcast::Sender<Value>) {
             hotkey_hook::set_active(Some(matcher), Some(_tx.clone()), mode);
         } else {
             eprintln!(
-                "[dictation::host] hotkey '{}' не парсится — hook деактивирован",
+                "[dictation::host] hotkey '{}' не парсится — \
+                 hook деактивирован",
                 cfg.hotkey
             );
             hotkey_hook::set_active(None, None, mode);
@@ -19,11 +20,9 @@ fn apply_ptt_hook(cfg: &DictationConfig, _tx: &broadcast::Sender<Value>) {
     {
         #[cfg(target_os = "macos")]
         {
-            if let Err(e) = crate::dictation::macos_native::set_hotkey_active(
-                &cfg.hotkey,
-                cfg.trigger_mode,
-                _tx.clone(),
-            ) {
+            if let Err(e) =
+                crate::macos_native::set_hotkey_active(&cfg.hotkey, cfg.trigger_mode, _tx.clone())
+            {
                 eprintln!("[dictation::host] macOS hotkey helper unavailable: {e}");
             }
         }
@@ -102,9 +101,10 @@ async fn op_capture_start(params: Value, host: &Arc<DictationHost>) -> Dictation
         return started;
     }
     // Live RMS-уровни микрофона → broadcast `dictation_audio_level`, чтобы
-    // pill-оверлей мог рисовать waveform (паритет с Vue pill AnalyserNode).
-    // broadcast::send синхронный и не блокирует — вызывается прямо из
-    // capture-потока через mpsc-переходник.
+    // pill-оверлей мог рисовать waveform (паритет с Vue pill
+    // AnalyserNode).
+    // broadcast::send синхронный и не блокирует — вызывается прямо
+    // из capture-потока через mpsc-переходник.
     let (level_tx, level_rx) = std::sync::mpsc::channel::<f32>();
     {
         let events_tx = host.events_tx.clone();
@@ -262,8 +262,9 @@ async fn preload_local_runtime_for_recording(host: &DictationHost) {
     }
 
     // Self-heal для существующих установок: Vulkan whisper-cli без
-    // whisper-server.exe работает только «холодно» (модель грузится заново на
-    // каждую диктовку). Докачиваем обновлённый рантайм (r2) в фоне — после
+    // whisper-server.exe работает только «холодно» (модель грузится
+    // заново на каждую диктовку). Докачиваем обновлённый рантайм (r2)
+    // в фоне — после
     // успеха тёплый GPU-путь включается автоматически.
     if cfg.local_engine != local::PARAKEET_LOCAL_ENGINE
         && local_models::vulkan_runtime_needs_server_repair(&host.data_dir)
@@ -378,7 +379,8 @@ async fn op_submit_audio(params: Value, host: &Arc<DictationHost>) -> DictationR
         .map(|f| f.max(0.0).round() as f32)
         .unwrap_or(0.0);
 
-    // Декод base64 — fatal без retry (битое аудио переотправлять бессмысленно).
+    // Декод base64 — fatal без retry (битое аудио переотправлять
+    // бессмысленно).
     let wav_bytes = match base64::engine::general_purpose::STANDARD.decode(&audio_b64) {
         Ok(b) => b,
         Err(e) => {
@@ -407,7 +409,8 @@ async fn op_submit_audio(params: Value, host: &Arc<DictationHost>) -> DictationR
     let cfg = host.snapshot_config().await;
     let prev_hwnd = host.state.lock().await.prev_hwnd;
 
-    // Disk-first: enqueue до любого HTTP. Crash после этой точки не теряет аудио.
+    // Disk-first: enqueue до любого HTTP. Crash после этой точки не
+    // теряет аудио.
     let opts = super::pending::EnqueueOpts {
         language: cfg.language.clone(),
         prompt: cfg.transcription_prompt.clone(),
@@ -497,9 +500,10 @@ async fn op_submit_audio(params: Value, host: &Arc<DictationHost>) -> DictationR
         String::new()
     };
 
-    // Одна inline-попытка — pill показывает «Распознаю…» ~1s в happy-path.
-    // На фейле — spawn'им auto-retry в фоне (5/10/20/40s) и сразу возвращаем
-    // OK с state=idle, чтобы pill закрылся без перехвата фокуса.
+    // Одна inline-попытка — pill показывает «Распознаю…» ~1s в
+    // happy-path. На фейле — spawn'им auto-retry в фоне (5/10/20/40s)
+    // и сразу возвращаем OK с state=idle, чтобы pill закрылся без
+    // перехвата фокуса.
     let outcome = if params.get("delivery").and_then(Value::as_str) == Some("text_only") {
         process_one_attempt_with_injector(
             host,
@@ -543,10 +547,11 @@ async fn op_submit_audio(params: Value, host: &Arc<DictationHost>) -> DictationR
             "cancelled": true,
         })),
         AttemptOutcome::Fatal => {
-            // Фатально (401/400/403/etc) — НЕ спавним auto-retry. Возвращаем
-            // pill state="error" с user_msg чтобы он показал понятную ошибку
-            // и закрылся. Pending остаётся на диске — после фикса конфига
-            // (DoH/proxy/новый key) можно retry'ить из Settings → Очередь.
+            // Фатально (401/400/403/etc) — НЕ спавним auto-retry.
+            // Возвращаем pill state="error" с user_msg чтобы он показал
+            // понятную ошибку и закрылся. Pending остаётся на диске —
+            // после фикса конфига (DoH/proxy/новый key) можно retry'ить
+            // из Settings → Очередь.
             let user_msg = {
                 let s = host.state.lock().await;
                 s.last_error

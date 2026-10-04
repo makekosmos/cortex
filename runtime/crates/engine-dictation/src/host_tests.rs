@@ -326,13 +326,13 @@
 
     struct FailingInjector;
 
-    impl crate::dictation::inject::Injector for FailingInjector {
+    impl crate::inject::Injector for FailingInjector {
         fn inject(
             &self,
             _text: &str,
             _mode: InjectMode,
             _prev_hwnd: Option<isize>,
-        ) -> Result<crate::dictation::inject::DeliveryResult, InjectError> {
+        ) -> Result<crate::inject::DeliveryResult, InjectError> {
             Err(InjectError::SendInput {
                 injected: 0,
                 expected: 4,

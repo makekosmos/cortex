@@ -42,6 +42,7 @@ required-features = ["markdown-bridge-fixture"]
 ark-core = { path = "../core/crates/ark-core", package = "ark-core" }
 package-protocol = { path = "crates/package-protocol" }
 engine-base = { path = "crates/engine-base" }
+engine-dictation = { path = "crates/engine-dictation" }
 rusqlite.workspace = true
 tokio = { version = "1", features = [
   "rt-multi-thread",
@@ -81,11 +82,6 @@ async-trait = "0.1"
 zip = { version = "0.6", default-features = false, features = ["deflate"] }
 flate2 = "1"
 tar = "0.4"
-transcribe-rs = { version = "0.3.11", features = ["onnx"] }
-# KOS-345: load-dynamic — ort-sys/dlopen onnxruntime.dll в рантайме вместо
-# download/link в build script. transcribe-rs не пробрасывает эту feature,
-# поэтому ort объявлен напрямую (та же версия, feature unification).
-ort = { version = "2.0.0-rc.12", features = ["load-dynamic"] }
 # App Index (2026-05-22): .lnk parsing для Start Menu sources.
 lnk = "0.5"
 # App Index: fs-watch для invalidation cache.
@@ -96,20 +92,13 @@ walkdir = "2"
 ignore = "0.4"
 globset = "0.4"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
-# Dictation Phase 1 (2026-05-24): диктация Groq cloud.
-# enigo — кросс-платформенная симуляция клавиш (Win32 SendInput) для Ctrl+V инжекта.
-# arboard — clipboard read/write с восстановлением оригинала после inject.
-# keyring — нативный secret store для API key (enterprise-standard, не plaintext):
-#   Windows Credential Manager (windows-native) + macOS Keychain (apple-native).
-#   Без backend-feature для платформы keyring молча использует mock store —
-#   запись «успешна», но ключ не персистит (на macOS → submit_audio: API key не задан).
-# hickory-resolver — DoH resolver для AI HTTP клиентов (РФ обход DNS poisoning).
-# base64 — encode/decode WAV bytes между renderer и backend.
-# arboard — save/restore clipboard поверх inject'а транскрипта. Ctrl+V сам шлётся
-# через нативный windows::Win32 SendInput (enigo шёл через VK_PACKET, ломался).
-arboard = "3"
+# Dictation deps (arboard, transcribe-rs/ort, hickory-resolver, libloading,
+# enigo notes) moved with the code to runtime/crates/engine-dictation (KOS-334).
+# keyring stays: package_service/integrations/secret_store.rs also uses it —
+#   без backend-feature для платформы keyring молча использует mock store —
+#   запись «успешна», но ключ не персистит.
+# base64 — encode/decode WAV bytes между renderer и backend (shared).
 keyring = { version = "3", features = ["windows-native", "apple-native"] }
-hickory-resolver = { version = "0.24", features = ["dns-over-https-rustls"] }
 base64 = "0.22"
 hpke = { version = "=0.14.1", default-features = false, features = [
   "alloc",
@@ -118,7 +107,6 @@ hpke = { version = "=0.14.1", default-features = false, features = [
   "hkdfsha2",
   "chacha",
 ] }
-libloading = "0.8"
 semver = "1"
 # Phase 4 bug-detection: structured logging.
 # tracing = фасад; subscriber = JSON exporter + env-filter; appender =
@@ -177,9 +165,11 @@ libc = "0.2"
 pe-version-info = { path = "crates/pe-version-info" }
 
 [dev-dependencies]
-# engine-base test-support exposes shared test helpers (CaptureBuf) to the
-# engine test targets; dev-dep features do not leak into normal builds.
+# engine-base/engine-dictation test-support exposes shared test helpers
+# (CaptureBuf, DictationHost::new_for_test) to the engine test targets;
+# dev-dep features do not leak into normal builds.
 engine-base = { path = "crates/engine-base", features = ["test-support"] }
+engine-dictation = { path = "crates/engine-dictation", features = ["test-support"] }
 tempfile.workspace = true
 httpmock = "0.8.3"
 # Test-only: the replication fixtures sign their own documents; the package

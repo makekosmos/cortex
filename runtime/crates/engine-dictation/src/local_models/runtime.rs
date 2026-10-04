@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 
 use super::download::ProgressCallback;
 use super::{path_string, same_path_or_text, shared_assets_root, tools_dir, LocalModelsError};
-use crate::dictation::config;
+use crate::config;
 
 mod install;
 use install::install_whisper_cpp_zip;

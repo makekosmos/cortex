@@ -232,7 +232,7 @@ mod tests {
             .send()
             .await
             .expect_err("must fail");
-        let err = SubmitError::Network(crate::dictation::network::NetworkError::Reqwest(req_err));
+        let err = SubmitError::Network(crate::network::NetworkError::Reqwest(req_err));
         assert_eq!(classify(&err), FailureKind::Retryable);
     }
 }
