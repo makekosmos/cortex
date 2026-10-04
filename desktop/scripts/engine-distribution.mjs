@@ -8,6 +8,13 @@ import { ENGINE_BINARY, ENGINE_MANIFEST_PRODUCT } from "./brand.mjs";
 // helper exes ship in the distribution.
 export const ENGINE_FILES = [ENGINE_BINARY, "tray.ico"];
 
+// KOS-345: ort is built with `load-dynamic` — ONNX Runtime is dlopen'd at
+// runtime, nothing is downloaded/linked at build time. The DLL is provisioned
+// separately (see docs/onnxruntime.md) and rides the payload only when the
+// staging dir actually contains it — the manifest's per-file sha256 then
+// verifies it on install like any other engine file.
+export const OPTIONAL_ENGINE_FILES = ["onnxruntime.dll"];
+
 // MIGRATION(KOS-267): 'kosmos-engine' manifests exist in installed Engine
 // roots written by 0.9.x installers; the Engine's `install` subcommand
 // accepts both until cleanup.
@@ -58,7 +65,11 @@ export function buildEnginePayload(releaseDir, payloadDir, { version, sourceComm
   if (!ENGINE_VERSION.test(version)) throw new Error("engine version must be semver");
   if (!SOURCE_COMMIT.test(sourceCommit))
     throw new Error("engine sourceCommit must be a 40-character lowercase commit");
-  const files = ENGINE_FILES.map((name) => {
+  const names = [
+    ...ENGINE_FILES,
+    ...OPTIONAL_ENGINE_FILES.filter((name) => fs.existsSync(path.join(releaseDir, name))),
+  ];
+  const files = names.map((name) => {
     const data = fs.readFileSync(path.join(releaseDir, name));
     return { name, data, sha256: sha256(data), size: data.length };
   });

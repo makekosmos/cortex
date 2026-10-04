@@ -764,12 +764,46 @@ fn run_whisper_cpp(req: OwnedLocalRequest) -> Result<TranscriptionResult, LocalE
     })
 }
 
+#[cfg(windows)]
+const ORT_DYLIB_NAME: &str = "onnxruntime.dll";
+#[cfg(target_os = "macos")]
+const ORT_DYLIB_NAME: &str = "libonnxruntime.dylib";
+#[cfg(all(unix, not(target_os = "macos")))]
+const ORT_DYLIB_NAME: &str = "libonnxruntime.so";
+
+/// KOS-345: ort собран с `load-dynamic` — ONNX Runtime подгружается dlopen'ом
+/// в рантайме, build script ничего не скачивает и не линкует. Порядок поиска:
+/// `ORT_DYLIB_PATH` → dylib рядом с exe → имя в стандартном loader path.
+/// `ort::init_from` возвращает Result, поэтому отсутствующая библиотека —
+/// понятная ошибка, а не panic внутри ort при первом обращении к API.
+fn ensure_onnxruntime() -> Result<(), LocalError> {
+    let candidates = [
+        std::env::var_os("ORT_DYLIB_PATH").map(PathBuf::from),
+        std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent().map(|dir| dir.join(ORT_DYLIB_NAME))),
+        Some(PathBuf::from(ORT_DYLIB_NAME)),
+    ];
+    let mut last_err = String::new();
+    for path in candidates.into_iter().flatten() {
+        match ort::init_from(&path) {
+            Ok(_) => return Ok(()),
+            Err(e) => last_err = format!("{}: {e}", path.display()),
+        }
+    }
+    Err(LocalError::CommandFailed(format!(
+        "onnxruntime dylib not found (set ORT_DYLIB_PATH or place {ORT_DYLIB_NAME} next to \
+         the engine binary): {last_err}"
+    )))
+}
+
 fn run_parakeet(req: OwnedLocalRequest) -> Result<TranscriptionResult, LocalError> {
     let model_path = ensure_existing_model_path(
         req.model_path
             .as_deref()
             .ok_or(LocalError::MissingModelPath)?,
     )?;
+    ensure_onnxruntime()?;
     let (wav_path, out_base) = temp_audio_paths()?;
     fs::write(&wav_path, &req.wav_bytes).map_err(|e| LocalError::TempAudio(e.to_string()))?;
 
