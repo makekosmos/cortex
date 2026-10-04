@@ -452,8 +452,8 @@ mod tests {
             .mock_async(|when, then| {
                 when.method(POST)
                     .path("/openai/v1/audio/transcriptions")
-                    .matches(|req| {
-                        let body = String::from_utf8_lossy(req.body.as_deref().unwrap_or(&[]));
+                    .is_true(|req| {
+                        let body = String::from_utf8_lossy(req.body_ref());
                         !body.contains("name=\"language\"")
                     });
                 then.status(200).body(concat!(
@@ -519,6 +519,6 @@ mod tests {
         .expect("transcribe");
 
         assert_eq!(out.text, "часть часть часть");
-        assert_eq!(mock.hits_async().await, 3);
+        assert_eq!(mock.calls_async().await, 3);
     }
 }

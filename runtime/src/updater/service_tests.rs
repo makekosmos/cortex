@@ -77,7 +77,7 @@ async fn unsupported_package_reports_release_without_downloading_foreign_install
     assert!(!service.downloading.load(Ordering::SeqCst));
     assert_eq!(service.download()["state"], "error");
     assert_eq!(service.install()["state"], "error");
-    payload.assert_hits_async(0).await;
+    payload.assert_calls_async(0).await;
     assert!(!dir.path().join("updates/a.exe").exists());
 }
 
