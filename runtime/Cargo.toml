@@ -173,10 +173,11 @@ pe-version-info = { path = "crates/pe-version-info" }
 
 [dev-dependencies]
 tempfile.workspace = true
-httpmock = "0.7"
+httpmock = "0.8.3"
 # Test-only: the replication fixtures sign their own documents; the package
-# catalog path carries no Ed25519 code.
-ed25519-dalek = "2"
+# catalog path carries no Ed25519 code. Pinned to the same release as
+# ark-core so tests do not pull a second ed25519/curve25519 stack.
+ed25519-dalek = "=3.0.0-rc.0"
 
 [lints]
 workspace = true
