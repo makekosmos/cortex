@@ -18,7 +18,9 @@ use serde_json::Value;
 use thiserror::Error;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{ChildStdin, ChildStdout, Command as TokioCommand};
+#[cfg(feature = "local-dictation")]
 use transcribe_rs::onnx::parakeet::{ParakeetModel, ParakeetParams, TimestampGranularity};
+#[cfg(feature = "local-dictation")]
 use transcribe_rs::onnx::Quantization;
 
 use crate::process_tree::ProcessTree;
@@ -127,6 +129,24 @@ pub enum LocalError {
     EmptyTranscript,
     #[error("Локальный STT sidecar недоступен: {0}")]
     SidecarUnavailable(String),
+    // KOS-337: the whole local backend (whisper.cpp sidecar/direct, Parakeet
+    // ONNX) is behind the `local-dictation` Cargo feature — dev/agent builds
+    // compile without it and every local entry returns this error.
+    #[error("local dictation backend not built with local-dictation feature")]
+    NotBuiltWithLocalDictation,
+}
+
+/// KOS-337 feature gate: локальный backend собирается только с
+/// `local-dictation`. `cfg!` (а не `#[cfg]` на вызовах) сохраняет весь код
+/// компилируемым в обоих режимах — cfg'нуты только куски, требующие
+/// transcribe-rs/ort (Parakeet path).
+#[inline]
+fn local_dictation_feature_gate() -> Result<(), LocalError> {
+    if cfg!(feature = "local-dictation") {
+        Ok(())
+    } else {
+        Err(LocalError::NotBuiltWithLocalDictation)
+    }
 }
 
 fn is_dictation_test_mode() -> bool {
@@ -273,5 +293,10 @@ fn local_stt_sidecar_path() -> Result<PathBuf, LocalError> {
 
 include!("local/sidecar.rs");
 include!("local/backend.rs");
-#[cfg(test)]
+// KOS-337: локальные backend-тесты смысленны только когда backend собран —
+// без фичи они скипаются (не компилируются), а контракт ошибки покрывает
+// tests_disabled.rs.
+#[cfg(all(test, feature = "local-dictation"))]
 include!("local/tests.rs");
+#[cfg(all(test, not(feature = "local-dictation")))]
+include!("local/tests_disabled.rs");

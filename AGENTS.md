@@ -48,6 +48,14 @@ cross-cutting documentation lives in-tree under [`docs/`](docs/).
   крейты и запускает `check` + `nextest` только для них. Опции:
   `--check-only`, `--files <path>...`, позиционные аргументы — фильтр nextest.
 - Типичная итерация — десятки секунд на прогретом кэше (мелкий крейт ~5 s).
+- `local-dictation` (KOS-337): локальный dictation backend (whisper.cpp +
+  Parakeet ONNX через `transcribe-rs`/`ort`) собирается только с фичей
+  `engine/local-dictation` (= `engine-dictation/local-dictation`). Дефолтные
+  dev/agent сборки — БЕЗ неё (минус ~31 крейт ONNX-стека); `local::transcribe`
+  и `preload_server` тогда возвращают
+  `LocalError::NotBuiltWithLocalDictation`, groq/cloud не затронут. Полный
+  гейт и release собирают С фичей — правки в `dictation/local/*` проверять
+  `cargo check/nextest -p engine-dictation --features local-dictation`.
 - mbx уже шарит кэш компиляций между worktree'ми (`mbx[cache]: N hits` в
   выводе cargo) — НЕ делать `cargo clean` и не задавать свой
   `CARGO_TARGET_DIR`: это ломает shared cache и форсит холодную пересборку.

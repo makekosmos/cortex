@@ -664,6 +664,7 @@ pub(crate) async fn preload_with_whisper_backend(
 pub(crate) async fn preload_with_whisper_backend_model(
     model: &LocalSttModelSpec,
 ) -> Result<bool, LocalError> {
+    local_dictation_feature_gate()?;
     if !is_supported_engine(&model.engine) {
         return Err(LocalError::UnsupportedEngine {
             engine: model.engine.clone(),
@@ -764,11 +765,11 @@ fn run_whisper_cpp(req: OwnedLocalRequest) -> Result<TranscriptionResult, LocalE
     })
 }
 
-#[cfg(windows)]
+#[cfg(all(feature = "local-dictation", windows))]
 const ORT_DYLIB_NAME: &str = "onnxruntime.dll";
-#[cfg(target_os = "macos")]
+#[cfg(all(feature = "local-dictation", target_os = "macos"))]
 const ORT_DYLIB_NAME: &str = "libonnxruntime.dylib";
-#[cfg(all(unix, not(target_os = "macos")))]
+#[cfg(all(feature = "local-dictation", unix, not(target_os = "macos")))]
 const ORT_DYLIB_NAME: &str = "libonnxruntime.so";
 
 /// KOS-345: ort собран с `load-dynamic` — ONNX Runtime подгружается dlopen'ом
@@ -776,6 +777,7 @@ const ORT_DYLIB_NAME: &str = "libonnxruntime.so";
 /// `ORT_DYLIB_PATH` → dylib рядом с exe → имя в стандартном loader path.
 /// `ort::init_from` возвращает Result, поэтому отсутствующая библиотека —
 /// понятная ошибка, а не panic внутри ort при первом обращении к API.
+#[cfg(feature = "local-dictation")]
 fn ensure_onnxruntime() -> Result<(), LocalError> {
     let candidates = [
         std::env::var_os("ORT_DYLIB_PATH").map(PathBuf::from),
@@ -797,6 +799,7 @@ fn ensure_onnxruntime() -> Result<(), LocalError> {
     )))
 }
 
+#[cfg(feature = "local-dictation")]
 fn run_parakeet(req: OwnedLocalRequest) -> Result<TranscriptionResult, LocalError> {
     let model_path = ensure_existing_model_path(
         req.model_path
@@ -837,6 +840,7 @@ fn run_parakeet(req: OwnedLocalRequest) -> Result<TranscriptionResult, LocalErro
 pub(crate) async fn transcribe_with_whisper_backend(
     req: LocalRequest<'_>,
 ) -> Result<TranscriptionResult, LocalError> {
+    local_dictation_feature_gate()?;
     transcribe_owned_with_whisper_backend(OwnedLocalRequest::from(req)).await
 }
 
@@ -846,6 +850,7 @@ pub(crate) async fn transcribe_with_whisper_backend_model(
     language: &str,
     prompt: &str,
 ) -> Result<TranscriptionResult, LocalError> {
+    local_dictation_feature_gate()?;
     transcribe_owned_with_whisper_backend(owned_request_from_model(
         model, wav_bytes, language, prompt,
     ))
@@ -862,9 +867,12 @@ async fn transcribe_owned_with_whisper_backend(
     }
 
     if is_parakeet_engine(&owned.engine) {
+        #[cfg(feature = "local-dictation")]
         return tokio::task::spawn_blocking(move || run_parakeet(owned))
             .await
             .map_err(|e| LocalError::CommandFailed(format!("worker join failed: {e}")))?;
+        #[cfg(not(feature = "local-dictation"))]
+        return Err(LocalError::NotBuiltWithLocalDictation);
     }
 
     let command_path = owned.command_path.clone();
@@ -889,6 +897,7 @@ pub async fn preload_server(
     model_path: Option<&str>,
     command_path: Option<&str>,
 ) -> Result<bool, LocalError> {
+    local_dictation_feature_gate()?;
     if model_path.is_none_or(|path| path.trim().is_empty()) {
         return Err(LocalError::MissingModelPath);
     }
@@ -961,6 +970,7 @@ pub async fn unload_sidecar() -> Result<bool, LocalError> {
 }
 
 pub async fn transcribe(req: LocalRequest<'_>) -> Result<TranscriptionResult, LocalError> {
+    local_dictation_feature_gate()?;
     tracing::info!(
         engine = req.engine,
         model_id = ?req.model_id,

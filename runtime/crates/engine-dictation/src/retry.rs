@@ -63,6 +63,9 @@ pub(crate) fn classify(err: &SubmitError) -> FailureKind {
             user_msg: "Локальная модель не вернула текст".into(),
         },
         SubmitError::Local(LocalError::SidecarUnavailable(_)) => FailureKind::Retryable,
+        SubmitError::Local(LocalError::NotBuiltWithLocalDictation) => FailureKind::Fatal {
+            user_msg: "Локальная диктовка недоступна в этой сборке".into(),
+        },
         SubmitError::Groq(GroqError::Http(_)) => FailureKind::Retryable,
         SubmitError::Groq(GroqError::Api { status, .. }) => match *status {
             429 => FailureKind::Retryable,
