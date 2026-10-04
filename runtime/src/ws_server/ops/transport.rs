@@ -37,7 +37,7 @@ where
         code,
         message: message.to_string(),
     })?;
-    send_message(sink, Message::Text(payload), shutdown).await?;
+    send_message(sink, Message::Text(payload.into()), shutdown).await?;
     send_message(sink, Message::Close(None), shutdown).await?;
     Ok(())
 }

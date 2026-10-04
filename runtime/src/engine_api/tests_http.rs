@@ -574,7 +574,8 @@
                     "token": token,
                     "pid": std::process::id(),
                 })
-                .to_string(),
+                .to_string()
+                .into(),
             ))
             .await
             .expect("hello");
@@ -629,7 +630,7 @@
         });
         socket
             .send(tokio_tungstenite::tungstenite::Message::Text(
-                ws_write.to_string(),
+                ws_write.to_string().into(),
             ))
             .await
             .expect("ws write");
@@ -653,7 +654,7 @@
         ] {
             socket
                 .send(tokio_tungstenite::tungstenite::Message::Text(
-                    invalid.to_string(),
+                    invalid.to_string().into(),
                 ))
                 .await
                 .expect("ws invalid request");
@@ -678,7 +679,9 @@
         let manifest = r#"[{"id":"ws.command","title":"WS","category":"open"}]"#;
         let register = format!(r#"{{"operation":"commands.register","commands":{manifest}}}"#);
         socket
-            .send(tokio_tungstenite::tungstenite::Message::Text(register))
+            .send(tokio_tungstenite::tungstenite::Message::Text(
+                register.into(),
+            ))
             .await
             .expect("ws register");
         let _ = socket.next().await.expect("ws register response");

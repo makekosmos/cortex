@@ -126,7 +126,7 @@ pub(super) mod reject_tests {
         let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}"))
             .await
             .expect("connect");
-        ws.send(Message::Text(serialize_message(&hello)))
+        ws.send(Message::Text(serialize_message(&hello).into()))
             .await
             .expect("send hello");
         let frame = tokio::time::timeout(Duration::from_secs(2), ws.next()).await;

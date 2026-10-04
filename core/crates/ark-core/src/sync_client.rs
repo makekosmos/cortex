@@ -95,7 +95,7 @@ impl SyncClient {
                 entity,
                 origin_device_id: None,
             };
-            let _ = tx.send(Message::Text(serialize_message(&msg)));
+            let _ = tx.send(Message::Text(serialize_message(&msg).into()));
         }
     }
 
@@ -119,9 +119,9 @@ impl SyncClient {
         self.storage
             .validate_outbound_signed_integration_frame(&frame, &self.space_id, &self.device_id)
             .await?;
-        tx.send(Message::Text(serialize_message(
-            &LanSyncMessage::SignedIntegrationFrame { frame },
-        )))
+        tx.send(Message::Text(
+            serialize_message(&LanSyncMessage::SignedIntegrationFrame { frame }).into(),
+        ))
         .map_err(|_| "LAN peer connection is closed".into())
     }
 
@@ -200,7 +200,7 @@ async fn save_version_vector(storage: &Arc<dyn StorageBackend>, vector: &Version
 
 fn send_msg(tx: &mpsc::UnboundedSender<Message>, msg: &LanSyncMessage) {
     let json = serialize_message(msg);
-    let _ = tx.send(Message::Text(json));
+    let _ = tx.send(Message::Text(json.into()));
 }
 
 /// Race connections to all addresses; return the first successful WebSocket + winning address.

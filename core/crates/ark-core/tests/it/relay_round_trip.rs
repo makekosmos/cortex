@@ -189,7 +189,7 @@ async fn relay_round_trip() {
         origin_device_id: Some("device-A".to_string()),
     };
     let text = serialize_message(&msg);
-    ws_a_tx.send(Message::Text(text)).await.unwrap();
+    ws_a_tx.send(Message::Text(text.into())).await.unwrap();
 
     // 6. Assert B receives the message. The cap is only a hang guard — the
     // message itself is the event; under parallel gate load 5 s was not enough

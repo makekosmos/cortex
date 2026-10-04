@@ -965,7 +965,8 @@ async fn probe_api_v1_ws_dispatch(port: u16, token: &str) -> Result<(), String> 
                 "clientClass": "mundus-runtime",
                 "clientVersion": engine::build_info::display_version(),
             })
-            .to_string(),
+            .to_string()
+            .into(),
         ))
         .await
         .map_err(|e| e.to_string())?;

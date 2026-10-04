@@ -254,7 +254,7 @@ async fn save_removed_peer_ids(storage: &Arc<dyn StorageBackend>, peer_ids: &[St
 
 fn send_msg(tx: &mpsc::UnboundedSender<Message>, msg: &LanSyncMessage) {
     let json = serialize_message(msg);
-    let _ = tx.send(Message::Text(json));
+    let _ = tx.send(Message::Text(json.into()));
 }
 
 /// Drops a rejected hello's session and closes its socket. A bare return would
@@ -293,7 +293,7 @@ async fn broadcast_to_others(
                 continue;
             }
         }
-        let _ = peer.tx.send(Message::Text(json.clone()));
+        let _ = peer.tx.send(Message::Text(json.clone().into()));
     }
 }
 

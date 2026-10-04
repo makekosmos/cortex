@@ -40,7 +40,8 @@ async fn production_ws_shutdown_reaps_authenticated_and_stalled_lifecycles() {
                 "token": "test-token".repeat(8),
                 "pid": std::process::id(),
             })
-            .to_string(),
+            .to_string()
+            .into(),
         ))
         .await
         .unwrap();

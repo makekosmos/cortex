@@ -18,7 +18,7 @@ engine-base = { path = "../engine-base" }
 ignore = "0.4"
 globset = "0.4"
 # App Index + File Index: fs-watch for cache/index invalidation.
-notify = "6"
+notify = "8"
 # App Index: рекурсивный walk Start Menu directories.
 walkdir = "2"
 # App Index (2026-05-22): .lnk parsing для Start Menu sources.

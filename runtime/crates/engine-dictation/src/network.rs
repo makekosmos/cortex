@@ -181,8 +181,10 @@ fn finish_client_builder(
 fn build_resolver(
     profile: &NetworkProfile,
 ) -> Result<Option<Arc<HickoryDnsResolver>>, NetworkError> {
-    use hickory_resolver::config::{NameServerConfig, Protocol, ResolverConfig, ResolverOpts};
-    use hickory_resolver::TokioAsyncResolver;
+    use hickory_resolver::config::{NameServerConfig, ResolverConfig, ResolverOpts};
+    use hickory_resolver::name_server::TokioConnectionProvider;
+    use hickory_resolver::proto::xfer::Protocol;
+    use hickory_resolver::TokioResolver;
 
     let config = match profile {
         NetworkProfile::System => return Ok(None),
@@ -219,9 +221,9 @@ fn build_resolver(
                 socket_addr: SocketAddr::new(ip, parsed.port),
                 protocol: Protocol::Https,
                 tls_dns_name: Some(parsed.host.clone()),
+                http_endpoint: Some(parsed.path.clone()),
                 trust_negative_responses: false,
                 bind_addr: None,
-                tls_config: None,
             });
             debug!(
                 host = %parsed.host,
@@ -238,7 +240,9 @@ fn build_resolver(
     let mut opts = ResolverOpts::default();
     opts.timeout = Duration::from_secs(3);
     opts.attempts = 2;
-    let resolver = TokioAsyncResolver::tokio(config, opts);
+    let resolver = TokioResolver::builder_with_config(config, TokioConnectionProvider::default())
+        .with_options(opts)
+        .build();
     Ok(Some(Arc::new(HickoryDnsResolver(Arc::new(resolver)))))
 }
 
@@ -286,7 +290,7 @@ pub async fn resolve_host(
     Ok(addrs.map(|s| s.ip()).collect())
 }
 
-pub struct HickoryDnsResolver(Arc<hickory_resolver::TokioAsyncResolver>);
+pub struct HickoryDnsResolver(Arc<hickory_resolver::TokioResolver>);
 
 impl Resolve for HickoryDnsResolver {
     fn resolve(&self, name: Name) -> Resolving {

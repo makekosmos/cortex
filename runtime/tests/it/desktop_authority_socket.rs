@@ -79,7 +79,8 @@ async fn connect(address: SocketAddr, pid: u32) -> (Socket, Value) {
                 "kind":"hello", "apiVersion":"1.0.0", "token":GLOBAL_TOKEN,
                 "pid":pid, "clientClass":"kosmos-desktop", "clientVersion":"test"
             })
-            .to_string(),
+            .to_string()
+            .into(),
         ))
         .await
         .unwrap();
@@ -100,7 +101,7 @@ async fn rpc(socket: &mut Socket, id: &str, operation: &str, params: Value) -> V
         request.extend(object.clone());
     }
     socket
-        .send(Message::Text(Value::Object(request).to_string()))
+        .send(Message::Text(Value::Object(request).to_string().into()))
         .await
         .unwrap();
     serde_json::from_str(socket.next().await.unwrap().unwrap().to_text().unwrap()).unwrap()
