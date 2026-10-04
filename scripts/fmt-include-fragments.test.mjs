@@ -109,6 +109,24 @@ test("fmt-include-fragments discovers relative include! targets and ignores vend
   }
 });
 
+test("fmt-include-fragments skips a tracked file deleted but not yet staged", () => {
+  const cwd = repo();
+  try {
+    writeFileSync(resolve(cwd, "lib.rs"), 'mod a {\n    include!("frag.rs");\n}\n');
+    writeFileSync(resolve(cwd, "frag.rs"), "    pub const OK: u8 = 1;\n");
+    writeFileSync(resolve(cwd, "gone.rs"), "pub fn gone() {}\n");
+    git(cwd, "add", ".");
+    // deleted from the worktree but still in the index: `git ls-files` lists it
+    rmSync(resolve(cwd, "gone.rs"));
+
+    const check = run(cwd, "--check");
+    assert.equal(check.status, 0, `${check.stdout} ${check.stderr}`);
+    assert.doesNotMatch(`${check.stdout}${check.stderr}`, /ENOENT/);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
 test("fmt-include-fragments fails clearly on a missing include target", () => {
   const cwd = repo();
   try {
