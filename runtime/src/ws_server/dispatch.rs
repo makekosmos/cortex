@@ -32,24 +32,10 @@ pub(super) async fn dispatch_operation(
     {
         dispatch_special::dispatch_special(
             request,
-            ark_host.clone(),
-            command_bus.clone(),
-            pomodoro_host.clone(),
-            dictation_host.clone(),
-            app_index.clone(),
-            file_index.clone(),
-            agents.clone(),
-            agents_data_dir.clone(),
-            agent_events.clone(),
-            usage_diagnostics.clone(),
-            rpc_diagnostics.clone(),
-            protocol_usage.clone(),
             package_service.clone(),
             snapshots.clone(),
             grants.clone(),
             desktop_authority.clone(),
-            manager_state.clone(),
-            correlation_id.clone(),
             client_id,
         )
         .await

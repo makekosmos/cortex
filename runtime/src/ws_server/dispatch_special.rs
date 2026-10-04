@@ -1,24 +1,10 @@
 use super::*;
 pub(super) async fn dispatch_special(
     request: crate::engine_dispatch::DispatchRequest,
-    _ark_host: Arc<ArkHost>,
-    _command_bus: Arc<CommandBus>,
-    _pomodoro_host: Arc<PomodoroHost>,
-    _dictation_host: Arc<DictationHost>,
-    _app_index: Arc<AppIndex>,
-    _file_index: Arc<FileIndex>,
-    _agents: Arc<tokio::sync::OnceCell<Arc<AgentsService>>>,
-    _agents_data_dir: Arc<std::path::PathBuf>,
-    _agent_events: tokio::sync::broadcast::Sender<serde_json::Value>,
-    _usage_diagnostics: Arc<UsageTrackerDiagnosticsState>,
-    _rpc_diagnostics: SharedRpcDiagnostics,
-    _protocol_usage: Arc<ProtocolUsageStore>,
     package_service: Arc<PackageService>,
     snapshots: Arc<crate::package_worker_broker::SnapshotRegistry>,
     grants: Arc<GrantAuthorityRegistry>,
     desktop_authority: Arc<crate::desktop_authority::DesktopAuthorityRegistry>,
-    _manager_state: ManagerState,
-    _correlation_id: Arc<String>,
     client_id: ClientId,
 ) -> LocalResponse {
     let operation = request.operation.as_str().to_owned();
