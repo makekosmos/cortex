@@ -117,7 +117,7 @@ fn collect_entries_from_package(pkg: &Package, out: &mut Vec<App>) -> Result<()>
     })?;
     // Blocking — ок, мы в background scan thread.
     let entries = entries_op
-        .get()
+        .join()
         .map_err(|e| AppIndexError::Discover("uwp".into(), format!("AppListEntries get: {e}")))?;
 
     for entry in entries {

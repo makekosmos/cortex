@@ -44,7 +44,7 @@ fn version_string(exe_path: &str, name: &str) -> Option<String> {
         let mut data = vec![0u8; size as usize];
         if GetFileVersionInfoW(
             windows::core::PCWSTR(wide.as_ptr()),
-            0,
+            Some(0),
             size,
             data.as_mut_ptr().cast(),
         )

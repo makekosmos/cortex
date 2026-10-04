@@ -105,7 +105,7 @@ mod win {
                 None,
                 OPEN_EXISTING,
                 FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
-                HANDLE::default(),
+                None,
             )
         };
         let handle = match handle {

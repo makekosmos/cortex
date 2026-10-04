@@ -161,11 +161,11 @@ unsafe fn get_process_user_sid(
 /// pipe server can use it without a back-edge into engine.
 #[cfg(windows)]
 pub fn process_image_path(pid: u32) -> Result<std::path::PathBuf, AuthError> {
-    engine_indexes::process_image::process_image_path(pid).map_err(|e| match e {
-        engine_indexes::process_image::ProcessImageError::PidNotFound { pid } => {
+    crate::process_image::process_image_path(pid).map_err(|e| match e {
+        crate::process_image::ProcessImageError::PidNotFound { pid } => {
             AuthError::PidNotFound { pid }
         }
-        engine_indexes::process_image::ProcessImageError::Other(msg) => AuthError::Other(msg),
+        crate::process_image::ProcessImageError::Other(msg) => AuthError::Other(msg),
     })
 }
 

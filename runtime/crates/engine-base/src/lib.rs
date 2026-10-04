@@ -39,6 +39,11 @@ pub mod lock_file;
 pub mod observability;
 pub mod package_manifest;
 pub mod priority;
+/// Same-user process image query — lives here (not engine-indexes) so
+/// `auth::process_image_path` can wrap it without a circular dep;
+/// engine-indexes re-exports it for `privileged::impersonate`.
+#[cfg(windows)]
+pub mod process_image;
 pub mod process_tree;
 #[cfg(test)]
 mod process_tree_tests;

@@ -9,8 +9,8 @@ use std::time::Duration;
 
 use sha2::{Digest, Sha256};
 
-use windows::core::PWSTR;
-use windows::Win32::Foundation::{CloseHandle, BOOL, FILETIME, HWND, LPARAM};
+use windows::core::{BOOL, PWSTR};
+use windows::Win32::Foundation::{CloseHandle, FILETIME, HWND, LPARAM};
 use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED,
 };

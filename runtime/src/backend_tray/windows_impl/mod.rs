@@ -41,7 +41,7 @@ pub fn run(events: UnboundedSender<TrayEvent>, ready: SyncSender<u32>) {
     let thread_id = unsafe { GetCurrentThreadId() };
     let mut bootstrap = MSG::default();
     unsafe {
-        let _ = PeekMessageW(&mut bootstrap, HWND::default(), 0, 0, PM_NOREMOVE);
+        let _ = PeekMessageW(&mut bootstrap, None, 0, 0, PM_NOREMOVE);
     }
     let _ = ready.send(thread_id);
     let _ = EVENTS.set(events);
@@ -89,9 +89,9 @@ pub fn run(events: UnboundedSender<TrayEvent>, ready: SyncSender<u32>) {
             0,
             0,
             0,
-            HWND::default(),
             None,
-            instance,
+            None,
+            Some(instance),
             None,
         )
     }) else {
@@ -116,7 +116,7 @@ pub fn run(events: UnboundedSender<TrayEvent>, ready: SyncSender<u32>) {
 
     let mut message = MSG::default();
     unsafe {
-        while GetMessageW(&mut message, HWND::default(), 0, 0).as_bool() {
+        while GetMessageW(&mut message, None, 0, 0).as_bool() {
             let _ = TranslateMessage(&message);
             DispatchMessageW(&message);
         }
@@ -185,7 +185,7 @@ fn show_context_menu(window: HWND) {
             TPM_RETURNCMD | TPM_RIGHTBUTTON,
             point.x,
             point.y,
-            0,
+            None,
             window,
             None,
         )

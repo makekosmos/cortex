@@ -67,13 +67,17 @@ fn client_profile_dir_impersonated() -> Result<PathBuf, String> {
             .map_err(|e| format!("open client token failed: {e}"))?;
         let result = (|| {
             let mut size: u32 = 0;
-            let _ = GetUserProfileDirectoryW(token, windows::core::PWSTR::null(), &mut size);
+            let _ = GetUserProfileDirectoryW(token, None, &mut size);
             if size == 0 || size > 32768 {
                 return Err("client profile directory unavailable".to_string());
             }
             let mut buf = vec![0u16; size as usize];
-            GetUserProfileDirectoryW(token, windows::core::PWSTR(buf.as_mut_ptr()), &mut size)
-                .map_err(|e| format!("client profile directory failed: {e}"))?;
+            GetUserProfileDirectoryW(
+                token,
+                Some(windows::core::PWSTR(buf.as_mut_ptr())),
+                &mut size,
+            )
+            .map_err(|e| format!("client profile directory failed: {e}"))?;
             let len = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
             Ok(PathBuf::from(String::from_utf16_lossy(&buf[..len])))
         })();

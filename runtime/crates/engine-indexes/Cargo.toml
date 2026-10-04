@@ -44,7 +44,7 @@ tracing = "0.1"
 ntfs-reader = "0.4.5"
 # SCM install/status + service dispatcher for the privileged service.
 windows-service = "0.7"
-windows = { version = "0.58", features = [
+windows = { version = "0.62", features = [
   "Win32_Foundation",
   "Win32_Security",
   "Win32_Security_Authorization",

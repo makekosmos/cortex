@@ -46,8 +46,8 @@ pub mod install_layout;
 #[cfg(windows)]
 pub(crate) mod ntfs_common;
 
-/// Same-user process image query — lives here so `privileged::impersonate`
-/// can identify pipe clients without a back-edge into engine's `auth`
-/// module; engine re-exports it at `crate::auth::process_image_path`.
+/// Same-user process image query — lives in `engine-base` (KOS-342) so
+/// `engine_base::auth::process_image_path` can wrap it without a circular
+/// edge; `privileged::impersonate` keeps using it at `crate::process_image`.
 #[cfg(windows)]
-pub mod process_image;
+pub use engine_base::process_image;

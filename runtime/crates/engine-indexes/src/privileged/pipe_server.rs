@@ -21,10 +21,10 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
 
-use windows::core::{HRESULT, PCWSTR};
+use windows::core::{BOOL, HRESULT, PCWSTR};
 use windows::Win32::Foundation::{
-    CloseHandle, GetLastError, LocalFree, BOOL, ERROR_PIPE_BUSY, ERROR_PIPE_CONNECTED, HANDLE,
-    HLOCAL, INVALID_HANDLE_VALUE,
+    CloseHandle, GetLastError, LocalFree, ERROR_PIPE_BUSY, ERROR_PIPE_CONNECTED, HANDLE, HLOCAL,
+    INVALID_HANDLE_VALUE,
 };
 use windows::Win32::Security::Authorization::{
     ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
@@ -192,7 +192,7 @@ pub fn accept_loop(stop_flag: Arc<AtomicBool>, grant_sid: &str) {
     }
 
     if let Some((_, sd)) = sa_pair {
-        unsafe { LocalFree(HLOCAL(sd.0)) };
+        unsafe { LocalFree(Some(HLOCAL(sd.0))) };
     }
 }
 
