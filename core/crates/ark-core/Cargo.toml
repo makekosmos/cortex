@@ -40,11 +40,6 @@ async-trait = "0.1"
 if-addrs = "0.13"
 hostname.workspace = true
 thiserror.workspace = true
-# Phase 5 bug-detection: ts-rs codegen для wire-protocol типов.
-# Derive opt-in через #[cfg_attr(feature = "ts-rs", derive(TS))] — production
-# build не подтягивает ts-rs runtime (он только для тестов которые экспортят
-# bindings).
-ts-rs = { version = "10", optional = true, features = ["import-esm"] }
 # iroh p2p QUIC-транспорт — штатный транспорт start_sync (`use_iroh`), не
 # опциональный: release Engine собирается с ним, поэтому гейт тоже (KOS-270 —
 # gate tests exactly what ships).
@@ -74,8 +69,6 @@ proptest = "1.5"
 
 [features]
 bench-fixtures = []
-# Phase 5: opt-in для cargo test --features ts-rs (генерирует bindings/*.ts).
-ts-rs = ["dep:ts-rs"]
 
 [[bench]]
 name = "delphi_filters"

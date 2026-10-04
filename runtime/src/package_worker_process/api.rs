@@ -119,18 +119,6 @@ impl WorkerProcess {
     }
 
     #[cfg(windows)]
-    pub(crate) fn take_stdin(&mut self) -> Option<WorkerPipe> {
-        self.stdin.take()
-    }
-    #[cfg(windows)]
-    pub(crate) fn take_stdout(&mut self) -> Option<WorkerPipe> {
-        self.stdout.take()
-    }
-    #[cfg(windows)]
-    pub(crate) fn take_stderr(&mut self) -> Option<WorkerPipe> {
-        self.stderr.take()
-    }
-    #[cfg(windows)]
     pub(crate) fn has_all_pipes(&self) -> bool {
         self.stdin.is_some() && self.stdout.is_some() && self.stderr.is_some()
     }

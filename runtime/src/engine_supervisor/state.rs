@@ -118,19 +118,6 @@ pub(crate) fn process_matches_current_executable(pid: u32) -> bool {
         .unwrap_or(false)
 }
 
-#[cfg(windows)]
-trait WindowsCommandExt {
-    fn creation_flags(&mut self, flags: u32) -> &mut Self;
-}
-
-#[cfg(windows)]
-impl WindowsCommandExt for std::process::Command {
-    fn creation_flags(&mut self, flags: u32) -> &mut Self {
-        std::os::windows::process::CommandExt::creation_flags(self, flags);
-        self
-    }
-}
-
 #[cfg(unix)]
 pub(crate) fn exit_status_failure() -> std::process::ExitStatus {
     use std::os::unix::process::ExitStatusExt;

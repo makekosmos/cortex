@@ -35,7 +35,6 @@ pub enum GrantError {
 }
 
 const MAX_RULES: usize = 64;
-const MAX_CAPABILITIES: usize = 64;
 const MAX_BATCH: usize = 100;
 const MAX_FIELDS: usize = 256;
 const MAX_RELATIONS: usize = 128;

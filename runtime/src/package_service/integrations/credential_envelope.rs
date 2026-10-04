@@ -8,6 +8,13 @@ use hpke::{
 };
 use serde::Serialize;
 use sha2::{Digest, Sha256};
+/// Fixture builds keep package secrets in the in-memory test store, not the OS
+/// keyring; integration tests read the replicated secret back through this.
+#[cfg(feature = "package-worker-fixture")]
+pub fn fixture_read_integration_secret(id: &str, version: &str, setting: &str) -> Option<String> {
+    read_package_integration_secret(id, version, setting)
+}
+
 pub(crate) const ENVELOPE_VERSION: u8 = 2;
 const ALGORITHM: &str = "HPKE-Auth-X25519-HKDF-SHA256-ChaCha20Poly1305";
 const HPKE_INFO: &[u8] = b"makekosmos/cortex/credential-envelope/v2";

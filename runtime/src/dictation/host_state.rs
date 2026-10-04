@@ -26,7 +26,7 @@ struct HostState {
     /// Счётчик попыток для UI (Pending state).
     attempts: u32,
     /// Можно ли retry-ить текущую Error-сессию (true для Fatal от Groq,
-    /// false для AudioDecode / NoApiKey — там аудио бесполезно).
+    /// false для AudioDecode — там аудио бесполезно).
     can_retry: bool,
 }
 
@@ -349,8 +349,6 @@ impl DictationResponse {
 
 #[derive(Debug, Error)]
 pub(crate) enum SubmitError {
-    #[error("no api key configured")]
-    NoApiKey,
     #[error("audio payload base64 decode failed: {0}")]
     AudioDecode(#[from] base64::DecodeError),
     #[error("network: {0}")]

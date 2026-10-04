@@ -15,9 +15,6 @@ async fn load_version_vector(storage: &Arc<dyn StorageBackend>) -> VersionVector
         None => VersionVector::new(),
     }
 }
-
-#[allow(dead_code)]
-fn _touch_peer_record(_: Option<PeerRecord>) {}
 #[cfg(test)]
 mod tests {
     use super::*;

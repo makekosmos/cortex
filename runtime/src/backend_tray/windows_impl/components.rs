@@ -27,22 +27,6 @@ impl Component {
         }
     }
 
-    /// Folder name under `resources/components/` — bundled Manager only.
-    pub fn dir_name(self) -> Option<&'static str> {
-        match self {
-            Component::Manager => Some("manager"),
-            Component::App(_) => None,
-        }
-    }
-
-    /// Packaged executable file name inside the component folder.
-    pub fn exe_name(self) -> Option<&'static str> {
-        match self {
-            Component::Manager => Some("Mundus Manager.exe"),
-            Component::App(_) => None,
-        }
-    }
-
     /// `brand::env` suffix for the dev override (`MUNDUS_*_EXECUTABLE`, with
     /// legacy-name fallback) — the same source the service uses.
     pub fn env_override(self) -> &'static str {
