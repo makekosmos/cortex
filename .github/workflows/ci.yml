@@ -60,6 +60,23 @@ jobs:
       - name: Actionlint
         uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2
 
+      # KOS-346: gate on new duplicate dependency versions (deny.toml documents
+      # the pre-existing skip list) and on undocumented exact/pre-release pins.
+      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2
+        with:
+          tool: cargo-deny
+
+      - name: Dependency bans and pins
+        run: |
+          cargo deny check bans
+          node scripts/check-dep-pins.mjs
+
+      # Warn-only until the KOS-340 dep cleanup clears the existing advisories;
+      # keep the signal visible without gating PRs on sibling-ticket upgrades.
+      - name: Advisories (non-blocking)
+        continue-on-error: true
+        run: cargo deny check advisories
+
   check:
     name: Check (${{ matrix.os }})
     strategy:
