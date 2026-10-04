@@ -1,8 +1,22 @@
 # AGENTS.md — Cortex
 
 Cortex owns the desktop packaging (`desktop/`), Manager (`manager-gpui/`) and
-the Rust runtime (`runtime/`). Техническая документация:
-[`makekosmos/docs`](https://github.com/makekosmos/docs).
+the Rust runtime (`runtime/`). The `makekosmos/docs` repo is retired —
+cross-cutting documentation lives in-tree under [`docs/`](docs/).
+
+## Карта
+
+- `runtime/` — Mundus Engine (Rust): Engine API (`/v1/rpc` + WS), package
+  host/supervisor, `focus.*`/`pomodoro.*` ops, dictation, updater, tray.
+  In-process ARK host: `runtime/src/ark_host.rs`.
+- `core/crates/ark-core/` — vendored ARK runtime (Rust + SQLite, sync).
+  Contract and invariants: `core/crates/ark-core/AGENTS.md`,
+  `docs/ark-core.md`, `docs/sync.md`, `docs/write-boundary.md`.
+- `manager-gpui/` — GPUI shell app (dashboard, settings, data browser).
+- `desktop/` — installer/packaging and release pipeline scripts.
+- `scripts/` + `docs/` — local gate implementation and architecture notes.
+- Focus engine ops live in `runtime/src/focus.rs`/`pomodoro*` (the focus UI
+  lives in ordo — see `docs/focus.md`).
 
 ## Universal never rules
 
