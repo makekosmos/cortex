@@ -156,6 +156,9 @@ pub struct DefinitionReference {
 pub enum MappingDirection {
     Import,
     Export,
+    // Published catalogs use kebab-case; preserve the existing wire spelling
+    // when serializing manifests already persisted by the Engine.
+    #[serde(alias = "bidirectional-sync")]
     BidirectionalSync,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -913,6 +916,23 @@ fn safe_package_id(value: &str) -> bool {
 #[allow(clippy::panic)]
 mod tests {
     use super::*;
+    #[test]
+    fn published_mapping_direction_accepts_kebab_case_without_changing_wire_output() {
+        for spelling in ["bidirectional-sync", "bidirectionalSync"] {
+            let direction: MappingDirection =
+                serde_json::from_value(serde_json::json!(spelling)).unwrap();
+            assert_eq!(direction, MappingDirection::BidirectionalSync);
+            assert_eq!(
+                serde_json::to_value(direction).unwrap(),
+                "bidirectionalSync"
+            );
+        }
+        assert!(
+            serde_json::from_value::<MappingDirection>(serde_json::json!("unsupported-sync"))
+                .is_err()
+        );
+    }
+
     fn valid() -> PackageManifest {
         PackageManifest {
             schema_version: 1,

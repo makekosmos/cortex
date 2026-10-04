@@ -71,6 +71,22 @@ fn a_real_shaped_catalog_parses_and_lists() {
 }
 
 #[test]
+fn windows_only_catalog_with_published_sync_mapping_parses_on_every_host() {
+    let mut value = document_json();
+    value["packages"][0]["manifest"]["data"]["mappings"] = serde_json::json!([{
+        "type": "com.mundus.note", "versions": "^1.0.0",
+        "direction": "bidirectional-sync", "fidelity": "lossless"
+    }]);
+    let bytes = serde_json::to_vec(&value).unwrap();
+    let document = CatalogDocument::parse(&bytes, now(), 0).unwrap();
+    assert_eq!(document.listings().len(), 2);
+    if TargetOs::current() != TargetOs::Windows {
+        assert!(document.packages[0].archive().is_none());
+    }
+    assert!(CatalogDocument::parse_persisted(&serde_json::to_vec(&document).unwrap()).is_ok());
+}
+
+#[test]
 fn unresolvable_connects_to_and_bad_hashes_are_rejected() {
     let mut broken = document_json();
     broken["external_apps"] = serde_json::json!([]);

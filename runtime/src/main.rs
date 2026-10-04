@@ -573,6 +573,18 @@ async fn setup() -> Result<SetupState, DynError> {
     }
     let package_service = Arc::new(package_service);
 
+    // A clean installation has no persisted catalog. Fetch it on every start
+    // without blocking Engine readiness; never install packages implicitly.
+    {
+        let catalog_service = package_service.clone();
+        let task = tokio::spawn(async move {
+            if let Err(error) = catalog_service.refresh_catalog().await {
+                tracing::warn!(%error, "integration catalog refresh failed");
+            }
+        });
+        package_service.track_background_task("catalog-refresh", task);
+    }
+
     // MIGRATION(KOS-267): remove after 2026-11-01
     // 0.9.x → 0.10.0: users who had Agenda/Memoria/Dictation in the old
     // package store (or as bundled components) get the native GPUI build
