@@ -5,5 +5,12 @@ git-fetch-with-cli = true
 # see docs/experiments/2026-09-30-build-speed.md). Requires `ld.lld` on PATH —
 # e.g. the `lld` package, or a symlink to the toolchain's rust-lld
 # (rustup component add llvm-tools).
+#
+# KOS-341: keep linker and codegen flags HERE, never in env vars
+# (RUSTFLAGS, CARGO_TARGET_*_LINKER, CARGO_ENCODED_RUSTFLAGS). mbx cannot
+# model env-provided options in its cache key and bypasses the shared cache
+# entirely; flags in this file are identical in every worktree, so fresh
+# worktrees hit the warm cache (~99% of units, see
+# docs/experiments/2026-10-04-shared-build-cache.md).
 [target.x86_64-unknown-linux-gnu]
 rustflags = ["-C", "link-arg=-fuse-ld=lld"]
