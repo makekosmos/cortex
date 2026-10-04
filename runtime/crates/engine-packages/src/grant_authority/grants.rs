@@ -264,7 +264,7 @@ impl GrantAuthorityRegistry {
     /// grant. Owner, extension and root-identity checks are identical to the
     /// per-file entry points; `exact_file` grants are always rejected here so
     /// vault-style operations cannot treat a file grant as a directory.
-    pub(crate) fn with_directory_root<T>(
+    pub fn with_directory_root<T>(
         &self,
         grant_id: &str,
         owner: &GrantOwner,

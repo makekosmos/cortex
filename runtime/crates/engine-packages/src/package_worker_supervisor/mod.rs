@@ -106,5 +106,5 @@ pub use authority::{AfterLaunchGate, HolderLockGate};
 #[cfg(all(windows, feature = "package-worker-fixture"))]
 use authority::{AfterLaunchGateParts, NEXT_AFTER_LAUNCH_GATE};
 pub use authority::{ArkRequestExecutor, PackageWorkerSupervisor};
-pub use engine_capability::EngineCapabilityExecutor;
+pub use engine_capability::{AutostartControl, EngineCapabilityExecutor};
 pub use types::{IntegrationLaunchConfig, WorkerDiagnostics, WorkerHealth, WorkerState};

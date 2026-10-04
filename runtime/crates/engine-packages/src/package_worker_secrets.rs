@@ -63,7 +63,7 @@ impl SecretRecord {
     }
 }
 
-pub(crate) fn zeroize_secret(value: &mut String) {
+pub fn zeroize_secret(value: &mut String) {
     // Volatile writes keep the clearing operation observable without a
     // zeroization dependency. Zero bytes preserve String's UTF-8 invariant.
     for byte in unsafe { value.as_mut_vec() } {
