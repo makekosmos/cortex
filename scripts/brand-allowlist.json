@@ -3,7 +3,7 @@
   "patterns": [
     {
       "pattern": "makekosmos",
-      "reason": "GitHub org for cortex + sibling repos (component pins, updater channel makekosmos/cortex, the KOS-304 makekosmos/desktop bridge release, imago (imago-gpui/mundus-gpui-kit) deps, docs links). Org rename is a separate change; GitHub redirects keep old URLs working."
+      "reason": "GitHub org for cortex + sibling repos (component pins, updater channel makekosmos/cortex, imago (imago-gpui/mundus-gpui-kit) deps, docs links). Org rename is a separate change; GitHub redirects keep old URLs working."
     },
     {
       "pattern": "com\\.kosmos\\.",

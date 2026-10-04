@@ -184,13 +184,12 @@ export function nextBuildVersion({ run = defaultRun, currentVersion, repo = RELE
 
 export function planRelease({ run = defaultRun, currentVersion, repo = RELEASE_REPO } = {}) {
   const baseline = latestPublishedRelease(listReleases(run, repo));
-  // No baseline means the repo has never seen a release — the planner must not
-  // guess a starting point or fall back to the legacy makekosmos/desktop feed.
-  // The first cortex release is the manual KOS-304 bridge publish.
+  // No baseline means the repo has never seen a release — the planner must
+  // not guess a starting point.
   if (!baseline)
     throw new Error(
       `${repo} has no published stable release to diff against — ` +
-        `publish the first one manually (publish-release.mjs --also-bridge-repo makekosmos/desktop)`,
+        `publish the first one manually (publish-release.mjs)`,
     );
   const head = must(run("git", ["rev-parse", "HEAD"]), "git rev-parse HEAD").trim();
   // Windows channel only. The mac pin is a different repo and is not an input,
@@ -323,7 +322,9 @@ function cli() {
     else setWinVersion(positional[0]);
     return;
   }
-  throw new Error("usage: release-plan.mjs plan | build-version | set [--platform win|mac] <version>");
+  throw new Error(
+    "usage: release-plan.mjs plan | build-version | set [--platform win|mac] <version>",
+  );
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

@@ -124,16 +124,16 @@ test("git errors fail loudly instead of looking like no changes", () => {
   assert.throws(() => planRelease({ run: runDiff, currentVersion: CURRENT }), /git diff failed/);
 });
 
-// KOS-304: with no published release in cortex there is no receipt to diff
-// against. The planner must fail closed and point at the one-time bridge
-// publish — never fall back to makekosmos/desktop or guess a version.
+// With no published release in cortex there is no receipt to diff against.
+// The planner must fail closed and point at the manual first publish — never
+// guess a version.
 test("with no published releases the plan fails closed", () => {
   const { run } = fakeRun([
     [`gh api --paginate --slurp repos/${RELEASE_REPO}/releases`, { stdout: "[[]]" }],
   ]);
   assert.throws(
     () => planRelease({ run, currentVersion: CURRENT }),
-    /no published stable release.*--also-bridge-repo/s,
+    /no published stable release.*publish-release\.mjs/s,
   );
 });
 

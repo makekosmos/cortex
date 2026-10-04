@@ -1,8 +1,7 @@
 use super::manifest::{parse_latest_yml, LatestManifest};
 use super::UpdaterError;
 
-// KOS-304: releases moved to makekosmos/cortex; makekosmos/desktop only
-// carries the one-time 0.10.1 bridge release for pre-0.10.1 clients.
+// KOS-304: releases live in makekosmos/cortex.
 pub(crate) const DEFAULT_FEED_BASE: &str =
     "https://github.com/makekosmos/cortex/releases/latest/download";
 const CHANNEL_FILE: &str = "latest.yml";

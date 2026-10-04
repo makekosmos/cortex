@@ -74,14 +74,9 @@ function compareSemver(a, b) {
 // The list endpoint (not releases/latest) is deliberate: `latest` answers 404
 // both for a missing repo and for a repo with zero releases, while the list
 // answers 200 `[]` for the latter — the only state in which any version is
-// publishable, which is exactly what the KOS-304 bridge publish relies on.
-export async function assertVersionIsPublishable({
-  platform,
-  version,
-  repository,
-  fetchImpl = fetch,
-}) {
-  const repo = repository ?? RELEASE_REPOS[platform];
+// publishable, which is exactly what a first publish relies on.
+export async function assertVersionIsPublishable({ platform, version, fetchImpl = fetch }) {
+  const repo = RELEASE_REPOS[platform];
   if (!repo) throw new Error(`Unknown platform "${platform}"`);
   const response = await fetchImpl(`https://api.github.com/repos/${repo}/releases?per_page=100`);
   if (!response.ok)

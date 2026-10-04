@@ -55,39 +55,26 @@ test("publish is a receipt consumer and never invokes build or package", async (
   assert.match(publish, /assertReceiptMatchesBom/);
   assert.match(publish, /release create/);
   assert.ok(publish.indexOf("if (dryRun) return") < publish.lastIndexOf("duplicateRelease("));
+  assert.ok(publish.indexOf("if (dryRun) return") < publish.indexOf('"release",\n      "create"'));
   assert.ok(
-    publish.indexOf("if (dryRun) return") < publish.indexOf('"release",\n        "create"'),
-  );
-  assert.ok(
-    publish.indexOf('"release",\n        "create"') <
+    publish.indexOf('"release",\n      "create"') <
       publish.lastIndexOf("verify-release-channel.mjs"),
   );
 });
 
-// KOS-304: the primary target is always makekosmos/cortex; the legacy
-// makekosmos/desktop feed is reachable only via the explicit bridge flag,
-// which publishes the identical asset set to both repos.
-test("publish targets: cortex only unless --also-bridge-repo opts in", async () => {
-  const { publishTargets } = await import("./publish-release.mjs");
-  assert.deepEqual(publishTargets({}), ["makekosmos/cortex"]);
-  assert.deepEqual(publishTargets({ "also-bridge-repo": "makekosmos/desktop" }), [
-    "makekosmos/cortex",
-    "makekosmos/desktop",
-  ]);
-  assert.throws(() => publishTargets({ "also-bridge-repo": "not-a-repo" }), /owner\/repo/);
-  assert.throws(
-    () => publishTargets({ "also-bridge-repo": "makekosmos/cortex" }),
-    /differ from the primary/,
-  );
+// The only publish target is makekosmos/cortex; the KOS-304 bridge flag is
+// gone and must fail fast rather than silently publish cortex-only.
+test("publish targets: the removed --also-bridge-repo flag dies", async () => {
+  const publish = await readFile(path.join(scripts, "publish-release.mjs"), "utf8");
+  assert.match(publish, /also-bridge-repo.*removed/s);
 });
 
-// KOS-304: both repos get the identical gh release create — same tag, files
-// and notes — and the duplicate probe for every target runs before the first
-// create, so a stale bridge release cannot orphan a cortex-only publish.
-test("a bridge publish probes every repo before creating any", async () => {
+// The duplicate-release probe runs before the release create so an existing
+// tag fails before anything is published.
+test("the duplicate-release probe runs before the create", async () => {
   const publish = await readFile(path.join(scripts, "publish-release.mjs"), "utf8");
-  const probes = publish.indexOf("for (const repository of repositories) duplicateRelease");
-  const create = publish.indexOf('"release",\n        "create"');
+  const probes = publish.indexOf("duplicateRelease(repository, version)");
+  const create = publish.indexOf('"release",\n      "create"');
   assert.ok(probes >= 0 && create > probes);
 });
 
