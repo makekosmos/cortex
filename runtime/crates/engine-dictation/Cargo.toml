@@ -35,7 +35,7 @@ arboard = "3"
 libloading = "0.8"
 # Secrets + DNS.
 keyring = { version = "3", features = ["windows-native", "apple-native"] }
-hickory-resolver = { version = "0.24", features = ["dns-over-https-rustls"] }
+hickory-resolver = { version = "0.25", default-features = false, features = ["tokio", "https-ring", "webpki-roots"] }
 # HTTP/audio plumbing.
 base64 = "0.22"
 reqwest = { version = "0.12", default-features = false, features = [
