@@ -221,7 +221,7 @@ impl PackageWorkerSupervisor {
         integration: Option<IntegrationLaunchConfig>,
     ) -> Result<(), &'static str> {
         Self::validate_manifest(manifest)?;
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         if self.inner.fail_next_start.swap(false, Ordering::AcqRel) {
             return Err("unavailable");
         }

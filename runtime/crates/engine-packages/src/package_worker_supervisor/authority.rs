@@ -31,7 +31,7 @@ pub(super) struct SupervisorInner {
     /// package workers do not launch on other targets.
     #[cfg(windows)]
     pub(super) restart_delays: Vec<Duration>,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(super) fail_next_start: std::sync::atomic::AtomicBool,
 }
 
@@ -154,7 +154,9 @@ pub struct PackageWorkerSupervisor {
 }
 
 impl PackageWorkerSupervisor {
-    #[cfg(test)]
+    // `test-support` (not cfg(test)) — the engine crate's own tests call this
+    // through dev-dependency feature unification (KOS-347).
+    #[cfg(any(test, feature = "test-support"))]
     pub fn test_fail_next_start(&self) {
         self.inner
             .fail_next_start
@@ -190,7 +192,7 @@ impl PackageWorkerSupervisor {
                 grants: Mutex::new(None),
                 #[cfg(windows)]
                 restart_delays,
-                #[cfg(test)]
+                #[cfg(any(test, feature = "test-support"))]
                 fail_next_start: std::sync::atomic::AtomicBool::new(false),
             }),
         }

@@ -16,6 +16,14 @@ const ALLOWED = new Map([
   // ed25519-dalek 3.0.0-rc.0: the 3.x line carries the API noq/iroh need; no
   // stable 3.x exists yet. Revisit on the first stable 3.x release.
   ["core/crates/ark-core/Cargo.toml::ed25519-dalek", "=3.0.0-rc.0"],
+  // ed25519-dalek =3.0.0-rc.0 (engine dev-dep): replication test fixtures sign
+  // their own documents; pinned to the same release as ark-core so tests do
+  // not pull a second ed25519/curve25519 stack (moved with the KOS-334 split).
+  ["runtime/Cargo.toml::ed25519-dalek", "=3.0.0-rc.0"],
+  // ort 2.0.0-rc.12 (engine-dictation, local-dictation only): transcribe-rs
+  // 0.3.11 builds against this rc and does not re-export the load-dynamic
+  // feature, so the same rc is declared directly for feature unification.
+  ["runtime/crates/engine-dictation/Cargo.toml::ort", "2.0.0-rc.12"],
   // hpke =0.14.1: the iroh/noq stack pins the same RustCrypto draft suite;
   // a caret bump splits the crypto traits.
   ["runtime/Cargo.toml::hpke", "=0.14.1"],
