@@ -112,7 +112,6 @@
 
         let snapshot = usage.snapshot();
         assert_eq!(snapshot.api_v1.connections, 1);
-        assert_eq!(snapshot.legacy.connections, 0);
         assert_eq!(
             snapshot
                 .clients

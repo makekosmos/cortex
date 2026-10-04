@@ -82,26 +82,17 @@ impl ManagerState {
         let protocol_usage = json!({
             "tracking_started_at": protocol_snapshot.tracking_started_at,
             "api_v1": protocol_snapshot.api_v1,
-            "legacy": protocol_snapshot.legacy,
-            "legacy_zero_since": protocol_snapshot.legacy_zero_since,
-            "legacy_zero_for_30_days": protocol_snapshot.legacy_zero_for_30_days,
         });
         let legacy_gate = json!({
             "api_v1": {
                 "connections": protocol_snapshot.api_v1.connections,
                 "last_seen": protocol_snapshot.api_v1.last_seen,
             },
-            "legacy": {
-                "connections": protocol_snapshot.legacy.connections,
-                "last_seen": protocol_snapshot.legacy.last_seen,
-            },
             "api_v1_connections": protocol_snapshot.api_v1.connections,
-            "legacy_connections": protocol_snapshot.legacy.connections,
             "api_v1_last_seen": protocol_snapshot.api_v1.last_seen,
-            "legacy_last_seen": protocol_snapshot.legacy.last_seen,
             "tracking_started_at": protocol_snapshot.tracking_started_at,
-            "legacy_zero_since": protocol_snapshot.legacy_zero_since,
-            "ready": protocol_snapshot.legacy_zero_for_30_days,
+            "ready": true,
+            "note": "legacy transport removed (KOS-333); 30-day observation no longer tracked",
         });
         let components = json!([
             {"name": "rpc", "status": "ok", "state": "ok", "details": rpc_snapshot},

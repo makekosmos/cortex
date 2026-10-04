@@ -2,27 +2,24 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::lock_file::{self, LockFileError};
 
 const FORMAT_VERSION: u32 = 1;
-const OBSERVATION_DAYS: i64 = 30;
 const MAX_CLIENT_BUCKETS: usize = 64;
 pub const FILE_NAME: &str = "protocol-usage.json";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransportKind {
     ApiV1,
-    Legacy,
 }
 
 impl TransportKind {
     fn key(self) -> &'static str {
         match self {
             Self::ApiV1 => "api_v1",
-            Self::Legacy => "legacy",
         }
     }
 }
@@ -38,7 +35,6 @@ struct UsageFile {
     format_version: u32,
     tracking_started_at: String,
     api_v1: UsageCounter,
-    legacy: UsageCounter,
     clients: BTreeMap<String, UsageCounter>,
 }
 
@@ -48,7 +44,6 @@ impl UsageFile {
             format_version: FORMAT_VERSION,
             tracking_started_at: now.to_rfc3339(),
             api_v1: UsageCounter::default(),
-            legacy: UsageCounter::default(),
             clients: BTreeMap::new(),
         }
     }
@@ -58,10 +53,7 @@ impl UsageFile {
 pub struct ProtocolUsageSnapshot {
     pub tracking_started_at: String,
     pub api_v1: UsageCounter,
-    pub legacy: UsageCounter,
     pub clients: BTreeMap<String, UsageCounter>,
-    pub legacy_zero_since: String,
-    pub legacy_zero_for_30_days: bool,
 }
 
 pub struct ProtocolUsageStore {
@@ -94,7 +86,6 @@ impl ProtocolUsageStore {
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         let counter = match transport {
             TransportKind::ApiV1 => &mut state.api_v1,
-            TransportKind::Legacy => &mut state.legacy,
         };
         counter.connections = counter.connections.saturating_add(1);
         counter.last_seen = Some(now.clone());
@@ -113,30 +104,11 @@ impl ProtocolUsageStore {
     }
 
     pub fn snapshot(&self) -> ProtocolUsageSnapshot {
-        self.snapshot_at(Utc::now())
-    }
-
-    fn snapshot_at(&self, now: DateTime<Utc>) -> ProtocolUsageSnapshot {
         let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        let legacy_zero_since = state
-            .legacy
-            .last_seen
-            .clone()
-            .unwrap_or_else(|| state.tracking_started_at.clone());
-        let zero_since = DateTime::parse_from_rfc3339(&legacy_zero_since)
-            .ok()
-            .map(|value| value.with_timezone(&Utc));
-        let legacy_zero_for_30_days = zero_since
-            .map(|value| now.signed_duration_since(value) >= Duration::days(OBSERVATION_DAYS))
-            .unwrap_or(false);
-
         ProtocolUsageSnapshot {
             tracking_started_at: state.tracking_started_at.clone(),
             api_v1: state.api_v1.clone(),
-            legacy: state.legacy.clone(),
             clients: state.clients.clone(),
-            legacy_zero_since,
-            legacy_zero_for_30_days,
         }
     }
 }
@@ -166,7 +138,7 @@ mod tests {
         let store = ProtocolUsageStore::open(dir.path()).unwrap();
         store
             .record(
-                TransportKind::Legacy,
+                TransportKind::ApiV1,
                 Some("pid=4242 secret-token raw-client-id payload-body"),
                 Some("secret-token"),
             )
@@ -181,8 +153,8 @@ mod tests {
         }
         let reopened = ProtocolUsageStore::open(dir.path()).unwrap();
         let snapshot = reopened.snapshot();
-        assert_eq!(snapshot.legacy.connections, 1);
-        assert!(snapshot.clients.contains_key("legacy:unknown@unknown"));
+        assert_eq!(snapshot.api_v1.connections, 1);
+        assert!(snapshot.clients.contains_key("api_v1:unknown@unknown"));
     }
 
     #[test]
@@ -234,7 +206,6 @@ mod tests {
 
         let snapshot = store.snapshot();
         assert_eq!(snapshot.api_v1.connections, 2);
-        assert_eq!(snapshot.legacy.connections, 0);
         assert_eq!(
             snapshot
                 .clients
@@ -252,6 +223,7 @@ mod tests {
         assert!(!snapshot.clients.contains_key("legacy:kosmos-desktop@1.0.0"));
 
         let raw = std::fs::read_to_string(dir.path().join(FILE_NAME)).unwrap();
+        assert!(!raw.contains("\"legacy\""));
         for sensitive in ["pid=4242", "secret-token", "raw-client-id", "payload-body"] {
             assert!(
                 !raw.contains(sensitive),
@@ -261,22 +233,26 @@ mod tests {
     }
 
     #[test]
-    fn gate_requires_full_30_days_since_last_legacy_use() {
+    fn tolerates_legacy_key_in_files_written_before_kos_333() {
         let dir = tempfile::tempdir().unwrap();
-        let store = ProtocolUsageStore::open(dir.path()).unwrap();
-        {
-            let mut state = store.state.lock().unwrap();
-            state.tracking_started_at = "2026-06-01T00:00:00Z".into();
-            state.legacy.last_seen = Some("2026-06-20T00:00:00Z".into());
-        }
+        std::fs::write(
+            dir.path().join(FILE_NAME),
+            serde_json::json!({
+                "format_version": FORMAT_VERSION,
+                "tracking_started_at": "2026-06-01T00:00:00Z",
+                "api_v1": {"connections": 3, "last_seen": "2026-06-02T00:00:00Z"},
+                "legacy": {"connections": 7, "last_seen": "2026-06-20T00:00:00Z"},
+                "clients": {},
+            })
+            .to_string(),
+        )
+        .unwrap();
 
-        let before = DateTime::parse_from_rfc3339("2026-07-19T23:59:59Z")
-            .unwrap()
-            .with_timezone(&Utc);
-        let after = DateTime::parse_from_rfc3339("2026-07-20T00:00:00Z")
-            .unwrap()
-            .with_timezone(&Utc);
-        assert!(!store.snapshot_at(before).legacy_zero_for_30_days);
-        assert!(store.snapshot_at(after).legacy_zero_for_30_days);
+        let store = ProtocolUsageStore::open(dir.path()).unwrap();
+        let snapshot = store.snapshot();
+        assert_eq!(snapshot.api_v1.connections, 3);
+
+        let raw = std::fs::read_to_string(dir.path().join(FILE_NAME)).unwrap();
+        assert!(!raw.contains("\"legacy\""));
     }
 }
