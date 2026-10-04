@@ -35,7 +35,7 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
                             "event": "commands_changed",
                             "commands": list,
                         });
-                        let text = Message::Text(payload.to_string());
+                        let text = Message::Text(payload.to_string().into());
                         if send_message(&mut sink, text, &shutdown).await.is_err() {
                             break;
                         }
@@ -46,7 +46,7 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
                             "id": id,
                             "params": params,
                         });
-                        let text = Message::Text(payload.to_string());
+                        let text = Message::Text(payload.to_string().into());
                         if send_message(&mut sink, text, &shutdown).await.is_err() {
                             break;
                         }
@@ -62,7 +62,7 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
             aevt = ark_evt_rx.recv() => {
                 match aevt {
                     Ok((_name, payload)) => {
-                        let text = Message::Text(payload.to_string());
+                        let text = Message::Text(payload.to_string().into());
                         if send_message(&mut sink, text, &shutdown).await.is_err() {
                             break;
                         }
@@ -76,7 +76,7 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
             agent_evt = agents_rx.recv() => {
                 match agent_evt {
                     Ok(payload) => {
-                        let text = Message::Text(payload.to_string());
+                        let text = Message::Text(payload.to_string().into());
                         if send_message(&mut sink, text, &shutdown).await.is_err() { break; }
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
@@ -88,7 +88,7 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
             pevt = pomo_rx.recv() => {
                 match pevt {
                     Ok(payload) => {
-                        let text = Message::Text(payload.to_string());
+                        let text = Message::Text(payload.to_string().into());
                         if send_message(&mut sink, text, &shutdown).await.is_err() {
                             break;
                         }
@@ -102,7 +102,7 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
             devt = dict_rx.recv() => {
                 match devt {
                     Ok(payload) => {
-                        let text = Message::Text(payload.to_string());
+                        let text = Message::Text(payload.to_string().into());
                         if send_message(&mut sink, text, &shutdown).await.is_err() {
                             break;
                         }
@@ -145,7 +145,7 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
                         let malformed = Message::Text(serde_json::json!({
                             "ok": false,
                             "error": format!("malformed JSON: {error}"),
-                        }).to_string());
+                        }).to_string().into());
                         if send_message(&mut sink, malformed, &shutdown).await.is_err() {
                             break;
                         }
@@ -175,7 +175,7 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
                             Value::String("desktop authority denied".into())
                         },
                     });
-                    let text = Message::Text(response.to_string());
+                    let text = Message::Text(response.to_string().into());
                     if send_message(&mut sink, text, &shutdown).await.is_err() {
                         break;
                     }
@@ -198,7 +198,7 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
                             "id": serde_json::Value::Null,
                             "ok": false,
                             "error": error.to_string(),
-                        }).to_string());
+                        }).to_string().into());
                         if send_message(&mut sink, invalid, &shutdown).await.is_err() {
                             break;
                         }
@@ -217,7 +217,7 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
                             "ok": false,
                             "error": "WS request capacity exhausted",
                         });
-                        let text = Message::Text(payload.to_string());
+                        let text = Message::Text(payload.to_string().into());
                         if send_message(&mut sink, text, &shutdown).await.is_err() { break; }
                         continue;
                     }
@@ -336,7 +336,7 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
                                         "ok": false,
                                         "error": "WS request busy",
                                     });
-                                    let text = Message::Text(busy.to_string());
+                                    let text = Message::Text(busy.to_string().into());
                                     if send_message(&mut sink, text, &shutdown).await.is_err() {
                                         shutdown.finish_request(request_id, true).await;
                                         return Ok(());
@@ -347,7 +347,7 @@ pub(super) async fn run(args: ConnectionLoopArgs) -> Result<(), WsServerError> {
                     }
                 };
                 shutdown.finish_request(request_id, false).await;
-                let text = Message::Text(payload.to_string());
+                let text = Message::Text(payload.to_string().into());
                 if send_message(&mut sink, text, &shutdown).await.is_err() {
                     break;
                 }

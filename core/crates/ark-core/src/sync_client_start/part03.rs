@@ -35,7 +35,11 @@
                     auth_hmac,
                 };
                 let hello_json = serialize_message(&hello);
-                if ws_sink.send(Message::Text(hello_json)).await.is_err() {
+                if ws_sink
+                    .send(Message::Text(hello_json.into()))
+                    .await
+                    .is_err()
+                {
                     continue;
                 }
 

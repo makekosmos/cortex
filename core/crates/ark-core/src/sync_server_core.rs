@@ -48,9 +48,9 @@ impl SyncServer {
             return Err("target LAN peer is not authenticated".into());
         };
         peer.tx
-            .send(Message::Text(serialize_message(
-                &LanSyncMessage::SignedIntegrationFrame { frame },
-            )))
+            .send(Message::Text(
+                serialize_message(&LanSyncMessage::SignedIntegrationFrame { frame }).into(),
+            ))
             .map_err(|_| "LAN peer connection is closed".into())
     }
     pub fn new(storage: Arc<dyn StorageBackend>) -> Self {
@@ -309,7 +309,7 @@ impl SyncServer {
                         let peers_guard = peers.lock().await;
                         for peer in peers_guard.values() {
                             if peer.authenticated {
-                                let _ = peer.tx.send(Message::Ping(vec![]));
+                                let _ = peer.tx.send(Message::Ping(vec![].into()));
                             }
                         }
                     }

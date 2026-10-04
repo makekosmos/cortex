@@ -45,7 +45,7 @@ impl SyncServer {
                 peer.queued_live_changes.push(entity.clone());
                 continue;
             }
-            let _ = peer.tx.send(Message::Text(json.clone()));
+            let _ = peer.tx.send(Message::Text(json.clone().into()));
         }
     }
 

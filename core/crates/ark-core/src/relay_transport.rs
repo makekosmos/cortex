@@ -145,7 +145,7 @@ impl SyncTransport for RelayTransport {
                             auth_hmac,
                         };
                         let text = serialize_message(&hello);
-                        let _ = ws_tx.send(Message::Text(text)).await;
+                        let _ = ws_tx.send(Message::Text(text.into())).await;
 
                         // Drain offline outbox on reconnect.
                         {
@@ -156,7 +156,7 @@ impl SyncTransport for RelayTransport {
                             };
                             for msg in queued {
                                 let text = serialize_message(&msg);
-                                let _ = ws_tx.send(Message::Text(text)).await;
+                                let _ = ws_tx.send(Message::Text(text.into())).await;
                             }
                         }
 
@@ -173,7 +173,7 @@ impl SyncTransport for RelayTransport {
                                 }
                                 Some(msg_to_send) = send_rx.recv() => {
                                     let text = serialize_message(&msg_to_send);
-                                    if ws_tx.send(Message::Text(text)).await.is_err() {
+                                    if ws_tx.send(Message::Text(text.into())).await.is_err() {
                                         break; // connection dead — fall through to reconnect
                                     }
                                 }

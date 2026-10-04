@@ -17,7 +17,8 @@ async fn production_ws_reaps_each_sequential_request_on_one_connection() {
                     "operation": "commands.unregister",
                     "ids": [],
                 })
-                .to_string(),
+                .to_string()
+                .into(),
             ))
             .await
             .unwrap();
@@ -71,7 +72,8 @@ async fn production_ws_disconnect_cancels_stalled_request_without_replay() {
                 "id": "stalled",
                 "operation": "test.stall",
             })
-            .to_string(),
+            .to_string()
+            .into(),
         ))
         .await
         .unwrap();
@@ -88,7 +90,8 @@ async fn production_ws_disconnect_cancels_stalled_request_without_replay() {
                 "id": "second",
                 "operation": "test.stall",
             })
-            .to_string(),
+            .to_string()
+            .into(),
         ))
         .await
         .unwrap();

@@ -56,11 +56,9 @@ pub(super) async fn handle_connection(
 ) -> Result<(), WsServerError> {
     let owner_guard = WsConnectionOwnerGuard::new(dispatcher.clone(), owner_lease);
     let client_id = owner_guard.id();
-    let ws_config = tokio_tungstenite::tungstenite::protocol::WebSocketConfig {
-        max_message_size: Some(MAX_WS_MESSAGE_BYTES),
-        max_frame_size: Some(MAX_WS_MESSAGE_BYTES),
-        ..Default::default()
-    };
+    let ws_config = tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default()
+        .max_message_size(Some(MAX_WS_MESSAGE_BYTES))
+        .max_frame_size(Some(MAX_WS_MESSAGE_BYTES));
     let ws = tokio::select! {
         _ = shutdown.cancelled() => return Ok(()),
         result = tokio_tungstenite::accept_async_with_config(stream, Some(ws_config)) => result?,
@@ -123,7 +121,7 @@ pub(super) async fn handle_connection(
                 compatibility: compatibility_label(&compatibility),
             };
             let payload = serde_json::to_string(&response)?;
-            send_message(&mut sink, Message::Text(payload), &shutdown).await?;
+            send_message(&mut sink, Message::Text(payload.into()), &shutdown).await?;
         }
     }
 

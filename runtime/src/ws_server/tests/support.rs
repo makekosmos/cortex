@@ -38,7 +38,8 @@ pub(super) async fn authenticated_socket(
                 "token": token,
                 "pid": std::process::id(),
             })
-            .to_string(),
+            .to_string()
+            .into(),
         ))
         .await
         .unwrap();
