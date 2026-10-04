@@ -64,7 +64,12 @@ test("worktree and pre-commit modes read package.json revisions from git", (t) =
 test("documents read by tests are listed as contract docs", () => {
   const tracked = new Set(git(root, "ls-files", "-z").split("\0").filter(Boolean));
   const tests = [...tracked].filter(
-    (file) => /\.test\.[cm]?[jt]s$/.test(file) && !/^core\//.test(file) && !/check-plan/.test(file),
+    (file) =>
+      /\.test\.[cm]?[jt]s$/.test(file) &&
+      !/^core\//.test(file) &&
+      !/check-plan/.test(file) &&
+      // ls-files lists deletions until staged; skip paths gone from the worktree
+      existsSync(path.join(root, file)),
   );
   const readers = {};
   for (const file of tests) {

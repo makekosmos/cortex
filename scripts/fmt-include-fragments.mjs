@@ -3,7 +3,7 @@
 // indentation, run `rustfmt`, and strip the wrapper again.
 //   --check   verify only (exit 1 + list files needing changes)
 //   (default) write formatted output back
-import { readFileSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, posix } from "node:path";
@@ -12,9 +12,11 @@ import { execSync } from "node:child_process";
 const MODE = process.argv.includes("--check") ? "check" : "write";
 
 // collect include targets; vendor/ is third-party and out of scope
+// `git ls-files` still lists a file deleted from the worktree until the
+// deletion is staged, so filter to paths that actually exist on disk.
 const all = execSync('git ls-files "*.rs"', { encoding: "utf8" })
   .split("\n")
-  .filter((f) => f && !f.startsWith("vendor/") && !f.includes("/vendor/"));
+  .filter((f) => f && existsSync(f) && !f.startsWith("vendor/") && !f.includes("/vendor/"));
 const targets = new Set();
 const unresolvable = [];
 for (const f of all) {
