@@ -14,12 +14,7 @@ fn create_process_suspended(
     };
     let mut attribute_size = 0usize;
     unsafe {
-        let _ = InitializeProcThreadAttributeList(
-            windows::Win32::System::Threading::LPPROC_THREAD_ATTRIBUTE_LIST(std::ptr::null_mut()),
-            1,
-            0,
-            &mut attribute_size,
-        );
+        let _ = InitializeProcThreadAttributeList(None, 1, None, &mut attribute_size);
     }
     if attribute_size == 0 {
         return Err(WorkerProcessError::Setup);
@@ -28,9 +23,9 @@ fn create_process_suspended(
     let attribute_list = attribute_storage.as_mut_ptr() as *mut std::ffi::c_void;
     unsafe {
         InitializeProcThreadAttributeList(
-            windows::Win32::System::Threading::LPPROC_THREAD_ATTRIBUTE_LIST(attribute_list),
+            Some(windows::Win32::System::Threading::LPPROC_THREAD_ATTRIBUTE_LIST(attribute_list)),
             1,
-            0,
+            None,
             &mut attribute_size,
         )
         .map_err(|_| WorkerProcessError::Setup)?;
@@ -141,7 +136,7 @@ fn create_process_suspended(
         && unsafe {
             CreateProcessW(
                 PCWSTR(app.as_ptr()),
-                windows::core::PWSTR::null(),
+                None,
                 None,
                 None,
                 true,

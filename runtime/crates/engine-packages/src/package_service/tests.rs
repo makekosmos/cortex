@@ -21,10 +21,12 @@ pub mod tests {
     include!("tests/bridge.rs");
     include!("tests/manifests.rs");
 
-    #[cfg(all(windows, target_arch = "x86_64"))]
+    // httpmock is a dev-dep: native_* tests can only exist under cfg(test),
+    // not under the test-support feature build consumed by engine's targets.
+    #[cfg(all(test, windows, target_arch = "x86_64"))]
     include!("native_tests.rs");
-    #[cfg(all(windows, target_arch = "x86_64"))]
+    #[cfg(all(test, windows, target_arch = "x86_64"))]
     include!("native_icon_tests.rs");
-    #[cfg(all(windows, target_arch = "x86_64"))]
+    #[cfg(all(test, windows, target_arch = "x86_64"))]
     include!("native_migration_tests.rs");
 }

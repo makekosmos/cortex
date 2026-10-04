@@ -61,7 +61,7 @@ mod imp {
             RegOpenKeyExW(
                 HKEY_CURRENT_USER,
                 PCWSTR(wide_key.as_ptr()),
-                0,
+                Some(0),
                 access,
                 &mut handle,
             )
@@ -84,7 +84,7 @@ mod imp {
             RegCreateKeyExW(
                 HKEY_CURRENT_USER,
                 PCWSTR(wide_key.as_ptr()),
-                0,
+                None,
                 PCWSTR::null(),
                 REG_OPEN_CREATE_OPTIONS(0),
                 KEY_WRITE,
@@ -173,7 +173,7 @@ mod imp {
             let status = RegSetValueExW(
                 handle,
                 PCWSTR(wide_name.as_ptr()),
-                0,
+                None,
                 REG_VALUE_TYPE(value.kind),
                 Some(&value.data),
             );

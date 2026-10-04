@@ -4,7 +4,7 @@ use std::env;
 use std::path::{Path, PathBuf};
 
 use windows::core::PCWSTR;
-use windows::Win32::Foundation::{HINSTANCE, HWND};
+use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::Shell::{
     Shell_NotifyIconW, NIF_ICON, NIF_MESSAGE, NIF_TIP, NIM_DELETE, NOTIFYICONDATAW,
 };
@@ -43,7 +43,7 @@ pub fn load_icon(path: &Path) -> Option<HICON> {
     let path = wide(path.as_os_str());
     unsafe {
         LoadImageW(
-            HINSTANCE::default(),
+            None,
             PCWSTR(path.as_ptr()),
             IMAGE_ICON,
             0,

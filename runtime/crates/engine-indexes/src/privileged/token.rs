@@ -34,7 +34,7 @@ pub fn current_user_sid() -> Result<String, String> {
             ConvertSidToStringSidW(user.User.Sid, &mut sid_w)
                 .map_err(|e| format!("sid to string failed: {e}"))?;
             let text = pwstr_to_string(sid_w);
-            let _ = LocalFree(HLOCAL(sid_w.0.cast()));
+            let _ = LocalFree(Some(HLOCAL(sid_w.0.cast())));
             Ok(text)
         })();
         let _ = CloseHandle(token);
@@ -114,10 +114,10 @@ pub fn validate_grant_sid(sid: &str) -> bool {
                 return false;
             }
             let text = pwstr_to_string(back);
-            let _ = LocalFree(HLOCAL(back.0.cast()));
+            let _ = LocalFree(Some(HLOCAL(back.0.cast())));
             text == sid
         })();
-        let _ = LocalFree(HLOCAL(psid.0));
+        let _ = LocalFree(Some(HLOCAL(psid.0)));
         round_trips
     }
 }

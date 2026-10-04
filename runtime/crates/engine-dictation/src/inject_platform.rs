@@ -141,7 +141,7 @@ impl OsAdapter for SystemOsAdapter {
             };
 
             let hwnd = HWND(raw as *mut _);
-            if !unsafe { IsWindow(hwnd).as_bool() } {
+            if !unsafe { IsWindow(Some(hwnd)).as_bool() } {
                 return Err(InjectError::StaleTarget);
             }
             if unsafe { GetForegroundWindow() } != hwnd

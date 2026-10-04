@@ -497,7 +497,7 @@ mod uwp {
         let open_op = stream_ref
             .OpenReadAsync()
             .map_err(map_err("OpenReadAsync"))?;
-        let stream = open_op.get().map_err(map_err("OpenReadAsync.get"))?;
+        let stream = open_op.join().map_err(map_err("OpenReadAsync.join"))?;
 
         let size = stream.Size().map_err(map_err("Size"))? as u32;
         if size == 0 {
@@ -508,7 +508,7 @@ mod uwp {
         let _ = reader.SetInputStreamOptions(InputStreamOptions::None);
 
         let load_op = reader.LoadAsync(size).map_err(map_err("LoadAsync"))?;
-        let loaded = load_op.get().map_err(map_err("LoadAsync.get"))?;
+        let loaded = load_op.join().map_err(map_err("LoadAsync.join"))?;
         if loaded == 0 {
             return Err(std::io::Error::other("DataReader loaded 0 bytes"));
         }
@@ -578,7 +578,7 @@ mod uwp {
         package: &Package,
     ) -> Option<windows::Storage::Streams::RandomAccessStreamReference> {
         let entries_op = package.GetAppListEntriesAsync().ok()?;
-        let entries = entries_op.get().ok()?;
+        let entries = entries_op.join().ok()?;
         for entry in entries {
             let info = match entry.DisplayInfo() {
                 Ok(v) => v,

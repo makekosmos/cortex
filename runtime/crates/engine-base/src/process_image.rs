@@ -1,10 +1,10 @@
 //! Executable image path of a same-user process, queried by PID —
 //! trustworthy process identity, unlike self-declared client headers.
 //!
-//! Moved verbatim from `engine::auth` (KOS-335): `privileged::impersonate`
-//! needs it to identify pipe clients without a back-edge into engine;
-//! engine keeps `crate::auth::process_image_path` as a thin wrapper that
-//! maps [`ProcessImageError`] onto `AuthError`.
+//! Moved verbatim from `engine::auth` via `engine-indexes` (KOS-335);
+//! relocated to `engine-base` (KOS-342) so `crate::auth::process_image_path`
+//! can wrap it directly — engine-indexes re-exports it for
+//! `privileged::impersonate`.
 
 #![cfg(windows)]
 
