@@ -1,3 +1,5 @@
+use super::*;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Project {
@@ -23,7 +25,7 @@ pub enum SessionStatus {
 }
 
 impl SessionStatus {
-    fn as_str(&self) -> &'static str {
+    pub(crate) fn as_str(&self) -> &'static str {
         match self {
             Self::Starting => "starting",
             Self::Running => "running",
@@ -96,10 +98,10 @@ pub struct AgentsEvent {
 }
 
 #[derive(Debug)]
-struct RuntimeHandle {
-    tx: mpsc::Sender<AppCommand>,
-    generation: u64,
-    task: tokio::task::JoinHandle<()>,
+pub(crate) struct RuntimeHandle {
+    pub(crate) tx: mpsc::Sender<AppCommand>,
+    pub(crate) generation: u64,
+    pub(crate) task: tokio::task::JoinHandle<()>,
 }
 
 impl RuntimeHandle {
@@ -107,7 +109,7 @@ impl RuntimeHandle {
     /// is still unwinding, and its Arc<AgentsService> — the SQLite connection
     /// inside the data dir — is released only when the task returns. Without
     /// the join a TempDir fixture can outrace the teardown (KOS-314).
-    async fn stop(self, session_id: &str) -> Result<(), String> {
+    pub(crate) async fn stop(self, session_id: &str) -> Result<(), String> {
         let (done_tx, done_rx) = tokio::sync::oneshot::channel();
         let result = if self
             .tx
@@ -130,24 +132,24 @@ impl RuntimeHandle {
 }
 
 #[derive(Debug, Clone)]
-struct StreamBuffer {
-    event: TimelineEvent,
-    last_emit: Instant,
-    pending: bool,
+pub(crate) struct StreamBuffer {
+    pub(crate) event: TimelineEvent,
+    pub(crate) last_emit: Instant,
+    pub(crate) pending: bool,
 }
 
-struct AppServerStartup {
-    process_tree: crate::process_tree::ProcessTree,
-    stdin: tokio::process::ChildStdin,
-    lines: Lines<BufReader<ChildStdout>>,
-    thread_id: String,
-    active_turn_id: Option<String>,
-    status: SessionStatus,
-    buffered: Vec<Value>,
+pub(crate) struct AppServerStartup {
+    pub(crate) process_tree: crate::process_tree::ProcessTree,
+    pub(crate) stdin: tokio::process::ChildStdin,
+    pub(crate) lines: Lines<BufReader<ChildStdout>>,
+    pub(crate) thread_id: String,
+    pub(crate) active_turn_id: Option<String>,
+    pub(crate) status: SessionStatus,
+    pub(crate) buffered: Vec<Value>,
 }
 
 #[derive(Debug)]
-enum AppCommand {
+pub(crate) enum AppCommand {
     Send {
         text: String,
     },
@@ -164,37 +166,37 @@ enum AppCommand {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct FullAccessConsentBinding {
-    package_id: String,
-    package_version: String,
-    project_id: String,
-    project_path: String,
-    mode: String,
-    model: Option<String>,
-    prompt_hash: String,
-    connection_id: Option<u64>,
+pub(crate) struct FullAccessConsentBinding {
+    pub(crate) package_id: String,
+    pub(crate) package_version: String,
+    pub(crate) project_id: String,
+    pub(crate) project_path: String,
+    pub(crate) mode: String,
+    pub(crate) model: Option<String>,
+    pub(crate) prompt_hash: String,
+    pub(crate) connection_id: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
-struct FullAccessConsent {
-    token: String,
-    token_hash: [u8; 32],
-    binding: FullAccessConsentBinding,
-    expires_at: Instant,
-    approved: bool,
+pub(crate) struct FullAccessConsent {
+    pub(crate) token: String,
+    pub(crate) token_hash: [u8; 32],
+    pub(crate) binding: FullAccessConsentBinding,
+    pub(crate) expires_at: Instant,
+    pub(crate) approved: bool,
 }
 
 #[derive(Debug, Default)]
-struct FullAccessConsentRegistry {
-    pending: HashMap<String, FullAccessConsent>,
+pub(crate) struct FullAccessConsentRegistry {
+    pub(crate) pending: HashMap<String, FullAccessConsent>,
 }
 
 impl FullAccessConsentRegistry {
-    fn issue(&mut self, binding: FullAccessConsentBinding) -> Value {
+    pub(crate) fn issue(&mut self, binding: FullAccessConsentBinding) -> Value {
         self.issue_at(binding, Instant::now())
     }
 
-    fn issue_at(&mut self, binding: FullAccessConsentBinding, now: Instant) -> Value {
+    pub(crate) fn issue_at(&mut self, binding: FullAccessConsentBinding, now: Instant) -> Value {
         self.purge_at(now);
         let request_id = Uuid::new_v4().to_string();
         let token = new_consent_token();
@@ -225,13 +227,13 @@ impl FullAccessConsentRegistry {
         })
     }
 
-    fn binding(&self, request_id: &str) -> Option<FullAccessConsentBinding> {
+    pub(crate) fn binding(&self, request_id: &str) -> Option<FullAccessConsentBinding> {
         self.pending
             .get(request_id)
             .map(|consent| consent.binding.clone())
     }
 
-    fn approve(
+    pub(crate) fn approve(
         &mut self,
         request_id: &str,
         approved: bool,
@@ -240,7 +242,7 @@ impl FullAccessConsentRegistry {
         self.approve_at(request_id, approved, connection_id, Instant::now())
     }
 
-    fn approve_at(
+    pub(crate) fn approve_at(
         &mut self,
         request_id: &str,
         approved: bool,
@@ -266,11 +268,15 @@ impl FullAccessConsentRegistry {
         Ok(Some(consent.token.clone()))
     }
 
-    fn consume(&mut self, token: &str, binding: &FullAccessConsentBinding) -> Result<(), String> {
+    pub(crate) fn consume(
+        &mut self,
+        token: &str,
+        binding: &FullAccessConsentBinding,
+    ) -> Result<(), String> {
         self.consume_at(token, binding, Instant::now())
     }
 
-    fn consume_at(
+    pub(crate) fn consume_at(
         &mut self,
         token: &str,
         binding: &FullAccessConsentBinding,
@@ -296,7 +302,7 @@ impl FullAccessConsentRegistry {
         Ok(())
     }
 
-    fn purge_at(&mut self, now: Instant) {
+    pub(crate) fn purge_at(&mut self, now: Instant) {
         self.pending.retain(|_, consent| consent.expires_at > now);
     }
 }
@@ -309,25 +315,25 @@ fn constant_time_equal(left: &[u8; 32], right: &[u8; 32]) -> bool {
 }
 
 pub struct AgentsService {
-    root: PathBuf,
-    db: Mutex<Connection>,
-    runtimes: Mutex<HashMap<String, RuntimeHandle>>,
+    pub(crate) root: PathBuf,
+    pub(crate) db: Mutex<Connection>,
+    pub(crate) runtimes: Mutex<HashMap<String, RuntimeHandle>>,
     /// Tasks whose handle left `runtimes` without being joined (a task
     /// deregisters itself at the end of run_app_server). Kept so shutdown()
     /// can still wait for their last instructions — the Arc<AgentsService>
     /// they hold keeps the SQLite connection open until the task returns.
     /// Entries are pruned on push, so the vec is bounded by live tasks.
-    finished_tasks: crate::background_task::TaskRegistry,
-    lifecycle_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
-    next_runtime_generation: AtomicU64,
-    events: broadcast::Sender<Value>,
-    seq: AtomicU64,
-    event_order: Mutex<()>,
-    recent_events: Mutex<VecDeque<Value>>,
-    restored: AtomicBool,
-    restore_lock: tokio::sync::Mutex<()>,
-    streams: Mutex<HashMap<(String, String), StreamBuffer>>,
-    full_access_consents: Mutex<FullAccessConsentRegistry>,
+    pub(crate) finished_tasks: crate::background_task::TaskRegistry,
+    pub(crate) lifecycle_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
+    pub(crate) next_runtime_generation: AtomicU64,
+    pub(crate) events: broadcast::Sender<Value>,
+    pub(crate) seq: AtomicU64,
+    pub(crate) event_order: Mutex<()>,
+    pub(crate) recent_events: Mutex<VecDeque<Value>>,
+    pub(crate) restored: AtomicBool,
+    pub(crate) restore_lock: tokio::sync::Mutex<()>,
+    pub(crate) streams: Mutex<HashMap<(String, String), StreamBuffer>>,
+    pub(crate) full_access_consents: Mutex<FullAccessConsentRegistry>,
 }
 
 impl AgentsService {
@@ -442,19 +448,19 @@ impl AgentsService {
         crate::background_task::drain_tasks(&self.finished_tasks, RUNTIME_JOIN_TIMEOUT).await;
     }
 
-    fn db(&self) -> MutexGuard<'_, Connection> {
+    pub(crate) fn db(&self) -> MutexGuard<'_, Connection> {
         self.db
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
-    fn runtimes(&self) -> MutexGuard<'_, HashMap<String, RuntimeHandle>> {
+    pub(crate) fn runtimes(&self) -> MutexGuard<'_, HashMap<String, RuntimeHandle>> {
         self.runtimes
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
-    fn lifecycle_lock(&self, session_id: &str) -> Arc<tokio::sync::Mutex<()>> {
+    pub(crate) fn lifecycle_lock(&self, session_id: &str) -> Arc<tokio::sync::Mutex<()>> {
         self.lifecycle_locks
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -463,13 +469,13 @@ impl AgentsService {
             .clone()
     }
 
-    fn runtime_is_current(&self, session_id: &str, generation: u64) -> bool {
+    pub(crate) fn runtime_is_current(&self, session_id: &str, generation: u64) -> bool {
         self.runtimes()
             .get(session_id)
             .is_some_and(|runtime| runtime.generation == generation)
     }
 
-    fn remove_runtime(&self, session_id: &str, generation: u64) {
+    pub(crate) fn remove_runtime(&self, session_id: &str, generation: u64) {
         let mut runtimes = self.runtimes();
         if runtimes
             .get(session_id)
@@ -485,7 +491,7 @@ impl AgentsService {
         }
     }
 
-    fn emit(&self, kind: &str, session_id: &str, payload: Value) {
+    pub(crate) fn emit(&self, kind: &str, session_id: &str, payload: Value) {
         let _order = self.event_order.lock().unwrap_or_else(|p| p.into_inner());
         let seq = self
             .db()
@@ -562,7 +568,7 @@ impl AgentsService {
         }
     }
 
-    async fn restore_active_sessions(self: &Arc<Self>) {
+    pub(crate) async fn restore_active_sessions(self: &Arc<Self>) {
         let _guard = self.restore_lock.lock().await;
         if self.restored.load(Ordering::Acquire) {
             return;
@@ -627,7 +633,7 @@ impl AgentsService {
         self.restored.store(true, Ordering::Release);
     }
 
-    fn list_projects(&self) -> Result<Vec<Project>, String> {
+    pub(crate) fn list_projects(&self) -> Result<Vec<Project>, String> {
         let db = self.db();
         let mut statement = db
             .prepare("SELECT id,name,path,created_at FROM projects ORDER BY created_at")
@@ -648,7 +654,7 @@ impl AgentsService {
             .map_err(|e| e.to_string())
     }
 
-    async fn add_project(&self, raw_path: &str) -> Result<Value, String> {
+    pub(crate) async fn add_project(&self, raw_path: &str) -> Result<Value, String> {
         let requested = PathBuf::from(raw_path);
         let canonical = git_repository_root(&requested)?;
         let path = canonical.to_string_lossy().into_owned();
@@ -674,7 +680,7 @@ impl AgentsService {
         Ok(json!(project))
     }
 
-    fn remove_project(&self, id: &str) -> Result<Value, String> {
+    pub(crate) fn remove_project(&self, id: &str) -> Result<Value, String> {
         let active: i64 = self
             .db()
             .query_row(
@@ -692,7 +698,7 @@ impl AgentsService {
         Ok(json!(true))
     }
 
-    fn list_sessions(&self, include_archived: bool) -> Result<Vec<Session>, String> {
+    pub(crate) fn list_sessions(&self, include_archived: bool) -> Result<Vec<Session>, String> {
         let sql = if include_archived {
             concat!(
                 "SELECT id,project_id,title,prompt,mode,model,status,branch,worktree_path,",
@@ -715,7 +721,7 @@ impl AgentsService {
             .map_err(|e| e.to_string())
     }
 
-    fn get_session(&self, id: &str) -> Result<Session, String> {
+    pub(crate) fn get_session(&self, id: &str) -> Result<Session, String> {
         self.db()
             .query_row(
                 concat!(
@@ -731,12 +737,12 @@ impl AgentsService {
             .ok_or_else(|| "Сессия не найдена".into())
     }
 
-    async fn create_session(self: &Arc<Self>, input: Value) -> Result<Value, String> {
+    pub(crate) async fn create_session(self: &Arc<Self>, input: Value) -> Result<Value, String> {
         self.create_session_with_client(input, &crate::engine_dispatch::DispatchClient::default())
             .await
     }
 
-    async fn create_session_with_client(
+    pub(crate) async fn create_session_with_client(
         self: &Arc<Self>,
         input: Value,
         client: &crate::engine_dispatch::DispatchClient,
@@ -891,7 +897,7 @@ impl AgentsService {
         Ok(json!(self.get_session(&id)?))
     }
 
-    fn issue_full_access_consent(
+    pub(crate) fn issue_full_access_consent(
         &self,
         input: Value,
         client: &crate::engine_dispatch::DispatchClient,
@@ -919,7 +925,7 @@ impl AgentsService {
         Ok(result)
     }
 
-    fn approve_full_access_consent(
+    pub(crate) fn approve_full_access_consent(
         &self,
         input: Value,
         client: &crate::engine_dispatch::DispatchClient,
@@ -966,7 +972,7 @@ impl AgentsService {
         }
     }
 
-    fn full_access_consent_binding(
+    pub(crate) fn full_access_consent_binding(
         &self,
         input: &Value,
         client: &crate::engine_dispatch::DispatchClient,
@@ -996,7 +1002,7 @@ impl AgentsService {
         })
     }
 
-    fn audit_security(
+    pub(crate) fn audit_security(
         &self,
         event: &str,
         result: &str,
@@ -1026,7 +1032,7 @@ impl AgentsService {
             .map_err(|error| format!("security audit failed: {error}"))
     }
 
-    async fn spawn_runtime(self: &Arc<Self>, session: Session) -> Result<(), String> {
+    pub(crate) async fn spawn_runtime(self: &Arc<Self>, session: Session) -> Result<(), String> {
         let (tx, rx) = mpsc::channel(64);
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let generation = self.next_runtime_generation.fetch_add(1, Ordering::Relaxed);
@@ -1060,7 +1066,11 @@ impl AgentsService {
         result
     }
 
-    async fn send(self: &Arc<Self>, session_id: &str, text: &str) -> Result<Value, String> {
+    pub(crate) async fn send(
+        self: &Arc<Self>,
+        session_id: &str,
+        text: &str,
+    ) -> Result<Value, String> {
         let lifecycle = self.lifecycle_lock(session_id);
         let _guard = lifecycle.lock().await;
         let session = self.get_session(session_id)?;
@@ -1088,7 +1098,7 @@ impl AgentsService {
         Ok(json!(true))
     }
 
-    async fn interrupt(&self, session_id: &str) -> Result<Value, String> {
+    pub(crate) async fn interrupt(&self, session_id: &str) -> Result<Value, String> {
         let lifecycle = self.lifecycle_lock(session_id);
         let _guard = lifecycle.lock().await;
         let Some(turn_id) = self.get_session(session_id)?.active_turn_id else {
@@ -1178,7 +1188,7 @@ impl AgentsService {
         Ok(json!(true))
     }
 
-    async fn archive(&self, session_id: &str) -> Result<Value, String> {
+    pub(crate) async fn archive(&self, session_id: &str) -> Result<Value, String> {
         let lifecycle = self.lifecycle_lock(session_id);
         let _guard = lifecycle.lock().await;
         if self.get_session(session_id)?.archived_at.is_some() {
@@ -1223,7 +1233,7 @@ impl AgentsService {
         Ok(json!(true))
     }
 
-    fn mark_archived(&self, session_id: &str) -> Result<(), String> {
+    pub(crate) fn mark_archived(&self, session_id: &str) -> Result<(), String> {
         let timestamp = now();
         self.db()
             .execute(
@@ -1237,14 +1247,14 @@ impl AgentsService {
         Ok(())
     }
 
-    async fn stop_runtime(&self, session_id: &str) -> Result<(), String> {
+    pub(crate) async fn stop_runtime(&self, session_id: &str) -> Result<(), String> {
         let Some(handle) = self.runtimes().remove(session_id) else {
             return Ok(());
         };
         handle.stop(session_id).await
     }
 
-    async fn remove_worktree(&self, session_id: &str) -> Result<Value, String> {
+    pub(crate) async fn remove_worktree(&self, session_id: &str) -> Result<Value, String> {
         let lifecycle = self.lifecycle_lock(session_id);
         let _guard = lifecycle.lock().await;
         let session = self.get_session(session_id)?;
@@ -1279,7 +1289,7 @@ impl AgentsService {
         Ok(json!(true))
     }
 
-    fn timeline(&self, input: Value) -> Result<Value, String> {
+    pub(crate) fn timeline(&self, input: Value) -> Result<Value, String> {
         let session_id = required_str(&input, "session_id")?;
         let cursor = input
             .get("cursor")
@@ -1308,7 +1318,7 @@ impl AgentsService {
         Ok(json!({"events":events,"nextCursor":next_cursor}))
     }
 
-    async fn respond_approval(&self, input: Value) -> Result<Value, String> {
+    pub(crate) async fn respond_approval(&self, input: Value) -> Result<Value, String> {
         let approval_id = required_str(&input, "approval_id")?;
         let decision = input
             .get("decision")
@@ -1393,7 +1403,7 @@ impl AgentsService {
         Ok(json!(true))
     }
 
-    async fn diff(&self, session_id: &str) -> Result<Value, String> {
+    pub(crate) async fn diff(&self, session_id: &str) -> Result<Value, String> {
         let session = self.get_session(session_id)?;
         let cwd = PathBuf::from(&session.worktree_path);
         let canonical_cwd = std::fs::canonicalize(&cwd).map_err(|error| error.to_string())?;
@@ -1480,12 +1490,12 @@ impl AgentsService {
             "truncated":truncated}))
     }
 
-    async fn models(&self) -> Result<Value, String> {
+    pub(crate) async fn models(&self) -> Result<Value, String> {
         let output = codex_one_shot("model/list", json!({"limit":100})).await?;
         Ok(output)
     }
 
-    async fn editors(&self) -> Result<Value, String> {
+    pub(crate) async fn editors(&self) -> Result<Value, String> {
         let mut editors = Vec::new();
         for (id, label, command) in [
             ("code", "Visual Studio Code", "code"),
@@ -1500,7 +1510,7 @@ impl AgentsService {
         Ok(json!(editors))
     }
 
-    async fn open_editor(&self, input: Value) -> Result<Value, String> {
+    pub(crate) async fn open_editor(&self, input: Value) -> Result<Value, String> {
         let session = self.get_session(&required_str(&input, "session_id")?)?;
         let editor = input
             .get("editor_id")
@@ -1527,7 +1537,7 @@ impl AgentsService {
         Ok(json!(true))
     }
 
-    fn snapshot(&self, input: Value) -> Result<Value, String> {
+    pub(crate) fn snapshot(&self, input: Value) -> Result<Value, String> {
         let after_seq = input.get("after_seq").and_then(Value::as_u64).unwrap_or(0);
         let approvals = self.pending_approvals()?;
         let recent_events = self
@@ -1547,7 +1557,7 @@ impl AgentsService {
             "approvals":approvals}))
     }
 
-    fn append_timeline(
+    pub(crate) fn append_timeline(
         &self,
         session_id: &str,
         kind: &str,
@@ -1607,7 +1617,12 @@ impl AgentsService {
         })
     }
 
-    fn append_and_emit(&self, session_id: &str, kind: &str, payload: Value) -> Result<(), String> {
+    pub(crate) fn append_and_emit(
+        &self,
+        session_id: &str,
+        kind: &str,
+        payload: Value,
+    ) -> Result<(), String> {
         if matches!(
             kind,
             "message_delta" | "reasoning_delta" | "command_output" | "file_change_delta"
@@ -1620,7 +1635,7 @@ impl AgentsService {
         Ok(())
     }
 
-    fn append_stream_delta(
+    pub(crate) fn append_stream_delta(
         &self,
         session_id: &str,
         kind: &str,
@@ -1683,7 +1698,7 @@ impl AgentsService {
         Ok(())
     }
 
-    fn flush_streams(&self, session_id: &str) {
+    pub(crate) fn flush_streams(&self, session_id: &str) {
         let mut streams = self.streams.lock().unwrap_or_else(|p| p.into_inner());
         let keys = streams
             .keys()
@@ -1699,7 +1714,7 @@ impl AgentsService {
         }
     }
 
-    fn set_status(&self, session_id: &str, status: SessionStatus) -> Result<(), String> {
+    pub(crate) fn set_status(&self, session_id: &str, status: SessionStatus) -> Result<(), String> {
         self.db()
             .execute(
                 concat!(
@@ -1712,7 +1727,7 @@ impl AgentsService {
         Ok(())
     }
 
-    fn update_codex_ids(
+    pub(crate) fn update_codex_ids(
         &self,
         session_id: &str,
         thread_id: Option<&str>,
@@ -1730,7 +1745,7 @@ impl AgentsService {
         Ok(())
     }
 
-    fn save_approval(
+    pub(crate) fn save_approval(
         &self,
         session_id: &str,
         request_id: Value,
@@ -1786,7 +1801,7 @@ impl AgentsService {
         Ok(approval)
     }
 
-    fn get_approval(&self, id: &str) -> Result<Approval, String> {
+    pub(crate) fn get_approval(&self, id: &str) -> Result<Approval, String> {
         self.db()
             .query_row(
                 concat!(
@@ -1801,7 +1816,7 @@ impl AgentsService {
             .ok_or_else(|| "Approval не найден".into())
     }
 
-    fn pending_approvals(&self) -> Result<Vec<Approval>, String> {
+    pub(crate) fn pending_approvals(&self) -> Result<Vec<Approval>, String> {
         let db = self.db();
         let mut statement = db
             .prepare(concat!(
@@ -1817,7 +1832,11 @@ impl AgentsService {
             .map_err(|e| e.to_string())
     }
 
-    fn expire_pending_approvals(&self, session_id: &str, reason: &str) -> Result<(), String> {
+    pub(crate) fn expire_pending_approvals(
+        &self,
+        session_id: &str,
+        reason: &str,
+    ) -> Result<(), String> {
         let timestamp = now();
         let approval_ids = {
             let db = self.db();
@@ -1866,7 +1885,11 @@ impl AgentsService {
         Ok(())
     }
 
-    fn resolve_server_request(&self, session_id: &str, request_id: &Value) -> Result<(), String> {
+    pub(crate) fn resolve_server_request(
+        &self,
+        session_id: &str,
+        request_id: &Value,
+    ) -> Result<(), String> {
         let approval_id = self
             .db()
             .query_row(

@@ -1,4 +1,6 @@
-async fn run_app_server(
+use super::*;
+
+pub(crate) async fn run_app_server(
     service: Arc<AgentsService>,
     session: Session,
     generation: u64,
@@ -374,7 +376,7 @@ async fn start_app_server(session: &Session) -> Result<AppServerStartup, String>
     })
 }
 
-async fn handle_app_message(
+pub(crate) async fn handle_app_message(
     service: &AgentsService,
     session_id: &str,
     generation: u64,
@@ -553,7 +555,7 @@ async fn write_json(stdin: &mut tokio::process::ChildStdin, value: &Value) -> Re
     stdin.flush().await.map_err(|e| e.to_string())
 }
 
-async fn codex_one_shot(method: &str, params_value: Value) -> Result<Value, String> {
+pub(crate) async fn codex_one_shot(method: &str, params_value: Value) -> Result<Value, String> {
     let mut command =
         crate::process_tree::resolve_command(codex_command()).map_err(|e| e.to_string())?;
     let mut child = command
@@ -587,14 +589,14 @@ async fn codex_one_shot(method: &str, params_value: Value) -> Result<Value, Stri
         .ok_or_else(|| format!("Codex {method}: {response}"))
 }
 
-fn mode_params(mode: &str) -> (&'static str, &'static str, &'static str) {
+pub(crate) fn mode_params(mode: &str) -> (&'static str, &'static str, &'static str) {
     match mode {
         "auto-review" => ("workspace-write", "on-request", "auto_review"),
         "full-access" => ("danger-full-access", "never", "user"),
         _ => ("workspace-write", "on-request", "user"),
     }
 }
-fn turn_policy(mode: &str) -> Value {
+pub(crate) fn turn_policy(mode: &str) -> Value {
     let (sandbox, approval_policy, reviewer) = mode_params(mode);
     let sandbox_policy = if sandbox == "danger-full-access" {
         json!({"type":"dangerFullAccess"})
@@ -623,22 +625,22 @@ fn codex_command() -> Command {
     }
     Command::new("codex")
 }
-fn now() -> String {
+pub(crate) fn now() -> String {
     Utc::now().to_rfc3339()
 }
 
-fn new_consent_token() -> String {
+pub(crate) fn new_consent_token() -> String {
     let mut bytes = [0u8; 32];
     rand::rngs::OsRng.fill_bytes(&mut bytes);
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
-fn canonical_project_path(project: &Project) -> Result<String, String> {
+pub(crate) fn canonical_project_path(project: &Project) -> Result<String, String> {
     Path::new(&project.path)
         .canonicalize()
         .map(|path| path.to_string_lossy().into_owned())
         .map_err(|error| format!("project path is unavailable: {error}"))
 }
-fn required_str(value: &Value, key: &str) -> Result<String, String> {
+pub(crate) fn required_str(value: &Value, key: &str) -> Result<String, String> {
     value
         .get(key)
         .and_then(Value::as_str)
@@ -646,13 +648,13 @@ fn required_str(value: &Value, key: &str) -> Result<String, String> {
         .map(str::to_string)
         .ok_or_else(|| format!("missing '{key}'"))
 }
-fn path_str(path: &Path) -> Result<&str, String> {
+pub(crate) fn path_str(path: &Path) -> Result<&str, String> {
     path.to_str().ok_or_else(|| "Путь не является UTF-8".into())
 }
-fn hex_hash(value: &str) -> String {
+pub(crate) fn hex_hash(value: &str) -> String {
     format!("{:x}", Sha256::digest(value.as_bytes()))
 }
-fn prompt_slug(prompt: &str) -> String {
+pub(crate) fn prompt_slug(prompt: &str) -> String {
     let slug = prompt
         .chars()
         .flat_map(char::to_lowercase)
@@ -670,7 +672,7 @@ fn prompt_slug(prompt: &str) -> String {
         compact.chars().take(48).collect()
     }
 }
-fn truncate_utf8(mut text: String, max: usize) -> String {
+pub(crate) fn truncate_utf8(mut text: String, max: usize) -> String {
     if text.len() <= max {
         return text;
     }
@@ -681,7 +683,7 @@ fn truncate_utf8(mut text: String, max: usize) -> String {
     text.truncate(end);
     text
 }
-fn untracked_patch(path: &str, content: &str) -> String {
+pub(crate) fn untracked_patch(path: &str, content: &str) -> String {
     let normalized = path.replace('\\', "/");
     let line_count = content.lines().count().max(1);
     let body = content
@@ -693,7 +695,7 @@ fn untracked_patch(path: &str, content: &str) -> String {
              b/{normalized}\n@@ -0,0 +1,{line_count} @@\n{body}"
     )
 }
-fn git_dirty(path: &Path) -> bool {
+pub(crate) fn git_dirty(path: &Path) -> bool {
     if git_cwd_is_isolated(path).is_err() {
         return false;
     }
@@ -704,7 +706,7 @@ fn git_dirty(path: &Path) -> bool {
         .map(|o| !o.stdout.is_empty())
         .unwrap_or(false)
 }
-fn is_binary(path: &Path) -> bool {
+pub(crate) fn is_binary(path: &Path) -> bool {
     let mut bytes = [0_u8; 8192];
     std::fs::File::open(path)
         .and_then(|mut file| file.read(&mut bytes))
@@ -712,7 +714,7 @@ fn is_binary(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-async fn git_output(cwd: &Path, args: &[&str]) -> Result<String, String> {
+pub(crate) async fn git_output(cwd: &Path, args: &[&str]) -> Result<String, String> {
     git_cwd_is_isolated(cwd)?;
     let output = isolated_async_git()
         .args(args)
@@ -726,7 +728,7 @@ async fn git_output(cwd: &Path, args: &[&str]) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
-fn git_cwd_is_isolated(cwd: &Path) -> Result<(), String> {
+pub(crate) fn git_cwd_is_isolated(cwd: &Path) -> Result<(), String> {
     let requested = cwd
         .canonicalize()
         .map_err(|error| format!("Git working directory is unavailable: {error}"))?;
@@ -751,7 +753,7 @@ fn git_cwd_is_isolated(cwd: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn git_repository_root(path: &Path) -> Result<PathBuf, String> {
+pub(crate) fn git_repository_root(path: &Path) -> Result<PathBuf, String> {
     let requested = path
         .canonicalize()
         .map_err(|error| format!("Git repository path is unavailable: {error}"))?;
@@ -768,7 +770,7 @@ fn git_repository_root(path: &Path) -> Result<PathBuf, String> {
         .map_err(|error| format!("Git repository root is unavailable: {error}"))
 }
 
-fn isolated_std_git() -> std::process::Command {
+pub(crate) fn isolated_std_git() -> std::process::Command {
     let mut command = std::process::Command::new("git");
     for key in [
         "GIT_DIR",
@@ -801,10 +803,10 @@ fn isolated_async_git() -> Command {
     }
     command
 }
-async fn git_status(cwd: &Path, args: &[&str]) -> Result<(), String> {
+pub(crate) async fn git_status(cwd: &Path, args: &[&str]) -> Result<(), String> {
     git_output(cwd, args).await.map(|_| ())
 }
-async fn command_available(command: &str) -> bool {
+pub(crate) async fn command_available(command: &str) -> bool {
     Command::new(command)
         .arg("--version")
         .stdin(Stdio::null())
@@ -816,7 +818,7 @@ async fn command_available(command: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn session_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Session> {
+pub(crate) fn session_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Session> {
     let worktree_path: String = row.get(8)?;
     Ok(Session {
         id: row.get(0)?,
@@ -837,7 +839,7 @@ fn session_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Session> {
         archived_at: row.get(14)?,
     })
 }
-fn timeline_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<TimelineEvent> {
+pub(crate) fn timeline_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<TimelineEvent> {
     let raw: String = row.get(3)?;
     Ok(TimelineEvent {
         id: row.get(0)?,
@@ -849,7 +851,7 @@ fn timeline_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<TimelineEvent>
         truncated: row.get::<_, i64>(6)? != 0,
     })
 }
-fn approval_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Approval> {
+pub(crate) fn approval_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Approval> {
     let request: String = row.get(2)?;
     let params_raw: String = row.get(4)?;
     let response: Option<String> = row.get(6)?;

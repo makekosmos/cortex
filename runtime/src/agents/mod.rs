@@ -33,6 +33,10 @@ const RUNTIME_ACK_TIMEOUT: Duration = Duration::from_secs(5);
 /// keeps a wedged task from hanging shutdown while never leaving it detached.
 const RUNTIME_JOIN_TIMEOUT: Duration = Duration::from_secs(10);
 
-include!("definitions.rs");
-include!("app_server.rs");
-include!("tests.rs");
+mod app_server;
+mod definitions;
+#[cfg(test)]
+mod tests;
+
+pub(crate) use app_server::*;
+pub use definitions::*;
