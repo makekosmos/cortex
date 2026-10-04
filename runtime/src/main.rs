@@ -1360,7 +1360,10 @@ mod tests {
         let package_build = include_str!("../../desktop/scripts/build-backend.mjs");
         // The packaged build enables the windows-subsystem feature so the
         // shipped binary does not allocate a console.
-        assert!(package_build.contains("--features\", \"windows-gui-subsystem\""));
+        assert!(package_build.contains("\"windows-gui-subsystem\""));
+        // KOS-337: release ships the local dictation backend — the packaged
+        // build must keep enabling the feature dev builds skip.
+        assert!(package_build.contains("\"local-dictation\""));
         // And it must never enable the test-only fixture feature — the
         // compile_error in lib.rs backs this check at compile time.
         assert!(!package_build.contains("package-worker-fixture"));

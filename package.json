@@ -17,7 +17,7 @@
     "check:source-size": "node scripts/check-source-size.mjs",
     "format:check": "node scripts/check-format.mjs",
     "rustfmt": "cargo fmt --all -- --check",
-    "clippy": "cargo clippy --workspace --all-targets -- -D warnings",
+    "clippy": "cargo clippy --workspace --all-targets --features engine/local-dictation -- -D warnings",
     "test:rust": "node runtime/scripts/test-lib.mjs --workspace",
     "check:manager-gpui": "cargo fmt --manifest-path manager-gpui/Cargo.toml --all -- --check && cargo clippy --manifest-path manager-gpui/Cargo.toml --all-targets -- -D warnings && cargo test --manifest-path manager-gpui/Cargo.toml",
     "test:static": "pnpm run test:source-size && pnpm run test:format && pnpm run test:package-manager && pnpm run test:check-plan && pnpm run test:release-bom && pnpm run test:desktop-contracts && pnpm run test:native-build && node --test runtime/scripts/test-lib.test.mjs runtime/src/engine_api/host_shim.test.mjs scripts/check-toolchain.test.mjs",

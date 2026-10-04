@@ -905,6 +905,8 @@
         assert_eq!(state.data["state"], "recording");
     }
 
+    // KOS-337: exercises the local backend — only built with `local-dictation`.
+    #[cfg(feature = "local-dictation")]
     #[tokio::test]
     async fn start_recording_preloads_local_sidecar() {
         let _guard = local::TEST_SIDECAR_TEST_LOCK.lock().await;
@@ -1053,6 +1055,8 @@
         );
     }
 
+    // KOS-337: exercises the local backend — only built with `local-dictation`.
+    #[cfg(feature = "local-dictation")]
     #[tokio::test]
     async fn submit_audio_local_provider_without_model_reports_missing_local_model() {
         let td = tempfile::TempDir::new().unwrap();
@@ -1314,6 +1318,8 @@
         std::env::remove_var("MUNDUS_TEST_MODE");
     }
 
+    // KOS-337: exercises the local backend — only built with `local-dictation`.
+    #[cfg(feature = "local-dictation")]
     #[tokio::test]
     async fn submit_audio_local_transcript_succeeds_without_api_key_and_cleans_up() {
         let _guard = local::TEST_SIDECAR_TEST_LOCK.lock().await;
@@ -1385,6 +1391,8 @@
         std::env::remove_var("MUNDUS_TEST_MODE");
     }
 
+    // KOS-337: exercises the local backend — only built with `local-dictation`.
+    #[cfg(feature = "local-dictation")]
     #[tokio::test]
     async fn submit_audio_local_missing_model_path_returns_error_and_keeps_pending() {
         let td = tempfile::TempDir::new().unwrap();
@@ -1425,6 +1433,8 @@
         assert_eq!(pending.data["items"].as_array().unwrap().len(), 1);
     }
 
+    // KOS-337: exercises the local backend — only built with `local-dictation`.
+    #[cfg(feature = "local-dictation")]
     #[tokio::test]
     async fn submit_audio_local_sidecar_unavailable_keeps_pending() {
         let _guard = local::TEST_SIDECAR_TEST_LOCK.lock().await;

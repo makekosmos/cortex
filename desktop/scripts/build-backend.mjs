@@ -38,7 +38,17 @@ const { productVersion, sourceCommit, env: cargoEnv } = releaseBuildIdentity(she
 const cortexBuildArgs = ["build", "--release", "--manifest-path", "../Cargo.toml"];
 const buildMundus = spawnSync(
   "cargo",
-  [...cortexBuildArgs, "--bin", "mundus-engine", "--features", "windows-gui-subsystem"],
+  // KOS-337: release ships the local dictation backend — a second
+  // `--features local-dictation` enables what dev/agent builds skip.
+  [
+    ...cortexBuildArgs,
+    "--bin",
+    "mundus-engine",
+    "--features",
+    "windows-gui-subsystem",
+    "--features",
+    "local-dictation",
+  ],
   {
     cwd: shellRoot,
     stdio: "inherit",

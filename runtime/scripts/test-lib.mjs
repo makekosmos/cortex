@@ -39,7 +39,9 @@ function run(cwd, args) {
 // ark-core needs no feature flags: iroh is a regular dependency now.
 const GATE_FEATURES = [
   "--features",
-  "engine/package-worker-fixture,engine/markdown-bridge-fixture",
+  // KOS-337: engine/local-dictation — the gate must test what ships, and
+  // release builds compile the local dictation backend in.
+  "engine/package-worker-fixture,engine/markdown-bridge-fixture,engine/local-dictation",
 ];
 
 // These are integration-test fixtures, not production dependencies. Build

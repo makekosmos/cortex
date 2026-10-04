@@ -19,6 +19,10 @@ package-worker-fixture = [
 # Test-only feature: builds the ark-markdown-bridge integration-test
 # fixture bin. Plain `cargo build`/`cargo test --lib` skip it.
 markdown-bridge-fixture = []
+# KOS-337: local dictation backend (whisper.cpp + Parakeet ONNX via
+# transcribe-rs/ort). Off by default — dev/agent builds skip the ONNX stack;
+# the full gate (test-lib GATE_FEATURES) and release builds enable it.
+local-dictation = ["engine-dictation/local-dictation"]
 
 [lib]
 name = "engine"
