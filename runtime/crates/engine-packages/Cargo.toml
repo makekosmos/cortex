@@ -2,7 +2,7 @@
 name = "engine-packages"
 version = "0.1.0"
 edition.workspace = true
-description = "Engine packages — package store, worker process/broker/supervisor/protocol, runtime grants, grant authority, ark host"
+description = "Engine packages — package service, native apps, catalog, package launch/registration, store, worker process/broker/supervisor/protocol, runtime grants, grant authority, ark host"
 
 [lib]
 name = "engine_packages"
@@ -37,6 +37,21 @@ sha2.workspace = true
 semver.workspace = true
 base64 = "0.22"
 async-trait = "0.1"
+futures-util.workspace = true
+# package_service/integrations credential envelope + secret store.
+hpke = { version = "=0.14.1", default-features = false, features = [
+  "alloc",
+  "getrandom",
+  "x25519",
+  "hkdfsha2",
+  "chacha",
+] }
+keyring = { version = "3", features = ["windows-native", "apple-native"] }
+# native_apps shortcuts: .lnk parsing.
+lnk = "0.5"
+# package_service test fixtures (enabled via `test-support` for engine's
+# test targets) build tempfile-backed stores in non-test builds.
+tempfile.workspace = true
 reqwest = { version = "0.12", default-features = false, features = [
   "json",
   "rustls-tls",
@@ -68,9 +83,11 @@ windows = { version = "0.58", features = [
   "Win32_System_JobObjects",
   "Win32_System_SystemInformation",
   "Win32_System_Com",
+  "Win32_UI_Shell",
 ] }
 
 [dev-dependencies]
+httpmock = "0.8.3"
 # Unit tests exercise DictationHost::new_for_test; the dev-dep unifies the
 # test-support feature into engine-dictation's build for this crate's tests
 # without leaking it into downstream normal builds.
