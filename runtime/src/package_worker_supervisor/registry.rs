@@ -89,18 +89,6 @@ impl TaskRegistry {
         Some((start_rx, cancel_rx, owner, process_holder))
     }
 
-    #[cfg(windows)]
-    pub(super) fn owner(&self, key: &TaskKey) -> Option<Arc<LaunchCleanupOwner>> {
-        lock(&self.slots)
-            .get(key)
-            .and_then(|slot| slot.owner.clone())
-            .or_else(|| {
-                lock(&self.quarantine)
-                    .get(key)
-                    .and_then(|slot| slot.owner.clone())
-            })
-    }
-
     pub(super) fn install_pending(
         &self,
         key: &TaskKey,

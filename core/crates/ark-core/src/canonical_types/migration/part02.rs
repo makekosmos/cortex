@@ -471,8 +471,3 @@ pub fn retire_legacy_planning_tables(conn: &Connection) -> Result<(usize, usize)
         }
     }
 }
-
-#[allow(dead_code)]
-fn _ledger_contract_is_stable() -> &'static str {
-    migration_ledger::CONTRACT_VERSION
-}

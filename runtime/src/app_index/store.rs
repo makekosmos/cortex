@@ -160,13 +160,7 @@ fn parse_kind(s: &str) -> std::result::Result<AppKind, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app_index::AppIndexError;
     use tempfile::tempdir;
-
-    #[allow(dead_code)]
-    fn _use_error(e: AppIndexError) -> AppIndexError {
-        e
-    }
 
     #[test]
     fn round_trip() {

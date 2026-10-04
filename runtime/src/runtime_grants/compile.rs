@@ -29,14 +29,6 @@ impl RegistrySnapshot {
     pub fn new(types: Vec<RegisteredType>) -> Self {
         Self { types }
     }
-    fn find(&self, id: &str, v: &str) -> Option<&RegisteredType> {
-        self.types
-            .iter()
-            .find(|t| t.type_id == id && t.version == v)
-    }
-    fn has(&self, id: &str, v: &str) -> bool {
-        self.find(id, v).is_some()
-    }
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GrantRule {
