@@ -1,2 +1,9 @@
 [net]
 git-fetch-with-cli = true
+
+# KOS-328: link dev builds with lld (measured ~40% faster incremental links,
+# see docs/experiments/2026-09-30-build-speed.md). Requires `ld.lld` on PATH —
+# e.g. the `lld` package, or a symlink to the toolchain's rust-lld
+# (rustup component add llvm-tools).
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
