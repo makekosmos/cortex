@@ -85,7 +85,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           CALLER_VERSION: ${{ inputs.version }}
         run: |
-          node -p 'const t = require("./toolchain.json"); `NODE_VERSION=${t.node}\nRUST_VERSION=${t.rust}`' >> "$GITHUB_ENV"
+          node -e 'const t=require("./toolchain.json");console.log("NODE_VERSION="+t.node+"\nRUST_VERSION="+t.rust)' >> "$GITHUB_ENV"
           version="${CALLER_VERSION:-$(node desktop/scripts/release-plan.mjs build-version)}"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
