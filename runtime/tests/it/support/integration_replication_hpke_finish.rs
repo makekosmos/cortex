@@ -27,6 +27,15 @@ pub async fn receive_and_validate(
     .await
     .unwrap();
     assert_eq!(received["stored"], true);
+    // The fixture feature swaps the engine's keyring for an in-memory store.
+    #[cfg(feature = "package-worker-fixture")]
+    let stored = engine::package_service::credential_envelope::fixture_read_integration_secret(
+        PACKAGE_ID,
+        PACKAGE_VERSION,
+        SETTING,
+    )
+    .unwrap();
+    #[cfg(not(feature = "package-worker-fixture"))]
     let stored = keyring::Entry::new(
         engine::brand::KEYRING_SERVICE,
         &format!("package-integration:{PACKAGE_ID}:{PACKAGE_VERSION}:{SETTING}"),
