@@ -14,10 +14,9 @@ use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 use crate::lock_file::retry_io;
-use crate::package_store::eq_hash;
 
 #[derive(Debug, Error)]
-pub(crate) enum VerifyError {
+pub enum VerifyError {
     #[error("size mismatch: expected {expected} bytes, got {actual}")]
     Size { expected: u64, actual: u64 },
     #[error("sha256 mismatch: expected {expected}, got {actual}")]
@@ -27,7 +26,7 @@ pub(crate) enum VerifyError {
 }
 
 /// Streamed digest — never buffers the whole file.
-pub(crate) fn file_digest<D: Digest>(path: &Path) -> io::Result<Output<D>> {
+pub fn file_digest<D: Digest>(path: &Path) -> io::Result<Output<D>> {
     let mut file = retry_io(|| fs::File::open(path))?;
     let mut hasher = D::new();
     let mut buffer = [0; 256 * 1024];
@@ -43,19 +42,23 @@ pub(crate) fn file_digest<D: Digest>(path: &Path) -> io::Result<Output<D>> {
 
 /// sha256 of an already-open reader — same loop for callers that stream
 /// from a zip entry or a `File` they hold themselves.
-pub(crate) fn sha256_reader(mut reader: impl Read) -> io::Result<String> {
+pub fn eq_hash(a: &str, b: &str) -> bool {
+    a.eq_ignore_ascii_case(b) && b.len() == 64 && b.bytes().all(|c| c.is_ascii_hexdigit())
+}
+
+pub fn sha256_reader(mut reader: impl Read) -> io::Result<String> {
     let mut hasher = Sha256::new();
     io::copy(&mut reader, &mut hasher)?;
     Ok(format!("{:x}", hasher.finalize()))
 }
 
 /// Lowercase hex sha256 of a file.
-pub(crate) fn file_sha256(path: &Path) -> io::Result<String> {
+pub fn file_sha256(path: &Path) -> io::Result<String> {
     Ok(format!("{:x}", file_digest::<Sha256>(path)?))
 }
 
 /// Hash-only check for downloads whose exact byte size is not pinned.
-pub(crate) fn verify_sha256(path: &Path, expected_sha256: &str) -> Result<(), VerifyError> {
+pub fn verify_sha256(path: &Path, expected_sha256: &str) -> Result<(), VerifyError> {
     let actual = file_sha256(path)?;
     if eq_hash(&actual, expected_sha256) {
         Ok(())
@@ -70,7 +73,7 @@ pub(crate) fn verify_sha256(path: &Path, expected_sha256: &str) -> Result<(), Ve
 /// A downloaded artifact is trusted only when both the pinned byte size and
 /// the pinned sha256 match — the size check runs first because it is cheap
 /// and rejects truncated or padded files before hashing.
-pub(crate) fn verify_size_and_sha256(
+pub fn verify_size_and_sha256(
     path: &Path,
     expected_size: u64,
     expected_sha256: &str,

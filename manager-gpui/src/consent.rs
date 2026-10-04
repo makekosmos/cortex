@@ -38,7 +38,7 @@ fn blocked<T>(block: ConsentBlock) -> Result<T, ConsentBlock> {
 }
 
 /// The capability vocabulary is the closed list the Engine validates
-/// (`known_capability` in runtime/src/package_manifest.rs). Keep this match
+/// (`known_capability` in runtime/crates/engine-base/src/package_manifest.rs). Keep this match
 /// exhaustive over that list: anything else must block consent, not render.
 fn capability_text(capability: &str) -> Result<&'static str, ConsentBlock> {
     match capability {
@@ -275,7 +275,7 @@ mod tests {
 
     #[test]
     fn every_known_capability_has_russian_text() {
-        // Mirrors `known_capability` in runtime/src/package_manifest.rs —
+        // Mirrors `known_capability` in runtime/crates/engine-base/src/package_manifest.rs —
         // the closed set the Engine validates.
         let known = [
             "ark.read",

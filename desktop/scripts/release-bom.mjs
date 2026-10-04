@@ -24,7 +24,10 @@ export async function deriveReleaseBom(root, platform, commit) {
   if (!COMMIT.test(commit)) fail("commit must be a 40-character lowercase commit");
   const packageJson = await readJson(path.join(root, "package.json"));
   const toolchain = await readJson(path.join(root, "toolchain.json"));
-  const protocol = await readFile(path.join(root, "runtime", "src", "protocol_version.rs"), "utf8");
+  const protocol = await readFile(
+    path.join(root, "runtime", "crates", "engine-base", "src", "protocol_version.rs"),
+    "utf8",
+  );
 
   const version = readReleaseVersion({ root });
   const pnpm = /^pnpm@(\d+\.\d+\.\d+)$/.exec(String(packageJson.packageManager ?? ""))?.[1];

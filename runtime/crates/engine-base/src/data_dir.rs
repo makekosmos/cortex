@@ -30,7 +30,7 @@ use crate::brand;
 use crate::lock_file::LockFileError;
 
 mod migration;
-pub(crate) mod temp_sweep;
+pub mod temp_sweep;
 #[cfg(test)]
 mod tests;
 

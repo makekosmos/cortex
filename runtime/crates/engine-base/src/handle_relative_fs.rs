@@ -78,7 +78,7 @@ pub enum FaultPoint {
 #[cfg(test)]
 type FaultHook<'a> = Option<&'a dyn Fn(FaultPoint, &[String]) -> io::Result<()>>;
 
-pub(crate) fn validate_components(components: &[&str]) -> io::Result<()> {
+pub fn validate_components(components: &[&str]) -> io::Result<()> {
     if components.is_empty() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,

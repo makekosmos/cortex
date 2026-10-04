@@ -46,7 +46,7 @@ const GRANDFATHERED = new Set([
   "runtime/src/file_index/store.rs",
   "runtime/src/focus.rs",
   "runtime/src/main.rs",
-  "runtime/src/package_manifest.rs",
+  "runtime/crates/engine-base/src/package_manifest.rs",
   "runtime/src/package_registration.rs",
   "runtime/src/package_worker_protocol.rs",
   "runtime/src/pomodoro_host.rs",

@@ -20,7 +20,7 @@
   !error "OUT_FILE must be defined via /DOUT_FILE=<path>"
 !endif
 
-; --- Brand block (mirrors desktop/scripts/brand.mjs / runtime/src/brand.rs) --
+; --- Brand block (mirrors desktop/scripts/brand.mjs / runtime/crates/engine-base/src/brand.rs) --
 !define APP_NAME "Mundus"
 !define PUBLISHER "Kazui"
 !define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\Mundus"

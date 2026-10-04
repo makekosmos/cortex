@@ -36,7 +36,7 @@ fn lock_permissions_disabled() -> bool {
 /// Транзиентные fs-ошибки Windows: AV/индексер кратковременно держит хэндл на
 /// свежесозданных файлах, и rename/remove/copy падают с access/sharing ошибками.
 /// Ретраим с bounded backoff; последняя ошибка возвращается как есть.
-pub(crate) fn retry_io<T>(mut op: impl FnMut() -> io::Result<T>) -> io::Result<T> {
+pub fn retry_io<T>(mut op: impl FnMut() -> io::Result<T>) -> io::Result<T> {
     const ATTEMPTS: u32 = 20;
     let mut attempt = 0;
     loop {
@@ -117,10 +117,7 @@ pub fn write_engine_atomic(path: &Path, lock: &EngineLockFile) -> Result<(), Loc
     write_owner_only_json(path, lock)
 }
 
-pub(crate) fn write_owner_only_json<T: Serialize>(
-    path: &Path,
-    value: &T,
-) -> Result<(), LockFileError> {
+pub fn write_owner_only_json<T: Serialize>(path: &Path, value: &T) -> Result<(), LockFileError> {
     if let Some(parent) = path.parent() {
         retry_io(|| fs::create_dir_all(parent))?;
     }
@@ -157,20 +154,18 @@ pub(crate) fn write_owner_only_json<T: Serialize>(
 
 /// Harden a package-private state directory. Production callers must fail
 /// closed when the OS cannot apply the owner-only ACL.
-pub(crate) fn ensure_owner_only_directory(path: &Path) -> Result<(), io::Error> {
+pub fn ensure_owner_only_directory(path: &Path) -> Result<(), io::Error> {
     retry_io(|| fs::create_dir_all(path))?;
     retry_io(|| apply_owner_only_directory_permissions(path))
 }
 
-pub(crate) fn read_owner_only_json<T: for<'de> Deserialize<'de>>(
-    path: &Path,
-) -> Result<T, io::Error> {
+pub fn read_owner_only_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, io::Error> {
     let bytes = retry_io(|| fs::read(path))?;
     serde_json::from_slice(&bytes).map_err(io::Error::other)
 }
 
 /// Apply owner-only permissions to a broker-created private state file.
-pub(crate) fn apply_owner_only_file_permissions(path: &Path) -> Result<(), io::Error> {
+pub fn apply_owner_only_file_permissions(path: &Path) -> Result<(), io::Error> {
     apply_owner_only_permissions(path)
         .map_err(|error| io::Error::new(io::ErrorKind::PermissionDenied, error.to_string()))
 }
@@ -368,7 +363,7 @@ mod tests {
 
     #[test]
     fn production_runtime_does_not_publish_legacy_lock() {
-        let source = include_str!("main.rs");
+        let source = include_str!("../../../src/main.rs");
         assert!(!source.contains("write_atomic(&lock_path"));
         assert!(!source.contains("legacy lock-file written"));
     }

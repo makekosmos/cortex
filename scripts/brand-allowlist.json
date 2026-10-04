@@ -112,7 +112,7 @@
       "reason": "The check itself — it contains the search terms in code."
     },
     {
-      "path": "runtime/src/brand.rs",
+      "path": "runtime/crates/engine-base/src/brand.rs",
       "reason": "The brand module — it *defines* the legacy KOSMOS_/KEPLER_ env prefixes consumed as fallbacks."
     },
     {

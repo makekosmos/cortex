@@ -18,12 +18,12 @@ async function fixture({
 } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "mundus-bom-"));
   await mkdir(path.join(root, "desktop"));
-  await mkdir(path.join(root, "runtime", "src"), { recursive: true });
+  await mkdir(path.join(root, "runtime", "crates", "engine-base", "src"), { recursive: true });
   await writeFile(path.join(root, "package.json"), JSON.stringify({ packageManager }));
   await writeFile(path.join(root, "desktop", "release-versions.json"), JSON.stringify({ win }));
   await writeFile(path.join(root, "toolchain.json"), JSON.stringify({ node, rust }));
   await writeFile(
-    path.join(root, "runtime", "src", "protocol_version.rs"),
+    path.join(root, "runtime", "crates", "engine-base", "src", "protocol_version.rs"),
     `pub const API_VERSION: &str = "${api}";\n`,
   );
   return root;

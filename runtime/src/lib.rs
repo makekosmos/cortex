@@ -45,6 +45,12 @@ compile_error!(
 // Оба binary запускают идентичный setup; UI binary добавляет tray + launcher
 // поверх; headless binary только ждёт Ctrl+C / parent kill.
 
+// KOS-331: foundation modules (brand, data_dir, file hashing, process tree,
+// lock file, handle-relative FS, package manifest, observability, …) live in
+// the `engine-base` crate; re-exported wholesale so `crate::<module>` paths
+// keep working unchanged.
+pub use engine_base::*;
+
 pub mod agents;
 pub mod app_index;
 pub(crate) mod app_network;
@@ -53,13 +59,9 @@ pub mod ark_host;
 pub mod auth;
 pub mod backend_tray;
 pub(crate) mod background_task;
-pub mod brand;
-pub mod build_info;
-pub mod build_metadata;
 pub mod catalog;
 pub mod command_bus;
 pub mod crash_reporter;
-pub mod data_dir;
 pub mod db_backup;
 pub mod desktop_authority;
 pub(crate) mod device_name;
@@ -71,20 +73,15 @@ pub mod engine_dispatch;
 pub mod engine_settings;
 pub mod engine_supervisor;
 pub mod engine_versions;
-pub(crate) mod file_hash;
 pub mod file_index;
 pub mod focus;
 pub mod grant_authority;
-pub mod handle_relative_fs;
 pub mod installer;
 pub mod integrations;
-pub mod lock_file;
 pub mod manager_api;
 pub mod markdown_vault;
 pub mod native_apps;
-pub mod observability;
 pub(crate) mod package_launch;
-pub mod package_manifest;
 pub mod package_registration;
 pub mod package_service;
 pub mod package_store;
@@ -95,15 +92,9 @@ pub mod package_worker_secrets;
 pub mod package_worker_supervisor;
 pub mod pomodoro;
 pub mod pomodoro_host;
-pub mod priority;
 pub mod privileged;
-pub mod process_tree;
-#[cfg(test)]
-mod process_tree_tests;
 pub mod protocol_usage;
-pub mod protocol_version;
 pub mod runtime_grants;
-pub mod singleton;
 pub mod storage_maintenance;
 pub mod sync;
 #[cfg(test)]
@@ -111,6 +102,4 @@ mod test_links;
 pub mod updater;
 pub mod usage_tracker;
 pub mod user_data;
-#[cfg(windows)]
-pub(crate) mod win32;
 pub mod ws_server;

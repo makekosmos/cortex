@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 /// `installer::legacy`). The returned `PWSTR` is freed unconditionally —
 /// `CoTaskMemFree` runs before the `to_string` result is inspected, so the
 /// error path cannot leak the allocation.
-pub(crate) fn known_folder(id: &windows::core::GUID) -> Result<PathBuf, String> {
+pub fn known_folder(id: &windows::core::GUID) -> Result<PathBuf, String> {
     use windows::Win32::Foundation::HANDLE;
     use windows::Win32::System::Com::CoTaskMemFree;
     use windows::Win32::UI::Shell::{SHGetKnownFolderPath, KNOWN_FOLDER_FLAG};
@@ -33,7 +33,7 @@ pub(crate) fn known_folder(id: &windows::core::GUID) -> Result<PathBuf, String> 
 /// original spelling is kept so non-existent fixture paths still compare.
 /// A reparse point that this call resolves to somewhere else falls outside
 /// the caller's root and is rejected — fail closed.
-pub(crate) fn windows_path_key(path: &Path) -> String {
+pub fn windows_path_key(path: &Path) -> String {
     let path = long_path_if_present(path);
     let text = path.to_string_lossy().replace('/', "\\");
     let text = if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {

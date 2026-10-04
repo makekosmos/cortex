@@ -1,5 +1,5 @@
 // Single source of truth for the Mundus product identity in desktop build
-// scripts. Mirrors runtime/src/brand.rs — keep the two in sync.
+// scripts. Mirrors runtime/crates/engine-base/src/brand.rs — keep the two in sync.
 //
 // Persisted/legacy identifiers that must keep working are listed in
 // docs/brand-legacy-identifiers.md.

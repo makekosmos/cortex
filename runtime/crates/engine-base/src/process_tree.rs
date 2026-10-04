@@ -13,7 +13,7 @@ use std::time::Duration;
 use tokio::process::{Child, Command};
 
 #[cfg(windows)]
-pub(crate) mod win32;
+pub mod win32;
 #[cfg(windows)]
 mod windows_program;
 #[cfg(all(test, windows))]
