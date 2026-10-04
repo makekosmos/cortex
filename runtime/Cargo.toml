@@ -12,7 +12,10 @@ windows-gui-subsystem = []
 # Test-only: relaxes the broker's HTTPS-only origin check to allow loopback
 # http origins and exposes worker failure hooks. A release build refuses to
 # compile with it (see the compile_error in src/lib.rs).
-package-worker-fixture = ["engine-base/package-worker-fixture"]
+package-worker-fixture = [
+  "engine-base/package-worker-fixture",
+  "engine-packages/package-worker-fixture",
+]
 # Test-only feature: builds the ark-markdown-bridge integration-test
 # fixture bin. Plain `cargo build`/`cargo test --lib` skip it.
 markdown-bridge-fixture = []
@@ -43,6 +46,7 @@ ark-core = { path = "../core/crates/ark-core", package = "ark-core" }
 package-protocol = { path = "crates/package-protocol" }
 engine-base = { path = "crates/engine-base" }
 engine-dictation = { path = "crates/engine-dictation" }
+engine-packages = { path = "crates/engine-packages" }
 rusqlite.workspace = true
 tokio = { version = "1", features = [
   "rt-multi-thread",
@@ -170,6 +174,7 @@ pe-version-info = { path = "crates/pe-version-info" }
 # dev-dep features do not leak into normal builds.
 engine-base = { path = "crates/engine-base", features = ["test-support"] }
 engine-dictation = { path = "crates/engine-dictation", features = ["test-support"] }
+engine-packages = { path = "crates/engine-packages", features = ["test-support"] }
 tempfile.workspace = true
 httpmock = "0.8.3"
 # Test-only: the replication fixtures sign their own documents; the package

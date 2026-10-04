@@ -558,7 +558,7 @@ async fn setup() -> Result<SetupState, DynError> {
         Arc::new(EngineCapabilityExecutor::new(
             ark.clone(),
             dictation_host.clone(),
-            manager_state.clone(),
+            Arc::new(manager_state.clone()),
         )),
     );
     package_service.configure_workers(
