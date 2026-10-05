@@ -1,5 +1,11 @@
 //! Engine-owned, per-device appearance preferences. Never stored in ARK/sync.
+//!
+//! Unscoped `appearance.get`/`appearance.set` keep their original shape for
+//! Manager backward compatibility. Scoped `{app_id}` / `{app_id, patch}`
+//! params persist a per-app override under this same Engine data dir (never
+//! in app-local config) — see `appearance/apps.rs`.
 
+use crate::engine_dispatch::DispatchClient;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
@@ -121,48 +127,68 @@ fn valid_color(color: &str) -> bool {
         && color.as_bytes()[1..].iter().all(u8::is_ascii_hexdigit)
 }
 
+// Shared by the global and per-app settings shapes (the latter omits
+// `follow_apps`, which stays global/Manager-only — see `appearance/apps.rs`).
+fn validate_fields(
+    mode: &str,
+    light_theme: &str,
+    dark_theme: &str,
+    accent_source: &str,
+    accent_color: Option<&str>,
+    material: &str,
+    font_family: &str,
+    font_size: f32,
+) -> Result<(), String> {
+    if !["system", "light", "dark"].contains(&mode) {
+        return Err("invalid mode".into());
+    }
+    if !THEME_IDS.contains(&light_theme) {
+        return Err("invalid light_theme".into());
+    }
+    if !THEME_IDS.contains(&dark_theme) {
+        return Err("invalid dark_theme".into());
+    }
+    if !["theme", "custom", "wallpaper"].contains(&accent_source) {
+        return Err("invalid accent_source".into());
+    }
+    if accent_color.is_some_and(|color| !valid_color(color)) {
+        return Err("accent_color must be #RRGGBB or null".into());
+    }
+    if accent_source == "custom" && accent_color.is_none() {
+        return Err("custom accent requires accent_color".into());
+    }
+    if accent_source == "wallpaper" && !cfg!(target_os = "macos") {
+        return Err("desktop wallpaper accent is unsupported on this platform".into());
+    }
+    if !materials().contains(&material) {
+        return Err("material is unsupported on this platform".into());
+    }
+    if font_family.is_empty()
+        || font_family.len() > 128
+        || font_family.chars().any(char::is_control)
+    {
+        return Err("invalid font_family".into());
+    }
+    if !font_size.is_finite() || !(11.0..=18.0).contains(&font_size) {
+        return Err("font_size must be 11..18".into());
+    }
+    Ok(())
+}
+
 fn validate(settings: &AppearanceSettings) -> Result<(), String> {
     if settings.schema_version != 1 {
         return Err("schema_version must be 1".into());
     }
-    if !["system", "light", "dark"].contains(&settings.mode.as_str()) {
-        return Err("invalid mode".into());
-    }
-    if !THEME_IDS.contains(&settings.light_theme.as_str()) {
-        return Err("invalid light_theme".into());
-    }
-    if !THEME_IDS.contains(&settings.dark_theme.as_str()) {
-        return Err("invalid dark_theme".into());
-    }
-    if !["theme", "custom", "wallpaper"].contains(&settings.accent_source.as_str()) {
-        return Err("invalid accent_source".into());
-    }
-    if settings
-        .accent_color
-        .as_deref()
-        .is_some_and(|color| !valid_color(color))
-    {
-        return Err("accent_color must be #RRGGBB or null".into());
-    }
-    if settings.accent_source == "custom" && settings.accent_color.is_none() {
-        return Err("custom accent requires accent_color".into());
-    }
-    if settings.accent_source == "wallpaper" && !cfg!(target_os = "macos") {
-        return Err("desktop wallpaper accent is unsupported on this platform".into());
-    }
-    if !materials().contains(&settings.material.as_str()) {
-        return Err("material is unsupported on this platform".into());
-    }
-    if settings.font_family.is_empty()
-        || settings.font_family.len() > 128
-        || settings.font_family.chars().any(char::is_control)
-    {
-        return Err("invalid font_family".into());
-    }
-    if !settings.font_size.is_finite() || !(11.0..=18.0).contains(&settings.font_size) {
-        return Err("font_size must be 11..18".into());
-    }
-    Ok(())
+    validate_fields(
+        &settings.mode,
+        &settings.light_theme,
+        &settings.dark_theme,
+        &settings.accent_source,
+        settings.accent_color.as_deref(),
+        &settings.material,
+        &settings.font_family,
+        settings.font_size,
+    )
 }
 
 fn read(path: &Path) -> Result<AppearanceSettings, String> {
@@ -179,10 +205,14 @@ fn read(path: &Path) -> Result<AppearanceSettings, String> {
     Ok(settings)
 }
 
-fn persist(path: &Path, settings: &AppearanceSettings) -> Result<(), String> {
+fn persist<T: Serialize>(path: &Path, settings: &T) -> Result<(), String> {
     let parent = path.parent().ok_or("appearance path has no parent")?;
     fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    let temporary = parent.join(format!(".{FILE_NAME}.{}.tmp", uuid::Uuid::new_v4()));
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or("appearance path has no file name")?;
+    let temporary = parent.join(format!(".{file_name}.{}.tmp", uuid::Uuid::new_v4()));
     let result = (|| -> Result<(), String> {
         let mut file = fs::OpenOptions::new()
             .write(true)
@@ -233,6 +263,7 @@ pub struct AppearanceStore {
 }
 
 include!("appearance/wallpaper.rs");
+include!("appearance/apps.rs");
 
 impl AppearanceStore {
     pub fn new(data_dir: PathBuf) -> Self {
@@ -252,7 +283,18 @@ impl AppearanceStore {
         }
     }
 
-    pub async fn get(&self, params: &Value) -> Result<Value, String> {
+    pub async fn get(&self, params: &Value, client: &DispatchClient) -> Result<Value, String> {
+        if let Some(object) = params.as_object() {
+            if let Some(app_id) = object.get("app_id") {
+                if object.len() != 1 {
+                    return Err("appearance.get scoped params must be {app_id}".into());
+                }
+                let app_id = app_id
+                    .as_str()
+                    .ok_or("appearance.get app_id must be a string")?;
+                return self.get_scoped(app_id, client).await;
+            }
+        }
         if !params.is_null() && params.as_object().is_none_or(|object| !object.is_empty()) {
             return Err("appearance.get params must be empty".into());
         }
@@ -260,10 +302,27 @@ impl AppearanceStore {
         Ok(self.response(settings).await)
     }
 
-    pub async fn set(&self, params: &Value) -> Result<Value, String> {
-        let patch = params
+    pub async fn set(&self, params: &Value, client: &DispatchClient) -> Result<Value, String> {
+        let object = params
             .as_object()
-            .ok_or("appearance.set params must be a patch object")?;
+            .ok_or("appearance.set params must be an object")?;
+        if let Some(app_id) = object.get("app_id") {
+            let app_id = app_id
+                .as_str()
+                .ok_or("appearance.set app_id must be a string")?;
+            let patch = object
+                .get("patch")
+                .and_then(Value::as_object)
+                .ok_or("appearance.set scoped params must include a patch object")?;
+            if object.keys().any(|key| key != "app_id" && key != "patch") {
+                return Err("appearance.set scoped params must be {app_id, patch}".into());
+            }
+            return self.set_scoped(app_id, patch, client).await;
+        }
+        if client.class.as_deref() != Some("manager-gpui") {
+            return Err("appearance.set is restricted to the manager-gpui client".into());
+        }
+        let patch = object;
         if patch.is_empty() {
             return Err("appearance.set patch must not be empty".into());
         }
@@ -315,4 +374,5 @@ impl AppearanceStore {
 #[cfg(test)]
 mod tests {
     include!("appearance/tests.rs");
+    include!("appearance/apps_tests.rs");
 }

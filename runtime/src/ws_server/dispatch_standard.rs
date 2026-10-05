@@ -48,8 +48,8 @@ pub(super) async fn dispatch_standard(
     } else if crate::appearance::is_appearance_operation(&operation) {
         let appearance = manager_state.appearance();
         let result = match operation.as_str() {
-            "appearance.get" => appearance.get(&params).await,
-            "appearance.set" => appearance.set(&params).await,
+            "appearance.get" => appearance.get(&params, &client).await,
+            "appearance.set" => appearance.set(&params, &client).await,
             other => {
                 return LocalResponse::err(format!("unknown appearance operation {other}"));
             }
