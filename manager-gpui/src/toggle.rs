@@ -14,13 +14,15 @@ const TRACK: f32 = 20.8;
 const INSET: f32 = 1.6;
 const THUMB: f32 = 24.0;
 
+type ChangeHandler = Rc<dyn Fn(bool, &mut Window, &mut App)>;
+
 #[derive(IntoElement)]
 pub struct Toggle {
     id: &'static str,
     checked: bool,
     disabled: bool,
     label: Option<SharedString>,
-    on_change: Rc<dyn Fn(bool, &mut Window, &mut App)>,
+    on_change: ChangeHandler,
 }
 
 pub fn toggle<T: 'static>(

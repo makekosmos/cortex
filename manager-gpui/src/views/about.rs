@@ -55,6 +55,9 @@ pub fn render(
                     .pt_1()
                     .text_size(crate::theme::ui_px(13.))
                     .text_color(c(MUTED_FG()))
+                    // A bare `cargo build` has no injected product version and
+                    // reports "dev" here — never the crate's 0.1.0 placeholder
+                    // (KOS-278).
                     .child(crate::device_info::product_version_label()),
             )
             .child(
@@ -219,8 +222,10 @@ enum Diag {
     Fail,
 }
 
+type Check = (&'static str, Diag);
+
 fn render_diagnostics(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {
-    let checks: Vec<(&'static str, Diag)> = vec![
+    let checks: Vec<Check> = vec![
         (
             "Engine",
             match app.slots.get("about.health") {
@@ -244,7 +249,7 @@ fn render_diagnostics(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> Any
             },
         ),
     ];
-    let (bad, good): (Vec<(&'static str, Diag)>, Vec<(&'static str, Diag)>) = checks
+    let (bad, good): (Vec<Check>, Vec<Check>) = checks
         .into_iter()
         .partition(|(_, d)| matches!(d, Diag::Fail));
     let has_failures = !bad.is_empty();

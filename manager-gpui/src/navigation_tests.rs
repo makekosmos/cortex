@@ -75,12 +75,10 @@ fn relocated_static_cards_remain_visible_when_values_are_pending_or_failed(
             cx.notify();
         });
         cx.update(|_, cx| cx.refresh_windows());
-        for selector in ["settings-startup-card"] {
-            assert!(
-                cx.debug_bounds(selector).is_some(),
-                "missing static card {selector}"
-            );
-        }
+        assert!(
+            cx.debug_bounds("settings-startup-card").is_some(),
+            "missing static card settings-startup-card"
+        );
         manager.update(cx, |app, cx| {
             app.view = View::Data;
             app.slots.insert(
