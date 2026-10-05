@@ -20,7 +20,9 @@ fn main() {
         // feature (agenda embeds its own), so the Manager manifest comes from
         // pe-version-info like the Engine's. Embedding a second RT_MANIFEST
         // would be a duplicate resource — do not re-enable gpui-pre's
-        // `windows-manifest`.
-        manifest: true,
+        // `windows-manifest`. `Gui` restores gpui's Common-Controls v6
+        // dependency: without it the exe fails to load on Windows
+        // ("TaskDialogIndirect entry point not found").
+        manifest: pe_version_info::Manifest::Gui,
     });
 }

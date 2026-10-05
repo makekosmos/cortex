@@ -17,6 +17,6 @@ fn main() {
         version: pe_version_info::product_version(&manifest_dir),
         icon: Some(manifest_dir.join("../desktop/build/icon.ico")),
         // The Engine has no manifest from any dependency — the helper owns it.
-        manifest: true,
+        manifest: pe_version_info::Manifest::Background,
     });
 }

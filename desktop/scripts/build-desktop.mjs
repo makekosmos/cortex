@@ -72,7 +72,7 @@ function assertVersionInfo(file, expectedVersion) {
 // manifest with requestedExecutionLevel asInvoker — both the Engine's and
 // the Manager's come from pe-version-info (KOS-347: the imago gpui pin no
 // longer ships a `windows-manifest` feature).
-function assertApplicationManifest(file) {
+function assertApplicationManifest(file, { commonControls = false } = {}) {
   const data = readFileSync(file);
   const marker = Buffer.from("urn:schemas-microsoft-com:asm.v1");
   let hits = 0;
@@ -80,6 +80,13 @@ function assertApplicationManifest(file) {
   if (hits !== 1) die(`${file}: expected exactly one application manifest, found ${hits}`);
   if (!data.includes('requestedExecutionLevel level="asInvoker"'))
     die(`${file}: application manifest lacks requestedExecutionLevel asInvoker`);
+  // gpui imports TaskDialogIndirect, exported only by comctl32 v6: a GUI exe
+  // without the Common-Controls v6 dependency fails to load on Windows.
+  if (
+    commonControls &&
+    !data.includes('name="Microsoft.Windows.Common-Controls" version="6.0.0.0"')
+  )
+    die(`${file}: GUI manifest lacks the Common-Controls v6 dependency`);
 }
 
 function assertNoPowerShellPayload(stage) {
@@ -130,12 +137,12 @@ function stageInstaller(version) {
   // KOS-306: fail the build when a shipped exe lacks VERSIONINFO, and never
   // let a .ps1 back into the payload.
   assertNoPowerShellPayload(stage);
-  for (const exe of [
-    path.join(resources, "engine", "mundus-engine.exe"),
-    path.join(managerDir, MANAGER_EXE),
+  for (const [exe, gui] of [
+    [path.join(resources, "engine", "mundus-engine.exe"), false],
+    [path.join(managerDir, MANAGER_EXE), true],
   ]) {
     assertVersionInfo(exe, version);
-    assertApplicationManifest(exe);
+    assertApplicationManifest(exe, { commonControls: gui });
   }
   return stage;
 }

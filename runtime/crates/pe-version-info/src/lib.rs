@@ -21,12 +21,29 @@ pub const PRODUCT_NAME: &str = "Mundus";
 pub const COMPANY_NAME: &str = "Kazui";
 pub const LEGAL_COPYRIGHT: &str = "Copyright (C) Kazui";
 
-/// Application manifest (RT_MANIFEST id 1): `asInvoker` + `uiAccess=false`
-/// and the Windows 10/11 supportedOS GUID (10 and 11 share it). No
-/// Common-Controls v6 dependency and no DPI/heap settings — the Engine is a
-/// background binary that creates no windows, and any setting beyond
-/// identity/elevation/OS-version would change runtime behaviour.
-const APPLICATION_MANIFEST: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+/// Which application manifest (RT_MANIFEST id 1) an exe gets.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Manifest {
+    /// No manifest — only for an exe whose dependency provably ships its own
+    /// RT_MANIFEST; embedding a second would be a duplicate resource.
+    None,
+    /// `asInvoker` + `uiAccess=false` and the Windows 10/11 supportedOS GUID
+    /// (10 and 11 share it). No Common-Controls v6 dependency and no DPI/heap
+    /// settings — the Engine is a background binary that creates no windows,
+    /// and any setting beyond identity/elevation/OS-version would change
+    /// runtime behaviour.
+    Background,
+    /// [`Manifest::Background`] plus what gpui's own `gpui.manifest.xml`
+    /// carried before the imago pin dropped `windows-manifest` (KOS-347):
+    /// the Common-Controls v6 dependency, PerMonitorV2 DPI awareness and
+    /// SegmentHeap. gpui's Windows backend imports `TaskDialogIndirect`,
+    /// which only comctl32 v6 exports — without the dependency the loader
+    /// binds v5.82 and the exe dies before `main` with "entry point
+    /// TaskDialogIndirect not found".
+    Gui,
+}
+
+const MANIFEST_HEAD: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
     <security>
@@ -40,8 +57,35 @@ const APPLICATION_MANIFEST: &str = r#"<?xml version="1.0" encoding="UTF-8" stand
       <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}" />
     </application>
   </compatibility>
-</assembly>
 "#;
+
+const GUI_MANIFEST_SETTINGS: &str = r#"  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>
+      <dpiAwareness
+        xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
+      <heapType xmlns="http://schemas.microsoft.com/SMI/2020/WindowsSettings">SegmentHeap</heapType>
+    </windowsSettings>
+  </application>
+  <dependency>
+    <dependentAssembly>
+      <assemblyIdentity
+        type="win32"
+        name="Microsoft.Windows.Common-Controls" version="6.0.0.0"
+        processorArchitecture="*"
+        publicKeyToken="6595b64144ccf1df" />
+    </dependentAssembly>
+  </dependency>
+"#;
+
+fn manifest_xml(kind: Manifest) -> Option<String> {
+    let settings = match kind {
+        Manifest::None => return None,
+        Manifest::Background => "",
+        Manifest::Gui => GUI_MANIFEST_SETTINGS,
+    };
+    Some(format!("{MANIFEST_HEAD}{settings}</assembly>\n"))
+}
 
 /// Everything the resources need to describe one shipped executable.
 pub struct ExeInfo<'a> {
@@ -56,12 +100,10 @@ pub struct ExeInfo<'a> {
     pub version: [u32; 3],
     /// Optional `.ico` embedded as the exe's icon.
     pub icon: Option<PathBuf>,
-    /// Embed [`APPLICATION_MANIFEST`]. Both shipped exes set this: the
+    /// The embedded application manifest. Both shipped exes carry one: the
     /// imago gpui pin dropped the `windows-manifest` feature (KOS-347), so
     /// `Mundus Manager.exe` no longer gets a manifest from a dependency.
-    /// `false` only for an exe whose dependency provably ships its own
-    /// RT_MANIFEST — embedding a second would be a duplicate resource.
-    pub manifest: bool,
+    pub manifest: Manifest,
 }
 
 /// The version stamped into every shipped exe — one function, one rule for
@@ -140,10 +182,9 @@ fn resource_script(info: &ExeInfo, out_dir: &Path) -> String {
             icon.display().to_string().replace('\\', "\\\\")
         )
     });
-    let manifest_line = if info.manifest {
+    let manifest_line = if let Some(xml) = manifest_xml(info.manifest) {
         let manifest_path = out_dir.join(format!("{}.manifest", info.exe_name));
-        fs::write(&manifest_path, APPLICATION_MANIFEST)
-            .unwrap_or_else(|e| panic!("write {manifest_path:?}: {e}"));
+        fs::write(&manifest_path, xml).unwrap_or_else(|e| panic!("write {manifest_path:?}: {e}"));
         format!(
             "1 24 \"{}\"\n",
             manifest_path.display().to_string().replace('\\', "\\\\")
@@ -199,7 +240,7 @@ mod tests {
                 exe_name: "mundus-engine.exe",
                 version: [1, 2, 3],
                 icon: Some(PathBuf::from(r"C:\icons\app.ico")),
-                manifest: true,
+                manifest: Manifest::Background,
             },
             out.path(),
         );
@@ -223,6 +264,32 @@ mod tests {
         let manifest = fs::read_to_string(out.path().join("mundus-engine.exe.manifest")).unwrap();
         assert!(manifest.contains(r#"level="asInvoker""#));
         assert!(manifest.contains("8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a"));
+        assert!(!manifest.contains("Common-Controls"));
+    }
+
+    #[test]
+    fn gui_manifest_binds_common_controls_v6() {
+        // gpui imports TaskDialogIndirect (comctl32 v6 only): a GUI exe
+        // without this dependency fails to load on Windows.
+        let out = TempDir::new();
+        resource_script(
+            &ExeInfo {
+                description: "Mundus Manager",
+                exe_name: "Mundus Manager.exe",
+                version: [1, 2, 3],
+                icon: None,
+                manifest: Manifest::Gui,
+            },
+            out.path(),
+        );
+        let manifest = fs::read_to_string(out.path().join("Mundus Manager.exe.manifest")).unwrap();
+        assert!(manifest.contains(r#"name="Microsoft.Windows.Common-Controls" version="6.0.0.0""#));
+        assert!(manifest.contains("PerMonitorV2"));
+        assert!(manifest.contains(r#"level="asInvoker""#));
+        assert_eq!(
+            manifest.matches("urn:schemas-microsoft-com:asm.v1").count(),
+            1
+        );
     }
 
     #[test]
@@ -234,7 +301,7 @@ mod tests {
                 exe_name: "helper.exe",
                 version: [1, 2, 3],
                 icon: None,
-                manifest: false,
+                manifest: Manifest::None,
             },
             out.path(),
         );
