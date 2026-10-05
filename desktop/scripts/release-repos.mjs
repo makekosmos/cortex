@@ -1,17 +1,18 @@
 // Single source of truth for the GitHub repos Mundus releases are published
-// to and updated from (KOS-304). The Engine updater feed
+// to and updated from (KOS-304 / KOS-349). The Engine updater feed
 // (runtime/src/updater/feed.rs DEFAULT_FEED_BASE) must resolve to
 // RELEASE_REPOS.win — check-plan does not verify that across languages, so
 // feed.rs pins it with a test.
 //
-// The channels are independent. Windows publishes to this repo and never
-// uploads a mac artifact. Mac publishes to makekosmos/desktop-mac, whose
-// electron-updater channel file is latest-mac.yml. A failure on one repo
-// cannot gate the other: each preflight and verifier looks up only its own
-// entry here.
+// Both Windows and macOS publish to makekosmos/cortex (same product version).
+// Windows owns latest.yml + the NSIS installer; macOS owns latest-mac.yml +
+// the .dmg. A failure on one platform must not gate the other: each
+// preflight and verifier looks up only its own channel file here. The
+// The former separate Mac publish repo is deleted (Jack) and must not
+// reappear as a publish target.
 export const RELEASE_REPOS = {
   win: "makekosmos/cortex",
-  mac: "makekosmos/desktop-mac",
+  mac: "makekosmos/cortex",
 };
 
 const CHANNEL_FILES = {

@@ -1,8 +1,9 @@
 name: Nightly release
 
 # 06:00 MSK (UTC+3) every night, plus manual dispatch. Ships the Windows
-# installer through the same scripts a manual release uses; see
-# desktop/scripts/release-plan.mjs for the skip/bump rules.
+# installer and (independently) the macOS DMG to makekosmos/cortex releases;
+# see desktop/scripts/release-plan.mjs for the skip/bump rules. The macOS job
+# must not gate Windows publish (KOS-349).
 on:
   schedule:
     - cron: "0 3 * * *"
@@ -207,3 +208,107 @@ jobs:
       - name: Verify release channel
         if: needs.plan.outputs.release == 'true'
         run: pnpm --dir desktop run verify:channel
+
+  # KOS-349: macOS DMG publish. Depends on plan only — never on the Windows
+  # smoke or release jobs — so a red Mac step cannot block the Windows
+  # installer. Shares the planned version/sha; uploads latest-mac.yml + DMG
+  # to the same cortex release (creates the release if Win has not yet).
+  release-mac:
+    needs: [plan]
+    if: needs.plan.outputs.release == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 300
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+          fetch-depth: 0
+
+      - name: Read toolchain pins
+        shell: bash
+        run: node -e 'const t=require("./toolchain.json");console.log("NODE_VERSION="+t.node+"\nRUST_VERSION="+t.rust)' >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Bootstrap pnpm and install
+        shell: bash
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+          pnpm --dir desktop install --frozen-lockfile
+
+      - name: Install Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install "$RUST_VERSION" --profile minimal --component rustfmt --component clippy
+          rustup default "$RUST_VERSION"
+
+      - name: macOS Metal compiler
+        run: |
+          if ! xcrun --find metal; then
+            xcodebuild -downloadComponent MetalToolchain
+          fi
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: |
+            . -> target
+            core -> target
+            manager-gpui -> target
+
+      # Align pins with the planned release version without pushing — Win owns
+      # the bump commit + tag on main. Checkout may be detached at plan.sha.
+      - name: Set release version (local)
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          node desktop/scripts/release-plan.mjs set "$VERSION"
+          node desktop/scripts/release-plan.mjs set --platform mac "$VERSION"
+
+      # TODO(KOS-349): export Apple Developer ID / notary secrets here when
+      # available and switch package-macos-dmg.mjs to a signed+notarized path.
+      # Unsigned DMG is the publishable artifact until then.
+      - name: Build macOS native binaries + DMG
+        run: |
+          pnpm --dir desktop run build:native:macos
+          # --skip-preflight: pin was set locally on a detached plan.sha (dirty
+          # tree); still emit BOM + receipt for the publish handoff.
+          node desktop/scripts/build-desktop.mjs --platform mac --skip-preflight
+
+      # Win owns tag + release create. Wait so we attach DMG/latest-mac.yml
+      # without racing refs/tags/vX. Soft-fail independence: this job being
+      # red still never blocks the Windows release job.
+      - name: Wait for cortex release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 90); do
+            if gh release view "v$VERSION" --repo makekosmos/cortex >/dev/null 2>&1; then
+              echo "Release v$VERSION is published"
+              exit 0
+            fi
+            echo "waiting for v$VERSION ($i/90)..."
+            sleep 20
+          done
+          echo "timed out waiting for makekosmos/cortex v$VERSION" >&2
+          exit 1
+
+      - name: Publish dry run
+        env:
+          MUNDUS_RELEASE_LOCAL: "1"
+        run: node desktop/scripts/publish-release.mjs --platform mac --receipt desktop/release/release-receipt.v2.json --dry-run
+
+      - name: Publish macOS assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MUNDUS_RELEASE_LOCAL: "1"
+        run: node desktop/scripts/publish-release.mjs --platform mac --receipt desktop/release/release-receipt.v2.json
+
+      - name: Verify mac channel
+        run: pnpm --dir desktop run verify:channel -- --platform mac

@@ -13,6 +13,7 @@ import {
   setMacVersion,
   setWinVersion,
 } from "./release-plan.mjs";
+import { RELEASE_BOM_FILE } from "./release-bom.mjs";
 import { RELEASE_RECEIPT_FILE } from "./release-receipt.mjs";
 
 const HEAD = "a".repeat(40);
@@ -25,12 +26,15 @@ test("the release baseline repo is makekosmos/cortex", () => {
   assert.equal(RELEASE_REPO, "makekosmos/cortex");
 });
 
-function release(tag, { draft = false, prerelease = false, receipt = true } = {}) {
+function release(tag, { draft = false, prerelease = false, bom = true, receipt = false } = {}) {
+  const assets = [];
+  if (bom) assets.push({ name: RELEASE_BOM_FILE, id: 11111 });
+  if (receipt) assets.push({ name: RELEASE_RECEIPT_FILE, id: 12345 });
   return {
     tag_name: tag,
     draft,
     prerelease,
-    assets: receipt ? [{ name: RELEASE_RECEIPT_FILE, id: 12345 }] : [],
+    assets,
   };
 }
 
@@ -49,6 +53,7 @@ function fakeRun(handlers) {
   return { run, calls };
 }
 
+const bomJson = JSON.stringify({ release: { version: "0.10.0" }, source: { commit: BASE_COMMIT } });
 const receiptJson = JSON.stringify({ inputs: { commit: BASE_COMMIT, version: "0.10.0" } });
 
 function baseHandlers({ diffStatus = 1 } = {}) {
@@ -57,7 +62,7 @@ function baseHandlers({ diffStatus = 1 } = {}) {
       `gh api --paginate --slurp repos/${RELEASE_REPO}/releases`,
       { stdout: JSON.stringify([[release("v0.10.0")]]) },
     ],
-    ["gh api -H Accept: application/octet-stream", { stdout: receiptJson }],
+    ["gh api -H Accept: application/octet-stream", { stdout: bomJson }],
     ["git rev-parse HEAD", { stdout: HEAD }],
     [`git merge-base --is-ancestor ${BASE_COMMIT} HEAD`, {}],
     [`git diff --quiet ${BASE_COMMIT} HEAD --`, { status: diffStatus }],
@@ -114,7 +119,7 @@ test("git errors fail loudly instead of looking like no changes", () => {
       `gh api --paginate --slurp repos/${RELEASE_REPO}/releases`,
       { stdout: JSON.stringify([[release("v0.10.0")]]) },
     ],
-    ["gh api -H Accept: application/octet-stream", { stdout: receiptJson }],
+    ["gh api -H Accept: application/octet-stream", { stdout: bomJson }],
     ["git rev-parse HEAD", { stdout: HEAD }],
     [`git merge-base --is-ancestor ${BASE_COMMIT} HEAD`, { status: 1, stderr: "not an ancestor" }],
   ]);
@@ -189,18 +194,18 @@ test("drafts, prereleases and non-stable tags never become the baseline", () => 
   assert.equal(best.version, "0.9.0");
 });
 
-test("a published release without a verification receipt fails loudly", () => {
+test("a published release without a BOM or legacy receipt fails loudly", () => {
   const { run } = fakeRun([
     [
       `gh api --paginate --slurp repos/${RELEASE_REPO}/releases`,
-      { stdout: JSON.stringify([[release("v0.10.0", { receipt: false })]]) },
+      { stdout: JSON.stringify([[release("v0.10.0", { bom: false, receipt: false })]]) },
     ],
     ["git rev-parse HEAD", { stdout: HEAD }],
   ]);
   assert.throws(() => planRelease({ run, currentVersion: CURRENT }), /no .* asset/);
 });
 
-test("a receipt naming another commit tree fails the baseline check", () => {
+test("a BOM naming a bad commit fails the baseline check", () => {
   const { run } = fakeRun([
     [
       `gh api --paginate --slurp repos/${RELEASE_REPO}/releases`,
@@ -208,11 +213,30 @@ test("a receipt naming another commit tree fails the baseline check", () => {
     ],
     [
       "gh api -H Accept: application/octet-stream",
-      { stdout: JSON.stringify({ inputs: { commit: "not-a-sha", version: "0.10.0" } }) },
+      {
+        stdout: JSON.stringify({ release: { version: "0.10.0" }, source: { commit: "not-a-sha" } }),
+      },
     ],
     ["git rev-parse HEAD", { stdout: HEAD }],
   ]);
-  assert.throws(() => planRelease({ run, currentVersion: CURRENT }), /inputs\.commit/);
+  assert.throws(() => planRelease({ run, currentVersion: CURRENT }), /source\.commit/);
+});
+
+test("a legacy receipt-only release still plans (KOS-349 fallback)", () => {
+  const { run } = fakeRun([
+    [
+      `gh api --paginate --slurp repos/${RELEASE_REPO}/releases`,
+      { stdout: JSON.stringify([[release("v0.10.0", { bom: false, receipt: true })]]) },
+    ],
+    ["gh api -H Accept: application/octet-stream", { stdout: receiptJson }],
+    ["git rev-parse HEAD", { stdout: HEAD }],
+    [`git merge-base --is-ancestor ${BASE_COMMIT} HEAD`, {}],
+    [`git diff --quiet ${BASE_COMMIT} HEAD --`, { status: 0 }],
+    ["git rev-parse -q --verify refs/tags/", { status: 1 }],
+  ]);
+  const plan = planRelease({ run, currentVersion: CURRENT });
+  assert.equal(plan.release, false);
+  assert.equal(plan.previousCommit, BASE_COMMIT);
 });
 
 test("parseStableVersion rejects non-stable input", () => {

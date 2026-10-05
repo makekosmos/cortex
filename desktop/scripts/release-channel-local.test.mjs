@@ -30,8 +30,8 @@ test("the mac channel file is latest-mac.yml and the default stays latest.yml", 
   const directory = await mkdtemp(path.join(os.tmpdir(), "mundus-channel-mac-"));
   try {
     const archive = Buffer.from("mac-archive");
-    await writeFile(path.join(directory, "Mundus-1.2.3.zip"), archive);
-    const body = `version: 1.2.3\nfiles:\n  - url: Mundus-1.2.3.zip\n    sha512: ${hash(archive)}\n    size: ${archive.length}\npath: Mundus-1.2.3.zip\nsha512: ${hash(archive)}\n`;
+    await writeFile(path.join(directory, "Mundus-1.2.3.dmg"), archive);
+    const body = `version: 1.2.3\nfiles:\n  - url: Mundus-1.2.3.dmg\n    sha512: ${hash(archive)}\n    size: ${archive.length}\npath: Mundus-1.2.3.dmg\nsha512: ${hash(archive)}\n`;
     await writeFile(path.join(directory, "latest-mac.yml"), body);
     assert.doesNotThrow(() => verifyLocalReleaseChannel(directory, "1.2.3", "mac"));
     assert.throws(
@@ -48,7 +48,7 @@ test("the mac channel file is latest-mac.yml and the default stays latest.yml", 
       resolveVerifyTarget(["node", "verify-release-channel.mjs", "--platform", "mac"]),
       {
         platform: "mac",
-        repo: "makekosmos/desktop-mac",
+        repo: "makekosmos/cortex",
         channelFile: "latest-mac.yml",
         version: null,
       },

@@ -13,7 +13,9 @@
     "build": "pnpm run build:backend && node scripts/release-preflight.mjs --platform win && pnpm run build:native:macos && pnpm run build:package-components && node scripts/build-desktop.mjs --platform win --skip-preflight",
     "verify:channel": "node scripts/verify-release-channel.mjs",
     "package:dir": "pnpm run build:backend && node scripts/release-preflight.mjs --platform win && pnpm run build:package-components && node scripts/build-desktop.mjs --platform win --skip-preflight --package-dir",
-    "build:package-components": "node scripts/build-package-components.mjs"
+    "build:package-components": "node scripts/build-package-components.mjs",
+    "build:mac": "pnpm run build:native:macos && node scripts/build-desktop.mjs --platform mac --skip-preflight",
+    "package:macos-dmg": "node scripts/package-macos-dmg.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.9.2",

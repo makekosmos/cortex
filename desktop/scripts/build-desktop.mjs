@@ -15,11 +15,13 @@ import {
 import path from "node:path";
 import { deriveReleaseBom, RELEASE_BOM_FILE } from "./release-bom.mjs";
 import { verifyLocalReleaseChannel } from "./release-channel-local.mjs";
-import { bytes, documentHash, writeAtomic } from "./release-utils.mjs";
+import { documentHash, writeAtomic } from "./release-utils.mjs";
 import { createReceipt, RELEASE_RECEIPT_FILE, writeReceipt } from "./release-receipt.mjs";
 import { readReleaseVersion } from "./release-version.mjs";
 import { ensureNsis } from "./ensure-nsis.mjs";
 import { env, MANAGER_EXE } from "./brand.mjs";
+import { packageMacosDmg } from "./package-macos-dmg.mjs";
+import { releaseTarget } from "./release-repos.mjs";
 import {
   currentCommit,
   runReleasePreflight,
@@ -27,7 +29,7 @@ import {
 } from "./release-preflight.mjs";
 
 const SHELL_ROOT = PREFLIGHT_ROOT;
-const VALID_PLATFORMS = ["win"];
+const VALID_PLATFORMS = ["win", "mac"];
 function die(msg) {
   console.error(`[build-desktop] FATAL: ${msg}`);
   process.exit(1);
@@ -38,40 +40,35 @@ function log(...args) {
 }
 
 function collectArtifacts(outputDir, platform, version) {
-  const channel = "latest.yml";
+  const { channelFile: channel } = releaseTarget(platform);
+  const installerSuffix = platform === "mac" ? ".dmg" : ".exe";
   const names = readdirSync(outputDir).filter((name) => {
     if (name === channel) return true;
+    if (name === RELEASE_BOM_FILE) return false;
     if (!name.includes(version)) return false;
-    return /\.(?:exe|json)$/i.test(name);
+    return name.toLowerCase().endsWith(installerSuffix);
   });
   const artifacts = names.map((name) => {
     const file = path.join(outputDir, name);
     return { name, sha256: documentHash(readFileSync(file)), size: statSync(file).size };
   });
-  if (!artifacts.some(({ name }) => name.endsWith(".exe")))
+  if (!artifacts.some(({ name }) => name.toLowerCase().endsWith(installerSuffix)))
     die(`no installer artifact found in ${outputDir}`);
   if (!artifacts.some(({ name }) => name === channel)) die(`missing ${channel} in ${outputDir}`);
   return artifacts;
 }
 
-async function emitProvenance(outputDir, platform, version, bom) {
-  verifyLocalReleaseChannel(outputDir, version);
+// KOS-349: release assets are installer + bom + channel yml only.
+// Provenance and receipt stay local for the build→publish handoff and are
+// not uploaded to GitHub.
+async function emitReleaseMetadata(outputDir, platform, version, bom) {
+  verifyLocalReleaseChannel(outputDir, version, platform);
   const artifacts = collectArtifacts(outputDir, platform, version);
-  const provenance = {
-    schema_version: 1,
-    bom_id: bom.value.id,
-    bom_digest: bom.digest,
-    platform,
-    version,
-    artifacts,
-  };
-  const file = path.join(outputDir, "release-provenance.json");
   const bomFile = path.join(outputDir, RELEASE_BOM_FILE);
   await writeAtomic(bomFile, bom.bytes);
-  await writeAtomic(file, bytes(provenance));
-  log(`Release provenance: ${file}`);
+  log(`Release BOM: ${bomFile}`);
   return {
-    metadataFiles: [bomFile, file],
+    metadataFiles: [bomFile],
     artifactFiles: artifacts.map(({ name }) => path.join(outputDir, name)),
   };
 }
@@ -287,8 +284,8 @@ async function main() {
     }
   }
 
-  // Windows is the only supported package target; default to it so
-  // `pnpm run build:desktop -- --local` works without extra flags.
+  // Default to Windows so `pnpm run build -- --local` keeps working.
+  // Pass `--platform mac` on a macOS host / nightly mac job (KOS-349).
   platform ??= "win";
   if (!VALID_PLATFORMS.includes(platform))
     die(`Unknown platform "${platform}". Valid: ${VALID_PLATFORMS.join(", ")}`);
@@ -298,11 +295,13 @@ async function main() {
   // directly when the caller (`pnpm run build`) has just run the preflight.
   let version;
   let bom = null;
-  if (local) {
-    version = readReleaseVersion();
-  } else if (skipPreflight) {
-    version = readReleaseVersion();
+  // --skip-preflight wins over --local: CI may set MUNDUS_RELEASE_LOCAL while
+  // still wanting BOM/receipt for publish (mac nightly on a dirty pin bump).
+  if (skipPreflight) {
+    version = readReleaseVersion({ platform });
     bom = await deriveReleaseBom(path.resolve(SHELL_ROOT, ".."), platform, currentCommit());
+  } else if (local) {
+    version = readReleaseVersion({ platform });
   } else {
     ({ version, bom } = await runReleasePreflight({ platform }));
     log("Preflight: source, BOM, and pins");
@@ -315,12 +314,14 @@ async function main() {
   log("");
   if (dryRun) {
     log("Dry-run plan:");
-    log(`  build: NSIS installer via makensis`);
+    log(
+      `  build: ${platform === "mac" ? "unsigned Mundus-<ver>.dmg via hdiutil" : "NSIS installer via makensis"}`,
+    );
     if (!bom) {
       log("  local build: no BOM, receipt, or publish");
       return;
     }
-    log("  verify: local channel, BOM, provenance, receipt");
+    log("  verify: local channel, BOM, receipt (local handoff only)");
     log(
       `  publish: node scripts/publish-release.mjs --platform ${platform} --receipt ${receiptPath}`,
     );
@@ -332,11 +333,22 @@ async function main() {
     return;
   }
 
-  const { releaseDir, outFile } = await buildWindows(version);
+  let releaseDir;
+  let outFile;
+  if (platform === "mac") {
+    if (process.platform !== "darwin")
+      die("mac packaging requires macOS (darwin) — run the nightly mac job or a Mac host");
+    log(
+      "Packaging unsigned Mundus-<ver>.dmg (signing/notarization TODO when Apple secrets exist)...",
+    );
+    ({ releaseDir, dmgPath: outFile } = await packageMacosDmg(version));
+  } else {
+    ({ releaseDir, outFile } = await buildWindows(version));
+  }
   log("");
   if (bom) {
-    log("NSIS installer built. Emitting release provenance...");
-    const releaseFiles = await emitProvenance(releaseDir, platform, version, bom);
+    log("Installer built. Emitting release BOM + local receipt...");
+    const releaseFiles = await emitReleaseMetadata(releaseDir, platform, version, bom);
     const receipt = await createReceipt({
       outputDir: releaseDir,
       platform,
@@ -346,7 +358,7 @@ async function main() {
       files: [...releaseFiles.artifactFiles, ...releaseFiles.metadataFiles],
     });
     await writeReceipt(receiptPath, receipt);
-    log(`Verification receipt: ${receiptPath}`);
+    log(`Verification receipt (local only): ${receiptPath}`);
     log(`Build + verify complete for ${platform} v${version}. Run publish-release.mjs explicitly.`);
   } else {
     log(`Local build complete: ${outFile}`);

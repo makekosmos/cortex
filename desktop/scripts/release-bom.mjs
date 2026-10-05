@@ -1,8 +1,13 @@
 // The release BOM records what one desktop release is built from. Every field
 // is derived from the checkout at HEAD — nothing is hand-written — so the BOM
 // can never drift from the source it describes. It ships next to the
-// installer as `release-bom.v2.json`, and its digest is bound into the
-// provenance and the verification receipt.
+// installer as `release-bom.v2.json`.
+//
+// KOS-349: provenance and receipt no longer ride in the GitHub release. The
+// BOM is the single composition document for a cortex release. Windows and
+// macOS may each derive a platform-scoped BOM locally; the published release
+// keeps ONE `release-bom.v2.json` (the first publisher uploads it; the other
+// platform does not clobber a different digest).
 //
 // Store packages are not part of it: the Engine reads the unsigned
 // integrations catalog at runtime and native apps come from their own
@@ -16,7 +21,11 @@ import { readReleaseVersion } from "./release-version.mjs";
 export const RELEASE_BOM_SCHEMA_VERSION = 2;
 export const RELEASE_BOM_FILE = `release-bom.v${RELEASE_BOM_SCHEMA_VERSION}.json`;
 const REPOSITORY = "makekosmos/cortex";
-const TARGETS = { win: "x86_64-pc-windows-msvc" };
+const TARGETS = {
+  win: "x86_64-pc-windows-msvc",
+  // macos-latest is Apple Silicon; the nightly mac job builds host-native.
+  mac: "aarch64-apple-darwin",
+};
 const COMMIT = /^[0-9a-f]{40}$/;
 
 export async function deriveReleaseBom(root, platform, commit) {
@@ -29,7 +38,7 @@ export async function deriveReleaseBom(root, platform, commit) {
     "utf8",
   );
 
-  const version = readReleaseVersion({ root });
+  const version = readReleaseVersion({ root, platform });
   const pnpm = /^pnpm@(\d+\.\d+\.\d+)$/.exec(String(packageJson.packageManager ?? ""))?.[1];
   const engineApi = /pub const API_VERSION: &str = "([^"]+)"/.exec(protocol)?.[1];
   const value = {

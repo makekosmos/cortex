@@ -10,6 +10,15 @@ export const PUBLISHER = "Kazui";
 /** Installer file name: `Mundus-Setup-<ver>.exe`. */
 export const installerName = (version) => `${PRODUCT_NAME}-Setup-${version}.exe`;
 
+/** macOS disk image: `Mundus-<ver>.dmg` (KOS-349). */
+export const dmgName = (version) => `${PRODUCT_NAME}-${version}.dmg`;
+
+/** Packaged Manager binary name inside the macOS .app (no .exe). */
+export const MANAGER_MAC_BIN = "Mundus Manager";
+
+/** Engine binary stem on Unix hosts. */
+export const ENGINE_BINARY_UNIX = "mundus-engine";
+
 /** Per-user install dir: `%LOCALAPPDATA%\Programs\Mundus`. */
 export const PROGRAMS_DIR_NAME = PRODUCT_NAME;
 /** Roaming data root: `%APPDATA%\Mundus`. */
