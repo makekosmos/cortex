@@ -28,6 +28,8 @@ pub struct UpdaterService {
     // The current installer is Windows-only. UI consumes this capability,
     // never guesses it from its own OS, and other hosts don't download .exe.
     install_supported: bool,
+    // `manifest.json` platforms key this Engine updates from (KOS-350).
+    platform: &'static str,
     feed_base: String,
     downloads_dir: PathBuf,
     client: reqwest::Client,
@@ -46,6 +48,7 @@ impl UpdaterService {
             feed::DEFAULT_FEED_BASE.to_string(),
             version::current_version(),
             cfg!(windows),
+            feed::host_platform(),
         )
         .expect("updater HTTP client")
     }
@@ -55,6 +58,7 @@ impl UpdaterService {
         feed_base: String,
         current_version: String,
         install_supported: bool,
+        platform: &'static str,
     ) -> Result<Arc<Self>, UpdaterError> {
         let downloads_dir = data_dir.join("updates");
         // KOS-301: a fresh service has no pending update and no live download,
@@ -70,6 +74,7 @@ impl UpdaterService {
         }
         Ok(Arc::new(Self {
             install_supported,
+            platform,
             feed_base,
             downloads_dir,
             client: feed::build_client()?,
@@ -84,7 +89,14 @@ impl UpdaterService {
 
     #[cfg(test)]
     fn with_feed_base(data_dir: PathBuf, feed_base: String, current_version: &str) -> Arc<Self> {
-        Self::try_with_feed_base(data_dir, feed_base, current_version.to_string(), true).unwrap()
+        Self::try_with_feed_base(
+            data_dir,
+            feed_base,
+            current_version.to_string(),
+            true,
+            "win",
+        )
+        .unwrap()
     }
 
     fn status_json(&self, status: &UpdaterStatus) -> Value {
@@ -120,16 +132,23 @@ impl UpdaterService {
             ..self.snapshot()
         });
         let current = self.current_version.clone();
-        let result = feed::fetch_manifest(&self.client, &self.feed_base)
+        let platform = self.platform;
+        let result = feed::fetch_release(&self.client, &self.feed_base, platform)
             .await
-            .and_then(|manifest| {
-                let file = manifest.primary_file()?.clone();
-                let asset_url = feed::asset_url(&self.feed_base, &file.url)?;
-                Ok((manifest.version, file, asset_url))
+            .and_then(|release| {
+                // A release without a build for this platform is "nothing
+                // to install", not an error.
+                let Some(file) = release.file else {
+                    return Ok(None);
+                };
+                let asset_url = feed::asset_url(&self.feed_base, &file.url, platform)?;
+                Ok(Some((release.version, file, asset_url)))
             });
         let checked_at_ms = now_ms();
         match result {
-            Ok((new_version, file, asset_url)) if version::is_newer(&new_version, &current) => {
+            Ok(Some((new_version, file, asset_url)))
+                if version::is_newer(&new_version, &current) =>
+            {
                 let pending = PendingUpdate {
                     version: new_version.clone(),
                     asset_url,

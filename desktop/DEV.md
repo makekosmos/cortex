@@ -29,7 +29,8 @@ pnpm run build:desktop -- --local           # NSIS installer (no BOM/publish)
 `desktop/.tmp/installer-stage`, compiles
 `desktop/build/installer.nsi` with `makensis` (downloaded on demand into
 `desktop/.tmp/nsis`), and writes `desktop/release/Mundus-Setup-<ver>.exe` plus
-`desktop/release/latest.yml`. It never publishes and never touches the
+`desktop/release/manifest.json` (and, during the KOS-350 dual-publish window,
+`desktop/release/latest.yml` rendered from it). It never publishes and never touches the
 installed system.
 
 ## Release preflight (`pnpm --dir desktop run build`)

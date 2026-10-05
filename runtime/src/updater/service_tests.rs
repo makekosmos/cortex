@@ -59,6 +59,7 @@ async fn unsupported_package_reports_release_without_downloading_foreign_install
         server.base_url(),
         crate::build_info::display_version().to_string(),
         false,
+        "win",
     )
     .unwrap();
     let status = service.check().await;
@@ -219,4 +220,78 @@ fn desktop_lease_keeps_startup_state_idle() {
     authority.register("session".into(), 1, 123, "credential");
     assert!(authority.len() > 0);
     assert_eq!(service.status()["state"], "idle");
+}
+
+fn manifest_json(version: &str, platforms: &str) -> String {
+    format!(
+        concat!(
+            r#"{{"schema":"mundus-release-manifest","schema_version":1,"#,
+            r#""version":"{}","platforms":{{{}}}}}"#
+        ),
+        version, platforms
+    )
+}
+
+#[tokio::test]
+async fn check_uses_manifest_json_for_the_download_kos_350() {
+    let body = b"manifest installer".repeat(40);
+    let server = MockServer::start_async().await;
+    server
+        .mock_async(|when, then| {
+            when.method(httpmock::Method::GET).path("/manifest.json");
+            then.status(200).body(manifest_json(
+                "99.1.0",
+                &format!(
+                    r#""win":{{"file":"Mundus-Setup-99.1.0.exe","size":{},"sha512":"{}"}}"#,
+                    body.len(),
+                    hash(&body)
+                ),
+            ));
+        })
+        .await;
+    let legacy = server
+        .mock_async(|when, then| {
+            when.method(httpmock::Method::GET).path("/latest.yml");
+            then.status(200)
+                .body("version: 1.0.0\nfiles:\n  - url: old.exe\n");
+        })
+        .await;
+    server
+        .mock_async(|when, then| {
+            when.method(httpmock::Method::GET)
+                .path("/Mundus-Setup-99.1.0.exe");
+            then.status(200).body(body.clone());
+        })
+        .await;
+    let dir = tempfile::tempdir().unwrap();
+    let service =
+        UpdaterService::with_feed_base(dir.path().to_path_buf(), server.base_url(), "0.5.0");
+
+    assert_eq!(service.check().await["newVersion"], "99.1.0");
+    for _ in 0..200 {
+        if service.status()["state"] == "downloaded" {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert_eq!(service.status()["state"], "downloaded");
+    legacy.assert_calls_async(0).await;
+}
+
+#[tokio::test]
+async fn release_without_a_build_for_this_platform_is_not_available() {
+    let server = MockServer::start_async().await;
+    server
+        .mock_async(|when, then| {
+            when.method(httpmock::Method::GET).path("/manifest.json");
+            then.status(200).body(manifest_json(
+                "99.0.0",
+                r#""mac":{"file":"Mundus-99.0.0.dmg","size":1,"sha512":"AAA"}"#,
+            ));
+        })
+        .await;
+    let dir = tempfile::tempdir().unwrap();
+    let service =
+        UpdaterService::with_feed_base(dir.path().to_path_buf(), server.base_url(), "0.5.0");
+    assert_eq!(service.check().await["state"], "not-available");
 }

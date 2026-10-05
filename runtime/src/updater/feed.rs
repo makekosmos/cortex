@@ -1,10 +1,37 @@
-use super::manifest::{parse_latest_yml, LatestManifest};
+use super::manifest::parse_latest_yml;
+use super::release_manifest::{parse_release_manifest, FeedRelease};
 use super::UpdaterError;
 
 // KOS-304: releases live in makekosmos/cortex.
 pub(crate) const DEFAULT_FEED_BASE: &str =
     "https://github.com/makekosmos/cortex/releases/latest/download";
-const CHANNEL_FILE: &str = "latest.yml";
+/// KOS-350: the one release document; read first.
+pub(crate) const MANIFEST_FILE: &str = "manifest.json";
+/// Dual-publish window (KOS-350): releases still also carry the legacy
+/// `latest.yml` / `latest-mac.yml`, so a missing or unreadable
+/// `manifest.json` falls back to them. Flip to `false` (and later drop the
+/// yml parser) together with `DUAL_PUBLISH_LEGACY_FEEDS` in
+/// `desktop/scripts/release-manifest.mjs` at cutover.
+pub(crate) const LEGACY_FEED_FALLBACK: bool = true;
+
+/// `platforms` key in `manifest.json` for the OS this Engine runs on.
+pub(crate) fn host_platform() -> &'static str {
+    if cfg!(windows) {
+        "win"
+    } else if cfg!(target_os = "macos") {
+        "mac"
+    } else {
+        "linux"
+    }
+}
+
+fn legacy_channel_file(platform: &str) -> Option<&'static str> {
+    match platform {
+        "win" => Some("latest.yml"),
+        "mac" => Some("latest-mac.yml"),
+        _ => None,
+    }
+}
 
 pub(crate) fn build_client() -> Result<reqwest::Client, UpdaterError> {
     reqwest::Client::builder()
@@ -13,13 +40,9 @@ pub(crate) fn build_client() -> Result<reqwest::Client, UpdaterError> {
         .map_err(|error| UpdaterError::Network(error.to_string()))
 }
 
-pub(crate) async fn fetch_manifest(
-    client: &reqwest::Client,
-    feed_base: &str,
-) -> Result<LatestManifest, UpdaterError> {
-    let url = format!("{feed_base}/{CHANNEL_FILE}");
+async fn fetch_text(client: &reqwest::Client, url: &str) -> Result<String, UpdaterError> {
     let response = client
-        .get(&url)
+        .get(url)
         .send()
         .await
         .map_err(|error| UpdaterError::Network(error.to_string()))?;
@@ -29,16 +52,61 @@ pub(crate) async fn fetch_manifest(
             response.status()
         )));
     }
-    let text = response
+    response
         .text()
         .await
-        .map_err(|error| UpdaterError::Network(error.to_string()))?;
-    parse_latest_yml(&text)
+        .map_err(|error| UpdaterError::Network(error.to_string()))
 }
 
-pub(crate) fn asset_url(feed_base: &str, filename: &str) -> Result<String, UpdaterError> {
-    let valid = !filename.is_empty()
-        && filename.ends_with(".exe")
+/// Newest release for `platform`: `manifest.json` first, then (dual-publish
+/// only) the legacy channel yml.
+pub(crate) async fn fetch_release(
+    client: &reqwest::Client,
+    feed_base: &str,
+    platform: &str,
+) -> Result<FeedRelease, UpdaterError> {
+    fetch_release_with(client, feed_base, platform, LEGACY_FEED_FALLBACK).await
+}
+
+async fn fetch_release_with(
+    client: &reqwest::Client,
+    feed_base: &str,
+    platform: &str,
+    legacy_fallback: bool,
+) -> Result<FeedRelease, UpdaterError> {
+    let primary = fetch_text(client, &format!("{feed_base}/{MANIFEST_FILE}"))
+        .await
+        .and_then(|text| parse_release_manifest(&text, platform));
+    let error = match primary {
+        Ok(release) => return Ok(release),
+        Err(error) => error,
+    };
+    let Some(channel) = legacy_channel_file(platform).filter(|_| legacy_fallback) else {
+        return Err(error);
+    };
+    tracing::info!(%error, channel, "manifest.json unavailable; using legacy update feed");
+    let legacy = parse_latest_yml(&fetch_text(client, &format!("{feed_base}/{channel}")).await?)?;
+    Ok(FeedRelease {
+        file: Some(legacy.primary_file()?.clone()),
+        version: legacy.version,
+    })
+}
+
+/// Joins a manifest filename onto the feed base. Only a plain installer name
+/// with the platform's installer extension is accepted.
+pub(crate) fn asset_url(
+    feed_base: &str,
+    filename: &str,
+    platform: &str,
+) -> Result<String, UpdaterError> {
+    let extension = match platform {
+        "win" => ".exe",
+        "mac" => ".dmg",
+        _ => return Err(UpdaterError::MalformedManifest),
+    };
+    let valid = filename.len() > extension.len()
+        && filename.ends_with(extension)
+        && !filename.starts_with('.')
         && filename
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'_'));
@@ -49,60 +117,5 @@ pub(crate) fn asset_url(feed_base: &str, filename: &str) -> Result<String, Updat
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use httpmock::MockServer;
-
-    #[tokio::test]
-    async fn fetches_and_parses_the_channel_file() {
-        let server = MockServer::start_async().await;
-        let mock = server
-            .mock_async(|when, then| {
-                when.method(httpmock::Method::GET).path("/latest.yml");
-                then.status(200).body(concat!(
-                    "version: 0.5.3\nfiles:\n  - url: Mundus-Setup-0.5.3.exe\n    sha512: AAA\n  ",
-                    "  size: 10\n"
-                ));
-            })
-            .await;
-        let manifest = fetch_manifest(&build_client().unwrap(), &server.base_url())
-            .await
-            .unwrap();
-        assert_eq!(manifest.version, "0.5.3");
-        mock.assert_async().await;
-    }
-
-    #[tokio::test]
-    async fn surfaces_non_success_status_as_network_error() {
-        let server = MockServer::start_async().await;
-        server
-            .mock_async(|when, then| {
-                when.method(httpmock::Method::GET).path("/latest.yml");
-                then.status(404);
-            })
-            .await;
-        let error = fetch_manifest(&build_client().unwrap(), &server.base_url())
-            .await
-            .unwrap_err();
-        assert!(matches!(error, UpdaterError::Network(_)));
-    }
-
-    #[test]
-    fn default_feed_reads_cortex_releases() {
-        assert_eq!(
-            DEFAULT_FEED_BASE,
-            "https://github.com/makekosmos/cortex/releases/latest/download"
-        );
-    }
-
-    #[test]
-    fn asset_url_accepts_only_safe_executable_filenames() {
-        assert_eq!(
-            asset_url("https://example.test/dl", "Mundus-Setup-0.5.3.exe").unwrap(),
-            "https://example.test/dl/Mundus-Setup-0.5.3.exe"
-        );
-        for filename in ["../evil.exe", "dir/evil.exe", "evil.exe?x=1", "notes.txt"] {
-            assert!(asset_url("https://example.test/dl", filename).is_err());
-        }
-    }
-}
+#[path = "feed_tests.rs"]
+mod tests;

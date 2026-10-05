@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import {
   copyFileSync,
@@ -13,15 +12,13 @@ import {
   statSync,
 } from "node:fs";
 import path from "node:path";
-import { deriveReleaseBom, RELEASE_BOM_FILE } from "./release-bom.mjs";
-import { verifyLocalReleaseChannel } from "./release-channel-local.mjs";
-import { documentHash, writeAtomic } from "./release-utils.mjs";
+import { deriveReleaseBom } from "./release-bom.mjs";
+import { emitReleaseFeeds } from "./release-feeds.mjs";
 import { createReceipt, RELEASE_RECEIPT_FILE, writeReceipt } from "./release-receipt.mjs";
 import { readReleaseVersion } from "./release-version.mjs";
 import { ensureNsis } from "./ensure-nsis.mjs";
 import { env, MANAGER_EXE } from "./brand.mjs";
 import { packageMacosDmg } from "./package-macos-dmg.mjs";
-import { releaseTarget } from "./release-repos.mjs";
 import {
   currentCommit,
   runReleasePreflight,
@@ -39,38 +36,11 @@ function log(...args) {
   console.log("[build-desktop]", ...args);
 }
 
-function collectArtifacts(outputDir, platform, version) {
-  const { channelFile: channel } = releaseTarget(platform);
-  const installerSuffix = platform === "mac" ? ".dmg" : ".exe";
-  const names = readdirSync(outputDir).filter((name) => {
-    if (name === channel) return true;
-    if (name === RELEASE_BOM_FILE) return false;
-    if (!name.includes(version)) return false;
-    return name.toLowerCase().endsWith(installerSuffix);
-  });
-  const artifacts = names.map((name) => {
-    const file = path.join(outputDir, name);
-    return { name, sha256: documentHash(readFileSync(file)), size: statSync(file).size };
-  });
-  if (!artifacts.some(({ name }) => name.toLowerCase().endsWith(installerSuffix)))
-    die(`no installer artifact found in ${outputDir}`);
-  if (!artifacts.some(({ name }) => name === channel)) die(`missing ${channel} in ${outputDir}`);
-  return artifacts;
-}
-
-// KOS-349: release assets are installer + bom + channel yml only.
-// Provenance and receipt stay local for the build→publish handoff and are
-// not uploaded to GitHub.
-async function emitReleaseMetadata(outputDir, platform, version, bom) {
-  verifyLocalReleaseChannel(outputDir, version, platform);
-  const artifacts = collectArtifacts(outputDir, platform, version);
-  const bomFile = path.join(outputDir, RELEASE_BOM_FILE);
-  await writeAtomic(bomFile, bom.bytes);
-  log(`Release BOM: ${bomFile}`);
-  return {
-    metadataFiles: [bomFile],
-    artifactFiles: artifacts.map(({ name }) => path.join(outputDir, name)),
-  };
+// KOS-350: release assets are installer + manifest.json (+ legacy feeds
+// during dual-publish) — see release-feeds.mjs. Provenance and receipt stay
+// local for the build→publish handoff and are not uploaded to GitHub.
+function emitReleaseMetadata(outputDir, platform, version, bom, installerFile, { local }) {
+  return emitReleaseFeeds({ outputDir, platform, version, bom, installerFile, local, log });
 }
 
 // KOS-306: every exe the installer ships (or the Engine installs) must carry
@@ -195,12 +165,6 @@ function defenderGate(outFile) {
     die(`Defender scan reported a detection in ${outFile} (exit ${scan.status})`);
 }
 
-function sha512Base64(file) {
-  const hash = createHash("sha512");
-  hash.update(readFileSync(file));
-  return hash.digest("base64");
-}
-
 async function buildWindows(version) {
   const stage = stageInstaller(version);
   const releaseDir = path.join(SHELL_ROOT, "release");
@@ -238,21 +202,7 @@ async function buildWindows(version) {
   assertApplicationManifest(outFile);
   defenderGate(outFile);
 
-  // electron-updater / Engine updater channel file.
-  const installerSha512 = sha512Base64(outFile);
   const installerSize = statSync(outFile).size;
-  const latest = [
-    `version: ${version}`,
-    "files:",
-    `  - url: Mundus-Setup-${version}.exe`,
-    `    sha512: ${installerSha512}`,
-    `    size: ${installerSize}`,
-    `path: Mundus-Setup-${version}.exe`,
-    `sha512: ${installerSha512}`,
-    `releaseDate: '${new Date().toISOString()}'`,
-    "",
-  ].join("\n");
-  await writeAtomic(path.join(releaseDir, "latest.yml"), latest);
   log(`Installer: ${outFile} (${installerSize} bytes)`);
   return { releaseDir, outFile };
 }
@@ -318,10 +268,10 @@ async function main() {
       `  build: ${platform === "mac" ? "unsigned Mundus-<ver>.dmg via hdiutil" : "NSIS installer via makensis"}`,
     );
     if (!bom) {
-      log("  local build: no BOM, receipt, or publish");
+      log("  local build: manifest.json (+ legacy yml); no BOM, receipt, or publish");
       return;
     }
-    log("  verify: local channel, BOM, receipt (local handoff only)");
+    log("  verify: manifest.json (+ legacy feeds), BOM, receipt (local handoff only)");
     log(
       `  publish: node scripts/publish-release.mjs --platform ${platform} --receipt ${receiptPath}`,
     );
@@ -347,20 +297,36 @@ async function main() {
   }
   log("");
   if (bom) {
-    log("Installer built. Emitting release BOM + local receipt...");
-    const releaseFiles = await emitReleaseMetadata(releaseDir, platform, version, bom);
+    log("Installer built. Emitting manifest.json (+ legacy feeds) + local receipt...");
+    const { files } = await emitReleaseMetadata(releaseDir, platform, version, bom, outFile, {
+      local: false,
+    });
     const receipt = await createReceipt({
       outputDir: releaseDir,
       platform,
       version,
       currentCommit: currentCommit(),
       bom,
-      files: [...releaseFiles.artifactFiles, ...releaseFiles.metadataFiles],
+      files,
     });
     await writeReceipt(receiptPath, receipt);
     log(`Verification receipt (local only): ${receiptPath}`);
     log(`Build + verify complete for ${platform} v${version}. Run publish-release.mjs explicitly.`);
   } else {
+    // Local builds still get manifest.json (+ legacy yml) so the Engine
+    // updater can be pointed at a local feed; no BOM file, no receipt.
+    try {
+      const localBom = await deriveReleaseBom(
+        path.resolve(SHELL_ROOT, ".."),
+        platform,
+        currentCommit(),
+      );
+      await emitReleaseMetadata(releaseDir, platform, version, localBom, outFile, { local: true });
+    } catch (error) {
+      log(
+        `warning: skipped local manifest.json (${error instanceof Error ? error.message : error})`,
+      );
+    }
     log(`Local build complete: ${outFile}`);
   }
 }

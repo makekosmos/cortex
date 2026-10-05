@@ -87,8 +87,19 @@ node desktop/scripts/publish-release.mjs --platform win --receipt desktop/releas
 
 The release BOM (`desktop/scripts/release-bom.mjs`) is never written by hand:
 it is derived from the checkout at HEAD — commit, release version, pnpm/Node/Rust
-pins, target, and Engine API — and ships as `release-bom.v2.json` next to the
-installer. `pnpm --dir desktop run build` runs the whole release build in one go.
+pins, target, and Engine API. KOS-350: a cortex release carries ONE release
+document next to the installers, `manifest.json`
+(`desktop/scripts/release-manifest.mjs`, schema `mundus-release-manifest` v1):
+product version, source commit/toolchain/Engine API (what the BOM carried),
+and a `platforms` map (`win`, `mac`; `linux` reserved) with each installer's
+`file`, `url`, `size`, and `sha512`. Windows creates it; the macOS publish
+merges its entry in. The Engine updater (`runtime/src/updater/`) reads
+`…/releases/latest/download/manifest.json` and the nightly planner takes its
+baseline from `source.commit`. During the dual-publish window
+(`DUAL_PUBLISH_LEGACY_FEEDS = true`, Rust `LEGACY_FEED_FALLBACK = true`) the
+release also carries `latest.yml`, `latest-mac.yml`, and `release-bom.v2.json`,
+all rendered from that same manifest; cutover flips both flags to `false`.
+`pnpm --dir desktop run build` runs the whole release build in one go.
 
 The affected-check planner is fail-closed: every mode plans the diff of the
 revision under test against `merge-base(HEAD, origin/main)` — staged changes

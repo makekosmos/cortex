@@ -5,7 +5,6 @@
 // Signing / notarization: not wired yet. When Apple secrets land in the
 // macOS nightly job, add codesign + notarytool here (see TODO below). An
 // unsigned DMG is still a publishable CI artifact for the cortex channel.
-import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import {
   chmodSync,
@@ -14,7 +13,6 @@ import {
   existsSync,
   mkdirSync,
   readdirSync,
-  readFileSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -30,10 +28,6 @@ const cortexRoot = path.resolve(desktopRoot, "..");
 
 function die(message) {
   throw new Error(message);
-}
-
-function sha512Base64(file) {
-  return createHash("sha512").update(readFileSync(file)).digest("base64");
 }
 
 function findBinary(candidates, label) {
@@ -160,25 +154,11 @@ export function createUnsignedDmg({ appPath, dmgPath, volumeName }) {
   return dmgPath;
 }
 
-export async function writeLatestMacYml(releaseDir, version, dmgFileName, dmgPath) {
-  const installerSha512 = sha512Base64(dmgPath);
-  const installerSize = statSync(dmgPath).size;
-  const latest = [
-    `version: ${version}`,
-    "files:",
-    `  - url: ${dmgFileName}`,
-    `    sha512: ${installerSha512}`,
-    `    size: ${installerSize}`,
-    `path: ${dmgFileName}`,
-    `sha512: ${installerSha512}`,
-    `releaseDate: '${new Date().toISOString()}'`,
-    "",
-  ].join("\n");
-  await writeAtomic(path.join(releaseDir, "latest-mac.yml"), latest);
-  return { sha512: installerSha512, size: installerSize };
-}
-
-/** Full mac packaging: stage .app → DMG → latest-mac.yml under desktop/release. */
+/**
+ * Full mac packaging: stage .app → DMG under desktop/release. manifest.json
+ * (and the legacy latest-mac.yml during dual-publish) are written by
+ * build-desktop.mjs from the DMG bytes (KOS-350).
+ */
 export async function packageMacosDmg(
   version,
   { releaseDir = path.join(desktopRoot, "release") } = {},
@@ -193,7 +173,6 @@ export async function packageMacosDmg(
     dmgPath,
     volumeName: `${PRODUCT_NAME} ${version}`,
   });
-  await writeLatestMacYml(releaseDir, version, fileName, dmgPath);
   // Record that this artifact is unsigned so operators do not mistake it for
   // a notarized build. Not uploaded to the GitHub release.
   await writeAtomic(

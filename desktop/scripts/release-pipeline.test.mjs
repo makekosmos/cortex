@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -145,18 +145,98 @@ test("receipt validation rejects mutation and stale inputs", async () => {
   assert.throws(() => normalizeArtifactPath("installer\\alias.exe"), /canonical/i);
 });
 
-test("publish uploads installer + bom + channel yml and never provenance/receipt (KOS-349)", async () => {
+test("publish uploads installer + manifest.json and never provenance/receipt (KOS-350)", async () => {
   const publish = await readFile(path.join(scripts, "publish-release.mjs"), "utf8");
   assert.match(publish, /publishAssetPaths/);
   assert.doesNotMatch(publish, /release-provenance\.json/);
-  assert.match(publish, /RELEASE_BOM_FILE/);
-  // Receipt is a local handoff input, not a release asset.
-  assert.ok(
-    publish.includes("release-receipt") ||
-      publish.includes("RELEASE_RECEIPT") ||
-      publish.includes("receipt"),
-  );
+  assert.match(publish, /RELEASE_MANIFEST_FILE/);
+  assert.match(publish, /mergeReleaseManifest/);
+  assert.match(publish, /legacyFeedFiles/);
   assert.match(publish, /"release", "upload"/);
+});
+
+async function publishDir(platform, names) {
+  const dir = await mkdtemp(path.join(os.tmpdir(), `mundus-publish-${platform}-`));
+  for (const name of names) await writeFile(path.join(dir, name), name);
+  return dir;
+}
+
+test("publish set: dual-publish adds the legacy feeds; cutover is installer + manifest", async () => {
+  const { publishAssetPaths } = await import("./publish-release.mjs");
+  const win = await publishDir("win", [
+    "Mundus-Setup-1.2.3.exe",
+    "manifest.json",
+    "latest.yml",
+    "release-bom.v2.json",
+  ]);
+  const names = (files) => files.map((file) => path.basename(file));
+  const args = { platform: "win", version: "1.2.3", outputDir: win };
+  assert.deepEqual(names(publishAssetPaths({ ...args, releaseAlreadyExists: false })), [
+    "Mundus-Setup-1.2.3.exe",
+    "manifest.json",
+    "latest.yml",
+    "release-bom.v2.json",
+  ]);
+  // Existing release (retry): keep the single bom already attached.
+  assert.deepEqual(names(publishAssetPaths({ ...args, releaseAlreadyExists: true })), [
+    "Mundus-Setup-1.2.3.exe",
+    "manifest.json",
+    "latest.yml",
+  ]);
+  assert.deepEqual(
+    names(publishAssetPaths({ ...args, releaseAlreadyExists: false, dual: false })),
+    ["Mundus-Setup-1.2.3.exe", "manifest.json"],
+  );
+  const mac = await publishDir("mac", ["Mundus-1.2.3.dmg", "manifest.json", "latest-mac.yml"]);
+  const merged = path.join(mac, "publish-manifest", "manifest.json");
+  await mkdir(path.dirname(merged));
+  await writeFile(merged, "{}");
+  const macArgs = { platform: "mac", version: "1.2.3", outputDir: mac };
+  const macFiles = publishAssetPaths({
+    ...macArgs,
+    releaseAlreadyExists: true,
+    manifestPath: merged,
+  });
+  assert.deepEqual(names(macFiles), ["Mundus-1.2.3.dmg", "manifest.json", "latest-mac.yml"]);
+  assert.equal(macFiles[1], merged);
+  assert.deepEqual(
+    names(publishAssetPaths({ ...macArgs, releaseAlreadyExists: true, dual: false })),
+    ["Mundus-1.2.3.dmg", "manifest.json"],
+  );
+  await rm(win, { recursive: true, force: true });
+  await rm(path.join(mac, "latest-mac.yml"));
+  assert.throws(
+    () => publishAssetPaths({ ...macArgs, releaseAlreadyExists: true }),
+    /missing publish artifact/,
+  );
+  await rm(mac, { recursive: true, force: true });
+});
+
+test("fetchReleaseManifest returns null without the asset and fails closed on gh errors", async () => {
+  const { fetchReleaseManifest } = await import("./publish-release.mjs");
+  const view = (assets) => ({ status: 0, stdout: JSON.stringify({ assets }), stderr: "" });
+  assert.equal(
+    fetchReleaseManifest("makekosmos/cortex", "1.2.3", () => view([{ name: "latest.yml", id: 1 }])),
+    null,
+  );
+  assert.throws(
+    () =>
+      fetchReleaseManifest("makekosmos/cortex", "1.2.3", () => ({
+        status: 1,
+        stdout: "",
+        stderr: "HTTP 500",
+      })),
+    /cannot read release/,
+  );
+  const calls = [];
+  const run = (cmd, args) => {
+    calls.push(args.join(" "));
+    if (args.includes("Accept: application/octet-stream"))
+      return { status: 0, stdout: "{}", stderr: "" };
+    return view([{ name: "manifest.json", id: 42 }]);
+  };
+  assert.throws(() => fetchReleaseManifest("makekosmos/cortex", "1.2.3", run), /schema/);
+  assert.ok(calls.some((line) => line.endsWith("releases/assets/42")));
 });
 
 test("RELEASE_REPOS.mac points at cortex, not desktop-mac (KOS-349)", async () => {
@@ -164,6 +244,7 @@ test("RELEASE_REPOS.mac points at cortex, not desktop-mac (KOS-349)", async () =
   assert.equal(RELEASE_REPOS.win, "makekosmos/cortex");
   assert.equal(RELEASE_REPOS.mac, "makekosmos/cortex");
   assert.equal(releaseTarget("mac").channelFile, "latest-mac.yml");
+  assert.equal(releaseTarget("mac").manifestFile, "manifest.json");
   assert.notEqual(RELEASE_REPOS.mac, "makekosmos/desktop-mac");
 });
 
@@ -178,4 +259,13 @@ test("nightly mac job does not gate the Windows release job (KOS-349)", async ()
   const winBlock = workflow.split("release-mac:")[0];
   assert.match(winBlock, /needs: \[plan, smoke\]/);
   assert.doesNotMatch(winBlock, /release-mac/);
+});
+
+test("nightly mac publish waits for the Windows-created manifest.json (KOS-350)", async () => {
+  const workflow = await readFile(
+    path.join(scripts, "..", "..", ".github", "workflows", "nightly-release.yml"),
+    "utf8",
+  );
+  const macBlock = workflow.split("release-mac:")[1];
+  assert.match(macBlock, /grep -qx 'manifest\.json'/);
 });
