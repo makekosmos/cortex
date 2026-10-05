@@ -6,11 +6,11 @@
 // Shape: `{ "win": "x.y.z", "mac": "x.y.z" }`. One product, one version
 // (KOS-233): both pins carry the Mundus product version. They are still two
 // publish channels. `planRelease` reads only `win`, and a Windows nightly
-// publishes no mac artifact, so a mac repo can never block a Windows release.
+// mac publish is a separate nightly job that must not gate Windows (KOS-349).
 // `release-plan.mjs set` (no `--platform`) moves `mac` with `win` when the
 // key is already present, and does not invent it when it is absent. `mac` is
-// what a future makekosmos/desktop-mac publish would ship; 0.5.1 was only the
-// last tag on that repo before the channel was removed, not a second product.
+// what the macOS cortex publish ships (KOS-349); 0.5.1 was only the last
+// makekosmos/desktop-mac tag before that repo was deleted, not a second product.
 // The "win" key is what the nightly workflow, `runtime/crates/pe-version-info`
 // (product_version, used by runtime/build.rs and manager-gpui/build.rs) and
 // older checkouts read by name. Packaged builds inject it as

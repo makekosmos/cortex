@@ -70,26 +70,29 @@ test("assertVersionIsPublishable passes when the repo has no releases yet", asyn
   );
 });
 
-test("mac publishability is the desktop-mac repo and does not consult cortex", async () => {
+test("mac publishability consults cortex and allows the same product version (KOS-349)", async () => {
   const seen = [];
   const fetchImpl = async (url) => {
     seen.push(url);
-    return { ok: true, json: async () => [{ tag_name: "v0.5.1" }] };
+    return { ok: true, json: async () => [{ tag_name: "v0.10.4" }] };
   };
+  await assert.doesNotReject(() =>
+    assertVersionIsPublishable({ platform: "mac", version: "0.10.4", fetchImpl }),
+  );
   await assert.rejects(
-    () => assertVersionIsPublishable({ platform: "mac", version: "0.5.1", fetchImpl }),
-    /must be greater than the latest published 0\.5\.1 on makekosmos\/desktop-mac/,
+    () => assertVersionIsPublishable({ platform: "mac", version: "0.10.3", fetchImpl }),
+    /must be greater than or equal to the latest published 0\.10\.4 on makekosmos\/cortex/,
   );
   assert.deepEqual(seen, [
-    "https://api.github.com/repos/makekosmos/desktop-mac/releases?per_page=100",
+    "https://api.github.com/repos/makekosmos/cortex/releases?per_page=100",
+    "https://api.github.com/repos/makekosmos/cortex/releases?per_page=100",
   ]);
 });
 
-test("mac preflight returns before the Windows engine check", async () => {
+test("mac preflight derives a BOM and skips the Windows engine check", async () => {
   const source = await readFile(path.join(import.meta.dirname, "release-preflight.mjs"), "utf8");
-  const macReturn = source.indexOf('if (platform === "mac") return');
-  const engine = source.indexOf("verifyEngineArtifact(version, commit);");
-  assert.ok(macReturn > 0 && engine > macReturn);
+  assert.match(source, /if \(platform === "win"\) verifyEngineArtifact/);
+  assert.doesNotMatch(source, /if \(platform === "mac"\) return/);
 });
 
 test("assertVersionIsPublishable surfaces a clear error when the check is unreachable (KOS-233)", async () => {

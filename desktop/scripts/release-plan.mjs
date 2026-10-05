@@ -7,13 +7,13 @@
 // publish step failed stays retryable on the next run.
 //
 // Cortex has no tags for releases cut before this pipeline existed, so the diff
-// baseline is the source commit recorded in the published release's receipt
-// (`release-receipt.v2.json`, uploaded as a release asset by
-// publish-release.mjs → build-desktop.mjs).
+// baseline is the source commit recorded in the published release's BOM
+// (`release-bom.v2.json`). Releases published before KOS-349 also carried a
+// verification receipt; that remains a fallback so history still plans.
 //
 // Library API (all pure or dependency-injected for tests):
 //   parseStableVersion(v)         → { major, minor, patch } | throws
-//   latestPublishedRelease(list)  → { tag, version, receiptAssetId } | null
+//   latestPublishedRelease(list)  → { tag, version, bomAssetId, receiptAssetId } | null
 //   nextReleaseVersion(current, previous, changed) → "X.Y.Z" | null (skip)
 //   nextBuildVersion({ run, currentVersion, repo }) → "X.Y.Z" — see below
 //   planRelease({ run, currentVersion, repo })     → plan object
@@ -47,6 +47,7 @@ import { appendFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { RELEASE_BOM_FILE } from "./release-bom.mjs";
 import { RELEASE_RECEIPT_FILE } from "./release-receipt.mjs";
 import { RELEASE_REPOS } from "./release-repos.mjs";
 import {
@@ -82,11 +83,12 @@ export function latestPublishedRelease(releases) {
     if (release.draft || release.prerelease) continue;
     const match = STABLE_TAG.exec(String(release.tag_name ?? ""));
     if (!match) continue;
+    const assets = release.assets ?? [];
     const candidate = {
       tag: release.tag_name,
       version: `${match[1]}.${match[2]}.${match[3]}`,
-      receiptAssetId: (release.assets ?? []).find((asset) => asset.name === RELEASE_RECEIPT_FILE)
-        ?.id,
+      bomAssetId: assets.find((asset) => asset.name === RELEASE_BOM_FILE)?.id,
+      receiptAssetId: assets.find((asset) => asset.name === RELEASE_RECEIPT_FILE)?.id,
     };
     if (
       !best ||
@@ -129,14 +131,33 @@ function must(result, description) {
   return result.stdout;
 }
 
-// Source commit the published release was built from, taken from its uploaded
-// verification receipt. A release without a receipt fails loudly — silently
-// falling back to "release everything" would turn a corrupt baseline into an
-// unwanted publish.
+// Source commit the published release was built from. Prefer the BOM
+// (KOS-349 publish set); fall back to a pre-KOS-349 verification receipt so
+// existing cortex releases still plan. A release with neither fails loudly.
 function baselineCommit(run, repo, baseline) {
+  if (baseline.bomAssetId !== undefined) {
+    const raw = must(
+      run("gh", [
+        "api",
+        "-H",
+        "Accept: application/octet-stream",
+        `repos/${repo}/releases/assets/${baseline.bomAssetId}`,
+      ]),
+      `download ${RELEASE_BOM_FILE} for ${baseline.tag}`,
+    );
+    const bom = JSON.parse(raw);
+    const commit = bom?.source?.commit;
+    if (!/^[0-9a-f]{40}$/.test(String(commit ?? "")))
+      throw new Error(`${RELEASE_BOM_FILE} of ${baseline.tag} has no valid source.commit`);
+    if (bom.release?.version !== baseline.version)
+      throw new Error(
+        `${RELEASE_BOM_FILE} of ${baseline.tag} records version ${bom.release?.version}`,
+      );
+    return commit;
+  }
   if (baseline.receiptAssetId === undefined)
     throw new Error(
-      `latest published release ${baseline.tag} has no ${RELEASE_RECEIPT_FILE} asset — cannot determine its source commit`,
+      `latest published release ${baseline.tag} has no ${RELEASE_BOM_FILE} (or legacy ${RELEASE_RECEIPT_FILE}) asset — cannot determine its source commit`,
     );
   const raw = must(
     run("gh", [

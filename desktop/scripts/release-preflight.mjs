@@ -85,7 +85,19 @@ export async function assertVersionIsPublishable({ platform, version, fetchImpl 
       `could not read the published ${repo} releases (HTTP ${response.status}) — pass --local for an offline/local build`,
     );
   const latest = latestPublishedRelease(await response.json())?.version;
-  if (latest && compareSemver(version, latest) <= 0)
+  if (!latest) return;
+  const order = compareSemver(version, latest);
+  // Windows creates a new cortex release and must be strictly newer.
+  // macOS attaches assets to the same product version (KOS-349), so equal
+  // is allowed; only a downgrade fails.
+  if (platform === "mac") {
+    if (order < 0)
+      throw new Error(
+        `release version ${version} must be greater than or equal to the latest published ${latest} on ${repo}`,
+      );
+    return;
+  }
+  if (order <= 0)
     throw new Error(
       `release version ${version} must be greater than the latest published ${latest} on ${repo}`,
     );
@@ -115,18 +127,19 @@ export async function runReleasePreflight({ platform, local = false }) {
   // Each channel reads its own pin. A mac preflight never loads the win
   // version, and the win path below never loads mac.
   const version = readReleaseVersion({ platform });
-  ensureCleanSource();
+  // Local / CI handoff builds (MUNDUS_RELEASE_LOCAL) may bump the pin on a
+  // detached plan.sha without committing — skip the clean-tree gate.
+  if (!local) ensureCleanSource();
   const commit = currentCommit();
   if (!local) {
     assertBuildingFromMain(path.resolve(SHELL_ROOT, ".."));
     await assertVersionIsPublishable({ platform, version });
   }
-  // The Windows installer is the only packaged artifact. Mac stops after the
-  // channel pin check: there is no mac Engine payload and no mac BOM, so a
-  // mac version can never fail the Windows build that calls this with "win".
-  if (platform === "mac") return { platform, version, currentCommit: commit, bom: null };
+  // KOS-349: both win and mac derive a platform BOM. Windows still verifies
+  // the staged Engine payload under .tmp/engine.next; mac packaging reads
+  // cargo release binaries directly, so the Engine manifest check is win-only.
   const bom = await deriveReleaseBom(path.resolve(SHELL_ROOT, ".."), platform, commit);
-  verifyEngineArtifact(version, commit);
+  if (platform === "win") verifyEngineArtifact(version, commit);
   return { platform, version, currentCommit: commit, bom };
 }
 

@@ -16,7 +16,7 @@
 //   node scripts/verify-release-channel.mjs                  # win, version from the pinned release version
 //   node scripts/verify-release-channel.mjs 0.5.3            # win, explicit version (positional, backward-compat)
 //   node scripts/verify-release-channel.mjs --platform win
-//   node scripts/verify-release-channel.mjs --platform mac   # desktop-mac / latest-mac.yml
+//   node scripts/verify-release-channel.mjs --platform mac   # cortex / latest-mac.yml
 //   node scripts/verify-release-channel.mjs --version 0.5.3
 //   node scripts/verify-release-channel.mjs --repo owner/name   # bridge-run override
 //   pnpm run verify:channel
@@ -29,7 +29,7 @@
 //   4. package.json.version (last fallback)
 //
 // Repo and channel file come from release-repos.mjs (win → makekosmos/cortex
-// / latest.yml, mac → makekosmos/desktop-mac / latest-mac.yml). --repo
+// / latest.yml, mac → makekosmos/cortex / latest-mac.yml). --repo
 // overrides the repo for bridge runs and does not change the channel file.
 // Omitting --platform stays on win, which is what publish-release.mjs calls.
 //
@@ -364,7 +364,7 @@ async function main() {
       `Failed to download ${channelFile} after ${MAX_RETRIES} attempts: ${err.message}\n\n` +
         `Fix: ensure the release ${tag} exists on ${ownerRepo} and ${channelFile} was published.` +
         (platform === "mac"
-          ? `\nNote: makekosmos/desktop-mac is a separate repo from the Windows feed.`
+          ? `\nNote: macOS assets publish to makekosmos/cortex as latest-mac.yml (KOS-349).`
           : ``),
     );
   }

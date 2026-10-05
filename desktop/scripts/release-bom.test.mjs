@@ -72,9 +72,23 @@ test("the real repository pins derive a valid BOM", async () => {
 
 test("an unknown platform or a malformed commit is rejected", async () => {
   const root = await fixture();
-  await assert.rejects(() => deriveReleaseBom(root, "mac", COMMIT), /Unknown platform "mac"/);
+  await assert.rejects(() => deriveReleaseBom(root, "linux", COMMIT), /Unknown platform "linux"/);
   await assert.rejects(() => deriveReleaseBom(root, "win", "abc"), /40-character/);
   await assert.rejects(() => deriveReleaseBom(root, "win", "A".repeat(40)), /40-character/);
+});
+
+test("mac derives a BOM with the apple silicon target (KOS-349)", async () => {
+  const root = await fixture();
+  // fixture only writes win; add the mac pin at the same product version.
+  const { writeFile } = await import("node:fs/promises");
+  await writeFile(
+    path.join(root, "desktop", "release-versions.json"),
+    JSON.stringify({ win: "0.10.0", mac: "0.10.0" }),
+  );
+  const mac = await deriveReleaseBom(root, "mac", COMMIT);
+  assert.equal(mac.value.id, "mundus-desktop-0.10.0-mac");
+  assert.equal(mac.value.release.platform, "mac");
+  assert.equal(mac.value.source.toolchain.target, "aarch64-apple-darwin");
 });
 
 test("every pin must be present and semantic", async () => {

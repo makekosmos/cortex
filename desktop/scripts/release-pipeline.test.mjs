@@ -53,13 +53,11 @@ test("publish is a receipt consumer and never invokes build or package", async (
   assert.match(publish, /verifyReceiptArtifacts/);
   assert.match(publish, /assertExactArtifactSet/);
   assert.match(publish, /assertReceiptMatchesBom/);
-  assert.match(publish, /release create/);
+  assert.match(publish, /"release",\n        "create"/);
   assert.ok(publish.indexOf("if (dryRun) return") < publish.lastIndexOf("duplicateRelease("));
-  assert.ok(publish.indexOf("if (dryRun) return") < publish.indexOf('"release",\n      "create"'));
-  assert.ok(
-    publish.indexOf('"release",\n      "create"') <
-      publish.lastIndexOf("verify-release-channel.mjs"),
-  );
+  const createAt = publish.indexOf('"release",\n        "create"');
+  assert.ok(publish.indexOf("if (dryRun) return") < createAt);
+  assert.ok(createAt < publish.lastIndexOf("verify-release-channel.mjs"));
 });
 
 // The only publish target is makekosmos/cortex; the KOS-304 bridge flag is
@@ -74,7 +72,7 @@ test("publish targets: the removed --also-bridge-repo flag dies", async () => {
 test("the duplicate-release probe runs before the create", async () => {
   const publish = await readFile(path.join(scripts, "publish-release.mjs"), "utf8");
   const probes = publish.indexOf("duplicateRelease(repository, version)");
-  const create = publish.indexOf('"release",\n      "create"');
+  const create = publish.indexOf('"release",\n        "create"');
   assert.ok(probes >= 0 && create > probes);
 });
 
@@ -145,4 +143,39 @@ test("receipt validation rejects mutation and stale inputs", async () => {
   assert.throws(() => normalizeArtifactPath("./installer.exe"), /canonical/i);
   assert.throws(() => normalizeArtifactPath("installer/../installer.exe"), /canonical/i);
   assert.throws(() => normalizeArtifactPath("installer\\alias.exe"), /canonical/i);
+});
+
+test("publish uploads installer + bom + channel yml and never provenance/receipt (KOS-349)", async () => {
+  const publish = await readFile(path.join(scripts, "publish-release.mjs"), "utf8");
+  assert.match(publish, /publishAssetPaths/);
+  assert.doesNotMatch(publish, /release-provenance\.json/);
+  assert.match(publish, /RELEASE_BOM_FILE/);
+  // Receipt is a local handoff input, not a release asset.
+  assert.ok(
+    publish.includes("release-receipt") ||
+      publish.includes("RELEASE_RECEIPT") ||
+      publish.includes("receipt"),
+  );
+  assert.match(publish, /"release", "upload"/);
+});
+
+test("RELEASE_REPOS.mac points at cortex, not desktop-mac (KOS-349)", async () => {
+  const { RELEASE_REPOS, releaseTarget } = await import("./release-repos.mjs");
+  assert.equal(RELEASE_REPOS.win, "makekosmos/cortex");
+  assert.equal(RELEASE_REPOS.mac, "makekosmos/cortex");
+  assert.equal(releaseTarget("mac").channelFile, "latest-mac.yml");
+  assert.notEqual(RELEASE_REPOS.mac, "makekosmos/desktop-mac");
+});
+
+test("nightly mac job does not gate the Windows release job (KOS-349)", async () => {
+  const workflow = await readFile(
+    path.join(scripts, "..", "..", ".github", "workflows", "nightly-release.yml"),
+    "utf8",
+  );
+  assert.match(workflow, /release-mac:/);
+  assert.match(workflow, /needs: \[plan\]/);
+  // Windows release must not need release-mac.
+  const winBlock = workflow.split("release-mac:")[0];
+  assert.match(winBlock, /needs: \[plan, smoke\]/);
+  assert.doesNotMatch(winBlock, /release-mac/);
 });
