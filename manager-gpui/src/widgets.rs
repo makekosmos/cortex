@@ -8,10 +8,10 @@ use gpui_component::InteractiveElementExt;
 use imago_gpui::chrome::{self, SIDEBAR_W};
 
 pub use crate::button::{btn, btn_id};
-pub use crate::toggle::toggle;
 pub use crate::page_layout::{
     card, empty, input_field, kv, page_sections, page_stack, row, row_copy, section, section_group,
 };
+pub use crate::toggle::toggle;
 pub use mundus_gpui_kit::widgets::*;
 
 use crate::app::ManagerApp;

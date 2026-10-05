@@ -134,7 +134,6 @@ fn every_reorganized_page_names_its_controls(cx: &mut TestAppContext) {
             crate::app::Slot::Ready(json!({"settings":{
             "accent_source":"custom","accent_color":"#FFFFFF","font_size":18}})),
         );
-        app.appearance.font_menu_open = true;
         cx.notify();
     });
     for view in crate::views::NAV_GROUPS
@@ -145,6 +144,14 @@ fn every_reorganized_page_names_its_controls(cx: &mut TestAppContext) {
             app.view = *view;
             cx.notify();
         });
+        // The font menu's interactive options need a11y names too: open it
+        // the way a user would while the Appearance page is up.
+        if *view == crate::views::View::Appearance {
+            if let Some(bounds) = cx.debug_bounds("appearance-font-picker") {
+                cx.simulate_click(bounds.center(), Default::default());
+                cx.run_until_parked();
+            }
+        }
         let tree = a11y_tree(cx);
         for (role, node) in nodes(&tree) {
             if INTERACTIVE_ROLES.contains(&role.as_str()) {

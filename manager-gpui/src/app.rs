@@ -70,6 +70,7 @@ pub struct ManagerApp {
     pub sidebar_target: f32,
     pub sidebar_stamp: Instant,
     pub appearance: crate::appearance_state::Appearance,
+    pub appearance_editor: Entity<imago_gpui::appearance_editor::AppearanceEditor>,
     pub dev_fps: bool,
     pub fps_view: Entity<FpsOverlay>,
     worker: Worker,
@@ -134,6 +135,16 @@ impl ManagerApp {
             sidebar_target: 1.0,
             sidebar_stamp: Instant::now(),
             appearance: crate::appearance_state::Appearance::new(cx),
+            appearance_editor: {
+                let app = cx.weak_entity();
+                cx.new(|cx| {
+                    imago_gpui::appearance_editor::AppearanceEditor::new(cx, move |params, cx| {
+                        let _ = app.update(cx, |app, cx| {
+                            crate::views::appearance::patch(app, params, cx);
+                        });
+                    })
+                })
+            },
             dev_fps: std::env::var("MANAGER_FPS").is_ok(),
             fps_view: {
                 let manager = cx.weak_entity();

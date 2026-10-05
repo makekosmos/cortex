@@ -75,14 +75,6 @@ pub fn panel_fill() -> Hsla {
     }
 }
 
-pub fn menu_fill() -> Hsla {
-    if is_glass() {
-        rgba(CARD(), 0.72)
-    } else {
-        c(CARD())
-    }
-}
-
 pub fn apply(profile: &Resolved, window: &Window, cx: &mut App) {
     imago_gpui::theme::set_mode(profile.dark);
     imago_gpui::theme::set_theme(profile.theme_index);
