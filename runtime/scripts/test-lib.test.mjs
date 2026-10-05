@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { openGateTmp, reportGateTmpSweep, sweepGateTmp } from "./gate-tmp.mjs";
+import { aliasGateTmp, openGateTmp, reportGateTmpSweep, sweepGateTmp } from "./gate-tmp.mjs";
 
 // Each test gets its own scratch dir and removes it afterwards, so the
 // contract tests for "never leak into %TEMP%" do not leak into it themselves.
@@ -57,4 +57,20 @@ test("sweepGateTmp refuses to delete anything outside <target>/gate-tmp", (t) =>
   const outside = scratch(t, "gate-tmp-outside-");
   assert.throws(() => sweepGateTmp(target, outside), /not under/);
   assert.ok(existsSync(outside));
+});
+
+test("aliasGateTmp gives Unix a short link into the run dir and keeps Windows as is", (t) => {
+  // mbx binds its cache socket under TMPDIR; the real run dir of a deeply
+  // nested checkout overflows SUN_LEN, so Unix gets a short alias instead.
+  const target = scratch(t, "gate-tmp-target-");
+  const root = scratch(t, "gate-tmp-alias-");
+  const dir = openGateTmp(target, 7);
+  assert.equal(aliasGateTmp(dir, 7, { platform: "win32", root }).path, dir);
+  const alias = aliasGateTmp(dir, 7, { platform: "darwin", root });
+  assert.equal(alias.path, join(root, "cortex-gate-7"));
+  assert.equal(realpathSync(alias.path), realpathSync(dir));
+  writeFileSync(join(alias.path, ".tmpViaAlias"), "x");
+  alias.release();
+  assert.ok(!existsSync(alias.path));
+  assert.deepEqual(sweepGateTmp(target, dir), [{ name: ".tmpViaAlias", contents: [] }]);
 });

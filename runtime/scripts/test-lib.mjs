@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
-import { openGateTmp, reportGateTmpSweep } from "./gate-tmp.mjs";
+import { aliasGateTmp, openGateTmp, reportGateTmpSweep } from "./gate-tmp.mjs";
 
 const cortex = resolve(import.meta.dirname, "..", "..");
 const target = process.env.CARGO_TARGET_DIR
@@ -14,13 +14,20 @@ const bridge = executable("ark-markdown-bridge");
 // invocation gets a fresh per-run scratch dir as TMP/TEMP/TMPDIR, swept and
 // reported once the test processes have exited and released their handles.
 const gateTmp = openGateTmp(target, process.pid);
+const gateTmpAlias = aliasGateTmp(gateTmp, process.pid);
 process.on("exit", (code) => {
+  gateTmpAlias.release();
   if (reportGateTmpSweep(target, gateTmp) && code === 0) {
     console.error("gate tmp: leftover entries are a leak — the gate fails");
     process.exitCode = 1;
   }
 });
-const gateEnv = { ...process.env, TMP: gateTmp, TEMP: gateTmp, TMPDIR: gateTmp };
+const gateEnv = {
+  ...process.env,
+  TMP: gateTmpAlias.path,
+  TEMP: gateTmpAlias.path,
+  TMPDIR: gateTmpAlias.path,
+};
 // Cargo's default job count is used: a cold `--workspace` run took 1474 s with
 // CARGO_BUILD_JOBS=1 and 498 s with 12, and free memory stayed above 17.5 GB
 // of 32 (docs/experiments/2026-09-30-build-speed.md). Set CARGO_BUILD_JOBS to
