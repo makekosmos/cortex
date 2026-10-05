@@ -93,12 +93,14 @@ test("writeReleaseVersion preserves the other channel", async () => {
   }
 });
 
+// KOS-348: the nightly bump moves both pins together (setWinVersion), so
+// compare them against each other — freezing a literal here fails on every
+// version bump even though the parity invariant still holds.
 test("the mac pin is the same product version as win", () => {
   const root = path.resolve(import.meta.dirname, "..", "..");
   const win = readReleaseVersion({ root, platform: "win" });
   // 0.5.1 was the last makekosmos/desktop-mac tag, not a second product.
   assert.equal(readReleaseVersion({ root, platform: "mac" }), win);
-  assert.equal(win, "0.10.3");
 });
 
 // release-version.mjs is the single owner of desktop/release-versions.json:

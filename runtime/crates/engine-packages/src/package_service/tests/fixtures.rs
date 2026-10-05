@@ -205,6 +205,49 @@ fn archive_with_versioned_manifest_and_documents(
     (path, hash, bytes.len() as u64)
 }
 
+// KOS-348: `CARGO_BIN_EXE_ark-markdown-bridge` is only set for bins owned by
+// the package under test, and the bridge bin lives in `engine`, so
+// engine-packages tests always fall back to the artifact test-lib.mjs builds
+// beforehand. That lands in the workspace `target/debug` (or
+// CARGO_TARGET_DIR) — not `../target` next to this crate, which resolves to
+// `runtime/crates/target` and is what broke the nightly full gate.
+#[cfg(any(test, windows))]
+fn bridge_binary_path() -> PathBuf {
+    option_env!("CARGO_BIN_EXE_ark-markdown-bridge")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            bridge_binary_path_in(
+                std::env::var_os("CARGO_TARGET_DIR").map(PathBuf::from),
+                Path::new(env!("CARGO_MANIFEST_DIR")),
+            )
+        })
+}
+
+#[cfg(any(test, windows))]
+fn bridge_binary_path_in(target_dir: Option<PathBuf>, manifest_dir: &Path) -> PathBuf {
+    target_dir
+        .unwrap_or_else(|| workspace_root(manifest_dir).join("target"))
+        .join("debug")
+        .join(format!(
+            "ark-markdown-bridge{}",
+            std::env::consts::EXE_SUFFIX
+        ))
+}
+
+/// Nearest ancestor of `manifest_dir` whose Cargo.toml declares `[workspace]`.
+#[cfg(any(test, windows))]
+fn workspace_root(manifest_dir: &Path) -> PathBuf {
+    for dir in manifest_dir.ancestors() {
+        if fs::read_to_string(dir.join("Cargo.toml"))
+            .map(|toml| toml.contains("[workspace]"))
+            .unwrap_or(false)
+        {
+            return dir.to_path_buf();
+        }
+    }
+    manifest_dir.join("../../..")
+}
+
 #[cfg(windows)]
 fn archive_bridge_binary(
     root: &Path,
@@ -214,14 +257,7 @@ fn archive_bridge_binary(
     // Set when the fixture feature built the bin in this test run;
     // `cargo test --lib` skips bins, so fall back to the artifact
     // test-lib.mjs builds beforehand (honouring CARGO_TARGET_DIR).
-    let binary = option_env!("CARGO_BIN_EXE_ark-markdown-bridge")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            std::env::var_os("CARGO_TARGET_DIR")
-                .map(PathBuf::from)
-                .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../target"))
-                .join("debug/ark-markdown-bridge.exe")
-        });
+    let binary = bridge_binary_path();
     assert!(
         binary.is_file(),
         "build ark-markdown-bridge before this test: {binary:?}"
@@ -327,4 +363,46 @@ fn package_definition_dispatcher(
             })
         }),
     ))
+}
+
+#[cfg(test)]
+fn bridge_binary_name() -> String {
+    format!("ark-markdown-bridge{}", std::env::consts::EXE_SUFFIX)
+}
+
+#[test]
+fn bridge_binary_path_falls_back_to_workspace_target() {
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let expected = workspace_root(manifest_dir)
+        .join("target")
+        .join("debug")
+        .join(bridge_binary_name());
+    assert_eq!(bridge_binary_path_in(None, manifest_dir), expected);
+    // The pre-KOS-348 fallback resolved `../target` next to this crate
+    // (runtime/crates/target) — that split is what the nightly hit.
+    assert_ne!(
+        bridge_binary_path_in(None, manifest_dir),
+        manifest_dir
+            .join("../target")
+            .join("debug")
+            .join(bridge_binary_name())
+    );
+}
+
+#[test]
+fn bridge_binary_path_prefers_cargo_target_dir() {
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    assert_eq!(
+        bridge_binary_path_in(Some(PathBuf::from("/tmp/mbx-target")), manifest_dir),
+        PathBuf::from("/tmp/mbx-target")
+            .join("debug")
+            .join(bridge_binary_name())
+    );
+}
+
+#[test]
+fn workspace_root_finds_the_workspace_manifest() {
+    let root = workspace_root(Path::new(env!("CARGO_MANIFEST_DIR")));
+    let toml = fs::read_to_string(root.join("Cargo.toml")).expect("workspace Cargo.toml");
+    assert!(toml.contains("[workspace]"));
 }
