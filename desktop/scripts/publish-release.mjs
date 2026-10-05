@@ -1,12 +1,21 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { documentHash, requireArgs } from "./release-utils.mjs";
-import { verifyLocalReleaseChannel } from "./release-channel-local.mjs";
+import { verifyLocalReleaseManifest } from "./release-channel-local.mjs";
 import { RELEASE_BOM_FILE } from "./release-bom.mjs";
+import {
+  legacyBom,
+  legacyFeedFiles,
+  MANIFEST_CREATOR_PLATFORM,
+  manifestBytes,
+  mergeReleaseManifest,
+  parseReleaseManifest,
+  RELEASE_MANIFEST_FILE,
+} from "./release-manifest.mjs";
 import { runReleasePreflight } from "./release-preflight.mjs";
 import { releaseTarget } from "./release-repos.mjs";
 import {
@@ -16,7 +25,6 @@ import {
   verifyReceiptArtifacts,
 } from "./release-receipt.mjs";
 import { dmgName, installerName } from "./brand.mjs";
-import { readFileSync } from "node:fs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -60,21 +68,68 @@ function installerFileName(platform, version) {
 }
 
 /**
- * KOS-349 publish set: installer + channel yml + at most one bom.
- * Provenance and receipt are never uploaded.
- * When the GitHub release already exists (other platform published first),
- * skip re-uploading the bom so the release keeps a single bom file.
+ * manifest.json already attached to release v<version>, or null when the
+ * release has none yet. Fails closed on any gh/API error.
  */
-export function publishAssetPaths({ platform, version, outputDir, releaseAlreadyExists }) {
-  const { channelFile } = releaseTarget(platform);
+export function fetchReleaseManifest(repository, version, run = spawnSync) {
+  const options = {
+    cwd: ROOT,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+    env: process.env,
+  };
+  const view = run("gh", ["api", `repos/${repository}/releases/tags/v${version}`], options);
+  if (view.error) throw view.error;
+  if (view.status !== 0)
+    die(`cannot read release v${version} assets: ${view.stderr?.trim() || "gh api failed"}`);
+  const asset = (JSON.parse(view.stdout).assets ?? []).find(
+    ({ name }) => name === RELEASE_MANIFEST_FILE,
+  );
+  if (!asset) return null;
+  const raw = run(
+    "gh",
+    [
+      "api",
+      "-H",
+      "Accept: application/octet-stream",
+      `repos/${repository}/releases/assets/${asset.id}`,
+    ],
+    options,
+  );
+  if (raw.error) throw raw.error;
+  if (raw.status !== 0)
+    die(`cannot download ${RELEASE_MANIFEST_FILE} of v${version}: ${raw.stderr?.trim()}`);
+  return parseReleaseManifest(raw.stdout);
+}
+
+/**
+ * KOS-350 publish set: installer + manifest.json, plus — while
+ * DUAL_PUBLISH_LEGACY_FEEDS is on — the legacy channel yml and (Windows only)
+ * release-bom.v2.json, all rendered from that manifest. Provenance and
+ * receipt are never uploaded. When the GitHub release already exists, the
+ * bom is not re-uploaded so the release keeps a single bom file.
+ * `manifestPath` is the merged manifest when the release already had one.
+ */
+export function publishAssetPaths({
+  platform,
+  version,
+  outputDir,
+  releaseAlreadyExists,
+  manifestPath = path.join(outputDir, RELEASE_MANIFEST_FILE),
+  dual,
+}) {
   const installer = path.join(outputDir, installerFileName(platform, version));
-  const channel = path.join(outputDir, channelFile);
-  const bom = path.join(outputDir, RELEASE_BOM_FILE);
-  for (const file of [installer, channel, bom]) {
+  const legacy = legacyFeedFiles(platform, dual === undefined ? {} : { dual }).map((name) =>
+    path.join(outputDir, name),
+  );
+  for (const file of [installer, manifestPath, ...legacy]) {
     if (!existsSync(file)) die(`missing publish artifact: ${file}`);
   }
-  if (releaseAlreadyExists) return [installer, channel];
-  return [installer, channel, bom];
+  const uploads = releaseAlreadyExists
+    ? legacy.filter((file) => path.basename(file) !== RELEASE_BOM_FILE)
+    : legacy;
+  return [installer, manifestPath, ...uploads];
 }
 
 function ghRelease(args, dryRun) {
@@ -101,7 +156,7 @@ export async function main() {
   if (args["also-bridge-repo"] !== undefined)
     die("--also-bridge-repo was removed: makekosmos/desktop is deleted (KOS-316)");
 
-  const { repo: repository, channelFile } = releaseTarget(platform);
+  const { repo: repository } = releaseTarget(platform);
   const receiptPath = path.resolve(args.receipt);
   const receipt = await readReceipt(receiptPath);
   // --local / MUNDUS_RELEASE_LOCAL: mac nightly builds off plan.sha with a
@@ -117,26 +172,62 @@ export async function main() {
     bom,
   });
   const outputDir = path.dirname(receiptPath);
-  const bomCopy = path.join(outputDir, RELEASE_BOM_FILE);
-  if (documentHash(readFileSync(bomCopy)) !== bom.digest)
+  // manifest.json is the source of truth: its entry must describe this
+  // commit's installer, and the BOM it encodes must be the one derived from
+  // HEAD. During dual-publish the legacy feeds are checked against it too.
+  const localManifest = verifyLocalReleaseManifest(outputDir, version, platform);
+  if (localManifest.platforms[platform].commit !== commit)
+    die(`${RELEASE_MANIFEST_FILE} was built from another commit than HEAD`);
+  if (legacyBom(localManifest, platform).digest !== bom.digest)
+    die(`${RELEASE_MANIFEST_FILE} does not match the BOM derived from HEAD`);
+  const legacyFiles = legacyFeedFiles(platform);
+  if (
+    legacyFiles.includes(RELEASE_BOM_FILE) &&
+    documentHash(readFileSync(path.join(outputDir, RELEASE_BOM_FILE))) !== bom.digest
+  )
     die("release BOM copy does not match the BOM derived from HEAD");
-  verifyLocalReleaseChannel(outputDir, version, platform);
 
-  // Local receipt lists installer + channel + bom. Provenance/receipt are not
-  // part of the published asset set (KOS-349).
+  // Local receipt lists installer + manifest (+ legacy feeds). Provenance /
+  // receipt are not part of the published asset set (KOS-349).
   assertExactArtifactSet(receipt, [
     installerFileName(platform, version),
-    channelFile,
-    RELEASE_BOM_FILE,
+    RELEASE_MANIFEST_FILE,
+    ...legacyFiles,
   ]);
   await verifyReceiptArtifacts(receipt, outputDir);
 
   const alreadyExists = dryRun ? false : releaseExists(repository, version);
+  if (platform !== MANIFEST_CREATOR_PLATFORM && !alreadyExists && !dryRun)
+    die(
+      `${platform} publish requires cortex release v${version} to exist first (created by the Windows publish job)`,
+    );
+  let manifestPath;
+  if (alreadyExists) {
+    // Merge into the release's manifest so neither platform drops the
+    // other's entry; macOS never rewrites the Windows-owned fields.
+    const merged = mergeReleaseManifest(
+      fetchReleaseManifest(repository, version),
+      localManifest,
+      platform,
+    );
+    const mergeDir = path.join(outputDir, "publish-manifest");
+    mkdirSync(mergeDir, { recursive: true });
+    manifestPath = path.join(mergeDir, RELEASE_MANIFEST_FILE);
+    writeFileSync(manifestPath, manifestBytes(merged));
+    console.log(
+      `[publish-release] merged ${RELEASE_MANIFEST_FILE} platforms: ${Object.keys(merged.platforms).sort().join(", ")}`,
+    );
+  } else if (dryRun && platform !== MANIFEST_CREATOR_PLATFORM) {
+    console.log(
+      `[publish-release] dry run: would merge platforms.${platform} into the v${version} ${RELEASE_MANIFEST_FILE}`,
+    );
+  }
   const files = publishAssetPaths({
     platform,
     version,
     outputDir,
     releaseAlreadyExists: alreadyExists,
+    manifestPath,
   });
   console.log(
     `[publish-release] verified local artifacts; uploading ${files.map((f) => path.basename(f)).join(", ")}`,
@@ -150,11 +241,8 @@ export async function main() {
   if (platform === "mac") {
     // Mac never creates the GitHub release or tag — that is Windows' job —
     // so the two cannot race on refs/tags/vX. The nightly mac job waits for
-    // the release to exist, then attaches DMG + latest-mac.yml.
-    if (!alreadyExists)
-      die(
-        `macOS publish requires cortex release v${version} to exist first (created by the Windows publish job)`,
-      );
+    // the release (and its manifest.json) to exist, then attaches the DMG and
+    // the merged manifest (+ latest-mac.yml during dual-publish).
     ghRelease(
       ["release", "upload", `v${version}`, ...files, "--repo", repository, "--clobber"],
       false,
@@ -179,7 +267,7 @@ export async function main() {
         "--title",
         `Mundus ${version}`,
         "--notes",
-        "Mundus desktop release (installers + bom + updater channel).",
+        "Mundus desktop release (installers + manifest.json).",
       ],
       false,
     );

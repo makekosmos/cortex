@@ -1,4 +1,7 @@
-//! Parser for electron-builder's `latest.yml` channel file. Same flat format
+//! Parser for the legacy electron-builder `latest.yml` / `latest-mac.yml`
+//! channel file — only read while the KOS-350 dual-publish window is open
+//! (`feed::LEGACY_FEED_FALLBACK`); `release_manifest.rs` parses the primary
+//! `manifest.json`. Same flat format
 //! `desktop/scripts/verify-release-channel.mjs` hand-parses on the release
 //! side (see `parseLatestYmlByHand` there) — ported to Rust rather than
 //! pulling in a YAML crate, since the format is fixed and small:

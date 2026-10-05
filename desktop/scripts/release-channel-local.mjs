@@ -2,6 +2,12 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { releaseTarget } from "./release-repos.mjs";
+import {
+  DUAL_PUBLISH_LEGACY_FEEDS,
+  legacyChannelProblems,
+  parseReleaseManifest,
+  RELEASE_MANIFEST_FILE,
+} from "./release-manifest.mjs";
 
 function scalar(value) {
   return value.trim().replace(/^(?:"([^"]*)"|'([^']*)')$/, "$1$2");
@@ -11,10 +17,45 @@ function sha512(file) {
   return createHash("sha512").update(readFileSync(file)).digest("base64");
 }
 
-// `platform` defaults to win so the Windows publish path (publish-release.mjs,
-// build-desktop.mjs) keeps checking latest.yml and nothing else. Mac checks
-// latest-mac.yml in its own output directory; this function never looks at
-// the other platform's file.
+// KOS-350: manifest.json is the release source of truth. Checks the local
+// manifest's entry for `platform` against the installer bytes and, during the
+// dual-publish window, that the legacy channel yml says exactly the same.
+// Returns the parsed manifest.
+export function verifyLocalReleaseManifest(
+  outputDir,
+  expectedVersion,
+  platform = "win",
+  { dual = DUAL_PUBLISH_LEGACY_FEEDS } = {},
+) {
+  const manifest = parseReleaseManifest(
+    readFileSync(path.join(outputDir, RELEASE_MANIFEST_FILE), "utf8"),
+  );
+  if (manifest.version !== expectedVersion)
+    throw new Error(`${RELEASE_MANIFEST_FILE} version ${manifest.version} != ${expectedVersion}`);
+  const entry = manifest.platforms[platform];
+  if (!entry) throw new Error(`${RELEASE_MANIFEST_FILE} has no ${platform} entry`);
+  const artifact = path.join(outputDir, entry.file);
+  if (
+    !existsSync(artifact) ||
+    statSync(artifact).size !== entry.size ||
+    sha512(artifact) !== entry.sha512
+  )
+    throw new Error(`${RELEASE_MANIFEST_FILE} artifact mismatch: ${entry.file}`);
+  if (dual) {
+    const channel = verifyLocalReleaseChannel(outputDir, expectedVersion, platform);
+    const problems = legacyChannelProblems(manifest, platform, channel);
+    if (problems.length > 0)
+      throw new Error(
+        `${releaseTarget(platform).channelFile} drifted from ${RELEASE_MANIFEST_FILE}: ${problems.join("; ")}`,
+      );
+  }
+  return manifest;
+}
+
+// Legacy channel yml check (dual-publish window). `platform` defaults to win
+// (latest.yml); mac checks latest-mac.yml in its own output directory; this
+// function never looks at the other platform's file. Returns the parsed
+// { version, files } so callers can compare it with manifest.json.
 export function verifyLocalReleaseChannel(outputDir, expectedVersion, platform = "win") {
   const { channelFile: channelName } = releaseTarget(platform);
   const document = readFileSync(path.join(outputDir, channelName), "utf8");
@@ -76,4 +117,8 @@ export function verifyLocalReleaseChannel(outputDir, expectedVersion, platform =
   const primary = scalar(primaryName);
   if (!seen.has(primary) || sha512(path.join(outputDir, primary)) !== primaryHash)
     throw new Error(`${channelName} primary artifact mismatch: ${primary}`);
+  return {
+    version: scalar(version),
+    files: files.map(({ name, sha512: hash, size }) => ({ url: name, sha512: hash, size })),
+  };
 }

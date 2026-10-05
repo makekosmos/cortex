@@ -7,13 +7,15 @@
 // publish step failed stays retryable on the next run.
 //
 // Cortex has no tags for releases cut before this pipeline existed, so the diff
-// baseline is the source commit recorded in the published release's BOM
-// (`release-bom.v2.json`). Releases published before KOS-349 also carried a
-// verification receipt; that remains a fallback so history still plans.
+// baseline is the source commit recorded in the published release's
+// `manifest.json` (KOS-350, `source.commit`). Older history falls back to the
+// BOM (`release-bom.v2.json`, KOS-349) and then to the pre-KOS-349
+// verification receipt, so every existing release still plans.
 //
 // Library API (all pure or dependency-injected for tests):
 //   parseStableVersion(v)         → { major, minor, patch } | throws
-//   latestPublishedRelease(list)  → { tag, version, bomAssetId, receiptAssetId } | null
+//   latestPublishedRelease(list)  → { tag, version, manifestAssetId, bomAssetId,
+//                                     receiptAssetId } | null
 //   nextReleaseVersion(current, previous, changed) → "X.Y.Z" | null (skip)
 //   nextBuildVersion({ run, currentVersion, repo }) → "X.Y.Z" — see below
 //   planRelease({ run, currentVersion, repo })     → plan object
@@ -48,6 +50,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { RELEASE_BOM_FILE } from "./release-bom.mjs";
+import { parseReleaseManifest, RELEASE_MANIFEST_FILE } from "./release-manifest.mjs";
 import { RELEASE_RECEIPT_FILE } from "./release-receipt.mjs";
 import { RELEASE_REPOS } from "./release-repos.mjs";
 import {
@@ -87,6 +90,7 @@ export function latestPublishedRelease(releases) {
     const candidate = {
       tag: release.tag_name,
       version: `${match[1]}.${match[2]}.${match[3]}`,
+      manifestAssetId: assets.find((asset) => asset.name === RELEASE_MANIFEST_FILE)?.id,
       bomAssetId: assets.find((asset) => asset.name === RELEASE_BOM_FILE)?.id,
       receiptAssetId: assets.find((asset) => asset.name === RELEASE_RECEIPT_FILE)?.id,
     };
@@ -131,18 +135,47 @@ function must(result, description) {
   return result.stdout;
 }
 
-// Source commit the published release was built from. Prefer the BOM
-// (KOS-349 publish set); fall back to a pre-KOS-349 verification receipt so
-// existing cortex releases still plan. A release with neither fails loudly.
+function downloadAsset(run, repo, assetId, description) {
+  return must(
+    run("gh", [
+      "api",
+      "-H",
+      "Accept: application/octet-stream",
+      `repos/${repo}/releases/assets/${assetId}`,
+    ]),
+    description,
+  );
+}
+
+// Source commit the published release was built from. Prefer manifest.json
+// (KOS-350); fall back to the BOM (KOS-349 publish set) and then to a
+// pre-KOS-349 verification receipt so older cortex releases still plan. A
+// release with none of them fails loudly.
 function baselineCommit(run, repo, baseline) {
+  if (baseline.manifestAssetId !== undefined) {
+    const raw = downloadAsset(
+      run,
+      repo,
+      baseline.manifestAssetId,
+      `download ${RELEASE_MANIFEST_FILE} for ${baseline.tag}`,
+    );
+    let manifest;
+    try {
+      manifest = parseReleaseManifest(raw);
+    } catch (error) {
+      throw new Error(`${RELEASE_MANIFEST_FILE} of ${baseline.tag} is invalid: ${error.message}`);
+    }
+    if (manifest.version !== baseline.version)
+      throw new Error(
+        `${RELEASE_MANIFEST_FILE} of ${baseline.tag} records version ${manifest.version}`,
+      );
+    return manifest.source.commit;
+  }
   if (baseline.bomAssetId !== undefined) {
-    const raw = must(
-      run("gh", [
-        "api",
-        "-H",
-        "Accept: application/octet-stream",
-        `repos/${repo}/releases/assets/${baseline.bomAssetId}`,
-      ]),
+    const raw = downloadAsset(
+      run,
+      repo,
+      baseline.bomAssetId,
       `download ${RELEASE_BOM_FILE} for ${baseline.tag}`,
     );
     const bom = JSON.parse(raw);
@@ -157,15 +190,12 @@ function baselineCommit(run, repo, baseline) {
   }
   if (baseline.receiptAssetId === undefined)
     throw new Error(
-      `latest published release ${baseline.tag} has no ${RELEASE_BOM_FILE} (or legacy ${RELEASE_RECEIPT_FILE}) asset — cannot determine its source commit`,
+      `latest published release ${baseline.tag} has no ${RELEASE_MANIFEST_FILE} (or legacy ${RELEASE_BOM_FILE} / ${RELEASE_RECEIPT_FILE}) asset — cannot determine its source commit`,
     );
-  const raw = must(
-    run("gh", [
-      "api",
-      "-H",
-      "Accept: application/octet-stream",
-      `repos/${repo}/releases/assets/${baseline.receiptAssetId}`,
-    ]),
+  const raw = downloadAsset(
+    run,
+    repo,
+    baseline.receiptAssetId,
     `download ${RELEASE_RECEIPT_FILE} for ${baseline.tag}`,
   );
   const receipt = JSON.parse(raw);

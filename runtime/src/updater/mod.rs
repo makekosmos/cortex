@@ -1,9 +1,9 @@
 //! Mundus self-update (KOS-236 "Mundus без Electron"). Ports the update half
-//! of `desktop/electron/autoupdater-host.ts` into the Engine: today Mundus
-//! Desktop updates via electron-updater running inside the Electron shell,
-//! reading `latest.yml` + an NSIS installer from the `makekosmos/cortex`
-//! GitHub releases feed. As Electron is removed, the Engine owns this flow
-//! instead — see `service.rs` for the state machine and
+//! of the former Electron autoupdater into the Engine, which owns the flow:
+//! it reads the release `manifest.json` (KOS-350; `release_manifest.rs`) —
+//! falling back to the legacy `latest.yml` during the dual-publish window
+//! (`feed.rs`) — plus the NSIS installer from the `makekosmos/cortex` GitHub
+//! releases feed. See `service.rs` for the state machine and
 //! `crate::ws_server::dispatch_standard`'s `updater.` branch for the
 //! Manager-only RPC surface (`updater.status` / `check` / `download` /
 //! `install`).
@@ -22,6 +22,7 @@ mod feed;
 mod install;
 mod manifest;
 mod ops;
+mod release_manifest;
 mod service;
 mod state;
 mod version;

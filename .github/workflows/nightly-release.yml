@@ -211,8 +211,9 @@ jobs:
 
   # KOS-349: macOS DMG publish. Depends on plan only — never on the Windows
   # smoke or release jobs — so a red Mac step cannot block the Windows
-  # installer. Shares the planned version/sha; uploads latest-mac.yml + DMG
-  # to the same cortex release (creates the release if Win has not yet).
+  # installer. Shares the planned version/sha; attaches the DMG to the same
+  # cortex release Win created and merges platforms.mac into its manifest.json
+  # (+ latest-mac.yml while dual-publish is on, KOS-350).
   release-mac:
     needs: [plan]
     if: needs.plan.outputs.release == 'true'
@@ -276,12 +277,14 @@ jobs:
         run: |
           pnpm --dir desktop run build:native:macos
           # --skip-preflight: pin was set locally on a detached plan.sha (dirty
-          # tree); still emit BOM + receipt for the publish handoff.
+          # tree); still emit manifest.json + receipt for the publish handoff.
           node desktop/scripts/build-desktop.mjs --platform mac --skip-preflight
 
-      # Win owns tag + release create. Wait so we attach DMG/latest-mac.yml
-      # without racing refs/tags/vX. Soft-fail independence: this job being
-      # red still never blocks the Windows release job.
+      # Win owns tag + release create + the release manifest.json (KOS-350).
+      # Wait until the release AND its manifest.json exist so the mac publish
+      # can merge platforms.mac into it without racing refs/tags/vX.
+      # Soft-fail independence: this job being red still never blocks the
+      # Windows release job.
       - name: Wait for cortex release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -289,14 +292,14 @@ jobs:
         run: |
           set -euo pipefail
           for i in $(seq 1 90); do
-            if gh release view "v$VERSION" --repo makekosmos/cortex >/dev/null 2>&1; then
-              echo "Release v$VERSION is published"
+            if gh release view "v$VERSION" --repo makekosmos/cortex --json assets -q '.assets[].name' 2>/dev/null | grep -qx 'manifest.json'; then
+              echo "Release v$VERSION with manifest.json is published"
               exit 0
             fi
-            echo "waiting for v$VERSION ($i/90)..."
+            echo "waiting for v$VERSION manifest.json ($i/90)..."
             sleep 20
           done
-          echo "timed out waiting for makekosmos/cortex v$VERSION" >&2
+          echo "timed out waiting for makekosmos/cortex v$VERSION manifest.json" >&2
           exit 1
 
       - name: Publish dry run

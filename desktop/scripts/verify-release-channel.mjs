@@ -1,22 +1,23 @@
 #!/usr/bin/env node
-// Verifies that a published GitHub release's channel file (latest.yml) is
-// consistent with the actual uploaded installer assets.
+// Verifies that a published GitHub release's manifest.json (KOS-350) is
+// consistent with the actual uploaded installer for one platform, that the
+// stable `releases/latest/download/manifest.json` URL resolves, and — during
+// the dual-publish window (DUAL_PUBLISH_LEGACY_FEEDS) — that the legacy
+// latest.yml / latest-mac.yml / release-bom.v2.json say exactly what the
+// manifest says.
 //
-// Background: electron-updater verifies the sha512 field in the channel file
-// against the downloaded installer before applying the update. If the release
-// was published in multiple non-atomic passes (e.g. the installer was
-// re-uploaded without regenerating the channel file), the checksums desync and
-// every client gets "sha512 checksum mismatch" — auto-update is dead for that
-// release.
-//
-// This happened on v0.5.3: the installer was re-uploaded from build B while
-// latest.yml still described build A. This script detects that exact scenario.
+// Background: the updater verifies the sha512 from the feed against the
+// downloaded installer before applying the update. If the release was
+// published in multiple non-atomic passes (e.g. the installer was re-uploaded
+// without regenerating the feed), the checksums desync and every client gets
+// "sha512 checksum mismatch" — auto-update is dead for that release. This
+// happened on v0.5.3 (installer from build B, latest.yml from build A).
 //
 // Usage:
 //   node scripts/verify-release-channel.mjs                  # win, version from the pinned release version
 //   node scripts/verify-release-channel.mjs 0.5.3            # win, explicit version (positional, backward-compat)
 //   node scripts/verify-release-channel.mjs --platform win
-//   node scripts/verify-release-channel.mjs --platform mac   # cortex / latest-mac.yml
+//   node scripts/verify-release-channel.mjs --platform mac   # cortex / platforms.mac
 //   node scripts/verify-release-channel.mjs --version 0.5.3
 //   node scripts/verify-release-channel.mjs --repo owner/name   # bridge-run override
 //   pnpm run verify:channel
@@ -28,9 +29,9 @@
 //   3. the pinned release version for that platform (release-version.mjs)
 //   4. package.json.version (last fallback)
 //
-// Repo and channel file come from release-repos.mjs (win → makekosmos/cortex
-// / latest.yml, mac → makekosmos/cortex / latest-mac.yml). --repo
-// overrides the repo for bridge runs and does not change the channel file.
+// Repo, manifest and legacy channel file come from release-repos.mjs (win →
+// makekosmos/cortex platforms.win / latest.yml, mac → platforms.mac /
+// latest-mac.yml). --repo overrides the repo and does not change the files.
 // Omitting --platform stays on win, which is what publish-release.mjs calls.
 //
 // Exit codes:
@@ -38,10 +39,10 @@
 //   1  — one or more checks FAIL
 //
 // Retry behaviour (for post-publish use):
-//   The script retries the initial channel file fetch up to MAX_RETRIES times
-//   with RETRY_DELAY_MS between attempts, so a few seconds of GH release asset
-//   propagation lag does not cause a false-fail right after `electron-builder
-//   --publish always` completes.
+//   Every feed fetch retries up to MAX_RETRIES times with RETRY_DELAY_MS
+//   between attempts, so GH release asset propagation lag (or the other
+//   platform re-uploading the merged manifest) does not false-fail right
+//   after publish.
 
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
@@ -52,6 +53,14 @@ import { spawnSync } from "node:child_process";
 import { env } from "./brand.mjs";
 import { readReleaseVersion } from "./release-version.mjs";
 import { resolveVerifyTarget } from "./verify-release-target.mjs";
+import { RELEASE_BOM_FILE } from "./release-bom.mjs";
+import {
+  DUAL_PUBLISH_LEGACY_FEEDS,
+  legacyBom,
+  legacyChannelProblems,
+  MANIFEST_CREATOR_PLATFORM,
+  parseReleaseManifest,
+} from "./release-manifest.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -319,7 +328,7 @@ async function main() {
   } catch (error) {
     die(error instanceof Error ? error.message : String(error));
   }
-  const { platform, channelFile } = request;
+  const { platform, channelFile, manifestFile } = request;
   const ownerRepo = request.repo;
 
   // ── 2. Determine version & publish config ────────────────────────────────
@@ -349,49 +358,49 @@ async function main() {
   const tag = `v${version}`;
   log(`Platform:     ${platform}`);
   log(`Verifying release ${tag} on ${ownerRepo}`);
-  log(`Channel file: ${channelFile}`);
+  log(`Manifest:     ${manifestFile}`);
+  if (DUAL_PUBLISH_LEGACY_FEEDS) log(`Legacy feed:  ${channelFile} (dual-publish)`);
   log("");
 
-  // ── 3. Download channel file (with retry for post-publish propagation lag) ─
-  const ymlUrl = `https://github.com/${ownerRepo}/releases/download/${tag}/${channelFile}`;
-  log(`Fetching ${ymlUrl} (up to ${MAX_RETRIES} attempts)...`);
-
-  let ymlText;
+  // ── 3. Download manifest.json (with retry for post-publish propagation lag)
+  // KOS-350: manifest.json is the source of truth. The other platform's
+  // publish may be re-uploading a merged manifest (--clobber) right now, so
+  // the retry also covers that short window.
+  const assetBaseUrl = `https://github.com/${ownerRepo}/releases/download/${tag}`;
+  const manifestUrl = `${assetBaseUrl}/${manifestFile}`;
+  log(`Fetching ${manifestUrl} (up to ${MAX_RETRIES} attempts)...`);
+  let manifest;
   try {
-    ymlText = await fetchTextWithRetry(ymlUrl, MAX_RETRIES, RETRY_DELAY_MS);
+    manifest = parseReleaseManifest(
+      await fetchTextWithRetry(manifestUrl, MAX_RETRIES, RETRY_DELAY_MS),
+    );
   } catch (err) {
     die(
-      `Failed to download ${channelFile} after ${MAX_RETRIES} attempts: ${err.message}\n\n` +
-        `Fix: ensure the release ${tag} exists on ${ownerRepo} and ${channelFile} was published.` +
-        (platform === "mac"
-          ? `\nNote: macOS assets publish to makekosmos/cortex as latest-mac.yml (KOS-349).`
-          : ``),
+      `Failed to read ${manifestFile} for ${tag}: ${err.message}\n\n` +
+        `Fix: ensure the release ${tag} exists on ${ownerRepo} and ${manifestFile} was published.`,
     );
   }
 
-  // ── 4. Parse channel file ──────────────────────────────────────────────────
-  const manifest = parseLatestYml(ymlText);
-  log(`${channelFile} declares version: ${manifest.version}`);
-  log(`${channelFile} file entries: ${manifest.files.length}`);
-  log("");
-
-  // ── 5. Check version field ────────────────────────────────────────────────
+  // ── 4. Check version + platform entry ─────────────────────────────────────
   let anyHardFail = false;
-
   if (manifest.version !== version) {
     console.error(
-      `${LOG_PREFIX} FAIL  version mismatch: ${channelFile} says "${manifest.version}", expected "${version}"`,
+      `${LOG_PREFIX} FAIL  version mismatch: ${manifestFile} says "${manifest.version}", expected "${version}"`,
     );
     anyHardFail = true;
   } else {
-    log(`PASS  ${channelFile} version matches: ${version}`);
+    log(`PASS  ${manifestFile} version matches: ${version}`);
   }
+  log(`${manifestFile} platforms: ${Object.keys(manifest.platforms).sort().join(", ")}`);
+  const entry = manifest.platforms[platform];
+  if (!entry) die(`${manifestFile} has no ${platform} entry — cannot verify anything.`);
+  if (manifest.source.repository !== ownerRepo)
+    warn(
+      `${manifestFile} source.repository is ${manifest.source.repository}, verifying ${ownerRepo}`,
+    );
+  log("");
 
-  if (manifest.files.length === 0) {
-    die(`${channelFile} has no files[] entries — cannot verify anything.`);
-  }
-
-  // ── 6. Fetch asset timestamps (degradable) ────────────────────────────────
+  // ── 5. Fetch asset timestamps (degradable) ────────────────────────────────
   const ghAvail = ghAvailable();
   let assetTimestamps = null;
   if (ghAvail) {
@@ -404,20 +413,12 @@ async function main() {
     warn("gh CLI not available or not authenticated — skipping timestamp desync check.");
   }
 
-  // ── 7. Per-asset verification ─────────────────────────────────────────────
-  const assetBaseUrl = `https://github.com/${ownerRepo}/releases/download/${tag}`;
+  // ── 6. Installer bytes vs manifest entry ──────────────────────────────────
   const results = [];
-
-  for (const entry of manifest.files) {
-    const { url: assetName, sha512: expectedSha, size: expectedSize } = entry;
-    log(`--- Checking: ${assetName} ---`);
-
-    if (!assetName) {
-      warn("Entry has no url field — skipping.");
-      continue;
-    }
-
+  {
+    const assetName = entry.file;
     const assetUrl = `${assetBaseUrl}/${assetName}`;
+    log(`--- Checking: ${assetName} ---`);
     let actual;
     try {
       log(`  Downloading and hashing ${assetUrl}...`);
@@ -425,47 +426,81 @@ async function main() {
     } catch (err) {
       console.error(`${LOG_PREFIX} FAIL  ${assetName}: download failed — ${err.message}`);
       anyHardFail = true;
-      results.push({ name: assetName, pass: false, reason: `download failed: ${err.message}` });
-      continue;
+      results.push({ name: assetName, pass: false });
     }
-
-    let entryPass = true;
-    const issues = [];
-
-    // SHA-512 check
-    if (expectedSha && actual.sha512 !== expectedSha) {
-      issues.push(
-        `sha512 MISMATCH:\n      ${channelFile}: ${expectedSha}\n      actual:     ${actual.sha512}`,
-      );
-      entryPass = false;
-    } else if (!expectedSha) {
-      issues.push("sha512 not present in channel file entry (cannot verify)");
-      // Not a hard fail — warn only
-    }
-
-    // Size check
-    if (
-      Object.prototype.toString.call(expectedSize) === "[object Number]" &&
-      !isNaN(expectedSize)
-    ) {
-      if (actual.size !== expectedSize) {
+    if (actual) {
+      const issues = [];
+      if (actual.sha512 !== entry.sha512)
         issues.push(
-          `size MISMATCH:\n      ${channelFile}: ${expectedSize} bytes\n      actual:     ${actual.size} bytes`,
+          `sha512 MISMATCH:\n      ${manifestFile}: ${entry.sha512}\n      actual:     ${actual.sha512}`,
         );
-        entryPass = false;
+      if (actual.size !== entry.size)
+        issues.push(
+          `size MISMATCH:\n      ${manifestFile}: ${entry.size} bytes\n      actual:     ${actual.size} bytes`,
+        );
+      if (issues.length > 0) {
+        anyHardFail = true;
+        for (const issue of issues) console.error(`${LOG_PREFIX} FAIL  ${assetName}: ${issue}`);
+      } else {
+        log(`  PASS  sha512 ✓  size ${actual.size} bytes ✓`);
       }
+      results.push({ name: assetName, pass: issues.length === 0 });
     }
+  }
 
-    if (!entryPass) {
+  // ── 7. Legacy feeds (dual-publish window) must say exactly the same ───────
+  if (DUAL_PUBLISH_LEGACY_FEEDS) {
+    log(`--- Checking legacy ${channelFile} against ${manifestFile} ---`);
+    try {
+      const channel = parseLatestYml(
+        await fetchTextWithRetry(`${assetBaseUrl}/${channelFile}`, MAX_RETRIES, RETRY_DELAY_MS),
+      );
+      const problems = legacyChannelProblems(manifest, platform, channel);
+      for (const problem of problems)
+        console.error(`${LOG_PREFIX} FAIL  ${channelFile}: ${problem}`);
+      if (problems.length === 0) log(`  PASS  ${channelFile} matches ${manifestFile}`);
+      results.push({ name: channelFile, pass: problems.length === 0 });
+      if (problems.length > 0) anyHardFail = true;
+    } catch (err) {
+      console.error(`${LOG_PREFIX} FAIL  ${channelFile}: ${err.message}`);
+      results.push({ name: channelFile, pass: false });
       anyHardFail = true;
-      for (const issue of issues) {
-        console.error(`${LOG_PREFIX} FAIL  ${assetName}: ${issue}`);
-      }
-    } else {
-      log(`  PASS  sha512 ✓  size ${actual.size} bytes ✓`);
     }
+    if (platform === MANIFEST_CREATOR_PLATFORM) {
+      log(`--- Checking legacy ${RELEASE_BOM_FILE} against ${manifestFile} ---`);
+      try {
+        const remoteBom = await fetchTextWithRetry(
+          `${assetBaseUrl}/${RELEASE_BOM_FILE}`,
+          MAX_RETRIES,
+          RETRY_DELAY_MS,
+        );
+        const pass = remoteBom === legacyBom(manifest, platform).bytes.toString("utf8");
+        if (pass) log(`  PASS  ${RELEASE_BOM_FILE} matches ${manifestFile}`);
+        else console.error(`${LOG_PREFIX} FAIL  ${RELEASE_BOM_FILE} drifted from ${manifestFile}`);
+        results.push({ name: RELEASE_BOM_FILE, pass });
+        if (!pass) anyHardFail = true;
+      } catch (err) {
+        console.error(`${LOG_PREFIX} FAIL  ${RELEASE_BOM_FILE}: ${err.message}`);
+        results.push({ name: RELEASE_BOM_FILE, pass: false });
+        anyHardFail = true;
+      }
+    }
+  }
 
-    results.push({ name: assetName, pass: entryPass, sha512: actual.sha512, size: actual.size });
+  // ── 7b. Stable URL: …/releases/latest/download/manifest.json ──────────────
+  const stableUrl = `https://github.com/${ownerRepo}/releases/latest/download/${manifestFile}`;
+  log(`--- Checking stable ${stableUrl} ---`);
+  try {
+    const latest = parseReleaseManifest(
+      await fetchTextWithRetry(stableUrl, MAX_RETRIES, RETRY_DELAY_MS),
+    );
+    if (latest.version === version) log(`  PASS  stable manifest resolves to ${version}`);
+    else warn(`stable manifest resolves to ${latest.version}, not ${version} (older release?)`);
+    results.push({ name: `latest/${manifestFile}`, pass: true });
+  } catch (err) {
+    console.error(`${LOG_PREFIX} FAIL  stable ${manifestFile}: ${err.message}`);
+    results.push({ name: `latest/${manifestFile}`, pass: false });
+    anyHardFail = true;
   }
 
   // ── 8. Timestamp desync check ─────────────────────────────────────────────
@@ -474,17 +509,14 @@ async function main() {
     log("");
     log("--- Timestamp desync analysis ---");
 
-    // Collect updated_at for each asset we verified plus the channel file itself
+    // This platform's installer + its legacy channel file came from one
+    // upload session. manifest.json is excluded: the other platform's
+    // publish legitimately re-uploads it (merged) later; its content is
+    // checked by hash above instead.
     const times = [];
-    for (const entry of manifest.files) {
-      const ts = assetTimestamps.get(entry.url);
-      if (ts) {
-        times.push({ name: entry.url, updatedAt: new Date(ts.updated_at).getTime() });
-      }
-    }
-    const ymlTs = assetTimestamps.get(channelFile);
-    if (ymlTs) {
-      times.push({ name: channelFile, updatedAt: new Date(ymlTs.updated_at).getTime() });
+    for (const name of [entry.file, ...(DUAL_PUBLISH_LEGACY_FEEDS ? [channelFile] : [])]) {
+      const ts = assetTimestamps.get(name);
+      if (ts) times.push({ name, updatedAt: new Date(ts.updated_at).getTime() });
     }
 
     if (times.length >= 2) {
@@ -560,11 +592,11 @@ async function main() {
         `${LOG_PREFIX}      (which ends with: node scripts/build-desktop.mjs --platform win)`,
       );
       console.error(
-        `${LOG_PREFIX}   4. That produces an atomic set: installer + ${channelFile} from the same build.`,
+        `${LOG_PREFIX}   4. That produces an atomic set: installer + ${manifestFile} from the same build.`,
       );
     } else {
       console.error(
-        `${LOG_PREFIX}   3. Republish ${tag} on ${ownerRepo} as one atomic upload of ${channelFile} and its artifacts.`,
+        `${LOG_PREFIX}   3. Re-run the macOS publish for ${tag}: it re-merges platforms.mac into ${manifestFile} and re-uploads its artifacts.`,
       );
       console.error(
         `${LOG_PREFIX}      The Windows installer build does not produce this channel.`,
@@ -576,7 +608,7 @@ async function main() {
     process.exit(1);
   } else {
     log("════════════════════════════════════════");
-    log(`OVERALL: PASS — all assets consistent with ${channelFile}`);
+    log(`OVERALL: PASS — all assets consistent with ${manifestFile}`);
     process.exit(0);
   }
 }
