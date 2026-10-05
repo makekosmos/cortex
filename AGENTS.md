@@ -18,6 +18,9 @@ cross-cutting documentation lives in-tree under [`docs/`](docs/).
 - Focus engine ops live in `runtime/src/focus.rs`/`pomodoro*` (the focus UI
   lives in ordo — see `docs/focus.md`).
 
+- Dev loop: `./dev-watch.sh engine` / `./dev-watch.sh manager --local-imago` (stops the installed Engine first; `--local-imago` builds against `../imago`); whole stack: `pwsh ../dev-stack.ps1`.
+- Logs: Engine `%APPDATA%\Mundus\logs\mundus-engine.<YYYY-MM-DD>` (JSON, daily; `MUNDUS_DATA_DIR` overrides; panics in `crashes\`); Manager has no log file (stderr only; dev stack tees to `../.dev-logs/manager.log`; Engine autostart output goes to `%APPDATA%\Mundus\logs\manager-engine-start.log`).
+
 ## Universal never rules
 
 - ❌ GitHub Actions workflows (`.github/workflows/**`) — орг не оплачивает hosted CI; локальные lefthook-гейты — единственные проверки. Не добавлять и не чинить workflows.
