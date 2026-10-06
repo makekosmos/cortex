@@ -32,11 +32,11 @@ futures-util.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
-ed25519-dalek = "=3.0.0-rc.0"
+ed25519-dalek.workspace = true
 semver.workspace = true
 chrono.workspace = true
 rand.workspace = true
-async-trait = "0.1"
+async-trait.workspace = true
 if-addrs = "0.13"
 hostname.workspace = true
 thiserror.workspace = true
@@ -47,7 +47,7 @@ iroh = "1.0.0"
 # Structured logging facade — host process (the Engine) installs the
 # subscriber; without one the calls are no-ops. Used for relay connectivity
 # transitions so the log keeps one warn per up/down flap (KOS-298).
-tracing = "0.1"
+tracing.workspace = true
 # Ticket-based pairing (NodeTicket/EndpointTicket) — отдельный крейт,
 # `iroh` 1.0.0 их не реэкспортирует (проверено: нет `Ticket` в src/lib.rs).
 iroh-tickets = "1.0.0"

@@ -73,7 +73,7 @@ hyper = { version = "1", features = ["http1", "server"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 http-body-util = "0.1"
 bytes = "1"
-regex = "1"
+regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 rand.workspace = true
@@ -83,35 +83,30 @@ uuid.workspace = true
 # usage_tracker module (Phase E1) — sha2 для tracked_app_id хеша.
 sha2.workspace = true
 hmac = "0.12"
-reqwest = { version = "0.13", default-features = false, features = [
-  "json",
-  "rustls",
-  "multipart",
-  "socks",
-] }
-async-trait = "0.1"
-zip = { version = "0.6", default-features = false, features = ["deflate"] }
-image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+reqwest.workspace = true
+async-trait.workspace = true
+zip.workspace = true
+image.workspace = true
 # Dictation deps (arboard, transcribe-rs/ort, hickory-resolver, libloading,
 # enigo notes) moved with the code to runtime/crates/engine-dictation (KOS-334).
 # keyring stays: package_service/integrations/secret_store.rs also uses it —
 #   без backend-feature для платформы keyring молча использует mock store —
 #   запись «успешна», но ключ не персистит.
 # base64 — encode/decode WAV bytes между renderer и backend (shared).
-keyring = { version = "3", features = ["windows-native", "apple-native"] }
-base64 = "0.22"
+keyring.workspace = true
+base64.workspace = true
 semver = "1"
 # Phase 4 bug-detection: structured logging.
 # tracing = фасад; subscriber = JSON exporter + env-filter; appender =
 # rolling daily file под `<data_dir>/logs/<slot>/`.
-tracing = "0.1"
+tracing.workspace = true
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tracing-appender = "0.2"
 
 [target.'cfg(windows)'.dependencies]
 # File identity by volume serial + file index — the /v1/rpc Manager check
 # must not rely on path spelling (KOS-269 round 4).
-same-file = "1"
+same-file.workspace = true
 windows = { version = "0.62", features = [
   "Win32_Foundation",
   "Win32_Security",
@@ -135,7 +130,7 @@ windows = { version = "0.62", features = [
 ] }
 
 [target.'cfg(unix)'.dependencies]
-libc = "0.2"
+libc.workspace = true
 
 [build-dependencies]
 # Shared with manager-gpui/build.rs — one resource script for every shipped exe.
@@ -149,11 +144,11 @@ engine-base = { path = "crates/engine-base", features = ["test-support"] }
 engine-dictation = { path = "crates/engine-dictation", features = ["test-support"] }
 engine-packages = { path = "crates/engine-packages", features = ["test-support"] }
 tempfile.workspace = true
-httpmock = "0.8.3"
+httpmock.workspace = true
 # Test-only: the replication fixtures sign their own documents; the package
 # catalog path carries no Ed25519 code. Pinned to the same release as
 # ark-core so tests do not pull a second ed25519/curve25519 stack.
-ed25519-dalek = "=3.0.0-rc.0"
+ed25519-dalek.workspace = true
 
 [lints]
 workspace = true
