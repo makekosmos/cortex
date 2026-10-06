@@ -228,22 +228,29 @@ impl ManagerApp {
                     && matches!(self.slots.get(slot), Some(Slot::Ready(_)))))
     }
 
-    /// Queue an Engine op into a named slot; the reply overwrites it.
-    pub fn call(&mut self, slot: impl Into<String>, op: &'static str, params: Value) {
-        let slot = slot.into();
+    /// Hand a command to the worker; a dead worker raises the restart banner.
+    fn send(&mut self, command: Command) -> bool {
+        let sent = self.worker.commands.send(command).is_ok();
+        if !sent {
+            self.worker_dead = true;
+            self.error = Some("Соединение с Engine завершено. Перезапустите приложение.".into());
+        }
+        sent
+    }
+
+    /// Mark `slot` Loading and queue its command, unless navigation can reuse
+    /// the snapshot already there.
+    fn load_slot(&mut self, slot: String, command: impl FnOnce(String) -> Command) {
         if self.reuse_navigation_slot(&slot) {
             return;
         }
         self.slots.insert(slot.clone(), Slot::Loading);
-        if self
-            .worker
-            .commands
-            .send(Command::Rpc { slot, op, params })
-            .is_err()
-        {
-            self.worker_dead = true;
-            self.error = Some("Соединение с Engine завершено. Перезапустите приложение.".into());
-        }
+        self.send(command(slot));
+    }
+
+    /// Queue an Engine op into a named slot; the reply overwrites it.
+    pub fn call(&mut self, slot: impl Into<String>, op: &'static str, params: Value) {
+        self.load_slot(slot.into(), |slot| Command::Rpc { slot, op, params });
     }
 
     /// Rebuild the prepared usage rows from the current report slot. Called
@@ -265,38 +272,12 @@ impl ManagerApp {
     /// Queue the composite usage report (analytics + icon resolution) into a
     /// named slot; the reply overwrites it.
     pub fn usage_report(&mut self, slot: impl Into<String>) {
-        let slot = slot.into();
-        if self.reuse_navigation_slot(&slot) {
-            return;
-        }
-        self.slots.insert(slot.clone(), Slot::Loading);
-        if self
-            .worker
-            .commands
-            .send(Command::UsageReport { slot })
-            .is_err()
-        {
-            self.worker_dead = true;
-            self.error = Some("Соединение с Engine завершено. Перезапустите приложение.".into());
-        }
+        self.load_slot(slot.into(), |slot| Command::UsageReport { slot });
     }
 
     /// Queue a GET /v1/<path> status surface into a named slot.
     pub fn status(&mut self, slot: impl Into<String>, path: &'static str) {
-        let slot = slot.into();
-        if self.reuse_navigation_slot(&slot) {
-            return;
-        }
-        self.slots.insert(slot.clone(), Slot::Loading);
-        if self
-            .worker
-            .commands
-            .send(Command::Get { slot, path })
-            .is_err()
-        {
-            self.worker_dead = true;
-            self.error = Some("Соединение с Engine завершено. Перезапустите приложение.".into());
-        }
+        self.load_slot(slot.into(), |slot| Command::Get { slot, path });
     }
 
     /// Background status check: keep the current value visible while fetching.
@@ -304,18 +285,12 @@ impl ManagerApp {
         if !self.background_slots.insert(slot.into()) {
             return;
         }
-        if self
-            .worker
-            .commands
-            .send(Command::Get {
-                slot: slot.into(),
-                path,
-            })
-            .is_err()
-        {
-            self.background_slots.remove(slot);
-            self.worker_dead = true;
-            self.error = Some("Соединение с Engine завершено. Перезапустите приложение.".into());
+        let slot = slot.to_string();
+        if !self.send(Command::Get {
+            slot: slot.clone(),
+            path,
+        }) {
+            self.background_slots.remove(&slot);
         }
     }
 
@@ -325,15 +300,7 @@ impl ManagerApp {
     pub fn refresh(&mut self, slot: impl Into<String>, op: &'static str, params: Value) {
         let slot = slot.into();
         self.background_slots.insert(slot.clone());
-        if self
-            .worker
-            .commands
-            .send(Command::Rpc { slot, op, params })
-            .is_err()
-        {
-            self.worker_dead = true;
-            self.error = Some("Соединение с Engine завершено. Перезапустите приложение.".into());
-        }
+        self.send(Command::Rpc { slot, op, params });
     }
 
     /// Mutation op: on success reloads the current view (Vue Manager does the
