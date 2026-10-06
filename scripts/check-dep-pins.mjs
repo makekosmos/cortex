@@ -27,6 +27,7 @@ const ALLOWED = new Map([
   // hpke =0.14.1: the iroh/noq stack pins the same RustCrypto draft suite;
   // a caret bump splits the crypto traits.
   ["runtime/Cargo.toml::hpke", "=0.14.1"],
+  ["runtime/crates/engine-packages/Cargo.toml::hpke", "=0.14.1"],
   // embed-resource =3.0.11: Windows resource compiler helper, pinned to keep
   // manager-gpui build output reproducible.
   ["runtime/crates/pe-version-info/Cargo.toml::embed-resource", "=3.0.11"],
@@ -34,6 +35,8 @@ const ALLOWED = new Map([
   // this exact upstream release.
   ["manager-gpui/Cargo.toml::gpui", "=0.6.2"],
   ["manager-gpui/Cargo.toml::gpui-component", "=0.6.2"],
+  // gpui-base =0.6.4: companion crate of the gpui-kit/gpui-component pair above.
+  ["manager-gpui/Cargo.toml::gpui-base", "=0.6.4"],
 ]);
 
 // Vendored/upstream trees and generated dirs are not our pins to police.
