@@ -16,22 +16,36 @@ pub struct ModelSpec {
     pub recommended: bool,
     pub transcription_supported: bool,
     pub directory: bool,
+    /// Multi-file directory models: `(remote path, local filename)` pairs
+    /// resolved against `url` as a base and downloaded into `model_path`.
+    /// Empty for single-file and tarball directory models.
+    pub files: &'static [(&'static str, &'static str)],
 }
 
 pub const MODEL_CATALOG: &[ModelSpec] = &[
     ModelSpec {
-        id: "tiny-q5_1",
-        name: "Whisper Tiny",
-        description: "Самая быстрая проверочная модель. Подходит для smoke-теста, качество ниже.",
-        filename: "ggml-tiny-q5_1.bin",
-        url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny-q5_1.bin",
+        id: "parakeet-ultra",
+        name: "Parakeet Ultra",
+        description:
+            "Самая точная on-device модель: post-trained Parakeet v3 от Moondream, 25 языков.",
+        filename: "parakeet-tdt-0.6b-v3-ultra-int8",
+        url: "https://huggingface.co/Olicorne/parakeet-tdt-0.6b-v3-ultra-onnx/resolve/main",
         sha256: None,
-        size_mb: 31,
-        accuracy_score: 0.35,
-        speed_score: 0.98,
-        recommended: false,
+        size_mb: 637,
+        accuracy_score: 0.85,
+        speed_score: 0.90,
+        recommended: true,
         transcription_supported: true,
-        directory: false,
+        directory: true,
+        files: &[
+            ("int8/encoder-model.int8.onnx", "encoder-model.int8.onnx"),
+            (
+                "int8/decoder_joint-model.int8.onnx",
+                "decoder_joint-model.int8.onnx",
+            ),
+            ("nemo128.onnx", "nemo128.onnx"),
+            ("vocab.txt", "vocab.txt"),
+        ],
     },
     ModelSpec {
         id: "small",
@@ -46,6 +60,7 @@ pub const MODEL_CATALOG: &[ModelSpec] = &[
         recommended: true,
         transcription_supported: true,
         directory: false,
+        files: &[],
     },
     ModelSpec {
         id: "medium",
@@ -60,6 +75,7 @@ pub const MODEL_CATALOG: &[ModelSpec] = &[
         recommended: false,
         transcription_supported: true,
         directory: false,
+        files: &[],
     },
     ModelSpec {
         id: "turbo",
@@ -74,6 +90,7 @@ pub const MODEL_CATALOG: &[ModelSpec] = &[
         recommended: false,
         transcription_supported: true,
         directory: false,
+        files: &[],
     },
     ModelSpec {
         id: "large",
@@ -88,6 +105,7 @@ pub const MODEL_CATALOG: &[ModelSpec] = &[
         recommended: false,
         transcription_supported: true,
         directory: false,
+        files: &[],
     },
     ModelSpec {
         id: "parakeet-tdt-0.6b-v3",
@@ -102,6 +120,7 @@ pub const MODEL_CATALOG: &[ModelSpec] = &[
         recommended: false,
         transcription_supported: true,
         directory: true,
+        files: &[],
     },
 ];
 
