@@ -42,14 +42,16 @@ The shipped Mundus Desktop for Windows contains no Electron. The product is
 the Mundus Engine (`mundus-engine` with in-process ARK, tray + updater +
 autostart) plus GPUI components under `resources/components/<name>/`.
 
-## What is intentionally not promised
+## CI and release
 
-The repository layout is portable, but the existing desktop build still
-expects external extension bundles, ARK, visuals, and release tooling. CI
-therefore validates ownership and local metadata only. A green layout check
-does not mean that a complete Windows installer can be built here yet.
-Publish builds additionally require a reviewed release BOM; signing secrets are not read by
-the BOM validator or provenance emitter.
+Hosted CI (`.github/workflows/ci.yml`) runs on every pull request and on
+`main`: lint and dependency gates on Ubuntu, then Clippy, build and tests of the
+Engine and Manager on Windows and macOS. `installer-smoke.yml` (on PRs that touch
+the installer, and before every nightly release) builds the Windows installer
+and actually installs, upgrades and uninstalls it. A green CI
+run does not publish anything: publish builds additionally require a reviewed
+release BOM, and signing secrets are not read by the BOM validator or
+provenance emitter.
 
 ## Local checks
 
@@ -126,7 +128,7 @@ merge base, a shallow clone, a non-commit pushed object, or an empty or
 malformed push record selects the full check. Checks always run on the
 on-disk tree: when a pushed commit's tree differs from it, the hook prints a
 note that the run certified the working tree, not those commits — the push is
-not blocked, and the pushed commits are covered by CI. Docs and isolated assets are a no-op, except
+not blocked, and the pushed commits are covered by hosted CI. Docs and isolated assets are a no-op, except
 documents that tests read as contracts (`DOC_CONTRACTS` in
 `scripts/check-plan-manifest.mjs`), which select the checks reading them. A
 `package.json` edit that only changes known `"scripts"` entries selects the
@@ -136,9 +138,8 @@ unparseable revision selects the full check, as do shared, lockfile, build,
 workflow, hook, and unknown changes.
 
 Cheap local baseline: layout 0.108s, source-size test 0.680s, and naming test
-0.154s. There is no hosted CI by policy; local Lefthook gates are the only
-enforceable checks. Branch protection is disabled, and ruleset/merge-queue
-status is NOT_RUN. Use `--full` when reviewing uncertain changes and treat the
+0.154s. Hosted CI and the local Lefthook gates cover the same ground; CI is the
+source of truth. Use `--full` when reviewing uncertain changes and treat the
 planner's `reasons` field as the explanation for a full selection.
 
 The build wrapper runs the release preflight — clean `main`, a version newer than
