@@ -9,18 +9,18 @@
 // MUNDUS_ENGINE_PATH when none is running (manager-gpui/src/boot.rs), so the
 // only things this wrapper owns are the shared MUNDUS_DATA_DIR and the path.
 // The Engine is deliberately detached from the Manager: closing the Manager
-// leaves it running; stop it with `kill $(jq .pid <data-dir>/engine.lock.json)`.
+// leaves it running; its pid is in <data-dir>/engine.lock.json.
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { parseArgs } from "node:util";
 
-const args = process.argv.slice(2);
-const flag = (name) => args.includes(name);
-const dataDirAt = args.indexOf("--data-dir");
-const dataDir =
-  (dataDirAt >= 0 ? args[dataDirAt + 1] : undefined) ??
-  process.env.MUNDUS_DATA_DIR ??
-  join(tmpdir(), "mundus-dev");
+const { values } = parseArgs({
+  options: { "engine-only": { type: "boolean" }, "data-dir": { type: "string" } },
+});
+const dataDir = resolve(
+  values["data-dir"] ?? process.env.MUNDUS_DATA_DIR ?? join(tmpdir(), "mundus-dev"),
+);
 
 function cargo(cargoArgs, env = {}) {
   const result = spawnSync("cargo", cargoArgs, {
@@ -43,7 +43,7 @@ const engine = join(targetDir, "debug", exe);
 const env = { MUNDUS_DATA_DIR: dataDir, MUNDUS_ENGINE_PATH: engine };
 
 console.error(`data dir: ${dataDir}`);
-if (flag("--engine-only")) {
+if (values["engine-only"]) {
   cargo(["run", "-p", "engine"], env);
 } else {
   cargo(["build", "-p", "engine", "--bin", "mundus-engine"]);
