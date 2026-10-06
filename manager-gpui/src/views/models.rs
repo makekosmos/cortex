@@ -19,6 +19,8 @@ const ACTION_W: f32 = 96.;
 const ACTION_H: f32 = 28.;
 const PIP_W: f32 = 14.;
 const PIP_H: f32 = 4.;
+/// Progress ring stroke width on the download pill.
+const RING_W: f32 = 1.5;
 /// Per-frame lerp toward the polled percent — engine updates land once a
 /// second, the fill still moves smoothly between them.
 const FILL_LERP: f32 = 0.3;
@@ -138,8 +140,9 @@ fn delete_button(id: &str, cx: &mut Context<ManagerApp>) -> Stateful<Div> {
     )
 }
 
-/// Same fixed-size pill as an accent progress fill — the right edge of the
-/// fill lightens via a horizontal gradient so the front reads as moving.
+/// Same fixed-size pill during download: a thin ring traced around the
+/// pill's outline, filled clockwise from top-center to `percent`. The
+/// lerped `percent` keeps the arc smooth between 1s polls.
 fn progress_pill(id: &str, percent: Option<f32>) -> Stateful<Div> {
     let fraction = percent.unwrap_or(0.0).clamp(0.0, 100.0) / 100.0;
     let label = percent
@@ -154,21 +157,73 @@ fn progress_pill(id: &str, percent: Option<f32>) -> Stateful<Div> {
         .rounded_full()
         .bg(fade(FG(), 0.08))
         .relative()
-        .overflow_hidden()
         .role(Role::ProgressIndicator)
         .aria_label(format!("Скачивание {id}"))
         .child(
-            div()
-                .absolute()
-                .left_0()
-                .top_0()
-                .bottom_0()
-                .w(px(ACTION_W * fraction))
-                .bg(linear_gradient(
-                    90.,
-                    linear_color_stop(c(ACCENT()), 0.),
-                    linear_color_stop(mix(0xffffff, 0.28, ACCENT()), 1.),
-                )),
+            canvas(
+                |_, _, _| (),
+                move |bounds, _, window, _| {
+                    let inset = RING_W / 2.0;
+                    let x0 = f32::from(bounds.origin.x) + inset;
+                    let y0 = f32::from(bounds.origin.y) + inset;
+                    let x1 = f32::from(bounds.origin.x + bounds.size.width) - inset;
+                    let y1 = f32::from(bounds.origin.y + bounds.size.height) - inset;
+                    let radius = ((y1 - y0) / 2.0).max(0.0);
+                    let cx = (x0 + x1) / 2.0;
+                    // Clockwise rounded-rect outline starting at top-center.
+                    let trace = |path: &mut PathBuilder| {
+                        path.move_to(point(px(cx), px(y0)));
+                        path.line_to(point(px(x1 - radius), px(y0)));
+                        path.arc_to(
+                            point(px(radius), px(radius)),
+                            px(0.),
+                            false,
+                            true,
+                            point(px(x1), px(y0 + radius)),
+                        );
+                        path.line_to(point(px(x1), px(y1 - radius)));
+                        path.arc_to(
+                            point(px(radius), px(radius)),
+                            px(0.),
+                            false,
+                            true,
+                            point(px(x1 - radius), px(y1)),
+                        );
+                        path.line_to(point(px(x0 + radius), px(y1)));
+                        path.arc_to(
+                            point(px(radius), px(radius)),
+                            px(0.),
+                            false,
+                            true,
+                            point(px(x0), px(y1 - radius)),
+                        );
+                        path.line_to(point(px(x0), px(y0 + radius)));
+                        path.arc_to(
+                            point(px(radius), px(radius)),
+                            px(0.),
+                            false,
+                            true,
+                            point(px(x0 + radius), px(y0)),
+                        );
+                        path.line_to(point(px(cx), px(y0)));
+                        path.close();
+                    };
+                    let mut track = PathBuilder::stroke(px(RING_W));
+                    trace(&mut track);
+                    window.paint_path(track.build().unwrap(), fade(ACCENT(), 0.22));
+                    if fraction > 0.0 {
+                        let perimeter = 2.0 * ((x1 - x0) - 2.0 * radius)
+                            + 2.0 * ((y1 - y0) - 2.0 * radius)
+                            + std::f32::consts::TAU * radius;
+                        let mut ring = PathBuilder::stroke(px(RING_W))
+                            .dash_array(&[px(fraction * perimeter), px(perimeter)]);
+                        trace(&mut ring);
+                        window.paint_path(ring.build().unwrap(), c(ACCENT()));
+                    }
+                },
+            )
+            .absolute()
+            .inset_0(),
         )
         .child(
             div()
