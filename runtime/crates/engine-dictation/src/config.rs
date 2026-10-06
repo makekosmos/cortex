@@ -412,22 +412,6 @@ pub fn set_api_key(_key: &str) -> Result<(), keyring::Error> {
     Ok(())
 }
 
-#[cfg(not(test))]
-pub fn clear_api_key() -> Result<(), keyring::Error> {
-    let entry = keyring_entry()?;
-    match entry.delete_credential() {
-        Ok(()) => Ok(()),
-        // Если ключа не было — считаем clear успешным.
-        Err(keyring::Error::NoEntry) => Ok(()),
-        Err(e) => Err(e),
-    }
-}
-
-#[cfg(test)]
-pub fn clear_api_key() -> Result<(), keyring::Error> {
-    Ok(())
-}
-
 #[cfg(test)]
 #[allow(clippy::field_reassign_with_default, clippy::panic)]
 mod tests {

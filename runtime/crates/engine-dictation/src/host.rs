@@ -57,7 +57,6 @@ pub async fn handle_dictation_op(
         }
         "update_config" => op_update_config(params, host).await,
         "set_api_key" => op_set_api_key(params, host).await,
-        "clear_api_key" => op_clear_api_key(host).await,
         "capture_foreground_window" => op_capture_foreground(host).await,
         "start_recording" => op_start_recording(host).await,
         "cancel" => op_cancel(host).await,
