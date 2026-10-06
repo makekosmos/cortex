@@ -199,27 +199,16 @@ pub fn render(
                     .flex_none()
                     .text_color(c(FG())),
             )
-            .child(row_copy(
-                vstr(model, "name"),
-                vopt(model, "description").unwrap_or_default(),
-            ))
+            .child(row_copy(vstr(model, "name"), ""))
             .child(pips(vnum(model, "speedScore")))
             .child(pips(vnum(model, "accuracyScore")));
         if let Some(percent) = pill {
             r = r.child(progress_pill(&id, percent));
         } else if vbool(model, "selected") {
-            r = r.child(badge("Выбрана", SUCCESS()));
-        } else if vbool(model, "downloaded") {
-            r = r
-                .child(badge("Скачана", MUTED_FG()))
-                .child(btn_id(
-                    &format!("model-use-{id}"),
-                    "Использовать",
-                    cx.listener(move |this, _, _, _| {
-                        this.action("dictation.use_local_model", json!({"modelId": use_id}));
-                    }),
-                ))
-                .child(btn_id(&format!("model-del-{id}"), "Удалить", {
+            r = r.child(badge("Выбрана", SUCCESS())).child(btn_id(
+                &format!("model-del-{id}"),
+                "Удалить",
+                {
                     cx.listener(move |this, _, _, cx| {
                         this.ask_confirm(
                             format!("Удалить {delete_id}?"),
@@ -229,7 +218,16 @@ pub fn render(
                             cx,
                         );
                     })
-                }));
+                },
+            ));
+        } else if vbool(model, "downloaded") {
+            r = r.child(btn_id(
+                &format!("model-use-{id}"),
+                "Использовать",
+                cx.listener(move |this, _, _, _| {
+                    this.action("dictation.use_local_model", json!({"modelId": use_id}));
+                }),
+            ));
         } else {
             r = r.child(download_button(
                 &id,
