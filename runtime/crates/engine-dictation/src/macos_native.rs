@@ -339,6 +339,34 @@ fn mac_key_name(code: u16) -> Option<&'static str> {
         47 => ".",
         49 => "Space",
         50 => "`",
+        36 => "Enter",
+        48 => "Tab",
+        51 => "Backspace",
+        117 => "Delete",
+        115 => "Home",
+        119 => "End",
+        116 => "PageUp",
+        121 => "PageDown",
+        123 => "Left",
+        124 => "Right",
+        125 => "Down",
+        126 => "Up",
+        122 => "F1",
+        120 => "F2",
+        99 => "F3",
+        118 => "F4",
+        96 => "F5",
+        97 => "F6",
+        98 => "F7",
+        100 => "F8",
+        101 => "F9",
+        109 => "F10",
+        103 => "F11",
+        111 => "F12",
+        105 => "F13",
+        107 => "F14",
+        113 => "F15",
+        106 => "F16",
         _ => return None,
     };
     Some(name)
@@ -439,6 +467,34 @@ fn mac_key_code(key: &str) -> Option<u16> {
         "." => Some(47),
         "`" | "backquote" => Some(50),
         "space" => Some(49),
+        "enter" | "return" => Some(36),
+        "tab" => Some(48),
+        "backspace" => Some(51),
+        "delete" => Some(117),
+        "home" => Some(115),
+        "end" => Some(119),
+        "pageup" => Some(116),
+        "pagedown" => Some(121),
+        "left" => Some(123),
+        "right" => Some(124),
+        "down" => Some(125),
+        "up" => Some(126),
+        "f1" => Some(122),
+        "f2" => Some(120),
+        "f3" => Some(99),
+        "f4" => Some(118),
+        "f5" => Some(96),
+        "f6" => Some(97),
+        "f7" => Some(98),
+        "f8" => Some(100),
+        "f9" => Some(101),
+        "f10" => Some(109),
+        "f11" => Some(103),
+        "f12" => Some(111),
+        "f13" => Some(105),
+        "f14" => Some(107),
+        "f15" => Some(113),
+        "f16" => Some(106),
         _ => None,
     }
 }
@@ -565,5 +621,27 @@ mod tests {
         let spec = parse_hotkey(&acc).unwrap();
         assert_eq!(spec.key_code, 49);
         assert!(spec.cmd);
+    }
+
+    /// Every keyCode mac_key_name emits must round-trip through
+    /// parse_hotkey — a name parse_hotkey can't read would make the captured
+    /// hotkey silently un-armable.
+    #[test]
+    fn every_captured_name_parses_back() {
+        for code in [
+            0u16, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+            24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45,
+            46, 47, 48, 49, 50, 51, 96, 97, 98, 99, 100, 101, 103, 105, 106, 107, 109, 111, 113,
+            115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126,
+        ] {
+            let acc = capture_value_to_accelerator(&json!({
+                "captured": true, "keyCode": code,
+                "cmd": true, "ctrl": false, "alt": false, "shift": false, "fn": false,
+            }))
+            .unwrap_or_else(|| panic!("mac_key_name({code}) returned None"));
+            let spec = parse_hotkey(&acc)
+                .unwrap_or_else(|| panic!("captured accelerator {acc:?} does not parse"));
+            assert_eq!(spec.key_code, code, "accelerator {acc:?}");
+        }
     }
 }
