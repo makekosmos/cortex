@@ -1,26 +1,10 @@
 #![cfg_attr(test, allow(clippy::unwrap_used))]
-#![allow(dead_code)]
-#![allow(
-    clippy::collapsible_if,
-    clippy::derivable_impls,
-    clippy::explicit_auto_deref,
-    clippy::len_without_is_empty,
-    clippy::manual_is_multiple_of,
-    clippy::map_entry,
-    clippy::needless_borrow,
-    clippy::needless_match,
-    clippy::needless_question_mark,
-    clippy::needless_return,
-    clippy::new_ret_no_self,
-    clippy::new_without_default,
-    clippy::question_mark,
-    clippy::redundant_closure,
-    clippy::redundant_locals,
-    clippy::result_large_err,
-    clippy::too_many_arguments,
-    clippy::type_complexity,
-    clippy::unnecessary_lazy_evaluations
-)]
+// Windows is the primary target and its build sees every item; code that only
+// Windows callers reach is dead elsewhere, so the lint is silenced off-Windows
+// and in test builds, which carry platform-gated fixtures.
+#![cfg_attr(any(test, not(windows)), allow(dead_code))]
+// Remaining debt: these signatures need context structs / boxed errors.
+#![allow(clippy::too_many_arguments, clippy::result_large_err)]
 
 // `package-worker-fixture` relaxes the broker's HTTPS-only origin check to
 // allow loopback http origins and exposes worker test hooks — none of that

@@ -13,7 +13,7 @@ Native release-сборка Engine и Manager с единой продуктов
 включает автозапуск. Согласованная организация страниц: [NAVIGATION_PROPOSAL.md](NAVIGATION_PROPOSAL.md).
 
 ```bash
-cargo run --manifest-path manager-gpui/Cargo.toml
+pnpm run dev    # из корня Cortex: собирает Engine и запускает Manager (общий MUNDUS_DATA_DIR)
 ```
 
 Приложение читает `engine.lock.json` из `MUNDUS_DATA_DIR` (по умолчанию
@@ -33,7 +33,8 @@ Engine запускается независимо от UI: закрытие Man
 Manager, не Engine. На macOS добавлено нативное меню приложения с `Cmd+Q`.
 `manager-gpui --check-engine` проверяет тот же startup-контракт без открытия окна.
 
-Для разработки Engine можно запустить заранее:
+Для разработки Engine можно запустить заранее (`pnpm run dev -- --engine-only`
+или вручную):
 
 ```bash
 MUNDUS_DATA_DIR=/tmp/mundus-dev cargo run -p engine

@@ -173,7 +173,7 @@ importers:
         specifier: ^2.1.10
         version: 2.1.12
       oxfmt:
-        specifier: latest
+        specifier: 0.67.0
         version: 0.67.0
       oxlint:
         specifier: 1.80.0
