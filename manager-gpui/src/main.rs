@@ -14,6 +14,7 @@ mod consent;
 mod device_info;
 mod devpkg;
 mod fps;
+mod liquid_metal;
 mod modals;
 #[cfg(target_os = "macos")]
 mod native_menu;

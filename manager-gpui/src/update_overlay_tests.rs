@@ -1,4 +1,4 @@
-use super::{bounce_offset, resolve, sweep_fraction, OverlayState};
+use super::{bounce_offset, resolve, OverlayState};
 use crate::app::Slot;
 use gpui::TestAppContext;
 use serde_json::json;
@@ -61,20 +61,6 @@ fn bounce_is_bounded_and_continuous() {
     assert!((bounce_offset(1.899) - bounce_offset(1.901)).abs() < 0.5);
 }
 
-#[test]
-fn sweep_crosses_the_badge_then_rests_offscreen() {
-    // Inside the active sweep window the stripe travels from off-left to
-    // fully off-right.
-    assert_eq!(sweep_fraction(0.0), -0.55);
-    let mid = sweep_fraction(0.45);
-    assert!(mid > 0.0 && mid < 1.0, "{mid}");
-    // Past the sweep window it parks offscreen until the next cycle.
-    assert_eq!(sweep_fraction(1.5), -0.55);
-    assert_eq!(sweep_fraction(2.0), -0.55);
-    // Wraps cleanly into the next cycle.
-    assert_eq!(sweep_fraction(2.4), -0.55);
-}
-
 // --- Rendered overlay ----------------------------------------------------------
 
 fn set_status(
@@ -95,7 +81,10 @@ fn overlay_appears_on_available_and_snoozes_for_the_session(cx: &mut TestAppCont
     set_status(
         cx,
         &manager,
-        json!({"state": "available", "currentVersion": "0.10.2", "newVersion": "0.10.3", "canInstall": true}),
+        json!({
+            "state": "available", "currentVersion": "0.10.2",
+            "newVersion": "0.10.3", "canInstall": true
+        }),
     );
     assert!(cx.debug_bounds("update-overlay").is_some());
     let tree = cx
@@ -113,7 +102,10 @@ fn overlay_appears_on_available_and_snoozes_for_the_session(cx: &mut TestAppCont
     set_status(
         cx,
         &manager,
-        json!({"state": "downloaded", "currentVersion": "0.10.2", "newVersion": "0.10.3", "percent": 100, "canInstall": true}),
+        json!({
+            "state": "downloaded", "currentVersion": "0.10.2",
+            "newVersion": "0.10.3", "percent": 100, "canInstall": true
+        }),
     );
     assert!(cx.debug_bounds("update-overlay").is_none());
 }
@@ -124,7 +116,10 @@ fn downloading_shows_determinate_bar_and_error_offers_retry(cx: &mut TestAppCont
     set_status(
         cx,
         &manager,
-        json!({"state": "downloading", "currentVersion": "0.10.2", "newVersion": "0.10.3", "percent": 42, "canInstall": true}),
+        json!({
+            "state": "downloading", "currentVersion": "0.10.2",
+            "newVersion": "0.10.3", "percent": 42, "canInstall": true
+        }),
     );
     assert!(cx.debug_bounds("update-overlay-progress").is_some());
     // Failure while open → error state with a retry button.

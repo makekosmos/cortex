@@ -3328,6 +3328,7 @@ dependencies = [
  "qoi",
  "ravif",
  "rayon",
+ "rgb",
  "tiff",
  "zune-core 0.5.3",
  "zune-jpeg 0.5.15",
@@ -3883,6 +3884,7 @@ dependencies = [
  "gpui-base",
  "gpui-component",
  "gpui-kit",
+ "image",
  "imago-gpui",
  "mundus-gpui-kit",
  "objc2 0.6.4",
@@ -3890,6 +3892,7 @@ dependencies = [
  "pe-version-info",
  "serde",
  "serde_json",
+ "smallvec",
  "tracing",
  "ureq",
 ]

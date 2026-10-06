@@ -99,8 +99,11 @@ pub struct ManagerApp {
     /// Last resolved overlay state — `Failed` is gated on the overlay
     /// already being open when the Engine reports `error`.
     pub update_overlay: crate::update_overlay::OverlayState,
-    /// Frame clock for the badge bounce/sweep; reset on Hidden→visible.
+    /// Frame clock for the logo bounce/metal flow; reset on Hidden→visible.
     pub update_anim_start: Instant,
+    /// Liquid-metal input field (edge + alpha), rasterized once from the
+    /// Mundus mark. `None` → plain-icon fallback.
+    pub update_logo: Option<std::sync::Arc<crate::liquid_metal::LogoField>>,
     /// Company whose key modal is open.
     pub key_editor: Option<String>,
     /// Key value that passed verification in the open modal.
@@ -179,6 +182,7 @@ impl ManagerApp {
             update_snoozed: false,
             update_overlay: crate::update_overlay::OverlayState::Hidden,
             update_anim_start: Instant::now(),
+            update_logo: None,
             key_editor: None,
             key_checked: None,
             disclosure: None,
