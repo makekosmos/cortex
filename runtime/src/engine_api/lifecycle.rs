@@ -9,7 +9,6 @@ struct HttpConnectionLifecycle {
 
 enum HttpConnectionSlot {
     Reserved {
-        permit: Arc<Mutex<Option<tokio::sync::OwnedSemaphorePermit>>>,
         start: oneshot::Sender<()>,
     },
     Installed(tokio::task::JoinHandle<()>),
@@ -114,10 +113,7 @@ struct OwnedHttpOperation {
 }
 
 enum HttpOperationSlot {
-    Reserved {
-        cleanup: Arc<HttpOperationCleanup>,
-        permit: Arc<Mutex<Option<tokio::sync::OwnedSemaphorePermit>>>,
-    },
+    Reserved,
     Installed(OwnedHttpOperation),
 }
 
@@ -216,23 +212,16 @@ impl HttpOperationRegistry {
             cleanup.run();
             return None;
         }
-        let permit_cell = Arc::new(Mutex::new(Some(permit)));
         let (start_sender, start_receiver) = oneshot::channel();
         self.continuations
             .lock()
             .unwrap_or_else(|p| p.into_inner())
-            .insert(
-                operation_id,
-                HttpOperationSlot::Reserved {
-                    cleanup: cleanup.clone(),
-                    permit: permit_cell.clone(),
-                },
-            );
+            .insert(operation_id, HttpOperationSlot::Reserved);
         let handle = tokio::spawn(async move {
             if start_receiver.await.is_err() {
                 return;
             }
-            let _permit = permit_cell.lock().unwrap_or_else(|p| p.into_inner()).take();
+            let _permit = permit;
             let dispatch = dispatcher.dispatch(request);
             tokio::pin!(dispatch);
             let result = tokio::select! {
@@ -260,7 +249,7 @@ impl HttpOperationRegistry {
                     cancel,
                 }),
             );
-        debug_assert!(matches!(old, Some(HttpOperationSlot::Reserved { .. })));
+        debug_assert!(matches!(old, Some(HttpOperationSlot::Reserved)));
         let _ = start_sender.send(());
         Some((
             operation_id,

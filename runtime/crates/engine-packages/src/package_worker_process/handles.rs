@@ -37,9 +37,3 @@ unsafe impl Send for ProcessHandle {}
 struct JobHandle(OwnedHandle);
 #[cfg(windows)]
 unsafe impl Send for JobHandle {}
-#[cfg(windows)]
-impl JobHandle {
-    fn raw(&self) -> windows::Win32::Foundation::HANDLE {
-        self.0.raw()
-    }
-}

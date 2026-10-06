@@ -154,6 +154,7 @@ msg!(BootstrapMessage {
 });
 msg!(RunMessage { pub method: String, pub generation: u64, pub run_id: String });
 impl RunMessage {
+    #[cfg(test)]
     fn validate(&self) -> Result<(), &'static str> {
         (!self.run_id.is_empty()
             && self.run_id.len() <= 128

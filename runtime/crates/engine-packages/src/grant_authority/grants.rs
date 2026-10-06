@@ -91,7 +91,6 @@ impl GrantAuthorityRegistry {
                     exact_file_identity: file_identity,
                     root,
                     identity,
-                    persistent_id: persistent_id.clone(),
                 },
             );
         Ok((id, identity, persistent_id))
@@ -130,7 +129,6 @@ impl GrantAuthorityRegistry {
                     exact_file_identity: file_identity,
                     root,
                     identity,
-                    persistent_id: Some(persistent_id.to_owned()),
                 },
             );
         Ok((id, identity))
