@@ -92,6 +92,10 @@
   ],
   "files": [
     {
+      "path": "AGENTS.md",
+      "reason": "This document — it states the brand rule and so names the legacy identifiers on purpose."
+    },
+    {
       "path": "core/AGENTS.md",
       "reason": "Vendored upstream-monorepo doc: it names live identifiers of that codebase (`kosmos:*`, `window.kepler`, `kepler-focus-*`), which are not ours to rename."
     },

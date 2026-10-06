@@ -16,6 +16,7 @@ import {
   parseReleaseManifest,
   RELEASE_MANIFEST_FILE,
 } from "./release-manifest.mjs";
+import { previousReleaseBaseline } from "./release-plan.mjs";
 import { runReleasePreflight } from "./release-preflight.mjs";
 import { releaseTarget } from "./release-repos.mjs";
 import {
@@ -132,6 +133,46 @@ export function publishAssetPaths({
   return [installer, manifestPath, ...uploads];
 }
 
+// run(cmd, args) → { status, stdout, stderr } — injectable so tests never
+// touch git. Default implementation spawns in the desktop directory.
+function gitRun(cmd, args) {
+  const result = spawnSync(cmd, args, {
+    cwd: ROOT,
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  if (result.error) throw result.error;
+  return { status: result.status ?? 1, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
+}
+
+/**
+ * GitHub release body: a header line plus every non-merge commit in
+ * `fromCommit..toCommit` (exclusive of the previous release's source commit)
+ * as `- <short hash> <subject> (<author>)`. Fails closed: a git error throws —
+ * the release must never go out with no commit list.
+ */
+export function buildReleaseNotes({ version, fromCommit, toCommit, run = gitRun }) {
+  const header = `Mundus ${version} installers + manifest.`;
+  const result = run("git", [
+    "log",
+    "--no-merges",
+    "--format=%h %s (%an)",
+    `${fromCommit}..${toCommit}`,
+  ]);
+  if (result.status !== 0)
+    die(
+      `git log ${fromCommit}..${toCommit} failed (${result.status}): ${result.stderr?.trim() || "unknown git error"}`,
+    );
+  const commits = result.stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const body = commits.length
+    ? commits.map((line) => `- ${line}`).join("\n")
+    : "No non-merge commits.";
+  return `${header}\n\n${body}`;
+}
+
 function ghRelease(args, dryRun) {
   console.log(`[publish-release] plan: gh ${args.join(" ")}`);
   if (dryRun) return;
@@ -236,6 +277,20 @@ export async function main() {
     `[publish-release] plan: gh release ${alreadyExists ? "upload" : "create"} v${version} --repo ${repository}`,
   );
 
+  // Release notes are built only on the Windows create path: the body lists
+  // every non-merge commit since the previous published release's source
+  // commit — the same baseline release-plan.mjs plans against, which on the
+  // publish job is still the latest published stable release.
+  let releaseNotes = null;
+  if (platform === MANIFEST_CREATOR_PLATFORM && !alreadyExists) {
+    const baseline = previousReleaseBaseline({ repo: repository });
+    releaseNotes = buildReleaseNotes({ version, fromCommit: baseline.commit, toCommit: commit });
+    if (dryRun)
+      console.log(
+        `[publish-release] release notes for v${version} (since ${baseline.tag}):\n${releaseNotes}`,
+      );
+  }
+
   if (dryRun) return;
 
   if (platform === "mac") {
@@ -267,7 +322,7 @@ export async function main() {
         "--title",
         `Mundus ${version}`,
         "--notes",
-        "Mundus desktop release (installers + manifest.json).",
+        releaseNotes,
       ],
       false,
     );
