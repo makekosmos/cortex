@@ -1,8 +1,8 @@
-//! Full-window update overlay (KOS-355, round 2): the Mundus petal mark
-//! rendered as Paper "Liquid Metal" — a faithful CPU port of the
-//! `liquid-metal` fragment shader evaluated per frame and clipped to the
-//! logo's alpha — floating over an opaque shell, state-driven content
-//! underneath. No badge or plate behind the mark.
+//! Full-window update overlay (KOS-355): the Mundus petal mark rendered as
+//! Paper "Liquid Metal" — a pre-baked animated WebP loop decoded once into
+//! a `RenderImage` ring (see `logo_anim.rs`) — floating over an opaque
+//! shell, state-driven content underneath. No badge or plate behind the
+//! mark.
 //!
 //! The machine is deliberately tiny and pure: `resolve` maps
 //! (snoozed, was_open, Engine `updater.status.state`) to the visible state.
@@ -15,7 +15,7 @@ use std::sync::Arc;
 
 use crate::app::ManagerApp;
 use crate::button;
-use crate::liquid_metal::{self, LogoField};
+use crate::logo_anim::LogoFrames;
 use crate::theme::*;
 use mundus_gpui_kit::fields::{vnum, vopt, vstr};
 
@@ -60,20 +60,20 @@ pub fn bounce_offset(elapsed_secs: f32) -> f32 {
     (elapsed_secs * std::f32::consts::TAU / 1.9).sin() * 6.0
 }
 
-/// The petal mark itself, filled with animated liquid metal. One frame is a
-/// ~64k-texel CPU-shaded grid at 256×252 — cheap enough for vsync-rate
-/// repaints while the overlay is on screen.
-fn logo(field: Option<&Arc<LogoField>>, elapsed: f32) -> Stateful<Div> {
+/// The petal mark itself, filled with animated liquid metal: a ring of
+/// pre-baked 256×252 frames, indexed by elapsed time — a clone of an `Arc`
+/// per repaint while the overlay is on screen.
+fn logo(frames: Option<&Arc<LogoFrames>>, elapsed: f32) -> Stateful<Div> {
     let mut mark = div()
         .id("update-overlay-logo")
         .debug_selector(|| "update-overlay-logo".into())
         .relative()
         .top(px(bounce_offset(elapsed)))
         .size(px(200.));
-    if let Some(field) = field {
-        mark = mark.child(img(liquid_metal::frame(field, elapsed)).size_full());
+    if let Some(frames) = frames {
+        mark = mark.child(img(frames.frame(elapsed)).size_full());
     } else {
-        // Fallback if the SVG mask could not be rasterized: plain glyph.
+        // Fallback if the embedded WebP could not be decoded: plain glyph.
         mark = mark.flex().items_center().justify_center().child(
             gpui_component::Icon::default()
                 .path("icons/mundus.svg")
@@ -106,7 +106,7 @@ pub fn render(
     window.request_animation_frame();
 
     if app.update_logo.is_none() {
-        app.update_logo = LogoField::build(&cx.svg_renderer());
+        app.update_logo = LogoFrames::shared();
     }
 
     let (title, detail) = match state {
