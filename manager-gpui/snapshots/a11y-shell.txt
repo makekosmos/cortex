@@ -1,18 +1,17 @@
 Window ""
+  Button "О приложении" selected=true
   Button "Приложения" selected=false
-  Button "Данные" selected=true
+  Button "Данные" selected=false
   Button "Активность" selected=false
   Button "Девайсы" selected=false
   Button "Интеграции" selected=false
   Button "Ключи" selected=false
   Button "Настройки" selected=false
   Button "Внешний вид" selected=false
-  Button "Обновления" selected=false
-  Button "О приложении" selected=false
+  Button "Браузер" selected=false
+  Button "Разработчикам" selected=false
   Button "Свернуть"
   Button "Закрыть"
-  TextInput "Поиск объектов…"
-  Button "Найти"
-  Button "Создать копию"
-  Button "Открыть папку"
+  Button "Проверить обновления"
+  Button "Показать"
   Switch "Боковая панель" toggled=True
