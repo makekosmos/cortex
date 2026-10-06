@@ -23,6 +23,7 @@ mod page_layout;
 mod render;
 mod theme;
 mod toggle;
+mod update_overlay;
 mod views;
 mod widgets;
 mod worker;
