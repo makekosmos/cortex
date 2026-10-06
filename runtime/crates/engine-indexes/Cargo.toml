@@ -28,7 +28,7 @@ rusqlite.workspace = true
 # App Index icons: ICO/GDI bitmap → PNG.
 image.workspace = true
 # install_layout::engine_root_of_exe — strict X.Y.Z version shape check.
-semver = "1"
+semver.workspace = true
 # Shared workspace deps.
 serde.workspace = true
 serde_json.workspace = true

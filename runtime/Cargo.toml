@@ -95,7 +95,7 @@ image.workspace = true
 # base64 — encode/decode WAV bytes между renderer и backend (shared).
 keyring.workspace = true
 base64.workspace = true
-semver = "1"
+semver.workspace = true
 # Phase 4 bug-detection: structured logging.
 # tracing = фасад; subscriber = JSON exporter + env-filter; appender =
 # rolling daily file под `<data_dir>/logs/<slot>/`.
