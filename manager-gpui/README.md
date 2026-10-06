@@ -138,7 +138,7 @@ Windows-only. Другие платформы могут узнать о нов�
 | Интеграции | `integrations.list/set_credential/clear_credential/sync_now` |
 | О приложении | `/v1/health`, `/v1/info`; инструменты поддержки и `manager.diagnostics.support_bundle.*` по явному действию |
 | Обновления | `store.refresh`, `packages.refresh_catalog`, `packages.install` |
-| Ключи | `dictation.get_config/verify_api_key/set_api_key/clear_api_key/test_connectivity/get_stats` |
+| Ключи | `dictation.get_config/verify_api_key/set_api_key/test_connectivity/get_stats` |
 | Браузер | `browser.json` `persistData` (тот же файл, что пишет Host) |
 | Разработка | `packages.install_development`, `packages.uninstall` |
 
