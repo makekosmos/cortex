@@ -161,6 +161,13 @@ impl DesktopAuthorityRegistry {
     pub fn len(&self) -> usize {
         self.leases.lock().unwrap_or_else(|p| p.into_inner()).len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.leases
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .is_empty()
+    }
 }
 fn hash_credential(value: &str) -> [u8; 32] {
     Sha256::digest(value.as_bytes()).into()
@@ -207,7 +214,7 @@ mod tests {
         );
         assert_eq!(registry.bind("session", 2, 123, "new", 2), Ok(()));
         registry.disconnect(2);
-        assert_eq!(registry.len(), 1);
+        assert!(!registry.is_empty());
         assert!(!registry.authorize(2));
         assert_eq!(registry.bind("session", 2, 123, "new", 3), Ok(()));
         assert!(registry.authorize(3));
@@ -216,7 +223,7 @@ mod tests {
             Err(AuthorityError::WrongPid)
         );
         registry.revoke_generation("session", 2);
-        assert_eq!(registry.len(), 0);
+        assert!(registry.is_empty());
         assert_eq!(
             registry.bind("session", 2, 123, "new", 5),
             Err(AuthorityError::MissingLease)

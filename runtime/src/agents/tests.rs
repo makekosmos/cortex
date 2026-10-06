@@ -1,17 +1,9 @@
 use super::*;
 
-struct StdCommand;
-impl StdCommand {
-    fn new(program: &str) -> std::process::Command {
-        assert_eq!(program, "git");
-        isolated_std_git()
-    }
-}
-
 fn temp_repo(dir: &tempfile::TempDir) -> PathBuf {
     let repo = dir.path().join("repo");
     std::fs::create_dir_all(&repo).unwrap();
-    assert!(StdCommand::new("git")
+    assert!(isolated_std_git()
         .args(["init", "--quiet"])
         .current_dir(&repo)
         .status()
@@ -26,7 +18,7 @@ fn configured_repo(dir: &tempfile::TempDir) -> PathBuf {
         vec!["config", "user.email", "daedalus@test.invalid"],
         vec!["config", "user.name", "Daedalus Test"],
     ] {
-        assert!(StdCommand::new("git")
+        assert!(isolated_std_git()
             .args(args)
             .current_dir(&repo)
             .status()
@@ -38,13 +30,13 @@ fn configured_repo(dir: &tempfile::TempDir) -> PathBuf {
 
 fn commit_file(repo: &Path, name: &str, contents: &str, message: &str) {
     std::fs::write(repo.join(name), contents).unwrap();
-    assert!(StdCommand::new("git")
+    assert!(isolated_std_git()
         .args(["add", name])
         .current_dir(repo)
         .status()
         .unwrap()
         .success());
-    assert!(StdCommand::new("git")
+    assert!(isolated_std_git()
         .args(["commit", "-m", message])
         .current_dir(repo)
         .status()
@@ -101,7 +93,7 @@ fn git_fixture_rejects_a_cwd_that_would_fall_back_to_the_outer_repo() {
     let dir = tempfile::tempdir().unwrap();
     let repo = dir.path().join("repo");
     std::fs::create_dir_all(&repo).unwrap();
-    assert!(StdCommand::new("git")
+    assert!(isolated_std_git()
         .args(["init", "--quiet"])
         .current_dir(&repo)
         .status()

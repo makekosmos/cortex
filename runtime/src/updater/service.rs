@@ -277,7 +277,7 @@ impl UpdaterService {
         desktop_authority: Arc<crate::desktop_authority::DesktopAuthorityRegistry>,
     ) {
         tokio::time::sleep(STARTUP_GRACE).await;
-        if desktop_authority.len() == 0 {
+        if desktop_authority.is_empty() {
             self.check().await;
         }
     }
