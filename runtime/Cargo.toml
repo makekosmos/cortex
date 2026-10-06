@@ -167,3 +167,8 @@ ed25519-dalek = "=3.0.0-rc.0"
 
 [lints]
 workspace = true
+
+[[bin]]
+name = "mundus-local-stt"
+path = "src/bin/mundus-local-stt.rs"
+required-features = ["local-dictation"]
