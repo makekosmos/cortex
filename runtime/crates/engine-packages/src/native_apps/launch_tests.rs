@@ -15,7 +15,12 @@ fn pid_zero_never_gets_foreground_grant() {
 #[cfg(unix)]
 #[test]
 fn spawn_detached_runs_executable() {
-    spawn_detached(Path::new("/bin/true"), &[]).expect("spawn /bin/true");
+    // `/bin/sh` exists on Linux and macOS; `/bin/true` is missing on macOS.
+    spawn_detached(
+        Path::new("/bin/sh"),
+        &[OsStr::new("-c"), OsStr::new("true")],
+    )
+    .expect("spawn /bin/sh");
 }
 
 #[test]
