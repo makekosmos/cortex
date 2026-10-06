@@ -138,8 +138,9 @@ unparseable revision selects the full check, as do shared, lockfile, build,
 workflow, hook, and unknown changes.
 
 Cheap local baseline: layout 0.108s, source-size test 0.680s, and naming test
-0.154s. Hosted CI and the local Lefthook gates cover the same ground; CI is the
-source of truth. Use `--full` when reviewing uncertain changes and treat the
+0.154s. CI is the merge signal for Rust build, Clippy and tests; the local Lefthook gate
+additionally runs checks CI does not (brand, source size, test skips, JS
+lint/format, static tests). Use `--full` when reviewing uncertain changes and treat the
 planner's `reasons` field as the explanation for a full selection.
 
 The build wrapper runs the release preflight — clean `main`, a version newer than

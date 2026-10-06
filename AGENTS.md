@@ -13,7 +13,7 @@ Linux годится для разработки Engine (`docs/linux-dev.md`).
   (`/v1/rpc`, WebSocket), хост и супервизор пакетов, `focus.*`/`pomodoro.*`,
   диктовка, апдейтер, трей. Подкрейты: `runtime/crates/{engine-base,
   engine-dictation,engine-packages,engine-indexes,package-protocol,
-  pe-version-info}`. ARK работает внутри процесса: `runtime/src/ark_host.rs`.
+  pe-version-info}`. ARK работает внутри процесса: `runtime/crates/engine-packages/src/ark_host.rs`.
 - `core/crates/ark-core/` — Rust + SQLite, контракт и инварианты в
   `core/crates/ark-core/AGENTS.md` и `docs/{ark-core,sync,write-boundary}.md`.
 - `manager-gpui/` — GPUI-приложение Manager. Это отдельный Cargo workspace со
@@ -46,7 +46,8 @@ Manager запускает Engine сам, но уже живой Engine в то�
 ## Проверки
 
 CI на GitHub запускается на каждый PR и на push в `main` и является
-источником истины. Локальный гейт покрывает тот же круг проверок заранее.
+источником истины. Локальный гейт — не копия CI: часть проверок (см. ниже)
+идёт только локально.
 
 - `.github/workflows/ci.yml`: job `lint` (Ubuntu: rustfmt обоих workspace,
   actionlint, `cargo deny check bans`, `check-dep-pins`, версии тулчейна;
@@ -55,6 +56,10 @@ CI на GitHub запускается на каждый PR и на push в `main
   Manager, нативные хелперы macOS). `installer-smoke.yml` собирает и реально
   запускает установщик (на PR — при правках установщика, и перед ночным
   релизом); `nightly-release.yml` публикует релиз в 03:00 UTC.
+- Только локально (в CI их нет, обход хуков никто не поймает): `check:brand`,
+  `check:source-size`, `check:test-skips`, `check:layout`, oxlint, oxfmt,
+  `check:core-pin`, `test:static`, сборка рантайма (`runtime-staging`).
+  Не обходи хуки.
 - Workflows можно и нужно править, когда они расходятся с реальностью;
   `actionlint` в CI проверяет синтаксис, actions закреплены по SHA.
 - `pnpm run check` — полный локальный гейт (список в
