@@ -94,6 +94,13 @@ pub struct ManagerApp {
     pub about_diag_open: bool,
     pub data_storage_open: bool,
     pub confirm: Option<Confirm>,
+    /// KOS-355 update overlay: «Позже» hides it until the app restarts.
+    pub update_snoozed: bool,
+    /// Last resolved overlay state — `Failed` is gated on the overlay
+    /// already being open when the Engine reports `error`.
+    pub update_overlay: crate::update_overlay::OverlayState,
+    /// Frame clock for the badge bounce/sweep; reset on Hidden→visible.
+    pub update_anim_start: Instant,
     /// Company whose key modal is open.
     pub key_editor: Option<String>,
     /// Key value that passed verification in the open modal.
@@ -165,6 +172,9 @@ impl ManagerApp {
             about_diag_open: false,
             data_storage_open: false,
             confirm: None,
+            update_snoozed: false,
+            update_overlay: crate::update_overlay::OverlayState::Hidden,
+            update_anim_start: Instant::now(),
             key_editor: None,
             key_checked: None,
             disclosure: None,
