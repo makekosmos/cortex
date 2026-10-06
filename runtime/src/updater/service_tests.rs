@@ -218,7 +218,7 @@ fn desktop_lease_keeps_startup_state_idle() {
     let service = UpdaterService::new(dir.path().to_path_buf());
     let authority = crate::desktop_authority::DesktopAuthorityRegistry::new();
     authority.register("session".into(), 1, 123, "credential");
-    assert!(authority.len() > 0);
+    assert!(!authority.is_empty());
     assert_eq!(service.status()["state"], "idle");
 }
 

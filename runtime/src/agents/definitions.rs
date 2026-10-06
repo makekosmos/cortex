@@ -1553,7 +1553,7 @@ impl AgentsService {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
-            .map_err(|e| AgentsError::EditorOpen(e))?;
+            .map_err(AgentsError::EditorOpen)?;
         Ok(json!(true))
     }
 
