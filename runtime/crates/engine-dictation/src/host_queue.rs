@@ -198,6 +198,11 @@ async fn process_one_attempt_with_injector(
         };
     }
 
+    // `cfg` becomes mutable: when the selected local model vanished (deleted
+    // or never downloaded), reconcile swaps the in-memory selection for the
+    // first downloaded model and the same attempt keeps going — no spurious
+    // "Не доставлено" before a real failure exists.
+    let mut cfg = cfg;
     let result: Result<String, SubmitError> = if provider_uses_local_runtime(&cfg.provider) {
         if !local_config_is_ready(&host.data_dir, &cfg) {
             tracing::warn!(
@@ -208,11 +213,15 @@ async fn process_one_attempt_with_injector(
                 "dictation: local model became unavailable before transcribe"
             );
             let _ = reconcile_unready_local_config(host).await;
-            let _ = super::pending::bump_attempt(&host.data_dir, uuid, LOCAL_MODEL_NOT_READY_MSG);
-            host.emit_pending_changed();
-            host.fail_session(uuid, LOCAL_MODEL_NOT_READY_MSG, false)
-                .await;
-            return AttemptOutcome::Fatal;
+            cfg = host.snapshot_config().await;
+            if !local_config_is_ready(&host.data_dir, &cfg) {
+                let _ =
+                    super::pending::bump_attempt(&host.data_dir, uuid, LOCAL_MODEL_NOT_READY_MSG);
+                host.emit_pending_changed();
+                host.fail_session(uuid, LOCAL_MODEL_NOT_READY_MSG, false)
+                    .await;
+                return AttemptOutcome::Fatal;
+            }
         }
         local::transcribe(local::LocalRequest {
             wav_bytes: &wav,
