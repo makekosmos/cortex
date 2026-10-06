@@ -53,16 +53,6 @@ async fn op_set_api_key(params: Value, host: &DictationHost) -> DictationRespons
     }
 }
 
-async fn op_clear_api_key(host: &DictationHost) -> DictationResponse {
-    match config::clear_api_key() {
-        Ok(()) => {
-            host.emit_config_changed();
-            DictationResponse::ok(json!({ "ok": true }))
-        }
-        Err(e) => DictationResponse::err(format!("keyring delete failed: {e}")),
-    }
-}
-
 async fn op_capture_foreground(host: &DictationHost) -> DictationResponse {
     let hwnd = inject::capture_foreground_window();
     let mut s = host.state.lock().await;
