@@ -1,5 +1,7 @@
 //! Root layout: sidebar + titlebar + active view, with the Engine banner,
 //! confirm modal and disclosure/detail overlays layered on top.
+use std::time::Instant;
+
 use ::gpui::{prelude::*, *};
 use gpui_component::scroll::ScrollableElement;
 
@@ -110,6 +112,26 @@ impl Render for ManagerApp {
         }
         if self.disclosure.is_some() || self.detail.is_some() {
             root = root.child(render_overlay(self, cx));
+        }
+        // KOS-355: full-window update overlay, topmost layer. The state is
+        // resolved every frame from the Engine status slot; `Failed` needs
+        // the previous state, so the resolution is stored back on the app.
+        let update_state = crate::update_overlay::resolve(
+            self.update_snoozed,
+            self.update_overlay.visible(),
+            &vstr(&self.data("upd.mundus"), "state"),
+        );
+        if update_state.visible() && !self.update_overlay.visible() {
+            self.update_anim_start = Instant::now();
+        }
+        self.update_overlay = update_state;
+        if update_state.visible() {
+            root = root.child(crate::update_overlay::render(
+                self,
+                update_state,
+                window,
+                cx,
+            ));
         }
         root
     }

@@ -14,6 +14,7 @@ mod consent;
 mod device_info;
 mod devpkg;
 mod fps;
+mod logo_anim;
 mod modals;
 #[cfg(target_os = "macos")]
 mod native_menu;
@@ -23,6 +24,7 @@ mod page_layout;
 mod render;
 mod theme;
 mod toggle;
+mod update_overlay;
 mod views;
 mod widgets;
 mod worker;

@@ -8,9 +8,7 @@ struct HttpConnectionLifecycle {
 }
 
 enum HttpConnectionSlot {
-    Reserved {
-        start: oneshot::Sender<()>,
-    },
+    Reserved { start: oneshot::Sender<()> },
     Installed(tokio::task::JoinHandle<()>),
 }
 
