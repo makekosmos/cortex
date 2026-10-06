@@ -160,6 +160,8 @@ jobs:
 
       - name: Publish dry run
         if: needs.plan.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: node desktop/scripts/publish-release.mjs --platform win --receipt desktop/release/release-receipt.v2.json --dry-run
 
       # Push the bump commit and tag only after the gate and build passed, so
@@ -304,6 +306,7 @@ jobs:
 
       - name: Publish dry run
         env:
+          GH_TOKEN: ${{ github.token }}
           MUNDUS_RELEASE_LOCAL: "1"
         run: node desktop/scripts/publish-release.mjs --platform mac --receipt desktop/release/release-receipt.v2.json --dry-run
 
