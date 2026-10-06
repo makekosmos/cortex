@@ -84,6 +84,7 @@ pub fn load(path: &Path) -> Result<Manifest, String> {
     })
 }
 
+#[cfg(test)]
 pub fn sha256_hex(path: &Path) -> Result<String, String> {
     crate::file_hash::file_sha256(path).map_err(|e| format!("hash {path:?}: {e}"))
 }
