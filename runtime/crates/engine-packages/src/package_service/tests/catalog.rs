@@ -346,7 +346,9 @@ Connection: close
             socket.write_all(&head).await.expect("head");
             socket.write_all(&body).await.expect("body");
         });
-        reqwest::get(format!("http://127.0.0.1:{port}/"))
+        engine_base::http::client()
+            .get(format!("http://127.0.0.1:{port}/"))
+            .send()
             .await
             .expect("response")
     }
