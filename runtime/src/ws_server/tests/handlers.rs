@@ -189,3 +189,63 @@ async fn package_open_mints_per_tab_leases_and_reports_typed_errors() {
     assert!(!response.ok);
     assert_eq!(response.error.as_deref(), Some("packages.open: disabled"));
 }
+
+/// KOS-353: Manager package rows are keyed by id and call
+/// set_enabled/uninstall/disclosure without `version`. With a single
+/// installed (or singly catalog-listed) version the Engine resolves it —
+/// the id-only call must work, and only an absent/ambiguous id may fail
+/// `invalid-request`.
+#[tokio::test]
+async fn package_state_ops_resolve_version_for_id_only_calls() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let (service, _, _) = crate::package_service::tests::enabled_app_service(dir.path());
+    let service = Arc::new(service);
+
+    let disclosure = handle_package_op(
+        "disclosure",
+        serde_json::json!({"package_id": "com.kosmos.demo"}),
+        &service,
+    )
+    .await;
+    assert!(disclosure.ok, "{:?}", disclosure.error);
+
+    let disabled = handle_package_op(
+        "set_enabled",
+        serde_json::json!({"package_id": "com.kosmos.demo", "enabled": false}),
+        &service,
+    )
+    .await;
+    assert!(disabled.ok, "{:?}", disabled.error);
+    assert_eq!(disabled.data["enabled"], false);
+
+    let enabled = handle_package_op(
+        "set_enabled",
+        serde_json::json!({"package_id": "com.kosmos.demo", "enabled": true}),
+        &service,
+    )
+    .await;
+    assert!(enabled.ok, "{:?}", enabled.error);
+    assert_eq!(enabled.data["enabled"], true);
+
+    // An unknown or absent id still fails closed.
+    for params in [
+        serde_json::json!({"package_id": "com.kosmos.missing", "enabled": true}),
+        serde_json::json!({"enabled": true}),
+    ] {
+        let response = handle_package_op("set_enabled", params, &service).await;
+        assert!(!response.ok);
+        assert_eq!(
+            response.error.as_deref(),
+            Some("packages.set_enabled: invalid-request")
+        );
+    }
+
+    let uninstalled = handle_package_op(
+        "uninstall",
+        serde_json::json!({"package_id": "com.kosmos.demo"}),
+        &service,
+    )
+    .await;
+    assert!(uninstalled.ok, "{:?}", uninstalled.error);
+    assert_eq!(uninstalled.data["uninstalled"], true);
+}

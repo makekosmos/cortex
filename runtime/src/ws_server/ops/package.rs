@@ -60,8 +60,8 @@ pub(in crate::ws_server) async fn handle_package_op(
                 service.verify_installed_app(id, version, hash, catalog_sequence),
             )
         }
-        "disclosure" => match package_id_version(subop, &params) {
-            Ok((id, version)) => package_response(subop, service.disclosure(id, version)),
+        "disclosure" => match package_id_resolve_version(subop, &params, service) {
+            Ok((id, version)) => package_response(subop, service.disclosure(&id, &version)),
             Err(response) => response,
         },
         "refresh_catalog" => package_response(subop, service.refresh_catalog().await),
@@ -127,18 +127,10 @@ pub(in crate::ws_server) async fn handle_package_op(
             )
         }
         "install" => {
-            let Some(id) = params
-                .get("id")
-                .or_else(|| params.get("package_id"))
-                .and_then(serde_json::Value::as_str)
-            else {
-                return LocalResponse::err("packages.install: invalid-request");
+            let (id, version) = match package_id_resolve_version(subop, &params, service) {
+                Ok(pair) => pair,
+                Err(response) => return response,
             };
-            let Some(version) = params.get("version").and_then(serde_json::Value::as_str) else {
-                return LocalResponse::err("packages.install: invalid-request");
-            };
-            let id = id.to_owned();
-            let version = version.to_owned();
             if let Some(archive_path) = params
                 .get("archive_path")
                 .and_then(serde_json::Value::as_str)
@@ -196,20 +188,14 @@ pub(in crate::ws_server) async fn handle_package_op(
             }
         }
         "set_enabled" => {
-            let Some(id) = params
-                .get("id")
-                .or_else(|| params.get("package_id"))
-                .and_then(serde_json::Value::as_str)
-            else {
-                return LocalResponse::err("packages.set_enabled: invalid-request");
-            };
-            let Some(version) = params.get("version").and_then(serde_json::Value::as_str) else {
-                return LocalResponse::err("packages.set_enabled: invalid-request");
+            let (id, version) = match package_id_resolve_version(subop, &params, service) {
+                Ok(pair) => pair,
+                Err(response) => return response,
             };
             let Some(enabled) = params.get("enabled").and_then(serde_json::Value::as_bool) else {
                 return LocalResponse::err("packages.set_enabled: invalid-request");
             };
-            package_response(subop, service.set_enabled(id, version, enabled).await)
+            package_response(subop, service.set_enabled(&id, &version, enabled).await)
         }
         "bridge_config" => match package_id_version(subop, &params) {
             Ok((id, version)) => package_response(subop, service.bridge_config(id, version)),
@@ -236,20 +222,14 @@ pub(in crate::ws_server) async fn handle_package_op(
             package_response(subop, service.set_bridge_config(id, version, config).await)
         }
         "uninstall" => {
-            let Some(id) = params
-                .get("id")
-                .or_else(|| params.get("package_id"))
-                .and_then(serde_json::Value::as_str)
-            else {
-                return LocalResponse::err("packages.uninstall: invalid-request");
-            };
-            let Some(version) = params.get("version").and_then(serde_json::Value::as_str) else {
-                return LocalResponse::err("packages.uninstall: invalid-request");
+            let (id, version) = match package_id_resolve_version(subop, &params, service) {
+                Ok(pair) => pair,
+                Err(response) => return response,
             };
             package_response(
                 subop,
                 service
-                    .uninstall_with_worker_stop(id, version)
+                    .uninstall_with_worker_stop(&id, &version)
                     .await
                     .map(|()| serde_json::json!({ "uninstalled": true })),
             )
