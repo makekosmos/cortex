@@ -62,7 +62,7 @@ impl PackageService {
             let path = parsed.to_file_path().map_err(|_| PackageError::Invalid)?;
             fs::read(path).map_err(|_| PackageError::Invalid)?
         } else {
-            let response = reqwest::Client::builder()
+            let response = engine_base::http::client_builder()
                 .timeout(std::time::Duration::from_secs(30))
                 .build()
                 .map_err(|_| PackageError::Invalid)?
