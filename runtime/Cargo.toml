@@ -152,3 +152,8 @@ ed25519-dalek.workspace = true
 
 [lints]
 workspace = true
+
+[[bin]]
+name = "mundus-local-stt"
+path = "src/bin/mundus-local-stt.rs"
+required-features = ["local-dictation"]

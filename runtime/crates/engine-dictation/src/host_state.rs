@@ -57,6 +57,10 @@ pub struct DictationHost {
     capture: std::sync::Mutex<Option<super::native_capture::Session>>,
     contract_window_id: std::sync::Mutex<Option<String>>,
     contract_events: std::sync::atomic::AtomicBool,
+    /// In-flight `download_local_model` ops: model_id → last percent
+    /// (`None` = indeterminate phase). Polled via `list_local_models` —
+    /// Manager has no WS subscription.
+    downloads: Arc<std::sync::Mutex<local_models::ModelDownloads>>,
 }
 
 impl DictationHost {
@@ -114,6 +118,7 @@ impl DictationHost {
             capture: std::sync::Mutex::new(None),
             contract_window_id: std::sync::Mutex::new(None),
             contract_events: std::sync::atomic::AtomicBool::new(false),
+            downloads: Arc::new(std::sync::Mutex::new(local_models::ModelDownloads::new())),
         });
         // Активируем PTT hook соответственно текущему trigger_mode.
         apply_ptt_hook(&cfg, &events_tx);
@@ -145,6 +150,7 @@ impl DictationHost {
             capture: std::sync::Mutex::new(None),
             contract_window_id: std::sync::Mutex::new(None),
             contract_events: std::sync::atomic::AtomicBool::new(false),
+            downloads: Arc::new(std::sync::Mutex::new(local_models::ModelDownloads::new())),
         })
     }
 
@@ -255,6 +261,19 @@ impl DictationHost {
 
     async fn snapshot_config(&self) -> DictationConfig {
         self.config.lock().await.clone()
+    }
+
+    fn downloads_snapshot(&self) -> local_models::ModelDownloads {
+        self.downloads
+            .lock()
+            .map(|downloads| downloads.clone())
+            .unwrap_or_default()
+    }
+
+    /// `localModels` snapshot for op replies — config plus live download
+    /// progress so poll-only clients (Manager) can render a progress bar.
+    fn local_models_snapshot(&self, cfg: &DictationConfig) -> local_models::LocalModelsSnapshot {
+        local_models::snapshot(&self.data_dir, cfg, &self.downloads_snapshot())
     }
 }
 
@@ -396,7 +415,28 @@ fn local_selection_valid(cfg: &DictationConfig) -> bool {
     }
     let model_ok = cfg.local_model_path.as_deref().is_some_and(|path| {
         let path = std::path::Path::new(path);
-        path.is_file() || path.is_dir()
+        if path.is_file() {
+            return true;
+        }
+        if !path.is_dir() {
+            return false;
+        }
+        // Multi-file directory models count only once every declared file
+        // exists — a half-downloaded dir is not a usable selection.
+        cfg.local_model
+            .as_deref()
+            .and_then(|id| {
+                local_models::MODEL_CATALOG
+                    .iter()
+                    .find(|spec| spec.id == id)
+            })
+            .filter(|spec| spec.directory && !spec.files.is_empty())
+            .map(|spec| {
+                spec.files
+                    .iter()
+                    .all(|(_, local)| path.join(local).is_file())
+            })
+            .unwrap_or(true)
     });
     if cfg.local_engine == "parakeet" {
         return model_ok;

@@ -59,8 +59,8 @@ async fn apply_local_model_selection_values_to_config(
 }
 
 fn local_engine_for_model(model_id: &str) -> &'static str {
-    if model_id == "parakeet-tdt-0.6b-v3" {
-        "parakeet"
+    if model_id.starts_with("parakeet") {
+        local::PARAKEET_LOCAL_ENGINE
     } else {
         platform_local_engine()
     }
@@ -171,7 +171,7 @@ fn autoselect_local_model(data_dir: &std::path::Path, cfg: &mut DictationConfig)
 async fn op_list_local_models(host: &DictationHost) -> DictationResponse {
     let _ = reconcile_unready_local_config(host).await;
     let cfg = host.snapshot_config().await;
-    DictationResponse::ok(json!(local_models::snapshot(&host.data_dir, &cfg)))
+    DictationResponse::ok(json!(host.local_models_snapshot(&cfg)))
 }
 
 async fn op_download_local_model(params: Value, host: &DictationHost) -> DictationResponse {
@@ -192,10 +192,22 @@ async fn op_download_local_model(params: Value, host: &DictationHost) -> Dictati
     let events_tx = host.events_tx.clone();
     let data_dir = host.data_dir.clone();
     let config_state = host.config.clone();
+    let downloads = host.downloads.clone();
+    // Mark the download before spawning so the very next `list_local_models`
+    // poll already reports `downloading` — the op reply races the task.
+    if let Ok(mut map) = downloads.lock() {
+        map.insert(model_id.clone(), None);
+    }
     let model_id_for_task = model_id.clone();
     tokio::spawn(async move {
         let model_id = model_id_for_task;
         let mut progress = |progress: local_models::DownloadProgress| {
+            if let Ok(mut map) = downloads.lock() {
+                map.insert(
+                    model_id.clone(),
+                    progress.percent.map(|percent| percent as f32),
+                );
+            }
             let _ = events_tx.send(json!({
                 "event": "dictation_local_model_download_progress",
                 "modelId": model_id,
@@ -220,6 +232,9 @@ async fn op_download_local_model(params: Value, host: &DictationHost) -> Dictati
             Ok(path) => path,
             Err(e) => {
                 let msg = format!("download_local_model: {e}");
+                if let Ok(mut map) = downloads.lock() {
+                    map.remove(&model_id);
+                }
                 let _ = events_tx.send(json!({
                     "event": "dictation_local_model_download_failed",
                     "modelId": model_id,
@@ -235,6 +250,9 @@ async fn op_download_local_model(params: Value, host: &DictationHost) -> Dictati
                 Ok(path) => Some(path),
                 Err(e) => {
                     let msg = format!("download_local_model: {e}");
+                    if let Ok(mut map) = downloads.lock() {
+                        map.remove(&model_id);
+                    }
                     let _ = events_tx.send(json!({
                         "event": "dictation_local_model_download_failed",
                         "modelId": model_id,
@@ -259,6 +277,9 @@ async fn op_download_local_model(params: Value, host: &DictationHost) -> Dictati
             .await
             {
                 let msg = format!("download_local_model: {e}");
+                if let Ok(mut map) = downloads.lock() {
+                    map.remove(&model_id);
+                }
                 let _ = events_tx.send(json!({
                     "event": "dictation_local_model_download_failed",
                     "modelId": model_id,
@@ -268,11 +289,18 @@ async fn op_download_local_model(params: Value, host: &DictationHost) -> Dictati
             }
         }
         let cfg = config_state.lock().await.clone();
+        let local_models = match downloads.lock() {
+            Ok(mut map) => {
+                map.remove(&model_id);
+                local_models::snapshot(&data_dir, &cfg, &map)
+            }
+            Err(_) => local_models::snapshot(&data_dir, &cfg, &Default::default()),
+        };
         let _ = events_tx.send(json!({
             "event": "dictation_local_model_download_complete",
             "modelId": model_id,
             "config": select.then(|| config_to_value(&cfg)),
-            "localModels": local_models::snapshot(&data_dir, &cfg),
+            "localModels": local_models,
         }));
         let _ = events_tx.send(json!({ "event": "dictation.models_changed" }));
     });
@@ -293,7 +321,11 @@ async fn op_use_local_model(params: Value, host: &DictationHost) -> DictationRes
         .map(|spec| (spec, local_models::model_path(&host.data_dir, spec)))
     {
         Some((_, path)) if path.is_file() => path,
-        Some((spec, path)) if spec.directory && path.is_dir() => path,
+        Some((spec, path))
+            if spec.directory && local_models::model_is_installed(&host.data_dir, spec) =>
+        {
+            path
+        }
         Some((_, _)) => {
             return DictationResponse::err(format!(
                 "use_local_model: model is not downloaded: {model_id}"
@@ -319,7 +351,7 @@ async fn op_use_local_model(params: Value, host: &DictationHost) -> DictationRes
     match apply_local_model_selection(host, model_id, model_path, command_path).await {
         Ok(cfg) => DictationResponse::ok(json!({
             "config": config_to_value(&cfg),
-            "localModels": local_models::snapshot(&host.data_dir, &cfg),
+            "localModels": host.local_models_snapshot(&cfg),
         })),
         Err(e) => DictationResponse::err(format!("use_local_model: {e}")),
     }
@@ -367,7 +399,7 @@ async fn op_delete_local_model(params: Value, host: &DictationHost) -> Dictation
     let cfg = host.snapshot_config().await;
     DictationResponse::ok(json!({
         "config": config_to_value(&cfg),
-        "localModels": local_models::snapshot(&host.data_dir, &cfg),
+        "localModels": host.local_models_snapshot(&cfg),
     }))
 }
 

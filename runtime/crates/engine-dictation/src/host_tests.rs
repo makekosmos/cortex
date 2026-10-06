@@ -1823,16 +1823,17 @@
     #[test]
     fn autoselect_falls_back_to_catalog_order() {
         let td = tempfile::TempDir::new().unwrap();
-        // No recommended model ("small") downloaded — catalog order wins.
-        fake_model(td.path(), "turbo");
-        let tiny = fake_model(td.path(), "tiny-q5_1");
+        // No recommended model downloaded — catalog order wins ("turbo"
+        // sits before "large").
+        let turbo = fake_model(td.path(), "turbo");
+        fake_model(td.path(), "large");
         fake_whisper_command(td.path());
         let mut cfg = local_cfg();
         assert!(autoselect_local_model(td.path(), &mut cfg));
-        assert_eq!(cfg.local_model.as_deref(), Some("tiny-q5_1"));
+        assert_eq!(cfg.local_model.as_deref(), Some("turbo"));
         assert_eq!(
             cfg.local_model_path.as_deref(),
-            Some(tiny.to_string_lossy().as_ref())
+            Some(turbo.to_string_lossy().as_ref())
         );
     }
 

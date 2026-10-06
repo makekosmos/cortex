@@ -26,10 +26,13 @@ local-dictation = ["dep:transcribe-rs", "dep:ort"]
 engine-base = { path = "../engine-base" }
 # STT backends (local-dictation feature only).
 transcribe-rs = { version = "0.3.11", features = ["onnx"], optional = true }
-# KOS-345: load-dynamic — ort-sys/dlopen onnxruntime.dll в рантайме вместо
-# download/link в build script. transcribe-rs не пробрасывает эту feature,
+# KOS-345 → macOS fix: статическая линковка вместо load-dynamic. ort-sys
+# download-binaries в build script кладёт libonnxruntime.a в бинарь —
+# рантайме ничего искать не нужно (dlopen libonnxruntime.dylib на macOS
+# умирал по SIGKILL через com.apple.provenance, а error-path орта
+# дедлокился на OnceLock). transcribe-rs не пробрасывает эту feature,
 # поэтому ort объявлен напрямую (та же версия, feature unification).
-ort = { version = "2.0.0-rc.12", features = ["load-dynamic"], optional = true }
+ort = { version = "2.0.0-rc.12", optional = true }
 # Inject/capture.
 arboard = "3"
 libloading = "0.8"

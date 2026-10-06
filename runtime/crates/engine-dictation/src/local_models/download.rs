@@ -136,7 +136,6 @@ pub(super) async fn download_file(
         let lower_content_type = content_type.to_ascii_lowercase();
         if lower_content_type.contains("text/html")
             || lower_content_type.contains("application/json")
-            || lower_content_type.starts_with("text/")
         {
             return Err(LocalModelsError::Download(format!(
                 "{request_url}: expected binary download, got {content_type}"

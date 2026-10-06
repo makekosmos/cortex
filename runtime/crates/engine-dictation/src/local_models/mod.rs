@@ -53,6 +53,10 @@ pub struct LocalModelInfo {
     pub directory: bool,
     pub downloaded: bool,
     pub selected: bool,
+    /// A download op for this model is in flight; `downloadPercent` is the
+    /// last reported value (None = indeterminate, e.g. the extract phase).
+    pub downloading: bool,
+    pub download_percent: Option<f32>,
     pub path: Option<String>,
 }
 
@@ -128,7 +132,16 @@ pub fn model_path(data_dir: &Path, spec: &ModelSpec) -> PathBuf {
 pub fn model_is_installed(data_dir: &Path, spec: &ModelSpec) -> bool {
     let path = model_path(data_dir, spec);
     if spec.directory {
-        path.is_dir()
+        if spec.files.is_empty() {
+            // Tarball directory models: extraction is atomic, dir-exists is enough.
+            path.is_dir()
+        } else {
+            // Multi-file models download into the dir piecemeal — count as
+            // installed only once every declared file is present.
+            spec.files
+                .iter()
+                .all(|(_, local)| path.join(local).is_file())
+        }
     } else {
         path.is_file()
     }
@@ -252,7 +265,16 @@ pub fn cleanup_unused_backends(data_dir: &Path) -> io::Result<bool> {
     Ok(changed)
 }
 
-pub fn snapshot(data_dir: &Path, cfg: &config::DictationConfig) -> LocalModelsSnapshot {
+/// In-flight model downloads, `model_id` → last reported percent
+/// (`None` while the phase is indeterminate). `DictationHost` owns the map;
+/// `snapshot` renders it into `LocalModelInfo` for poll-only clients.
+pub type ModelDownloads = std::collections::HashMap<String, Option<f32>>;
+
+pub fn snapshot(
+    data_dir: &Path,
+    cfg: &config::DictationConfig,
+    downloads: &ModelDownloads,
+) -> LocalModelsSnapshot {
     let models_dir = models_dir(data_dir);
     let command_path = command_path(data_dir);
     let command_installed = command_path.as_ref().is_some_and(|path| path.is_file());
@@ -266,6 +288,7 @@ pub fn snapshot(data_dir: &Path, cfg: &config::DictationConfig) -> LocalModelsSn
             let selected = downloaded
                 && (cfg.local_model.as_deref() == Some(spec.id)
                     || selected_path == Some(path_text.as_str()));
+            let download_percent = downloads.get(spec.id).copied().flatten();
             LocalModelInfo {
                 id: spec.id.to_owned(),
                 name: spec.name.to_owned(),
@@ -280,6 +303,8 @@ pub fn snapshot(data_dir: &Path, cfg: &config::DictationConfig) -> LocalModelsSn
                 directory: spec.directory,
                 downloaded,
                 selected,
+                downloading: downloads.contains_key(spec.id),
+                download_percent,
                 path: downloaded.then_some(path_text),
             }
         })
@@ -340,7 +365,41 @@ pub async fn ensure_model_with_progress(
     if model_is_installed(data_dir, spec) {
         return Ok(path);
     }
-    if spec.directory {
+    if spec.directory && !spec.files.is_empty() {
+        // Multi-file model (e.g. Parakeet Ultra ONNX): `url` is the base,
+        // each `files` pair downloads straight into the model dir. Already
+        // present files are skipped; per-file `.part` resume stays inside
+        // `download_file`.
+        let base = spec.url.trim_end_matches('/');
+        let expected_total = spec.size_mb.saturating_mul(1024 * 1024);
+        let mut per_file = vec![0_u64; spec.files.len()];
+        for (index, (remote, local)) in spec.files.iter().enumerate() {
+            let destination = path.join(local);
+            if destination.is_file() {
+                continue;
+            }
+            let url = format!("{base}/{remote}");
+            let per_file = &mut per_file;
+            let progress = &mut *progress;
+            let mut inner = move |file_progress: DownloadProgress| {
+                per_file[index] = file_progress.downloaded_bytes;
+                let downloaded: u64 = per_file.iter().sum();
+                progress(DownloadProgress {
+                    phase: "model",
+                    downloaded_bytes: downloaded,
+                    total_bytes: Some(expected_total),
+                    percent: Some((downloaded as f64 / expected_total as f64 * 100.0).min(100.0)),
+                });
+            };
+            download::download_file(client, &url, &destination, "model", None, &mut inner).await?;
+        }
+        progress(DownloadProgress {
+            phase: "model",
+            downloaded_bytes: expected_total,
+            total_bytes: Some(expected_total),
+            percent: Some(100.0),
+        });
+    } else if spec.directory {
         let archive_path = path.with_extension("tar.gz");
         download::download_file(client, spec.url, &archive_path, "model", None, progress).await?;
         if let Some(expected) = spec.sha256 {
