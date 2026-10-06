@@ -91,11 +91,6 @@ reqwest = { version = "0.13", default-features = false, features = [
 ] }
 async-trait = "0.1"
 zip = { version = "0.6", default-features = false, features = ["deflate"] }
-flate2 = "1"
-tar = "0.4"
-# native_apps shortcuts: .lnk parsing (app_index's copy moved to
-# engine-indexes, KOS-335).
-lnk = "0.5"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 # Dictation deps (arboard, transcribe-rs/ort, hickory-resolver, libloading,
 # enigo notes) moved with the code to runtime/crates/engine-dictation (KOS-334).
@@ -105,7 +100,6 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg"]
 # base64 — encode/decode WAV bytes между renderer и backend (shared).
 keyring = { version = "3", features = ["windows-native", "apple-native"] }
 base64 = "0.22"
-hpke.workspace = true
 semver = "1"
 # Phase 4 bug-detection: structured logging.
 # tracing = фасад; subscriber = JSON exporter + env-filter; appender =
