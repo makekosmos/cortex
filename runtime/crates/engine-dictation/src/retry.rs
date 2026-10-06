@@ -226,7 +226,7 @@ mod tests {
     async fn classify_network_error_is_retryable() {
         // Чтобы получить реальный reqwest::Error — стучимся в заведомо
         // непривязанный порт (timeout).
-        let client = reqwest::Client::builder()
+        let client = engine_base::http::client_builder()
             .timeout(Duration::from_millis(50))
             .build()
             .expect("client");

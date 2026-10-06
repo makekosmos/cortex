@@ -73,7 +73,7 @@ fn interrupted_runtime_swap_recovers_previous_install() {
 #[ignore = "requires the immutable production runtime release"]
 async fn pinned_runtime_release_installs_atomically() {
     let tmp = tempfile::TempDir::new().expect("tempdir");
-    let client = Client::new();
+    let client = engine_base::http::client();
     install_whisper_cpp_zip(
         &client,
         &tools_dir(tmp.path()),
