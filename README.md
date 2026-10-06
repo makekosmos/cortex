@@ -1,4 +1,4 @@
-# CosCast
+# Mundus (Cortex)
 
 This repository owns the Mundus desktop application and its host-side services:
 
@@ -15,6 +15,21 @@ This repository owns the Mundus desktop application and its host-side services:
 - `runtime/` — the Rust Engine, including privileged operations
   (`mundus-engine privileged …` — managed hosts blocks and fast NTFS
   indexing behind a one-time UAC grant).
+
+## Quick start (dev)
+
+```text
+pnpm run dev                      # build the Engine, run the Manager against it
+pnpm run dev -- --engine-only     # only the Engine (cargo run -p engine)
+pnpm run dev -- --data-dir DIR    # default: <tmp>/mundus-dev, shared by both
+```
+
+Needs Rust (pinned by `rust-toolchain.toml`) and Node. Plain
+`cargo run -p engine` also works (`default-run = "mundus-engine"`); the
+Manager is a separate Cargo workspace, `cargo run --manifest-path
+manager-gpui/Cargo.toml`, and starts the Engine named by `MUNDUS_ENGINE_PATH`
+if none is running. The first build is slow (about 550 crates); later ones
+are incremental.
 
 ## Current boundary
 
@@ -120,9 +135,9 @@ unparseable revision selects the full check, as do shared, lockfile, build,
 workflow, hook, and unknown changes.
 
 Cheap local baseline: layout 0.108s, source-size test 0.680s, and naming test
-0.154s. There is no hosted CI by policy; local Lefthook gates are the only
-enforceable checks. Branch protection is disabled, and ruleset/merge-queue
-status is NOT_RUN. Use `--full` when reviewing uncertain changes and treat the
+0.154s. Hosted CI (`.github/workflows/ci.yml`: lint, plus build and tests on
+Windows and macOS) runs on every PR and on `main`; local Lefthook gates run the
+same checks earlier. Use `--full` when reviewing uncertain changes and treat the
 planner's `reasons` field as the explanation for a full selection.
 
 The build wrapper runs the release preflight — clean `main`, a version newer than
