@@ -765,38 +765,13 @@ fn run_whisper_cpp(req: OwnedLocalRequest) -> Result<TranscriptionResult, LocalE
     })
 }
 
-#[cfg(all(feature = "local-dictation", windows))]
-const ORT_DYLIB_NAME: &str = "onnxruntime.dll";
-#[cfg(all(feature = "local-dictation", target_os = "macos"))]
-const ORT_DYLIB_NAME: &str = "libonnxruntime.dylib";
-#[cfg(all(feature = "local-dictation", unix, not(target_os = "macos")))]
-const ORT_DYLIB_NAME: &str = "libonnxruntime.so";
-
-/// KOS-345: ort собран с `load-dynamic` — ONNX Runtime подгружается dlopen'ом
-/// в рантайме, build script ничего не скачивает и не линкует. Порядок поиска:
-/// `ORT_DYLIB_PATH` → dylib рядом с exe → имя в стандартном loader path.
-/// `ort::init_from` возвращает Result, поэтому отсутствующая библиотека —
-/// понятная ошибка, а не panic внутри ort при первом обращении к API.
+/// ONNX Runtime статически слинкован (ort-sys download-binaries в build
+/// script) — искать/грузить dylib в рантайме не нужно. `ort::init()` лишь
+/// коммитит Env; повторный commit — no-op, так что это дёшево.
 #[cfg(feature = "local-dictation")]
 fn ensure_onnxruntime() -> Result<(), LocalError> {
-    let candidates = [
-        std::env::var_os("ORT_DYLIB_PATH").map(PathBuf::from),
-        std::env::current_exe()
-            .ok()
-            .and_then(|exe| exe.parent().map(|dir| dir.join(ORT_DYLIB_NAME))),
-        Some(PathBuf::from(ORT_DYLIB_NAME)),
-    ];
-    let mut last_err = String::new();
-    for path in candidates.into_iter().flatten() {
-        match ort::init_from(&path) {
-            Ok(_) => return Ok(()),
-            Err(e) => last_err = format!("{}: {e}", path.display()),
-        }
-    }
-    Err(LocalError::CommandFailed(format!(
-        "onnxruntime dylib not found (set ORT_DYLIB_PATH or place {ORT_DYLIB_NAME} next to \
-         the engine binary): {last_err}"
-    )))
+    ort::init().commit();
+    Ok(())
 }
 
 #[cfg(feature = "local-dictation")]
