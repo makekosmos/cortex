@@ -6,55 +6,59 @@ use serde_json::Value;
 use crate::app::ManagerApp;
 
 impl ManagerApp {
-    /// The `pkg.open` reply: open the launch URL or surface the typed
-    /// Engine error (already a Russian line — `worker::package_open_message`).
-    pub(crate) fn open_reply(&mut self, result: Result<Value, String>) {
+    /// Hand an Engine-provided URL to the system browser, or raise `missing`
+    /// when the reply carried none; an Engine error is shown as is.
+    fn open_reply_url(
+        &mut self,
+        result: Result<Value, String>,
+        url_of: impl FnOnce(&Value) -> Option<String>,
+        missing: &str,
+    ) {
         match result {
-            Ok(v) => match v.get("launch_url").and_then(Value::as_str) {
-                Some(url) if !url.is_empty() => {
-                    if let Err(e) = mundus_gpui_kit::engine::open_url(url) {
+            Ok(v) => match url_of(&v).filter(|url| !url.is_empty()) {
+                Some(url) => {
+                    if let Err(e) = mundus_gpui_kit::engine::open_url(&url) {
                         self.error = Some(e);
                     }
                 }
-                _ => self.error = Some("Engine не вернул адрес приложения.".into()),
+                None => self.error = Some(missing.into()),
             },
             Err(e) => self.error = Some(e),
         }
+    }
+
+    /// The `pkg.open` reply: open the launch URL or surface the typed
+    /// Engine error (already a Russian line — `worker::package_open_message`).
+    pub(crate) fn open_reply(&mut self, result: Result<Value, String>) {
+        self.open_reply_url(
+            result,
+            |v| v.get("launch_url")?.as_str().map(str::to_owned),
+            "Engine не вернул адрес приложения.",
+        );
     }
 
     /// The `conn.login` reply: `integrations.login_contract` hands back the
     /// provider's login page — open it in the system browser.
     pub(crate) fn login_reply(&mut self, result: Result<Value, String>) {
-        match result {
-            Ok(v) => match v.pointer("/login/startUrl").and_then(Value::as_str) {
-                Some(url) if !url.is_empty() => {
-                    if let Err(e) = mundus_gpui_kit::engine::open_url(url) {
-                        self.error = Some(e);
-                    }
-                }
-                _ => self.error = Some("Интеграция не вернула страницу входа.".into()),
-            },
-            Err(e) => self.error = Some(e),
-        }
+        self.open_reply_url(
+            result,
+            |v| v.pointer("/login/startUrl")?.as_str().map(str::to_owned),
+            "Интеграция не вернула страницу входа.",
+        );
     }
 
     /// The `store.ext` reply: `store.external_url` → open in the system
-    /// browser.
+    /// browser. The answer is `{url}` or a bare string.
     pub(crate) fn external_url_reply(&mut self, result: Result<Value, String>) {
-        match result {
-            Ok(v) => {
-                let url = v
-                    .get("url")
+        self.open_reply_url(
+            result,
+            |v| {
+                v.get("url")
                     .and_then(Value::as_str)
-                    .map(str::to_string)
-                    .unwrap_or_else(|| v.as_str().unwrap_or_default().to_string());
-                if url.is_empty() {
-                    self.error = Some("Engine не вернул ссылку маркетплейса.".into());
-                } else if let Err(e) = mundus_gpui_kit::engine::open_url(&url) {
-                    self.error = Some(e);
-                }
-            }
-            Err(e) => self.error = Some(e),
-        }
+                    .or_else(|| v.as_str())
+                    .map(str::to_owned)
+            },
+            "Engine не вернул ссылку маркетплейса.",
+        );
     }
 }
