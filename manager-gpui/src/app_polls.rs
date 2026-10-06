@@ -70,18 +70,11 @@ impl ManagerApp {
         }
         if self.view == View::About && Instant::now() >= self.next_updater_poll {
             self.next_updater_poll = Instant::now() + std::time::Duration::from_secs(1);
-            if self
-                .worker
-                .commands
-                .send(Command::Rpc {
-                    slot: "upd.mundus".into(),
-                    op: "updater.status",
-                    params: json!({}),
-                })
-                .is_err()
-            {
-                self.worker_dead = true;
-            }
+            self.send(Command::Rpc {
+                slot: "upd.mundus".into(),
+                op: "updater.status",
+                params: json!({}),
+            });
         }
     }
 }
