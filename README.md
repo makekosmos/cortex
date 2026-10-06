@@ -1,4 +1,4 @@
-# CosCast
+# Mundus (Cortex)
 
 This repository owns the Mundus desktop application and its host-side services:
 
@@ -15,6 +15,22 @@ This repository owns the Mundus desktop application and its host-side services:
 - `runtime/` — the Rust Engine, including privileged operations
   (`mundus-engine privileged …` — managed hosts blocks and fast NTFS
   indexing behind a one-time UAC grant).
+
+## Quick start (dev)
+
+```text
+pnpm run dev                      # build the Engine, run the Manager against it
+pnpm run dev -- --engine-only     # only the Engine (cargo run -p engine)
+pnpm run dev -- --data-dir DIR    # default: <tmp>/mundus-dev, shared by both
+```
+
+Needs Rust (pinned by `rust-toolchain.toml`) and Node. Plain
+`cargo run -p engine` also works (`default-run = "mundus-engine"`); the
+Manager is a separate Cargo workspace, `cargo run --manifest-path
+manager-gpui/Cargo.toml`, and starts the Engine named by `MUNDUS_ENGINE_PATH`
+if none is running (an already healthy Engine in the data dir is reused as is,
+so stop a stale one first: its `pid` is in `<data-dir>/engine.lock.json`). The first build is slow (several hundred crates); later ones
+are incremental.
 
 ## Current boundary
 

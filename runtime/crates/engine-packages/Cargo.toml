@@ -39,13 +39,7 @@ base64 = "0.22"
 async-trait = "0.1"
 futures-util.workspace = true
 # package_service/integrations credential envelope + secret store.
-hpke = { version = "=0.14.1", default-features = false, features = [
-  "alloc",
-  "getrandom",
-  "x25519",
-  "hkdfsha2",
-  "chacha",
-] }
+hpke.workspace = true
 keyring = { version = "3", features = ["windows-native", "apple-native"] }
 # native_apps shortcuts: .lnk parsing.
 lnk = "0.5"
