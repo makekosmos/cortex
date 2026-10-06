@@ -1,6 +1,8 @@
-//! Full-window update overlay (KOS-355) — Grok-bot style: a centered Mundus
-//! badge with an animated metallic sweep and a gentle bounce over a dimmed
-//! shell, state-driven content underneath.
+//! Full-window update overlay (KOS-355, round 2): the Mundus petal mark
+//! rendered as Paper "Liquid Metal" — a faithful CPU port of the
+//! `liquid-metal` fragment shader evaluated per frame and clipped to the
+//! logo's alpha — floating over an opaque shell, state-driven content
+//! underneath. No badge or plate behind the mark.
 //!
 //! The machine is deliberately tiny and pure: `resolve` maps
 //! (snoozed, was_open, Engine `updater.status.state`) to the visible state.
@@ -9,9 +11,11 @@
 //! background check must never take over the whole window unprompted.
 use ::gpui::{prelude::*, *};
 use serde_json::json;
+use std::sync::Arc;
 
 use crate::app::ManagerApp;
 use crate::button;
+use crate::liquid_metal::{self, LogoField};
 use crate::theme::*;
 use mundus_gpui_kit::fields::{vnum, vopt, vstr};
 
@@ -56,64 +60,28 @@ pub fn bounce_offset(elapsed_secs: f32) -> f32 {
     (elapsed_secs * std::f32::consts::TAU / 1.9).sin() * 6.0
 }
 
-/// Shine-stripe position as a fraction of the badge width: sweeps left→right
-/// in ~0.9s, then rests out of view for the remainder of the 2.4s cycle so
-/// the sweep reads as a periodic glint, not a conveyor belt.
-pub fn sweep_fraction(elapsed_secs: f32) -> f32 {
-    let cycle = (elapsed_secs % 2.4) / 2.4;
-    if cycle < 0.375 {
-        cycle / 0.375 * 1.6 - 0.55
-    } else {
-        -0.55
-    }
-}
-
-fn badge(elapsed: f32) -> Div {
-    let sweep = sweep_fraction(elapsed);
-    let chrome_hi = crate::theme::rgba(0xf5f8fc, 1.0);
-    let chrome_lo = crate::theme::rgba(0x8fa9c4, 1.0);
-    div()
+/// The petal mark itself, filled with animated liquid metal. One frame is a
+/// few dozen KB of CPU-shaded pixels at 168×165 — cheap enough for vsync-rate
+/// repaints while the overlay is on screen.
+fn logo(field: Option<&Arc<LogoField>>, elapsed: f32) -> Stateful<Div> {
+    let mut mark = div()
+        .id("update-overlay-logo")
+        .debug_selector(|| "update-overlay-logo".into())
         .relative()
         .top(px(bounce_offset(elapsed)))
-        .size(px(112.))
-        .child(
-            div()
-                .id("update-overlay-badge")
-                .debug_selector(|| "update-overlay-badge".into())
-                .absolute()
-                .size_full()
-                .rounded_full()
-                .overflow_hidden()
-                .bg(linear_gradient(
-                    135.0,
-                    linear_color_stop(chrome_hi, 0.0),
-                    linear_color_stop(chrome_lo, 1.0),
-                ))
-                .border_2()
-                .border_color(crate::theme::rgba(0xffffff, 0.55))
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(
-                    gpui_component::Icon::default()
-                        .path("icons/mundus.svg")
-                        .size(px(56.))
-                        .text_color(gpui::white()),
-                )
-                .child(
-                    div()
-                        .absolute()
-                        .top_0()
-                        .bottom_0()
-                        .left(relative(sweep))
-                        .w(relative(0.5))
-                        .bg(linear_gradient(
-                            100.0,
-                            linear_color_stop(crate::theme::rgba(0xffffff, 0.0), 0.0),
-                            linear_color_stop(crate::theme::rgba(0xffffff, 0.6), 1.0),
-                        )),
-                ),
-        )
+        .size(px(160.));
+    if let Some(field) = field {
+        mark = mark.child(img(liquid_metal::frame(field, elapsed)).size_full());
+    } else {
+        // Fallback if the SVG mask could not be rasterized: plain glyph.
+        mark = mark.flex().items_center().justify_center().child(
+            gpui_component::Icon::default()
+                .path("icons/mundus.svg")
+                .size(px(140.))
+                .text_color(c(FG())),
+        );
+    }
+    mark
 }
 
 fn primary_op(state: OverlayState) -> &'static str {
@@ -133,9 +101,13 @@ pub fn render(
     let next = vopt(&status, "newVersion").unwrap_or_default();
     let current = vstr(&status, "currentVersion");
     let elapsed = app.update_anim_start.elapsed().as_secs_f32();
-    // The sweep/bounce need continuous frames only while the overlay is on
+    // The metal flow needs continuous frames only while the overlay is on
     // screen; Hidden requests nothing, so idle CPU stays at zero.
     window.request_animation_frame();
+
+    if app.update_logo.is_none() {
+        app.update_logo = LogoField::build(&cx.svg_renderer());
+    }
 
     let (title, detail) = match state {
         OverlayState::Offer => (
@@ -159,7 +131,6 @@ pub fn render(
     };
 
     let primary_label = match state {
-        OverlayState::Ready => "Обновить",
         OverlayState::Failed => "Повторить",
         _ => "Обновить",
     };
@@ -170,7 +141,7 @@ pub fn render(
         .flex_col()
         .items_center()
         .gap_4()
-        .child(badge(elapsed))
+        .child(logo(app.update_logo.as_ref(), elapsed))
         .child(
             div()
                 .flex()
@@ -227,49 +198,51 @@ pub fn render(
         );
     }
 
-    body = body.child(
+    // Actions stack vertically, equal width, centered: accent on top.
+    let mut actions = div().flex().flex_col().items_center().gap_2().w(px(240.));
+    if state != OverlayState::Downloading {
+        actions = actions.child(
+            div()
+                .id("update-overlay-primary")
+                .debug_selector(|| "update-overlay-primary".into())
+                .w_full()
+                .child(
+                    button::primary("update-overlay-primary-btn")
+                        .w_full()
+                        .label(primary_label)
+                        .disabled(busy)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.action(primary_op(state), json!({}));
+                            cx.notify();
+                        })),
+                ),
+        );
+    }
+    actions = actions.child(
         div()
-            .flex()
-            .gap_2()
-            .items_center()
-            .when(state != OverlayState::Downloading, |row| {
-                row.child(
-                    div()
-                        .id("update-overlay-primary")
-                        .debug_selector(|| "update-overlay-primary".into())
-                        .child(
-                            button::primary("update-overlay-primary-btn")
-                                .label(primary_label)
-                                .disabled(busy)
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.action(primary_op(state), json!({}));
-                                    cx.notify();
-                                })),
-                        ),
-                )
-            })
+            .id("update-overlay-later")
+            .debug_selector(|| "update-overlay-later".into())
+            .w_full()
             .child(
-                div()
-                    .id("update-overlay-later")
-                    .debug_selector(|| "update-overlay-later".into())
-                    .child(
-                        button::secondary("update-overlay-later-btn")
-                            .label("Позже")
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.update_snoozed = true;
-                                this.update_overlay = OverlayState::Hidden;
-                                cx.notify();
-                            })),
-                    ),
+                button::secondary("update-overlay-later-btn")
+                    .w_full()
+                    .label("Позже")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.update_snoozed = true;
+                        this.update_overlay = OverlayState::Hidden;
+                        cx.notify();
+                    })),
             ),
     );
+    body = body.child(actions);
 
     div()
         .id("update-overlay")
         .debug_selector(|| "update-overlay".into())
         .absolute()
         .size_full()
-        .bg(fade(0x000000, 0.55))
+        // Opaque takeover: the shell underneath must not bleed through.
+        .bg(c(BG()))
         .flex()
         .items_center()
         .justify_center()
