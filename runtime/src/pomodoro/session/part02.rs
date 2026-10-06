@@ -137,7 +137,9 @@ impl Session {
             Phase::Work => {
                 if self.completed_pomodoros > 0
                     && cfg.pomodoros_until_long_break > 0
-                    && self.completed_pomodoros.is_multiple_of(cfg.pomodoros_until_long_break)
+                    && self
+                        .completed_pomodoros
+                        .is_multiple_of(cfg.pomodoros_until_long_break)
                 {
                     Phase::LongBreak
                 } else {
