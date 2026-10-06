@@ -70,6 +70,54 @@ pub(crate) struct PendingItem {
     pub duration_sec: f32,
     /// Размер WAV в байтах (для GC по размеру + sanity check).
     pub wav_bytes: u64,
+    /// `Some("delivered")` — доставленная запись истории: WAV удалён,
+    /// retry по ней бессмысленен. `None`/прочее — ещё в очереди.
+    #[serde(default)]
+    pub status: Option<String>,
+    /// Распознанный текст доставленной записи (для истории в UI).
+    #[serde(default)]
+    pub transcript: Option<String>,
+}
+
+/// Item в списке, который ещё требует обработки (не delivered-запись
+/// истории): применяется в worker'ах и retry-all, чтобы доставленные не
+/// ре-инжектились.
+fn is_unresolved(item: &PendingItem) -> bool {
+    item.status.as_deref() != Some("delivered")
+}
+
+pub(crate) fn list_unresolved(data_dir: &Path) -> Result<Vec<PendingItem>, PendingError> {
+    Ok(list(data_dir)?.into_iter().filter(is_unresolved).collect())
+}
+
+/// Доставленная попытка остаётся в списке как история: meta JSON
+/// переписывается со статусом + текстом, WAV удаляется.
+pub(crate) fn mark_delivered(
+    data_dir: &Path,
+    uuid: &str,
+    transcript: &str,
+) -> Result<(), PendingError> {
+    let mut item = list(data_dir)?
+        .into_iter()
+        .find(|i| i.uuid == uuid)
+        .ok_or_else(|| PendingError::NotFound(uuid.into()))?;
+    item.status = Some("delivered".into());
+    item.transcript = Some(transcript.to_string());
+    let json = serde_json::to_vec_pretty(&item)?;
+    atomic_write(&meta_path(data_dir, uuid), &json)?;
+    // WAV больше не нужен — retry по delivered записи не поддерживается.
+    let _ = fs::remove_file(wav_path(data_dir, uuid));
+    Ok(())
+}
+
+/// Сбросить историю целиком — каждый item (и delivered-записи тоже).
+pub(crate) fn drop_all(data_dir: &Path) -> Result<u32, PendingError> {
+    let mut removed = 0u32;
+    for item in list(data_dir)? {
+        drop_item(data_dir, &item.uuid)?;
+        removed += 1;
+    }
+    Ok(removed)
 }
 
 fn pending_dir(data_dir: &Path) -> PathBuf {
@@ -118,6 +166,8 @@ pub(crate) fn enqueue(
         opts,
         duration_sec,
         wav_bytes: wav.len() as u64,
+        status: None,
+        transcript: None,
     };
     let json = serde_json::to_vec_pretty(&item)?;
     atomic_write(&meta_path(data_dir, &uuid), &json)?;
@@ -154,7 +204,9 @@ pub(crate) fn list(data_dir: &Path) -> Result<Vec<PendingItem>, PendingError> {
             Err(_) => continue,
         };
         // WAV должен существовать — иначе orphan-метаданные, чистим.
-        if !wav_path(data_dir, &item.uuid).exists() {
+        // Delivered-записи истории легально без аудио (WAV удаляется на
+        // mark_delivered) — их не трогаем.
+        if item.status.as_deref() != Some("delivered") && !wav_path(data_dir, &item.uuid).exists() {
             let _ = fs::remove_file(&path);
             continue;
         }

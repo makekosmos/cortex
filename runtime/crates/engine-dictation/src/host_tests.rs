@@ -391,8 +391,11 @@
             }
         ));
 
-        // pending удалён
-        assert!(super::super::pending::list(&host.data_dir)
+        // Доставленная попытка остаётся историей, но покидает очередь.
+        let items = super::super::pending::list(&host.data_dir).unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].status.as_deref(), Some("delivered"));
+        assert!(super::super::pending::list_unresolved(&host.data_dir)
             .unwrap()
             .is_empty());
         // state → Idle
@@ -441,7 +444,7 @@
                 ..
             }
         ));
-        assert!(super::super::pending::list(&host.data_dir)
+        assert!(super::super::pending::list_unresolved(&host.data_dir)
             .unwrap()
             .is_empty());
         let snap = host.current_state().await;
@@ -682,7 +685,7 @@
         )
         .await;
         // Никаких новых файлов не появилось — discard выдержан.
-        assert!(super::super::pending::list(&host.data_dir)
+        assert!(super::super::pending::list_unresolved(&host.data_dir)
             .unwrap()
             .is_empty());
     }
@@ -740,7 +743,7 @@
         }
         let resp = op_discard(json!({ "uuid": uuid }), &host).await;
         assert!(resp.ok);
-        assert!(super::super::pending::list(&host.data_dir)
+        assert!(super::super::pending::list_unresolved(&host.data_dir)
             .unwrap()
             .is_empty());
         let snap = host.current_state().await;
@@ -797,7 +800,7 @@
         let resp = op_discard_all(&host).await;
         assert!(resp.ok);
         assert_eq!(resp.data["discarded"], 2);
-        assert!(super::super::pending::list(&host.data_dir)
+        assert!(super::super::pending::list_unresolved(&host.data_dir)
             .unwrap()
             .is_empty());
         let snap = host.current_state().await;
@@ -1197,6 +1200,7 @@
         assert_eq!(state.data["state"], "idle");
         assert_eq!(state.data["activeUuid"], Value::Null);
 
+        // submit_audio обходит очередь — диагностический путь, не история.
         let pending = op_list_pending(&host).await;
         assert!(pending.ok);
         assert_eq!(pending.data["items"].as_array().unwrap().len(), 0);
@@ -1305,7 +1309,9 @@
 
         let pending = op_list_pending(&host).await;
         assert!(pending.ok);
-        assert_eq!(pending.data["items"].as_array().unwrap().len(), 0);
+        let items = pending.data["items"].as_array().unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["status"], "delivered");
 
         let stats = handle_dictation_op("get_stats", Value::Null, &host).await;
         assert!(stats.ok);
@@ -1385,7 +1391,9 @@
 
         let pending = op_list_pending(&host).await;
         assert!(pending.ok);
-        assert_eq!(pending.data["items"].as_array().unwrap().len(), 0);
+        let items = pending.data["items"].as_array().unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["status"], "delivered");
 
         std::env::remove_var("MUNDUS_TEST_LOCAL_DICTATION_TRANSCRIPT");
         std::env::remove_var("MUNDUS_TEST_MODE");

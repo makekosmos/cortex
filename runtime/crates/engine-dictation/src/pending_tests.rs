@@ -240,3 +240,34 @@ fn read_wav_and_bump_attempt_reject_traversal_uuid() {
         Err(PendingError::InvalidUuid(_))
     ));
 }
+
+#[test]
+fn delivered_items_stay_in_history_but_leave_the_queue() {
+    let td = TempDir::new().unwrap();
+    let uuid = enqueue(
+        td.path(),
+        b"wav",
+        1.0,
+        EnqueueOpts {
+            language: "ru".into(),
+            prompt: String::new(),
+            inject_mode: "auto_paste".into(),
+            model: "parakeet".into(),
+            prev_hwnd: None,
+        },
+    )
+    .unwrap();
+
+    mark_delivered(td.path(), &uuid, "привет").unwrap();
+    // История: запись осталась со статусом и текстом, WAV удалён.
+    let items = list(td.path()).unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].status.as_deref(), Some("delivered"));
+    assert_eq!(items[0].transcript.as_deref(), Some("привет"));
+    assert!(!wav_path(td.path(), &uuid).exists());
+    // А из unresolved-очереди она ушла — retry её не трогает.
+    assert!(list_unresolved(td.path()).unwrap().is_empty());
+    // drop_all сносит и историю.
+    assert_eq!(drop_all(td.path()).unwrap(), 1);
+    assert!(list(td.path()).unwrap().is_empty());
+}
