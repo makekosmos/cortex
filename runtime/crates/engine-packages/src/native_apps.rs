@@ -306,6 +306,7 @@ impl NativeAppStore {
 pub mod releases;
 
 include!("native_apps/install.rs");
+include!("native_apps/launch.rs");
 include!("native_apps/shortcuts.rs");
 
 impl NativeAppStore {
@@ -358,6 +359,10 @@ impl NativeAppStore {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "native_apps/launch_tests.rs"]
+mod launch_tests;
 
 #[cfg(test)]
 #[path = "native_apps/tests.rs"]
