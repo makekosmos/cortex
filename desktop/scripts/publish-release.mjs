@@ -283,12 +283,15 @@ export async function main() {
   // publish job is still the latest published stable release.
   let releaseNotes = null;
   if (platform === MANIFEST_CREATOR_PLATFORM && !alreadyExists) {
-    const baseline = previousReleaseBaseline({ repo: repository });
-    releaseNotes = buildReleaseNotes({ version, fromCommit: baseline.commit, toCommit: commit });
-    if (dryRun)
+    if (dryRun) {
+      // Dry-run has no GH_TOKEN: never call `gh` for the baseline.
       console.log(
-        `[publish-release] release notes for v${version} (since ${baseline.tag}):\n${releaseNotes}`,
+        `[publish-release] dry run: would generate release notes for v${version} from previous published baseline`,
       );
+    } else {
+      const baseline = previousReleaseBaseline({ repo: repository });
+      releaseNotes = buildReleaseNotes({ version, fromCommit: baseline.commit, toCommit: commit });
+    }
   }
 
   if (dryRun) return;
