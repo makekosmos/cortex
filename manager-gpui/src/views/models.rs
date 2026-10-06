@@ -19,6 +19,8 @@ const ACTION_W: f32 = 96.;
 const ACTION_H: f32 = 28.;
 const PIP_W: f32 = 14.;
 const PIP_H: f32 = 4.;
+/// Fixed column for one pip group — header labels sit on the same grid.
+const PIP_COL_W: f32 = 84.;
 /// Progress ring stroke width on the download pill.
 const RING_W: f32 = 1.5;
 /// Per-frame lerp toward the polled percent — engine updates land once a
@@ -29,12 +31,58 @@ pub fn load(app: &mut ManagerApp) {
     app.call("models.list", "dictation.list_local_models", json!({}));
 }
 
-fn icon_for(id: &str) -> &'static str {
-    if id.starts_with("parakeet") {
-        "icons/providers/nvidia.svg"
+fn icon_for(id: &str) -> AnyElement {
+    if id == "parakeet-ultra" {
+        img("icons/providers/moondream.webp")
+            .size(px(20.))
+            .flex_none()
+            .into_any_element()
     } else {
-        "icons/providers/openai.svg"
+        svg()
+            .path(if id.starts_with("parakeet") {
+                "icons/providers/nvidia.svg"
+            } else {
+                "icons/providers/openai.svg"
+            })
+            .size(px(20.))
+            .flex_none()
+            .text_color(c(FG()))
+            .into_any_element()
     }
+}
+
+/// Column labels aligned to the row grid: icon spacer, name, the two pip
+/// groups, the action pill.
+fn header_row() -> Div {
+    let cell = |label: &'static str| {
+        div()
+            .w(px(PIP_COL_W))
+            .flex_none()
+            .text_size(ui_px(11.))
+            .text_color(c(MUTED_FG()))
+            .child(label)
+    };
+    div()
+        .mx(px(16.))
+        .pt(px(12.))
+        .pb(px(6.))
+        .border_b_1()
+        .border_color(fade(BORDER(), 0.6))
+        .flex()
+        .items_center()
+        .gap(px(12.))
+        .child(div().w(px(20.)).flex_none())
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .text_size(ui_px(11.))
+                .text_color(c(MUTED_FG()))
+                .child("Модель"),
+        )
+        .child(cell("Скорость"))
+        .child(cell("Точность"))
+        .child(div().w(px(ACTION_W)).flex_none())
 }
 
 /// Five thin bars; `score` is 0.0..=1.0 from the Engine catalog.
@@ -258,6 +306,9 @@ pub fn render(
         .px(px(0.))
         .py(px(0.))
         .gap(px(0.));
+    if !models.is_null() {
+        rows = rows.child(header_row());
+    }
     let mut downloading_ids = std::collections::HashSet::new();
     let mut animating = false;
     for (index, model) in sorted.iter().enumerate() {
@@ -298,16 +349,20 @@ pub fn render(
             .flex()
             .items_center()
             .gap(px(12.))
-            .child(
-                svg()
-                    .path(icon_for(&id))
-                    .size(px(20.))
-                    .flex_none()
-                    .text_color(c(FG())),
-            )
+            .child(icon_for(&id))
             .child(row_copy(vstr(model, "name"), ""))
-            .child(pips(vnum(model, "speedScore")))
-            .child(pips(vnum(model, "accuracyScore")));
+            .child(
+                div()
+                    .w(px(PIP_COL_W))
+                    .flex_none()
+                    .child(pips(vnum(model, "speedScore"))),
+            )
+            .child(
+                div()
+                    .w(px(PIP_COL_W))
+                    .flex_none()
+                    .child(pips(vnum(model, "accuracyScore"))),
+            );
         if let Some(percent) = pill {
             r = r.child(progress_pill(&id, percent));
         } else if vbool(model, "downloaded") {
