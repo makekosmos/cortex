@@ -17,8 +17,10 @@ imago-gpui = { git = "https://github.com/makekosmos/imago.git", rev = "c7ae79447
 # pin the SAME imago rev as imago-gpui so the lockfile holds one source.
 mundus-gpui-kit = { git = "https://github.com/makekosmos/imago.git", rev = "c7ae7944782af5ec903c6332bfef362bb03e03b8" }
 serde = { version = "1.0.229", features = ["derive"] }
-# KOS-355 liquid-metal logo: per-frame RenderImage construction. Versions
-# match the ones already pinned in the lockfile by gpui itself.
+# KOS-355 liquid-metal logo: the mark is a checked-in lossless animated
+# WebP (assets/logo-256-60.webp) decoded once into a RenderImage ring.
+# `static` forces the vendored libwebp build instead of pkg-config.
+webp-animation = { version = "0.10.0", features = ["static"] }
 image = "0.25.1"
 smallvec = "1.13"
 serde_json = "1.0.151"

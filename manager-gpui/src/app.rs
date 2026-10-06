@@ -101,9 +101,9 @@ pub struct ManagerApp {
     pub update_overlay: crate::update_overlay::OverlayState,
     /// Frame clock for the logo bounce/metal flow; reset on Hidden→visible.
     pub update_anim_start: Instant,
-    /// Liquid-metal input field (edge + alpha), rasterized once from the
-    /// Mundus mark. `None` → plain-icon fallback.
-    pub update_logo: Option<std::sync::Arc<crate::liquid_metal::LogoField>>,
+    /// Decoded WebP frame ring for the liquid-metal mark.
+    /// `None` → plain-icon fallback.
+    pub update_logo: Option<std::sync::Arc<crate::logo_anim::LogoFrames>>,
     /// Company whose key modal is open.
     pub key_editor: Option<String>,
     /// Key value that passed verification in the open modal.
