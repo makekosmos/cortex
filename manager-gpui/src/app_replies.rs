@@ -11,13 +11,13 @@ impl ManagerApp {
     fn open_reply_url(
         &mut self,
         result: Result<Value, String>,
-        url_of: impl FnOnce(&Value) -> Option<String>,
+        url_of: impl FnOnce(&Value) -> Option<&str>,
         missing: &str,
     ) {
         match result {
             Ok(v) => match url_of(&v).filter(|url| !url.is_empty()) {
                 Some(url) => {
-                    if let Err(e) = mundus_gpui_kit::engine::open_url(&url) {
+                    if let Err(e) = mundus_gpui_kit::engine::open_url(url) {
                         self.error = Some(e);
                     }
                 }
@@ -32,7 +32,7 @@ impl ManagerApp {
     pub(crate) fn open_reply(&mut self, result: Result<Value, String>) {
         self.open_reply_url(
             result,
-            |v| v.get("launch_url")?.as_str().map(str::to_owned),
+            |v| v.get("launch_url")?.as_str(),
             "Engine не вернул адрес приложения.",
         );
     }
@@ -42,7 +42,7 @@ impl ManagerApp {
     pub(crate) fn login_reply(&mut self, result: Result<Value, String>) {
         self.open_reply_url(
             result,
-            |v| v.pointer("/login/startUrl")?.as_str().map(str::to_owned),
+            |v| v.pointer("/login/startUrl")?.as_str(),
             "Интеграция не вернула страницу входа.",
         );
     }
@@ -52,12 +52,7 @@ impl ManagerApp {
     pub(crate) fn external_url_reply(&mut self, result: Result<Value, String>) {
         self.open_reply_url(
             result,
-            |v| {
-                v.get("url")
-                    .and_then(Value::as_str)
-                    .or_else(|| v.as_str())
-                    .map(str::to_owned)
-            },
+            |v| v.get("url").and_then(Value::as_str).or_else(|| v.as_str()),
             "Engine не вернул ссылку маркетплейса.",
         );
     }
