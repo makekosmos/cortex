@@ -26,8 +26,7 @@ const ALLOWED = new Map([
   ["runtime/crates/engine-dictation/Cargo.toml::ort", "2.0.0-rc.12"],
   // hpke =0.14.1: the iroh/noq stack pins the same RustCrypto draft suite;
   // a caret bump splits the crypto traits.
-  ["runtime/Cargo.toml::hpke", "=0.14.1"],
-  ["runtime/crates/engine-packages/Cargo.toml::hpke", "=0.14.1"],
+  ["Cargo.toml::hpke", "=0.14.1"],
   // embed-resource =3.0.11: Windows resource compiler helper, pinned to keep
   // manager-gpui build output reproducible.
   ["runtime/crates/pe-version-info/Cargo.toml::embed-resource", "=3.0.11"],

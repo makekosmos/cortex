@@ -4,6 +4,8 @@ version = "0.1.0"
 edition.workspace = true
 description = "Mundus Engine — headless ARK host (WS server, sidecar supervisor, sync)"
 autobins = false
+# `cargo run -p engine` starts the Engine; the other bins are test fixtures.
+default-run = "mundus-engine"
 
 [features]
 default = ["handle-relative-fs-serde"]
@@ -103,13 +105,7 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg"]
 # base64 — encode/decode WAV bytes между renderer и backend (shared).
 keyring = { version = "3", features = ["windows-native", "apple-native"] }
 base64 = "0.22"
-hpke = { version = "=0.14.1", default-features = false, features = [
-  "alloc",
-  "getrandom",
-  "x25519",
-  "hkdfsha2",
-  "chacha",
-] }
+hpke.workspace = true
 semver = "1"
 # Phase 4 bug-detection: structured logging.
 # tracing = фасад; subscriber = JSON exporter + env-filter; appender =

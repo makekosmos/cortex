@@ -46,7 +46,7 @@ wildcards = "warn"
 highlight = "all"
 skip = [
     # --- windows crate chains -------------------------------------------------
-    # Multiple generations of the windows/-sys/-targets family are pulled in by
+    # Multiple generations of windows-sys/-targets and windows_* are pulled in by
     # different upstream deps (iroh/netwatch, netdev, gpui, wmi, etc.). Not
     # controllable until the upstreams converge.
     { name = "windows-sys" },

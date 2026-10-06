@@ -2,6 +2,7 @@
   "name": "@mundus/shell",
   "private": true,
   "scripts": {
+    "dev": "node scripts/dev.mjs",
     "build:desktop": "node desktop/scripts/build-desktop.mjs --platform win",
     "build:native": "node desktop/scripts/build-native-components.mjs",
     "test:native-build": "node --test desktop/scripts/build-native-components.test.mjs",
