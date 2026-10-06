@@ -100,8 +100,9 @@ pub struct ManagerApp {
     pub key_checked: Option<String>,
     /// packages.disclosure payload waiting for install consent.
     pub disclosure: Option<Value>,
-    /// package_id the disclosure was fetched for — install proceeds on consent.
-    pub pending_install: Option<String>,
+    /// (package_id, version) the disclosure was fetched for — install
+    /// proceeds on consent. `packages.install` requires both.
+    pub pending_install: Option<(String, String)>,
     /// Store listing shown in the detail overlay.
     pub detail: Option<Value>,
     /// Usage view state: column sort, system-process filter, virtual list scroll.

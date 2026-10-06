@@ -133,6 +133,7 @@ pub fn render_tools(
         for p in dev {
             let id = vstr(&p, "id");
             let uid = id.clone();
+            let uversion = vstr(&p, "version");
             el = el.child(
                 entry_row(
                     icon_file(vopt(&p, "icon_path")),
@@ -147,7 +148,7 @@ pub fn render_tools(
                             "Удалить dev-пакет",
                             "Пакет будет удалён из Engine.",
                             "packages.uninstall",
-                            json!({"package_id": uid}),
+                            json!({"package_id": uid, "version": uversion}),
                             cx,
                         );
                     })
