@@ -751,6 +751,7 @@ impl AgentsService {
             .ok_or_else(|| AgentsError::SessionNotFound)
     }
 
+    #[cfg(test)]
     pub(crate) async fn create_session(
         self: &Arc<Self>,
         input: Value,

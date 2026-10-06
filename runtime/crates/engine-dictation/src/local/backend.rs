@@ -31,6 +31,7 @@ fn ensure_existing_file(path: &str, missing: LocalError) -> Result<PathBuf, Loca
     Ok(path)
 }
 
+#[cfg(feature = "local-dictation")]
 fn ensure_existing_model_path(path: &str) -> Result<PathBuf, LocalError> {
     let trimmed = path.trim();
     if trimmed.is_empty() {

@@ -33,12 +33,14 @@ pub(crate) fn next_crash_streak(current: usize, ran_for: Duration) -> usize {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ExitKind {
+    #[cfg(test)]
     Intentional,
     Unexpected,
 }
 
 pub(crate) fn crash_streak_after_exit(current: usize, ran_for: Duration, kind: ExitKind) -> usize {
     match kind {
+        #[cfg(test)]
         ExitKind::Intentional => current,
         ExitKind::Unexpected => next_crash_streak(current, ran_for),
     }

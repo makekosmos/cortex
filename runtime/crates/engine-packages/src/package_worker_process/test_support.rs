@@ -178,7 +178,7 @@ pub mod test_support {
         let mut returned = 0;
         unsafe {
             QueryInformationJobObject(
-                Some(job.raw()),
+                Some(job.0.raw()),
                 JobObjectExtendedLimitInformation,
                 (&mut limits as *mut JOBOBJECT_EXTENDED_LIMIT_INFORMATION)
                     .cast::<std::ffi::c_void>(),
@@ -190,7 +190,7 @@ pub mod test_support {
         let mut cpu = JOBOBJECT_CPU_RATE_CONTROL_INFORMATION::default();
         unsafe {
             QueryInformationJobObject(
-                Some(job.raw()),
+                Some(job.0.raw()),
                 JobObjectCpuRateControlInformation,
                 (&mut cpu as *mut JOBOBJECT_CPU_RATE_CONTROL_INFORMATION)
                     .cast::<std::ffi::c_void>(),
