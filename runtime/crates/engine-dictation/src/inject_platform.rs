@@ -33,9 +33,50 @@ pub fn capture_foreground_window() -> Option<isize> {
     (raw != 0).then_some(raw)
 }
 
-#[cfg(not(windows))]
+/// macOS: frontmost app PID via System Events — stored as prev_hwnd and
+/// used to reactivate the target before Cmd+V at delivery time.
+#[cfg(target_os = "macos")]
+pub fn capture_foreground_window() -> Option<isize> {
+    const SCRIPT: &str = concat!(
+        r#"tell application "System Events" to "#,
+        "get unix id of first application process whose frontmost is true",
+    );
+    let out = std::process::Command::new("/usr/bin/osascript")
+        .args(["-e", SCRIPT])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&out.stdout)
+        .trim()
+        .parse::<isize>()
+        .ok()
+}
+
+#[cfg(all(not(windows), not(target_os = "macos")))]
 pub fn capture_foreground_window() -> Option<isize> {
     None
+}
+
+/// Reactivate the app captured at recording start so the paste keystroke
+/// lands in the user's editor, not in the dictation window itself.
+#[cfg(target_os = "macos")]
+fn activate_pid(pid: isize) -> Result<(), InjectError> {
+    let script = format!(
+        "tell application \"System Events\" to set frontmost of \
+         (first process whose unix id is {pid}) to true"
+    );
+    let ok = std::process::Command::new("/usr/bin/osascript")
+        .args(["-e", &script])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if ok {
+        Ok(())
+    } else {
+        Err(InjectError::ForegroundRestore)
+    }
 }
 
 #[cfg(windows)]
@@ -153,7 +194,11 @@ impl OsAdapter for SystemOsAdapter {
                 return Err(InjectError::ForegroundRestore);
             }
         }
-        #[cfg(not(windows))]
+        #[cfg(target_os = "macos")]
+        {
+            activate_pid(raw)?;
+        }
+        #[cfg(all(not(windows), not(target_os = "macos")))]
         {
             let _ = raw;
         }
@@ -191,7 +236,16 @@ pub(crate) fn inject_with_adapter(
 
     #[cfg(target_os = "macos")]
     {
-        let _ = prev_hwnd;
+        if let Some(pid) = prev_hwnd {
+            if let Err(error) = adapter.restore_foreground_window(pid) {
+                return Ok(DeliveryResult {
+                    delivery: Delivery::ClipboardFallback {
+                        reason: error.safe_reason(),
+                    },
+                });
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
         if let Err(error) = adapter.send_paste() {
             return Ok(DeliveryResult {
                 delivery: Delivery::ClipboardFallback {
