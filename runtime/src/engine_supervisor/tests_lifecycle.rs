@@ -158,8 +158,14 @@ async fn deadline_force_kills_only_the_owned_child_handle() {
     };
     #[cfg(windows)]
     let mut command = {
-        let mut command = Command::new("cmd.exe");
-        command.args(["/D", "/C", "ping -n 11 127.0.0.1 >NUL"]);
+        // Run ping directly: through `cmd.exe` the force-kill only reaches the
+        // shell and the orphaned ping keeps inherited handles open, which
+        // nextest reports as a leak.
+        let mut command = Command::new("ping.exe");
+        command.args(["-n", "11", "127.0.0.1"]);
+        command.stdin(std::process::Stdio::null());
+        command.stdout(std::process::Stdio::null());
+        command.stderr(std::process::Stdio::null());
         command.creation_flags(CREATE_NO_WINDOW);
         command
     };

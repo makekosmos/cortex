@@ -62,7 +62,7 @@ pub(in crate::ws_server) async fn handle_package_op(
         }
         "disclosure" => match package_id_version(subop, &params) {
             Ok((id, version)) => package_response(subop, service.disclosure(id, version)),
-            Err(response) => return response,
+            Err(response) => response,
         },
         "refresh_catalog" => package_response(subop, service.refresh_catalog().await),
         "revoke_legacy_grants" => {
@@ -213,7 +213,7 @@ pub(in crate::ws_server) async fn handle_package_op(
         }
         "bridge_config" => match package_id_version(subop, &params) {
             Ok((id, version)) => package_response(subop, service.bridge_config(id, version)),
-            Err(response) => return response,
+            Err(response) => response,
         },
         "bridge_config_set" => {
             let Some(id) = params

@@ -278,7 +278,7 @@ async fn start_app_server(session: &Session) -> Result<AppServerStartup, AgentsE
     // codex is an npm `codex.cmd` shim on Windows: resolve it before setting
     // stdio, which a rebuilt command would drop.
     let mut command = crate::process_tree::resolve_command(codex_command())
-        .map_err(|e| AgentsError::CodexCliSpawn(e))?;
+        .map_err(AgentsError::CodexCliSpawn)?;
     command
         .args(["app-server", "--stdio"])
         .current_dir(&session.worktree_path)
@@ -287,7 +287,7 @@ async fn start_app_server(session: &Session) -> Result<AppServerStartup, AgentsE
         .stderr(Stdio::null());
     let mut process_tree = crate::process_tree::ProcessTree::spawn(&mut command, 0)
         .await
-        .map_err(|e| AgentsError::CodexCliSpawn(e))?;
+        .map_err(AgentsError::CodexCliSpawn)?;
     let mut stdin = process_tree
         .child_mut()
         .stdin
@@ -656,7 +656,7 @@ pub(crate) fn canonical_project_path(project: &Project) -> Result<String, Agents
     Path::new(&project.path)
         .canonicalize()
         .map(|path| path.to_string_lossy().into_owned())
-        .map_err(|error| AgentsError::ProjectPath(error))
+        .map_err(AgentsError::ProjectPath)
 }
 pub(crate) fn required_str(value: &Value, key: &str) -> Result<String, AgentsError> {
     value
@@ -769,9 +769,7 @@ pub(crate) async fn git_output(cwd: &Path, args: &[&str]) -> Result<String, Agen
 }
 
 pub(crate) fn git_cwd_is_isolated(cwd: &Path) -> Result<(), AgentsError> {
-    let requested = cwd
-        .canonicalize()
-        .map_err(|error| AgentsError::GitCwdUnavailable(error))?;
+    let requested = cwd.canonicalize().map_err(AgentsError::GitCwdUnavailable)?;
     let output = isolated_std_git()
         .args(["rev-parse", "--show-toplevel"])
         .current_dir(&requested)
