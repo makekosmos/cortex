@@ -55,12 +55,19 @@ fn pips(score: f64) -> Div {
     row
 }
 
-/// Fixed-size ghost button: size label until the download starts.
-fn download_button(id: &str, label: String, cx: &mut Context<ManagerApp>) -> Stateful<Div> {
-    let model_id = id.to_owned();
+/// Fixed-size ghost pill — the single action shape on this page (size →
+/// download, «Удалить» for downloaded). Same geometry/colors so rows never
+/// change their action footprint.
+fn pill_button(
+    id: &str,
+    label: String,
+    aria: String,
+    on_click: impl Fn(&mut ManagerApp, &mut Window, &mut Context<ManagerApp>) + 'static,
+    cx: &mut Context<ManagerApp>,
+) -> Stateful<Div> {
     div()
-        .id(SharedString::from(format!("model-dl-{id}")))
-        .debug_selector(move || format!("model-dl-{id}"))
+        .id(SharedString::from(id.to_string()))
+        .debug_selector(move || id.to_string())
         .w(px(ACTION_W))
         .h(px(ACTION_H))
         .flex_none()
@@ -68,7 +75,7 @@ fn download_button(id: &str, label: String, cx: &mut Context<ManagerApp>) -> Sta
         .bg(fade(FG(), 0.08))
         .cursor_pointer()
         .role(Role::Button)
-        .aria_label(format!("Скачать {id}"))
+        .aria_label(aria)
         .hover(|button| button.bg(fade(FG(), 0.14)))
         .flex()
         .items_center()
@@ -77,12 +84,45 @@ fn download_button(id: &str, label: String, cx: &mut Context<ManagerApp>) -> Sta
         .font_weight(FontWeight::MEDIUM)
         .text_color(c(FG()))
         .child(label)
-        .on_click(cx.listener(move |this, _, _, _| {
+        .on_click(cx.listener(move |this, _, window, cx| on_click(this, window, cx)))
+}
+
+/// Size label until the download starts.
+fn download_button(id: &str, label: String, cx: &mut Context<ManagerApp>) -> Stateful<Div> {
+    let model_id = id.to_owned();
+    pill_button(
+        &format!("model-dl-{id}"),
+        label,
+        format!("Скачать {id}"),
+        move |this, _, _| {
             this.action(
                 "dictation.download_local_model",
                 json!({"modelId": model_id, "select": true}),
             );
-        }))
+        },
+        cx,
+    )
+}
+
+/// Same pill for a downloaded model — selection lives in the dictation
+/// app, so the only action here is delete.
+fn delete_button(id: &str, cx: &mut Context<ManagerApp>) -> Stateful<Div> {
+    let model_id = id.to_owned();
+    pill_button(
+        &format!("model-del-{id}"),
+        "Удалить".into(),
+        format!("Удалить {id}"),
+        move |this, _, cx| {
+            this.ask_confirm(
+                format!("Удалить {model_id}?"),
+                "Файлы модели будут удалены с диска",
+                "dictation.delete_local_model",
+                json!({"modelId": model_id}),
+                cx,
+            );
+        },
+        cx,
+    )
 }
 
 /// Same fixed-size pill as an accent progress fill — the right edge of the
@@ -177,8 +217,6 @@ pub fn render(
             None
         };
 
-        let use_id = id.clone();
-        let delete_id = id.clone();
         let sel_id = id.clone();
         let mut r = div()
             .id(SharedString::from(format!("model-{id}")))
@@ -204,30 +242,11 @@ pub fn render(
             .child(pips(vnum(model, "accuracyScore")));
         if let Some(percent) = pill {
             r = r.child(progress_pill(&id, percent));
-        } else if vbool(model, "selected") {
-            r = r.child(badge("Выбрана", SUCCESS())).child(btn_id(
-                &format!("model-del-{id}"),
-                "Удалить",
-                {
-                    cx.listener(move |this, _, _, cx| {
-                        this.ask_confirm(
-                            format!("Удалить {delete_id}?"),
-                            "Файлы модели будут удалены с диска",
-                            "dictation.delete_local_model",
-                            json!({"modelId": delete_id}),
-                            cx,
-                        );
-                    })
-                },
-            ));
         } else if vbool(model, "downloaded") {
-            r = r.child(btn_id(
-                &format!("model-use-{id}"),
-                "Использовать",
-                cx.listener(move |this, _, _, _| {
-                    this.action("dictation.use_local_model", json!({"modelId": use_id}));
-                }),
-            ));
+            if vbool(model, "selected") {
+                r = r.child(badge("Выбрана", SUCCESS()));
+            }
+            r = r.child(delete_button(&id, cx));
         } else {
             r = r.child(download_button(
                 &id,
