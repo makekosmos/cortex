@@ -1,9 +1,8 @@
 //! CPU port of Paper's `liquid-metal` fragment shader
 //! (`@paper-design/shaders`, `packages/shaders/src/shaders/liquid-metal.ts`),
-//! restricted to the `u_isImage = true` path: the Mundus petal mark is
-//! preprocessed once into the shader's R/G texture channels (R = normalized
-//! Poisson edge-height field, G = shape opacity), then evaluated per pixel
-//! each frame and painted as a `RenderImage` clipped to the logo alpha.
+//! restricted to the `u_isImage = true` path. Field preprocessing lives in
+//! `liquid_metal_field.rs`; this file evaluates the fragment math per pixel
+//! each frame and paints it as a `RenderImage` clipped to the logo alpha.
 //!
 //! Uniforms follow the upstream `defaultPreset` for image mode:
 //! colorBack transparent, colorTint #ffffff, distortion 0.07, repetition 2.0,
@@ -11,16 +10,15 @@
 
 use std::sync::Arc;
 
-use gpui::{RenderImage, SvgRenderer};
+use gpui::RenderImage;
 use image::{Frame, ImageBuffer, Rgba};
 use smallvec::{smallvec, SmallVec};
 
-const SVG: &[u8] = include_bytes!("../assets/icons/mundus.svg");
-/// Source viewBox is 854×841; we rasterize the mask at this width in device
-/// pixels. Small on purpose — the CPU shader runs per pixel per frame.
-const MASK_W: f32 = 168.0;
-/// Upstream renders the source twice (SMOOTH_SVG_SCALE_FACTOR): ask for half.
-const MASK_SCALE: f32 = MASK_W / 854.0 / 2.0;
+#[path = "liquid_metal_field.rs"]
+mod field;
+
+use field::bilinear;
+pub use field::LogoField;
 
 /// Default preset uniforms (image mode).
 const DISTORTION: f32 = 0.07;
@@ -30,82 +28,10 @@ const SHIFT_BLUE: f32 = 0.3;
 const CONTOUR: f32 = 0.4;
 const SOFTNESS: f32 = 0.1;
 const ANGLE_DEG: f32 = 70.0;
-
-/// Preprocessed shader input: per-pixel R (edge field) and G (opacity)
-/// channels of the virtual `u_image` texture for the logo shape.
-pub struct LogoField {
-    pub width: usize,
-    pub height: usize,
-    /// Poisson edge-height field normalized to 0..1 (0 at the boundary).
-    pub edge: Vec<f32>,
-    /// Shape opacity 0..1 (antialiased mask edges).
-    pub alpha: Vec<f32>,
-}
-
-impl LogoField {
-    /// Rasterize `icons/mundus.svg` once via GPUI's SVG renderer, then solve
-    /// the same Poisson equation Paper's `toProcessedLiquidMetal` runs in the
-    /// browser: ∇²u = −1 inside the shape, u = 0 on the boundary, normalized
-    /// to 0..1. One-time cost (~a few ms at 168px), cached by the caller.
-    pub fn build(renderer: &SvgRenderer) -> Option<Arc<Self>> {
-        let image = renderer.render_single_frame(SVG, MASK_SCALE).ok()?;
-        let size = image.size(0);
-        let (w, h) = (size.width.0.max(0) as usize, size.height.0.max(0) as usize);
-        if w < 8 || h < 8 {
-            return None;
-        }
-        let bytes = image.as_bytes(0)?;
-        // BGRA premultiplied: byte 3 is the coverage alpha.
-        let alpha: Vec<f32> = (0..w * h)
-            .map(|i| bytes[i * 4 + 3] as f32 / 255.0)
-            .collect();
-
-        let edge = poisson_edge_field(&alpha, w, h);
-        Some(Arc::new(Self {
-            width: w,
-            height: h,
-            edge,
-            alpha,
-        }))
-    }
-}
-
-/// Shape mask: coverage above a low threshold counts as inside.
-fn shape_mask(alpha: &[f32]) -> Vec<bool> {
-    alpha.iter().map(|&a| a > 0.08).collect()
-}
-
-/// Solve ∇²u = −1 on the shape interior (u = 0 on the boundary) with
-/// successive over-relaxation — the same field Paper computes in
-/// `toProcessedLiquidMetal`, normalized to 0..1.
-fn poisson_edge_field(alpha: &[f32], w: usize, h: usize) -> Vec<f32> {
-    let shape = shape_mask(alpha);
-    let mut u = vec![0.0f32; w * h];
-    for _ in 0..160 {
-        for y in 0..h {
-            for x in 0..w {
-                let i = y * w + x;
-                if !shape[i] {
-                    continue;
-                }
-                let n = if y > 0 { u[i - w] } else { 0.0 };
-                let s = if y + 1 < h { u[i + w] } else { 0.0 };
-                let e = if x + 1 < w { u[i + 1] } else { 0.0 };
-                let ws = if x > 0 { u[i - 1] } else { 0.0 };
-                // SOR with ω ≈ 1.7 converges ~2-3x faster than Gauss-Seidel.
-                let gs = (n + s + e + ws + 1.0) * 0.25;
-                u[i] += 1.7 * (gs - u[i]);
-            }
-        }
-    }
-    let max = u.iter().copied().fold(0.0f32, f32::max);
-    if max > 0.0 {
-        for v in &mut u {
-            *v /= max;
-        }
-    }
-    u
-}
+/// `u_resolution` drives only `smallCanvasT`, which fades to zero above a
+/// 500px canvas. The Paper demo renders on a full-size canvas, so the term
+/// vanishes; the overlay window is likewise always > 500px.
+const CANVAS_MIN_PX: f32 = 1024.0;
 
 // --- GLSL helpers ------------------------------------------------------------
 
@@ -207,41 +133,54 @@ fn color_changes(
     ch.clamp(0.0, 1.0)
 }
 
-/// `blurEdge3x3`: tent filter over the edge field at ±`radius` texels.
-fn blur_edge3x3(edge: &[f32], w: usize, h: usize, uv: [f32; 2], radius: f32, center: f32) -> f32 {
-    let px = uv[0] * w as f32;
-    let py = uv[1] * h as f32;
-    let sample = |dx: f32, dy: f32| -> f32 {
-        let x = (px + dx).round().clamp(0.0, w as f32 - 1.0) as usize;
-        let y = (py + dy).round().clamp(0.0, h as f32 - 1.0) as usize;
-        edge[y * w + x]
+/// `blurEdge3x3`: tent filter over the edge field at ±`radius` texels,
+/// bilinear-sampled like `textureGrad`.
+fn blur_edge3x3(field: &LogoField, uv: [f32; 2], radius: f32, center: f32) -> f32 {
+    let (w, h) = (field.width, field.height);
+    let texel = [1.0 / w as f32, 1.0 / h as f32];
+    let s = |du: f32, dv: f32| {
+        bilinear(
+            &field.edge,
+            w,
+            h,
+            (uv[0] + du * texel[0]).clamp(0.0, 1.0),
+            (uv[1] + dv * texel[1]).clamp(0.0, 1.0),
+        )
     };
     let mut sum = 4.0 * center;
-    sum += 2.0
-        * (sample(0.0, -radius) + sample(0.0, radius) + sample(-radius, 0.0) + sample(radius, 0.0));
-    sum += sample(-radius, -radius)
-        + sample(-radius, radius)
-        + sample(radius, -radius)
-        + sample(radius, radius);
+    sum += 2.0 * (s(0.0, -radius) + s(0.0, radius) + s(-radius, 0.0) + s(radius, 0.0));
+    sum += s(-radius, -radius) + s(-radius, radius) + s(radius, -radius) + s(radius, radius);
     sum / 16.0
 }
 
-/// Evaluate one pixel of the ported fragment shader. Returns premultiplied
-/// BGRA bytes for `RenderImage`.
-fn shade_pixel(field: &LogoField, x: usize, y: usize, t_secs: f32) -> [u8; 4] {
+/// Per-pixel intermediates computed in pass 1 of `frame`: the three stripe
+/// phases plus everything `getColorChanges` still needs. Storing them lets
+/// pass 2 derive a real `fwidth(stripe)` from neighbor differences — the
+/// term upstream gets for free from the GPU derivative units, and the term
+/// that turns stripe edges into the wide soft ramps of the demo.
+#[derive(Clone, Copy, Default)]
+struct StripeParams {
+    stripes: [f32; 3],
+    w: [f32; 3],
+    blur: f32,
+    r_extra: f32,
+    g_extra: f32,
+    bump: f32,
+    diag_tl_br: f32,
+}
+
+/// Pass 1 of the ported fragment shader: everything up to the per-channel
+/// `getColorChanges` calls. Evaluated for every texel, not just opaque ones —
+/// the shader runs on the whole canvas and neighbors feed `fwidth`.
+fn stripe_params(field: &LogoField, x: usize, y: usize, t_secs: f32) -> StripeParams {
     let (w, h) = (field.width, field.height);
-    let i = y * w + x;
-    let opacity = field.alpha[i];
-    if opacity <= 0.0 {
-        return [0; 4];
-    }
 
     let t = 0.3 * (t_secs + 2.8);
     let uv = [(x as f32 + 0.5) / w as f32, (y as f32 + 0.5) / h as f32];
     let cycle_width = REPETITION;
 
-    let edge_raw = field.edge[i];
-    let mut edge = blur_edge3x3(&field.edge, w, h, uv, 6.0, edge_raw).powf(1.6);
+    let edge_raw = bilinear(&field.edge, w, h, uv[0], uv[1]);
+    let mut edge = blur_edge3x3(field, uv, 6.0, edge_raw).powf(1.6);
     edge *= smoothstep(0.0, 0.4, CONTOUR); // contour ≤ .4 range: edge hardness
 
     let angle = (-ANGLE_DEG + 70.0) * std::f32::consts::PI / 180.0;
@@ -251,18 +190,15 @@ fn shade_pixel(field: &LogoField, x: usize, y: usize, t_secs: f32) -> [u8; 4] {
     let rotated_uv = [rx * cos_a - ry * sin_a + 0.5, rx * sin_a + ry * cos_a + 0.5];
 
     let diag_bl_tr = rotated_uv[0] - rotated_uv[1];
-    let diag_tl_br = rotated_uv[0] + rotated_uv[1];
-
-    let color1 = [0.98f32, 0.98, 1.0];
-    let color2 = [0.1, 0.1, 0.1 + 0.1 * smoothstep(0.7, 1.3, diag_tl_br)];
 
     let grad = [uv[0] - 0.5, uv[1] - 0.5];
     let dist = ((grad[0]) * (grad[0])
         + (grad[1] + 0.2 * diag_bl_tr) * (grad[1] + 0.2 * diag_bl_tr))
         .sqrt();
+    // rotate(grad_uv, rot).x = cos·x − sin·y (GLSL mat2 is column-major).
     let rot = (0.25 - 0.2 * diag_bl_tr) * std::f32::consts::PI;
     let (rc, rs) = (rot.cos(), rot.sin());
-    let mut direction = grad[0] * rc + grad[1] * rs; // rotate(grad_uv, rot).x
+    let mut direction = grad[0] * rc - grad[1] * rs;
 
     let mut bump = 1.0 - (1.8 * dist).powf(1.2);
     bump *= uv[1].powf(0.3);
@@ -282,7 +218,7 @@ fn shade_pixel(field: &LogoField, x: usize, y: usize, t_secs: f32) -> [u8; 4] {
     direction += diag_bl_tr;
     let e_smooth = smoothstep(0.0, 1.0, edge);
     direction -= 2.0 * noise * diag_bl_tr * e_smooth * (1.0 - e_smooth);
-    direction *= 1.0 + (1.0 - edge - 1.0) * smoothstep(0.5, 1.0, CONTOUR);
+    direction *= 1.0 - edge * smoothstep(0.5, 1.0, CONTOUR);
     direction -= 1.7 * edge * smoothstep(0.5, 1.0, CONTOUR);
     direction += 0.2 * CONTOUR.powi(4) * (1.0 - e_smooth);
 
@@ -313,65 +249,121 @@ fn shade_pixel(field: &LogoField, x: usize, y: usize, t_secs: f32) -> [u8; 4] {
 
     let softness = 0.05 * SOFTNESS;
     let mut blur = softness + 0.5 * smoothstep(1.0, 10.0, REPETITION) * smoothstep(0.0, 1.0, edge);
-    let small_canvas_t = 1.0 - smoothstep(100.0, 500.0, w.min(h) as f32);
+    let small_canvas_t = 1.0 - smoothstep(100.0, 500.0, CANVAS_MIN_PX);
     blur += small_canvas_t * smoothstep(0.0, 1.0, edge);
     let r_extra_blur = softness * (0.05 + 0.1 * (SHIFT_RED / 20.0) * bump);
     let g_extra_blur = softness * 0.05 / (1.0 - diag_bl_tr).abs().max(0.001);
-    // fwidth(stripe) ≈ pattern gradient per pixel; stripes run along the
-    // rotated direction so a fixed estimate is visually equivalent.
-    let fwidth = 2.5 * cycle_width / w as f32;
 
     w_vec[1] -= 0.02 * smoothstep(0.0, 1.0, edge + bump);
 
-    let stripe_r = fract(direction + dispersion_red);
-    let r = color_changes(
-        color1[0],
-        color2[0],
-        stripe_r,
-        w_vec,
-        blur + fwidth + r_extra_blur,
+    StripeParams {
+        stripes: [
+            fract(direction + dispersion_red),
+            fract(direction),
+            fract(direction - dispersion_blue),
+        ],
+        w: w_vec,
+        blur,
+        r_extra: r_extra_blur,
+        g_extra: g_extra_blur,
         bump,
-        1.0,
-    );
-    let stripe_g = fract(direction);
-    let g = color_changes(
-        color1[1],
-        color2[1],
-        stripe_g,
-        w_vec,
-        blur + fwidth + g_extra_blur,
-        bump,
-        1.0,
-    );
-    let stripe_b = fract(direction - dispersion_blue);
-    let b = color_changes(
-        color1[2],
-        color2[2],
-        stripe_b,
-        w_vec,
-        blur + fwidth,
-        bump,
-        1.0,
-    );
+        diag_tl_br: rotated_uv[0] + rotated_uv[1],
+    }
+}
 
-    // Premultiplied output, BGRA byte order for RenderImage.
-    [
-        (b * opacity * 255.0) as u8,
-        (g * opacity * 255.0) as u8,
-        (r * opacity * 255.0) as u8,
-        (opacity * 255.0) as u8,
-    ]
+/// GLSL `fwidth(v)` = |∂v/∂x| + |∂v/∂y|, central differences on the fract'ed
+/// stripe phase — crucially ~1 at wrap lines, which is what softens them.
+fn stripe_fwidth(
+    stripes: &[StripeParams],
+    w: usize,
+    h: usize,
+    x: usize,
+    y: usize,
+    ch: usize,
+) -> f32 {
+    let xm = x.saturating_sub(1);
+    let xp = (x + 1).min(w - 1);
+    let ym = y.saturating_sub(1);
+    let yp = (y + 1).min(h - 1);
+    let dx = (stripes[y * w + xp].stripes[ch] - stripes[y * w + xm].stripes[ch]).abs()
+        / (xp - xm) as f32;
+    let dy = (stripes[yp * w + x].stripes[ch] - stripes[ym * w + x].stripes[ch]).abs()
+        / (yp - ym) as f32;
+    dx + dy
+}
+
+/// `colorBandingFix` dither — ±1/512 hash noise before premultiplying.
+fn banding_dither(x: usize, y: usize) -> f32 {
+    let s = (x as f32 * 0.014 * 12.9898 + y as f32 * 0.014 * 78.233).sin() * 43_758.547;
+    (fract(s) - 0.5) / 256.0
 }
 
 /// Render one animation frame of the liquid-metal logo as a GPUI image.
 /// `t_secs` is seconds since the overlay appeared.
 pub fn frame(field: &LogoField, t_secs: f32) -> Arc<RenderImage> {
     let (w, h) = (field.width, field.height);
+    let mut params = vec![StripeParams::default(); w * h];
+    for y in 0..h {
+        for x in 0..w {
+            params[y * w + x] = stripe_params(field, x, y, t_secs);
+        }
+    }
+
+    let color1 = [0.98f32, 0.98, 1.0];
     let mut buf = vec![0u8; w * h * 4];
     for y in 0..h {
         for x in 0..w {
-            let p = shade_pixel(field, x, y, t_secs);
-            buf[(y * w + x) * 4..(y * w + x) * 4 + 4].copy_from_slice(&p);
+            let i = y * w + x;
+            let opacity = field.alpha[i];
+            if opacity <= 0.0 {
+                continue;
+            }
+            let p = params[i];
+            let color2 = [0.1, 0.1, 0.1 + 0.1 * smoothstep(0.7, 1.3, p.diag_tl_br)];
+
+            let fw_r = stripe_fwidth(&params, w, h, x, y, 0);
+            let fw_g = stripe_fwidth(&params, w, h, x, y, 1);
+            let fw_b = stripe_fwidth(&params, w, h, x, y, 2);
+            let r = color_changes(
+                color1[0],
+                color2[0],
+                p.stripes[0],
+                p.w,
+                p.blur + fw_r + p.r_extra,
+                p.bump,
+                1.0,
+            );
+            let g = color_changes(
+                color1[1],
+                color2[1],
+                p.stripes[1],
+                p.w,
+                p.blur + fw_g + p.g_extra,
+                p.bump,
+                1.0,
+            );
+            let b = color_changes(
+                color1[2],
+                color2[2],
+                p.stripes[2],
+                p.w,
+                p.blur + fw_b,
+                p.bump,
+                1.0,
+            );
+            let d = banding_dither(x, y);
+            let (r, g, b) = (
+                (r + d).clamp(0.0, 1.0),
+                (g + d).clamp(0.0, 1.0),
+                (b + d).clamp(0.0, 1.0),
+            );
+            // Premultiplied output, BGRA byte order for RenderImage.
+            buf[i * 4..i * 4 + 4].copy_from_slice(&[
+                (b * opacity * 255.0) as u8,
+                (g * opacity * 255.0) as u8,
+                (r * opacity * 255.0) as u8,
+                (opacity * 255.0) as u8,
+            ]);
         }
     }
     let image: ImageBuffer<Rgba<u8>, Vec<u8>> =
