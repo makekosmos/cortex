@@ -115,8 +115,12 @@ pub struct ManagerApp {
     #[cfg(test)]
     pub usage_builds: usize,
     pub(crate) action_busy: bool,
+    /// Lerped progress-fill percents on the Модели page — polled targets
+    /// land once a second, renders smooth the fill between them.
+    pub model_fill: HashMap<String, f32>,
     worker_dead: bool,
     next_updater_poll: Instant,
+    next_models_poll: Instant,
     next_store_poll: Instant,
     next_sync_poll: Instant,
     next_about_poll: Instant,
@@ -177,8 +181,10 @@ impl ManagerApp {
             #[cfg(test)]
             usage_builds: 0,
             action_busy: false,
+            model_fill: HashMap::new(),
             worker_dead: false,
             next_updater_poll: Instant::now(),
+            next_models_poll: Instant::now(),
             next_store_poll: Instant::now(),
             next_sync_poll: Instant::now(),
             next_about_poll: Instant::now(),

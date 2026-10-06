@@ -33,6 +33,26 @@ impl ManagerApp {
                 self.refresh("sync.ticket", "get_own_iroh_ticket", json!({}));
             }
         }
+        // Model downloads run as Engine-side tasks; progress is only visible
+        // inside the `list_local_models` snapshot. Poll every second while a
+        // download runs, slower otherwise — a download can also be started
+        // outside this Manager (another client), which only the poll sees.
+        if self.view == View::Models && Instant::now() >= self.next_models_poll {
+            let downloading = self
+                .data("models.list")
+                .get("models")
+                .and_then(Value::as_array)
+                .is_some_and(|models| {
+                    models.iter().any(|model| {
+                        model.get("downloading").and_then(Value::as_bool) == Some(true)
+                    })
+                });
+            self.next_models_poll =
+                Instant::now() + std::time::Duration::from_secs(if downloading { 1 } else { 5 });
+            if !self.background_slots.contains("models.list") {
+                self.refresh("models.list", "dictation.list_local_models", json!({}));
+            }
+        }
         // Native app installs run as Engine-side background jobs.
         if self.view == View::Packages && Instant::now() >= self.next_store_poll {
             self.next_store_poll = Instant::now() + std::time::Duration::from_secs(1);
