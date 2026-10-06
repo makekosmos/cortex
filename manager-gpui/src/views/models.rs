@@ -62,6 +62,7 @@ fn pill_button(
     id: &str,
     label: String,
     aria: String,
+    danger: bool,
     on_click: impl Fn(&mut ManagerApp, &mut Window, &mut Context<ManagerApp>) + 'static,
     cx: &mut Context<ManagerApp>,
 ) -> Stateful<Div> {
@@ -72,17 +73,27 @@ fn pill_button(
         .h(px(ACTION_H))
         .flex_none()
         .rounded_full()
-        .bg(fade(FG(), 0.08))
+        .bg(if danger {
+            fade(DESTRUCTIVE(), 0.14)
+        } else {
+            fade(FG(), 0.08)
+        })
         .cursor_pointer()
         .role(Role::Button)
         .aria_label(aria)
-        .hover(|button| button.bg(fade(FG(), 0.14)))
+        .hover(|button| {
+            button.bg(if danger {
+                fade(DESTRUCTIVE(), 0.22)
+            } else {
+                fade(FG(), 0.14)
+            })
+        })
         .flex()
         .items_center()
         .justify_center()
         .text_size(ui_px(12.5))
         .font_weight(FontWeight::MEDIUM)
-        .text_color(c(FG()))
+        .text_color(if danger { c(DESTRUCTIVE()) } else { c(FG()) })
         .child(label)
         .on_click(cx.listener(move |this, _, window, cx| on_click(this, window, cx)))
 }
@@ -94,6 +105,7 @@ fn download_button(id: &str, label: String, cx: &mut Context<ManagerApp>) -> Sta
         &format!("model-dl-{id}"),
         label,
         format!("Скачать {id}"),
+        false,
         move |this, _, _| {
             this.action(
                 "dictation.download_local_model",
@@ -112,6 +124,7 @@ fn delete_button(id: &str, cx: &mut Context<ManagerApp>) -> Stateful<Div> {
         &format!("model-del-{id}"),
         "Удалить".into(),
         format!("Удалить {id}"),
+        true,
         move |this, _, cx| {
             this.ask_confirm(
                 format!("Удалить {model_id}?"),
@@ -243,9 +256,6 @@ pub fn render(
         if let Some(percent) = pill {
             r = r.child(progress_pill(&id, percent));
         } else if vbool(model, "downloaded") {
-            if vbool(model, "selected") {
-                r = r.child(badge("Выбрана", SUCCESS()));
-            }
             r = r.child(delete_button(&id, cx));
         } else {
             r = r.child(download_button(
