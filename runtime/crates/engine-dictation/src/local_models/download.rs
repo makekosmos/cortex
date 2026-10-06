@@ -263,7 +263,7 @@ mod tests {
 
         let tmp = tempfile::TempDir::new().expect("tempdir");
         let path = tmp.path().join("model.bin");
-        let client = Client::new();
+        let client = engine_base::http::client();
         let mut events = Vec::new();
 
         download_file(
@@ -312,7 +312,7 @@ mod tests {
 
         let tmp = tempfile::TempDir::new().expect("tempdir");
         let path = tmp.path().join("model.bin");
-        let client = Client::new();
+        let client = engine_base::http::client();
         let err = download_file(
             &client,
             &server.url("/model.bin"),
@@ -346,7 +346,7 @@ mod tests {
         let path = tmp.path().join("oversized.bin");
 
         let error = download_file(
-            &Client::new(),
+            &engine_base::http::client(),
             &server.url("/oversized.bin"),
             &path,
             "model",
@@ -380,7 +380,7 @@ mod tests {
         let tmp = tempfile::TempDir::new().expect("tempdir");
         let path = tmp.path().join("model.bin");
         fs::write(path.with_extension("part"), b"hello ").expect("part file");
-        let client = Client::new();
+        let client = engine_base::http::client();
         let mut events = Vec::new();
 
         download_file(

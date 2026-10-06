@@ -64,10 +64,15 @@ hpke = { version = "=0.14.1", default-features = false, features = [
 ] }
 reqwest = { version = "0.13", default-features = false, features = [
   "json",
-  "rustls",
+  "rustls-no-provider",
   "multipart",
   "socks",
 ] }
+# One TLS backend for the whole tree: iroh/noq and the DNS resolver already run
+# on ring, so reqwest uses it too (no aws-lc C build). reqwest's
+# `rustls-no-provider` requires the provider to be installed before the first
+# client, which engine_base::http does.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 base64 = "0.22"
 keyring = { version = "3", features = ["windows-native", "apple-native"] }
 zip = { version = "0.6", default-features = false, features = ["deflate"] }
