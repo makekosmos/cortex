@@ -163,6 +163,13 @@ async fn deadline_force_kills_only_the_owned_child_handle() {
         command.creation_flags(CREATE_NO_WINDOW);
         command
     };
+    // Killing the owned `cmd.exe` leaves its `ping` grandchild running on
+    // purpose; it must not inherit nextest's stdout/stderr pipes, or the run
+    // reports the test as LEAK-FAIL while ping is still alive.
+    command
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
     let mut child = command.spawn().expect("controlled child");
     stop_owned_child_with_deadline(&mut child, Duration::from_millis(10)).await;
     assert!(child.try_wait().expect("child status").is_some());

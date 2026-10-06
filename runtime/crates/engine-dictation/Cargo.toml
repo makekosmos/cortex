@@ -54,7 +54,6 @@ serde_json.workspace = true
 thiserror.workspace = true
 chrono.workspace = true
 uuid.workspace = true
-rand.workspace = true
 tokio = { version = "1", features = [
   "rt",
   "macros",
