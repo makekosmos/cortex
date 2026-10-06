@@ -2,7 +2,7 @@
 // Windows is the primary target and its build sees every item; code that only
 // Windows callers reach is dead elsewhere, so the lint is silenced off-Windows
 // and in test builds, which carry platform-gated fixtures.
-#![cfg_attr(any(test, not(windows)), allow(dead_code))]
+#![cfg_attr(any(test, feature = "test-support", not(windows)), allow(dead_code))]
 #![allow(
     clippy::collapsible_if,
     clippy::derivable_impls,
