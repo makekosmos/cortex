@@ -513,6 +513,10 @@ fn mac_key_code(key: &str) -> Option<u16> {
     }
 }
 
+pub(crate) fn resolve_helper_pub(name: &str) -> Result<PathBuf, NativeHelperError> {
+    resolve_helper(name)
+}
+
 fn resolve_helper(name: &str) -> Result<PathBuf, NativeHelperError> {
     let mut candidates = Vec::new();
 

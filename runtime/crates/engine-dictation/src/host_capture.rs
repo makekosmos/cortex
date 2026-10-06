@@ -343,6 +343,14 @@ async fn op_start_recording(host: &DictationHost) -> DictationResponse {
 
 async fn op_cancel(host: &DictationHost) -> DictationResponse {
     super::audio_duck::restore();
+    // Глушим живой захват — без этого helper (macOS) остаётся запущенным и
+    // следующий capture.start получает «busy».
+    let session = host.capture.lock().expect("capture mutex poisoned").take();
+    if let Some(session) = session {
+        tokio::task::spawn_blocking(move || {
+            let _ = super::native_capture::stop(session);
+        });
+    }
     *host
         .contract_window_id
         .lock()

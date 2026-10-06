@@ -28,7 +28,11 @@ pub fn start(
     {
         return start_windows(capture_id, level_sink);
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    {
+        return start_macos(capture_id, level_sink);
+    }
+    #[cfg(all(not(windows), not(target_os = "macos")))]
     {
         let _ = (capture_id, level_sink);
         Err("device_unavailable".into())
@@ -43,26 +47,55 @@ pub fn stop(session: Session) -> Result<CapturedAudio, String> {
         .map_err(|_| "capture_failed".to_string())?
 }
 
-#[cfg(windows)]
-fn start_windows(
+#[cfg(target_os = "macos")]
+fn start_macos(
     capture_id: String,
     level_sink: Option<mpsc::Sender<f32>>,
 ) -> Result<(Session, u32, u16), String> {
+    use std::io::Write;
+    let helper = crate::macos_native::resolve_helper_pub("audio-capturer")
+        .map_err(|e| format!("device_unavailable: {e}"))?;
+    let mut child = std::process::Command::new(&helper)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| format!("device_unavailable: spawn {e}"))?;
+    tracing::info!(helper = %helper.display(), "dictation: audio-capturer spawned");
+    let mut stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| "device_unavailable: no stdin".to_string())?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| "device_unavailable: no stdout".to_string())?;
     let (stop_tx, stop_rx) = mpsc::channel();
     let (ready_tx, ready_rx) = mpsc::channel();
     let join = std::thread::Builder::new()
         .name("mundus-dictation-capture".into())
         .spawn(move || {
-            let result = capture_windows(stop_rx, ready_tx.clone(), level_sink);
+            let result = capture_macos(&mut stdin, stdout, stop_rx, level_sink, ready_tx.clone());
             if let Err(error) = &result {
                 let _ = ready_tx.send(Err(error.clone()));
             }
+            // "exit" для чистого shutdown helper'а — процесс доживать не должен.
+            let _ = writeln!(stdin, "exit");
+            let _ = child.wait();
             result
         })
         .map_err(|_| "device_unavailable".to_string())?;
     let (sample_rate, channels) = ready_rx
-        .recv()
-        .map_err(|_| "device_unavailable".to_string())??;
+        .recv_timeout(std::time::Duration::from_secs(25))
+        .map_err(|_| {
+            tracing::warn!("dictation: macOS capture ready-wait timed out");
+            "device_unavailable".to_string()
+        })
+        .and_then(|r| {
+            r.inspect_err(|e| {
+                tracing::warn!(error = %e, "dictation: macOS capture failed");
+            })
+        })?;
     Ok((
         Session {
             capture_id,
@@ -74,178 +107,169 @@ fn start_windows(
     ))
 }
 
-#[cfg(windows)]
-/// RMS (0.0..=1.0) одного PCM16-фрейм-пакета — пилюля рисует из них waveform,
-/// как Vue-пилюля из AnalyserNode. Молчание (SILENT flag) шлём как 0.
-fn rms_i16le(bytes: &[u8]) -> f32 {
-    let mut sum = 0.0f64;
-    let mut n = 0u64;
-    for chunk in bytes.as_chunks::<2>().0 {
-        let s = i16::from_le_bytes(*chunk) as f64 / 32768.0;
-        sum += s * s;
-        n += 1;
-    }
-    if n == 0 {
-        return 0.0;
-    }
-    (sum / n as f64).sqrt().min(1.0) as f32
+/// События из stdout-помпы `audio-capturer` — handshake'и, файл результата
+/// и meter-уровни.
+#[cfg(target_os = "macos")]
+enum CaptureEvent {
+    Ready,
+    Recording,
+    File(String),
+    Meter(f32),
+    Error(String),
 }
 
-/// Перцепционная нормализация уровня для waveform: линейный RMS → шкала
-/// ~dBFS (-55 dB → 0, 0 dB → 1). Обычная речь (-30..-15 dBFS RMS) даёт
-/// видимые бары — паритет с AnalyserNode-спектром Vue-пилюли, где даже
-/// тихая речь двигала waveform.
-#[cfg(windows)]
-fn level_for_ui(rms: f32) -> f32 {
-    const FLOOR_DB: f32 = -55.0;
-    let db = 20.0 * rms.max(1e-6).log10();
-    ((db - FLOOR_DB) / -FLOOR_DB).clamp(0.0, 1.0)
-}
-
-#[cfg(windows)]
-fn capture_windows(
-    stop_rx: mpsc::Receiver<()>,
-    ready_tx: mpsc::Sender<Result<(u32, u16), String>>,
-    level_sink: Option<mpsc::Sender<f32>>,
-) -> Result<CapturedAudio, String> {
-    use std::ptr::null_mut;
-    use windows::Win32::Media::Audio::{
-        eCapture, eConsole, IAudioCaptureClient, IAudioClient, IMMDeviceEnumerator,
-        MMDeviceEnumerator, AUDCLNT_BUFFERFLAGS_SILENT, AUDCLNT_SHAREMODE_SHARED,
-        AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM, WAVEFORMATEX,
-    };
-    use windows::Win32::System::Com::{
-        CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_ALL, COINIT_MULTITHREADED,
-    };
-
-    if unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.is_err() {
-        let _ = ready_tx.send(Err("permission_denied".into()));
-        return Err("permission_denied".into());
-    }
-    struct ComGuard;
-    impl Drop for ComGuard {
-        fn drop(&mut self) {
-            unsafe { CoUninitialize() };
+#[cfg(target_os = "macos")]
+impl CaptureEvent {
+    /// `wait_for` уже отфильтровал — других веток тут быть не может.
+    fn unwrap_file(self) -> String {
+        match self {
+            CaptureEvent::File(p) => p,
+            _ => String::new(),
         }
     }
-    let _com = ComGuard;
-    let enumerator: IMMDeviceEnumerator =
-        unsafe { CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL) }
-            .map_err(|_| "device_unavailable".to_string())?;
-    let device = unsafe { enumerator.GetDefaultAudioEndpoint(eCapture, eConsole) }
-        .map_err(|_| "device_unavailable".to_string())?;
-    let client: IAudioClient = unsafe { device.Activate(CLSCTX_ALL, None) }
-        .map_err(|_| "permission_denied".to_string())?;
-    let requested = WAVEFORMATEX {
-        wFormatTag: 1,
-        nChannels: 1,
-        nSamplesPerSec: 16_000,
-        nAvgBytesPerSec: 32_000,
-        nBlockAlign: 2,
-        wBitsPerSample: 16,
-        cbSize: 0,
+}
+
+/// Драйвер `audio-capturer` helper'а: warmup → start → meter × 100мс →
+/// stop → WAV-файл. Ответы helper'а — JSON-строки на stdout; одна
+/// помпа-читалка раскладывает их по типам, сессионный поток ждёт события
+/// через канал с таймаутами.
+#[cfg(target_os = "macos")]
+fn capture_macos(
+    stdin: &mut impl std::io::Write,
+    stdout: impl std::io::Read + Send + 'static,
+    stop_rx: mpsc::Receiver<()>,
+    level_sink: Option<mpsc::Sender<f32>>,
+    ready_tx: mpsc::Sender<Result<(u32, u16), String>>,
+) -> Result<CapturedAudio, String> {
+    use std::io::{BufRead, BufReader, Write};
+    use std::time::{Duration, Instant};
+
+    let (event_tx, event_rx) = mpsc::channel::<CaptureEvent>();
+    let pump = std::thread::spawn(move || {
+        let mut reader = BufReader::new(stdout);
+        let mut line = String::new();
+        loop {
+            line.clear();
+            match reader.read_line(&mut line) {
+                Ok(0) | Err(_) => break,
+                Ok(_) => {}
+            }
+            let Ok(v) = serde_json::from_str::<serde_json::Value>(&line) else {
+                continue;
+            };
+            let event = if v.get("ready").and_then(|b| b.as_bool()) == Some(true) {
+                Some(CaptureEvent::Ready)
+            } else if v.get("recording").and_then(|b| b.as_bool()) == Some(true) {
+                Some(CaptureEvent::Recording)
+            } else if let Some(path) = v.get("file").and_then(|f| f.as_str()) {
+                Some(CaptureEvent::File(path.to_string()))
+            } else if let Some(avg) = v
+                .get("meter")
+                .and_then(|m| m.get("average"))
+                .and_then(|a| a.as_f64())
+            {
+                Some(CaptureEvent::Meter(avg as f32))
+            } else {
+                v.get("error")
+                    .and_then(|e| e.as_str())
+                    .map(|e| CaptureEvent::Error(e.to_string()))
+            };
+            if let Some(event) = event {
+                if event_tx.send(event).is_err() {
+                    break;
+                }
+            }
+        }
+    });
+
+    // Протокол helper'а — JSON-строки `{"command":"<name>"}`.
+    let cmd = |stdin: &mut dyn Write, c: &str| -> Result<(), String> {
+        writeln!(stdin, "{{\"command\":\"{c}\"}}")
+            .and_then(|_| stdin.flush())
+            .map_err(|e| format!("capture_failed: {e}"))
     };
-    unsafe {
-        client.Initialize(
-            AUDCLNT_SHAREMODE_SHARED,
-            AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,
-            10_000_000,
-            0,
-            &requested,
-            None,
-        )
-    }
-    .map_err(|_| "device_unavailable".to_string())?;
-    let capture: IAudioCaptureClient =
-        unsafe { client.GetService() }.map_err(|_| "device_unavailable".to_string())?;
-    unsafe { client.Start() }.map_err(|_| "permission_denied".to_string())?;
+    // Ждём нужного события с дедлайном; meter'ы попутно сливаем в sink,
+    // посторонние события (готовые file/error) остаются фатальными.
+    let wait_for =
+        |is: fn(&CaptureEvent) -> bool, timeout: Duration| -> Result<CaptureEvent, String> {
+            let deadline = Instant::now() + timeout;
+            loop {
+                let left = deadline.saturating_duration_since(Instant::now());
+                if left.is_zero() {
+                    return Err("capture_failed: helper timeout".into());
+                }
+                match event_rx.recv_timeout(left) {
+                    Ok(ev) if is(&ev) => return Ok(ev),
+                    Ok(CaptureEvent::Meter(l)) => {
+                        if let Some(tx) = level_sink.as_ref() {
+                            let _ = tx.send(l);
+                        }
+                    }
+                    Ok(CaptureEvent::Error(e)) => return Err(format!("capture_failed: {e}")),
+                    Ok(_) => {}
+                    Err(mpsc::RecvTimeoutError::Timeout) => {
+                        return Err("capture_failed: helper timeout".into())
+                    }
+                    Err(mpsc::RecvTimeoutError::Disconnected) => {
+                        return Err("capture_failed: helper died".into())
+                    }
+                }
+            }
+        };
+
+    cmd(stdin, "warmup")?;
+    tracing::info!("dictation: macOS capture warmup sent");
+    wait_for(
+        |e| matches!(e, CaptureEvent::Ready),
+        Duration::from_secs(15),
+    )?;
+    tracing::info!("dictation: macOS capture ready");
+    cmd(stdin, "start")?;
+    wait_for(
+        |e| matches!(e, CaptureEvent::Recording),
+        Duration::from_secs(5),
+    )?;
+    tracing::info!("dictation: macOS capture recording");
     let _ = ready_tx.send(Ok((16_000, 1)));
-    let mut pcm = Vec::new();
-    // Level events throttled до ~30 Гц — UI-перерисовка чаще бессмысленна,
-    // а broadcast-канал не должен засоряться.
-    let mut last_level_emit = std::time::Instant::now() - std::time::Duration::from_millis(100);
-    loop {
-        if stop_rx.try_recv().is_ok() {
+
+    // Уровень для pill waveform — meter каждые 100мс (helper ограничивает
+    // эмит сам на ~10 Гц).
+    while stop_rx.try_recv().is_err() {
+        if cmd(stdin, "meter").is_err() {
             break;
         }
-        let mut packet_frames =
-            unsafe { capture.GetNextPacketSize() }.map_err(|_| "capture_failed".to_string())?;
-        while packet_frames > 0 {
-            let mut data = null_mut();
-            let mut frames = 0u32;
-            let mut flags = 0u32;
-            unsafe { capture.GetBuffer(&mut data, &mut frames, &mut flags, None, None) }
-                .map_err(|_| "capture_failed".to_string())?;
-            let byte_count = frames as usize * 2;
-            if flags & AUDCLNT_BUFFERFLAGS_SILENT.0 as u32 != 0 {
-                pcm.resize(pcm.len() + byte_count, 0);
-                if let Some(sink) = &level_sink {
-                    if last_level_emit.elapsed() >= std::time::Duration::from_millis(30) {
-                        last_level_emit = std::time::Instant::now();
-                        let _ = sink.send(0.0);
-                    }
+        // Между опросами сливаем meter-события в sink.
+        while let Ok(ev) = event_rx.try_recv() {
+            if let CaptureEvent::Meter(l) = ev {
+                if let Some(tx) = level_sink.as_ref() {
+                    let _ = tx.send(l);
                 }
-            } else if !data.is_null() {
-                let bytes = unsafe { std::slice::from_raw_parts(data.cast::<u8>(), byte_count) };
-                if let Some(sink) = &level_sink {
-                    if last_level_emit.elapsed() >= std::time::Duration::from_millis(30) {
-                        last_level_emit = std::time::Instant::now();
-                        let _ = sink.send(level_for_ui(rms_i16le(bytes)));
-                    }
-                }
-                pcm.extend_from_slice(bytes);
             }
-            unsafe { capture.ReleaseBuffer(frames) }.map_err(|_| "capture_failed".to_string())?;
-            packet_frames =
-                unsafe { capture.GetNextPacketSize() }.map_err(|_| "capture_failed".to_string())?;
         }
-        std::thread::sleep(std::time::Duration::from_millis(10));
+        std::thread::sleep(Duration::from_millis(100));
     }
-    let _ = unsafe { client.Stop() };
+
+    cmd(stdin, "stop")?;
+    let path = wait_for(
+        |e| matches!(e, CaptureEvent::File(_)),
+        Duration::from_secs(10),
+    )?
+    .unwrap_file();
+    let wav = std::fs::read(&path).map_err(|e| format!("capture_failed: {e}"))?;
+    if let Some(dir) = std::path::Path::new(&path).parent() {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+    // Pump join'ится только когда helper умрёт — шлём exit до join'а,
+    // иначе stdout остаётся открытым и join висит навечно.
+    let _ = cmd(stdin, "exit");
+    let _ = pump.join();
+
+    let frames = (wav.len().saturating_sub(44) / 2) as u64;
     Ok(CapturedAudio {
-        wav: wav_header(16_000, 1, 16, 2, pcm.len() as u32, &pcm),
+        wav,
         sample_rate: 16_000,
         channels: 1,
-        duration_ms: pcm.len() as u64 * 1000 / 2 / 16_000,
+        duration_ms: frames * 1000 / 16_000,
         format: "wav",
     })
-}
-
-fn wav_header(
-    sample_rate: u32,
-    channels: u16,
-    bits: u16,
-    block_align: u16,
-    data_len: u32,
-    pcm: &[u8],
-) -> Vec<u8> {
-    let mut out = Vec::with_capacity(44 + pcm.len());
-    out.extend_from_slice(b"RIFF");
-    out.extend_from_slice(&(36u32.saturating_add(data_len)).to_le_bytes());
-    out.extend_from_slice(b"WAVEfmt ");
-    out.extend_from_slice(&16u32.to_le_bytes());
-    out.extend_from_slice(&1u16.to_le_bytes());
-    out.extend_from_slice(&channels.to_le_bytes());
-    out.extend_from_slice(&sample_rate.to_le_bytes());
-    out.extend_from_slice(&sample_rate.saturating_mul(block_align as u32).to_le_bytes());
-    out.extend_from_slice(&block_align.to_le_bytes());
-    out.extend_from_slice(&bits.to_le_bytes());
-    out.extend_from_slice(b"data");
-    out.extend_from_slice(&data_len.to_le_bytes());
-    out.extend_from_slice(pcm);
-    out
-}
-
-#[cfg(test)]
-mod tests {
-    use super::wav_header;
-
-    #[test]
-    fn synthetic_wav_header_is_well_formed() {
-        let wav = wav_header(16_000, 1, 16, 2, 4, &[1, 2, 3, 4]);
-        assert_eq!(&wav[..4], b"RIFF");
-        assert_eq!(&wav[8..12], b"WAVE");
-        assert_eq!(&wav[36..40], b"data");
-        assert_eq!(wav.len(), 48);
-    }
 }
