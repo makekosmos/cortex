@@ -61,7 +61,7 @@ pub fn bounce_offset(elapsed_secs: f32) -> f32 {
 }
 
 /// The petal mark itself, filled with animated liquid metal. One frame is a
-/// few dozen KB of CPU-shaded pixels at 168×165 — cheap enough for vsync-rate
+/// ~64k-texel CPU-shaded grid at 256×252 — cheap enough for vsync-rate
 /// repaints while the overlay is on screen.
 fn logo(field: Option<&Arc<LogoField>>, elapsed: f32) -> Stateful<Div> {
     let mut mark = div()
@@ -69,7 +69,7 @@ fn logo(field: Option<&Arc<LogoField>>, elapsed: f32) -> Stateful<Div> {
         .debug_selector(|| "update-overlay-logo".into())
         .relative()
         .top(px(bounce_offset(elapsed)))
-        .size(px(160.));
+        .size(px(200.));
     if let Some(field) = field {
         mark = mark.child(img(liquid_metal::frame(field, elapsed)).size_full());
     } else {
