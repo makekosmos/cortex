@@ -1,10 +1,9 @@
 fn apply_ptt_hook(cfg: &DictationConfig, _tx: &broadcast::Sender<Value>) {
     #[cfg(windows)]
     {
-        let mode = match cfg.trigger_mode {
-            TriggerMode::PushToTalk => hotkey_hook::HookMode::PushToTalk,
-            TriggerMode::Toggle => hotkey_hook::HookMode::Toggle,
-        };
+        // Режима больше нет в UI: завершение — тем же хоткеем (toggle),
+        // отмена — двойной Esc. trigger_mode в конфиге игнорируется.
+        let mode = hotkey_hook::HookMode::Toggle;
         if let Some(matcher) = hotkey_hook::parse_accelerator(&cfg.hotkey) {
             hotkey_hook::set_active(Some(matcher), Some(_tx.clone()), mode);
         } else {
@@ -21,7 +20,12 @@ fn apply_ptt_hook(cfg: &DictationConfig, _tx: &broadcast::Sender<Value>) {
         #[cfg(target_os = "macos")]
         {
             if let Err(e) =
-                crate::macos_native::set_hotkey_active(&cfg.hotkey, cfg.trigger_mode, _tx.clone())
+                // Toggle-only: завершение — тем же хоткеем (см. коммент выше).
+                crate::macos_native::set_hotkey_active(
+                    &cfg.hotkey,
+                    TriggerMode::Toggle,
+                    _tx.clone(),
+                )
             {
                 eprintln!("[dictation::host] macOS hotkey helper unavailable: {e}");
             }
