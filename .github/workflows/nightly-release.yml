@@ -113,8 +113,14 @@ jobs:
         with:
           tool: cargo-nextest
 
+      # KOS-363: shared-key with installer-smoke's `build` job so this job
+      # restores the cache the smoke just wrote on the same commit — the
+      # release-profile dep tree is warm and `Build installer` only
+      # rebuilds the env-stamped leaf crates. Cargo fingerprints still
+      # validate every restored artifact.
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
+          shared-key: win-installer
           cache-on-failure: true
           workspaces: |
             . -> target
