@@ -4,29 +4,20 @@
 // Uses AVAudioEngine to capture microphone audio with minimal latency.
 // Communicates via JSON-over-stdin/stdout (same pattern as whisper-transcriber serve mode).
 //
-// Commands:
-//   warmup          — Start the audio engine (mic hot) without recording.
-//                     Emits {"ready":true} when the engine is running.
-//   start           — Begin capturing audio to a ring buffer.
-//                     Emits {"recording":true} once capture is active.
-//   stop            — Stop capturing and write captured audio to a WAV file.
-//                     Emits {"file":"<path>","duration":<seconds>}.
-//   snapshot        — Write current ring buffer contents to a WAV file
-//                     without stopping the recording.  Used for periodic
-//                     partial transcriptions while the user is still speaking.
-//                     Emits {"file":"<path>","duration":<seconds>}.
-//   meter           — Emit current audio level.
-//                     Emits {"meter":{"average":<0-1>,"peak":<0-1>}}.
-//   drain           — Emit PCM samples appended since the previous drain.
-//                     Emits {"pcm":"<base64 int16 LE>","dropped":<count>};
-//                     dropped > 0 means the ring overflowed and the beginning
-//                     of the undrained region was lost.
-//   stopEngine      — Stop the audio engine entirely (mic cold).
-//                     Emits {"stopped":true}.
-//   ping            — Health check.  Emits {"pong":true}.
-//   exit            — Shut down cleanly.
+// Commands (one JSON per line on stdout):
+//   warmup     — start audio engine, emits {"ready":true}
+//   start      — capture into ring buffer, emits {"recording":true}
+//   stop       — write captured audio to WAV, emits {"file","duration"}
+//   meter      — emits {"meter":{"average","peak"}}
+//   drain      — emits {"pcm":"<base64 int16 LE>","dropped":N} appended since
+//                previous drain; dropped>0 = ring overflow lost the head
+//   stopEngine — mic cold, emits {"stopped":true}
+//   ping/exit  — health check / clean shutdown
 //
-// All responses are one JSON object per line on stdout.
+// File-source mode (e2e, no mic): if MUNDUS_DICTATION_CAPTURE_FILE is set, `start`
+// decodes that file (wav/mp3/m4a via AVAudioFile) to 16 kHz mono and feeds the
+// same ring/meter/drain path in ~50 ms blocks at real time / SPEED env (default 1.0),
+// then silence until `stop`. Env is read at each `start` — swap files freely.
 
 import Foundation
 import AVFoundation
@@ -103,42 +94,22 @@ func emitJSON(_ dict: [String: Any]) {
 // MARK: - WAV writing
 
 func writeWaveFile(samples: [Float], sampleRate: Double, toPath path: String) throws {
-  let frameCount = UInt32(samples.count)
-  let bytesPerSample: UInt32 = 2  // 16-bit PCM
-  let channels: UInt32 = 1
-  let dataSize = frameCount * bytesPerSample * channels
-  let fileSize = 36 + dataSize
-
+  let dataSize = UInt32(samples.count * 2)
   var data = Data(capacity: Int(44 + dataSize))
+  func u32(_ v: UInt32) { withUnsafeBytes(of: v.littleEndian) { data.append(contentsOf: $0) } }
+  func u16(_ v: UInt16) { withUnsafeBytes(of: v.littleEndian) { data.append(contentsOf: $0) } }
 
-  // RIFF header
-  data.append(contentsOf: [0x52, 0x49, 0x46, 0x46])  // "RIFF"
-  data.append(contentsOf: withUnsafeBytes(of: UInt32(littleEndian: fileSize)) { Array($0) })
-  data.append(contentsOf: [0x57, 0x41, 0x56, 0x45])  // "WAVE"
+  data.append(contentsOf: "RIFF".utf8); u32(36 + dataSize)
+  data.append(contentsOf: "WAVEfmt ".utf8)
+  u32(16); u16(1); u16(1)                    // PCM, mono
+  u32(UInt32(sampleRate)); u32(UInt32(sampleRate) * 2)
+  u16(2); u16(16)                            // block align, bits
+  data.append(contentsOf: "data".utf8); u32(dataSize)
 
-  // fmt chunk
-  data.append(contentsOf: [0x66, 0x6D, 0x74, 0x20])  // "fmt "
-  data.append(contentsOf: withUnsafeBytes(of: UInt32(littleEndian: 16)) { Array($0) })  // chunk size
-  data.append(contentsOf: withUnsafeBytes(of: UInt16(littleEndian: 1)) { Array($0) })   // PCM format
-  data.append(contentsOf: withUnsafeBytes(of: UInt16(littleEndian: UInt16(channels))) { Array($0) })
-  data.append(contentsOf: withUnsafeBytes(of: UInt32(littleEndian: UInt32(sampleRate))) { Array($0) })
-  let byteRate = UInt32(sampleRate) * channels * bytesPerSample
-  data.append(contentsOf: withUnsafeBytes(of: UInt32(littleEndian: byteRate)) { Array($0) })
-  let blockAlign = UInt16(UInt16(channels) * UInt16(bytesPerSample))
-  data.append(contentsOf: withUnsafeBytes(of: UInt16(littleEndian: blockAlign)) { Array($0) })
-  data.append(contentsOf: withUnsafeBytes(of: UInt16(littleEndian: UInt16(bytesPerSample * 8))) { Array($0) })
-
-  // data chunk
-  data.append(contentsOf: [0x64, 0x61, 0x74, 0x61])  // "data"
-  data.append(contentsOf: withUnsafeBytes(of: UInt32(littleEndian: dataSize)) { Array($0) })
-
-  // PCM samples (float32 → int16)
   for sample in samples {
-    let clamped = max(-1.0, min(1.0, sample))
-    let intVal = Int16(clamped * Float(Int16.max))
-    data.append(contentsOf: withUnsafeBytes(of: Int16(littleEndian: intVal)) { Array($0) })
+    var v = Int16(max(-1.0, min(1.0, sample)) * Float(Int16.max)).littleEndian
+    withUnsafeBytes(of: &v) { data.append(contentsOf: $0) }
   }
-
   try data.write(to: URL(fileURLWithPath: path), options: .atomic)
 }
 
@@ -162,16 +133,27 @@ class AudioCapturer {
   private var lastMeterAt: Date = Date.distantPast
   private var meterAverage: Double = 0
   private var meterPeak: Double = 0
-  // Monotonic sample counters for `drain` — the ring may overwrite data
-  // between drains on very long recordings, so dropped reports the gap.
+  // Monotonic `drain` counters — ring overwrite between drains → dropped.
   private var totalWrittenSamples = 0
   private var drainedSamples = 0
+  // File-source mode: paced feeder instead of the mic tap.
+  private let feedQueue = DispatchQueue(label: "mundus.audio-capturer.feed")
+  private var feedTimer: DispatchSourceTimer?
+  /// Capture-file override path, read lazily so the file can swap between runs.
+  private var captureFilePath: String? {
+    let path = ProcessInfo.processInfo.environment["MUNDUS_DICTATION_CAPTURE_FILE"] ?? ""
+    return path.isEmpty ? nil : path
+  }
 
   // MARK: Engine lifecycle
 
   func startEngine() throws {
     if engine?.isRunning == true {
       emitJSON(["ready": true, "alreadyRunning": true])
+      return
+    }
+    if captureFilePath != nil { // file-source mode: no mic/engine
+      emitJSON(["ready": true, "fileSource": true])
       return
     }
 
@@ -205,6 +187,7 @@ class AudioCapturer {
   }
 
   func stopEngine() {
+    stopFeeder()
     if let inputNode = engine?.inputNode {
       inputNode.removeTap(onBus: 0)
     }
@@ -222,10 +205,18 @@ class AudioCapturer {
   // MARK: Recording
 
   func startRecording() {
+    if let path = captureFilePath {
+      startFileRecording(path: path)
+      return
+    }
     guard engine?.isRunning == true else {
       emitJSON(["error": "Audio engine not running. Call warmup first."])
       return
     }
+    beginRecording()
+  }
+
+  private func beginRecording() {
     ringBuffer.clear()
     totalWrittenSamples = 0
     drainedSamples = 0
@@ -234,9 +225,77 @@ class AudioCapturer {
     emitJSON(["recording": true])
   }
 
-  /// Emits all samples written since the previous drain as base64 int16 LE.
-  /// If the ring overflowed mid-recording the missing head is reported via
-  /// `dropped` and only what is still buffered is sent.
+  /// File-source capture: decode once, feed the ring in 50 ms blocks paced
+  /// by SPEED env; silence past EOF until `stop`. `samples` stays local to
+  /// the timer closure — no shared mutable state with stopFeeder.
+  private func startFileRecording(path: String) {
+    let samples: [Float]
+    do {
+      samples = try loadAudioFile(path)
+    } catch {
+      emitJSON(["error": "Cannot read capture file \(path): \(error.localizedDescription)"])
+      return
+    }
+    beginRecording()
+    let env = ProcessInfo.processInfo.environment
+    let speed = max(0.01, Double(env["MUNDUS_DICTATION_CAPTURE_FILE_SPEED"] ?? "") ?? 1.0)
+    let block = Int(targetSampleRate * 0.05)
+    let timer = DispatchSource.makeTimerSource(queue: feedQueue)
+    timer.schedule(deadline: .now(), repeating: 0.05 / speed)
+    var pos = 0
+    timer.setEventHandler { [weak self] in
+      guard let self, self.isRecording else { return }
+      if pos < samples.count {
+        let end = min(pos + block, samples.count)
+        samples.withUnsafeBufferPointer { base in
+          self.ingest(UnsafeBufferPointer(start: base.baseAddress! + pos, count: end - pos))
+        }
+      } else {
+        [Float](repeating: 0, count: block).withUnsafeBufferPointer { self.ingest($0) }
+      }
+      pos += block
+    }
+    timer.resume()
+    feedTimer = timer
+  }
+
+  private func stopFeeder() {
+    feedTimer?.cancel()
+    feedTimer = nil
+  }
+
+  /// Декодировать файл в float-сэмплы 16 кГц mono — формат микрофонного tap'а.
+  private func loadAudioFile(_ path: String) throws -> [Float] {
+    let file = try AVAudioFile(forReading: URL(fileURLWithPath: path))
+    let inFormat = file.processingFormat
+    guard let converter = AVAudioConverter(from: inFormat, to: targetFormat) else {
+      throw NSError(domain: "AudioCapturer", code: -2, userInfo: [
+        NSLocalizedDescriptionKey: "Unable to create audio converter.",
+      ])
+    }
+    if inFormat.channelCount > 1 {
+      converter.channelMap = [NSNumber(value: 0)]
+    }
+    let input = AVAudioPCMBuffer(
+      pcmFormat: inFormat, frameCapacity: AVAudioFrameCount(file.length))!
+    try file.read(into: input)
+    let ratio = targetFormat.sampleRate / inFormat.sampleRate
+    let capacity = AVAudioFrameCount((Double(input.frameLength) * ratio).rounded(.up) + 32)
+    let output = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: capacity)!
+    var error: NSError?
+    var consumed = false
+    _ = converter.convert(to: output, error: &error) { _, outStatus in
+      defer { consumed = true }
+      outStatus.pointee = consumed ? .endOfStream : .haveData
+      return consumed ? nil : input
+    }
+    if let error { throw error }
+    guard output.frameLength > 0, let channel = output.floatChannelData else { return [] }
+    return Array(UnsafeBufferPointer(start: channel[0], count: Int(output.frameLength)))
+  }
+
+  /// All samples since the previous drain as base64 int16 LE; `dropped`
+  /// reports a ring overflow (only the still-buffered tail is sent).
   func drain() {
     let pending = max(0, totalWrittenSamples - drainedSamples)
     let emit = min(pending, ringBuffer.sampleCount())
@@ -260,11 +319,11 @@ class AudioCapturer {
       emitJSON(["error": "Not recording"])
       return nil
     }
+    stopFeeder()
 
     let samples = ringBuffer.recentSamples(count: ringBuffer.sampleCount())
     let duration = samples.count / Int(targetSampleRate)
     isRecording = false
-
     guard !samples.isEmpty else {
       emitJSON(["file": NSNull(), "duration": 0])
       return nil
@@ -285,42 +344,15 @@ class AudioCapturer {
     }
   }
 
-  func takeSnapshot() -> String? {
-    let samples = ringBuffer.recentSamples(count: ringBuffer.sampleCount())
-    let duration = Double(samples.count) / targetSampleRate
-
-    guard !samples.isEmpty else {
-      emitJSON(["file": NSNull(), "duration": 0])
-      return nil
-    }
-
-    let tempDir = FileManager.default.temporaryDirectory
-      .appendingPathComponent("supercmd-audio-snapshot-\(UUID().uuidString)")
-    let filePath = tempDir.path + "/snapshot.wav"
-
-    do {
-      try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-      try writeWaveFile(samples: samples, sampleRate: targetSampleRate, toPath: filePath)
-      emitJSON(["file": filePath, "duration": duration])
-      return filePath
-    } catch {
-      emitJSON(["error": "Failed to write snapshot WAV: \(error.localizedDescription)"])
-      return nil
-    }
-  }
-
   // MARK: Buffer processing
 
-  private func processBuffer(_ buffer: AVAudioPCMBuffer) {
-    guard let converted = convertBuffer(buffer),
-          converted.frameLength > 0,
-          let samples = converted.floatChannelData?[0]
-    else { return }
-
-    let sampleCount = Int(converted.frameLength)
+  /// Единая точка входа сэмплов в ring/meter — mic tap и файловый feeder.
+  private func ingest(_ samples: UnsafeBufferPointer<Float>) {
+    let sampleCount = samples.count
+    guard sampleCount > 0 else { return }
 
     if isRecording {
-      ringBuffer.append(UnsafeBufferPointer(start: samples, count: sampleCount))
+      ringBuffer.append(samples)
       totalWrittenSamples += sampleCount
     }
 
@@ -339,6 +371,14 @@ class AudioCapturer {
       meterPeak = Double(min(1, peak * 5))
       lastMeterAt = now
     }
+  }
+
+  private func processBuffer(_ buffer: AVAudioPCMBuffer) {
+    guard let converted = convertBuffer(buffer),
+          converted.frameLength > 0,
+          let samples = converted.floatChannelData?[0]
+    else { return }
+    ingest(UnsafeBufferPointer(start: samples, count: Int(converted.frameLength)))
   }
 
   func getMeter() -> [String: Double] {
@@ -397,35 +437,27 @@ class AudioCapturer {
 
 let capturer = AudioCapturer()
 
-// Handle SIGINT/SIGTERM for clean shutdown
-let stopSource = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
-stopSource.setEventHandler {
-  capturer.cleanup()
-  exit(0)
+// Clean shutdown on signals
+for sig in [SIGINT, SIGTERM] {
+  let source = DispatchSource.makeSignalSource(signal: sig, queue: .main)
+  source.setEventHandler {
+    capturer.cleanup()
+    exit(0)
+  }
+  source.resume()
+  signal(sig, SIG_IGN)
 }
-stopSource.resume()
-signal(SIGINT, SIG_IGN)
 
-let stopSource2 = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
-stopSource2.setEventHandler {
-  capturer.cleanup()
-  exit(0)
-}
-stopSource2.resume()
-signal(SIGTERM, SIG_IGN)
-
-// Read commands from stdin
+// Commands loop: one JSON per stdin line.
 while let line = readLine(strippingNewline: true) {
   let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-  if trimmed.isEmpty { continue }
-
-  guard let data = trimmed.data(using: .utf8),
+  guard !trimmed.isEmpty,
+        let data = trimmed.data(using: .utf8),
         let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
   else {
-    emitJSON(["error": "Invalid JSON request"])
+    if !trimmed.isEmpty { emitJSON(["error": "Invalid JSON request"]) }
     continue
   }
-
   let command = json["command"] as? String ?? ""
 
   switch command {
@@ -441,9 +473,6 @@ while let line = readLine(strippingNewline: true) {
 
   case "stop":
     _ = capturer.stopRecording()
-
-  case "snapshot":
-    _ = capturer.takeSnapshot()
 
   case "meter":
     let m = capturer.getMeter()

@@ -12,6 +12,15 @@ pub struct CapturedAudio {
     pub format: &'static str,
 }
 
+/// Per-capture file source (e2e): helper decodes this file instead of the
+/// mic. Per-request env on the spawned helper — the Engine env is never
+/// allowed to hijack real capture (`env_remove` below).
+#[derive(Debug)]
+pub struct CaptureSource {
+    pub path: std::path::PathBuf,
+    pub speed: f32,
+}
+
 pub struct Session {
     pub(crate) capture_id: String,
     stop: mpsc::Sender<()>,
@@ -23,6 +32,7 @@ pub fn start(
     capture_id: String,
     level_sink: Option<mpsc::Sender<f32>>,
     pcm_sink: Option<mpsc::Sender<Vec<i16>>>,
+    source: Option<CaptureSource>,
 ) -> Result<(Session, u32, u16), String> {
     if device_id.is_some_and(|id| !id.is_empty()) {
         return Err("device_unavailable".into());
@@ -30,14 +40,20 @@ pub fn start(
     #[cfg(windows)]
     {
         let _ = pcm_sink;
+        if source.is_some() {
+            return Err("file_source_unsupported".into());
+        }
         return start_windows(capture_id, level_sink);
     }
     #[cfg(target_os = "macos")]
     {
-        return start_macos(capture_id, level_sink, pcm_sink);
+        return start_macos(capture_id, level_sink, pcm_sink, source);
     }
     #[cfg(all(not(windows), not(target_os = "macos")))]
     {
+        if source.is_some() {
+            return Err("file_source_unsupported".into());
+        }
         let _ = (capture_id, level_sink, pcm_sink);
         Err("device_unavailable".into())
     }
@@ -56,11 +72,23 @@ fn start_macos(
     capture_id: String,
     level_sink: Option<mpsc::Sender<f32>>,
     pcm_sink: Option<mpsc::Sender<Vec<i16>>>,
+    source: Option<CaptureSource>,
 ) -> Result<(Session, u32, u16), String> {
     use std::io::Write;
     let helper = crate::macos_native::resolve_helper_pub("audio-capturer")
         .map_err(|e| format!("device_unavailable: {e}"))?;
-    let mut child = std::process::Command::new(&helper)
+    let mut cmd = std::process::Command::new(&helper);
+    // Источник — только per-request: унаследованный env Engine'а не может
+    // угнать реальный микрофон.
+    cmd.env_remove("MUNDUS_DICTATION_CAPTURE_FILE")
+        .env_remove("MUNDUS_DICTATION_CAPTURE_FILE_SPEED");
+    if let Some(source) = &source {
+        cmd.env("MUNDUS_DICTATION_CAPTURE_FILE", &source.path).env(
+            "MUNDUS_DICTATION_CAPTURE_FILE_SPEED",
+            source.speed.to_string(),
+        );
+    }
+    let mut child = cmd
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())

@@ -63,5 +63,8 @@ guard let source = CGEventSource(stateID: .hidSystemState),
 vDown.flags = .maskCommand
 vUp.flags = .maskCommand
 vDown.post(tap: .cghidEventTap)
+// WKWebView-цели (Tauri) теряют вставку, если keyUp идёт вплотную за
+// keyDown — подтверждено repro: <5мс глотается, ≥5мс работает.
+usleep(20_000)
 vUp.post(tap: .cghidEventTap)
 emit(true)
