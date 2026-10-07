@@ -6,6 +6,8 @@ Dictation живут в своих репозиториях (`makekosmos/agenda-
 `makekosmos/memoria-gpui`, `makekosmos/dictation`) и ставятся Engine из GitHub
 Releases. Главная платформа — Windows; macOS собирается и проверяется в CI,
 Linux годится для разработки Engine (`docs/linux-dev.md`).
+Локальный диктовочный dev-цикл (watchers, lock-файл, файловый источник
+захвата, ловушки lefthook) — `docs/dictation-dev.md`.
 
 ## Карта
 
