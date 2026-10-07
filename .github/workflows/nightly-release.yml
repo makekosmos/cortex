@@ -121,6 +121,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           shared-key: win-installer
+          cache-on-failure: true
           workspaces: |
             . -> target
             core -> target
@@ -265,8 +266,12 @@ jobs:
             xcodebuild -downloadComponent MetalToolchain
           fi
 
+      # The post-build wait can legitimately fail (sibling `release` job
+      # timeout/cancel); without cache-on-failure the built target dirs are
+      # discarded and the next nightly rebuilds ~15 min from cold.
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
+          cache-on-failure: true
           workspaces: |
             . -> target
             core -> target
