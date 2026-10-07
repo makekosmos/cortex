@@ -55,7 +55,7 @@ CI на GitHub запускается на каждый PR и на push в `main
   `-D warnings`, сборка, тесты Engine через nextest, clippy/тесты/сборка
   Manager, нативные хелперы macOS). `installer-smoke.yml` собирает и реально
   запускает установщик (на PR — при правках установщика, и перед ночным
-  релизом); `nightly-release.yml` публикует релиз в 03:00 UTC.
+  релизом); `nightly-release.yml` публикует релиз в 21:00 UTC.
 - Только локально (в CI их нет, обход хуков никто не поймает): `check:brand`,
   `check:source-size`, `check:test-skips`, `check:layout`, oxlint, oxfmt,
   `check:core-pin`, `test:static`, сборка рантайма (`runtime-staging`).
