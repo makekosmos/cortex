@@ -149,10 +149,52 @@ jobs:
             git tag "$tag"
           fi
 
+      # The release commit normally only moves the version pin, and plan.sha
+      # already passed the ci.yml `check` job — re-running every cargo
+      # compile here (~28 min cold) then re-checks identical code. Detect
+      # that case and downgrade to the cheap checks. Fail-closed: any file
+      # other than desktop/release-versions.json, a dirty tree, or any doubt
+      # keeps the full gate (KOS-364).
+      - name: Classify release commit
+        id: classify
+        if: needs.plan.outputs.release == 'true'
+        shell: bash
+        env:
+          RELEASE_SHA: ${{ needs.plan.outputs.sha }}
+        run: |
+          set -euo pipefail
+          pins_only=false
+          changed="$(git diff --name-only "$RELEASE_SHA" HEAD)"
+          dirty="$(git status --porcelain)"
+          if [ -z "$dirty" ]; then
+            case "$changed" in
+              # Empty diff: retry on the already-tagged commit — nothing to
+              # re-check. Single file: the only thing `release-plan set` +
+              # the commit step above can ever touch.
+              "" | "desktop/release-versions.json")
+                pins_only=true ;;
+            esac
+          fi
+          echo "pins_only=$pins_only" >> "$GITHUB_OUTPUT"
+          echo "changed files vs $RELEASE_SHA:"
+          printf '%s\n' "$changed"
+
       # Full gate on the release commit before anything is published.
       - name: Full gate
-        if: needs.plan.outputs.release == 'true'
+        if: needs.plan.outputs.release == 'true' && steps.classify.outputs.pins_only != 'true'
         run: pnpm run check
+
+      # Version-pin-only commit: plan.sha's code is unchanged since it passed
+      # ci.yml `check`, so the cargo compile checks would rerun byte-identical
+      # work. Always keep the cheap repo-wide lints plus the script tests that
+      # actually cover release-versions.json and the staging layout. The
+      # installer smoke and Build installer/publish below are never skipped.
+      - name: Reduced gate (version-pin-only commit)
+        if: needs.plan.outputs.release == 'true' && steps.classify.outputs.pins_only == 'true'
+        run: |
+          pnpm run check:fast
+          pnpm run test:static
+          node --test desktop/scripts/runtime-staging.test.mjs
 
       # Same recipe as `pnpm run build:installer:local`, minus --local:
       # Engine from this tree + Manager + NSIS installer + receipt.
