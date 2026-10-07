@@ -1,12 +1,14 @@
 name: Nightly release
 
-# 06:00 MSK (UTC+3) every night, plus manual dispatch. Ships the Windows
-# installer and (independently) the macOS DMG to makekosmos/cortex releases;
-# see desktop/scripts/release-plan.mjs for the skip/bump rules. The macOS job
-# must not gate Windows publish (KOS-349).
+# 00:00 MSK (UTC+3) every night, plus manual dispatch. GitHub delays
+# scheduled runs under load (observed lag up to ~6h), so we schedule for
+# midnight MSK to let the Windows/macOS builds still finish before morning
+# MSK (KOS-359). Ships the Windows installer and (independently) the macOS
+# DMG to makekosmos/cortex releases; see desktop/scripts/release-plan.mjs for
+# the skip/bump rules. The macOS job must not gate Windows publish (KOS-349).
 on:
   schedule:
-    - cron: "0 3 * * *"
+    - cron: "0 21 * * *"
   workflow_dispatch:
 
 permissions:
