@@ -68,9 +68,11 @@ jobs:
     timeout-minutes: 300
     # Releases live in this repo (makekosmos/cortex) — the job's own
     # GITHUB_TOKEN pushes the release commit/tag and creates the GitHub
-    # release. All other scopes stay at the default "none".
+    # release. actions: read lets the CI gate below poll the CI run on
+    # plan.sha. All other scopes stay at the default "none".
     permissions:
       contents: write
+      actions: read
     steps:
       # Credentials persist (the default) so `git push` reuses the same
       # GITHUB_TOKEN — there are no PAT secrets anywhere in this workflow.
@@ -191,6 +193,53 @@ jobs:
         if: needs.plan.outputs.release == 'true' && steps.classify.outputs.pins_only != 'true'
         run: pnpm run check
 
+      # The pins_only path assumes plan.sha's code passed CI — verify that
+      # assumption instead of trusting it: poll the ci.yml run on plan.sha,
+      # wait while queued/in_progress, and fail on any other conclusion or on
+      # a sha that never got a run. A retry builds the already-tagged release
+      # commit, pushed by GITHUB_TOKEN, which triggers no CI run: gate on its
+      # parent when that commit only bumps the pin.
+      - name: CI passed on the planned sha
+        if: needs.plan.outputs.release == 'true' && steps.classify.outputs.pins_only == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ needs.plan.outputs.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [ "$(git diff --name-only "$RELEASE_SHA~1" "$RELEASE_SHA" 2>/dev/null)" = "desktop/release-versions.json" ]; then
+            RELEASE_SHA="$(git rev-parse "$RELEASE_SHA~1")"
+          fi
+          deadline=$(( $(date +%s) + 60 * 60 ))
+          grace=$(( $(date +%s) + 5 * 60 ))
+          while :; do
+            state="$(gh api "repos/$REPO/actions/runs?head_sha=$RELEASE_SHA&event=push" \
+              --jq '[.workflow_runs[] | select(.name == "CI")] | .[0] // empty | .status + " " + (.conclusion // "")' \
+              2>/dev/null || true)"
+            case "$state" in
+              "completed success")
+                echo "CI on $RELEASE_SHA: success"
+                exit 0 ;;
+              "completed "*)
+                echo "CI on $RELEASE_SHA concluded '${state#completed }' — refusing to release" >&2
+                exit 1 ;;
+              "")
+                # No CI run yet — a fresh push's run may take a moment to
+                # register; a sha that never got one fails after the grace.
+                if [ "$(date +%s)" -ge "$grace" ]; then
+                  echo "no CI run found for $RELEASE_SHA" >&2
+                  exit 1
+                fi ;;
+            esac
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "timed out waiting for CI on $RELEASE_SHA (state: ${state:-none})" >&2
+              exit 1
+            fi
+            echo "waiting for CI on $RELEASE_SHA (state: ${state:-none})..."
+            sleep 20
+          done
+
       # Version-pin-only commit: plan.sha's code is unchanged since it passed
       # ci.yml `check`, so the cargo compile checks would rerun byte-identical
       # work. Always keep the cheap repo-wide lints plus the script tests that
@@ -223,6 +272,14 @@ jobs:
         env:
           VERSION: ${{ needs.plan.outputs.version }}
           BASE_SHA: ${{ needs.plan.outputs.sha }}
+          # The pins_only path ran no `pnpm run check`, so the lefthook
+          # pre-push hook (installed by `pnpm install` → prepare) finds no
+          # full-gate cache for this tree, replans the push diff —
+          # release-versions.json is a full-influence file — and would rerun
+          # the ~19 min gate here. Disable the hook only on that path; the
+          # pushed tree is CI-verified plan.sha plus the generated pin.
+          # LEFTHOOK=1 is lefthook's normal enabled state.
+          LEFTHOOK: ${{ steps.classify.outputs.pins_only == 'true' && '0' || '1' }}
         run: |
           set -euo pipefail
           head=$(git rev-parse HEAD)
@@ -260,21 +317,16 @@ jobs:
         if: needs.plan.outputs.release == 'true'
         run: pnpm --dir desktop run verify:channel
 
-  # KOS-349: macOS DMG publish. Depends on plan only — never on the Windows
+  # KOS-349: macOS DMG build. Depends on plan only — never on the Windows
   # smoke or release jobs — so a red Mac step cannot block the Windows
-  # installer. Shares the planned version/sha; attaches the DMG to the same
-  # cortex release Win created and merges platforms.mac into its manifest.json
-  # (+ latest-mac.yml while dual-publish is on, KOS-350).
+  # installer. The macOS runner builds the DMG and hands desktop/release/* to
+  # `publish-mac` (a cheap Linux runner that starts only after `release`
+  # lands), so the Mac stops billing while Windows finishes.
   release-mac:
     needs: [plan]
     if: needs.plan.outputs.release == 'true'
     runs-on: macos-latest
-    timeout-minutes: 300
-    permissions:
-      contents: write
-      # read sibling job status so the manifest wait tracks Windows `release`
-      # health instead of a fixed attempt count (KOS-349, v0.10.7 race)
-      actions: read
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -308,9 +360,9 @@ jobs:
             xcodebuild -downloadComponent MetalToolchain
           fi
 
-      # The post-build wait can legitimately fail (sibling `release` job
-      # timeout/cancel); without cache-on-failure the built target dirs are
-      # discarded and the next nightly rebuilds ~15 min from cold.
+      # The build can legitimately end on failure/cancel; without
+      # cache-on-failure the built target dirs are discarded and the next
+      # nightly rebuilds ~15 min from cold.
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           cache-on-failure: true
@@ -338,56 +390,63 @@ jobs:
           # tree); still emit manifest.json + receipt for the publish handoff.
           node desktop/scripts/build-desktop.mjs --platform mac --skip-preflight
 
-      # Win owns tag + release create + the release manifest.json (KOS-350).
-      # Wait until the release AND its manifest.json exist so the mac publish
-      # can merge platforms.mac into it without racing refs/tags/vX.
-      # Soft-fail independence: this job being red still never blocks the
-      # Windows release job.
-      #
-      # KOS-349 lesson (v0.10.7, run 37540994541): the old fixed 90×20s loop
-      # (~30 min) expired at 02:21 MSK while the sibling Windows `release`
-      # job of the same run was still healthy — it published at 02:34. Any
-      # fixed attempt count can lose that race again, so this wait tracks
-      # sibling health instead of a short fixed budget:
-      #   - while `release` is queued/running, keep waiting (no expiry);
-      #   - if `release` ends failed/cancelled/timed_out, give up immediately;
-      #   - if `release` succeeded but manifest.json is still absent, fail —
-      #     Win owns creating it, something is wrong upstream;
-      #   - absolute ceiling matches this job's timeout-minutes: 300 minus
-      #     headroom for the publish/verify steps that follow (~240 min).
-      - name: Wait for cortex release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ needs.plan.outputs.version }}
-          REPO: ${{ github.repository }}
-          RUN_ID: ${{ github.run_id }}
+      # Everything the mac publish step reads lives under desktop/release
+      # (DMG, manifest.json, latest-mac.yml, the receipt); publish-mac on
+      # ubuntu-latest downloads it there.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-mac
+          path: desktop/release/
+          retention-days: 1
+
+  # Mac publish. needs: release is the ordering guarantee the old
+  # release-mac in-job "Wait for cortex release" poll provided (KOS-349
+  # lesson, v0.10.7 run 37540994541): the job only starts once Windows has
+  # created the release and its manifest.json, so the mac publish can merge
+  # platforms.mac into it without racing refs/tags/vX (+ latest-mac.yml while
+  # dual-publish is on, KOS-350). A red release-mac still never blocks the
+  # Windows job — this job only follows it.
+  publish-mac:
+    needs: [plan, release, release-mac]
+    if: needs.plan.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      # gh release upload attaches the DMG and the merged manifest.json.
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+          fetch-depth: 0
+
+      - name: Read toolchain pins
+        shell: bash
+        run: node -e 'const t=require("./toolchain.json");console.log("NODE_VERSION="+t.node)' >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Bootstrap pnpm and install
+        shell: bash
         run: |
-          set -euo pipefail
-          deadline=$(( $(date +%s) + 240 * 60 ))
-          while :; do
-            if gh release view "v$VERSION" --repo "$REPO" --json assets -q '.assets[].name' 2>/dev/null | grep -qx 'manifest.json'; then
-              echo "Release v$VERSION with manifest.json is published"
-              exit 0
-            fi
-            # Sibling Windows job of THIS run (name is `release`, not
-            # `release-mac`). --paginate covers large job lists.
-            state="$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs" --paginate \
-              --jq '.jobs[] | select(.name == "release") | .status + " " + (.conclusion // "")' 2>/dev/null | head -1 || true)"
-            case "$state" in
-              *" success")
-                echo "Windows release job succeeded but v$VERSION manifest.json is missing" >&2
-                exit 1 ;;
-              *failure*|*cancelled*|*timed_out*)
-                echo "Windows release job ended as '$state'; not waiting for manifest.json" >&2
-                exit 1 ;;
-            esac
-            if [ "$(date +%s)" -ge "$deadline" ]; then
-              echo "timed out waiting for $REPO v$VERSION manifest.json (sibling release: ${state:-unknown})" >&2
-              exit 1
-            fi
-            echo "waiting for v$VERSION manifest.json (sibling release: ${state:-unknown})..."
-            sleep 20
-          done
+          corepack enable
+          pnpm --dir desktop install --frozen-lockfile
+
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: release-mac
+          path: desktop/release
+
+      # publish-release.mjs verifies the receipt against HEAD + the local
+      # version pin — replay the same local pin release-mac built with.
+      - name: Set release version (local)
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          node desktop/scripts/release-plan.mjs set "$VERSION"
+          node desktop/scripts/release-plan.mjs set --platform mac "$VERSION"
 
       - name: Publish dry run
         env:

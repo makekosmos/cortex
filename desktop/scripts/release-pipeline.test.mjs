@@ -261,11 +261,21 @@ test("nightly mac job does not gate the Windows release job (KOS-349)", async ()
   assert.doesNotMatch(winBlock, /release-mac/);
 });
 
-test("nightly mac publish waits for the Windows-created manifest.json (KOS-350)", async () => {
+// The mac build/publish split: the macOS runner only builds the DMG and
+// uploads desktop/release/*; a Linux publish-mac job starts after `release`
+// (needs replaces the old in-job manifest.json poll, KOS-349/KOS-350) and
+// runs the publish — so the Mac never idles waiting on Windows.
+test("nightly mac publish runs on Linux after the Windows release (KOS-350)", async () => {
   const workflow = await readFile(
     path.join(scripts, "..", "..", ".github", "workflows", "nightly-release.yml"),
     "utf8",
   );
   const macBlock = workflow.split("release-mac:")[1];
-  assert.match(macBlock, /grep -qx 'manifest\.json'/);
+  assert.match(macBlock, /upload-artifact/);
+  assert.doesNotMatch(macBlock.split("publish-mac:")[0], /run:.*publish-release/);
+  const publishBlock = workflow.split("publish-mac:")[1];
+  assert.match(publishBlock, /needs: \[plan, release, release-mac\]/);
+  assert.match(publishBlock, /runs-on: ubuntu-latest/);
+  assert.match(publishBlock, /name: release-mac/);
+  assert.match(publishBlock, /publish-release\.mjs --platform mac/);
 });
