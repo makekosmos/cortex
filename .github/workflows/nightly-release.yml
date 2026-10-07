@@ -319,7 +319,7 @@ jobs:
             state="$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs" --paginate \
               --jq '.jobs[] | select(.name == "release") | .status + " " + (.conclusion // "")' 2>/dev/null | head -1 || true)"
             case "$state" in
-              success*)
+              *" success")
                 echo "Windows release job succeeded but v$VERSION manifest.json is missing" >&2
                 exit 1 ;;
               *failure*|*cancelled*|*timed_out*)
