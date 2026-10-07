@@ -157,7 +157,8 @@ impl DictationHost {
     /// На старте: GC pending по 7d/20 items. Если что-то осталось — emit
     /// `dictation_pending_changed` чтобы UI показал нотификацию.
     fn bootstrap_pending(&self) {
-        let _ = super::pending::gc(&self.data_dir, 20, chrono::Duration::days(7));
+        // История диктовок живёт 30 дней, потолок — 200 записей.
+        let _ = super::pending::gc(&self.data_dir, 200, chrono::Duration::days(30));
         if let Ok(items) = super::pending::list(&self.data_dir) {
             if !items.is_empty() {
                 let _ = self.events_tx.send(json!({
@@ -298,6 +299,10 @@ fn config_to_value(cfg: &DictationConfig) -> Value {
         "injectMode": match cfg.inject_mode {
             InjectMode::AutoPaste => "auto_paste",
             InjectMode::ClipboardOnly => "clipboard_only",
+        },
+        "pillStyle": match cfg.pill_style {
+            PillStyle::Large => "large",
+            PillStyle::Compact => "compact",
         },
         "networkProfile": network_profile_to_value(&cfg.network_profile),
         "httpProxy": cfg.http_proxy,

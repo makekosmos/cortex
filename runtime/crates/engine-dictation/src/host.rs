@@ -19,7 +19,9 @@ use thiserror::Error;
 use tokio::sync::broadcast;
 use tokio::sync::Mutex;
 
-use super::config::{self, has_api_key, DictationConfig, InjectMode, NetworkProfile, TriggerMode};
+use super::config::{
+    self, has_api_key, DictationConfig, InjectMode, NetworkProfile, PillStyle, TriggerMode,
+};
 use super::groq::{self, GroqError};
 #[cfg(windows)]
 use super::hotkey_hook;

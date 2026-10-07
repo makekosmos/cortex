@@ -1,10 +1,9 @@
 fn apply_ptt_hook(cfg: &DictationConfig, _tx: &broadcast::Sender<Value>) {
     #[cfg(windows)]
     {
-        let mode = match cfg.trigger_mode {
-            TriggerMode::PushToTalk => hotkey_hook::HookMode::PushToTalk,
-            TriggerMode::Toggle => hotkey_hook::HookMode::Toggle,
-        };
+        // Режима больше нет в UI: завершение — тем же хоткеем (toggle),
+        // отмена — двойной Esc. trigger_mode в конфиге игнорируется.
+        let mode = hotkey_hook::HookMode::Toggle;
         if let Some(matcher) = hotkey_hook::parse_accelerator(&cfg.hotkey) {
             hotkey_hook::set_active(Some(matcher), Some(_tx.clone()), mode);
         } else {
@@ -21,7 +20,12 @@ fn apply_ptt_hook(cfg: &DictationConfig, _tx: &broadcast::Sender<Value>) {
         #[cfg(target_os = "macos")]
         {
             if let Err(e) =
-                crate::macos_native::set_hotkey_active(&cfg.hotkey, cfg.trigger_mode, _tx.clone())
+                // Toggle-only: завершение — тем же хоткеем (см. коммент выше).
+                crate::macos_native::set_hotkey_active(
+                    &cfg.hotkey,
+                    TriggerMode::Toggle,
+                    _tx.clone(),
+                )
             {
                 eprintln!("[dictation::host] macOS hotkey helper unavailable: {e}");
             }
@@ -55,6 +59,7 @@ async fn op_set_api_key(params: Value, host: &DictationHost) -> DictationRespons
 
 async fn op_capture_foreground(host: &DictationHost) -> DictationResponse {
     let hwnd = inject::capture_foreground_window();
+    eprintln!("[dictation::inject] capture_foreground op result: {hwnd:?}");
     let mut s = host.state.lock().await;
     s.prev_hwnd = hwnd;
     DictationResponse::ok(json!({ "captured": hwnd.is_some() }))
@@ -62,6 +67,7 @@ async fn op_capture_foreground(host: &DictationHost) -> DictationResponse {
 
 async fn op_contract_foreground(host: &DictationHost) -> DictationResponse {
     let hwnd = inject::capture_foreground_window();
+    eprintln!("[dictation::inject] contract_foreground op result: {hwnd:?}");
     if hwnd.is_none() {
         return DictationResponse::err("device_unavailable");
     }
@@ -73,6 +79,29 @@ async fn op_contract_foreground(host: &DictationHost) -> DictationResponse {
         .lock()
         .expect("window mutex poisoned") = Some(window_id.clone());
     DictationResponse::ok(json!({ "windowId": window_id }))
+}
+
+/// Каталог Parakeet-модели, если для этой записи имеет смысл stream-
+/// транскриба: local provider + engine=parakeet + модель на месте —
+/// то же условие, что у preload.
+#[cfg(feature = "local-dictation")]
+async fn stream_model_dir_for_streaming(host: &DictationHost) -> Option<std::path::PathBuf> {
+    let cfg = host.snapshot_config().await;
+    let eligible = cfg.provider_enabled
+        && provider_uses_local_runtime(&cfg.provider)
+        && cfg.local_engine == local::PARAKEET_LOCAL_ENGINE
+        && local_config_is_ready(&host.data_dir, &cfg);
+    if !eligible {
+        return None;
+    }
+    cfg.local_model_path
+        .map(std::path::PathBuf::from)
+        .filter(|dir| dir.is_dir())
+}
+
+#[cfg(not(feature = "local-dictation"))]
+async fn stream_model_dir_for_streaming(_host: &DictationHost) -> Option<std::path::PathBuf> {
+    None
 }
 
 async fn op_capture_start(params: Value, host: &Arc<DictationHost>) -> DictationResponse {
@@ -112,13 +141,27 @@ async fn op_capture_start(params: Value, host: &Arc<DictationHost>) -> Dictation
             })
             .ok();
     }
+    let stream_model_dir = stream_model_dir_for_streaming(host).await;
+    let (pcm_tx, pcm_rx) = std::sync::mpsc::channel::<Vec<i16>>();
+    let pcm_sink = stream_model_dir.as_ref().map(|_| pcm_tx);
     let native_capture_id = capture_id.clone();
     let result = tokio::task::spawn_blocking(move || {
-        super::native_capture::start(device_id.as_deref(), native_capture_id, Some(level_tx))
+        super::native_capture::start(
+            device_id.as_deref(),
+            native_capture_id,
+            Some(level_tx),
+            pcm_sink,
+        )
     })
     .await;
     match result {
         Ok(Ok((session, sample_rate, channels))) => {
+            if let Some(model_dir) = stream_model_dir {
+                #[cfg(feature = "local-dictation")]
+                local::start_parakeet_stream(model_dir, pcm_rx);
+                #[cfg(not(feature = "local-dictation"))]
+                let _ = (model_dir, pcm_rx);
+            }
             *host.capture.lock().expect("capture mutex poisoned") = Some(session);
             DictationResponse::ok(json!({
                 "captureId": capture_id,
@@ -159,6 +202,12 @@ async fn op_capture_stop(params: Value, host: &Arc<DictationHost>) -> DictationR
             // Keep the foreground capability token alive for the worker's
             // subsequent speech.transcribe → input.insert_text sequence.
             super::audio_duck::restore();
+            // Дождаться stream-потока (in-flight чанк дозавершится) и
+            // сохранить partial для transcribe. Join'им вне async-runtime.
+            #[cfg(feature = "local-dictation")]
+            tokio::task::spawn_blocking(local::finish_parakeet_stream)
+                .await
+                .ok();
             let mut state = host.state.lock().await;
             *state = HostState::idle();
             let snapshot = state.clone();
@@ -329,6 +378,23 @@ async fn op_start_recording(host: &DictationHost) -> DictationResponse {
 
 async fn op_cancel(host: &DictationHost) -> DictationResponse {
     super::audio_duck::restore();
+    // Остановить stream-транскрибу и выбросить её partial — запись
+    // отменена, частичный текст непригоден.
+    #[cfg(feature = "local-dictation")]
+    {
+        tokio::task::spawn_blocking(local::finish_parakeet_stream)
+            .await
+            .ok();
+        local::discard_parakeet_partial();
+    }
+    // Глушим живой захват — без этого helper (macOS) остаётся запущенным и
+    // следующий capture.start получает «busy».
+    let session = host.capture.lock().expect("capture mutex poisoned").take();
+    if let Some(session) = session {
+        tokio::task::spawn_blocking(move || {
+            let _ = super::native_capture::stop(session);
+        });
+    }
     *host
         .contract_window_id
         .lock()

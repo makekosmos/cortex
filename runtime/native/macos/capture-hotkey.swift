@@ -35,8 +35,13 @@ func installParentWatchdogIfNeeded() {
 }
 
 let kEscapeKeyCode: CGKeyCode = 53
+let kFnKeyCode: CGKeyCode = 63
+let kDoubleTapMs: Double = 0.5
+var lastFnDown = Date.distantPast
 
-let eventMask: CGEventMask = (1 << CGEventType.keyDown.rawValue)
+let eventMask: CGEventMask =
+    (1 << CGEventType.keyDown.rawValue) |
+    (1 << CGEventType.flagsChanged.rawValue)
 
 let callback: CGEventTapCallBack = { _, type, event, _ in
     if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
@@ -44,6 +49,21 @@ let callback: CGEventTapCallBack = { _, type, event, _ in
     }
 
     let keyCode = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
+
+    // Дабл-тап Fn — отдельный хоткей "FnFn" (Fn одиночной не биндится).
+    if type == .flagsChanged && keyCode == kFnKeyCode {
+        if event.flags.contains(.maskSecondaryFn) {
+            if Date().timeIntervalSince(lastFnDown) < kDoubleTapMs {
+                emit(["captured": true, "doubleFn": true])
+                exit(0)
+            }
+            lastFnDown = Date()
+        }
+        return Unmanaged.passUnretained(event)
+    }
+    if type != .keyDown {
+        return Unmanaged.passUnretained(event)
+    }
 
     // Escape — отмена capture (с модификаторами или без).
     if keyCode == kEscapeKeyCode {

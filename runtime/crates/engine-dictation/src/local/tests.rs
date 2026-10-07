@@ -331,6 +331,136 @@ mod tests {
     }
 
     #[test]
+    fn parakeet_cache_is_stale_only_on_missing_or_different_dir() {
+        let dir_a = Path::new("/models/parakeet-a");
+        let dir_b = Path::new("/models/parakeet-b");
+
+        assert!(parakeet_cache_is_stale(None, dir_a));
+        assert!(!parakeet_cache_is_stale(Some(dir_a), dir_a));
+        assert!(parakeet_cache_is_stale(Some(dir_a), dir_b));
+    }
+
+    #[test]
+    fn split_points_short_audio_never_splits() {
+        let rate = 16_000u32;
+        let speech = vec![0.3f32; 15 * rate as usize];
+        assert!(split_points(&speech, rate, 12.0, 20.0).is_empty());
+        let edge = vec![0.3f32; 20 * rate as usize];
+        assert!(split_points(&edge, rate, 12.0, 20.0).is_empty());
+    }
+
+    #[test]
+    fn split_points_cut_at_silence_gaps() {
+        let rate = 16_000u32;
+        let total_secs = 45.0f64;
+        let mut samples = vec![0.3f32; (total_secs * rate as f64) as usize];
+        // Паузы-тишина 1.5с по центрам 15с и 33с.
+        for center in [15.0, 33.0] {
+            let from = ((center - 0.75) * rate as f64) as usize;
+            let to = ((center + 0.75) * rate as f64) as usize;
+            for s in &mut samples[from..to] {
+                *s = 0.0;
+            }
+        }
+
+        let points = split_points(&samples, rate, 12.0, 20.0);
+        assert_eq!(points.len(), 2);
+        let tolerance = (0.3 * rate as f64) as usize;
+        assert!(
+            (points[0] as i64 - 15 * rate as i64).abs() <= tolerance as i64,
+            "first cut {} should be near 15s",
+            points[0] as f64 / rate as f64
+        );
+        assert!(
+            (points[1] as i64 - 33 * rate as i64).abs() <= tolerance as i64,
+            "second cut {} should be near 33s",
+            points[1] as f64 / rate as f64
+        );
+        // Ни один кусок не длиннее max.
+        let mut prev = 0usize;
+        for cut in points.iter().chain(std::iter::once(&samples.len())) {
+            assert!(*cut - prev <= 20 * rate as usize);
+            prev = *cut;
+        }
+    }
+
+    #[test]
+    fn collapse_repeats_drops_decoder_loops() {
+        // Реальные фрагменты вырожденной диктовки.
+        assert_eq!(
+            collapse_repeats(
+                "чтобы чтобы чтобы чтобы чтобы чтобы чтобы чтобы чтобы чтобы чтобы он"
+            ),
+            "чтобы он"
+        );
+        let forty = "которые ".repeat(40);
+        assert_eq!(collapse_repeats(&forty), "которые");
+        let twenty = "дела ".repeat(20);
+        assert_eq!(collapse_repeats(&twenty), "дела");
+        // Повторный 2-грамм.
+        assert_eq!(collapse_repeats("как бы как бы как бы"), "как бы");
+        // Пунктуация и регистр не должны мешать схлопыванию.
+        assert_eq!(collapse_repeats("Дела, дела, дела."), "Дела,");
+    }
+
+    #[test]
+    fn best_cut_lands_in_silence() {
+        let rate = 16_000u32;
+        // 10с речи + тишина 1.2с по центру 9с + ещё речь.
+        let mut samples = vec![0.3f32; 15 * rate as usize];
+        for s in &mut samples[(8.4 * rate as f64) as usize..(9.6 * rate as f64) as usize] {
+            *s = 0.0;
+        }
+        let cut = best_cut(&samples, rate, 7.0, 12.0);
+        assert!(
+            (cut as f64 / rate as f64 - 9.0).abs() <= 0.3,
+            "cut {:.2}s should land in the 9s silence",
+            cut as f64 / rate as f64
+        );
+    }
+
+    #[test]
+    fn apply_partial_validates_prefix() {
+        let samples: Vec<i16> = (0..16_000 * 30).map(|i| (i % 997) as i16).collect();
+        let committed = 16_000 * 25;
+        let good = PartialTranscript {
+            committed,
+            prefix_hash: hash_pcm16(&samples[..committed]),
+            texts: vec!["prefix".into()],
+        };
+        assert_eq!(apply_partial(&samples, &good), Some(committed));
+
+        // Хэш чужой записи — miss.
+        let wrong = PartialTranscript {
+            committed,
+            prefix_hash: 12345,
+            texts: vec!["prefix".into()],
+        };
+        assert_eq!(apply_partial(&samples, &wrong), None);
+
+        // Wav короче committed — miss.
+        assert_eq!(apply_partial(&samples[..committed - 1], &good), None);
+
+        // Пустой partial — miss.
+        let empty = PartialTranscript {
+            committed: 0,
+            prefix_hash: hash_pcm16(&[]),
+            texts: vec![],
+        };
+        assert_eq!(apply_partial(&samples, &empty), None);
+    }
+
+    #[test]
+    fn collapse_repeats_keeps_legit_doubles() {
+        assert_eq!(collapse_repeats("очень очень хорошо"), "очень очень хорошо");
+        assert_eq!(collapse_repeats(""), "");
+        assert_eq!(
+            collapse_repeats("это был длинный день без повторов"),
+            "это был длинный день без повторов"
+        );
+    }
+
+    #[test]
     fn whisper_profile_and_accelerator_args_map_to_backend_flags() {
         let mut fast = Command::new("whisper-cli");
         apply_whisper_quality_args_blocking(&mut fast, &LocalSttProfile::Fast);

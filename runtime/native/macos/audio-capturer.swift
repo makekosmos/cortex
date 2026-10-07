@@ -17,6 +17,10 @@
 //                     Emits {"file":"<path>","duration":<seconds>}.
 //   meter           — Emit current audio level.
 //                     Emits {"meter":{"average":<0-1>,"peak":<0-1>}}.
+//   drain           — Emit PCM samples appended since the previous drain.
+//                     Emits {"pcm":"<base64 int16 LE>","dropped":<count>};
+//                     dropped > 0 means the ring overflowed and the beginning
+//                     of the undrained region was lost.
 //   stopEngine      — Stop the audio engine entirely (mic cold).
 //                     Emits {"stopped":true}.
 //   ping            — Health check.  Emits {"pong":true}.
@@ -30,8 +34,10 @@ import AVFoundation
 // MARK: - Constants
 
 let targetSampleRate: Double = 16_000
-let ringBufferDuration: TimeInterval = 30.0
-let meterInterval: TimeInterval = 0.1
+// Safety net only — `drain` streams PCM out continuously, so recordings
+// longer than the ring still reach the Engine intact.
+let ringBufferDuration: TimeInterval = 60.0
+let meterInterval: TimeInterval = 0.05
 
 // MARK: - Ring Buffer
 
@@ -156,6 +162,10 @@ class AudioCapturer {
   private var lastMeterAt: Date = Date.distantPast
   private var meterAverage: Double = 0
   private var meterPeak: Double = 0
+  // Monotonic sample counters for `drain` — the ring may overwrite data
+  // between drains on very long recordings, so dropped reports the gap.
+  private var totalWrittenSamples = 0
+  private var drainedSamples = 0
 
   // MARK: Engine lifecycle
 
@@ -217,9 +227,32 @@ class AudioCapturer {
       return
     }
     ringBuffer.clear()
+    totalWrittenSamples = 0
+    drainedSamples = 0
     isRecording = true
     recordingStartedAt = Date()
     emitJSON(["recording": true])
+  }
+
+  /// Emits all samples written since the previous drain as base64 int16 LE.
+  /// If the ring overflowed mid-recording the missing head is reported via
+  /// `dropped` and only what is still buffered is sent.
+  func drain() {
+    let pending = max(0, totalWrittenSamples - drainedSamples)
+    let emit = min(pending, ringBuffer.sampleCount())
+    let dropped = pending - emit
+    var bytes = Data()
+    if emit > 0 {
+      let floats = ringBuffer.recentSamples(count: emit)
+      bytes.reserveCapacity(emit * 2)
+      for sample in floats {
+        let clamped = max(-1.0, min(1.0, sample))
+        var v = Int16(clamped * Float(Int16.max))
+        withUnsafeBytes(of: &v) { bytes.append(contentsOf: $0) }
+      }
+    }
+    drainedSamples = totalWrittenSamples
+    emitJSON(["pcm": bytes.base64EncodedString(), "dropped": dropped])
   }
 
   func stopRecording() -> String? {
@@ -288,6 +321,7 @@ class AudioCapturer {
 
     if isRecording {
       ringBuffer.append(UnsafeBufferPointer(start: samples, count: sampleCount))
+      totalWrittenSamples += sampleCount
     }
 
     // Compute meter
@@ -414,6 +448,9 @@ while let line = readLine(strippingNewline: true) {
   case "meter":
     let m = capturer.getMeter()
     emitJSON(["meter": m])
+
+  case "drain":
+    capturer.drain()
 
   case "stopEngine":
     capturer.stopEngine()

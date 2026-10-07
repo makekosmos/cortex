@@ -73,6 +73,7 @@ fn watch_hotkey_once(
         bool_arg(spec.alt).to_string(),
         bool_arg(spec.shift).to_string(),
         bool_arg(spec.function).to_string(),
+        bool_arg(spec.double_fn).to_string(),
     ];
     let mut child = Command::new(helper)
         .args(args)
@@ -243,6 +244,10 @@ fn run_capture_once(
 /// `None` если keyCode неизвестен — тогда capture молча игнорится (как
 /// Windows-ветка при невалидной клавише).
 fn capture_value_to_accelerator(value: &Value) -> Option<String> {
+    // Дабл-тап Fn — особый хоткей "FnFn" (нет real keyCode-пары).
+    if value.get("doubleFn").and_then(|v| v.as_bool()) == Some(true) {
+        return Some("FnFn".into());
+    }
     let key_code = value.get("keyCode").and_then(|v| v.as_u64())? as u16;
     let key = mac_key_name(key_code)?;
     let flag = |name: &str| value.get(name).and_then(|v| v.as_bool()).unwrap_or(false);
@@ -388,6 +393,9 @@ struct MacHotkeySpec {
     alt: bool,
     shift: bool,
     function: bool,
+    /// "FnFn" — двойной тап по Fn (как системная диктовка Apple). На
+    /// Windows нет Fn — там accelerator просто не парсится.
+    double_fn: bool,
 }
 
 fn parse_hotkey(raw: &str) -> Option<MacHotkeySpec> {
@@ -398,7 +406,13 @@ fn parse_hotkey(raw: &str) -> Option<MacHotkeySpec> {
         alt: false,
         shift: false,
         function: false,
+        double_fn: false,
     };
+    if raw.trim().eq_ignore_ascii_case("fnfn") || raw.trim() == "Fn ×2" {
+        spec.key_code = 63; // kVK_Function
+        spec.double_fn = true;
+        return Some(spec);
+    }
     let mut key: Option<&str> = None;
     for part in raw.split('+') {
         let token = part.trim().to_ascii_lowercase();
@@ -499,6 +513,10 @@ fn mac_key_code(key: &str) -> Option<u16> {
     }
 }
 
+pub(crate) fn resolve_helper_pub(name: &str) -> Result<PathBuf, NativeHelperError> {
+    resolve_helper(name)
+}
+
 fn resolve_helper(name: &str) -> Result<PathBuf, NativeHelperError> {
     let mut candidates = Vec::new();
 
@@ -571,6 +589,13 @@ mod tests {
         assert!(spec.shift);
         assert!(!spec.cmd);
         assert!(!spec.alt);
+    }
+
+    #[test]
+    fn parses_double_fn_hotkey() {
+        let spec = parse_hotkey("FnFn").unwrap();
+        assert!(spec.double_fn);
+        assert_eq!(spec.key_code, 63); // kVK_Function
     }
 
     #[test]
