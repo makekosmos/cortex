@@ -681,7 +681,7 @@ async fn setup() -> Result<SetupState, DynError> {
         manager_state,
     )
     .await?;
-    tokio::spawn(updater.run_startup_check_after_grace(ws.desktop_authority()));
+    tokio::spawn(updater.run_check_loop());
     let port = ws.port();
     tracing::info!(port = port, "WS listening on 127.0.0.1");
     let dispatcher = Arc::new(ws.dispatcher());

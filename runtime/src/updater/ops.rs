@@ -40,8 +40,9 @@ impl UpdaterResponse {
 }
 
 /// `updater.status` — current state, poll-friendly (no side effects).
-/// `updater.check` — manual feed check; also runs once at Engine startup
-///   (`UpdaterService::run_startup_check_after_grace`). Finding a newer
+/// `updater.check` — manual feed check; Engine also runs it on its own
+///   shortly after startup and then periodically
+///   (`UpdaterService::run_check_loop`). Finding a newer
 ///   version starts its download automatically (autoDownload=true parity
 ///   with `autoupdater-host.ts`).
 /// `updater.download` — explicit (re)start of the pending download; a

@@ -9,6 +9,10 @@ use super::state::{Phase, UpdaterStatus};
 use super::{cleanup, download, feed, install, version, UpdaterError};
 
 const STARTUP_GRACE: Duration = Duration::from_secs(5);
+// Engine-owned discovery (KOS-357): Manager polls `updater.status`, which is
+// side-effect free, so it must never be the only trigger. Recheck the feed
+// periodically so an update released while Mundus is running still surfaces.
+const RECHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 
 #[derive(Debug, Clone)]
 struct PendingUpdate {
@@ -272,12 +276,25 @@ impl UpdaterService {
             .clone()
     }
 
-    pub async fn run_startup_check_after_grace(
-        self: Arc<Self>,
-        desktop_authority: Arc<crate::desktop_authority::DesktopAuthorityRegistry>,
-    ) {
+    /// Engine-owned update discovery (KOS-357): one check shortly after
+    /// startup, then a recheck every `RECHECK_INTERVAL` for the life of the
+    /// process. Runs unconditionally — desktop authority previously gated the
+    /// startup check, so with Manager already connected a new release was
+    /// never discovered without the manual button.
+    pub async fn run_check_loop(self: Arc<Self>) {
         tokio::time::sleep(STARTUP_GRACE).await;
-        if desktop_authority.is_empty() {
+        loop {
+            self.check_tick().await;
+            tokio::time::sleep(RECHECK_INTERVAL).await;
+        }
+    }
+
+    /// One iteration of `run_check_loop`. Skipped once an installer is
+    /// downloaded — a recheck would only re-download the same payload and
+    /// flicker the status; the next Engine restart discovers anything newer.
+    /// An in-flight download already makes `check()` a no-op.
+    async fn check_tick(self: &Arc<Self>) {
+        if self.snapshot().phase != Phase::Downloaded {
             self.check().await;
         }
     }

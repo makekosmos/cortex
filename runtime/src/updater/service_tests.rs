@@ -212,14 +212,50 @@ async fn check_replacing_pending_drops_the_superseded_installer() {
     assert!(!updates.join("Mundus-Setup-98.0.0.exe").exists());
 }
 
-#[test]
-fn desktop_lease_keeps_startup_state_idle() {
-    let dir = tempfile::tempdir().unwrap();
-    let service = UpdaterService::new(dir.path().to_path_buf());
+#[tokio::test]
+async fn desktop_lease_does_not_block_update_discovery_kos_357() {
+    // Regression: the startup check used to skip when the desktop authority
+    // registry held a lease, so with Manager connected an update was never
+    // discovered without the manual button. The Engine-owned check loop
+    // must consult the feed regardless of leases.
+    let manifest = "version: 99.0.0\nfiles:\n  - url: a.exe\n    sha512: AAA\n    size: 1\n";
+    let (_dir, service) = service_with_manifest(manifest.to_string(), "0.5.0").await;
     let authority = crate::desktop_authority::DesktopAuthorityRegistry::new();
     authority.register("session".into(), 1, 123, "credential");
     assert!(!authority.is_empty());
-    assert_eq!(service.status()["state"], "idle");
+
+    service.check_tick().await;
+
+    assert_eq!(service.status()["state"], "available");
+    assert_eq!(service.status()["newVersion"], "99.0.0");
+}
+
+#[tokio::test]
+async fn check_tick_skips_the_feed_once_an_installer_is_downloaded() {
+    let server = MockServer::start_async().await;
+    let feed_mock = server
+        .mock_async(|when, then| {
+            when.method(httpmock::Method::GET).path("/latest.yml");
+            then.status(200)
+                .body("version: 99.0.0\nfiles:\n  - url: a.exe\n    sha512: AAA\n    size: 1\n");
+        })
+        .await;
+    let dir = tempfile::tempdir().unwrap();
+    let service =
+        UpdaterService::with_feed_base(dir.path().to_path_buf(), server.base_url(), "0.5.0");
+    service.set_status(UpdaterStatus {
+        phase: Phase::Downloaded,
+        current_version: "0.5.0".into(),
+        new_version: Some("99.0.0".into()),
+        percent: Some(100),
+        message: None,
+        checked_at_ms: Some(1),
+    });
+
+    service.check_tick().await;
+
+    assert_eq!(service.status()["state"], "downloaded");
+    feed_mock.assert_calls_async(0).await;
 }
 
 fn manifest_json(version: &str, platforms: &str) -> String {
