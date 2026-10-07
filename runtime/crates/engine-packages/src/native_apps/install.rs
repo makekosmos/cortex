@@ -1,3 +1,7 @@
+/// Gzip magic — a unix release asset is a `.tar.gz`; anything else falls
+/// through to the zip extractor (which rejects non-zip inputs itself).
+const GZIP_MAGIC: [u8; 2] = [0x1f, 0x8b];
+
 impl NativeAppStore {
     /// Install `archive` as `spec.version` and flip the current pointer.
     /// The previous version stays live until the new pointer is written;
@@ -161,13 +165,25 @@ impl NativeAppStore {
     /// entry-count and expanded-size limits, enclosed paths only, no
     /// traversal, no duplicates, no symlinks or reparse points, no reserved
     /// device names. The descriptor-declared executable must exist as a file.
+    /// Windows assets are zips; unix assets are gzipped tars — the format is
+    /// sniffed from the magic bytes, never from the (random) download name.
     fn extract_verified(
         &self,
         archive: &Path,
         staging: &Path,
         spec: &NativeInstallSpec,
     ) -> Result<()> {
-        let file = retry_io(|| fs::File::open(archive))?;
+        let mut file = retry_io(|| fs::File::open(archive))?;
+        let mut magic = [0u8; 2];
+        let read = io::Read::read(&mut file, &mut magic)?;
+        file.rewind()?;
+        if read == magic.len() && magic == GZIP_MAGIC {
+            return self.extract_tarball(file, staging, spec);
+        }
+        self.extract_zip(file, staging, spec)
+    }
+
+    fn extract_zip(&self, file: fs::File, staging: &Path, spec: &NativeInstallSpec) -> Result<()> {
         let mut zip = ZipArchive::new(file)?;
         if zip.len() > MAX_ENTRIES {
             return Err(NativeAppError::Archive("too many entries"));
@@ -226,4 +242,85 @@ impl NativeAppStore {
         }
         Ok(())
     }
+
+    /// The same extraction contract for gzipped tars (unix release assets):
+    /// enclosed normalized paths, entry-count and expanded-size limits, no
+    /// duplicates, and only regular files and directories — symlinks,
+    /// hardlinks and device nodes are rejected. File modes are restored
+    /// (capped at 0o777, no setuid) so the `.app` bundle's binaries keep
+    /// their exec bit; the declared executable always lands runnable.
+    fn extract_tarball(
+        &self,
+        file: fs::File,
+        staging: &Path,
+        spec: &NativeInstallSpec,
+    ) -> Result<()> {
+        let mut tar = tar::Archive::new(flate2::read::GzDecoder::new(file));
+        let mut seen: HashSet<String> = HashSet::new();
+        let mut total: u64 = 0;
+        let mut executable_found = false;
+        for (index, entry) in tar.entries()?.enumerate() {
+            if index >= MAX_ENTRIES {
+                return Err(NativeAppError::Archive("too many entries"));
+            }
+            let entry = entry?;
+            let header = entry.header().clone();
+            let Some(normalized) = normalize_path(&entry.path()?) else {
+                return Err(NativeAppError::Archive("unsafe path"));
+            };
+            if !seen.insert(normalized.to_lowercase()) {
+                return Err(NativeAppError::Archive("duplicate path"));
+            }
+            let target = staging.join(&normalized);
+            match header.entry_type() {
+                tar::EntryType::Directory => fs::create_dir_all(&target)?,
+                tar::EntryType::Regular => {
+                    let declared = header.size().unwrap_or(u64::MAX);
+                    if declared > MAX_EXPANDED {
+                        return Err(NativeAppError::Archive("expanded entry too large"));
+                    }
+                    total = total.saturating_add(declared);
+                    if total > MAX_EXPANDED {
+                        return Err(NativeAppError::Archive("expanded archive too large"));
+                    }
+                    if let Some(parent) = target.parent() {
+                        fs::create_dir_all(parent)?;
+                    }
+                    let mut out = fs::File::create(&target)?;
+                    let copied = io::copy(&mut entry.take(declared.saturating_add(1)), &mut out)?;
+                    if copied != declared {
+                        return Err(NativeAppError::Archive("entry size mismatch"));
+                    }
+                    let mode = header.mode().unwrap_or(0o644);
+                    let mode = if normalized == spec.executable {
+                        mode | 0o111
+                    } else {
+                        mode
+                    };
+                    apply_entry_mode(&target, mode)?;
+                    if normalized == spec.executable {
+                        executable_found = true;
+                    }
+                }
+                _ => return Err(NativeAppError::Archive("unsupported file type")),
+            }
+        }
+        if !executable_found {
+            return Err(NativeAppError::Archive("missing entry executable"));
+        }
+        Ok(())
+    }
+}
+
+/// Restore a tar file mode — permission bits only, setuid/sticky dropped.
+/// No-op off unix, where modes are meaningless.
+#[cfg(unix)]
+fn apply_entry_mode(path: &Path, mode: u32) -> io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(path, fs::Permissions::from_mode(mode & 0o777))
+}
+
+#[cfg(not(unix))]
+fn apply_entry_mode(_path: &Path, _mode: u32) -> io::Result<()> {
+    Ok(())
 }

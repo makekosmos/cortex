@@ -151,14 +151,27 @@ fn terminate_dictation_process(executable: &Path) -> std::io::Result<()> {
     }
 }
 
-// Non-Windows hosts have no native app installs (`host_app_target`), and
-// test builds must never spawn or kill real processes — both paths are
-// inert there.
-#[cfg(any(not(windows), test))]
+/// `<exe> --background` detached — the unix twin of the Windows spawn. The
+/// executable points inside the `.app` bundle; spawning it directly (rather
+/// than `open` on the bundle) keeps the Engine's process accounting exact.
+/// Process termination stays inert: unix unlink/rename semantics let the
+/// installer replace a live tree safely, so `app_is_running` is never true
+/// there and `terminate` is unreachable.
+#[cfg(all(unix, not(test)))]
+fn spawn_dictation_background(executable: &Path) -> std::io::Result<()> {
+    std::process::Command::new(executable)
+        .arg("--background")
+        .spawn()
+        .map(|_| ())
+}
+
+// Test builds must never spawn or kill real processes, and hosts outside
+// windows/unix have no store installs at all — the inert path covers both.
+#[cfg(any(test, not(any(windows, unix))))]
 fn spawn_dictation_background(_: &Path) -> std::io::Result<()> {
     Err(std::io::Error::new(
         std::io::ErrorKind::Unsupported,
-        "native apps are windows-only",
+        "native apps are unsupported here",
     ))
 }
 

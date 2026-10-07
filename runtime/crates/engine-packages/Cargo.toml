@@ -48,6 +48,8 @@ lnk.workspace = true
 tempfile.workspace = true
 reqwest.workspace = true
 zip.workspace = true
+flate2.workspace = true
+tar.workspace = true
 tokio = { version = "1", features = [
   "rt",
   "macros",
