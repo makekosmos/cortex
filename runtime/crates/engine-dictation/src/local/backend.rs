@@ -774,6 +774,425 @@ fn ensure_onnxruntime() -> Result<(), LocalError> {
     Ok(())
 }
 
+/// Резидентная Parakeet-модель: ONNX session init стоит ~600мс на каждой
+/// диктовке, поэтому модель живёт в процессе между запросами (аналог пула
+/// whisper-server). Mutex сериализует инференс — одна транскрипция за раз.
+#[cfg(feature = "local-dictation")]
+struct ParakeetCache {
+    path: PathBuf,
+    model: ParakeetModel,
+    last_used: Instant,
+    generation: u64,
+}
+
+#[cfg(feature = "local-dictation")]
+static PARAKEET: OnceLock<Mutex<Option<ParakeetCache>>> = OnceLock::new();
+
+#[cfg(feature = "local-dictation")]
+fn parakeet_slot() -> &'static Mutex<Option<ParakeetCache>> {
+    PARAKEET.get_or_init(|| Mutex::new(None))
+}
+
+/// Кэш протух, если модели нет или каталог сменился. Чистая функция —
+/// покрыта тестом без модельных файлов.
+#[cfg(feature = "local-dictation")]
+fn parakeet_cache_is_stale(cached: Option<&Path>, requested: &Path) -> bool {
+    cached != Some(requested)
+}
+
+/// Блокирует кэш и гарантирует загруженную модель для `model_dir`; держать
+/// guard на время инференса — это и есть сериализация.
+#[cfg(feature = "local-dictation")]
+fn with_parakeet<R>(
+    model_dir: &Path,
+    f: impl FnOnce(&mut ParakeetModel) -> Result<R, LocalError>,
+) -> Result<R, LocalError> {
+    let mut guard = parakeet_slot()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let requested = stable_path_key(model_dir);
+    if parakeet_cache_is_stale(
+        guard.as_ref().map(|cached| cached.path.as_path()),
+        &requested,
+    ) {
+        let started = Instant::now();
+        let model = ParakeetModel::load(model_dir, &Quantization::Int8)
+            .map_err(|e| LocalError::CommandFailed(e.to_string()))?;
+        let duration_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+        tracing::info!(duration_ms, "dictation: parakeet model loaded");
+        eprintln!("[dictation::local] parakeet model loaded duration_ms={duration_ms}");
+        let generation = guard
+            .as_ref()
+            .map(|cached| cached.generation + 1)
+            .unwrap_or(1);
+        *guard = Some(ParakeetCache {
+            path: requested,
+            model,
+            last_used: Instant::now(),
+            generation,
+        });
+    }
+    let cached = guard.as_mut().expect("parakeet cache just populated");
+    let result = f(&mut cached.model)?;
+    cached.last_used = Instant::now();
+    let generation = cached.generation;
+    drop(guard);
+    schedule_parakeet_idle_unload(generation);
+    Ok(result)
+}
+
+/// Idle-unload в отдельном потоке (этот код вызывается из spawn_blocking —
+/// tokio::spawn недоступен). Выгружает только если с момента постановки не
+/// было новой генерации и last_used старше таймаута. `None`/0 — никогда.
+#[cfg(feature = "local-dictation")]
+fn schedule_parakeet_idle_unload(generation: u64) {
+    let Some(ms) = local_stt_idle_unload_after_ms_for_engine(PARAKEET_LOCAL_ENGINE) else {
+        return;
+    };
+    if ms == 0 {
+        return;
+    }
+    thread::spawn(move || {
+        thread::sleep(Duration::from_millis(ms));
+        let mut guard = parakeet_slot()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let stale = guard.as_ref().is_some_and(|cached| {
+            cached.generation == generation
+                && cached.last_used.elapsed() >= Duration::from_millis(ms)
+        });
+        if stale {
+            guard.take();
+            tracing::info!(idle_ms = ms, "dictation: parakeet idle unload triggered");
+            eprintln!("[dictation::local] parakeet idle unload triggered idle_ms={ms}");
+        }
+    });
+}
+
+/// Выгрузить резидентную модель — вызывается из всех путей смены/удаления
+/// модели вместе с whisper unload'ами.
+#[cfg(feature = "local-dictation")]
+pub(crate) fn unload_parakeet() {
+    let mut guard = parakeet_slot()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if guard.take().is_some() {
+        tracing::info!("dictation: parakeet model unloaded");
+        eprintln!("[dictation::local] parakeet model unloaded");
+    }
+}
+
+// ---- Streaming-транскриба во время записи -------------------------------
+
+/// Текст уже транскрибированных во время записи кусков. `committed` — длина
+/// префикса в сэмплах i16, `prefix_hash` — хэш этого префикса для проверки,
+/// что финальный wav — та же запись.
+#[cfg(feature = "local-dictation")]
+pub(crate) struct PartialTranscript {
+    pub committed: usize,
+    pub prefix_hash: u64,
+    pub texts: Vec<String>,
+}
+
+/// Активный stream-транскрибёр: join'им при остановке записи.
+#[cfg(feature = "local-dictation")]
+struct StreamingParakeet {
+    join: thread::JoinHandle<StreamingState>,
+}
+
+#[cfg(feature = "local-dictation")]
+struct StreamingState {
+    samples: Vec<i16>,
+    committed: usize,
+    texts: Vec<String>,
+}
+
+#[cfg(feature = "local-dictation")]
+static PARAKEET_STREAM: OnceLock<Mutex<Option<StreamingParakeet>>> = OnceLock::new();
+#[cfg(feature = "local-dictation")]
+static STREAM_PARTIAL: OnceLock<Mutex<Option<PartialTranscript>>> = OnceLock::new();
+
+#[cfg(feature = "local-dictation")]
+fn stream_slot() -> &'static Mutex<Option<StreamingParakeet>> {
+    PARAKEET_STREAM.get_or_init(|| Mutex::new(None))
+}
+
+#[cfg(feature = "local-dictation")]
+fn stream_partial_slot() -> &'static Mutex<Option<PartialTranscript>> {
+    STREAM_PARTIAL.get_or_init(|| Mutex::new(None))
+}
+
+/// i16-сэмплы из wav-байтов (16kHz mono s16 — формат capture'а). Поиск
+/// data-чанка, а не слепой offset 44 — запас на чужие wav'и.
+#[cfg(feature = "local-dictation")]
+fn wav_pcm16(wav: &[u8]) -> Option<Vec<i16>> {
+    if wav.len() < 12 || &wav[0..4] != b"RIFF" || &wav[8..12] != b"WAVE" {
+        return None;
+    }
+    let mut pos = 12usize;
+    while pos + 8 <= wav.len() {
+        let size = u32::from_le_bytes(wav[pos + 4..pos + 8].try_into().ok()?) as usize;
+        if &wav[pos..pos + 4] == b"data" {
+            let end = (pos + 8 + size).min(wav.len());
+            return Some(
+                wav[pos + 8..end]
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
+                    .map(|c| i16::from_le_bytes(*c))
+                    .collect(),
+            );
+        }
+        pos += 8 + size + (size & 1);
+    }
+    None
+}
+
+/// Хэш префикса i16-сэмплов — проверка, что wav из capture.stop та же
+/// запись, что стримил транскрибёр (иначе частичный текст чужой).
+#[cfg(feature = "local-dictation")]
+fn hash_pcm16(samples: &[i16]) -> u64 {
+    use std::hash::Hasher;
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    for s in samples {
+        h.write_i16(*s);
+    }
+    h.finish()
+}
+
+/// Решение «reuse partial»: Some(committed) только если wav длиннее
+/// committed И хэш префикса совпал.
+#[cfg(feature = "local-dictation")]
+fn apply_partial(samples: &[i16], partial: &PartialTranscript) -> Option<usize> {
+    if partial.committed == 0 || samples.len() < partial.committed {
+        return None;
+    }
+    if hash_pcm16(&samples[..partial.committed]) != partial.prefix_hash {
+        return None;
+    }
+    Some(partial.committed)
+}
+
+/// Стартует фоновую транскрибу pcm-потока (вызывается при capture.start
+/// для parakeet). `rx` — канал, куда capture-драйвер пишет drain-блоки.
+#[cfg(feature = "local-dictation")]
+pub(crate) fn start_parakeet_stream(model_dir: PathBuf, rx: mpsc::Receiver<Vec<i16>>) {
+    // Новая запись: старый stream и его partial сбрасываем.
+    finish_parakeet_stream();
+    *stream_partial_slot()
+        .lock()
+        .unwrap_or_else(|p| p.into_inner()) = None;
+
+    let join = thread::Builder::new()
+        .name("mundus-parakeet-stream".into())
+        .spawn(move || {
+            let mut state = StreamingState {
+                samples: Vec::new(),
+                committed: 0,
+                texts: Vec::new(),
+            };
+            while let Ok(block) = rx.recv() {
+                state.samples.extend_from_slice(&block);
+                let uncommitted = state.samples.len() - state.committed;
+                // Чанк по тихому месту: ждём ≥10с некоммиченного аудио и
+                // режем в [7с, 12с] — не рвём посреди фразы.
+                if uncommitted >= 10 * 16_000 {
+                    let tail_f32: Vec<f32> = state.samples[state.committed..]
+                        .iter()
+                        .map(|s| *s as f32 / i16::MAX as f32)
+                        .collect();
+                    let cut = state.committed + best_cut(&tail_f32, 16_000, 7.0, 12.0);
+                    let region_f32: Vec<f32> = state.samples[state.committed..cut]
+                        .iter()
+                        .map(|s| *s as f32 / i16::MAX as f32)
+                        .collect();
+                    let seconds = (cut - state.committed) as f64 / 16_000.0;
+                    match with_parakeet(&model_dir, |model| {
+                        model
+                            .transcribe_with(
+                                &region_f32,
+                                &ParakeetParams {
+                                    timestamp_granularity: Some(TimestampGranularity::Segment),
+                                    ..Default::default()
+                                },
+                            )
+                            .map_err(|e| LocalError::CommandFailed(e.to_string()))
+                    }) {
+                        Ok(chunk) => {
+                            let text = chunk.text.trim().to_owned();
+                            eprintln!(
+                                "[dictation::local] stream chunk {:.1}s committed={:.1}s len={}",
+                                seconds,
+                                cut as f64 / 16_000.0,
+                                text.len()
+                            );
+                            if !text.is_empty() {
+                                state.texts.push(text);
+                            }
+                            state.committed = cut;
+                        }
+                        Err(e) => {
+                            eprintln!("[dictation::local] stream chunk failed: {e}");
+                            // Не коммитим — кусок останется в хвосте для
+                            // полного прохода после stop.
+                            break;
+                        }
+                    }
+                }
+            }
+            state
+        })
+        .expect("spawn parakeet stream thread");
+    *stream_slot().lock().unwrap_or_else(|p| p.into_inner()) = Some(StreamingParakeet { join });
+}
+
+/// Завершить stream-транскрибу: ждать конца потока (in-flight чанк
+/// дозавершится), сохранить PartialTranscript для run_parakeet.
+#[cfg(feature = "local-dictation")]
+pub(crate) fn finish_parakeet_stream() {
+    let streamer = stream_slot()
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .take();
+    let Some(streamer) = streamer else { return };
+    let state = match streamer.join.join() {
+        Ok(state) => state,
+        Err(_) => {
+            eprintln!("[dictation::local] stream thread panicked");
+            return;
+        }
+    };
+    if state.committed > 0 && !state.texts.is_empty() {
+        *stream_partial_slot()
+            .lock()
+            .unwrap_or_else(|p| p.into_inner()) = Some(PartialTranscript {
+            committed: state.committed,
+            prefix_hash: hash_pcm16(&state.samples[..state.committed]),
+            texts: state.texts,
+        });
+    }
+}
+
+/// Сбросить partial (cancel записи / новая диктовка до transcribe).
+#[cfg(feature = "local-dictation")]
+pub(crate) fn discard_parakeet_partial() {
+    *stream_partial_slot()
+        .lock()
+        .unwrap_or_else(|p| p.into_inner()) = None;
+}
+
+/// Самый тихий срез внутри `samples` в окне [min_secs, max_secs] от начала —
+/// центр минимального по энергии 300мс прогона 30мс RMS-фреймов. Возвращает
+/// индекс сэмпла в `samples`. Чистая функция.
+#[cfg(feature = "local-dictation")]
+fn best_cut(samples: &[f32], sample_rate: u32, min_secs: f64, max_secs: f64) -> usize {
+    let rate = sample_rate as f64;
+    let frame = (0.030 * rate) as usize;
+    let run_frames = 10usize; // самое тихое окно = 10 фреймов = 300мс
+    let lo = ((min_secs * rate) as usize).min(samples.len());
+    let hi = ((max_secs * rate) as usize).min(samples.len());
+    if hi <= lo {
+        return hi.max(lo.min(1));
+    }
+    // Энергия каждого фрейма в окне поиска.
+    let mut energies: Vec<f64> = Vec::new();
+    let mut p = lo;
+    while p < hi {
+        let end = (p + frame).min(hi);
+        let sum_sq: f64 = samples[p..end]
+            .iter()
+            .map(|s| (*s as f64) * (*s as f64))
+            .sum();
+        energies.push(sum_sq / (end - p) as f64);
+        p = end;
+    }
+    if energies.len() < run_frames {
+        // Окно короче 300мс (тишину искать негде) — режем по max.
+        return hi;
+    }
+    // Центр самого тихого региона: крайние позиции минимального 300мс
+    // прогона (пауза может быть длиннее окна — резать надо по середине,
+    // а не по первому совпадению).
+    let mut best_e = f64::MAX;
+    let (mut first, mut last) = (0usize, 0usize);
+    for i in 0..=(energies.len() - run_frames) {
+        let e: f64 = energies[i..i + run_frames].iter().sum();
+        if e < best_e {
+            best_e = e;
+            first = i;
+            last = i;
+        } else if e == best_e {
+            last = i;
+        }
+    }
+    lo + (first + last + run_frames) * frame / 2
+}
+
+/// Точки разреза (индексы сэмплов) для длинного аудио: жадный TDT/RNNT
+/// декодер Parakeet вырождается в повторы на длинных проходах (>20с), поэтому
+/// режем на куски ≤ max_secs по самому тихому 300мс окну в диапазоне
+/// [min_secs, max_secs] от начала каждого куска. Чистая функция.
+#[cfg(feature = "local-dictation")]
+fn split_points(samples: &[f32], sample_rate: u32, min_secs: f64, max_secs: f64) -> Vec<usize> {
+    let rate = sample_rate as f64;
+    let max_len = (max_secs * rate) as usize;
+    let mut points = Vec::new();
+    let mut start = 0usize;
+    while samples.len().saturating_sub(start) > max_len {
+        let window_end = (start + max_len).min(samples.len());
+        let cut = start + best_cut(&samples[start..window_end], sample_rate, min_secs, max_secs);
+        let cut = cut.clamp(start + 1, window_end);
+        points.push(cut);
+        start = cut;
+    }
+    points
+}
+
+/// Страховка от вырождения жадного декодера: схлопывает n-граммы (n=1..4,
+/// токены по whitespace, сравнение без регистра и конечной пунктуации),
+/// повторённые подряд ≥3 раз, до одного экземпляра. Легитимные дубли
+/// («очень очень») не трогаем — порог именно 3+.
+#[cfg(feature = "local-dictation")]
+fn collapse_repeats(text: &str) -> String {
+    fn norm(token: &str) -> String {
+        token
+            .trim_end_matches(|c: char| !c.is_alphanumeric())
+            .to_lowercase()
+    }
+    let toks: Vec<&str> = text.split_whitespace().collect();
+    let mut out: Vec<&str> = Vec::with_capacity(toks.len());
+    let mut i = 0usize;
+    while i < toks.len() {
+        let mut collapsed = false;
+        for n in 1..=4usize {
+            if i + n * 3 > toks.len() {
+                continue;
+            }
+            let gram: Vec<String> = toks[i..i + n].iter().map(|t| norm(t)).collect();
+            let mut run = 1usize;
+            while i + (run + 1) * n <= toks.len()
+                && toks[i + run * n..i + (run + 1) * n]
+                    .iter()
+                    .map(|t| norm(t))
+                    .eq(gram.iter().cloned())
+            {
+                run += 1;
+            }
+            if run >= 3 {
+                out.extend_from_slice(&toks[i..i + n]);
+                i += run * n;
+                collapsed = true;
+                break;
+            }
+        }
+        if !collapsed {
+            out.push(toks[i]);
+            i += 1;
+        }
+    }
+    out.join(" ")
+}
+
 #[cfg(feature = "local-dictation")]
 fn run_parakeet(req: OwnedLocalRequest) -> Result<TranscriptionResult, LocalError> {
     let model_path = ensure_existing_model_path(
@@ -788,21 +1207,102 @@ fn run_parakeet(req: OwnedLocalRequest) -> Result<TranscriptionResult, LocalErro
     let result = (|| {
         let samples = transcribe_rs::audio::read_wav_samples(&wav_path)
             .map_err(|e| LocalError::CommandFailed(e.to_string()))?;
-        let mut model = ParakeetModel::load(&model_path, &Quantization::Int8)
-            .map_err(|e| LocalError::CommandFailed(e.to_string()))?;
-        model
-            .transcribe_with(
-                &samples,
-                &ParakeetParams {
-                    timestamp_granularity: Some(TimestampGranularity::Segment),
-                    ..Default::default()
-                },
-            )
-            .map_err(|e| LocalError::CommandFailed(e.to_string()))
+        // Streaming-транскриба во время записи: если partial совпал по
+        // хэшу i16-префикса — транскрибируем только хвост. i16 читаем
+        // напрямую из wav-байтов (f32-конверсия теряет точность хэша).
+        let wav_i16 = wav_pcm16(&req.wav_bytes);
+        let mut texts: Vec<String> = Vec::new();
+        let mut tail_start = 0usize;
+        if let Some(pcm) = wav_i16.as_deref() {
+            let partial = stream_partial_slot()
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .take();
+            if let Some(partial) = partial {
+                match apply_partial(pcm, &partial) {
+                    Some(committed) if pcm.len() == samples.len() => {
+                        eprintln!(
+                            "[dictation::local] stream partial hit committed={:.1}s \
+                             chunks={} tail={:.1}s",
+                            committed as f64 / 16_000.0,
+                            partial.texts.len(),
+                            (samples.len() - committed) as f64 / 16_000.0,
+                        );
+                        texts = partial.texts;
+                        tail_start = committed;
+                    }
+                    Some(_) => {
+                        eprintln!("[dictation::local] stream partial miss: len mismatch");
+                    }
+                    None => {
+                        eprintln!("[dictation::local] stream partial miss: hash/len");
+                    }
+                }
+            }
+        }
+        // Хвост <0.3с или почти тишина — транскрибировать нечего.
+        let tail = &samples[tail_start..];
+        let tail_secs = tail.len() as f64 / 16_000.0;
+        let tail_rms = if tail.is_empty() {
+            0.0f64
+        } else {
+            (tail.iter().map(|s| (*s as f64) * (*s as f64)).sum::<f64>() / tail.len() as f64).sqrt()
+        };
+        if tail_secs < 0.3 || (tail_start > 0 && tail_rms < 0.001) {
+            return Ok(texts.join(" "));
+        }
+        // >20с за один проход жадный TDT-декодер зацикливается — режем по
+        // тихим местам и склеиваем текст.
+        let cuts = split_points(tail, 16_000, 12.0, 20.0);
+        let mut bounds = Vec::with_capacity(cuts.len() + 1);
+        let mut prev = 0usize;
+        for cut in &cuts {
+            bounds.push(prev..*cut);
+            prev = *cut;
+        }
+        bounds.push(prev..tail.len());
+        eprintln!(
+            "[dictation::local] parakeet audio={:.1}s chunks={} (tail from {:.1}s)",
+            samples.len() as f64 / 16_000.0,
+            bounds.len(),
+            tail_start as f64 / 16_000.0,
+        );
+        with_parakeet(&model_path, |model| {
+            let mut new_texts: Vec<String> = Vec::with_capacity(bounds.len());
+            for (idx, range) in bounds.iter().enumerate() {
+                let started = Instant::now();
+                let chunk = model
+                    .transcribe_with(
+                        &tail[range.clone()],
+                        &ParakeetParams {
+                            timestamp_granularity: Some(TimestampGranularity::Segment),
+                            ..Default::default()
+                        },
+                    )
+                    .map_err(|e| LocalError::CommandFailed(e.to_string()))?;
+                let elapsed = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+                eprintln!(
+                    "[dictation::local] parakeet chunk {}/{} {:.1}s duration_ms={elapsed}",
+                    idx + 1,
+                    bounds.len(),
+                    (range.end - range.start) as f64 / 16_000.0,
+                );
+                let trimmed = chunk.text.trim().to_owned();
+                if !trimmed.is_empty() {
+                    new_texts.push(trimmed);
+                }
+            }
+            Ok(new_texts)
+        })
+        .map(|new_texts| {
+            texts.extend(new_texts);
+            texts.join(" ")
+        })
     })();
 
     cleanup_temp_outputs(&wav_path, &out_base);
-    let text = result?.text.trim().to_owned();
+    let text = collapse_repeats(result?.trim());
+    let text = text.trim().to_owned();
     if text.is_empty() {
         return Err(LocalError::EmptyTranscript);
     }
@@ -863,6 +1363,8 @@ async fn transcribe_owned_with_whisper_backend(
 }
 
 pub(crate) async fn unload_whisper_backend() {
+    #[cfg(feature = "local-dictation")]
+    unload_parakeet();
     let mut pool = whisper_server_pool().lock().await;
     pool.active = None;
 }
@@ -877,6 +1379,18 @@ pub async fn preload_server(
         return Err(LocalError::MissingModelPath);
     }
     if is_parakeet_engine(engine) {
+        #[cfg(feature = "local-dictation")]
+        {
+            // Parakeet живёт в процессе (не sidecar) — прогрев = загрузка в
+            // резидентный кэш. Вызывается на старте и на recording start.
+            let model_dir = ensure_existing_model_path(model_path.unwrap_or_default())?;
+            let warm_dir = model_dir.clone();
+            tokio::task::spawn_blocking(move || with_parakeet(&warm_dir, |_| Ok(())))
+                .await
+                .map_err(|e| LocalError::CommandFailed(format!("worker join failed: {e}")))??;
+            return Ok(true);
+        }
+        #[cfg(not(feature = "local-dictation"))]
         return Ok(false);
     }
     if command_path.is_none_or(|path| path.trim().is_empty()) {
@@ -935,6 +1449,10 @@ pub async fn cancel_sidecar() -> Result<bool, LocalError> {
 }
 
 pub async fn unload_sidecar() -> Result<bool, LocalError> {
+    // Parakeet-модель живёт в этом процессе (не в sidecar) — выгружаем кэш
+    // безусловно при delete/switch модели, даже если sidecar недоступен.
+    #[cfg(feature = "local-dictation")]
+    unload_parakeet();
     match send_sidecar_request(LocalSttRequest::Unload).await {
         Ok(LocalSttResponse::Status(status)) => Ok(!status.warm),
         Ok(other) => Err(LocalError::SidecarUnavailable(format!(
