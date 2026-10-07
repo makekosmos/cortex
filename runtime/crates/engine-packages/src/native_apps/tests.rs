@@ -88,6 +88,9 @@ fn append_tar_link(builder: &mut tar::Builder<flate2::write::GzEncoder<fs::File>
 /// The darwin release layout: `<Name>.app` bundle at the root with the
 /// binary under `Contents/MacOS`. `spec_for` mirrors what
 /// `run_native_install_inner` builds from `desc.executable(target)`.
+/// Unix-only: Windows record hygiene requires a `*.exe` executable, so the
+/// `.app` path is rejected by validation before extraction there.
+#[cfg(unix)]
 #[test]
 fn install_from_tarball_extracts_bundle_and_keeps_exec_bit() {
     let dir = TempDir::new().unwrap();
@@ -123,7 +126,13 @@ fn install_from_tarball_extracts_bundle_and_keeps_exec_bit() {
 fn tarball_safety_gate_rejects_traversal_links_and_missing_exe() {
     let dir = TempDir::new().unwrap();
     let store = NativeAppStore::new(dir.path().join("Apps")).unwrap();
-    let executable = "Agenda.app/Contents/MacOS/agenda-gpui";
+    // Windows record hygiene only accepts `*.exe`; darwin tarballs carry the
+    // `.app` bundle path. Either way the safety gate must run.
+    let executable = if cfg!(windows) {
+        "agenda-gpui.exe"
+    } else {
+        "Agenda.app/Contents/MacOS/agenda-gpui"
+    };
 
     // `..` escapes staging — rejected like the zip traversal case.
     let traversal = dir.path().join("evil.tar.gz");
