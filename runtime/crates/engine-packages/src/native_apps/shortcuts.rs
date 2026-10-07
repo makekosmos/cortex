@@ -149,8 +149,9 @@ fn com_write_link(link: &Path, target: &Path) -> windows::core::Result<()> {
 
 #[cfg(not(windows))]
 fn write_link(_link: &Path, _target: &Path) -> Result<()> {
-    // Store apps only install on Windows targets today; reaching this is a
-    // bug in a future port, not a state to silently accept.
+    // macOS needs no link step — the extracted `.app` self-registers with
+    // LaunchServices on first launch — and `start_menu_dir` is `None` on
+    // unix anyway, so reaching this means a mis-set START_MENU_DIR override.
     Err(NativeAppError::Invalid("start menu unsupported"))
 }
 
