@@ -27,6 +27,14 @@ serde_json = "1.0.151"
 tracing = "0.1.44"
 ureq = { version = "2.12", default-features = false, features = ["json"] }
 flate2 = "1.1"
+# logo-gpu feature: live wgpu liquid-metal logo (src/logo_gpu.rs). OFF by
+# default; without the feature the overlay uses the baked WebP ring as
+# before.
+wgpu = { version = "30", default-features = false, features = ["vulkan", "dx12", "metal", "wgsl", "std", "parking_lot"], optional = true }
+pollster = { version = "0.4", optional = true }
+
+[features]
+logo-gpu = ["dep:wgpu", "dep:pollster"]
 
 # Unconditional: build.rs resolves embed_resource (through pe-version-info)
 # at compile time and the helper gates actual resource embedding on

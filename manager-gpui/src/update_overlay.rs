@@ -63,15 +63,15 @@ pub fn bounce_offset(elapsed_secs: f32) -> f32 {
 /// The petal mark itself, filled with animated liquid metal: a ring of
 /// pre-baked 256×252 frames, indexed by elapsed time — a clone of an `Arc`
 /// per repaint while the overlay is on screen.
-fn logo(frames: Option<&Arc<LogoFrames>>, elapsed: f32) -> Stateful<Div> {
+fn logo(image: Option<Arc<RenderImage>>, elapsed: f32) -> Stateful<Div> {
     let mut mark = div()
         .id("update-overlay-logo")
         .debug_selector(|| "update-overlay-logo".into())
         .relative()
         .top(px(bounce_offset(elapsed)))
         .size(px(200.));
-    if let Some(frames) = frames {
-        mark = mark.child(img(frames.frame(elapsed)).size_full());
+    if let Some(image) = image {
+        mark = mark.child(img(image).size_full());
     } else {
         // Fallback if the embedded WebP could not be decoded: plain glyph.
         mark = mark.flex().items_center().justify_center().child(
@@ -82,6 +82,20 @@ fn logo(frames: Option<&Arc<LogoFrames>>, elapsed: f32) -> Stateful<Div> {
         );
     }
     mark
+}
+
+/// The logo image for this repaint. With `logo-gpu` enabled the live wgpu
+/// shader is tried first; any failure falls back to the baked WebP ring
+/// (decoded on first use, so a healthy GPU path never pays for it).
+fn logo_image(app: &mut ManagerApp, elapsed: f32) -> Option<Arc<RenderImage>> {
+    #[cfg(feature = "logo-gpu")]
+    if let Some(img) = crate::logo_gpu::frame(elapsed) {
+        return Some(img);
+    }
+    if app.update_logo.is_none() {
+        app.update_logo = LogoFrames::shared();
+    }
+    app.update_logo.as_ref().map(|f| f.frame(elapsed))
 }
 
 fn primary_op(state: OverlayState) -> &'static str {
@@ -104,10 +118,6 @@ pub fn render(
     // The metal flow needs continuous frames only while the overlay is on
     // screen; Hidden requests nothing, so idle CPU stays at zero.
     window.request_animation_frame();
-
-    if app.update_logo.is_none() {
-        app.update_logo = LogoFrames::shared();
-    }
 
     let (title, detail) = match state {
         OverlayState::Offer => (
@@ -141,7 +151,7 @@ pub fn render(
         .flex_col()
         .items_center()
         .gap_4()
-        .child(logo(app.update_logo.as_ref(), elapsed))
+        .child(logo(logo_image(app, elapsed), elapsed))
         .child(
             div()
                 .flex()

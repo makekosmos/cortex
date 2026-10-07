@@ -15,6 +15,8 @@ mod device_info;
 mod devpkg;
 mod fps;
 mod logo_anim;
+#[cfg(feature = "logo-gpu")]
+mod logo_gpu;
 mod modals;
 #[cfg(target_os = "macos")]
 mod native_menu;
