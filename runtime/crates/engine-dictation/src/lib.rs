@@ -62,6 +62,8 @@ pub mod local_whisper_dll;
 pub mod macos_native;
 pub(crate) mod model_sweep;
 pub mod native_capture;
+#[cfg(windows)]
+mod native_capture_windows;
 pub mod network;
 pub mod pending;
 pub mod retry;

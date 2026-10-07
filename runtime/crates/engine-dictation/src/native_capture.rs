@@ -23,8 +23,8 @@ pub struct CaptureSource {
 
 pub struct Session {
     pub(crate) capture_id: String,
-    stop: mpsc::Sender<()>,
-    join: std::thread::JoinHandle<Result<CapturedAudio, String>>,
+    pub(crate) stop: mpsc::Sender<()>,
+    pub(crate) join: std::thread::JoinHandle<Result<CapturedAudio, String>>,
 }
 
 pub fn start(
@@ -43,7 +43,7 @@ pub fn start(
         if source.is_some() {
             return Err("file_source_unsupported".into());
         }
-        return start_windows(capture_id, level_sink);
+        return super::native_capture_windows::start(capture_id, level_sink);
     }
     #[cfg(target_os = "macos")]
     {

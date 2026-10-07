@@ -111,6 +111,8 @@ pub(crate) fn mark_delivered(
 }
 
 /// Сбросить историю целиком — каждый item (и delivered-записи тоже).
+/// Боевого вызова пока нет — только тесты (`-D warnings` ловит это на Windows).
+#[cfg(test)]
 pub(crate) fn drop_all(data_dir: &Path) -> Result<u32, PendingError> {
     let mut removed = 0u32;
     for item in list(data_dir)? {
