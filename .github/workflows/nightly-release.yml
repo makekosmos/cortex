@@ -221,6 +221,9 @@ jobs:
     timeout-minutes: 300
     permissions:
       contents: write
+      # read sibling job status so the manifest wait tracks Windows `release`
+      # health instead of a fixed attempt count (KOS-349, v0.10.7 race)
+      actions: read
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -285,22 +288,51 @@ jobs:
       # can merge platforms.mac into it without racing refs/tags/vX.
       # Soft-fail independence: this job being red still never blocks the
       # Windows release job.
+      #
+      # KOS-349 lesson (v0.10.7, run 37540994541): the old fixed 90×20s loop
+      # (~30 min) expired at 02:21 MSK while the sibling Windows `release`
+      # job of the same run was still healthy — it published at 02:34. Any
+      # fixed attempt count can lose that race again, so this wait tracks
+      # sibling health instead of a short fixed budget:
+      #   - while `release` is queued/running, keep waiting (no expiry);
+      #   - if `release` ends failed/cancelled/timed_out, give up immediately;
+      #   - if `release` succeeded but manifest.json is still absent, fail —
+      #     Win owns creating it, something is wrong upstream;
+      #   - absolute ceiling matches this job's timeout-minutes: 300 minus
+      #     headroom for the publish/verify steps that follow (~240 min).
       - name: Wait for cortex release
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.plan.outputs.version }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail
-          for i in $(seq 1 90); do
-            if gh release view "v$VERSION" --repo makekosmos/cortex --json assets -q '.assets[].name' 2>/dev/null | grep -qx 'manifest.json'; then
+          deadline=$(( $(date +%s) + 240 * 60 ))
+          while :; do
+            if gh release view "v$VERSION" --repo "$REPO" --json assets -q '.assets[].name' 2>/dev/null | grep -qx 'manifest.json'; then
               echo "Release v$VERSION with manifest.json is published"
               exit 0
             fi
-            echo "waiting for v$VERSION manifest.json ($i/90)..."
+            # Sibling Windows job of THIS run (name is `release`, not
+            # `release-mac`). --paginate covers large job lists.
+            state="$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs" --paginate \
+              --jq '.jobs[] | select(.name == "release") | .status + " " + (.conclusion // "")' 2>/dev/null | head -1 || true)"
+            case "$state" in
+              *" success")
+                echo "Windows release job succeeded but v$VERSION manifest.json is missing" >&2
+                exit 1 ;;
+              *failure*|*cancelled*|*timed_out*)
+                echo "Windows release job ended as '$state'; not waiting for manifest.json" >&2
+                exit 1 ;;
+            esac
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "timed out waiting for $REPO v$VERSION manifest.json (sibling release: ${state:-unknown})" >&2
+              exit 1
+            fi
+            echo "waiting for v$VERSION manifest.json (sibling release: ${state:-unknown})..."
             sleep 20
           done
-          echo "timed out waiting for makekosmos/cortex v$VERSION manifest.json" >&2
-          exit 1
 
       - name: Publish dry run
         env:
