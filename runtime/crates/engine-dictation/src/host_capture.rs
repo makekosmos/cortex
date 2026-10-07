@@ -104,6 +104,37 @@ async fn stream_model_dir_for_streaming(_host: &DictationHost) -> Option<std::pa
     None
 }
 
+/// Опциональный файловый источник захвата (e2e): `sourceFile` — абсолютный
+/// путь к wav/mp3/m4a, `sourceSpeed` — темп подачи (по умолчанию 1.0,
+/// зажато в (0, 64]).
+fn parse_capture_source(
+    params: &Value,
+) -> Result<Option<super::native_capture::CaptureSource>, String> {
+    let Some(file) = params.get("sourceFile") else {
+        return Ok(None);
+    };
+    let Some(path_str) = file.as_str() else {
+        return Err("capture.start: sourceFile must be a string".into());
+    };
+    let path = std::path::PathBuf::from(path_str);
+    if !path.is_file() {
+        return Err(format!(
+            "capture.start: sourceFile does not exist: {path_str}"
+        ));
+    }
+    let speed = match params.get("sourceSpeed") {
+        None => 1.0,
+        Some(v) => v
+            .as_f64()
+            .filter(|s| s.is_finite())
+            .ok_or("capture.start: sourceSpeed must be a finite number")?,
+    };
+    Ok(Some(super::native_capture::CaptureSource {
+        path,
+        speed: speed.clamp(0.01, 64.0) as f32,
+    }))
+}
+
 async fn op_capture_start(params: Value, host: &Arc<DictationHost>) -> DictationResponse {
     host.contract_events
         .store(true, std::sync::atomic::Ordering::Release);
@@ -114,6 +145,10 @@ async fn op_capture_start(params: Value, host: &Arc<DictationHost>) -> Dictation
         .get("deviceId")
         .and_then(Value::as_str)
         .map(str::to_owned);
+    let source = match parse_capture_source(&params) {
+        Ok(source) => source,
+        Err(error) => return DictationResponse::err(error),
+    };
     let capture_id = uuid::Uuid::new_v4().to_string();
     let started = op_start_recording(host).await;
     if !started.ok {
@@ -121,11 +156,11 @@ async fn op_capture_start(params: Value, host: &Arc<DictationHost>) -> Dictation
     }
     // Live RMS-уровни микрофона → broadcast `dictation_audio_level`, чтобы
     // pill-оверлей мог рисовать waveform (паритет с Vue pill
-    // AnalyserNode).
-    // broadcast::send синхронный и не блокирует — вызывается прямо
-    // из capture-потока через mpsc-переходник.
-    let (level_tx, level_rx) = std::sync::mpsc::channel::<f32>();
-    {
+    // AnalyserNode). Файловый источник (e2e) — без broadcast'ов: pill в
+    // GPUI открывается именно по audio_level-событиям, а тестовая запись
+    // не должна мелькать на экране пользователя.
+    let level_sink = if source.is_none() {
+        let (level_tx, level_rx) = std::sync::mpsc::channel::<f32>();
         let events_tx = host.events_tx.clone();
         let level_capture_id = capture_id.clone();
         std::thread::Builder::new()
@@ -140,7 +175,10 @@ async fn op_capture_start(params: Value, host: &Arc<DictationHost>) -> Dictation
                 }
             })
             .ok();
-    }
+        Some(level_tx)
+    } else {
+        None
+    };
     let stream_model_dir = stream_model_dir_for_streaming(host).await;
     let (pcm_tx, pcm_rx) = std::sync::mpsc::channel::<Vec<i16>>();
     let pcm_sink = stream_model_dir.as_ref().map(|_| pcm_tx);
@@ -149,8 +187,9 @@ async fn op_capture_start(params: Value, host: &Arc<DictationHost>) -> Dictation
         super::native_capture::start(
             device_id.as_deref(),
             native_capture_id,
-            Some(level_tx),
+            level_sink,
             pcm_sink,
+            source,
         )
     })
     .await;
