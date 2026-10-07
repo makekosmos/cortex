@@ -55,20 +55,14 @@ pub fn resolve(snoozed: bool, was_open: bool, engine_state: &str) -> OverlayStat
     }
 }
 
-/// Gentle bounce: ±6px sine over ~1.9s — Telegram-sticker float, not a jump.
-pub fn bounce_offset(elapsed_secs: f32) -> f32 {
-    (elapsed_secs * std::f32::consts::TAU / 1.9).sin() * 6.0
-}
-
 /// The petal mark itself, filled with animated liquid metal: a ring of
 /// pre-baked 256×252 frames, indexed by elapsed time — a clone of an `Arc`
-/// per repaint while the overlay is on screen.
-fn logo(image: Option<Arc<RenderImage>>, elapsed: f32) -> Stateful<Div> {
+/// per repaint while the overlay is on screen. The mark sits still; only
+/// the metal inside it moves.
+fn logo(image: Option<Arc<RenderImage>>) -> Stateful<Div> {
     let mut mark = div()
         .id("update-overlay-logo")
         .debug_selector(|| "update-overlay-logo".into())
-        .relative()
-        .top(px(bounce_offset(elapsed)))
         .size(px(200.));
     if let Some(image) = image {
         mark = mark.child(img(image).size_full());
@@ -151,7 +145,7 @@ pub fn render(
         .flex_col()
         .items_center()
         .gap_4()
-        .child(logo(logo_image(app, elapsed), elapsed))
+        .child(logo(logo_image(app, elapsed)))
         .child(
             div()
                 .flex()

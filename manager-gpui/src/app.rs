@@ -99,7 +99,7 @@ pub struct ManagerApp {
     /// Last resolved overlay state — `Failed` is gated on the overlay
     /// already being open when the Engine reports `error`.
     pub update_overlay: crate::update_overlay::OverlayState,
-    /// Frame clock for the logo bounce/metal flow; reset on Hidden→visible.
+    /// Frame clock for the logo metal flow; reset on Hidden→visible.
     pub update_anim_start: Instant,
     /// Decoded WebP frame ring for the liquid-metal mark.
     /// `None` → plain-icon fallback.

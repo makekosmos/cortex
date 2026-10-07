@@ -1,4 +1,4 @@
-use super::{bounce_offset, resolve, OverlayState};
+use super::{resolve, OverlayState};
 use crate::app::Slot;
 use gpui::TestAppContext;
 use serde_json::json;
@@ -47,18 +47,6 @@ fn full_flow_offer_to_ready_to_hidden() {
     assert_eq!(state, OverlayState::Ready);
     state = resolve(false, state.visible(), "idle");
     assert_eq!(state, OverlayState::Hidden);
-}
-
-// --- Animation helpers --------------------------------------------------------
-
-#[test]
-fn bounce_is_bounded_and_continuous() {
-    for i in 0..200 {
-        let t = i as f32 * 0.05;
-        assert!(bounce_offset(t).abs() <= 6.001, "t={t}");
-    }
-    // No discontinuity across the period wrap.
-    assert!((bounce_offset(1.899) - bounce_offset(1.901)).abs() < 0.5);
 }
 
 // --- Rendered overlay ----------------------------------------------------------
@@ -138,6 +126,29 @@ fn downloading_shows_determinate_bar_and_error_offers_retry(cx: &mut TestAppCont
     manager.read_with(cx, |app, _| {
         assert!(matches!(app.slots.get("@action"), Some(Slot::Loading)));
     });
+}
+
+#[gpui::test]
+fn logo_stays_put_while_metal_flows(cx: &mut TestAppContext) {
+    let (manager, cx) = crate::a11y_tests::launch(cx);
+    set_status(
+        cx,
+        &manager,
+        json!({
+            "state": "available", "currentVersion": "0.10.2",
+            "newVersion": "0.10.3", "canInstall": true
+        }),
+    );
+    let first = cx.debug_bounds("update-overlay-logo").unwrap();
+    // Advance the animation clock well past a full metal-flow cycle; the
+    // shader keeps animating but the mark must not move.
+    manager.update(cx, |app, cx| {
+        app.update_anim_start = std::time::Instant::now() - std::time::Duration::from_millis(1950);
+        cx.notify();
+    });
+    cx.update(|_, cx| cx.refresh_windows());
+    let second = cx.debug_bounds("update-overlay-logo").unwrap();
+    assert_eq!(first, second);
 }
 
 #[gpui::test]

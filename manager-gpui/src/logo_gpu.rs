@@ -107,7 +107,6 @@ impl GpuLogo {
             power_preference: wgpu::PowerPreference::LowPower,
             compatible_surface: None,
             force_fallback_adapter: true,
-            apply_limit_buckets: false,
         }))
         .map_err(|e| format!("no adapter: {e}"))?;
         let adapter_name = adapter.get_info().name;
@@ -358,9 +357,7 @@ impl GpuLogo {
         rx.recv_timeout(READBACK_TIMEOUT)
             .map_err(|_| "readback timed out".to_string())?
             .map_err(|e| format!("map: {e}"))?;
-        let data = slice
-            .get_mapped_range()
-            .map_err(|e| format!("mapped range: {e}"))?;
+        let data = slice.get_mapped_range();
         let mut out = vec![0u8; (w * h * 4) as usize];
         for y in 0..h {
             let src = (y * row_padded) as usize;
@@ -416,5 +413,9 @@ mod tests {
         let img = g.frame(0.5).expect("frame");
         let size = img.size(0);
         assert_eq!((i32::from(size.width), i32::from(size.height)), (256, 252));
+        if let Ok(path) = std::env::var("MUNDUS_LOGO_GPU_DUMP") {
+            // Premultiplied BGRA, same bytes the overlay paints.
+            std::fs::write(path, img.as_bytes(0).expect("frame bytes")).expect("dump frame");
+        }
     }
 }
