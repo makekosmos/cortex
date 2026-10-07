@@ -481,6 +481,17 @@ async fn op_update_config(params: Value, host: &DictationHost) -> DictationRespo
             }
         };
     }
+    if let Some(s) = params.get("pillStyle").and_then(|v| v.as_str()) {
+        cfg.pill_style = match s {
+            "large" => PillStyle::Large,
+            "compact" => PillStyle::Compact,
+            other => {
+                return DictationResponse::err(format!(
+                    "update_config: invalid pillStyle '{other}'"
+                ))
+            }
+        };
+    }
     if params.get("httpProxy").is_some() {
         cfg.http_proxy = params
             .get("httpProxy")

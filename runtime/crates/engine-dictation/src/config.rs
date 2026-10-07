@@ -35,6 +35,14 @@ pub enum InjectMode {
     ClipboardOnly,
 }
 
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PillStyle {
+    #[default]
+    Large,
+    Compact,
+}
+
 /// DNS-резолвер для исходящих AI-запросов. Scope ограничен AI HTTP клиентом
 /// (не sync/RAWG/прочее) — см. forbidden.md → Dictation.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -60,6 +68,8 @@ pub struct DictationConfig {
     /// Whisper language hint: `ru`, `en`, `auto`. `auto` → empty string в API.
     pub language: String,
     pub inject_mode: InjectMode,
+    #[serde(default)]
+    pub pill_style: PillStyle,
     pub network_profile: NetworkProfile,
     /// HTTP/SOCKS proxy URL для AI-провайдеров. Используется когда DoH
     /// недостаточно (SNI-block / TCP block). Поддерживает `http://`,
@@ -114,6 +124,7 @@ impl Default for DictationConfig {
             trigger_mode: TriggerMode::Toggle,
             language: "ru".into(),
             inject_mode: InjectMode::AutoPaste,
+            pill_style: PillStyle::Large,
             network_profile: NetworkProfile::System,
             http_proxy: None,
             transcription_prompt: String::new(),
@@ -246,6 +257,7 @@ fn deserialize_lenient(value: &serde_json::Value) -> DictationConfig {
     field!("triggerMode", cfg.trigger_mode);
     field!("language", cfg.language);
     field!("injectMode", cfg.inject_mode);
+    field!("pillStyle", cfg.pill_style);
     field!("networkProfile", cfg.network_profile);
     field!("httpProxy", cfg.http_proxy);
     field!("transcriptionPrompt", cfg.transcription_prompt);
@@ -442,6 +454,7 @@ mod tests {
             trigger_mode: TriggerMode::Toggle,
             language: "en".into(),
             inject_mode: InjectMode::ClipboardOnly,
+            pill_style: PillStyle::Compact,
             network_profile: NetworkProfile::CloudflareDoh,
             http_proxy: Some("http://127.0.0.1:8888".into()),
             transcription_prompt: "Mundus Groq".into(),
@@ -460,6 +473,7 @@ mod tests {
         let loaded = load_from(&path);
         assert_eq!(loaded.hotkey, "Ctrl+Alt+D");
         assert_eq!(loaded.inject_mode, InjectMode::ClipboardOnly);
+        assert_eq!(loaded.pill_style, PillStyle::Compact);
         assert_eq!(loaded.network_profile, NetworkProfile::CloudflareDoh);
         assert_eq!(loaded.http_proxy.as_deref(), Some("http://127.0.0.1:8888"));
         assert_eq!(loaded.transcription_prompt, "Mundus Groq");

@@ -273,6 +273,7 @@
             trigger_mode: TriggerMode::Toggle,
             language: "ru".into(),
             inject_mode: InjectMode::ClipboardOnly, // не трогаем реальный clipboard
+            pill_style: PillStyle::Large,
             network_profile: NetworkProfile::System,
             provider: "groq".into(),
             provider_enabled: true,
@@ -1550,6 +1551,7 @@
             json!({
                 "language": "auto",
                 "injectMode": "clipboard_only",
+                "pillStyle": "compact",
                 "provider": "local",
                 "duckAudioDuringRecording": true,
                 "localEngine": "whisper.cpp",
@@ -1582,6 +1584,7 @@
         let state = handle_dictation_op("get_state", Value::Null, &host2).await;
         assert_eq!(state.data["config"]["language"], "auto");
         assert_eq!(state.data["config"]["injectMode"], "clipboard_only");
+        assert_eq!(state.data["config"]["pillStyle"], "compact");
         assert_eq!(state.data["config"]["provider"], "local");
         assert_eq!(state.data["config"]["duckAudioDuringRecording"], true);
         assert_eq!(state.data["config"]["localEngine"], "whisper.cpp");

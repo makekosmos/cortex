@@ -300,6 +300,10 @@ fn config_to_value(cfg: &DictationConfig) -> Value {
             InjectMode::AutoPaste => "auto_paste",
             InjectMode::ClipboardOnly => "clipboard_only",
         },
+        "pillStyle": match cfg.pill_style {
+            PillStyle::Large => "large",
+            PillStyle::Compact => "compact",
+        },
         "networkProfile": network_profile_to_value(&cfg.network_profile),
         "httpProxy": cfg.http_proxy,
         "transcriptionPrompt": cfg.transcription_prompt,
