@@ -1896,6 +1896,48 @@
         assert_eq!(cfg.local_model.as_deref(), Some("small"));
     }
 
+    #[test]
+    fn parse_capture_source_defaults_to_mic() {
+        assert!(parse_capture_source(&json!({})).unwrap().is_none());
+    }
+
+    #[test]
+    fn parse_capture_source_rejects_bad_params() {
+        // sourceFile не строкой — ошибка, а не тихий mic-захват.
+        assert!(parse_capture_source(&json!({ "sourceFile": 42 })).is_err());
+        // Несуществующий файл — ошибка до спавна helper'а.
+        assert!(
+            parse_capture_source(&json!({ "sourceFile": "/no/such/file.wav" }))
+                .unwrap_err()
+                .contains("does not exist")
+        );
+        // Нечисловая скорость — ошибка.
+        let td = tempfile::TempDir::new().unwrap();
+        let wav = td.path().join("clip.wav");
+        std::fs::write(&wav, b"RIFF").unwrap();
+        assert!(parse_capture_source(&json!({
+            "sourceFile": wav.to_string_lossy(),
+            "sourceSpeed": "fast",
+        }))
+        .is_err());
+    }
+
+    #[test]
+    fn parse_capture_source_clamps_speed() {
+        let td = tempfile::TempDir::new().unwrap();
+        let wav = td.path().join("clip.wav");
+        std::fs::write(&wav, b"RIFF").unwrap();
+        let params = json!({ "sourceFile": wav.to_string_lossy(), "sourceSpeed": 500 });
+        let source = parse_capture_source(&params).unwrap().unwrap();
+        assert_eq!(source.speed, 64.0);
+        let params = json!({ "sourceFile": wav.to_string_lossy(), "sourceSpeed": -3 });
+        let source = parse_capture_source(&params).unwrap().unwrap();
+        assert_eq!(source.speed, 0.01);
+        let params = json!({ "sourceFile": wav.to_string_lossy() });
+        let source = parse_capture_source(&params).unwrap().unwrap();
+        assert_eq!(source.speed, 1.0);
+    }
+
     #[cfg(windows)]
     #[test]
     fn autoselect_ignores_non_local_provider() {
