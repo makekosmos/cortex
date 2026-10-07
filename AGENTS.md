@@ -14,6 +14,13 @@ Linux годится для разработки Engine (`docs/linux-dev.md`).
   диктовка, апдейтер, трей. Подкрейты: `runtime/crates/{engine-base,
   engine-dictation,engine-packages,engine-indexes,package-protocol,
   pe-version-info}`. ARK работает внутри процесса: `runtime/crates/engine-packages/src/ark_host.rs`.
+- `engine-dictation` на macOS: микрофон через
+  `runtime/native/macos/audio-capturer` (JSON-over-stdio, команды
+  `{"command":"warmup|start|stop|meter|snapshot|exit"}` — bare words дают
+  `{"error":"Invalid JSON request"}`); хоткей через `hotkey-hold-monitor` и
+  `capture-hotkey`; inject — osascript System Events (перед Cmd+V фокус
+  возвращается приложению по pid, захваченному при старте записи).
+  Windows: захват in-process через WASAPI.
 - `core/crates/ark-core/` — Rust + SQLite, контракт и инварианты в
   `core/crates/ark-core/AGENTS.md` и `docs/{ark-core,sync,write-boundary}.md`.
 - `manager-gpui/` — GPUI-приложение Manager. Это отдельный Cargo workspace со
@@ -30,6 +37,13 @@ Linux годится для разработки Engine (`docs/linux-dev.md`).
   возможность для приложения — это новая операция Engine, а не обход.
 
 ## Запуск
+
+Чистый рестарт Engine для локальной проверки: `pkill -f mundus-engine` →
+подождать 2–3 сек (супервизор отклоняет запуск при живом pid —
+`no verifiable control ownership`) → `MUNDUS_DATA_DIR=$HOME/.config/Mundus
+MUNDUS_SKIP_SYNC=1 ./target/debug/mundus-engine`. osascript к приложению
+без Automation-consent висит бессрочно — консент проверяется хелперами
+`target/debug/native/macos/{microphone-access,input-monitoring-request}`.
 
 ```text
 pnpm run dev                     # собрать Engine и запустить Manager на нём
