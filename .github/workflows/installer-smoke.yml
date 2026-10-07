@@ -113,6 +113,9 @@ jobs:
         with:
           shared-key: win-installer
           cache-on-failure: true
+          # PRs restore but never save — their per-run saves (~1.1 GB each)
+          # crowded the 10 GB budget and evicted the nightly's entries.
+          save-if: ${{ github.event_name != 'pull_request' }}
           workspaces: |
             . -> target
             core -> target
