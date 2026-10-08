@@ -4,7 +4,10 @@
 
 struct Uniforms {
     t_secs: f32,
-    _pad: vec3<f32>,
+    // Render target size in physical px (the edge-field texture is sampled
+    // through uv, so it keeps its own dimensions).
+    size: vec2<f32>,
+    _pad: vec4<f32>,
     _pad2: vec4<f32>,
 };
 @group(0) @binding(0) var<uniform> u: Uniforms;
@@ -102,9 +105,8 @@ fn edge_at(uv: vec2<f32>) -> f32 {
 
 @fragment
 fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
-    let dims = vec2<f32>(textureDimensions(field_tex));
-    let uv = in.pos.xy / dims;
-    let texel = 1.0 / dims;
+    let uv = in.pos.xy / u.size;
+    let texel = 1.0 / vec2<f32>(textureDimensions(field_tex));
     let t = 0.3 * (u.t_secs + 2.8);
     let cycle_width = REPETITION;
 

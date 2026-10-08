@@ -123,6 +123,7 @@ impl Render for ManagerApp {
         );
         if update_state.visible() && !self.update_overlay.visible() {
             self.update_anim_start = Instant::now();
+            self.update_fill = 0.0;
         }
         self.update_overlay = update_state;
         if update_state.visible() {

@@ -55,6 +55,12 @@ pub fn resolve(snoozed: bool, was_open: bool, engine_state: &str) -> OverlayStat
     }
 }
 
+/// Displayed edge length of the mark (logical px).
+const LOGO_SIZE: f32 = 100.0;
+/// Produce at most one new logo frame per this interval — the paint loop
+/// runs at display refresh, but a new GPU/WebP frame every ~33 ms is plenty.
+const LOGO_FRAME_INTERVAL: std::time::Duration = std::time::Duration::from_millis(33);
+
 /// The petal mark itself, filled with animated liquid metal: a ring of
 /// pre-baked 256×252 frames, indexed by elapsed time — a clone of an `Arc`
 /// per repaint while the overlay is on screen. The mark sits still; only
@@ -63,7 +69,7 @@ fn logo(image: Option<Arc<RenderImage>>) -> Stateful<Div> {
     let mut mark = div()
         .id("update-overlay-logo")
         .debug_selector(|| "update-overlay-logo".into())
-        .size(px(200.));
+        .size(px(LOGO_SIZE));
     if let Some(image) = image {
         mark = mark.child(img(image).size_full());
     } else {
@@ -71,7 +77,7 @@ fn logo(image: Option<Arc<RenderImage>>) -> Stateful<Div> {
         mark = mark.flex().items_center().justify_center().child(
             gpui_component::Icon::default()
                 .path("icons/mundus.svg")
-                .size(px(140.))
+                .size(px(LOGO_SIZE * 0.7))
                 .text_color(c(FG())),
         );
     }
@@ -79,17 +85,42 @@ fn logo(image: Option<Arc<RenderImage>>) -> Stateful<Div> {
 }
 
 /// The logo image for this repaint. With `logo-gpu` enabled the live wgpu
-/// shader is tried first; any failure falls back to the baked WebP ring
-/// (decoded on first use, so a healthy GPU path never pays for it).
-fn logo_image(app: &mut ManagerApp, elapsed: f32) -> Option<Arc<RenderImage>> {
+/// shader is tried first (rendered at displayed size × scale factor); any
+/// failure or an in-flight first readback falls back to the baked WebP ring
+/// (decoded on first use, so a healthy GPU path never pays for it). New
+/// frames are produced at most every `LOGO_FRAME_INTERVAL`; in between (and
+/// while the window is not visible) the last image is reused.
+fn logo_image(app: &mut ManagerApp, window: &Window, elapsed: f32) -> Option<Arc<RenderImage>> {
+    let fresh = app
+        .update_logo_frame
+        .as_ref()
+        .is_some_and(|(at, _)| at.elapsed() < LOGO_FRAME_INTERVAL);
+    if !window.is_visible() || fresh {
+        return app.update_logo_frame.as_ref().map(|(_, img)| img.clone());
+    }
     #[cfg(feature = "logo-gpu")]
-    if let Some(img) = crate::logo_gpu::frame(elapsed) {
+    if let Some(img) =
+        crate::logo_gpu::frame(elapsed, (LOGO_SIZE * window.scale_factor()).ceil() as u32)
+    {
+        #[cfg(test)]
+        {
+            app.update_logo_frames += 1;
+        }
+        app.update_logo_frame = Some((std::time::Instant::now(), img.clone()));
         return Some(img);
     }
     if app.update_logo.is_none() {
         app.update_logo = LogoFrames::shared();
     }
-    app.update_logo.as_ref().map(|f| f.frame(elapsed))
+    let img = app.update_logo.as_ref().map(|f| f.frame(elapsed));
+    if let Some(img) = &img {
+        #[cfg(test)]
+        {
+            app.update_logo_frames += 1;
+        }
+        app.update_logo_frame = Some((std::time::Instant::now(), img.clone()));
+    }
+    img
 }
 
 fn primary_op(state: OverlayState) -> &'static str {
@@ -97,6 +128,23 @@ fn primary_op(state: OverlayState) -> &'static str {
         OverlayState::Ready => "updater.install",
         _ => "updater.download",
     }
+}
+
+/// Exponential approach of the displayed fill toward the polled `percent`
+/// (~80 ms time constant → settles in ~0.3 s) so the bar glides between the
+/// once-a-second status polls instead of jumping.
+fn smoothed_fill(app: &mut ManagerApp, target: f32) -> f32 {
+    let now = std::time::Instant::now();
+    let dt = now
+        .duration_since(app.update_fill_stamp)
+        .as_secs_f32()
+        .min(0.25);
+    app.update_fill_stamp = now;
+    app.update_fill += (target - app.update_fill) * (1.0 - (-dt / 0.08).exp());
+    if (target - app.update_fill).abs() < 0.2 {
+        app.update_fill = target;
+    }
+    app.update_fill
 }
 
 pub fn render(
@@ -110,8 +158,13 @@ pub fn render(
     let current = vstr(&status, "currentVersion");
     let elapsed = app.update_anim_start.elapsed().as_secs_f32();
     // The metal flow needs continuous frames only while the overlay is on
-    // screen; Hidden requests nothing, so idle CPU stays at zero.
-    window.request_animation_frame();
+    // screen AND the window is actually presented; Hidden requests nothing,
+    // so idle CPU stays at zero. `window.is_visible()` covers minimized /
+    // fully occluded / other-Space windows where the platform supports it.
+    let window_visible = window.is_visible();
+    if window_visible {
+        window.request_animation_frame();
+    }
 
     let (title, detail) = match state {
         OverlayState::Offer => (
@@ -145,7 +198,7 @@ pub fn render(
         .flex_col()
         .items_center()
         .gap_4()
-        .child(logo(logo_image(app, elapsed)))
+        .child(logo(logo_image(app, window, elapsed)))
         .child(
             div()
                 .flex()
@@ -168,76 +221,91 @@ pub fn render(
                 ),
         );
 
+    // Actions stack vertically, equal width, centered: accent on top.
+    // While downloading there are no buttons at all — the slot carries a
+    // juicy filling progress bar instead (the download must not be
+    // dismissible mid-flight).
+    let mut actions = div().flex().flex_col().items_center().gap_2().w(px(240.));
     if state == OverlayState::Downloading {
         let percent = vnum(&status, "percent").clamp(0.0, 100.0);
-        body = body.child(
-            div()
-                .w(px(280.))
-                .flex()
-                .flex_col()
-                .gap_1p5()
-                .items_center()
-                .child(
-                    div()
-                        .text_size(ui_px(12.))
-                        .text_color(c(MUTED_FG()))
-                        .child(format!("{percent:.0}%")),
-                )
-                .child(
-                    div()
-                        .id("update-overlay-progress")
-                        .debug_selector(|| "update-overlay-progress".into())
-                        .h(px(6.))
-                        .w_full()
-                        .rounded_full()
-                        .bg(fade(FG(), 0.12))
-                        .child(
-                            div()
-                                .h_full()
-                                .w(relative(percent as f32 / 100.0))
-                                .rounded_full()
-                                .bg(c(ACCENT())),
-                        ),
-                ),
-        );
-    }
-
-    // Actions stack vertically, equal width, centered: accent on top.
-    let mut actions = div().flex().flex_col().items_center().gap_2().w(px(240.));
-    if state != OverlayState::Downloading {
-        actions = actions.child(
-            div()
-                .id("update-overlay-primary")
-                .debug_selector(|| "update-overlay-primary".into())
-                .w_full()
-                .child(
-                    button::primary("update-overlay-primary-btn")
-                        .w_full()
-                        .label(primary_label)
-                        .disabled(busy)
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.action(primary_op(state), json!({}));
-                            cx.notify();
-                        })),
-                ),
-        );
-    }
-    actions = actions.child(
-        div()
-            .id("update-overlay-later")
-            .debug_selector(|| "update-overlay-later".into())
-            .w_full()
+        let fill = smoothed_fill(app, percent as f32);
+        actions = actions
             .child(
-                button::secondary("update-overlay-later-btn")
+                div()
+                    .id("update-overlay-progress")
+                    .debug_selector(|| "update-overlay-progress".into())
+                    .h(px(12.))
                     .w_full()
-                    .label("Позже")
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.update_snoozed = true;
-                        this.update_overlay = OverlayState::Hidden;
-                        cx.notify();
-                    })),
-            ),
-    );
+                    .rounded_full()
+                    .bg(fade(FG(), 0.10))
+                    .child(
+                        div()
+                            .id("update-overlay-progress-fill")
+                            .debug_selector(|| "update-overlay-progress-fill".into())
+                            .relative()
+                            .h_full()
+                            .w(relative(fill / 100.0))
+                            .rounded_full()
+                            .overflow_hidden()
+                            .bg(linear_gradient(
+                                180.,
+                                linear_color_stop(c(ACCENT()).blend(white().opacity(0.28)), 0.),
+                                linear_color_stop(c(ACCENT()), 1.),
+                            ))
+                            .child(
+                                div()
+                                    .absolute()
+                                    .top_0()
+                                    .left_0()
+                                    .right_0()
+                                    .h(relative(0.5))
+                                    .rounded_full()
+                                    .bg(white().opacity(0.16)),
+                            ),
+                    ),
+            )
+            .child(
+                div()
+                    .text_size(ui_px(12.))
+                    .line_height(ui_px(16.))
+                    .text_color(c(MUTED_FG()))
+                    .child(format!("{percent:.0}%")),
+            );
+    } else {
+        actions = actions
+            .child(
+                div()
+                    .id("update-overlay-primary")
+                    .debug_selector(|| "update-overlay-primary".into())
+                    .w_full()
+                    .child(
+                        button::primary("update-overlay-primary-btn")
+                            .w_full()
+                            .label(primary_label)
+                            .disabled(busy)
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.action(primary_op(state), json!({}));
+                                cx.notify();
+                            })),
+                    ),
+            )
+            .child(
+                div()
+                    .id("update-overlay-later")
+                    .debug_selector(|| "update-overlay-later".into())
+                    .w_full()
+                    .child(
+                        button::secondary("update-overlay-later-btn")
+                            .w_full()
+                            .label("Позже")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.update_snoozed = true;
+                                this.update_overlay = OverlayState::Hidden;
+                                cx.notify();
+                            })),
+                    ),
+            );
+    }
     body = body.child(actions);
 
     div()

@@ -99,7 +99,116 @@ fn overlay_appears_on_available_and_snoozes_for_the_session(cx: &mut TestAppCont
 }
 
 #[gpui::test]
-fn downloading_shows_determinate_bar_and_error_offers_retry(cx: &mut TestAppContext) {
+fn downloading_shows_juicy_bar_instead_of_buttons(cx: &mut TestAppContext) {
+    let (manager, cx) = crate::a11y_tests::launch(cx);
+    set_status(
+        cx,
+        &manager,
+        json!({
+            "state": "downloading", "currentVersion": "0.10.2",
+            "newVersion": "0.10.3", "percent": 42, "canInstall": true
+        }),
+    );
+    // The bar replaces the whole button stack while a download runs.
+    let track = cx.debug_bounds("update-overlay-progress").unwrap();
+    assert!(cx.debug_bounds("update-overlay-primary").is_none());
+    assert!(cx.debug_bounds("update-overlay-later").is_none());
+    // After the eased fill settles it tracks percent: 42% of the track.
+    manager.update(cx, |app, cx| {
+        app.update_fill = 42.0;
+        cx.notify();
+    });
+    cx.update(|_, cx| cx.refresh_windows());
+    cx.run_until_parked();
+    let fill = cx.debug_bounds("update-overlay-progress-fill").unwrap();
+    let ratio = fill.size.width / track.size.width;
+    assert!((ratio - 0.42).abs() < 0.05, "ratio {ratio}");
+}
+
+#[gpui::test]
+fn offer_and_ready_keep_their_buttons(cx: &mut TestAppContext) {
+    let (manager, cx) = crate::a11y_tests::launch(cx);
+    set_status(
+        cx,
+        &manager,
+        json!({
+            "state": "available", "currentVersion": "0.10.2",
+            "newVersion": "0.10.3", "canInstall": true
+        }),
+    );
+    assert!(cx.debug_bounds("update-overlay-primary").is_some());
+    assert!(cx.debug_bounds("update-overlay-later").is_some());
+    set_status(
+        cx,
+        &manager,
+        json!({
+            "state": "downloaded", "currentVersion": "0.10.2",
+            "newVersion": "0.10.3", "percent": 100, "canInstall": true
+        }),
+    );
+    assert!(cx.debug_bounds("update-overlay-primary").is_some());
+    assert!(cx.debug_bounds("update-overlay-later").is_some());
+}
+
+#[gpui::test]
+fn hidden_window_pauses_logo_frames_until_visible(cx: &mut TestAppContext) {
+    let (manager, cx) = crate::a11y_tests::launch(cx);
+    set_status(
+        cx,
+        &manager,
+        json!({
+            "state": "available", "currentVersion": "0.10.2",
+            "newVersion": "0.10.3", "canInstall": true
+        }),
+    );
+    // Age the cached frame so the next visible render produces a fresh one.
+    let stale = |manager: &gpui::Entity<crate::app::ManagerApp>,
+                 cx: &mut gpui::VisualTestContext| {
+        manager.update(cx, |app, cx| {
+            if let Some((at, _)) = &mut app.update_logo_frame {
+                *at = std::time::Instant::now() - std::time::Duration::from_secs(1);
+            }
+            cx.notify();
+        });
+    };
+    stale(&manager, cx);
+    cx.update(|_, cx| cx.refresh_windows());
+    cx.run_until_parked();
+    let produced = manager.read_with(cx, |app, _| app.update_logo_frames);
+    assert!(produced > 0, "a visible overlay must produce logo frames");
+
+    cx.simulate_visibility_change(gpui::WindowVisibility::Hidden);
+    // The platform callback lands on the window on the next cycle; the
+    // baseline is whatever that last still-visible render produced.
+    stale(&manager, cx);
+    cx.update(|_, cx| cx.refresh_windows());
+    cx.run_until_parked();
+    let produced_at_hide = manager.read_with(cx, |app, _| app.update_logo_frames);
+    stale(&manager, cx);
+    cx.update(|_, cx| cx.refresh_windows());
+    cx.run_until_parked();
+    cx.update(|_, cx| cx.refresh_windows());
+    cx.run_until_parked();
+    assert_eq!(
+        manager.read_with(cx, |app, _| app.update_logo_frames),
+        produced_at_hide,
+        "hidden window must not produce logo frames"
+    );
+
+    cx.simulate_visibility_change(gpui::WindowVisibility::Visible);
+    cx.update(|_, cx| cx.refresh_windows());
+    cx.run_until_parked();
+    stale(&manager, cx);
+    cx.update(|_, cx| cx.refresh_windows());
+    cx.run_until_parked();
+    assert!(
+        manager.read_with(cx, |app, _| app.update_logo_frames) > produced_at_hide,
+        "visible window resumes logo frames"
+    );
+}
+
+#[gpui::test]
+fn downloading_then_error_offers_retry(cx: &mut TestAppContext) {
     let (manager, cx) = crate::a11y_tests::launch(cx);
     set_status(
         cx,
