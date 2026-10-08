@@ -48,6 +48,15 @@ pub enum LanSyncMessage {
         auth_nonce: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         auth_hmac: Option<String>,
+        /// Sender's OS (`std::env::consts::OS` spelling: "macos", "windows",
+        /// ...) — shown in the device list. Optional so peers built before
+        /// this field keep parsing.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        platform: Option<String>,
+        /// Sender's product version label (the Engine build, not the crate
+        /// version). Optional for the same compat reason as `platform`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        app_version: Option<String>,
     },
 
     #[serde(rename = "version_vector")]

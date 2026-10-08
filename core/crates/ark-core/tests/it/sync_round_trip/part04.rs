@@ -163,6 +163,8 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
         addresses: vec![format!("127.0.0.1:{port_a}")],
         last_seen: chrono::Utc::now().to_rfc3339(),
         last_address: None,
+        platform: None,
+        app_version: None,
     };
     let client = Arc::new(SyncClient::new(
         storage_b.clone() as Arc<dyn StorageBackend>,

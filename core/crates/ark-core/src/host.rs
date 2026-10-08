@@ -120,6 +120,35 @@ pub fn strip_ipv6_zone(addr: &str) -> String {
 }
 
 // ---------------------------------------------------------------------------
+// Local device metadata advertised in `hello`
+// ---------------------------------------------------------------------------
+
+/// This process's OS in the spelling the Hello field carries
+/// (`"macos"`, `"windows"`, `"linux"`, ...). Compile-time constant — no
+/// threading needed through sync configs.
+pub fn local_platform() -> String {
+    std::env::consts::OS.to_string()
+}
+
+/// Product version of the host application (the Engine build label), set by
+/// `start_sync` params. Process-global is intentional: one process is one
+/// product build, and it spares every transport config a copy of the field.
+/// `None` when the embedder never supplied one — Hello then omits the field.
+static APP_VERSION: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+
+pub fn set_app_version(version: Option<String>) {
+    let _ = APP_VERSION.set(
+        version
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty()),
+    );
+}
+
+pub fn app_version() -> Option<String> {
+    APP_VERSION.get().cloned().flatten()
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
