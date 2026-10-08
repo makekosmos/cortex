@@ -88,8 +88,12 @@ gpui = { package = "gpui-kit", version = "=0.7.1", features = ["test-support"] }
 # gpui-pre 0.3.8 in imago carries the a11y TestWindow patch that makes
 # `Window::debug_a11y_tree_json` work in #[gpui::test] runs, plus the
 # agenda window fixes. See crates/gpui-pre/PATCH.md in that rev.
+# gpui-pre-windows carries the Windows backend fixes (WM_NCHITTEST
+# hit-testing, mouse-leave, move-loop, Mica, frame pacing); see
+# crates/gpui-pre-windows/PATCH.md in that rev.
 # Pinned to the same imago rev as imago-gpui/mundus-gpui-kit above.
 gpui-pre = { git = "https://github.com/makekosmos/imago.git", rev = "0766584549f5055b40ebe10da7f73fefd97a3834" }
+gpui-pre-windows = { git = "https://github.com/makekosmos/imago.git", rev = "0766584549f5055b40ebe10da7f73fefd97a3834" }
 
 # Standalone crate: the Manager GPUI shell carries heavyweight UI deps that
 # the runtime workspace must not inherit (mirrors how agenda-gpui ships).
