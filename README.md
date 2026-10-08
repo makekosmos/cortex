@@ -8,23 +8,30 @@
 One native Rust Engine with an embedded data core, a GPUI Manager, and the
 pipeline that ships them to Windows and macOS every night.
 
-[![Release](https://img.shields.io/github/v/release/makekosmos/cortex?style=flat-square&label=release&color=18181b&labelColor=09090b)](https://github.com/makekosmos/cortex/releases/latest)
-[![CI](https://img.shields.io/github/actions/workflow/status/makekosmos/cortex/ci.yml?branch=main&style=flat-square&label=CI&labelColor=09090b)](https://github.com/makekosmos/cortex/actions/workflows/ci.yml)
-[![Nightly](https://img.shields.io/github/actions/workflow/status/makekosmos/cortex/nightly-release.yml?style=flat-square&label=nightly&labelColor=09090b)](https://github.com/makekosmos/cortex/actions/workflows/nightly-release.yml)
-[![Installer smoke](https://img.shields.io/github/actions/workflow/status/makekosmos/cortex/installer-smoke.yml?style=flat-square&label=installer%20smoke&labelColor=09090b)](https://github.com/makekosmos/cortex/actions/workflows/installer-smoke.yml)
-<br />
-[![Rust](https://img.shields.io/badge/rust-1.95.0-18181b?style=flat-square&logo=rust&logoColor=white&labelColor=09090b)](rust-toolchain.toml)
-[![pnpm](https://img.shields.io/badge/pnpm-12.4.1-18181b?style=flat-square&logo=pnpm&logoColor=white&labelColor=09090b)](package.json)
-[![GPUI](https://img.shields.io/badge/UI-GPUI-18181b?style=flat-square&labelColor=09090b)](manager-gpui/)
-[![SQLite](https://img.shields.io/badge/storage-SQLite-18181b?style=flat-square&logo=sqlite&logoColor=white&labelColor=09090b)](core/crates/ark-core/)
-[![Windows](https://img.shields.io/badge/Windows-primary-18181b?style=flat-square&logo=windows&logoColor=white&labelColor=09090b)](#download)
-[![macOS](https://img.shields.io/badge/macOS-DMG-18181b?style=flat-square&logo=apple&logoColor=white&labelColor=09090b)](#download)
-[Download](#download) ·
-[Architecture](#architecture) ·
-[Quick start](#quick-start) ·
-[Checks](#checks) ·
-[Release pipeline](#release-pipeline) ·
-[Docs](#docs)
+<p>
+  <a href="https://github.com/makekosmos/cortex/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/makekosmos/cortex?style=for-the-badge&label=release&color=8b5cf6&logo=github&logoColor=white" /></a>
+  <a href="https://github.com/makekosmos/cortex/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/makekosmos/cortex/ci.yml?branch=main&style=for-the-badge&label=CI&logo=githubactions&logoColor=white" /></a>
+  <a href="https://github.com/makekosmos/cortex/actions/workflows/nightly-release.yml"><img alt="Nightly" src="https://img.shields.io/github/actions/workflow/status/makekosmos/cortex/nightly-release.yml?style=for-the-badge&label=nightly&logo=githubactions&logoColor=white" /></a>
+  <a href="https://github.com/makekosmos/cortex/actions/workflows/installer-smoke.yml"><img alt="Installer smoke" src="https://img.shields.io/github/actions/workflow/status/makekosmos/cortex/installer-smoke.yml?style=for-the-badge&label=installer%20smoke&logo=githubactions&logoColor=white" /></a>
+</p>
+
+<p>
+  <a href="rust-toolchain.toml"><img alt="Rust" src="https://img.shields.io/badge/rust-1.95.0-ce422b?style=for-the-badge&logo=rust&logoColor=white" /></a>
+  <a href="package.json"><img alt="pnpm" src="https://img.shields.io/badge/pnpm-12.4.1-f69220?style=for-the-badge&logo=pnpm&logoColor=white" /></a>
+  <a href="manager-gpui/"><img alt="GPUI" src="https://img.shields.io/badge/UI-GPUI-6366f1?style=for-the-badge&logo=zedindustries&logoColor=white" /></a>
+  <a href="core/crates/ark-core/"><img alt="SQLite" src="https://img.shields.io/badge/storage-SQLite-0f80cc?style=for-the-badge&logo=sqlite&logoColor=white" /></a>
+  <a href="#download"><img alt="Windows" src="https://img.shields.io/badge/Windows-primary-0078d4?style=for-the-badge&logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0wIDBoMTEuNHYxMS40SDB6TTEyLjYgMEgyNHYxMS40SDEyLjZ6TTAgMTIuNmgxMS40VjI0SDB6TTEyLjYgMTIuNkgyNFYyNEgxMi42eiIvPjwvc3ZnPg==" /></a>
+  <a href="#download"><img alt="macOS" src="https://img.shields.io/badge/macOS-DMG-e4e4e7?style=for-the-badge&logo=apple&logoColor=black" /></a>
+</p>
+
+<p>
+  <a href="#download"><b>Download</b></a> ·
+  <a href="#architecture"><b>Architecture</b></a> ·
+  <a href="#quick-start"><b>Quick start</b></a> ·
+  <a href="#checks"><b>Checks</b></a> ·
+  <a href="#release-pipeline"><b>Release pipeline</b></a> ·
+  <a href="#docs"><b>Docs</b></a>
+</p>
 
 </div>
 
