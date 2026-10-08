@@ -426,7 +426,7 @@ impl PackageService {
             self.install_downloaded(id, version, &path, expected_size, &expected_sha256)
                 .await
         } else {
-            let response = reqwest::Client::builder()
+            let response = engine_base::http::client_builder()
                 .timeout(std::time::Duration::from_secs(60))
                 .build()
                 .map_err(|_| PackageError::Invalid)?

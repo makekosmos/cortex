@@ -3,7 +3,8 @@
     all(windows, feature = "windows-gui-subsystem"),
     windows_subsystem = "windows"
 )]
-#![allow(dead_code, clippy::useless_conversion)]
+#![cfg_attr(any(test, not(windows)), allow(dead_code))]
+#![allow(clippy::useless_conversion)]
 
 // Mundus backend — native runtime and Windows tray owner.
 //
@@ -680,7 +681,7 @@ async fn setup() -> Result<SetupState, DynError> {
         manager_state,
     )
     .await?;
-    tokio::spawn(updater.run_startup_check_after_grace(ws.desktop_authority()));
+    tokio::spawn(updater.run_check_loop());
     let port = ws.port();
     tracing::info!(port = port, "WS listening on 127.0.0.1");
     let dispatcher = Arc::new(ws.dispatcher());
@@ -855,15 +856,7 @@ async fn setup() -> Result<SetupState, DynError> {
 
 const ADAPTER_READINESS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
-async fn wait_for_adapter_readiness(
-    http_port: u16,
-    ws_port: u16,
-    token: &str,
-) -> Result<(), String> {
-    wait_for_adapter_readiness_with_timeout(http_port, ws_port, token, ADAPTER_READINESS_TIMEOUT)
-        .await
-}
-
+#[cfg(test)]
 async fn wait_for_adapter_readiness_with_timeout(
     http_port: u16,
     ws_port: u16,

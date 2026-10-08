@@ -65,7 +65,7 @@ pub(crate) async fn fetch_with_secret_json_limit(
                 !is_blocked_ip(a.ip())
             })
             .ok_or_else(|| BrokerError::Invalid("host resolves to blocked address".into()))?;
-        let client = reqwest::Client::builder()
+        let client = engine_base::http::client_builder()
             .redirect(reqwest::redirect::Policy::none())
             .timeout(Duration::from_secs(30))
             .resolve(host, addr)

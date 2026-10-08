@@ -1,5 +1,6 @@
 //! Apply Engine worker replies to the Manager's controlled UI state.
 use super::*;
+use crate::worker::Reply;
 
 impl ManagerApp {
     pub(super) fn drain(&mut self, cx: &mut Context<Self>) {
@@ -15,49 +16,45 @@ impl ManagerApp {
                     break;
                 }
             };
-            if reply.slot == "appearance.set" {
-                self.background_slots.remove("appearance.set");
-                match reply.result {
-                    Ok(value) => {
-                        if self.appearance.ingest(&value) {
-                            self.slots.insert("appearance".into(), Slot::Ready(value));
+            let Reply { slot, result } = reply;
+            match slot.as_str() {
+                "appearance.set" => {
+                    self.background_slots.remove("appearance.set");
+                    match result {
+                        Ok(value) => {
+                            if self.appearance.ingest(&value) {
+                                self.slots.insert("appearance".into(), Slot::Ready(value));
+                            }
                         }
+                        Err(error) => self.error = Some(error),
                     }
-                    Err(error) => self.error = Some(error),
                 }
-            } else if reply.slot == "@action" {
-                self.action_busy = false;
-                match reply.result {
-                    Ok(_) => {
-                        self.notice = Some("Выполнено.".into());
-                        self.invalidated_slots.extend(self.slots.keys().cloned());
-                        views::load(self.view, self);
+                "@action" => {
+                    self.action_busy = false;
+                    match result {
+                        Ok(_) => {
+                            self.notice = Some("Выполнено.".into());
+                            self.invalidated_slots.extend(self.slots.keys().cloned());
+                            views::load(self.view, self);
+                        }
+                        Err(e) => self.error = Some(e),
                     }
-                    Err(e) => self.error = Some(e),
                 }
-            } else if reply.slot == "pkg.open" {
-                self.open_reply(reply.result);
-            } else if reply.slot == "conn.login" {
-                self.login_reply(reply.result);
-            } else if reply.slot == "apps.op" {
+                "pkg.open" => self.open_reply(result),
+                "conn.login" => self.login_reply(result),
+                "store.ext" => self.external_url_reply(result),
                 // Pull fresh app rows after background install/update starts.
-                match reply.result {
+                "apps.op" => match result {
                     Ok(_) => self.refresh("store.apps", "apps.list", json!({})),
                     Err(e) => self.error = Some(e),
-                }
-            } else if reply.slot == "disclosure" {
-                match reply.result {
+                },
+                "disclosure" => match result {
                     Ok(v) => self.disclosure = Some(v),
                     Err(e) => self.error = Some(e),
-                }
-            } else if reply.slot == "store.ext" {
-                self.external_url_reply(reply.result);
-            } else {
-                let slot = reply.slot.clone();
-                let background = self.background_slots.remove(&slot);
-                self.slots.insert(
-                    slot.clone(),
-                    match reply.result {
+                },
+                _ => {
+                    let background = self.background_slots.remove(&slot);
+                    let state = match result {
                         Ok(v) => {
                             self.invalidated_slots.remove(&slot);
                             if !background && self.error.is_some() {
@@ -69,10 +66,11 @@ impl ManagerApp {
                             self.error = Some(e.clone());
                             Slot::Failed(e)
                         }
-                    },
-                );
-                if slot == "usage.report" {
-                    self.rebuild_usage_rows();
+                    };
+                    self.slots.insert(slot.clone(), state);
+                    if slot == "usage.report" {
+                        self.rebuild_usage_rows();
+                    }
                 }
             }
             cx.notify();

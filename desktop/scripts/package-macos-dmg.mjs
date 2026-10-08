@@ -1,15 +1,16 @@
 #!/usr/bin/env node
-// KOS-349: stage Engine + Manager (+ Swift helpers) into an unsigned
-// Mundus Manager.app and wrap it in Mundus-<ver>.dmg via hdiutil.
+// KOS-349: stage Engine + Manager (+ Swift helpers) into Mundus Manager.app
+// (ad-hoc signed; icon + Info.plist wired) and wrap it in Mundus-<ver>.dmg
+// via dmgbuild with a drag-to-Applications layout over a hidpi background.
 //
 // Signing / notarization: not wired yet. When Apple secrets land in the
-// macOS nightly job, add codesign + notarytool here (see TODO below). An
-// unsigned DMG is still a publishable CI artifact for the cortex channel.
+// macOS nightly job, replace the ad-hoc codesign below with a Developer ID
+// signature + notarytool (see TODO below). The DMG is still a publishable
+// CI artifact for the cortex channel.
 import { spawnSync } from "node:child_process";
 import {
   chmodSync,
   copyFileSync,
-  cpSync,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -57,6 +58,48 @@ function managerBinaryCandidates() {
   ];
 }
 
+function run(cmd, args, opts = {}) {
+  const result = spawnSync(cmd, args, { stdio: "inherit", ...opts });
+  if ((result.status ?? 1) !== 0) {
+    die(`${cmd} ${args[0] ?? ""} failed (exit ${result.status})`);
+  }
+}
+
+/**
+ * Build Contents/Resources/mundus.icns from the pre-masked macOS icon
+ * (squircle + margins + shadow baked into build/macos/icon-1024.png —
+ * sips can't alpha-mask; regenerate it with scripts/macos-icon.py).
+ */
+function buildIcns(appContents, workDir) {
+  const source = path.join(desktopRoot, "build", "macos", "icon-1024.png");
+  if (!existsSync(source)) die(`missing ${source}; run scripts/macos-icon.py`);
+  const iconset = path.join(workDir, "mundus.iconset");
+  rmSync(iconset, { recursive: true, force: true });
+  mkdirSync(iconset, { recursive: true });
+  for (const size of [16, 32, 128, 256, 512]) {
+    run("sips", [
+      "-z",
+      String(size),
+      String(size),
+      source,
+      "--out",
+      path.join(iconset, `icon_${size}x${size}.png`),
+    ]);
+    run("sips", [
+      "-z",
+      String(size * 2),
+      String(size * 2),
+      source,
+      "--out",
+      path.join(iconset, `icon_${size}x${size}@2x.png`),
+    ]);
+  }
+  const resources = path.join(appContents, "Resources");
+  mkdirSync(resources, { recursive: true });
+  run("iconutil", ["-c", "icns", iconset, "-o", path.join(resources, "mundus.icns")]);
+  rmSync(iconset, { recursive: true, force: true });
+}
+
 function writeInfoPlist(appContents, version) {
   const plist = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -76,6 +119,8 @@ function writeInfoPlist(appContents, version) {
   <string>APPL</string>
   <key>CFBundleExecutable</key>
   <string>${MANAGER_MAC_BIN}</string>
+  <key>CFBundleIconFile</key>
+  <string>mundus</string>
   <key>LSMinimumSystemVersion</key>
   <string>13.0</string>
   <key>NSHighResolutionCapable</key>
@@ -124,32 +169,122 @@ export function stageMacosApp({ version, stageDir }) {
   }
 
   writeInfoPlist(contents, version);
+
+  // Icon + signature are macOS-only steps; staging on other hosts still
+  // produces the lookup layout for tests.
+  if (process.platform === "darwin") {
+    buildIcns(contents, stageDir);
+    if (process.env.CODESIGN_IDENTITY) {
+      // TODO(KOS-349): hardened runtime + entitlements + notarytool once the
+      // Apple secrets land in the macOS nightly job.
+      run("codesign", [
+        "--force",
+        "--options",
+        "runtime",
+        "--timestamp",
+        "--sign",
+        process.env.CODESIGN_IDENTITY,
+        appRoot,
+      ]);
+    } else {
+      // Ad-hoc signature so the app launches on Apple silicon (Gatekeeper
+      // still requires right-click → Open without notarization).
+      run("codesign", ["--deep", "--force", "--sign", "-", appRoot]);
+    }
+  }
   return appRoot;
 }
 
+function ensureDmgbuild() {
+  const probe = spawnSync("python3", ["-c", "import dmgbuild"], { stdio: "ignore" });
+  if ((probe.status ?? 1) === 0) return;
+  const install = spawnSync("python3", ["-m", "pip", "install", "--quiet", "--user", "dmgbuild"], {
+    stdio: "ignore",
+  });
+  if ((install.status ?? 1) === 0) return;
+  run("python3", [
+    "-m",
+    "pip",
+    "install",
+    "--quiet",
+    "--user",
+    "--break-system-packages",
+    "dmgbuild",
+  ]);
+}
+
+// dmgbuild writes the .DS_Store (background, icon view, icon positions)
+// directly — no Finder scripting, so it also works on headless CI runners.
+const DMGBUILD_PY = `
+import os
+import dmgbuild
+
+app = os.environ["MUNDUS_DMG_APP"]
+app_name = os.path.basename(app)
+dmgbuild.build_dmg(
+    filename=os.environ["MUNDUS_DMG_OUT"],
+    volume_name=os.environ["MUNDUS_DMG_VOLUME"],
+    settings={
+        "format": "UDZO",
+        "files": [app],
+        "symlinks": {"Applications": "/Applications"},
+        "icon": os.path.join(app, "Contents/Resources/mundus.icns"),
+        "background": os.environ["MUNDUS_DMG_BG_TIFF"],
+        "show_status_bar": False,
+        "show_tab_view": False,
+        "show_toolbar": False,
+        "show_pathbar": False,
+        "show_sidebar": False,
+        "default_view": "icon-view",
+        # Window and icon geometry must match scripts/dmg-background.py.
+        "window_rect": ((200, 120), (660, 400)),
+        "icon_size": 104,
+        "text_size": 12,
+        "icon_locations": {app_name: (165, 195), "Applications": (495, 195)},
+    },
+)
+`;
+
 /**
- * Build an unsigned UDIF DMG containing the staged .app.
+ * Build an unsigned UDIF DMG containing the staged .app with the classic
+ * drag-into-Applications layout. dmgbuild installs via pip --user when
+ * missing, same as zeron's scripts/package-macos.sh.
  * TODO(KOS-349): when APPLE_DEVELOPER_ID_CERT / NOTARY_* secrets exist in CI,
- * codesign the .app + DMG and submit with notarytool before returning.
+ * sign the DMG and submit it with notarytool before returning.
  */
 export function createUnsignedDmg({ appPath, dmgPath, volumeName }) {
   if (process.platform !== "darwin") {
-    die("hdiutil DMG packaging requires macOS (darwin)");
+    die("dmgbuild DMG packaging requires macOS (darwin)");
   }
   rmSync(dmgPath, { force: true });
-  const staging = `${dmgPath}.stage`;
-  rmSync(staging, { recursive: true, force: true });
-  mkdirSync(staging, { recursive: true });
-  cpSync(appPath, path.join(staging, path.basename(appPath)), { recursive: true });
+  ensureDmgbuild();
 
-  // Unsigned publishable artifact. Do not invent Apple certs here.
-  const result = spawnSync(
-    "hdiutil",
-    ["create", "-volname", volumeName, "-srcfolder", staging, "-ov", "-format", "UDZO", dmgPath],
-    { stdio: "inherit" },
-  );
-  rmSync(staging, { recursive: true, force: true });
-  if ((result.status ?? 1) !== 0) die(`hdiutil create failed (exit ${result.status})`);
+  // Pair the 1x/2x background renders into a hidpi tiff so the artwork
+  // stays crisp on retina displays.
+  const macosAssets = path.join(desktopRoot, "build", "macos");
+  const bgTiff = `${dmgPath}.background.tiff`;
+  rmSync(bgTiff, { force: true });
+  run("tiffutil", [
+    "-cathidpicheck",
+    path.join(macosAssets, "dmg-background.png"),
+    path.join(macosAssets, "dmg-background@2x.png"),
+    "-out",
+    bgTiff,
+  ]);
+
+  try {
+    run("python3", ["-c", DMGBUILD_PY], {
+      env: {
+        ...process.env,
+        MUNDUS_DMG_APP: appPath,
+        MUNDUS_DMG_OUT: dmgPath,
+        MUNDUS_DMG_VOLUME: volumeName,
+        MUNDUS_DMG_BG_TIFF: bgTiff,
+      },
+    });
+  } finally {
+    rmSync(bgTiff, { force: true });
+  }
   if (!existsSync(dmgPath)) die(`DMG was not created: ${dmgPath}`);
   return dmgPath;
 }

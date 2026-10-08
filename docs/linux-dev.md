@@ -35,7 +35,8 @@ cargo build -p engine            # writes target/debug/mundus-engine
 # no sidecar to build or provision.
 ```
 
-Manual run:
+`pnpm run dev -- --engine-only` builds and runs the Engine with an isolated
+data dir in one step. Manual run:
 
 ```text
 MUNDUS_DATA_DIR=/tmp/mundus-data MUNDUS_HEADLESS=1 target/debug/mundus-engine &

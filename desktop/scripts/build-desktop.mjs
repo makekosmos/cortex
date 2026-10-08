@@ -272,7 +272,7 @@ async function main() {
   if (dryRun) {
     log("Dry-run plan:");
     log(
-      `  build: ${platform === "mac" ? "unsigned Mundus-<ver>.dmg via hdiutil" : "NSIS installer via makensis"}`,
+      `  build: ${platform === "mac" ? "unsigned Mundus-<ver>.dmg via dmgbuild" : "NSIS installer via makensis"}`,
     );
     if (!bom) {
       log("  local build: manifest.json (+ legacy yml); no BOM, receipt, or publish");

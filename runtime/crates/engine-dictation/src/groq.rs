@@ -421,7 +421,7 @@ mod tests {
             })
             .await;
 
-        let client = reqwest::Client::new();
+        let client = engine_base::http::client();
         let url = format!("{}/openai/v1/audio/transcriptions", server.base_url());
         let part = reqwest::multipart::Part::bytes(b"fake".to_vec())
             .file_name("audio.wav")
@@ -463,7 +463,7 @@ mod tests {
             })
             .await;
 
-        let client = reqwest::Client::new();
+        let client = engine_base::http::client();
         let url = format!("{}/openai/v1/audio/transcriptions", server.base_url());
         let part = reqwest::multipart::Part::bytes(b"x".to_vec())
             .file_name("audio.wav")
@@ -504,7 +504,7 @@ mod tests {
             })
             .await;
 
-        let client = reqwest::Client::new();
+        let client = engine_base::http::client();
         let url = format!("{}/openai/v1/audio/transcriptions", server.base_url());
         let out = transcribe(
             &client,

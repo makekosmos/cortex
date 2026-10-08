@@ -94,14 +94,25 @@ pub struct ManagerApp {
     pub about_diag_open: bool,
     pub data_storage_open: bool,
     pub confirm: Option<Confirm>,
+    /// KOS-355 update overlay: «Позже» hides it until the app restarts.
+    pub update_snoozed: bool,
+    /// Last resolved overlay state — `Failed` is gated on the overlay
+    /// already being open when the Engine reports `error`.
+    pub update_overlay: crate::update_overlay::OverlayState,
+    /// Frame clock for the logo bounce/metal flow; reset on Hidden→visible.
+    pub update_anim_start: Instant,
+    /// Decoded WebP frame ring for the liquid-metal mark.
+    /// `None` → plain-icon fallback.
+    pub update_logo: Option<std::sync::Arc<crate::logo_anim::LogoFrames>>,
     /// Company whose key modal is open.
     pub key_editor: Option<String>,
     /// Key value that passed verification in the open modal.
     pub key_checked: Option<String>,
     /// packages.disclosure payload waiting for install consent.
     pub disclosure: Option<Value>,
-    /// package_id the disclosure was fetched for — install proceeds on consent.
-    pub pending_install: Option<String>,
+    /// (package_id, version) the disclosure was fetched for — install
+    /// proceeds on consent. `packages.install` requires both.
+    pub pending_install: Option<(String, String)>,
     /// Store listing shown in the detail overlay.
     pub detail: Option<Value>,
     /// Usage view state: column sort, system-process filter, virtual list scroll.
@@ -115,8 +126,12 @@ pub struct ManagerApp {
     #[cfg(test)]
     pub usage_builds: usize,
     pub(crate) action_busy: bool,
+    /// Lerped progress-fill percents on the Модели page — polled targets
+    /// land once a second, renders smooth the fill between them.
+    pub model_fill: HashMap<String, f32>,
     worker_dead: bool,
     next_updater_poll: Instant,
+    next_models_poll: Instant,
     next_store_poll: Instant,
     next_sync_poll: Instant,
     next_about_poll: Instant,
@@ -165,6 +180,10 @@ impl ManagerApp {
             about_diag_open: false,
             data_storage_open: false,
             confirm: None,
+            update_snoozed: false,
+            update_overlay: crate::update_overlay::OverlayState::Hidden,
+            update_anim_start: Instant::now(),
+            update_logo: None,
             key_editor: None,
             key_checked: None,
             disclosure: None,
@@ -177,8 +196,10 @@ impl ManagerApp {
             #[cfg(test)]
             usage_builds: 0,
             action_busy: false,
+            model_fill: HashMap::new(),
             worker_dead: false,
             next_updater_poll: Instant::now(),
+            next_models_poll: Instant::now(),
             next_store_poll: Instant::now(),
             next_sync_poll: Instant::now(),
             next_about_poll: Instant::now(),
@@ -228,22 +249,29 @@ impl ManagerApp {
                     && matches!(self.slots.get(slot), Some(Slot::Ready(_)))))
     }
 
-    /// Queue an Engine op into a named slot; the reply overwrites it.
-    pub fn call(&mut self, slot: impl Into<String>, op: &'static str, params: Value) {
-        let slot = slot.into();
+    /// Hand a command to the worker; a dead worker raises the restart banner.
+    fn send(&mut self, command: Command) -> bool {
+        let sent = self.worker.commands.send(command).is_ok();
+        if !sent {
+            self.worker_dead = true;
+            self.error = Some("Соединение с Engine завершено. Перезапустите приложение.".into());
+        }
+        sent
+    }
+
+    /// Mark `slot` Loading and queue its command, unless navigation can reuse
+    /// the snapshot already there.
+    fn load_slot(&mut self, slot: String, command: impl FnOnce(String) -> Command) {
         if self.reuse_navigation_slot(&slot) {
             return;
         }
         self.slots.insert(slot.clone(), Slot::Loading);
-        if self
-            .worker
-            .commands
-            .send(Command::Rpc { slot, op, params })
-            .is_err()
-        {
-            self.worker_dead = true;
-            self.error = Some("Соединение с Engine завершено. Перезапустите приложение.".into());
-        }
+        self.send(command(slot));
+    }
+
+    /// Queue an Engine op into a named slot; the reply overwrites it.
+    pub fn call(&mut self, slot: impl Into<String>, op: &'static str, params: Value) {
+        self.load_slot(slot.into(), |slot| Command::Rpc { slot, op, params });
     }
 
     /// Rebuild the prepared usage rows from the current report slot. Called
@@ -265,38 +293,12 @@ impl ManagerApp {
     /// Queue the composite usage report (analytics + icon resolution) into a
     /// named slot; the reply overwrites it.
     pub fn usage_report(&mut self, slot: impl Into<String>) {
-        let slot = slot.into();
-        if self.reuse_navigation_slot(&slot) {
-            return;
-        }
-        self.slots.insert(slot.clone(), Slot::Loading);
-        if self
-            .worker
-            .commands
-            .send(Command::UsageReport { slot })
-            .is_err()
-        {
-            self.worker_dead = true;
-            self.error = Some("Соединение с Engine завершено. Перезапустите приложение.".into());
-        }
+        self.load_slot(slot.into(), |slot| Command::UsageReport { slot });
     }
 
     /// Queue a GET /v1/<path> status surface into a named slot.
     pub fn status(&mut self, slot: impl Into<String>, path: &'static str) {
-        let slot = slot.into();
-        if self.reuse_navigation_slot(&slot) {
-            return;
-        }
-        self.slots.insert(slot.clone(), Slot::Loading);
-        if self
-            .worker
-            .commands
-            .send(Command::Get { slot, path })
-            .is_err()
-        {
-            self.worker_dead = true;
-            self.error = Some("Соединение с Engine завершено. Перезапустите приложение.".into());
-        }
+        self.load_slot(slot.into(), |slot| Command::Get { slot, path });
     }
 
     /// Background status check: keep the current value visible while fetching.
@@ -304,18 +306,12 @@ impl ManagerApp {
         if !self.background_slots.insert(slot.into()) {
             return;
         }
-        if self
-            .worker
-            .commands
-            .send(Command::Get {
-                slot: slot.into(),
-                path,
-            })
-            .is_err()
-        {
-            self.background_slots.remove(slot);
-            self.worker_dead = true;
-            self.error = Some("Соединение с Engine завершено. Перезапустите приложение.".into());
+        let slot = slot.to_string();
+        if !self.send(Command::Get {
+            slot: slot.clone(),
+            path,
+        }) {
+            self.background_slots.remove(&slot);
         }
     }
 
@@ -325,15 +321,7 @@ impl ManagerApp {
     pub fn refresh(&mut self, slot: impl Into<String>, op: &'static str, params: Value) {
         let slot = slot.into();
         self.background_slots.insert(slot.clone());
-        if self
-            .worker
-            .commands
-            .send(Command::Rpc { slot, op, params })
-            .is_err()
-        {
-            self.worker_dead = true;
-            self.error = Some("Соединение с Engine завершено. Перезапустите приложение.".into());
-        }
+        self.send(Command::Rpc { slot, op, params });
     }
 
     /// Mutation op: on success reloads the current view (Vue Manager does the

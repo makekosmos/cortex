@@ -17,7 +17,6 @@ pub(super) async fn dispatch_special(
         if !request.client.desktop_authorized {
             LocalResponse::err("desktop authority denied")
         } else {
-            let snapshots = snapshots;
             let owner = format!("desktop-connection-{connection_id}");
             match operation.as_str() {
                 "package.snapshot.reserve" => {

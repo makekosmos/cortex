@@ -115,6 +115,7 @@ fn take_pipe_connect_barrier() -> Option<PipeConnectBarrierParts> {
         .take()
 }
 
+#[cfg(test)]
 fn advance_launch_state(state: LaunchState) -> Option<LaunchState> {
     match state {
         LaunchState::JobConfigured => Some(LaunchState::Assigned),

@@ -210,12 +210,6 @@ mod imp {
         Ok(pids)
     }
 
-    /// True while a process whose image name is one of `names` runs from
-    /// exactly `path`.
-    pub fn is_running_at(path: &Path, names: &[&str]) -> Result<bool, String> {
-        Ok(!pids_at(path, names)?.is_empty())
-    }
-
     fn normalize(path: &Path) -> String {
         // canonicalize resolves junctions/short names; keep a plain
         // absolute fallback for paths that no longer exist on disk.
@@ -408,9 +402,6 @@ mod imp {
 mod imp {
     use super::*;
 
-    pub fn is_running_at(_path: &Path, _names: &[&str]) -> Result<bool, String> {
-        Ok(false)
-    }
     pub fn kill_by_names(_names: &[&str]) -> Result<KillReport, String> {
         Ok(KillReport::default())
     }

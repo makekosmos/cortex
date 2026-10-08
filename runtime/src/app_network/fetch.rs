@@ -73,7 +73,7 @@ async fn request_once(
     spec: &FetchSpec<'_>,
 ) -> Result<reqwest::Response, &'static str> {
     let host = url.host_str().ok_or("invalid-request")?;
-    let client = reqwest::Client::builder()
+    let client = engine_base::http::client_builder()
         .redirect(reqwest::redirect::Policy::none())
         .timeout(spec.timeout)
         .connect_timeout(Duration::from_secs(10))

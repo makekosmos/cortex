@@ -79,6 +79,9 @@ struct State {
     /// (Windows шлёт повторы при удержании, нам нужен только первый down +
     /// один up).
     pressed: bool,
+    /// Timestamp последнего Esc-down — два нажатия подряд за
+    /// ESC_DOUBLE_MS = отмена диктовки на всех платформах.
+    last_esc_down: Option<std::time::Instant>,
     /// Capture mode — Settings UI просит hook ловить СЛЕДУЮЩЕЕ non-modifier
     /// нажатие и emit'ить полный accelerator (vk + текущие modifiers).
     /// Это позволяет назначить системные shortcut'ы вроде Win+H — иначе
@@ -97,6 +100,7 @@ fn state_mtx() -> &'static Mutex<State> {
             sender: None,
             mode: HookMode::Toggle,
             pressed: false,
+            last_esc_down: None,
             capture_active: false,
         })
     })
@@ -116,6 +120,10 @@ unsafe extern "system" fn keyboard_proc(code: i32, wparam: WPARAM, lparam: LPARA
                 if handle_capture(info.vkCode, is_down) {
                     return LRESULT(1);
                 }
+                // Дабл-Esc отменяет запись — наблюдаем, не перехватываем.
+                if is_down && handle_escape_tap(info.vkCode) {
+                    // fallthrough: Esc пропускаем дальше всегда
+                }
                 if handle_event(info.vkCode, is_down) {
                     return LRESULT(1);
                 }
@@ -123,6 +131,39 @@ unsafe extern "system" fn keyboard_proc(code: i32, wparam: WPARAM, lparam: LPARA
         }
     }
     CallNextHookEx(None, code, wparam, lparam)
+}
+
+const VK_ESC: u32 = 0x1B;
+const ESC_DOUBLE_MS: u128 = 500;
+
+/// Дабл-Esc → `dictation_escape_cancel` (отмена диктовки на любом экране).
+/// Наблюдает, но не перехватывает: возвращаемое значение — только "был ли
+/// даблтап", клавиша всегда доезжает до приложения.
+fn handle_escape_tap(vk: u32) -> bool {
+    if vk != VK_ESC {
+        return false;
+    }
+    let mut guard = match state_mtx().lock() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    if guard.capture_active {
+        return false; // в capture Esc — отмена захвата (handle_capture уже съел)
+    }
+    let now = std::time::Instant::now();
+    let double = guard
+        .last_esc_down
+        .is_some_and(|t| now.duration_since(t).as_millis() < ESC_DOUBLE_MS);
+    guard.last_esc_down = Some(now);
+    let sender = guard.sender.clone();
+    drop(guard);
+    if double {
+        if let Some(tx) = sender {
+            let _ = tx.send(json!({ "event": "dictation_escape_cancel" }));
+        }
+        return true;
+    }
+    false
 }
 
 /// Returns `true` если capture mode активен И событие было captured/intercepted.

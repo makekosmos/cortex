@@ -233,6 +233,19 @@ export function nextBuildVersion({ run = defaultRun, currentVersion, repo = RELE
   );
 }
 
+// The previous published release's tag and source commit — the same baseline
+// planRelease diffs against. publish-release.mjs uses it to list the commits
+// a new release ships. Throws when no stable release has ever been published.
+export function previousReleaseBaseline({ run = defaultRun, repo = RELEASE_REPO } = {}) {
+  const baseline = latestPublishedRelease(listReleases(run, repo));
+  if (!baseline)
+    throw new Error(
+      `${repo} has no published stable release to diff against — ` +
+        `publish the first one manually (publish-release.mjs)`,
+    );
+  return { tag: baseline.tag, commit: baselineCommit(run, repo, baseline) };
+}
+
 export function planRelease({ run = defaultRun, currentVersion, repo = RELEASE_REPO } = {}) {
   const baseline = latestPublishedRelease(listReleases(run, repo));
   // No baseline means the repo has never seen a release — the planner must

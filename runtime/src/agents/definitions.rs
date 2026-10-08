@@ -751,6 +751,7 @@ impl AgentsService {
             .ok_or_else(|| AgentsError::SessionNotFound)
     }
 
+    #[cfg(test)]
     pub(crate) async fn create_session(
         self: &Arc<Self>,
         input: Value,
@@ -1552,7 +1553,7 @@ impl AgentsService {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
-            .map_err(|e| AgentsError::EditorOpen(e))?;
+            .map_err(AgentsError::EditorOpen)?;
         Ok(json!(true))
     }
 

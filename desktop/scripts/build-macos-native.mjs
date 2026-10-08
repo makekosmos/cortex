@@ -60,6 +60,11 @@ const helpers = [
     sources: ["get-selected-text.swift"],
     frameworks: ["Foundation", "ApplicationServices", "AppKit"],
   },
+  {
+    out: "paste-text",
+    sources: ["paste-text.swift"],
+    frameworks: ["AppKit", "ApplicationServices", "CoreGraphics"],
+  },
 ];
 
 for (const helper of helpers) {

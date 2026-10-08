@@ -136,7 +136,6 @@ pub(super) async fn download_file(
         let lower_content_type = content_type.to_ascii_lowercase();
         if lower_content_type.contains("text/html")
             || lower_content_type.contains("application/json")
-            || lower_content_type.starts_with("text/")
         {
             return Err(LocalModelsError::Download(format!(
                 "{request_url}: expected binary download, got {content_type}"
@@ -263,7 +262,7 @@ mod tests {
 
         let tmp = tempfile::TempDir::new().expect("tempdir");
         let path = tmp.path().join("model.bin");
-        let client = Client::new();
+        let client = engine_base::http::client();
         let mut events = Vec::new();
 
         download_file(
@@ -312,7 +311,7 @@ mod tests {
 
         let tmp = tempfile::TempDir::new().expect("tempdir");
         let path = tmp.path().join("model.bin");
-        let client = Client::new();
+        let client = engine_base::http::client();
         let err = download_file(
             &client,
             &server.url("/model.bin"),
@@ -346,7 +345,7 @@ mod tests {
         let path = tmp.path().join("oversized.bin");
 
         let error = download_file(
-            &Client::new(),
+            &engine_base::http::client(),
             &server.url("/oversized.bin"),
             &path,
             "model",
@@ -380,7 +379,7 @@ mod tests {
         let tmp = tempfile::TempDir::new().expect("tempdir");
         let path = tmp.path().join("model.bin");
         fs::write(path.with_extension("part"), b"hello ").expect("part file");
-        let client = Client::new();
+        let client = engine_base::http::client();
         let mut events = Vec::new();
 
         download_file(

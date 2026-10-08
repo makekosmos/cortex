@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, writeFile, chmod, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, chmod, rm, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -43,7 +43,11 @@ test("stageMacosApp lays out Engine + Manager + helpers for lookup", async () =>
       existsSync(path.join(appPath, "Contents", "MacOS", "native", "macos", "hotkey-hold-monitor")),
       true,
     );
-    assert.equal(existsSync(path.join(appPath, "Contents", "Info.plist")), true);
+    const plist = await readFile(path.join(appPath, "Contents", "Info.plist"), "utf8");
+    assert.match(plist, /<key>CFBundleIconFile<\/key>\s*<string>mundus<\/string>/);
+    if (process.platform === "darwin") {
+      assert.equal(existsSync(path.join(appPath, "Contents", "Resources", "mundus.icns")), true);
+    }
     if (createdHelper) await rm(helper, { force: true });
   } finally {
     if (previous === undefined) delete process.env.CARGO_TARGET_DIR;
@@ -59,4 +63,14 @@ test("createUnsignedDmg refuses non-darwin hosts", async () => {
     () => createUnsignedDmg({ appPath: "/tmp/x.app", dmgPath: "/tmp/x.dmg", volumeName: "x" }),
     /requires macOS/,
   );
+});
+
+test("dmgbuild settings carry the drag-to-Applications layout", async () => {
+  const source = await readFile(path.join(import.meta.dirname, "package-macos-dmg.mjs"), "utf8");
+  // Applications symlink, volume icon, and hidpi background are what turn the
+  // raw image into the classic install window — guard them in the settings.
+  assert.match(source, /"symlinks":\s*\{\s*"Applications":\s*"\/Applications"\s*\}/);
+  assert.match(source, /"icon":.*mundus\.icns/);
+  assert.match(source, /"background":/);
+  assert.match(source, /"icon_locations":\s*\{[^}]*"Applications":\s*\(495,\s*195\)/);
 });

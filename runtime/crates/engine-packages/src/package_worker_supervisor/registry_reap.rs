@@ -215,6 +215,7 @@ impl TaskRegistry {
         .await
     }
 
+    #[cfg(test)]
     pub(super) async fn cancel_generation(
         &self,
         package: &str,

@@ -46,15 +46,9 @@ wildcards = "warn"
 highlight = "all"
 skip = [
     # --- windows crate chains -------------------------------------------------
-    # Multiple generations of the windows/-sys/-targets family are pulled in by
+    # Multiple generations of windows-sys/-targets and windows_* are pulled in by
     # different upstream deps (iroh/netwatch, netdev, gpui, wmi, etc.). Not
     # controllable until the upstreams converge.
-    { name = "windows" },
-    { name = "windows-core" },
-    { name = "windows-implement" },
-    { name = "windows-interface" },
-    { name = "windows-result" },
-    { name = "windows-strings" },
     { name = "windows-sys" },
     { name = "windows-targets" },
     { name = "windows_aarch64_msvc" },
@@ -62,29 +56,17 @@ skip = [
     { name = "windows_x86_64_msvc" },
 
     # --- crypto ecosystems ----------------------------------------------------
-    # RustCrypto (aead/cipher/digest/...) and dalek crates exist in two major
-    # generations because ed25519-dalek 3.0.0-rc, hpke 0.14, and the iroh stack
-    # pin different majors.
+    # RustCrypto (aead/cipher/digest/...) crates exist in two major generations
+    # because hpke 0.14 and the iroh stack pin different majors.
     { name = "aead" },
     { name = "block-buffer" },
     { name = "cipher" },
-    { name = "const-oid" },
     { name = "crypto-common" },
-    { name = "curve25519-dalek" },
-    { name = "der" },
     { name = "digest" },
-    { name = "ed25519" },
-    { name = "ed25519-dalek" },
     { name = "hmac" },
     { name = "inout" },
-    { name = "pkcs8" },
-    { name = "rustls" },
-    { name = "rustls-webpki" },
     { name = "security-framework" },
     { name = "sha2" },
-    { name = "signature" },
-    { name = "spki" },
-    { name = "tokio-rustls" },
     { name = "universal-hash" },
 
     # --- rand family ----------------------------------------------------------
@@ -94,14 +76,11 @@ skip = [
     { name = "rand_core" },
     { name = "getrandom" },
 
-    # --- http/hyper ecosystem -------------------------------------------------
-    # reqwest/hyper/iroh span the 0.14->1.x and pre-1.0 generations.
-    { name = "h2" },
-    { name = "http" },
-    { name = "http-body" },
-    { name = "hyper" },
-    { name = "reqwest" },
+    # --- http / TLS roots -----------------------------------------------------
     { name = "base64" },
+    # hickory-resolver 0.25 (engine-dictation) pins webpki-roots 0.26 while the
+    # iroh stack uses 1.x.
+    { name = "webpki-roots" },
 
     # --- platform / misc transitive --------------------------------------------
     # Split mostly by upstream majors we do not control (netdev/netlink for
@@ -112,13 +91,10 @@ skip = [
     { name = "hashbrown" },
     { name = "jni" },
     { name = "jni-sys" },
-    { name = "mio" },
     { name = "netdev" },
     { name = "netlink-packet-core" },
     { name = "netlink-packet-route" },
     { name = "netlink-sys" },
-    { name = "quick-error" },
-    { name = "socket2" },
     { name = "spin" },
     { name = "syn" },
     { name = "thiserror" },

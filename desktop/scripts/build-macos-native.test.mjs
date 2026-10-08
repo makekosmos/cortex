@@ -30,6 +30,7 @@ test("every Swift helper the build script compiles is in the tree", async () => 
     "speech-recognizer.swift",
     "input-monitoring-request.swift",
     "get-selected-text.swift",
+    "paste-text.swift",
   ]);
   for (const name of sources)
     assert.equal(existsSync(path.join(repoRoot, "runtime", "native", "macos", name)), true, name);

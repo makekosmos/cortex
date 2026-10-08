@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -60,6 +61,7 @@ const IGNORED = new Set([
   "build",
   "coverage",
   "dist",
+  "dist-electron",
   "node_modules",
   "release",
   "target",
@@ -72,7 +74,8 @@ const IGNORED = new Set([
 async function collect(dir, files = []) {
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     if (entry.isDirectory() && !IGNORED.has(entry.name)) {
-      await collect(path.join(dir, entry.name), files);
+      const child = path.join(dir, entry.name);
+      if (!existsSync(path.join(child, ".git"))) await collect(child, files);
     } else if (entry.isFile() && SOURCE_EXTENSIONS.has(path.extname(entry.name))) {
       files.push(path.join(dir, entry.name));
     }

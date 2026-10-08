@@ -295,7 +295,6 @@ impl EngineApiServer {
             }
             let task_id = connections.next_task.fetch_add(1, Ordering::Relaxed);
             let task_shutdown = connections.clone();
-            let permit = Arc::new(Mutex::new(Some(permit)));
             let (start_sender, start_receiver) = oneshot::channel();
             connections
                 .tasks
@@ -304,12 +303,11 @@ impl EngineApiServer {
                 .insert(
                     task_id,
                     HttpConnectionSlot::Reserved {
-                        permit: permit.clone(),
                         start: start_sender,
                     },
                 );
             let task = tokio::spawn(async move {
-                let _permit = permit.lock().unwrap_or_else(|p| p.into_inner()).take();
+                let _permit = permit;
                 if start_receiver.await.is_err() {
                     return;
                 }

@@ -34,7 +34,7 @@ fn legacy_channel_file(platform: &str) -> Option<&'static str> {
 }
 
 pub(crate) fn build_client() -> Result<reqwest::Client, UpdaterError> {
-    reqwest::Client::builder()
+    engine_base::http::client_builder()
         .timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|error| UpdaterError::Network(error.to_string()))

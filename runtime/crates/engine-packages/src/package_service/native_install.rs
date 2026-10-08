@@ -245,20 +245,13 @@ impl PackageService {
             .ok_or(PackageError::NotFound)
     }
 
-    /// Launch the installed app.
+    /// Launch the installed app. The spawn path lives in
+    /// `native_apps::launch`: detached, no console window, and — on
+    /// Windows — the child gets explicit foreground rights so its window
+    /// opens on top instead of behind the Manager (KOS-354).
     pub fn open_native_app(&self, desc: &NativeAppDescriptor) -> Result<(), PackageError> {
         let executable = self.native_app_executable(desc)?;
-        #[cfg(windows)]
-        let mut command = {
-            use std::os::windows::process::CommandExt;
-            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-            let mut command = std::process::Command::new(&executable);
-            command.creation_flags(CREATE_NO_WINDOW);
-            command
-        };
-        #[cfg(not(windows))]
-        let mut command = std::process::Command::new(&executable);
-        command.spawn().map_err(|error| {
+        crate::native_apps::spawn_detached(&executable, &[]).map_err(|error| {
             tracing::warn!(
                 target: "native_apps",
                 executable = %executable.display(),

@@ -4,7 +4,7 @@ use serde_json::{json, Value};
 use std::sync::mpsc::{Receiver, Sender};
 
 use mundus_gpui_kit::engine::Engine;
-use mundus_gpui_kit::engine_error::EngineError;
+use mundus_gpui_kit::engine_error::{EngineError, ErrorKind};
 
 pub enum Command {
     /// POST /v1/rpc — `slot` routes the reply into `ManagerApp::slots`.
@@ -69,8 +69,28 @@ impl Worker {
 /// Engine failures reach the UI as `message()` text; the raw wire code in
 /// `detail` is what a support session needs, so it goes to the app log
 /// (KOS-298 — KOS-295 could not recover why a write was rejected).
+///
+/// KOS-353: Engine wire errors look like `area.op: <class>` — note the space
+/// after the colon. The kit's `from_engine_code` exact-matches the class
+/// segment, so the padded form lands in `Unknown` and the user saw only the
+/// generic "неизвестная ошибка" banner. Re-classify the trimmed tail first;
+/// when the code still maps to no known class, show the Engine's own error
+/// text instead of the generic line.
 fn engine_error_message(error: EngineError) -> String {
     tracing::warn!(error = %error, "engine call failed");
+    if error.kind == ErrorKind::Unknown {
+        if let Some(tail) = error.detail.rsplit(':').next().map(str::trim) {
+            let kind = ErrorKind::from_engine_code(tail);
+            if kind != ErrorKind::Unknown {
+                return EngineError {
+                    kind,
+                    detail: error.detail.clone(),
+                }
+                .message();
+            }
+        }
+        return format!("Engine сообщил об ошибке: {}", error.detail);
+    }
     error.message()
 }
 
@@ -228,5 +248,28 @@ mod tests {
             message("launch-failed"),
             "Не удалось открыть приложение. Повторите попытку."
         );
+    }
+
+    /// KOS-353: `packages.*` wire errors are `op: <class>` — the padded
+    /// colon defeats the kit's exact-match classification, so every
+    /// set_enabled/uninstall failure surfaced as "неизвестная ошибка".
+    /// The banner must name the real class, or the Engine's own text.
+    #[test]
+    fn engine_error_message_recovers_padded_class_and_shows_real_text() {
+        let message =
+            engine_error_message(EngineError::engine("packages.set_enabled: invalid-request"));
+        assert_eq!(
+            message,
+            "Engine отклонил операцию: данные не прошли проверку. \
+             Обновите Mundus и сообщите о проблеме."
+        );
+
+        let message =
+            engine_error_message(EngineError::engine("packages.uninstall: store-rejected"));
+        assert!(
+            message.contains("packages.uninstall: store-rejected"),
+            "{message}"
+        );
+        assert!(!message.contains("неизвестн"), "{message}");
     }
 }

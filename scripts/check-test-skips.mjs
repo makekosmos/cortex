@@ -5,7 +5,7 @@
 //     after link/symlink setup or a printed skip/NOT_RUN notice — the classic
 //     "test passed without testing" shape audited in KOS-282.
 // Runs on every hook invocation like check:brand — it is a fast text scan.
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -95,7 +95,9 @@ export function rustFiles(root) {
   const walk = (dir) => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       if (entry.isDirectory()) {
-        if (!SKIP_DIRS.has(entry.name)) walk(join(dir, entry.name));
+        const child = join(dir, entry.name);
+        // Nested repositories/worktrees own their own gates (.git may be a file).
+        if (!SKIP_DIRS.has(entry.name) && !existsSync(join(child, ".git"))) walk(child);
       } else if (entry.name.endsWith(".rs")) files.push(join(dir, entry.name));
     }
   };

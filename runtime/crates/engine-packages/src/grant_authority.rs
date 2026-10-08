@@ -62,7 +62,6 @@ struct Grant {
     exact_file_identity: Option<RootIdentity>,
     root: RootHandle,
     identity: RootIdentity,
-    persistent_id: Option<String>,
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GrantError {

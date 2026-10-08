@@ -54,6 +54,10 @@ const ICONS: &[(&str, &[u8])] = &[
         "icons/providers/nvidia.svg",
         include_bytes!("../assets/icons/providers/nvidia.svg"),
     ),
+    (
+        "icons/providers/moondream.webp",
+        include_bytes!("../assets/icons/providers/moondream.webp"),
+    ),
     // Product mark — the white tray glyph (f35eebb4, formerly
     // desktop/build/tray.svg).
     (
@@ -92,6 +96,10 @@ mod tests {
     fn device_and_existing_icons_are_embedded() {
         for (name, _) in ICONS {
             let bytes = Assets.load(name).unwrap().unwrap();
+            if name.ends_with(".webp") {
+                // Raster provider marks (moondream) aren't SVGs.
+                continue;
+            }
             let svg = std::str::from_utf8(&bytes).unwrap();
             assert!(
                 svg.contains("viewBox=\"0 0 24 24\"")

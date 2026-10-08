@@ -58,7 +58,7 @@ fn json_session_injection_preserves_worker_body_and_hides_unmapped_fields() {
         .unwrap()
         .unwrap();
     let request = apply_secret(
-        reqwest::Client::new()
+        engine_base::http::client()
             .post("https://example.com")
             .body(bytes),
         &secret,
@@ -86,7 +86,11 @@ fn json_session_injection_preserves_worker_body_and_hides_unmapped_fields() {
         secret: r#"{"uid":"bad\r\nheader","accessToken":"a"}"#,
         ..missing
     };
-    assert!(apply_secret(reqwest::Client::new().post("https://example.com"), &invalid).is_err());
+    assert!(apply_secret(
+        engine_base::http::client().post("https://example.com"),
+        &invalid
+    )
+    .is_err());
 }
 
 #[test]
@@ -163,7 +167,7 @@ async fn network_response_http_limits_reject_oversized_content() {
 
 #[test]
 fn secret_injection_is_manifest_bound_and_filters_cookies() {
-    let client = reqwest::Client::new();
+    let client = engine_base::http::client();
     let injection = SecretInjection::Header {
         origins: vec!["https://example.com/".into()],
         name: "Authorization".into(),

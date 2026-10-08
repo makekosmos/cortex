@@ -1,6 +1,14 @@
 target/
 .tmp/
 
+# Historical local worktrees and Electron outputs are not current source.
+.claude/
+worktrees/
+cortex/
+host/
+manager/
+dist-electron/
+
 # Local dependency, build, test, and agent output.
 node_modules/
 dist/

@@ -111,6 +111,7 @@ pub(crate) async fn stop_owned_child_gracefully_with_deadline(
     }
 }
 
+#[cfg(test)]
 pub(crate) async fn stop_owned_child_with_deadline(child: &mut Child, deadline: Duration) {
     let exited = tokio::time::timeout(deadline, child.wait()).await;
     if exited.is_err() {

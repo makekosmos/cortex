@@ -57,6 +57,8 @@ fn about_update_action_tracks_state_and_blocks_duplicate_requests(cx: &mut TestA
         manager.update(cx, |app, cx| {
             app.view = View::About;
             app.action_busy = false;
+            // The KOS-355 overlay otherwise covers the card on `available`.
+            app.update_snoozed = true;
             app.slots.insert(
                 "upd.mundus".into(),
                 Slot::Ready(json!({

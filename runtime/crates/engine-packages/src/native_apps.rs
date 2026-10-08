@@ -12,7 +12,7 @@
 
 use std::collections::HashSet;
 use std::fs;
-use std::io::{self, Read};
+use std::io::{self, Read, Seek};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -128,7 +128,7 @@ fn valid_record_executable(value: &str) -> bool {
         && !value.contains('\\')
         && !value.contains('\0')
         && !value.contains('%')
-        && value.to_ascii_lowercase().ends_with(".exe")
+        && executable_suffix_ok(value)
         && value.split('/').all(|part| {
             !part.is_empty()
                 && part != "."
@@ -138,6 +138,19 @@ fn valid_record_executable(value: &str) -> bool {
                 && !part.ends_with(' ')
                 && !is_reserved_name(part)
         })
+}
+
+/// Record-hygiene suffix rule for the installable executable: Windows
+/// installs always land a `*.exe`; unix targets install `.app` bundle
+/// members or a bare binary, so only the segment rules above apply.
+#[cfg(windows)]
+fn executable_suffix_ok(value: &str) -> bool {
+    value.to_ascii_lowercase().ends_with(".exe")
+}
+
+#[cfg(not(windows))]
+fn executable_suffix_ok(_value: &str) -> bool {
+    true
 }
 
 /// `%LOCALAPPDATA%\Mundus\Apps` — the single product-local root every native
@@ -306,6 +319,7 @@ impl NativeAppStore {
 pub mod releases;
 
 include!("native_apps/install.rs");
+include!("native_apps/launch.rs");
 include!("native_apps/shortcuts.rs");
 
 impl NativeAppStore {
@@ -358,6 +372,10 @@ impl NativeAppStore {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "native_apps/launch_tests.rs"]
+mod launch_tests;
 
 #[cfg(test)]
 #[path = "native_apps/tests.rs"]

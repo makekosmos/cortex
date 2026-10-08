@@ -179,8 +179,8 @@ fn target_switch_falls_back_without_sending_input() {
 #[cfg(target_os = "macos")]
 #[test]
 fn failed_paste_falls_back_to_clipboard() {
-    // The macOS inject path has no foreground restore: a failed Cmd+V is
-    // the only fallback, and the text stays on the clipboard.
+    // macOS reactivates the captured target app before Cmd+V; a paste
+    // failure is the only fallback, and the text stays on the clipboard.
     let mut adapter = FakeAdapter {
         paste_fails: true,
         ..Default::default()

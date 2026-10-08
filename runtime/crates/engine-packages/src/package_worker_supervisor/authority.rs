@@ -14,7 +14,6 @@ pub(super) struct SupervisorInner {
     pub(super) startups: Arc<TaskRegistry>,
     pub(super) lifecycles: Arc<TaskRegistry>,
     pub(super) api_major: u32,
-    pub(super) ark: Option<Arc<ArkHost>>,
     pub(super) ark_executor: Arc<dyn ArkRequestExecutor>,
     pub(super) typed_launches: Mutex<HashMap<(String, String), TypedLaunch>>,
     pub(super) store: Mutex<Option<Arc<PackageStore>>>,
@@ -164,7 +163,6 @@ impl PackageWorkerSupervisor {
     }
     fn build(
         api_major: u32,
-        ark: Option<Arc<ArkHost>>,
         ark_executor: Arc<dyn ArkRequestExecutor>,
         restart_delays: Vec<Duration>,
     ) -> Self {
@@ -180,7 +178,6 @@ impl PackageWorkerSupervisor {
                 startups: TaskRegistry::owned(256),
                 lifecycles: TaskRegistry::owned(256),
                 api_major,
-                ark,
                 ark_executor,
                 typed_launches: Mutex::new(HashMap::new()),
                 store: Mutex::new(None),
@@ -198,12 +195,7 @@ impl PackageWorkerSupervisor {
         }
     }
     pub fn new(api_major: u32) -> Self {
-        Self::build(
-            api_major,
-            None,
-            Arc::new(UnavailableArk),
-            RESTART_DELAYS.to_vec(),
-        )
+        Self::build(api_major, Arc::new(UnavailableArk), RESTART_DELAYS.to_vec())
     }
     /// Same as [`Self::new`], with a caller-provided retry backoff schedule.
     /// Integration tests inject short delays so exhaust-retry cases finish
@@ -211,14 +203,14 @@ impl PackageWorkerSupervisor {
     /// `package-worker-fixture` refuses to compile into a release build.
     #[cfg(any(test, feature = "package-worker-fixture"))]
     pub fn with_restart_delays(api_major: u32, restart_delays: Vec<Duration>) -> Self {
-        Self::build(api_major, None, Arc::new(UnavailableArk), restart_delays)
+        Self::build(api_major, Arc::new(UnavailableArk), restart_delays)
     }
     pub fn with_ark(api_major: u32, ark: Arc<ArkHost>) -> Self {
         let executor: Arc<dyn ArkRequestExecutor> = ark.clone();
-        Self::build(api_major, Some(ark), executor, RESTART_DELAYS.to_vec())
+        Self::build(api_major, executor, RESTART_DELAYS.to_vec())
     }
     pub fn with_ark_executor(api_major: u32, executor: Arc<dyn ArkRequestExecutor>) -> Self {
-        Self::build(api_major, None, executor, RESTART_DELAYS.to_vec())
+        Self::build(api_major, executor, RESTART_DELAYS.to_vec())
     }
 
     /// Binds the host-compiled typed grant to one authenticated launch.

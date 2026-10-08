@@ -20,10 +20,12 @@ impl TaskRegistry {
         ok
     }
 
+    #[cfg(test)]
     pub(super) async fn shutdown(&self) -> bool {
         self.shutdown_until(Instant::now() + STOP_DEADLINE).await
     }
 
+    #[cfg(test)]
     pub(super) async fn cancel_matching<F>(&self, predicate: F) -> bool
     where
         F: Fn(&TaskKey) -> bool,

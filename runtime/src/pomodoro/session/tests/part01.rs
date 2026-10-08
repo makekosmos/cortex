@@ -26,7 +26,7 @@ fn cfg_threshold(threshold: u32) -> SessionConfig {
 }
 
 fn expected_break(completed: u32, threshold: u32) -> Phase {
-    if completed % threshold == 0 {
+    if completed.is_multiple_of(threshold) {
         Phase::LongBreak
     } else {
         Phase::ShortBreak

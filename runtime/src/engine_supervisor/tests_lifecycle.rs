@@ -158,11 +158,24 @@ async fn deadline_force_kills_only_the_owned_child_handle() {
     };
     #[cfg(windows)]
     let mut command = {
-        let mut command = Command::new("cmd.exe");
-        command.args(["/D", "/C", "ping -n 11 127.0.0.1 >NUL"]);
+        // Run ping directly: through `cmd.exe` the force-kill only reaches the
+        // shell and the orphaned ping keeps inherited handles open, which
+        // nextest reports as a leak.
+        let mut command = Command::new("ping.exe");
+        command.args(["-n", "11", "127.0.0.1"]);
+        command.stdin(std::process::Stdio::null());
+        command.stdout(std::process::Stdio::null());
+        command.stderr(std::process::Stdio::null());
         command.creation_flags(CREATE_NO_WINDOW);
         command
     };
+    // Killing the owned `cmd.exe` leaves its `ping` grandchild running on
+    // purpose; it must not inherit nextest's stdout/stderr pipes, or the run
+    // reports the test as LEAK-FAIL while ping is still alive.
+    command
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
     let mut child = command.spawn().expect("controlled child");
     stop_owned_child_with_deadline(&mut child, Duration::from_millis(10)).await;
     assert!(child.try_wait().expect("child status").is_some());

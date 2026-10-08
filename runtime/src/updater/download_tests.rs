@@ -21,7 +21,7 @@ async fn downloads_fresh_file() {
     let dest = dir.path().join("installer.exe.part");
     let mut last = (0, 0);
     download_resumable(
-        &reqwest::Client::new(),
+        &engine_base::http::client(),
         &server.url("/installer.exe"),
         &dest,
         body.len() as u64,
@@ -50,7 +50,7 @@ async fn resumes_with_range() {
     let dest = dir.path().join("installer.exe.part");
     tokio::fs::write(&dest, &body[..split]).await.unwrap();
     download_resumable(
-        &reqwest::Client::new(),
+        &engine_base::http::client(),
         &server.url("/installer.exe"),
         &dest,
         body.len() as u64,
@@ -75,7 +75,7 @@ async fn ignored_range_restarts_partial_file() {
     let dest = dir.path().join("installer.exe.part");
     tokio::fs::write(&dest, b"partial").await.unwrap();
     download_resumable(
-        &reqwest::Client::new(),
+        &engine_base::http::client(),
         &server.url("/installer.exe"),
         &dest,
         body.len() as u64,
@@ -90,7 +90,7 @@ async fn ignored_range_restarts_partial_file() {
 async fn network_failure_preserves_error_kind() {
     let dir = tempfile::tempdir().unwrap();
     let error = download_resumable(
-        &reqwest::Client::new(),
+        &engine_base::http::client(),
         "http://127.0.0.1:1/installer.exe",
         &dir.path().join("installer.exe.part"),
         10,

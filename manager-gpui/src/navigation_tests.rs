@@ -12,15 +12,16 @@ fn sidebar_contains_only_task_oriented_top_level_pages() {
         pages,
         vec![
             View::About,
+            View::Appearance,
             View::Packages,
+            View::Connections,
             View::Data,
             View::Usage,
             View::Sync,
-            View::Connections,
-            View::Keys,
-            View::Settings,
-            View::Appearance,
             View::Browser,
+            View::Keys,
+            View::Models,
+            View::Settings,
             View::Dev
         ]
     );

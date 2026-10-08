@@ -169,7 +169,9 @@ fn package_row(p: &Value, cx: &mut Context<ManagerApp>) -> Div {
         "Отключён"
     };
     let rid = id.clone();
+    let rversion = vstr(p, "version");
     let uid = id.clone();
+    let uversion = vstr(p, "version");
     let mut r = entry_row(
         icon_file(vopt(p, "icon_path")),
         name.clone(),
@@ -189,7 +191,7 @@ fn package_row(p: &Value, cx: &mut Context<ManagerApp>) -> Div {
                 move |this, checked, _| {
                     this.action(
                         "packages.set_enabled",
-                        json!({"package_id": rid, "enabled": checked}),
+                        json!({"package_id": rid, "version": rversion, "enabled": checked}),
                     );
                 },
             )
@@ -220,7 +222,7 @@ fn package_row(p: &Value, cx: &mut Context<ManagerApp>) -> Div {
                 "Удалить пакет",
                 format!("Пакет «{name}» будет удалён из Engine."),
                 "packages.uninstall",
-                json!({"package_id": pid}),
+                json!({"package_id": pid, "version": uversion}),
                 cx,
             );
         })
@@ -258,6 +260,7 @@ fn render_catalog(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElem
             let mut r = entry_row(icon_url(vopt(item, "icon_url")), name.clone(), caption);
             r = r.child(badge(format!("v{ver}"), MUTED_FG()));
             let install_id = id.clone();
+            let install_version = ver.clone();
             let detail_item = item.clone();
             r = r
                 .child(
@@ -277,11 +280,11 @@ fn render_catalog(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElem
                 .child(btn_id(&format!("install-{id}"), "Установить", {
                     let pid = install_id;
                     cx.listener(move |this, _, _, cx| {
-                        this.pending_install = Some(pid.clone());
+                        this.pending_install = Some((pid.clone(), install_version.clone()));
                         this.call(
                             "disclosure",
                             "packages.disclosure",
-                            json!({"package_id": pid}),
+                            json!({"package_id": pid, "version": install_version}),
                         );
                         cx.notify();
                     })

@@ -18,7 +18,7 @@ use std::sync::Mutex;
 #[cfg(all(windows, any(test, feature = "package-worker-fixture")))]
 use std::sync::OnceLock;
 
-#[cfg_attr(not(windows), allow(dead_code))]
+#[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LaunchState {
     CreatedSuspended,

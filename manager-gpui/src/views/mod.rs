@@ -12,6 +12,7 @@ pub mod connections;
 pub mod data;
 pub mod dev;
 pub mod engine_settings;
+pub mod models;
 pub mod secrets;
 pub mod settings;
 pub mod store;
@@ -31,6 +32,7 @@ pub enum View {
     Browser,
     Connections,
     Keys,
+    Models,
     About,
     Dev,
 }
@@ -42,10 +44,11 @@ pub enum StoreTab {
 }
 
 pub const NAV_GROUPS: &[&[View]] = &[
-    &[View::About],
-    &[View::Packages, View::Data, View::Usage],
-    &[View::Sync, View::Connections, View::Keys],
-    &[View::Settings, View::Appearance, View::Browser, View::Dev],
+    &[View::About, View::Appearance],
+    &[View::Packages, View::Connections, View::Data, View::Usage],
+    &[View::Sync, View::Browser],
+    &[View::Keys, View::Models],
+    &[View::Settings, View::Dev],
 ];
 
 impl View {
@@ -61,6 +64,7 @@ impl View {
             View::Dev => "Разработчикам",
             View::Connections => "Интеграции",
             View::Keys => "Ключи",
+            View::Models => "Модели",
             View::About => "О приложении",
         }
     }
@@ -77,6 +81,7 @@ impl View {
             View::Browser => "browser",
             View::Connections => "connections",
             View::Keys => "keys",
+            View::Models => "models",
             View::About => "about",
             View::Dev => "dev",
         }
@@ -93,6 +98,7 @@ impl View {
             "browser" => View::Browser,
             "connections" => View::Connections,
             "keys" => View::Keys,
+            "models" => View::Models,
             "about" => View::About,
             "updates" => View::About,
             "dev" => View::Dev,
@@ -112,6 +118,7 @@ impl View {
             View::Dev => "icons/code.svg",
             View::Connections => "icons/connections.svg",
             View::Keys => "icons/key.svg",
+            View::Models => "icons/download.svg",
             View::About => "icons/help-circle.svg",
         };
         Icon::default().path(path)
@@ -131,6 +138,7 @@ pub fn load(view: View, app: &mut ManagerApp) {
         View::Dev => dev::load(app),
         View::Connections => connections::load(app),
         View::Keys => secrets::load(app),
+        View::Models => models::load(app),
         View::About => about::load(app),
     }
 }
@@ -152,6 +160,7 @@ pub fn render(
         View::Dev => dev::render(app, window, cx),
         View::Connections => connections::render(app, window, cx),
         View::Keys => secrets::render(app, window, cx),
+        View::Models => models::render(app, window, cx),
         View::About => about::render(app, window, cx),
     }
 }

@@ -14,7 +14,9 @@ pub struct NativeAppDescriptor {
     /// Release tag prefix before the bare semver: `v` or `gpui-v`.
     pub tag_prefix: &'static str,
     /// Asset filename stem: `<stem>-<version>-<target>.<ext>`, and the
-    /// executable inside the archive (`<stem>.exe` on Windows targets).
+    /// executable inside the archive (`<stem>.exe` on Windows targets,
+    /// `<name>.app/Contents/MacOS/<stem>` on darwin, bare `<stem>` on other
+    /// unix targets).
     pub asset_stem: &'static str,
     /// Dev-only env override naming an executable to launch instead of the
     /// installed one (`MUNDUS_AGENDA_EXECUTABLE` etc., via `brand::env`).
@@ -68,14 +70,16 @@ fn is_windows_target(target: &str) -> bool {
 }
 
 /// The host's app-release target triple, or `None` when this platform has no
-/// published asset. Install/uninstall stays Windows-only for now — the
-/// archive layout on unix targets is a tar.gz, which `install_archive` does
-/// not extract.
+/// published asset. Windows assets are zips; unix targets ship tar.gz, which
+/// `install_archive` extracts via the same safety rules. Only aarch64 macOS
+/// builds are published — x86_64 macOS and Linux get `None`.
 pub fn host_app_target() -> Option<&'static str> {
     if cfg!(windows) && cfg!(target_arch = "x86_64") {
         Some("x86_64-pc-windows-msvc")
     } else if cfg!(windows) && cfg!(target_arch = "aarch64") {
         Some("aarch64-pc-windows-msvc")
+    } else if cfg!(target_os = "macos") && cfg!(target_arch = "aarch64") {
+        Some("aarch64-apple-darwin")
     } else {
         None
     }
@@ -115,10 +119,15 @@ impl NativeAppDescriptor {
         )
     }
 
-    /// Executable path inside the archive for `target`.
+    /// Executable path inside the archive for `target`. Darwin tarballs ship
+    /// a signed `<Name>.app` bundle at the root — the launchable file is its
+    /// `Contents/MacOS` binary, and launching it directly still registers
+    /// the app with LaunchServices.
     pub fn executable(&self, target: &str) -> String {
         if is_windows_target(target) {
             format!("{}.exe", self.asset_stem)
+        } else if target.ends_with("-apple-darwin") {
+            format!("{}.app/Contents/MacOS/{}", self.name, self.asset_stem)
         } else {
             self.asset_stem.to_owned()
         }

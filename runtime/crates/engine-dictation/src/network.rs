@@ -133,7 +133,7 @@ pub fn build_client(
     //     быстро инкрементятся, пользователь видит прогресс.
     //   - timeout 30s — реальная Groq транскрипция ~1-3с, 30s даёт запас на
     //     long upload (>30s аудио) без перехода в зависание.
-    let builder = reqwest::Client::builder()
+    let builder = engine_base::http::client_builder()
         .timeout(Duration::from_secs(20))
         .connect_timeout(Duration::from_secs(5))
         .user_agent("Mundus/Mundus dictation");
@@ -148,7 +148,7 @@ pub fn build_download_client(
     profile: &NetworkProfile,
     http_proxy: Option<&str>,
 ) -> Result<reqwest::Client, NetworkError> {
-    let builder = reqwest::Client::builder()
+    let builder = engine_base::http::client_builder()
         .connect_timeout(Duration::from_secs(10))
         .user_agent("Mundus/Mundus dictation download");
 

@@ -27,6 +27,7 @@ const SCRIPT_CHECKS = {
     "test:package-manager": ["package-manager"],
     "build:desktop": [],
     "build:installer:local": [],
+    dev: [],
     "test:backend": [],
     "test:static": [],
     "test:desktop-tooling": [],

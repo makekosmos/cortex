@@ -1,6 +1,26 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { scanSource } from "./check-test-skips.mjs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { rustFiles, scanSource } from "./check-test-skips.mjs";
+
+test("does not scan nested repositories or worktrees", () => {
+  const root = mkdtempSync(join(tmpdir(), "test-skips-"));
+  try {
+    writeFileSync(join(root, "owned.rs"), "");
+    for (const name of ["repository", "worktree"]) {
+      const child = join(root, name);
+      mkdirSync(child);
+      if (name === "repository") mkdirSync(join(child, ".git"));
+      else writeFileSync(join(child, ".git"), "gitdir: elsewhere");
+      writeFileSync(join(child, "foreign.rs"), "#[ignore]");
+    }
+    assert.deepEqual(rustFiles(root), [join(root, "owned.rs")]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test("flags a test that returns early when link setup fails", () => {
   const violations = scanSource(

@@ -17,7 +17,7 @@ fn snapshot_does_not_mark_missing_selected_model() {
         ..Default::default()
     };
 
-    let snapshot = snapshot(tmp.path(), &cfg);
+    let snapshot = snapshot(tmp.path(), &cfg, &ModelDownloads::new());
     let model = snapshot
         .models
         .iter()
@@ -25,6 +25,41 @@ fn snapshot_does_not_mark_missing_selected_model() {
         .expect("snapshot model");
     assert!(!model.downloaded);
     assert!(!model.selected);
+}
+
+#[test]
+fn multi_file_model_is_installed_only_with_all_files() {
+    let tmp = tempfile::TempDir::new().expect("tempdir");
+    let spec = model_spec("parakeet-ultra").expect("parakeet-ultra spec");
+    let dir = model_path(tmp.path(), spec);
+    assert!(!model_is_installed(tmp.path(), spec));
+    fs::create_dir_all(&dir).expect("model dir");
+    // A bare/partial dir is not an install — every declared file must exist.
+    assert!(!model_is_installed(tmp.path(), spec));
+    for (_, local) in spec.files.iter().take(spec.files.len() - 1) {
+        fs::write(dir.join(local), b"part").expect("model file");
+    }
+    assert!(!model_is_installed(tmp.path(), spec));
+    let (_, last) = spec.files.last().expect("files");
+    fs::write(dir.join(last), b"part").expect("model file");
+    assert!(model_is_installed(tmp.path(), spec));
+}
+
+#[test]
+fn snapshot_reports_inflight_download() {
+    let tmp = tempfile::TempDir::new().expect("tempdir");
+    let cfg = config::DictationConfig::default();
+    let mut downloads = ModelDownloads::new();
+    downloads.insert("parakeet-ultra".to_owned(), Some(42.5));
+    let snapshot = snapshot(tmp.path(), &cfg, &downloads);
+    let model = snapshot
+        .models
+        .iter()
+        .find(|model| model.id == "parakeet-ultra")
+        .expect("snapshot model");
+    assert!(model.downloading);
+    assert_eq!(model.download_percent, Some(42.5));
+    assert!(!model.downloaded);
 }
 
 #[test]

@@ -88,13 +88,13 @@ impl ReleaseProbe {
 
     pub fn with_base(base: String) -> Result<Self, ReleaseError> {
         let base = check_base(&base)?;
-        let probe = reqwest::Client::builder()
+        let probe = engine_base::http::client_builder()
             .redirect(reqwest::redirect::Policy::none())
             .timeout(CHECK_TIMEOUT)
             .user_agent(crate::brand::ENGINE_BINARY_STEM)
             .build()
             .map_err(|_| ReleaseError::Unavailable)?;
-        let http = reqwest::Client::builder()
+        let http = engine_base::http::client_builder()
             .user_agent(crate::brand::ENGINE_BINARY_STEM)
             .build()
             .map_err(|_| ReleaseError::Unavailable)?;

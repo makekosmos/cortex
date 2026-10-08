@@ -179,11 +179,16 @@ pub fn render_overlay(app: &mut ManagerApp, cx: &mut Context<ManagerApp>) -> imp
                                     button::primary("consent-install")
                                         .label("Установить")
                                         .on_click(cx.listener(|this, _, _, cx| {
-                                            if let Some(pid) = this.pending_install.take() {
+                                            if let Some((pid, pversion)) =
+                                                this.pending_install.take()
+                                            {
                                                 this.disclosure = None;
                                                 this.action(
                                                     "packages.install",
-                                                    serde_json::json!({"package_id": pid}),
+                                                    serde_json::json!({
+                                                        "package_id": pid,
+                                                        "version": pversion,
+                                                    }),
                                                 );
                                             }
                                             cx.notify();

@@ -17,6 +17,57 @@ pub(in crate::ws_server) fn package_id_version<'a>(
     Ok((id, version))
 }
 
+/// Package id + optional `version` — KOS-353: callers like the Manager key
+/// rows by id alone and omit `version`. The Engine resolves it: the single
+/// installed version for that id, else the single catalog-listed version
+/// (covers install/disclosure of not-yet-installed packages). An unknown or
+/// ambiguous id stays `invalid-request`.
+pub(in crate::ws_server) fn package_id_resolve_version(
+    subop: &str,
+    params: &serde_json::Value,
+    service: &PackageService,
+) -> Result<(String, String), LocalResponse> {
+    let invalid = || LocalResponse::err(format!("packages.{subop}: invalid-request"));
+    let id = params
+        .get("id")
+        .or_else(|| params.get("package_id"))
+        .and_then(Value::as_str)
+        .ok_or_else(invalid)?;
+    if let Some(version) = params
+        .get("version")
+        .and_then(Value::as_str)
+        .filter(|version| !version.is_empty())
+    {
+        return Ok((id.to_owned(), version.to_owned()));
+    }
+    let mut versions: Vec<String> = service
+        .list()
+        .map(|list| {
+            list.packages
+                .iter()
+                .filter(|package| package.id == id)
+                .map(|package| package.version.clone())
+                .collect()
+        })
+        .unwrap_or_default();
+    if versions.is_empty() {
+        if let Ok(catalog) = service.catalog_packages(None) {
+            versions = catalog
+                .iter()
+                .filter(|entry| entry.id == id)
+                .map(|entry| entry.version.clone())
+                .collect();
+        }
+    }
+    versions.sort();
+    versions.dedup();
+    if versions.len() == 1 {
+        Ok((id.to_owned(), versions.remove(0)))
+    } else {
+        Err(invalid())
+    }
+}
+
 pub(in crate::ws_server) async fn package_blocking<T, F>(work: F) -> Result<T, PackageError>
 where
     T: Send + 'static,

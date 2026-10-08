@@ -66,7 +66,7 @@ func modifiersSatisfied(flags: CGEventFlags, state: MonitorState) -> Bool {
 }
 
 guard CommandLine.arguments.count >= 7 else {
-    emit(["error": "Usage: hotkey-hold-monitor <keyCode> <cmd0|1> <ctrl0|1> <alt0|1> <shift0|1> <fn0|1>"])
+    emit(["error": "Usage: hotkey-hold-monitor <keyCode> <cmd0|1> <ctrl0|1> <alt0|1> <shift0|1> <fn0|1> [doubleFn0|1]"])
     exit(1)
 }
 
@@ -84,6 +84,17 @@ let state = MonitorState(
     needFn: parseBool(CommandLine.arguments[6])
 )
 
+// Args 8+: doubleFn — хоткей "FnFn" (дабл-тап Fn, как системная диктовка).
+let wantDoubleFn = CommandLine.arguments.count >= 8 && parseBool(CommandLine.arguments[7])
+
+// Дабл-Esc (keyCode 53) — отмена записи на всех платформах; наблюдаем,
+// событие не перехватываем.
+let kEscKeyCode: CGKeyCode = 53
+let kFnKeyCode: CGKeyCode = 63
+let kDoubleTapMs: Double = 0.5
+var lastEscDown = Date.distantPast
+var lastFnDown = Date.distantPast
+
 let statePtr = Unmanaged.passRetained(state).toOpaque()
 let eventMask: CGEventMask =
     (1 << CGEventType.keyDown.rawValue) |
@@ -100,6 +111,27 @@ let callback: CGEventTapCallBack = { _, type, event, userInfo in
 
     let flags = event.flags
     let keyCode = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
+    let now = Date()
+
+    // Дабл-Esc — отмена (emit побочно, основной матч ниже не затрагивается).
+    if type == .keyDown && keyCode == kEscKeyCode {
+        if now.timeIntervalSince(lastEscDown) < kDoubleTapMs {
+            emit(["escapeCancel": true])
+        }
+        lastEscDown = now
+    }
+
+    // Дабл-тап Fn — срабатывание хоткея "FnFn" и выход (respawn со стороны Rust).
+    if wantDoubleFn && type == .flagsChanged && keyCode == kFnKeyCode {
+        if flags.contains(.maskSecondaryFn) {
+            if now.timeIntervalSince(lastFnDown) < kDoubleTapMs {
+                emit(["pressed": true])
+                exit(0)
+            }
+            lastFnDown = now
+        }
+        return Unmanaged.passUnretained(event)
+    }
 
     if !state.isPressed {
         if (type == .keyDown || type == .flagsChanged) && keyCode == state.targetKeyCode && modifiersSatisfied(flags: flags, state: state) {

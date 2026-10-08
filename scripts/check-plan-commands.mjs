@@ -17,7 +17,10 @@ const COMMANDS_BY_CHECK = {
   rustfmt: ["pnpm", ["run", "rustfmt"]],
   clippy: ["pnpm", ["run", "clippy"]],
   "test:rust": ["pnpm", ["run", "test:rust"]],
-  "runtime-staging": ["pnpm", ["--dir", "desktop", "run", "test:runtime-staging"]],
+  // `pnpm --dir desktop` loses the cwd under nested `pnpm run` (vite-plus
+  // pnpm.native), so node runs the test file directly — it resolves paths
+  // from import.meta.url anyway.
+  "runtime-staging": [process.execPath, ["--test", "desktop/scripts/runtime-staging.test.mjs"]],
   "manager-gpui": ["pnpm", ["run", "check:manager-gpui"]],
   "test:static": ["pnpm", ["run", "test:static"]],
 };
