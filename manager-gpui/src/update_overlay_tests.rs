@@ -115,7 +115,7 @@ fn downloading_shows_juicy_bar_instead_of_buttons(cx: &mut TestAppContext) {
     assert!(cx.debug_bounds("update-overlay-later").is_none());
     // After the eased fill settles it tracks percent: 42% of the track.
     manager.update(cx, |app, cx| {
-        app.update_fill = 42.0;
+        app.update_fill.snap(42.0);
         cx.notify();
     });
     cx.update(|_, cx| cx.refresh_windows());
@@ -258,6 +258,124 @@ fn logo_stays_put_while_metal_flows(cx: &mut TestAppContext) {
     cx.update(|_, cx| cx.refresh_windows());
     let second = cx.debug_bounds("update-overlay-logo").unwrap();
     assert_eq!(first, second);
+}
+
+// --- Download fill smoothing -------------------------------------------------
+
+use super::FillSmoother;
+
+#[test]
+fn fill_glides_monotonically_and_never_passes_the_target() {
+    let mut s = FillSmoother::new();
+    let mut prev = 0.0;
+    for target in [0., 3., 12., 15., 24., 37., 52., 66., 81., 94.] {
+        for _ in 0..60 {
+            // one second of uneven polls at 60 fps
+            let v = s.step(target, 1.0 / 60.0);
+            assert!(
+                v >= prev,
+                "fill went backwards {prev} → {v} (target {target})"
+            );
+            assert!(
+                v <= target + 1e-4 && v <= 100.0,
+                "fill {v} passed target {target}"
+            );
+            prev = v;
+        }
+    }
+    // It must keep moving between polls, not staircase: mid-second frames
+    // differ while the target is held.
+    let mut s = FillSmoother::new();
+    s.step(50.0, 1.0 / 60.0);
+    let a = s.step(50.0, 1.0 / 60.0);
+    let b = s.step(50.0, 1.0 / 60.0);
+    assert!(b > a, "fill froze between polls: {a} → {b}");
+}
+
+#[test]
+fn fill_converges_to_the_target() {
+    let mut s = FillSmoother::new();
+    for _ in 0..(60 * 30) {
+        s.step(50.0, 1.0 / 60.0);
+    }
+    assert_eq!(s.value(), 50.0);
+}
+
+#[test]
+fn fill_reaches_100_on_downloaded() {
+    let mut s = FillSmoother::new();
+    for _ in 0..60 {
+        s.step(90.0, 1.0 / 60.0);
+    }
+    s.finish();
+    assert_eq!(s.value(), 100.0);
+}
+
+#[test]
+fn new_download_resets_the_fill() {
+    let mut s = FillSmoother::new();
+    for _ in 0..120 {
+        s.step(80.0, 1.0 / 60.0);
+    }
+    assert!(s.value() > 50.0);
+    s.reset();
+    assert_eq!(s.value(), 0.0);
+    for _ in 0..30 {
+        let v = s.step(5.0, 1.0 / 60.0);
+        assert!(v <= 5.0);
+    }
+}
+
+#[test]
+fn hitched_frame_does_not_overshoot() {
+    let mut s = FillSmoother::new();
+    let v = s.step(80.0, 10.0); // a stalled paint → clamped dt
+    assert!(v > 0.0 && v <= 80.0);
+    let mut s = FillSmoother::new();
+    for _ in 0..60 {
+        s.step(40.0, 1.0 / 60.0);
+    }
+    let v = s.step(45.0, 10.0);
+    assert!(v <= 45.0 && v >= s.value() - 1e-6);
+}
+
+#[gpui::test]
+fn new_download_restarts_the_bar_and_ready_completes_it(cx: &mut TestAppContext) {
+    let (manager, cx) = crate::a11y_tests::launch(cx);
+    set_status(
+        cx,
+        &manager,
+        json!({
+            "state": "downloading", "currentVersion": "0.10.2",
+            "newVersion": "0.10.3", "percent": 90, "canInstall": true
+        }),
+    );
+    manager.update(cx, |app, cx| {
+        app.update_fill.snap(90.0);
+        cx.notify();
+    });
+    cx.update(|_, cx| cx.refresh_windows());
+    // `downloaded` completes the fill even though Ready hides the bar.
+    set_status(
+        cx,
+        &manager,
+        json!({
+            "state": "downloaded", "currentVersion": "0.10.2",
+            "newVersion": "0.10.3", "percent": 100, "canInstall": true
+        }),
+    );
+    manager.read_with(cx, |app, _| assert_eq!(app.update_fill.value(), 100.0));
+    // A NEW download after Ready restarts the bar near zero.
+    set_status(
+        cx,
+        &manager,
+        json!({
+            "state": "downloading", "currentVersion": "0.10.3",
+            "newVersion": "0.10.4", "percent": 5, "canInstall": true
+        }),
+    );
+    cx.run_until_parked();
+    manager.read_with(cx, |app, _| assert!(app.update_fill.value() <= 5.0));
 }
 
 #[gpui::test]

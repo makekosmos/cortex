@@ -58,8 +58,8 @@ pub fn resolve(snoozed: bool, was_open: bool, engine_state: &str) -> OverlayStat
 /// Displayed edge length of the mark (logical px).
 const LOGO_SIZE: f32 = 100.0;
 /// Produce at most one new logo frame per this interval — the paint loop
-/// runs at display refresh, but a new GPU/WebP frame every ~33 ms is plenty.
-const LOGO_FRAME_INTERVAL: std::time::Duration = std::time::Duration::from_millis(33);
+/// runs at display refresh, so ~16 ms lets the metal flow at 60 fps.
+const LOGO_FRAME_INTERVAL: std::time::Duration = std::time::Duration::from_millis(16);
 
 /// The petal mark itself, filled with animated liquid metal: a ring of
 /// pre-baked 256×252 frames, indexed by elapsed time — a clone of an `Arc`
@@ -88,7 +88,7 @@ fn logo(image: Option<Arc<RenderImage>>) -> Stateful<Div> {
 /// shader is tried first (rendered at displayed size × scale factor); any
 /// failure or an in-flight first readback falls back to the baked WebP ring
 /// (decoded on first use, so a healthy GPU path never pays for it). New
-/// frames are produced at most every `LOGO_FRAME_INTERVAL`; in between (and
+/// frames are produced at most every `LOGO_FRAME_INTERVAL` (~60 fps); in between (and
 /// while the window is not visible) the last image is reused.
 fn logo_image(app: &mut ManagerApp, window: &Window, elapsed: f32) -> Option<Arc<RenderImage>> {
     let fresh = app
@@ -130,21 +130,97 @@ fn primary_op(state: OverlayState) -> &'static str {
     }
 }
 
-/// Exponential approach of the displayed fill toward the polled `percent`
-/// (~80 ms time constant → settles in ~0.3 s) so the bar glides between the
-/// once-a-second status polls instead of jumping.
-fn smoothed_fill(app: &mut ManagerApp, target: f32) -> f32 {
-    let now = std::time::Instant::now();
-    let dt = now
-        .duration_since(app.update_fill_stamp)
-        .as_secs_f32()
-        .min(0.25);
-    app.update_fill_stamp = now;
-    app.update_fill += (target - app.update_fill) * (1.0 - (-dt / 0.08).exp());
-    if (target - app.update_fill).abs() < 0.2 {
-        app.update_fill = target;
+/// Exponential approach time constant of the download fill, seconds.
+const FILL_TAU: f32 = 0.7;
+/// Cap on the extrapolated creep rate (%/s) so a stale feed cannot race.
+const FILL_RATE_CAP: f32 = 100.0;
+/// Closer than this many percent counts as arrived — kills the asymptotic tail.
+const FILL_SNAP: f32 = 0.25;
+
+/// Juicy download fill: the Engine reports `percent` once a second (the
+/// `updater.status` poll in `app_polls.rs`), but the bar glides on every
+/// paint — a slow exponential approach (τ `FILL_TAU`) plus a creep at the
+/// recently observed download rate keeps it visibly moving between polls
+/// instead of staircase-jumping each second. The displayed value is
+/// monotonic non-decreasing within one download and never passes the latest
+/// target; `reset` (a new download) is the only way it drops, `finish`
+/// snaps it to 100 on `downloaded`. dt-driven, so it is framerate-free.
+#[derive(Debug, Clone)]
+pub struct FillSmoother {
+    value: f32,
+    target: f32,
+    /// Seconds since `target` last changed — the poll cadence.
+    target_age: f32,
+    /// EMA of the observed download rate, %/s.
+    rate: f32,
+}
+
+impl FillSmoother {
+    pub fn new() -> Self {
+        Self {
+            value: 0.0,
+            target: 0.0,
+            target_age: 0.0,
+            rate: 0.0,
+        }
     }
-    app.update_fill
+
+    /// Test seam: read the displayed value (the render loop uses `step`'s
+    /// return).
+    #[cfg(test)]
+    pub fn value(&self) -> f32 {
+        self.value
+    }
+
+    /// A new download starts: the only time the display may drop.
+    pub fn reset(&mut self) {
+        *self = Self::new();
+    }
+
+    /// `downloaded` reported: the bar is complete even though Ready no
+    /// longer draws it.
+    pub fn finish(&mut self) {
+        self.value = 100.0;
+        self.target = 100.0;
+    }
+
+    /// Test seam: place the display at `value` without animating.
+    #[cfg(test)]
+    pub fn snap(&mut self, value: f32) {
+        self.value = value;
+        self.target = value;
+    }
+
+    /// Advance the display toward `target` by `dt` seconds (clamped so a
+    /// hitched frame cannot jump). Returns the displayed fill.
+    pub fn step(&mut self, target: f32, dt: f32) -> f32 {
+        let dt = dt.clamp(0.0, 0.25);
+        let target = target.clamp(0.0, 100.0);
+        if target != self.target {
+            if target > self.target && self.target_age > 0.0 {
+                let observed = (target - self.target) / self.target_age;
+                self.rate = self.rate * 0.6 + observed.clamp(0.0, FILL_RATE_CAP) * 0.4;
+            }
+            self.target = target;
+            self.target_age = 0.0;
+        }
+        self.target_age += dt;
+        let k = 1.0 - (-dt / FILL_TAU).exp();
+        let eased = self.value + (self.target - self.value) * k;
+        let crept = self.value + self.rate * dt;
+        // Monotonic, and bounded above by the latest target — except when
+        // the Engine moved the target backwards mid-download, where the
+        // display holds (monotonic wins) until the target catches up.
+        let mut next = eased
+            .max(crept)
+            .max(self.value)
+            .min(self.target.max(self.value));
+        if next < self.target && self.target - next < FILL_SNAP {
+            next = self.target;
+        }
+        self.value = next;
+        self.value
+    }
 }
 
 pub fn render(
@@ -228,13 +304,18 @@ pub fn render(
     let mut actions = div().flex().flex_col().items_center().gap_2().w(px(240.));
     if state == OverlayState::Downloading {
         let percent = vnum(&status, "percent").clamp(0.0, 100.0);
-        let fill = smoothed_fill(app, percent as f32);
+        let now = std::time::Instant::now();
+        let dt = now.duration_since(app.update_fill_stamp).as_secs_f32();
+        app.update_fill_stamp = now;
+        let fill = app.update_fill.step(percent as f32, dt);
+        // Sheen band sweeping along the fill, one pass every ~1.7 s.
+        let sheen = (elapsed * 0.6).fract() * 1.4 - 0.2;
         actions = actions
             .child(
                 div()
                     .id("update-overlay-progress")
                     .debug_selector(|| "update-overlay-progress".into())
-                    .h(px(12.))
+                    .h(px(6.))
                     .w_full()
                     .rounded_full()
                     .bg(fade(FG(), 0.10))
@@ -253,14 +334,37 @@ pub fn render(
                                 linear_color_stop(c(ACCENT()), 1.),
                             ))
                             .child(
+                                // 1 px lighter top line keeps the sheen
+                                // readable at the 6 px height.
                                 div()
                                     .absolute()
                                     .top_0()
                                     .left_0()
                                     .right_0()
-                                    .h(relative(0.5))
+                                    .h(px(1.))
                                     .rounded_full()
-                                    .bg(white().opacity(0.16)),
+                                    .bg(white().opacity(0.22)),
+                            )
+                            .child(
+                                // Moving sheen: two half-gradients make a
+                                // soft bright band sweeping left→right.
+                                div()
+                                    .absolute()
+                                    .top_0()
+                                    .bottom_0()
+                                    .w(px(36.))
+                                    .left(relative(sheen))
+                                    .flex()
+                                    .child(div().h_full().w_1_2().bg(linear_gradient(
+                                        90.,
+                                        linear_color_stop(white().opacity(0.0), 0.),
+                                        linear_color_stop(white().opacity(0.30), 1.),
+                                    )))
+                                    .child(div().h_full().w_1_2().bg(linear_gradient(
+                                        90.,
+                                        linear_color_stop(white().opacity(0.30), 0.),
+                                        linear_color_stop(white().opacity(0.0), 1.),
+                                    ))),
                             ),
                     ),
             )
@@ -269,7 +373,7 @@ pub fn render(
                     .text_size(ui_px(12.))
                     .line_height(ui_px(16.))
                     .text_color(c(MUTED_FG()))
-                    .child(format!("{percent:.0}%")),
+                    .child(format!("{fill:.0}%")),
             );
     } else {
         actions = actions

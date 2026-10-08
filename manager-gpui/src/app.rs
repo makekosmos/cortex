@@ -104,11 +104,11 @@ pub struct ManagerApp {
     /// Decoded WebP frame ring for the liquid-metal mark.
     /// `None` → plain-icon fallback.
     pub update_logo: Option<std::sync::Arc<crate::logo_anim::LogoFrames>>,
-    /// Last produced logo frame + when — reused between ~33 ms ticks and
+    /// Last produced logo frame + when — reused between ~16 ms ticks and
     /// while the window is not visible.
     pub update_logo_frame: Option<(Instant, std::sync::Arc<gpui::RenderImage>)>,
     /// Smoothed update-download bar fill (0..100) and its easing clock.
-    pub update_fill: f32,
+    pub update_fill: crate::update_overlay::FillSmoother,
     pub update_fill_stamp: Instant,
     /// Test-only: frames actually produced by `logo_image` (excludes reuse
     /// of the cached frame) so tests can assert the pause/resume behavior.
@@ -198,7 +198,7 @@ impl ManagerApp {
             update_anim_start: Instant::now(),
             update_logo: None,
             update_logo_frame: None,
-            update_fill: 0.0,
+            update_fill: crate::update_overlay::FillSmoother::new(),
             update_fill_stamp: Instant::now(),
             #[cfg(test)]
             update_logo_frames: 0,

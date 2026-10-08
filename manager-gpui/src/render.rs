@@ -123,7 +123,17 @@ impl Render for ManagerApp {
         );
         if update_state.visible() && !self.update_overlay.visible() {
             self.update_anim_start = Instant::now();
-            self.update_fill = 0.0;
+        }
+        use crate::update_overlay::OverlayState;
+        if update_state == OverlayState::Downloading
+            && self.update_overlay != OverlayState::Downloading
+        {
+            // A NEW download (from Hidden/Offer/Ready/Failed) starts the
+            // bar over — the only moment the displayed fill may drop.
+            self.update_fill.reset();
+        }
+        if update_state == OverlayState::Ready && self.update_overlay != OverlayState::Ready {
+            self.update_fill.finish();
         }
         self.update_overlay = update_state;
         if update_state.visible() {
