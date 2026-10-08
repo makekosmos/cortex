@@ -19,8 +19,6 @@ pipeline that ships them to Windows and macOS every night.
 [![SQLite](https://img.shields.io/badge/storage-SQLite-18181b?style=flat-square&logo=sqlite&logoColor=white&labelColor=09090b)](core/crates/ark-core/)
 [![Windows](https://img.shields.io/badge/Windows-primary-18181b?style=flat-square&logo=windows&logoColor=white&labelColor=09090b)](#download)
 [![macOS](https://img.shields.io/badge/macOS-DMG-18181b?style=flat-square&logo=apple&logoColor=white&labelColor=09090b)](#download)
-[![No Electron](https://img.shields.io/badge/Electron-0%20bytes-18181b?style=flat-square&logo=electron&logoColor=white&labelColor=09090b)](docs/repo-split-decisions.md)
-
 [Download](#download) ·
 [Architecture](#architecture) ·
 [Quick start](#quick-start) ·
@@ -105,8 +103,8 @@ it gets a new Engine operation, never a bypass. See
 [`docs/write-boundary.md`](docs/write-boundary.md) and
 [`docs/repo-split-decisions.md`](docs/repo-split-decisions.md).
 
-The shipped package contains no Electron: it is `mundus-engine` with ARK
-in-process, plus GPUI components under `resources/components/<name>/`.
+The shipped package is `mundus-engine` with ARK in-process, plus GPUI
+components under `resources/components/<name>/`.
 
 ## Quick start
 
