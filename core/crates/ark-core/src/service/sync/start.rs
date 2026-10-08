@@ -18,9 +18,11 @@ pub(crate) async fn handle_start_sync(
         iroh_peer_ticket,
         discovery_enabled,
         bind,
+        app_version,
     } = params;
     // Idempotency: tear down any running runtime first.
     handle_stop_sync(state).await;
+    crate::host::set_app_version(app_version.clone());
 
     let device_name = device_name.unwrap_or_else(get_host_device_name);
     // Port 0 would bind an ephemeral port while advertising ":0" to peers.
@@ -104,6 +106,7 @@ pub(crate) async fn handle_start_sync(
         iroh_peer_ticket: iroh_peer_ticket.clone(),
         discovery_enabled,
         bind,
+        app_version,
     };
     let relay = if transport_choice == TransportChoice::Relay {
         let relay_url = relay_url.clone().expect("Relay choice implies relay_url");
@@ -286,16 +289,26 @@ pub(crate) async fn handle_start_sync(
                         return;
                     }
                     server
-                        .register_external_peer(
-                            &peer.device_id,
-                            &peer.device_name,
-                            reachable.clone(),
-                        )
+                        .register_external_peer(PeerRecord {
+                            device_id: peer.device_id.clone(),
+                            device_name: peer.device_name.clone(),
+                            addresses: reachable.clone(),
+                            last_seen: chrono::Utc::now()
+                                .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+                            last_address: None,
+                            platform: None,
+                            app_version: None,
+                        })
                         .await;
                     emit_event(json!({
                         "event": "peer_list_updated",
-                        "peers": server.get_connected_peer_entries().await.iter().map(|(id, name)| {
-                            json!({"device_id": id, "device_name": name})
+                        "peers": server.get_connected_peer_entries().await.iter().map(|entry| {
+                            json!({
+                                "device_id": entry.device_id,
+                                "device_name": entry.device_name,
+                                "platform": entry.platform,
+                                "app_version": entry.app_version,
+                            })
                         }).collect::<Vec<_>>(),
                     }));
 
@@ -313,6 +326,8 @@ pub(crate) async fn handle_start_sync(
                                 last_seen: chrono::Utc::now()
                                     .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
                                 last_address: None,
+                                platform: None,
+                                app_version: None,
                             })
                             .await;
                         return;
@@ -325,6 +340,8 @@ pub(crate) async fn handle_start_sync(
                         last_seen: chrono::Utc::now()
                             .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
                         last_address: None,
+                        platform: None,
+                        app_version: None,
                     };
                     spawn_sync_client(
                         &ClientEnv {

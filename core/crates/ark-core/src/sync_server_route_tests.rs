@@ -13,6 +13,8 @@ async fn send_signed_integration_frame_requires_addressed_authenticated_peer() {
             device_id: "peer".to_string(),
             device_name: "Peer".to_string(),
             addresses: vec![],
+            platform: None,
+            app_version: None,
             authenticated: true,
             sync_complete: true,
             queued_live_changes: vec![],

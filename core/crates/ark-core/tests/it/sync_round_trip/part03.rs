@@ -31,6 +31,8 @@ async fn hmac_authenticated_sync_succeeds_with_matching_secret() {
         addresses: vec![format!("127.0.0.1:{port_a}")],
         last_seen: chrono::Utc::now().to_rfc3339(),
         last_address: None,
+        platform: None,
+        app_version: None,
     };
     let client = Arc::new(SyncClient::new(
         storage_b.clone() as Arc<dyn StorageBackend>,
@@ -93,6 +95,8 @@ async fn hmac_authenticated_sync_rejects_wrong_secret() {
         addresses: vec![format!("127.0.0.1:{port_a}")],
         last_seen: chrono::Utc::now().to_rfc3339(),
         last_address: None,
+        platform: None,
+        app_version: None,
     };
     let client = Arc::new(SyncClient::new(
         storage_b.clone() as Arc<dyn StorageBackend>,
@@ -186,6 +190,8 @@ async fn usage_entities_sync_between_two_servers() {
         addresses: vec![format!("127.0.0.1:{port_a}")],
         last_seen: chrono::Utc::now().to_rfc3339(),
         last_address: None,
+        platform: None,
+        app_version: None,
     };
     let client = Arc::new(SyncClient::new(
         storage_b.clone() as Arc<dyn StorageBackend>,

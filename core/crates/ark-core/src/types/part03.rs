@@ -53,4 +53,10 @@ pub struct PeerRecord {
     pub last_seen: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_address: Option<String>,
+    /// Peer OS + product version learned from its Hello; `None` for peers
+    /// that predate those fields.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub platform: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub app_version: Option<String>,
 }

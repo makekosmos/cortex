@@ -102,6 +102,8 @@ fn send_hello(tx: &mpsc::UnboundedSender<TransportEvent>) {
             addresses: None,
             auth_nonce: None,
             auth_hmac: None,
+            platform: None,
+            app_version: None,
         },
     })
     .unwrap();
@@ -114,7 +116,12 @@ async fn transport_dropped_evicts_all_peers() {
     wait_for_peer(&relay).await;
     assert_eq!(
         relay.get_connected_peer_entries().await,
-        vec![("peer-x".to_string(), "Peer X".to_string())]
+        vec![ark_core::sync_server::PeerEntry {
+            device_id: "peer-x".to_string(),
+            device_name: "Peer X".to_string(),
+            platform: None,
+            app_version: None,
+        }]
     );
 
     // RelayTransport emits TransportDropped when the multiplexed relay
@@ -142,6 +149,11 @@ async fn disconnect_with_own_device_id_is_ignored() {
     tokio::time::sleep(Duration::from_millis(200)).await;
     assert_eq!(
         relay.get_connected_peer_entries().await,
-        vec![("peer-x".to_string(), "Peer X".to_string())]
+        vec![ark_core::sync_server::PeerEntry {
+            device_id: "peer-x".to_string(),
+            device_name: "Peer X".to_string(),
+            platform: None,
+            app_version: None,
+        }]
     );
 }

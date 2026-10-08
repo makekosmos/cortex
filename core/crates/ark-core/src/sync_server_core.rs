@@ -166,10 +166,10 @@ impl SyncServer {
 
     /// Dedup connected peers by device_id. Matches the `getConnectedPeerEntries`
     /// semantics of the TS sync server. Order: LinkedHashMap insertion order.
-    pub async fn get_connected_peer_entries(&self) -> Vec<(String, String)> {
+    pub async fn get_connected_peer_entries(&self) -> Vec<PeerEntry> {
         let peers = self.peers.lock().await;
-        let mut seen: HashMap<String, String> = HashMap::new();
-        let mut order: Vec<String> = Vec::new();
+        let mut seen: HashMap<String, usize> = HashMap::new();
+        let mut entries: Vec<PeerEntry> = Vec::new();
         for peer in peers.values() {
             if !peer.authenticated {
                 continue;
@@ -177,18 +177,29 @@ impl SyncServer {
             if peer.device_id.is_empty() {
                 continue;
             }
-            if !seen.contains_key(&peer.device_id) {
-                order.push(peer.device_id.clone());
+            match seen.get(&peer.device_id) {
+                Some(&index) => {
+                    let entry = &mut entries[index];
+                    entry.device_name.clone_from(&peer.device_name);
+                    if peer.platform.is_some() {
+                        entry.platform.clone_from(&peer.platform);
+                    }
+                    if peer.app_version.is_some() {
+                        entry.app_version.clone_from(&peer.app_version);
+                    }
+                }
+                None => {
+                    seen.insert(peer.device_id.clone(), entries.len());
+                    entries.push(PeerEntry {
+                        device_id: peer.device_id.clone(),
+                        device_name: peer.device_name.clone(),
+                        platform: peer.platform.clone(),
+                        app_version: peer.app_version.clone(),
+                    });
+                }
             }
-            seen.insert(peer.device_id.clone(), peer.device_name.clone());
         }
-        order
-            .into_iter()
-            .map(|id| {
-                let name = seen.remove(&id).unwrap_or_default();
-                (id, name)
-            })
-            .collect()
+        entries
     }
 
     /// True if any authenticated session matches the given `device_id`.
@@ -201,32 +212,29 @@ impl SyncServer {
 
     /// Record an externally-connected peer (e.g. a `SyncClient` we just dialled
     /// out to) so `get_known_peers` reflects the merged set. Mirrors the
-    /// TS `registerExternalPeer` helper.
-    pub async fn register_external_peer(
-        &self,
-        device_id: &str,
-        device_name: &str,
-        addresses: Vec<String>,
-    ) {
+    /// TS `registerExternalPeer` helper. `last_seen`/`last_address` are
+    /// overwritten here; `platform`/`app_version` pass through from the
+    /// caller's record (the client's authenticated Hello, or `None` for a
+    /// beacon-discovered peer that hasn't connected yet).
+    pub async fn register_external_peer(&self, record: PeerRecord) {
         let my_device_id = self.device_id.read().await.clone();
         let my_addresses = self.own_addresses.read().await.clone();
 
-        if device_id == my_device_id {
+        if record.device_id == my_device_id {
             return;
         }
-        if !addresses.is_empty() && addresses.iter().all(|a| my_addresses.contains(a)) {
+        if !record.addresses.is_empty() && record.addresses.iter().all(|a| my_addresses.contains(a))
+        {
             return;
         }
 
-        if self.is_peer_blocked(device_id).await {
+        if self.is_peer_blocked(&record.device_id).await {
             return;
         }
         let new_record = PeerRecord {
-            device_id: device_id.to_string(),
-            device_name: device_name.to_string(),
-            addresses,
             last_seen: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
             last_address: None,
+            ..record
         };
         let mut known = self.known_peer_records.lock().await;
         *known = merge_peer_records(&known, &[new_record]);
@@ -379,6 +387,8 @@ impl SyncServer {
                                     device_id: String::new(),
                                     device_name: String::new(),
                                     addresses: Vec::new(),
+                                    platform: None,
+                                    app_version: None,
                                     authenticated: false,
                                     sync_complete: false,
                                     queued_live_changes: Vec::new(),

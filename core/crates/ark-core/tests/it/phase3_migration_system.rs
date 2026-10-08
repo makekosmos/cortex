@@ -7,6 +7,8 @@ use rusqlite::{params, Connection};
 use serde_json::json;
 
 use crate::phase3_legacy_fixtures;
+#[path = "phase3_blocked_writes.rs"]
+mod blocked_writes;
 
 // Pre-migration retired-planning shape plus shared seed row; three tests use it.
 const LEGACY_AREAS_HEADINGS_SCHEMA: &str =

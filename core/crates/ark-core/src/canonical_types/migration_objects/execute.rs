@@ -119,7 +119,9 @@ fn ledger_source_kind(kind: &SourceKind) -> String {
     }
 }
 
-fn ensure_object_state_schema(conn: &Connection) -> Result<(), ObjectPlanError> {
+/// Additive runtime tables are needed by canonical writes even while legacy
+/// object migration is blocked. Creating them does not project legacy rows.
+pub fn ensure_object_state_schema(conn: &Connection) -> Result<(), ObjectPlanError> {
     conn.execute_batch(concat!(
         "CREATE TABLE IF NOT EXISTS object_local_state (object_id TEXT NOT NULL,",
         "device_id TEXT NOT NULL,data_json TEXT NOT NULL DEFAULT '{}',updated_at ",

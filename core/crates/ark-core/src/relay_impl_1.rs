@@ -103,14 +103,19 @@ impl RelaySync {
         })
     }
 
-    pub async fn get_connected_peer_entries(&self) -> Vec<(String, String)> {
+    pub async fn get_connected_peer_entries(&self) -> Vec<PeerEntry> {
         self.peers
             .lock()
             .await
             .iter()
             .filter_map(|(device_id, peer)| {
                 if peer.authenticated {
-                    Some((device_id.clone(), peer.device_name.clone()))
+                    Some(PeerEntry {
+                        device_id: device_id.clone(),
+                        device_name: peer.device_name.clone(),
+                        platform: peer.platform.clone(),
+                        app_version: peer.app_version.clone(),
+                    })
                 } else {
                     None
                 }
@@ -132,6 +137,8 @@ impl RelaySync {
                 space_id,
                 auth_nonce,
                 auth_hmac,
+                platform,
+                app_version,
                 ..
             } => {
                 if protocol_version != PROTOCOL_VERSION {
@@ -165,6 +172,8 @@ impl RelaySync {
                         device_id.clone(),
                         RelayPeerState {
                             device_name: device_name.clone(),
+                            platform,
+                            app_version,
                             authenticated: true,
                         },
                     );

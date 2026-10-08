@@ -98,6 +98,7 @@ fn pairing_restart_params_force_iroh_and_replace_ticket() {
             // Loopback on purpose: the pairing restart must escalate the
             // bind, not just inherit it (KOS-269).
             bind: SyncBind::Loopback,
+            app_version: None,
         },
         iroh_our_ticket: None,
         beacon: Arc::new(crate::beacon::BroadcastDiscovery::new()),
@@ -148,6 +149,7 @@ fn loopback_runtime_fixture() -> SyncRuntime {
             iroh_peer_ticket: None,
             discovery_enabled: false,
             bind: SyncBind::Loopback,
+            app_version: None,
         },
         iroh_our_ticket: None,
         beacon: Arc::new(crate::beacon::BroadcastDiscovery::new()),
@@ -252,6 +254,7 @@ async fn start_sync_with_use_iroh_selects_iroh_transport_and_exposes_ticket() {
             iroh_peer_ticket: None,
             discovery_enabled: false,
             bind: SyncBind::Loopback,
+            app_version: None,
         }),
     )
     .await;

@@ -101,6 +101,7 @@ async fn setup_sync_with_capturing_transport(
             iroh_peer_ticket: None,
             discovery_enabled: true,
             bind: SyncBind::AllInterfaces,
+            app_version: None,
         },
         iroh_our_ticket: None,
         beacon: Arc::new(crate::beacon::BroadcastDiscovery::new()),

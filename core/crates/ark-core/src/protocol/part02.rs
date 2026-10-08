@@ -13,6 +13,8 @@ mod tests {
             addresses: Some(vec!["192.168.1.70:21531".to_string()]),
             auth_nonce: None,
             auth_hmac: None,
+            platform: None,
+            app_version: None,
         };
         let json_str = serialize_message(&msg);
         let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
@@ -164,6 +166,8 @@ mod tests {
                 addresses: vec!["10.0.0.1:21531".to_string()],
                 last_seen: "2026-01-01T00:00:00.000Z".to_string(),
                 last_address: Some("10.0.0.1:21531".to_string()),
+                platform: None,
+                app_version: None,
             }],
         };
         let json_str = serialize_message(&msg);
@@ -234,6 +238,8 @@ mod tests {
                 addresses,
                 auth_nonce,
                 auth_hmac,
+                platform,
+                app_version,
             } => {
                 assert_eq!(protocol_version, 1);
                 assert_eq!(device_id, "dev-123");
@@ -242,6 +248,8 @@ mod tests {
                 assert_eq!(addresses, Some(vec!["192.168.1.70:21531".to_string()]));
                 assert_eq!(auth_nonce, None);
                 assert_eq!(auth_hmac, None);
+                assert_eq!(platform, None);
+                assert_eq!(app_version, None);
             }
             other => panic!("expected Hello, got {other:?}"),
         }

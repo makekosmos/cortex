@@ -23,6 +23,8 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
             addresses,
             auth_nonce,
             auth_hmac,
+            platform: peer_platform,
+            app_version: peer_app_version,
         } => {
             let repeated = peers
                 .lock()
@@ -118,6 +120,8 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                     peer.device_id = peer_device_id.clone();
                     peer.device_name = peer_device_name.clone();
                     peer.addresses = addresses.clone().unwrap_or_default();
+                    peer.platform = peer_platform.clone();
+                    peer.app_version = peer_app_version.clone();
                     peer.authenticated = true;
                     peer.tx.clone()
                 } else {
@@ -142,6 +146,8 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                         last_seen: chrono::Utc::now()
                             .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
                         last_address: None,
+                        platform: peer_platform,
+                        app_version: peer_app_version,
                     };
                     let removed = load_removed_peer_ids(storage).await;
                     if !removed.iter().any(|id| id == &new_record.device_id) {
@@ -172,6 +178,8 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                     addresses: Some(my_addresses),
                     auth_nonce: reply_auth_nonce,
                     auth_hmac: reply_auth_hmac,
+                    platform: Some(crate::host::local_platform()),
+                    app_version: crate::host::app_version(),
                 },
             );
 

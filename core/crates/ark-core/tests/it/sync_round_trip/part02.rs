@@ -100,6 +100,8 @@ async fn round_trip_sync_between_two_servers() {
         addresses: vec![format!("127.0.0.1:{port_a}")],
         last_seen: chrono::Utc::now().to_rfc3339(),
         last_address: None,
+        platform: None,
+        app_version: None,
     };
     let client = Arc::new(SyncClient::new(
         storage_b.clone() as Arc<dyn StorageBackend>,
@@ -175,6 +177,8 @@ async fn self_connect_is_rejected() {
         addresses: vec![format!("127.0.0.1:{port}")],
         last_seen: chrono::Utc::now().to_rfc3339(),
         last_address: None,
+        platform: None,
+        app_version: None,
     };
     // The SyncClient will connect and send a hello with device_id = "device-self"
     // — same as the server. The server must reject the connection and NOT

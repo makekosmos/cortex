@@ -66,20 +66,22 @@ async fn spawn_sync_client(env: &ClientEnv, peer: PeerRecord) {
     let server_for_connect = server.clone();
     let peer_addrs = peer.addresses.clone();
     client
-        .set_on_connected(Arc::new(move |peer_device_id, peer_name| {
+        .set_on_connected(Arc::new(move |connected: PeerRecord| {
             let server = server_for_connect.clone();
             let addrs = peer_addrs.clone();
-            let peer_device_id_clone = peer_device_id.clone();
-            let peer_name_clone = peer_name.clone();
+            let record = connected.clone();
             tokio::spawn(async move {
                 server
-                    .register_external_peer(&peer_device_id_clone, &peer_name_clone, addrs)
+                    .register_external_peer(PeerRecord {
+                        addresses: addrs,
+                        ..record
+                    })
                     .await;
             });
             emit_event(json!({
                 "event": "peer_connected",
-                "device_id": peer_device_id,
-                "device_name": peer_name,
+                "device_id": connected.device_id,
+                "device_name": connected.device_name,
             }));
         }))
         .await;
@@ -120,6 +122,8 @@ async fn start_seed_client(env: &ClientEnv, addresses: Vec<String>, bind: SyncBi
         addresses: reachable,
         last_seen: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
         last_address: None,
+        platform: None,
+        app_version: None,
     };
     spawn_sync_client(env, peer).await;
 }
@@ -164,6 +168,7 @@ pub(super) async fn handle_start_sync_with_params(
             iroh_peer_ticket: params.iroh_peer_ticket,
             discovery_enabled: params.discovery_enabled,
             bind: params.bind,
+            app_version: params.app_version,
         },
     )
     .await
@@ -238,39 +243,57 @@ pub(super) async fn handle_get_sync_snapshot(state: &Arc<ServiceState>) -> Resul
         connected.extend(relay.get_connected_peer_entries().await);
     }
     let known = runtime.server.get_known_peers().await;
-    let connected_ids: std::collections::HashSet<String> =
-        connected.iter().map(|(id, _)| id.clone()).collect();
+    // Fresh Hello metadata wins over the persisted record: a peer that just
+    // upgraded keeps its old platform/version in storage until it reconnects.
+    let connected_meta: std::collections::HashMap<String, (Option<String>, Option<String>)> =
+        connected
+            .iter()
+            .map(|entry| {
+                (
+                    entry.device_id.clone(),
+                    (entry.platform.clone(), entry.app_version.clone()),
+                )
+            })
+            .collect();
     let mut represented_ids = std::collections::HashSet::new();
     let mut peers: Vec<Value> = known
         .into_iter()
         .filter(|peer| peer.device_id != runtime.device_id)
         .map(|peer| {
             represented_ids.insert(peer.device_id.clone());
-            let status = if connected_ids.contains(&peer.device_id) {
+            let status = if connected_meta.contains_key(&peer.device_id) {
                 "online"
             } else {
                 "offline"
             };
+            let (platform, app_version) = connected_meta
+                .get(&peer.device_id)
+                .cloned()
+                .unwrap_or_default();
             json!({
                 "device_id": peer.device_id,
                 "device_name": peer.device_name,
                 "last_seen": peer.last_seen,
                 "status": status,
+                "platform": platform.or(peer.platform),
+                "app_version": app_version.or(peer.app_version),
             })
         })
         .collect();
     peers.extend(
         connected
             .into_iter()
-            .filter(|(device_id, _)| {
-                device_id != &runtime.device_id && !represented_ids.contains(device_id)
+            .filter(|entry| {
+                entry.device_id != runtime.device_id && !represented_ids.contains(&entry.device_id)
             })
-            .map(|(device_id, device_name)| {
+            .map(|entry| {
                 json!({
-                    "device_id": device_id,
-                    "device_name": device_name,
+                    "device_id": entry.device_id,
+                    "device_name": entry.device_name,
                     "last_seen": chrono::Utc::now().to_rfc3339(),
                     "status": "online",
+                    "platform": entry.platform,
+                    "app_version": entry.app_version,
                 })
             }),
     );
@@ -354,13 +377,13 @@ pub(super) async fn handle_get_connected_peers(state: &Arc<ServiceState>) -> Res
 
     // Merge in outbound-connected clients (not yet visible in the server peer
     // table if the connection is outbound-only).
-    let mut seen: HashMap<String, String> = HashMap::new();
+    let mut seen: HashMap<String, PeerEntry> = HashMap::new();
     let mut order: Vec<String> = Vec::new();
-    for (id, name) in entries {
-        if !seen.contains_key(&id) {
-            order.push(id.clone());
+    for entry in entries {
+        if !seen.contains_key(&entry.device_id) {
+            order.push(entry.device_id.clone());
         }
-        seen.insert(id, name);
+        seen.insert(entry.device_id.clone(), entry);
     }
     let clients: Vec<_> = runtime
         .clients
@@ -376,27 +399,37 @@ pub(super) async fn handle_get_connected_peers(state: &Arc<ServiceState>) -> Res
         let peer = client.current_peer().await;
         if !peer.device_id.is_empty() {
             order.push(peer.device_id.clone());
-            seen.insert(peer.device_id, peer.device_name);
+            seen.insert(
+                peer.device_id.clone(),
+                PeerEntry {
+                    device_id: peer.device_id,
+                    device_name: peer.device_name,
+                    platform: peer.platform,
+                    app_version: peer.app_version,
+                },
+            );
         }
     }
 
     if let Some(relay) = runtime.relay.as_ref() {
-        for (device_id, device_name) in relay.get_connected_peer_entries().await {
-            if seen.contains_key(&device_id) {
+        for entry in relay.get_connected_peer_entries().await {
+            if seen.contains_key(&entry.device_id) {
                 continue;
             }
-            order.push(device_id.clone());
-            seen.insert(device_id, device_name);
+            order.push(entry.device_id.clone());
+            seen.insert(entry.device_id.clone(), entry);
         }
     }
 
     let list: Vec<Value> = order
         .into_iter()
         .filter_map(|id| {
-            seen.remove(&id).map(|name| {
+            seen.remove(&id).map(|entry| {
                 json!({
-                    "device_id": id,
-                    "device_name": name,
+                    "device_id": entry.device_id,
+                    "device_name": entry.device_name,
+                    "platform": entry.platform,
+                    "app_version": entry.app_version,
                 })
             })
         })

@@ -25,6 +25,8 @@ async fn disconnect_peer_stops_matching_outbound_client_and_emits_events() {
         addresses: vec!["192.168.1.20:21531".to_string()],
         last_seen: "2026-06-17T00:00:00.000Z".to_string(),
         last_address: None,
+        platform: None,
+        app_version: None,
     };
     let client = Arc::new(SyncClient::new(
         backend.clone() as Arc<dyn crate::sync_server::StorageBackend>,
@@ -60,6 +62,7 @@ async fn disconnect_peer_stops_matching_outbound_client_and_emits_events() {
             iroh_peer_ticket: None,
             discovery_enabled: true,
             bind: SyncBind::AllInterfaces,
+            app_version: None,
         },
         iroh_our_ticket: None,
         beacon: Arc::new(crate::beacon::BroadcastDiscovery::new()),

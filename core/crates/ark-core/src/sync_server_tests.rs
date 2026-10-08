@@ -78,6 +78,8 @@ pub(super) mod tests {
             addresses: addrs.iter().map(|s| s.to_string()).collect(),
             last_seen: "2026-04-01T00:00:00.000Z".to_string(),
             last_address: None,
+            platform: None,
+            app_version: None,
         }
     }
 
@@ -128,6 +130,18 @@ pub(super) mod tests {
         assert_eq!(ids, vec!["real".to_string()]);
     }
 
+    fn peer_record(device_id: &str, name: &str, addrs: &[&str]) -> PeerRecord {
+        PeerRecord {
+            device_id: device_id.to_string(),
+            device_name: name.to_string(),
+            addresses: addrs.iter().map(|a| a.to_string()).collect(),
+            last_seen: "2026-04-01T00:00:00.000Z".to_string(),
+            last_address: None,
+            platform: None,
+            app_version: None,
+        }
+    }
+
     #[tokio::test]
     async fn register_external_peer_rejects_self() {
         let storage = Arc::new(MemBackend::new()) as Arc<dyn StorageBackend>;
@@ -136,11 +150,11 @@ pub(super) mod tests {
         *server.own_addresses.write().await = vec!["10.0.0.1:21531".to_string()];
 
         server
-            .register_external_peer("me", "Me", vec!["10.0.0.1:21531".to_string()])
+            .register_external_peer(peer_record("me", "Me", &["10.0.0.1:21531"]))
             .await;
         // Also: all-self addresses under a different device_id.
         server
-            .register_external_peer("phantom", "Phantom", vec!["10.0.0.1:21531".to_string()])
+            .register_external_peer(peer_record("phantom", "Phantom", &["10.0.0.1:21531"]))
             .await;
 
         assert!(
@@ -157,7 +171,7 @@ pub(super) mod tests {
         *server.own_addresses.write().await = vec!["10.0.0.1:21531".to_string()];
 
         server
-            .register_external_peer("other", "Other", vec!["192.168.1.20:21531".to_string()])
+            .register_external_peer(peer_record("other", "Other", &["192.168.1.20:21531"]))
             .await;
 
         let known = server.get_known_peers().await;
@@ -191,7 +205,7 @@ pub(super) mod tests {
         server.block_peer("blocked").await;
 
         server
-            .register_external_peer("blocked", "Blocked", vec!["192.168.1.21:21531".to_string()])
+            .register_external_peer(peer_record("blocked", "Blocked", &["192.168.1.21:21531"]))
             .await;
 
         assert!(server.get_known_peers().await.is_empty());
@@ -212,6 +226,8 @@ pub(super) mod tests {
                 device_id: "blocked".to_string(),
                 device_name: "Blocked One".to_string(),
                 addresses: vec!["192.168.1.20:21531".to_string()],
+                platform: None,
+                app_version: None,
                 authenticated: true,
                 sync_complete: true,
                 queued_live_changes: vec![],
@@ -224,6 +240,8 @@ pub(super) mod tests {
                 device_id: "blocked".to_string(),
                 device_name: "Blocked Two".to_string(),
                 addresses: vec!["192.168.1.21:21531".to_string()],
+                platform: None,
+                app_version: None,
                 authenticated: true,
                 sync_complete: true,
                 queued_live_changes: vec![],
@@ -236,6 +254,8 @@ pub(super) mod tests {
                 device_id: "keep".to_string(),
                 device_name: "Keep".to_string(),
                 addresses: vec!["192.168.1.22:21531".to_string()],
+                platform: None,
+                app_version: None,
                 authenticated: true,
                 sync_complete: true,
                 queued_live_changes: vec![],
@@ -252,7 +272,12 @@ pub(super) mod tests {
         assert_eq!(server.connected_peer_count().await, 1);
         assert_eq!(
             server.get_connected_peer_entries().await,
-            vec![("keep".to_string(), "Keep".to_string())]
+            vec![crate::sync_server::PeerEntry {
+                device_id: "keep".to_string(),
+                device_name: "Keep".to_string(),
+                platform: None,
+                app_version: None,
+            }]
         );
         assert_eq!(server.peers.lock().await.len(), 1);
     }
@@ -268,6 +293,8 @@ pub(super) mod tests {
             device_id: device_id.to_string(),
             device_name: "DupDevice".to_string(),
             addresses: vec![],
+            platform: None,
+            app_version: None,
             authenticated: true,
             sync_complete: true,
             queued_live_changes: vec![],
@@ -282,6 +309,6 @@ pub(super) mod tests {
             1,
             "duplicate device_id sessions should collapse to one entry",
         );
-        assert_eq!(entries[0].0, "dup");
+        assert_eq!(entries[0].device_id, "dup");
     }
 }

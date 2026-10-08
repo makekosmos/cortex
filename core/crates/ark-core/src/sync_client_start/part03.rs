@@ -33,6 +33,8 @@
                     addresses: Some(own_addresses.clone()),
                     auth_nonce,
                     auth_hmac,
+                    platform: Some(crate::host::local_platform()),
+                    app_version: crate::host::app_version(),
                 };
                 let hello_json = serialize_message(&hello);
                 if ws_sink
@@ -92,6 +94,8 @@
                                         space_id: server_space_id,
                                         auth_nonce,
                                         auth_hmac,
+                                        platform: server_platform,
+                                        app_version: server_app_version,
                                         ..
                                     } => {
                                         if authenticated {
@@ -174,17 +178,20 @@
                                         // device_id, and DisconnectPeer /
                                         // peer listings key off the
                                         // stored record.
-                                        {
+                                        let connected_record = {
                                             let mut p = peer.write().await;
                                             p.device_id = server_device_id.clone();
                                             p.device_name = server_device_name.clone();
-                                        }
+                                            p.platform = server_platform.clone();
+                                            p.app_version = server_app_version.clone();
+                                            p.clone()
+                                        };
                                         eprintln!(
                                             "{TAG} Authenticated with {server_device_name} \
                                                  ({server_device_id})"
                                         );
                                         if let Some(handler) = on_connected.lock().await.as_ref() {
-                                            handler(server_device_id, server_device_name);
+                                            handler(connected_record);
                                         }
 
                                         // Send version vector

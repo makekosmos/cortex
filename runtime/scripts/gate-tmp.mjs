@@ -25,7 +25,9 @@ export function aliasGateTmp(dir, runId, { platform = process.platform, root = "
   if (platform === "win32") return { path: dir, release() {} };
   const link = join(root, `cortex-gate-${runId}`);
   rmSync(link, { force: true });
-  symlinkSync(dir, link, "dir");
+  // Tests can exercise the Unix branch on a Windows host. A junction keeps
+  // that fixture unprivileged; production Windows still returns above.
+  symlinkSync(dir, link, process.platform === "win32" ? "junction" : "dir");
   return {
     path: link,
     release() {

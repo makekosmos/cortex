@@ -13,6 +13,8 @@ pub(super) mod reject_tests {
             addresses: addrs.iter().map(|s| s.to_string()).collect(),
             last_seen: "2026-04-01T00:00:00.000Z".to_string(),
             last_address: None,
+            platform: None,
+            app_version: None,
         }
     }
 
@@ -58,6 +60,8 @@ pub(super) mod reject_tests {
                 device_id: "gossip".to_string(),
                 device_name: "Gossip".to_string(),
                 addresses: vec![],
+                platform: None,
+                app_version: None,
                 authenticated: true,
                 sync_complete: true,
                 queued_live_changes: vec![],
@@ -117,6 +121,8 @@ pub(super) mod reject_tests {
             addresses: None,
             auth_nonce: None,
             auth_hmac: None,
+            platform: None,
+            app_version: None,
         }
     }
 

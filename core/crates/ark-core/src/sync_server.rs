@@ -148,10 +148,25 @@ struct PeerState {
     device_id: String,
     device_name: String,
     addresses: Vec<String>,
+    /// OS / product version the peer advertised in its Hello; `None` for
+    /// peers built before those fields existed.
+    platform: Option<String>,
+    app_version: Option<String>,
     authenticated: bool,
     sync_complete: bool,
     queued_live_changes: Vec<SyncEntity>,
     tx: mpsc::UnboundedSender<Message>,
+}
+
+/// One authenticated connection's view of a peer, for `get_connected_peers`
+/// and the sync snapshot. Unlike the persisted `PeerRecord` this carries the
+/// metadata even when the peer never made it into the known-peer list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PeerEntry {
+    pub device_id: String,
+    pub device_name: String,
+    pub platform: Option<String>,
+    pub app_version: Option<String>,
 }
 
 // ---------------------------------------------------------------------------

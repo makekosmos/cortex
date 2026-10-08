@@ -161,6 +161,8 @@ impl RelaySync {
             addresses: None,
             auth_nonce,
             auth_hmac,
+            platform: Some(crate::host::local_platform()),
+            app_version: crate::host::app_version(),
         }
     }
 
