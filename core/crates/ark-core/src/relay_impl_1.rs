@@ -33,6 +33,7 @@ impl RelaySync {
             auth_secret,
             peers: Arc::new(Mutex::new(HashMap::new())),
             transport_keys: Arc::new(Mutex::new(HashMap::new())),
+            pairing_accept: Mutex::new(None),
             incoming_sync: Arc::new(Mutex::new(None)),
             on_change: Arc::new(Mutex::new(None)),
             on_peer_connect: Arc::new(Mutex::new(None)),
@@ -135,11 +136,11 @@ impl RelaySync {
                 device_id,
                 device_name,
                 space_id,
+                addresses,
                 auth_nonce,
                 auth_hmac,
                 platform,
                 app_version,
-                ..
             } => {
                 if protocol_version != PROTOCOL_VERSION {
                     eprintln!("{TAG} protocol mismatch from relay peer {device_id}");
@@ -149,6 +150,16 @@ impl RelaySync {
                     return;
                 }
                 if device_id == self.config.device_id {
+                    return;
+                }
+                // A peer the user removed via «Отключить» must not silently
+                // re-authenticate — same block as the WS server Hello path.
+                if crate::sync_server::load_removed_peer_ids(&self.storage)
+                    .await
+                    .iter()
+                    .any(|id| id == &device_id)
+                {
+                    eprintln!("{TAG} rejecting hello from removed peer {device_id}");
                     return;
                 }
 
@@ -172,13 +183,33 @@ impl RelaySync {
                         device_id.clone(),
                         RelayPeerState {
                             device_name: device_name.clone(),
-                            platform,
-                            app_version,
+                            platform: platform.clone(),
+                            app_version: app_version.clone(),
                             authenticated: true,
                         },
                     );
                     was_new
                 };
+
+                // Persist the pairing into `sync.peers` — the WS server does
+                // this on Hello too. Without it a transport-paired device
+                // vanishes from the snapshot and from `lan_bind_at_boot`'s
+                // "sync is enabled" check after an Engine restart (KOS-367).
+                let record = PeerRecord {
+                    device_id: device_id.clone(),
+                    device_name: device_name.clone(),
+                    addresses: addresses.unwrap_or_default(),
+                    last_seen: chrono::Utc::now()
+                        .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+                    last_address: None,
+                    platform,
+                    app_version,
+                };
+                let known = merge_peer_records(
+                    &crate::sync_server::load_known_peer_records(&self.storage).await,
+                    &[record],
+                );
+                crate::sync_server::save_known_peers(&self.storage, &known).await;
 
                 if was_new {
                     if let Some(handler) = self.on_peer_connect.lock().await.as_ref() {

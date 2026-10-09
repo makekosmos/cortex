@@ -253,7 +253,14 @@ pub fn render_banner(
     sidebar_progress: f32,
     cx: &mut Context<ManagerApp>,
 ) -> impl IntoElement {
-    let text = app.error.clone().unwrap_or_default();
+    // The banner is also the success notice (e.g. a completed pairing) —
+    // `notice` used to be write-only, so «Выполнено.» was invisible (KOS-367).
+    let is_error = app.error.is_some();
+    let text = app
+        .error
+        .clone()
+        .or_else(|| app.notice.clone())
+        .unwrap_or_default();
     div()
         .absolute()
         .bottom_3()
@@ -268,13 +275,23 @@ pub fn render_banner(
         .items_center()
         .gap_3()
         .child(div().flex_1().text_size(px(13.)).child(text))
-        .when(app.error.is_some(), |d| {
+        .when(is_error, |d| {
             d.child(
                 crate::button::secondary("retry")
                     .label("Обновить")
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.error = None;
                         this.load_current();
+                        cx.notify();
+                    })),
+            )
+        })
+        .when(!is_error, |d| {
+            d.child(
+                crate::button::secondary("dismiss-notice")
+                    .label("OK")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.notice = None;
                         cx.notify();
                     })),
             )

@@ -11,7 +11,7 @@ use crate::sync_server::{
     OnChangeCallback, OnPeerConnectCallback, OnPeerDisconnectCallback, PeerEntry, StorageBackend,
 };
 use crate::sync_transport::{SyncTransport, TransportEvent};
-use crate::types::{SyncEntity, VersionVector};
+use crate::types::{PeerRecord, SyncEntity, VersionVector};
 
 const TAG: &str = "[RelaySync]";
 const VERSION_VECTOR_KEY: &str = "lan_sync.version_vector";
@@ -42,6 +42,22 @@ struct IncomingSyncState {
     last_update: Instant,
 }
 
+/// A user-initiated pairing action opened the first-contact window the
+/// Hello gate consults: `show_pairing_code` admits any unknown endpoint
+/// (`expected_endpoint: None` — whoever proves the ticket), while
+/// `connect_with_pairing_code` pins the window to the ticketed endpoint.
+/// Time-bounded because the Manager signals the card opening, never its
+/// closing.
+struct PairingAccept {
+    expected_endpoint: Option<String>,
+    until: Instant,
+}
+
+/// How long a pairing action keeps the first-contact window open. Covers
+/// "the other device comes online a little late"; the dial loop retries
+/// beyond it, but new unknown endpoints stop being admitted.
+const PAIRING_ACCEPT_TTL: Duration = Duration::from_secs(300);
+
 pub struct RelaySync {
     storage: Arc<dyn StorageBackend>,
     transport: Arc<dyn SyncTransport>,
@@ -49,6 +65,7 @@ pub struct RelaySync {
     auth_secret: Option<String>,
     peers: Arc<Mutex<HashMap<String, RelayPeerState>>>,
     transport_keys: Arc<Mutex<HashMap<String, String>>>,
+    pairing_accept: Mutex<Option<PairingAccept>>,
     incoming_sync: Arc<Mutex<Option<IncomingSyncState>>>,
     on_change: Arc<Mutex<Option<OnChangeCallback>>>,
     on_peer_connect: Arc<Mutex<Option<OnPeerConnectCallback>>>,

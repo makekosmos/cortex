@@ -52,6 +52,15 @@ async fn restart_sync_with_restore(
     }
 }
 
+/// How long `connect_with_pairing_code` waits for the peer's Hello before
+/// reporting failure. The dial itself is async — without this wait the op
+/// returned Ok the moment the transport restarted and a peer that never
+/// answered left the UI showing literally nothing (KOS-367). Bounded below
+/// the Manager's 15s RPC timeout: ticket decode + restart (which includes
+/// the endpoint bind and the `our_ticket` relay-homing wait) can already
+/// consume several seconds.
+const PAIRING_CONNECT_BUDGET: std::time::Duration = std::time::Duration::from_secs(12);
+
 pub(crate) async fn handle_connect_with_pairing_code(
     state: &Arc<ServiceState>,
     pairing_code: String,
@@ -60,6 +69,13 @@ pub(crate) async fn handle_connect_with_pairing_code(
     if code.is_empty() {
         return Err("pairing code is empty".to_string());
     }
+    // Validate before touching the running sync: a malformed code used to
+    // tear sync down and restore it for nothing. The endpoint id also pins
+    // the wait below to the device the code belongs to.
+    let expected_endpoint = crate::iroh_transport::from_ticket(code)
+        .map_err(|err| format!("invalid pairing code: {err}"))?
+        .id
+        .to_string();
 
     let runtime = {
         let guard = state.sync.lock().await;
@@ -72,13 +88,50 @@ pub(crate) async fn handle_connect_with_pairing_code(
     let restart_params = build_pairing_restart_params(&runtime, code);
     let restore_params = runtime.start_params.clone();
 
+    let started_at = std::time::Instant::now();
     restart_sync_with_restore(
         state,
         restart_params,
         restore_params,
         "connect_with_pairing_code",
     )
-    .await
+    .await?;
+
+    // Wait for the peer's Hello: the iroh dial runs in a background task,
+    // so a successful restart says nothing about reachability. Poll until
+    // the *ticketed* endpoint authenticates — matching any connected peer
+    // would report a false success naming a device that merely reconnected
+    // during the window. A timeout is a real error for the UI while the
+    // dial loop keeps retrying in the background, so a late peer still
+    // completes the pairing.
+    loop {
+        let runtime = {
+            let guard = state.sync.lock().await;
+            match guard.as_ref() {
+                Some(r) => r.clone(),
+                None => return Err("Sync not running".to_string()),
+            }
+        };
+        if let Some(relay) = runtime.relay.as_ref() {
+            if let Some(peer) = relay
+                .authenticated_peer_for_transport_key(&expected_endpoint)
+                .await
+            {
+                return Ok(json!({
+                    "status": "connected",
+                    "device_id": peer.device_id,
+                    "device_name": peer.device_name,
+                }));
+            }
+        }
+        if started_at.elapsed() >= PAIRING_CONNECT_BUDGET {
+            return Err(
+                "device did not respond — check the code and that the other device is online"
+                    .to_string(),
+            );
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    }
 }
 
 /// `show_pairing_code` (KOS-269): the explicit LAN opt-in for the device
@@ -112,11 +165,18 @@ pub(crate) async fn handle_show_pairing_code(state: &Arc<ServiceState>) -> Resul
         .await?;
     }
 
-    let ticket = state
-        .sync
-        .lock()
-        .await
-        .as_ref()
-        .and_then(|r| r.iroh_our_ticket.clone());
-    Ok(json!(ticket))
+    let runtime = {
+        let guard = state.sync.lock().await;
+        match guard.as_ref() {
+            Some(r) => r.clone(),
+            None => return Err("Sync not running".to_string()),
+        }
+    };
+    // The user is showing a code: admit whoever proves the ticket for the
+    // next few minutes. Without this window the Hello gate drops unknown
+    // endpoints and the other side's «Подключить» goes nowhere.
+    if let Some(relay) = runtime.relay.as_ref() {
+        relay.open_pairing_window(None).await;
+    }
+    Ok(json!(runtime.iroh_our_ticket.clone()))
 }

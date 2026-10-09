@@ -23,12 +23,68 @@ impl RelaySync {
                 msg,
             } => {
                 if matches!(&msg, LanSyncMessage::Hello { .. }) {
-                    let trusted = self
+                    // A Hello is trusted in exactly two cases. The claimed
+                    // device has a stored endpoint key — persisted from an
+                    // earlier pairing (`sync.peer_transport_keys`) or granted
+                    // through integration replication (`authorized_nodes`) —
+                    // and it matches (a mismatch is the rotation/revocation
+                    // guard). Or a user opened the first-contact window with
+                    // «Показать код» / «Подключить»: the ticket is the
+                    // capability there (KOS-367). Anything else is dropped —
+                    // the endpoint stays reachable by id forever, so
+                    // unconditional acceptance would turn a once-disclosed
+                    // ticket into a permanent key. `auth_secret` HMAC still
+                    // applies inside `handle_message`.
+                    let authorized = self
                         .storage
                         .authorized_transport_public_key(&from_device_id)
-                        .await
-                        .is_some_and(|key| key == transport_public_key);
-                    if trusted {
+                        .await;
+                    let mut paired_keys =
+                        crate::sync_server::load_peer_transport_keys(&self.storage).await;
+                    let known_key = authorized
+                        .as_deref()
+                        .or_else(|| paired_keys.get(&from_device_id).map(String::as_str));
+                    let (window_open, admits_any, expected_match) = {
+                        let pending = self.pairing_accept.lock().await;
+                        let active =
+                            pending.as_ref().is_some_and(|p| p.until > Instant::now());
+                        let admits_any = active
+                            && pending
+                                .as_ref()
+                                .is_some_and(|p| p.expected_endpoint.is_none());
+                        let expected_match = active
+                            && pending.as_ref().is_some_and(|p| {
+                                p.expected_endpoint.as_deref()
+                                    == Some(transport_public_key.as_str())
+                            });
+                        (active, admits_any, expected_match)
+                    };
+                    // A stored integration-replication key never yields to a
+                    // pairing window — that trust domain owns the binding.
+                    // A stored *pairing* key may rotate under explicit
+                    // re-consent: entering that endpoint's code rebinds it.
+                    let accept = match known_key {
+                        Some(key) if key == transport_public_key => true,
+                        Some(_) => expected_match && authorized.is_none(),
+                        None => window_open && (admits_any || expected_match),
+                    };
+                    if !accept {
+                        eprintln!(
+                            "{TAG} rejecting Hello from {from_device_id}: {}",
+                            if known_key.is_some() {
+                                "transport key does not match the stored record"
+                            } else {
+                                "unknown endpoint and no pairing window is open"
+                            }
+                        );
+                    } else {
+                        // Re-pairing a previously removed device is explicit
+                        // re-consent — unblock it before handle_message's
+                        // removed-peer check would drop the Hello forever.
+                        if expected_match {
+                            crate::sync_server::unblock_peer_id(&self.storage, &from_device_id)
+                                .await;
+                        }
                         self.handle_message(from_device_id.clone(), msg, None).await;
                         if self.is_authenticated_peer(&from_device_id).await {
                             let _ = self
@@ -37,7 +93,18 @@ impl RelaySync {
                             self.transport_keys
                                 .lock()
                                 .await
-                                .insert(from_device_id, transport_public_key);
+                                .insert(from_device_id.clone(), transport_public_key.clone());
+                            if paired_keys.get(&from_device_id)
+                                != Some(&transport_public_key)
+                            {
+                                paired_keys
+                                    .insert(from_device_id, transport_public_key);
+                                crate::sync_server::save_peer_transport_keys(
+                                    &self.storage,
+                                    &paired_keys,
+                                )
+                                .await;
+                            }
                         }
                     }
                 } else if self
@@ -83,6 +150,77 @@ impl RelaySync {
             }
         }
         trim_process_heap();
+    }
+
+    /// Authenticated peer count over this transport — the WS server has
+    /// `connected_peer_count`; the `peer_disconnected` event's `remaining`
+    /// must count both.
+    pub async fn connected_peer_count(&self) -> usize {
+        self.peers
+            .lock()
+            .await
+            .values()
+            .filter(|p| p.authenticated)
+            .count()
+    }
+
+    /// Open the first-contact window the Hello gate above consults.
+    /// `expected_endpoint: Some(id)` pins it to the endpoint whose ticket
+    /// was entered; `None` (the code-showing side) admits any unknown
+    /// endpoint — whoever proves the ticket.
+    pub async fn open_pairing_window(&self, expected_endpoint: Option<String>) {
+        *self.pairing_accept.lock().await = Some(PairingAccept {
+            expected_endpoint,
+            until: Instant::now() + PAIRING_ACCEPT_TTL,
+        });
+    }
+
+    /// The authenticated peer bound to this transport key, if any. Lets
+    /// `connect_with_pairing_code` report the device that actually proved
+    /// the dialed endpoint rather than any peer that happened to reconnect
+    /// during the wait.
+    pub async fn authenticated_peer_for_transport_key(
+        &self,
+        transport_public_key: &str,
+    ) -> Option<PeerEntry> {
+        let device_id = {
+            let keys = self.transport_keys.lock().await;
+            keys.iter()
+                .find(|(_, key)| key.as_str() == transport_public_key)
+                .map(|(device_id, _)| device_id.clone())
+        }?;
+        let peers = self.peers.lock().await;
+        peers.get(&device_id).and_then(|peer| {
+            peer.authenticated.then(|| PeerEntry {
+                device_id,
+                device_name: peer.device_name.clone(),
+                platform: peer.platform.clone(),
+                app_version: peer.app_version.clone(),
+            })
+        })
+    }
+
+    /// Evict a peer the user removed via «Отключить»: without this the
+    /// authenticated entry survives removal, so a transport-paired device
+    /// keeps syncing and stays "online" in the snapshot until the Engine
+    /// restarts. `sync.removed_peers` (written by the caller) blocks
+    /// re-authentication on the next Hello.
+    pub async fn disconnect_peer(&self, device_id: &str) {
+        self.transport_keys.lock().await.remove(device_id);
+        // Forget the persisted endpoint key so the device has to pair again
+        // (a stored match would otherwise re-admit it without a window).
+        let mut keys = crate::sync_server::load_peer_transport_keys(&self.storage).await;
+        if keys.remove(device_id).is_some() {
+            crate::sync_server::save_peer_transport_keys(&self.storage, &keys).await;
+        }
+        if self.peers.lock().await.remove(device_id).is_none() {
+            return;
+        }
+        let _ = self.transport.disconnect_peer(device_id);
+        if let Some(handler) = self.on_peer_disconnect.lock().await.as_ref() {
+            let remaining = self.peers.lock().await.len();
+            handler(device_id.to_string(), remaining);
+        }
     }
 
     /// Route an addressed integration frame through the configured transport.
