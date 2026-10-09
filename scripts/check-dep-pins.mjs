@@ -27,12 +27,12 @@ const ALLOWED = new Map([
   // embed-resource =3.0.11: Windows resource compiler helper, pinned to keep
   // manager-gpui build output reproducible.
   ["runtime/crates/pe-version-info/Cargo.toml::embed-resource", "=3.0.11"],
-  // gpui-kit/gpui-component =0.6.2: the vendored gpui fork only builds against
-  // this exact upstream release.
-  ["manager-gpui/Cargo.toml::gpui", "=0.6.2"],
-  ["manager-gpui/Cargo.toml::gpui-component", "=0.6.2"],
-  // gpui-base =0.6.4: companion crate of the gpui-kit/gpui-component pair above.
-  ["manager-gpui/Cargo.toml::gpui-base", "=0.6.4"],
+  // gpui-kit/gpui-component/gpui-base =0.7.1: the 0.7.1 family pins gpui-pre
+  // =0.3.8, which our imago [patch.crates-io] entries replace — the exact pin
+  // is required so the patched source satisfies the requirement.
+  ["manager-gpui/Cargo.toml::gpui", "=0.7.1"],
+  ["manager-gpui/Cargo.toml::gpui-component", "=0.7.1"],
+  ["manager-gpui/Cargo.toml::gpui-base", "=0.7.1"],
 ]);
 
 // Vendored/upstream trees and generated dirs are not our pins to police.
