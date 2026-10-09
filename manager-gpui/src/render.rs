@@ -101,7 +101,7 @@ impl Render for ManagerApp {
                     .child(self.fps_view.clone()),
             );
         }
-        if self.error.is_some() {
+        if self.error.is_some() || self.notice.is_some() {
             root = root.child(render_banner(self, sidebar_p, cx));
         }
         if let Some(confirm) = &self.confirm {

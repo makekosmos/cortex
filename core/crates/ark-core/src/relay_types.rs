@@ -11,7 +11,7 @@ use crate::sync_server::{
     OnChangeCallback, OnPeerConnectCallback, OnPeerDisconnectCallback, PeerEntry, StorageBackend,
 };
 use crate::sync_transport::{SyncTransport, TransportEvent};
-use crate::types::{SyncEntity, VersionVector};
+use crate::types::{PeerRecord, SyncEntity, VersionVector};
 
 const TAG: &str = "[RelaySync]";
 const VERSION_VECTOR_KEY: &str = "lan_sync.version_vector";

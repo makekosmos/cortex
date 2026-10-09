@@ -106,3 +106,5 @@ fn main() {
 
 #[cfg(test)]
 mod a11y_tests;
+#[cfg(test)]
+mod reply_tests;

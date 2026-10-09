@@ -40,6 +40,7 @@ mod local_writes;
 mod object_revision_compat;
 mod object_validation;
 mod object_write_snapshot;
+mod pairing_iroh;
 mod request_config;
 /// KOS-51: atomic ARK snapshot restore RPC (list/validate/restore).
 mod snapshot_restore;

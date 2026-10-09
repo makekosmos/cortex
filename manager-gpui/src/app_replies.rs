@@ -37,6 +37,31 @@ impl ManagerApp {
         );
     }
 
+    /// The `@action` reply: a mutation finished — reload the current view.
+    /// `connect_with_pairing_code` answers `{"status":"connected", …}` once
+    /// the peer's Hello completed, so the notice names the device instead of
+    /// the generic «Выполнено.»; an Engine error goes to the banner
+    /// (KOS-367 — pairing must never fail silently).
+    pub(crate) fn action_reply(&mut self, result: Result<Value, String>) {
+        self.action_busy = false;
+        match result {
+            Ok(value) => {
+                let peer_name = (value.get("status").and_then(Value::as_str) == Some("connected"))
+                    .then(|| value.get("device_name").and_then(Value::as_str))
+                    .flatten()
+                    .map(str::trim)
+                    .filter(|name| !name.is_empty())
+                    .map(str::to_owned);
+                self.notice = Some(match peer_name {
+                    Some(name) => format!("Устройство подключено: {name}."),
+                    None => "Выполнено.".into(),
+                });
+                self.reload_current_view();
+            }
+            Err(e) => self.error = Some(e),
+        }
+    }
+
     /// The `conn.login` reply: `integrations.login_contract` hands back the
     /// provider's login page — open it in the system browser.
     pub(crate) fn login_reply(&mut self, result: Result<Value, String>) {

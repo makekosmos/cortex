@@ -34,7 +34,7 @@ mod sync_server_tests;
 
 const TAG: &str = "[SyncServer]";
 const VERSION_VECTOR_KEY: &str = "lan_sync.version_vector";
-const KNOWN_PEERS_KEY: &str = "sync.peers";
+pub(crate) const KNOWN_PEERS_KEY: &str = "sync.peers";
 const REMOVED_PEERS_KEY: &str = "sync.removed_peers";
 const SYNC_LOAD_PAGE_SIZE: usize = 100;
 
@@ -232,12 +232,19 @@ pub(crate) async fn persist_pull_vector(
     save_version_vector(storage, vector).await;
 }
 
-async fn save_known_peers(storage: &Arc<dyn StorageBackend>, peers: &[PeerRecord]) {
+pub(crate) async fn save_known_peers(storage: &Arc<dyn StorageBackend>, peers: &[PeerRecord]) {
     let json = serde_json::to_string(peers).unwrap_or_default();
     storage.set_kv(KNOWN_PEERS_KEY, &json).await;
 }
 
-async fn load_removed_peer_ids(storage: &Arc<dyn StorageBackend>) -> Vec<String> {
+pub(crate) async fn load_known_peer_records(storage: &Arc<dyn StorageBackend>) -> Vec<PeerRecord> {
+    match storage.get_kv(KNOWN_PEERS_KEY).await {
+        Some(raw) => serde_json::from_str(&raw).unwrap_or_default(),
+        None => Vec::new(),
+    }
+}
+
+pub(crate) async fn load_removed_peer_ids(storage: &Arc<dyn StorageBackend>) -> Vec<String> {
     match storage.get_kv(REMOVED_PEERS_KEY).await {
         Some(raw) => serde_json::from_str(&raw).unwrap_or_default(),
         None => Vec::new(),

@@ -23,12 +23,28 @@ impl RelaySync {
                 msg,
             } => {
                 if matches!(&msg, LanSyncMessage::Hello { .. }) {
-                    let trusted = self
+                    // Pairing is first contact: a device that was never
+                    // paired/authorized has no stored transport key, so a
+                    // hard "key must already be on record" check drops every
+                    // legitimate Hello and pairing silently does nothing
+                    // (KOS-367). The pairing ticket itself is the capability
+                    // — the same trust level as the LAN/WS accept path, and
+                    // `auth_secret` HMAC verification still applies inside
+                    // `handle_message`. Only a *mismatching* stored key
+                    // (rotation/revocation guard) rejects the Hello.
+                    let known_key = self
                         .storage
                         .authorized_transport_public_key(&from_device_id)
-                        .await
-                        .is_some_and(|key| key == transport_public_key);
-                    if trusted {
+                        .await;
+                    if known_key
+                        .as_deref()
+                        .is_some_and(|key| key != transport_public_key)
+                    {
+                        eprintln!(
+                            "{TAG} rejecting Hello from {from_device_id}: transport key does \
+                             not match the authorized record"
+                        );
+                    } else {
                         self.handle_message(from_device_id.clone(), msg, None).await;
                         if self.is_authenticated_peer(&from_device_id).await {
                             let _ = self

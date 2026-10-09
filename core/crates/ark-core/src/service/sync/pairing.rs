@@ -52,6 +52,15 @@ async fn restart_sync_with_restore(
     }
 }
 
+/// How long `connect_with_pairing_code` waits for the peer's Hello before
+/// reporting failure. The dial itself is async — without this wait the op
+/// returned Ok the moment the transport restarted and a peer that never
+/// answered left the UI showing literally nothing (KOS-367). Bounded below
+/// the Manager's 15s RPC timeout: ticket decode + restart (which includes
+/// the endpoint bind and the `our_ticket` relay-homing wait) can already
+/// consume several seconds.
+const PAIRING_CONNECT_BUDGET: std::time::Duration = std::time::Duration::from_secs(12);
+
 pub(crate) async fn handle_connect_with_pairing_code(
     state: &Arc<ServiceState>,
     pairing_code: String,
@@ -72,13 +81,50 @@ pub(crate) async fn handle_connect_with_pairing_code(
     let restart_params = build_pairing_restart_params(&runtime, code);
     let restore_params = runtime.start_params.clone();
 
+    let started_at = std::time::Instant::now();
     restart_sync_with_restore(
         state,
         restart_params,
         restore_params,
         "connect_with_pairing_code",
     )
-    .await
+    .await?;
+
+    // Wait for the peer's Hello: the iroh dial runs in a background task,
+    // so a successful restart says nothing about reachability. Poll the
+    // fresh runtime's peer list until the budget expires; a timeout is a
+    // real error for the UI while the dial loop keeps retrying in the
+    // background, so a late peer still completes the pairing.
+    loop {
+        let runtime = {
+            let guard = state.sync.lock().await;
+            match guard.as_ref() {
+                Some(r) => r.clone(),
+                None => return Err("Sync not running".to_string()),
+            }
+        };
+        let mut entries = runtime.server.get_connected_peer_entries().await;
+        if let Some(relay) = runtime.relay.as_ref() {
+            entries.extend(relay.get_connected_peer_entries().await);
+        }
+        if let Some(peer) = entries
+            .into_iter()
+            .find(|entry| entry.device_id != runtime.device_id)
+        {
+            return Ok(json!({
+                "status": "connected",
+                "device_id": peer.device_id,
+                "device_name": peer.device_name,
+            }));
+        }
+        if started_at.elapsed() >= PAIRING_CONNECT_BUDGET {
+            return Err(
+                "device did not respond — check the code and that the other device is online"
+                    .to_string(),
+            );
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    }
 }
 
 /// `show_pairing_code` (KOS-269): the explicit LAN opt-in for the device
