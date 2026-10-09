@@ -109,3 +109,31 @@ fn relocated_static_cards_remain_visible_when_values_are_pending_or_failed(
 fn saved_updates_page_redirects_to_about() {
     assert_eq!(View::from_key("updates"), Some(View::About));
 }
+
+/// KOS-368: on macOS the Dock's window list showed two entries for the
+/// single Manager window. Root cause: gpui-pre-macos `set_title` calls
+/// `changeWindowsItem`, which *adds* the NSWindow to the Dock/Window list
+/// when AppKit has not tracked it yet; running it during `open_window`
+/// (before order-in) left a phantom entry once AppKit added the window
+/// itself. The fix defers the title until after the window is ordered in:
+/// creation options must not carry a title, and the real startup path must
+/// still open exactly one window.
+#[gpui::test]
+fn startup_window_defers_title_and_opens_exactly_one_window(cx: &mut TestAppContext) {
+    cx.update(gpui_component::init);
+    cx.update(imago_gpui::theme::apply);
+    cx.update(|cx| {
+        let options = crate::manager_window_options(cx);
+        assert!(
+            options
+                .titlebar
+                .as_ref()
+                .and_then(|t| t.title.as_ref())
+                .is_none(),
+            "creation-time window title reintroduces the phantom Dock entry"
+        );
+        crate::open_manager_window(cx);
+        let windows = cx.windows();
+        assert_eq!(windows.len(), 1, "expected one window, got {windows:?}");
+    });
+}
