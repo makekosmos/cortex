@@ -4,9 +4,10 @@ use std::time::Instant;
 
 use ::gpui::{prelude::*, *};
 use gpui_component::scroll::ScrollableElement;
+use serde_json::Value;
 
 use crate::app::ManagerApp;
-use crate::modals::{render_confirm, render_overlay};
+use crate::modals::{render_confirm, render_overlay, render_pairing_prompt};
 use crate::theme::*;
 use crate::views;
 use crate::widgets::*;
@@ -112,6 +113,15 @@ impl Render for ManagerApp {
         }
         if self.disclosure.is_some() || self.detail.is_some() {
             root = root.child(render_overlay(self, cx));
+        }
+        // KOS-369: an unanswered pairing request pops on top of any view.
+        let pairing_request = self
+            .data("sync.snapshot")
+            .get("incoming_pairing_requests")
+            .and_then(Value::as_array)
+            .and_then(|requests| requests.first().cloned());
+        if let Some(request) = pairing_request {
+            root = root.child(render_pairing_prompt(&request, cx));
         }
         // KOS-355: full-window update overlay, topmost layer. The state is
         // resolved every frame from the Engine status slot; `Failed` needs

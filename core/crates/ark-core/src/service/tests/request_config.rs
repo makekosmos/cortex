@@ -94,6 +94,7 @@ fn pairing_restart_params_force_iroh_and_replace_ticket() {
             auth_secret: Some("secret".to_string()),
             use_iroh: false,
             iroh_peer_ticket: None,
+            pairing_connect: false,
             discovery_enabled: true,
             // Loopback on purpose: the pairing restart must escalate the
             // bind, not just inherit it (KOS-269).
@@ -147,6 +148,7 @@ fn loopback_runtime_fixture() -> SyncRuntime {
             auth_secret: None,
             use_iroh: false,
             iroh_peer_ticket: None,
+            pairing_connect: false,
             discovery_enabled: false,
             bind: SyncBind::Loopback,
             app_version: None,
@@ -252,6 +254,7 @@ async fn start_sync_with_use_iroh_selects_iroh_transport_and_exposes_ticket() {
             auth_secret: None,
             use_iroh: true,
             iroh_peer_ticket: None,
+            pairing_connect: false,
             discovery_enabled: false,
             bind: SyncBind::Loopback,
             app_version: None,

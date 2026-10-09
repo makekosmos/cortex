@@ -13,7 +13,10 @@ pub(crate) use self::start::handle_start_sync;
 // The pairing handlers; the param builders are exercised by tests only.
 #[cfg(test)]
 pub(crate) use self::pairing::{build_pairing_restart_params, lan_opt_in_params};
-pub(crate) use self::pairing::{handle_connect_with_pairing_code, handle_show_pairing_code};
+pub(crate) use self::pairing::{
+    handle_accept_pairing, handle_cancel_pairing, handle_connect_with_pairing_code,
+    handle_decline_pairing, handle_show_pairing_code,
+};
 
 /// Everything a spawned SyncClient needs: the shared server-side handles
 /// plus this node's identity material.
@@ -166,6 +169,7 @@ pub(super) async fn handle_start_sync_with_params(
             auth_secret: params.auth_secret,
             use_iroh: params.use_iroh,
             iroh_peer_ticket: params.iroh_peer_ticket,
+            pairing_connect: params.pairing_connect,
             discovery_enabled: params.discovery_enabled,
             bind: params.bind,
             app_version: params.app_version,
@@ -233,14 +237,23 @@ pub(super) async fn handle_get_sync_snapshot(state: &Arc<ServiceState>) -> Resul
                     "pairing_available": false,
                     "own_pairing_code_available": false,
                     "peers": [],
+                    "incoming_pairing_requests": [],
+                    "outgoing_pairing": Value::Null,
                 }))
             }
         }
     };
 
     let mut connected = runtime.server.get_connected_peer_entries().await;
+    // KOS-369 consent surface: unknown endpoints that Hello'd us wait in
+    // `incoming_pairing_requests` for «Принять / Отклонить»; `outgoing_pairing`
+    // reports our own attempt (pending / declined / connected) to the
+    // initiator's UI.
+    let mut incoming_pairing_requests = Vec::new();
+    let mut outgoing_pairing = Value::Null;
     if let Some(relay) = runtime.relay.as_ref() {
         connected.extend(relay.get_connected_peer_entries().await);
+        (incoming_pairing_requests, outgoing_pairing) = pairing::snapshot(relay).await;
     }
     let known = runtime.server.get_known_peers().await;
     // Fresh Hello metadata wins over the persisted record: a peer that just
@@ -309,6 +322,8 @@ pub(super) async fn handle_get_sync_snapshot(state: &Arc<ServiceState>) -> Resul
         "pairing_available": runtime.iroh_our_ticket.is_some(),
         "own_pairing_code_available": runtime.iroh_our_ticket.is_some(),
         "peers": peers,
+        "incoming_pairing_requests": incoming_pairing_requests,
+        "outgoing_pairing": outgoing_pairing,
         "local_device": {
             "device_id": runtime.device_id.clone(),
             "device_name": runtime.device_name.clone(),

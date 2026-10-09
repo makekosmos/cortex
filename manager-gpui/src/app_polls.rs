@@ -18,14 +18,18 @@ impl ManagerApp {
                 self.refresh_status("about.health", "health");
             }
         }
-        if self.view == View::Sync && Instant::now() >= self.next_sync_poll {
+        // App-wide (KOS-369): an incoming pairing request must raise the
+        // consent prompt even when the user isn't on the Sync page — the
+        // snapshot carries `incoming_pairing_requests`/`outgoing_pairing`.
+        if Instant::now() >= self.next_sync_poll {
             self.next_sync_poll = Instant::now() + std::time::Duration::from_secs(3);
             if !self.background_slots.contains("sync.snapshot")
                 && !matches!(self.slots.get("sync.snapshot"), Some(Slot::Loading))
             {
                 self.refresh("sync.snapshot", "get_sync_snapshot", json!({}));
             }
-            if self.sync_pairing_open
+            if self.view == View::Sync
+                && self.sync_pairing_open
                 && self.data("sync.ticket").is_null()
                 && !self.background_slots.contains("sync.ticket")
                 && !matches!(self.slots.get("sync.ticket"), Some(Slot::Loading))

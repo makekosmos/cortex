@@ -41,6 +41,7 @@ mod object_revision_compat;
 mod object_validation;
 mod object_write_snapshot;
 mod pairing_iroh;
+mod pairing_proto;
 mod request_config;
 /// KOS-51: atomic ARK snapshot restore RPC (list/validate/restore).
 mod snapshot_restore;
@@ -100,6 +101,7 @@ async fn setup_sync_with_capturing_transport(
             auth_secret: None,
             use_iroh: false,
             iroh_peer_ticket: None,
+            pairing_connect: false,
             discovery_enabled: true,
             bind: SyncBind::AllInterfaces,
             app_version: None,

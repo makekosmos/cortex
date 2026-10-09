@@ -1,5 +1,5 @@
 use ::gpui::{prelude::*, *};
-use serde_json::json;
+use serde_json::{json, Value};
 
 use super::{block, block_row, device_identity, pairing_code, presence, section_label};
 use crate::app::ManagerApp;
@@ -112,6 +112,60 @@ pub(super) fn render(
                         ),
                 ),
         );
+        // KOS-369: the connect RPC returns `pending` at once — the outcome
+        // arrives through `outgoing_pairing` in the snapshot. While pending
+        // the row offers «Отмена»; a terminal state shows the result and a
+        // «Скрыть» that clears it engine-side.
+        let outgoing = app.data("sync.snapshot");
+        let outgoing = outgoing.get("outgoing_pairing");
+        let status = outgoing
+            .and_then(|o| o.get("status"))
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let pending = status == "pending";
+        let timed_out = pending
+            && outgoing
+                .and_then(|o| o.get("expires_in_ms"))
+                .and_then(Value::as_u64)
+                == Some(0);
+        let (line, terminal) = match status {
+            _ if timed_out => (
+                "Не дождались подтверждения — проверьте код и повторите.",
+                true,
+            ),
+            "pending" => ("Ожидание подтверждения на другом устройстве…", false),
+            "declined" => ("Подключение отклонено.", true),
+            "connected" => ("Устройство подключено.", true),
+            _ => ("", false),
+        };
+        if !line.is_empty() {
+            // The status text lives in the button's accessible name: the a11y
+            // tree (and assistive tech) only expose interactive nodes.
+            content = content.child(
+                block_row(false).child(device_identity(line, "")).child(
+                    btn(
+                        if terminal {
+                            "sync-pairing-dismiss"
+                        } else {
+                            "sync-pairing-cancel"
+                        },
+                        if terminal {
+                            "Скрыть"
+                        } else {
+                            "Отмена"
+                        },
+                        false,
+                        cx,
+                        |app, cx| {
+                            app.action("cancel_pairing", json!({}));
+                            cx.notify();
+                        },
+                    )
+                    .accessibility_label(line)
+                    .disabled(app.action_busy),
+                ),
+            );
+        }
     }
     div()
         .flex()

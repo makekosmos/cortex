@@ -174,5 +174,5 @@ impl crate::sync_transport::SyncTransport for CapturingTransport {
         Ok(())
     }
 
-    fn stop(&self) {}
+    async fn stop(&self) {}
 }

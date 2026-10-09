@@ -174,6 +174,9 @@ pub(crate) async fn handle_request(
         Request::ConnectWithPairingCode { pairing_code } => {
             system::connect_with_pairing_code(state, pairing_code).await
         }
+        Request::AcceptPairing { device_id } => system::accept_pairing(state, device_id).await,
+        Request::DeclinePairing { device_id } => system::decline_pairing(state, device_id).await,
+        Request::CancelPairing => system::cancel_pairing(state).await,
         Request::LeaveSpace => system::leave_space(state).await,
         Request::AddSeedPeer { addresses } => system::add_seed_peer(state, addresses).await,
         Request::GetOwnAddresses { port } => system::own_addresses(state, port).await,

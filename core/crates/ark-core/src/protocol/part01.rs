@@ -106,6 +106,13 @@ pub enum LanSyncMessage {
     #[serde(rename = "signed_integration_ack")]
     SignedIntegrationAck { message_id: String, accepted: bool },
 
+    /// KOS-369: the responder declined the consent prompt. Protocol-level
+    /// rejection so the initiator shows «Подключение отклонено» instead of
+    /// hanging; peers built before this variant can't parse it and simply
+    /// get their connection closed.
+    #[serde(rename = "pairing_rejected")]
+    PairingRejected { device_id: String },
+
     #[serde(rename = "peer_list")]
     PeerList { peers: Vec<PeerRecord> },
 
@@ -136,7 +143,9 @@ pub fn deserialize_message(raw: &str) -> Option<LanSyncMessage> {
 
 pub fn message_origin_device_id(msg: &LanSyncMessage) -> Option<String> {
     match msg {
-        LanSyncMessage::Hello { device_id, .. } => Some(device_id.clone()),
+        LanSyncMessage::Hello { device_id, .. } | LanSyncMessage::PairingRejected { device_id } => {
+            Some(device_id.clone())
+        }
         LanSyncMessage::VersionVector {
             origin_device_id, ..
         }

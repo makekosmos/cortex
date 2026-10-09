@@ -60,6 +60,7 @@ async fn disconnect_peer_stops_matching_outbound_client_and_emits_events() {
             auth_secret: None,
             use_iroh: false,
             iroh_peer_ticket: None,
+            pairing_connect: false,
             discovery_enabled: true,
             bind: SyncBind::AllInterfaces,
             app_version: None,

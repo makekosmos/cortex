@@ -50,3 +50,32 @@ async fn pairing_connect_reply_surfaces_outcome(cx: &mut TestAppContext) {
         assert_eq!(app.notice.as_deref(), Some("Выполнено."));
     });
 }
+
+/// KOS-369: a `pending` connect reply unblocks the button without a success
+/// notice (the consent wait lives in the pairing card), and the responder's
+/// «Отклонить» reply reads «Подключение отклонено.».
+#[gpui::test]
+async fn pairing_pending_and_declined_replies(cx: &mut TestAppContext) {
+    let (manager, cx) = launch(cx);
+
+    manager.update(cx, |app, _cx| {
+        app.action("connect_with_pairing_code", json!({"pairing_code": "x"}));
+    });
+    manager.update(cx, |app, _cx| {
+        app.action_reply(Ok(json!({"status": "pending"})));
+    });
+    manager.read_with(cx, |app, _| {
+        assert!(!app.action_busy);
+        assert!(app.notice.is_none());
+        assert!(app.error.is_none());
+    });
+
+    manager.update(cx, |app, _cx| {
+        app.action("decline_pairing", json!({"device_id": "dev-b"}));
+        app.action_reply(Ok(json!({"status": "declined"})));
+    });
+    manager.read_with(cx, |app, _| {
+        assert!(!app.action_busy);
+        assert_eq!(app.notice.as_deref(), Some("Подключение отклонено."));
+    });
+}

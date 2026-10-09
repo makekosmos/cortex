@@ -12,9 +12,18 @@ pub struct IrohTransport {
     registry: std::sync::Arc<DeviceRegistry>,
     /// Live connections by remote endpoint so «Отключить» can actually
     /// close the QUIC link, not just evict the peer's auth state.
-    connections:
-        std::sync::Arc<std::sync::Mutex<HashMap<EndpointId, iroh::endpoint::Connection>>>,
+    connections: std::sync::Arc<std::sync::Mutex<HashMap<EndpointId, iroh::endpoint::Connection>>>,
+    /// Endpoints we deliberately cut (`disconnect_transport_peer`) — the
+    /// dial loop must not resurrect them on its own: a declined or
+    /// cancelled pairing attempt would re-prompt the responder forever.
+    suppressed_endpoints: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<EndpointId>>>,
     outbound_storage: Arc<tokio::sync::RwLock<Option<OutboundStorage>>>,
+    /// Every spawned task (relay watch, accept/dial loops, per-connection
+    /// pumps) — aborted and joined by `stop()`. The connection tasks hold
+    /// `outbound_storage` (the open `ark.db` conn); an untracked task
+    /// outliving `stop()` keeps the file open past teardown, which on
+    /// Windows makes the containing directory undeletable (KOS-369).
+    tasks: Arc<Mutex<Vec<tokio::task::JoinHandle<()>>>>,
 }
 
 impl IrohTransport {
@@ -29,8 +38,23 @@ impl IrohTransport {
             stop_rx,
             registry: std::sync::Arc::new(DeviceRegistry::new()),
             connections: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())),
+            suppressed_endpoints: std::sync::Arc::new(std::sync::Mutex::new(
+                std::collections::HashSet::new(),
+            )),
             outbound_storage: Arc::new(tokio::sync::RwLock::new(None)),
+            tasks: Arc::new(Mutex::new(Vec::new())),
         }
+    }
+
+    /// Register a spawned task for `stop()`'s abort-and-join sweep. Spawn
+    /// sites must push the handle in the same synchronous stretch as the
+    /// `tokio::spawn` call — an abort only lands at the next await, so a
+    /// task that has started but not yet registered would escape the join.
+    fn track(&self, handle: tokio::task::JoinHandle<()>) {
+        self.tasks
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(handle);
     }
 
     /// Текущий снимок реестра device_id ↔ EndpointId (для тестов/диагностики).
