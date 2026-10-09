@@ -59,7 +59,9 @@ async fn connect_with_pairing_code_authenticates_both_sides() {
     start(&state_a, "device-a", "Device A", free_port()).await;
     start(&state_b, "device-b", "Device B", free_port()).await;
 
-    let ticket = handle_request(&state_a, Request::GetOwnIrohTicket)
+    // «Показать код» on A: returns the ticket and opens A's first-contact
+    // window — the same RPC the Manager fires when the pairing card opens.
+    let ticket = handle_request(&state_a, Request::ShowPairingCode)
         .await
         .unwrap()
         .as_str()
@@ -67,14 +69,17 @@ async fn connect_with_pairing_code_authenticates_both_sides() {
         .to_string();
 
     // The exact RPC the Manager sends when «Подключить» is clicked.
-    handle_request(
+    let reply = handle_request(
         &state_b,
         Request::ConnectWithPairingCode {
-            pairing_code: ticket,
+            pairing_code: ticket.clone(),
         },
     )
     .await
     .expect("connect_with_pairing_code must accept a valid ticket");
+    assert_eq!(reply["status"].as_str(), Some("connected"));
+    assert_eq!(reply["device_id"].as_str(), Some("device-a"));
+    assert_eq!(reply["device_name"].as_str(), Some("Device A"));
 
     let peer_online = |snapshot: &Value, device_id: &str| {
         snapshot["peers"].as_array().is_some_and(|peers| {
@@ -105,6 +110,170 @@ async fn connect_with_pairing_code_authenticates_both_sides() {
             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         }
     }
+
+    // «Отключить» must drop the transport peer too: B's snapshot stops
+    // reporting A online, and the paired endpoint key is forgotten.
+    handle_request(
+        &state_b,
+        Request::DisconnectPeer {
+            device_id: "device-a".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+    let snapshot_b = handle_request(&state_b, Request::GetSyncSnapshot)
+        .await
+        .unwrap();
+    assert!(
+        !peer_online(&snapshot_b, "device-a"),
+        "a removed iroh peer must not keep showing online: {snapshot_b}"
+    );
+    let keys = handle_request(
+        &state_b,
+        Request::GetSyncKv {
+            key: "sync.peer_transport_keys".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(
+        keys.is_null() || !keys.as_str().is_some_and(|raw| raw.contains("device-a")),
+        "removed peer must lose its stored endpoint key: {keys}"
+    );
+
+    // Re-pairing the same code is explicit re-consent: B enters A's code
+    // again and the removed block lifts for the ticketed endpoint.
+    let repair = handle_request(
+        &state_b,
+        Request::ConnectWithPairingCode {
+            pairing_code: ticket,
+        },
+    )
+    .await;
+    let repair_deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+    let mut repaired = matches!(
+        repair,
+        Ok(ref value) if value["device_id"].as_str() == Some("device-a")
+    );
+    while !repaired {
+        assert!(
+            std::time::Instant::now() < repair_deadline,
+            "timed out waiting for B to re-authenticate A after re-pair"
+        );
+        let snapshot_b = handle_request(&state_b, Request::GetSyncSnapshot)
+            .await
+            .unwrap();
+        repaired = peer_online(&snapshot_b, "device-a");
+        if !repaired {
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        }
+    }
+
+    handle_request(&state_a, Request::StopSync).await.unwrap();
+    handle_request(&state_b, Request::StopSync).await.unwrap();
+}
+
+/// First contact is only admitted while a pairing window is open: a peer
+/// that learned our ticket (it stays valid forever) but connects while we
+/// never showed a code must not get trusted — its Hello is dropped and it
+/// never appears in our snapshot.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn hello_without_pairing_window_is_not_trusted() {
+    let fixture_a = service_fixture();
+    let fixture_b = service_fixture();
+    let state_a = fixture_a.state.clone();
+    let state_b = fixture_b.state.clone();
+
+    for (state, dir) in [(&state_a, &fixture_a.dir), (&state_b, &fixture_b.dir)] {
+        let db_path = dir.path().join("ark.db");
+        handle_request(
+            state,
+            Request::Init {
+                db_path: db_path.to_string_lossy().to_string(),
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    let free_port = || {
+        std::net::TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port()
+    };
+
+    for (state, id, name) in [
+        (&state_a, "device-a", "Device A"),
+        (&state_b, "device-b", "Device B"),
+    ] {
+        handle_request(
+            state,
+            Request::StartSync(StartSyncParams {
+                space_id: "pair-space".to_string(),
+                device_id: id.to_string(),
+                device_name: Some(name.to_string()),
+                port: Some(free_port()),
+                seed_addresses: None,
+                relay_url: None,
+                relay_api_key: None,
+                auth_secret: None,
+                use_iroh: true,
+                iroh_peer_ticket: None,
+                discovery_enabled: false,
+                bind: SyncBind::Loopback,
+                app_version: None,
+            }),
+        )
+        .await
+        .unwrap();
+    }
+
+    // Passive ticket read — `GetOwnIrohTicket` opens no pairing window.
+    let ticket = handle_request(&state_a, Request::GetOwnIrohTicket)
+        .await
+        .unwrap()
+        .as_str()
+        .expect("device A must expose an iroh ticket")
+        .to_string();
+
+    // B dials A's ticket (its own connect opens B's window pinned to A) —
+    // A never opened one, so B's Hello must not authenticate at A.
+    let _ = handle_request(
+        &state_b,
+        Request::ConnectWithPairingCode {
+            pairing_code: ticket,
+        },
+    )
+    .await;
+
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+    let snapshot_a = handle_request(&state_a, Request::GetSyncSnapshot)
+        .await
+        .unwrap();
+    let trusted = snapshot_a["peers"].as_array().is_some_and(|peers| {
+        peers.iter().any(|peer| {
+            peer["device_id"].as_str() == Some("device-b")
+                && peer["status"].as_str() == Some("online")
+        })
+    });
+    assert!(
+        !trusted,
+        "an endpoint with no open pairing window must not get trusted: {snapshot_a}"
+    );
+    let keys = handle_request(
+        &state_a,
+        Request::GetSyncKv {
+            key: "sync.peer_transport_keys".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(
+        keys.is_null() || !keys.as_str().is_some_and(|raw| raw.contains("device-b")),
+        "no pairing window → no persisted endpoint key: {keys}"
+    );
 
     handle_request(&state_a, Request::StopSync).await.unwrap();
     handle_request(&state_b, Request::StopSync).await.unwrap();

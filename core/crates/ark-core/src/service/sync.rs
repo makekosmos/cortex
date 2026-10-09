@@ -332,6 +332,12 @@ pub(super) async fn handle_disconnect_peer(
     }
 
     let _ = runtime.server.disconnect_peer(device_id).await;
+    // Transport-paired peers (iroh) live in RelaySync's own peer table —
+    // without this eviction they keep syncing and stay "online" after
+    // «Отключить» until the Engine restarts (KOS-367).
+    if let Some(relay) = runtime.relay.as_ref() {
+        relay.disconnect_peer(device_id).await;
+    }
 
     let client_entries: Vec<(String, Arc<SyncClient>)> = {
         let clients = runtime.clients.lock().await;
@@ -355,7 +361,10 @@ pub(super) async fn handle_disconnect_peer(
         }
     }
 
-    let remaining = runtime.server.connected_peer_count().await;
+    let mut remaining = runtime.server.connected_peer_count().await;
+    if let Some(relay) = runtime.relay.as_ref() {
+        remaining += relay.connected_peer_count().await;
+    }
     emit_event(json!({
         "event": "peer_disconnected",
         "device_id": device_id,

@@ -33,6 +33,7 @@ impl RelaySync {
             auth_secret,
             peers: Arc::new(Mutex::new(HashMap::new())),
             transport_keys: Arc::new(Mutex::new(HashMap::new())),
+            pairing_accept: Mutex::new(None),
             incoming_sync: Arc::new(Mutex::new(None)),
             on_change: Arc::new(Mutex::new(None)),
             on_peer_connect: Arc::new(Mutex::new(None)),

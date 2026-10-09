@@ -69,6 +69,13 @@ pub(crate) async fn handle_connect_with_pairing_code(
     if code.is_empty() {
         return Err("pairing code is empty".to_string());
     }
+    // Validate before touching the running sync: a malformed code used to
+    // tear sync down and restore it for nothing. The endpoint id also pins
+    // the wait below to the device the code belongs to.
+    let expected_endpoint = crate::iroh_transport::from_ticket(code)
+        .map_err(|err| format!("invalid pairing code: {err}"))?
+        .id
+        .to_string();
 
     let runtime = {
         let guard = state.sync.lock().await;
@@ -91,10 +98,12 @@ pub(crate) async fn handle_connect_with_pairing_code(
     .await?;
 
     // Wait for the peer's Hello: the iroh dial runs in a background task,
-    // so a successful restart says nothing about reachability. Poll the
-    // fresh runtime's peer list until the budget expires; a timeout is a
-    // real error for the UI while the dial loop keeps retrying in the
-    // background, so a late peer still completes the pairing.
+    // so a successful restart says nothing about reachability. Poll until
+    // the *ticketed* endpoint authenticates — matching any connected peer
+    // would report a false success naming a device that merely reconnected
+    // during the window. A timeout is a real error for the UI while the
+    // dial loop keeps retrying in the background, so a late peer still
+    // completes the pairing.
     loop {
         let runtime = {
             let guard = state.sync.lock().await;
@@ -103,19 +112,17 @@ pub(crate) async fn handle_connect_with_pairing_code(
                 None => return Err("Sync not running".to_string()),
             }
         };
-        let mut entries = runtime.server.get_connected_peer_entries().await;
         if let Some(relay) = runtime.relay.as_ref() {
-            entries.extend(relay.get_connected_peer_entries().await);
-        }
-        if let Some(peer) = entries
-            .into_iter()
-            .find(|entry| entry.device_id != runtime.device_id)
-        {
-            return Ok(json!({
-                "status": "connected",
-                "device_id": peer.device_id,
-                "device_name": peer.device_name,
-            }));
+            if let Some(peer) = relay
+                .authenticated_peer_for_transport_key(&expected_endpoint)
+                .await
+            {
+                return Ok(json!({
+                    "status": "connected",
+                    "device_id": peer.device_id,
+                    "device_name": peer.device_name,
+                }));
+            }
         }
         if started_at.elapsed() >= PAIRING_CONNECT_BUDGET {
             return Err(
@@ -158,11 +165,18 @@ pub(crate) async fn handle_show_pairing_code(state: &Arc<ServiceState>) -> Resul
         .await?;
     }
 
-    let ticket = state
-        .sync
-        .lock()
-        .await
-        .as_ref()
-        .and_then(|r| r.iroh_our_ticket.clone());
-    Ok(json!(ticket))
+    let runtime = {
+        let guard = state.sync.lock().await;
+        match guard.as_ref() {
+            Some(r) => r.clone(),
+            None => return Err("Sync not running".to_string()),
+        }
+    };
+    // The user is showing a code: admit whoever proves the ticket for the
+    // next few minutes. Without this window the Hello gate drops unknown
+    // endpoints and the other side's «Подключить» goes nowhere.
+    if let Some(relay) = runtime.relay.as_ref() {
+        relay.open_pairing_window(None).await;
+    }
+    Ok(json!(runtime.iroh_our_ticket.clone()))
 }

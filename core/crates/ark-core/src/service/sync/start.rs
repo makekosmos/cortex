@@ -145,6 +145,7 @@ pub(crate) async fn handle_start_sync(
             Some(ticket) => Some(crate::iroh_transport::from_ticket(ticket)?),
             None => None,
         };
+        let peer_endpoint = peer_addr.as_ref().map(|addr| addr.id.to_string());
         let iroh_transport = Arc::new(crate::iroh_transport::IrohTransport::new(
             crate::iroh_transport::IrohConfig {
                 device_id: device_id.clone(),
@@ -180,6 +181,12 @@ pub(crate) async fn handle_start_sync(
             iroh_transport.clone() as Arc<dyn crate::sync_transport::SyncTransport>,
         );
         wire_relay_sync_events(&relay_sync).await;
+        // A start carrying a peer ticket is a pairing intent: pin the
+        // first-contact window to that endpoint *before* the transport
+        // starts dialing, or the responder's first Hello could be dropped.
+        if let Some(endpoint) = peer_endpoint {
+            relay_sync.open_pairing_window(Some(endpoint)).await;
+        }
         relay_sync.start().await?;
         // `start()` binds the endpoint, so `our_ticket()` is available now.
         // Snapshot it onto `SyncRuntime` for `GetOwnIrohTicket` — capture

@@ -9,6 +9,7 @@ struct ConnectionParams {
     stop_rx: watch::Receiver<bool>,
     event_tx: mpsc::UnboundedSender<TransportEvent>,
     registry: Arc<DeviceRegistry>,
+    connections: Arc<Mutex<HashMap<EndpointId, iroh::endpoint::Connection>>>,
     outbound_storage: Arc<tokio::sync::RwLock<Option<OutboundStorage>>>,
 }
 
@@ -51,10 +52,15 @@ async fn handle_connection(params: ConnectionParams) {
         stop_rx,
         event_tx,
         registry,
+        connections,
         outbound_storage,
     } = params;
     let remote_endpoint_id = conn.remote_id();
     let role = if is_dialer { "dialer" } else { "listener" };
+    connections
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(remote_endpoint_id, conn.clone());
 
     // ── Получаем единственный bi-стрим для всего соединения. ─────────────────
     let (mut send, recv) = if is_dialer {
@@ -281,6 +287,10 @@ async fn handle_connection(params: ConnectionParams) {
     // stop_rx). Мы просто ждём join'а.
     let _ = writer_handle.await;
     let _ = reader_handle.await;
+    connections
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(&remote_endpoint_id);
 
     eprintln!("[iroh] connection closed ({role}) remote={remote_endpoint_id}");
 }

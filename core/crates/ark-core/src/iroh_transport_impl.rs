@@ -10,6 +10,10 @@ pub struct IrohTransport {
     stop_rx: watch::Receiver<bool>,
     /// Шаг 3: device_id ↔ EndpointId реестр, заполняется по входящим Hello.
     registry: std::sync::Arc<DeviceRegistry>,
+    /// Live connections by remote endpoint so «Отключить» can actually
+    /// close the QUIC link, not just evict the peer's auth state.
+    connections:
+        std::sync::Arc<std::sync::Mutex<HashMap<EndpointId, iroh::endpoint::Connection>>>,
     outbound_storage: Arc<tokio::sync::RwLock<Option<OutboundStorage>>>,
 }
 
@@ -24,6 +28,7 @@ impl IrohTransport {
             stop_tx,
             stop_rx,
             registry: std::sync::Arc::new(DeviceRegistry::new()),
+            connections: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())),
             outbound_storage: Arc::new(tokio::sync::RwLock::new(None)),
         }
     }

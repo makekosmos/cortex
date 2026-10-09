@@ -57,6 +57,7 @@ impl SyncTransport for IrohTransport {
             let accept_endpoint = endpoint.clone();
             let accept_event_tx = event_tx.clone();
             let accept_registry = self.registry.clone();
+            let accept_connections = self.connections.clone();
             let accept_outbound_storage = self.outbound_storage.clone();
             let mut accept_stop = self.stop_rx.clone();
             let out_tx = self.out_tx.clone();
@@ -75,6 +76,7 @@ impl SyncTransport for IrohTransport {
                             };
                             let event_tx = accept_event_tx.clone();
                             let registry = accept_registry.clone();
+                            let connections = accept_connections.clone();
                             let outbound_storage = accept_outbound_storage.clone();
                             let out_rx = out_tx.subscribe();
                             let stop_rx = accept_stop.clone();
@@ -100,6 +102,7 @@ impl SyncTransport for IrohTransport {
                                     stop_rx,
                                     event_tx,
                                     registry,
+                                    connections,
                                     outbound_storage,
                                 })
                                 .await;
@@ -122,6 +125,7 @@ impl SyncTransport for IrohTransport {
             let dial_endpoint = endpoint.clone();
             let dial_event_tx = event_tx.clone();
             let dial_registry = self.registry.clone();
+            let dial_connections = self.connections.clone();
             let dial_outbound_storage = self.outbound_storage.clone();
             let mut dial_stop = self.stop_rx.clone();
             let out_tx = self.out_tx.clone();
@@ -170,6 +174,7 @@ impl SyncTransport for IrohTransport {
                                 stop_rx,
                                 event_tx: dial_event_tx.clone(),
                                 registry: dial_registry.clone(),
+                                connections: dial_connections.clone(),
                                 outbound_storage: dial_outbound_storage.clone(),
                             })
                             .await;
@@ -290,6 +295,33 @@ impl SyncTransport for IrohTransport {
             Ok(())
         } else {
             Err("iroh transport identity does not match peer endpoint".into())
+        }
+    }
+
+    fn disconnect_peer(&self, device_id: &str) -> Result<(), String> {
+        let endpoint = self
+            .registry
+            .endpoint_id_for(device_id)
+            .ok_or_else(|| format!("iroh peer {device_id} has no bound endpoint"))?;
+        self.disconnect_transport_peer(&endpoint.to_string())
+    }
+
+    fn disconnect_transport_peer(&self, transport_public_key: &str) -> Result<(), String> {
+        let endpoint_id: EndpointId = transport_public_key
+            .parse()
+            .map_err(|_| "iroh transport key is not an endpoint id".to_string())?;
+        let conn = self
+            .connections
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&endpoint_id);
+        match conn {
+            Some(conn) => {
+                conn.close(0u32.into(), b"peer removed");
+                self.registry.remove_endpoint(&endpoint_id);
+                Ok(())
+            }
+            None => Err("iroh peer has no live connection".to_string()),
         }
     }
 
