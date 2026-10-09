@@ -34,11 +34,9 @@ impl Button {
         self
     }
 
-    pub fn hover(mut self, style: impl FnOnce(StyleRefinement) -> StyleRefinement) -> Self {
-        self.inner = self.inner.hover(style);
-        self
-    }
-
+    // NOTE: no `hover` forwarding — gpui-component's Button::render applies the
+    // variant hover itself, so a user-set hover_style would collide (it was
+    // silently overwritten in release builds and panics under debug_assertions).
     pub fn disabled(mut self, disabled: bool) -> Self {
         self.inner = self.inner.disabled(disabled);
         self
