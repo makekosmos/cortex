@@ -143,6 +143,30 @@ async fn handle_connection(params: ConnectionParams) {
                             if outgoing.target.is_some_and(|target| target != remote_endpoint_id) {
                                 continue;
                             }
+                            // Data frames only flow to authenticated
+                            // endpoints. A pairing-pending connection (KOS-369)
+                            // is mapped in the registry but untrusted: it sees
+                            // Hello + PairingRejected and nothing else.
+                            if !writer_registry.is_authenticated_endpoint(&remote_endpoint_id)
+                                && !matches!(
+                                    outgoing.msg,
+                                    LanSyncMessage::Hello { .. }
+                                        | LanSyncMessage::PairingRejected { .. }
+                                )
+                            {
+                                if let Some(completion) = outgoing.completion {
+                                    if let Some(
+                                        tx
+                                    ) = completion.lock().unwrap_or_else(
+                                        |e| e.into_inner()
+                                    ).take() {
+                                        let _ = tx.send(Err(
+                                            "iroh transport peer is not authenticated".into()
+                                        ));
+                                    }
+                                }
+                                continue;
+                            }
                             let variant = message_variant_name(&outgoing.msg);
                             let authorization = if let LanSyncMessage::SignedIntegrationFrame {
                                 frame

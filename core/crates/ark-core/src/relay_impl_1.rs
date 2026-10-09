@@ -33,11 +33,14 @@ impl RelaySync {
             auth_secret,
             peers: Arc::new(Mutex::new(HashMap::new())),
             transport_keys: Arc::new(Mutex::new(HashMap::new())),
-            pairing_accept: Mutex::new(None),
+            pending_pairing: Mutex::new(HashMap::new()),
+            declined_pairing: Mutex::new(HashMap::new()),
+            outgoing_pairing: Mutex::new(None),
             incoming_sync: Arc::new(Mutex::new(None)),
             on_change: Arc::new(Mutex::new(None)),
             on_peer_connect: Arc::new(Mutex::new(None)),
             on_peer_disconnect: Arc::new(Mutex::new(None)),
+            on_pairing_changed: Arc::new(Mutex::new(None)),
             tasks: Mutex::new(Vec::new()),
         })
     }
@@ -52,6 +55,16 @@ impl RelaySync {
 
     pub async fn set_on_peer_disconnect(&self, handler: OnPeerDisconnectCallback) {
         *self.on_peer_disconnect.lock().await = Some(handler);
+    }
+
+    pub async fn set_on_pairing_changed(&self, handler: OnPairingChangedCallback) {
+        *self.on_pairing_changed.lock().await = Some(handler);
+    }
+
+    async fn notify_pairing_changed(&self) {
+        if let Some(handler) = self.on_pairing_changed.lock().await.as_ref() {
+            handler();
+        }
     }
 
     pub async fn start(self: &Arc<Self>) -> Result<(), String> {

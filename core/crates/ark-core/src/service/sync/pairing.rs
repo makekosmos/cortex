@@ -27,7 +27,9 @@ pub(crate) fn build_pairing_restart_params(
     runtime: &SyncRuntime,
     pairing_code: &str,
 ) -> SyncStartParams {
-    lan_opt_in_params(runtime, Some(pairing_code.trim().to_string()))
+    let mut params = lan_opt_in_params(runtime, Some(pairing_code.trim().to_string()));
+    params.pairing_connect = true;
+    params
 }
 
 /// Stop the running sync and restart it with `params`; on failure restore
@@ -52,15 +54,12 @@ async fn restart_sync_with_restore(
     }
 }
 
-/// How long `connect_with_pairing_code` waits for the peer's Hello before
-/// reporting failure. The dial itself is async — without this wait the op
-/// returned Ok the moment the transport restarted and a peer that never
-/// answered left the UI showing literally nothing (KOS-367). Bounded below
-/// the Manager's 15s RPC timeout: ticket decode + restart (which includes
-/// the endpoint bind and the `our_ticket` relay-homing wait) can already
-/// consume several seconds.
-const PAIRING_CONNECT_BUDGET: std::time::Duration = std::time::Duration::from_secs(12);
-
+/// KOS-369: entering a code kicks off an *asynchronous* pairing attempt.
+/// The RPC answers `pending` right after the sync restart — the outcome
+/// (the other human pressing «Принять»/«Отклонить») is reported through
+/// `get_sync_snapshot` as `outgoing_pairing`. A blocking wait here stalled
+/// the sequential service worker and still could not span a human
+/// decision.
 pub(crate) async fn handle_connect_with_pairing_code(
     state: &Arc<ServiceState>,
     pairing_code: String,
@@ -70,8 +69,7 @@ pub(crate) async fn handle_connect_with_pairing_code(
         return Err("pairing code is empty".to_string());
     }
     // Validate before touching the running sync: a malformed code used to
-    // tear sync down and restore it for nothing. The endpoint id also pins
-    // the wait below to the device the code belongs to.
+    // tear sync down and restore it for nothing.
     let expected_endpoint = crate::iroh_transport::from_ticket(code)
         .map_err(|err| format!("invalid pairing code: {err}"))?
         .id
@@ -88,7 +86,10 @@ pub(crate) async fn handle_connect_with_pairing_code(
     let restart_params = build_pairing_restart_params(&runtime, code);
     let restore_params = runtime.start_params.clone();
 
-    let started_at = std::time::Instant::now();
+    // `handle_start_sync` marks the dialed endpoint as the outgoing pairing
+    // before the transport starts dialing — a responder Hello arriving
+    // during the first connect attempt must already be recognized as
+    // consented.
     restart_sync_with_restore(
         state,
         restart_params,
@@ -97,41 +98,93 @@ pub(crate) async fn handle_connect_with_pairing_code(
     )
     .await?;
 
-    // Wait for the peer's Hello: the iroh dial runs in a background task,
-    // so a successful restart says nothing about reachability. Poll until
-    // the *ticketed* endpoint authenticates — matching any connected peer
-    // would report a false success naming a device that merely reconnected
-    // during the window. A timeout is a real error for the UI while the
-    // dial loop keeps retrying in the background, so a late peer still
-    // completes the pairing.
-    loop {
-        let runtime = {
-            let guard = state.sync.lock().await;
-            match guard.as_ref() {
-                Some(r) => r.clone(),
-                None => return Err("Sync not running".to_string()),
-            }
-        };
-        if let Some(relay) = runtime.relay.as_ref() {
-            if let Some(peer) = relay
-                .authenticated_peer_for_transport_key(&expected_endpoint)
-                .await
-            {
-                return Ok(json!({
-                    "status": "connected",
-                    "device_id": peer.device_id,
-                    "device_name": peer.device_name,
-                }));
-            }
+    Ok(json!({
+        "status": "pending",
+        "endpoint": expected_endpoint,
+    }))
+}
+
+/// «Принять» on the receiving side: authenticate and persist the pending
+/// device exactly like a fresh pairing.
+pub(crate) async fn handle_accept_pairing(
+    state: &Arc<ServiceState>,
+    device_id: String,
+) -> Result<Value, String> {
+    let runtime = {
+        let guard = state.sync.lock().await;
+        match guard.as_ref() {
+            Some(r) => r.clone(),
+            None => return Err("Sync not running".to_string()),
         }
-        if started_at.elapsed() >= PAIRING_CONNECT_BUDGET {
-            return Err(
-                "device did not respond — check the code and that the other device is online"
-                    .to_string(),
-            );
+    };
+    let relay = runtime
+        .relay
+        .as_ref()
+        .ok_or_else(|| "pairing requires the iroh transport".to_string())?;
+    let peer = relay.accept_pairing(device_id.trim()).await?;
+    Ok(json!({
+        "status": "connected",
+        "device_id": peer.device_id,
+        "device_name": peer.device_name,
+    }))
+}
+
+/// «Отклонить» on the receiving side: send `pairing_rejected`, close the
+/// connection, persist nothing.
+pub(crate) async fn handle_decline_pairing(
+    state: &Arc<ServiceState>,
+    device_id: String,
+) -> Result<Value, String> {
+    let runtime = {
+        let guard = state.sync.lock().await;
+        match guard.as_ref() {
+            Some(r) => r.clone(),
+            None => return Err("Sync not running".to_string()),
         }
-        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    };
+    let relay = runtime
+        .relay
+        .as_ref()
+        .ok_or_else(|| "pairing requires the iroh transport".to_string())?;
+    relay.decline_pairing(device_id.trim()).await?;
+    Ok(json!({ "status": "declined" }))
+}
+
+/// «Отмена»/dismiss on the initiator: clear the outgoing attempt; while it
+/// is still pending this also cuts the dialled connection so the
+/// responder's prompt disappears.
+pub(crate) async fn handle_cancel_pairing(state: &Arc<ServiceState>) -> Result<Value, String> {
+    let runtime = {
+        let guard = state.sync.lock().await;
+        match guard.as_ref() {
+            Some(r) => r.clone(),
+            None => return Ok(json!(true)),
+        }
+    };
+    if let Some(relay) = runtime.relay.as_ref() {
+        relay.cancel_outgoing_pairing().await;
     }
+    Ok(json!(true))
+}
+
+/// Snapshot slice for `get_sync_snapshot`: pending consent requests and the
+/// outgoing attempt status.
+pub(super) async fn snapshot(relay: &RelaySync) -> (Vec<Value>, Value) {
+    let incoming = relay
+        .pending_pairing_requests()
+        .await
+        .into_iter()
+        .map(|entry| {
+            json!({
+                "device_id": entry.device_id,
+                "device_name": entry.device_name,
+                "platform": entry.platform,
+                "app_version": entry.app_version,
+            })
+        })
+        .collect();
+    let outgoing = relay.outgoing_pairing_status().await.unwrap_or(Value::Null);
+    (incoming, outgoing)
 }
 
 /// `show_pairing_code` (KOS-269): the explicit LAN opt-in for the device
@@ -172,11 +225,5 @@ pub(crate) async fn handle_show_pairing_code(state: &Arc<ServiceState>) -> Resul
             None => return Err("Sync not running".to_string()),
         }
     };
-    // The user is showing a code: admit whoever proves the ticket for the
-    // next few minutes. Without this window the Hello gate drops unknown
-    // endpoints and the other side's «Подключить» goes nowhere.
-    if let Some(relay) = runtime.relay.as_ref() {
-        relay.open_pairing_window(None).await;
-    }
     Ok(json!(runtime.iroh_our_ticket.clone()))
 }

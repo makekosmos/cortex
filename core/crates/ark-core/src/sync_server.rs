@@ -265,6 +265,15 @@ pub(crate) async fn unblock_peer_id(storage: &Arc<dyn StorageBackend>, device_id
     }
 }
 
+/// Drop a peer record outright — for a declined pairing attempt, where the
+/// device was never consented to and must not linger as an offline row
+/// (distinct from `block_peer`/`removed_peers`, which is a user blacklist).
+pub(crate) async fn remove_peer_record(storage: &Arc<dyn StorageBackend>, device_id: &str) {
+    let mut peers = load_known_peer_records(storage).await;
+    peers.retain(|peer| peer.device_id != device_id);
+    save_known_peers(storage, &peers).await;
+}
+
 pub(crate) async fn load_peer_transport_keys(
     storage: &Arc<dyn StorageBackend>,
 ) -> HashMap<String, String> {

@@ -16,6 +16,7 @@ pub(crate) async fn handle_start_sync(
         auth_secret,
         use_iroh,
         iroh_peer_ticket,
+        pairing_connect,
         discovery_enabled,
         bind,
         app_version,
@@ -104,6 +105,10 @@ pub(crate) async fn handle_start_sync(
         auth_secret: auth_secret.clone(),
         use_iroh,
         iroh_peer_ticket: iroh_peer_ticket.clone(),
+        // One-shot: later restarts derive from these params, and a stored
+        // peer key must be what re-admits the endpoint — not a replayed
+        // pairing intent.
+        pairing_connect: false,
         discovery_enabled,
         bind,
         app_version,
@@ -181,11 +186,16 @@ pub(crate) async fn handle_start_sync(
             iroh_transport.clone() as Arc<dyn crate::sync_transport::SyncTransport>,
         );
         wire_relay_sync_events(&relay_sync).await;
-        // A start carrying a peer ticket is a pairing intent: pin the
-        // first-contact window to that endpoint *before* the transport
-        // starts dialing, or the responder's first Hello could be dropped.
-        if let Some(endpoint) = peer_endpoint {
-            relay_sync.open_pairing_window(Some(endpoint)).await;
+        // Only a `connect_with_pairing_code` start is a pairing intent
+        // (`pairing_connect`); boot restores replay the stored ticket for an
+        // already-paired endpoint, whose Hello passes on the stored key —
+        // no outgoing attempt must appear in the snapshot. Set it *before*
+        // the transport starts dialing, or the responder's first Hello
+        // would be parked as an unsolicited request.
+        if pairing_connect {
+            if let Some(endpoint) = peer_endpoint {
+                relay_sync.begin_outgoing_pairing(endpoint).await;
+            }
         }
         relay_sync.start().await?;
         // `start()` binds the endpoint, so `our_ticket()` is available now.

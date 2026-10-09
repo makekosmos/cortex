@@ -458,6 +458,10 @@
                                     }
 
                                     LanSyncMessage::Pong { .. } => {}
+
+                                    // Pairing consent lives on the iroh
+                                    // transport — meaningless over WS.
+                                    LanSyncMessage::PairingRejected { .. } => {}
                                 }
                             }
                         }

@@ -28,84 +28,82 @@ impl RelaySync {
                     // earlier pairing (`sync.peer_transport_keys`) or granted
                     // through integration replication (`authorized_nodes`) —
                     // and it matches (a mismatch is the rotation/revocation
-                    // guard). Or a user opened the first-contact window with
-                    // «Показать код» / «Подключить»: the ticket is the
-                    // capability there (KOS-367). Anything else is dropped —
-                    // the endpoint stays reachable by id forever, so
-                    // unconditional acceptance would turn a once-disclosed
-                    // ticket into a permanent key. `auth_secret` HMAC still
-                    // applies inside `handle_message`.
+                    // guard). Or it is the endpoint whose code this device
+                    // just entered: the user's own «Подключить» is the
+                    // consent (KOS-369). Anything else is parked as a
+                    // pending request for «Принять / Отклонить» — the
+                    // endpoint stays reachable by id forever, so silent
+                    // acceptance would turn a once-disclosed ticket into a
+                    // permanent key. `auth_secret` HMAC still applies inside
+                    // `handle_message`.
                     let authorized = self
                         .storage
                         .authorized_transport_public_key(&from_device_id)
                         .await;
-                    let mut paired_keys =
+                    let paired_keys =
                         crate::sync_server::load_peer_transport_keys(&self.storage).await;
                     let known_key = authorized
                         .as_deref()
                         .or_else(|| paired_keys.get(&from_device_id).map(String::as_str));
-                    let (window_open, admits_any, expected_match) = {
-                        let pending = self.pairing_accept.lock().await;
-                        let active =
-                            pending.as_ref().is_some_and(|p| p.until > Instant::now());
-                        let admits_any = active
-                            && pending
-                                .as_ref()
-                                .is_some_and(|p| p.expected_endpoint.is_none());
-                        let expected_match = active
-                            && pending.as_ref().is_some_and(|p| {
-                                p.expected_endpoint.as_deref()
-                                    == Some(transport_public_key.as_str())
-                            });
-                        (active, admits_any, expected_match)
-                    };
+                    let outgoing_match = self
+                        .outgoing_pairing
+                        .lock()
+                        .await
+                        .as_ref()
+                        .is_some_and(|o| o.endpoint == transport_public_key);
                     // A stored integration-replication key never yields to a
-                    // pairing window — that trust domain owns the binding.
+                    // pairing consent — that trust domain owns the binding.
                     // A stored *pairing* key may rotate under explicit
                     // re-consent: entering that endpoint's code rebinds it.
                     let accept = match known_key {
                         Some(key) if key == transport_public_key => true,
-                        Some(_) => expected_match && authorized.is_none(),
-                        None => window_open && (admits_any || expected_match),
+                        Some(_) => outgoing_match && authorized.is_none(),
+                        None => outgoing_match,
                     };
-                    if !accept {
-                        eprintln!(
-                            "{TAG} rejecting Hello from {from_device_id}: {}",
-                            if known_key.is_some() {
-                                "transport key does not match the stored record"
-                            } else {
-                                "unknown endpoint and no pairing window is open"
-                            }
-                        );
-                    } else {
-                        // Re-pairing a previously removed device is explicit
-                        // re-consent — unblock it before handle_message's
-                        // removed-peer check would drop the Hello forever.
-                        if expected_match {
+                    if accept {
+                        // Entering a previously removed device's code is
+                        // explicit re-consent — unblock it before
+                        // handle_message's removed-peer check drops the Hello.
+                        if outgoing_match {
                             crate::sync_server::unblock_peer_id(&self.storage, &from_device_id)
                                 .await;
                         }
-                        self.handle_message(from_device_id.clone(), msg, None).await;
-                        if self.is_authenticated_peer(&from_device_id).await {
-                            let _ = self
-                                .transport
-                                .bind_authenticated_peer(&from_device_id, &transport_public_key);
-                            self.transport_keys
-                                .lock()
-                                .await
-                                .insert(from_device_id.clone(), transport_public_key.clone());
-                            if paired_keys.get(&from_device_id)
-                                != Some(&transport_public_key)
-                            {
-                                paired_keys
-                                    .insert(from_device_id, transport_public_key);
-                                crate::sync_server::save_peer_transport_keys(
-                                    &self.storage,
-                                    &paired_keys,
-                                )
-                                .await;
-                            }
+                        // A repeated Hello on an already-authenticated link
+                        // is the responder's post-accept announcement — the
+                        // consent signal that resolves our attempt.
+                        let already_authenticated =
+                            self.is_authenticated_peer(&from_device_id).await;
+                        self.admit_transport_hello(
+                            from_device_id.clone(),
+                            transport_public_key.clone(),
+                            msg,
+                            paired_keys,
+                        )
+                        .await;
+                        if outgoing_match && already_authenticated {
+                            self.mark_outgoing_accepted(&transport_public_key).await;
                         }
+                    } else if known_key.is_some() {
+                        eprintln!(
+                            "{TAG} rejecting Hello from {from_device_id}: transport key \
+                             does not match the stored record"
+                        );
+                    } else {
+                        self.record_pairing_request(from_device_id, transport_public_key, msg)
+                            .await;
+                    }
+                } else if let LanSyncMessage::PairingRejected { device_id } = &msg {
+                    // Only the endpoint we are pairing with may decline us —
+                    // a third connection cannot cancel our attempt.
+                    let matches_outgoing = self
+                        .outgoing_pairing
+                        .lock()
+                        .await
+                        .as_ref()
+                        .is_some_and(|o| o.endpoint == transport_public_key);
+                    if matches_outgoing {
+                        self.handle_pairing_rejected(device_id, &transport_public_key)
+                            .await;
                     }
                 } else if self
                     .transport_keys
@@ -114,6 +112,9 @@ impl RelaySync {
                     .get(&from_device_id)
                     .is_some_and(|key| key == &transport_public_key)
                 {
+                    // Any data frame from the endpoint we dialed means the
+                    // responder processed our Hello — it consented.
+                    self.mark_outgoing_accepted(&transport_public_key).await;
                     self.handle_message(from_device_id, msg, Some(transport_public_key))
                         .await;
                 }
@@ -125,6 +126,17 @@ impl RelaySync {
                 if device_id != self.config.device_id {
                     self.peers.lock().await.remove(&device_id);
                     self.transport_keys.lock().await.remove(&device_id);
+                    // An initiator that hung up (cancel, Engine stop) takes
+                    // its unanswered consent request down with it.
+                    if self
+                        .pending_pairing
+                        .lock()
+                        .await
+                        .remove(&device_id)
+                        .is_some()
+                    {
+                        self.notify_pairing_changed().await;
+                    }
                     if let Some(handler) = self.on_peer_disconnect.lock().await.as_ref() {
                         handler(device_id, self.peers.lock().await.len());
                     }
@@ -140,6 +152,10 @@ impl RelaySync {
                     evicted
                 };
                 self.transport_keys.lock().await.clear();
+                if !self.pending_pairing.lock().await.is_empty() {
+                    self.pending_pairing.lock().await.clear();
+                    self.notify_pairing_changed().await;
+                }
                 if let Some(handler) = self.on_peer_disconnect.lock().await.as_ref() {
                     let mut remaining = evicted.len();
                     for device_id in evicted {
@@ -162,17 +178,6 @@ impl RelaySync {
             .values()
             .filter(|p| p.authenticated)
             .count()
-    }
-
-    /// Open the first-contact window the Hello gate above consults.
-    /// `expected_endpoint: Some(id)` pins it to the endpoint whose ticket
-    /// was entered; `None` (the code-showing side) admits any unknown
-    /// endpoint — whoever proves the ticket.
-    pub async fn open_pairing_window(&self, expected_endpoint: Option<String>) {
-        *self.pairing_accept.lock().await = Some(PairingAccept {
-            expected_endpoint,
-            until: Instant::now() + PAIRING_ACCEPT_TTL,
-        });
     }
 
     /// The authenticated peer bound to this transport key, if any. Lets
@@ -207,8 +212,17 @@ impl RelaySync {
     /// re-authentication on the next Hello.
     pub async fn disconnect_peer(&self, device_id: &str) {
         self.transport_keys.lock().await.remove(device_id);
+        if self
+            .pending_pairing
+            .lock()
+            .await
+            .remove(device_id)
+            .is_some()
+        {
+            self.notify_pairing_changed().await;
+        }
         // Forget the persisted endpoint key so the device has to pair again
-        // (a stored match would otherwise re-admit it without a window).
+        // (a stored match would otherwise re-admit it without fresh consent).
         let mut keys = crate::sync_server::load_peer_transport_keys(&self.storage).await;
         if keys.remove(device_id).is_some() {
             crate::sync_server::save_peer_transport_keys(&self.storage, &keys).await;

@@ -165,6 +165,24 @@ pub(super) async fn connect_with_pairing_code(
     handle_connect_with_pairing_code(state, pairing_code).await
 }
 
+pub(super) async fn accept_pairing(
+    state: &Arc<ServiceState>,
+    device_id: String,
+) -> Result<Value, String> {
+    handle_accept_pairing(state, device_id).await
+}
+
+pub(super) async fn decline_pairing(
+    state: &Arc<ServiceState>,
+    device_id: String,
+) -> Result<Value, String> {
+    handle_decline_pairing(state, device_id).await
+}
+
+pub(super) async fn cancel_pairing(state: &Arc<ServiceState>) -> Result<Value, String> {
+    handle_cancel_pairing(state).await
+}
+
 pub(super) async fn leave_space(state: &Arc<ServiceState>) -> Result<Value, String> {
     handle_stop_sync(state).await;
     // Also purge any persisted self-reference peer records so the

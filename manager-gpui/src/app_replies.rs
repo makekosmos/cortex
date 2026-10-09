@@ -46,16 +46,27 @@ impl ManagerApp {
         self.action_busy = false;
         match result {
             Ok(value) => {
-                let peer_name = (value.get("status").and_then(Value::as_str) == Some("connected"))
-                    .then(|| value.get("device_name").and_then(Value::as_str))
-                    .flatten()
-                    .map(str::trim)
-                    .filter(|name| !name.is_empty())
-                    .map(str::to_owned);
-                self.notice = Some(match peer_name {
-                    Some(name) => format!("Устройство подключено: {name}."),
-                    None => "Выполнено.".into(),
-                });
+                match value.get("status").and_then(Value::as_str) {
+                    // KOS-369: «Подключить» now answers `pending` — the human
+                    // decision arrives through the snapshot, so no notice yet.
+                    Some("pending") => {}
+                    Some("declined") => {
+                        self.notice = Some("Подключение отклонено.".into());
+                    }
+                    _ => {
+                        let peer_name = (value.get("status").and_then(Value::as_str)
+                            == Some("connected"))
+                        .then(|| value.get("device_name").and_then(Value::as_str))
+                        .flatten()
+                        .map(str::trim)
+                        .filter(|name| !name.is_empty())
+                        .map(str::to_owned);
+                        self.notice = Some(match peer_name {
+                            Some(name) => format!("Устройство подключено: {name}."),
+                            None => "Выполнено.".into(),
+                        });
+                    }
+                }
                 self.reload_current_view();
             }
             Err(e) => self.error = Some(e),

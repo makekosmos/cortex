@@ -27,6 +27,12 @@ pub(crate) struct StartSyncParams {
     /// `iroh_transport::IrohTransport::our_ticket`/`from_ticket`).
     #[serde(default)]
     pub(crate) iroh_peer_ticket: Option<String>,
+    /// KOS-369: set only when this start IS the user entering a code
+    /// (`connect_with_pairing_code`) — marks the endpoint as a
+    /// human-consented outgoing pairing and surfaces it in the snapshot.
+    /// Boot restores replay the stored ticket without it.
+    #[serde(default)]
+    pub(crate) pairing_connect: bool,
     /// Whether to start LAN beacon discovery. Defaults to true for compatibility.
     #[serde(default = "default_discovery_enabled")]
     pub(crate) discovery_enabled: bool,

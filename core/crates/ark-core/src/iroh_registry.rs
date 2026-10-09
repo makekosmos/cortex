@@ -81,6 +81,27 @@ impl DeviceRegistry {
         true
     }
 
+    /// Is this endpoint currently trusted — i.e. may it receive data
+    /// frames? A pairing-pending endpoint is mapped but not trusted.
+    pub fn is_authenticated_endpoint(&self, endpoint_id: &EndpointId) -> bool {
+        self.trusted
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .values()
+            .any(|endpoint| endpoint == endpoint_id)
+    }
+
+    /// Drop the trusted binding without forgetting the endpoint→device
+    /// mapping — used when a pre-consented Hello fails `handle_message`
+    /// checks (HMAC, protocol, removed list) after the transport binding
+    /// was already applied.
+    pub fn unbind_authenticated(&self, device_id: &str) {
+        self.trusted
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(device_id);
+    }
+
     pub fn authenticated_endpoint(&self, device_id: &str) -> Option<EndpointId> {
         self.trusted
             .lock()

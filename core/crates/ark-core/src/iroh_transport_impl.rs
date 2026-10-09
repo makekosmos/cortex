@@ -12,8 +12,11 @@ pub struct IrohTransport {
     registry: std::sync::Arc<DeviceRegistry>,
     /// Live connections by remote endpoint so «Отключить» can actually
     /// close the QUIC link, not just evict the peer's auth state.
-    connections:
-        std::sync::Arc<std::sync::Mutex<HashMap<EndpointId, iroh::endpoint::Connection>>>,
+    connections: std::sync::Arc<std::sync::Mutex<HashMap<EndpointId, iroh::endpoint::Connection>>>,
+    /// Endpoints we deliberately cut (`disconnect_transport_peer`) — the
+    /// dial loop must not resurrect them on its own: a declined or
+    /// cancelled pairing attempt would re-prompt the responder forever.
+    suppressed_endpoints: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<EndpointId>>>,
     outbound_storage: Arc<tokio::sync::RwLock<Option<OutboundStorage>>>,
 }
 
@@ -29,6 +32,9 @@ impl IrohTransport {
             stop_rx,
             registry: std::sync::Arc::new(DeviceRegistry::new()),
             connections: std::sync::Arc::new(std::sync::Mutex::new(HashMap::new())),
+            suppressed_endpoints: std::sync::Arc::new(std::sync::Mutex::new(
+                std::collections::HashSet::new(),
+            )),
             outbound_storage: Arc::new(tokio::sync::RwLock::new(None)),
         }
     }

@@ -229,6 +229,22 @@ async fn iroh_bidirectional_burst_no_desync() {
         a_got_hello,
         "A must receive Hello from B within {hello_timeout:?}"
     );
+    // KOS-369: data frames only flow to endpoints bound as authenticated
+    // (pairing consent at the RelaySync layer). These transport-level tests
+    // stand in for both sides having consented — the registry knows each
+    // endpoint↔device pair once the injected Hellos have arrived.
+    transport_a
+        .bind_authenticated_peer(
+            "device-B-burst",
+            &transport_b.endpoint_id().unwrap().to_string(),
+        )
+        .expect("A binds B");
+    transport_b
+        .bind_authenticated_peer(
+            "device-A-burst",
+            &transport_a.endpoint_id().unwrap().to_string(),
+        )
+        .expect("B binds A");
 
     // ── 4. Build burst payloads. ───────────────────────────────────────────────
     let mut a_sent_ids = HashSet::new();

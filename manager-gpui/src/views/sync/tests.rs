@@ -1,5 +1,6 @@
 use super::{device_name, pairing_code, peer_status_text};
-use gpui::TestAppContext;
+use crate::app::ManagerApp;
+use gpui::{Entity, TestAppContext, VisualTestContext};
 use serde_json::{json, Value};
 
 #[test]
@@ -57,4 +58,83 @@ fn pairing_form_is_hidden_until_opened(cx: &mut TestAppContext) {
     assert!(opened.contains("Отмена"));
     assert!(opened.contains("Подключить"));
     assert!(!opened.contains("private-pairing-code"));
+}
+
+/// KOS-369: a pending incoming pairing request renders the «Принять /
+/// Отклонить» consent prompt with the requester's name and platform,
+/// regardless of which view is active.
+#[gpui::test]
+fn pairing_consent_prompt_renders_requester(cx: &mut TestAppContext) {
+    let (manager, cx) = crate::a11y_tests::launch(cx);
+    manager.update(cx, |app, cx| {
+        app.slots.insert(
+            "sync.snapshot".into(),
+            crate::app::Slot::Ready(json!({
+                "running": true,
+                "peers": [],
+                "incoming_pairing_requests": [{
+                    "device_id": "dev-pc",
+                    "device_name": "Рабочий PC",
+                    "platform": "windows",
+                }],
+            })),
+        );
+        cx.notify();
+    });
+    let tree = crate::a11y_tests::a11y_tree(cx).to_string();
+    assert!(tree.contains("Рабочий PC"), "{tree}");
+    assert!(tree.contains("Windows"), "{tree}");
+    assert!(tree.contains("Принять"), "{tree}");
+    assert!(tree.contains("Отклонить"), "{tree}");
+}
+
+/// KOS-369: after «Подключить» the initiator waits on the human — the card
+/// shows «Ожидание подтверждения» with a «Отмена» action, and a declined
+/// answer surfaces «Подключение отклонено» with the button usable again.
+#[gpui::test]
+fn pairing_card_shows_outgoing_states(cx: &mut TestAppContext) {
+    let (manager, cx) = crate::a11y_tests::launch(cx);
+    let set_snapshot =
+        |manager: &Entity<ManagerApp>, cx: &mut VisualTestContext, outgoing: Value| {
+            manager.update(cx, |app, cx| {
+                app.view = crate::views::View::Sync;
+                app.sync_pairing_open = true;
+                app.slots.insert(
+                    "sync.snapshot".into(),
+                    crate::app::Slot::Ready(json!({
+                        "running": true,
+                        "peers": [],
+                        "incoming_pairing_requests": [],
+                        "outgoing_pairing": outgoing,
+                    })),
+                );
+                cx.notify();
+            });
+        };
+
+    set_snapshot(
+        &manager,
+        cx,
+        json!({"status": "pending", "endpoint": "ep", "expires_in_ms": 60000}),
+    );
+    let tree = crate::a11y_tests::a11y_tree(cx).to_string();
+    assert!(tree.contains("Ожидание подтверждения"), "{tree}");
+    assert!(tree.contains("Отмена"), "{tree}");
+
+    set_snapshot(
+        &manager,
+        cx,
+        json!({"status": "declined", "endpoint": "ep"}),
+    );
+    let tree = crate::a11y_tests::a11y_tree(cx).to_string();
+    assert!(tree.contains("Подключение отклонено"), "{tree}");
+    assert!(!tree.contains("Ожидание подтверждения"), "{tree}");
+
+    set_snapshot(
+        &manager,
+        cx,
+        json!({"status": "pending", "endpoint": "ep", "expires_in_ms": 0}),
+    );
+    let tree = crate::a11y_tests::a11y_tree(cx).to_string();
+    assert!(tree.contains("Не дождались подтверждения"), "{tree}");
 }
