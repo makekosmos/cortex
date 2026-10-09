@@ -32,7 +32,7 @@ impl SyncTransport for StubTransport {
     fn send(&self, _msg: LanSyncMessage) -> Result<(), String> {
         Ok(())
     }
-    fn stop(&self) {}
+    async fn stop(&self) {}
 }
 
 async fn relay_with_stub() -> (Arc<RelaySync>, mpsc::UnboundedSender<TransportEvent>) {

@@ -256,6 +256,6 @@ async fn iroh_bidirectional_hello_and_reverse_send() {
         .await
         .expect_err("foreign recipient must be rejected before the wire");
     assert!(error.contains("recipient"));
-    transport_a.stop();
-    transport_b.stop();
+    transport_a.stop().await;
+    transport_b.stop().await;
 }

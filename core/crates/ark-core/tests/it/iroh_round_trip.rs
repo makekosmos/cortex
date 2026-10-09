@@ -191,6 +191,6 @@ async fn iroh_round_trip() {
         "expected LiveChange for todo test-entity-iroh-001, got {received:?}"
     );
 
-    transport_a.stop();
-    transport_b.stop();
+    transport_a.stop().await;
+    transport_b.stop().await;
 }

@@ -202,6 +202,6 @@ async fn iroh_ticket_pairing_round_trip() {
         "expected LiveChange for test-entity-iroh-ticket-001, got {received:?}"
     );
 
-    transport_a.stop();
-    transport_b.stop();
+    transport_a.stop().await;
+    transport_b.stop().await;
 }

@@ -99,7 +99,7 @@ impl RelaySync {
     /// Stop transport, then abort and join the background tasks — both
     /// clone `self` and would otherwise keep `storage` alive past teardown.
     pub async fn stop(&self) {
-        self.transport.stop();
+        self.transport.stop().await;
         let tasks: Vec<_> = self.tasks.lock().await.drain(..).collect();
         for task in &tasks {
             task.abort();

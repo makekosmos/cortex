@@ -18,6 +18,12 @@ pub struct IrohTransport {
     /// cancelled pairing attempt would re-prompt the responder forever.
     suppressed_endpoints: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<EndpointId>>>,
     outbound_storage: Arc<tokio::sync::RwLock<Option<OutboundStorage>>>,
+    /// Every spawned task (relay watch, accept/dial loops, per-connection
+    /// pumps) — aborted and joined by `stop()`. The connection tasks hold
+    /// `outbound_storage` (the open `ark.db` conn); an untracked task
+    /// outliving `stop()` keeps the file open past teardown, which on
+    /// Windows makes the containing directory undeletable (KOS-369).
+    tasks: Arc<Mutex<Vec<tokio::task::JoinHandle<()>>>>,
 }
 
 impl IrohTransport {
@@ -36,7 +42,19 @@ impl IrohTransport {
                 std::collections::HashSet::new(),
             )),
             outbound_storage: Arc::new(tokio::sync::RwLock::new(None)),
+            tasks: Arc::new(Mutex::new(Vec::new())),
         }
+    }
+
+    /// Register a spawned task for `stop()`'s abort-and-join sweep. Spawn
+    /// sites must push the handle in the same synchronous stretch as the
+    /// `tokio::spawn` call — an abort only lands at the next await, so a
+    /// task that has started but not yet registered would escape the join.
+    fn track(&self, handle: tokio::task::JoinHandle<()>) {
+        self.tasks
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(handle);
     }
 
     /// Текущий снимок реестра device_id ↔ EndpointId (для тестов/диагностики).

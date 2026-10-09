@@ -45,11 +45,13 @@ impl SyncTransport for IrohTransport {
         // iroh's relay actor retries internally and warns per attempt — the
         // Engine filters those to error (runtime `init_tracing`), so one WARN
         // per up→down / down→up transition is the signal that survives.
-        spawn_relay_connectivity_watch(
+        if let Some(watch_task) = spawn_relay_connectivity_watch(
             &endpoint,
             self.config.relay_mode.as_ref(),
             self.stop_rx.clone(),
-        );
+        ) {
+            self.track(watch_task);
+        }
 
         // ── Accept-loop ───────────────────────────────────────────────────────
         // Каждое входящее соединение порождает `handle_connection(is_dialer=false)`.
@@ -62,8 +64,9 @@ impl SyncTransport for IrohTransport {
             let mut accept_stop = self.stop_rx.clone();
             let out_tx = self.out_tx.clone();
             let hello = self.make_hello();
+            let tasks = self.tasks.clone();
 
-            tokio::spawn(async move {
+            self.track(tokio::spawn(async move {
                 loop {
                     tokio::select! {
                         _ = accept_stop.changed() => {
@@ -82,7 +85,7 @@ impl SyncTransport for IrohTransport {
                             let stop_rx = accept_stop.clone();
                             let hello = hello.clone();
 
-                            tokio::spawn(async move {
+                            let connection_task = tokio::spawn(async move {
                                 let conn = match incoming.await {
                                     Ok(conn) => conn,
                                     Err(e) => {
@@ -107,10 +110,16 @@ impl SyncTransport for IrohTransport {
                                 })
                                 .await;
                             });
+                            // Same synchronous stretch as the spawn — see
+                            // `IrohTransport::track`.
+                            tasks
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner())
+                                .push(connection_task);
                         }
                     }
                 }
-            });
+            }));
         }
 
         // ── Dial-loop (если задан peer) ───────────────────────────────────────
@@ -132,7 +141,7 @@ impl SyncTransport for IrohTransport {
             let out_tx = self.out_tx.clone();
             let hello = self.make_hello();
 
-            tokio::spawn(async move {
+            self.track(tokio::spawn(async move {
                 let mut backoff_secs: u64 = 1;
 
                 loop {
@@ -204,7 +213,7 @@ impl SyncTransport for IrohTransport {
                         }
                     }
                 }
-            });
+            }));
         }
 
         Ok(())
@@ -374,20 +383,41 @@ impl SyncTransport for IrohTransport {
         }
     }
 
-    /// Сигнализирует всем фоновым задачам остановиться и закрывает `Endpoint`.
-    fn stop(&self) {
+    /// Останавливает транспорт: сигналит фоновым задачам, закрывает
+    /// `Endpoint` (это будит `accept()` и рвёт чтение в reader-тасках), затем
+    /// abort+join всего зарегистрированного — пока задача жива, она держит
+    /// `outbound_storage` (открытый `ark.db`), и на Windows tempdir теста
+    /// потом не удаляется (KOS-369).
+    async fn stop(&self) {
         let _ = self.stop_tx.send(true);
         // Закрываем endpoint явно — это разбудит accept_endpoint.accept().
-        if let Some(ep) = self
+        let endpoint = self
             .endpoint
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .take()
-        {
-            // close() — async fn, но мы на sync пути. Spawn best-effort close.
-            tokio::spawn(async move {
-                ep.close().await;
-            });
+            .take();
+        if let Some(ep) = endpoint {
+            ep.close().await;
+        }
+        // Drain in a loop: a task aborted before its first poll never runs,
+        // but an aborted accept iteration could have spawned a connection
+        // task between our drain and its own abort — sweep until empty.
+        loop {
+            let tasks: Vec<tokio::task::JoinHandle<()>> = self
+                .tasks
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .drain(..)
+                .collect();
+            if tasks.is_empty() {
+                break;
+            }
+            for task in &tasks {
+                task.abort();
+            }
+            for task in tasks {
+                let _ = task.await;
+            }
         }
     }
 }

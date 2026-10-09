@@ -100,6 +100,10 @@ pub trait SyncTransport: Send + Sync {
         Err("transport peer disconnect is not supported".into())
     }
 
-    /// Signal the transport to stop.
-    fn stop(&self);
+    /// Stop the transport and join its background tasks. Must not return
+    /// while a spawned task is still running: tasks hold `outbound_storage`
+    /// (the open `ark.db` connection), and a task that outlives `stop()`
+    /// keeps the database file open past teardown — on Windows the
+    /// containing directory then cannot be deleted (KOS-369).
+    async fn stop(&self);
 }

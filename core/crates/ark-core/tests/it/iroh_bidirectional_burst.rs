@@ -286,8 +286,8 @@ async fn iroh_bidirectional_burst_no_desync() {
     let b_missing: Vec<_> = a_sent_ids.difference(&b_received).collect();
     let a_missing: Vec<_> = b_sent_ids.difference(&a_received).collect();
 
-    transport_a.stop();
-    transport_b.stop();
+    transport_a.stop().await;
+    transport_b.stop().await;
 
     assert!(
         b_missing.is_empty(),
