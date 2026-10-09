@@ -122,7 +122,7 @@ fn saved_updates_page_redirects_to_about() {
 fn startup_window_defers_title_and_opens_exactly_one_window(cx: &mut TestAppContext) {
     cx.update(gpui_component::init);
     cx.update(imago_gpui::theme::apply);
-    cx.update(|cx| {
+    let windows = cx.update(|cx| {
         let options = crate::manager_window_options(cx);
         assert!(
             options
@@ -133,7 +133,9 @@ fn startup_window_defers_title_and_opens_exactly_one_window(cx: &mut TestAppCont
             "creation-time window title reintroduces the phantom Dock entry"
         );
         crate::open_manager_window(cx);
-        let windows = cx.windows();
-        assert_eq!(windows.len(), 1, "expected one window, got {windows:?}");
+        cx.windows()
     });
+    assert_eq!(windows.len(), 1, "expected one window, got {windows:?}");
+    let mut window_cx = gpui::VisualTestContext::from_window(windows[0], cx);
+    assert_eq!(window_cx.window_title().as_deref(), Some("Mundus"));
 }

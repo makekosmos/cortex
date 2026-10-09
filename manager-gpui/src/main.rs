@@ -36,10 +36,6 @@ use app::ManagerApp;
 /// `MANAGER_GPUI_OFFSCREEN=1` parks the window far outside the desktop for
 /// automated runs (same convention as agenda-gpui's AGENDA_OFFSCREEN).
 fn window_bounds(cx: &mut App) -> Bounds<gpui::Pixels> {
-    window_bounds_for_test(cx)
-}
-
-pub(crate) fn window_bounds_for_test(cx: &mut App) -> Bounds<gpui::Pixels> {
     if std::env::var("MANAGER_GPUI_OFFSCREEN").is_ok() {
         gpui::bounds(
             gpui::point(px(-20000.), px(-20000.)),
@@ -52,7 +48,7 @@ pub(crate) fn window_bounds_for_test(cx: &mut App) -> Bounds<gpui::Pixels> {
 
 const WINDOW_TITLE: &str = "Mundus";
 
-pub(crate) fn manager_window_options(cx: &mut App) -> WindowOptions {
+fn manager_window_options(cx: &mut App) -> WindowOptions {
     WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(window_bounds(cx))),
         titlebar: Some(gpui::TitlebarOptions {
@@ -69,10 +65,11 @@ pub(crate) fn manager_window_options(cx: &mut App) -> WindowOptions {
     }
 }
 
-pub(crate) fn open_manager_window(cx: &mut App) {
+fn open_manager_window(cx: &mut App) {
     let options = manager_window_options(cx);
     cx.open_window(options, |window, cx| {
-        // The platform window is already ordered in when this closure runs,
+        // The platform window is already ordered in when this closure runs
+        // (order-in happens inside open_window via the default show/focus),
         // so set_title only renames the Dock/Window-list entry AppKit added
         // itself instead of inserting a phantom one.
         window.set_window_title(WINDOW_TITLE);
