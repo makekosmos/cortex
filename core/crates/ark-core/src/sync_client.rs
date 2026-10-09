@@ -27,7 +27,7 @@ const SYNC_LOAD_PAGE_SIZE: usize = 100;
 // ---------------------------------------------------------------------------
 
 pub type ClientOnChangeCallback = Arc<dyn Fn(SyncEntity) + Send + Sync>;
-pub type ClientOnConnectedCallback = Arc<dyn Fn(String, String) + Send + Sync>;
+pub type ClientOnConnectedCallback = Arc<dyn Fn(PeerRecord) + Send + Sync>;
 pub type ClientOnDisconnectedCallback = Arc<dyn Fn(String) + Send + Sync>;
 pub type ClientOnPeerListCallback = Arc<dyn Fn(Vec<PeerRecord>) + Send + Sync>;
 

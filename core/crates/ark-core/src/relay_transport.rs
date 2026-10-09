@@ -143,6 +143,8 @@ impl SyncTransport for RelayTransport {
                             addresses: None,
                             auth_nonce,
                             auth_hmac,
+                            platform: Some(crate::host::local_platform()),
+                            app_version: crate::host::app_version(),
                         };
                         let text = serialize_message(&hello);
                         let _ = ws_tx.send(Message::Text(text.into())).await;

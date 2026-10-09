@@ -8,7 +8,7 @@ use crate::hlc::HLC;
 use crate::protocol::*;
 use crate::relay_transport::{RelayConfig, RelayTransport};
 use crate::sync_server::{
-    OnChangeCallback, OnPeerConnectCallback, OnPeerDisconnectCallback, StorageBackend,
+    OnChangeCallback, OnPeerConnectCallback, OnPeerDisconnectCallback, PeerEntry, StorageBackend,
 };
 use crate::sync_transport::{SyncTransport, TransportEvent};
 use crate::types::{SyncEntity, VersionVector};
@@ -30,6 +30,9 @@ pub struct RelaySyncConfig {
 #[derive(Debug, Clone)]
 struct RelayPeerState {
     device_name: String,
+    /// OS / product version the peer advertised in its Hello.
+    platform: Option<String>,
+    app_version: Option<String>,
     authenticated: bool,
 }
 

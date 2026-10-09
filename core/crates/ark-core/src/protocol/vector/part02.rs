@@ -142,6 +142,8 @@ mod tests {
             addresses: vec!["10.0.0.1:21531".to_string()],
             last_seen: "2026-01-01T00:00:00.000Z".to_string(),
             last_address: None,
+            platform: None,
+            app_version: None,
         }];
         let merged = merge_peer_records(&existing, &incoming);
         assert_eq!(merged.len(), 1);
@@ -156,6 +158,8 @@ mod tests {
             addresses: vec!["10.0.0.1:21531".to_string()],
             last_seen: "2026-01-01T00:00:00.000Z".to_string(),
             last_address: None,
+            platform: None,
+            app_version: None,
         }];
         let incoming = vec![PeerRecord {
             device_id: "d1".to_string(),
@@ -166,6 +170,8 @@ mod tests {
             ],
             last_seen: "2026-01-02T00:00:00.000Z".to_string(),
             last_address: Some("192.168.1.50:21531".to_string()),
+            platform: None,
+            app_version: None,
         }];
 
         let merged = merge_peer_records(&existing, &incoming);
@@ -190,6 +196,8 @@ mod tests {
             addresses: vec!["10.0.0.1:21531".to_string()],
             last_seen: "2026-01-02T00:00:00.000Z".to_string(),
             last_address: Some("10.0.0.1:21531".to_string()),
+            platform: None,
+            app_version: None,
         }];
         let incoming = vec![PeerRecord {
             device_id: "d1".to_string(),
@@ -197,6 +205,8 @@ mod tests {
             addresses: vec!["10.0.0.2:21531".to_string()],
             last_seen: "2026-01-01T00:00:00.000Z".to_string(),
             last_address: Some("10.0.0.2:21531".to_string()),
+            platform: None,
+            app_version: None,
         }];
 
         let merged = merge_peer_records(&existing, &incoming);

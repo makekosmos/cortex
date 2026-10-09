@@ -142,6 +142,12 @@ pub fn merge_peer_records(existing: &[PeerRecord], incoming: &[PeerRecord]) -> V
                 if inc.last_seen > current.last_seen {
                     current.last_seen.clone_from(&inc.last_seen);
                     current.device_name.clone_from(&inc.device_name);
+                    if inc.platform.is_some() {
+                        current.platform.clone_from(&inc.platform);
+                    }
+                    if inc.app_version.is_some() {
+                        current.app_version.clone_from(&inc.app_version);
+                    }
                     if inc.last_address.is_some() {
                         current.last_address.clone_from(&inc.last_address);
                     }

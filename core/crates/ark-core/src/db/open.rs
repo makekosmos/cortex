@@ -162,15 +162,32 @@ fn ensure_integration_credential_fence_column(conn: &Connection) -> Result<(), S
 
 pub fn init_schema(conn: &Connection) -> Result<(), String> {
     init_schema_prerequisites_for_phase3(conn)?;
+    crate::canonical_types::migration_objects::ensure_object_state_schema(conn).map_err(
+        |error| format!("canonical runtime schema during init_schema failed: {error:?}"),
+    )?;
     migration::migrate_phase3(conn)
         .map(|_| ())
         .map_err(|error| format!("phase3 migration during init_schema failed: {error:?}"))?;
+    // A blocked legacy-object migration must not prevent new canonical writes.
+    // Archive legacy definitions before installing contracts; leave the legacy
+    // objects and planning tables untouched until their migration succeeds.
+    conn.execute_batch("SAVEPOINT ark_canonical_contracts")
+        .map_err(|error| error.to_string())?;
+    match crate::canonical_types::migration_registry::prepare_registry_for_objects(conn) {
+        Ok(()) => conn
+            .execute_batch("RELEASE SAVEPOINT ark_canonical_contracts")
+            .map_err(|error| error.to_string())?,
+        Err(error) => {
+            let _ = conn.execute_batch(concat!(
+                "ROLLBACK TO SAVEPOINT ark_canonical_contracts; ",
+                "RELEASE SAVEPOINT ark_canonical_contracts",
+            ));
+            return Err(format!(
+                "canonical version install during init_schema failed: {error:?}"
+            ));
+        }
+    }
     if phase3_migration_completed(conn)? {
-        // Definitions can gain a new canonical version after the migration
-        // has completed; install the new version rows without re-migrating.
-        crate::canonical_types::migration_registry::ensure_canonical_type_versions(conn).map_err(
-            |error| format!("canonical version install during init_schema failed: {error:?}"),
-        )?;
         migration::retire_legacy_planning_tables(conn)
             .map(|_| ())
             .map_err(|error| {

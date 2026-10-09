@@ -80,6 +80,9 @@ pub async fn start_lan_sync(
         "space_id": space_id,
         "device_id": device_id,
         "device_name": device_name,
+        // Product version peers show in their device list — the same build
+        // label the About page and updater use, never the crate version.
+        "app_version": crate::build_info::display_version(),
         "port": null,
         "seed_addresses": null,
         "use_iroh": resolve_use_iroh_by_default(),
