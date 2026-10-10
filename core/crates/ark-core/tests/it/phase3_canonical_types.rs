@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used)]
 use ark_core::canonical_types::definitions::canonical_type_registrations;
-use ark_core::db::{init_schema, upsert_object_type};
+use ark_core::db::{delete_object_type, init_schema, upsert_object_type};
 use ark_core::type_registry::{canonical_schema_hash, resolve_alias};
 use ark_core::types::ObjectType;
 use rusqlite::Connection;
@@ -211,6 +211,49 @@ fn fresh_init_registers_exact_canonical_authority_and_routes_legacy_aliases() {
             "SELECT COUNT(*) FROM object_types WHERE id='note_obj'",
             [],
             |row| { row.get::<_, i64>(0) }
+        )
+        .unwrap(),
+        0
+    );
+}
+
+#[test]
+fn inbound_legacy_object_type_entity_cannot_mutate_canonical_row() {
+    // KOS-370: sync exports every object_types row as a legacy `object_type`
+    // entity. Applying a peer's canonical definition on this side must not
+    // downgrade `current_version` to `0.0.0+legacy.*` or deprecate the row —
+    // either mutation fails the phase3 registry preflight at next open and
+    // bricks the database.
+    let conn = Connection::open_in_memory().unwrap();
+    init_schema(&conn).unwrap();
+
+    let synced = ObjectType {
+        id: "com.kosmos.task".into(),
+        name: "Peer Task".into(),
+        schema_json: "{}".into(),
+        ui_schema_json: "{}".into(),
+        created_at: "now".into(),
+        updated_at: "now".into(),
+        system_locked: false,
+    };
+    upsert_object_type(&conn, &synced).unwrap();
+    delete_object_type(&conn, "com.kosmos.task").unwrap();
+
+    let (current_version, status): (String, String) = conn
+        .query_row(
+            "SELECT current_version, status FROM object_types WHERE id='com.kosmos.task'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(current_version, "1.1.0");
+    assert_eq!(status, "active");
+    assert_eq!(
+        conn.query_row(
+            "SELECT COUNT(*) FROM object_type_versions
+             WHERE type_id='com.kosmos.task' AND version LIKE '0.0.0+legacy.%'",
+            [],
+            |row| row.get::<_, i64>(0)
         )
         .unwrap(),
         0
