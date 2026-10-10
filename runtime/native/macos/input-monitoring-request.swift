@@ -1,5 +1,11 @@
 import Foundation
+import AppKit
 import CoreGraphics
+
+// KOS-376: bundled helper — its event tap connects to the WindowServer;
+// without the accessory policy it would claim a second Dock tile under the
+// Mundus Manager identity while it stays alive for TCC registration.
+NSApplication.shared.setActivationPolicy(.accessory)
 
 // input-monitoring-request
 //
