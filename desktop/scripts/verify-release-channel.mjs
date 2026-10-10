@@ -39,10 +39,13 @@
 //   1  — one or more checks FAIL
 //
 // Retry behaviour (for post-publish use):
-//   Every feed fetch retries up to MAX_RETRIES times with RETRY_DELAY_MS
-//   between attempts, so GH release asset propagation lag (or the other
-//   platform re-uploading the merged manifest) does not false-fail right
-//   after publish.
+//   manifest.json is polled until it carries this platform's entry and the
+//   expected version, up to MANIFEST_READY_DEADLINE_MS
+//   (verify-manifest-retry.mjs, cache-busted): a CDN edge can serve a
+//   pre-merge copy for minutes after the other platform's upload — a stale
+//   manifest used to die() instantly (KOS-377). A real mismatch still
+//   fails, just after the bound. Every other feed fetch retries up to
+//   MAX_RETRIES times with RETRY_DELAY_MS between attempts.
 
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
@@ -61,6 +64,7 @@ import {
   MANIFEST_CREATOR_PLATFORM,
   parseReleaseManifest,
 } from "./release-manifest.mjs";
+import { fetchManifestUntilReady } from "./verify-manifest-retry.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -368,12 +372,17 @@ async function main() {
   // the retry also covers that short window.
   const assetBaseUrl = `https://github.com/${ownerRepo}/releases/download/${tag}`;
   const manifestUrl = `${assetBaseUrl}/${manifestFile}`;
-  log(`Fetching ${manifestUrl} (up to ${MAX_RETRIES} attempts)...`);
+  log(`Fetching ${manifestUrl} (retries until the ${platform} entry appears)...`);
   let manifest;
   try {
-    manifest = parseReleaseManifest(
-      await fetchTextWithRetry(manifestUrl, MAX_RETRIES, RETRY_DELAY_MS),
-    );
+    manifest = (
+      await fetchManifestUntilReady({
+        url: manifestUrl,
+        platform,
+        version,
+        log: (msg) => log(msg),
+      })
+    ).manifest;
   } catch (err) {
     die(
       `Failed to read ${manifestFile} for ${tag}: ${err.message}\n\n` +
@@ -491,9 +500,14 @@ async function main() {
   const stableUrl = `https://github.com/${ownerRepo}/releases/latest/download/${manifestFile}`;
   log(`--- Checking stable ${stableUrl} ---`);
   try {
-    const latest = parseReleaseManifest(
-      await fetchTextWithRetry(stableUrl, MAX_RETRIES, RETRY_DELAY_MS),
-    );
+    const latest = (
+      await fetchManifestUntilReady({
+        url: stableUrl,
+        platform,
+        version,
+        log: (msg) => log(msg),
+      })
+    ).manifest;
     if (latest.version === version) log(`  PASS  stable manifest resolves to ${version}`);
     else warn(`stable manifest resolves to ${latest.version}, not ${version} (older release?)`);
     results.push({ name: `latest/${manifestFile}`, pass: true });

@@ -47,8 +47,11 @@ impl UpdaterResponse {
 ///   with `autoupdater-host.ts`).
 /// `updater.download` — explicit (re)start of the pending download; a
 ///   no-op if one is already running or finished.
-/// `updater.install` — launches the downloaded installer silently
-///   (`/S`, detached) once `status().state == "downloaded"`.
+/// `updater.install` — once `status().state == "downloaded"`, applies the
+///   payload: Windows launches the NSIS installer silently (`/S`, detached),
+///   macOS mounts the DMG and hands a detached helper the bundle swap +
+///   relaunch (`updater::macos`). Both paths surface failures as the `error`
+///   state.
 pub(crate) async fn handle_updater_op(
     subop: &str,
     _params: Value,
