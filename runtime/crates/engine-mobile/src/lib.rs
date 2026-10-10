@@ -79,7 +79,7 @@ fn resolve_device_id(data_dir: &Path) -> Result<String, EngineError> {
 }
 
 /// The engine object the Kotlin app holds for the process lifetime.
-/// Drop order matters: `close()` (or dropping the object) shuts the ark
+/// Drop order matters: `shutdown()` (or dropping the object) shuts the ark
 /// worker down before the process moves on.
 #[derive(uniffi::Object)]
 pub struct MobileEngine {
@@ -198,8 +198,9 @@ impl MobileEngine {
     }
 
     /// Shut the ark worker down. Idempotent; further calls return
-    /// `EngineError::Closed`.
-    pub fn close(&self) {
+    /// `EngineError::Closed`. Named `shutdown` rather than `close` so the
+    /// generated Kotlin `AutoCloseable.close()` destructor stays unique.
+    pub fn shutdown(&self) {
         let _ = self.service().map(|mut guard| guard.take());
     }
 }

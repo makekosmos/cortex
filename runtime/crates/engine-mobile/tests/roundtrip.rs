@@ -134,7 +134,7 @@ fn task_roundtrip_survives_reopen() {
         assert_eq!(fetched["propsJson"]["scheduledAt"], json!("2026-10-11"));
         assert_eq!(fetched["typeVersion"], json!("1.1.0"));
 
-        engine.close();
+        engine.shutdown();
     }
 
     // Reopen on the same dir: the task must still be there.
@@ -154,5 +154,5 @@ fn task_roundtrip_survives_reopen() {
             .any(|o| o["id"] == TASK_ID),
         "task missing after reopen"
     );
-    engine.close();
+    engine.shutdown();
 }
