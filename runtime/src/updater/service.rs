@@ -5,6 +5,8 @@ use std::time::Duration;
 
 use serde_json::Value;
 
+#[cfg(unix)]
+use super::macos;
 use super::state::{Phase, UpdaterStatus};
 use super::{cleanup, download, feed, install, version, UpdaterError};
 
@@ -43,6 +45,10 @@ pub struct UpdaterService {
     current_version: String,
     inner: Mutex<Inner>,
     downloading: AtomicBool,
+    /// Reentrancy guard for `start_mac_install` — the Windows arm spawns
+    /// instantly and needs none.
+    #[cfg(unix)]
+    installing: AtomicBool,
 }
 
 impl UpdaterService {
@@ -51,7 +57,7 @@ impl UpdaterService {
             data_dir,
             feed::DEFAULT_FEED_BASE.to_string(),
             version::current_version(),
-            cfg!(windows),
+            cfg!(windows) || cfg!(target_os = "macos"),
             feed::host_platform(),
         )
         .expect("updater HTTP client")
@@ -88,6 +94,8 @@ impl UpdaterService {
                 pending: None,
             }),
             downloading: AtomicBool::new(false),
+            #[cfg(unix)]
+            installing: AtomicBool::new(false),
         }))
     }
 
@@ -220,7 +228,7 @@ impl UpdaterService {
         self.status()
     }
 
-    pub(crate) fn install(&self) -> Value {
+    pub(crate) fn install(self: &Arc<Self>) -> Value {
         if !self.install_supported {
             return self.set_error(
                 UpdaterError::UnsupportedPlatform,
@@ -236,10 +244,38 @@ impl UpdaterService {
         if self.snapshot().phase != Phase::Downloaded {
             return self.set_error(UpdaterError::NotDownloaded, self.snapshot().checked_at_ms);
         }
-        match install::launch_silent_detached(&pending.installer_path) {
-            Ok(()) => self.status(),
-            Err(error) => self.set_error(error, self.snapshot().checked_at_ms),
+        match self.platform {
+            "win" => match install::launch_silent_detached(&pending.installer_path) {
+                Ok(()) => self.status(),
+                Err(error) => self.set_error(error, self.snapshot().checked_at_ms),
+            },
+            #[cfg(unix)]
+            "mac" => self.start_mac_install(pending.installer_path.clone()),
+            _ => self.set_error(
+                UpdaterError::UnsupportedPlatform,
+                self.snapshot().checked_at_ms,
+            ),
         }
+    }
+
+    /// macOS apply (KOS-377): mount the DMG, stage the `.app` next to the
+    /// running bundle, spawn the detached swap+relaunch helper. Runs on a
+    /// spawned task — staging a ~40 MB app takes seconds — so the RPC
+    /// returns immediately with the current status; failures land in
+    /// `Phase::Error` for the UI.
+    #[cfg(unix)]
+    fn start_mac_install(self: &Arc<Self>, dmg: std::path::PathBuf) -> Value {
+        if self.installing.swap(true, Ordering::SeqCst) {
+            return self.status();
+        }
+        let this = self.clone();
+        tokio::spawn(async move {
+            if let Err(error) = macos::apply_update(&dmg).await {
+                this.set_error(error, this.snapshot().checked_at_ms);
+            }
+            this.installing.store(false, Ordering::SeqCst);
+        });
+        self.status()
     }
 
     fn set_error(&self, error: UpdaterError, checked_at_ms: Option<i64>) -> Value {
@@ -309,3 +345,7 @@ include!("service_download.rs");
 #[cfg(test)]
 #[path = "service_tests.rs"]
 mod tests;
+
+#[cfg(all(test, unix))]
+#[path = "service_tests_macos.rs"]
+mod macos_tests;

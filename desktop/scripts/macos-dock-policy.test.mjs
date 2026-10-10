@@ -19,15 +19,9 @@ test("Engine marks itself a UIElement process before starting the runtime", asyn
   assert.notEqual(suppress, -1, "mundus-engine main() must call macos_dock::suppress_dock_tile()");
   const run = main.indexOf("run(args)");
   assert.notEqual(run, -1);
-  assert.ok(
-    suppress < run,
-    "the dock tile must be suppressed before the Engine runtime starts",
-  );
+  assert.ok(suppress < run, "the dock tile must be suppressed before the Engine runtime starts");
 
-  const dock = await readFile(
-    path.join(cortexRoot, "runtime", "src", "macos_dock.rs"),
-    "utf8",
-  );
+  const dock = await readFile(path.join(cortexRoot, "runtime", "src", "macos_dock.rs"), "utf8");
   assert.match(
     dock,
     /TransformProcessType/,
