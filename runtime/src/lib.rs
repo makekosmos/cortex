@@ -73,6 +73,7 @@ pub mod engine_versions;
 pub mod focus;
 pub mod installer;
 pub mod integrations;
+pub mod macos_dock;
 pub mod manager_api;
 pub mod markdown_vault;
 pub mod pomodoro;
