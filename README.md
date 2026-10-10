@@ -73,6 +73,20 @@ Nightly builds ship from `main` at 21:00 UTC.
 
 **→ [Latest release](https://github.com/makekosmos/cortex/releases/latest)**
 
+The macOS DMG is ad-hoc signed but not notarized. On macOS 26 there is no
+"Open Anyway" escape hatch for a quarantined unnotarized app, so the
+supported Mac install is the curl path (no quarantine is set on curl
+downloads):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/makekosmos/cortex/main/desktop/install-macos.sh | bash
+```
+
+Downloading `Mundus-<ver>.dmg` in a browser works on macOS 15 and earlier via
+Privacy & Security → "Open Anyway"; on macOS 26 it requires
+`xattr -dr com.apple.quarantine "/Applications/Mundus Manager.app"` after
+copying the app to /Applications.
+
 ## Architecture
 
 ```mermaid
