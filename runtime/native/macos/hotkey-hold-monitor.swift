@@ -1,6 +1,12 @@
 import Foundation
+import AppKit
 import CoreGraphics
 import Darwin
+
+// KOS-376: this helper lives inside Mundus Manager.app, so it inherits the
+// bundle's Regular activation policy — its CGEventTap would claim a second
+// "Mundus Manager" Dock tile for as long as the watcher runs.
+NSApplication.shared.setActivationPolicy(.accessory)
 
 final class MonitorState {
     let targetKeyCode: CGKeyCode

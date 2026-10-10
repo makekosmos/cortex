@@ -1,6 +1,11 @@
 import Foundation
+import AppKit
 import Speech
 import AVFoundation
+
+// KOS-376: bundled helper — without the accessory policy it would claim a
+// second Dock tile under the Mundus Manager identity.
+NSApplication.shared.setActivationPolicy(.accessory)
 
 // Usage: speech-recognizer [language-code] [--auth-only]
 // Streams NDJSON to stdout:
