@@ -143,7 +143,8 @@ async fn mac_install_stages_the_dmg_app_over_the_running_bundle_and_relaunches()
             "#!/bin/sh\n",
             "if [ \"$1\" = \"attach\" ]; then\n",
             "  mnt=\"\"; prev=\"\"\n",
-            "  for a in \"$@\"; do [ \"$prev\" = \"-mountpoint\" ] && mnt=\"$a\"; prev=\"$a\"; done\n",
+            "  for a in \"$@\"; do [ \"$prev\" = \"-mountpoint\" ] && mnt=\"$a\";\n",
+            "    prev=\"$a\"; done\n",
             "  mkdir -p \"$mnt\" && cp -R \"$STUB_MOUNT_APP\" \"$mnt/\"\n",
             "else\n  exit 0\nfi\n"
         ),
