@@ -175,3 +175,28 @@ jobs:
       # workspace build above does not exercise.
       - name: Build macOS native helpers
         run: node desktop/scripts/build-macos-native.mjs
+
+      # KOS-378: prove the shipped DMG carries a seal macOS accepts. The
+      # package step signs inside-out and re-verifies the .app inside the
+      # mounted image (fail-closed). Then the same checks run against the
+      # latest published DMG — its Gatekeeper verdict is logged for the
+      # before/after record but does not gate (a previous release cannot be
+      # fixed retroactively; `resign` re-signs it with the release plan and
+      # verifies the rebuilt image).
+      - name: Verify macOS DMG signature
+        if: runner.os == 'macOS'
+        run: |
+          node desktop/scripts/package-macos-dmg.mjs 0.0.0-ci
+          # Released-DMG evidence is informational: the download can fail on
+          # rate limits, and a broken seal in an already-shipped release can
+          # only be fixed forward. The rebuilt image's `resign` verification
+          # still runs the same fail-closed check when the download works.
+          if url=$(curl -fsSL https://api.github.com/repos/makekosmos/cortex/releases/latest \
+            | sed -n 's/.*"browser_download_url": *"\([^"]*\.dmg\)".*/\1/p' | head -1) \
+            && [ -n "$url" ] \
+            && curl -fL -o /tmp/mundus-released.dmg "$url"; then
+            node desktop/scripts/macos-gatekeeper-check.mjs check /tmp/mundus-released.dmg || true
+            node desktop/scripts/macos-gatekeeper-check.mjs resign /tmp/mundus-released.dmg /tmp/mundus-resigned.dmg
+          else
+            echo "::warning::could not download latest release DMG; skipping before/after evidence"
+          fi

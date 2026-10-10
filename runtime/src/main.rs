@@ -124,6 +124,10 @@ fn startup_delay_ms(env_key: &str, default_ms: u64) -> u64 {
 }
 
 fn main() -> ExitCode {
+    // KOS-376: inside `Mundus Manager.app` the Engine would otherwise claim a
+    // second Dock tile at its first WindowServer connection; transform it
+    // before anything can touch AppKit.
+    engine::macos_dock::suppress_dock_tile();
     let args: Vec<String> = std::env::args().skip(1).collect();
     // `privileged <install|uninstall|status|run-service>` — dedicated
     // one-shot / SCM modes that never start the Engine runtime.

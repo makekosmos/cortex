@@ -16,6 +16,7 @@ fn message_variant_name(msg: &LanSyncMessage) -> &'static str {
         LanSyncMessage::Pong { .. } => "Pong",
         LanSyncMessage::SignedIntegrationFrame { .. } => "SignedIntegrationFrame",
         LanSyncMessage::SignedIntegrationAck { .. } => "SignedIntegrationAck",
+        LanSyncMessage::PairingRejected { .. } => "PairingRejected",
     }
 }
 

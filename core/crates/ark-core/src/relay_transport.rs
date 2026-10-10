@@ -243,8 +243,9 @@ impl SyncTransport for RelayTransport {
         Ok(())
     }
 
-    /// Signal the background loop to stop.
-    fn stop(&self) {
+    /// Signal the background loop to stop. The loop holds no `storage`
+    /// handle, so a send-only shutdown cannot leak the db connection.
+    async fn stop(&self) {
         if let Some(tx) = self
             .stop_tx
             .lock()

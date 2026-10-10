@@ -20,7 +20,12 @@
 // then silence until `stop`. Env is read at each `start` — swap files freely.
 
 import Foundation
+import AppKit
 import AVFoundation
+
+// KOS-376: bundled helper — without the accessory policy it would claim a
+// second Dock tile under the Mundus Manager identity.
+NSApplication.shared.setActivationPolicy(.accessory)
 
 // MARK: - Constants
 

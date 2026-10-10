@@ -9,6 +9,7 @@ struct ConnectionParams {
     stop_rx: watch::Receiver<bool>,
     event_tx: mpsc::UnboundedSender<TransportEvent>,
     registry: Arc<DeviceRegistry>,
+    connections: Arc<Mutex<HashMap<EndpointId, iroh::endpoint::Connection>>>,
     outbound_storage: Arc<tokio::sync::RwLock<Option<OutboundStorage>>>,
 }
 
@@ -51,10 +52,15 @@ async fn handle_connection(params: ConnectionParams) {
         stop_rx,
         event_tx,
         registry,
+        connections,
         outbound_storage,
     } = params;
     let remote_endpoint_id = conn.remote_id();
     let role = if is_dialer { "dialer" } else { "listener" };
+    connections
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(remote_endpoint_id, conn.clone());
 
     // ── Получаем единственный bi-стрим для всего соединения. ─────────────────
     let (mut send, recv) = if is_dialer {
@@ -102,13 +108,19 @@ async fn handle_connection(params: ConnectionParams) {
     // ── Writer task: владеет `send`. ──────────────────────────────────────────
     // Никогда не конкурирует с reader в одном select! — поэтому read_frame
     // больше не может быть дропнут во время частичного чтения.
+    // A JoinSet — not two detached handles: when the transport's `stop()`
+    // aborts this connection task, the set drops and aborts writer and
+    // reader, so they cannot outlive teardown holding `outbound_storage`
+    // (KOS-369).
+    let mut conn_tasks = tokio::task::JoinSet::new();
+
     let writer_notify = done_notify.clone();
     let writer_registry = registry.clone();
     let writer_event_tx = event_tx.clone();
     let writer_our_device_id = our_device_id.clone();
     let mut writer_stop_rx = stop_rx.clone();
 
-    let writer_handle = tokio::spawn(async move {
+    conn_tasks.spawn(async move {
         let mut send = send; // move into task
         loop {
             tokio::select! {
@@ -135,6 +147,30 @@ async fn handle_connection(params: ConnectionParams) {
                     match recv_result {
                         Ok(outgoing) => {
                             if outgoing.target.is_some_and(|target| target != remote_endpoint_id) {
+                                continue;
+                            }
+                            // Data frames only flow to authenticated
+                            // endpoints. A pairing-pending connection (KOS-369)
+                            // is mapped in the registry but untrusted: it sees
+                            // Hello + PairingRejected and nothing else.
+                            if !writer_registry.is_authenticated_endpoint(&remote_endpoint_id)
+                                && !matches!(
+                                    outgoing.msg,
+                                    LanSyncMessage::Hello { .. }
+                                        | LanSyncMessage::PairingRejected { .. }
+                                )
+                            {
+                                if let Some(completion) = outgoing.completion {
+                                    if let Some(
+                                        tx
+                                    ) = completion.lock().unwrap_or_else(
+                                        |e| e.into_inner()
+                                    ).take() {
+                                        let _ = tx.send(Err(
+                                            "iroh transport peer is not authenticated".into()
+                                        ));
+                                    }
+                                }
                                 continue;
                             }
                             let variant = message_variant_name(&outgoing.msg);
@@ -221,7 +257,7 @@ async fn handle_connection(params: ConnectionParams) {
     let reader_registry = registry.clone();
     let reader_event_tx = event_tx.clone();
 
-    let reader_handle = tokio::spawn(async move {
+    conn_tasks.spawn(async move {
         let mut recv = recv; // move into task
         loop {
             match read_frame(&mut recv).await {
@@ -279,8 +315,11 @@ async fn handle_connection(params: ConnectionParams) {
     //
     // Если stop_rx срабатывает здесь, writer увидит его сам (он тоже слушает
     // stop_rx). Мы просто ждём join'а.
-    let _ = writer_handle.await;
-    let _ = reader_handle.await;
+    while conn_tasks.join_next().await.is_some() {}
+    connections
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(&remote_endpoint_id);
 
     eprintln!("[iroh] connection closed ({role}) remote={remote_endpoint_id}");
 }

@@ -19,12 +19,12 @@ fn spawn_relay_connectivity_watch(
     endpoint: &Endpoint,
     relay_mode: Option<&RelayMode>,
     mut stop_rx: watch::Receiver<bool>,
-) {
+) -> Option<tokio::task::JoinHandle<()>> {
     if matches!(relay_mode, Some(RelayMode::Disabled)) {
-        return;
+        return None;
     }
     let mut watcher = endpoint.home_relay_status();
-    tokio::spawn(async move {
+    Some(tokio::spawn(async move {
         let mut connected: Option<bool> = None;
         loop {
             tokio::select! {
@@ -54,5 +54,5 @@ fn spawn_relay_connectivity_watch(
                 }
             }
         }
-    });
+    }))
 }

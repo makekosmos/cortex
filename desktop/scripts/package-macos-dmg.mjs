@@ -21,6 +21,11 @@ import {
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { dmgName, ENGINE_BINARY_UNIX, MANAGER_MAC_BIN, PRODUCT_NAME } from "./brand.mjs";
+import {
+  logGatekeeperAssessment,
+  signMacosApp,
+  verifyMacosAppSignature,
+} from "./macos-codesign.mjs";
 import { bytes, writeAtomic } from "./release-utils.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -174,23 +179,13 @@ export function stageMacosApp({ version, stageDir }) {
   // produces the lookup layout for tests.
   if (process.platform === "darwin") {
     buildIcns(contents, stageDir);
-    if (process.env.CODESIGN_IDENTITY) {
-      // TODO(KOS-349): hardened runtime + entitlements + notarytool once the
-      // Apple secrets land in the macOS nightly job.
-      run("codesign", [
-        "--force",
-        "--options",
-        "runtime",
-        "--timestamp",
-        "--sign",
-        process.env.CODESIGN_IDENTITY,
-        appRoot,
-      ]);
-    } else {
-      // Ad-hoc signature so the app launches on Apple silicon (Gatekeeper
-      // still requires right-click → Open without notarization).
-      run("codesign", ["--deep", "--force", "--sign", "-", appRoot]);
-    }
+    // TODO(KOS-349): entitlements + notarytool once the Apple secrets land in
+    // the macOS nightly job. CODESIGN_IDENTITY already switches the plan to
+    // hardened runtime + secure timestamp inside-out signing.
+    signMacosApp(appRoot, {
+      mainExecutableName: MANAGER_MAC_BIN,
+      identity: process.env.CODESIGN_IDENTITY,
+    });
   }
   return appRoot;
 }
@@ -290,6 +285,30 @@ export function createUnsignedDmg({ appPath, dmgPath, volumeName }) {
 }
 
 /**
+ * Prove the signature survives the DMG round-trip: mount the finished image
+ * read-only and re-verify the sealed .app inside. hdiutil output goes to the
+ * build log; the codesign verdict is the fail-closed gate.
+ */
+export function verifyDmgSignature(dmgPath, appName = `${PRODUCT_NAME} Manager.app`) {
+  if (process.platform !== "darwin") {
+    die("DMG signature verification requires macOS (darwin)");
+  }
+  const mountPoint = `${dmgPath}.mnt`;
+  rmSync(mountPoint, { recursive: true, force: true });
+  mkdirSync(mountPoint, { recursive: true });
+  try {
+    run("hdiutil", ["attach", "-nobrowse", "-readonly", "-mountpoint", mountPoint, dmgPath]);
+    const staged = path.join(mountPoint, appName);
+    if (!existsSync(staged)) die(`DMG does not contain ${appName}: ${dmgPath}`);
+    verifyMacosAppSignature(staged);
+    logGatekeeperAssessment(staged);
+  } finally {
+    spawnSync("hdiutil", ["detach", mountPoint, "-quiet"], { stdio: "ignore" });
+    rmSync(mountPoint, { recursive: true, force: true });
+  }
+}
+
+/**
  * Full mac packaging: stage .app → DMG under desktop/release. manifest.json
  * (and the legacy latest-mac.yml during dual-publish) are written by
  * build-desktop.mjs from the DMG bytes (KOS-350).
@@ -308,6 +327,7 @@ export async function packageMacosDmg(
     dmgPath,
     volumeName: `${PRODUCT_NAME} ${version}`,
   });
+  verifyDmgSignature(dmgPath);
   // Record that this artifact is unsigned so operators do not mistake it for
   // a notarized build. Not uploaded to the GitHub release.
   await writeAtomic(

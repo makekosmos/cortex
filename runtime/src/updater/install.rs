@@ -1,7 +1,6 @@
-//! Silent installer launch. Windows-only for now: the feed this module reads
-//! (`feed::DEFAULT_FEED_BASE`) only ever names an NSIS `.exe`, so there is no
-//! macOS/Linux installer to launch here yet — see the PR description for the
-//! mac follow-up.
+//! Silent installer launch, Windows: the feed's `win` entry names an NSIS
+//! `.exe` that self-installs with `/S`. macOS applies its DMG differently
+//! (mount → stage → detached swap+relaunch helper) in `macos.rs`.
 //!
 //! The installer is spawned **detached** and this call does not wait for it
 //! or terminate the current process: Engine is not the process that owns
@@ -31,6 +30,8 @@ pub(crate) fn launch_silent_detached(installer_path: &Path) -> Result<(), Update
 
 #[cfg(not(windows))]
 pub(crate) fn launch_silent_detached(_installer_path: &Path) -> Result<(), UpdaterError> {
+    // The "win" install arm; reached only if a non-Windows service is
+    // pointed at the NSIS feed (tests) — macOS goes through `macos.rs`.
     Err(UpdaterError::UnsupportedPlatform)
 }
 

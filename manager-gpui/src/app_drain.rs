@@ -29,17 +29,7 @@ impl ManagerApp {
                         Err(error) => self.error = Some(error),
                     }
                 }
-                "@action" => {
-                    self.action_busy = false;
-                    match result {
-                        Ok(_) => {
-                            self.notice = Some("Выполнено.".into());
-                            self.invalidated_slots.extend(self.slots.keys().cloned());
-                            views::load(self.view, self);
-                        }
-                        Err(e) => self.error = Some(e),
-                    }
-                }
+                "@action" => self.action_reply(result),
                 "pkg.open" => self.open_reply(result),
                 "conn.login" => self.login_reply(result),
                 "store.ext" => self.external_url_reply(result),

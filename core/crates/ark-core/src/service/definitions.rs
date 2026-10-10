@@ -18,6 +18,11 @@ pub(crate) struct SyncStartParams {
     pub(crate) auth_secret: Option<String>,
     pub(crate) use_iroh: bool,
     pub(crate) iroh_peer_ticket: Option<String>,
+    /// KOS-369: this start is the user entering a pairing code — mark the
+    /// endpoint as an outgoing consent attempt. One-shot: the runtime's
+    /// persisted `start_params` carry `false` so internal restarts and boot
+    /// restores don't resurrect it.
+    pub(crate) pairing_connect: bool,
     pub(crate) discovery_enabled: bool,
     pub(crate) bind: SyncBind,
     pub(crate) app_version: Option<String>,
@@ -350,6 +355,19 @@ pub(crate) enum Request {
         #[serde(alias = "code")]
         pairing_code: String,
     },
+    /// KOS-369 consent decisions on the receiving side. `accept_pairing`
+    /// completes the handshake for a pending request; `decline_pairing`
+    /// sends `pairing_rejected` and closes the connection.
+    AcceptPairing {
+        device_id: String,
+    },
+    DeclinePairing {
+        device_id: String,
+    },
+    /// KOS-369 «Отмена» on the initiator (or dismissal of a terminal
+    /// outcome): drops the outbound attempt and, while still pending, cuts
+    /// the dialled connection.
+    CancelPairing,
     LeaveSpace,
     AddSeedPeer {
         addresses: Vec<String>,

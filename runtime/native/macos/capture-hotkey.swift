@@ -1,6 +1,11 @@
 import Foundation
+import AppKit
 import CoreGraphics
 import Darwin
+
+// KOS-376: bundled helper — without the accessory policy its event tap would
+// claim a second Dock tile under the Mundus Manager identity.
+NSApplication.shared.setActivationPolicy(.accessory)
 
 // capture-hotkey — variation point hotkey-hold-monitor для назначения хоткея.
 //

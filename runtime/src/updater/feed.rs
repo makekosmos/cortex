@@ -78,18 +78,49 @@ async fn fetch_release_with(
         .await
         .and_then(|text| parse_release_manifest(&text, platform));
     let error = match primary {
-        Ok(release) => return Ok(release),
+        // KOS-377: a manifest that parses but has no entry for this
+        // platform is ambiguous during the dual-publish window — the CDN
+        // can serve a copy that predates the platform's asset merge for
+        // hours after publish. Consult the legacy channel file before
+        // reporting "no update": it names the installable build.
+        Ok(release) if release.file.is_some() => return Ok(release),
+        Ok(release) => match legacy_release(client, feed_base, platform, legacy_fallback).await {
+            Ok(Some(legacy)) => return Ok(legacy),
+            _ => return Ok(release),
+        },
         Err(error) => error,
     };
+    match legacy_release(client, feed_base, platform, legacy_fallback).await? {
+        Some(legacy) => Ok(legacy),
+        None => Err(error),
+    }
+}
+
+/// The platform's legacy channel feed (`latest.yml` / `latest-mac.yml`),
+/// or `None` when the dual-publish window is closed, the platform has no
+/// channel file, or the fetch/parse fails (callers fall back to the
+/// manifest result).
+async fn legacy_release(
+    client: &reqwest::Client,
+    feed_base: &str,
+    platform: &str,
+    legacy_fallback: bool,
+) -> Result<Option<FeedRelease>, UpdaterError> {
     let Some(channel) = legacy_channel_file(platform).filter(|_| legacy_fallback) else {
-        return Err(error);
+        return Ok(None);
     };
-    tracing::info!(%error, channel, "manifest.json unavailable; using legacy update feed");
-    let legacy = parse_latest_yml(&fetch_text(client, &format!("{feed_base}/{channel}")).await?)?;
-    Ok(FeedRelease {
+    let text = match fetch_text(client, &format!("{feed_base}/{channel}")).await {
+        Ok(text) => text,
+        Err(error) => {
+            tracing::info!(%error, channel, "legacy update feed unavailable");
+            return Ok(None);
+        }
+    };
+    let legacy = parse_latest_yml(&text)?;
+    Ok(Some(FeedRelease {
         file: Some(legacy.primary_file()?.clone()),
         version: legacy.version,
-    })
+    }))
 }
 
 /// Joins a manifest filename onto the feed base. Only a plain installer name

@@ -38,22 +38,22 @@ const helpers = [
   {
     out: "audio-capturer",
     sources: ["audio-capturer.swift"],
-    frameworks: ["AVFoundation", "Foundation"],
+    frameworks: ["AVFoundation", "Foundation", "AppKit"],
   },
   {
     out: "microphone-access",
     sources: ["microphone-access.swift"],
-    frameworks: ["AVFoundation"],
+    frameworks: ["AVFoundation", "AppKit"],
   },
   {
     out: "speech-recognizer",
     sources: ["speech-recognizer.swift"],
-    frameworks: ["Speech", "AVFoundation"],
+    frameworks: ["Speech", "AVFoundation", "AppKit"],
   },
   {
     out: "input-monitoring-request",
     sources: ["input-monitoring-request.swift"],
-    frameworks: ["CoreGraphics"],
+    frameworks: ["CoreGraphics", "AppKit"],
   },
   {
     out: "get-selected-text",

@@ -1,5 +1,10 @@
 import Foundation
+import AppKit
 import AVFoundation
+
+// KOS-376: bundled helper — without the accessory policy it would claim a
+// second Dock tile under the Mundus Manager identity.
+NSApplication.shared.setActivationPolicy(.accessory)
 
 // Usage: microphone-access [--prompt]
 // Emits one JSON line to stdout:
