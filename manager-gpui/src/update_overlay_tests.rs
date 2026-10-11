@@ -1,4 +1,4 @@
-use super::{bounce_offset, resolve, OverlayState};
+use super::{resolve, OverlayState};
 use crate::app::Slot;
 use gpui::TestAppContext;
 use serde_json::json;
@@ -47,18 +47,6 @@ fn full_flow_offer_to_ready_to_hidden() {
     assert_eq!(state, OverlayState::Ready);
     state = resolve(false, state.visible(), "idle");
     assert_eq!(state, OverlayState::Hidden);
-}
-
-// --- Animation helpers --------------------------------------------------------
-
-#[test]
-fn bounce_is_bounded_and_continuous() {
-    for i in 0..200 {
-        let t = i as f32 * 0.05;
-        assert!(bounce_offset(t).abs() <= 6.001, "t={t}");
-    }
-    // No discontinuity across the period wrap.
-    assert!((bounce_offset(1.899) - bounce_offset(1.901)).abs() < 0.5);
 }
 
 // --- Rendered overlay ----------------------------------------------------------
@@ -111,7 +99,116 @@ fn overlay_appears_on_available_and_snoozes_for_the_session(cx: &mut TestAppCont
 }
 
 #[gpui::test]
-fn downloading_shows_determinate_bar_and_error_offers_retry(cx: &mut TestAppContext) {
+fn downloading_shows_juicy_bar_instead_of_buttons(cx: &mut TestAppContext) {
+    let (manager, cx) = crate::a11y_tests::launch(cx);
+    set_status(
+        cx,
+        &manager,
+        json!({
+            "state": "downloading", "currentVersion": "0.10.2",
+            "newVersion": "0.10.3", "percent": 42, "canInstall": true
+        }),
+    );
+    // The bar replaces the whole button stack while a download runs.
+    let track = cx.debug_bounds("update-overlay-progress").unwrap();
+    assert!(cx.debug_bounds("update-overlay-primary").is_none());
+    assert!(cx.debug_bounds("update-overlay-later").is_none());
+    // After the eased fill settles it tracks percent: 42% of the track.
+    manager.update(cx, |app, cx| {
+        app.update_fill.snap(42.0);
+        cx.notify();
+    });
+    cx.update(|_, cx| cx.refresh_windows());
+    cx.run_until_parked();
+    let fill = cx.debug_bounds("update-overlay-progress-fill").unwrap();
+    let ratio = fill.size.width / track.size.width;
+    assert!((ratio - 0.42).abs() < 0.05, "ratio {ratio}");
+}
+
+#[gpui::test]
+fn offer_and_ready_keep_their_buttons(cx: &mut TestAppContext) {
+    let (manager, cx) = crate::a11y_tests::launch(cx);
+    set_status(
+        cx,
+        &manager,
+        json!({
+            "state": "available", "currentVersion": "0.10.2",
+            "newVersion": "0.10.3", "canInstall": true
+        }),
+    );
+    assert!(cx.debug_bounds("update-overlay-primary").is_some());
+    assert!(cx.debug_bounds("update-overlay-later").is_some());
+    set_status(
+        cx,
+        &manager,
+        json!({
+            "state": "downloaded", "currentVersion": "0.10.2",
+            "newVersion": "0.10.3", "percent": 100, "canInstall": true
+        }),
+    );
+    assert!(cx.debug_bounds("update-overlay-primary").is_some());
+    assert!(cx.debug_bounds("update-overlay-later").is_some());
+}
+
+#[gpui::test]
+fn hidden_window_pauses_logo_frames_until_visible(cx: &mut TestAppContext) {
+    let (manager, cx) = crate::a11y_tests::launch(cx);
+    set_status(
+        cx,
+        &manager,
+        json!({
+            "state": "available", "currentVersion": "0.10.2",
+            "newVersion": "0.10.3", "canInstall": true
+        }),
+    );
+    // Age the cached frame so the next visible render produces a fresh one.
+    let stale = |manager: &gpui::Entity<crate::app::ManagerApp>,
+                 cx: &mut gpui::VisualTestContext| {
+        manager.update(cx, |app, cx| {
+            if let Some((at, _)) = &mut app.update_logo_frame {
+                *at = std::time::Instant::now() - std::time::Duration::from_secs(1);
+            }
+            cx.notify();
+        });
+    };
+    stale(&manager, cx);
+    cx.update(|_, cx| cx.refresh_windows());
+    cx.run_until_parked();
+    let produced = manager.read_with(cx, |app, _| app.update_logo_frames);
+    assert!(produced > 0, "a visible overlay must produce logo frames");
+
+    cx.simulate_visibility_change(gpui::WindowVisibility::Hidden);
+    // The platform callback lands on the window on the next cycle; the
+    // baseline is whatever that last still-visible render produced.
+    stale(&manager, cx);
+    cx.update(|_, cx| cx.refresh_windows());
+    cx.run_until_parked();
+    let produced_at_hide = manager.read_with(cx, |app, _| app.update_logo_frames);
+    stale(&manager, cx);
+    cx.update(|_, cx| cx.refresh_windows());
+    cx.run_until_parked();
+    cx.update(|_, cx| cx.refresh_windows());
+    cx.run_until_parked();
+    assert_eq!(
+        manager.read_with(cx, |app, _| app.update_logo_frames),
+        produced_at_hide,
+        "hidden window must not produce logo frames"
+    );
+
+    cx.simulate_visibility_change(gpui::WindowVisibility::Visible);
+    cx.update(|_, cx| cx.refresh_windows());
+    cx.run_until_parked();
+    stale(&manager, cx);
+    cx.update(|_, cx| cx.refresh_windows());
+    cx.run_until_parked();
+    assert!(
+        manager.read_with(cx, |app, _| app.update_logo_frames) > produced_at_hide,
+        "visible window resumes logo frames"
+    );
+}
+
+#[gpui::test]
+fn downloading_then_error_offers_retry(cx: &mut TestAppContext) {
     let (manager, cx) = crate::a11y_tests::launch(cx);
     set_status(
         cx,
@@ -138,6 +235,147 @@ fn downloading_shows_determinate_bar_and_error_offers_retry(cx: &mut TestAppCont
     manager.read_with(cx, |app, _| {
         assert!(matches!(app.slots.get("@action"), Some(Slot::Loading)));
     });
+}
+
+#[gpui::test]
+fn logo_stays_put_while_metal_flows(cx: &mut TestAppContext) {
+    let (manager, cx) = crate::a11y_tests::launch(cx);
+    set_status(
+        cx,
+        &manager,
+        json!({
+            "state": "available", "currentVersion": "0.10.2",
+            "newVersion": "0.10.3", "canInstall": true
+        }),
+    );
+    let first = cx.debug_bounds("update-overlay-logo").unwrap();
+    // Advance the animation clock well past a full metal-flow cycle; the
+    // shader keeps animating but the mark must not move.
+    manager.update(cx, |app, cx| {
+        app.update_anim_start = std::time::Instant::now() - std::time::Duration::from_millis(1950);
+        cx.notify();
+    });
+    cx.update(|_, cx| cx.refresh_windows());
+    let second = cx.debug_bounds("update-overlay-logo").unwrap();
+    assert_eq!(first, second);
+}
+
+// --- Download fill smoothing -------------------------------------------------
+
+use super::FillSmoother;
+
+#[test]
+fn fill_glides_monotonically_and_never_passes_the_target() {
+    let mut s = FillSmoother::new();
+    let mut prev = 0.0;
+    for target in [0., 3., 12., 15., 24., 37., 52., 66., 81., 94.] {
+        for _ in 0..60 {
+            // one second of uneven polls at 60 fps
+            let v = s.step(target, 1.0 / 60.0);
+            assert!(
+                v >= prev,
+                "fill went backwards {prev} → {v} (target {target})"
+            );
+            assert!(
+                v <= target + 1e-4 && v <= 100.0,
+                "fill {v} passed target {target}"
+            );
+            prev = v;
+        }
+    }
+    // It must keep moving between polls, not staircase: mid-second frames
+    // differ while the target is held.
+    let mut s = FillSmoother::new();
+    s.step(50.0, 1.0 / 60.0);
+    let a = s.step(50.0, 1.0 / 60.0);
+    let b = s.step(50.0, 1.0 / 60.0);
+    assert!(b > a, "fill froze between polls: {a} → {b}");
+}
+
+#[test]
+fn fill_converges_to_the_target() {
+    let mut s = FillSmoother::new();
+    for _ in 0..(60 * 30) {
+        s.step(50.0, 1.0 / 60.0);
+    }
+    assert_eq!(s.value(), 50.0);
+}
+
+#[test]
+fn fill_reaches_100_on_downloaded() {
+    let mut s = FillSmoother::new();
+    for _ in 0..60 {
+        s.step(90.0, 1.0 / 60.0);
+    }
+    s.finish();
+    assert_eq!(s.value(), 100.0);
+}
+
+#[test]
+fn new_download_resets_the_fill() {
+    let mut s = FillSmoother::new();
+    for _ in 0..120 {
+        s.step(80.0, 1.0 / 60.0);
+    }
+    assert!(s.value() > 50.0);
+    s.reset();
+    assert_eq!(s.value(), 0.0);
+    for _ in 0..30 {
+        let v = s.step(5.0, 1.0 / 60.0);
+        assert!(v <= 5.0);
+    }
+}
+
+#[test]
+fn hitched_frame_does_not_overshoot() {
+    let mut s = FillSmoother::new();
+    let v = s.step(80.0, 10.0); // a stalled paint → clamped dt
+    assert!(v > 0.0 && v <= 80.0);
+    let mut s = FillSmoother::new();
+    for _ in 0..60 {
+        s.step(40.0, 1.0 / 60.0);
+    }
+    let v = s.step(45.0, 10.0);
+    assert!(v <= 45.0 && v >= s.value() - 1e-6);
+}
+
+#[gpui::test]
+fn new_download_restarts_the_bar_and_ready_completes_it(cx: &mut TestAppContext) {
+    let (manager, cx) = crate::a11y_tests::launch(cx);
+    set_status(
+        cx,
+        &manager,
+        json!({
+            "state": "downloading", "currentVersion": "0.10.2",
+            "newVersion": "0.10.3", "percent": 90, "canInstall": true
+        }),
+    );
+    manager.update(cx, |app, cx| {
+        app.update_fill.snap(90.0);
+        cx.notify();
+    });
+    cx.update(|_, cx| cx.refresh_windows());
+    // `downloaded` completes the fill even though Ready hides the bar.
+    set_status(
+        cx,
+        &manager,
+        json!({
+            "state": "downloaded", "currentVersion": "0.10.2",
+            "newVersion": "0.10.3", "percent": 100, "canInstall": true
+        }),
+    );
+    manager.read_with(cx, |app, _| assert_eq!(app.update_fill.value(), 100.0));
+    // A NEW download after Ready restarts the bar near zero.
+    set_status(
+        cx,
+        &manager,
+        json!({
+            "state": "downloading", "currentVersion": "0.10.3",
+            "newVersion": "0.10.4", "percent": 5, "canInstall": true
+        }),
+    );
+    cx.run_until_parked();
+    manager.read_with(cx, |app, _| assert!(app.update_fill.value() <= 5.0));
 }
 
 #[gpui::test]

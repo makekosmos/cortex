@@ -3907,12 +3907,14 @@ dependencies = [
  "objc2 0.6.4",
  "objc2-app-kit 0.3.2",
  "pe-version-info",
+ "pollster 0.2.5",
  "serde",
  "serde_json",
  "smallvec",
  "tracing",
  "ureq",
  "webp-animation",
+ "wgpu",
 ]
 
 [[package]]

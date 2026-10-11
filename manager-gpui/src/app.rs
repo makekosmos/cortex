@@ -99,11 +99,24 @@ pub struct ManagerApp {
     /// Last resolved overlay state — `Failed` is gated on the overlay
     /// already being open when the Engine reports `error`.
     pub update_overlay: crate::update_overlay::OverlayState,
-    /// Frame clock for the logo bounce/metal flow; reset on Hidden→visible.
+    /// Frame clock for the logo metal flow; reset on Hidden→visible.
     pub update_anim_start: Instant,
     /// Decoded WebP frame ring for the liquid-metal mark.
     /// `None` → plain-icon fallback.
     pub update_logo: Option<std::sync::Arc<crate::logo_anim::LogoFrames>>,
+    /// Last produced logo frame + when — reused between ~16 ms ticks and
+    /// while the window is not visible.
+    pub update_logo_frame: Option<(Instant, std::sync::Arc<gpui::RenderImage>)>,
+    /// Smoothed update-download bar fill (0..100) and its easing clock.
+    pub update_fill: crate::update_overlay::FillSmoother,
+    pub update_fill_stamp: Instant,
+    /// Test-only: frames actually produced by `logo_image` (excludes reuse
+    /// of the cached frame) so tests can assert the pause/resume behavior.
+    #[cfg(test)]
+    pub update_logo_frames: usize,
+    /// Keeps the window-visibility observer alive; on Visible it notifies so
+    /// the overlay animation resumes.
+    _window_visibility: Option<gpui::Subscription>,
     /// Company whose key modal is open.
     pub key_editor: Option<String>,
     /// Key value that passed verification in the open modal.
@@ -184,6 +197,12 @@ impl ManagerApp {
             update_overlay: crate::update_overlay::OverlayState::Hidden,
             update_anim_start: Instant::now(),
             update_logo: None,
+            update_logo_frame: None,
+            update_fill: crate::update_overlay::FillSmoother::new(),
+            update_fill_stamp: Instant::now(),
+            #[cfg(test)]
+            update_logo_frames: 0,
+            _window_visibility: None,
             key_editor: None,
             key_checked: None,
             disclosure: None,
@@ -216,7 +235,16 @@ impl ManagerApp {
             }
         })
         .detach();
-        let _ = window;
+        // Resume the update-overlay animation when the platform starts
+        // presenting this window again (Hidden → Visible).
+        let weak = cx.weak_entity();
+        this._window_visibility = Some(window.observe_window_visibility(
+            move |visibility, _window, cx| {
+                if visibility.is_visible() {
+                    let _ = weak.update(cx, |_this, cx| cx.notify());
+                }
+            },
+        ));
         this
     }
 

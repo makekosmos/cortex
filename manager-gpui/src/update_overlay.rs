@@ -55,39 +55,171 @@ pub fn resolve(snoozed: bool, was_open: bool, engine_state: &str) -> OverlayStat
     }
 }
 
-/// Gentle bounce: ±6px sine over ~1.9s — Telegram-sticker float, not a jump.
-pub fn bounce_offset(elapsed_secs: f32) -> f32 {
-    (elapsed_secs * std::f32::consts::TAU / 1.9).sin() * 6.0
-}
+/// Displayed edge length of the mark (logical px).
+const LOGO_SIZE: f32 = 100.0;
+/// Produce at most one new logo frame per this interval — the paint loop
+/// runs at display refresh, so ~16 ms lets the metal flow at 60 fps.
+const LOGO_FRAME_INTERVAL: std::time::Duration = std::time::Duration::from_millis(16);
 
 /// The petal mark itself, filled with animated liquid metal: a ring of
 /// pre-baked 256×252 frames, indexed by elapsed time — a clone of an `Arc`
-/// per repaint while the overlay is on screen.
-fn logo(frames: Option<&Arc<LogoFrames>>, elapsed: f32) -> Stateful<Div> {
+/// per repaint while the overlay is on screen. The mark sits still; only
+/// the metal inside it moves.
+fn logo(image: Option<Arc<RenderImage>>) -> Stateful<Div> {
     let mut mark = div()
         .id("update-overlay-logo")
         .debug_selector(|| "update-overlay-logo".into())
-        .relative()
-        .top(px(bounce_offset(elapsed)))
-        .size(px(200.));
-    if let Some(frames) = frames {
-        mark = mark.child(img(frames.frame(elapsed)).size_full());
+        .size(px(LOGO_SIZE));
+    if let Some(image) = image {
+        mark = mark.child(img(image).size_full());
     } else {
         // Fallback if the embedded WebP could not be decoded: plain glyph.
         mark = mark.flex().items_center().justify_center().child(
             gpui_component::Icon::default()
                 .path("icons/mundus.svg")
-                .size(px(140.))
+                .size(px(LOGO_SIZE * 0.7))
                 .text_color(c(FG())),
         );
     }
     mark
 }
 
+/// The logo image for this repaint. With `logo-gpu` enabled the live wgpu
+/// shader is tried first (rendered at displayed size × scale factor); any
+/// failure or an in-flight first readback falls back to the baked WebP ring
+/// (decoded on first use, so a healthy GPU path never pays for it). New
+/// frames are produced at most every `LOGO_FRAME_INTERVAL` (~60 fps); in between (and
+/// while the window is not visible) the last image is reused.
+fn logo_image(app: &mut ManagerApp, window: &Window, elapsed: f32) -> Option<Arc<RenderImage>> {
+    let fresh = app
+        .update_logo_frame
+        .as_ref()
+        .is_some_and(|(at, _)| at.elapsed() < LOGO_FRAME_INTERVAL);
+    if !window.is_visible() || fresh {
+        return app.update_logo_frame.as_ref().map(|(_, img)| img.clone());
+    }
+    #[cfg(feature = "logo-gpu")]
+    if let Some(img) =
+        crate::logo_gpu::frame(elapsed, (LOGO_SIZE * window.scale_factor()).ceil() as u32)
+    {
+        #[cfg(test)]
+        {
+            app.update_logo_frames += 1;
+        }
+        app.update_logo_frame = Some((std::time::Instant::now(), img.clone()));
+        return Some(img);
+    }
+    if app.update_logo.is_none() {
+        app.update_logo = LogoFrames::shared();
+    }
+    let img = app.update_logo.as_ref().map(|f| f.frame(elapsed));
+    if let Some(img) = &img {
+        #[cfg(test)]
+        {
+            app.update_logo_frames += 1;
+        }
+        app.update_logo_frame = Some((std::time::Instant::now(), img.clone()));
+    }
+    img
+}
+
 fn primary_op(state: OverlayState) -> &'static str {
     match state {
         OverlayState::Ready => "updater.install",
         _ => "updater.download",
+    }
+}
+
+/// Exponential approach time constant of the download fill, seconds.
+const FILL_TAU: f32 = 0.7;
+/// Cap on the extrapolated creep rate (%/s) so a stale feed cannot race.
+const FILL_RATE_CAP: f32 = 100.0;
+/// Closer than this many percent counts as arrived — kills the asymptotic tail.
+const FILL_SNAP: f32 = 0.25;
+
+/// Juicy download fill: the Engine reports `percent` once a second (the
+/// `updater.status` poll in `app_polls.rs`), but the bar glides on every
+/// paint — a slow exponential approach (τ `FILL_TAU`) plus a creep at the
+/// recently observed download rate keeps it visibly moving between polls
+/// instead of staircase-jumping each second. The displayed value is
+/// monotonic non-decreasing within one download and never passes the latest
+/// target; `reset` (a new download) is the only way it drops, `finish`
+/// snaps it to 100 on `downloaded`. dt-driven, so it is framerate-free.
+#[derive(Debug, Clone)]
+pub struct FillSmoother {
+    value: f32,
+    target: f32,
+    /// Seconds since `target` last changed — the poll cadence.
+    target_age: f32,
+    /// EMA of the observed download rate, %/s.
+    rate: f32,
+}
+
+impl FillSmoother {
+    pub fn new() -> Self {
+        Self {
+            value: 0.0,
+            target: 0.0,
+            target_age: 0.0,
+            rate: 0.0,
+        }
+    }
+
+    /// Test seam: read the displayed value (the render loop uses `step`'s
+    /// return).
+    #[cfg(test)]
+    pub fn value(&self) -> f32 {
+        self.value
+    }
+
+    /// A new download starts: the only time the display may drop.
+    pub fn reset(&mut self) {
+        *self = Self::new();
+    }
+
+    /// `downloaded` reported: the bar is complete even though Ready no
+    /// longer draws it.
+    pub fn finish(&mut self) {
+        self.value = 100.0;
+        self.target = 100.0;
+    }
+
+    /// Test seam: place the display at `value` without animating.
+    #[cfg(test)]
+    pub fn snap(&mut self, value: f32) {
+        self.value = value;
+        self.target = value;
+    }
+
+    /// Advance the display toward `target` by `dt` seconds (clamped so a
+    /// hitched frame cannot jump). Returns the displayed fill.
+    pub fn step(&mut self, target: f32, dt: f32) -> f32 {
+        let dt = dt.clamp(0.0, 0.25);
+        let target = target.clamp(0.0, 100.0);
+        if target != self.target {
+            if target > self.target && self.target_age > 0.0 {
+                let observed = (target - self.target) / self.target_age;
+                self.rate = self.rate * 0.6 + observed.clamp(0.0, FILL_RATE_CAP) * 0.4;
+            }
+            self.target = target;
+            self.target_age = 0.0;
+        }
+        self.target_age += dt;
+        let k = 1.0 - (-dt / FILL_TAU).exp();
+        let eased = self.value + (self.target - self.value) * k;
+        let crept = self.value + self.rate * dt;
+        // Monotonic, and bounded above by the latest target — except when
+        // the Engine moved the target backwards mid-download, where the
+        // display holds (monotonic wins) until the target catches up.
+        let mut next = eased
+            .max(crept)
+            .max(self.value)
+            .min(self.target.max(self.value));
+        if next < self.target && self.target - next < FILL_SNAP {
+            next = self.target;
+        }
+        self.value = next;
+        self.value
     }
 }
 
@@ -102,11 +234,12 @@ pub fn render(
     let current = vstr(&status, "currentVersion");
     let elapsed = app.update_anim_start.elapsed().as_secs_f32();
     // The metal flow needs continuous frames only while the overlay is on
-    // screen; Hidden requests nothing, so idle CPU stays at zero.
-    window.request_animation_frame();
-
-    if app.update_logo.is_none() {
-        app.update_logo = LogoFrames::shared();
+    // screen AND the window is actually presented; Hidden requests nothing,
+    // so idle CPU stays at zero. `window.is_visible()` covers minimized /
+    // fully occluded / other-Space windows where the platform supports it.
+    let window_visible = window.is_visible();
+    if window_visible {
+        window.request_animation_frame();
     }
 
     let (title, detail) = match state {
@@ -141,7 +274,7 @@ pub fn render(
         .flex_col()
         .items_center()
         .gap_4()
-        .child(logo(app.update_logo.as_ref(), elapsed))
+        .child(logo(logo_image(app, window, elapsed)))
         .child(
             div()
                 .flex()
@@ -164,76 +297,119 @@ pub fn render(
                 ),
         );
 
+    // Actions stack vertically, equal width, centered: accent on top.
+    // While downloading there are no buttons at all — the slot carries a
+    // juicy filling progress bar instead (the download must not be
+    // dismissible mid-flight).
+    let mut actions = div().flex().flex_col().items_center().gap_2().w(px(240.));
     if state == OverlayState::Downloading {
         let percent = vnum(&status, "percent").clamp(0.0, 100.0);
-        body = body.child(
-            div()
-                .w(px(280.))
-                .flex()
-                .flex_col()
-                .gap_1p5()
-                .items_center()
-                .child(
-                    div()
-                        .text_size(ui_px(12.))
-                        .text_color(c(MUTED_FG()))
-                        .child(format!("{percent:.0}%")),
-                )
-                .child(
-                    div()
-                        .id("update-overlay-progress")
-                        .debug_selector(|| "update-overlay-progress".into())
-                        .h(px(6.))
-                        .w_full()
-                        .rounded_full()
-                        .bg(fade(FG(), 0.12))
-                        .child(
-                            div()
-                                .h_full()
-                                .w(relative(percent as f32 / 100.0))
-                                .rounded_full()
-                                .bg(c(ACCENT())),
-                        ),
-                ),
-        );
-    }
-
-    // Actions stack vertically, equal width, centered: accent on top.
-    let mut actions = div().flex().flex_col().items_center().gap_2().w(px(240.));
-    if state != OverlayState::Downloading {
-        actions = actions.child(
-            div()
-                .id("update-overlay-primary")
-                .debug_selector(|| "update-overlay-primary".into())
-                .w_full()
-                .child(
-                    button::primary("update-overlay-primary-btn")
-                        .w_full()
-                        .label(primary_label)
-                        .disabled(busy)
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.action(primary_op(state), json!({}));
-                            cx.notify();
-                        })),
-                ),
-        );
-    }
-    actions = actions.child(
-        div()
-            .id("update-overlay-later")
-            .debug_selector(|| "update-overlay-later".into())
-            .w_full()
+        let now = std::time::Instant::now();
+        let dt = now.duration_since(app.update_fill_stamp).as_secs_f32();
+        app.update_fill_stamp = now;
+        let fill = app.update_fill.step(percent as f32, dt);
+        // Sheen band sweeping along the fill, one pass every ~1.7 s.
+        let sheen = (elapsed * 0.6).fract() * 1.4 - 0.2;
+        actions = actions
             .child(
-                button::secondary("update-overlay-later-btn")
+                div()
+                    .id("update-overlay-progress")
+                    .debug_selector(|| "update-overlay-progress".into())
+                    .h(px(6.))
                     .w_full()
-                    .label("Позже")
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.update_snoozed = true;
-                        this.update_overlay = OverlayState::Hidden;
-                        cx.notify();
-                    })),
-            ),
-    );
+                    .rounded_full()
+                    .bg(fade(FG(), 0.10))
+                    .child(
+                        div()
+                            .id("update-overlay-progress-fill")
+                            .debug_selector(|| "update-overlay-progress-fill".into())
+                            .relative()
+                            .h_full()
+                            .w(relative(fill / 100.0))
+                            .rounded_full()
+                            .overflow_hidden()
+                            .bg(linear_gradient(
+                                180.,
+                                linear_color_stop(c(ACCENT()).blend(white().opacity(0.28)), 0.),
+                                linear_color_stop(c(ACCENT()), 1.),
+                            ))
+                            .child(
+                                // 1 px lighter top line keeps the sheen
+                                // readable at the 6 px height.
+                                div()
+                                    .absolute()
+                                    .top_0()
+                                    .left_0()
+                                    .right_0()
+                                    .h(px(1.))
+                                    .rounded_full()
+                                    .bg(white().opacity(0.22)),
+                            )
+                            .child(
+                                // Moving sheen: two half-gradients make a
+                                // soft bright band sweeping left→right.
+                                div()
+                                    .absolute()
+                                    .top_0()
+                                    .bottom_0()
+                                    .w(px(36.))
+                                    .left(relative(sheen))
+                                    .flex()
+                                    .child(div().h_full().w_1_2().bg(linear_gradient(
+                                        90.,
+                                        linear_color_stop(white().opacity(0.0), 0.),
+                                        linear_color_stop(white().opacity(0.30), 1.),
+                                    )))
+                                    .child(div().h_full().w_1_2().bg(linear_gradient(
+                                        90.,
+                                        linear_color_stop(white().opacity(0.30), 0.),
+                                        linear_color_stop(white().opacity(0.0), 1.),
+                                    ))),
+                            ),
+                    ),
+            )
+            .child(
+                div()
+                    .text_size(ui_px(12.))
+                    .line_height(ui_px(16.))
+                    .text_color(c(MUTED_FG()))
+                    .child(format!("{fill:.0}%")),
+            );
+    } else {
+        actions = actions
+            .child(
+                div()
+                    .id("update-overlay-primary")
+                    .debug_selector(|| "update-overlay-primary".into())
+                    .w_full()
+                    .child(
+                        button::primary("update-overlay-primary-btn")
+                            .w_full()
+                            .label(primary_label)
+                            .disabled(busy)
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.action(primary_op(state), json!({}));
+                                cx.notify();
+                            })),
+                    ),
+            )
+            .child(
+                div()
+                    .id("update-overlay-later")
+                    .debug_selector(|| "update-overlay-later".into())
+                    .w_full()
+                    .child(
+                        button::secondary("update-overlay-later-btn")
+                            .w_full()
+                            .label("Позже")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.update_snoozed = true;
+                                this.update_overlay = OverlayState::Hidden;
+                                cx.notify();
+                            })),
+                    ),
+            );
+    }
     body = body.child(actions);
 
     div()
