@@ -22,7 +22,9 @@ path = "src/bin/uniffi-bindgen.rs"
 required-features = ["cli"]
 
 [dependencies]
-ark-core = { path = "../../../core/crates/ark-core", package = "ark-core" }
+# default-features = false drops ark-core/desktop-net (iroh portmapper +
+# metrics) — APK size, see the iroh note in ark-core/Cargo.toml.
+ark-core = { path = "../../../core/crates/ark-core", package = "ark-core", default-features = false }
 uniffi = "0.29"
 serde_json.workspace = true
 thiserror.workspace = true
