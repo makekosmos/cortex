@@ -30,7 +30,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use engine::{
     ark_host::ArkHost,
     auth, backend_tray, crash_reporter, db_backup,
-    dictation::DictationHost,
+    dictation::{self, DictationHost},
     engine_api::EngineApiServer,
     engine_control::{self, ControlMessage},
     engine_supervisor::{self, ProcessMode},
@@ -616,28 +616,29 @@ async fn setup() -> Result<SetupState, DynError> {
     }
 
     // Hotkey hooks are Engine-owned; forward their normalized trigger to the
-    // installed Dictation worker so Desktop is never part of the control path.
+    // installed Dictation worker, falling back to in-engine orchestration
+    // (host_capture::handle_engine_trigger) when neither worker nor the
+    // dictation app process is alive — the control path must survive a
+    // crashed or absent Dictation app.
     let mut dictation_events = dictation_host.subscribe();
     let dictation_packages = package_service.clone();
+    let dictation_host_for_triggers = dictation_host.clone();
     tokio::spawn(async move {
         loop {
             match dictation_events.recv().await {
                 Ok(event) => {
-                    if event.get("event").and_then(serde_json::Value::as_str)
-                        != Some("dictation.trigger")
-                    {
-                        continue;
-                    }
-                    let params = serde_json::json!({
-                        "kind": event.get("kind").and_then(serde_json::Value::as_str),
-                        "phase": event.get("phase").and_then(serde_json::Value::as_str),
-                    });
-                    if let Err(error) = dictation_packages
-                        .invoke_worker_operation("dictation.trigger", params)
-                        .await
-                    {
-                        tracing::debug!(error = %error, "dictation trigger worker unavailable");
-                    }
+                    dictation::route_trigger_event(
+                        &event,
+                        |params| {
+                            dictation_packages.invoke_worker_operation("dictation.trigger", params)
+                        },
+                        || dictation_packages.dictation_app_running(),
+                        |event| {
+                            let host = &dictation_host_for_triggers;
+                            async move { dictation::handle_engine_trigger(host, &event).await }
+                        },
+                    )
+                    .await;
                 }
                 Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
                 Err(tokio::sync::broadcast::error::RecvError::Closed) => break,

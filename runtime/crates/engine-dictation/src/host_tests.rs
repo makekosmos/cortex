@@ -1953,3 +1953,78 @@
         assert_eq!(cfg.provider, before.provider);
         assert_eq!(cfg.local_model, before.local_model);
     }
+
+    // ---- route_trigger_event ----
+
+    #[tokio::test]
+    async fn trigger_worker_ok_skips_engine() {
+        let engine_calls = std::sync::atomic::AtomicUsize::new(0);
+        route_trigger_event(
+            &json!({ "event": "dictation.trigger", "kind": "toggle", "phase": "down" }),
+            |_params| async { Ok::<_, &str>(json!({})) },
+            || false,
+            |_event: Value| async {
+                engine_calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            },
+        )
+        .await;
+        assert_eq!(engine_calls.load(std::sync::atomic::Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn trigger_worker_fail_app_alive_skips_engine() {
+        let engine_calls = std::sync::atomic::AtomicUsize::new(0);
+        route_trigger_event(
+            &json!({ "event": "dictation.trigger", "kind": "toggle", "phase": "down" }),
+            |_params| async { Err::<Value, _>("worker down") },
+            || true,
+            |_event: Value| async {
+                engine_calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            },
+        )
+        .await;
+        assert_eq!(engine_calls.load(std::sync::atomic::Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn trigger_worker_fail_no_app_falls_back_to_engine() {
+        let engine_calls = std::sync::atomic::AtomicUsize::new(0);
+        route_trigger_event(
+            &json!({ "event": "dictation.trigger", "kind": "ptt", "phase": "down" }),
+            |params| async move {
+                assert_eq!(params["kind"], "ptt");
+                assert_eq!(params["phase"], "down");
+                Err::<Value, _>("no worker")
+            },
+            || false,
+            |event: Value| {
+                let calls = &engine_calls;
+                async move {
+                    assert_eq!(event["event"], "dictation.trigger");
+                    calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                }
+            },
+        )
+        .await;
+        assert_eq!(engine_calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn escape_cancel_always_routes_to_engine() {
+        let engine_calls = std::sync::atomic::AtomicUsize::new(0);
+        let worker_calls = std::sync::atomic::AtomicUsize::new(0);
+        route_trigger_event(
+            &json!({ "event": "dictation_escape_cancel" }),
+            |_params| {
+                worker_calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                async { Ok::<_, &str>(json!({})) }
+            },
+            || true,
+            |_event: Value| async {
+                engine_calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            },
+        )
+        .await;
+        assert_eq!(engine_calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(worker_calls.load(std::sync::atomic::Ordering::SeqCst), 0);
+    }

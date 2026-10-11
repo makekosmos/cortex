@@ -41,7 +41,10 @@ pnpm run dev -- --data-dir DIR   # общий MUNDUS_DATA_DIR (по умолча
 
 Manager запускает Engine сам, но уже живой Engine в той же папке данных
 переиспользуется как есть, поэтому после правок в `runtime/` останови старый
-(его `pid` лежит в `<data-dir>/engine.lock.json`). Версии Rust и Node берутся
+(его `pid` лежит в `<data-dir>/engine.lock.json`). Watch-цикл без Manager:
+`./dev-watch.sh engine` (пересборка+запуск Engine на сохранении) и
+`./dev-watch.sh manager --local-imago` (Manager против соседнего чекаута
+`../imago`); `--dry-run` печатает команду. Версии Rust и Node берутся
 из `toolchain.json`; `rust-toolchain.toml` из него генерируется
 (`node scripts/check-toolchain.mjs --write`).
 
