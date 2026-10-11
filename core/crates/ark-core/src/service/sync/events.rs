@@ -50,4 +50,9 @@ pub(super) async fn wire_relay_sync_events(relay_sync: &Arc<RelaySync>) {
             }));
         }))
         .await;
+    relay_sync
+        .set_on_pairing_changed(Arc::new(|| {
+            emit_event(json!({"event": "pairing_changed"}));
+        }))
+        .await;
 }

@@ -143,6 +143,8 @@ impl SyncTransport for RelayTransport {
                             addresses: None,
                             auth_nonce,
                             auth_hmac,
+                            platform: Some(crate::host::local_platform()),
+                            app_version: crate::host::app_version(),
                         };
                         let text = serialize_message(&hello);
                         let _ = ws_tx.send(Message::Text(text.into())).await;
@@ -241,8 +243,9 @@ impl SyncTransport for RelayTransport {
         Ok(())
     }
 
-    /// Signal the background loop to stop.
-    fn stop(&self) {
+    /// Signal the background loop to stop. The loop holds no `storage`
+    /// handle, so a send-only shutdown cannot leak the db connection.
+    async fn stop(&self) {
         if let Some(tx) = self
             .stop_tx
             .lock()

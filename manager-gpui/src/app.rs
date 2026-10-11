@@ -352,6 +352,13 @@ impl ManagerApp {
         self.send(Command::Rpc { slot, op, params });
     }
 
+    /// Refresh-after-write shared by `action` and `action_reply`: mark every
+    /// slot stale and reload the current view.
+    pub(crate) fn reload_current_view(&mut self) {
+        self.invalidated_slots.extend(self.slots.keys().cloned());
+        views::load(self.view, self);
+    }
+
     /// Mutation op: on success reloads the current view (Vue Manager does the
     /// same refresh-after-write), on failure shows the Engine error.
     pub fn action(&mut self, op: &'static str, params: Value) {

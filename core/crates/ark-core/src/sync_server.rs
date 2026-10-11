@@ -34,8 +34,12 @@ mod sync_server_tests;
 
 const TAG: &str = "[SyncServer]";
 const VERSION_VECTOR_KEY: &str = "lan_sync.version_vector";
-const KNOWN_PEERS_KEY: &str = "sync.peers";
+pub(crate) const KNOWN_PEERS_KEY: &str = "sync.peers";
 const REMOVED_PEERS_KEY: &str = "sync.removed_peers";
+/// device_id → transport endpoint key for devices paired over an addressed
+/// transport (iroh). Persisted so a returning peer's Hello needs no open
+/// pairing window after a restart, and a changed key is a real mismatch.
+const PEER_TRANSPORT_KEYS_KEY: &str = "sync.peer_transport_keys";
 const SYNC_LOAD_PAGE_SIZE: usize = 100;
 
 // ---------------------------------------------------------------------------
@@ -148,10 +152,25 @@ struct PeerState {
     device_id: String,
     device_name: String,
     addresses: Vec<String>,
+    /// OS / product version the peer advertised in its Hello; `None` for
+    /// peers built before those fields existed.
+    platform: Option<String>,
+    app_version: Option<String>,
     authenticated: bool,
     sync_complete: bool,
     queued_live_changes: Vec<SyncEntity>,
     tx: mpsc::UnboundedSender<Message>,
+}
+
+/// One authenticated connection's view of a peer, for `get_connected_peers`
+/// and the sync snapshot. Unlike the persisted `PeerRecord` this carries the
+/// metadata even when the peer never made it into the known-peer list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PeerEntry {
+    pub device_id: String,
+    pub device_name: String,
+    pub platform: Option<String>,
+    pub app_version: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -217,16 +236,59 @@ pub(crate) async fn persist_pull_vector(
     save_version_vector(storage, vector).await;
 }
 
-async fn save_known_peers(storage: &Arc<dyn StorageBackend>, peers: &[PeerRecord]) {
+pub(crate) async fn save_known_peers(storage: &Arc<dyn StorageBackend>, peers: &[PeerRecord]) {
     let json = serde_json::to_string(peers).unwrap_or_default();
     storage.set_kv(KNOWN_PEERS_KEY, &json).await;
 }
 
-async fn load_removed_peer_ids(storage: &Arc<dyn StorageBackend>) -> Vec<String> {
+pub(crate) async fn load_known_peer_records(storage: &Arc<dyn StorageBackend>) -> Vec<PeerRecord> {
+    match storage.get_kv(KNOWN_PEERS_KEY).await {
+        Some(raw) => serde_json::from_str(&raw).unwrap_or_default(),
+        None => Vec::new(),
+    }
+}
+
+pub(crate) async fn load_removed_peer_ids(storage: &Arc<dyn StorageBackend>) -> Vec<String> {
     match storage.get_kv(REMOVED_PEERS_KEY).await {
         Some(raw) => serde_json::from_str(&raw).unwrap_or_default(),
         None => Vec::new(),
     }
+}
+
+/// Re-authorize a device the user previously removed — invoked only when
+/// they re-pair by explicitly entering that endpoint's pairing code.
+pub(crate) async fn unblock_peer_id(storage: &Arc<dyn StorageBackend>, device_id: &str) {
+    let mut removed = load_removed_peer_ids(storage).await;
+    if removed.iter().any(|id| id == device_id) {
+        removed.retain(|id| id != device_id);
+        save_removed_peer_ids(storage, &removed).await;
+    }
+}
+
+/// Drop a peer record outright — for a declined pairing attempt, where the
+/// device was never consented to and must not linger as an offline row
+/// (distinct from `block_peer`/`removed_peers`, which is a user blacklist).
+pub(crate) async fn remove_peer_record(storage: &Arc<dyn StorageBackend>, device_id: &str) {
+    let mut peers = load_known_peer_records(storage).await;
+    peers.retain(|peer| peer.device_id != device_id);
+    save_known_peers(storage, &peers).await;
+}
+
+pub(crate) async fn load_peer_transport_keys(
+    storage: &Arc<dyn StorageBackend>,
+) -> HashMap<String, String> {
+    match storage.get_kv(PEER_TRANSPORT_KEYS_KEY).await {
+        Some(raw) => serde_json::from_str(&raw).unwrap_or_default(),
+        None => HashMap::new(),
+    }
+}
+
+pub(crate) async fn save_peer_transport_keys(
+    storage: &Arc<dyn StorageBackend>,
+    keys: &HashMap<String, String>,
+) {
+    let json = serde_json::to_string(keys).unwrap_or_default();
+    storage.set_kv(PEER_TRANSPORT_KEYS_KEY, &json).await;
 }
 
 /// Shared mutable state handed to `handle_message`. Every field has a

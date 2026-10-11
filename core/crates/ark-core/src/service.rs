@@ -52,7 +52,7 @@ use crate::protocol::LAN_SYNC_PORT;
 use crate::relay_sync::{RelaySync, RelaySyncConfig};
 use crate::sync_bind::SyncBind;
 use crate::sync_client::SyncClient;
-use crate::sync_server::{StorageBackend, SyncServer};
+use crate::sync_server::{PeerEntry, StorageBackend, SyncServer};
 use crate::transport_select::{select_transport, TransportChoice};
 use crate::types::*;
 
@@ -74,9 +74,10 @@ pub(crate) use crate::db::RefreshLeaseAcquireParams;
 #[cfg(test)]
 use self::sync::build_pairing_restart_params;
 use self::sync::{
-    handle_add_seed_peer, handle_broadcast_change, handle_connect_with_pairing_code,
-    handle_disconnect_peer, handle_get_connected_peers, handle_get_own_iroh_ticket,
-    handle_get_sync_snapshot, handle_show_pairing_code, handle_start_sync, handle_stop_sync,
+    handle_accept_pairing, handle_add_seed_peer, handle_broadcast_change, handle_cancel_pairing,
+    handle_connect_with_pairing_code, handle_decline_pairing, handle_disconnect_peer,
+    handle_get_connected_peers, handle_get_own_iroh_ticket, handle_get_sync_snapshot,
+    handle_show_pairing_code, handle_start_sync, handle_stop_sync,
 };
 
 /// Per-service state — what used to be the sidecar's process-wide globals

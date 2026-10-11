@@ -3,7 +3,7 @@ use base64::Engine as _;
 use httpmock::MockServer;
 use sha2::{Digest, Sha512};
 
-fn hash(bytes: &[u8]) -> String {
+pub(super) fn hash(bytes: &[u8]) -> String {
     base64::engine::general_purpose::STANDARD.encode(Sha512::digest(bytes))
 }
 
@@ -258,7 +258,7 @@ async fn check_tick_skips_the_feed_once_an_installer_is_downloaded() {
     feed_mock.assert_calls_async(0).await;
 }
 
-fn manifest_json(version: &str, platforms: &str) -> String {
+pub(super) fn manifest_json(version: &str, platforms: &str) -> String {
     format!(
         concat!(
             r#"{{"schema":"mundus-release-manifest","schema_version":1,"#,

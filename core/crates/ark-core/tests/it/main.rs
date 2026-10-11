@@ -13,6 +13,7 @@ mod iroh_bidirectional_burst;
 mod iroh_bidirectional_network;
 mod iroh_loopback_smoke;
 mod iroh_round_trip;
+mod iroh_stop_teardown;
 mod iroh_ticket_pairing;
 mod phase2_slice2_object_versions;
 mod phase3_agenda_contract;

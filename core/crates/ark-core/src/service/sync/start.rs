@@ -16,11 +16,14 @@ pub(crate) async fn handle_start_sync(
         auth_secret,
         use_iroh,
         iroh_peer_ticket,
+        pairing_connect,
         discovery_enabled,
         bind,
+        app_version,
     } = params;
     // Idempotency: tear down any running runtime first.
     handle_stop_sync(state).await;
+    crate::host::set_app_version(app_version.clone());
 
     let device_name = device_name.unwrap_or_else(get_host_device_name);
     // Port 0 would bind an ephemeral port while advertising ":0" to peers.
@@ -102,8 +105,13 @@ pub(crate) async fn handle_start_sync(
         auth_secret: auth_secret.clone(),
         use_iroh,
         iroh_peer_ticket: iroh_peer_ticket.clone(),
+        // One-shot: later restarts derive from these params, and a stored
+        // peer key must be what re-admits the endpoint — not a replayed
+        // pairing intent.
+        pairing_connect: false,
         discovery_enabled,
         bind,
+        app_version,
     };
     let relay = if transport_choice == TransportChoice::Relay {
         let relay_url = relay_url.clone().expect("Relay choice implies relay_url");
@@ -142,6 +150,7 @@ pub(crate) async fn handle_start_sync(
             Some(ticket) => Some(crate::iroh_transport::from_ticket(ticket)?),
             None => None,
         };
+        let peer_endpoint = peer_addr.as_ref().map(|addr| addr.id.to_string());
         let iroh_transport = Arc::new(crate::iroh_transport::IrohTransport::new(
             crate::iroh_transport::IrohConfig {
                 device_id: device_id.clone(),
@@ -177,6 +186,17 @@ pub(crate) async fn handle_start_sync(
             iroh_transport.clone() as Arc<dyn crate::sync_transport::SyncTransport>,
         );
         wire_relay_sync_events(&relay_sync).await;
+        // Only a `connect_with_pairing_code` start is a pairing intent
+        // (`pairing_connect`); boot restores replay the stored ticket for an
+        // already-paired endpoint, whose Hello passes on the stored key —
+        // no outgoing attempt must appear in the snapshot. Set it *before*
+        // the transport starts dialing, or the responder's first Hello
+        // would be parked as an unsolicited request.
+        if pairing_connect {
+            if let Some(endpoint) = peer_endpoint {
+                relay_sync.begin_outgoing_pairing(endpoint).await;
+            }
+        }
         relay_sync.start().await?;
         // `start()` binds the endpoint, so `our_ticket()` is available now.
         // Snapshot it onto `SyncRuntime` for `GetOwnIrohTicket` — capture
@@ -286,16 +306,26 @@ pub(crate) async fn handle_start_sync(
                         return;
                     }
                     server
-                        .register_external_peer(
-                            &peer.device_id,
-                            &peer.device_name,
-                            reachable.clone(),
-                        )
+                        .register_external_peer(PeerRecord {
+                            device_id: peer.device_id.clone(),
+                            device_name: peer.device_name.clone(),
+                            addresses: reachable.clone(),
+                            last_seen: chrono::Utc::now()
+                                .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+                            last_address: None,
+                            platform: None,
+                            app_version: None,
+                        })
                         .await;
                     emit_event(json!({
                         "event": "peer_list_updated",
-                        "peers": server.get_connected_peer_entries().await.iter().map(|(id, name)| {
-                            json!({"device_id": id, "device_name": name})
+                        "peers": server.get_connected_peer_entries().await.iter().map(|entry| {
+                            json!({
+                                "device_id": entry.device_id,
+                                "device_name": entry.device_name,
+                                "platform": entry.platform,
+                                "app_version": entry.app_version,
+                            })
                         }).collect::<Vec<_>>(),
                     }));
 
@@ -313,6 +343,8 @@ pub(crate) async fn handle_start_sync(
                                 last_seen: chrono::Utc::now()
                                     .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
                                 last_address: None,
+                                platform: None,
+                                app_version: None,
                             })
                             .await;
                         return;
@@ -325,6 +357,8 @@ pub(crate) async fn handle_start_sync(
                         last_seen: chrono::Utc::now()
                             .to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
                         last_address: None,
+                        platform: None,
+                        app_version: None,
                     };
                     spawn_sync_client(
                         &ClientEnv {

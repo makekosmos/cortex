@@ -48,6 +48,15 @@ pub enum LanSyncMessage {
         auth_nonce: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         auth_hmac: Option<String>,
+        /// Sender's OS (`std::env::consts::OS` spelling: "macos", "windows",
+        /// ...) — shown in the device list. Optional so peers built before
+        /// this field keep parsing.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        platform: Option<String>,
+        /// Sender's product version label (the Engine build, not the crate
+        /// version). Optional for the same compat reason as `platform`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        app_version: Option<String>,
     },
 
     #[serde(rename = "version_vector")]
@@ -97,6 +106,13 @@ pub enum LanSyncMessage {
     #[serde(rename = "signed_integration_ack")]
     SignedIntegrationAck { message_id: String, accepted: bool },
 
+    /// KOS-369: the responder declined the consent prompt. Protocol-level
+    /// rejection so the initiator shows «Подключение отклонено» instead of
+    /// hanging; peers built before this variant can't parse it and simply
+    /// get their connection closed.
+    #[serde(rename = "pairing_rejected")]
+    PairingRejected { device_id: String },
+
     #[serde(rename = "peer_list")]
     PeerList { peers: Vec<PeerRecord> },
 
@@ -127,7 +143,9 @@ pub fn deserialize_message(raw: &str) -> Option<LanSyncMessage> {
 
 pub fn message_origin_device_id(msg: &LanSyncMessage) -> Option<String> {
     match msg {
-        LanSyncMessage::Hello { device_id, .. } => Some(device_id.clone()),
+        LanSyncMessage::Hello { device_id, .. } | LanSyncMessage::PairingRejected { device_id } => {
+            Some(device_id.clone())
+        }
         LanSyncMessage::VersionVector {
             origin_device_id, ..
         }

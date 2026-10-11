@@ -31,7 +31,7 @@ mod views;
 mod widgets;
 mod worker;
 
-use gpui::{px, size, App, AppContext, Bounds, SharedString, Styled, WindowBounds, WindowOptions};
+use gpui::{px, size, App, AppContext, Bounds, Styled, WindowBounds, WindowOptions};
 
 use app::ManagerApp;
 
@@ -46,6 +46,40 @@ fn window_bounds(cx: &mut App) -> Bounds<gpui::Pixels> {
     } else {
         Bounds::centered(None, size(px(1280.), px(840.)), cx)
     }
+}
+
+const WINDOW_TITLE: &str = "Mundus";
+
+fn manager_window_options(cx: &mut App) -> WindowOptions {
+    WindowOptions {
+        window_bounds: Some(WindowBounds::Windowed(window_bounds(cx))),
+        titlebar: Some(gpui::TitlebarOptions {
+            // KOS-368: no creation-time title. gpui's macOS backend routes
+            // set_title through -[NSApplication changeWindowsItem:title:…],
+            // which *adds* the window to the Dock/Window list when AppKit has
+            // not tracked it yet; ordering the window in afterwards adds a
+            // second, phantom entry (the two Dock windows Jack saw).
+            title: None,
+            appears_transparent: true,
+            traffic_light_position: Some(gpui::point(px(12.), px(14.))),
+        }),
+        ..Default::default()
+    }
+}
+
+fn open_manager_window(cx: &mut App) {
+    let options = manager_window_options(cx);
+    cx.open_window(options, |window, cx| {
+        // The platform window is already ordered in when this closure runs
+        // (order-in happens inside open_window via the default show/focus),
+        // so set_title only renames the Dock/Window-list entry AppKit added
+        // itself instead of inserting a phantom one.
+        window.set_window_title(WINDOW_TITLE);
+        let manager = cx.new(|cx| ManagerApp::new(window, cx));
+        app_actions::register(cx, manager.downgrade());
+        cx.new(|cx| gpui_component::Root::new(manager, window, cx).bg(gpui::rgba(0)))
+    })
+    .unwrap();
 }
 
 fn main() {
@@ -80,24 +114,7 @@ fn main() {
                 .add_fonts(imago_gpui::assets::font_bytes())
                 .expect("load Imago fonts");
             imago_gpui::theme::apply(cx);
-            let bounds = window_bounds(cx);
-            cx.open_window(
-                WindowOptions {
-                    window_bounds: Some(WindowBounds::Windowed(bounds)),
-                    titlebar: Some(gpui::TitlebarOptions {
-                        title: Some(SharedString::from("Mundus")),
-                        appears_transparent: true,
-                        traffic_light_position: Some(gpui::point(px(12.), px(14.))),
-                    }),
-                    ..Default::default()
-                },
-                |window, cx| {
-                    let manager = cx.new(|cx| ManagerApp::new(window, cx));
-                    app_actions::register(cx, manager.downgrade());
-                    cx.new(|cx| gpui_component::Root::new(manager, window, cx).bg(gpui::rgba(0)))
-                },
-            )
-            .unwrap();
+            open_manager_window(cx);
             #[cfg(target_os = "macos")]
             native_menu::install(cx);
             if std::env::var("MANAGER_GPUI_OFFSCREEN").is_err() {
@@ -108,3 +125,5 @@ fn main() {
 
 #[cfg(test)]
 mod a11y_tests;
+#[cfg(test)]
+mod reply_tests;

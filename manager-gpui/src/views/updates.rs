@@ -22,9 +22,12 @@ pub fn render(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {
         crate::button::button("mundus-install", crate::button::ButtonKind::Success)
             // Keep the semantic success tint when the installer is unavailable;
             // the component's default disabled style replaces it with gray.
+            // No `.hover()`: gpui-component's Button::render already applies
+            // the variant's hover style, so a second one is silently
+            // overwritten in release and trips gpui's hover_style debug_assert
+            // in dev.
             .bg(fade(SUCCESS(), 0.20))
             .text_color(c(SUCCESS()))
-            .hover(|style| style.bg(fade(SUCCESS(), 0.28)))
             .border_0()
             .label("Установить обновление")
             .disabled(busy || status.get("canInstall").and_then(Value::as_bool) == Some(false))

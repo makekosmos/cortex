@@ -74,6 +74,24 @@ pub trait SyncTransport: Send + Sync {
         Err("authenticated transport binding is not supported".into())
     }
 
+    /// Drop a binding made by `bind_authenticated_peer` when the handshake
+    /// it enabled fails afterwards (HMAC/protocol/removed-peer rejection).
+    fn unbind_authenticated_peer(&self, _device_id: &str) -> Result<(), String> {
+        Err("authenticated transport binding is not supported".into())
+    }
+
+    /// Addressed send to a connection identified by its transport key —
+    /// before authentication, for handshake-level replies only
+    /// (`PairingRejected`; `bind_authenticated_peer` has not run yet, so
+    /// `send_to`'s authenticated lookup cannot reach the peer).
+    async fn send_to_transport_peer(
+        &self,
+        _transport_public_key: &str,
+        _msg: LanSyncMessage,
+    ) -> Result<(), String> {
+        Err("transport-key addressed send is not supported".into())
+    }
+
     fn disconnect_peer(&self, _device_id: &str) -> Result<(), String> {
         Err("addressed peer disconnect is not supported".into())
     }
@@ -82,6 +100,10 @@ pub trait SyncTransport: Send + Sync {
         Err("transport peer disconnect is not supported".into())
     }
 
-    /// Signal the transport to stop.
-    fn stop(&self);
+    /// Stop the transport and join its background tasks. Must not return
+    /// while a spawned task is still running: tasks hold `outbound_storage`
+    /// (the open `ark.db` connection), and a task that outlives `stop()`
+    /// keeps the database file open past teardown — on Windows the
+    /// containing directory then cannot be deleted (KOS-369).
+    async fn stop(&self);
 }

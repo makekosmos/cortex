@@ -39,6 +39,7 @@ async fn iroh_bidirectional_hello_and_reverse_send() {
         .start(a_events_tx)
         .await
         .expect("transport A start");
+
     let (b_got_hello_from, _b_hello_msg) =
         find_message(&mut b_events_rx, EVENT_GUARD, |_from, msg| {
             matches!(msg, LanSyncMessage::Hello { .. })
@@ -59,6 +60,17 @@ async fn iroh_bidirectional_hello_and_reverse_send() {
         a_got_hello_from, "device-B",
         "A должна получить Hello с from_device_id == device-B"
     );
+    // KOS-369: data frames only flow to endpoints bound as authenticated
+    // (pairing consent at the RelaySync layer). These transport-level tests
+    // stand in for both sides having consented — the registry knows each
+    // endpoint↔device pair once the injected Hellos have arrived.
+    transport_a
+        .bind_authenticated_peer("device-B", &transport_b.endpoint_id().unwrap().to_string())
+        .expect("A binds B");
+    transport_b
+        .bind_authenticated_peer("device-A", &transport_a.endpoint_id().unwrap().to_string())
+        .expect("B binds A");
+
     let change_id = format!("reverse-change-{}", generate_id());
     let entity = SyncEntity {
         entity_type: "todo".to_string(),
@@ -244,6 +256,6 @@ async fn iroh_bidirectional_hello_and_reverse_send() {
         .await
         .expect_err("foreign recipient must be rejected before the wire");
     assert!(error.contains("recipient"));
-    transport_a.stop();
-    transport_b.stop();
+    transport_a.stop().await;
+    transport_b.stop().await;
 }

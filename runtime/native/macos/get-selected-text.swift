@@ -2,6 +2,11 @@ import Foundation
 import ApplicationServices
 import AppKit
 
+// KOS-376: bundled helper — NSWorkspace/AX connects it to the WindowServer;
+// without the accessory policy it would claim a second Dock tile under the
+// Mundus Manager identity.
+NSApplication.shared.setActivationPolicy(.accessory)
+
 private let debugEnabled = ProcessInfo.processInfo.environment["GET_SELECTED_TEXT_DEBUG"] == "1"
 
 private func dbg(_ message: @autoclosure () -> String) {
