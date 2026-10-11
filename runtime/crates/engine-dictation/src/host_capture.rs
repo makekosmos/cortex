@@ -322,6 +322,158 @@ async fn op_insert_text(params: Value, host: &DictationHost) -> DictationRespons
     }
 }
 
+/// In-engine обработка триггеров хоткея (`dictation.trigger`,
+/// `dictation_escape_cancel`): весь конвейер capture → transcribe → inject
+/// живёт в этом процессе, внешний клиент нужен только для UI. Вызывается
+/// из trigger-loop в engine main.rs, когда dictation worker недоступен
+/// или не установлен.
+pub async fn handle_engine_trigger(host: &Arc<DictationHost>, event: &Value) {
+    match event.get("event").and_then(Value::as_str) {
+        Some("dictation_escape_cancel") | Some("dictation_capture_cancelled") => {
+            let _ = op_cancel(host).await;
+        }
+        Some("dictation.trigger") => {
+            let kind = event
+                .get("kind")
+                .and_then(Value::as_str)
+                .unwrap_or("toggle");
+            let phase = event.get("phase").and_then(Value::as_str).unwrap_or("down");
+            match (kind, phase) {
+                ("ptt", "down") => engine_begin_capture(host).await,
+                ("ptt", "up") => engine_finish_capture(host).await,
+                ("toggle", "down") => {
+                    let state = host.current_state().await;
+                    if state.get("state").and_then(Value::as_str) == Some("recording") {
+                        engine_finish_capture(host).await;
+                    } else {
+                        engine_begin_capture(host).await;
+                    }
+                }
+                _ => {}
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Маршрутизация одного события хоткея: worker → живое dictation-приложение
+/// (WS subscriber, обрабатывает тот же broadcast) → in-engine fallback.
+/// `invoke_worker`, `app_alive` и `engine_handle` инжектятся, чтобы роутинг
+/// тестировался без worker'а, процессов и аудио. `dictation_escape_cancel`
+/// — safety cancel, он идёт в engine безусловно и идемпотентен.
+pub async fn route_trigger_event<Invoke, InvokeFut, AppAlive, Engine, EngineFut, E>(
+    event: &Value,
+    invoke_worker: Invoke,
+    app_alive: AppAlive,
+    engine_handle: Engine,
+) where
+    Invoke: FnOnce(Value) -> InvokeFut,
+    InvokeFut: std::future::Future<Output = Result<Value, E>>,
+    E: std::fmt::Display,
+    AppAlive: FnOnce() -> bool,
+    Engine: FnOnce(Value) -> EngineFut,
+    EngineFut: std::future::Future<Output = ()>,
+{
+    match event.get("event").and_then(Value::as_str) {
+        Some("dictation.trigger") => {
+            let params = json!({
+                "kind": event.get("kind").and_then(Value::as_str),
+                "phase": event.get("phase").and_then(Value::as_str),
+            });
+            match invoke_worker(params).await {
+                Ok(_) => {}
+                Err(error) if app_alive() => {
+                    tracing::debug!(
+                        error = %error,
+                        "dictation trigger worker unavailable; app is running"
+                    );
+                }
+                Err(error) => {
+                    tracing::debug!(
+                        error = %error,
+                        "dictation trigger: no worker, no app; handling in-engine"
+                    );
+                    engine_handle(event.clone()).await;
+                }
+            }
+        }
+        Some("dictation_escape_cancel") => engine_handle(event.clone()).await,
+        _ => {}
+    }
+}
+
+/// Тот же happy path, что делает worker: захват foreground HWND, затем
+/// `capture.start` на сконфигурированном микрофоне.
+async fn engine_begin_capture(host: &Arc<DictationHost>) {
+    let _ = op_capture_foreground(host).await;
+    let device_id = host.snapshot_config().await.microphone_device_id;
+    let params = match device_id {
+        Some(id) => json!({ "deviceId": id }),
+        None => json!({}),
+    };
+    let resp = op_capture_start(params, host).await;
+    if !resp.ok {
+        tracing::warn!(
+            error = ?resp.error,
+            "dictation: engine trigger capture.start failed"
+        );
+    }
+}
+
+/// `capture.stop` активной сессии → `speech.transcribe` (тот сам транскрибирует
+/// и инжектит через SystemInjector с захваченным prev_hwnd).
+async fn engine_finish_capture(host: &Arc<DictationHost>) {
+    let capture_id = host
+        .capture
+        .lock()
+        .ok()
+        .and_then(|guard| guard.as_ref().map(|s| s.capture_id.clone()));
+    let Some(capture_id) = capture_id else {
+        // Записи нет (например, старая сессия без native capture) — сброс.
+        let _ = op_cancel(host).await;
+        return;
+    };
+    let stopped = op_capture_stop(json!({ "captureId": capture_id }), host).await;
+    if !stopped.ok {
+        tracing::warn!(
+            error = ?stopped.error,
+            "dictation: engine trigger capture.stop failed"
+        );
+        return;
+    }
+    let audio_b64 = stopped
+        .data
+        .get("audioB64")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned();
+    if audio_b64.is_empty() {
+        return;
+    }
+    let duration_sec = stopped
+        .data
+        .get("durationMs")
+        .and_then(Value::as_f64)
+        .unwrap_or(0.0)
+        / 1000.0;
+    // Транскрибация (~1s) в фоне — иначе trigger-loop не обработает
+    // дабл-Esc отмену до конца распознавания.
+    let host = host.clone();
+    tokio::spawn(async move {
+        let resp = op_speech_transcribe(
+            json!({ "audioB64": audio_b64, "durationSec": duration_sec }),
+            &host,
+        )
+        .await;
+        if !resp.ok {
+            tracing::warn!(
+                error = ?resp.error,
+                "dictation: engine trigger speech.transcribe failed"
+            );
+        }
+    });
+}
+
 async fn preload_local_runtime_for_recording(host: &DictationHost) {
     #[cfg(test)]
     {

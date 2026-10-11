@@ -73,4 +73,7 @@ pub use config::{
     config_path, data_dir, has_api_key, load, save, set_api_key, DictationConfig, InjectMode,
     NetworkProfile, TriggerMode,
 };
-pub use host::{handle_dictation_op, DictationHost, DictationResponse, DictationStateName};
+pub use host::{
+    handle_dictation_op, handle_engine_trigger, route_trigger_event, DictationHost,
+    DictationResponse, DictationStateName,
+};

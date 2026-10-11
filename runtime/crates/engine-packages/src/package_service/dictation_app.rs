@@ -54,6 +54,17 @@ impl PackageService {
         }
     }
 
+    /// Жив ли background-процесс dictation app? Используется trigger
+    /// fallback'ом в engine main: пока приложение запущено, оно владеет
+    /// обработкой `dictation.trigger`; нет процесса — хоткей обслуживает
+    /// сам Engine (`handle_engine_trigger`).
+    pub fn dictation_app_running(&self) -> bool {
+        let Ok(store) = self.native_store() else {
+            return false;
+        };
+        matches!(store.app_is_running(DICTATION_APP_ID), Ok(true))
+    }
+
     /// Stop the running dictation app so the Store can mutate its install.
     /// `false` = still running after the bounded wait — the caller then
     /// reports `app-running` instead of racing a live exe. `true` also when
