@@ -37,6 +37,24 @@ pub fn upsert_object_type(conn: &Connection, object_type: &ObjectType) -> Result
         return Err("alias collides with canonical type".into());
     }
 
+    // Canonical definitions are installed and owned by the type registry at
+    // open. An inbound legacy-shaped `object_type` entity for a canonical id
+    // (synced from a peer that exports its object_types rows, or written via
+    // the RPC op) carries no authority over the canonical row: applying it
+    // rewrote `current_version` to `0.0.0+legacy.*`, which the phase3
+    // registry preflight rejects and which bricked the DB at next open
+    // (KOS-370).
+    if crate::canonical_types::definitions::canonical_type_registrations()
+        .map(|registrations| {
+            registrations
+                .iter()
+                .any(|registration| registration.type_id == object_type.id)
+        })
+        .unwrap_or(false)
+    {
+        return Ok(());
+    }
+
     conn.execute(
         "INSERT INTO object_types
             (id, name, schema_json, ui_schema_json, created_at, updated_at, system_locked)
@@ -147,6 +165,18 @@ pub fn upsert_object_type(conn: &Connection, object_type: &ObjectType) -> Result
 }
 
 pub fn delete_object_type(conn: &Connection, id: &str) -> Result<(), String> {
+    // Same authority rule as upsert: a canonical row is registry-owned, and
+    // deprecating it would fail the phase3 preflight at next open (KOS-370).
+    if crate::canonical_types::definitions::canonical_type_registrations()
+        .map(|registrations| {
+            registrations
+                .iter()
+                .any(|registration| registration.type_id == id)
+        })
+        .unwrap_or(false)
+    {
+        return Ok(());
+    }
     conn.execute(
         "UPDATE object_types SET status='deprecated' WHERE id = ?1",
         params![id],

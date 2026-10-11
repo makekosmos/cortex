@@ -1,0 +1,36 @@
+[package]
+name = "engine-mobile"
+version = "0.1.0"
+edition.workspace = true
+description = "In-process Engine for Android — UniFFI API over ark-core (no HTTP, no lockfile)"
+
+[features]
+default = []
+# Builds the `uniffi-bindgen` bin used to emit Kotlin bindings
+# (`cargo run -p engine-mobile --features cli --bin uniffi-bindgen`).
+cli = ["uniffi/cli"]
+
+[lib]
+name = "engine_mobile"
+path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
+doctest = false
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+required-features = ["cli"]
+
+[dependencies]
+ark-core = { path = "../../../core/crates/ark-core", package = "ark-core" }
+uniffi = "0.29"
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+tokio = { version = "1", features = ["rt", "sync"] }
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true
