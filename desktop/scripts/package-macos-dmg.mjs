@@ -310,8 +310,7 @@ export function verifyDmgSignature(dmgPath, appName = `${PRODUCT_NAME} Manager.a
 
 /**
  * Full mac packaging: stage .app → DMG under desktop/release. manifest.json
- * (and the legacy latest-mac.yml during dual-publish) are written by
- * build-desktop.mjs from the DMG bytes (KOS-350).
+ * is written by build-desktop.mjs from the DMG bytes (KOS-350).
  */
 export async function packageMacosDmg(
   version,

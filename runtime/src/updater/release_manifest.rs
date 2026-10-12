@@ -21,7 +21,6 @@ use std::collections::BTreeMap;
 
 use serde::Deserialize;
 
-use super::manifest::ManifestFile;
 use super::UpdaterError;
 
 pub(crate) const MANIFEST_SCHEMA: &str = "mundus-release-manifest";
@@ -42,7 +41,16 @@ struct PlatformEntry {
     sha512: String,
 }
 
-/// What a feed says about the newest release for one platform. `file` is
+/// The installer for one platform: filename (relative, joined onto the feed
+/// base by the caller), base64 sha512 and byte size.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ManifestFile {
+    pub(crate) url: String,
+    pub(crate) sha512: String,
+    pub(crate) size: u64,
+}
+
+/// What `manifest.json` says about the newest release for one platform. `file` is
 /// `None` when the release exists but has no build for this platform (for
 /// example the macOS job has not attached its DMG yet).
 #[derive(Debug, Clone, PartialEq, Eq)]

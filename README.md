@@ -285,10 +285,8 @@ Windows job creates it; the macOS publish merges its entry in.
 
 The Engine updater (`runtime/src/updater/`) reads
 `…/releases/latest/download/manifest.json`, and the nightly planner takes its
-baseline from `source.commit`. During the dual-publish window
-(`DUAL_PUBLISH_LEGACY_FEEDS = true`, Rust `LEGACY_FEED_FALLBACK = true`), the
-release also carries `latest.yml`, `latest-mac.yml`, and `release-bom.v2.json`,
-all rendered from the same manifest. Cutover flips both flags to `false`.
+baseline from `source.commit`. A release publishes only the installers and
+`manifest.json`; the BOM and the receipt stay local build inputs.
 
 The Windows installer is a standalone NSIS script
 (`desktop/build/installer.nsi`) compiled by `makensis`. The build downloads the

@@ -17,7 +17,7 @@ test("release build verifies locally and leaves publishing to the receipt consum
   assert.match(script, /createReceipt\(/);
   assert.match(script, /writeReceipt\(/);
   assert.doesNotMatch(script, /publishRelease\(|release create|electron-builder/);
-  assert.match(script, /emitReleaseMetadata\(/);
+  assert.match(script, /emitReleaseFeeds\(/);
   assert.doesNotMatch(script, /emitProvenance\(|release-provenance\.json/);
   assert.match(script, /Preflight: source, BOM, and pins/);
   assert.match(script, /--dry-run/);

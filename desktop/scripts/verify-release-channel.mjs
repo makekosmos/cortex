@@ -1,17 +1,14 @@
 #!/usr/bin/env node
 // Verifies that a published GitHub release's manifest.json (KOS-350) is
 // consistent with the actual uploaded installer for one platform, that the
-// stable `releases/latest/download/manifest.json` URL resolves, and — during
-// the dual-publish window (DUAL_PUBLISH_LEGACY_FEEDS) — that the legacy
-// latest.yml / latest-mac.yml / release-bom.v2.json say exactly what the
-// manifest says.
+// stable `releases/latest/download/manifest.json` URL resolves.
 //
 // Background: the updater verifies the sha512 from the feed against the
 // downloaded installer before applying the update. If the release was
 // published in multiple non-atomic passes (e.g. the installer was re-uploaded
 // without regenerating the feed), the checksums desync and every client gets
 // "sha512 checksum mismatch" — auto-update is dead for that release. This
-// happened on v0.5.3 (installer from build B, latest.yml from build A).
+// happened on v0.5.3 (installer from build B, feed from build A).
 //
 // Usage:
 //   node scripts/verify-release-channel.mjs                  # win, version from the pinned release version
@@ -29,9 +26,8 @@
 //   3. the pinned release version for that platform (release-version.mjs)
 //   4. package.json.version (last fallback)
 //
-// Repo, manifest and legacy channel file come from release-repos.mjs (win →
-// makekosmos/cortex platforms.win / latest.yml, mac → platforms.mac /
-// latest-mac.yml). --repo overrides the repo and does not change the files.
+// Repo and manifest come from release-repos.mjs (win → makekosmos/cortex
+// platforms.win, mac → platforms.mac). --repo overrides the repo.
 // Omitting --platform stays on win, which is what publish-release.mjs calls.
 //
 // Exit codes:
@@ -44,26 +40,14 @@
 //   (verify-manifest-retry.mjs, cache-busted): a CDN edge can serve a
 //   pre-merge copy for minutes after the other platform's upload — a stale
 //   manifest used to die() instantly (KOS-377). A real mismatch still
-//   fails, just after the bound. Every other feed fetch retries up to
-//   MAX_RETRIES times with RETRY_DELAY_MS between attempts.
+//   fails, just after the bound.
 
 import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnSync } from "node:child_process";
-import { env } from "./brand.mjs";
 import { readReleaseVersion } from "./release-version.mjs";
 import { resolveVerifyTarget } from "./verify-release-target.mjs";
-import { RELEASE_BOM_FILE } from "./release-bom.mjs";
-import {
-  DUAL_PUBLISH_LEGACY_FEEDS,
-  legacyBom,
-  legacyChannelProblems,
-  MANIFEST_CREATOR_PLATFORM,
-  parseReleaseManifest,
-} from "./release-manifest.mjs";
 import { fetchManifestUntilReady } from "./verify-manifest-retry.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -71,20 +55,6 @@ const __dirname = path.dirname(__filename);
 const SHELL_ROOT = path.resolve(__dirname, "..");
 
 // ─── Configuration ────────────────────────────────────────────────────────────
-
-// Retry config: channel file may lag a few seconds after electron-builder publish.
-const MAX_RETRIES = 5;
-const RETRY_DELAY_MS = 4_000;
-
-// Timestamp desync threshold. If the spread between asset upload times exceeds
-// this, it strongly suggests artifacts came from different builds.
-// Choice: we WARN (not hard-fail) on spread > WARN_THRESHOLD_MS alone, but
-// HARD-FAIL on spread > HARD_FAIL_THRESHOLD_MS. Any hash/size mismatch
-// combined with ANY spread above WARN_THRESHOLD_MS also hard-fails.
-// Rationale: a spread of a few seconds is normal (GitHub processes assets
-// sequentially), but multiple minutes means a separate upload session.
-const WARN_THRESHOLD_MS = 3 * 60 * 1_000; // 3 minutes
-const HARD_FAIL_THRESHOLD_MS = 10 * 60 * 1_000; // 10 minutes
 
 const LOG_PREFIX = "[verify:channel]";
 
@@ -101,169 +71,6 @@ function warn(...args) {
 function die(msg) {
   console.error(LOG_PREFIX, "FATAL:", msg);
   process.exit(1);
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/** Resolve gh CLI path. */
-function resolveGh() {
-  if (env("GH_PATH") && existsSync(env("GH_PATH"))) {
-    return env("GH_PATH");
-  }
-  const candidates = [
-    "C:/Program Files/GitHub CLI/gh.exe",
-    "C:/Program Files (x86)/GitHub CLI/gh.exe",
-  ];
-  for (const c of candidates) {
-    if (existsSync(c)) return c;
-  }
-  return "gh"; // assume PATH
-}
-
-const GH = resolveGh();
-
-/** Check whether gh CLI is available and authenticated (read-only probe). */
-function ghAvailable() {
-  try {
-    const r = spawnSync(GH, ["auth", "status"], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    return r.status === 0;
-  } catch {
-    return false;
-  }
-}
-
-/** Fetch asset timestamps from GitHub API for the given release tag.
- *  Returns a Map<assetName, {created_at, updated_at}> or null on failure. */
-function fetchAssetTimestamps(ownerRepo, tag) {
-  const r = spawnSync(
-    GH,
-    [
-      "api",
-      `repos/${ownerRepo}/releases/tags/${tag}`,
-      "-q",
-      "[.assets[] | {name: .name, created_at: .created_at, updated_at: .updated_at}]",
-    ],
-    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
-  );
-  if (r.status !== 0) {
-    warn(`gh api failed for ${tag}:`, r.stderr.slice(0, 200));
-    return null;
-  }
-  try {
-    const arr = JSON.parse(r.stdout);
-    const map = new Map();
-    for (const a of arr) {
-      map.set(a.name, { created_at: a.created_at, updated_at: a.updated_at });
-    }
-    return map;
-  } catch {
-    warn("failed to parse gh api response");
-    return null;
-  }
-}
-
-// ─── latest.yml parser ────────────────────────────────────────────────────────
-// Dependency-free hand-parser for the flat structure electron-builder emits.
-// We deliberately do NOT reach for js-yaml: whether it is hoisted into
-// node_modules varies by machine / package manager, so relying on it would
-// make this guard behave differently across devices and checkouts. The format
-// below is fixed and simple, so a targeted parser is deterministic everywhere.
-
-/**
- * Hand-parser for the flat latest.yml format electron-builder emits.
- *
- * Handles:
- *   version: 0.5.3
- *   files:
- *     - url: Mundus-Setup-0.5.3.exe
- *       sha512: CX4w...==
- *       size: 122041993
- *   path: Mundus-Setup-0.5.3.exe
- *   sha512: CX4w...==
- *   releaseDate: '2026-06-18T12:18:15.656Z'
- *
- * Returns { version, files: [{url, sha512, size}] }
- */
-function parseLatestYmlByHand(text) {
-  const lines = text.split(/\r?\n/);
-  const result = { version: null, files: [] };
-  let inFiles = false;
-  let currentFile = null;
-
-  for (let raw of lines) {
-    // Strip inline comments
-    const line = raw.replace(/#.*$/, "");
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-
-    // Top-level key detection (no leading spaces)
-    if (/^\S/.test(line)) {
-      // Commit any buffered file entry before switching section
-      if (currentFile) {
-        result.files.push(currentFile);
-        currentFile = null;
-      }
-
-      const m = /^(\w+)\s*:\s*(.*)$/.exec(trimmed);
-      if (!m) {
-        inFiles = false;
-        continue;
-      }
-      const key = m[1];
-      const val = m[2].replace(/^['"]|['"]$/g, "").trim();
-
-      if (key === "version") {
-        result.version = val;
-        inFiles = false;
-      } else if (key === "files") {
-        inFiles = true;
-      } else {
-        inFiles = false;
-      }
-      continue;
-    }
-
-    if (!inFiles) continue;
-
-    // List item start: "  - url: ..."
-    const itemStart = /^\s+-\s+(\w+)\s*:\s*(.*)$/.exec(line);
-    if (itemStart) {
-      if (currentFile) result.files.push(currentFile);
-      currentFile = {};
-      const key = itemStart[1];
-      const val = itemStart[2].replace(/^['"]|['"]$/g, "").trim();
-      assignFileField(currentFile, key, val);
-      continue;
-    }
-
-    // Continuation property under current list item: "    sha512: ..."
-    const contProp = /^\s+(\w+)\s*:\s*(.*)$/.exec(line);
-    if (contProp && currentFile) {
-      const key = contProp[1];
-      const val = contProp[2].replace(/^['"]|['"]$/g, "").trim();
-      assignFileField(currentFile, key, val);
-    }
-  }
-
-  if (currentFile) result.files.push(currentFile);
-  return result;
-}
-
-function assignFileField(obj, key, val) {
-  if (key === "size") {
-    obj.size = parseInt(val, 10);
-  } else {
-    obj[key] = val;
-  }
-}
-
-function parseLatestYml(text) {
-  return parseLatestYmlByHand(text);
 }
 
 // ─── Download & hash ──────────────────────────────────────────────────────────
@@ -297,32 +104,6 @@ async function downloadAndHash(url) {
   };
 }
 
-/**
- * Fetches a URL, retrying up to `maxRetries` times with `delayMs` between
- * attempts. Returns the response text on success.
- */
-async function fetchTextWithRetry(url, maxRetries, delayMs) {
-  let lastErr;
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const res = await fetch(url);
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status} ${res.statusText}`);
-      }
-      return await res.text();
-    } catch (err) {
-      lastErr = err;
-      if (attempt < maxRetries) {
-        log(
-          `attempt ${attempt}/${maxRetries} failed (${err.message}), retrying in ${delayMs / 1000}s...`,
-        );
-        await sleep(delayMs);
-      }
-    }
-  }
-  throw lastErr;
-}
-
 // ─── Main verification logic ──────────────────────────────────────────────────
 
 async function main() {
@@ -332,7 +113,7 @@ async function main() {
   } catch (error) {
     die(error instanceof Error ? error.message : String(error));
   }
-  const { platform, channelFile, manifestFile } = request;
+  const { platform, manifestFile } = request;
   const ownerRepo = request.repo;
 
   // ── 2. Determine version & publish config ────────────────────────────────
@@ -363,7 +144,6 @@ async function main() {
   log(`Platform:     ${platform}`);
   log(`Verifying release ${tag} on ${ownerRepo}`);
   log(`Manifest:     ${manifestFile}`);
-  if (DUAL_PUBLISH_LEGACY_FEEDS) log(`Legacy feed:  ${channelFile} (dual-publish)`);
   log("");
 
   // ── 3. Download manifest.json (with retry for post-publish propagation lag)
@@ -409,19 +189,6 @@ async function main() {
     );
   log("");
 
-  // ── 5. Fetch asset timestamps (degradable) ────────────────────────────────
-  const ghAvail = ghAvailable();
-  let assetTimestamps = null;
-  if (ghAvail) {
-    log(`Fetching asset timestamps via gh api for ${ownerRepo} ${tag}...`);
-    assetTimestamps = fetchAssetTimestamps(ownerRepo, tag);
-    if (!assetTimestamps) {
-      warn("Could not fetch asset timestamps — skipping timestamp desync check.");
-    }
-  } else {
-    warn("gh CLI not available or not authenticated — skipping timestamp desync check.");
-  }
-
   // ── 6. Installer bytes vs manifest entry ──────────────────────────────────
   const results = [];
   {
@@ -457,45 +224,6 @@ async function main() {
     }
   }
 
-  // ── 7. Legacy feeds (dual-publish window) must say exactly the same ───────
-  if (DUAL_PUBLISH_LEGACY_FEEDS) {
-    log(`--- Checking legacy ${channelFile} against ${manifestFile} ---`);
-    try {
-      const channel = parseLatestYml(
-        await fetchTextWithRetry(`${assetBaseUrl}/${channelFile}`, MAX_RETRIES, RETRY_DELAY_MS),
-      );
-      const problems = legacyChannelProblems(manifest, platform, channel);
-      for (const problem of problems)
-        console.error(`${LOG_PREFIX} FAIL  ${channelFile}: ${problem}`);
-      if (problems.length === 0) log(`  PASS  ${channelFile} matches ${manifestFile}`);
-      results.push({ name: channelFile, pass: problems.length === 0 });
-      if (problems.length > 0) anyHardFail = true;
-    } catch (err) {
-      console.error(`${LOG_PREFIX} FAIL  ${channelFile}: ${err.message}`);
-      results.push({ name: channelFile, pass: false });
-      anyHardFail = true;
-    }
-    if (platform === MANIFEST_CREATOR_PLATFORM) {
-      log(`--- Checking legacy ${RELEASE_BOM_FILE} against ${manifestFile} ---`);
-      try {
-        const remoteBom = await fetchTextWithRetry(
-          `${assetBaseUrl}/${RELEASE_BOM_FILE}`,
-          MAX_RETRIES,
-          RETRY_DELAY_MS,
-        );
-        const pass = remoteBom === legacyBom(manifest, platform).bytes.toString("utf8");
-        if (pass) log(`  PASS  ${RELEASE_BOM_FILE} matches ${manifestFile}`);
-        else console.error(`${LOG_PREFIX} FAIL  ${RELEASE_BOM_FILE} drifted from ${manifestFile}`);
-        results.push({ name: RELEASE_BOM_FILE, pass });
-        if (!pass) anyHardFail = true;
-      } catch (err) {
-        console.error(`${LOG_PREFIX} FAIL  ${RELEASE_BOM_FILE}: ${err.message}`);
-        results.push({ name: RELEASE_BOM_FILE, pass: false });
-        anyHardFail = true;
-      }
-    }
-  }
-
   // ── 7b. Stable URL: …/releases/latest/download/manifest.json ──────────────
   const stableUrl = `https://github.com/${ownerRepo}/releases/latest/download/${manifestFile}`;
   log(`--- Checking stable ${stableUrl} ---`);
@@ -517,64 +245,6 @@ async function main() {
     anyHardFail = true;
   }
 
-  // ── 8. Timestamp desync check ─────────────────────────────────────────────
-  let timestampFail = false;
-  if (assetTimestamps && assetTimestamps.size > 0) {
-    log("");
-    log("--- Timestamp desync analysis ---");
-
-    // This platform's installer + its legacy channel file came from one
-    // upload session. manifest.json is excluded: the other platform's
-    // publish legitimately re-uploads it (merged) later; its content is
-    // checked by hash above instead.
-    const times = [];
-    for (const name of [entry.file, ...(DUAL_PUBLISH_LEGACY_FEEDS ? [channelFile] : [])]) {
-      const ts = assetTimestamps.get(name);
-      if (ts) times.push({ name, updatedAt: new Date(ts.updated_at).getTime() });
-    }
-
-    if (times.length >= 2) {
-      const minTime = Math.min(...times.map((t) => t.updatedAt));
-      const maxTime = Math.max(...times.map((t) => t.updatedAt));
-      const spreadMs = maxTime - minTime;
-      const spreadSec = (spreadMs / 1000).toFixed(1);
-
-      for (const t of times) {
-        const offsetSec = ((t.updatedAt - minTime) / 1000).toFixed(1);
-        log(`  ${t.name}: ${new Date(t.updatedAt).toISOString()} (offset +${offsetSec}s)`);
-      }
-
-      if (spreadMs > HARD_FAIL_THRESHOLD_MS) {
-        console.error(
-          `${LOG_PREFIX} FAIL  asset timestamp spread is ${spreadSec}s (> ${HARD_FAIL_THRESHOLD_MS / 60000}min threshold)`,
-        );
-        console.error(
-          `${LOG_PREFIX}       This strongly indicates artifacts were uploaded in separate sessions — they likely come from different builds.`,
-        );
-        timestampFail = true;
-        anyHardFail = true;
-      } else if (spreadMs > WARN_THRESHOLD_MS) {
-        warn(
-          `asset timestamp spread is ${spreadSec}s — exceeds ${WARN_THRESHOLD_MS / 60000}min warning threshold.`,
-        );
-        warn(
-          `Artifacts may come from different build sessions. Combined with any hash/size mismatch this is a hard failure.`,
-        );
-        // Upgrade to hard fail if there was already a hash/size issue
-        if (anyHardFail) {
-          console.error(
-            `${LOG_PREFIX} FAIL  timestamp desync (${spreadSec}s spread) combined with hash/size mismatch — hard failure.`,
-          );
-          timestampFail = true;
-        }
-      } else {
-        log(`  PASS  asset timestamp spread: ${spreadSec}s (within acceptable range)`);
-      }
-    } else {
-      warn("Not enough timestamp data to compute spread.");
-    }
-  }
-
   // ── 9. Summary ────────────────────────────────────────────────────────────
   log("");
   log("════════════════════════════════════════");
@@ -583,9 +253,6 @@ async function main() {
   for (const r of results) {
     const status = r.pass ? "PASS" : "FAIL";
     log(`  ${status}  ${r.name}`);
-  }
-  if (timestampFail) {
-    log("  FAIL  timestamp desync");
   }
 
   if (anyHardFail) {

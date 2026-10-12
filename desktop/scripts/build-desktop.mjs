@@ -36,13 +36,6 @@ function log(...args) {
   console.log("[build-desktop]", ...args);
 }
 
-// KOS-350: release assets are installer + manifest.json (+ legacy feeds
-// during dual-publish) — see release-feeds.mjs. Provenance and receipt stay
-// local for the build→publish handoff and are not uploaded to GitHub.
-function emitReleaseMetadata(outputDir, platform, version, bom, installerFile, { local }) {
-  return emitReleaseFeeds({ outputDir, platform, version, bom, installerFile, local, log });
-}
-
 // KOS-306: every exe the installer ships (or the Engine installs) must carry
 // a VERSIONINFO resource — bare exes are a Defender first-sight ML feature.
 // Read on the build machine via Get-Item; fails the build on any gap.
@@ -275,10 +268,10 @@ async function main() {
       `  build: ${platform === "mac" ? "unsigned Mundus-<ver>.dmg via dmgbuild" : "NSIS installer via makensis"}`,
     );
     if (!bom) {
-      log("  local build: manifest.json (+ legacy yml); no BOM, receipt, or publish");
+      log("  local build: manifest.json; no receipt or publish");
       return;
     }
-    log("  verify: manifest.json (+ legacy feeds), BOM, receipt (local handoff only)");
+    log("  verify: manifest.json, BOM, receipt (local handoff only)");
     log(
       `  publish: node scripts/publish-release.mjs --platform ${platform} --receipt ${receiptPath}`,
     );
@@ -304,9 +297,16 @@ async function main() {
   }
   log("");
   if (bom) {
-    log("Installer built. Emitting manifest.json (+ legacy feeds) + local receipt...");
-    const { files } = await emitReleaseMetadata(releaseDir, platform, version, bom, outFile, {
-      local: false,
+    // KOS-350: release assets are installer + manifest.json. Provenance and
+    // receipt stay local for the build→publish handoff.
+    log("Installer built. Emitting manifest.json + local receipt...");
+    const { files } = await emitReleaseFeeds({
+      outputDir: releaseDir,
+      platform,
+      version,
+      bom,
+      installerFile: outFile,
+      log,
     });
     const receipt = await createReceipt({
       outputDir: releaseDir,
@@ -320,15 +320,22 @@ async function main() {
     log(`Verification receipt (local only): ${receiptPath}`);
     log(`Build + verify complete for ${platform} v${version}. Run publish-release.mjs explicitly.`);
   } else {
-    // Local builds still get manifest.json (+ legacy yml) so the Engine
-    // updater can be pointed at a local feed; no BOM file, no receipt.
+    // Local builds still get manifest.json so the Engine updater can be
+    // pointed at a local feed; no receipt.
     try {
       const localBom = await deriveReleaseBom(
         path.resolve(SHELL_ROOT, ".."),
         platform,
         currentCommit(),
       );
-      await emitReleaseMetadata(releaseDir, platform, version, localBom, outFile, { local: true });
+      await emitReleaseFeeds({
+        outputDir: releaseDir,
+        platform,
+        version,
+        bom: localBom,
+        installerFile: outFile,
+        log,
+      });
     } catch (error) {
       log(
         `warning: skipped local manifest.json (${error instanceof Error ? error.message : error})`,

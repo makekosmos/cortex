@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildReleaseNotes, MACOS_INSTALL_NOTE } from "./publish-release.mjs";
 import { previousReleaseBaseline, RELEASE_REPO } from "./release-plan.mjs";
-import { RELEASE_BOM_FILE } from "./release-bom.mjs";
+import { RELEASE_MANIFEST_FILE } from "./release-manifest.mjs";
 
 const FROM = "b".repeat(40);
 const TO = "a".repeat(40);
@@ -63,17 +63,40 @@ test("an empty commit range still produces the header", () => {
 });
 
 test("previousReleaseBaseline resolves the published release source commit", () => {
-  const bom = JSON.stringify({ release: { version: "0.10.6" }, source: { commit: FROM } });
+  const manifest = JSON.stringify({
+    schema: "mundus-release-manifest",
+    schema_version: 1,
+    product: "mundus",
+    version: "0.10.6",
+    channel: "production",
+    source: {
+      repository: "makekosmos/cortex",
+      commit: FROM,
+      toolchain: { pnpm: "12.4.1", node: "24.15.0", rust: "1.95.0" },
+    },
+    compatibility: { engine_api: "1.0.0" },
+    platforms: {
+      win: {
+        file: "Mundus-Setup-0.10.6.exe",
+        url: "https://github.com/makekosmos/cortex/releases/download/v0.10.6/Mundus-Setup-0.10.6.exe",
+        size: 10,
+        sha512: `${"A".repeat(86)}==`,
+        target: "x86_64-pc-windows-msvc",
+        commit: FROM,
+        released_at: "2026-10-05T10:00:00.000Z",
+      },
+    },
+  });
   const { run } = fakeRun([
     [
       `gh api --paginate --slurp repos/${RELEASE_REPO}/releases`,
       {
         stdout: JSON.stringify([
-          [{ tag_name: "v0.10.6", assets: [{ name: RELEASE_BOM_FILE, id: 42 }] }],
+          [{ tag_name: "v0.10.6", assets: [{ name: RELEASE_MANIFEST_FILE, id: 42 }] }],
         ]),
       },
     ],
-    ["gh api -H Accept: application/octet-stream", { stdout: bom }],
+    ["gh api -H Accept: application/octet-stream", { stdout: manifest }],
   ]);
   assert.deepEqual(previousReleaseBaseline({ run }), { tag: "v0.10.6", commit: FROM });
 });

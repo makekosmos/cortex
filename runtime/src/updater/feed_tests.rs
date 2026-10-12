@@ -4,10 +4,6 @@ use httpmock::MockServer;
 const MANIFEST: &str = r#"{"schema":"mundus-release-manifest","schema_version":1,
   "version":"0.6.0","platforms":{"win":{"file":"Mundus-Setup-0.6.0.exe","size":10,
   "sha512":"MANIFEST=="},"mac":{"file":"Mundus-0.6.0.dmg","size":7,"sha512":"MAC=="}}}"#;
-const LEGACY: &str = concat!(
-    "version: 0.5.3\nfiles:\n  - url: Mundus-Setup-0.5.3.exe\n    sha512: AAA\n  ",
-    "  size: 10\n"
-);
 
 async fn mock<'a>(
     server: &'a MockServer,
@@ -26,10 +22,9 @@ async fn mock<'a>(
 }
 
 #[tokio::test]
-async fn prefers_manifest_json_over_the_legacy_channel_file() {
+async fn win_reads_its_own_manifest_entry() {
     let server = MockServer::start_async().await;
     let manifest = mock(&server, "/manifest.json", 200, MANIFEST).await;
-    let legacy = mock(&server, "/latest.yml", 200, LEGACY).await;
     let release = fetch_release(&build_client().unwrap(), &server.base_url(), "win")
         .await
         .unwrap();
@@ -38,7 +33,6 @@ async fn prefers_manifest_json_over_the_legacy_channel_file() {
     assert_eq!(file.url, "Mundus-Setup-0.6.0.exe");
     assert_eq!(file.sha512, "MANIFEST==");
     manifest.assert_async().await;
-    legacy.assert_calls_async(0).await;
 }
 
 #[tokio::test]
@@ -52,51 +46,9 @@ async fn mac_reads_its_own_manifest_entry() {
 }
 
 #[tokio::test]
-async fn falls_back_to_latest_yml_while_dual_publish_is_on() {
-    let server = MockServer::start_async().await;
-    mock(&server, "/manifest.json", 404, "").await;
-    mock(&server, "/latest.yml", 200, LEGACY).await;
-    let release = fetch_release_with(&build_client().unwrap(), &server.base_url(), "win", true)
-        .await
-        .unwrap();
-    assert_eq!(release.version, "0.5.3");
-    assert_eq!(release.file.unwrap().url, "Mundus-Setup-0.5.3.exe");
-}
-
-#[tokio::test]
-async fn an_unreadable_manifest_also_falls_back_during_dual_publish() {
-    let server = MockServer::start_async().await;
-    mock(&server, "/manifest.json", 200, "{\"schema_version\":99}").await;
-    mock(
-        &server,
-        "/latest-mac.yml",
-        200,
-        &LEGACY.replace(".exe", ".dmg"),
-    )
-    .await;
-    let release = fetch_release_with(&build_client().unwrap(), &server.base_url(), "mac", true)
-        .await
-        .unwrap();
-    assert_eq!(release.file.unwrap().url, "Mundus-Setup-0.5.3.dmg");
-}
-
-#[tokio::test]
-async fn after_cutover_a_missing_manifest_is_an_error_even_with_latest_yml() {
-    let server = MockServer::start_async().await;
-    mock(&server, "/manifest.json", 404, "").await;
-    let legacy = mock(&server, "/latest.yml", 200, LEGACY).await;
-    let error = fetch_release_with(&build_client().unwrap(), &server.base_url(), "win", false)
-        .await
-        .unwrap_err();
-    assert!(matches!(error, UpdaterError::Network(_)));
-    legacy.assert_calls_async(0).await;
-}
-
-#[tokio::test]
 async fn surfaces_non_success_status_as_network_error() {
     let server = MockServer::start_async().await;
     mock(&server, "/manifest.json", 404, "").await;
-    mock(&server, "/latest.yml", 404, "").await;
     let error = fetch_release(&build_client().unwrap(), &server.base_url(), "win")
         .await
         .unwrap_err();
@@ -142,56 +94,15 @@ fn asset_url_accepts_only_safe_installer_filenames_for_the_platform() {
 }
 
 #[tokio::test]
-async fn a_manifest_missing_the_platform_entry_still_consults_the_legacy_feed() {
-    // KOS-377: for hours after publish the CDN can serve a manifest.json
-    // that predates the platform's asset merge (win-only). The legacy
-    // latest-mac.yml already names the DMG — "no mac entry" must not read
-    // as "no update" while the dual-publish window is open.
+async fn a_manifest_missing_the_platform_entry_reports_no_update() {
     let server = MockServer::start_async().await;
     let win_only = r#"{"schema":"mundus-release-manifest","schema_version":1,
       "version":"0.10.11","platforms":{"win":{"file":"Mundus-Setup-0.10.11.exe",
       "size":10,"sha512":"WIN=="}}}"#;
     mock(&server, "/manifest.json", 200, win_only).await;
-    mock(
-        &server,
-        "/latest-mac.yml",
-        200,
-        &LEGACY.replace("0.5.3", "0.10.11").replace(".exe", ".dmg"),
-    )
-    .await;
-    let release = fetch_release(&build_client().unwrap(), &server.base_url(), "mac")
-        .await
-        .unwrap();
-    assert_eq!(release.version, "0.10.11");
-    assert_eq!(release.file.unwrap().url, "Mundus-Setup-0.10.11.dmg");
-}
-
-#[tokio::test]
-async fn a_missing_platform_entry_with_no_legacy_feed_still_reports_no_update() {
-    let server = MockServer::start_async().await;
-    let win_only = r#"{"schema":"mundus-release-manifest","schema_version":1,
-      "version":"0.10.11","platforms":{"win":{"file":"Mundus-Setup-0.10.11.exe",
-      "size":10,"sha512":"WIN=="}}}"#;
-    mock(&server, "/manifest.json", 200, win_only).await;
-    mock(&server, "/latest-mac.yml", 404, "").await;
     let release = fetch_release(&build_client().unwrap(), &server.base_url(), "mac")
         .await
         .unwrap();
     assert_eq!(release.version, "0.10.11");
     assert!(release.file.is_none());
-}
-
-#[tokio::test]
-async fn after_cutover_a_missing_platform_entry_does_not_consult_legacy() {
-    let server = MockServer::start_async().await;
-    let win_only = r#"{"schema":"mundus-release-manifest","schema_version":1,
-      "version":"0.10.11","platforms":{"win":{"file":"Mundus-Setup-0.10.11.exe",
-      "size":10,"sha512":"WIN=="}}}"#;
-    mock(&server, "/manifest.json", 200, win_only).await;
-    let legacy = mock(&server, "/latest-mac.yml", 200, LEGACY).await;
-    let release = fetch_release_with(&build_client().unwrap(), &server.base_url(), "mac", false)
-        .await
-        .unwrap();
-    assert!(release.file.is_none());
-    legacy.assert_calls_async(0).await;
 }
