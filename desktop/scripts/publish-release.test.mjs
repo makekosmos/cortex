@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildReleaseNotes } from "./publish-release.mjs";
+import { buildReleaseNotes, MACOS_INSTALL_NOTE } from "./publish-release.mjs";
 import { previousReleaseBaseline, RELEASE_REPO } from "./release-plan.mjs";
 import { RELEASE_BOM_FILE } from "./release-bom.mjs";
 
@@ -40,6 +40,7 @@ test("release notes list every commit with short hash, subject and author", () =
   assert.equal(
     notes,
     "Mundus 0.10.7 installers + manifest.\n\n" +
+      `${MACOS_INSTALL_NOTE}\n\n` +
       "- abc1234 fix(engine): restart stalled supervisor (Jane Doe)\n" +
       "- def5678 feat(manager): add tray menu (Jack)",
   );

@@ -151,8 +151,13 @@ function gitRun(cmd, args) {
  * as `- <short hash> <subject> (<author>)`. Fails closed: a git error throws —
  * the release must never go out with no commit list.
  */
+// The DMG is not notarized (KOS-349): a browser download is quarantined and
+// Gatekeeper blocks it, so the notes lead with the quarantine-free install.
+export const MACOS_INSTALL_NOTE =
+  "macOS: `curl -fsSL https://raw.githubusercontent.com/makekosmos/cortex/main/desktop/install-macos.sh | bash`";
+
 export function buildReleaseNotes({ version, fromCommit, toCommit, run = gitRun }) {
-  const header = `Mundus ${version} installers + manifest.`;
+  const header = `Mundus ${version} installers + manifest.\n\n${MACOS_INSTALL_NOTE}`;
   const result = run("git", [
     "log",
     "--no-merges",

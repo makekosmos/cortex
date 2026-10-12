@@ -82,6 +82,10 @@ downloads):
 curl -fsSL https://raw.githubusercontent.com/makekosmos/cortex/main/desktop/install-macos.sh | bash
 ```
 
+The script checks the DMG against the sha512 in `manifest.json`, stops a
+running Mundus, replaces `/Applications/Mundus Manager.app` and opens it.
+Every release's notes carry the same line.
+
 Downloading `Mundus-<ver>.dmg` in a browser works on macOS 15 and earlier via
 Privacy & Security → "Open Anyway"; on macOS 26 it requires
 `xattr -dr com.apple.quarantine "/Applications/Mundus Manager.app"` after
