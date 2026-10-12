@@ -1,69 +1,8 @@
-// macOS arm of the updater service (KOS-377): feed fallback for a stale
-// win-only manifest, and the full DMG apply with stub mac tools.
+// macOS arm of the updater service: the full DMG apply with stub mac tools.
 use super::tests::{hash, manifest_json};
 use super::*;
 use httpmock::MockServer;
 use std::path::Path;
-
-#[tokio::test]
-async fn mac_check_uses_legacy_feed_when_manifest_lacks_the_mac_entry() {
-    // KOS-377: a stale win-only manifest.json (CDN lag right after publish)
-    // must not hide a real mac update while latest-mac.yml names the DMG.
-    let body = b"dmg payload".repeat(40);
-    let server = MockServer::start_async().await;
-    server
-        .mock_async(|when, then| {
-            when.method(httpmock::Method::GET).path("/manifest.json");
-            then.status(200).body(manifest_json(
-                "99.0.0",
-                r#""win":{"file":"Mundus-Setup-99.0.0.exe","size":1,"sha512":"AAA"}"#,
-            ));
-        })
-        .await;
-    server
-        .mock_async(|when, then| {
-            when.method(httpmock::Method::GET).path("/latest-mac.yml");
-            then.status(200).body(format!(
-                "version: 99.0.0\nfiles:\n  - url: Mundus-99.0.0.dmg\n    sha512: {}\n    \
-                 size: {}\n",
-                hash(&body),
-                body.len()
-            ));
-        })
-        .await;
-    server
-        .mock_async(|when, then| {
-            when.method(httpmock::Method::GET)
-                .path("/Mundus-99.0.0.dmg");
-            then.status(200).body(body.clone());
-        })
-        .await;
-    let dir = tempfile::tempdir().unwrap();
-    let service = UpdaterService::try_with_feed_base(
-        dir.path().to_path_buf(),
-        server.base_url(),
-        "0.5.0".into(),
-        true,
-        "mac",
-    )
-    .unwrap();
-
-    assert_eq!(service.check().await["state"], "available");
-    assert_eq!(service.status()["newVersion"], "99.0.0");
-    for _ in 0..200 {
-        if service.status()["state"] == "downloaded" {
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
-    assert_eq!(service.status()["state"], "downloaded");
-    assert_eq!(
-        tokio::fs::read(dir.path().join("updates/Mundus-99.0.0.dmg"))
-            .await
-            .unwrap(),
-        body
-    );
-}
 
 #[cfg(unix)]
 fn write_stub(dir: &Path, name: &str, body: &str) {

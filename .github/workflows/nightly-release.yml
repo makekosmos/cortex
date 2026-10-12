@@ -391,7 +391,7 @@ jobs:
           node desktop/scripts/build-desktop.mjs --platform mac --skip-preflight
 
       # Everything the mac publish step reads lives under desktop/release
-      # (DMG, manifest.json, latest-mac.yml, the receipt); publish-mac on
+      # (DMG, manifest.json, the receipt); publish-mac on
       # ubuntu-latest downloads it there.
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -403,8 +403,7 @@ jobs:
   # release-mac in-job "Wait for cortex release" poll provided (KOS-349
   # lesson, v0.10.7 run 37540994541): the job only starts once Windows has
   # created the release and its manifest.json, so the mac publish can merge
-  # platforms.mac into it without racing refs/tags/vX (+ latest-mac.yml while
-  # dual-publish is on, KOS-350). A red release-mac still never blocks the
+  # platforms.mac into it without racing refs/tags/vX. A red release-mac still never blocks the
   # Windows job — this job only follows it.
   publish-mac:
     needs: [plan, release, release-mac]

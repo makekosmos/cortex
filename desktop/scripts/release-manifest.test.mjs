@@ -1,18 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { deriveReleaseBom, RELEASE_BOM_FILE } from "./release-bom.mjs";
-import { verifyLocalReleaseChannel } from "./release-channel-local.mjs";
+import { deriveReleaseBom } from "./release-bom.mjs";
 import {
   assetDownloadUrl,
   createReleaseManifest,
-  DUAL_PUBLISH_LEGACY_FEEDS,
-  legacyBom,
-  legacyChannelProblems,
-  legacyChannelYml,
-  legacyFeedFiles,
   manifestBytes,
   mergeReleaseManifest,
   parseReleaseManifest,
@@ -101,37 +95,6 @@ test("manifest.json schema v1 carries version, source baseline and platform entr
   assert.deepEqual(parseReleaseManifest(manifestBytes(win).toString("utf8")), win);
 });
 
-test("legacy BOM rendered from the manifest is byte-identical to the derived BOM", async () => {
-  const { win, mac, winBom, macBom } = await manifests();
-  assert.deepEqual(legacyBom(win, "win").bytes, winBom.bytes);
-  assert.equal(legacyBom(win, "win").digest, winBom.digest);
-  assert.equal(legacyBom(mac, "mac").digest, macBom.digest);
-});
-
-test("legacy latest.yml rendered from the manifest passes the channel checker", async () => {
-  const { win } = await manifests();
-  const dir = await mkdtemp(path.join(os.tmpdir(), "mundus-manifest-yml-"));
-  try {
-    await writeFile(path.join(dir, "Mundus-Setup-1.2.3.exe"), "exe");
-    await writeFile(path.join(dir, "latest.yml"), legacyChannelYml(win, "win"));
-    const channel = verifyLocalReleaseChannel(dir, "1.2.3", "win");
-    assert.deepEqual(legacyChannelProblems(win, "win", channel), []);
-    assert.match(legacyChannelYml(win, "win"), new RegExp(`releaseDate: '${AT}'`));
-    const drifted = { ...channel, files: [{ ...channel.files[0], size: 99 }] };
-    assert.deepEqual(legacyChannelProblems(win, "win", drifted), ["size differs from manifest"]);
-  } finally {
-    await rm(dir, { recursive: true, force: true });
-  }
-});
-
-test("dual-publish emits yml (+ bom from the creator) and the cutover emits none", () => {
-  assert.equal(DUAL_PUBLISH_LEGACY_FEEDS, true);
-  assert.deepEqual(legacyFeedFiles("win"), ["latest.yml", RELEASE_BOM_FILE]);
-  assert.deepEqual(legacyFeedFiles("mac"), ["latest-mac.yml"]);
-  assert.deepEqual(legacyFeedFiles("win", { dual: false }), []);
-  assert.deepEqual(legacyFeedFiles("mac", { dual: false }), []);
-});
-
 test("windows creates the release manifest; mac merges into it without rewriting win fields", async () => {
   const { win, mac } = await manifests();
   assert.deepEqual(mergeReleaseManifest(null, win, "win"), win);
@@ -145,8 +108,6 @@ test("windows creates the release manifest; mac merges into it without rewriting
   // A Windows retry after mac attached keeps the mac entry.
   const retried = mergeReleaseManifest(merged, win, "win");
   assert.deepEqual(retried.platforms.mac, merged.platforms.mac);
-  // The legacy win BOM is still the win build's even after the merge.
-  assert.equal(legacyBom(merged, "win").digest, legacyBom(win, "win").digest);
 });
 
 test("merge fails closed on another version or a different release commit", async () => {
@@ -188,11 +149,10 @@ test("validation rejects unknown schema versions and unsafe entries", async () =
   assert.doesNotThrow(() => validateReleaseManifest({ ...structuredClone(win), notes: "x" }));
 });
 
-test("emitReleaseFeeds: dual writes manifest + legacy feeds that a receipt/publish accepts", async () => {
+test("emitReleaseFeeds writes only manifest.json next to the installer, and a receipt accepts it", async () => {
   const { emitReleaseFeeds } = await import("./release-feeds.mjs");
   const { createReceipt, assertExactArtifactSet, verifyReceiptArtifacts } =
     await import("./release-receipt.mjs");
-  const { readFile } = await import("node:fs/promises");
   const root = await fixtureRoot();
   const out = await mkdtemp(path.join(os.tmpdir(), "mundus-feeds-"));
   try {
@@ -208,14 +168,10 @@ test("emitReleaseFeeds: dual writes manifest + legacy feeds that a receipt/publi
     });
     assert.deepEqual(
       files.map((file) => path.basename(file)),
-      ["Mundus-Setup-1.2.3.exe", "manifest.json", "latest.yml", RELEASE_BOM_FILE],
+      ["Mundus-Setup-1.2.3.exe", RELEASE_MANIFEST_FILE],
     );
-    // No drift: legacy BOM bytes == derived BOM, yml == manifest entry.
-    assert.deepEqual(await readFile(path.join(out, RELEASE_BOM_FILE)), bom.bytes);
-    assert.equal(
-      await readFile(path.join(out, "latest.yml"), "utf8"),
-      legacyChannelYml(manifest, "win"),
-    );
+    assert.deepEqual((await readdir(out)).sort(), ["Mundus-Setup-1.2.3.exe", RELEASE_MANIFEST_FILE]);
+    assert.equal(manifest.platforms.win.file, "Mundus-Setup-1.2.3.exe");
     const receipt = await createReceipt({
       outputDir: out,
       platform: "win",
@@ -225,53 +181,9 @@ test("emitReleaseFeeds: dual writes manifest + legacy feeds that a receipt/publi
       files,
     });
     assert.doesNotThrow(() =>
-      assertExactArtifactSet(receipt, [
-        "Mundus-Setup-1.2.3.exe",
-        RELEASE_MANIFEST_FILE,
-        ...legacyFeedFiles("win"),
-      ]),
+      assertExactArtifactSet(receipt, ["Mundus-Setup-1.2.3.exe", RELEASE_MANIFEST_FILE]),
     );
-    assert.equal((await verifyReceiptArtifacts(receipt, out)).length, 4);
-  } finally {
-    await rm(root, { recursive: true, force: true });
-    await rm(out, { recursive: true, force: true });
-  }
-});
-
-test("emitReleaseFeeds: cutover (dual off) writes only manifest.json; local skips the bom", async () => {
-  const { emitReleaseFeeds } = await import("./release-feeds.mjs");
-  const root = await fixtureRoot();
-  const out = await mkdtemp(path.join(os.tmpdir(), "mundus-feeds-cut-"));
-  try {
-    const installerFile = path.join(out, "Mundus-1.2.3.dmg");
-    await writeFile(installerFile, "dmg bytes");
-    const macBom = await deriveReleaseBom(root, "mac", MAC_COMMIT);
-    const cut = await emitReleaseFeeds({
-      outputDir: out,
-      platform: "mac",
-      version: "1.2.3",
-      bom: macBom,
-      installerFile,
-      dual: false,
-    });
-    assert.deepEqual(
-      cut.files.map((file) => path.basename(file)),
-      ["Mundus-1.2.3.dmg", "manifest.json"],
-    );
-    const winInstaller = path.join(out, "Mundus-Setup-1.2.3.exe");
-    await writeFile(winInstaller, "exe bytes");
-    const local = await emitReleaseFeeds({
-      outputDir: out,
-      platform: "win",
-      version: "1.2.3",
-      bom: await deriveReleaseBom(root, "win", WIN_COMMIT),
-      installerFile: winInstaller,
-      local: true,
-    });
-    assert.deepEqual(
-      local.files.map((file) => path.basename(file)),
-      ["Mundus-Setup-1.2.3.exe", "manifest.json", "latest.yml"],
-    );
+    assert.equal((await verifyReceiptArtifacts(receipt, out)).length, 2);
   } finally {
     await rm(root, { recursive: true, force: true });
     await rm(out, { recursive: true, force: true });

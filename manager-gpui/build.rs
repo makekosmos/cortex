@@ -6,7 +6,7 @@ fn main() {
     let icon_path = manifest_dir.join("../desktop/build/icon.ico");
     println!("cargo:rerun-if-changed={}", icon_path.display());
     // Icon + VERSIONINFO stamped with the win release version — the packaged
-    // exe reports the same version the installer and latest.yml carry. The
+    // exe reports the same version the installer and manifest.json carry. The
     // resource script and the version resolution are shared with
     // runtime/build.rs via pe-version-info (KOS-306); embedding is
     // target-gated inside the helper, so cross-compiles from non-Windows

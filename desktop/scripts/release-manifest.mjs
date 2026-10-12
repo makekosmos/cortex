@@ -33,29 +33,19 @@
 //
 // Readers must ignore unknown keys (additive changes keep schema_version 1)
 // and reject a schema_version they do not know.
-//
-// Dual-publish window (KOS-350): while DUAL_PUBLISH_LEGACY_FEEDS is true the
-// release also carries latest.yml / latest-mac.yml / release-bom.v2.json for
-// clients that predate manifest.json. They are rendered FROM the manifest
-// below (legacyChannelYml / legacyBom), never derived separately, so the two
-// formats cannot drift. Cutover = flip the flag to false (plus
-// LEGACY_FEED_FALLBACK in runtime/src/updater/feed.rs) in a follow-up.
 
 import { readFileSync, statSync } from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
-import { RELEASE_BOM_FILE, RELEASE_BOM_SCHEMA_VERSION } from "./release-bom.mjs";
-import { bytes, documentHash, fail, semver } from "./release-utils.mjs";
+import { bytes, fail, semver } from "./release-utils.mjs";
 
 export const RELEASE_MANIFEST_FILE = "manifest.json";
 export const RELEASE_MANIFEST_SCHEMA = "mundus-release-manifest";
 export const RELEASE_MANIFEST_SCHEMA_VERSION = 1;
-export const DUAL_PUBLISH_LEGACY_FEEDS = true;
 // linux is reserved in the schema; nothing publishes it yet.
 export const MANIFEST_PLATFORMS = ["win", "mac", "linux"];
-const LEGACY_CHANNEL_FILES = { win: "latest.yml", mac: "latest-mac.yml" };
-// The release creator (Windows) owns the top-level source/compatibility and
-// the single legacy BOM; other platforms only add their platforms entry.
+// The release creator (Windows) owns the top-level source/compatibility;
+// other platforms only add their platforms entry.
 export const MANIFEST_CREATOR_PLATFORM = "win";
 
 const COMMIT = /^[0-9a-f]{40}$/;
@@ -65,18 +55,6 @@ const SAFE_FILE = /^[A-Za-z0-9._-]+$/;
 const isObject = (value) =>
   value !== null && Object.prototype.toString.call(value) === "[object Object]";
 const isString = (value) => Object.prototype.toString.call(value) === "[object String]";
-
-export function legacyChannelFile(platform) {
-  return LEGACY_CHANNEL_FILES[platform] ?? fail(`no legacy channel file for "${platform}"`);
-}
-
-/** Legacy assets a platform still emits next to manifest.json. */
-export function legacyFeedFiles(platform, { dual = DUAL_PUBLISH_LEGACY_FEEDS } = {}) {
-  if (!dual) return [];
-  const files = [legacyChannelFile(platform)];
-  if (platform === MANIFEST_CREATOR_PLATFORM) files.push(RELEASE_BOM_FILE);
-  return files;
-}
 
 export function assetDownloadUrl(repository, version, file) {
   return `https://github.com/${repository}/releases/download/v${version}/${file}`;
@@ -214,68 +192,4 @@ export function mergeReleaseManifest(remote, local, platform) {
     ...structuredClone(remote),
     platforms: { ...structuredClone(remote.platforms), [platform]: structuredClone(entry) },
   });
-}
-
-function platformEntry(manifest, platform) {
-  return (
-    validateReleaseManifest(manifest).platforms[platform] ??
-    fail(`manifest has no ${platform} entry`)
-  );
-}
-
-/** electron-builder style latest.yml / latest-mac.yml rendered from the manifest. */
-export function legacyChannelYml(manifest, platform) {
-  const entry = platformEntry(manifest, platform);
-  return [
-    `version: ${manifest.version}`,
-    "files:",
-    `  - url: ${entry.file}`,
-    `    sha512: ${entry.sha512}`,
-    `    size: ${entry.size}`,
-    `path: ${entry.file}`,
-    `sha512: ${entry.sha512}`,
-    `releaseDate: '${entry.released_at}'`,
-    "",
-  ].join("\n");
-}
-
-/**
- * release-bom.v2.json rendered from the manifest. Byte-identical to
- * deriveReleaseBom() for the same checkout, which publish asserts — so the
- * legacy BOM and the manifest always describe the same build.
- */
-export function legacyBom(manifest, platform) {
-  const entry = platformEntry(manifest, platform);
-  const value = {
-    schema_version: RELEASE_BOM_SCHEMA_VERSION,
-    id: `mundus-desktop-${manifest.version}-${platform}`,
-    release: { version: manifest.version, channel: manifest.channel, platform },
-    source: {
-      repository: manifest.source.repository,
-      commit: entry.commit,
-      toolchain: { ...manifest.source.toolchain, target: entry.target },
-    },
-    compatibility: structuredClone(manifest.compatibility),
-  };
-  const raw = bytes(value);
-  return { value, bytes: raw, digest: documentHash(raw) };
-}
-
-/**
- * Parsed legacy channel ({ version, files: [{ url, sha512, size }] }) must
- * describe exactly the manifest's entry for the platform. Returns problems.
- */
-export function legacyChannelProblems(manifest, platform, channel) {
-  const entry = platformEntry(manifest, platform);
-  const problems = [];
-  if (channel.version !== manifest.version)
-    problems.push(`version ${channel.version} != manifest ${manifest.version}`);
-  const first = channel.files?.[0];
-  if (!first) problems.push("no files[] entry");
-  else {
-    if (first.url !== entry.file) problems.push(`file ${first.url} != manifest ${entry.file}`);
-    if (first.sha512 !== entry.sha512) problems.push("sha512 differs from manifest");
-    if (Number(first.size) !== entry.size) problems.push("size differs from manifest");
-  }
-  return problems;
 }

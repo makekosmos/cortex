@@ -8,14 +8,11 @@
 //
 // Cortex has no tags for releases cut before this pipeline existed, so the diff
 // baseline is the source commit recorded in the published release's
-// `manifest.json` (KOS-350, `source.commit`). Older history falls back to the
-// BOM (`release-bom.v2.json`, KOS-349) and then to the pre-KOS-349
-// verification receipt, so every existing release still plans.
+// `manifest.json` (KOS-350, `source.commit`).
 //
 // Library API (all pure or dependency-injected for tests):
 //   parseStableVersion(v)         → { major, minor, patch } | throws
-//   latestPublishedRelease(list)  → { tag, version, manifestAssetId, bomAssetId,
-//                                     receiptAssetId } | null
+//   latestPublishedRelease(list)  → { tag, version, manifestAssetId } | null
 //   nextReleaseVersion(current, previous, changed) → "X.Y.Z" | null (skip)
 //   nextBuildVersion({ run, currentVersion, repo }) → "X.Y.Z" — see below
 //   planRelease({ run, currentVersion, repo })     → plan object
@@ -49,9 +46,7 @@ import { appendFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { RELEASE_BOM_FILE } from "./release-bom.mjs";
 import { parseReleaseManifest, RELEASE_MANIFEST_FILE } from "./release-manifest.mjs";
-import { RELEASE_RECEIPT_FILE } from "./release-receipt.mjs";
 import { RELEASE_REPOS } from "./release-repos.mjs";
 import {
   readReleaseVersion,
@@ -91,8 +86,6 @@ export function latestPublishedRelease(releases) {
       tag: release.tag_name,
       version: `${match[1]}.${match[2]}.${match[3]}`,
       manifestAssetId: assets.find((asset) => asset.name === RELEASE_MANIFEST_FILE)?.id,
-      bomAssetId: assets.find((asset) => asset.name === RELEASE_BOM_FILE)?.id,
-      receiptAssetId: assets.find((asset) => asset.name === RELEASE_RECEIPT_FILE)?.id,
     };
     if (
       !best ||
@@ -147,66 +140,30 @@ function downloadAsset(run, repo, assetId, description) {
   );
 }
 
-// Source commit the published release was built from. Prefer manifest.json
-// (KOS-350); fall back to the BOM (KOS-349 publish set) and then to a
-// pre-KOS-349 verification receipt so older cortex releases still plan. A
-// release with none of them fails loudly.
+// Source commit the published release was built from, from its manifest.json
+// (KOS-350). A release without one fails loudly.
 function baselineCommit(run, repo, baseline) {
-  if (baseline.manifestAssetId !== undefined) {
-    const raw = downloadAsset(
-      run,
-      repo,
-      baseline.manifestAssetId,
-      `download ${RELEASE_MANIFEST_FILE} for ${baseline.tag}`,
-    );
-    let manifest;
-    try {
-      manifest = parseReleaseManifest(raw);
-    } catch (error) {
-      throw new Error(`${RELEASE_MANIFEST_FILE} of ${baseline.tag} is invalid: ${error.message}`);
-    }
-    if (manifest.version !== baseline.version)
-      throw new Error(
-        `${RELEASE_MANIFEST_FILE} of ${baseline.tag} records version ${manifest.version}`,
-      );
-    return manifest.source.commit;
-  }
-  if (baseline.bomAssetId !== undefined) {
-    const raw = downloadAsset(
-      run,
-      repo,
-      baseline.bomAssetId,
-      `download ${RELEASE_BOM_FILE} for ${baseline.tag}`,
-    );
-    const bom = JSON.parse(raw);
-    const commit = bom?.source?.commit;
-    if (!/^[0-9a-f]{40}$/.test(String(commit ?? "")))
-      throw new Error(`${RELEASE_BOM_FILE} of ${baseline.tag} has no valid source.commit`);
-    if (bom.release?.version !== baseline.version)
-      throw new Error(
-        `${RELEASE_BOM_FILE} of ${baseline.tag} records version ${bom.release?.version}`,
-      );
-    return commit;
-  }
-  if (baseline.receiptAssetId === undefined)
+  if (baseline.manifestAssetId === undefined)
     throw new Error(
-      `latest published release ${baseline.tag} has no ${RELEASE_MANIFEST_FILE} (or legacy ${RELEASE_BOM_FILE} / ${RELEASE_RECEIPT_FILE}) asset — cannot determine its source commit`,
+      `latest published release ${baseline.tag} has no ${RELEASE_MANIFEST_FILE} asset — cannot determine its source commit`,
     );
   const raw = downloadAsset(
     run,
     repo,
-    baseline.receiptAssetId,
-    `download ${RELEASE_RECEIPT_FILE} for ${baseline.tag}`,
+    baseline.manifestAssetId,
+    `download ${RELEASE_MANIFEST_FILE} for ${baseline.tag}`,
   );
-  const receipt = JSON.parse(raw);
-  const commit = receipt?.inputs?.commit;
-  if (!/^[0-9a-f]{40}$/.test(String(commit ?? "")))
-    throw new Error(`${RELEASE_RECEIPT_FILE} of ${baseline.tag} has no valid inputs.commit`);
-  if (receipt.inputs.version !== baseline.version)
+  let manifest;
+  try {
+    manifest = parseReleaseManifest(raw);
+  } catch (error) {
+    throw new Error(`${RELEASE_MANIFEST_FILE} of ${baseline.tag} is invalid: ${error.message}`);
+  }
+  if (manifest.version !== baseline.version)
     throw new Error(
-      `${RELEASE_RECEIPT_FILE} of ${baseline.tag} records version ${receipt.inputs.version}`,
+      `${RELEASE_MANIFEST_FILE} of ${baseline.tag} records version ${manifest.version}`,
     );
-  return commit;
+  return manifest.source.commit;
 }
 
 function listReleases(run, repo) {
