@@ -196,8 +196,9 @@ impl ManagerState {
     pub fn autostart(&self) -> Value {
         // Dev builds too: the manager-gpui settings toggle registers
         // `<exe> --start` — headless engine at sign-in, no UI window.
-        let available = cfg!(windows) && std::env::var_os("MUNDUS_TEST_MODE").is_none();
-        let enabled = available && windows_autostart_enabled();
+        let available = cfg!(any(windows, target_os = "macos"))
+            && std::env::var_os("MUNDUS_TEST_MODE").is_none();
+        let enabled = available && os_autostart_enabled();
         json!(
             {"enabled": enabled,
             "available": available,
@@ -213,7 +214,7 @@ impl ManagerState {
         {
             return Err("autostart-unavailable-in-dev-or-test".into());
         }
-        set_windows_autostart(enabled)?;
+        set_os_autostart(enabled)?;
         let state = self.autostart();
         if state.get("enabled").and_then(Value::as_bool) != Some(enabled) {
             return Err("autostart-readback-failed".into());
@@ -237,23 +238,31 @@ impl AutostartControl for ManagerState {
 #[cfg(windows)]
 pub(crate) mod windows_autostart;
 
+#[cfg(target_os = "macos")]
+mod macos_autostart;
+
+#[cfg(target_os = "macos")]
+use macos_autostart as os_autostart;
 #[cfg(windows)]
-fn windows_autostart_enabled() -> bool {
-    windows_autostart::enabled()
+use windows_autostart as os_autostart;
+
+#[cfg(any(windows, target_os = "macos"))]
+fn os_autostart_enabled() -> bool {
+    os_autostart::enabled()
 }
 
-#[cfg(not(windows))]
-fn windows_autostart_enabled() -> bool {
+#[cfg(not(any(windows, target_os = "macos")))]
+fn os_autostart_enabled() -> bool {
     false
 }
 
-#[cfg(windows)]
-fn set_windows_autostart(enabled: bool) -> Result<(), String> {
-    windows_autostart::set(enabled)
+#[cfg(any(windows, target_os = "macos"))]
+fn set_os_autostart(enabled: bool) -> Result<(), String> {
+    os_autostart::set(enabled)
 }
 
-#[cfg(not(windows))]
-fn set_windows_autostart(_enabled: bool) -> Result<(), String> {
+#[cfg(not(any(windows, target_os = "macos")))]
+fn set_os_autostart(_enabled: bool) -> Result<(), String> {
     Err("autostart-unavailable-in-dev-or-test".into())
 }
 
