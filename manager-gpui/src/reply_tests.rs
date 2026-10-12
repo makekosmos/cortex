@@ -79,3 +79,40 @@ async fn pairing_pending_and_declined_replies(cx: &mut TestAppContext) {
         assert_eq!(app.notice.as_deref(), Some("Подключение отклонено."));
     });
 }
+
+/// «Проверить обновления» names what the check found; «Выполнено.» on a
+/// check that found nothing read as a no-op.
+#[gpui::test]
+async fn updater_check_reply_names_the_outcome(cx: &mut TestAppContext) {
+    let (manager, cx) = launch(cx);
+    let cases = [
+        (
+            json!({"state": "not-available", "currentVersion": "0.10.13"}),
+            Some("Установлена последняя версия."),
+            None,
+        ),
+        (
+            json!({"state": "downloading", "currentVersion": "0.10.12", "newVersion": "0.10.13"}),
+            Some("Скачиваем версию 0.10.13."),
+            None,
+        ),
+        (
+            json!({"state": "error", "currentVersion": "0.10.13", "message": "GET manifest.json: HTTP 503"}),
+            None,
+            Some("GET manifest.json: HTTP 503"),
+        ),
+    ];
+    for (reply, notice, error) in cases {
+        manager.update(cx, |app, _cx| {
+            app.notice = None;
+            app.error = None;
+            app.action("updater.check", json!({}));
+            app.action_reply(Ok(reply));
+        });
+        manager.read_with(cx, |app, _| {
+            assert!(!app.action_busy);
+            assert_eq!(app.notice.as_deref(), notice);
+            assert_eq!(app.error.as_deref(), error);
+        });
+    }
+}
