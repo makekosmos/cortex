@@ -38,6 +38,10 @@ pub const LOG_FILE_PREFIX: &str = "mundus-engine";
 /// HKCU `...\Run` value name for Engine autostart.
 pub const AUTOSTART_RUN_VALUE: &str = "Mundus Engine";
 
+/// launchd label (and `~/Library/LaunchAgents/<label>.plist` stem) for
+/// Engine autostart on macOS.
+pub const AUTOSTART_LAUNCH_AGENT_LABEL: &str = "com.kazui.mundus.engine";
+
 /// HKCU Uninstall key name (`...\Uninstall\Mundus`).
 pub const UNINSTALL_KEY_NAME: &str = "Mundus";
 
