@@ -53,6 +53,10 @@ impl ManagerApp {
                     Some("declined") => {
                         self.notice = Some("Подключение отклонено.".into());
                     }
+                    _ if value.get("currentVersion").is_some() => match updater_outcome(&value) {
+                        Ok(notice) => self.notice = Some(notice),
+                        Err(error) => self.error = Some(error),
+                    },
                     _ => {
                         let peer_name = (value.get("status").and_then(Value::as_str)
                             == Some("connected"))
@@ -91,5 +95,25 @@ impl ManagerApp {
             |v| v.get("url").and_then(Value::as_str).or_else(|| v.as_str()),
             "Engine не вернул ссылку маркетплейса.",
         );
+    }
+}
+
+/// An `updater.*` reply is the updater status: say what the check found
+/// instead of «Выполнено.», which read as "nothing happened".
+fn updater_outcome(status: &Value) -> Result<String, String> {
+    let field = |key| status.get(key).and_then(Value::as_str).unwrap_or_default();
+    let next = field("newVersion");
+    match field("state") {
+        "not-available" => Ok("Установлена последняя версия.".into()),
+        "available" if status.get("canInstall") == Some(&Value::Bool(false)) => Ok(format!(
+            "Доступна версия {next}. {}",
+            field("installUnavailableReason")
+        )),
+        "available" => Ok(format!("Доступна версия {next}.")),
+        "downloading" => Ok(format!("Скачиваем версию {next}.")),
+        "downloaded" => Ok(format!("Версия {next} скачана.")),
+        "error" if !field("message").is_empty() => Err(field("message").into()),
+        "error" => Err("Не удалось проверить обновления.".into()),
+        _ => Ok("Выполнено.".into()),
     }
 }
