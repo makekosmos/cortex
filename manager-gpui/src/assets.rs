@@ -3,6 +3,13 @@ use gpui::{AssetSource, Result, SharedString};
 use std::borrow::Cow;
 
 pub struct Assets;
+pub fn font_bytes() -> Vec<Cow<'static, [u8]>> {
+    let mut fonts = imago_gpui::assets::font_bytes();
+    fonts.push(Cow::Borrowed(include_bytes!(
+        "../assets/fonts/GeistMono-Regular.ttf"
+    )));
+    fonts
+}
 const ICONS: &[(&str, &[u8])] = &[
     (
         "icons/appearance.svg",

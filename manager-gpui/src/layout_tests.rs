@@ -8,7 +8,7 @@ fn all_pages_share_centered_width_with_sidebar_open_or_closed(cx: &mut TestAppCo
         cx.simulate_resize(size(px(width), px(900.)));
         for open in [true, false] {
             for view in [
-                View::Data,
+                View::Storage,
                 View::Usage,
                 View::Sync,
                 View::Packages,

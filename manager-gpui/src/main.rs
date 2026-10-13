@@ -111,7 +111,7 @@ fn main() {
         .run(|cx: &mut App| {
             gpui_component::init(cx);
             cx.text_system()
-                .add_fonts(imago_gpui::assets::font_bytes())
+                .add_fonts(assets::font_bytes())
                 .expect("load Imago fonts");
             imago_gpui::theme::apply(cx);
             open_manager_window(cx);

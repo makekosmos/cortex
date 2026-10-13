@@ -12,6 +12,14 @@ impl ManagerApp {
                 self.refresh("appearance", "appearance.get", json!({}));
             }
         }
+        if self.view == View::Storage && Instant::now() >= self.next_storage_poll {
+            self.next_storage_poll = Instant::now() + std::time::Duration::from_secs(5);
+            if !self.background_slots.contains("data.storage")
+                && !matches!(self.slots.get("data.storage"), Some(Slot::Loading))
+            {
+                self.refresh("data.storage", "manager.data.storage", json!({}));
+            }
+        }
         if self.view == View::About && Instant::now() >= self.next_about_poll {
             self.next_about_poll = Instant::now() + std::time::Duration::from_secs(5);
             if !matches!(self.slots.get("about.health"), Some(Slot::Loading)) {

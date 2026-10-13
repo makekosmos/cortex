@@ -7,15 +7,13 @@ use serde_json::json;
 fn revisiting_page_keeps_cached_data_visible(cx: &mut TestAppContext) {
     let (manager, cx) = launch(cx);
     manager.update(cx, |app, cx| {
-        for slot in ["data.summary", "data.types", "data.storage"] {
-            app.slots
-                .insert(slot.into(), Slot::Ready(json!({"cached": true})));
-        }
+        app.slots
+            .insert("data.storage".into(), Slot::Ready(json!({"cached": true})));
         app.set_view(View::Settings, cx);
-        app.set_view(View::Data, cx);
-        for slot in ["data.summary", "data.types", "data.storage"] {
-            assert!(matches!(app.slots.get(slot), Some(Slot::Ready(v)) if v["cached"] == true));
-        }
+        app.set_view(View::Storage, cx);
+        assert!(
+            matches!(app.slots.get("data.storage"), Some(Slot::Ready(v)) if v["cached"] == true)
+        );
     });
 }
 
@@ -38,7 +36,7 @@ fn explicit_refresh_and_invalidated_cache_still_reload(cx: &mut TestAppContext) 
         app.slots
             .insert("engine.settings".into(), Slot::Ready(json!({})));
         app.invalidated_slots.insert("engine.settings".into());
-        app.set_view(View::Data, cx);
+        app.set_view(View::Storage, cx);
         app.set_view(View::Settings, cx);
         assert!(matches!(
             app.slots.get("engine.settings"),
