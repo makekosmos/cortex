@@ -58,6 +58,14 @@ const EXPECTED: [(&str, &str, &str); 9] = [
 
 // Newer versions registered alongside their predecessors; stored objects keep
 // the version they were written with, so every listed version stays valid.
+// KOS-397: `core.task` 0.1.0 is a new type id with no legacy alias, so it is
+// pinned separately from EXPECTED (which requires one alias per type).
+const NEW_TYPES: &[(&str, &str, &str)] = &[(
+    "core.task",
+    "0.1.0",
+    "20fbcf5ec311b37563d2b18bf29fb79c781b3eaa9fb28cca76620678f1f8abb1",
+)];
+
 const SUPERSEDED: &[(&str, &str, &str)] = &[
     (
         "com.kosmos.task",
@@ -74,7 +82,10 @@ const SUPERSEDED: &[(&str, &str, &str)] = &[
 #[test]
 fn canonical_definitions_match_frozen_order_and_metadata() {
     let registrations = canonical_type_registrations().expect("canonical definitions");
-    assert_eq!(registrations.len(), EXPECTED.len() + SUPERSEDED.len());
+    assert_eq!(
+        registrations.len(),
+        EXPECTED.len() + SUPERSEDED.len() + NEW_TYPES.len()
+    );
     for (registration, (type_id, alias, hash)) in registrations.iter().zip(EXPECTED) {
         assert_eq!(registration.type_id, type_id);
         assert_eq!(registration.version, "1.0.0");
@@ -96,13 +107,27 @@ fn canonical_definitions_match_frozen_order_and_metadata() {
         assert_eq!(registration.aliases[0].alias, *alias);
         assert_eq!(registration.schema_hash, *hash);
     }
+    for (registration, (type_id, version, hash)) in registrations
+        [EXPECTED.len() + SUPERSEDED.len()..]
+        .iter()
+        .zip(NEW_TYPES)
+    {
+        assert_eq!(registration.type_id, *type_id);
+        assert_eq!(registration.version, *version);
+        assert!(registration.aliases.is_empty());
+        assert_eq!(registration.schema_hash, *hash);
+    }
 }
 
 #[test]
 fn canonical_definition_json_is_parseable_and_hashes_exactly() {
     let registrations = canonical_type_registrations().expect("canonical definitions");
-    let expected: Vec<(&str, &str, &str)> =
-        EXPECTED.iter().chain(SUPERSEDED.iter()).copied().collect();
+    let expected: Vec<(&str, &str, &str)> = EXPECTED
+        .iter()
+        .chain(SUPERSEDED.iter())
+        .chain(NEW_TYPES.iter())
+        .copied()
+        .collect();
     for (registration, (_, _, expected_hash)) in registrations.iter().zip(expected) {
         let schema: Value = serde_json::from_str(&registration.schema_json).unwrap();
         let ui_schema: Value = serde_json::from_str(&registration.ui_schema_json).unwrap();
@@ -124,7 +149,7 @@ fn canonical_ids_and_aliases_do_not_collide() {
         .iter()
         .flat_map(|r| r.aliases.iter().map(|a| a.alias.as_str()))
         .collect();
-    assert_eq!(ids.len(), EXPECTED.len());
+    assert_eq!(ids.len(), EXPECTED.len() + NEW_TYPES.len());
     assert_eq!(aliases.len(), EXPECTED.len());
     assert!(ids.is_disjoint(&aliases));
 }
@@ -175,6 +200,7 @@ fn fresh_init_registers_exact_canonical_authority_and_routes_legacy_aliases() {
             ((*id).to_owned(), current.to_owned())
         })
         .collect();
+    expected.push(("core.task".to_owned(), "0.1.0".to_owned()));
     expected.sort();
     assert_eq!(rows, expected);
 

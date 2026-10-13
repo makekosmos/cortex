@@ -142,7 +142,7 @@ fn phase3_migration_creates_additive_state_and_promotes_registry_atomically() {
             |row| row.get::<_, i64>(0)
         )
         .unwrap(),
-        9
+        10
     );
     assert_eq!(
         conn.query_row(
@@ -222,7 +222,7 @@ fn phase3_clear_all_removes_ephemeral_state_but_preserves_locked_registry_and_ar
             |r| r.get::<_, i64>(0)
         )
         .unwrap(),
-        9
+        10
     );
     assert_eq!(
         conn.query_row(

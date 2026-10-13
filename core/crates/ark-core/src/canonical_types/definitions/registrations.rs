@@ -40,6 +40,8 @@ pub fn canonical_type_registrations() -> Result<Vec<TypeRegistration>, String> {
         DAY_CONTRACT_VERSION,
         &DAY_FIELDS[..2],
     )?);
+    // KOS-397: a new type id, appended last so the existing frozen order holds.
+    registrations.push(registration_from_literal(CORE_TASK_DEFINITION)?);
     Ok(registrations)
 }
 

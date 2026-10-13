@@ -227,8 +227,8 @@ fn production_init_runs_phase3_once_and_reopen_is_idempotent() {
     ] {
         assert!(table_exists(&conn, table), "missing {table}");
     }
-    assert_eq!(count(&conn, "object_types"), 9);
-    assert_eq!(count(&conn, "object_type_versions"), 11);
+    assert_eq!(count(&conn, "object_types"), 10);
+    assert_eq!(count(&conn, "object_type_versions"), 12);
     assert_eq!(count(&conn, "object_type_aliases"), 9);
     assert_eq!(
         conn.query_row(
@@ -237,7 +237,7 @@ fn production_init_runs_phase3_once_and_reopen_is_idempotent() {
             |r| r.get::<_, i64>(0),
         )
         .unwrap(),
-        9
+        10
     );
     let before: (i64, String) = conn
         .query_row(
