@@ -16,6 +16,7 @@ pub(crate) async fn handle_start_sync(
         auth_secret,
         use_iroh,
         iroh_peer_ticket,
+        iroh_relay_url,
         pairing_connect,
         discovery_enabled,
         bind,
@@ -91,9 +92,11 @@ pub(crate) async fn handle_start_sync(
         .await?;
 
     let transport_choice = select_transport(use_iroh, &relay_url);
-    let mut iroh_our_ticket: Option<String> = None;
-
     let transport_state = Some(transport_choice.clone());
+    // Our iroh ticket is published through this channel: `our_ticket()`
+    // waits on relay homing (network), which must not stall the sequential
+    // request worker — the iroh branch fills it from a spawned task.
+    let (iroh_our_ticket_tx, iroh_our_ticket) = watch::channel(None);
     let start_params = SyncStartParams {
         space_id: space_id.clone(),
         device_id: device_id.clone(),
@@ -105,6 +108,7 @@ pub(crate) async fn handle_start_sync(
         auth_secret: auth_secret.clone(),
         use_iroh,
         iroh_peer_ticket: iroh_peer_ticket.clone(),
+        iroh_relay_url: iroh_relay_url.clone(),
         // One-shot: later restarts derive from these params, and a stored
         // peer key must be what re-admits the endpoint — not a replayed
         // pairing intent.
@@ -151,6 +155,26 @@ pub(crate) async fn handle_start_sync(
             None => None,
         };
         let peer_endpoint = peer_addr.as_ref().map(|addr| addr.id.to_string());
+        // A loopback-bound endpoint cannot be reached through a
+        // relay anyway, and tests must stay offline; RelayMode::Disabled
+        // also makes `our_ticket()` advertise the loopback socket.
+        // An explicit `iroh_relay_url` overrides both: self-hosted
+        // relays, and tests that need an unreachable relay.
+        let iroh_relay_mode = match &iroh_relay_url {
+            Some(url) => {
+                let relay_url: iroh::RelayUrl = url
+                    .parse()
+                    .map_err(|e| format!("invalid iroh_relay_url {url:?}: {e}"))?;
+                Some(iroh::RelayMode::custom([relay_url]))
+            }
+            None => match bind {
+                SyncBind::Loopback => Some(iroh::RelayMode::Disabled),
+                SyncBind::AllInterfaces => None,
+            },
+        };
+        // `our_ticket()` only waits on the network while homing on a
+        // relay; with relays disabled it resolves from local addresses.
+        let ticket_is_offline = matches!(iroh_relay_mode, Some(iroh::RelayMode::Disabled));
         let iroh_transport = Arc::new(crate::iroh_transport::IrohTransport::new(
             crate::iroh_transport::IrohConfig {
                 device_id: device_id.clone(),
@@ -159,13 +183,7 @@ pub(crate) async fn handle_start_sync(
                 secret_key: Some(secret_key),
                 peer_addr,
                 peer_ticket: iroh_peer_ticket.clone(),
-                // A loopback-bound endpoint cannot be reached through a
-                // relay anyway, and tests must stay offline; RelayMode::Disabled
-                // also makes `our_ticket()` advertise the loopback socket.
-                relay_mode: match bind {
-                    SyncBind::Loopback => Some(iroh::RelayMode::Disabled),
-                    SyncBind::AllInterfaces => None,
-                },
+                relay_mode: iroh_relay_mode,
                 auth_secret: auth_secret.clone(),
                 bind,
             },
@@ -198,17 +216,42 @@ pub(crate) async fn handle_start_sync(
             }
         }
         relay_sync.start().await?;
-        // `start()` binds the endpoint, so `our_ticket()` is available now.
-        // Snapshot it onto `SyncRuntime` for `GetOwnIrohTicket` — capture
+        // `start()` binds the endpoint, so `our_ticket()` can be computed.
+        // It may wait on relay homing (network, up to its own timeout), so
+        // it runs on a spawned task — the worker must stay free for local
+        // ops while the ticket is pending. The ticket lands in the
+        // `iroh_our_ticket` watch channel on `SyncRuntime`; capture
         // failures are logged but not fatal (pairing UI degrades to "no
         // ticket yet" rather than aborting an otherwise-successful start).
-        iroh_our_ticket = match iroh_transport.our_ticket().await {
-            Ok(ticket) => Some(ticket),
-            Err(e) => {
-                eprintln!("[handle_start_sync] our_ticket() failed: {e}");
-                None
+        // `get_sync_snapshot`'s `pairing_available` flips to true once the
+        // channel fills.
+        if ticket_is_offline {
+            // Loopback/tests: the ticket is local, fill it before
+            // `start_sync` returns so passive reads never observe a
+            // transient `null` here.
+            match iroh_transport.our_ticket().await {
+                Ok(ticket) => {
+                    let _ = iroh_our_ticket_tx.send(Some(ticket));
+                }
+                Err(e) => {
+                    eprintln!("[handle_start_sync] our_ticket() failed: {e}");
+                }
             }
-        };
+        } else {
+            let ticket_transport = iroh_transport.clone();
+            let ticket_tx = iroh_our_ticket_tx;
+            tokio::spawn(async move {
+                match ticket_transport.our_ticket().await {
+                    Ok(ticket) => {
+                        let _ = ticket_tx.send(Some(ticket));
+                        emit_event(json!({"event": "pairing_changed"}));
+                    }
+                    Err(e) => {
+                        eprintln!("[handle_start_sync] our_ticket() failed: {e}");
+                    }
+                }
+            });
+        }
         Some(relay_sync)
     } else {
         None

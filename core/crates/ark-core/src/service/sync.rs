@@ -169,6 +169,7 @@ pub(super) async fn handle_start_sync_with_params(
             auth_secret: params.auth_secret,
             use_iroh: params.use_iroh,
             iroh_peer_ticket: params.iroh_peer_ticket,
+            iroh_relay_url: params.iroh_relay_url,
             pairing_connect: params.pairing_connect,
             discovery_enabled: params.discovery_enabled,
             bind: params.bind,
@@ -221,7 +222,7 @@ pub(super) async fn handle_get_own_iroh_ticket(state: &Arc<ServiceState>) -> Res
     let guard = state.sync.lock().await;
     let ticket = guard
         .as_ref()
-        .and_then(|runtime| runtime.iroh_our_ticket.clone());
+        .and_then(|runtime| runtime.iroh_our_ticket.borrow().clone());
     Ok(json!(ticket))
 }
 
@@ -319,8 +320,8 @@ pub(super) async fn handle_get_sync_snapshot(state: &Arc<ServiceState>) -> Resul
             Some(TransportChoice::None) => "lan",
             None => "unknown",
         },
-        "pairing_available": runtime.iroh_our_ticket.is_some(),
-        "own_pairing_code_available": runtime.iroh_our_ticket.is_some(),
+        "pairing_available": runtime.iroh_our_ticket.borrow().is_some(),
+        "own_pairing_code_available": runtime.iroh_our_ticket.borrow().is_some(),
         "peers": peers,
         "incoming_pairing_requests": incoming_pairing_requests,
         "outgoing_pairing": outgoing_pairing,

@@ -94,6 +94,7 @@ fn pairing_restart_params_force_iroh_and_replace_ticket() {
             auth_secret: Some("secret".to_string()),
             use_iroh: false,
             iroh_peer_ticket: None,
+            iroh_relay_url: None,
             pairing_connect: false,
             discovery_enabled: true,
             // Loopback on purpose: the pairing restart must escalate the
@@ -101,7 +102,7 @@ fn pairing_restart_params_force_iroh_and_replace_ticket() {
             bind: SyncBind::Loopback,
             app_version: None,
         },
-        iroh_our_ticket: None,
+        iroh_our_ticket: watch::channel(None).1,
         beacon: Arc::new(crate::beacon::BroadcastDiscovery::new()),
         space_id: "space-a".to_string(),
         device_id: "device-a".to_string(),
@@ -148,12 +149,13 @@ fn loopback_runtime_fixture() -> SyncRuntime {
             auth_secret: None,
             use_iroh: false,
             iroh_peer_ticket: None,
+            iroh_relay_url: None,
             pairing_connect: false,
             discovery_enabled: false,
             bind: SyncBind::Loopback,
             app_version: None,
         },
-        iroh_our_ticket: None,
+        iroh_our_ticket: watch::channel(None).1,
         beacon: Arc::new(crate::beacon::BroadcastDiscovery::new()),
         space_id: "space-a".to_string(),
         device_id: "device-a".to_string(),
@@ -188,7 +190,8 @@ async fn show_pairing_code_returns_existing_ticket_without_restart() {
     let mut runtime = loopback_runtime_fixture();
     runtime.start_params.bind = SyncBind::AllInterfaces;
     runtime.start_params.use_iroh = true;
-    runtime.iroh_our_ticket = Some("endpoint-our-ticket".to_string());
+    runtime.transport_choice = Some(TransportChoice::Iroh);
+    runtime.iroh_our_ticket = watch::channel(Some("endpoint-our-ticket".to_string())).1;
     *state.sync.lock().await = Some(Arc::new(runtime));
 
     let result = handle_request(&state, Request::ShowPairingCode)
@@ -254,6 +257,7 @@ async fn start_sync_with_use_iroh_selects_iroh_transport_and_exposes_ticket() {
             auth_secret: None,
             use_iroh: true,
             iroh_peer_ticket: None,
+            iroh_relay_url: None,
             pairing_connect: false,
             discovery_enabled: false,
             bind: SyncBind::Loopback,
