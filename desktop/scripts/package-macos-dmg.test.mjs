@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, writeFile, chmod, rm, readFile } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, copyFile, chmod, rm, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -10,6 +10,13 @@ test("dmgName is Mundus-<ver>.dmg", () => {
   assert.equal(dmgName("1.2.3"), "Mundus-1.2.3.dmg");
 });
 
+// stageMacosApp codesigns the bundle on darwin, and codesign refuses plain
+// text files as executables, so stand in a real Mach-O there.
+async function writeFakeBinary(file, text) {
+  if (process.platform === "darwin") await copyFile("/usr/bin/true", file);
+  else await writeFile(file, text);
+}
+
 test("stageMacosApp lays out Engine + Manager + helpers for lookup", async () => {
   const { stageMacosApp } = await import("./package-macos-dmg.mjs");
   const root = await mkdtemp(path.join(os.tmpdir(), "mundus-dmg-"));
@@ -19,8 +26,8 @@ test("stageMacosApp lays out Engine + Manager + helpers for lookup", async () =>
     await mkdir(path.join(cargoTarget, "release"), { recursive: true });
     const engine = path.join(cargoTarget, "release", ENGINE_BINARY_UNIX);
     const manager = path.join(cargoTarget, "release", "manager-gpui");
-    await writeFile(engine, "engine-bin");
-    await writeFile(manager, "manager-bin");
+    await writeFakeBinary(engine, "engine-bin");
+    await writeFakeBinary(manager, "manager-bin");
     await chmod(engine, 0o755);
     await chmod(manager, 0o755);
     process.env.CARGO_TARGET_DIR = cargoTarget;
@@ -32,7 +39,7 @@ test("stageMacosApp lays out Engine + Manager + helpers for lookup", async () =>
     await mkdir(helpersDir, { recursive: true });
     const helper = path.join(helpersDir, "hotkey-hold-monitor");
     const createdHelper = !existsSync(helper);
-    if (createdHelper) await writeFile(helper, "helper");
+    if (createdHelper) await writeFakeBinary(helper, "helper");
 
     const stageDir = path.join(root, "stage");
     const appPath = stageMacosApp({ version: "1.2.3", stageDir });
