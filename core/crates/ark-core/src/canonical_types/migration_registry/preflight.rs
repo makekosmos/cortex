@@ -254,22 +254,24 @@ pub fn preflight_registry(conn: &Connection) -> Result<RegistryPlan, RegistryErr
                 legacy_type_ids.push(alias.alias.clone());
             }
         }
-        if conn
-            .query_row(
-                "SELECT 1 FROM object_types WHERE id=?1",
-                [registration.aliases[0].alias.as_str()],
-                |_| Ok(()),
-            )
-            .optional()
-            .map_err(storage)?
-            .is_some()
-        {
-            let legacy = &registration.aliases[0].alias;
-            let evidence = archive_evidence(conn, legacy, &registration.type_id)?;
-            if let Some(false) = existing_archive(conn, &evidence)? {
-                return Err(RegistryError::ArchiveConflict {
-                    type_id: legacy.clone(),
-                });
+        // A type with no legacy alias (e.g. `core.task`) has no archive to check.
+        if let Some(legacy) = registration.aliases.first().map(|alias| &alias.alias) {
+            if conn
+                .query_row(
+                    "SELECT 1 FROM object_types WHERE id=?1",
+                    [legacy.as_str()],
+                    |_| Ok(()),
+                )
+                .optional()
+                .map_err(storage)?
+                .is_some()
+            {
+                let evidence = archive_evidence(conn, legacy, &registration.type_id)?;
+                if let Some(false) = existing_archive(conn, &evidence)? {
+                    return Err(RegistryError::ArchiveConflict {
+                        type_id: legacy.clone(),
+                    });
+                }
             }
         }
     }
