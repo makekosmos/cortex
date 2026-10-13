@@ -12,8 +12,8 @@ pub use auth::{
 };
 pub use vector::{
     apply_usage_complete_through, compute_local_excess, compute_vector_diff, is_usage_entity,
-    merge_peer_records, merge_usage_cursors, observe_non_usage_entity, should_send_entity,
-    split_into_batches,
+    merge_peer_records, merge_usage_cursors, merge_vector_entries, observe_non_usage_entity,
+    should_send_entity, split_into_batches,
 };
 
 // ---------------------------------------------------------------------------
