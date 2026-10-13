@@ -96,11 +96,14 @@ mod tests {
         for (root, count) in [(&working, 3), (&dev, 17)] {
             std::fs::create_dir(root).unwrap();
             let conn = rusqlite::Connection::open(root.join("ark.db")).unwrap();
-            conn.execute_batch("CREATE TABLE objects(id TEXT PRIMARY KEY, deleted_at TEXT)")
+            conn.execute_batch("CREATE TABLE object_types(id TEXT PRIMARY KEY,name TEXT); INSERT INTO object_types VALUES('fixture.task','Task'); CREATE TABLE objects(id TEXT PRIMARY KEY, type_id TEXT, deleted_at TEXT)")
                 .unwrap();
             for index in 0..count {
-                conn.execute("INSERT INTO objects VALUES(?1,NULL)", [index.to_string()])
-                    .unwrap();
+                conn.execute(
+                    "INSERT INTO objects VALUES(?1,'fixture.task',NULL)",
+                    [index.to_string()],
+                )
+                .unwrap();
             }
         }
         let mut value = json!({"data_dir":working, "total_bytes":0, "categories":[
@@ -108,11 +111,10 @@ mod tests {
         database_breakdown(&mut value);
         let database = &value["categories"][0];
         let parts = database["detail"].as_array().unwrap();
-        assert!(parts
+        let records = parts
             .iter()
-            .filter(|part| part["id"] != "objects")
-            .all(|part| part.get("detail").is_none()));
-        let records = parts.iter().find(|part| part["id"] == "objects").unwrap();
+            .find(|part| part["id"] == "record_type_fixture.task")
+            .unwrap();
         let children: u64 = records["detail"]
             .as_array()
             .unwrap()
@@ -120,11 +122,8 @@ mod tests {
             .map(|part| part["bytes"].as_u64().unwrap())
             .sum();
         assert_eq!(records["bytes"].as_u64().unwrap(), children);
-        assert!(!records["label"].as_str().unwrap().contains('('));
-        assert_eq!(
-            parts.iter().find(|part| part["id"] == "objects").unwrap()["active_count"],
-            3
-        );
+        assert_eq!(records["detail"][0]["count"], 3);
+        assert!(parts.iter().all(|part| part["id"] != "objects"));
         let total: u64 = parts
             .iter()
             .map(|part| part["bytes"].as_u64().unwrap())

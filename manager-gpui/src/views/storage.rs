@@ -30,6 +30,19 @@ fn color(id: &str) -> u32 {
         "recordings" | "usage_tracker" => 0xd79067,
         "tools" | "-shm" => 0x729f96,
         "-wal" | "-journal" => 0x80ab73,
+        "record_indexes" => 0xb79a7e,
+        "record_overhead" => 0xd9b852,
+        _ if id.starts_with("record_type_") => {
+            if id.ends_with(".task") {
+                0xf09c0e
+            } else if id.ends_with(".note") {
+                0x9b87db
+            } else if id.ends_with(".project") {
+                0x659bc8
+            } else {
+                0x65b9b0
+            }
+        }
         _ => 0x89919b,
     }
 }

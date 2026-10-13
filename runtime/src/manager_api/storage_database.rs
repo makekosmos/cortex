@@ -83,27 +83,7 @@ fn read_detail(db_path: &Path, immutable: bool) -> Result<Value, String> {
         .into_iter()
         .map(|(id, (label, bytes))| json!({"id":id,"label":label,"bytes":bytes}))
         .collect();
-    if let Ok((active, deleted)) = transaction.query_row(
-        "SELECT SUM(deleted_at IS NULL),SUM(deleted_at IS NOT NULL) FROM objects",
-        [],
-        |row| {
-            Ok((
-                row.get::<_, Option<u64>>(0)?.unwrap_or(0),
-                row.get::<_, Option<u64>>(1)?.unwrap_or(0),
-            ))
-        },
-    ) {
-        if let Some(objects) = parts.iter_mut().find(|part| part["id"] == "objects") {
-            objects["active_count"] = json!(active);
-            objects["deleted_count"] = json!(deleted);
-        }
-    }
-    if let Some(records) = parts.iter_mut().find(|part| part["id"] == "objects") {
-        records["detail"] = json!([
-            {"id":"record_data", "label":"Содержимое записей, включая удалённые", "bytes":record_bytes[0]},
-            {"id":"record_indexes", "label":"Индексы для поиска и сортировки", "bytes":record_bytes[1]}
-        ]);
-    }
+    records::split(&transaction, &mut parts, record_bytes)?;
     let pages: u64 = transaction
         .query_row("PRAGMA freelist_count", [], |row| row.get(0))
         .map_err(|e| e.to_string())?;
@@ -143,3 +123,6 @@ pub(super) fn database_detail(db_path: &Path) -> Result<Value, String> {
     }
     Ok(snapshot)
 }
+
+#[path = "storage_records.rs"]
+mod records;
