@@ -525,6 +525,7 @@ fn apply_editable(
         }
     }
     let canonical = canonical_type(object_type(&object).unwrap_or_default());
+    let is_canonical = canonical.is_some();
     if let Some(canonical) = canonical {
         let version = object
             .get("type_version")
