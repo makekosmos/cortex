@@ -51,7 +51,7 @@ pub(super) fn add_external_storage(value: &mut Value, data_dir: &Path, package_r
     add_root(value, package_root, Category::Packages, &mut counted);
     let roots = [
         crate::data_dir::mundus_config_dir().ok(),
-        crate::data_dir::mundus_local_data_dir(),
+        crate::data_dir::mundus_local_dir(),
     ];
     for local in roots.into_iter().flatten() {
         // On Windows roaming and local roots differ; on macOS this is already counted.
@@ -71,7 +71,11 @@ pub(super) fn add_external_storage(value: &mut Value, data_dir: &Path, package_r
                     }
                     continue;
                 }
-                add_root(value, &entry.path(), classify(&name, false), &mut counted);
+                let category = classify(&name, false);
+                // Only the installed roaming ARK database is represented in БД.
+                if !matches!(category, Category::Database) {
+                    add_root(value, &entry.path(), category, &mut counted);
+                }
             }
         }
     }
@@ -113,13 +117,14 @@ pub(super) fn add_external_storage(value: &mut Value, data_dir: &Path, package_r
 }
 
 fn add_model_assets(value: &mut Value, data_dir: &Path, counted: &mut Vec<PathBuf>) {
-    let models = crate::dictation::local_models::models_dir(data_dir);
+    let assets = crate::dictation::local_models::default_shared_assets_root();
+    let models = assets.join("models/dictation");
     if let Ok(entries) = std::fs::read_dir(models) {
         for entry in entries.flatten() {
             add_root(value, &entry.path(), Category::DictationModels, counted);
         }
     }
-    let tools = crate::dictation::local_models::tools_dir(data_dir);
+    let tools = assets.join("tools/dictation/whisper.cpp");
     if let Some(parent) = tools.parent() {
         add_root(value, parent, Category::Tools, counted);
     }

@@ -16,19 +16,20 @@ pub fn load(app: &mut ManagerApp) {
 fn color(id: &str) -> u32 {
     match id {
         "database" | "objects" => 0xf09c0e,
-        "backups" | "sqlite_reserved" => 0xd9b852,
-        "dictation_models" => 0x9b87db,
-        "packages" => 0x659bc8,
+        "backups" | "sqlite_reserved" | "free_pages" | "file_reserve" => 0xd9b852,
+        "dictation_models" | "types" => 0x9b87db,
+        "packages" | "sync" => 0x659bc8,
         "updates" => 0x80ab73,
         "file_index" | "search_index" => 0x65b9b0,
-        "app_index" => 0xb79a7e,
-        "installations" => 0xce8293,
-        "cache" => 0x88acbe,
+        "app_index" | "migrations" => 0xb79a7e,
+        "installations" | "links" => 0xce8293,
+        "cache" | "local_state" => 0x88acbe,
         "logs" => 0xa7a7a7,
-        "settings" => 0xab9cb8,
+        "settings" | "integrations" => 0xab9cb8,
         "runtime_state" | "schema" => 0x8f9b7a,
         "recordings" | "usage_tracker" => 0xd79067,
-        "tools" => 0x729f96,
+        "tools" | "-shm" => 0x729f96,
+        "-wal" | "-journal" => 0x80ab73,
         _ => 0x89919b,
     }
 }
@@ -168,6 +169,7 @@ pub fn render(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {
             let parts = segments(value, database_only);
             let segment_total: f64 = parts.iter().map(|part| vnum(part, "bytes")).sum();
             let mut bar = div()
+                .debug_selector(|| "storage-bar".into())
                 .w_full()
                 .h(px(27.))
                 .flex()
@@ -181,7 +183,7 @@ pub fn render(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {
                 let id = vstr(part, "id");
                 let segment_id = id.clone();
                 let label = vstr(part, "label");
-                let tip = format!("{label} · {}", fmt_bytes(bytes));
+                let tip = format!("{label}: {}", fmt_bytes(bytes));
                 let hover_id = segment_id.clone();
                 let dimmed = app
                     .storage_ui
@@ -194,7 +196,7 @@ pub fn render(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {
                         .debug_selector(move || format!("storage-segment-{id}"))
                         .h_full()
                         .flex_1()
-                        .flex_grow((bytes / segment_total.max(1.)) as f32)
+                        .flex_grow((100. * bytes / segment_total.max(1.)) as f32)
                         .min_w(px(4.))
                         .rounded(px(5.))
                         .bg({
@@ -240,7 +242,7 @@ pub fn render(app: &ManagerApp, cx: &mut Context<ManagerApp>) -> AnyElement {
                         .text_size(ui_px(12.))
                         .text_color(c(MUTED_FG()))
                         .child(if database_only {
-                            "Базы ARK и журнал SQLite на этом компьютере"
+                            "Содержимое рабочей базы ARK и журнал SQLite"
                         } else {
                             "Установки, данные и локальные ИИ-модели Mundus"
                         }),

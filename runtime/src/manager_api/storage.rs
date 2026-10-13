@@ -1,14 +1,10 @@
-//! `manager.data.storage` — честная разбивка каталога данных по категориям.
-//!
-//! Раньше страница показывала только «управляемое хранилище»
-//! (ark.db + packages ≈ 0.5 ГБ), а реальный каталог данных занимал ~4 ГБ —
-//! бэкапы, модели диктовки, скачанные установщики и индексы не входили в
-//! сумму. Теперь Engine обходит весь data_dir и отдаёт по категориям.
+//! `manager.data.storage` measures installed Mundus data and assets.
+//! Development session data/package overrides are deliberately excluded.
 
 use super::ManagerState;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Fixed category ids — the Manager renders them in this order.
 #[derive(Clone, Copy)]
@@ -259,18 +255,24 @@ fn finish_breakdown(data_dir: &Path, acc: BTreeMap<usize, u64>) -> Value {
 impl ManagerState {
     /// Directory walk and the dbstat scan run on a blocking thread — the
     /// request loop must not stall on a multi-GB data dir.
-    pub async fn data_storage(&self, package_root: &Path) -> Result<Value, String> {
-        let data_dir = self.data_dir().to_path_buf();
-        let package_root = package_root.to_path_buf();
-        tokio::task::spawn_blocking(move || {
-            let mut value = storage_breakdown(&data_dir, &package_root);
-            external::add_external_storage(&mut value, &data_dir, &package_root);
-            presentation::describe(&mut value);
-            value
-        })
-        .await
-        .map_err(|e| e.to_string())
+    pub async fn data_storage(&self, _package_root: &Path) -> Result<Value, String> {
+        // Storage describes the installed product, even when this RPC is served
+        // by a development Engine with a separate data/package directory.
+        let data_dir = crate::data_dir::mundus_config_dir().map_err(|e| e.to_string())?;
+        let package_root = data_dir.join("packages");
+        installed_storage(data_dir, package_root).await
     }
+}
+
+async fn installed_storage(data_dir: PathBuf, package_root: PathBuf) -> Result<Value, String> {
+    tokio::task::spawn_blocking(move || {
+        let mut value = storage_breakdown(&data_dir, &package_root);
+        external::add_external_storage(&mut value, &data_dir, &package_root);
+        presentation::describe(&mut value);
+        value
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

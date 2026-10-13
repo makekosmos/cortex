@@ -114,3 +114,36 @@ fn categories_start_closed_and_bar_click_opens_the_matching_category(cx: &mut Te
         assert!(!app.storage_ui.open.contains("dictation_models"))
     });
 }
+
+#[gpui::test]
+fn graph_fills_width_and_record_breakdown_opens_on_click(cx: &mut TestAppContext) {
+    let (manager, cx) = crate::a11y_tests::launch(cx);
+    manager.update(cx, |app, cx| {
+        app.view = View::Storage;
+        app.storage_database_only = true;
+        app.slots.insert(
+            "data.storage".into(),
+            Slot::Ready(json!({"categories":[
+                {"id":"database", "bytes":1234567, "detail":[
+                    {"id":"objects", "label":"Задачи, проекты и другие записи", "bytes":1234566,
+                     "detail":[{"label":"Содержимое записей", "bytes":1000000},
+                               {"label":"Индексы", "bytes":234566}]},
+                    {"id":"schema", "label":"Структура базы", "bytes":1}
+                ]}
+            ]})),
+        );
+        cx.notify();
+    });
+    cx.update(|_, cx| cx.refresh_windows());
+    let bar = cx.debug_bounds("storage-bar").unwrap();
+    let last = cx.debug_bounds("storage-segment-schema").unwrap();
+    assert!((last.right() - bar.right()).abs() < gpui::px(1.));
+    manager.read_with(cx, |app, _| {
+        assert!(!app.storage_ui.open.contains("objects"))
+    });
+    let row = cx.debug_bounds("storage-toggle-objects").unwrap();
+    cx.simulate_click(row.center(), Default::default());
+    manager.read_with(cx, |app, _| {
+        assert!(app.storage_ui.open.contains("objects"))
+    });
+}

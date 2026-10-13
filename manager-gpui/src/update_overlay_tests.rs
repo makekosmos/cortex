@@ -54,13 +54,28 @@ fn full_flow_offer_to_ready_to_hidden() {
 fn set_status(
     cx: &mut gpui::VisualTestContext,
     manager: &gpui::Entity<crate::app::ManagerApp>,
-    status: serde_json::Value,
+    mut status: serde_json::Value,
 ) {
+    status["testPreview"] = json!(true);
     manager.update(cx, |app, cx| {
         app.slots.insert("upd.mundus".into(), Slot::Ready(status));
         cx.notify();
     });
     cx.update(|_, cx| cx.refresh_windows());
+}
+
+#[gpui::test]
+fn development_build_does_not_offer_installed_product_updates(cx: &mut TestAppContext) {
+    let (manager, cx) = crate::a11y_tests::launch(cx);
+    manager.update(cx, |app, cx| {
+        app.slots.insert(
+            "upd.mundus".into(),
+            Slot::Ready(json!({"state":"available"})),
+        );
+        cx.notify();
+    });
+    cx.update(|_, cx| cx.refresh_windows());
+    assert!(cx.debug_bounds("update-overlay").is_none());
 }
 
 #[gpui::test]

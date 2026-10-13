@@ -134,7 +134,9 @@ impl Render for ManagerApp {
         // resolved every frame from the Engine status slot; `Failed` needs
         // the previous state, so the resolution is stored back on the app.
         let update_state = crate::update_overlay::resolve(
-            self.update_snoozed,
+            self.update_snoozed
+                || (cfg!(debug_assertions)
+                    && !(cfg!(test) && self.data("upd.mundus")["testPreview"] == true)),
             self.update_overlay.visible(),
             &vstr(&self.data("upd.mundus"), "state"),
         );

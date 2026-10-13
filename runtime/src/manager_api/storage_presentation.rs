@@ -58,6 +58,9 @@ fn purpose(id: &str) -> &'static str {
 }
 
 fn file_label(path: &Path, category: &str) -> String {
+    if let Some(label) = provenance::sqlite_label(path) {
+        return label;
+    }
     let name = path.file_name().unwrap_or_default().to_string_lossy();
     if category == "dictation_models" {
         if let Some(model) = crate::dictation::local_models::MODEL_CATALOG
@@ -116,6 +119,7 @@ fn file_label(path: &Path, category: &str) -> String {
 }
 
 pub(super) fn describe(value: &mut Value) {
+    provenance::database_breakdown(value);
     let Some(categories) = value["categories"].as_array_mut() else {
         return;
     };
@@ -138,7 +142,7 @@ pub(super) fn describe(value: &mut Value) {
                         .flatten();
                     detail["description"] =
                         json!(model.map_or_else(|| purpose(&id), |model| model.description));
-                } else {
+                } else if detail.get("description").is_none() {
                     detail["description"] =
                         json!(purpose(detail["id"].as_str().unwrap_or_default()));
                 }
@@ -222,3 +226,6 @@ mod tests {
         visible(&value);
     }
 }
+
+#[path = "storage_provenance.rs"]
+mod provenance;
