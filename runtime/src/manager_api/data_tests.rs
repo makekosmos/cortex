@@ -56,22 +56,18 @@ async fn data_page_counts_objects_stored_under_legacy_alias_ids() {
             .find(|t| t["type_id"] == id)
             .map(|t| t["count"].as_u64().unwrap())
     };
-    assert_eq!(
-        count_of("com.kosmos.task"),
-        Some(2),
-        "deleted task excluded"
-    );
+    assert_eq!(count_of("core.task"), Some(2), "deleted task excluded");
     assert_eq!(count_of("com.kosmos.note"), Some(1));
     assert_eq!(count_of("workout_obj"), Some(2));
 
-    for queried in ["com.kosmos.task", "task_obj"] {
+    for queried in ["core.task", "task_obj"] {
         let list = state
             .data_list(&ark, &json!({"type_id": queried, "limit": 50}))
             .await
             .unwrap();
         let items = list["items"].as_array().unwrap();
         assert_eq!(items.len(), 2, "{queried} must list alias-stored rows");
-        assert_eq!(items[0]["type_id"], "com.kosmos.task");
+        assert_eq!(items[0]["type_id"], "core.task");
     }
 
     let all = state.data_list(&ark, &json!({})).await.unwrap();
@@ -82,7 +78,7 @@ async fn data_page_counts_objects_stored_under_legacy_alias_ids() {
         .as_array()
         .unwrap()
         .iter()
-        .find(|t| t["type_id"] == "com.kosmos.task")
+        .find(|t| t["type_id"] == "core.task")
         .unwrap()
         .clone();
     assert_eq!(task["name"], "Задача");
@@ -171,12 +167,12 @@ fn manager_rows_are_bounded_redacted_and_body_free() {
     let task = json!({
         "id": "task-1", "type_id": "task_obj", "type_version": "0.0.0-legacy",
         "title": "Task",
-        "props_json": {"status": "done", "api_token": "secret", "local_path": "/private"}
+        "props_json": {"state": {"kind": "done", "at": null}, "api_token": "secret", "local_path": "/private"}
     });
     let task_safe = safe_row(&task, None).expect("legacy task stays visible");
-    assert_eq!(task_safe["type_id"], "com.kosmos.task");
+    assert_eq!(task_safe["type_id"], "core.task");
     assert_eq!(task_safe["type_version"], "0.0.0-legacy");
-    assert_eq!(task_safe["fields"]["status"], "done");
+    assert_eq!(task_safe["fields"]["state"]["kind"], "done");
     assert!(task_safe["fields"].get("api_token").is_none());
     assert!(task_safe["fields"].get("local_path").is_none());
 
