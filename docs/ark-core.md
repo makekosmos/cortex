@@ -32,8 +32,10 @@ longer exists (`runtime/src/ark_host.rs` is the host wrapper).
 - KV + sync metadata: `sync_kv`, `sync_tombstones`, version vectors.
 - Integration replication tables: `authorized_nodes`,
   `integration_node_grants`, `integration_credential_envelopes`, etc.
-- Schema evolution is **additive only**: `CREATE TABLE IF NOT EXISTS`,
-  additive columns/indexes. No `DROP TABLE`, no incompatible `ALTER`.
+- Schema evolution is **additive by default**: `CREATE TABLE IF NOT EXISTS`,
+  additive columns/indexes. No `DROP TABLE`, no incompatible `ALTER`. A one-off
+  object rewrite needs an explicit approval per issue, a transaction and a
+  `ark.db` backup taken before it runs (see `core/crates/ark-core/AGENTS.md`).
 
 ## Layout
 
