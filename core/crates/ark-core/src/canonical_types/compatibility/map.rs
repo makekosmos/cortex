@@ -187,7 +187,7 @@ fn expected_target_type<'a>(
     Some(match link.link_type.as_str() {
         "project" => "com.kosmos.project",
         "tag" => "com.kosmos.tag",
-        "task" | "for-task" => "com.kosmos.task",
+        "task" | "for-task" => "core.task",
         "note" | "source-note" => "com.kosmos.note",
         "person" | "author-person" => "com.kosmos.person",
         "photo" | "cover-image" | "background-image" => "com.kosmos.image",

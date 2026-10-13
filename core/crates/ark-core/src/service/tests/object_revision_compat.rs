@@ -1,7 +1,7 @@
 use super::*;
 
 fn task(id: &str, title: &str) -> ArkObjectWrite {
-    let mut object = canonical_task_object(Some("1.0.0"), canonical_task_props());
+    let mut object = canonical_task_object(Some("0.1.0"), canonical_task_props());
     object.id = id.to_string();
     object.title = title.to_string();
     object

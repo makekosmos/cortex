@@ -23,10 +23,18 @@ const TICK: Duration = Duration::from_millis(100);
 const BRIDGE_FORMAT_VERSION: u64 = 1;
 const CANONICAL_VERSION: &str = "1.0.0";
 
+/// Newest contract per canonical type; core.task 0.1.0 is past the shared 1.0.0.
+fn canonical_version(canonical: &str) -> &'static str {
+    match canonical {
+        "core.task" => "0.1.0",
+        _ => CANONICAL_VERSION,
+    }
+}
+
 fn canonical_type(kind: &str) -> Option<&'static str> {
     match kind {
         "com.kosmos.note" | "note_obj" => Some("com.kosmos.note"),
-        "com.kosmos.task" | "task_obj" => Some("com.kosmos.task"),
+        "com.kosmos.task" | "task_obj" => Some("core.task"),
         _ => None,
     }
 }
@@ -419,8 +427,10 @@ fn parse(
     if fields.remove("bridge_version")?.as_u64()? != BRIDGE_FORMAT_VERSION {
         return None;
     }
-    if canonical_type(&source_kind).is_some() && version.as_deref() != Some(CANONICAL_VERSION) {
-        return None;
+    if let Some(canonical) = canonical_type(&source_kind) {
+        if version.as_deref() != Some(canonical_version(canonical)) {
+            return None;
+        }
     }
     if !config
         .selected_types
@@ -514,13 +524,13 @@ fn apply_editable(
             }
         }
     }
-    let is_canonical = canonical_type(object_type(&object).unwrap_or_default()).is_some();
-    if is_canonical {
+    let canonical = canonical_type(object_type(&object).unwrap_or_default());
+    if let Some(canonical) = canonical {
         let version = object
             .get("type_version")
             .or_else(|| object.get("typeVersion"))
             .and_then(Value::as_str);
-        if version != Some(CANONICAL_VERSION) {
+        if version != Some(canonical_version(canonical)) {
             return None;
         }
         if config.editable_fields.iter().any(|field| field == "body") {
@@ -814,7 +824,7 @@ fn sync(client: &mut Client, config: &Config) -> Result<BridgeStatus, ()> {
             };
             if let Some(canonical) = canonical_type(&parsed_type) {
                 updated["type_id"] = Value::String(canonical.into());
-                updated["type_version"] = Value::String(CANONICAL_VERSION.into());
+                updated["type_version"] = Value::String(canonical_version(canonical).into());
             }
             client.ark(true, "upsert_object", json!({"object":updated}))?;
             let refreshed = client.ark(false, "get_object", json!({"id":id}))?;

@@ -131,7 +131,7 @@ impl CompatibilityError {
 pub fn canonical_id(a: &str) -> Option<&'static str> {
     Some(match a {
         "note_obj" => "com.kosmos.note",
-        "task_obj" => "com.kosmos.task",
+        "task_obj" => "core.task",
         "project_obj" => "com.kosmos.project",
         "tag_obj" => "com.kosmos.tag",
         "person_obj" => "com.kosmos.person",

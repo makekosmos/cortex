@@ -13,7 +13,7 @@ async fn snapshot(state: &Arc<ServiceState>, id: &str) -> ObjectWriteSnapshot {
 }
 
 fn task(id: &str, title: &str) -> ArkObjectWrite {
-    let mut object = canonical_task_object(Some("1.0.0"), canonical_task_props());
+    let mut object = canonical_task_object(Some("0.1.0"), canonical_task_props());
     object.id = id.to_string();
     object.title = title.to_string();
     object
@@ -151,7 +151,7 @@ async fn guarded_object_upsert_rejects_every_stale_identity_or_revision() {
 
     with_write_tx(&state, |conn| {
         conn.execute(
-            "UPDATE objects SET type_id = 'com.kosmos.task', type_version = '1.0.0' WHERE id = ?1",
+            "UPDATE objects SET type_id = 'core.task', type_version = '0.1.0' WHERE id = ?1",
             ["guarded-task"],
         )
         .map_err(|error| error.to_string())?;

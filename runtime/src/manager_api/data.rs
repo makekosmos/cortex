@@ -17,14 +17,23 @@ const MAX_SEARCH_RESULTS: usize = 100;
 const CANONICAL_VERSION: &str = "1.0.0";
 const CANONICAL_TYPES: &[(&str, &str, &str)] = &[
     ("com.kosmos.note", "Заметка", "note_obj"),
-    ("com.kosmos.task", "Задача", "task_obj"),
+    ("core.task", "Задача", "task_obj"),
     ("com.kosmos.game", "Игра", "game_obj"),
 ];
 
 fn canonical_identity(type_id: &str) -> Option<(&'static str, &'static str)> {
     CANONICAL_TYPES.iter().find_map(|(canonical, _, alias)| {
-        (*canonical == type_id || *alias == type_id).then_some((*canonical, CANONICAL_VERSION))
+        (*canonical == type_id || *alias == type_id)
+            .then_some((*canonical, canonical_version(canonical)))
     })
+}
+
+/// core.task 0.1.0 is the one contract that moved on from the shared 1.0.0.
+fn canonical_version(canonical: &str) -> &'static str {
+    match canonical {
+        "core.task" => "0.1.0",
+        _ => CANONICAL_VERSION,
+    }
 }
 
 /// The grouping key for one stored type id: the canonical id when known,
@@ -274,14 +283,12 @@ fn safe_row(row: &Value, query: Option<&str>) -> Option<Value> {
     // type projects to identity + timestamps and nothing else.
     let allowed = match type_id {
         "com.kosmos.note" => ["description"].as_slice(),
-        "com.kosmos.task" => [
-            "status",
+        "core.task" => [
+            "state",
+            "planning",
+            "deadline",
+            "reminders",
             "priority",
-            "scheduledAt",
-            "dueAt",
-            "reminderAt",
-            "completedAt",
-            "canceledAt",
             "recurrence",
             "checklist",
         ]

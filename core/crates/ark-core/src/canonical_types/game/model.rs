@@ -146,7 +146,7 @@ pub(crate) fn validate_game_links(
         ("cover-image", "com.kosmos.image", 1usize),
         ("background-image", "com.kosmos.image", 1usize),
         ("note", "com.kosmos.note", usize::MAX),
-        ("task", "com.kosmos.task", usize::MAX),
+        ("task", "core.task", usize::MAX),
         ("tag", "com.kosmos.tag", usize::MAX),
     ];
     let mut counts = std::collections::HashMap::<&str, usize>::new();

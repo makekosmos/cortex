@@ -47,7 +47,7 @@ fn record(alias: &str, props: serde_json::Value) -> LegacyRecord {
 fn all_nine_aliases_map_to_exact_canonical_ids_and_version() {
     let aliases = [
         ("note_obj", "com.kosmos.note"),
-        ("task_obj", "com.kosmos.task"),
+        ("task_obj", "core.task"),
         ("project_obj", "com.kosmos.project"),
         ("tag_obj", "com.kosmos.tag"),
         ("person_obj", "com.kosmos.person"),
@@ -67,10 +67,10 @@ fn all_nine_aliases_map_to_exact_canonical_ids_and_version() {
         // Mapped objects claim the newest registered version of their type.
         assert_eq!(
             mapped.object.type_version,
-            if matches!(canonical, "com.kosmos.task" | "com.kosmos.project") {
-                "1.1.0"
-            } else {
-                "1.0.0"
+            match canonical {
+                "core.task" => "0.1.0",
+                "com.kosmos.project" => "1.1.0",
+                _ => "1.0.0",
             }
         );
         assert_eq!(mapped.object.id, format!("{alias}-1"));
@@ -246,17 +246,20 @@ fn legacy_day_fields_normalize_stamps_to_the_date_contract() {
         json!({"status":"todo","scheduled_date":"2026-05-15T21:00:00.000Z"}),
     );
     let mapped = map_legacy(&task).unwrap();
-    assert_eq!(mapped.object.type_version, "1.1.0");
+    assert_eq!(mapped.object.type_version, "0.1.0");
     let local_day = chrono::DateTime::parse_from_rfc3339("2026-05-15T21:00:00.000Z")
         .unwrap()
         .with_timezone(&chrono::Local)
         .format("%Y-%m-%d")
         .to_string();
-    assert_eq!(mapped.object.props_json["scheduledAt"], json!(local_day));
+    assert_eq!(
+        mapped.object.props_json["planning"]["date"],
+        json!(local_day)
+    );
     // Bare dates pass through unchanged.
     let task = record("task_obj", json!({"status":"todo","deadline":"2026-05-20"}));
     let mapped = map_legacy(&task).unwrap();
-    assert_eq!(mapped.object.props_json["dueAt"], json!("2026-05-20"));
+    assert_eq!(mapped.object.props_json["deadline"], json!("2026-05-20"));
     // Garbage still fails loudly instead of being silently normalized away.
     let task = record("task_obj", json!({"scheduled_date":"soon"}));
     assert!(map_legacy(&task).is_err());
