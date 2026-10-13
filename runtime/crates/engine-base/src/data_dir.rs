@@ -2,9 +2,12 @@
 //! migration.
 //!
 //! Layout:
-//!   roaming  `%APPDATA%\Mundus`      (legacy: `%APPDATA%\` + old dir name)
-//!   local    `%LOCALAPPDATA%\Mundus` (legacy: `%LOCALAPPDATA%\` + old name;
-//!            Engine payload lives under `<local>\Engine`, installer-owned)
+//!   roaming  `%APPDATA%\Mundus` (Windows), `~/Library/Application Support/Mundus`
+//!            (macOS), `$XDG_CONFIG_HOME/Mundus` or `~/.config/Mundus` (other Unix).
+//!            Legacy dir is the same root plus the old dir name.
+//!   local    `%LOCALAPPDATA%\Mundus` (Windows; Engine payload under `<local>\Engine`),
+//!            the same Application Support dir on macOS, `$XDG_DATA_HOME` or
+//!            `~/.local/share` otherwise.
 //!
 //! Migration rules (KOS-266):
 //!   * If the Mundus roaming dir does not exist and the legacy one does, the
@@ -47,60 +50,89 @@ const LEGACY_LOCAL_DIR_NAME: &str = "Kosmos"; // MIGRATION(KOS-267)
                                               // MIGRATION(KOS-267): remove after 2026-11-01.
 const LEGACY_SINGLETON_LOCK_NAME: &str = "kepler-singleton.lock.db"; // MIGRATION(KOS-267)
 
-/// Roaming config root: `%APPDATA%` / `$XDG_CONFIG_HOME` or `~/.config`.
+/// Roaming config root: `%APPDATA%` (Windows), `~/Library/Application Support`
+/// (macOS — same place Agenda and Manager look), `$XDG_CONFIG_HOME` or
+/// `~/.config` (other Unix).
 fn config_root() -> Result<PathBuf, LockFileError> {
-    if let Ok(appdata) = std::env::var("APPDATA") {
-        let trimmed = appdata.trim();
-        if !trimmed.is_empty() {
-            return Ok(PathBuf::from(trimmed));
-        }
-    }
-    #[cfg(unix)]
+    #[cfg(target_os = "macos")]
     {
-        if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
-            let trimmed = xdg.trim();
+        return application_support_root("HOME is not set");
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            let trimmed = appdata.trim();
             if !trimmed.is_empty() {
                 return Ok(PathBuf::from(trimmed));
             }
         }
-        if let Ok(home) = std::env::var("HOME") {
-            let trimmed = home.trim();
-            if !trimmed.is_empty() {
-                return Ok(PathBuf::from(trimmed).join(".config"));
+        #[cfg(unix)]
+        {
+            if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
+                let trimmed = xdg.trim();
+                if !trimmed.is_empty() {
+                    return Ok(PathBuf::from(trimmed));
+                }
+            }
+            if let Ok(home) = std::env::var("HOME") {
+                let trimmed = home.trim();
+                if !trimmed.is_empty() {
+                    return Ok(PathBuf::from(trimmed).join(".config"));
+                }
             }
         }
+        Err(LockFileError::Io(io_error(
+            "APPDATA (or XDG_CONFIG_HOME) is not set",
+        )))
     }
-    Err(LockFileError::Io(io_error(
-        "APPDATA (or XDG_CONFIG_HOME) is not set",
-    )))
 }
 
-/// Local data root: `%LOCALAPPDATA%` / `$XDG_DATA_HOME` or
-/// `~/.local/share`. Optional because a missing local dir is not fatal for
-/// the roaming migration.
-fn local_root() -> Option<PathBuf> {
-    if let Ok(local) = std::env::var("LOCALAPPDATA") {
-        let trimmed = local.trim();
+/// `~/Library/Application Support`. macOS clients do not honor `XDG_*` here.
+#[cfg(target_os = "macos")]
+fn application_support_root(missing: &str) -> Result<PathBuf, LockFileError> {
+    if let Ok(home) = std::env::var("HOME") {
+        let trimmed = home.trim();
         if !trimmed.is_empty() {
-            return Some(PathBuf::from(trimmed));
+            return Ok(PathBuf::from(trimmed).join("Library/Application Support"));
         }
     }
-    #[cfg(unix)]
+    Err(LockFileError::Io(io_error(missing)))
+}
+
+/// Local data root: `%LOCALAPPDATA%` (Windows), `~/Library/Application Support`
+/// (macOS, same folder as roaming — that is where installed apps live),
+/// `$XDG_DATA_HOME` or `~/.local/share` otherwise. Optional because a missing
+/// local dir is not fatal for the roaming migration.
+fn local_root() -> Option<PathBuf> {
+    #[cfg(target_os = "macos")]
     {
-        if let Ok(xdg) = std::env::var("XDG_DATA_HOME") {
-            let trimmed = xdg.trim();
+        return application_support_root("HOME is not set").ok();
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        if let Ok(local) = std::env::var("LOCALAPPDATA") {
+            let trimmed = local.trim();
             if !trimmed.is_empty() {
                 return Some(PathBuf::from(trimmed));
             }
         }
-        if let Ok(home) = std::env::var("HOME") {
-            let trimmed = home.trim();
-            if !trimmed.is_empty() {
-                return Some(PathBuf::from(trimmed).join(".local").join("share"));
+        #[cfg(unix)]
+        {
+            if let Ok(xdg) = std::env::var("XDG_DATA_HOME") {
+                let trimmed = xdg.trim();
+                if !trimmed.is_empty() {
+                    return Some(PathBuf::from(trimmed));
+                }
+            }
+            if let Ok(home) = std::env::var("HOME") {
+                let trimmed = home.trim();
+                if !trimmed.is_empty() {
+                    return Some(PathBuf::from(trimmed).join(".local").join("share"));
+                }
             }
         }
+        None
     }
-    None
 }
 
 pub fn mundus_config_dir() -> Result<PathBuf, LockFileError> {

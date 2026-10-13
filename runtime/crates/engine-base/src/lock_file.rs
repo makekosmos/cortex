@@ -105,7 +105,8 @@ pub fn default_engine_lock_file_path() -> Result<std::path::PathBuf, LockFileErr
 /// Resolve base directory для всех Mundus backend файлов: lock, singleton,
 /// дефолтный ark.db. Уважает `MUNDUS_DATA_DIR` env override (тесты; legacy
 /// `MUNDUS_DATA_DIR` fallback), иначе — `%APPDATA%\Mundus` (Win) /
-/// `$XDG_CONFIG_HOME/Mundus` (Unix). Учитывает brand-migration: если переезд
+/// `~/Library/Application Support/Mundus` (macOS) /
+/// `$XDG_CONFIG_HOME/Mundus` (other Unix). Учитывает brand-migration: если переезд
 /// с `%APPDATA%\Kosmos` не удался, эта сессия работает на legacy dir.
 pub fn mundus_data_dir() -> Result<std::path::PathBuf, LockFileError> {
     crate::data_dir::mundus_data_dir()

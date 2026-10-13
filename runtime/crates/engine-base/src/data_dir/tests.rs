@@ -2,8 +2,18 @@ use super::migration::migrate_dirs;
 use super::*;
 
 use std::fs;
+use std::path::PathBuf;
 
 use tempfile::tempdir;
+
+#[cfg(target_os = "macos")]
+#[test]
+fn macos_data_roots_match_application_support() {
+    let home = std::env::var("HOME").expect("HOME");
+    let expected = PathBuf::from(home.trim()).join("Library/Application Support");
+    assert_eq!(config_root().unwrap(), expected);
+    assert_eq!(local_root(), Some(expected));
+}
 
 fn seed_legacy_dir(root: &std::path::Path) -> std::path::PathBuf {
     let legacy = root.join("Kosmos"); // MIGRATION(KOS-267)
