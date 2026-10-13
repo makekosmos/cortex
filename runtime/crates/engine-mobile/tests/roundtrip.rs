@@ -4,6 +4,7 @@
 //! drop and reopen and still see the task. Legacy `com.kosmos.task` writes are
 //! refused after the cutover, so this test writes the new shape only.
 
+use std::path::Path;
 use std::sync::mpsc::{channel, Receiver};
 use std::time::Duration;
 
@@ -93,6 +94,24 @@ fn wait_for_upsert(rx: &Receiver<Value>, id: &str) -> bool {
     }
 }
 
+/// Deletes `path`, retrying for up to 10 s while Windows still refuses the
+/// delete. `TempDir::drop` ignores that error, so a directory left behind
+/// only shows up later as a gate leak with no test name; this fails here
+/// instead, with the path, if the file never frees up.
+fn remove_dir_when_free(path: &Path) {
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    let mut result = std::fs::remove_dir_all(path);
+    while result.is_err() && path.exists() && std::time::Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(100));
+        result = std::fs::remove_dir_all(path);
+    }
+    assert!(
+        !path.exists(),
+        "temp dir {} still in use: {result:?}",
+        path.display()
+    );
+}
+
 #[test]
 fn task_roundtrip_survives_reopen() {
     let dir = tempfile::tempdir().expect("tempdir");
@@ -153,5 +172,9 @@ fn task_roundtrip_survives_reopen() {
             .any(|o| o["id"] == TASK_ID),
         "task missing after reopen"
     );
+    // Remove the dir here rather than at scope end: a lock that outlives
+    // shutdown then fails this test by name instead of leaving a leftover.
     engine.shutdown();
+    drop(engine);
+    remove_dir_when_free(dir.path());
 }
