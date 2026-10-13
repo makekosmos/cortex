@@ -183,9 +183,7 @@ impl UpdaterService {
                     message: None,
                     checked_at_ms: Some(checked_at_ms),
                 });
-                if self.install_supported {
-                    self.start_download();
-                }
+                // No background download: the user opts in via `download()`.
                 json
             }
             Ok(_) => {
