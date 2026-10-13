@@ -14,4 +14,6 @@ Agenda's own test fails when its committed copy drifts from `mapping::write`
 output, with the same instruction — fixtures must be copied in the same change
 as the write-path diff.
 
-Last generated from makekosmos/agenda-gpui `kos-297` @ `2793d97`.
+Last generated from makekosmos/agenda-gpui `claude/kos-397-gtsswn` @ `762b1cb`
+(core.task 0.1.0, KOS-397). The project link is not in these files: Agenda
+writes it as an object link.

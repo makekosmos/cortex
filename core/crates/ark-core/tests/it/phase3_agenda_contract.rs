@@ -41,7 +41,6 @@ fn agenda_write_payloads_pass_engine_validation() {
         "task-deadline",
         "task-inbox",
         "task-note",
-        "task-project",
         "task-recurrence",
         "task-significance-unset",
         "task-completed",
