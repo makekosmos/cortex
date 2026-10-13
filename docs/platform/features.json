@@ -1,0 +1,425 @@
+{
+  "checked": "2026-10-13",
+  "source": "b47f1dce",
+  "platforms": ["windows", "macos", "linux", "android", "ios"],
+  "groups": [
+    {
+      "name": "Core",
+      "features": [
+        {
+          "id": "engine-api",
+          "name": "Engine API (/v1/rpc, WebSocket)",
+          "status": {
+            "windows": "yes",
+            "macos": "yes",
+            "linux": "yes",
+            "android": "no",
+            "ios": "no"
+          },
+          "note": {
+            "android": "No background daemon with localhost RPC; needs in-process embedding"
+          },
+          "boundary": "portable",
+          "code": ["runtime/src/engine_api/server.rs", "runtime/src/ws_server.rs"]
+        },
+        {
+          "id": "ark",
+          "name": "ARK data core",
+          "status": {
+            "windows": "yes",
+            "macos": "yes",
+            "linux": "yes",
+            "android": "unverified",
+            "ios": "no"
+          },
+          "note": { "android": "android cfg hooks exist; no Android build in CI" },
+          "boundary": "portable",
+          "code": ["core/crates/ark-core/src/host.rs"]
+        },
+        {
+          "id": "sync",
+          "name": "P2P sync (iroh, relay, LAN beacon)",
+          "status": {
+            "windows": "yes",
+            "macos": "yes",
+            "linux": "yes",
+            "android": "no",
+            "ios": "no"
+          },
+          "note": { "windows": "LAN firewall rule set by the privileged service" },
+          "boundary": "seam",
+          "code": [
+            "runtime/src/sync/bind.rs",
+            "runtime/crates/engine-indexes/src/privileged/client.rs#ensure_engine_firewall_rule"
+          ]
+        },
+        {
+          "id": "pomodoro",
+          "name": "Pomodoro timer",
+          "status": {
+            "windows": "yes",
+            "macos": "yes",
+            "linux": "yes",
+            "android": "no",
+            "ios": "no"
+          },
+          "boundary": "portable",
+          "code": ["runtime/src/pomodoro_host.rs"]
+        },
+        {
+          "id": "db-backup",
+          "name": "Database backup",
+          "status": {
+            "windows": "yes",
+            "macos": "yes",
+            "linux": "yes",
+            "android": "no",
+            "ios": "no"
+          },
+          "boundary": "portable",
+          "code": ["runtime/src/db_backup.rs"]
+        },
+        {
+          "id": "markdown-vault",
+          "name": "Markdown vault export",
+          "status": {
+            "windows": "yes",
+            "macos": "yes",
+            "linux": "yes",
+            "android": "no",
+            "ios": "no"
+          },
+          "boundary": "portable",
+          "code": ["runtime/src/markdown_vault/mod.rs"]
+        }
+      ]
+    },
+    {
+      "name": "Dictation",
+      "features": [
+        {
+          "id": "dictation-hotkey",
+          "name": "Global dictation hotkey",
+          "status": {
+            "windows": "yes",
+            "macos": "yes",
+            "linux": "no",
+            "android": "n/a",
+            "ios": "n/a"
+          },
+          "note": {
+            "macos": "Swift helper, needs Input Monitoring",
+            "android": "No global hotkeys; entry point is an IME or tile",
+            "ios": "No global hotkeys; entry point is a keyboard extension"
+          },
+          "boundary": "scattered",
+          "code": [
+            "runtime/crates/engine-dictation/src/hotkey_hook.rs",
+            "runtime/crates/engine-dictation/src/macos_native.rs#set_hotkey_active",
+            "runtime/crates/engine-dictation/src/host_queue.rs"
+          ]
+        },
+        {
+          "id": "mic-capture",
+          "name": "Microphone capture",
+          "status": {
+            "windows": "yes",
+            "macos": "yes",
+            "linux": "no",
+            "android": "no",
+            "ios": "no"
+          },
+          "note": { "macos": "audio-capturer Swift helper" },
+          "boundary": "seam",
+          "code": ["runtime/crates/engine-dictation/src/native_capture.rs#start"]
+        },
+        {
+          "id": "text-insert",
+          "name": "Insert text into the focused app",
+          "status": {
+            "windows": "yes",
+            "macos": "yes",
+            "linux": "no",
+            "android": "no",
+            "ios": "no"
+          },
+          "note": {
+            "macos": "paste-text helper, osascript fallback",
+            "android": "Needs an IME or AccessibilityService",
+            "ios": "Only through a keyboard extension"
+          },
+          "boundary": "seam",
+          "code": [
+            "runtime/crates/engine-dictation/src/inject.rs#OsAdapter",
+            "runtime/crates/engine-dictation/src/inject_platform.rs"
+          ]
+        },
+        {
+          "id": "audio-duck",
+          "name": "Lower system volume while dictating",
+          "status": {
+            "windows": "yes",
+            "macos": "no",
+            "linux": "no",
+            "android": "no",
+            "ios": "no"
+          },
+          "note": { "macos": "Stub returns Ok and does nothing" },
+          "boundary": "seam",
+          "code": ["runtime/crates/engine-dictation/src/audio_duck.rs"]
+        },
+        {
+          "id": "cloud-stt",
+          "name": "Cloud speech-to-text",
+          "status": {
+            "windows": "yes",
+            "macos": "yes",
+            "linux": "yes",
+            "android": "no",
+            "ios": "no"
+          },
+          "boundary": "portable",
+          "code": ["runtime/crates/engine-dictation/src/groq.rs"]
+        },
+        {
+          "id": "local-stt",
+          "name": "Local speech-to-text",
+          "status": {
+            "windows": "yes",
+            "macos": "no",
+            "linux": "unverified",
+            "android": "no",
+            "ios": "no"
+          },
+          "note": { "macos": "macOS release build omits the local-dictation feature" },
+          "boundary": "scattered",
+          "code": [
+            "desktop/scripts/build-backend.mjs",
+            "desktop/scripts/build-macos-native.mjs",
+            "runtime/crates/engine-dictation/src/local_sidecar.rs"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Focus and privileged",
+      "features": [
+        {
+          "id": "focus-ops",
+          "name": "Focus blocklists and session state",
+          "status": {
+            "windows": "yes",
+            "macos": "yes",
+            "linux": "yes",
+            "android": "no",
+            "ios": "no"
+          },
+          "boundary": "portable",
+          "code": ["runtime/src/focus.rs"]
+        },
+        {
+          "id": "site-block",
+          "name": "Block sites during focus",
+          "status": {
+            "windows": "yes",
+            "macos": "no",
+            "linux": "no",
+            "android": "no",
+            "ios": "no"
+          },
+          "note": {
+            "windows": "hosts file via the privileged service, one admin grant",
+            "macos": "Pipe returns \"privileged operations are Windows-only\"",
+            "android": "Would need a VpnService DNS filter",
+            "ios": "Would need NEFilter or the Screen Time API"
+          },
+          "boundary": "seam",
+          "code": ["runtime/crates/engine-indexes/src/privileged/client.rs#sync_managed_block"]
+        },
+        {
+          "id": "privileged-service",
+          "name": "Privileged service (one-time admin grant)",
+          "status": {
+            "windows": "yes",
+            "macos": "no",
+            "linux": "no",
+            "android": "n/a",
+            "ios": "n/a"
+          },
+          "boundary": "scattered",
+          "code": ["runtime/crates/engine-indexes/src/privileged/mod.rs"]
+        },
+        {
+          "id": "usage-tracker",
+          "name": "Foreground app usage tracking",
+          "status": {
+            "windows": "yes",
+            "macos": "no",
+            "linux": "no",
+            "android": "no",
+            "ios": "no"
+          },
+          "note": { "android": "Would use UsageStatsManager" },
+          "boundary": "scattered",
+          "code": [
+            "runtime/src/usage_tracker/mod.rs",
+            "runtime/src/usage_tracker/windows_capture.rs"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Indexes",
+      "features": [
+        {
+          "id": "app-index",
+          "name": "Installed apps index and launch",
+          "status": {
+            "windows": "yes",
+            "macos": "yes",
+            "linux": "no",
+            "android": "no",
+            "ios": "n/a"
+          },
+          "boundary": "seam",
+          "code": ["runtime/crates/engine-indexes/src/app_index/platform/mod.rs"]
+        },
+        {
+          "id": "file-index",
+          "name": "File index and search",
+          "status": {
+            "windows": "yes",
+            "macos": "partial",
+            "linux": "unverified",
+            "android": "no",
+            "ios": "n/a"
+          },
+          "note": {
+            "windows": "MFT fast path through the privileged service",
+            "macos": "Plain walk; open_file calls xdg-open, which macOS lacks"
+          },
+          "boundary": "scattered",
+          "code": ["runtime/crates/engine-indexes/src/file_index/scanner.rs#open_file"]
+        }
+      ]
+    },
+    {
+      "name": "Packages",
+      "features": [
+        {
+          "id": "package-workers",
+          "name": "Package workers (supervised, grant-gated)",
+          "status": {
+            "windows": "yes",
+            "macos": "yes",
+            "linux": "no",
+            "android": "no",
+            "ios": "no"
+          },
+          "note": { "linux": "Returns unsupported-platform" },
+          "boundary": "scattered",
+          "code": [
+            "runtime/crates/engine-packages/src/package_worker_supervisor/mod.rs",
+            "runtime/crates/engine-packages/src/package_worker_process/mod.rs"
+          ]
+        },
+        {
+          "id": "native-app-store",
+          "name": "Install and launch native apps from the Store",
+          "status": {
+            "windows": "yes",
+            "macos": "partial",
+            "linux": "unverified",
+            "android": "no",
+            "ios": "n/a"
+          },
+          "note": { "macos": "No shortcuts; foreground grant is a no-op" },
+          "boundary": "scattered",
+          "code": [
+            "runtime/crates/engine-packages/src/native_apps.rs",
+            "runtime/crates/engine-packages/src/native_apps/launch.rs",
+            "runtime/crates/engine-packages/src/native_apps/shortcuts.rs"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Desktop shell",
+      "features": [
+        {
+          "id": "tray",
+          "name": "Engine tray icon",
+          "status": {
+            "windows": "yes",
+            "macos": "no",
+            "linux": "no",
+            "android": "n/a",
+            "ios": "n/a"
+          },
+          "note": { "macos": "No menu bar item; Dock tile is suppressed" },
+          "boundary": "scattered",
+          "code": ["runtime/src/backend_tray.rs", "runtime/src/macos_dock.rs"]
+        },
+        {
+          "id": "autostart",
+          "name": "Start at login",
+          "status": {
+            "windows": "yes",
+            "macos": "yes",
+            "linux": "no",
+            "android": "n/a",
+            "ios": "n/a"
+          },
+          "note": { "windows": "Run key", "macos": "LaunchAgent" },
+          "boundary": "seam",
+          "code": [
+            "runtime/src/manager_api.rs#set_os_autostart",
+            "runtime/src/manager_api/macos_autostart.rs"
+          ]
+        },
+        {
+          "id": "updater",
+          "name": "Self-update",
+          "status": {
+            "windows": "yes",
+            "macos": "yes",
+            "linux": "no",
+            "android": "n/a",
+            "ios": "n/a"
+          },
+          "note": { "windows": "Silent NSIS", "macos": "DMG bundle swap" },
+          "boundary": "seam",
+          "code": ["runtime/src/updater/install.rs", "runtime/src/updater/macos.rs"]
+        },
+        {
+          "id": "installation",
+          "name": "Installer",
+          "status": {
+            "windows": "yes",
+            "macos": "partial",
+            "linux": "no",
+            "android": "no",
+            "ios": "no"
+          },
+          "note": { "macos": "DMG is ad-hoc signed, not notarized; curl install path" },
+          "boundary": "scattered",
+          "code": ["runtime/src/installer/mod.rs", "desktop/scripts/package-macos-dmg.mjs"]
+        },
+        {
+          "id": "appearance",
+          "name": "System theme and accent",
+          "status": {
+            "windows": "partial",
+            "macos": "yes",
+            "linux": "unverified",
+            "android": "no",
+            "ios": "no"
+          },
+          "note": { "windows": "No wallpaper accent" },
+          "boundary": "seam",
+          "code": ["runtime/src/appearance.rs"]
+        }
+      ]
+    }
+  ]
+}
