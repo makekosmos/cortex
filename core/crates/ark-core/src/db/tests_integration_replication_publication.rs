@@ -162,7 +162,7 @@ fn expired_unpublished_generation_retries_with_a_higher_fence() {
 
 #[test]
 fn concurrent_refresh_acquire_has_one_fence_winner() {
-    let directory = tempfile::tempdir().unwrap();
+    let directory = crate::test_support::temp_dir();
     let path = directory.path().join("integration-refresh.sqlite");
     let setup = open_db(path.to_str().unwrap()).unwrap();
     setup.execute_batch(crate::schema::CREATE_TABLES).unwrap();

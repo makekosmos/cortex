@@ -226,7 +226,7 @@
         object.props_json = json!({"tag": "test"});
         upsert_object(&conn, &object).unwrap();
 
-        let tmp = tempfile::tempdir().unwrap();
+        let tmp = crate::test_support::temp_dir();
         let dest = tmp.path().join("ark.db.backup");
         let dest_str = dest.to_str().unwrap();
         backup_to_file(&conn, dest_str).expect("backup РґРѕР»Р¶РµРЅ РїСЂРѕР№С‚Рё");
@@ -248,7 +248,7 @@
 
     #[test]
     fn backup_to_file_chunked_creates_valid_copy_via_separate_connection() {
-        let tmp = tempfile::tempdir().unwrap();
+        let tmp = crate::test_support::temp_dir();
         let src_path = tmp.path().join("ark.db");
         let src_str = src_path.to_str().unwrap();
         {

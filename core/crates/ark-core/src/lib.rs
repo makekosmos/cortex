@@ -26,6 +26,8 @@ pub mod sync_bind;
 pub mod sync_client;
 pub mod sync_server;
 pub mod sync_transport;
+#[cfg(test)]
+pub(crate) mod test_support;
 pub mod transport_select;
 pub mod type_registry;
 pub mod types;

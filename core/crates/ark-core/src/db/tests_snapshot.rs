@@ -3,8 +3,8 @@
 
 /// File-backed DB в tempdir (restore работает с `db_path`, in-memory
 /// не подходит). Возвращает (TempDir, db_path, conn).
-fn setup_file_db() -> (tempfile::TempDir, String, Connection) {
-    let dir = tempfile::tempdir().unwrap();
+fn setup_file_db() -> (crate::test_support::TestTempDir, String, Connection) {
+    let dir = crate::test_support::temp_dir();
     let db_path = dir.path().join("ark.db");
     let db_str = db_path.to_str().unwrap().to_string();
     let conn = open_db(&db_str).unwrap();

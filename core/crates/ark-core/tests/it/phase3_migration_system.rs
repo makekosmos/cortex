@@ -37,7 +37,7 @@ fn count(conn: &Connection, table: &str) -> i64 {
 
 #[test]
 fn phase9_retires_planning_tables_after_lossless_canonical_migration() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::support::temp_dir();
     let path = dir.path().join("planning-retirement.sqlite");
     let conn = open_db(path.to_str().unwrap()).unwrap();
     init_schema_prerequisites_for_phase3(&conn).unwrap();
@@ -259,7 +259,7 @@ fn production_init_runs_phase3_once_and_reopen_is_idempotent() {
 
 #[test]
 fn historical_malformed_registry_fails_closed_before_phase3_state() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::support::temp_dir();
     let path = dir.path().join("legacy.sqlite");
     let conn = Connection::open(&path).unwrap();
     conn.execute_batch(
@@ -421,7 +421,7 @@ fn migration_init_emits_no_search_or_sync_events() {
 
 #[test]
 fn raw_backup_preserves_nonempty_internal_blobs_and_schema() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::support::temp_dir();
     let source = dir.path().join("source.sqlite");
     let dest = dir.path().join("backup.sqlite");
     let conn = open_db(source.to_str().unwrap()).unwrap();

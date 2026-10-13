@@ -39,7 +39,7 @@ fn loopback_transport(device_id: &str, peer_addr: Option<iroh::EndpointAddr>) ->
     })
 }
 
-fn open_conn(dir: &tempfile::TempDir) -> Arc<StdMutex<Connection>> {
+fn open_conn(dir: &crate::support::TestTempDir) -> Arc<StdMutex<Connection>> {
     let conn = Arc::new(StdMutex::new(
         Connection::open(dir.path().join("ark.db")).unwrap(),
     ));
@@ -51,8 +51,8 @@ fn open_conn(dir: &tempfile::TempDir) -> Arc<StdMutex<Connection>> {
 /// storage. `stop()` must leave the test's own clone as the only reference.
 #[tokio::test(flavor = "current_thread")]
 async fn stop_joins_connection_tasks_holding_storage() {
-    let dir_a = tempfile::tempdir().unwrap();
-    let dir_b = tempfile::tempdir().unwrap();
+    let dir_a = crate::support::temp_dir();
+    let dir_b = crate::support::temp_dir();
     let conn_a = open_conn(&dir_a);
     let conn_b = open_conn(&dir_b);
 

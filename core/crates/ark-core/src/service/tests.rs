@@ -19,13 +19,13 @@ pub(super) fn test_state() -> Arc<ServiceState> {
 /// where an open file cannot be deleted (KOS-270).
 pub(super) struct ServiceFixture {
     pub(crate) state: Arc<ServiceState>,
-    pub(crate) dir: tempfile::TempDir,
+    pub(crate) dir: crate::test_support::TestTempDir,
 }
 
 pub(super) fn service_fixture() -> ServiceFixture {
     ServiceFixture {
         state: test_state(),
-        dir: tempfile::tempdir().unwrap(),
+        dir: crate::test_support::temp_dir(),
     }
 }
 

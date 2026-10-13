@@ -291,7 +291,7 @@ async fn selective_profile_is_used_by_backend_pages_and_replay_is_idempotent() {
 
 #[test]
 fn persisted_profile_reloads_owner_revision_and_rejects_stale_or_foreign_writes() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::support::temp_dir();
     let path = dir.path().join("profiles.db");
     let rules = [data_platform::SyncProfileRule {
         resource_kind: "type".into(),
