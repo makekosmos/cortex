@@ -93,7 +93,7 @@ async fn feed_failure_is_an_error_state() {
 }
 
 #[tokio::test]
-async fn check_downloads_and_verifies_update_in_background() {
+async fn download_after_check_verifies_update() {
     let body = b"installer payload".repeat(50);
     let server = MockServer::start_async().await;
     server
@@ -119,6 +119,8 @@ async fn check_downloads_and_verifies_update_in_background() {
         UpdaterService::with_feed_base(dir.path().to_path_buf(), server.base_url(), "0.5.0");
 
     assert_eq!(service.check().await["state"], "available");
+    assert!(!service.downloading.load(Ordering::SeqCst));
+    service.download();
     for _ in 0..200 {
         if service.status()["state"] == "downloaded" {
             break;
@@ -303,6 +305,7 @@ async fn check_uses_manifest_json_for_the_download_kos_350() {
         UpdaterService::with_feed_base(dir.path().to_path_buf(), server.base_url(), "0.5.0");
 
     assert_eq!(service.check().await["newVersion"], "99.1.0");
+    service.download();
     for _ in 0..200 {
         if service.status()["state"] == "downloaded" {
             break;

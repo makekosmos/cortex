@@ -120,6 +120,7 @@ async fn mac_install_stages_the_dmg_app_over_the_running_bundle_and_relaunches()
     )
     .unwrap();
     assert_eq!(service.check().await["state"], "available");
+    service.download();
     for _ in 0..200 {
         if service.status()["state"] == "downloaded" {
             break;

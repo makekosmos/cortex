@@ -1,8 +1,10 @@
 //! KOS-355 (round 3): the update-overlay logo is a pre-baked animated WebP
-//! of the Paper-matched liquid-metal Mundus mark — 256×252 canvas, 60
-//! frames @ 30 fps (2 s loop), lossless, ~2.6 MiB, checked in at
-//! `assets/logo-256-60.webp`. The bake is offline (ffmpeg `libwebp_anim
-//! -lossless 1 -loop 0` over frames rendered by the CPU shader port); at
+//! of the Paper-matched liquid-metal Mundus mark — 256×252 canvas, 48
+//! frames @ 30 fps (1.6 s loop), lossless, ~2.2 MiB, checked in at
+//! `assets/logo-256-48.webp`. The mark is the full `icons/mundus.svg`
+//! silhouette inset 8 px from the canvas edge (nothing clipped), and the
+//! last frames are cross-faded into the first so the loop has no seam. The
+//! bake is offline (lossless animated WebP, `loop 0`, over frames from the CPU shader port); at
 //! runtime we only decode once into a ring of premultiplied BGRA
 //! `RenderImage`s and index by elapsed time — ~1 ms/frame decode, no CPU
 //! shader in the paint loop, and no first-open bake stall.
@@ -14,9 +16,9 @@ use image::{Frame, ImageBuffer, Rgba};
 use smallvec::{smallvec, SmallVec};
 use webp_animation::{ColorMode, Decoder, DecoderOptions};
 
-static LOGO_WEBP: &[u8] = include_bytes!("../assets/logo-256-60.webp");
+static LOGO_WEBP: &[u8] = include_bytes!("../assets/logo-256-48.webp");
 
-/// Baked playback rate (60 frames → 2 s loop).
+/// Baked playback rate (48 frames → 1.6 s loop).
 pub const FPS: f32 = 30.0;
 
 /// The decoded frame ring. libwebp composites each animation frame onto the
@@ -60,7 +62,7 @@ impl LogoFrames {
     }
 
     /// Frame for `elapsed` seconds since the overlay appeared; wraps on the
-    /// 2 s loop.
+    /// 1.6 s loop.
     pub fn frame(&self, elapsed: f32) -> Arc<RenderImage> {
         let i = (elapsed.max(0.0) * FPS) as usize % self.frames.len();
         self.frames[i].clone()
@@ -74,10 +76,10 @@ mod tests {
     #[test]
     fn embedded_webp_decodes_to_full_ring() {
         let frames = LogoFrames::decode().expect("embedded WebP must decode");
-        assert_eq!(frames.frames.len(), 60);
+        assert_eq!(frames.frames.len(), 48);
         let size = frames.frame(0.0).size(0);
         assert_eq!((i32::from(size.width), i32::from(size.height)), (256, 252));
-        // Indexing wraps on the 2 s loop.
-        assert!(Arc::ptr_eq(&frames.frame(0.0), &frames.frame(2.0)));
+        // Indexing wraps on the 1.6 s loop.
+        assert!(Arc::ptr_eq(&frames.frame(0.0), &frames.frame(1.61)));
     }
 }

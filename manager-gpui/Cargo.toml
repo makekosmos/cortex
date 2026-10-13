@@ -18,7 +18,7 @@ imago-gpui = { git = "https://github.com/makekosmos/imago.git", rev = "86c830675
 mundus-gpui-kit = { git = "https://github.com/makekosmos/imago.git", rev = "86c830675480e96b3ec21b500059410ad4c0b852" }
 serde = { version = "1.0.229", features = ["derive"] }
 # KOS-355 liquid-metal logo: the mark is a checked-in lossless animated
-# WebP (assets/logo-256-60.webp) decoded once into a RenderImage ring.
+# WebP (assets/logo-256-48.webp) decoded once into a RenderImage ring.
 # `static` forces the vendored libwebp build instead of pkg-config.
 webp-animation = { version = "0.10.0", features = ["static"] }
 image = "0.25.1"
