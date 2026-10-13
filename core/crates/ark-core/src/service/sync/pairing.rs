@@ -4,6 +4,8 @@
 //! restart lives here so the firewall prompt is owned by a user action, not
 //! by boot.
 
+use std::time::Duration;
+
 use super::*;
 
 /// Restart params for the explicit "turn sync on" transitions: both force
@@ -204,9 +206,11 @@ pub(crate) async fn handle_show_pairing_code(state: &Arc<ServiceState>) -> Resul
     };
 
     // Restart only when the current runtime cannot produce a LAN-reachable
-    // ticket: loopback bind, or iroh wasn't the selected transport.
-    let needs_restart =
-        runtime.start_params.bind == SyncBind::Loopback || runtime.iroh_our_ticket.is_none();
+    // ticket: loopback bind, or iroh wasn't the selected transport. A
+    // merely-pending ticket (`our_ticket()` still waiting on relay homing)
+    // is not a reason to restart — the wait below covers it.
+    let needs_restart = runtime.start_params.bind == SyncBind::Loopback
+        || !matches!(runtime.transport_choice, Some(TransportChoice::Iroh));
     if needs_restart {
         let restore_params = runtime.start_params.clone();
         restart_sync_with_restore(
@@ -218,12 +222,24 @@ pub(crate) async fn handle_show_pairing_code(state: &Arc<ServiceState>) -> Resul
         .await?;
     }
 
-    let runtime = {
+    let mut ticket_rx = {
         let guard = state.sync.lock().await;
         match guard.as_ref() {
-            Some(r) => r.clone(),
+            Some(r) => r.iroh_our_ticket.clone(),
             None => return Err("Sync not running".to_string()),
         }
     };
-    Ok(json!(runtime.iroh_our_ticket.clone()))
+    // The ticket resolves asynchronously after start (relay homing). Wait
+    // for it here — bounded by the same 8s `our_ticket()` timeout — so the
+    // pairing UI still gets the code in one request when it can.
+    let _ = tokio::time::timeout(Duration::from_secs(9), async {
+        while ticket_rx.borrow().is_none() {
+            if ticket_rx.changed().await.is_err() {
+                break;
+            }
+        }
+    })
+    .await;
+    let ticket = ticket_rx.borrow().clone();
+    Ok(json!(ticket))
 }

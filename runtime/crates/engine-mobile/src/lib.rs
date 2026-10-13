@@ -84,18 +84,25 @@ fn resolve_device_id(data_dir: &Path) -> Result<String, EngineError> {
 #[derive(uniffi::Object)]
 pub struct MobileEngine {
     data_dir: PathBuf,
-    service: Mutex<Option<ArkService>>,
+    /// `Arc` so `call` can clone the handle, drop the lock, and then
+    /// block on the service — the lock only guards open/shutdown state,
+    /// it is never held across a service call (a slow op must not make
+    /// other callers wait on this mutex).
+    service: Mutex<Option<Arc<ArkService>>>,
 }
 
 impl MobileEngine {
-    fn service(&self) -> Result<MutexGuard<'_, Option<ArkService>>, EngineError> {
+    fn service(&self) -> Result<MutexGuard<'_, Option<Arc<ArkService>>>, EngineError> {
         Ok(self.service.lock().unwrap_or_else(|e| e.into_inner()))
     }
 
     fn call_service(&self, op: &str, params: Value) -> Result<String, EngineError> {
-        let guard = self.service()?;
-        let service = guard.as_ref().ok_or(EngineError::Closed)?;
-        call_json(service, op, params)
+        let service = self
+            .service()?
+            .as_ref()
+            .cloned()
+            .ok_or(EngineError::Closed)?;
+        call_json(&service, op, params)
     }
 }
 
@@ -113,7 +120,7 @@ impl MobileEngine {
             block_on(ArkService::open(db_path)).map_err(|e| EngineError::Open(e.to_string()))?;
         Ok(Arc::new(Self {
             data_dir,
-            service: Mutex::new(Some(service)),
+            service: Mutex::new(Some(Arc::new(service))),
         }))
     }
 
