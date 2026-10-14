@@ -1,6 +1,6 @@
 {
-  "checked": "2026-10-13",
-  "source": "b47f1dce",
+  "checked": "2026-10-14",
+  "source": "9cb1b96",
   "platforms": ["windows", "macos", "linux", "android", "ios"],
   "groups": [
     {
@@ -296,7 +296,7 @@
           },
           "note": {
             "windows": "MFT fast path through the privileged service",
-            "macos": "Plain walk; open_file calls xdg-open, which macOS lacks"
+            "macos": "Plain walk"
           },
           "boundary": "scattered",
           "code": ["runtime/crates/engine-indexes/src/file_index/scanner.rs#open_file"]
