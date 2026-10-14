@@ -267,6 +267,7 @@ impl RelaySync {
             } => {
                 let origin = origin_device_id.unwrap_or(from_device_id);
                 if !self.is_authenticated_peer(&origin).await {
+                    eprintln!("{TAG} dropped LiveChange from {origin}: peer not authenticated");
                     return;
                 }
                 // A single live change is not a final sync page — no

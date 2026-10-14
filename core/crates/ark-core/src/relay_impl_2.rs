@@ -397,11 +397,16 @@ impl RelaySync {
                     .get(&entity.id)
                     .is_none_or(|hlc| HLC::is_newer(&entity.hlc, hlc));
             if !should_apply {
+                eprintln!(
+                    "{TAG} skipped relay entity {}:{}: vector already at or ahead of its HLC",
+                    entity.entity_type, entity.id
+                );
                 continue;
             }
 
             match self.storage.apply_entity(entity).await {
                 Ok(()) => {
+                    eprintln!("{TAG} applied relay entity {}:{}", entity.entity_type, entity.id);
                     state.changed |= observe_non_usage_entity(&mut state.vector, entity);
                     if let Some(handler) = self.on_change.lock().await.as_ref() {
                         handler(entity.clone());
