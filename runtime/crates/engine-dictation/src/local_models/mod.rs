@@ -100,7 +100,8 @@ pub(super) fn default_shared_assets_base() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
 }
 
-pub(super) fn default_shared_assets_root() -> PathBuf {
+/// Installed shared assets, independent of development session overrides.
+pub fn default_shared_assets_root() -> PathBuf {
     default_shared_assets_base().join("Mundus")
 }
 

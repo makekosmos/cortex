@@ -6,15 +6,15 @@ use crate::app::ManagerApp;
 
 pub mod about;
 pub mod appearance;
-pub mod backups;
 pub mod browser;
 pub mod connections;
-pub mod data;
 pub mod dev;
 pub mod engine_settings;
 pub mod models;
 pub mod secrets;
 pub mod settings;
+pub mod storage;
+pub mod storage_motion;
 pub mod store;
 pub mod store_apps;
 pub mod sync;
@@ -23,7 +23,7 @@ pub mod usage;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum View {
-    Data,
+    Storage,
     Usage,
     Sync,
     Packages,
@@ -45,7 +45,12 @@ pub enum StoreTab {
 
 pub const NAV_GROUPS: &[&[View]] = &[
     &[View::About, View::Appearance],
-    &[View::Packages, View::Connections, View::Data, View::Usage],
+    &[
+        View::Packages,
+        View::Connections,
+        View::Storage,
+        View::Usage,
+    ],
     &[View::Sync, View::Browser],
     &[View::Keys, View::Models],
     &[View::Settings, View::Dev],
@@ -54,7 +59,7 @@ pub const NAV_GROUPS: &[&[View]] = &[
 impl View {
     pub fn label(self) -> &'static str {
         match self {
-            View::Data => "Данные",
+            View::Storage => "Хранилище",
             View::Usage => "Активность",
             View::Sync => "Девайсы",
             View::Packages => "Приложения",
@@ -72,7 +77,7 @@ impl View {
     /// Stable persistence key for the last-opened page.
     pub fn key(self) -> &'static str {
         match self {
-            View::Data => "data",
+            View::Storage => "storage",
             View::Usage => "usage",
             View::Sync => "sync",
             View::Packages => "packages",
@@ -89,7 +94,8 @@ impl View {
 
     pub fn from_key(key: &str) -> Option<View> {
         Some(match key {
-            "data" => View::Data,
+            "data" => View::Storage,
+            "storage" => View::Storage,
             "usage" => View::Usage,
             "sync" => View::Sync,
             "packages" => View::Packages,
@@ -108,7 +114,7 @@ impl View {
 
     pub fn icon(self) -> Icon {
         let path = match self {
-            View::Data => "icons/database.svg",
+            View::Storage => "icons/database.svg",
             View::Usage => "icons/cpu.svg",
             View::Sync => "icons/device-monitor.svg",
             View::Packages => "icons/store.svg",
@@ -128,7 +134,7 @@ impl View {
 /// Issue the ops a view needs when it becomes active or refreshes.
 pub fn load(view: View, app: &mut ManagerApp) {
     match view {
-        View::Data => data::load(app),
+        View::Storage => storage::load(app),
         View::Usage => usage::load(app),
         View::Sync => sync::load(app),
         View::Packages => store::load(app),
@@ -150,7 +156,7 @@ pub fn render(
     cx: &mut Context<ManagerApp>,
 ) -> AnyElement {
     match view {
-        View::Data => data::render(app, window, cx),
+        View::Storage => storage::render(app, cx),
         View::Usage => usage::render(app, window, cx),
         View::Sync => sync::render(app, window, cx),
         View::Packages => store::render(app, window, cx),

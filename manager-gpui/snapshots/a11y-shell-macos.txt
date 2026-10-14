@@ -3,7 +3,7 @@ Window ""
   Button "Внешний вид" selected=false
   Button "Приложения" selected=false
   Button "Интеграции" selected=false
-  Button "Данные" selected=false
+  Button "Хранилище" selected=false
   Button "Активность" selected=false
   Button "Девайсы" selected=false
   Button "Браузер" selected=false

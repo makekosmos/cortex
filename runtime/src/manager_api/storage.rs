@@ -1,14 +1,10 @@
-//! `manager.data.storage` — честная разбивка каталога данных по категориям.
-//!
-//! Раньше страница показывала только «управляемое хранилище»
-//! (ark.db + packages ≈ 0.5 ГБ), а реальный каталог данных занимал ~4 ГБ —
-//! бэкапы, модели диктовки, скачанные установщики и индексы не входили в
-//! сумму. Теперь Engine обходит весь data_dir и отдаёт по категориям.
+//! `manager.data.storage` measures installed Mundus data and assets.
+//! Development session data/package overrides are deliberately excluded.
 
 use super::ManagerState;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Fixed category ids — the Manager renders them in this order.
 #[derive(Clone, Copy)]
@@ -23,6 +19,13 @@ enum Category {
     // KOS-302: 0.9.x leftover with no writer in cortex — surfaced as its own
     // row so the «Данные» page can offer the «Очистить» action.
     LegacyQuarantine,
+    Installations,
+    Cache,
+    Logs,
+    Settings,
+    RuntimeState,
+    Recordings,
+    Tools,
     Other,
 }
 
@@ -37,7 +40,14 @@ impl Category {
             Category::FileIndex => "Индекс файлов",
             Category::AppIndex => "Индекс приложений",
             Category::LegacyQuarantine => "Устаревшие данные",
-            Category::Other => "Прочее",
+            Category::Installations => "Установленные приложения",
+            Category::Cache => "Кеш",
+            Category::Logs => "Журналы",
+            Category::Settings => "Настройки приложений",
+            Category::RuntimeState => "Состояние Engine",
+            Category::Recordings => "Записи диктовки",
+            Category::Tools => "Движки распознавания",
+            Category::Other => "Дополнительные файлы",
         }
     }
 
@@ -51,6 +61,13 @@ impl Category {
             Category::FileIndex => "file_index",
             Category::AppIndex => "app_index",
             Category::LegacyQuarantine => "legacy_quarantine",
+            Category::Installations => "installations",
+            Category::Cache => "cache",
+            Category::Logs => "logs",
+            Category::Settings => "settings",
+            Category::RuntimeState => "runtime_state",
+            Category::Recordings => "recordings",
+            Category::Tools => "tools",
             Category::Other => "other",
         }
     }
@@ -65,6 +82,13 @@ const ALL_CATEGORIES: &[Category] = &[
     Category::FileIndex,
     Category::AppIndex,
     Category::LegacyQuarantine,
+    Category::Installations,
+    Category::Cache,
+    Category::Logs,
+    Category::Settings,
+    Category::RuntimeState,
+    Category::Recordings,
+    Category::Tools,
     Category::Other,
 ];
 
@@ -73,9 +97,30 @@ const ALL_CATEGORIES: &[Category] = &[
 /// `<data_dir>/packages`.
 fn classify(name: &str, is_package_root: bool) -> Category {
     match name {
-        "ark.db" | "ark.db-wal" | "ark.db-shm" => Category::Database,
+        "ark.db" | "ark.db-wal" | "ark.db-shm" | "ark.db-journal" => Category::Database,
         "backups" => Category::Backups,
         "updates" => Category::Updates,
+        "Apps" | "Engine" => Category::Installations,
+        "cache" | "icon-cache" | "app-icons" | "icons" => Category::Cache,
+        "logs" => Category::Logs,
+        "dictation" => Category::Recordings,
+        "tools" | "runtimes" => Category::Tools,
+        "crashes" | "support-bundles" => Category::Logs,
+        _ if name.contains("config")
+            || name.contains("settings")
+            || name == "browser.json"
+            || name == "manager.json" =>
+        {
+            Category::Settings
+        }
+        _ if name.contains("lock")
+            || name.starts_with("engine-")
+            || name == "mundus-device-id.txt"
+            || name == "protocol-usage.json"
+            || name == "mundus-migration.json" =>
+        {
+            Category::RuntimeState
+        }
         "packages" => Category::Packages,
         "legacy-quarantine" => Category::LegacyQuarantine,
         _ if is_package_root => Category::Packages,
@@ -121,56 +166,10 @@ fn add_path(acc: &mut BTreeMap<usize, u64>, category: Category, bytes: u64) {
     *acc.entry(category as usize).or_default() += bytes;
 }
 
-/// Per-table on-disk split of ark.db via the `dbstat` vtab, so «трекер
-/// использования» counts usage_sync_log *and* its indexes rather than just
-/// raw column bytes. Errors surface to the caller — a broken or locked db
-/// must not silently lose the breakdown.
-fn database_detail(db_path: &Path) -> Result<Value, String> {
-    if !db_path.is_file() {
-        return Err("ark.db does not exist".into());
-    }
-    let conn =
-        rusqlite::Connection::open_with_flags(db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
-            .map_err(|e| e.to_string())?;
-    let mut stmt = conn
-        .prepare("SELECT name, SUM(pgsize) FROM dbstat GROUP BY name")
-        .map_err(|e| e.to_string())?;
-    let rows = stmt
-        .query_map([], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
-        })
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
-    let mut objects = 0_i64;
-    let mut usage = 0_i64;
-    let mut search = 0_i64;
-    let mut other = 0_i64;
-    for (name, bytes) in rows {
-        if name.starts_with("object_search_fts") {
-            search += bytes;
-        } else if name.starts_with("usage_") || name.starts_with("idx_usage") {
-            usage += bytes;
-        } else if name == "objects"
-            || name.starts_with("object_")
-            || name.starts_with("idx_objects")
-        {
-            objects += bytes;
-        } else {
-            other += bytes;
-        }
-    }
-    Ok(json!([
-        {"id": "objects", "label": "Объекты", "bytes": objects.max(0)},
-        {"id": "usage_tracker", "label": "Трекер использования", "bytes": usage.max(0)},
-        {"id": "search_index", "label": "Поисковый индекс", "bytes": search.max(0)},
-        {"id": "other", "label": "Прочее в базе", "bytes": other.max(0)},
-    ]))
-}
-
 fn storage_breakdown(data_dir: &Path, package_root: &Path) -> Value {
     let package_root = std::fs::canonicalize(package_root).ok();
     let mut acc: BTreeMap<usize, u64> = BTreeMap::new();
+    let mut details: BTreeMap<usize, Vec<Value>> = BTreeMap::new();
     if let Ok(entries) = std::fs::read_dir(data_dir) {
         for entry in entries.flatten() {
             let path = entry.path();
@@ -182,22 +181,45 @@ fn storage_breakdown(data_dir: &Path, package_root: &Path) -> Value {
             if name == "models" && is_dir {
                 if let Ok(models) = std::fs::read_dir(&path) {
                     for model_entry in models.flatten() {
-                        add_path(
-                            &mut acc,
-                            classify_models_entry(&model_entry.file_name().to_string_lossy()),
-                            entry_bytes(&model_entry),
-                        );
+                        let category =
+                            classify_models_entry(&model_entry.file_name().to_string_lossy());
+                        let bytes = entry_bytes(&model_entry);
+                        add_path(&mut acc, category, bytes);
+                        details
+                            .entry(category as usize)
+                            .or_default()
+                            .push(json!({"path": model_entry.path(), "bytes": bytes}));
                     }
                 }
                 continue;
             }
-            add_path(
-                &mut acc,
-                classify(&name, is_package_root),
-                entry_bytes(&entry),
-            );
+            let category = classify(&name, is_package_root);
+            let bytes = entry_bytes(&entry);
+            add_path(&mut acc, category, bytes);
+            if !matches!(category, Category::Database) && bytes > 0 {
+                details
+                    .entry(category as usize)
+                    .or_default()
+                    .push(json!({"path": path, "bytes": bytes}));
+            }
         }
     }
+    let mut value = finish_breakdown(data_dir, acc);
+    for category in ALL_CATEGORIES {
+        if let Some(detail) = details.remove(&(*category as usize)) {
+            if let Some(entry) = value["categories"].as_array_mut().and_then(|entries| {
+                entries
+                    .iter_mut()
+                    .find(|entry| entry["id"] == category.id())
+            }) {
+                entry["detail"] = json!(detail);
+            }
+        }
+    }
+    value
+}
+
+fn finish_breakdown(data_dir: &Path, acc: BTreeMap<usize, u64>) -> Value {
     let mut categories = Vec::new();
     let mut total = 0_u64;
     for category in ALL_CATEGORIES {
@@ -213,7 +235,7 @@ fn storage_breakdown(data_dir: &Path, package_root: &Path) -> Value {
         });
         if matches!(category, Category::Database) {
             let db_path = data_dir.join("ark.db");
-            match database_detail(&db_path) {
+            match database::database_detail(&db_path) {
                 Ok(detail) => value["detail"] = detail,
                 Err(error) => {
                     tracing::warn!(
@@ -227,21 +249,40 @@ fn storage_breakdown(data_dir: &Path, package_root: &Path) -> Value {
         }
         categories.push(value);
     }
-    json!({"total_bytes": total, "categories": categories})
+    json!({"total_bytes": total, "categories": categories, "data_dir": data_dir})
 }
 
 impl ManagerState {
     /// Directory walk and the dbstat scan run on a blocking thread — the
     /// request loop must not stall on a multi-GB data dir.
-    pub async fn data_storage(&self, package_root: &Path) -> Result<Value, String> {
-        let data_dir = self.data_dir().to_path_buf();
-        let package_root = package_root.to_path_buf();
-        tokio::task::spawn_blocking(move || storage_breakdown(&data_dir, &package_root))
-            .await
-            .map_err(|e| e.to_string())
+    pub async fn data_storage(&self, _package_root: &Path) -> Result<Value, String> {
+        // Storage describes the installed product, even when this RPC is served
+        // by a development Engine with a separate data/package directory.
+        let data_dir = crate::data_dir::mundus_config_dir().map_err(|e| e.to_string())?;
+        let package_root = data_dir.join("packages");
+        installed_storage(data_dir, package_root).await
     }
+}
+
+async fn installed_storage(data_dir: PathBuf, package_root: PathBuf) -> Result<Value, String> {
+    tokio::task::spawn_blocking(move || {
+        let mut value = storage_breakdown(&data_dir, &package_root);
+        external::add_external_storage(&mut value, &data_dir, &package_root);
+        presentation::describe(&mut value);
+        value
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
 #[path = "storage_tests.rs"]
 mod tests;
+
+#[path = "storage_external.rs"]
+mod external;
+
+#[path = "storage_database.rs"]
+mod database;
+#[path = "storage_presentation.rs"]
+mod presentation;

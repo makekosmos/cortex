@@ -219,7 +219,7 @@ async fn a11y_tree_shell_exposes_russian_names(cx: &mut TestAppContext) {
     // Sidebar navigation and window chrome — stable
     // Russian names suitable as locators.
     for expected in [
-        "Данные",
+        "Хранилище",
         "Активность",
         "Приложения",
         "Настройки",
@@ -231,7 +231,7 @@ async fn a11y_tree_shell_exposes_russian_names(cx: &mut TestAppContext) {
             labels.keys().collect::<Vec<_>>()
         );
     }
-    assert_eq!(labels["Данные"], "Button");
+    assert_eq!(labels["Хранилище"], "Button");
     assert!(
         !labels.contains_key("Обновить"),
         "no refresh button in titlebar"

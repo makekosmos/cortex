@@ -15,7 +15,7 @@ fn sidebar_contains_only_task_oriented_top_level_pages() {
             View::Appearance,
             View::Packages,
             View::Connections,
-            View::Data,
+            View::Storage,
             View::Usage,
             View::Sync,
             View::Browser,
@@ -44,8 +44,8 @@ fn relocated_controls_load_their_data_on_their_own_pages(cx: &mut TestAppContext
         assert!(app.slots.contains_key("browser.persist"));
         views::dev::load(app);
         assert!(app.slots.contains_key("dev.packages"));
-        views::data::load(app);
-        assert!(app.slots.contains_key("backups.list"));
+        views::storage::load(app);
+        assert!(app.slots.contains_key("data.storage"));
         views::connections::load(app);
         assert!(app.slots.contains_key("conn.list"));
         assert!(!app.slots.contains_key("secrets.config"));
@@ -80,20 +80,6 @@ fn relocated_static_cards_remain_visible_when_values_are_pending_or_failed(
             cx.debug_bounds("settings-startup-card").is_some(),
             "missing static card settings-startup-card"
         );
-        manager.update(cx, |app, cx| {
-            app.view = View::Data;
-            app.slots.insert(
-                "backups.list".into(),
-                if failed {
-                    Slot::Failed("offline".into())
-                } else {
-                    Slot::Loading
-                },
-            );
-            cx.notify();
-        });
-        cx.update(|_, cx| cx.refresh_windows());
-        assert!(cx.debug_bounds("data-backups-card").is_some());
         manager.update(cx, |app, cx| {
             app.view = View::Keys;
             cx.notify();
@@ -138,4 +124,10 @@ fn startup_window_defers_title_and_opens_exactly_one_window(cx: &mut TestAppCont
     assert_eq!(windows.len(), 1, "expected one window, got {windows:?}");
     let mut window_cx = gpui::VisualTestContext::from_window(windows[0], cx);
     assert_eq!(window_cx.window_title().as_deref(), Some("Mundus"));
+}
+
+#[test]
+fn saved_data_page_redirects_to_storage() {
+    assert_eq!(View::from_key("data"), Some(View::Storage));
+    assert_eq!(View::Storage.key(), "storage");
 }

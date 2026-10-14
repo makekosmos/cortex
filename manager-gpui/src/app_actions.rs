@@ -34,9 +34,9 @@ mod tests {
         let (manager, cx) = crate::a11y_tests::launch(cx);
         cx.update(|_, cx| register(cx, manager.downgrade()));
         manager.update(cx, |app, _| {
-            app.view = crate::views::View::Data;
+            app.view = crate::views::View::Storage;
             app.slots
-                .insert("data.summary".into(), Slot::Ready(json!({})));
+                .insert("data.storage".into(), Slot::Ready(json!({})));
         });
         let key = if cfg!(target_os = "macos") {
             "cmd-r"
@@ -50,7 +50,7 @@ mod tests {
         });
         cx.simulate_keystrokes(key);
         manager.read_with(cx, |app, _| {
-            assert!(matches!(app.slots.get("data.summary"), Some(Slot::Loading)));
+            assert!(matches!(app.slots.get("data.storage"), Some(Slot::Loading)));
         });
     }
 }

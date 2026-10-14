@@ -22,6 +22,9 @@ impl Render for ManagerApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.sync_theme(window, cx);
         let sidebar_p = self.sidebar_progress(window);
+        if self.view == views::View::Storage {
+            self.storage_ui.advance(window);
+        }
         let active = views::render(self.view, self, window, cx);
         let mut root = div()
             .size_full()
@@ -49,7 +52,11 @@ impl Render for ManagerApp {
                             .id("page-content")
                             .debug_selector(|| "page-content".into())
                             .flex_1()
-                            .overflow_y_scrollbar()
+                            .overflow_y_scroll()
+                            .track_scroll(&self.storage_ui.scroll)
+                            .when(self.view != views::View::Storage, |content| {
+                                content.vertical_scrollbar(&self.storage_ui.scroll)
+                            })
                             .p_6()
                             .flex()
                             .flex_col()
@@ -127,7 +134,9 @@ impl Render for ManagerApp {
         // resolved every frame from the Engine status slot; `Failed` needs
         // the previous state, so the resolution is stored back on the app.
         let update_state = crate::update_overlay::resolve(
-            self.update_snoozed,
+            self.update_snoozed
+                || (cfg!(debug_assertions)
+                    && !(cfg!(test) && self.data("upd.mundus")["testPreview"] == true)),
             self.update_overlay.visible(),
             &vstr(&self.data("upd.mundus"), "state"),
         );

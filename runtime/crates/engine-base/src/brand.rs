@@ -18,8 +18,9 @@ pub const ENGINE_BINARY_STEM: &str = "mundus-engine";
 /// Log/stderr tag emitted by the Engine process.
 pub const PROCESS_TAG: &str = "[mundus-engine]";
 
-/// Roaming config root name: `%APPDATA%\Mundus` (Windows) /
-/// `$XDG_CONFIG_HOME/Mundus` or `~/.config/Mundus` (Unix).
+/// Roaming config root name: `%APPDATA%\Mundus` (Windows),
+/// `~/Library/Application Support/Mundus` (macOS),
+/// `$XDG_CONFIG_HOME/Mundus` or `~/.config/Mundus` (other Unix).
 pub const CONFIG_DIR_NAME: &str = "Mundus";
 
 /// Local data root name: `%LOCALAPPDATA%\Mundus` (Engine installs under

@@ -143,13 +143,29 @@ fn storage_breakdown_does_not_descend_into_symlinks() {
 #[tokio::test]
 async fn data_storage_runs_off_the_request_loop() {
     let dir = tempfile::tempdir().unwrap();
-    let state = ManagerState::new(dir.path().to_path_buf());
-    // Seed after ManagerState::new: its UpdaterService sweeps updates/ for
-    // stale payloads on construction (KOS-301).
     put(dir.path(), "updates/x.bin", 5);
-    let value = state
-        .data_storage(&dir.path().join("packages"))
+    let value = installed_storage(dir.path().to_path_buf(), dir.path().join("packages"))
         .await
         .unwrap();
     assert_eq!(bytes_of(&value, "updates"), 5);
+}
+
+#[tokio::test]
+async fn dev_engine_inventory_uses_installed_data_and_packages() {
+    let dev = tempfile::tempdir().unwrap();
+    let state = ManagerState::new(dev.path().to_path_buf());
+    put(dev.path(), "dev-only-storage-fixture/payload", 123);
+    put(dev.path(), "packages/dev-only-package-fixture/payload", 456);
+    let value = state
+        .data_storage(&dev.path().join("packages"))
+        .await
+        .unwrap();
+    assert_eq!(
+        value["data_dir"],
+        json!(crate::data_dir::mundus_config_dir().unwrap())
+    );
+    let response = value.to_string();
+    assert!(!response.contains("dev-only-storage-fixture"));
+    assert!(!response.contains("dev-only-package-fixture"));
+    assert!(!response.contains(&dev.path().to_string_lossy().into_owned()));
 }

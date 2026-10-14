@@ -84,15 +84,14 @@ pub struct ManagerApp {
     pub notice: Option<String>,
     /// Persistent Engine error (banner until a retry succeeds).
     pub error: Option<String>,
-    /// Object type selected inside Данные.
-    pub data_type: Option<String>,
     pub store_tab: StoreTab,
     pub sync_pairing_open: bool,
     pub sync_code_copied: bool,
     pub about_support_open: bool,
     /// Диагностика: развёрнут ли список проверок.
     pub about_diag_open: bool,
-    pub data_storage_open: bool,
+    pub storage_database_only: bool,
+    pub storage_ui: crate::views::storage_motion::StorageUi,
     pub confirm: Option<Confirm>,
     /// KOS-355 update overlay: «Позже» hides it until the app restarts.
     pub update_snoozed: bool,
@@ -148,6 +147,7 @@ pub struct ManagerApp {
     next_store_poll: Instant,
     next_sync_poll: Instant,
     next_about_poll: Instant,
+    next_storage_poll: Instant,
     /// Slots whose replies came from a background `refresh` — they must not
     /// clear a visible error banner (that's for the user's own clicks).
     background_slots: std::collections::HashSet<String>,
@@ -185,13 +185,13 @@ impl ManagerApp {
             inputs: HashMap::new(),
             notice: None,
             error: None,
-            data_type: None,
             store_tab: StoreTab::Installed,
             sync_pairing_open: false,
             sync_code_copied: false,
             about_support_open: false,
             about_diag_open: false,
-            data_storage_open: false,
+            storage_database_only: false,
+            storage_ui: Default::default(),
             confirm: None,
             update_snoozed: false,
             update_overlay: crate::update_overlay::OverlayState::Hidden,
@@ -222,6 +222,7 @@ impl ManagerApp {
             next_store_poll: Instant::now(),
             next_sync_poll: Instant::now(),
             next_about_poll: Instant::now(),
+            next_storage_poll: Instant::now() + std::time::Duration::from_secs(5),
             background_slots: std::collections::HashSet::new(),
         };
         this.call("appearance", "appearance.get", json!({}));
