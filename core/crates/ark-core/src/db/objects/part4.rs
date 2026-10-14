@@ -28,6 +28,29 @@ pub fn delete_object_link(conn: &Connection, id: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Ids of links with this source and link_type, except `keep_id`.
+pub fn list_other_object_link_ids(
+    conn: &Connection,
+    source_id: &str,
+    link_type: &str,
+    keep_id: &str,
+) -> Result<Vec<String>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id FROM object_links
+             WHERE source_object_id = ?1 AND link_type = ?2 AND id <> ?3
+             ORDER BY id",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![source_id, link_type, keep_id], |row| {
+            row.get::<_, String>(0)
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
+}
+
 pub fn list_object_links(conn: &Connection) -> Result<Vec<ObjectLink>, String> {
     let mut stmt = conn
         .prepare(

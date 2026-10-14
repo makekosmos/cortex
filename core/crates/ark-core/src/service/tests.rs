@@ -42,6 +42,7 @@ mod object_validation;
 mod object_write_snapshot;
 mod pairing_iroh;
 mod pairing_proto;
+mod replace_object_link;
 mod request_config;
 /// KOS-51: atomic ARK snapshot restore RPC (list/validate/restore).
 mod snapshot_restore;
