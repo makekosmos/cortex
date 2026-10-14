@@ -240,7 +240,10 @@ pub(crate) async fn handle_start_sync(
         } else {
             let ticket_transport = iroh_transport.clone();
             let ticket_tx = iroh_our_ticket_tx;
-            tokio::spawn(async move {
+            // Tracked by the transport, not detached: this task holds the
+            // transport, and the transport holds the ark.db connection, so
+            // `stop()` must abort and join it (KOS-369).
+            let ticket_task = tokio::spawn(async move {
                 match ticket_transport.our_ticket().await {
                     Ok(ticket) => {
                         let _ = ticket_tx.send(Some(ticket));
@@ -251,6 +254,7 @@ pub(crate) async fn handle_start_sync(
                     }
                 }
             });
+            iroh_transport.track(ticket_task);
         }
         Some(relay_sync)
     } else {
