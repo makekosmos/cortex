@@ -18,6 +18,11 @@ pub(crate) struct SyncStartParams {
     pub(crate) auth_secret: Option<String>,
     pub(crate) use_iroh: bool,
     pub(crate) iroh_peer_ticket: Option<String>,
+    /// Optional iroh relay server URL. `None` => `RelayMode::Default` (n0
+    /// production relays) for the all-interfaces bind. A custom URL selects
+    /// `RelayMode::Custom` — self-hosted relays and tests pointing the
+    /// endpoint at an unreachable relay.
+    pub(crate) iroh_relay_url: Option<String>,
     /// KOS-369: this start is the user entering a pairing code — mark the
     /// endpoint as an outgoing consent attempt. One-shot: the runtime's
     /// persisted `start_params` carry `false` so internal restarts and boot
@@ -39,13 +44,17 @@ pub(crate) struct SyncRuntime {
     pub(crate) relay: Option<Arc<RelaySync>>,
     pub(crate) transport_choice: Option<TransportChoice>,
     pub(crate) start_params: SyncStartParams,
-    /// Step 4a: our iroh pairing ticket, captured at construction time when
-    /// the iroh transport was selected (`our_ticket()` needs the transport
-    /// object directly — `RelaySync` only exposes `Arc<dyn SyncTransport>`,
-    /// which is not downcastable — so we snapshot the ticket string instead
-    /// of threading a concrete `IrohTransport` handle through `SyncRuntime`).
-    /// `None` when iroh wasn't selected.
-    pub(crate) iroh_our_ticket: Option<String>,
+    /// Step 4a: our iroh pairing ticket, resolved asynchronously after the
+    /// iroh transport binds (`our_ticket()` needs the transport object
+    /// directly — `RelaySync` only exposes `Arc<dyn SyncTransport>`, which
+    /// is not downcastable — so the ticket string is published through this
+    /// watch channel instead of threading a concrete `IrohTransport` handle
+    /// through `SyncRuntime`). With relay homing enabled `our_ticket()`
+    /// waits on the network (relay reachability), which must not stall the
+    /// sequential request worker, so the start handler fills the channel
+    /// from a spawned task. `borrow()` is `None` until the ticket is
+    /// resolved, and stays `None` when iroh wasn't selected.
+    pub(crate) iroh_our_ticket: watch::Receiver<Option<String>>,
     pub(crate) beacon: Arc<BroadcastDiscovery>,
     pub(crate) space_id: String,
     pub(crate) device_id: String,

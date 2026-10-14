@@ -37,7 +37,7 @@ use std::sync::{Arc, Mutex as StdMutex};
 
 use serde::Deserialize;
 use serde_json::{json, Value};
-use tokio::sync::{mpsc, oneshot, Mutex as TokioMutex};
+use tokio::sync::{mpsc, oneshot, watch, Mutex as TokioMutex};
 
 use crate::beacon::{BeaconPeer, BroadcastDiscovery, BroadcastDiscoveryOptions};
 use crate::db::{self, SqliteStorageBackend};

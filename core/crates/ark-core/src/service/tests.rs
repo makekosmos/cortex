@@ -46,6 +46,7 @@ mod request_config;
 /// KOS-51: atomic ARK snapshot restore RPC (list/validate/restore).
 mod snapshot_restore;
 mod sync_lifecycle;
+mod sync_ticket_pending;
 
 /// Выставляет capturing-транспорт и выставляет SyncRuntime в `state.sync`.
 /// Возвращает буфер перехваченных сообщений.
@@ -101,12 +102,13 @@ async fn setup_sync_with_capturing_transport(
             auth_secret: None,
             use_iroh: false,
             iroh_peer_ticket: None,
+            iroh_relay_url: None,
             pairing_connect: false,
             discovery_enabled: true,
             bind: SyncBind::AllInterfaces,
             app_version: None,
         },
-        iroh_our_ticket: None,
+        iroh_our_ticket: watch::channel(None).1,
         beacon: Arc::new(crate::beacon::BroadcastDiscovery::new()),
         space_id: "test-space".to_string(),
         device_id: "test-device".to_string(),

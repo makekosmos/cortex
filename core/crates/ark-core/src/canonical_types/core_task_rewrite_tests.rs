@@ -154,6 +154,7 @@ fn rewrite_maps_every_legacy_state_and_keeps_trash_and_extensions() -> Result<()
         Some("2026-10-20"),
     );
     priced["extensions"]["price"] = json!(150);
+    priced["extensions"]["fuel_cost"] = json!(12.5);
     insert_legacy(&conn, "scheduled", &priced, false)?;
 
     let dir = tempfile::tempdir().map_err(|e| e.to_string())?;
@@ -214,6 +215,10 @@ fn rewrite_maps_every_legacy_state_and_keeps_trash_and_extensions() -> Result<()
         stored_props(&conn, "scheduled")?.2["extensions"]["price"],
         json!(150)
     );
+    assert!(stored_props(&conn, "scheduled")?.2["extensions"]
+        .get("fuel_cost")
+        .is_none());
+    assert!(props["extensions"].get("fuel_cost").is_none());
 
     let deleted_at: Option<String> = conn
         .query_row(
@@ -252,6 +257,33 @@ fn rewrite_writes_a_backup_of_the_legacy_rows_before_changing_them() -> Result<(
         .query_row("SELECT COUNT(*) FROM objects WHERE type_id = 'com.kosmos.task' AND type_version = '1.1.0'", [], |r| r.get(0))
         .map_err(|e| e.to_string())?;
     assert_eq!(legacy, 1);
+    Ok(())
+}
+
+#[test]
+fn rewrite_drops_fuel_cost_but_the_backup_keeps_it() -> Result<(), String> {
+    let conn = fresh_db()?;
+    let mut fueled = legacy_props("todo", false, false, false, false, false, None);
+    fueled["extensions"]["fuel_cost"] = json!(12.5);
+    insert_legacy(&conn, "fueled", &fueled, false)?;
+    let dir = tempfile::tempdir().map_err(|e| e.to_string())?;
+    let path = backup_path(&dir);
+    let report = rewrite_legacy_tasks(&conn, &path, "device-a")?;
+    assert_eq!(report.rewritten, 1);
+
+    let backup = Connection::open(&path).map_err(|e| e.to_string())?;
+    let backup_json: String = backup
+        .query_row(
+            "SELECT props_json FROM objects WHERE id = 'fueled'",
+            [],
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    let backup_props: Value = serde_json::from_str(&backup_json).map_err(|e| e.to_string())?;
+    assert_eq!(backup_props["extensions"]["fuel_cost"], json!(12.5));
+    assert!(stored_props(&conn, "fueled")?.2["extensions"]
+        .get("fuel_cost")
+        .is_none());
     Ok(())
 }
 

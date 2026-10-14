@@ -37,6 +37,7 @@ fn iroh_params(device_id: &str, name: &str, ticket: Option<String>) -> StartSync
         auth_secret: None,
         use_iroh: true,
         iroh_peer_ticket: ticket,
+        iroh_relay_url: None,
         pairing_connect: false,
         discovery_enabled: false,
         bind: SyncBind::Loopback,
