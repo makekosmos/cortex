@@ -39,11 +39,10 @@ pub fn start(
     }
     #[cfg(windows)]
     {
-        let _ = pcm_sink;
         if source.is_some() {
             return Err("file_source_unsupported".into());
         }
-        return super::native_capture_windows::start(capture_id, level_sink);
+        return super::native_capture_windows::start(capture_id, level_sink, pcm_sink);
     }
     #[cfg(target_os = "macos")]
     {
