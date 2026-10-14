@@ -1,81 +1,62 @@
 {
-  "id": "t",
-  "typeId": "com.kosmos.task",
-  "typeVersion": "1.1.0",
-  "title": "task-recurrence edited",
+  "contentJson": {
+    "content": [
+      {
+        "content": [
+          {
+            "text": "",
+            "type": "text"
+          }
+        ],
+        "type": "paragraph"
+      }
+    ],
+    "type": "doc"
+  },
   "createdAt": "2026-05-14T09:00:00.000Z",
+  "deletedAt": null,
+  "id": "t",
   "propsJson": {
+    "checklist": [],
+    "deadline": null,
     "extensions": {
-      "priority": 0,
-      "scheduled_date": null,
-      "deadline": null,
-      "reminder_date": null,
-      "is_today": false,
-      "is_evening": false,
-      "is_someday": false,
-      "status": "todo",
-      "system_kind": null,
-      "is_completed": false,
-      "completed_at": null,
-      "is_cancelled": false,
-      "is_trashed": false,
-      "created_at": "2026-05-14T09:00:00.000Z",
-      "heading_id": null,
-      "project_id": null,
       "area_id": null,
-      "tag_ids": [],
       "billable": false,
+      "description": null,
+      "heading_id": null,
       "price": null,
+      "scheduled_date": null,
       "significance": null,
       "sort_order": 0,
-      "description": null,
-      "cancelled_at": null,
-      "checklist_items": [],
-      "recurrence_rule": {
-        "frequency": 0,
-        "interval": 1,
-        "recurrenceType": 0,
-        "daysOfWeek": [
-          1,
-          3
-        ],
-        "endDate": null,
-        "dayOfMonth": null
-      }
+      "status": "todo",
+      "system_kind": null,
+      "tag_ids": []
     },
-    "status": "todo",
-    "canceledAt": null,
+    "planning": {
+      "date": null,
+      "kind": "anytime",
+      "period": "any"
+    },
     "priority": "none",
-    "scheduledAt": null,
-    "dueAt": null,
-    "reminderAt": null,
-    "completedAt": null,
-    "checklist": [],
     "recurrence": {
-      "frequency": "daily",
-      "interval": 1,
-      "recurrenceType": "fixed",
       "daysOfWeek": [
         1,
         3
       ],
-      "endDate": null
+      "end": null,
+      "frequency": "daily",
+      "interval": 1,
+      "kind": "calendar",
+      "timeZone": null
+    },
+    "reminders": [],
+    "state": {
+      "at": null,
+      "kind": "open"
     }
   },
-  "contentJson": {
-    "type": "doc",
-    "content": [
-      {
-        "type": "paragraph",
-        "content": [
-          {
-            "type": "text",
-            "text": ""
-          }
-        ]
-      }
-    ]
-  },
-  "deletedAt": null,
+  "title": "task-recurrence edited",
+  "typeId": "core.task",
+  "typeVersion": "0.1.0",
   "updatedAt": "2026-05-15T10:00:00.000Z"
 }
