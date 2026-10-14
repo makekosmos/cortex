@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used)]
 use ark_core::canonical_types::definitions::canonical_type_registrations;
-use ark_core::db::{init_schema, upsert_object_type};
+use ark_core::db::{delete_object_type, init_schema, upsert_object_type};
 use ark_core::type_registry::{canonical_schema_hash, resolve_alias};
 use ark_core::types::ObjectType;
 use rusqlite::Connection;
@@ -58,6 +58,14 @@ const EXPECTED: [(&str, &str, &str); 9] = [
 
 // Newer versions registered alongside their predecessors; stored objects keep
 // the version they were written with, so every listed version stays valid.
+// KOS-397: `core.task` 0.1.0 is a new type id with no legacy alias, so it is
+// pinned separately from EXPECTED (which requires one alias per type).
+const NEW_TYPES: &[(&str, &str, &str)] = &[(
+    "core.task",
+    "0.1.0",
+    "20fbcf5ec311b37563d2b18bf29fb79c781b3eaa9fb28cca76620678f1f8abb1",
+)];
+
 const SUPERSEDED: &[(&str, &str, &str)] = &[
     (
         "com.kosmos.task",
@@ -74,7 +82,10 @@ const SUPERSEDED: &[(&str, &str, &str)] = &[
 #[test]
 fn canonical_definitions_match_frozen_order_and_metadata() {
     let registrations = canonical_type_registrations().expect("canonical definitions");
-    assert_eq!(registrations.len(), EXPECTED.len() + SUPERSEDED.len());
+    assert_eq!(
+        registrations.len(),
+        EXPECTED.len() + SUPERSEDED.len() + NEW_TYPES.len()
+    );
     for (registration, (type_id, alias, hash)) in registrations.iter().zip(EXPECTED) {
         assert_eq!(registration.type_id, type_id);
         assert_eq!(registration.version, "1.0.0");
@@ -96,13 +107,27 @@ fn canonical_definitions_match_frozen_order_and_metadata() {
         assert_eq!(registration.aliases[0].alias, *alias);
         assert_eq!(registration.schema_hash, *hash);
     }
+    for (registration, (type_id, version, hash)) in registrations
+        [EXPECTED.len() + SUPERSEDED.len()..]
+        .iter()
+        .zip(NEW_TYPES)
+    {
+        assert_eq!(registration.type_id, *type_id);
+        assert_eq!(registration.version, *version);
+        assert!(registration.aliases.is_empty());
+        assert_eq!(registration.schema_hash, *hash);
+    }
 }
 
 #[test]
 fn canonical_definition_json_is_parseable_and_hashes_exactly() {
     let registrations = canonical_type_registrations().expect("canonical definitions");
-    let expected: Vec<(&str, &str, &str)> =
-        EXPECTED.iter().chain(SUPERSEDED.iter()).copied().collect();
+    let expected: Vec<(&str, &str, &str)> = EXPECTED
+        .iter()
+        .chain(SUPERSEDED.iter())
+        .chain(NEW_TYPES.iter())
+        .copied()
+        .collect();
     for (registration, (_, _, expected_hash)) in registrations.iter().zip(expected) {
         let schema: Value = serde_json::from_str(&registration.schema_json).unwrap();
         let ui_schema: Value = serde_json::from_str(&registration.ui_schema_json).unwrap();
@@ -124,7 +149,7 @@ fn canonical_ids_and_aliases_do_not_collide() {
         .iter()
         .flat_map(|r| r.aliases.iter().map(|a| a.alias.as_str()))
         .collect();
-    assert_eq!(ids.len(), EXPECTED.len());
+    assert_eq!(ids.len(), EXPECTED.len() + NEW_TYPES.len());
     assert_eq!(aliases.len(), EXPECTED.len());
     assert!(ids.is_disjoint(&aliases));
 }
@@ -175,6 +200,7 @@ fn fresh_init_registers_exact_canonical_authority_and_routes_legacy_aliases() {
             ((*id).to_owned(), current.to_owned())
         })
         .collect();
+    expected.push(("core.task".to_owned(), "0.1.0".to_owned()));
     expected.sort();
     assert_eq!(rows, expected);
 
@@ -211,6 +237,49 @@ fn fresh_init_registers_exact_canonical_authority_and_routes_legacy_aliases() {
             "SELECT COUNT(*) FROM object_types WHERE id='note_obj'",
             [],
             |row| { row.get::<_, i64>(0) }
+        )
+        .unwrap(),
+        0
+    );
+}
+
+#[test]
+fn inbound_legacy_object_type_entity_cannot_mutate_canonical_row() {
+    // KOS-370: sync exports every object_types row as a legacy `object_type`
+    // entity. Applying a peer's canonical definition on this side must not
+    // downgrade `current_version` to `0.0.0+legacy.*` or deprecate the row —
+    // either mutation fails the phase3 registry preflight at next open and
+    // bricks the database.
+    let conn = Connection::open_in_memory().unwrap();
+    init_schema(&conn).unwrap();
+
+    let synced = ObjectType {
+        id: "com.kosmos.task".into(),
+        name: "Peer Task".into(),
+        schema_json: "{}".into(),
+        ui_schema_json: "{}".into(),
+        created_at: "now".into(),
+        updated_at: "now".into(),
+        system_locked: false,
+    };
+    upsert_object_type(&conn, &synced).unwrap();
+    delete_object_type(&conn, "com.kosmos.task").unwrap();
+
+    let (current_version, status): (String, String) = conn
+        .query_row(
+            "SELECT current_version, status FROM object_types WHERE id='com.kosmos.task'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(current_version, "1.1.0");
+    assert_eq!(status, "active");
+    assert_eq!(
+        conn.query_row(
+            "SELECT COUNT(*) FROM object_type_versions
+             WHERE type_id='com.kosmos.task' AND version LIKE '0.0.0+legacy.%'",
+            [],
+            |row| row.get::<_, i64>(0)
         )
         .unwrap(),
         0

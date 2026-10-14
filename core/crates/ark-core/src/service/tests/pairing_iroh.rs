@@ -37,6 +37,7 @@ fn iroh_params(device_id: &str, name: &str, ticket: Option<String>) -> StartSync
         auth_secret: None,
         use_iroh: true,
         iroh_peer_ticket: ticket,
+        iroh_relay_url: None,
         pairing_connect: false,
         discovery_enabled: false,
         bind: SyncBind::Loopback,
@@ -363,7 +364,7 @@ async fn pending_pairing_exchanges_no_data() {
     let state_b = fixture_b.state.clone();
 
     let entity = |id: &str| {
-        let mut object = canonical_task_object(Some("1.0.0"), canonical_task_props());
+        let mut object = canonical_task_object(Some("0.1.0"), canonical_task_props());
         object.id = id.to_string();
         let value = serde_json::to_value(&object).unwrap();
         let Value::Object(mut data) = value else {

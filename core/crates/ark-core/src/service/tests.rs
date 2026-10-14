@@ -35,6 +35,18 @@ impl ServiceFixture {
     }
 }
 
+impl Drop for ServiceFixture {
+    fn drop(&mut self) {
+        // KOS-398: drop the shared SQLite handle before TempDir tries to
+        // delete ark.db. A forgotten StopSync (or a transport task that still
+        // holds its own Arc) keeps the file open on Windows; TestTempDir then
+        // panics with the test name instead of leaving a silent leftover.
+        if let Ok(mut guard) = self.state.db.lock() {
+            *guard = None;
+        }
+    }
+}
+
 mod legacy_writes;
 mod local_writes;
 mod object_revision_compat;
@@ -42,10 +54,12 @@ mod object_validation;
 mod object_write_snapshot;
 mod pairing_iroh;
 mod pairing_proto;
+mod replace_object_link;
 mod request_config;
 /// KOS-51: atomic ARK snapshot restore RPC (list/validate/restore).
 mod snapshot_restore;
 mod sync_lifecycle;
+mod sync_ticket_pending;
 
 /// Выставляет capturing-транспорт и выставляет SyncRuntime в `state.sync`.
 /// Возвращает буфер перехваченных сообщений.
@@ -101,12 +115,13 @@ async fn setup_sync_with_capturing_transport(
             auth_secret: None,
             use_iroh: false,
             iroh_peer_ticket: None,
+            iroh_relay_url: None,
             pairing_connect: false,
             discovery_enabled: true,
             bind: SyncBind::AllInterfaces,
             app_version: None,
         },
-        iroh_our_ticket: None,
+        iroh_our_ticket: watch::channel(None).1,
         beacon: Arc::new(crate::beacon::BroadcastDiscovery::new()),
         space_id: "test-space".to_string(),
         device_id: "test-device".to_string(),
@@ -122,7 +137,7 @@ async fn setup_sync_with_capturing_transport(
 fn canonical_task_object(type_version: Option<&str>, props_json: Value) -> ArkObjectWrite {
     ArkObjectWrite {
         id: "canonical-task-ingress".to_string(),
-        type_id: "com.kosmos.task".to_string(),
+        type_id: "core.task".to_string(),
         type_version: type_version.map(str::to_owned),
         title: "Canonical task".to_string(),
         content_json: json!(
@@ -139,14 +154,12 @@ fn canonical_task_object(type_version: Option<&str>, props_json: Value) -> ArkOb
 
 fn canonical_task_props() -> Value {
     json!(
-        {"status":"todo",
-        "priority":"medium",
-        "scheduledAt":null,
-        "dueAt":null,
-        "reminderAt":null,
-        "completedAt":null,
-        "canceledAt":null,
+        {"state":{"kind":"open","at":null},
+        "planning":{"kind":"anytime","period":"any","date":null},
+        "deadline":null,
+        "reminders":[],
         "recurrence":null,
+        "priority":"medium",
         "checklist":[],
         "extensions":{"vendor":{"opaque":true}}})
 }

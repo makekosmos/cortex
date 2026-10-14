@@ -100,7 +100,7 @@ fn branch_corpus_rejects_types_enums_and_cardinality_with_structured_pointers() 
 #[test]
 fn branch_corpus_preserves_flags_and_rejects_malformed_canonical_values() {
     let flags = map_legacy(&record("task_obj", json!({"is_completed": true}))).unwrap();
-    assert_eq!(flags.object.props_json["status"], "done");
+    assert_eq!(flags.object.props_json["state"]["kind"], "done");
     let bad = record("image_obj", json!({"altText": 42}));
     assert!(matches!(
         map_legacy(&bad),

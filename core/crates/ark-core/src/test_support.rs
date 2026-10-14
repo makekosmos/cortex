@@ -4,13 +4,25 @@
 //! проглатывает эту ошибку, и каталог с `ark.db` остаётся, а гейт потом
 //! падает без имени теста. Здесь удаление проверяется явно: тест, который
 //! закрыл базу не до конца, падает с путём к каталогу в сообщении.
+//!
+//! KOS-398: в каталог пишется `LEAK_OWNER` с именем потока/теста (nextest
+//! выставляет его), чтобы гейт в логе назвал виновника даже когда к моменту
+//! sweep процесс уже вышел и handle отпущен.
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 pub(crate) struct TestTempDir(Option<tempfile::TempDir>);
 
 pub(crate) fn temp_dir() -> TestTempDir {
-    TestTempDir(Some(tempfile::tempdir().expect("temp dir")))
+    let dir = tempfile::tempdir().expect("temp dir");
+    if let Some(name) = std::thread::current().name() {
+        let marker = dir.path().join("LEAK_OWNER");
+        if let Ok(mut file) = std::fs::File::create(&marker) {
+            let _ = writeln!(file, "{name}");
+        }
+    }
+    TestTempDir(Some(dir))
 }
 
 impl TestTempDir {
@@ -27,11 +39,14 @@ impl Drop for TestTempDir {
             return;
         };
         let path: PathBuf = dir.path().to_path_buf();
+        let owner = std::fs::read_to_string(path.join("LEAK_OWNER"))
+            .unwrap_or_else(|_| "(unknown test)".into());
         if let Err(error) = dir.close() {
             if !std::thread::panicking() {
                 panic!(
-                    "temp dir {} could not be removed, a file in it is still open: {error}",
-                    path.display()
+                    "temp dir {} (test {}) could not be removed, a file in it is still open: {error}",
+                    path.display(),
+                    owner.trim()
                 );
             }
         }

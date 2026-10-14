@@ -32,7 +32,7 @@ async fn blocked_database_accepts_agenda_write_through_service() {
         json!(true)
     );
     let stored = service.call("get_object", json!({"id":"t"})).await.unwrap();
-    assert_eq!(stored["typeVersion"], "1.1.0");
+    assert_eq!(stored["typeVersion"], "0.1.0");
     assert_eq!(
         service
             .call("delete_object", json!({"id":"t", "device_id":"test"}))

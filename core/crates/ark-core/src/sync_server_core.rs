@@ -1,4 +1,5 @@
 use super::*;
+use crate::task_set::track_task;
 
 async fn signed_integration_write_is_authorized(
     storage: &Arc<dyn StorageBackend>,
@@ -65,6 +66,7 @@ impl SyncServer {
             known_peer_records: Arc::new(Mutex::new(Vec::new())),
             shutdown_tx: Arc::new(Mutex::new(None)),
             accept_task: Arc::new(Mutex::new(None)),
+            conn_tasks: Arc::new(std::sync::Mutex::new(Vec::new())),
             on_change: Arc::new(Mutex::new(None)),
             on_peer_connect: Arc::new(Mutex::new(None)),
             on_peer_disconnect: Arc::new(Mutex::new(None)),
@@ -311,6 +313,7 @@ impl SyncServer {
         let on_peer_disconnect = self.on_peer_disconnect.clone();
         let on_new_peer_discovered = self.on_new_peer_discovered.clone();
         let next_peer_id = self.next_peer_id.clone();
+        let conn_tasks = self.conn_tasks.clone();
 
         // Ping ticker shares the accept task: a separate ping task had no
         // shutdown path and leaked (plus duplicated pings) on every restart.
@@ -349,7 +352,7 @@ impl SyncServer {
                                 let peers_writer = peers.clone();
                                 let space_id_writer = space_id.clone();
                                 let device_id_writer = device_id.clone();
-                                tokio::spawn(async move {
+                                track_task(&conn_tasks, tokio::spawn(async move {
                                     while let Some(msg) = rx.recv().await {
                                         if let Message::Text(text) = &msg {
                                             if let Some(LanSyncMessage::SignedIntegrationFrame {
@@ -386,7 +389,7 @@ impl SyncServer {
                                             break;
                                         }
                                     }
-                                });
+                                }));
 
                                 let peer_state = PeerState {
                                     device_id: String::new(),
@@ -418,7 +421,7 @@ impl SyncServer {
                                 let peers_reader = peers.clone();
                                 let on_peer_disconnect_reader = on_peer_disconnect.clone();
 
-                                tokio::spawn(async move {
+                                track_task(&conn_tasks, tokio::spawn(async move {
                                     while let Some(Ok(msg)) = ws_stream_rx.next().await {
                                         match msg {
                                             Message::Text(text) => {
@@ -454,7 +457,7 @@ impl SyncServer {
                                             }
                                         }
                                     }
-                                });
+                                }));
                             }
                             Err(e) => {
                                 eprintln!("{TAG} Accept error: {e}");

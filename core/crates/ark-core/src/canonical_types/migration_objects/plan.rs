@@ -117,7 +117,7 @@ fn context(conn: &Connection, records: &[SourceRecord]) -> Result<MappingContext
     // symmetric.
     for r in records {
         let canonical = match r.source_kind.name() {
-            "todos" => "com.kosmos.task",
+            "todos" => "core.task",
             "projects" | "areas" | "headings" => "com.kosmos.project",
             "tags" => "com.kosmos.tag",
             k => alias.get(k).map(|x| x.type_id.as_str()).unwrap_or(k),

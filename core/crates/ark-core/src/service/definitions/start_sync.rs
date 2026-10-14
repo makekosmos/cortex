@@ -27,6 +27,12 @@ pub(crate) struct StartSyncParams {
     /// `iroh_transport::IrohTransport::our_ticket`/`from_ticket`).
     #[serde(default)]
     pub(crate) iroh_peer_ticket: Option<String>,
+    /// Optional iroh relay server URL. `None` keeps the default mode
+    /// (loopback binds disable relays; all-interfaces uses n0 production
+    /// relays). A URL selects `RelayMode::Custom` — self-hosted relays, or
+    /// tests that need a deterministically unreachable relay.
+    #[serde(default)]
+    pub(crate) iroh_relay_url: Option<String>,
     /// KOS-369: set only when this start IS the user entering a code
     /// (`connect_with_pairing_code`) — marks the endpoint as a
     /// human-consented outgoing pairing and surfaces it in the snapshot.

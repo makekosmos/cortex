@@ -1,38 +1,38 @@
 
-    #[test]
-    fn test_schema_creation() {
-        let conn = setup_db();
-        // Verify tables exist
-        let count: i64 = conn
-            .query_row(
-                concat!(
-                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('todos',",
-                    "'projects','tags','tracked_apps','usage_sessions','usage_events','sync_kv',",
-                    "'sync_tombstones')"
-                ),
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(count, 8);
-        let object_count: i64 = conn
-            .query_row(
-                concat!(
-                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN (",
-                    "'object_types', 'objects', 'object_links')"
-                ),
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(object_count, 3);
-    }
+#[test]
+fn test_schema_creation() {
+    let conn = setup_db();
+    // Verify tables exist
+    let count: i64 = conn
+        .query_row(
+            concat!(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('todos',",
+                "'projects','tags','tracked_apps','usage_sessions','usage_events','sync_kv',",
+                "'sync_tombstones')"
+            ),
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(count, 8);
+    let object_count: i64 = conn
+        .query_row(
+            concat!(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN (",
+                "'object_types', 'objects', 'object_links')"
+            ),
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(object_count, 3);
+}
 
-    #[test]
-    fn test_init_schema_migrates_existing_db_without_destroying_data() {
-        let conn = Connection::open_in_memory().unwrap();
-        conn.execute_batch(
-            "
+#[test]
+fn test_init_schema_migrates_existing_db_without_destroying_data() {
+    let conn = Connection::open_in_memory().unwrap();
+    conn.execute_batch(
+        "
             CREATE TABLE todos (
                 id TEXT PRIMARY KEY,
                 title TEXT NOT NULL,
@@ -93,83 +93,80 @@
                 value TEXT NOT NULL
             );
             ",
-        )
-        .unwrap();
+    )
+    .unwrap();
 
-        let todo = make_todo("legacy-todo", "Keep me");
-        upsert_todo(&conn, &todo).unwrap();
-        set_sync_kv(&conn, "legacy-key", "legacy-value").unwrap();
+    let todo = make_todo("legacy-todo", "Keep me");
+    upsert_todo(&conn, &todo).unwrap();
+    set_sync_kv(&conn, "legacy-key", "legacy-value").unwrap();
 
-        init_schema(&conn).unwrap();
+    init_schema(&conn).unwrap();
 
-        let data = load_all(&conn).unwrap();
-        assert_eq!(data.todos.len(), 1);
-        assert_eq!(data.todos[0].id, "legacy-todo");
-        assert_eq!(data.todos[0].title, "Keep me");
-        assert_eq!(
-            get_sync_kv(&conn, "legacy-key").unwrap(),
-            Some("legacy-value".to_string())
-        );
+    let data = load_all(&conn).unwrap();
+    assert_eq!(data.todos.len(), 1);
+    assert_eq!(data.todos[0].id, "legacy-todo");
+    assert_eq!(data.todos[0].title, "Keep me");
+    assert_eq!(
+        get_sync_kv(&conn, "legacy-key").unwrap(),
+        Some("legacy-value".to_string())
+    );
 
-        let usage_table_count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM sqlite_master
+    let usage_table_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master
                  WHERE type='table'
                    AND name IN ('tracked_apps', 'usage_sessions', 'usage_events')",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(usage_table_count, 3);
-        let object_table_count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM sqlite_master
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(usage_table_count, 3);
+    let object_table_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master
                  WHERE type='table'
                    AND name IN ('object_types', 'objects', 'object_links')",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(object_table_count, 3);
-        let tombstone_table_count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM sqlite_master
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(object_table_count, 3);
+    let tombstone_table_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master
                  WHERE type='table' AND name = 'sync_tombstones'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(tombstone_table_count, 1);
-        let object_types = list_object_types(&conn).unwrap();
-        assert!(object_types.iter().any(|item| item.id == "com.kosmos.note"));
-        assert!(object_types.iter().any(|item| item.id == "com.kosmos.task"));
-        let migrated: (String, String) = conn
-            .query_row(
-                "SELECT type_id, type_version FROM objects WHERE id = 'legacy-todo'",
-                [],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .unwrap();
-        // Migrated objects claim the newest registered version of their type.
-        assert_eq!(
-            migrated,
-            ("com.kosmos.task".to_string(), "1.1.0".to_string()),
-        );
-        let canonical_type_exists: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM object_types WHERE id = 'com.kosmos.task'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(canonical_type_exists, 1);
-    }
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(tombstone_table_count, 1);
+    let object_types = list_object_types(&conn).unwrap();
+    assert!(object_types.iter().any(|item| item.id == "com.kosmos.note"));
+    assert!(object_types.iter().any(|item| item.id == "com.kosmos.task"));
+    let migrated: (String, String) = conn
+        .query_row(
+            "SELECT type_id, type_version FROM objects WHERE id = 'legacy-todo'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    // Migrated objects claim the newest registered version of their type.
+    assert_eq!(migrated, ("core.task".to_string(), "0.1.0".to_string()),);
+    let canonical_type_exists: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM object_types WHERE id = 'core.task'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(canonical_type_exists, 1);
+}
 
-    #[test]
-    fn test_init_schema_adds_usage_runtime_ms_to_existing_sessions() {
-        let conn = Connection::open_in_memory().unwrap();
-        conn.execute_batch(
-            "
+#[test]
+fn test_init_schema_adds_usage_runtime_ms_to_existing_sessions() {
+    let conn = Connection::open_in_memory().unwrap();
+    conn.execute_batch(
+        "
             CREATE TABLE tracked_apps (
                 id TEXT PRIMARY KEY,
                 platform TEXT NOT NULL,
@@ -215,19 +212,19 @@
                  '2026-01-01T00:00:00.000Z', '2026-01-01T01:00:00.000Z',
                  2400000, 300000, 'Legacy', 'legacy.exe', 'C:\\Games\\Legacy\\legacy.exe');
             ",
+    )
+    .unwrap();
+
+    init_schema(&conn).unwrap();
+
+    let runtime_ms: i64 = conn
+        .query_row(
+            "SELECT runtime_ms FROM usage_sessions WHERE id = 'session-legacy'",
+            [],
+            |row| row.get(0),
         )
         .unwrap();
-
-        init_schema(&conn).unwrap();
-
-        let runtime_ms: i64 = conn
-            .query_row(
-                "SELECT runtime_ms FROM usage_sessions WHERE id = 'session-legacy'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(runtime_ms, 2_700_000);
-        let data = load_all(&conn).unwrap();
-        assert_eq!(data.usage_sessions[0].runtime_ms, 2_700_000);
-    }
+    assert_eq!(runtime_ms, 2_700_000);
+    let data = load_all(&conn).unwrap();
+    assert_eq!(data.usage_sessions[0].runtime_ms, 2_700_000);
+}

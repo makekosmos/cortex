@@ -129,12 +129,16 @@ pub fn write_legacy_records(
     }
     for record in records {
         let type_id = match record.legacy_type_id.as_str() {
-            "task_obj" => "com.kosmos.task",
+            "task_obj" => "core.task",
             "project_obj" => "com.kosmos.project",
             "tag_obj" => "com.kosmos.tag",
             _ => continue,
         };
-        existing_object_ids.insert(record.id.clone(), CanonicalIdentity::new(type_id, VERSION));
+        let version = crate::canonical_types::definitions::current_canonical_version(type_id)
+            .ok()
+            .flatten()
+            .unwrap_or_default();
+        existing_object_ids.insert(record.id.clone(), CanonicalIdentity::new(type_id, version));
     }
     let context = MappingContext {
         existing_object_ids,

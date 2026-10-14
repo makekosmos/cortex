@@ -6,7 +6,7 @@ fn selective_object_entity(id: &str, type_id: &str, title: &str, counter: u64) -
         id: id.into(),
         data: serde_json::from_value(json!({
             "typeId": type_id,
-            "typeVersion": "1.0.0",
+            "typeVersion": if type_id == "core.task" { "0.1.0" } else { "1.0.0" },
             "title": title,
             "contentJson": {"type":"doc","content":[{"type":"paragraph"}]},
             "propsJson": if type_id == "com.kosmos.game" {
@@ -18,15 +18,13 @@ fn selective_object_entity(id: &str, type_id: &str, title: &str, counter: u64) -
                     "released":null,
                     "description":null,
                     "extensions":{"localState":{"path":"C:/device-only"}}})
-            } else if type_id == "com.kosmos.task" {
+            } else if type_id == "core.task" {
                 json!(
-                    {"status":"todo",
+                    {"state":{"kind":"open","at":null},
+                    "planning":{"kind":"anytime","period":"any","date":null},
+                    "deadline":null,
+                    "reminders":[],
                     "priority":"medium",
-                    "scheduledAt":null,
-                    "dueAt":null,
-                    "reminderAt":null,
-                    "completedAt":null,
-                    "canceledAt":null,
                     "recurrence":null,
                     "checklist":[],
                     "extensions":{"vendor":{"opaque":true},
@@ -51,11 +49,11 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
     let storage_a = make_storage("device-a");
     let storage_b = make_storage("device-b");
     let note = selective_object_entity("sync-note", "com.kosmos.note", "Sync note", 1);
-    let task = selective_object_entity("sync-task", "com.kosmos.task", "Sync task", 2);
+    let task = selective_object_entity("sync-task", "core.task", "Sync task", 2);
     let game = selective_object_entity("sync-game", "com.kosmos.game", "Sync game", 3);
     for (type_id, name, counter) in [
         ("com.kosmos.note", "Note", 10),
-        ("com.kosmos.task", "Task", 11),
+        ("core.task", "Task", 11),
         ("com.kosmos.game", "Game", 12),
     ] {
         storage_a
@@ -126,7 +124,7 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
 
     let mut profile = data_platform::SelectiveSyncProfile::default();
     profile.set_rule("type", "com.kosmos.note", data_platform::SyncMode::Full);
-    profile.set_rule("type", "com.kosmos.task", data_platform::SyncMode::Full);
+    profile.set_rule("type", "core.task", data_platform::SyncMode::Full);
     profile.set_rule("type", "com.kosmos.game", data_platform::SyncMode::Metadata);
     profile.set_rule("dataset", "usage", data_platform::SyncMode::None);
     storage_a.set_selective_sync_profile(Some(profile.clone()));

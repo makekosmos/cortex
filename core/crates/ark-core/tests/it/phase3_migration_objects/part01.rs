@@ -9,6 +9,7 @@ fn db() -> Connection {
     for id in [
         "com.kosmos.note",
         "com.kosmos.task",
+        "core.task",
         "com.kosmos.project",
         "com.kosmos.tag",
         "com.kosmos.person",
@@ -119,7 +120,7 @@ fn populated_generic_fixture_maps_all_nine_aliases_and_applies_exact_envelope() 
     assert_eq!(count, 9);
     let expected_types = [
         "com.kosmos.note",
-        "com.kosmos.task",
+        "core.task",
         "com.kosmos.project",
         "com.kosmos.tag",
         "com.kosmos.person",
@@ -150,7 +151,9 @@ fn populated_generic_fixture_maps_all_nine_aliases_and_applies_exact_envelope() 
         // Mapped objects claim the newest registered version of their type.
         assert_eq!(
             version,
-            if matches!(*expected_type, "com.kosmos.task" | "com.kosmos.project") {
+            if *expected_type == "core.task" {
+                "0.1.0"
+            } else if matches!(*expected_type, "com.kosmos.project") {
                 "1.1.0"
             } else {
                 "1.0.0"
