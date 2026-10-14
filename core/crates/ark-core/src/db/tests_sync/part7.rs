@@ -441,3 +441,60 @@
         assert!(pull_usage(&server, "dev-a", &client, true) >= 1);
         assert_eq!(usage_cursor(&client, "dev-a"), 7);
     }
+
+    /// KOS-370 regression: a pull-side vector snapshot is stale by the time
+    /// `is_last` persists it — the incoming session loads it at the first
+    /// batch and keeps it in memory for the whole exchange. Keys written
+    /// concurrently (local mutations, integration-replication bumps like
+    /// `integration_credential_envelope:*`) must survive the save.
+    #[tokio::test]
+    async fn persist_pull_vector_preserves_concurrent_keys() {
+        let shared = Arc::new(Mutex::new(setup_db()));
+        let backend: Arc<dyn crate::sync_server::StorageBackend> =
+            Arc::new(SqliteStorageBackend::new(shared.clone()));
+
+        // The session snapshot predates the concurrent write.
+        let mut pull_vector = VersionVector::new();
+        for id in ["entity-a", "entity-b"] {
+            pull_vector.insert(
+                id.to_string(),
+                "2026-01-01T00:00:00.000Z:000000:peer".to_string(),
+            );
+        }
+
+        // A local writer bumps unrelated keys while the session runs: one
+        // brand-new key, one that already exists in the snapshot with a
+        // newer hlc (a local mutation to the same entity mid-pull wins).
+        {
+            let guard = shared.lock().unwrap_or_else(|e| e.into_inner());
+            let mut stored = stored_vector(&guard);
+            for (key, hlc) in [
+                (
+                    "integration_credential_envelope:integration-a:node-b:1",
+                    "2026-01-03T00:00:00.000Z:000000:local",
+                ),
+                ("entity-b", "2026-01-02T00:00:00.000Z:000000:local"),
+            ] {
+                stored.insert(key.to_string(), hlc.to_string());
+            }
+            save_stored_vector(&guard, &stored);
+        }
+
+        crate::sync_server::persist_pull_vector(&backend, &mut pull_vector, true, true, None).await;
+
+        let guard = shared.lock().unwrap_or_else(|e| e.into_inner());
+        let stored = stored_vector(&guard);
+        let get = |key: &str| stored.get(key).map(String::as_str);
+        assert_eq!(
+            get("integration_credential_envelope:integration-a:node-b:1"),
+            Some("2026-01-03T00:00:00.000Z:000000:local"),
+        );
+        assert_eq!(
+            get("entity-a"),
+            Some("2026-01-01T00:00:00.000Z:000000:peer"),
+        );
+        assert_eq!(
+            get("entity-b"),
+            Some("2026-01-02T00:00:00.000Z:000000:local"),
+        );
+    }

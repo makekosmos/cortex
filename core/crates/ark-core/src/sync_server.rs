@@ -191,6 +191,9 @@ pub struct SyncServer {
     /// shared db connection) is released deterministically on shutdown
     /// rather than whenever the task happens to exit (KOS-270).
     accept_task: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
+    /// Per-connection reader and writer tasks. They hold `storage` and end
+    /// only when their socket closes, so `stop()` aborts and joins them.
+    conn_tasks: Arc<std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>>,
     on_change: Arc<Mutex<Option<OnChangeCallback>>>,
     on_peer_connect: Arc<Mutex<Option<OnPeerConnectCallback>>>,
     on_peer_disconnect: Arc<Mutex<Option<OnPeerDisconnectCallback>>>,
@@ -205,8 +208,13 @@ async fn load_version_vector(storage: &Arc<dyn StorageBackend>) -> VersionVector
     }
 }
 
+/// Save a version vector built from a possibly stale snapshot: union it
+/// with the stored vector first so keys written concurrently (local
+/// mutations, integration-replication bumps) are not clobbered.
 async fn save_version_vector(storage: &Arc<dyn StorageBackend>, vector: &VersionVector) {
-    let json = serde_json::to_string(vector).unwrap_or_default();
+    let mut merged = load_version_vector(storage).await;
+    merge_vector_entries(&mut merged, vector);
+    let json = serde_json::to_string(&merged).unwrap_or_default();
     storage.set_kv(VERSION_VECTOR_KEY, &json).await;
 }
 

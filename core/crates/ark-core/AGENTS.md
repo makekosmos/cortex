@@ -28,8 +28,11 @@ the repo-root docs; the retired `makekosmos/docs` repo is no longer the source.
 
 - No `Mutex::lock().unwrap()` in production paths; recover poison with
   `unwrap_or_else(|e| e.into_inner())`.
-- Schema evolution is additive only: no destructive migrations; prefer
-  idempotent `CREATE TABLE IF NOT EXISTS` / additive indexes (`src/schema.rs`).
+- Schema evolution is additive by default: prefer idempotent
+  `CREATE TABLE IF NOT EXISTS` / additive indexes (`src/schema.rs`). A one-off
+  rewrite of stored objects is allowed only when it is approved for a specific
+  issue, runs once in a transaction, and takes a backup of `ark.db` first
+  (KOS-397: `com.kosmos.task` 1.1.0 → `core.task` 0.1.0, approved 2026-10-13).
 - Every writer to syncable data must update sync state through
   `ark_core::db::bump_sync_version_vector` (usage entities go through
   `record_usage_sequence`; see `src/db/sync/`).

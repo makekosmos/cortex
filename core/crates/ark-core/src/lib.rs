@@ -26,6 +26,7 @@ pub mod sync_bind;
 pub mod sync_client;
 pub mod sync_server;
 pub mod sync_transport;
+mod task_set;
 pub mod transport_select;
 pub mod type_registry;
 pub mod types;
