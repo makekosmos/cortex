@@ -19,6 +19,7 @@ import { readReleaseVersion } from "./release-version.mjs";
 import { ensureNsis } from "./ensure-nsis.mjs";
 import { env, MANAGER_EXE } from "./brand.mjs";
 import { packageMacosDmg } from "./package-macos-dmg.mjs";
+import { runDefenderGate } from "./defender-gate.mjs";
 import {
   currentCommit,
   runReleasePreflight,
@@ -140,11 +141,8 @@ function stageInstaller(version) {
   return stage;
 }
 
-// KOS-306: static Defender gate. `-ScanType 3 -File` is a read-only custom
-// scan — it catches static signatures and the local ML model, but NOT the
-// cloud first-sight verdict that flagged 0.10.1 (an unknown hash has no
-// reputation yet). The unpacked-payload + VERSIONINFO work is what fixes the
-// cloud verdict; this gate just keeps the local model clean.
+// KOS-306 / KOS-399: static Defender gate; see defender-gate.mjs for how a
+// real detection is told apart from "scanner unavailable" (hr 0x800106BA).
 function defenderGate(outFile) {
   const mpCmdRun = path.join(
     process.env["ProgramFiles"] ?? "C:\\Program Files",
@@ -156,13 +154,11 @@ function defenderGate(outFile) {
     return;
   }
   log(`Defender gate: ${mpCmdRun} -Scan -ScanType 3 -File ${outFile}`);
-  const scan = spawnSync(
-    mpCmdRun,
-    ["-Scan", "-ScanType", "3", "-File", outFile, "-DisableRemediation"],
-    { stdio: "inherit", windowsHide: true },
-  );
-  if ((scan.status ?? 1) !== 0)
-    die(`Defender scan reported a detection in ${outFile} (exit ${scan.status})`);
+  try {
+    runDefenderGate({ outFile, mpCmdRun, log });
+  } catch (e) {
+    die(e.message);
+  }
 }
 
 async function buildWindows(version) {
