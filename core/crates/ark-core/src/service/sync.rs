@@ -66,21 +66,27 @@ async fn spawn_sync_client(env: &ClientEnv, peer: PeerRecord) {
         }))
         .await;
 
+    // Callback tasks hold `server`; `stop_and_join` waits for them.
+    let registry = client.callback_registry();
     let server_for_connect = server.clone();
     let peer_addrs = peer.addresses.clone();
+    let registry_for_connect = registry.clone();
     client
         .set_on_connected(Arc::new(move |connected: PeerRecord| {
             let server = server_for_connect.clone();
             let addrs = peer_addrs.clone();
             let record = connected.clone();
-            tokio::spawn(async move {
-                server
-                    .register_external_peer(PeerRecord {
-                        addresses: addrs,
-                        ..record
-                    })
-                    .await;
-            });
+            crate::task_set::track_task(
+                &registry_for_connect,
+                tokio::spawn(async move {
+                    server
+                        .register_external_peer(PeerRecord {
+                            addresses: addrs,
+                            ..record
+                        })
+                        .await;
+                }),
+            );
             emit_event(json!({
                 "event": "peer_connected",
                 "device_id": connected.device_id,
@@ -90,18 +96,22 @@ async fn spawn_sync_client(env: &ClientEnv, peer: PeerRecord) {
         .await;
 
     let server_for_disconnect = server.clone();
+    let registry_for_disconnect = registry.clone();
     client
         .set_on_disconnected(Arc::new(move |peer_device_id| {
             let server = server_for_disconnect.clone();
             let peer_device_id_clone = peer_device_id.clone();
-            tokio::spawn(async move {
-                let remaining = server.connected_peer_count().await;
-                emit_event(json!({
-                    "event": "peer_disconnected",
-                    "device_id": peer_device_id_clone,
-                    "remaining": remaining,
-                }));
-            });
+            crate::task_set::track_task(
+                &registry_for_disconnect,
+                tokio::spawn(async move {
+                    let remaining = server.connected_peer_count().await;
+                    emit_event(json!({
+                        "event": "peer_disconnected",
+                        "device_id": peer_device_id_clone,
+                        "remaining": remaining,
+                    }));
+                }),
+            );
         }))
         .await;
 
@@ -146,7 +156,7 @@ pub(super) async fn handle_stop_sync(state: &Arc<ServiceState>) {
             clients.values().cloned().collect()
         };
         for client in clients {
-            client.disconnect().await;
+            client.stop_and_join().await;
         }
         runtime.server.stop().await;
     }

@@ -18,6 +18,33 @@ pub(super) mod reject_tests {
         }
     }
 
+    /// A client asleep in its reconnect backoff holds `storage` (the db
+    /// connection). `stop_and_join` must end that task, so the storage is
+    /// released by the time it returns, not whenever the backoff ends.
+    #[tokio::test]
+    async fn client_stop_and_join_releases_storage() {
+        let storage = Arc::new(MemBackend::new()) as Arc<dyn StorageBackend>;
+        let client = crate::sync_client::SyncClient::new(
+            storage.clone(),
+            peer_rec("peer-dead", &["127.0.0.1:1"]),
+            "me".to_string(),
+            "me-name".to_string(),
+            "space".to_string(),
+            Vec::new(),
+            None,
+        );
+        client.start();
+        // The address refuses at once; the task then sleeps in its backoff.
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        client.stop_and_join().await;
+        drop(client);
+        assert_eq!(
+            Arc::strong_count(&storage),
+            1,
+            "client task still holds storage after stop_and_join"
+        );
+    }
+
     #[tokio::test]
     async fn stop_releases_background_tasks_holding_peers_map() {
         let storage = Arc::new(MemBackend::new()) as Arc<dyn StorageBackend>;
