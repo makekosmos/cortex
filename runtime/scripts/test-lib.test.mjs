@@ -137,3 +137,15 @@ test("the process listing is empty off Windows", (t) => {
   assert.ok(Array.isArray(rows));
   if (process.platform !== "win32") assert.deepEqual(rows, []);
 });
+
+test("a leak logs when each leftover file was last written", (t) => {
+  // KOS-397: a leftover file has no holder, so its last write is the only clue
+  // to the test that left it behind. The log must carry it.
+  const target = scratch(t, "gate-tmp-target-");
+  const dirty = openGateTmp(target, 8);
+  mkdirSync(join(dirty, ".tmpLeaked"));
+  writeFileSync(join(dirty, ".tmpLeaked", "ark.db"), "x");
+  const lines = [];
+  reportGateTmpSweep(target, dirty, (l) => lines.push(l), { listProcesses: () => [] });
+  assert.match(lines.join("\n"), /last written \d{4}-\d{2}-\d{2}T[\d:.]+Z \.tmpLeaked[\\/]ark\.db/);
+});

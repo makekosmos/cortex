@@ -1,4 +1,4 @@
-import { lstatSync, mkdirSync, readdirSync, rmSync, symlinkSync } from "node:fs";
+import { lstatSync, mkdirSync, readdirSync, rmSync, statSync, symlinkSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join, resolve, sep } from "node:path";
 
@@ -113,7 +113,8 @@ export function reportGateTmpSweep(
   { listProcesses = listBuildTreeProcesses } = {},
 ) {
   const leftover = sweepGateTmp(targetDir, dir, {
-    onLeftover() {
+    onLeftover(entries) {
+      logLeftoverTimes(dir, entries, log);
       try {
         logLiveProcesses(listProcesses(targetDir, dir), log);
       } catch (error) {
@@ -128,6 +129,22 @@ export function reportGateTmpSweep(
     log(`gate tmp:   leftover ${name} (${contents.join(",") || "-"})`);
   }
   return leftover.length > 0;
+}
+
+// KOS-397: a leftover file has no holder, so its last write is the only clue to
+// which test created it. Matching that time against the nextest PASS lines
+// narrows the candidates. Logged before removal, like the process listing.
+function logLeftoverTimes(dir, entries, log) {
+  for (const { name, contents } of entries.slice(0, 20)) {
+    const paths = contents.length ? contents.slice(0, 5).map((file) => join(dir, name, file)) : [join(dir, name)];
+    for (const path of paths) {
+      try {
+        log(`gate tmp:   last written ${statSync(path).mtime.toISOString()} ${path.slice(dir.length + 1)}`);
+      } catch (error) {
+        log(`gate tmp:   last written unknown ${path.slice(dir.length + 1)}: ${error.message}`);
+      }
+    }
+  }
 }
 
 function logLiveProcesses(rows, log) {
