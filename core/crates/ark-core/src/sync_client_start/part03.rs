@@ -76,6 +76,8 @@
                         }
                     }
                 });
+                let writer_abort = writer.abort_handle();
+                track_task(&writer_tasks, writer);
 
                 // Read messages
                 let mut authenticated = false;
@@ -471,7 +473,7 @@
                 }
 
                 // Connection closed
-                writer.abort();
+                writer_abort.abort();
                 *authenticated_tx.lock().await = None;
 
                 if authenticated {

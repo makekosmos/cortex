@@ -191,6 +191,9 @@ pub struct SyncServer {
     /// shared db connection) is released deterministically on shutdown
     /// rather than whenever the task happens to exit (KOS-270).
     accept_task: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
+    /// Per-connection reader and writer tasks. They hold `storage` and end
+    /// only when their socket closes, so `stop()` aborts and joins them.
+    conn_tasks: Arc<std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>>,
     on_change: Arc<Mutex<Option<OnChangeCallback>>>,
     on_peer_connect: Arc<Mutex<Option<OnPeerConnectCallback>>>,
     on_peer_disconnect: Arc<Mutex<Option<OnPeerDisconnectCallback>>>,
