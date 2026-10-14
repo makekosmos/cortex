@@ -10,6 +10,7 @@ use crate::hlc::HLC;
 use crate::integration_replication::SignedSyncEnvelope;
 use crate::protocol::*;
 use crate::sync_server::StorageBackend;
+use crate::task_set::{abort_and_join, join_all, track_task};
 
 #[path = "sync_client_start.rs"]
 mod sync_client_start;
@@ -53,6 +54,13 @@ pub struct SyncClient {
     on_connected: Arc<Mutex<Option<ClientOnConnectedCallback>>>,
     on_disconnected: Arc<Mutex<Option<ClientOnDisconnectedCallback>>>,
     on_peer_list: Arc<Mutex<Option<ClientOnPeerListCallback>>>,
+    /// The connection loop from `start` and each connection's writer. They
+    /// hold `storage` (the shared ark.db connection); `stop_and_join` aborts
+    /// and joins them so none outlives teardown (KOS-270, KOS-369).
+    tasks: Arc<std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>>,
+    /// Short callback tasks spawned on this client's behalf (see
+    /// `callback_registry`). `stop_and_join` waits for them.
+    callbacks: Arc<std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>>,
 }
 
 impl SyncClient {
@@ -79,6 +87,8 @@ impl SyncClient {
             on_connected: Arc::new(Mutex::new(None)),
             on_disconnected: Arc::new(Mutex::new(None)),
             on_peer_list: Arc::new(Mutex::new(None)),
+            tasks: Arc::new(std::sync::Mutex::new(Vec::new())),
+            callbacks: Arc::new(std::sync::Mutex::new(Vec::new())),
         }
     }
 
@@ -164,6 +174,25 @@ impl SyncClient {
         if let Some((_, tx)) = self.authenticated_tx.lock().await.take() {
             let _ = tx.send(Message::Close(None));
         }
+    }
+
+    /// Stop the client and wait until its tasks have ended. A loop asleep in
+    /// its reconnect backoff does not look at `stopped` until the sleep ends,
+    /// so the tasks are aborted and joined, not only signalled. Same
+    /// abort-and-drain shape as `IrohTransport::stop`.
+    pub async fn stop_and_join(&self) {
+        self.disconnect().await;
+        abort_and_join(&self.tasks).await;
+        // Callback work is short and finite: wait for it instead of aborting,
+        // so a db write it has started is not left running past the join.
+        join_all(&self.callbacks).await;
+    }
+
+    /// The task list for callbacks that spawn work on this client's behalf.
+    pub(crate) fn callback_registry(
+        &self,
+    ) -> Arc<std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>> {
+        self.callbacks.clone()
     }
 
     /// Replace the current peer record (typically used when the beacon

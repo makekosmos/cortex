@@ -13,8 +13,41 @@ impl SyncServer {
                 eprintln!("{TAG} accept task ended abnormally: {error}");
             }
         }
-        let mut peers = self.peers.lock().await;
-        peers.clear();
+        // The accept task has ended, so no new connection can be recorded.
+        // Each connection's reader holds `storage` and may be partway through
+        // a db write. Ask the peers to close and drop the writers' senders,
+        // then give the connection tasks a bounded chance to finish on their
+        // own: aborting a reader mid-write would leave its blocking db call
+        // running past the join (KOS-270). Whatever is still alive after the
+        // bound is aborted.
+        {
+            let mut peers = self.peers.lock().await;
+            for peer in peers.values() {
+                let _ = peer.tx.send(Message::Close(None));
+            }
+            peers.clear();
+        }
+        let tasks: Vec<tokio::task::JoinHandle<()>> = self
+            .conn_tasks
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .drain(..)
+            .collect();
+        let aborts: Vec<tokio::task::AbortHandle> =
+            tasks.iter().map(|t| t.abort_handle()).collect();
+        let joined = async {
+            for task in tasks {
+                let _ = task.await;
+            }
+        };
+        if tokio::time::timeout(Duration::from_secs(2), joined)
+            .await
+            .is_err()
+        {
+            for abort in aborts {
+                abort.abort();
+            }
+        }
         eprintln!("{TAG} Server stopped");
     }
 
