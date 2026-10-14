@@ -364,7 +364,7 @@ async fn pending_pairing_exchanges_no_data() {
     let state_b = fixture_b.state.clone();
 
     let entity = |id: &str| {
-        let mut object = canonical_task_object(Some("1.0.0"), canonical_task_props());
+        let mut object = canonical_task_object(Some("0.1.0"), canonical_task_props());
         object.id = id.to_string();
         let value = serde_json::to_value(&object).unwrap();
         let Value::Object(mut data) = value else {

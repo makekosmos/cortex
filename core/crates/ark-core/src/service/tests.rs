@@ -124,7 +124,7 @@ async fn setup_sync_with_capturing_transport(
 fn canonical_task_object(type_version: Option<&str>, props_json: Value) -> ArkObjectWrite {
     ArkObjectWrite {
         id: "canonical-task-ingress".to_string(),
-        type_id: "com.kosmos.task".to_string(),
+        type_id: "core.task".to_string(),
         type_version: type_version.map(str::to_owned),
         title: "Canonical task".to_string(),
         content_json: json!(
@@ -141,14 +141,12 @@ fn canonical_task_object(type_version: Option<&str>, props_json: Value) -> ArkOb
 
 fn canonical_task_props() -> Value {
     json!(
-        {"status":"todo",
-        "priority":"medium",
-        "scheduledAt":null,
-        "dueAt":null,
-        "reminderAt":null,
-        "completedAt":null,
-        "canceledAt":null,
+        {"state":{"kind":"open","at":null},
+        "planning":{"kind":"anytime","period":"any","date":null},
+        "deadline":null,
+        "reminders":[],
         "recurrence":null,
+        "priority":"medium",
         "checklist":[],
         "extensions":{"vendor":{"opaque":true}}})
 }

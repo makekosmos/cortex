@@ -48,6 +48,10 @@ pub fn prepare_object(
     input: ArkObjectWrite,
 ) -> Result<ArkObject, CanonicalIngressError> {
     let input_type_id = input.type_id.clone();
+    // KOS-397: after the rewrite, com.kosmos.task 1.1.0 is only read, never written.
+    if input_type_id == crate::canonical_types::core_task_rewrite::LEGACY_TASK_TYPE {
+        return Err(CanonicalIngressError::invalid("legacy_task_type_retired"));
+    }
     let requested_version = input.type_version.clone();
     let (canonical_type_id, resolved_version) = type_registry::resolve_object_type_identity(
         conn,

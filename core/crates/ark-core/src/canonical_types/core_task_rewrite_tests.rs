@@ -22,7 +22,7 @@ fn backup_path(dir: &tempfile::TempDir) -> String {
 
 /// Задача 1.1.0 в том виде, как её пишет живая база: верхний уровень и
 /// `extensions` согласованы, пустые поля — `null`.
-fn legacy_props(
+pub(super) fn legacy_props(
     status: &str,
     today: bool,
     someday: bool,
@@ -58,7 +58,12 @@ fn legacy_props(
     })
 }
 
-fn insert_legacy(conn: &Connection, id: &str, props: &Value, trashed: bool) -> Result<(), String> {
+pub(super) fn insert_legacy(
+    conn: &Connection,
+    id: &str,
+    props: &Value,
+    trashed: bool,
+) -> Result<(), String> {
     let content =
         r#"{"content":[{"content":[{"text":"","type":"text"}],"type":"paragraph"}],"type":"doc"}"#;
     let deleted_at = trashed.then_some(CREATED);

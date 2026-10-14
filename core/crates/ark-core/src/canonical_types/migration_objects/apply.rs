@@ -84,7 +84,7 @@ pub(crate) fn apply_one(
         let legacy_upgrade = matches!(
             (type_id.as_str(), object.type_id.as_str()),
             ("note_obj", "com.kosmos.note")
-                | ("task_obj", "com.kosmos.task")
+                | ("task_obj", "core.task")
                 | ("project_obj", "com.kosmos.project")
                 | ("tag_obj", "com.kosmos.tag")
                 | ("person_obj", "com.kosmos.person")

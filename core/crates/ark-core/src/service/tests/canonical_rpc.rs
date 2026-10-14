@@ -274,7 +274,7 @@ async fn canonical_upsert_object_rpc_persists_registered_identity() {
     handle_request(
         &state,
         Request::UpsertObject {
-            object: canonical_task_object(Some("1.0.0"), canonical_task_props()),
+            object: canonical_task_object(Some("0.1.0"), canonical_task_props()),
             expected_snapshot: None,
             device_id: Some("device-canonical".to_string()),
         },
@@ -286,9 +286,9 @@ async fn canonical_upsert_object_rpc_persists_registered_identity() {
     })
     .unwrap()
     .unwrap();
-    assert_eq!(object.type_id, "com.kosmos.task");
-    assert_eq!(object.type_version, "1.0.0");
-    assert_eq!(object.props_json["status"], "todo");
+    assert_eq!(object.type_id, "core.task");
+    assert_eq!(object.type_version, "0.1.0");
+    assert_eq!(object.props_json["planning"]["kind"], "anytime");
 }
 
 #[tokio::test]
@@ -348,7 +348,7 @@ async fn canonical_upsert_object_rpc_rejects_invalid_payload_without_sync_mutati
     let result = handle_request(
         &state,
         Request::UpsertObject {
-            object: canonical_task_object(Some("1.0.0"), props),
+            object: canonical_task_object(Some("0.1.0"), props),
             expected_snapshot: None,
             device_id: Some("device-canonical".to_string()),
         },
@@ -391,8 +391,9 @@ async fn canonical_upsert_object_rpc_rejects_legacy_alias_as_new_write() {
     )
     .await
     .unwrap();
-    let mut object = canonical_task_object(Some("1.0.0"), canonical_task_props());
-    object.type_id = "task_obj".to_string();
+    let mut object = canonical_task_object(Some("0.1.0"), canonical_task_props());
+    object.type_id = "note_obj".to_string();
+    object.type_version = Some("1.0.0".to_string());
     let result = handle_request(
         &state,
         Request::UpsertObject {

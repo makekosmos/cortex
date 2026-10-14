@@ -131,7 +131,7 @@ pub fn apply_canonical_object_entity(conn: &Connection, entity: &SyncEntity) -> 
         let input_type_version = input.type_version.clone();
         let canonical_alias = match input_type_id.as_str() {
             "note_obj" => Some("com.kosmos.note"),
-            "task_obj" => Some("com.kosmos.task"),
+            "task_obj" => Some("core.task"),
             "project_obj" => Some("com.kosmos.project"),
             "tag_obj" => Some("com.kosmos.tag"),
             "person_obj" => Some("com.kosmos.person"),
