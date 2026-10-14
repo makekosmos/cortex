@@ -1,4 +1,7 @@
 mod book;
+mod core_task;
+#[cfg(test)]
+mod core_task_tests;
 mod game;
 mod image;
 mod note;
@@ -9,6 +12,7 @@ mod tag;
 mod task;
 mod time_entry;
 pub(crate) use book::*;
+pub(crate) use core_task::*;
 pub(crate) use game::*;
 pub(crate) use image::*;
 pub(crate) use note::*;

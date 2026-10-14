@@ -49,12 +49,12 @@ fn fresh_registry_installs_all_exact_definitions_and_aliases() {
     let report = apply_registry(&conn, &plan).unwrap();
     // Nine canonical types; task and project carry a second registered
     // version (1.1.0) next to the original 1.0.0.
-    assert_eq!(report.installed, 11);
+    assert_eq!(report.installed, 12);
     assert_eq!(
         conn.query_row("SELECT count(*) FROM object_types", [], |r| r
             .get::<_, i64>(0))
             .unwrap(),
-        9
+        10
     );
     assert_eq!(
         conn.query_row(
@@ -258,7 +258,8 @@ fn legacy_archive_is_lossless_and_late_failure_rolls_back() {
 
 #[test]
 fn definitions_are_the_registry_hash_authority() {
-    assert_eq!(canonical_type_registrations().unwrap().len(), 11);
+    // Nine canonical types, task and project second versions, and core.task.
+    assert_eq!(canonical_type_registrations().unwrap().len(), 12);
 }
 
 #[test]
