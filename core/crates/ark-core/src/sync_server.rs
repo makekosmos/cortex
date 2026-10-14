@@ -205,8 +205,13 @@ async fn load_version_vector(storage: &Arc<dyn StorageBackend>) -> VersionVector
     }
 }
 
+/// Save a version vector built from a possibly stale snapshot: union it
+/// with the stored vector first so keys written concurrently (local
+/// mutations, integration-replication bumps) are not clobbered.
 async fn save_version_vector(storage: &Arc<dyn StorageBackend>, vector: &VersionVector) {
-    let json = serde_json::to_string(vector).unwrap_or_default();
+    let mut merged = load_version_vector(storage).await;
+    merge_vector_entries(&mut merged, vector);
+    let json = serde_json::to_string(&merged).unwrap_or_default();
     storage.set_kv(VERSION_VECTOR_KEY, &json).await;
 }
 
