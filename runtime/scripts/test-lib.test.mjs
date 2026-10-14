@@ -3,7 +3,13 @@ import test from "node:test";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { aliasGateTmp, openGateTmp, reportGateTmpSweep, sweepGateTmp } from "./gate-tmp.mjs";
+import {
+  aliasGateTmp,
+  listBuildTreeProcesses,
+  openGateTmp,
+  reportGateTmpSweep,
+  sweepGateTmp,
+} from "./gate-tmp.mjs";
 
 // Each test gets its own scratch dir and removes it afterwards, so the
 // contract tests for "never leak into %TEMP%" do not leak into it themselves.
@@ -73,4 +79,61 @@ test("aliasGateTmp gives Unix a short link into the run dir and keeps Windows as
   alias.release();
   assert.ok(!existsSync(alias.path));
   assert.deepEqual(sweepGateTmp(target, dir), [{ name: ".tmpViaAlias", contents: [] }]);
+});
+
+test("a leak logs the build-tree processes still alive before the sweep", (t) => {
+  // KOS-397: on Windows the holder of a leaked ark.db is a process that is
+  // still running after nextest returned. The log must name it, and the
+  // leak result itself must not change.
+  const target = scratch(t, "gate-tmp-target-");
+  const dirty = openGateTmp(target, 3);
+  mkdirSync(join(dirty, ".tmpLeaked"));
+  writeFileSync(join(dirty, ".tmpLeaked", "ark.db"), "x");
+  const lines = [];
+  let leftoverSeenByListing = false;
+  const listProcesses = () => {
+    leftoverSeenByListing = existsSync(join(dirty, ".tmpLeaked", "ark.db"));
+    return [
+      { pid: 4242, ppid: 7, name: "engine.exe", exe: join(target, "debug", "engine.exe"), cmd: "engine.exe" },
+    ];
+  };
+  assert.equal(reportGateTmpSweep(target, dirty, (l) => lines.push(l), { listProcesses }), true);
+  assert.ok(leftoverSeenByListing, "the listing runs while the leftovers are still on disk");
+  assert.match(lines.join("\n"), /1 live build-tree process at sweep time/);
+  assert.match(lines.join("\n"), /pid 4242 ppid 7 engine\.exe/);
+  assert.ok(!existsSync(dirty));
+});
+
+test("a clean sweep does not list processes", (t) => {
+  const target = scratch(t, "gate-tmp-target-");
+  let listed = false;
+  const listProcesses = () => {
+    listed = true;
+    return [];
+  };
+  assert.equal(reportGateTmpSweep(target, openGateTmp(target, 4), () => {}, { listProcesses }), false);
+  assert.equal(listed, false);
+});
+
+test("a failed process listing is logged and does not change the leak result", (t) => {
+  const target = scratch(t, "gate-tmp-target-");
+  const dirty = openGateTmp(target, 5);
+  mkdirSync(join(dirty, ".tmpLeaked"));
+  writeFileSync(join(dirty, ".tmpLeaked", "ark.db"), "x");
+  const lines = [];
+  const listProcesses = () => {
+    throw new Error("powershell unavailable");
+  };
+  assert.equal(reportGateTmpSweep(target, dirty, (l) => lines.push(l), { listProcesses }), true);
+  assert.match(lines.join("\n"), /process listing failed: powershell unavailable/);
+  assert.ok(!existsSync(dirty));
+});
+
+test("the process listing is empty off Windows", (t) => {
+  // The leak is a Windows handle. Other platforms never ask the OS for
+  // processes; Windows asks, and may legitimately find none.
+  const target = scratch(t, "gate-tmp-target-");
+  const rows = listBuildTreeProcesses(target, openGateTmp(target, 6));
+  assert.ok(Array.isArray(rows));
+  if (process.platform !== "win32") assert.deepEqual(rows, []);
 });
