@@ -300,6 +300,13 @@ pub(crate) enum Request {
         #[serde(default)]
         device_id: Option<String>,
     },
+    /// Move a link to a new target in one transaction: delete every other link
+    /// with the same source and link_type, then upsert `object_link`.
+    ReplaceObjectLink {
+        object_link: ObjectLink,
+        #[serde(default)]
+        device_id: Option<String>,
+    },
     GetSyncKv {
         key: String,
     },

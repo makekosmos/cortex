@@ -153,6 +153,10 @@ pub(crate) async fn handle_request(
         Request::DeleteObjectLink { id, device_id } => {
             types::delete_object_link(state, id, device_id).await
         }
+        Request::ReplaceObjectLink {
+            object_link,
+            device_id,
+        } => types::replace_object_link(state, object_link, device_id).await,
 
         Request::GetSyncKv { key } => system::get_sync_kv(state, key).await,
         Request::SetSyncKv { key, value } => system::set_sync_kv(state, key, value).await,

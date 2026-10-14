@@ -178,3 +178,83 @@ fn task_roundtrip_survives_reopen() {
     drop(engine);
     remove_dir_when_free(dir.path());
 }
+
+const PROJECT_A: &str = "project-mobile-a";
+const PROJECT_B: &str = "project-mobile-b";
+
+/// A `com.kosmos.project` 1.0.0 object: the target of a task's project link.
+fn project_object(id: &str) -> Value {
+    json!({
+        "id": id,
+        "typeId": "com.kosmos.project",
+        "typeVersion": "1.0.0",
+        "title": id,
+        "createdAt": "2026-10-10T12:00:00.000Z",
+        "updatedAt": "2026-10-10T12:00:00.000Z",
+        "deletedAt": null,
+        "contentJson": {"type": "doc", "content": [{"type": "paragraph"}]},
+        "propsJson": {
+            "status": "active",
+            "scheduledAt": null,
+            "dueAt": null,
+            "color": null,
+            "extensions": {}
+        }
+    })
+}
+
+/// `object_link` params in the `upsert_object_link` wire shape.
+fn project_link(id: &str, target: &str) -> Value {
+    json!({
+        "id": id,
+        "sourceObjectId": TASK_ID,
+        "targetObjectId": target,
+        "linkType": "project",
+        "createdAt": "2026-10-10T12:00:00.000Z"
+    })
+}
+
+#[test]
+fn replace_object_link_moves_task_to_another_project() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let engine = MobileEngine::open(dir.path().to_string_lossy().into_owned()).expect("open");
+
+    call(&engine, "upsert_object", json!({"object": task_object()}));
+    call(
+        &engine,
+        "upsert_object",
+        json!({"object": project_object(PROJECT_A)}),
+    );
+    call(
+        &engine,
+        "upsert_object",
+        json!({"object": project_object(PROJECT_B)}),
+    );
+    call(
+        &engine,
+        "upsert_object_link",
+        json!({"object_link": project_link("link-mobile-a", PROJECT_A)}),
+    );
+
+    let stored = call(
+        &engine,
+        "replace_object_link",
+        json!({"object_link": project_link("link-mobile-b", PROJECT_B)}),
+    );
+    assert_eq!(stored["targetObjectId"], json!(PROJECT_B));
+
+    let listed = call(&engine, "list_object_links", json!({}));
+    let project_links: Vec<&Value> = listed
+        .as_array()
+        .expect("list")
+        .iter()
+        .filter(|link| link["sourceObjectId"] == TASK_ID && link["linkType"] == "project")
+        .collect();
+    assert_eq!(project_links.len(), 1, "one project link: {listed}");
+    assert_eq!(project_links[0]["id"], json!("link-mobile-b"));
+    assert_eq!(project_links[0]["targetObjectId"], json!(PROJECT_B));
+
+    engine.shutdown();
+    drop(engine);
+    remove_dir_when_free(dir.path());
+}
