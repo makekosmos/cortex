@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { test } from "node:test";
@@ -200,8 +200,11 @@ test("the VERSIONINFO brand strings share one source across pe-version-info, bra
 
 test("the build runs a static Defender scan on the finished installer", () => {
   assert.match(script, /MpCmdRun\.exe/);
+  assert.match(script, /runDefenderGate\(\{ outFile, mpCmdRun/);
+  // KOS-399: the scan itself lives in defender-gate.mjs.
+  const gate = readFileSync(new URL("./defender-gate.mjs", import.meta.url), "utf8");
   assert.match(
-    script,
+    gate,
     /"-Scan",\s*"-ScanType",\s*"3",\s*"-File",\s*outFile,\s*"-DisableRemediation"/,
   );
 });
