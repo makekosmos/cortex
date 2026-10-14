@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn blocked_database_accepts_agenda_write_through_service() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::support::temp_dir();
     let path = dir.path().join("blocked.db");
     {
         let conn = Connection::open(&path).unwrap();

@@ -229,7 +229,7 @@ fn alias_target_collision_blocks_before_any_object_mutation() {
 
 #[test]
 fn durable_resume_reopens_committed_partial_ledger_without_duplicates() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::support::temp_dir();
     let path = dir.path().join("phase3-resume.sqlite");
     {
         let conn = Connection::open(&path).unwrap();

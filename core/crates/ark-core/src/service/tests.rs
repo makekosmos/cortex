@@ -19,19 +19,31 @@ pub(super) fn test_state() -> Arc<ServiceState> {
 /// where an open file cannot be deleted (KOS-270).
 pub(super) struct ServiceFixture {
     pub(crate) state: Arc<ServiceState>,
-    pub(crate) dir: tempfile::TempDir,
+    pub(crate) dir: crate::test_support::TestTempDir,
 }
 
 pub(super) fn service_fixture() -> ServiceFixture {
     ServiceFixture {
         state: test_state(),
-        dir: tempfile::tempdir().unwrap(),
+        dir: crate::test_support::temp_dir(),
     }
 }
 
 impl ServiceFixture {
     pub(crate) fn db_path(&self) -> std::path::PathBuf {
         self.dir.path().join("ark.db")
+    }
+}
+
+impl Drop for ServiceFixture {
+    fn drop(&mut self) {
+        // KOS-398: drop the shared SQLite handle before TempDir tries to
+        // delete ark.db. A forgotten StopSync (or a transport task that still
+        // holds its own Arc) keeps the file open on Windows; TestTempDir then
+        // panics with the test name instead of leaving a silent leftover.
+        if let Ok(mut guard) = self.state.db.lock() {
+            *guard = None;
+        }
     }
 }
 

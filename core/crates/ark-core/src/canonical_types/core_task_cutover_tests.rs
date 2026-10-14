@@ -131,7 +131,7 @@ fn engine_refuses_a_new_write_of_the_legacy_task_type() {
 
 #[tokio::test]
 async fn start_moves_stored_legacy_tasks_once_and_keeps_a_backup() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::test_support::temp_dir();
     let path = dir.path().join("ark.db");
     {
         let conn = Connection::open(&path).unwrap();

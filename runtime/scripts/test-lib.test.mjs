@@ -35,8 +35,8 @@ test("sweepGateTmp removes leftover test dirs and names their contents", (t) => 
   writeFileSync(join(dir, ".tmpLeaked", "ark.db"), "x");
   writeFileSync(join(dir, ".tmpOther"), "y");
   assert.deepEqual(sweepGateTmp(target, dir), [
-    { name: ".tmpLeaked", contents: ["ark.db"] },
-    { name: ".tmpOther", contents: [] },
+    { name: ".tmpLeaked", contents: ["ark.db"], owner: null },
+    { name: ".tmpOther", contents: [], owner: null },
   ]);
   assert.ok(!existsSync(dir));
 });
@@ -78,7 +78,7 @@ test("aliasGateTmp gives Unix a short link into the run dir and keeps Windows as
   writeFileSync(join(alias.path, ".tmpViaAlias"), "x");
   alias.release();
   assert.ok(!existsSync(alias.path));
-  assert.deepEqual(sweepGateTmp(target, dir), [{ name: ".tmpViaAlias", contents: [] }]);
+  assert.deepEqual(sweepGateTmp(target, dir), [{ name: ".tmpViaAlias", contents: [], owner: null }]);
 });
 
 test("a leak logs the build-tree processes still alive before the sweep", (t) => {
@@ -148,4 +148,20 @@ test("a leak logs when each leftover file was last written", (t) => {
   const lines = [];
   reportGateTmpSweep(target, dirty, (l) => lines.push(l), { listProcesses: () => [] });
   assert.match(lines.join("\n"), /last written \d{4}-\d{2}-\d{2}T[\d:.]+Z \.tmpLeaked[\\/]ark\.db/);
+});
+
+test("reportGateTmpSweep names the LEAK_OWNER marker when present", () => {
+  const target = mkdtempSync(join(tmpdir(), "gate-owner-"));
+  try {
+    const dirty = openGateTmp(target, 9);
+    const entry = join(dirty, ".tmpOwner");
+    mkdirSync(entry);
+    writeFileSync(join(entry, "ark.db"), "");
+    writeFileSync(join(entry, "LEAK_OWNER"), "ark_core::leaky_test\n");
+    const lines = [];
+    assert.equal(reportGateTmpSweep(target, dirty, (l) => lines.push(l), { listProcesses: () => [] }), true);
+    assert.ok(lines.some((l) => /owner ark_core::leaky_test/.test(l)), lines.join("\n"));
+  } finally {
+    rmSync(target, { recursive: true, force: true });
+  }
 });

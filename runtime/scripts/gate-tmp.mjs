@@ -1,4 +1,4 @@
-import { lstatSync, mkdirSync, readdirSync, rmSync, statSync, symlinkSync } from "node:fs";
+import { lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join, resolve, sep } from "node:path";
 
@@ -60,7 +60,13 @@ export function sweepGateTmp(targetDir, dir, { onLeftover } = {}) {
     } catch {
       contents = [];
     }
-    return { name, contents };
+    let owner = null;
+    try {
+      owner = readFileSync(join(dir, name, "LEAK_OWNER"), "utf8").trim();
+    } catch {
+      // Older fixtures have no marker.
+    }
+    return { name, contents, owner };
   });
   if (leftover.length > 0) onLeftover?.(leftover);
   rmSync(dir, { recursive: true, force: true });
@@ -125,8 +131,9 @@ export function reportGateTmpSweep(
   log(
     `gate tmp: swept ${leftover.length} leftover entr${leftover.length === 1 ? "y" : "ies"} under ${dir}`,
   );
-  for (const { name, contents } of leftover.slice(0, 20)) {
+  for (const { name, contents, owner } of leftover.slice(0, 20)) {
     log(`gate tmp:   leftover ${name} (${contents.join(",") || "-"})`);
+    if (owner) log(`gate tmp:   owner ${owner} (${name})`);
   }
   return leftover.length > 0;
 }

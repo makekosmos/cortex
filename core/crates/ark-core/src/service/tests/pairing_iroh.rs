@@ -14,7 +14,7 @@ fn free_port() -> u16 {
         .port()
 }
 
-async fn init_device(state: &Arc<ServiceState>, dir: &tempfile::TempDir) {
+async fn init_device(state: &Arc<ServiceState>, dir: &crate::test_support::TestTempDir) {
     handle_request(
         state,
         Request::Init {

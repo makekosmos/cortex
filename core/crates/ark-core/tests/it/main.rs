@@ -33,6 +33,7 @@ mod phase3_validation;
 mod proptest_invariants;
 mod relay_round_trip;
 mod relay_transport_events;
+mod support;
 mod sync_round_trip;
 mod type_registry_slice1;
 

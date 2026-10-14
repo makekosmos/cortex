@@ -185,7 +185,7 @@ fn integration_issuer_key_lookup_uses_the_versioned_wire_shape() {
 /// it, reopens the database, and keeps serving subsequent requests.
 #[tokio::test]
 async fn panicking_request_returns_error_and_service_recovers() {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::test_support::temp_dir();
     let db_path = dir.path().join("ark.db");
     let service = ArkService::open(db_path.to_str().unwrap())
         .await
