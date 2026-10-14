@@ -538,7 +538,12 @@ pub fn open_file(path: &str) -> Result<()> {
 
 #[cfg(not(windows))]
 pub fn open_file(path: &str) -> Result<()> {
-    Command::new("xdg-open")
+    let opener = if cfg!(target_os = "macos") {
+        "open"
+    } else {
+        "xdg-open"
+    };
+    Command::new(opener)
         .arg(path)
         .spawn()
         .map(|_| ())
