@@ -50,7 +50,7 @@ impl IrohTransport {
     /// sites must push the handle in the same synchronous stretch as the
     /// `tokio::spawn` call — an abort only lands at the next await, so a
     /// task that has started but not yet registered would escape the join.
-    fn track(&self, handle: tokio::task::JoinHandle<()>) {
+    pub(crate) fn track(&self, handle: tokio::task::JoinHandle<()>) {
         self.tasks
             .lock()
             .unwrap_or_else(|e| e.into_inner())
