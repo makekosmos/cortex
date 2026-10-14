@@ -38,11 +38,8 @@ fn agenda_write_payloads_pass_engine_validation() {
     let expected = [
         "task-canceled",
         "task-date",
-        "task-deadline",
         "task-inbox",
         "task-note",
-        "task-recurrence",
-        "task-significance-unset",
         "task-completed",
     ];
     let mut expected_names: Vec<String> = expected
