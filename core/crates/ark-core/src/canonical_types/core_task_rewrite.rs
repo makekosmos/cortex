@@ -24,8 +24,8 @@ pub const CORE_TASK_VERSION: &str = "0.1.0";
 static NULL: Value = Value::Null;
 
 /// Поля `extensions`, которые переходят в первые поля `core.task`. Остальные
-/// (price, fuel_cost, billable, significance, sort_order, system_kind, …)
-/// остаются в `extensions` как есть.
+/// (price, billable, significance, sort_order, system_kind, …) остаются в
+/// `extensions` как есть, кроме `REMOVED_EXTENSION_KEYS`.
 const PROMOTED_EXTENSION_KEYS: [&str; 18] = [
     "is_today",
     "is_someday",
@@ -58,6 +58,11 @@ const UNSUPPORTED_EXTENSION_KEYS: [&str; 7] = [
     "heading_id",
     "area_id",
 ];
+
+/// Поля, которые перезапись отбрасывает намеренно: топливо (`fuel_cost`) удалено
+/// из продукта. Это не «неподдерживаемые» поля, их значение не останавливает
+/// перезапись. Исходные значения остаются в бэкапе `<db>.pre-core-task.bak`.
+const REMOVED_EXTENSION_KEYS: [&str; 1] = ["fuel_cost"];
 
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct CoreTaskRewriteReport {
@@ -261,7 +266,10 @@ fn map_row(row: &LegacyRow, registration: &TypeRegistration) -> Result<Value, St
     };
 
     let mut extensions = ext.clone();
-    for key in PROMOTED_EXTENSION_KEYS {
+    for key in PROMOTED_EXTENSION_KEYS
+        .into_iter()
+        .chain(REMOVED_EXTENSION_KEYS)
+    {
         extensions.remove(key);
     }
     let migrated = json!({
