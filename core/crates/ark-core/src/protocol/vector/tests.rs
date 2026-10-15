@@ -1,6 +1,4 @@
-#[cfg(test)]
-mod tests {
-    use super::*;
+use super::*;
     use serde_json::json;
 
     #[test]
@@ -213,4 +211,3 @@ mod tests {
         assert_eq!(merged[0].device_name, "Phone");
         assert_eq!(merged[0].last_address, Some("10.0.0.1:21531".to_string()));
     }
-}

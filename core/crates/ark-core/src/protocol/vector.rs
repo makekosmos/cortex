@@ -1,2 +1,4 @@
 include!("vector/part01.rs");
-include!("vector/part02.rs");
+#[cfg(test)]
+#[path = "vector/tests.rs"]
+mod tests;
