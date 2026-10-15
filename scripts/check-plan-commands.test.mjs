@@ -51,6 +51,14 @@ test("selective checks emit pnpm run commands and Rust stays on cargo", async ()
     "test:rust",
     "runtime-staging",
   ]);
+  assert.deepEqual(run(["core/crates/ark-core/src/service.rs"]), [
+    "brand",
+    "test-skips",
+    "ark-db-writers",
+    "rustfmt",
+    "clippy",
+    "test:rust",
+  ]);
   assert.deepEqual(run(["manager-gpui/src/app.rs"]), ["brand", "test-skips", "manager-gpui"]);
 });
 
@@ -66,6 +74,21 @@ test("pre-commit emits the source-size safeguard through pnpm", async () => {
     "pnpm run check:test-skips",
     "pnpm run check:source-size",
   ]);
+});
+
+test("ARK writer census runs the classified test and baseline command", async () => {
+  const { createPlan, executePlan } = await import("./check-plan.mjs");
+  const seen = [];
+  executePlan(createPlan({ files: ["core/crates/ark-core/src/service.rs"] }), (command) => {
+    seen.push(command);
+    return 0;
+  });
+  const census = seen.find(({ name }) => name === "ark-db-writers");
+  assert.deepEqual(census, {
+    name: "ark-db-writers",
+    command: "pnpm",
+    args: ["run", "test:ark-db-writers"],
+  });
 });
 
 test("lint and format run Node tool entrypoints with verbatim file arguments", async () => {

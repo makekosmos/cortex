@@ -39,6 +39,7 @@ test("Rust, native, and packaging files expand conservatively", () => {
 
 test("core subtree maps crates to rust checks and inert paths to none", () => {
   assert.deepEqual(plan("--files", "core/crates/ark-core/src/lib.rs").json.checks, [
+    "ark-db-writers",
     "rustfmt",
     "clippy",
     "test:rust",
@@ -46,6 +47,16 @@ test("core subtree maps crates to rust checks and inert paths to none", () => {
   assert.deepEqual(plan("--files", "core/docs/plan.md").json.checks, []);
   assert.equal(plan("--files", "core/Cargo.toml").json.full, true);
   assert.equal(plan("--files", "core/ark/packages/ark/package.json").json.full, true);
+});
+
+test("ARK writer census runs when its scanner, baseline, or tests change", () => {
+  for (const file of [
+    "scripts/audit-ark-db-writers.mjs",
+    "scripts/audit-ark-db-writers.test.mjs",
+    "scripts/rust-source-scan.mjs",
+    "scripts/ark-db-writers.allow.json",
+  ])
+    assert.ok(plan("--files", file).json.checks.includes("ark-db-writers"), file);
 });
 
 test("manager-gpui maps to its standalone crate gate", () => {
