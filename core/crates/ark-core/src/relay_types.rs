@@ -6,9 +6,11 @@ use tokio::sync::{mpsc, Mutex};
 
 use crate::hlc::HLC;
 use crate::protocol::*;
-use crate::replication_storage::StorageBackend;
 use crate::relay_transport::{RelayConfig, RelayTransport};
-use crate::sync_server::{OnChangeCallback, OnPeerConnectCallback, OnPeerDisconnectCallback, PeerEntry};
+use crate::replication_storage::StorageBackend;
+use crate::sync_server::{
+    OnChangeCallback, OnPeerConnectCallback, OnPeerDisconnectCallback, PeerEntry,
+};
 use crate::sync_transport::{SyncTransport, TransportEvent};
 use crate::types::{PeerRecord, SyncEntity, VersionVector};
 

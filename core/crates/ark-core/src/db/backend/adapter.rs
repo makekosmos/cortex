@@ -1,3 +1,10 @@
+use super::SqliteStorageBackend;
+use crate::db::{
+    apply_signed_integration_changes, get_sync_kv, set_sync_kv, usage_log_complete_through,
+};
+use crate::replication_storage::StorageBackend;
+use crate::types::{SyncEntity, VersionVector};
+
 impl SqliteStorageBackend {
     pub fn set_selective_sync_profile(
         &self,

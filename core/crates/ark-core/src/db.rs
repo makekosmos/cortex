@@ -6,7 +6,8 @@ include!("db/usage.rs");
 include!("db/sync.rs");
 include!("db/compact.rs");
 include!("db/load.rs");
-include!("db/backend.rs");
+mod backend;
+pub use backend::{delete_tag, SqliteStorageBackend};
 include!("db/integration_replication_common.rs");
 include!("db/integration_replication_records.rs");
 include!("db/integration_replication_grants.rs");
@@ -20,7 +21,10 @@ include!("db/integration_replication_apply.rs");
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{Arc, Mutex};
+
     use super::*;
+    use crate::replication_storage::StorageBackend;
     use serde_json::json;
 
     include!("db/tests_core.rs");

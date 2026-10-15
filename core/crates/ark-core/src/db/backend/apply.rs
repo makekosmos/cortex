@@ -1,0 +1,162 @@
+use rusqlite::{params, Connection};
+use serde_json::{json, Value};
+
+use super::SqliteStorageBackend;
+use crate::db::{
+    delete_object, delete_object_link, delete_object_type, delete_project, delete_sync_tombstone,
+    delete_todo, delete_tracked_app, delete_usage_day, delete_usage_event, delete_usage_session,
+    finish_usage_entity_sync, insert_pending_object, is_object_definition_known,
+    is_sequenced_usage_entity, record_usage_sequence, upsert_object_link, upsert_object_type,
+    upsert_sync_tombstone, upsert_tracked_app, upsert_usage_day, upsert_usage_event,
+    upsert_usage_session, usage_entity_is_newer, usage_origin_for_entity,
+};
+use crate::types::{
+    ArkObject, ObjectLink, ObjectType, SyncEntity, TrackedApp, UsageDay, UsageEvent, UsageSession,
+};
+
+// ---------------------------------------------------------------------------
+// Delete helpers (for StorageBackend)
+// ---------------------------------------------------------------------------
+
+pub fn delete_tag(conn: &Connection, id: &str) -> Result<(), String> {
+    conn.execute("DELETE FROM tags WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+impl SqliteStorageBackend {
+    pub(in crate::db) fn apply_entity_blocking(
+        conn: &Connection,
+        entity: &SyncEntity,
+    ) -> Result<(), String> {
+        conn.execute_batch("SAVEPOINT sync_entity_apply")
+            .map_err(|e| e.to_string())?;
+        match Self::apply_entity_blocking_inner(conn, entity) {
+            Ok(()) => {
+                conn.execute_batch("RELEASE sync_entity_apply")
+                    .map_err(|e| e.to_string())?;
+                Ok(())
+            }
+            Err(error) => {
+                let _ =
+                    conn.execute_batch("ROLLBACK TO sync_entity_apply; RELEASE sync_entity_apply");
+                Err(error)
+            }
+        }
+    }
+
+    fn apply_entity_blocking_inner(conn: &Connection, entity: &SyncEntity) -> Result<(), String> {
+        let sequenced_usage = is_sequenced_usage_entity(&entity.entity_type);
+        if sequenced_usage && !usage_entity_is_newer(conn, entity)? {
+            let (device_id, seq) = usage_origin_for_entity(conn, entity)?;
+            return record_usage_sequence(
+                conn,
+                &entity.entity_type,
+                &entity.id,
+                &device_id,
+                seq,
+                &entity.hlc,
+                entity.deleted == Some(true),
+            );
+        }
+        if matches!(entity.entity_type.as_str(), "area" | "heading") {
+            return Err("LegacyPlanningReadOnly".into());
+        }
+        if matches!(entity.entity_type.as_str(), "todo" | "project" | "tag")
+            && entity.deleted == Some(true)
+        {
+            let mut canonical = entity.clone();
+            canonical.entity_type = "object".into();
+            return crate::canonical_types::facades::apply_canonical_object_entity(
+                conn, &canonical,
+            );
+        }
+        if entity.entity_type == "object" && entity.deleted == Some(true) {
+            return crate::canonical_types::facades::apply_canonical_object_entity(conn, entity);
+        }
+
+        if entity.deleted == Some(true) {
+            match entity.entity_type.as_str() {
+                "todo" => delete_todo(conn, &entity.id),
+                "project" => delete_project(conn, &entity.id),
+                "tag" => delete_tag(conn, &entity.id),
+                "tracked_app" => delete_tracked_app(conn, &entity.id),
+                "usage_session" => delete_usage_session(conn, &entity.id),
+                "usage_event" => delete_usage_event(conn, &entity.id),
+                "usage_day" => delete_usage_day(conn, &entity.id),
+                "object_type" => delete_object_type(conn, &entity.id),
+                "object" => delete_object(conn, &entity.id),
+                "object_link" => delete_object_link(conn, &entity.id),
+                _ => Err(format!("unknown sync entity type '{}'", entity.entity_type)),
+            }?;
+            upsert_sync_tombstone(conn, entity)?;
+            if sequenced_usage {
+                finish_usage_entity_sync(conn, entity)?;
+            }
+            return Ok(());
+        }
+
+        let mut full_data = entity.data.clone();
+        full_data.insert("id".to_string(), Value::String(entity.id.clone()));
+        let value = Value::Object(full_data);
+
+        let result = match entity.entity_type.as_str() {
+            "todo" | "project" | "tag" => {
+                crate::canonical_types::facades::apply_legacy_compat_entity(conn, entity)
+            }
+            "area" | "heading" => Err("LegacyPlanningReadOnly".into()),
+            "tracked_app" => serde_json::from_value::<TrackedApp>(value)
+                .map_err(|e| e.to_string())
+                .and_then(|tracked_app| upsert_tracked_app(conn, &tracked_app)),
+            "usage_session" => serde_json::from_value::<UsageSession>(value)
+                .map_err(|e| e.to_string())
+                .and_then(|session| upsert_usage_session(conn, &session)),
+            "usage_event" => serde_json::from_value::<UsageEvent>(value)
+                .map_err(|e| e.to_string())
+                .and_then(|event| upsert_usage_event(conn, &event)),
+            "usage_day" => serde_json::from_value::<UsageDay>(value)
+                .map_err(|e| e.to_string())
+                .and_then(|day| upsert_usage_day(conn, &day)),
+            "object_type" => serde_json::from_value::<ObjectType>(value)
+                .map_err(|e| e.to_string())
+                .and_then(|object_type| upsert_object_type(conn, &object_type)),
+            "object" => {
+                // The canonical ingress owns identity resolution and validation;
+                // pending replay uses this same branch after the registry arrives.
+                let mut object_data = match value.clone() {
+                    Value::Object(map) => map,
+                    _ => return Err("object payload must be an object".into()),
+                };
+                object_data
+                    .entry("typeVersion".to_string())
+                    .or_insert_with(|| Value::String("0.0.0-legacy".to_string()));
+                let object = serde_json::from_value::<ArkObject>(Value::Object(object_data))
+                    .map_err(|e| e.to_string())?;
+                if !is_object_definition_known(conn, &object.type_id, &object.type_version)? {
+                    insert_pending_object(conn, entity, &object.type_id)?;
+                    crate::events::emit_event(json!({
+                        "event": "sync_error",
+                        "code": "unknown_type_version",
+                        "entity_type": "object",
+                        "entity_id": entity.id,
+                        "awaited_type_id": object.type_id,
+                        "awaited_type_version": object.type_version,
+                    }));
+                    Ok(())
+                } else {
+                    crate::canonical_types::facades::apply_canonical_object_entity(conn, entity)
+                }
+            }
+            "object_link" => serde_json::from_value::<ObjectLink>(value)
+                .map_err(|e| e.to_string())
+                .and_then(|link| upsert_object_link(conn, &link)),
+            _ => Err(format!("unknown sync entity type '{}'", entity.entity_type)),
+        };
+        result?;
+        delete_sync_tombstone(conn, &entity.id)?;
+        if sequenced_usage {
+            finish_usage_entity_sync(conn, entity)?;
+        }
+        Ok(())
+    }
+}

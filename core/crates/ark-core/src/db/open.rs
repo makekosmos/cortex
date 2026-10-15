@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 
 use chrono::{Duration, Utc};
 use rusqlite::{params, params_from_iter, Connection, OptionalExtension, Row};
@@ -12,7 +11,6 @@ pub use crate::canonical_types::pending::{
 };
 use crate::hlc::HLC;
 use crate::schema::{CREATE_OBJECT_SEARCH_FTS, CREATE_TABLES};
-use crate::replication_storage::StorageBackend;
 use crate::type_registry;
 use crate::types::*;
 
