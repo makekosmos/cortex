@@ -60,6 +60,7 @@ mod request_config;
 mod snapshot_restore;
 mod sync_lifecycle;
 mod sync_ticket_pending;
+mod write_tx;
 
 /// Выставляет capturing-транспорт и выставляет SyncRuntime в `state.sync`.
 /// Возвращает буфер перехваченных сообщений.

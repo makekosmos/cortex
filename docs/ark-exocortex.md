@@ -122,7 +122,7 @@ Engine operation / incoming authenticated sync batch
 - Прерванный клиентский запрос может уже зафиксироваться. Таймаут не означает rollback; повтор с тем же ключом и тем же payload возвращает прежний результат. Тот же ключ с другим payload отклоняется. Ключ scoped по caller/space; retention и срок безопасного retry документированы.
 - Ошибки storage и join не превращаются в пустые данные. Типизированы как минимум validation, permission, conflict, unsupported capability, busy, storage failure, recovery required и outcome unknown.
 
-Текущий `with_write_tx` использует ручные BEGIN/COMMIT; ветка ошибки COMMIT не выполняет явный rollback. Целевой adapter использует RAII-rollback или эквивалентный проверенный guard. Это конкретная зона для failure injection, не доказательство уже случившегося повреждения БД.
+На момент аудита `with_write_tx` использовал ручные BEGIN/COMMIT, а ветка ошибки COMMIT не выполняла явный rollback. В KOS-430 helper переведён на rusqlite RAII-транзакцию с `Immediate`; deferred-FK COMMIT failure, ошибка callback и panic проверены отдельными тестами. Это исправляет только сервисный helper и не объединяет локальный write с remote apply.
 
 ## 6. Commit, доставка и события
 

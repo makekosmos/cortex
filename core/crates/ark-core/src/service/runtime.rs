@@ -27,18 +27,12 @@ where
     F: FnOnce(&rusqlite::Connection) -> Result<T, String>,
 {
     with_conn(state, |conn| {
-        conn.execute_batch("BEGIN IMMEDIATE")
-            .map_err(|e| e.to_string())?;
-        match f(conn) {
-            Ok(v) => {
-                conn.execute_batch("COMMIT").map_err(|e| e.to_string())?;
-                Ok(v)
-            }
-            Err(e) => {
-                let _ = conn.execute_batch("ROLLBACK");
-                Err(e)
-            }
-        }
+        let tx =
+            rusqlite::Transaction::new_unchecked(conn, rusqlite::TransactionBehavior::Immediate)
+                .map_err(|error| error.to_string())?;
+        let value = f(&tx)?;
+        tx.commit().map_err(|error| error.to_string())?;
+        Ok(value)
     })
 }
 
