@@ -1,5 +1,5 @@
 use super::*;
-use crate::service::runtime::get_shared_conn;
+use crate::service::runtime::get_db_handle;
 
 pub(crate) async fn handle_start_sync(
     state: &Arc<ServiceState>,
@@ -34,8 +34,8 @@ pub(crate) async fn handle_start_sync(
         None => LAN_SYNC_PORT,
     };
 
-    let shared_conn = get_shared_conn(state)?;
-    let storage = Arc::new(SqliteStorageBackend::new(shared_conn.clone()));
+    let db_handle = get_db_handle(state)?;
+    let storage = Arc::new(SqliteStorageBackend::with_db_handle(db_handle.clone()));
     storage.set_device_id(&device_id)?;
 
     let server = Arc::new(SyncServer::new(
@@ -147,11 +147,10 @@ pub(crate) async fn handle_start_sync(
         relay_sync.start().await?;
         Some(relay_sync)
     } else if transport_choice == TransportChoice::Iroh {
-        let secret_key = {
-            let conn = shared_conn.lock().unwrap_or_else(|e| e.into_inner());
-            crate::iroh_transport::load_or_generate_secret_key(&conn)
-                .map_err(|e| format!("iroh transport: failed to load identity: {e}"))?
-        };
+        let secret_key = db_handle.with_connection(|conn| {
+            crate::iroh_transport::load_or_generate_secret_key(conn)
+                .map_err(|e| format!("iroh transport: failed to load identity: {e}"))
+        })?;
         let peer_addr = match iroh_peer_ticket.as_deref() {
             Some(ticket) => Some(crate::iroh_transport::from_ticket(ticket)?),
             None => None,

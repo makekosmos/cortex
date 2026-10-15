@@ -114,7 +114,9 @@ async fn legacy_entity_writes_bump_version_vector() {
     .await
     .unwrap();
 
-    let shared = get_shared_conn(&state).unwrap();
+    let shared = get_db_handle(&state)
+        .map(|db| db.shared_connection_for_test())
+        .unwrap();
     let guard = shared.lock().unwrap();
     let raw = db::get_sync_kv(&guard, "lan_sync.version_vector")
         .unwrap()

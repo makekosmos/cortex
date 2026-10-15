@@ -15,7 +15,9 @@ async fn disconnect_peer_stops_matching_outbound_client_and_emits_events() {
     .await
     .unwrap();
 
-    let shared = get_shared_conn(&state).unwrap();
+    let shared = get_db_handle(&state)
+        .map(|db| db.shared_connection_for_test())
+        .unwrap();
     let backend = Arc::new(crate::db::SqliteStorageBackend::new(shared));
     backend.set_device_id("device-local").unwrap();
 

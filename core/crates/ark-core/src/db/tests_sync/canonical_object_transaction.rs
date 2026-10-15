@@ -135,7 +135,8 @@ async fn authenticated_apply_rechecks_removed_peer_before_persisting() {
         result.is_err(),
         "blocked authenticated peer must be rejected"
     );
-    let conn = backend.conn.lock().unwrap();
+    let shared = backend.db.shared_connection_for_test();
+    let conn = shared.lock().unwrap();
     assert!(get_object(&conn, &entity.id).unwrap().is_none());
 }
 
@@ -183,7 +184,8 @@ async fn clear_all_removes_object_write_receipts_before_replay() {
         .await
         .unwrap();
     {
-        let conn = backend.conn.lock().unwrap();
+        let shared = backend.db.shared_connection_for_test();
+        let conn = shared.lock().unwrap();
         assert!(get_object(&conn, &entity.id).unwrap().is_some());
         let count: i64 = conn
             .query_row(
@@ -209,7 +211,8 @@ async fn clear_all_removes_object_write_receipts_before_replay() {
         .apply_authenticated_entity(&entity, "device-a")
         .await
         .unwrap();
-    let conn = backend.conn.lock().unwrap();
+    let shared = backend.db.shared_connection_for_test();
+    let conn = shared.lock().unwrap();
     assert!(get_object(&conn, &entity.id).unwrap().is_some());
 }
 
@@ -240,7 +243,8 @@ async fn authenticated_core_task_replay_is_idempotent_and_rejects_revision_reuse
         .await
         .unwrap();
     {
-        let conn = backend.conn.lock().unwrap();
+        let shared = backend.db.shared_connection_for_test();
+        let conn = shared.lock().unwrap();
         let receipt_count: i64 = conn
             .query_row(
                 "SELECT COUNT(*) FROM entity_write_receipts WHERE entity_id = ?1",
@@ -265,7 +269,8 @@ async fn authenticated_core_task_replay_is_idempotent_and_rejects_revision_reuse
         .await
         .unwrap();
     {
-        let conn = backend.conn.lock().unwrap();
+        let shared = backend.db.shared_connection_for_test();
+        let conn = shared.lock().unwrap();
         assert_eq!(
             get_object(&conn, &entity.id).unwrap().unwrap().title,
             "Original title"
@@ -289,7 +294,8 @@ async fn authenticated_core_task_replay_is_idempotent_and_rejects_revision_reuse
             .unwrap_err(),
         "object_revision_payload_mismatch"
     );
-    let conn = backend.conn.lock().unwrap();
+    let shared = backend.db.shared_connection_for_test();
+    let conn = shared.lock().unwrap();
     assert_eq!(
         get_object(&conn, &entity.id).unwrap().unwrap().title,
         "Original title"

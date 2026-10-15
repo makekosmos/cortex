@@ -133,7 +133,9 @@ async fn local_object_and_usage_writes_record_sync_state() {
     .await
     .unwrap();
 
-    let shared = get_shared_conn(&state).unwrap();
+    let shared = get_db_handle(&state)
+        .map(|db| db.shared_connection_for_test())
+        .unwrap();
     let guard = shared.lock().unwrap();
     let raw = db::get_sync_kv(&guard, "lan_sync.version_vector")
         .unwrap()
@@ -295,7 +297,9 @@ async fn local_object_type_and_link_writes_record_sync_state() {
     .await
     .unwrap();
 
-    let shared = get_shared_conn(&state).unwrap();
+    let shared = get_db_handle(&state)
+        .map(|db| db.shared_connection_for_test())
+        .unwrap();
     let guard = shared.lock().unwrap();
     let raw = db::get_sync_kv(&guard, "lan_sync.version_vector")
         .unwrap()

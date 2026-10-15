@@ -69,7 +69,7 @@ async fn pre_version_table_revisions_reject_stale_remote_resurrection() {
     })
     .unwrap();
 
-    let backend = SqliteStorageBackend::new(get_shared_conn(&state).unwrap());
+    let backend = SqliteStorageBackend::with_db_handle(get_db_handle(&state).unwrap());
     backend
         .apply_entity(&remote_entity(&vector_object, "stale vector overwrite"))
         .await

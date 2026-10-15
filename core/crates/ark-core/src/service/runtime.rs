@@ -9,14 +9,7 @@ pub(super) fn with_conn<T, F>(state: &ServiceState, f: F) -> Result<T, String>
 where
     F: FnOnce(&rusqlite::Connection) -> Result<T, String>,
 {
-    let outer = state.db.lock().unwrap_or_else(|e| e.into_inner());
-    let shared = outer
-        .as_ref()
-        .ok_or_else(|| "Database not initialized. Call Init first.".to_string())?
-        .clone();
-    drop(outer);
-    let inner = shared.lock().unwrap_or_else(|e| e.into_inner());
-    f(&inner)
+    get_db_handle(state)?.with_connection(f)
 }
 
 /// Выполняет write-замыкание в одной SQLite-транзакции поверх shared conn.
@@ -36,11 +29,11 @@ where
     })
 }
 
-pub(super) fn get_shared_conn(
-    state: &ServiceState,
-) -> Result<Arc<StdMutex<rusqlite::Connection>>, String> {
-    let guard = state.db.lock().unwrap_or_else(|e| e.into_inner());
-    guard
+pub(super) fn get_db_handle(state: &ServiceState) -> Result<db::DbHandle, String> {
+    state
+        .db
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
         .as_ref()
         .cloned()
         .ok_or_else(|| "Database not initialized. Call Init first.".to_string())
@@ -54,14 +47,7 @@ pub(super) fn with_conn_mut<T, F>(state: &ServiceState, f: F) -> Result<T, Strin
 where
     F: FnOnce(&mut rusqlite::Connection) -> Result<T, String>,
 {
-    let outer = state.db.lock().unwrap_or_else(|e| e.into_inner());
-    let shared = outer
-        .as_ref()
-        .ok_or_else(|| "Database not initialized. Call Init first.".to_string())?
-        .clone();
-    drop(outer);
-    let mut inner = shared.lock().unwrap_or_else(|e| e.into_inner());
-    f(&mut inner)
+    get_db_handle(state)?.with_connection_mut(f)
 }
 
 /// Путь к live ARK DB (из Init). Общий accessor для `db_backup`,

@@ -223,58 +223,56 @@ pub(super) async fn upsert_object(
 ) -> Result<Value, String> {
     let object_id = object.id.clone();
     let object_type_id = object.type_id.clone();
-    let entity = with_write_tx(state, |conn| {
-        if object.type_id == "core.task" {
-            let session = crate::db::SqliteObjectWriteSession::new(conn);
-            let result = crate::application::objects::apply_local_core_task_write(
-                &session,
-                object,
-                expected_snapshot,
-                device_id,
-            )?;
-            let stored = db::get_object(conn, &object_id)?
-                .ok_or_else(|| "object_write_missing_after_commit".to_string())?;
-            let hlc = result
-                .receipt
-                .ok_or_else(|| "object_write_receipt_missing".to_string())?
-                .resulting_hlc
-                .ok_or_else(|| "object_write_receipt_missing_revision".to_string())?;
-            return Ok(make_sync_entity(
-                "object",
-                &stored.id,
-                serde_json::to_value(&stored).unwrap_or(json!({})),
-                hlc,
-                None,
-            ));
-        }
-        if let Some(expected) = expected_snapshot {
-            if object_write_snapshot(conn, &object.id)? != expected {
-                return Err("object_conflict:stale_snapshot".to_string());
-            }
-        }
-        let object = crate::canonical_types::ingress::prepare_object(conn, object)
-            .map_err(|error| error.to_string())?;
-        db::upsert_object(conn, &object)?;
-        let hlc = record_local_upsert(conn, "object", &object.id, device_id)?;
-        let version_rows = conn
-            .execute(
-                "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,0)
-                     ON CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=0
-                     WHERE excluded.hlc > object_sync_versions.hlc",
-                rusqlite::params![object.id, hlc],
+    let entity = if object.type_id == "core.task" {
+        let commit = get_db_handle(state)?
+            .submit(
+                db::CommandContext::engine(),
+                db::LocalCoreTaskWrite::new(object, expected_snapshot, device_id),
             )
+            .await
             .map_err(|error| error.to_string())?;
-        if version_rows != 1 {
-            return Err("object_conflict:stale_revision".to_string());
-        }
-        Ok(make_sync_entity(
+        let hlc = commit
+            .receipt
+            .resulting_hlc
+            .ok_or_else(|| "object_write_receipt_missing_revision".to_string())?;
+        make_sync_entity(
             "object",
-            &object.id,
-            serde_json::to_value(&object).unwrap_or(json!({})),
+            &commit.object.id,
+            serde_json::to_value(&commit.object).unwrap_or(json!({})),
             hlc,
             None,
-        ))
-    })?;
+        )
+    } else {
+        with_write_tx(state, |conn| {
+            if let Some(expected) = expected_snapshot {
+                if object_write_snapshot(conn, &object.id)? != expected {
+                    return Err("object_conflict:stale_snapshot".to_string());
+                }
+            }
+            let object = crate::canonical_types::ingress::prepare_object(conn, object)
+                .map_err(|error| error.to_string())?;
+            db::upsert_object(conn, &object)?;
+            let hlc = record_local_upsert(conn, "object", &object.id, device_id)?;
+            let version_rows = conn
+                .execute(
+                    "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,0)
+                     ON CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=0
+                     WHERE excluded.hlc > object_sync_versions.hlc",
+                    rusqlite::params![object.id, hlc],
+                )
+                .map_err(|error| error.to_string())?;
+            if version_rows != 1 {
+                return Err("object_conflict:stale_revision".to_string());
+            }
+            Ok(make_sync_entity(
+                "object",
+                &object.id,
+                serde_json::to_value(&object).unwrap_or(json!({})),
+                hlc,
+                None,
+            ))
+        })?
+    };
     let eid = object_id.clone();
     let etid = object_type_id.clone();
     maybe_broadcast_local_change(state, entity).await;

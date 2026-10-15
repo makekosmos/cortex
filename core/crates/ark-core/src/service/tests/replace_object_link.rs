@@ -111,7 +111,9 @@ async fn replace_object_link_moves_task_to_new_project_and_records_sync() {
     assert_eq!(links[0]["id"], json!("link-b"));
     assert_eq!(links[0]["targetObjectId"], json!("project-b"));
 
-    let shared = get_shared_conn(&state).unwrap();
+    let shared = get_db_handle(&state)
+        .map(|db| db.shared_connection_for_test())
+        .unwrap();
     let guard = shared.lock().unwrap();
     let removed_tombstones: i64 = guard
         .query_row(
@@ -168,7 +170,9 @@ async fn replace_object_link_rejects_missing_target_and_changes_nothing() {
     );
     assert_eq!(links[0]["id"], json!("link-a"));
 
-    let shared = get_shared_conn(&state).unwrap();
+    let shared = get_db_handle(&state)
+        .map(|db| db.shared_connection_for_test())
+        .unwrap();
     let guard = shared.lock().unwrap();
     let tombstones: i64 = guard
         .query_row(

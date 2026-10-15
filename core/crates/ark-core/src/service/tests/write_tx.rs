@@ -36,7 +36,9 @@ async fn write_tx_rolls_back_when_deferred_foreign_key_commit_fails() {
     .unwrap_err();
     assert!(error.contains("FOREIGN KEY constraint failed"), "{error}");
 
-    let conn = crate::service::runtime::get_shared_conn(&fixture.state).unwrap();
+    let conn = crate::service::runtime::get_db_handle(&fixture.state)
+        .map(|db| db.shared_connection_for_test())
+        .unwrap();
     let guard = conn.lock().unwrap_or_else(|error| error.into_inner());
     assert!(guard.is_autocommit());
     let child_count: i64 = guard
@@ -65,7 +67,9 @@ async fn write_tx_rolls_back_callback_error() {
     });
     assert_eq!(result.unwrap_err(), "callback failed");
 
-    let conn = crate::service::runtime::get_shared_conn(&fixture.state).unwrap();
+    let conn = crate::service::runtime::get_db_handle(&fixture.state)
+        .map(|db| db.shared_connection_for_test())
+        .unwrap();
     let guard = conn.lock().unwrap_or_else(|error| error.into_inner());
     assert!(guard.is_autocommit());
     let parent_count: i64 = guard
@@ -86,7 +90,9 @@ async fn write_tx_rolls_back_during_unwind() {
     }));
     assert!(panic.is_err());
 
-    let conn = crate::service::runtime::get_shared_conn(&fixture.state).unwrap();
+    let conn = crate::service::runtime::get_db_handle(&fixture.state)
+        .map(|db| db.shared_connection_for_test())
+        .unwrap();
     let guard = conn.lock().unwrap_or_else(|error| error.into_inner());
     assert!(guard.is_autocommit());
     let parent_count: i64 = guard

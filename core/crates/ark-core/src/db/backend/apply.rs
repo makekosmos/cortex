@@ -1,4 +1,3 @@
-use crate::application::objects::ObjectWriteSession;
 use rusqlite::{params, Connection, Transaction, TransactionBehavior};
 use serde_json::{json, Value};
 
@@ -11,11 +10,9 @@ use crate::db::{
     upsert_sync_tombstone, upsert_tracked_app, upsert_usage_day, upsert_usage_event,
     upsert_usage_session, usage_entity_is_newer, usage_origin_for_entity,
 };
-use crate::hlc::HLC;
 use crate::types::{
     ArkObject, ObjectLink, ObjectType, SyncEntity, TrackedApp, UsageDay, UsageEvent, UsageSession,
 };
-use std::cmp::Ordering;
 
 // ---------------------------------------------------------------------------
 // Delete helpers (for StorageBackend)
@@ -53,29 +50,7 @@ impl SqliteStorageBackend {
             return Err("sync_peer_removed".into());
         }
 
-        if is_full_core_task(entity) {
-            let session = super::canonical_object::SqliteObjectWriteSession::new(&transaction);
-            if session
-                .load_receipt(&entity.id, "full", &entity.hlc)?
-                .is_none()
-                && session
-                    .current_revision(&entity.id)?
-                    .as_deref()
-                    .is_some_and(|current| {
-                        HLC::compare_str(&entity.hlc, current) != Ordering::Greater
-                    })
-            {
-                return Ok(());
-            }
-            let remote = super::canonical_object::decode_full_core_task(entity)?;
-            crate::application::objects::apply_remote_core_task_write(
-                &session,
-                remote,
-                Some(authenticated_peer_id.to_owned()),
-            )?;
-        } else {
-            Self::apply_entity_blocking_inner(&transaction, entity)?;
-        }
+        Self::apply_entity_blocking_inner(&transaction, entity)?;
         transaction.commit().map_err(|error| error.to_string())
     }
 
@@ -195,7 +170,7 @@ impl SqliteStorageBackend {
     }
 }
 
-fn is_full_core_task(entity: &SyncEntity) -> bool {
+pub(super) fn is_full_core_task(entity: &SyncEntity) -> bool {
     entity.entity_type == "object"
         && entity.deleted != Some(true)
         && entity.data.get("typeId").and_then(Value::as_str) == Some("core.task")

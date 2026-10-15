@@ -12,7 +12,9 @@ pub(super) async fn init(state: &Arc<ServiceState>, db_path: String) -> Result<V
         &backup,
         &local_write_device_id(None),
     )?;
-    *state.db.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(StdMutex::new(conn)));
+    *state.db.lock().unwrap_or_else(|e| e.into_inner()) = Some(
+        db::DbHandle::from_shared_connection(Arc::new(StdMutex::new(conn))),
+    );
     *state.db_path.lock().unwrap_or_else(|e| e.into_inner()) = Some(db_path);
     Ok(json!(true))
 }

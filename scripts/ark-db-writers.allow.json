@@ -84,7 +84,7 @@
     {
       "path": "core/crates/ark-core/src/db/backend.rs",
       "category": "shared connection escape",
-      "count": 3
+      "count": 1
     },
     {
       "path": "core/crates/ark-core/src/db/backend/adapter.rs",
@@ -100,6 +100,16 @@
       "path": "core/crates/ark-core/src/db/backend/canonical_object.rs",
       "category": "SQLite mutation API",
       "count": 3
+    },
+    {
+      "path": "core/crates/ark-core/src/db/command.rs",
+      "category": "SQLite mutation API",
+      "count": 2
+    },
+    {
+      "path": "core/crates/ark-core/src/db/command.rs",
+      "category": "sync blocking adapter",
+      "count": 1
     },
     {
       "path": "core/crates/ark-core/src/db/compact.rs",
@@ -212,11 +222,6 @@
       "count": 4
     },
     {
-      "path": "core/crates/ark-core/src/service/runtime.rs",
-      "category": "shared connection escape",
-      "count": 1
-    },
-    {
       "path": "core/crates/ark-core/src/service/runtime/legacy.rs",
       "category": "connection lifecycle",
       "count": 2
@@ -255,16 +260,6 @@
       "path": "core/crates/ark-core/src/service/runtime/usage.rs",
       "category": "service transaction boundary",
       "count": 6
-    },
-    {
-      "path": "core/crates/ark-core/src/service/sync/start.rs",
-      "category": "shared connection escape",
-      "count": 1
-    },
-    {
-      "path": "core/crates/ark-core/src/service/tests.rs",
-      "category": "shared connection escape",
-      "count": 1
     },
     {
       "path": "core/crates/ark-core/src/type_registry/part01.rs",

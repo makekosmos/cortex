@@ -40,7 +40,7 @@ use serde_json::{json, Value};
 use tokio::sync::{mpsc, oneshot, watch, Mutex as TokioMutex};
 
 use crate::beacon::{BeaconPeer, BroadcastDiscovery, BroadcastDiscoveryOptions};
-use crate::db::{self, SqliteStorageBackend};
+use crate::db::{self, DbHandle, SqliteStorageBackend};
 use crate::events::emit_event;
 use crate::hlc::HLC;
 use crate::host::{get_host_device_name, get_own_addresses};
@@ -97,9 +97,9 @@ pub struct ArkHostConfig {
 }
 
 pub(crate) struct ServiceState {
-    /// Shared SQLite connection behind a mutex — the single writer for every
-    /// op executed by this service's worker.
-    db: StdMutex<Option<Arc<StdMutex<rusqlite::Connection>>>>,
+    /// Store-owned handle to the one shared SQLite connection. Callers clone
+    /// the handle, never the connection itself.
+    db: StdMutex<Option<DbHandle>>,
     /// Path to the live ARK DB (set by `init`). `db_backup` opens a separate
     /// read connection so it does not hold the DB mutex for the whole copy.
     db_path: StdMutex<Option<String>>,

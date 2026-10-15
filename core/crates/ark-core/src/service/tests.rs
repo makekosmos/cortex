@@ -2,7 +2,7 @@
 // `handle_request` against a per-test `ServiceState` (no process-wide
 // statics, so tests run in parallel without mutexes).
 
-use super::runtime::{get_shared_conn, with_conn, with_write_tx};
+use super::runtime::{get_db_handle, with_conn, with_write_tx};
 use super::*;
 
 /// Fresh per-test service state — replaces the old global `DB`/`SYNC`
@@ -78,7 +78,9 @@ async fn setup_sync_with_capturing_transport(
     });
 
     let backend = Arc::new(crate::db::SqliteStorageBackend::new(
-        get_shared_conn(state).unwrap(),
+        get_db_handle(state)
+            .map(|db| db.shared_connection_for_test())
+            .unwrap(),
     ));
     backend.set_device_id("test-device").unwrap();
 

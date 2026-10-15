@@ -2,50 +2,9 @@ use crate::application::objects::{
     NewObjectReceipt, ObjectWriteSession, ReceiptOutcome, StoredObjectReceipt,
 };
 use crate::db;
-use crate::domain::object_write::{ObjectWriteSnapshot, RemoteObjectWrite};
-use crate::types::{ArkObject, ObjectLink, SyncEntity};
+use crate::domain::object_write::ObjectWriteSnapshot;
+use crate::types::{ArkObject, ObjectLink};
 use rusqlite::{params, Connection, OptionalExtension};
-use serde_json::Value;
-
-pub(crate) fn decode_full_core_task(entity: &SyncEntity) -> Result<RemoteObjectWrite, String> {
-    if entity.entity_type != "object" || entity.deleted == Some(true) {
-        return Err("object_write_slice_unsupported_entity".into());
-    }
-    for key in [
-        "typeId",
-        "typeVersion",
-        "title",
-        "createdAt",
-        "updatedAt",
-        "deletedAt",
-        "contentJson",
-        "propsJson",
-    ] {
-        if !entity.data.contains_key(key) {
-            return Err("object_write_slice_requires_full_representation".into());
-        }
-    }
-    if entity.data.get("typeId").and_then(Value::as_str) != Some("core.task")
-        || entity.data.get("typeVersion").and_then(Value::as_str) != Some("0.1.0")
-    {
-        return Err("object_write_slice_unsupported_type".into());
-    }
-    let mut data = entity.data.clone();
-    data.insert("id".into(), Value::String(entity.id.clone()));
-    let links = data
-        .remove("links")
-        .map(serde_json::from_value)
-        .transpose()
-        .map_err(|error| error.to_string())?
-        .unwrap_or_default();
-    let object = serde_json::from_value(Value::Object(data)).map_err(|error| error.to_string())?;
-    Ok(RemoteObjectWrite {
-        object,
-        links,
-        source_hlc: entity.hlc.clone(),
-        source_origin_device_id: entity.origin_device_id.clone(),
-    })
-}
 
 pub(crate) struct SqliteObjectWriteSession<'a> {
     conn: &'a Connection,

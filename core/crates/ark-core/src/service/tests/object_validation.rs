@@ -148,7 +148,9 @@ async fn failed_upsert_object_persists_nothing() {
     )
     .await;
 
-    let shared = get_shared_conn(&state).unwrap();
+    let shared = get_db_handle(&state)
+        .map(|db| db.shared_connection_for_test())
+        .unwrap();
     let guard = shared.lock().unwrap();
 
     // Объект не должен быть в таблице objects

@@ -1,0 +1,219 @@
+use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError};
+use crate::application::objects::{ObjectWriteResult, ObjectWriteSession, StoredObjectReceipt};
+use crate::domain::object_write::{ObjectWriteSnapshot, RemoteObjectWrite};
+use crate::types::{ArkObject, ArkObjectWrite, ObjectLink};
+use rusqlite::Transaction;
+use serde::Serialize;
+use serde_json::{Map, Value};
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct LocalCoreTaskWrite {
+    object: ArkObjectWrite,
+    expected_snapshot: Option<ObjectWriteSnapshot>,
+    device_id: Option<String>,
+}
+
+impl LocalCoreTaskWrite {
+    pub(crate) fn new(
+        object: ArkObjectWrite,
+        expected_snapshot: Option<ObjectWriteSnapshot>,
+        device_id: Option<String>,
+    ) -> Self {
+        Self {
+            object,
+            expected_snapshot,
+            device_id,
+        }
+    }
+}
+
+impl sealed::Sealed for LocalCoreTaskWrite {}
+
+impl DbCommand for LocalCoreTaskWrite {
+    type Output = CoreTaskWriteCommit;
+
+    const CLASS: CommandClass = CommandClass::Interactive;
+
+    fn weight(&self) -> usize {
+        serialized_weight(self)
+    }
+
+    fn execute(
+        self,
+        context: &CommandContext,
+        transaction: &Transaction<'_>,
+    ) -> Result<Self::Output, DbError> {
+        context.require_engine()?;
+        if self.object.type_id != "core.task" {
+            return Err(DbError::Unsupported(
+                "object_write_slice_unsupported_type".into(),
+            ));
+        }
+        let id = self.object.id.clone();
+        let session = super::super::super::SqliteObjectWriteSession::new(transaction);
+        let result = crate::application::objects::apply_local_core_task_write(
+            &session,
+            self.object,
+            self.expected_snapshot,
+            self.device_id,
+        )
+        .map_err(DbError::from_application_error)?;
+        let receipt = required_receipt(result)?;
+        let object = crate::db::get_object(transaction, &id)
+            .map_err(|error| DbError::Storage(error.to_string()))?
+            .ok_or_else(|| DbError::Storage("object_write_missing_after_commit".into()))?;
+        Ok(CoreTaskWriteCommit { object, receipt })
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct AuthenticatedCoreTaskWrite {
+    id: String,
+    source_hlc: String,
+    source_origin_device_id: Option<String>,
+    data: Map<String, Value>,
+}
+
+impl AuthenticatedCoreTaskWrite {
+    pub(crate) fn new(
+        id: String,
+        source_hlc: String,
+        source_origin_device_id: Option<String>,
+        data: Map<String, Value>,
+    ) -> Self {
+        Self {
+            id,
+            source_hlc,
+            source_origin_device_id,
+            data,
+        }
+    }
+}
+
+impl sealed::Sealed for AuthenticatedCoreTaskWrite {}
+
+impl DbCommand for AuthenticatedCoreTaskWrite {
+    type Output = RemoteCoreTaskOutcome;
+
+    const CLASS: CommandClass = CommandClass::SyncLive;
+
+    fn weight(&self) -> usize {
+        serialized_weight(self)
+    }
+
+    fn execute(
+        self,
+        context: &CommandContext,
+        transaction: &Transaction<'_>,
+    ) -> Result<Self::Output, DbError> {
+        let peer_id = context.authenticated_peer_id()?;
+        let removed: Vec<String> = crate::db::get_sync_kv(transaction, "sync.removed_peers")
+            .map_err(DbError::from_application_error)?
+            .map(|raw| serde_json::from_str(&raw).map_err(|error| error.to_string()))
+            .transpose()
+            .map_err(DbError::from_application_error)?
+            .unwrap_or_default();
+        if removed.iter().any(|removed_id| removed_id == peer_id) {
+            return Err(DbError::Permission("sync_peer_removed".into()));
+        }
+
+        let session = super::super::super::SqliteObjectWriteSession::new(transaction);
+        if session
+            .load_receipt(&self.id, "full", &self.source_hlc)
+            .map_err(DbError::from_application_error)?
+            .is_none()
+            && session
+                .current_revision(&self.id)
+                .map_err(DbError::from_application_error)?
+                .as_deref()
+                .is_some_and(|current| {
+                    crate::hlc::HLC::compare_str(&self.source_hlc, current)
+                        != std::cmp::Ordering::Greater
+                })
+        {
+            // Preserve the existing authenticated-sync stale no-op: it does
+            // not decode malformed stale payloads or write a receipt.
+            return Ok(RemoteCoreTaskOutcome::Stale);
+        }
+
+        let remote = decode_remote(self)?;
+        let result = crate::application::objects::apply_remote_core_task_write(
+            &session,
+            remote,
+            Some(peer_id.to_owned()),
+        )
+        .map_err(DbError::from_application_error)?;
+        Ok(if result.duplicate {
+            RemoteCoreTaskOutcome::Duplicate
+        } else {
+            RemoteCoreTaskOutcome::Applied
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RemoteCoreTaskOutcome {
+    Applied,
+    Duplicate,
+    Stale,
+}
+
+#[derive(Debug)]
+pub(crate) struct CoreTaskWriteCommit {
+    pub(crate) object: ArkObject,
+    pub(crate) receipt: StoredObjectReceipt,
+}
+
+fn required_receipt(result: ObjectWriteResult) -> Result<StoredObjectReceipt, DbError> {
+    result
+        .receipt
+        .ok_or_else(|| DbError::Storage("object_write_receipt_missing".into()))
+}
+
+fn serialized_weight(value: &impl Serialize) -> usize {
+    serde_json::to_vec(value)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX)
+}
+
+fn decode_remote(input: AuthenticatedCoreTaskWrite) -> Result<RemoteObjectWrite, DbError> {
+    for key in [
+        "typeId",
+        "typeVersion",
+        "title",
+        "createdAt",
+        "updatedAt",
+        "deletedAt",
+        "contentJson",
+        "propsJson",
+    ] {
+        if !input.data.contains_key(key) {
+            return Err(DbError::Unsupported(
+                "object_write_slice_requires_full_representation".into(),
+            ));
+        }
+    }
+    if input.data.get("typeId").and_then(Value::as_str) != Some("core.task")
+        || input.data.get("typeVersion").and_then(Value::as_str) != Some("0.1.0")
+    {
+        return Err(DbError::Unsupported(
+            "object_write_slice_unsupported_type".into(),
+        ));
+    }
+    let mut data = input.data;
+    data.insert("id".into(), Value::String(input.id));
+    let links: Vec<ObjectLink> = data
+        .remove("links")
+        .map(serde_json::from_value)
+        .transpose()
+        .map_err(|error| DbError::Invalid(error.to_string()))?
+        .unwrap_or_default();
+    let object = serde_json::from_value(Value::Object(data))
+        .map_err(|error| DbError::Invalid(error.to_string()))?;
+    Ok(RemoteObjectWrite {
+        object,
+        links,
+        source_hlc: input.source_hlc,
+        source_origin_device_id: input.source_origin_device_id,
+    })
+}

@@ -219,7 +219,7 @@ async fn local_object_revision_blocks_older_remote_upsert_and_delete() {
     .await
     .unwrap();
 
-    let backend = SqliteStorageBackend::new(get_shared_conn(&state).unwrap());
+    let backend = SqliteStorageBackend::with_db_handle(get_db_handle(&state).unwrap());
     let local = with_conn(&state, |conn| {
         db::get_object(conn, "remote-guarded-task")?.ok_or("object missing".to_string())
     })
@@ -299,7 +299,7 @@ async fn newer_remote_upsert_and_delete_invalidate_guarded_writes() {
     .await
     .unwrap();
 
-    let backend = SqliteStorageBackend::new(get_shared_conn(&state).unwrap());
+    let backend = SqliteStorageBackend::with_db_handle(get_db_handle(&state).unwrap());
     let local = with_conn(&state, |conn| {
         db::get_object(conn, "remote-race-task")?.ok_or("object missing".to_string())
     })

@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 
+use super::DbHandle;
 use crate::db::ensure_usage_sequence_migrated;
 
 mod adapter;
@@ -11,15 +12,19 @@ pub use apply::delete_tag;
 pub(crate) use canonical_object::SqliteObjectWriteSession;
 
 pub struct SqliteStorageBackend {
-    pub(in crate::db) conn: Arc<Mutex<rusqlite::Connection>>,
+    pub(in crate::db) db: DbHandle,
     device_id: Arc<Mutex<String>>,
     selective_profile: Arc<Mutex<Option<crate::data_platform::SelectiveSyncProfile>>>,
 }
 
 impl SqliteStorageBackend {
     pub fn new(conn: Arc<Mutex<rusqlite::Connection>>) -> Self {
+        Self::with_db_handle(DbHandle::from_shared_connection(conn))
+    }
+
+    pub(crate) fn with_db_handle(db: DbHandle) -> Self {
         Self {
-            conn,
+            db,
             device_id: Arc::new(Mutex::new(String::new())),
             selective_profile: Arc::new(Mutex::new(None)),
         }
@@ -35,8 +40,8 @@ impl SqliteStorageBackend {
         let mut guard = self.device_id.lock().unwrap_or_else(|e| e.into_inner());
         *guard = device_id.to_string();
         drop(guard);
-        let conn = self.conn.lock().unwrap_or_else(|e| e.into_inner());
-        ensure_usage_sequence_migrated(&conn, device_id)
+        self.db
+            .with_connection(|conn| ensure_usage_sequence_migrated(conn, device_id))
     }
 
     pub fn device_id(&self) -> String {

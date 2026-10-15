@@ -1,7 +1,7 @@
     #[tokio::test]
     async fn storage_backend_versioned_object_matrix_holds_unknown_payload_and_replays_exactly() {
         let backend = make_backend();
-        let conn = backend.conn.clone();
+        let conn = backend.db.shared_connection_for_test();
         {
             let guard = conn.lock().unwrap();
             upsert_object_type(&guard, &make_object_type("remote-type", "Remote")).unwrap();
@@ -67,7 +67,7 @@
         // the SQL OFFSET counts refs. A skipped ref made the next page
         // re-emit entities it had already returned.
         let backend = make_backend();
-        let conn = backend.conn.clone();
+        let conn = backend.db.shared_connection_for_test();
         backend
             .apply_entity(&sync_tracked_app("app-drift"))
             .await
@@ -128,7 +128,7 @@
         // tombstones / skipped rows to every fresh peer, and the leftover
         // versions blocked peers from re-sending resurrected entities.
         let backend = make_backend();
-        let conn = backend.conn.clone();
+        let conn = backend.db.shared_connection_for_test();
         backend
             .apply_entity(&sync_tracked_app("app-clear"))
             .await
