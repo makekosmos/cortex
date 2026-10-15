@@ -6,6 +6,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use thiserror::Error;
 
+mod verification;
+
+pub use verification::{
+    IntegrationRefreshLease, IntegrationVerificationStatus, IssuerEncryptionKey,
+    IssuerEncryptionKeyForPublish,
+};
+
 const DEFAULT_PUBLIC_SETTINGS: fn() -> Value = || Value::Object(Map::new());
 
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
@@ -303,4 +310,3 @@ impl IntegrationCredentialEnvelope {
         require_nonzero(self.refresh_fencing_token, "refresh_fencing_token")
     }
 }
-include!("contracts_part02.rs");

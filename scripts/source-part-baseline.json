@@ -36,7 +36,6 @@
   "core/crates/ark-core/src/delphi/filters_fixtures/part1.rs",
   "core/crates/ark-core/src/delphi/filters_fixtures/part2.rs",
   "core/crates/ark-core/src/delphi/filters_fixtures/part3.rs",
-  "core/crates/ark-core/src/integration_replication/contracts_part02.rs",
   "core/crates/ark-core/src/integration_replication/tests_part02.rs",
   "core/crates/ark-core/src/protocol/part01.rs",
   "core/crates/ark-core/src/protocol/part02.rs",
