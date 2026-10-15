@@ -228,3 +228,29 @@ pub fn bump_sync_version_vector(
     )?;
     Ok(hlc)
 }
+
+pub fn record_remote_sync_revision(
+    conn: &Connection,
+    entity_id: &str,
+    incoming_hlc: &str,
+) -> Result<(), String> {
+    let raw = get_sync_kv(conn, VERSION_VECTOR_KEY)?;
+    let mut vector: VersionVector = raw
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| serde_json::from_str(value).map_err(|error| error.to_string()))
+        .transpose()?
+        .unwrap_or_default();
+    if vector
+        .get(entity_id)
+        .is_none_or(|current| HLC::is_newer(incoming_hlc, current))
+    {
+        vector.insert(entity_id.to_owned(), incoming_hlc.to_owned());
+        set_sync_kv(
+            conn,
+            VERSION_VECTOR_KEY,
+            &serde_json::to_string(&vector).map_err(|error| error.to_string())?,
+        )?;
+    }
+    Ok(())
+}

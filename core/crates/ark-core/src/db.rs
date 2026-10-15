@@ -7,6 +7,7 @@ include!("db/sync.rs");
 include!("db/compact.rs");
 include!("db/load.rs");
 mod backend;
+pub(crate) use backend::SqliteObjectWriteSession;
 pub use backend::{delete_tag, SqliteStorageBackend};
 include!("db/integration_replication_common.rs");
 include!("db/integration_replication_records.rs");

@@ -224,6 +224,29 @@ pub(super) async fn upsert_object(
     let object_id = object.id.clone();
     let object_type_id = object.type_id.clone();
     let entity = with_write_tx(state, |conn| {
+        if object.type_id == "core.task" {
+            let session = crate::db::SqliteObjectWriteSession::new(conn);
+            let result = crate::application::objects::apply_local_core_task_write(
+                &session,
+                object,
+                expected_snapshot,
+                device_id,
+            )?;
+            let stored = db::get_object(conn, &object_id)?
+                .ok_or_else(|| "object_write_missing_after_commit".to_string())?;
+            let hlc = result
+                .receipt
+                .ok_or_else(|| "object_write_receipt_missing".to_string())?
+                .resulting_hlc
+                .ok_or_else(|| "object_write_receipt_missing_revision".to_string())?;
+            return Ok(make_sync_entity(
+                "object",
+                &stored.id,
+                serde_json::to_value(&stored).unwrap_or(json!({})),
+                hlc,
+                None,
+            ));
+        }
         if let Some(expected) = expected_snapshot {
             if object_write_snapshot(conn, &object.id)? != expected {
                 return Err("object_conflict:stale_snapshot".to_string());

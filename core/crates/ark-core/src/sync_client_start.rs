@@ -1,5 +1,8 @@
 use super::*;
 
+#[path = "sync_client_start/client_hello.rs"]
+mod client_hello;
+
 impl SyncClient {
     /// Start connecting to the peer. Spawns a background task.
     pub fn start(&self) {

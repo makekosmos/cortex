@@ -1,6 +1,6 @@
 use super::super::definitions::canonical_type_registrations;
 use super::*;
-use crate::type_registry::TypeRegistration;
+use crate::domain::canonical_type::TypeRegistration;
 use rusqlite::{params, Connection, OptionalExtension};
 
 fn archive_and_promote(

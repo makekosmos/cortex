@@ -60,6 +60,13 @@ pub(super) mod tests {
             }
             Ok(())
         }
+        async fn apply_authenticated_entity(
+            &self,
+            entity: &SyncEntity,
+            _authenticated_peer_id: &str,
+        ) -> Result<(), String> {
+            self.apply_entity(entity).await
+        }
         async fn get_kv(&self, key: &str) -> Option<String> {
             self.kv.lock().unwrap().get(key).cloned()
         }

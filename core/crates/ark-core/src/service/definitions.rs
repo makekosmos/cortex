@@ -72,14 +72,7 @@ pub(crate) struct SyncRuntime {
 // Request enum
 // ---------------------------------------------------------------------------
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct ObjectWriteSnapshot {
-    pub(crate) exists: bool,
-    pub(crate) type_id: Option<String>,
-    pub(crate) type_version: Option<String>,
-    pub(crate) revision: Option<String>,
-}
+pub(crate) use crate::domain::object_write::ObjectWriteSnapshot;
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "operation", rename_all = "snake_case")]

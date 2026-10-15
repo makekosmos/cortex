@@ -11,6 +11,7 @@ pub fn clear_all(conn: &Connection) -> Result<(), String> {
     for table in [
         "object_migration_quarantine",
         "object_local_state",
+        "entity_write_receipts",
         "canonical_migration_items",
         "canonical_migration_runs",
         "object_sync_versions",

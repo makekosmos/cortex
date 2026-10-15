@@ -42,6 +42,16 @@ impl StorageBackend for BackfillBarrier {
         self.inner.apply_entity(entity).await
     }
 
+    async fn apply_authenticated_entity(
+        &self,
+        entity: &SyncEntity,
+        authenticated_peer_id: &str,
+    ) -> Result<(), String> {
+        self.inner
+            .apply_authenticated_entity(entity, authenticated_peer_id)
+            .await
+    }
+
     async fn get_kv(&self, key: &str) -> Option<String> {
         self.inner.get_kv(key).await
     }

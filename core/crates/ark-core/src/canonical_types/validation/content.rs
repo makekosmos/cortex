@@ -1,6 +1,6 @@
 use super::*;
 use crate::canonical_types::definitions::canonical_type_registrations;
-use crate::type_registry::TypeRegistration;
+use crate::domain::canonical_type::TypeRegistration;
 use serde_json::Value;
 
 /// Strict RFC 3339 full-date: exactly `YYYY-MM-DD` and a real calendar day.

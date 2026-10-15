@@ -14,7 +14,7 @@ use serde_json::{json, Map, Value};
 use super::definitions::canonical_type_registrations;
 use super::validation::validate_canonical;
 use crate::db::{backup_to_file, bump_sync_version_vector};
-use crate::type_registry::TypeRegistration;
+use crate::domain::canonical_type::TypeRegistration;
 
 pub const LEGACY_TASK_TYPE: &str = "com.kosmos.task";
 pub const LEGACY_TASK_VERSION: &str = "1.1.0";

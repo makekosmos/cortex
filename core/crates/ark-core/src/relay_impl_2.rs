@@ -1,5 +1,24 @@
 use crate::integration_replication::SignedSyncEnvelope;
 
+async fn apply_relay_entity(
+    storage: &Arc<dyn StorageBackend>,
+    entity: &SyncEntity,
+    authenticated_peer_id: Option<&str>,
+) -> Result<(), String> {
+    // Relay WebSocket frames have no authenticated sender envelope. Object
+    // type and deletion state may be stored outside the payload, so every
+    // object mutation requires a transport-bound peer identity.
+    if entity.entity_type == "object" {
+        let peer_id = authenticated_peer_id
+            .ok_or_else(|| "authenticated_transport_identity_unavailable".to_string())?;
+        return storage.apply_authenticated_entity(entity, peer_id).await;
+    }
+    match authenticated_peer_id {
+        Some(peer_id) => storage.apply_authenticated_entity(entity, peer_id).await,
+        None => storage.apply_entity(entity).await,
+    }
+}
+
 impl RelaySync {
     async fn handle_event(&self, event: TransportEvent) {
         match event {
@@ -7,15 +26,10 @@ impl RelaySync {
                 from_device_id,
                 msg,
             } => {
-                let from = if from_device_id.is_empty() {
-                    message_origin_device_id(&msg).unwrap_or_default()
-                } else {
-                    from_device_id
-                };
-                if from == self.config.device_id {
+                if from_device_id.is_empty() || from_device_id == self.config.device_id {
                     return;
                 }
-                self.handle_message(from, msg, None).await;
+                self.handle_message(from_device_id, msg, None).await;
             }
             TransportEvent::MessageReceivedFromTransport {
                 from_device_id,
@@ -378,6 +392,7 @@ impl RelaySync {
         entities: &[SyncEntity],
         is_last: bool,
         usage_complete_through: Option<&HashMap<String, u64>>,
+        authenticated_peer_id: Option<&str>,
     ) {
         let mut incoming = self.incoming_sync.lock().await;
         if incoming.is_none() {
@@ -400,7 +415,7 @@ impl RelaySync {
                 continue;
             }
 
-            match self.storage.apply_entity(entity).await {
+            match apply_relay_entity(&self.storage, entity, authenticated_peer_id).await {
                 Ok(()) => {
                     state.changed |= observe_non_usage_entity(&mut state.vector, entity);
                     if let Some(handler) = self.on_change.lock().await.as_ref() {

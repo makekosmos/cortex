@@ -4,11 +4,13 @@
 // for genuine invariants.
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 
+pub mod application;
 pub mod beacon;
 pub mod canonical_types;
 pub mod data_platform;
 pub mod db;
 pub mod delphi;
+pub mod domain;
 pub mod events;
 pub mod hlc;
 pub mod host;

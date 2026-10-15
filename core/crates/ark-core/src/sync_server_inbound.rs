@@ -63,14 +63,14 @@ pub(super) async fn handle_live_change(
         on_change,
         ..
     } = ctx;
-    let (tx, authenticated) = {
+    let (tx, authenticated_peer_id) = {
         let peers_guard = peers.lock().await;
         match peers_guard.get(&peer_id) {
-            Some(p) if p.authenticated => (p.tx.clone(), true),
+            Some(p) if p.authenticated => (p.tx.clone(), p.device_id.clone()),
             _ => return,
         }
     };
-    if !authenticated {
+    if authenticated_peer_id.is_empty() {
         return;
     }
 
@@ -81,7 +81,10 @@ pub(super) async fn handle_live_change(
             .is_none_or(|hlc| HLC::is_newer(&entity.hlc, hlc));
 
     if should_apply {
-        match storage.apply_entity(&entity).await {
+        match storage
+            .apply_authenticated_entity(&entity, &authenticated_peer_id)
+            .await
+        {
             Ok(()) => {
                 if observe_non_usage_entity(&mut local_vector, &entity) {
                     merge_usage_cursors(&mut local_vector, &load_version_vector(storage).await);

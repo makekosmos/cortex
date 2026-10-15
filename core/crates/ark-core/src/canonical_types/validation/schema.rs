@@ -1,5 +1,6 @@
 use super::*;
-use crate::type_registry::TypeRegistration;
+use crate::domain::canonical_type::TypeRegistration;
+pub use crate::domain::canonical_type::{CanonicalValidationCode, CanonicalValidationError};
 use serde_json::Value;
 
 // Pure validation for the frozen canonical props/content subset.
@@ -9,19 +10,6 @@ pub(crate) const RICH_MEDIA: &str = "application/vnd.kosmos.richtext+json";
 const SCHEMA_TYPES: &[&str] = &[
     "object", "array", "string", "number", "integer", "boolean", "null",
 ];
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CanonicalValidationCode {
-    InvalidField,
-    InvariantViolation,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalValidationError {
-    pub code: CanonicalValidationCode,
-    pub pointer: String,
-    pub keyword: Option<String>,
-}
 
 pub fn validate_canonical(
     registration: &TypeRegistration,

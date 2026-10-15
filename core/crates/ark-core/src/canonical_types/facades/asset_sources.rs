@@ -56,7 +56,9 @@ pub struct AssetSource {
     pub source_kind: String,
 }
 
-fn registration(type_id: &str) -> Result<crate::type_registry::TypeRegistration, AssetSourceError> {
+fn registration(
+    type_id: &str,
+) -> Result<crate::domain::canonical_type::TypeRegistration, AssetSourceError> {
     canonical_type_registrations()
         .map_err(|_| AssetSourceError::new("definition_invariant"))?
         .into_iter()

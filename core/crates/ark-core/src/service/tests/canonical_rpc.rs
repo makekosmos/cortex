@@ -289,6 +289,57 @@ async fn canonical_upsert_object_rpc_persists_registered_identity() {
     assert_eq!(object.type_id, "core.task");
     assert_eq!(object.type_version, "0.1.0");
     assert_eq!(object.props_json["planning"]["kind"], "anytime");
+    with_conn(&state, |conn| {
+        let receipt_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM entity_write_receipts
+                 WHERE entity_kind = 'object' AND entity_id = 'canonical-task-ingress'
+                   AND representation_kind = 'full' AND outcome = 'applied'",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(|error| error.to_string())?;
+        assert_eq!(receipt_count, 1);
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[tokio::test]
+async fn canonical_task_write_keeps_legacy_local_hlc_fallback() {
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let db_path = fixture.dir.path().join("ark.db");
+    handle_request(
+        &state,
+        Request::Init {
+            db_path: db_path.to_string_lossy().to_string(),
+        },
+    )
+    .await
+    .unwrap();
+    let mut object = canonical_task_object(Some("0.1.0"), canonical_task_props());
+    object.id = "canonical-task-hlc-fallback".into();
+    handle_request(
+        &state,
+        Request::UpsertObject {
+            object,
+            expected_snapshot: None,
+            device_id: Some("  \t ".into()),
+        },
+    )
+    .await
+    .unwrap();
+    with_conn(&state, |conn| {
+        let revision = db::get_object_revision(conn, "canonical-task-hlc-fallback")?
+            .ok_or_else(|| "missing object revision".to_string())?;
+        assert_eq!(
+            crate::hlc::HLC::from_string(&revision).device_id,
+            "ark-core-rpc-local"
+        );
+        Ok(())
+    })
+    .unwrap();
 }
 
 #[tokio::test]

@@ -235,6 +235,22 @@ impl StorageBackend for SqliteStorageBackend {
         .map_err(|e| e.to_string())?
     }
 
+    async fn apply_authenticated_entity(
+        &self,
+        entity: &SyncEntity,
+        authenticated_peer_id: &str,
+    ) -> Result<(), String> {
+        let conn = self.conn.clone();
+        let entity = entity.clone();
+        let authenticated_peer_id = authenticated_peer_id.to_owned();
+        tokio::task::spawn_blocking(move || {
+            let guard = conn.lock().unwrap_or_else(|e| e.into_inner());
+            Self::apply_authenticated_entity_blocking(&guard, &entity, &authenticated_peer_id)
+        })
+        .await
+        .map_err(|error| error.to_string())?
+    }
+
     async fn usage_complete_through(&self) -> std::collections::HashMap<String, u64> {
         let conn = self.conn.clone();
         tokio::task::spawn_blocking(move || {

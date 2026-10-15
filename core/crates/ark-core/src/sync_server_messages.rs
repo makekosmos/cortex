@@ -338,7 +338,10 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                         .is_none_or(|hlc| HLC::is_newer(&entity.hlc, hlc));
 
                 if should_apply {
-                    match storage.apply_entity(entity).await {
+                    match storage
+                        .apply_authenticated_entity(entity, &peer_device_id)
+                        .await
+                    {
                         Ok(()) => {
                             vector_updated |= observe_non_usage_entity(&mut local_vector, entity);
                             accepted += 1;

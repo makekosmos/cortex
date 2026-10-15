@@ -43,6 +43,13 @@ pub trait StorageBackend: Send + Sync {
         limit: usize,
     ) -> Vec<SyncEntity>;
     async fn apply_entity(&self, entity: &SyncEntity) -> Result<(), String>;
+    async fn apply_authenticated_entity(
+        &self,
+        _entity: &SyncEntity,
+        _authenticated_peer_id: &str,
+    ) -> Result<(), String> {
+        Err("authenticated_apply_unsupported".into())
+    }
     async fn apply_signed_integration_frame(
         &self,
         frame: &SignedSyncEnvelope,

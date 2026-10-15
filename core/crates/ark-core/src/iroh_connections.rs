@@ -278,11 +278,16 @@ async fn handle_connection(params: ConnectionParams) {
                             }
                         }
 
-                        // Резолвим from_device_id: сначала из самого сообщения
-                        // (Hello/VersionVector/LiveChange с origin_device_id),
-                        // иначе — из реестра по EndpointId соединения.
-                        let from_device_id = message_origin_device_id(&msg)
-                            .or_else(|| reader_registry.device_id_for(&remote_endpoint_id))
+                        // Once paired, the endpoint registry is authoritative.
+                        // Only an initial Hello may establish the claimed id;
+                        // later message fields cannot replace that binding.
+                        let from_device_id = reader_registry
+                            .device_id_for(&remote_endpoint_id)
+                            .or_else(|| {
+                                matches!(&msg, LanSyncMessage::Hello { .. })
+                                    .then(|| message_origin_device_id(&msg))
+                                    .flatten()
+                            })
                             .unwrap_or_default();
 
                         eprintln!(

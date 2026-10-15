@@ -16,27 +16,13 @@
 
                 let (mut ws_sink, mut ws_stream_rx) = ws_stream.split();
 
-                // Send hello
-                let (auth_nonce, auth_hmac) = match auth_secret.as_ref() {
-                    Some(secret) => {
-                        let nonce = generate_auth_nonce();
-                        let hmac = compute_hello_auth_hmac(secret, &space_id, &device_id, &nonce);
-                        (Some(nonce), Some(hmac))
-                    }
-                    None => (None, None),
-                };
-                let hello = LanSyncMessage::Hello {
-                    protocol_version: PROTOCOL_VERSION,
-                    device_id: device_id.clone(),
-                    device_name: device_name.clone(),
-                    space_id: space_id.clone(),
-                    addresses: Some(own_addresses.clone()),
-                    auth_nonce,
-                    auth_hmac,
-                    platform: Some(crate::host::local_platform()),
-                    app_version: crate::host::app_version(),
-                };
-                let hello_json = serialize_message(&hello);
+                let hello_json = client_hello::serialize_client_hello(
+                    &device_id,
+                    &device_name,
+                    &space_id,
+                    &own_addresses,
+                    auth_secret.as_deref(),
+                );
                 if ws_sink
                     .send(Message::Text(hello_json.into()))
                     .await
@@ -317,7 +303,13 @@
                                                     HLC::is_newer(&entity.hlc, hlc)
                                                 });
                                             if should_apply {
-                                                match storage.apply_entity(entity).await {
+                                                match storage
+                                                    .apply_authenticated_entity(
+                                                        entity,
+                                                        &peer_device_id_actual,
+                                                    )
+                                                    .await
+                                                {
                                                     Ok(()) => {
                                                         vector_updated |= observe_non_usage_entity(
                                                             &mut local_vector,
@@ -408,7 +400,13 @@
                                                 .is_none_or(|hlc| HLC::is_newer(&entity.hlc, hlc));
 
                                         if should_apply {
-                                            match storage.apply_entity(&entity).await {
+                                            match storage
+                                                .apply_authenticated_entity(
+                                                    &entity,
+                                                    &peer_device_id_actual,
+                                                )
+                                                .await
+                                            {
                                                 Ok(()) => {
                                                     if observe_non_usage_entity(
                                                         &mut local_vector,

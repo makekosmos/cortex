@@ -4,9 +4,11 @@ use crate::db::ensure_usage_sequence_migrated;
 
 mod adapter;
 mod apply;
+mod canonical_object;
 mod entities;
 
 pub use apply::delete_tag;
+pub(crate) use canonical_object::SqliteObjectWriteSession;
 
 pub struct SqliteStorageBackend {
     pub(in crate::db) conn: Arc<Mutex<rusqlite::Connection>>,

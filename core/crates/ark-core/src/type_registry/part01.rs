@@ -1,9 +1,9 @@
+use crate::domain::canonical_type::canonical_value;
+pub use crate::domain::canonical_type::{canonical_schema_hash, AliasRecord, TypeRegistration};
 use rusqlite::{params, Connection, OptionalExtension};
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
 
 pub const LEGACY_VERSION: &str = "0.0.0-legacy";
 
@@ -32,14 +32,6 @@ pub struct TypeVersion {
     pub created_at: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct AliasRecord {
-    pub alias: String,
-    pub canonical_type_id: String,
-    pub created_at: String,
-}
-
 pub fn legacy_compatibility_version(
     schema_json: &str,
     ui_schema_json: &str,
@@ -63,39 +55,6 @@ pub struct TypeGetResponse {
     pub definition: TypeVersion,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TypeRegistration {
-    pub type_id: String,
-    pub name: String,
-    pub schema_json: String,
-    pub ui_schema_json: String,
-    pub content_contract_json: String,
-    pub relations_json: String,
-    pub sync_policy_json: String,
-    pub version: String,
-    pub schema_hash: String,
-    pub owner_kind: String,
-    pub owner_id: Option<String>,
-    pub status: String,
-    pub base_type_id: Option<String>,
-    pub aliases: Vec<AliasRecord>,
-    pub created_at: String,
-}
-
-fn canonical_value(value: &Value) -> Value {
-    match value {
-        Value::Object(object) => {
-            let mut sorted = BTreeMap::new();
-            for (key, value) in object {
-                sorted.insert(key.clone(), canonical_value(value));
-            }
-            Value::Object(sorted.into_iter().collect::<Map<_, _>>())
-        }
-        Value::Array(values) => Value::Array(values.iter().map(canonical_value).collect()),
-        other => other.clone(),
-    }
-}
-
 fn parse_json(raw: &str, field: &str) -> Result<Value, String> {
     if raw.is_empty() {
         return Err(format!("{field} must not be empty"));
@@ -114,36 +73,6 @@ fn parse_json(raw: &str, field: &str) -> Result<Value, String> {
         ));
     }
     Ok(value)
-}
-
-#[derive(Serialize)]
-struct CanonicalTuple {
-    schema: Value,
-    #[serde(rename = "uiSchema")]
-    ui_schema: Value,
-    #[serde(rename = "contentContract")]
-    content_contract: Value,
-    relations: Value,
-    #[serde(rename = "syncPolicy")]
-    sync_policy: Value,
-}
-
-pub fn canonical_schema_hash(
-    schema: &Value,
-    ui_schema: &Value,
-    content_contract: &Value,
-    relations: &Value,
-    sync_policy: &Value,
-) -> Result<String, String> {
-    let tuple = CanonicalTuple {
-        schema: canonical_value(schema),
-        ui_schema: canonical_value(ui_schema),
-        content_contract: canonical_value(content_contract),
-        relations: canonical_value(relations),
-        sync_policy: canonical_value(sync_policy),
-    };
-    let bytes = serde_json::to_vec(&tuple).map_err(|e| e.to_string())?;
-    Ok(format!("{:x}", Sha256::digest(bytes)))
 }
 
 fn canonical_definition(

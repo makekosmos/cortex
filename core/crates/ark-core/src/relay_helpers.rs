@@ -185,7 +185,7 @@ mod tests {
         )
     }
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn relay_syncs_existing_entity_between_two_runtimes() {
+    async fn relay_websocket_fails_closed_for_existing_core_task_without_bound_identity() {
         let relay_url = test_relay_url().await;
         let storage_a = make_storage("device-a");
         let storage_b = make_storage("device-b");
@@ -213,9 +213,8 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(700)).await;
         let loaded_b = storage_b.load_entities(&HashMap::new()).await;
         assert!(
-            loaded_b.iter().any(|entity| entity.id == "relay-existing"),
-            "relay peer should receive existing entity; got {:?}",
-            loaded_b.iter().map(|entity| &entity.id).collect::<Vec<_>>()
+            loaded_b.iter().all(|entity| entity.id != "relay-existing"),
+            "unauthenticated WebSocket must not apply a core.task payload"
         );
         relay_a.stop().await;
         relay_b.stop().await;
@@ -281,5 +280,79 @@ mod tests {
         );
         relay_a.stop().await;
         relay_b.stop().await;
+    }
+
+    #[tokio::test]
+    async fn relay_payload_sender_cannot_authorize_object_writes() {
+        let conn = Connection::open_in_memory().unwrap();
+        init_schema(&conn).unwrap();
+        crate::db::set_sync_kv(&conn, "sync.removed_peers", r#"["device-blocked"]"#).unwrap();
+        let shared = Arc::new(StdMutex::new(conn));
+        let backend = Arc::new(SqliteStorageBackend::new(shared.clone()));
+        let storage = backend.clone() as Arc<dyn StorageBackend>;
+        let entity = SyncEntity {
+            entity_type: "object".into(),
+            id: "relay-spoofed-task".into(),
+            data: serde_json::json!({
+                "typeId": "core.task",
+                "typeVersion": "0.1.0",
+                "title": "Spoofed",
+                "createdAt": "2026-10-01T00:00:00Z",
+                "updatedAt": "2026-10-01T00:00:00Z",
+                "deletedAt": null,
+                "contentJson": {},
+                "propsJson": {}
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+            hlc: "2026-10-15T00:00:00.000Z:000001:device-blocked".into(),
+            deleted: None,
+            origin_device_id: Some("device-blocked".into()),
+            origin_seq: None,
+        };
+
+        let mut cases = vec![entity.clone()];
+        let mut missing_type = entity.clone();
+        missing_type.id = "relay-spoofed-object-missing-type".into();
+        missing_type.data.remove("typeId");
+        cases.push(missing_type);
+        let mut malformed_type = entity.clone();
+        malformed_type.id = "relay-spoofed-object-malformed-type".into();
+        malformed_type
+            .data
+            .insert("typeId".into(), serde_json::json!(null));
+        cases.push(malformed_type);
+        let mut tombstone = entity;
+        tombstone.id = "relay-spoofed-object-tombstone".into();
+        tombstone.data.clear();
+        tombstone.deleted = Some(true);
+        cases.push(tombstone);
+
+        for candidate in &cases {
+            assert_eq!(
+                apply_relay_entity(&storage, candidate, None)
+                    .await
+                    .unwrap_err(),
+                "authenticated_transport_identity_unavailable"
+            );
+        }
+        let conn = shared.lock().unwrap();
+        for candidate in &cases {
+            assert!(crate::db::get_object(&conn, &candidate.id)
+                .unwrap()
+                .is_none());
+        }
+        let receipts: i64 = conn
+            .query_row(
+                concat!(
+                    "SELECT COUNT(*) FROM entity_write_receipts ",
+                    "WHERE entity_id LIKE 'relay-spoofed-object%'"
+                ),
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(receipts, 0);
     }
 }

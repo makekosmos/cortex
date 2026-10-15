@@ -178,6 +178,24 @@ CREATE TABLE IF NOT EXISTS sync_tombstones (
     deleted_at TEXT NOT NULL,
     type_id TEXT
 );
+
+CREATE TABLE IF NOT EXISTS entity_write_receipts (
+    change_seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    entity_kind TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    representation_kind TEXT NOT NULL CHECK (representation_kind IN ('full', 'metadata')),
+    source_hlc TEXT NOT NULL,
+    source_origin_device_id TEXT,
+    type_id TEXT,
+    payload_sha256 TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    outcome TEXT NOT NULL CHECK (outcome IN ('applied', 'stale')),
+    resulting_hlc TEXT,
+    authenticated_peer_id TEXT,
+    committed_at TEXT NOT NULL,
+    UNIQUE(entity_kind, entity_id, representation_kind, source_hlc)
+);
+
 CREATE INDEX IF NOT EXISTS idx_objects_type_id ON objects(type_id);
 CREATE INDEX IF NOT EXISTS idx_objects_updated_at ON objects(updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_objects_deleted_at ON objects(deleted_at);

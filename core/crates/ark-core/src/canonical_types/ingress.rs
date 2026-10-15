@@ -1,45 +1,11 @@
 //! Engine-owned canonical object write ingress.
 use crate::canonical_types::definitions::canonical_type_registrations;
 use crate::canonical_types::validation::{validate_canonical, CanonicalValidationCode};
+pub use crate::domain::canonical_type::CanonicalIngressError;
+use crate::domain::canonical_type::TypeRegistration;
 use crate::type_registry;
 use crate::types::{ArkObject, ArkObjectWrite};
 use rusqlite::Connection;
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CanonicalIngressError {
-    pub category: &'static str,
-    pub code: &'static str,
-    pub pointer: Option<String>,
-}
-
-impl CanonicalIngressError {
-    pub(crate) fn invalid(code: &'static str) -> Self {
-        Self {
-            category: "invalid_request",
-            code,
-            pointer: None,
-        }
-    }
-
-    pub(crate) fn invariant(code: &'static str) -> Self {
-        Self {
-            category: "definition_invariant",
-            code,
-            pointer: None,
-        }
-    }
-}
-
-impl std::fmt::Display for CanonicalIngressError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "canonical_ingress:{}:{}", self.category, self.code)?;
-        if let Some(pointer) = &self.pointer {
-            write!(f, ":{pointer}")?;
-        }
-        Ok(())
-    }
-}
-
-impl std::error::Error for CanonicalIngressError {}
 
 /// Resolve and validate a new object before any persistence or sync mutation.
 /// Non-canonical/package registrations retain the existing compatibility path.
@@ -66,11 +32,31 @@ pub fn prepare_object(
         registration.type_id == canonical_type_id && registration.version == resolved_version
     });
 
+    prepare_resolved_object(input, &canonical_type_id, &resolved_version, registration)
+}
+
+pub(crate) fn prepare_resolved_object(
+    input: ArkObjectWrite,
+    canonical_type_id: &str,
+    resolved_version: &str,
+    registration: Option<&TypeRegistration>,
+) -> Result<ArkObject, CanonicalIngressError> {
+    let input_type_id = input.type_id.clone();
+    if registration.is_some_and(|registration| {
+        registration.type_id != canonical_type_id || registration.version != resolved_version
+    }) {
+        return Err(CanonicalIngressError::invariant(
+            "resolved_registration_mismatch",
+        ));
+    }
+    if input_type_id == crate::canonical_types::core_task_rewrite::LEGACY_TASK_TYPE {
+        return Err(CanonicalIngressError::invalid("legacy_task_type_retired"));
+    }
     if let Some(registration) = registration {
         if input_type_id != canonical_type_id {
             return Err(CanonicalIngressError::invalid("legacy_alias_new_write"));
         }
-        if requested_version.as_deref() != Some(registration.version.as_str()) {
+        if input.type_version.as_deref() != Some(registration.version.as_str()) {
             return Err(CanonicalIngressError::invalid("canonical_version_required"));
         }
         validate_canonical(registration, &input.props_json, &input.content_json).map_err(
@@ -88,7 +74,7 @@ pub fn prepare_object(
         )?;
     }
 
-    let mut object = input.with_type_version(resolved_version);
-    object.type_id = canonical_type_id;
+    let mut object = input.with_type_version(resolved_version.to_owned());
+    object.type_id = canonical_type_id.to_owned();
     Ok(object)
 }

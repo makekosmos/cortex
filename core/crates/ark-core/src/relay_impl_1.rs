@@ -248,30 +248,39 @@ impl RelaySync {
             LanSyncMessage::SyncChanges {
                 entities,
                 is_last,
-                origin_device_id,
+                origin_device_id: _,
                 usage_complete_through,
                 ..
             } => {
-                let origin = origin_device_id.unwrap_or(from_device_id);
-                if !self.is_authenticated_peer(&origin).await {
+                if !self.is_authenticated_peer(&from_device_id).await {
                     return;
                 }
-                self.apply_entities(&entities, is_last, usage_complete_through.as_ref())
-                    .await;
+                self.apply_entities(
+                    &entities,
+                    is_last,
+                    usage_complete_through.as_ref(),
+                    transport_public_key
+                        .as_deref()
+                        .map(|_| from_device_id.as_str()),
+                )
+                .await;
             }
 
-            LanSyncMessage::LiveChange {
-                entity,
-                origin_device_id,
-                ..
-            } => {
-                let origin = origin_device_id.unwrap_or(from_device_id);
-                if !self.is_authenticated_peer(&origin).await {
+            LanSyncMessage::LiveChange { entity, .. } => {
+                if !self.is_authenticated_peer(&from_device_id).await {
                     return;
                 }
                 // A single live change is not a final sync page — no
                 // complete-through claims accompany it.
-                self.apply_entities(&[entity], true, None).await;
+                self.apply_entities(
+                    &[entity],
+                    true,
+                    None,
+                    transport_public_key
+                        .as_deref()
+                        .map(|_| from_device_id.as_str()),
+                )
+                .await;
             }
 
             LanSyncMessage::SignedIntegrationFrame { frame } => {

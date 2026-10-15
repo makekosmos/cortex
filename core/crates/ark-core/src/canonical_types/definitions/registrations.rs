@@ -1,5 +1,5 @@
 use super::*;
-use crate::type_registry::{canonical_schema_hash, AliasRecord, TypeRegistration};
+use crate::domain::canonical_type::{canonical_schema_hash, AliasRecord, TypeRegistration};
 use serde_json::Value;
 
 /// Return the ordered first-party registrations.

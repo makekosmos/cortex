@@ -35,6 +35,14 @@
             Ok(())
         }
 
+        async fn apply_authenticated_entity(
+            &self,
+            _entity: &SyncEntity,
+            _authenticated_peer_id: &str,
+        ) -> Result<(), String> {
+            Ok(())
+        }
+
         async fn get_kv(&self, _key: &str) -> Option<String> {
             None
         }
