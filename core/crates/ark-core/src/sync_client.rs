@@ -9,7 +9,7 @@ use tokio_tungstenite::tungstenite::Message;
 use crate::hlc::HLC;
 use crate::integration_replication::SignedSyncEnvelope;
 use crate::protocol::*;
-use crate::sync_server::StorageBackend;
+use crate::replication_storage::StorageBackend;
 use crate::task_set::{abort_and_join, join_all, track_task};
 
 #[path = "sync_client_start.rs"]

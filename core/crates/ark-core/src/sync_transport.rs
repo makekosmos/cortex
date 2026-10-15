@@ -11,7 +11,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 
 use crate::protocol::LanSyncMessage;
-use crate::sync_server::StorageBackend;
+use crate::replication_storage::StorageBackend;
 
 /// Lifecycle/message events emitted by a sync transport into the orchestration
 /// layer. Structurally identical across transports.
@@ -42,7 +42,7 @@ pub enum TransportEvent {
 /// Object-safe transport abstraction consumed by `RelaySync`.
 ///
 /// Uses `async_trait` to match the crate's established async-trait pattern
-/// (`StorageBackend` in `sync_server.rs`), keeping the trait usable behind
+/// (`StorageBackend` in `replication_storage.rs`), keeping the trait usable behind
 /// `Arc<dyn SyncTransport>`.
 #[async_trait::async_trait]
 pub trait SyncTransport: Send + Sync {
