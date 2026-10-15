@@ -55,6 +55,9 @@ impl RequestAdmission {
     }
 
     fn try_admit_cost(&self, cost: usize) -> Result<AdmissionPermit, AdmissionError> {
+        if cost == 0 || cost > MAX_REQUEST_BYTES {
+            return Err(AdmissionError::Oversized);
+        }
         let count = self
             .count
             .clone()
@@ -164,6 +167,11 @@ mod tests {
     #[test]
     fn oversized_depth_and_node_count_are_rejected() {
         let admission = RequestAdmission::new();
+        assert!(matches!(
+            admission.try_admit_cost(MAX_REQUEST_BYTES + 1),
+            Err(AdmissionError::Oversized)
+        ));
+
         let mut nested = json!(null);
         for _ in 0..=MAX_VALUE_DEPTH {
             nested = Value::Array(vec![nested]);
