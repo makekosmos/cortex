@@ -57,6 +57,7 @@ use crate::sync_server::{PeerEntry, SyncServer};
 use crate::transport_select::{select_transport, TransportChoice};
 use crate::types::*;
 
+mod admission;
 mod definitions;
 mod runtime;
 mod sync;
@@ -64,6 +65,7 @@ mod sync;
 #[cfg(test)]
 mod tests;
 
+use self::admission::{AdmissionPermit, RequestAdmission};
 pub(crate) use self::definitions::{
     ObjectWriteSnapshot, Request, StartSyncParams, SyncRuntime, SyncStartParams,
 };
@@ -133,18 +135,23 @@ pub enum ArkServiceError {
     /// The request never reached the worker (service dropped or worker dead).
     #[error("ark service unavailable: {0}")]
     Unavailable(String),
+    /// Admission is bounded; callers may retry after pressure subsides.
+    #[error("ark service busy: {0}")]
+    Busy(String),
 }
 
 struct ServiceJob {
     request: Request,
     reply: oneshot::Sender<Result<Value, ArkServiceError>>,
+    _admission: AdmissionPermit,
 }
 
 /// In-process handle to the ARK runtime. Cheap to keep in an `Arc`; dropping
 /// it closes the job channel so the worker finishes its in-flight request,
 /// stops sync, and exits.
 pub struct ArkService {
-    jobs: Option<mpsc::UnboundedSender<ServiceJob>>,
+    jobs: Option<mpsc::Sender<ServiceJob>>,
+    admission: RequestAdmission,
     worker: Option<std::thread::JoinHandle<()>>,
     panic_count: Arc<AtomicU64>,
     db_path: String,
@@ -169,6 +176,7 @@ impl ArkService {
             .map_err(|e| ArkServiceError::Unavailable(format!("worker spawn failed: {e}")))?;
         let service = Self {
             jobs: Some(jobs),
+            admission: RequestAdmission::new(),
             worker: Some(worker),
             panic_count,
             db_path,
@@ -181,8 +189,13 @@ impl ArkService {
 
     /// Execute one request — same ops and semantics as the sidecar's
     /// `{"operation": "...", ...params}` envelope, without the JSON framing.
-    /// Requests run strictly sequentially on the worker (FIFO).
+    /// Requests run strictly sequentially on the worker (FIFO). Admission is
+    /// immediate and bounded by both retained request count and estimated size.
     pub async fn call(&self, operation: &str, params: Value) -> Result<Value, ArkServiceError> {
+        let admission = self
+            .admission
+            .try_admit(operation, &params)
+            .map_err(|error| ArkServiceError::Busy(error.to_string()))?;
         let mut envelope = match params {
             Value::Object(map) => map,
             Value::Null => serde_json::Map::new(),
@@ -196,11 +209,24 @@ impl ArkService {
         let request: Request = serde_json::from_value(Value::Object(envelope))
             .map_err(|e| ArkServiceError::Request(e.to_string()))?;
         let (tx, rx) = oneshot::channel();
-        self.jobs
+        let job = ServiceJob {
+            request,
+            reply: tx,
+            _admission: admission,
+        };
+        let jobs = self
+            .jobs
             .as_ref()
-            .ok_or_else(|| ArkServiceError::Unavailable("service shut down".into()))?
-            .send(ServiceJob { request, reply: tx })
-            .map_err(|_| ArkServiceError::Unavailable("worker channel closed".into()))?;
+            .ok_or_else(|| ArkServiceError::Unavailable("service shut down".into()))?;
+        match jobs.try_send(job) {
+            Ok(()) => {}
+            Err(mpsc::error::TrySendError::Full(_job)) => {
+                return Err(ArkServiceError::Busy("request queue is full".into()));
+            }
+            Err(mpsc::error::TrySendError::Closed(_job)) => {
+                return Err(ArkServiceError::Unavailable("worker channel closed".into()));
+            }
+        }
         rx.await
             .map_err(|_| ArkServiceError::Unavailable("worker dropped reply".into()))?
     }
@@ -234,11 +260,8 @@ fn spawn_worker(
     state: Arc<ServiceState>,
     db_path: String,
     panic_count: Arc<AtomicU64>,
-) -> std::io::Result<(
-    mpsc::UnboundedSender<ServiceJob>,
-    std::thread::JoinHandle<()>,
-)> {
-    let (tx, rx) = mpsc::unbounded_channel::<ServiceJob>();
+) -> std::io::Result<(mpsc::Sender<ServiceJob>, std::thread::JoinHandle<()>)> {
+    let (tx, rx) = mpsc::channel::<ServiceJob>(admission::REQUEST_QUEUE_CAPACITY);
     let worker = std::thread::Builder::new()
         .name("ark-service".to_string())
         .spawn(move || {
@@ -266,7 +289,7 @@ fn spawn_worker(
 async fn worker_loop(
     state: Arc<ServiceState>,
     db_path: String,
-    mut rx: mpsc::UnboundedReceiver<ServiceJob>,
+    mut rx: mpsc::Receiver<ServiceJob>,
     panic_count: Arc<AtomicU64>,
 ) {
     use futures_util::FutureExt;

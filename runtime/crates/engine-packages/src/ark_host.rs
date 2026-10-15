@@ -25,6 +25,9 @@ impl From<ark_core::service::ArkServiceError> for ArkHostError {
     fn from(error: ark_core::service::ArkServiceError) -> Self {
         match error {
             ark_core::service::ArkServiceError::Request(message) => Self::RpcError(message),
+            ark_core::service::ArkServiceError::Busy(message) => {
+                Self::RpcError(format!("ark service busy: {message}"))
+            }
             other => Self::Unavailable(other.to_string()),
         }
     }
@@ -168,6 +171,11 @@ impl ArkHost {
                 data: serde_json::Value::Null,
                 error: Some(error),
             }),
+            Err(ark_core::service::ArkServiceError::Busy(error)) => Ok(ArkResponse {
+                ok: false,
+                data: serde_json::Value::Null,
+                error: Some(format!("ark service busy: {error}")),
+            }),
             Err(error) => Err(ArkHostError::Unavailable(error.to_string())),
         }
     }
@@ -272,6 +280,24 @@ mod tests {
             .unwrap();
         assert!(!malformed.ok);
         assert!(malformed.error.is_some());
+    }
+
+    #[tokio::test]
+    async fn saturated_request_uses_the_existing_error_envelope() {
+        let dir = tempfile::tempdir().unwrap();
+        let host = ArkHost::open(dir.path().join("ark.db").to_str().unwrap())
+            .await
+            .unwrap();
+
+        let response = host
+            .request(
+                "test.oversized",
+                serde_json::json!({ "payload": "x".repeat(9 * 1024 * 1024) }),
+            )
+            .await
+            .expect("admission errors remain ArkResponse values");
+        assert!(!response.ok);
+        assert!(response.error.unwrap().contains("admission size limits"));
     }
 
     #[tokio::test]

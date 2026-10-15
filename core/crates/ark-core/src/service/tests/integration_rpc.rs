@@ -208,6 +208,25 @@ async fn panicking_request_returns_error_and_service_recovers() {
     assert_eq!(service.panic_count(), 1);
 }
 
+#[tokio::test]
+async fn oversized_request_is_rejected_before_queue_and_service_keeps_serving() {
+    let dir = crate::test_support::temp_dir();
+    let db_path = dir.path().join("ark.db");
+    let service = ArkService::open(db_path.to_string_lossy().to_string())
+        .await
+        .expect("service opens");
+
+    let result = service
+        .call(
+            "test.oversized",
+            json!({ "payload": "x".repeat(9 * 1024 * 1024) }),
+        )
+        .await;
+    assert!(matches!(result, Err(ArkServiceError::Busy(_))));
+
+    assert!(service.call("load_all", json!({})).await.is_ok());
+}
+
 #[test]
 fn integration_issuer_key_lookup_for_publish_uses_the_exact_wire_shape() {
     let request: Request = serde_json::from_value(json!({
