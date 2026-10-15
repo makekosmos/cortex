@@ -7,10 +7,12 @@ mod adapter;
 mod apply;
 mod canonical_object;
 mod entities;
+mod object_mutation;
 mod usage;
 
 pub use apply::delete_tag;
 pub(crate) use canonical_object::SqliteObjectWriteSession;
+pub(crate) use object_mutation::SqliteObjectMutationSession;
 pub(crate) use usage::SqliteUsageWriteSession;
 
 pub struct SqliteStorageBackend {

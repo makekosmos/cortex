@@ -171,3 +171,4 @@ fn canonical_task_props() -> Value {
 
 mod canonical_rpc;
 mod integration_rpc;
+mod object_mutation_commands;

@@ -3,7 +3,10 @@ use std::sync::{Arc, Mutex};
 
 mod commands;
 
-pub(crate) use commands::{AuthenticatedCoreTaskWrite, LocalCoreTaskWrite, LocalUsageWriteCommand};
+pub(crate) use commands::{
+    AuthenticatedCoreTaskWrite, CanonicalGameUpsertCommand, LocalBookCoverCommand,
+    LocalCoreTaskWrite, LocalObjectDeleteCommand, LocalObjectUpsertCommand, LocalUsageWriteCommand,
+};
 
 const MAX_COMMAND_BYTES: usize = 16 * 1024 * 1024;
 
