@@ -7,7 +7,7 @@ use tokio::sync::{mpsc, Mutex};
 use crate::hlc::HLC;
 use crate::protocol::*;
 use crate::relay_transport::{RelayConfig, RelayTransport};
-use crate::replication_storage::StorageBackend;
+use crate::replication_storage::SyncStorageBackend;
 use crate::sync_server::{
     OnChangeCallback, OnPeerConnectCallback, OnPeerDisconnectCallback, PeerEntry,
 };
@@ -82,7 +82,7 @@ const PAIRING_DECLINE_SUPPRESS: Duration = Duration::from_secs(120);
 pub type OnPairingChangedCallback = Arc<dyn Fn() + Send + Sync>;
 
 pub struct RelaySync {
-    storage: Arc<dyn StorageBackend>,
+    storage: Arc<dyn SyncStorageBackend>,
     transport: Arc<dyn SyncTransport>,
     config: RelaySyncConfig,
     auth_secret: Option<String>,

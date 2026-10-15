@@ -14,7 +14,10 @@ use crate::integration_replication::SignedSyncEnvelope;
 use crate::protocol::*;
 use crate::types::*;
 
-pub use crate::replication_storage::StorageBackend;
+pub use crate::replication_storage::{
+    AuthenticatedEntityBackend, IntegrationReplicationBackend, PeerIdentityBackend, StorageBackend,
+    SyncStorageBackend,
+};
 
 #[path = "sync_server_core.rs"]
 mod sync_server_core;
@@ -87,7 +90,7 @@ pub struct PeerEntry {
 // ---------------------------------------------------------------------------
 
 pub struct SyncServer {
-    storage: Arc<dyn StorageBackend>,
+    storage: Arc<dyn SyncStorageBackend>,
     space_id: Arc<RwLock<String>>,
     device_id: Arc<RwLock<String>>,
     device_name: Arc<RwLock<String>>,
@@ -110,7 +113,7 @@ pub struct SyncServer {
     next_peer_id: Arc<std::sync::atomic::AtomicUsize>,
 }
 
-async fn load_version_vector(storage: &Arc<dyn StorageBackend>) -> VersionVector {
+async fn load_version_vector(storage: &Arc<dyn SyncStorageBackend>) -> VersionVector {
     match storage.get_kv(VERSION_VECTOR_KEY).await {
         Some(raw) => serde_json::from_str(&raw).unwrap_or_default(),
         None => VersionVector::new(),
@@ -120,7 +123,7 @@ async fn load_version_vector(storage: &Arc<dyn StorageBackend>) -> VersionVector
 /// Save a version vector built from a possibly stale snapshot: union it
 /// with the stored vector first so keys written concurrently (local
 /// mutations, integration-replication bumps) are not clobbered.
-async fn save_version_vector(storage: &Arc<dyn StorageBackend>, vector: &VersionVector) {
+async fn save_version_vector(storage: &Arc<dyn SyncStorageBackend>, vector: &VersionVector) {
     let mut merged = load_version_vector(storage).await;
     merge_vector_entries(&mut merged, vector);
     let json = serde_json::to_string(&merged).unwrap_or_default();
@@ -135,7 +138,7 @@ async fn save_version_vector(storage: &Arc<dyn StorageBackend>, vector: &Version
 /// never received; merging stored cursors first keeps the claims a floor,
 /// never a regression.
 pub(crate) async fn persist_pull_vector(
-    storage: &Arc<dyn StorageBackend>,
+    storage: &Arc<dyn SyncStorageBackend>,
     vector: &mut VersionVector,
     vector_updated: bool,
     is_last: bool,
@@ -153,19 +156,21 @@ pub(crate) async fn persist_pull_vector(
     save_version_vector(storage, vector).await;
 }
 
-pub(crate) async fn save_known_peers(storage: &Arc<dyn StorageBackend>, peers: &[PeerRecord]) {
+pub(crate) async fn save_known_peers(storage: &Arc<dyn SyncStorageBackend>, peers: &[PeerRecord]) {
     let json = serde_json::to_string(peers).unwrap_or_default();
     storage.set_kv(KNOWN_PEERS_KEY, &json).await;
 }
 
-pub(crate) async fn load_known_peer_records(storage: &Arc<dyn StorageBackend>) -> Vec<PeerRecord> {
+pub(crate) async fn load_known_peer_records(
+    storage: &Arc<dyn SyncStorageBackend>,
+) -> Vec<PeerRecord> {
     match storage.get_kv(KNOWN_PEERS_KEY).await {
         Some(raw) => serde_json::from_str(&raw).unwrap_or_default(),
         None => Vec::new(),
     }
 }
 
-pub(crate) async fn load_removed_peer_ids(storage: &Arc<dyn StorageBackend>) -> Vec<String> {
+pub(crate) async fn load_removed_peer_ids(storage: &Arc<dyn SyncStorageBackend>) -> Vec<String> {
     match storage.get_kv(REMOVED_PEERS_KEY).await {
         Some(raw) => serde_json::from_str(&raw).unwrap_or_default(),
         None => Vec::new(),
@@ -174,7 +179,7 @@ pub(crate) async fn load_removed_peer_ids(storage: &Arc<dyn StorageBackend>) -> 
 
 /// Re-authorize a device the user previously removed — invoked only when
 /// they re-pair by explicitly entering that endpoint's pairing code.
-pub(crate) async fn unblock_peer_id(storage: &Arc<dyn StorageBackend>, device_id: &str) {
+pub(crate) async fn unblock_peer_id(storage: &Arc<dyn SyncStorageBackend>, device_id: &str) {
     let mut removed = load_removed_peer_ids(storage).await;
     if removed.iter().any(|id| id == device_id) {
         removed.retain(|id| id != device_id);
@@ -185,14 +190,14 @@ pub(crate) async fn unblock_peer_id(storage: &Arc<dyn StorageBackend>, device_id
 /// Drop a peer record outright — for a declined pairing attempt, where the
 /// device was never consented to and must not linger as an offline row
 /// (distinct from `block_peer`/`removed_peers`, which is a user blacklist).
-pub(crate) async fn remove_peer_record(storage: &Arc<dyn StorageBackend>, device_id: &str) {
+pub(crate) async fn remove_peer_record(storage: &Arc<dyn SyncStorageBackend>, device_id: &str) {
     let mut peers = load_known_peer_records(storage).await;
     peers.retain(|peer| peer.device_id != device_id);
     save_known_peers(storage, &peers).await;
 }
 
 pub(crate) async fn load_peer_transport_keys(
-    storage: &Arc<dyn StorageBackend>,
+    storage: &Arc<dyn SyncStorageBackend>,
 ) -> HashMap<String, String> {
     match storage.get_kv(PEER_TRANSPORT_KEYS_KEY).await {
         Some(raw) => serde_json::from_str(&raw).unwrap_or_default(),
@@ -201,7 +206,7 @@ pub(crate) async fn load_peer_transport_keys(
 }
 
 pub(crate) async fn save_peer_transport_keys(
-    storage: &Arc<dyn StorageBackend>,
+    storage: &Arc<dyn SyncStorageBackend>,
     keys: &HashMap<String, String>,
 ) {
     let json = serde_json::to_string(keys).unwrap_or_default();
@@ -214,7 +219,7 @@ pub(crate) async fn save_peer_transport_keys(
 #[derive(Clone)]
 struct MessageContext {
     peers: Arc<Mutex<HashMap<usize, PeerState>>>,
-    storage: Arc<dyn StorageBackend>,
+    storage: Arc<dyn SyncStorageBackend>,
     space_id: Arc<RwLock<String>>,
     device_id: Arc<RwLock<String>>,
     device_name: Arc<RwLock<String>>,
@@ -226,7 +231,7 @@ struct MessageContext {
     on_new_peer_discovered: Arc<Mutex<Option<OnNewPeerDiscoveredCallback>>>,
 }
 
-async fn save_removed_peer_ids(storage: &Arc<dyn StorageBackend>, peer_ids: &[String]) {
+async fn save_removed_peer_ids(storage: &Arc<dyn SyncStorageBackend>, peer_ids: &[String]) {
     let json = serde_json::to_string(peer_ids).unwrap_or_default();
     storage.set_kv(REMOVED_PEERS_KEY, &json).await;
 }

@@ -3,7 +3,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ark_core::data_platform;
-use ark_core::sync_server::StorageBackend;
+use ark_core::sync_server::{
+    AuthenticatedEntityBackend, IntegrationReplicationBackend, PeerIdentityBackend, StorageBackend,
+    SyncStorageBackend,
+};
 use ark_core::types::{PeerRecord, SyncEntity, VersionVector};
 use ark_core::SqliteStorageBackend;
 use tokio::sync::{watch, Notify};
@@ -42,16 +45,6 @@ impl StorageBackend for BackfillBarrier {
         self.inner.apply_entity(entity).await
     }
 
-    async fn apply_authenticated_entity(
-        &self,
-        entity: &SyncEntity,
-        authenticated_peer_id: &str,
-    ) -> Result<(), String> {
-        self.inner
-            .apply_authenticated_entity(entity, authenticated_peer_id)
-            .await
-    }
-
     async fn get_kv(&self, key: &str) -> Option<String> {
         self.inner.get_kv(key).await
     }
@@ -68,6 +61,12 @@ impl StorageBackend for BackfillBarrier {
         self.inner.filter_outgoing_entity(entity)
     }
 }
+
+#[async_trait::async_trait]
+impl IntegrationReplicationBackend for BackfillBarrier {}
+
+#[async_trait::async_trait]
+impl PeerIdentityBackend for BackfillBarrier {}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn six_devices_converge_during_initial_import_and_local_edit() {
@@ -120,7 +119,9 @@ async fn six_devices_converge_during_initial_import_and_local_edit() {
         requested: page_requested.clone(),
         release: release_rx,
     });
-    let server = Arc::new(SyncServer::new(server_storage as Arc<dyn StorageBackend>));
+    let server = Arc::new(SyncServer::new(
+        server_storage as Arc<dyn SyncStorageBackend>,
+    ));
     let port = pick_port().await;
     server
         .start_with_addr(
@@ -152,7 +153,7 @@ async fn six_devices_converge_during_initial_import_and_local_edit() {
         let storage = make_storage(&device_id);
         storage.set_selective_sync_profile(Some(profile()));
         let client = Arc::new(SyncClient::new(
-            storage.clone() as Arc<dyn StorageBackend>,
+            storage.clone() as Arc<dyn SyncStorageBackend>,
             peer.clone(),
             device_id.clone(),
             format!("Device {}", char::from(b'A' + index as u8)),
@@ -260,4 +261,17 @@ async fn six_devices_converge_during_initial_import_and_local_edit() {
         client.stop();
     }
     server.stop().await;
+}
+
+#[async_trait::async_trait]
+impl AuthenticatedEntityBackend for BackfillBarrier {
+    async fn apply_authenticated_entity(
+        &self,
+        entity: &SyncEntity,
+        authenticated_peer_id: &str,
+    ) -> Result<(), String> {
+        self.inner
+            .apply_authenticated_entity(entity, authenticated_peer_id)
+            .await
+    }
 }

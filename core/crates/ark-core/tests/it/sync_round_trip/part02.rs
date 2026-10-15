@@ -24,8 +24,12 @@ async fn round_trip_sync_between_two_servers() {
         )
         .await;
 
-    let server_a = Arc::new(SyncServer::new(storage_a.clone() as Arc<dyn StorageBackend>));
-    let server_b = Arc::new(SyncServer::new(storage_b.clone() as Arc<dyn StorageBackend>));
+    let server_a = Arc::new(SyncServer::new(
+        storage_a.clone() as Arc<dyn SyncStorageBackend>
+    ));
+    let server_b = Arc::new(SyncServer::new(
+        storage_b.clone() as Arc<dyn SyncStorageBackend>
+    ));
 
     // Use two separate loopback ports.
     let port_a = pick_port().await;
@@ -104,7 +108,7 @@ async fn round_trip_sync_between_two_servers() {
         app_version: None,
     };
     let client = Arc::new(SyncClient::new(
-        storage_b.clone() as Arc<dyn StorageBackend>,
+        storage_b.clone() as Arc<dyn SyncStorageBackend>,
         peer,
         "device-b".to_string(),
         "Beta".to_string(),
@@ -157,7 +161,9 @@ async fn round_trip_sync_between_two_servers() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn self_connect_is_rejected() {
     let storage = make_storage("device-self");
-    let server = Arc::new(SyncServer::new(storage.clone() as Arc<dyn StorageBackend>));
+    let server = Arc::new(SyncServer::new(
+        storage.clone() as Arc<dyn SyncStorageBackend>
+    ));
 
     let port = pick_port().await;
     server
@@ -184,7 +190,7 @@ async fn self_connect_is_rejected() {
     // — same as the server. The server must reject the connection and NOT
     // emit a peer_connected event.
     let client = Arc::new(SyncClient::new(
-        storage.clone() as Arc<dyn StorageBackend>,
+        storage.clone() as Arc<dyn SyncStorageBackend>,
         peer,
         "device-self".to_string(),
         "Self".to_string(),

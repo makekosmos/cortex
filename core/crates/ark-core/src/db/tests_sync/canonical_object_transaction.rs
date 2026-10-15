@@ -1,3 +1,4 @@
+use crate::replication_storage::AuthenticatedEntityBackend;
 #[test]
 fn failed_outer_apply_commit_rolls_back_and_releases_connection() {
     let conn = setup_db();

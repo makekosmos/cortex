@@ -2,7 +2,8 @@ use super::*;
 
 #[tokio::test]
 async fn send_signed_integration_frame_requires_addressed_authenticated_peer() {
-    let storage = Arc::new(sync_server_tests::tests::MemBackend::new()) as Arc<dyn StorageBackend>;
+    let storage =
+        Arc::new(sync_server_tests::tests::MemBackend::new()) as Arc<dyn SyncStorageBackend>;
     let server = SyncServer::new(storage);
     *server.space_id.write().await = "space".to_string();
     *server.device_id.write().await = "me".to_string();

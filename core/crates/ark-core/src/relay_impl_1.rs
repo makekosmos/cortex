@@ -1,5 +1,5 @@
 impl RelaySync {
-    pub fn new(storage: Arc<dyn StorageBackend>, config: RelaySyncConfig) -> Arc<Self> {
+    pub fn new(storage: Arc<dyn SyncStorageBackend>, config: RelaySyncConfig) -> Arc<Self> {
         let auth_secret = normalize_auth_secret(config.auth_secret.clone());
         let transport: Arc<dyn SyncTransport> = Arc::new(RelayTransport::new(RelayConfig {
             url: config.relay_url.clone(),
@@ -18,7 +18,7 @@ impl RelaySync {
     /// `IrohTransport`), or any other `SyncTransport` impl, instead of always
     /// constructing a `RelayTransport` internally from `config.relay_url`.
     pub fn with_transport(
-        storage: Arc<dyn StorageBackend>,
+        storage: Arc<dyn SyncStorageBackend>,
         config: RelaySyncConfig,
         transport: Arc<dyn SyncTransport>,
     ) -> Arc<Self> {

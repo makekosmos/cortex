@@ -7,7 +7,7 @@
 /// Это даёт стабильный `EndpointId` между рестартами процесса.
 ///
 /// Принимает `&Connection` напрямую (как `get_sync_kv`/`set_sync_kv` в
-/// `db.rs`), а не `Arc<dyn StorageBackend>`.
+/// `db.rs`), а не `Arc<dyn SyncStorageBackend>`.
 pub fn load_or_generate_secret_key(conn: &Connection) -> Result<iroh::SecretKey, String> {
     if let Some(stored) = get_sync_kv(conn, IROH_SECRET_KEY_KV_KEY)? {
         let bytes = hex_decode_32(&stored)

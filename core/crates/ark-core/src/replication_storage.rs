@@ -5,9 +5,56 @@ use crate::types::{SyncEntity, VersionVector};
 
 #[async_trait::async_trait]
 pub trait StorageBackend: Send + Sync {
+    async fn load_entities(&self, vector: &VersionVector) -> Vec<SyncEntity>;
+    async fn load_entities_page(
+        &self,
+        vector: &VersionVector,
+        offset: usize,
+        limit: usize,
+    ) -> Vec<SyncEntity>;
+    async fn apply_entity(&self, entity: &SyncEntity) -> Result<(), String>;
+    async fn get_kv(&self, key: &str) -> Option<String>;
+    async fn set_kv(&self, key: &str, value: &str);
+
+    /// Per usage origin device, the highest seq this node can serve
+    /// completely — sent as `usage_complete_through` on the final sync page
+    /// so the receiver can raise its `@usage:` cursor past compacted holes
+    /// (KOS-302). Backends without a usage journal return an empty map and
+    /// keep contiguous-only cursor advancement.
+    async fn usage_complete_through(&self) -> HashMap<String, u64> {
+        HashMap::new()
+    }
+
+    fn filter_outgoing_entity(&self, entity: &SyncEntity) -> Option<SyncEntity> {
+        Some(entity.clone())
+    }
+}
+
+/// Applies an ordinary entity only after the sync boundary authenticated its peer.
+#[async_trait::async_trait]
+pub trait AuthenticatedEntityBackend: Send + Sync {
+    async fn apply_authenticated_entity(
+        &self,
+        _entity: &SyncEntity,
+        _authenticated_peer_id: &str,
+    ) -> Result<(), String> {
+        Err("authenticated_apply_unsupported".into())
+    }
+}
+
+/// Trusted transport identity records used while authenticating a paired peer.
+#[async_trait::async_trait]
+pub trait PeerIdentityBackend: Send + Sync {
     async fn authorized_transport_public_key(&self, _device_id: &str) -> Option<String> {
         None
     }
+}
+
+/// Persistence operations for signed integration replication. Kept separate
+/// from ordinary entity storage so application and sync code can depend on
+/// only the capabilities they use.
+#[async_trait::async_trait]
+pub trait IntegrationReplicationBackend: Send + Sync {
     async fn validate_outbound_signed_integration_frame(
         &self,
         _frame: &SignedSyncEnvelope,
@@ -35,21 +82,6 @@ pub trait StorageBackend: Send + Sync {
         )
         .into())
     }
-    async fn load_entities(&self, vector: &VersionVector) -> Vec<SyncEntity>;
-    async fn load_entities_page(
-        &self,
-        vector: &VersionVector,
-        offset: usize,
-        limit: usize,
-    ) -> Vec<SyncEntity>;
-    async fn apply_entity(&self, entity: &SyncEntity) -> Result<(), String>;
-    async fn apply_authenticated_entity(
-        &self,
-        _entity: &SyncEntity,
-        _authenticated_peer_id: &str,
-    ) -> Result<(), String> {
-        Err("authenticated_apply_unsupported".into())
-    }
     async fn apply_signed_integration_frame(
         &self,
         frame: &SignedSyncEnvelope,
@@ -73,7 +105,12 @@ pub trait StorageBackend: Send + Sync {
         expected_recipient_node_id: &str,
         authenticated_transport_public_key: Option<&str>,
     ) -> Result<(), String> {
-        let _ = authenticated_transport_public_key;
+        if authenticated_transport_public_key.is_some() {
+            return Err(
+                "signed integration transport authorization is unsupported by this storage backend"
+                    .into(),
+            );
+        }
         self.apply_signed_integration_frame(
             frame,
             expected_space_id,
@@ -82,19 +119,65 @@ pub trait StorageBackend: Send + Sync {
         )
         .await
     }
-    async fn get_kv(&self, key: &str) -> Option<String>;
-    async fn set_kv(&self, key: &str, value: &str);
+}
 
-    /// Per usage origin device, the highest seq this node can serve
-    /// completely — sent as `usage_complete_through` on the final sync page
-    /// so the receiver can raise its `@usage:` cursor past compacted holes
-    /// (KOS-302). Backends without a usage journal return an empty map and
-    /// keep contiguous-only cursor advancement.
-    async fn usage_complete_through(&self) -> HashMap<String, u64> {
-        HashMap::new()
+/// The complete storage surface required by the sync runtime.
+pub trait SyncStorageBackend
+where
+    Self: StorageBackend
+        + AuthenticatedEntityBackend
+        + PeerIdentityBackend
+        + IntegrationReplicationBackend,
+{
+}
+
+impl<T> SyncStorageBackend for T where
+    T: StorageBackend
+        + AuthenticatedEntityBackend
+        + PeerIdentityBackend
+        + IntegrationReplicationBackend
+        + ?Sized
+{
+}
+
+#[cfg(test)]
+mod tests {
+    use super::IntegrationReplicationBackend;
+    use crate::integration_replication::SignedSyncEnvelope;
+
+    struct BaseOnlyBackend;
+
+    #[async_trait::async_trait]
+    impl IntegrationReplicationBackend for BaseOnlyBackend {
+        async fn apply_signed_integration_frame(
+            &self,
+            _frame: &SignedSyncEnvelope,
+            _expected_space_id: &str,
+            _authenticated_peer_id: &str,
+            _expected_recipient_node_id: &str,
+        ) -> Result<(), String> {
+            Ok(())
+        }
     }
 
-    fn filter_outgoing_entity(&self, entity: &SyncEntity) -> Option<SyncEntity> {
-        Some(entity.clone())
+    #[tokio::test]
+    async fn transport_key_is_rejected_when_backend_cannot_authorize_it() {
+        let frame =
+            SignedSyncEnvelope::new("space", "origin", "recipient", 1, "msg", vec![], "sig");
+
+        let result = BaseOnlyBackend
+            .apply_signed_integration_frame_with_transport(
+                &frame,
+                "space",
+                "peer",
+                "recipient",
+                Some("transport-key"),
+            )
+            .await;
+
+        assert_eq!(
+            result.unwrap_err(),
+            "signed integration transport authorization is unsupported by this storage backend"
+        );
     }
 }

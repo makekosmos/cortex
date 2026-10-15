@@ -77,7 +77,7 @@ fn pairing_restart_params_force_iroh_and_replace_ticket() {
     )));
     let runtime = SyncRuntime {
         server: Arc::new(crate::sync_server::SyncServer::new(
-            storage.clone() as Arc<dyn crate::sync_server::StorageBackend>
+            storage.clone() as Arc<dyn crate::sync_server::SyncStorageBackend>
         )),
         storage,
         clients: Arc::new(TokioMutex::new(HashMap::new())),
@@ -132,7 +132,7 @@ fn loopback_runtime_fixture() -> SyncRuntime {
     )));
     SyncRuntime {
         server: Arc::new(crate::sync_server::SyncServer::new(
-            storage.clone() as Arc<dyn crate::sync_server::StorageBackend>
+            storage.clone() as Arc<dyn crate::sync_server::SyncStorageBackend>
         )),
         storage,
         clients: Arc::new(TokioMutex::new(HashMap::new())),

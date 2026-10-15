@@ -49,7 +49,10 @@ pub use protocol::{
     merge_peer_records, serialize_message, split_into_batches, LanSyncMessage, LAN_SYNC_PORT,
     MAX_BATCH_BYTES, MAX_BATCH_SIZE, PROTOCOL_VERSION,
 };
-pub use replication_storage::StorageBackend;
+pub use replication_storage::{
+    AuthenticatedEntityBackend, IntegrationReplicationBackend, PeerIdentityBackend, StorageBackend,
+    SyncStorageBackend,
+};
 pub use sync_bind::SyncBind;
 pub use types::{
     Area, ArkObject, ArkObjectSummary, ArkObjectWrite, Heading, LoadAllData, ObjectLink,

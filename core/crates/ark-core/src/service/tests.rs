@@ -69,7 +69,7 @@ async fn setup_sync_with_capturing_transport(
     state: &Arc<ServiceState>,
 ) -> Arc<TokioMutex<Vec<crate::protocol::LanSyncMessage>>> {
     use crate::relay_sync::{RelaySync, RelaySyncConfig};
-    use crate::sync_server::StorageBackend;
+    use crate::sync_server::SyncStorageBackend;
 
     let captured: Arc<TokioMutex<Vec<crate::protocol::LanSyncMessage>>> =
         Arc::new(TokioMutex::new(Vec::new()));
@@ -83,7 +83,7 @@ async fn setup_sync_with_capturing_transport(
     backend.set_device_id("test-device").unwrap();
 
     let relay = RelaySync::with_transport(
-        backend.clone() as Arc<dyn StorageBackend>,
+        backend.clone() as Arc<dyn SyncStorageBackend>,
         RelaySyncConfig {
             relay_url: String::new(),
             relay_api_key: None,
@@ -97,7 +97,7 @@ async fn setup_sync_with_capturing_transport(
     relay.start().await.unwrap();
 
     let server = Arc::new(crate::sync_server::SyncServer::new(
-        backend.clone() as Arc<dyn StorageBackend>
+        backend.clone() as Arc<dyn SyncStorageBackend>
     ));
 
     let runtime = SyncRuntime {

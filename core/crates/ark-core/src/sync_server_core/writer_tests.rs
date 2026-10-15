@@ -5,7 +5,7 @@
     }
 
     #[async_trait::async_trait]
-    impl StorageBackend for RevocableBackend {
+    impl IntegrationReplicationBackend for RevocableBackend {
         async fn validate_outbound_signed_integration_frame(
             &self,
             _frame: &SignedSyncEnvelope,
@@ -17,7 +17,10 @@
                 .then_some(())
                 .ok_or_else(|| "revoked".to_string())
         }
+    }
 
+    #[async_trait::async_trait]
+    impl StorageBackend for RevocableBackend {
         async fn load_entities(&self, _vector: &VersionVector) -> Vec<SyncEntity> {
             Vec::new()
         }
@@ -35,14 +38,6 @@
             Ok(())
         }
 
-        async fn apply_authenticated_entity(
-            &self,
-            _entity: &SyncEntity,
-            _authenticated_peer_id: &str,
-        ) -> Result<(), String> {
-            Ok(())
-        }
-
         async fn get_kv(&self, _key: &str) -> Option<String> {
             None
         }
@@ -50,12 +45,18 @@
         async fn set_kv(&self, _key: &str, _value: &str) {}
     }
 
+    #[async_trait::async_trait]
+    impl AuthenticatedEntityBackend for RevocableBackend {}
+
+    #[async_trait::async_trait]
+    impl PeerIdentityBackend for RevocableBackend {}
+
     #[tokio::test]
     async fn queued_frame_is_dropped_when_revoked_before_writer_recheck() {
         let backend_impl = Arc::new(RevocableBackend {
             allowed: AtomicBool::new(true),
         });
-        let backend = backend_impl.clone() as Arc<dyn StorageBackend>;
+        let backend = backend_impl.clone() as Arc<dyn SyncStorageBackend>;
         let frame =
             SignedSyncEnvelope::new("space", "origin", "recipient", 1, "message", vec![], "sig");
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();

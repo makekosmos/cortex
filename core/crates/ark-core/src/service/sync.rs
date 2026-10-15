@@ -48,7 +48,7 @@ async fn spawn_sync_client(env: &ClientEnv, peer: PeerRecord) {
     }
 
     let client = Arc::new(SyncClient::new(
-        storage.clone() as Arc<dyn StorageBackend>,
+        storage.clone() as Arc<dyn SyncStorageBackend>,
         peer.clone(),
         device_id.clone(),
         device_name.clone(),

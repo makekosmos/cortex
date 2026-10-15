@@ -1,7 +1,7 @@
 use crate::integration_replication::SignedSyncEnvelope;
 
 async fn apply_relay_entity(
-    storage: &Arc<dyn StorageBackend>,
+    storage: &Arc<dyn SyncStorageBackend>,
     entity: &SyncEntity,
     authenticated_peer_id: Option<&str>,
 ) -> Result<(), String> {

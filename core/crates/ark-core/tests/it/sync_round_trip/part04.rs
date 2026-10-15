@@ -130,8 +130,12 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
     storage_a.set_selective_sync_profile(Some(profile.clone()));
     storage_b.set_selective_sync_profile(Some(profile));
 
-    let server_a = Arc::new(SyncServer::new(storage_a.clone() as Arc<dyn StorageBackend>));
-    let server_b = Arc::new(SyncServer::new(storage_b.clone() as Arc<dyn StorageBackend>));
+    let server_a = Arc::new(SyncServer::new(
+        storage_a.clone() as Arc<dyn SyncStorageBackend>
+    ));
+    let server_b = Arc::new(SyncServer::new(
+        storage_b.clone() as Arc<dyn SyncStorageBackend>
+    ));
     let port_a = pick_port().await;
     let port_b = pick_port().await;
     server_a
@@ -165,7 +169,7 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
         app_version: None,
     };
     let client = Arc::new(SyncClient::new(
-        storage_b.clone() as Arc<dyn StorageBackend>,
+        storage_b.clone() as Arc<dyn SyncStorageBackend>,
         peer.clone(),
         "device-b".into(),
         "Beta".into(),
@@ -202,7 +206,7 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
     client.stop();
     tokio::time::sleep(Duration::from_millis(100)).await;
     let reconnect = Arc::new(SyncClient::new(
-        storage_b.clone() as Arc<dyn StorageBackend>,
+        storage_b.clone() as Arc<dyn SyncStorageBackend>,
         peer,
         "device-b".into(),
         "Beta".into(),

@@ -38,7 +38,9 @@ pub(crate) async fn handle_start_sync(
     let storage = Arc::new(SqliteStorageBackend::new(shared_conn.clone()));
     storage.set_device_id(&device_id)?;
 
-    let server = Arc::new(SyncServer::new(storage.clone() as Arc<dyn StorageBackend>));
+    let server = Arc::new(SyncServer::new(
+        storage.clone() as Arc<dyn SyncStorageBackend>
+    ));
     server.set_auth_secret(auth_secret.clone()).await;
 
     // Wire server callbacks -> event stream
@@ -130,7 +132,7 @@ pub(crate) async fn handle_start_sync(
             }),
         );
         let relay_sync = RelaySync::with_transport(
-            storage.clone() as Arc<dyn StorageBackend>,
+            storage.clone() as Arc<dyn SyncStorageBackend>,
             RelaySyncConfig {
                 relay_url,
                 relay_api_key: relay_api_key.clone(),
@@ -192,7 +194,7 @@ pub(crate) async fn handle_start_sync(
         // `RelaySync::new` reads it to build a `RelayTransport`) — pass an
         // empty string rather than widening the struct for one unused field.
         let relay_sync = RelaySync::with_transport(
-            storage.clone() as Arc<dyn StorageBackend>,
+            storage.clone() as Arc<dyn SyncStorageBackend>,
             RelaySyncConfig {
                 relay_url: String::new(),
                 relay_api_key: None,

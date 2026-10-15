@@ -29,7 +29,7 @@ async fn disconnect_peer_stops_matching_outbound_client_and_emits_events() {
         app_version: None,
     };
     let client = Arc::new(SyncClient::new(
-        backend.clone() as Arc<dyn crate::sync_server::StorageBackend>,
+        backend.clone() as Arc<dyn crate::sync_server::SyncStorageBackend>,
         peer,
         "device-local".to_string(),
         "Local Device".to_string(),
@@ -43,7 +43,7 @@ async fn disconnect_peer_stops_matching_outbound_client_and_emits_events() {
     ));
     let runtime = SyncRuntime {
         server: Arc::new(crate::sync_server::SyncServer::new(
-            backend.clone() as Arc<dyn crate::sync_server::StorageBackend>
+            backend.clone() as Arc<dyn crate::sync_server::SyncStorageBackend>
         )),
         storage: backend,
         clients: clients.clone(),

@@ -8,7 +8,9 @@ async fn hmac_authenticated_sync_succeeds_with_matching_secret() {
         .await
         .unwrap();
 
-    let server_a = Arc::new(SyncServer::new(storage_a.clone() as Arc<dyn StorageBackend>));
+    let server_a = Arc::new(SyncServer::new(
+        storage_a.clone() as Arc<dyn SyncStorageBackend>
+    ));
     server_a
         .set_auth_secret(Some("mesh-secret".to_string()))
         .await;
@@ -35,7 +37,7 @@ async fn hmac_authenticated_sync_succeeds_with_matching_secret() {
         app_version: None,
     };
     let client = Arc::new(SyncClient::new(
-        storage_b.clone() as Arc<dyn StorageBackend>,
+        storage_b.clone() as Arc<dyn SyncStorageBackend>,
         peer,
         "device-b".to_string(),
         "Beta".to_string(),
@@ -72,7 +74,9 @@ async fn hmac_authenticated_sync_rejects_wrong_secret() {
         .await
         .unwrap();
 
-    let server_a = Arc::new(SyncServer::new(storage_a.clone() as Arc<dyn StorageBackend>));
+    let server_a = Arc::new(SyncServer::new(
+        storage_a.clone() as Arc<dyn SyncStorageBackend>
+    ));
     server_a
         .set_auth_secret(Some("correct-secret".to_string()))
         .await;
@@ -99,7 +103,7 @@ async fn hmac_authenticated_sync_rejects_wrong_secret() {
         app_version: None,
     };
     let client = Arc::new(SyncClient::new(
-        storage_b.clone() as Arc<dyn StorageBackend>,
+        storage_b.clone() as Arc<dyn SyncStorageBackend>,
         peer,
         "device-b".to_string(),
         "Beta".to_string(),
@@ -156,8 +160,12 @@ async fn usage_entities_sync_between_two_servers() {
         )
         .await;
 
-    let server_a = Arc::new(SyncServer::new(storage_a.clone() as Arc<dyn StorageBackend>));
-    let server_b = Arc::new(SyncServer::new(storage_b.clone() as Arc<dyn StorageBackend>));
+    let server_a = Arc::new(SyncServer::new(
+        storage_a.clone() as Arc<dyn SyncStorageBackend>
+    ));
+    let server_b = Arc::new(SyncServer::new(
+        storage_b.clone() as Arc<dyn SyncStorageBackend>
+    ));
 
     let port_a = pick_port().await;
     let port_b = pick_port().await;
@@ -194,7 +202,7 @@ async fn usage_entities_sync_between_two_servers() {
         app_version: None,
     };
     let client = Arc::new(SyncClient::new(
-        storage_b.clone() as Arc<dyn StorageBackend>,
+        storage_b.clone() as Arc<dyn SyncStorageBackend>,
         peer,
         "device-b".to_string(),
         "Beta".to_string(),

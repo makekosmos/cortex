@@ -23,7 +23,7 @@ pub(super) mod reject_tests {
     /// released by the time it returns, not whenever the backoff ends.
     #[tokio::test]
     async fn client_stop_and_join_releases_storage() {
-        let storage = Arc::new(MemBackend::new()) as Arc<dyn StorageBackend>;
+        let storage = Arc::new(MemBackend::new()) as Arc<dyn SyncStorageBackend>;
         let client = crate::sync_client::SyncClient::new(
             storage.clone(),
             peer_rec("peer-dead", &["127.0.0.1:1"]),
@@ -47,7 +47,7 @@ pub(super) mod reject_tests {
 
     #[tokio::test]
     async fn stop_releases_background_tasks_holding_peers_map() {
-        let storage = Arc::new(MemBackend::new()) as Arc<dyn StorageBackend>;
+        let storage = Arc::new(MemBackend::new()) as Arc<dyn SyncStorageBackend>;
         let server = SyncServer::new(storage);
 
         // Start + stop twice: a leaked ping task survives each start and
@@ -74,7 +74,7 @@ pub(super) mod reject_tests {
 
     #[tokio::test]
     async fn peer_list_ignores_blocked_peers() {
-        let storage = Arc::new(MemBackend::new()) as Arc<dyn StorageBackend>;
+        let storage = Arc::new(MemBackend::new()) as Arc<dyn SyncStorageBackend>;
         let server = SyncServer::new(storage.clone());
         *server.device_id.write().await = "me".to_string();
         server.block_peer("blocked").await;
@@ -171,7 +171,7 @@ pub(super) mod reject_tests {
 
     #[tokio::test]
     async fn rejected_hellos_close_connection_and_evict_session() {
-        let storage = Arc::new(MemBackend::new()) as Arc<dyn StorageBackend>;
+        let storage = Arc::new(MemBackend::new()) as Arc<dyn SyncStorageBackend>;
         let server = SyncServer::new(storage);
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();

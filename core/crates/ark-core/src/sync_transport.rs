@@ -11,7 +11,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 
 use crate::protocol::LanSyncMessage;
-use crate::replication_storage::StorageBackend;
+use crate::replication_storage::SyncStorageBackend;
 
 /// Lifecycle/message events emitted by a sync transport into the orchestration
 /// layer. Structurally identical across transports.
@@ -59,7 +59,7 @@ pub trait SyncTransport: Send + Sync {
 
     fn set_outbound_storage(
         &self,
-        _storage: Arc<dyn StorageBackend>,
+        _storage: Arc<dyn SyncStorageBackend>,
         _space_id: &str,
         _origin_node_id: &str,
     ) -> Result<(), String> {

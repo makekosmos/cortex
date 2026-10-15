@@ -450,7 +450,7 @@
     #[tokio::test]
     async fn persist_pull_vector_preserves_concurrent_keys() {
         let shared = Arc::new(Mutex::new(setup_db()));
-        let backend: Arc<dyn crate::sync_server::StorageBackend> =
+        let backend: Arc<dyn crate::sync_server::SyncStorageBackend> =
             Arc::new(SqliteStorageBackend::new(shared.clone()));
 
         // The session snapshot predates the concurrent write.

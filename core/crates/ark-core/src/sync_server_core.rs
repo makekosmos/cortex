@@ -2,7 +2,7 @@ use super::*;
 use crate::task_set::track_task;
 
 async fn signed_integration_write_is_authorized(
-    storage: &Arc<dyn StorageBackend>,
+    storage: &Arc<dyn SyncStorageBackend>,
     frame: &SignedSyncEnvelope,
     expected_space_id: &str,
     expected_origin_node_id: &str,
@@ -54,7 +54,7 @@ impl SyncServer {
             ))
             .map_err(|_| "LAN peer connection is closed".into())
     }
-    pub fn new(storage: Arc<dyn StorageBackend>) -> Self {
+    pub fn new(storage: Arc<dyn SyncStorageBackend>) -> Self {
         Self {
             storage,
             space_id: Arc::new(RwLock::new(String::new())),

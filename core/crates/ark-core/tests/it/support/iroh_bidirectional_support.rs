@@ -11,7 +11,9 @@ use ark_core::integration_replication::{
 use ark_core::iroh_transport::{IrohConfig, IrohTransport};
 use ark_core::protocol::{generate_id, LanSyncMessage};
 use ark_core::sync_bind::SyncBind;
-use ark_core::sync_server::StorageBackend;
+use ark_core::sync_server::{
+    AuthenticatedEntityBackend, IntegrationReplicationBackend, PeerIdentityBackend, StorageBackend,
+};
 use ark_core::sync_transport::{SyncTransport, TransportEvent};
 use ark_core::types::SyncEntity;
 use iroh::RelayMode;
@@ -24,6 +26,35 @@ struct TestStorage {
 
 #[async_trait::async_trait]
 impl StorageBackend for TestStorage {
+    async fn load_entities(&self, _vector: &ark_core::types::VersionVector) -> Vec<SyncEntity> {
+        Vec::new()
+    }
+    async fn load_entities_page(
+        &self,
+        _vector: &ark_core::types::VersionVector,
+        _offset: usize,
+        _limit: usize,
+    ) -> Vec<SyncEntity> {
+        Vec::new()
+    }
+    async fn apply_entity(&self, _entity: &SyncEntity) -> Result<(), String> {
+        Ok(())
+    }
+    async fn get_kv(&self, _key: &str) -> Option<String> {
+        None
+    }
+    async fn set_kv(&self, _key: &str, _value: &str) {}
+}
+
+#[async_trait::async_trait]
+impl PeerIdentityBackend for TestStorage {
+    async fn authorized_transport_public_key(&self, device_id: &str) -> Option<String> {
+        self.inner.authorized_transport_public_key(device_id).await
+    }
+}
+
+#[async_trait::async_trait]
+impl IntegrationReplicationBackend for TestStorage {
     async fn validate_outbound_signed_integration_frame(
         &self,
         _frame: &SignedSyncEnvelope,
@@ -57,31 +88,6 @@ impl StorageBackend for TestStorage {
         }
         Ok(())
     }
-    async fn load_entities(&self, _vector: &ark_core::types::VersionVector) -> Vec<SyncEntity> {
-        Vec::new()
-    }
-    async fn load_entities_page(
-        &self,
-        _vector: &ark_core::types::VersionVector,
-        _offset: usize,
-        _limit: usize,
-    ) -> Vec<SyncEntity> {
-        Vec::new()
-    }
-    async fn apply_entity(&self, _entity: &SyncEntity) -> Result<(), String> {
-        Ok(())
-    }
-    async fn apply_authenticated_entity(
-        &self,
-        _entity: &SyncEntity,
-        _authenticated_peer_id: &str,
-    ) -> Result<(), String> {
-        Ok(())
-    }
-    async fn get_kv(&self, _key: &str) -> Option<String> {
-        None
-    }
-    async fn set_kv(&self, _key: &str, _value: &str) {}
 }
 
 fn authorized_storage() -> (
@@ -276,5 +282,16 @@ where
             Ok(None) => return None, // канал закрыт
             Err(_) => return None,   // таймаут
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl AuthenticatedEntityBackend for TestStorage {
+    async fn apply_authenticated_entity(
+        &self,
+        _entity: &SyncEntity,
+        _authenticated_peer_id: &str,
+    ) -> Result<(), String> {
+        Ok(())
     }
 }

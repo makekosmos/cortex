@@ -21,7 +21,7 @@ use ark_core::db::{init_schema, SqliteStorageBackend};
 use ark_core::iroh_transport::{IrohConfig, IrohTransport};
 use ark_core::protocol::LanSyncMessage;
 use ark_core::sync_bind::SyncBind;
-use ark_core::sync_server::StorageBackend;
+use ark_core::sync_server::SyncStorageBackend;
 use ark_core::sync_transport::{SyncTransport, TransportEvent};
 use iroh::RelayMode;
 
@@ -60,7 +60,7 @@ async fn stop_joins_connection_tasks_holding_storage() {
     let transport_b = loopback_transport("device-b", None);
     transport_b
         .set_outbound_storage(
-            Arc::new(SqliteStorageBackend::new(conn_b.clone())) as Arc<dyn StorageBackend>,
+            Arc::new(SqliteStorageBackend::new(conn_b.clone())) as Arc<dyn SyncStorageBackend>,
             "test-iroh-stop-teardown",
             "device-b",
         )
@@ -72,7 +72,7 @@ async fn stop_joins_connection_tasks_holding_storage() {
     let transport_a = loopback_transport("device-a", Some(addr_b));
     transport_a
         .set_outbound_storage(
-            Arc::new(SqliteStorageBackend::new(conn_a.clone())) as Arc<dyn StorageBackend>,
+            Arc::new(SqliteStorageBackend::new(conn_a.clone())) as Arc<dyn SyncStorageBackend>,
             "test-iroh-stop-teardown",
             "device-a",
         )

@@ -16,7 +16,7 @@ use tokio::sync::mpsc;
 use ark_core::db::{init_schema, SqliteStorageBackend};
 use ark_core::protocol::{LanSyncMessage, PROTOCOL_VERSION};
 use ark_core::relay_sync::{RelaySync, RelaySyncConfig};
-use ark_core::sync_server::StorageBackend;
+use ark_core::sync_server::SyncStorageBackend;
 use ark_core::sync_transport::{SyncTransport, TransportEvent};
 
 struct StubTransport {
@@ -45,7 +45,7 @@ async fn relay_with_stub() -> (Arc<RelaySync>, mpsc::UnboundedSender<TransportEv
         event_tx: StdMutex::new(None),
     });
     let relay = RelaySync::with_transport(
-        backend as Arc<dyn StorageBackend>,
+        backend as Arc<dyn SyncStorageBackend>,
         RelaySyncConfig {
             relay_url: String::new(),
             relay_api_key: None,

@@ -9,7 +9,7 @@ use tokio_tungstenite::tungstenite::Message;
 use crate::hlc::HLC;
 use crate::integration_replication::SignedSyncEnvelope;
 use crate::protocol::*;
-use crate::replication_storage::StorageBackend;
+use crate::replication_storage::SyncStorageBackend;
 use crate::task_set::{abort_and_join, join_all, track_task};
 
 #[path = "sync_client_start.rs"]
@@ -41,7 +41,7 @@ type AuthenticatedTx = Arc<Mutex<Option<(String, mpsc::UnboundedSender<Message>)
 // ---------------------------------------------------------------------------
 
 pub struct SyncClient {
-    storage: Arc<dyn StorageBackend>,
+    storage: Arc<dyn SyncStorageBackend>,
     peer: Arc<RwLock<PeerRecord>>,
     device_id: String,
     device_name: String,
@@ -65,7 +65,7 @@ pub struct SyncClient {
 
 impl SyncClient {
     pub fn new(
-        storage: Arc<dyn StorageBackend>,
+        storage: Arc<dyn SyncStorageBackend>,
         peer: PeerRecord,
         device_id: String,
         device_name: String,
@@ -215,14 +215,14 @@ impl SyncClient {
 // Helpers
 // ---------------------------------------------------------------------------
 
-async fn load_version_vector(storage: &Arc<dyn StorageBackend>) -> VersionVector {
+async fn load_version_vector(storage: &Arc<dyn SyncStorageBackend>) -> VersionVector {
     match storage.get_kv(VERSION_VECTOR_KEY).await {
         Some(raw) => serde_json::from_str(&raw).unwrap_or_default(),
         None => VersionVector::new(),
     }
 }
 
-async fn save_version_vector(storage: &Arc<dyn StorageBackend>, vector: &VersionVector) {
+async fn save_version_vector(storage: &Arc<dyn SyncStorageBackend>, vector: &VersionVector) {
     let json = serde_json::to_string(vector).unwrap_or_default();
     storage.set_kv(VERSION_VECTOR_KEY, &json).await;
 }

@@ -9,7 +9,7 @@ pub fn trim_process_heap() {
 }
 #[cfg(not(all(target_os = "linux", target_env = "gnu")))]
 pub fn trim_process_heap() {}
-async fn load_version_vector(storage: &Arc<dyn StorageBackend>) -> VersionVector {
+async fn load_version_vector(storage: &Arc<dyn SyncStorageBackend>) -> VersionVector {
     match storage.get_kv(VERSION_VECTOR_KEY).await {
         Some(raw) => serde_json::from_str(&raw).unwrap_or_default(),
         None => VersionVector::new(),
@@ -19,6 +19,7 @@ async fn load_version_vector(storage: &Arc<dyn StorageBackend>) -> VersionVector
 mod tests {
     use super::*;
     use crate::db::{init_schema, SqliteStorageBackend};
+    use crate::replication_storage::StorageBackend;
     use futures_util::{SinkExt, StreamExt};
     use rusqlite::Connection;
     use std::sync::{Arc, Mutex as StdMutex};
@@ -173,7 +174,7 @@ mod tests {
         auth_secret: Option<&str>,
     ) -> Arc<RelaySync> {
         RelaySync::new(
-            storage as Arc<dyn StorageBackend>,
+            storage as Arc<dyn SyncStorageBackend>,
             RelaySyncConfig {
                 relay_url: relay_url.to_string(),
                 relay_api_key: None,
@@ -289,7 +290,7 @@ mod tests {
         crate::db::set_sync_kv(&conn, "sync.removed_peers", r#"["device-blocked"]"#).unwrap();
         let shared = Arc::new(StdMutex::new(conn));
         let backend = Arc::new(SqliteStorageBackend::new(shared.clone()));
-        let storage = backend.clone() as Arc<dyn StorageBackend>;
+        let storage = backend.clone() as Arc<dyn SyncStorageBackend>;
         let entity = SyncEntity {
             entity_type: "object".into(),
             id: "relay-spoofed-task".into(),

@@ -22,15 +22,6 @@ pub(super) mod tests {
 
     #[async_trait::async_trait]
     impl StorageBackend for MemBackend {
-        async fn validate_outbound_signed_integration_frame(
-            &self,
-            _frame: &SignedSyncEnvelope,
-            _expected_space_id: &str,
-            _expected_origin_node_id: &str,
-        ) -> Result<(), String> {
-            Ok(())
-        }
-
         async fn load_entities(&self, _vector: &VersionVector) -> Vec<SyncEntity> {
             self.entities.lock().unwrap().values().cloned().collect()
         }
@@ -60,13 +51,6 @@ pub(super) mod tests {
             }
             Ok(())
         }
-        async fn apply_authenticated_entity(
-            &self,
-            entity: &SyncEntity,
-            _authenticated_peer_id: &str,
-        ) -> Result<(), String> {
-            self.apply_entity(entity).await
-        }
         async fn get_kv(&self, key: &str) -> Option<String> {
             self.kv.lock().unwrap().get(key).cloned()
         }
@@ -75,6 +59,32 @@ pub(super) mod tests {
                 .lock()
                 .unwrap()
                 .insert(key.to_string(), value.to_string());
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl IntegrationReplicationBackend for MemBackend {
+        async fn validate_outbound_signed_integration_frame(
+            &self,
+            _frame: &SignedSyncEnvelope,
+            _expected_space_id: &str,
+            _expected_origin_node_id: &str,
+        ) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl PeerIdentityBackend for MemBackend {}
+
+    #[async_trait::async_trait]
+    impl AuthenticatedEntityBackend for MemBackend {
+        async fn apply_authenticated_entity(
+            &self,
+            entity: &SyncEntity,
+            _authenticated_peer_id: &str,
+        ) -> Result<(), String> {
+            self.apply_entity(entity).await
         }
     }
 
@@ -92,7 +102,7 @@ pub(super) mod tests {
 
     #[tokio::test]
     async fn purge_self_peers_drops_our_device_id() {
-        let storage = Arc::new(MemBackend::new()) as Arc<dyn StorageBackend>;
+        let storage = Arc::new(MemBackend::new()) as Arc<dyn SyncStorageBackend>;
         let server = SyncServer::new(storage.clone());
         *server.device_id.write().await = "me".to_string();
         *server.own_addresses.write().await = vec!["192.168.1.10:21531".to_string()];
@@ -111,7 +121,7 @@ pub(super) mod tests {
 
     #[tokio::test]
     async fn purge_self_peers_drops_records_with_all_our_addresses() {
-        let storage = Arc::new(MemBackend::new()) as Arc<dyn StorageBackend>;
+        let storage = Arc::new(MemBackend::new()) as Arc<dyn SyncStorageBackend>;
         let server = SyncServer::new(storage.clone());
         *server.device_id.write().await = "me".to_string();
         *server.own_addresses.write().await = vec![
@@ -151,7 +161,7 @@ pub(super) mod tests {
 
     #[tokio::test]
     async fn register_external_peer_rejects_self() {
-        let storage = Arc::new(MemBackend::new()) as Arc<dyn StorageBackend>;
+        let storage = Arc::new(MemBackend::new()) as Arc<dyn SyncStorageBackend>;
         let server = SyncServer::new(storage.clone());
         *server.device_id.write().await = "me".to_string();
         *server.own_addresses.write().await = vec!["10.0.0.1:21531".to_string()];
@@ -172,7 +182,7 @@ pub(super) mod tests {
 
     #[tokio::test]
     async fn register_external_peer_stores_routable_peer() {
-        let storage = Arc::new(MemBackend::new()) as Arc<dyn StorageBackend>;
+        let storage = Arc::new(MemBackend::new()) as Arc<dyn SyncStorageBackend>;
         let server = SyncServer::new(storage.clone());
         *server.device_id.write().await = "me".to_string();
         *server.own_addresses.write().await = vec!["10.0.0.1:21531".to_string()];
@@ -189,7 +199,7 @@ pub(super) mod tests {
 
     #[tokio::test]
     async fn block_peer_persists_removed_peer_and_filters_known_list() {
-        let storage = Arc::new(MemBackend::new()) as Arc<dyn StorageBackend>;
+        let storage = Arc::new(MemBackend::new()) as Arc<dyn SyncStorageBackend>;
         let server = SyncServer::new(storage.clone());
         *server.known_peer_records.lock().await = vec![peer_rec("other", &["192.168.1.20:21531"])];
 
@@ -205,7 +215,7 @@ pub(super) mod tests {
 
     #[tokio::test]
     async fn register_external_peer_ignores_blocked_peer() {
-        let storage = Arc::new(MemBackend::new()) as Arc<dyn StorageBackend>;
+        let storage = Arc::new(MemBackend::new()) as Arc<dyn SyncStorageBackend>;
         let server = SyncServer::new(storage.clone());
         *server.device_id.write().await = "me".to_string();
         *server.own_addresses.write().await = vec!["10.0.0.1:21531".to_string()];
@@ -220,7 +230,7 @@ pub(super) mod tests {
 
     #[tokio::test]
     async fn disconnect_peer_closes_matching_sessions_and_persists_blocklist() {
-        let storage = Arc::new(MemBackend::new()) as Arc<dyn StorageBackend>;
+        let storage = Arc::new(MemBackend::new()) as Arc<dyn SyncStorageBackend>;
         let server = SyncServer::new(storage.clone());
 
         let (tx1, _rx1) = mpsc::unbounded_channel::<Message>();
@@ -291,7 +301,7 @@ pub(super) mod tests {
 
     #[tokio::test]
     async fn get_connected_peer_entries_dedup_by_device_id() {
-        let storage = Arc::new(MemBackend::new()) as Arc<dyn StorageBackend>;
+        let storage = Arc::new(MemBackend::new()) as Arc<dyn SyncStorageBackend>;
         let server = SyncServer::new(storage.clone());
         // Simulate two authenticated sessions from the same device_id (a race
         // between old + new sessions before eviction settles).
