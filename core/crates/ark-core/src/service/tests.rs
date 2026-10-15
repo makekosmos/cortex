@@ -47,6 +47,7 @@ impl Drop for ServiceFixture {
     }
 }
 
+mod api_wire_compat;
 mod legacy_writes;
 mod local_writes;
 mod object_revision_compat;

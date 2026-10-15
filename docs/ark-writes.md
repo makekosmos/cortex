@@ -1,6 +1,6 @@
-# ARK write-flow census (bounded)
+# ARK write-flow census
 
-This source-based census covers known syncable writes and their current owners. It is deliberately bounded; it does not classify every SQL mutation in `ark-core`. The backend module extraction changes file ownership only.
+This census records current write boundaries in the reviewed Ark Core database, service, canonical-type, registry, and replication roots. It is a baseline of observed behavior, not a claim that the repository has one unified write path. The backend module extraction changes file ownership only.
 
 | Entry point | Physical write and transaction boundary | Sync metadata coupling | Exception / next owner |
 |---|---|---|---|
@@ -10,7 +10,7 @@ This source-based census covers known syncable writes and their current owners. 
 | Regular remote apply ([sync_server_inbound.rs](../core/crates/ark-core/src/sync_server_inbound.rs#L54), [backend/apply.rs](../core/crates/ark-core/src/db/backend/apply.rs#L28), [backend/adapter.rs](../core/crates/ark-core/src/db/backend/adapter.rs#L223)) | `StorageBackend::apply_entity` dispatches blocking SQLite work; the apply helper uses a savepoint for each entity. | Entity HLC, tombstone, usage sequence, and canonical object state are applied by the existing DB helpers. | Bulk callers include paged server/client sync and relay (`sync_server_messages.rs`, `sync_client_start/part03.rs`, `relay_impl_2.rs`); they own their cursor policy. |
 | Signed remote apply ([sync_server_inbound.rs](../core/crates/ark-core/src/sync_server_inbound.rs#L7), [backend/adapter.rs](../core/crates/ark-core/src/db/backend/adapter.rs#L89)) | Authenticated handlers call the signed adapter method; `apply_signed_integration_changes` performs the transaction. | Envelope identity, origin/recipient, replay reservation, and mutation are checked/applied by signed integration code. | Outbound validation is separate in `integration_replication/outbound.rs`; it is not the ordinary entity apply path. |
 | Special local broadcast ingress ([service/sync.rs](../core/crates/ark-core/src/service/sync.rs#L192)) | `handle_broadcast_change` persists with `runtime.storage.apply_entity` before fan-out. | Stamps an HLC through the sync server and persists so future vector exchange observes the entity. | Distinct from local RPC writes, which already committed before broadcast. |
-| Bootstrap and maintenance ([db/open.rs](../core/crates/ark-core/src/db/open.rs#L32), [db/load/part1.rs](../core/crates/ark-core/src/db/load/part1.rs#L5), [db/compact.rs](../core/crates/ark-core/src/db/compact.rs#L83), [db/sync/part2.rs](../core/crates/ark-core/src/db/sync/part2.rs#L1)) | Open/init owns schema and migrations; clear/delete-trashed and compaction each have their own DB transaction boundaries. | `delete_trashed` records tombstones; version-vector and usage journal helpers own sequence metadata; compaction retains data according to cursors. | Bootstrap/migration, cache, and snapshot SQL are not all syncable writes and remain outside this census. |
+| Bootstrap and maintenance ([db/open.rs](../core/crates/ark-core/src/db/open.rs#L32), [db/load/part1.rs](../core/crates/ark-core/src/db/load/part1.rs#L5), [db/compact.rs](../core/crates/ark-core/src/db/compact.rs#L83), [db/sync/part2.rs](../core/crates/ark-core/src/db/sync/part2.rs#L1)) | Open/init owns schema and migrations. `delete_trashed` uses a savepoint; `compact_usage_sync_log` issues bounded journal deletion; `clear_all` runs a content/progress reset through `with_conn` without an enclosing transaction. | `delete_trashed` records tombstones; version-vector and usage journal helpers own sequence metadata; compaction removes superseded sequence references. | `clear_all` is a reset exception: it deletes rows without per-entity tombstone/HLC propagation, preserves system-locked type definitions, and does not delete integration/auth records or `usage_sync_heads`. It must not be represented as ordinary entity deletion. |
 
 ## Behavior tests
 
@@ -20,6 +20,27 @@ This source-based census covers known syncable writes and their current owners. 
 - `db/tests_integration_replication_apply.rs` and `integration_replication/signed_sync_tests.rs`: signed authorization and atomic apply.
 - `tests/it/sync_round_trip.rs`: regular two-server and selective-profile replication.
 - Local object behavior also has coverage in `service/tests/object_write_snapshot.rs`, `object_revision_compat.rs`, and `sync_lifecycle.rs`.
+
+## Writer groups and current boundaries
+
+| Writer group | Physical mutation and current boundary | Coupled metadata or exception |
+|---|---|---|
+| Local legacy and service commands: `service/runtime/{legacy,usage,objects,types}.rs` | Commands use `with_write_tx` (`BEGIN IMMEDIATE`); lower-level CRUD helpers usually use the supplied connection/transaction. Broadcast follows a successful commit. | Local upsert/delete metadata (version vector, tombstones, object sync versions) is written in the same service transaction. Legacy and canonical object paths remain distinct. |
+| Regular remote entity apply: `sync_server_inbound.rs`, `sync_server_messages.rs`, `sync_client_start/part03.rs`, `relay_impl_2.rs` → `StorageBackend::apply_entity` → `db/backend/apply.rs` | Each entity uses a SQLite savepoint. Outermost `RELEASE` commits that entity; nested `RELEASE` remains within its caller's transaction. | Entity state and supported HLC/tombstone/usage/canonical metadata are applied together. Pull cursor/vector persistence happens later and is not atomic with the entity commit. |
+| Signed remote integration apply: `sync_server_inbound.rs` → `db/backend/adapter.rs` → `apply_signed_integration_changes` | Dedicated signed-apply transaction with envelope authorization, replay reservation, and writes. | Separate from ordinary `SyncEntity` apply. Outbound signed validation in `integration_replication/outbound.rs` is read-only. |
+| Registry and pending replay: `service/runtime/types.rs`, `type_registry/`, `canonical_types/pending/`, `db/objects/` | Registration and replay helpers use savepoints or the service transaction supplied by the caller; pending insertion/replay can share the definition write. | Unknown type-version payloads can be retained and replayed after registration. Registry/schema migration writes are classified below. |
+| Profiles, external references, and local metadata: `data_platform.rs`, `service/runtime/system.rs` | Profile upsert owns a savepoint; external-ref and game local-state writes are caller-owned or share a game-upsert savepoint; `set_sync_kv` uses `with_conn`. | Per-device selective profile controls projection; `object_local_state`, `external_refs`, and sync progress/settings are not ordinary replicated entity payloads. |
+| Maintenance and reset: `db/load/part1.rs`, `db/compact.rs`, `service/runtime/system.rs` | `delete_trashed` uses an entity-delete savepoint; journal compaction deletes superseded sequence references; `clear_all` is an unwrapped dynamic content/progress reset. Backup/restore operates on DB files. | `clear_all` is not mapped to per-record delete semantics and has no enclosing transaction. It preserves system-locked type definitions, integration/auth records, and `usage_sync_heads`. Compaction is journal maintenance, not source-entity deletion. |
+| Bootstrap, schema, and migration: `db/open.rs`, `schema.rs`, `type_registry/`, `canonical_types/migration*/`, `canonical_types/core_task_rewrite.rs` | Schema initialization uses DDL and named savepoints, without one encompassing `open_db` transaction. Registry/migration runners use savepoints; `rewrite_legacy_tasks` uses `unchecked_transaction` after a backup. | Migration ledgers, archives, quarantine, pending-table rebuilds, compatibility columns, and persistent pragmas are not incremental sync writes. |
+| Integration credentials and refresh coordination: `service/runtime/integration.rs`, `db/integration_replication_*.rs` | Publication/lease helpers use immediate transactions; lower-level envelope upsert can be caller-owned. | Credential publication and refresh leases are local integration coordination, distinct from signed replicated content. |
+
+The direct mutation search used for this baseline was:
+
+```sh
+rg -n --glob '*.rs' --glob '!**/tests/**' --glob '!**/*_tests.rs' --glob '!**/tests_*.rs' '(execute(_batch)?\s*\(|INSERT\s+INTO|UPDATE\s+[A-Za-z_][A-Za-z_0-9]*\s+SET|DELETE\s+FROM|REPLACE\s+INTO|ALTER\s+TABLE|CREATE\s+TABLE|DROP\s+TABLE|INSERT\s+OR\s+REPLACE|INSERT\s+OR\s+IGNORE)' core/crates/ark-core/src/db core/crates/ark-core/src/service core/crates/ark-core/src/canonical_types core/crates/ark-core/src/type_registry core/crates/ark-core/src/integration_replication core/crates/ark-core/src/data_platform.rs core/crates/ark-core/src/schema.rs core/crates/ark-core/src/space
+```
+
+It produced 393 lines across 49 files in those roots, including test-only blocks embedded in production files that were inspected and excluded from the classification. Follow-up searches covered `transaction`, `unchecked_transaction`, pragma updates, and backup calls. `data_platform.rs` writers were classified; no production SQL writer was found under `space/`. Sync clients, server handlers, and relay code delegate to the adapter paths above and remain separate protocol owners. This is a scoped source census, not a repository-wide proof. Classify new SQL and transaction APIs, each new `SyncEntity` constructor, and every ordinary/signed apply caller against these groups. Preserve the observed `clear_all` subset and its exception behavior unless its product contract changes.
 
 The extraction's SQLite behavior pin was `cargo nextest run -p ark-core storage_backend` (13 tests) before and after moving the modules. The full crate suite passes after the move; exact commands and exit statuses are in `.audit/modules-receipts.md`.
 
@@ -32,10 +53,4 @@ rg -n 'record_local_upsert|record_local_delete_with_type|handle_broadcast_change
 rg -n '\.apply_entity\(|apply_signed_integration_frame|handle_live_change|handle_signed_integration_frame|SyncChanges|apply_entities\(' core/crates/ark-core/src/{sync_server*,sync_client*,relay_impl_2.rs,service,integration_replication} -g '*.rs'
 ```
 
-Known gap: these searches trace current adapter callers and representative local paths but do not classify all `execute` calls. To extend coverage, search direct mutation statements and classify each table/transaction owner:
-
-```sh
-rg -n 'execute(_batch)?\(|INSERT INTO|UPDATE [[:alnum:]_]+ SET|DELETE FROM' core/crates/ark-core/src/{db,service,canonical_types} -g '*.rs'
-```
-
-KOS-430 separately hardens `with_write_tx` with an immediate rusqlite transaction guard. Regression tests reproduce deferred-COMMIT failure and panic cleanup against the previous helper and pass after the correction. This fixes the existing local helper; local and remote write paths remain separate. Exact verification is recorded in `.audit/transaction-receipts.md`.
+KOS-430 hardened `with_write_tx` with an immediate rusqlite transaction guard. Regression tests reproduce deferred-COMMIT failure and panic cleanup against the previous helper and pass after the correction. This fixes the existing local helper; local and remote write paths remain separate. Exact verification is recorded in `.audit/transaction-receipts.md`.

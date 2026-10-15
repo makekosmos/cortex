@@ -275,6 +275,38 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn request_response_bytes_match_ark_api_v1_fixtures() {
+        #[derive(serde::Deserialize)]
+        struct Fixture {
+            operation: String,
+            params: serde_json::Value,
+            response: String,
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let host = ArkHost::open(dir.path().join("ark.db").to_str().unwrap())
+            .await
+            .unwrap();
+        let fixtures = include_str!("../tests/fixtures/ark-api-v1/responses.jsonl");
+        let mut count = 0;
+        for line in fixtures.lines() {
+            let fixture: Fixture = serde_json::from_str(line).unwrap();
+            let response = host
+                .request(&fixture.operation, fixture.params)
+                .await
+                .unwrap();
+            assert_eq!(
+                serde_json::to_string(&response).unwrap(),
+                fixture.response,
+                "response bytes changed for {}",
+                fixture.operation
+            );
+            count += 1;
+        }
+        assert_eq!(count, 2, "ArkResponse golden corpus is incomplete");
+    }
+
+    #[tokio::test]
     async fn emit_event_reaches_subscribers() {
         let dir = tempfile::tempdir().unwrap();
         let host = ArkHost::open(dir.path().join("ark.db").to_str().unwrap())
