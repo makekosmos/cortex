@@ -1,3 +1,5 @@
+use super::*;
+
 #[test]
 fn expired_lease_gets_a_monotonic_fence_and_refresh_cas() {
     let old = acquire_refresh_lease(None, "integration-a", "node-a", 2, 10, 5).unwrap();

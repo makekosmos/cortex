@@ -300,4 +300,4 @@ fn revocation_and_reauthorization_require_a_higher_epoch() {
     ));
 }
 
-include!("tests_part02.rs");
+mod refresh_lease;
