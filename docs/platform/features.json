@@ -1,6 +1,6 @@
 {
-  "checked": "2026-10-13",
-  "source": "b47f1dce",
+  "checked": "2026-10-15",
+  "source": "a0c29d0",
   "platforms": ["windows", "macos", "linux", "android", "ios"],
   "groups": [
     {
@@ -13,11 +13,11 @@
             "windows": "yes",
             "macos": "yes",
             "linux": "yes",
-            "android": "no",
+            "android": "unverified",
             "ios": "no"
           },
           "note": {
-            "android": "No background daemon with localhost RPC; needs in-process embedding"
+            "android": "In-process engine-mobile (UniFFI) exists; no Android build in CI"
           },
           "boundary": "portable",
           "code": ["runtime/src/engine_api/server.rs", "runtime/src/ws_server.rs"]
@@ -296,7 +296,7 @@
           },
           "note": {
             "windows": "MFT fast path through the privileged service",
-            "macos": "Plain walk; open_file calls xdg-open, which macOS lacks"
+            "macos": "Plain walk, no MFT fast path"
           },
           "boundary": "scattered",
           "code": ["runtime/crates/engine-indexes/src/file_index/scanner.rs#open_file"]
