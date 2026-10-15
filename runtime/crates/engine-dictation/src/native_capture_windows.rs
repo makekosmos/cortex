@@ -7,13 +7,14 @@ use super::native_capture::{CapturedAudio, Session};
 pub(super) fn start(
     capture_id: String,
     level_sink: Option<mpsc::Sender<f32>>,
+    pcm_sink: Option<mpsc::Sender<Vec<i16>>>,
 ) -> Result<(Session, u32, u16), String> {
     let (stop_tx, stop_rx) = mpsc::channel();
     let (ready_tx, ready_rx) = mpsc::channel();
     let join = std::thread::Builder::new()
         .name("mundus-dictation-capture".into())
         .spawn(move || {
-            let result = capture_windows(stop_rx, ready_tx.clone(), level_sink);
+            let result = capture_windows(stop_rx, ready_tx.clone(), level_sink, pcm_sink);
             if let Err(error) = &result {
                 let _ = ready_tx.send(Err(error.clone()));
             }
@@ -60,10 +61,25 @@ fn level_for_ui(rms: f32) -> f32 {
     ((db - FLOOR_DB) / -FLOOR_DB).clamp(0.0, 1.0)
 }
 
+/// LE-байты пакета → i16-сэмплы для streaming-транскрибёра. Должно быть
+/// бит-в-бит тем же, что попадает в WAV (`pcm`), иначе `run_parakeet` не
+/// смэтчит partial по хэшу i16-префикса (`apply_partial`/`hash_pcm16` в
+/// local/backend.rs). Нечётный хвост-байт отбрасываем (в реальных пакетах
+/// byte_count всегда чётный — frames*2).
+fn pcm16_from_le_bytes(bytes: &[u8]) -> Vec<i16> {
+    bytes
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|pair| i16::from_le_bytes(*pair))
+        .collect()
+}
+
 fn capture_windows(
     stop_rx: mpsc::Receiver<()>,
     ready_tx: mpsc::Sender<Result<(u32, u16), String>>,
     level_sink: Option<mpsc::Sender<f32>>,
+    pcm_sink: Option<mpsc::Sender<Vec<i16>>>,
 ) -> Result<CapturedAudio, String> {
     use std::ptr::null_mut;
     use windows::Win32::Media::Audio::{
@@ -136,6 +152,11 @@ fn capture_windows(
             let byte_count = frames as usize * 2;
             if flags & AUDCLNT_BUFFERFLAGS_SILENT.0 as u32 != 0 {
                 pcm.resize(pcm.len() + byte_count, 0);
+                // Те же `frames` нулей, что легли в WAV — тишина тоже часть
+                // префикса, который матчится по хэшу.
+                if let Some(sink) = &pcm_sink {
+                    let _ = sink.send(vec![0i16; frames as usize]);
+                }
                 if let Some(sink) = &level_sink {
                     if last_level_emit.elapsed() >= std::time::Duration::from_millis(30) {
                         last_level_emit = std::time::Instant::now();
@@ -151,6 +172,9 @@ fn capture_windows(
                     }
                 }
                 pcm.extend_from_slice(bytes);
+                if let Some(sink) = &pcm_sink {
+                    let _ = sink.send(pcm16_from_le_bytes(bytes));
+                }
             }
             unsafe { capture.ReleaseBuffer(frames) }.map_err(|_| "capture_failed".to_string())?;
             packet_frames =
@@ -191,4 +215,23 @@ fn wav_header(
     out.extend_from_slice(&data_len.to_le_bytes());
     out.extend_from_slice(pcm);
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::pcm16_from_le_bytes;
+
+    #[test]
+    fn pcm16_bytes_decode_little_endian() {
+        let bytes = [0x00, 0x80, 0xFF, 0x7F, 0x01, 0x00];
+        assert_eq!(pcm16_from_le_bytes(&bytes), vec![-32768, 32767, 1]);
+    }
+
+    #[test]
+    fn pcm16_drops_trailing_odd_byte() {
+        let bytes = [0x34, 0x12, 0xAB];
+        assert_eq!(pcm16_from_le_bytes(&bytes), vec![0x1234]);
+        assert!(pcm16_from_le_bytes(&[0xAB]).is_empty());
+        assert!(pcm16_from_le_bytes(&[]).is_empty());
+    }
 }
