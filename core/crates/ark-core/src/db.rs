@@ -9,9 +9,11 @@ include!("db/load.rs");
 mod backend;
 mod command;
 pub(crate) use backend::SqliteObjectWriteSession;
+pub(crate) use backend::SqliteUsageWriteSession;
 pub use backend::{delete_tag, SqliteStorageBackend};
 pub(crate) use command::{
     AuthenticatedCoreTaskWrite, CommandContext, DbHandle, LocalCoreTaskWrite,
+    LocalUsageWriteCommand,
 };
 include!("db/integration_replication_common.rs");
 include!("db/integration_replication_records.rs");

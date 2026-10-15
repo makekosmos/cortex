@@ -1,23 +1,43 @@
 use super::*;
 
+async fn submit_local_usage_write(
+    state: &ServiceState,
+    device_id: String,
+    write: crate::application::usage::LocalUsageWrite,
+) -> Result<Vec<SyncEntity>, String> {
+    let mutations = get_db_handle(state)?
+        .submit(
+            db::CommandContext::engine(),
+            db::LocalUsageWriteCommand::new(device_id, write),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok(mutations
+        .into_iter()
+        .map(|mutation| {
+            make_sync_entity(
+                mutation.entity_type,
+                &mutation.id,
+                mutation.data,
+                mutation.hlc,
+                mutation.deleted,
+            )
+        })
+        .collect())
+}
+
 pub(super) async fn upsert_usage_session(
     state: &Arc<ServiceState>,
     usage_session: UsageSession,
     device_id: Option<String>,
 ) -> Result<Value, String> {
-    let entity = with_write_tx(state, |conn| {
-        db::ensure_usage_sequence_migrated(conn, &local_write_device_id(device_id.clone()))?;
-        db::upsert_usage_session(conn, &usage_session)?;
-        let hlc = record_local_upsert(conn, "usage_session", &usage_session.id, device_id)?;
-        Ok(make_sync_entity(
-            "usage_session",
-            &usage_session.id,
-            serde_json::to_value(&usage_session).unwrap_or(json!({})),
-            hlc,
-            None,
-        ))
-    })?;
-    maybe_broadcast_local_change(state, entity).await;
+    let entities = submit_local_usage_write(
+        state,
+        local_write_device_id(device_id),
+        crate::application::usage::LocalUsageWrite::UpsertSession(usage_session),
+    )
+    .await?;
+    maybe_broadcast_local_changes(state, entities).await;
     Ok(json!(true))
 }
 
@@ -26,19 +46,13 @@ pub(super) async fn delete_usage_session(
     id: String,
     device_id: Option<String>,
 ) -> Result<Value, String> {
-    let entity = with_write_tx(state, |conn| {
-        db::ensure_usage_sequence_migrated(conn, &local_write_device_id(device_id.clone()))?;
-        db::delete_usage_session(conn, &id)?;
-        let hlc = record_local_delete(conn, "usage_session", &id, device_id)?;
-        Ok(make_sync_entity(
-            "usage_session",
-            &id,
-            json!({}),
-            hlc,
-            Some(true),
-        ))
-    })?;
-    maybe_broadcast_local_change(state, entity).await;
+    let entities = submit_local_usage_write(
+        state,
+        local_write_device_id(device_id),
+        crate::application::usage::LocalUsageWrite::DeleteSession(id),
+    )
+    .await?;
+    maybe_broadcast_local_changes(state, entities).await;
     Ok(json!(true))
 }
 
@@ -47,19 +61,13 @@ pub(super) async fn upsert_usage_event(
     usage_event: UsageEvent,
     device_id: Option<String>,
 ) -> Result<Value, String> {
-    let entity = with_write_tx(state, |conn| {
-        db::ensure_usage_sequence_migrated(conn, &local_write_device_id(device_id.clone()))?;
-        db::upsert_usage_event(conn, &usage_event)?;
-        let hlc = record_local_upsert(conn, "usage_event", &usage_event.id, device_id)?;
-        Ok(make_sync_entity(
-            "usage_event",
-            &usage_event.id,
-            serde_json::to_value(&usage_event).unwrap_or(json!({})),
-            hlc,
-            None,
-        ))
-    })?;
-    maybe_broadcast_local_change(state, entity).await;
+    let entities = submit_local_usage_write(
+        state,
+        local_write_device_id(device_id),
+        crate::application::usage::LocalUsageWrite::UpsertEvent(usage_event),
+    )
+    .await?;
+    maybe_broadcast_local_changes(state, entities).await;
     Ok(json!(true))
 }
 
@@ -68,19 +76,13 @@ pub(super) async fn delete_usage_event(
     id: String,
     device_id: Option<String>,
 ) -> Result<Value, String> {
-    let entity = with_write_tx(state, |conn| {
-        db::ensure_usage_sequence_migrated(conn, &local_write_device_id(device_id.clone()))?;
-        db::delete_usage_event(conn, &id)?;
-        let hlc = record_local_delete(conn, "usage_event", &id, device_id)?;
-        Ok(make_sync_entity(
-            "usage_event",
-            &id,
-            json!({}),
-            hlc,
-            Some(true),
-        ))
-    })?;
-    maybe_broadcast_local_change(state, entity).await;
+    let entities = submit_local_usage_write(
+        state,
+        local_write_device_id(device_id),
+        crate::application::usage::LocalUsageWrite::DeleteEvent(id),
+    )
+    .await?;
+    maybe_broadcast_local_changes(state, entities).await;
     Ok(json!(true))
 }
 
@@ -88,27 +90,12 @@ pub(super) async fn upsert_usage_span(
     state: &Arc<ServiceState>,
     usage_span: UsageSpanWrite,
 ) -> Result<Value, String> {
-    let entities = with_write_tx(state, |conn| {
-        db::ensure_usage_sequence_migrated(conn, &usage_span.device_id)?;
-        db::upsert_usage_span(conn, &usage_span)?
-            .into_iter()
-            .map(|day| {
-                let hlc = record_local_upsert(
-                    conn,
-                    "usage_day",
-                    &day.id,
-                    Some(usage_span.device_id.clone()),
-                )?;
-                Ok(make_sync_entity(
-                    "usage_day",
-                    &day.id,
-                    serde_json::to_value(&day).unwrap_or(json!({})),
-                    hlc,
-                    None,
-                ))
-            })
-            .collect::<Result<Vec<_>, String>>()
-    })?;
+    let entities = submit_local_usage_write(
+        state,
+        usage_span.device_id.clone(),
+        crate::application::usage::LocalUsageWrite::UpsertSpan(usage_span),
+    )
+    .await?;
     let ids = entities
         .iter()
         .map(|entity| entity.id.clone())

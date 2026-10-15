@@ -145,7 +145,7 @@ pub struct UsageDay {
     pub updated_at: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UsageSpanWrite {
     pub device_id: String,

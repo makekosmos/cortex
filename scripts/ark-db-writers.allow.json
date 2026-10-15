@@ -259,7 +259,7 @@
     {
       "path": "core/crates/ark-core/src/service/runtime/usage.rs",
       "category": "service transaction boundary",
-      "count": 6
+      "count": 1
     },
     {
       "path": "core/crates/ark-core/src/type_registry/part01.rs",

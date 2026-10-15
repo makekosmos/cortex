@@ -61,6 +61,7 @@ mod request_config;
 mod snapshot_restore;
 mod sync_lifecycle;
 mod sync_ticket_pending;
+mod usage_commands;
 mod write_tx;
 
 /// Выставляет capturing-транспорт и выставляет SyncRuntime в `state.sync`.
