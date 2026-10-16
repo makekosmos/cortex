@@ -2,6 +2,8 @@
 
 This is an isolated behavior experiment, not a KOS-423 implementation or a library decision. The standalone package at [`experiments/kos423-merge-harness`](../../experiments/kos423-merge-harness/) pins Automerge 0.12.0, Loro 1.16.2, and Yrs 0.28.0 in its own `Cargo.lock`; its nested `[workspace]` keeps it out of Cortex's workspace. Reproduce from the repository root:
 
+The experiment package and initial report were added in commit `b758db43`.
+
 ```sh
 cargo test --locked --manifest-path experiments/kos423-merge-harness/Cargo.toml
 cargo run --locked --manifest-path experiments/kos423-merge-harness/Cargo.toml
