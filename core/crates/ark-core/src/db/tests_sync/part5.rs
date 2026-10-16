@@ -32,6 +32,14 @@
             )
             .unwrap();
         assert!(payload.contains("futurePayload"));
+        let feed_rows: i64 = guard
+            .query_row(
+                "SELECT COUNT(*) FROM ark_committed_feed WHERE entity_id='remote-unknown'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(feed_rows, 0, "pending data is not yet a committed change");
         drop(guard);
         let replayed = {
             let guard = conn.lock().unwrap();

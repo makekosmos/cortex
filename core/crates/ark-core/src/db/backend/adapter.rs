@@ -175,6 +175,9 @@ impl SyncEntityReadPort for SqliteStorageBackend {
             .next()
     }
 }
+
+include!("adapter/committed_feed.rs");
+
 #[async_trait::async_trait]
 impl SyncEntityMutationPort for SqliteStorageBackend {
     async fn apply_entity(&self, entity: &SyncEntity) -> Result<(), String> {
@@ -249,12 +252,43 @@ impl AuthenticatedEntityBackend for SqliteStorageBackend {
         entity: &SyncEntity,
         authenticated_peer_id: &str,
     ) -> Result<(), String> {
+        let inbox_message_id = crate::db::entity_inbox_message_id(
+            authenticated_peer_id,
+            &entity.entity_type,
+            &entity.id,
+            &entity.hlc,
+        );
+        self.apply_authenticated_entity_with_id(entity, authenticated_peer_id, &inbox_message_id)
+            .await
+    }
+
+    async fn apply_authenticated_entity_with_id(
+        &self,
+        entity: &SyncEntity,
+        authenticated_peer_id: &str,
+        inbox_message_id: &str,
+    ) -> Result<(), String> {
+        let inbox_payload_json =
+            serde_json::to_string(entity).map_err(|error| error.to_string())?;
+        self.db
+            .submit(
+                CommandContext::authenticated_peer(authenticated_peer_id.to_owned()),
+                crate::db::ReceiveInboxReceiptCommand::new(
+                    authenticated_peer_id.to_owned(),
+                    inbox_message_id.to_owned(),
+                    inbox_payload_json.clone(),
+                ),
+            )
+            .await
+            .map_err(|error| error.to_string())?;
         if is_full_core_task(entity) {
             let command = AuthenticatedCoreTaskWrite::new(
                 entity.id.clone(),
                 entity.hlc.clone(),
                 entity.origin_device_id.clone(),
                 entity.data.clone(),
+                inbox_message_id.to_owned(),
+                inbox_payload_json,
             );
             return self
                 .db
@@ -270,7 +304,10 @@ impl AuthenticatedEntityBackend for SqliteStorageBackend {
             .db
             .submit(
                 CommandContext::authenticated_peer(authenticated_peer_id.to_owned()),
-                crate::db::ApplyAuthenticatedSyncEntityCommand::new(entity.clone()),
+                crate::db::ApplyAuthenticatedSyncEntityCommand::with_message_id(
+                    entity.clone(),
+                    inbox_message_id.to_owned(),
+                ),
             )
             .await
             .map_err(|error| error.to_string())?;

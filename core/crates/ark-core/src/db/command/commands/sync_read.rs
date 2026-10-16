@@ -1,7 +1,12 @@
 use super::super::{sealed, CommandClass, CommandContext, DbError, DbQuery};
+use crate::application::sync_storage::CommittedFeedDeliveryPage;
 use crate::application::sync_storage::SyncReadClass;
 use crate::data_platform::SelectiveSyncProfile;
-use crate::db::{get_sync_kv, usage_log_complete_through, SqliteStorageBackend};
+use crate::db::{
+    committed_feed_snapshot, get_sync_kv, read_committed_feed_delivery_page,
+    read_committed_feed_page, usage_log_complete_through, CommittedFeedEntry, FeedSnapshot,
+    SqliteStorageBackend,
+};
 use crate::types::{SyncEntity, VersionVector};
 use rusqlite::Connection;
 use serde::Serialize;
@@ -144,6 +149,124 @@ impl DbQuery for UsageCompleteThroughQuery {
         }
         context.require_sync_peer_or_system()?;
         Ok(usage_log_complete_through(connection, None).unwrap_or_default())
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct CommittedFeedSnapshotQuery;
+
+impl sealed::Sealed for CommittedFeedSnapshotQuery {}
+
+impl DbQuery for CommittedFeedSnapshotQuery {
+    type Output = FeedSnapshot;
+
+    fn class(&self) -> CommandClass {
+        CommandClass::SyncLive
+    }
+
+    fn weight(&self) -> usize {
+        1
+    }
+
+    fn read(
+        self,
+        context: &CommandContext,
+        connection: &Connection,
+    ) -> Result<Self::Output, DbError> {
+        context.require_sync_peer_or_system()?;
+        committed_feed_snapshot(connection).map_err(DbError::Storage)
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct CommittedFeedPageQuery {
+    after_position: i64,
+    high_watermark: i64,
+    limit: usize,
+}
+
+impl CommittedFeedPageQuery {
+    pub(crate) fn new(after_position: i64, high_watermark: i64, limit: usize) -> Self {
+        Self {
+            after_position,
+            high_watermark,
+            limit,
+        }
+    }
+}
+
+impl sealed::Sealed for CommittedFeedPageQuery {}
+
+impl DbQuery for CommittedFeedPageQuery {
+    type Output = Vec<CommittedFeedEntry>;
+
+    fn class(&self) -> CommandClass {
+        CommandClass::SyncLive
+    }
+
+    fn weight(&self) -> usize {
+        std::mem::size_of::<Self>()
+    }
+
+    fn read(
+        self,
+        context: &CommandContext,
+        connection: &Connection,
+    ) -> Result<Self::Output, DbError> {
+        context.require_sync_peer_or_system()?;
+        read_committed_feed_page(
+            connection,
+            self.after_position,
+            self.high_watermark,
+            self.limit,
+        )
+        .map_err(DbError::Storage)
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct CommittedFeedDeliveryPageQuery {
+    after_position: i64,
+    high_watermark: i64,
+    limit: usize,
+}
+
+impl CommittedFeedDeliveryPageQuery {
+    pub(crate) fn new(after_position: i64, high_watermark: i64, limit: usize) -> Self {
+        Self {
+            after_position,
+            high_watermark,
+            limit,
+        }
+    }
+}
+
+impl sealed::Sealed for CommittedFeedDeliveryPageQuery {}
+
+impl DbQuery for CommittedFeedDeliveryPageQuery {
+    type Output = CommittedFeedDeliveryPage;
+
+    fn class(&self) -> CommandClass {
+        CommandClass::SyncLive
+    }
+
+    fn weight(&self) -> usize {
+        std::mem::size_of::<Self>()
+    }
+
+    fn read(
+        self,
+        context: &CommandContext,
+        connection: &Connection,
+    ) -> Result<Self::Output, DbError> {
+        context.require_sync_peer_or_system()?;
+        read_committed_feed_delivery_page(
+            connection,
+            self.after_position,
+            self.high_watermark,
+            self.limit,
+        )
+        .map_err(DbError::Storage)
     }
 }
 

@@ -249,9 +249,7 @@ async fn usage_entities_sync_between_two_servers() {
         4,
     );
     storage_a.apply_entity(&live_event).await.unwrap();
-    server_a
-        .broadcast_live_change(live_event.clone(), None)
-        .await;
+    server_a.broadcast_live_change(None).await;
 
     tokio::time::sleep(Duration::from_millis(500)).await;
 

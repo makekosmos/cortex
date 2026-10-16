@@ -28,7 +28,7 @@ pub fn open_db(path: &str) -> Result<Connection, String> {
     let conn = Connection::open(path).map_err(|e| e.to_string())?;
     conn.execute_batch(
         "PRAGMA journal_mode = WAL;
-         PRAGMA synchronous = NORMAL;
+         PRAGMA synchronous = FULL;
          PRAGMA foreign_keys = ON;
          PRAGMA busy_timeout = 5000;",
     )
@@ -85,6 +85,7 @@ pub fn init_schema_prerequisites_for_phase3(conn: &Connection) -> Result<(), Str
         .map_err(|e| e.to_string())?;
     conn.execute_batch(CREATE_TABLES)
         .map_err(|e| e.to_string())?;
+    super::committed_feed::bootstrap_committed_feed_heads(conn)?;
     ensure_integration_credential_fence_column(conn)?;
     ensure_authorized_node_transport_key(conn)?;
     ensure_sync_tombstone_type_id(conn)?;

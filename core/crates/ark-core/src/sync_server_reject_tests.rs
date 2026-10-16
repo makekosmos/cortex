@@ -91,7 +91,8 @@ pub(super) mod reject_tests {
                 app_version: None,
                 authenticated: true,
                 sync_complete: true,
-                queued_live_changes: vec![],
+                in_flight_feed_position: None,
+                pending_initial_snapshot_ack: None,
                 tx,
             },
         );

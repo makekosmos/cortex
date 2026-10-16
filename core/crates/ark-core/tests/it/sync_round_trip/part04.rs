@@ -226,7 +226,7 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
     );
 
     storage_a.set_selective_sync_profile(Some(data_platform::SelectiveSyncProfile::default()));
-    server_a.broadcast_live_change(game.clone(), None).await;
+    server_a.broadcast_live_change(None).await;
     tokio::time::sleep(Duration::from_millis(200)).await;
     assert!(storage_b
         .load_entities(&HashMap::new())
@@ -260,7 +260,7 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
     let mut deleted_game = selective_object_entity("sync-game", "com.kosmos.game", "Sync game", 6);
     deleted_game.deleted = Some(true);
     storage_a.apply_entity(&deleted_game).await.unwrap();
-    server_a.broadcast_live_change(deleted_game, None).await;
+    server_a.broadcast_live_change(None).await;
     tokio::time::sleep(Duration::from_millis(200)).await;
     let tombstones_b = storage_b.load_entities(&HashMap::new()).await.unwrap();
     let game_tombstone = tombstones_b

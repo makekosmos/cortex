@@ -1,5 +1,9 @@
 use super::*;
 
+#[path = "sync_server_messages/live_messages.rs"]
+mod live_messages;
+use live_messages::handle_live_message;
+
 pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: LanSyncMessage) {
     let MessageContext {
         peers,
@@ -88,6 +92,16 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
             };
             if !peer_device_id.is_empty() && removed.iter().any(|id| id == &peer_device_id) {
                 eprintln!("{TAG} Rejecting blocked peer: {peer_device_id}");
+                reject_hello(peers, peer_id).await;
+                return;
+            }
+
+            let generation = storage.selective_sync_policy_generation();
+            if let Err(error) = storage
+                .begin_outbound_policy(&peer_device_id, generation)
+                .await
+            {
+                eprintln!("{TAG} outbound snapshot baseline failed: {error}");
                 reject_hello(peers, peer_id).await;
                 return;
             }
@@ -326,10 +340,17 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                     return;
                 }
             }
+            let terminal_batch_id = generate_id();
+            {
+                let mut peers_guard = peers.lock().await;
+                if let Some(peer) = peers_guard.get_mut(&peer_id) {
+                    peer.pending_initial_snapshot_ack = Some(terminal_batch_id.clone());
+                }
+            }
             send_msg(
                 &tx,
                 &LanSyncMessage::SyncChanges {
-                    batch_id: generate_id(),
+                    batch_id: terminal_batch_id,
                     entities: vec![],
                     is_last: true,
                     origin_device_id: None,
@@ -337,27 +358,6 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                         .then_some(complete_through),
                 },
             );
-
-            // Mark sync complete
-            {
-                let mut peers_guard = peers.lock().await;
-                if let Some(peer) = peers_guard.get_mut(&peer_id) {
-                    peer.sync_complete = true;
-                    // Flush queued live changes
-                    let queued = std::mem::take(&mut peer.queued_live_changes);
-                    for entity in queued {
-                        let change_id = generate_id();
-                        send_msg(
-                            &peer.tx,
-                            &LanSyncMessage::LiveChange {
-                                change_id,
-                                entity,
-                                origin_device_id: None,
-                            },
-                        );
-                    }
-                }
-            }
         }
 
         LanSyncMessage::SyncChanges {
@@ -405,8 +405,7 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                             }
 
                             // Broadcast to other peers
-                            broadcast_to_others(peers, &entity.clone(), Some(&peer_device_id))
-                                .await;
+                            broadcast_to_others(storage, peers, Some(&peer_device_id)).await;
                         }
                         Err(e) => {
                             eprintln!(
@@ -437,40 +436,16 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
             }
         }
 
-        LanSyncMessage::SyncAck { .. } => {
-            // ACK received -- in a full implementation, resolve pending ACK timers
+        message @ (LanSyncMessage::SyncAck { .. }
+        | LanSyncMessage::SignedIntegrationFrame { .. }
+        | LanSyncMessage::SignedIntegrationAck { .. }
+        | LanSyncMessage::LiveChange { .. }
+        | LanSyncMessage::LiveAck { .. }
+        | LanSyncMessage::PeerList { .. }
+        | LanSyncMessage::Ping { .. }
+        | LanSyncMessage::Pong { .. }
+        | LanSyncMessage::PairingRejected { .. }) => {
+            handle_live_message(ctx, peer_id, message).await;
         }
-
-        LanSyncMessage::SignedIntegrationFrame { frame } => {
-            sync_server_inbound::handle_signed_integration_frame(ctx, peer_id, frame).await
-        }
-
-        LanSyncMessage::SignedIntegrationAck { .. } => {}
-
-        LanSyncMessage::LiveChange {
-            change_id, entity, ..
-        } => sync_server_inbound::handle_live_change(ctx, peer_id, change_id, entity).await,
-
-        LanSyncMessage::LiveAck { .. } => {}
-
-        LanSyncMessage::PeerList {
-            peers: incoming_peers,
-        } => sync_server_inbound::handle_peer_list(ctx, peer_id, incoming_peers).await,
-
-        LanSyncMessage::Ping { ts } => {
-            let tx = {
-                let peers_guard = peers.lock().await;
-                peers_guard.get(&peer_id).map(|p| p.tx.clone())
-            };
-            if let Some(tx) = tx {
-                send_msg(&tx, &LanSyncMessage::Pong { ts });
-            }
-        }
-
-        LanSyncMessage::Pong { .. } => {}
-
-        // Pairing consent lives on the addressed (iroh) transport; a
-        // rejection over the WS path is meaningless — drop it.
-        LanSyncMessage::PairingRejected { .. } => {}
     }
 }

@@ -198,14 +198,11 @@ pub(super) async fn broadcast_local_change(state: &ServiceState, entity: SyncEnt
         }
     };
 
-    runtime
-        .server
-        .broadcast_live_change(entity.clone(), None)
-        .await;
+    runtime.server.broadcast_live_change(None).await;
 
     let clients: Vec<_> = runtime.clients.lock().await.values().cloned().collect();
     for client in clients {
-        client.broadcast_live_change(entity.clone()).await;
+        client.broadcast_live_change().await;
     }
     if let Some(relay) = runtime.relay.as_ref() {
         // Ошибку отправки логируем, но не пробрасываем — live broadcast best-effort.

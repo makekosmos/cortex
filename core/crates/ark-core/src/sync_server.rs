@@ -64,7 +64,8 @@ struct PeerState {
     app_version: Option<String>,
     authenticated: bool,
     sync_complete: bool,
-    queued_live_changes: Vec<SyncEntity>,
+    in_flight_feed_position: Option<i64>,
+    pending_initial_snapshot_ack: Option<String>,
     tx: mpsc::UnboundedSender<Message>,
 }
 
@@ -253,29 +254,26 @@ async fn reject_hello(peers: &Mutex<HashMap<usize, PeerState>>, peer_id: usize) 
 // ---------------------------------------------------------------------------
 
 async fn broadcast_to_others(
+    storage: &Arc<dyn SyncRuntimeStorage>,
     peers: &Arc<Mutex<HashMap<usize, PeerState>>>,
-    entity: &SyncEntity,
     exclude_device_id: Option<&str>,
 ) {
-    let change_id = generate_id();
-    let msg = LanSyncMessage::LiveChange {
-        change_id,
-        entity: entity.clone(),
-        origin_device_id: None,
+    let peer_ids = {
+        let peers_guard = peers.lock().await;
+        peers_guard
+            .iter()
+            .filter(|(_, peer)| {
+                peer.authenticated
+                    && peer.sync_complete
+                    && exclude_device_id != Some(peer.device_id.as_str())
+            })
+            .map(|(peer_id, _)| *peer_id)
+            .collect::<Vec<_>>()
     };
-    let json = serialize_message(&msg);
-
-    let peers_guard = peers.lock().await;
-    for peer in peers_guard.values() {
-        if !peer.authenticated || !peer.sync_complete {
-            continue;
+    for peer_id in peer_ids {
+        if let Err(error) = sync_server_peers::pump_committed_feed(storage, peers, peer_id).await {
+            eprintln!("{TAG} committed feed wake failed: {error}");
         }
-        if let Some(exclude) = exclude_device_id {
-            if peer.device_id == exclude {
-                continue;
-            }
-        }
-        let _ = peer.tx.send(Message::Text(json.clone().into()));
     }
 }
 

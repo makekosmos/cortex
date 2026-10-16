@@ -5,7 +5,10 @@ use crate::types::{ArkObjectWrite, ObjectLink};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::{json, Value};
 
-pub fn apply_legacy_compat_entity(conn: &Connection, entity: &SyncEntity) -> Result<(), String> {
+pub fn apply_legacy_compat_entity(
+    conn: &Connection,
+    entity: &SyncEntity,
+) -> Result<crate::application::sync_storage::InboundApplyOutcome, String> {
     let current: Option<String> = conn
         .query_row(
             "SELECT hlc FROM object_sync_versions WHERE object_id=?1",
@@ -18,7 +21,7 @@ pub fn apply_legacy_compat_entity(conn: &Connection, entity: &SyncEntity) -> Res
         .as_deref()
         .is_some_and(|hlc| HLC::compare_str(&entity.hlc, hlc) != std::cmp::Ordering::Greater)
     {
-        return Ok(());
+        return Ok(crate::application::sync_storage::InboundApplyOutcome::Stale);
     }
     let legacy_type = match entity.entity_type.as_str() {
         "todo" => "task_obj",
@@ -95,16 +98,20 @@ pub fn apply_legacy_compat_entity(conn: &Connection, entity: &SyncEntity) -> Res
         params![entity.id, entity.hlc],
     )
     .map_err(|e| e.to_string())?;
-    db::delete_sync_tombstone(conn, &entity.id)
+    db::delete_sync_tombstone(conn, &entity.id)?;
+    Ok(crate::application::sync_storage::InboundApplyOutcome::Applied)
 }
 
-pub fn apply_canonical_object_entity(conn: &Connection, entity: &SyncEntity) -> Result<(), String> {
+pub fn apply_canonical_object_entity(
+    conn: &Connection,
+    entity: &SyncEntity,
+) -> Result<crate::application::sync_storage::InboundApplyOutcome, String> {
     let current = db::get_object_revision(conn, &entity.id)?;
     if current
         .as_deref()
         .is_some_and(|hlc| HLC::compare_str(&entity.hlc, hlc) != std::cmp::Ordering::Greater)
     {
-        return Ok(());
+        return Ok(crate::application::sync_storage::InboundApplyOutcome::Stale);
     }
     conn.execute_batch("SAVEPOINT canonical_sync_object")
         .map_err(|e| e.to_string())?;
@@ -202,6 +209,7 @@ pub fn apply_canonical_object_entity(conn: &Connection, entity: &SyncEntity) -> 
     match result {
         Ok(()) => conn
             .execute_batch("RELEASE canonical_sync_object")
+            .map(|()| crate::application::sync_storage::InboundApplyOutcome::Applied)
             .map_err(|e| e.to_string()),
         Err(error) => {
             let _ = conn

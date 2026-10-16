@@ -1,5 +1,6 @@
 mod backend;
 mod command;
+mod committed_feed;
 mod compact;
 mod legacy;
 mod load;
@@ -9,6 +10,10 @@ mod snapshot;
 mod sync;
 mod usage;
 
+pub use crate::application::sync_storage::{
+    CommittedFeedDeliveryPage, CommittedFeedEntry, FeedSnapshot, InitialSnapshot, OutboundAck,
+    OutboundProgress,
+};
 pub(crate) use backend::SqliteLegacyMutationSession;
 pub(crate) use backend::SqliteObjectMutationSession;
 pub(crate) use backend::SqliteObjectWriteSession;
@@ -21,18 +26,27 @@ pub(crate) use command::{
     AcquireIntegrationRefreshLeaseCommand, ApplyAuthenticatedSyncEntityCommand,
     ApplySignedIntegrationFrameCommand, ApplySyncEntityCommand, AuthenticatedCoreTaskWrite,
     AuthorizedTransportKeyQuery, CanonicalGameUpsertCommand, ClearAllCommand, CommandClass,
-    CommandContext, CompactUsageSyncLogCommand, DbHandle, DbOwner, DeleteObjectLinkCommand,
+    CommandContext, CommittedFeedDeliveryPageQuery, CommittedFeedPageQuery, CommittedFeedProgress,
+    CommittedFeedProgressCommand, CommittedFeedProgressOperation, CommittedFeedSnapshotQuery,
+    CompactUsageSyncLogCommand, DbHandle, DbOwner, DeleteObjectLinkCommand,
     DeleteObjectTypeCommand, DeleteTrashedCommand, EnsureUsageSequenceMigratedCommand,
     GetSyncKeyValueQuery, IdentityErrorStyle, IntegrationReadQuery, LegacyDeleteCommand,
     LegacyGraphWriteCommand, LoadEntitiesQuery, LoadOrGenerateIrohSecretKeyCommand,
     LocalBookCoverCommand, LocalCoreTaskWrite, LocalObjectDeleteCommand, LocalObjectUpsertCommand,
     LocalUsageWriteCommand, ObjectReadQuery, PersistIntegrationGrantCommand,
     PersistNodeAuthorizationCommand, PublishIntegrationCredentialEnvelopeCommand,
-    RegisterPackageTypesCommand, ReplaceObjectLinkCommand, RestoreSnapshotCommand,
-    SetLocalSyncKeyValueCommand, SetSyncKeyValueCommand, SystemReadQuery, TrackedAppDeleteCommand,
-    TrackedAppUpsertCommand, TypeReadQuery, UpsertExternalRefCommand, UpsertObjectLinkCommand,
-    UpsertObjectTypeCommand, UsageCompleteThroughQuery, UsageReadQuery,
+    ReceiveInboxReceiptCommand, RegisterPackageTypesCommand, ReplaceObjectLinkCommand,
+    RestoreSnapshotCommand, SetLocalSyncKeyValueCommand, SetSyncKeyValueCommand, SystemReadQuery,
+    TrackedAppDeleteCommand, TrackedAppUpsertCommand, TypeReadQuery, UpsertExternalRefCommand,
+    UpsertObjectLinkCommand, UpsertObjectTypeCommand, UsageCompleteThroughQuery, UsageReadQuery,
     ValidateOutboundSignedFrameQuery,
+};
+pub use committed_feed::{
+    acknowledge_outbound, append_committed_change, begin_outbound_policy,
+    bootstrap_committed_feed_heads, committed_feed_snapshot, complete_outbound_snapshot,
+    entity_inbox_message_id, load_outbound_progress, read_committed_feed_delivery_page,
+    read_committed_feed_page, receive_inbox_payload, record_outbound_scan, set_inbox_state,
+    InboxState, MAX_FEED_PAGE_SIZE, MAX_INBOX_PAYLOAD_BYTES,
 };
 pub use compact::{
     compact_usage_sync_log, usage_log_complete_through, USAGE_SYNC_LOG_RETENTION_DAYS,

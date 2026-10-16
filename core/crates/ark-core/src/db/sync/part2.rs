@@ -54,6 +54,15 @@ pub(in crate::db) fn record_usage_sequence(
     }
     vector.insert(cursor_key, contiguous.to_string());
     vector.remove(entity_id);
+    super::committed_feed::append_committed_change(
+        conn,
+        entity_type,
+        entity_id,
+        hlc,
+        deleted,
+        Some(device_id),
+        Some(seq),
+    )?;
     set_sync_kv(
         conn,
         VERSION_VECTOR_KEY,
@@ -188,6 +197,15 @@ pub fn bump_sync_version_vector(
         )
         .map_err(|e| e.to_string())?;
         record_usage_sequence(conn, entity_type, entity_id, device_id, seq, &hlc, deleted)?;
+        super::committed_feed::append_committed_change(
+            conn,
+            entity_type,
+            entity_id,
+            &hlc,
+            deleted,
+            Some(device_id),
+            Some(seq),
+        )?;
         return Ok(hlc);
     }
 
@@ -232,6 +250,15 @@ pub fn bump_sync_version_vector(
         VERSION_VECTOR_KEY,
         &serde_json::to_string(&vector).map_err(|e| e.to_string())?,
     )?;
+    super::committed_feed::append_committed_change(
+        conn,
+        entity_type,
+        entity_id,
+        &hlc,
+        deleted,
+        Some(device_id),
+        None,
+    )?;
     Ok(hlc)
 }
 
@@ -256,6 +283,15 @@ pub fn record_remote_sync_revision(
             conn,
             VERSION_VECTOR_KEY,
             &serde_json::to_string(&vector).map_err(|error| error.to_string())?,
+        )?;
+        super::committed_feed::append_committed_change(
+            conn,
+            "object",
+            entity_id,
+            incoming_hlc,
+            false,
+            Some(&HLC::from_string(incoming_hlc).device_id),
+            None,
         )?;
     }
     Ok(())

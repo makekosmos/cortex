@@ -138,7 +138,7 @@ async fn round_trip_sync_between_two_servers() {
     // ---------------------------------------------------------------------
     let live = todo_entity("entity-a-2", "Live from A", "device-a", 2);
     storage_a.apply_entity(&live).await.unwrap();
-    server_a.broadcast_live_change(live.clone(), None).await;
+    server_a.broadcast_live_change(None).await;
 
     tokio::time::sleep(Duration::from_millis(500)).await;
 

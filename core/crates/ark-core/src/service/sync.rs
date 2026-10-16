@@ -215,15 +215,12 @@ pub(super) async fn handle_broadcast_change(
     runtime.storage.apply_entity(&entity).await?;
 
     // Broadcast via the inbound server sessions.
-    runtime
-        .server
-        .broadcast_live_change(entity.clone(), None)
-        .await;
+    runtime.server.broadcast_live_change(None).await;
 
     // Broadcast via outbound clients.
     let clients: Vec<_> = runtime.clients.lock().await.values().cloned().collect();
     for client in clients {
-        client.broadcast_live_change(entity.clone()).await;
+        client.broadcast_live_change().await;
     }
     if let Some(relay) = runtime.relay.as_ref() {
         relay.broadcast_live_change(entity.clone())?;

@@ -1,4 +1,19 @@
+use crate::application::sync_storage::CommittedFeedPort;
 use crate::replication_storage::AuthenticatedEntityBackend;
+use std::time::Instant;
+
+fn expect_feed_deliveries(
+    page: crate::application::sync_storage::CommittedFeedDeliveryPage,
+) -> Vec<crate::application::sync_storage::CommittedFeedDelivery> {
+    match page {
+        crate::application::sync_storage::CommittedFeedDeliveryPage::Deliveries(deliveries) => {
+            deliveries
+        }
+        crate::application::sync_storage::CommittedFeedDeliveryPage::TooLarge { .. } => {
+            panic!("test feed entity exceeded the bounded projection size")
+        }
+    }
+}
 #[test]
 fn failed_outer_apply_commit_rolls_back_and_releases_connection() {
     let conn = setup_db();
@@ -86,6 +101,30 @@ async fn failed_authenticated_core_task_commit_rolls_back_every_write_and_releas
             )
             .unwrap();
         assert_eq!(receipt_rows, 0);
+        let inbox_rows: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM ark_sync_inbox WHERE peer_device_id = ?1",
+                ["device-a"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(inbox_rows, 1, "durable receipt survives failed apply");
+        let inbox_state: String = conn
+            .query_row(
+                "SELECT state FROM ark_sync_inbox WHERE peer_device_id = 'device-a'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(inbox_state, "received", "failed apply remains replayable");
+        let feed_rows: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM ark_committed_feed WHERE entity_id = ?1",
+                [&entity.id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(feed_rows, 0, "feed row must roll back with failed apply");
         assert!(!get_sync_kv(&conn, "lan_sync.version_vector")
             .unwrap_or_default()
             .unwrap_or_default()
@@ -105,6 +144,86 @@ async fn failed_authenticated_core_task_commit_rolls_back_every_write_and_releas
         .unwrap();
     let conn = shared.lock().unwrap();
     assert!(get_object(&conn, &next.id).unwrap().is_some());
+}
+
+#[tokio::test]
+async fn durable_inbox_receipt_replays_after_writer_restart() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("feed-restart.db");
+    let entity = full_core_task_entity(
+        "feed-restart-task",
+        "Replay after writer restart",
+        "2026-10-16T00:00:00.000Z:000001:device-a",
+    );
+    let (handle, mut owner) =
+        crate::db::DbHandle::open(path.to_string_lossy().into_owned(), "device-local".into())
+            .await
+            .unwrap();
+    let backend = SqliteStorageBackend::with_db_handle(handle);
+    let failpoint = rusqlite::Connection::open(&path).unwrap();
+    failpoint
+        .execute_batch(
+            "CREATE TABLE deferred_feed_probe (
+             parent_id TEXT REFERENCES objects(id) DEFERRABLE INITIALLY DEFERRED
+         );
+         CREATE TRIGGER fail_feed_commit AFTER INSERT ON objects
+         BEGIN
+             INSERT INTO deferred_feed_probe(parent_id) VALUES ('missing-parent');
+         END;",
+        )
+        .unwrap();
+    assert!(backend
+        .apply_authenticated_entity(&entity, "device-a")
+        .await
+        .is_err());
+    owner
+        .shutdown(Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
+
+    let check = rusqlite::Connection::open(&path).unwrap();
+    let (state, bytes): (String, i64) = check
+        .query_row(
+            "SELECT state, payload_bytes FROM ark_sync_inbox WHERE peer_device_id = 'device-a'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(state, "received");
+    assert!(bytes > 0, "pending receipt retains payload for replay");
+    check
+        .execute_batch("DROP TRIGGER fail_feed_commit")
+        .unwrap();
+    drop(check);
+
+    let (handle, mut owner) =
+        crate::db::DbHandle::open(path.to_string_lossy().into_owned(), "device-local".into())
+            .await
+            .unwrap();
+    let backend = SqliteStorageBackend::with_db_handle(handle);
+    backend
+        .apply_authenticated_entity(&entity, "device-a")
+        .await
+        .unwrap();
+    let snapshot = backend.committed_feed_snapshot().await.unwrap();
+    let feed = backend
+        .committed_feed_page(0, snapshot.high_watermark, 8)
+        .await
+        .unwrap();
+    assert!(feed.iter().any(|entry| entry.entity_id == entity.id));
+    let check = rusqlite::Connection::open(&path).unwrap();
+    let (state, bytes): (String, i64) = check
+        .query_row(
+            "SELECT state, payload_bytes FROM ark_sync_inbox WHERE peer_device_id = 'device-a'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!((state.as_str(), bytes), ("applied", 0));
+    owner
+        .shutdown(Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -140,164 +259,4 @@ async fn authenticated_apply_rechecks_removed_peer_before_persisting() {
     assert!(get_object(&conn, &entity.id).unwrap().is_none());
 }
 
-fn full_core_task_entity(id: &str, title: &str, hlc: &str) -> SyncEntity {
-    let mut entity = sync_object(id, "core.task", title);
-    entity.hlc = hlc.into();
-    entity.data.insert("typeVersion".into(), json!("0.1.0"));
-    entity.data.insert(
-        "propsJson".into(),
-        json!({
-            "state": {"kind": "open", "at": null},
-            "planning": {"kind": "inbox", "period": "any", "date": null},
-            "deadline": null,
-            "reminders": [],
-            "recurrence": null,
-            "priority": "none",
-            "checklist": [],
-            "extensions": {}
-        }),
-    );
-    entity
-}
-
-#[tokio::test]
-async fn clear_all_removes_object_write_receipts_before_replay() {
-    let conn = setup_db();
-    let backend = SqliteStorageBackend::for_test(Arc::new(Mutex::new(conn)));
-    let mut entity = sync_object("clear-receipt-task", "core.task", "Task before reset");
-    entity.data.insert("typeVersion".into(), json!("0.1.0"));
-    entity.data.insert(
-        "propsJson".into(),
-        json!({
-            "state": {"kind": "open", "at": null},
-            "planning": {"kind": "inbox", "period": "any", "date": null},
-            "deadline": null,
-            "reminders": [],
-            "recurrence": null,
-            "priority": "none",
-            "checklist": [],
-            "extensions": {}
-        }),
-    );
-    backend
-        .apply_authenticated_entity(&entity, "device-a")
-        .await
-        .unwrap();
-    {
-        let shared = backend.db.shared_connection_for_test();
-        let conn = shared.lock().unwrap();
-        assert!(get_object(&conn, &entity.id).unwrap().is_some());
-        let count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM entity_write_receipts WHERE entity_id = ?1",
-                [&entity.id],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(count, 1);
-        clear_all(&conn).unwrap();
-        assert!(get_object(&conn, &entity.id).unwrap().is_none());
-        let count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM entity_write_receipts WHERE entity_id = ?1",
-                [&entity.id],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(count, 0);
-    }
-    entity.hlc = "2026-01-02T00:00:00.000Z:000001:device-a".into();
-    backend
-        .apply_authenticated_entity(&entity, "device-a")
-        .await
-        .unwrap();
-    let shared = backend.db.shared_connection_for_test();
-    let conn = shared.lock().unwrap();
-    assert!(get_object(&conn, &entity.id).unwrap().is_some());
-}
-
-#[tokio::test]
-async fn authenticated_core_task_replay_is_idempotent_and_rejects_revision_reuse() {
-    let backend = SqliteStorageBackend::for_test(Arc::new(Mutex::new(setup_db())));
-    let mut entity = sync_object("receipt-replay-task", "core.task", "Original title");
-    entity.data.insert("typeVersion".into(), json!("0.1.0"));
-    entity.data.insert(
-        "propsJson".into(),
-        json!({
-            "state": {"kind": "open", "at": null},
-            "planning": {"kind": "inbox", "period": "any", "date": null},
-            "deadline": null,
-            "reminders": [],
-            "recurrence": null,
-            "priority": "none",
-            "checklist": [],
-            "extensions": {}
-        }),
-    );
-    backend
-        .apply_authenticated_entity(&entity, "device-a")
-        .await
-        .unwrap();
-    backend
-        .apply_authenticated_entity(&entity, "relay-peer")
-        .await
-        .unwrap();
-    {
-        let shared = backend.db.shared_connection_for_test();
-        let conn = shared.lock().unwrap();
-        let receipt_count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM entity_write_receipts WHERE entity_id = ?1",
-                [&entity.id],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(receipt_count, 1, "replay must reuse its committed receipt");
-        assert_eq!(
-            get_object(&conn, &entity.id).unwrap().unwrap().title,
-            "Original title"
-        );
-    }
-
-    let mut stale = entity.clone();
-    stale.hlc = "2025-12-31T00:00:00.000Z:000001:device-a".into();
-    stale
-        .data
-        .insert("propsJson".into(), json!("malformed stale payload"));
-    backend
-        .apply_authenticated_entity(&stale, "device-a")
-        .await
-        .unwrap();
-    {
-        let shared = backend.db.shared_connection_for_test();
-        let conn = shared.lock().unwrap();
-        assert_eq!(
-            get_object(&conn, &entity.id).unwrap().unwrap().title,
-            "Original title"
-        );
-        let stale_receipts: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM entity_write_receipts
-                 WHERE entity_id = ?1 AND source_hlc = ?2",
-                params![entity.id, stale.hlc],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(stale_receipts, 0, "legacy stale no-op writes no receipt");
-    }
-
-    entity.data.insert("title".into(), json!("Changed payload"));
-    assert_eq!(
-        backend
-            .apply_authenticated_entity(&entity, "device-a")
-            .await
-            .unwrap_err(),
-        "object_revision_payload_mismatch"
-    );
-    let shared = backend.db.shared_connection_for_test();
-    let conn = shared.lock().unwrap();
-    assert_eq!(
-        get_object(&conn, &entity.id).unwrap().unwrap().title,
-        "Original title"
-    );
-}
+include!("canonical_object_transaction/object_feed.rs");

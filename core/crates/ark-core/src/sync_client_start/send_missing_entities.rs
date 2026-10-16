@@ -6,7 +6,7 @@ pub(super) async fn send(
     peer_device_id: &str,
     remote_vector: &VersionVector,
     sync_complete: bool,
-) -> Result<(), String> {
+) -> Result<String, String> {
     let mut local_vector = load_version_vector(storage).await?;
     // KOS-302: snapshot completeness claims before the first page. A claim
     // computed later could include a sequence allocated mid-pull that the peer
@@ -55,15 +55,16 @@ pub(super) async fn send(
         }
     }
     save_version_vector(storage, &local_vector).await?;
+    let terminal_batch_id = generate_id();
     send_msg(
         tx,
         &LanSyncMessage::SyncChanges {
-            batch_id: generate_id(),
+            batch_id: terminal_batch_id.clone(),
             entities: vec![],
             is_last: true,
             origin_device_id: None,
             usage_complete_through: (!complete_through.is_empty()).then_some(complete_through),
         },
     );
-    Ok(())
+    Ok(terminal_batch_id)
 }

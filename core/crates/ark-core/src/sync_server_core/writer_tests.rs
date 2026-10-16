@@ -92,6 +92,79 @@ impl PeerProgressPort for RevocableBackend {
 }
 
 #[async_trait::async_trait]
+impl crate::application::sync_storage::CommittedFeedPort for RevocableBackend {
+    fn selective_sync_policy_generation(&self) -> i64 {
+        0
+    }
+
+    async fn committed_feed_snapshot(
+        &self,
+    ) -> Result<crate::application::sync_storage::FeedSnapshot, String> {
+        Err("test_feed_unsupported".into())
+    }
+
+    async fn committed_feed_page(
+        &self,
+        _: i64,
+        _: i64,
+        _: usize,
+    ) -> Result<Vec<crate::application::sync_storage::CommittedFeedEntry>, String> {
+        Err("test_feed_unsupported".into())
+    }
+
+    async fn committed_feed_delivery_page(
+        &self,
+        _: i64,
+        _: i64,
+        _: usize,
+    ) -> Result<crate::application::sync_storage::CommittedFeedDeliveryPage, String> {
+        Err("test_feed_unsupported".into())
+    }
+
+    async fn begin_outbound_policy(
+        &self,
+        _: &str,
+        _: i64,
+    ) -> Result<crate::application::sync_storage::OutboundProgress, String> {
+        Ok(crate::application::sync_storage::OutboundProgress {
+            initial_snapshot: crate::application::sync_storage::InitialSnapshot::Complete {
+                through: 0,
+            },
+            ..Default::default()
+        })
+    }
+    async fn complete_outbound_snapshot(
+        &self,
+        _: &str,
+        _: i64,
+    ) -> Result<crate::application::sync_storage::OutboundProgress, String> {
+        Ok(crate::application::sync_storage::OutboundProgress {
+            initial_snapshot: crate::application::sync_storage::InitialSnapshot::Complete {
+                through: 0,
+            },
+            ..Default::default()
+        })
+    }
+    async fn record_outbound_scan(
+        &self,
+        _: &str,
+        _: i64,
+        _: i64,
+    ) -> Result<crate::application::sync_storage::OutboundProgress, String> {
+        Err("test_feed_unsupported".into())
+    }
+    async fn acknowledge_outbound(
+        &self,
+        _: &str,
+        _: i64,
+        _: i64,
+        _: crate::application::sync_storage::OutboundAck,
+    ) -> Result<crate::application::sync_storage::OutboundProgress, String> {
+        Err("test_feed_unsupported".into())
+    }
+}
+
+#[async_trait::async_trait]
 impl AuthenticatedEntityBackend for RevocableBackend {}
 
 #[async_trait::async_trait]

@@ -86,47 +86,47 @@ pub(super) async fn handle_live_change(
             .get(&entity.id)
             .is_none_or(|hlc| HLC::is_newer(&entity.hlc, hlc));
 
-    if should_apply {
-        match storage
-            .apply_authenticated_entity(&entity, &authenticated_peer_id)
-            .await
-        {
-            Ok(()) => {
-                if observe_non_usage_entity(&mut local_vector, &entity) {
-                    let stored_vector = match load_version_vector(storage).await {
-                        Ok(vector) => vector,
-                        Err(error) => {
-                            eprintln!("{TAG} failed to reload sync progress: {error}");
-                            return;
-                        }
-                    };
-                    merge_usage_cursors(&mut local_vector, &stored_vector);
-                    if let Err(error) = save_version_vector(storage, &local_vector).await {
-                        eprintln!("{TAG} failed to save sync progress: {error}");
+    match storage
+        .apply_authenticated_entity_with_id(&entity, &authenticated_peer_id, &change_id)
+        .await
+    {
+        Ok(()) => {
+            if should_apply && observe_non_usage_entity(&mut local_vector, &entity) {
+                let stored_vector = match load_version_vector(storage).await {
+                    Ok(vector) => vector,
+                    Err(error) => {
+                        eprintln!("{TAG} failed to reload sync progress: {error}");
                         return;
                     }
+                };
+                merge_usage_cursors(&mut local_vector, &stored_vector);
+                if let Err(error) = save_version_vector(storage, &local_vector).await {
+                    eprintln!("{TAG} failed to save sync progress: {error}");
+                    return;
                 }
+            }
 
+            if should_apply {
                 if let Some(handler) = on_change.lock().await.as_ref() {
                     handler(entity.clone());
                 }
+            }
 
-                let peer_device_id = {
-                    let peers_guard = peers.lock().await;
-                    peers_guard
-                        .get(&peer_id)
-                        .map(|p| p.device_id.clone())
-                        .unwrap_or_default()
-                };
-                broadcast_to_others(peers, &entity, Some(&peer_device_id)).await;
-            }
-            Err(e) => {
-                eprintln!(
-                    "{TAG} Failed to apply live sync entity {}:{}: {e}",
-                    entity.entity_type, entity.id
-                );
-                return;
-            }
+            let peer_device_id = {
+                let peers_guard = peers.lock().await;
+                peers_guard
+                    .get(&peer_id)
+                    .map(|p| p.device_id.clone())
+                    .unwrap_or_default()
+            };
+            broadcast_to_others(storage, peers, Some(&peer_device_id)).await;
+        }
+        Err(e) => {
+            eprintln!(
+                "{TAG} Failed to apply live sync entity {}:{}: {e}",
+                entity.entity_type, entity.id
+            );
+            return;
         }
     }
 
@@ -235,7 +235,8 @@ mod tests {
                 app_version: None,
                 authenticated: true,
                 sync_complete: true,
-                queued_live_changes: Vec::new(),
+                in_flight_feed_position: None,
+                pending_initial_snapshot_ack: None,
                 tx,
             },
         );

@@ -72,6 +72,8 @@ pub(crate) struct AuthenticatedCoreTaskWrite {
     source_hlc: String,
     source_origin_device_id: Option<String>,
     data: Map<String, Value>,
+    inbox_message_id: String,
+    inbox_payload_json: String,
 }
 
 impl AuthenticatedCoreTaskWrite {
@@ -80,12 +82,16 @@ impl AuthenticatedCoreTaskWrite {
         source_hlc: String,
         source_origin_device_id: Option<String>,
         data: Map<String, Value>,
+        inbox_message_id: String,
+        inbox_payload_json: String,
     ) -> Self {
         Self {
             id,
             source_hlc,
             source_origin_device_id,
             data,
+            inbox_message_id,
+            inbox_payload_json,
         }
     }
 }
@@ -107,6 +113,16 @@ impl DbCommand for AuthenticatedCoreTaskWrite {
         transaction: &Transaction<'_>,
     ) -> Result<Self::Output, DbError> {
         let peer_id = context.authenticated_peer_id()?;
+        let inbox_state = crate::db::receive_inbox_payload(
+            transaction,
+            peer_id,
+            &self.inbox_message_id,
+            &self.inbox_payload_json,
+        )
+        .map_err(DbError::from_application_error)?;
+        if inbox_state == crate::db::InboxState::Applied {
+            return Ok(RemoteCoreTaskOutcome::Duplicate);
+        }
         let removed: Vec<String> = crate::db::get_sync_kv(transaction, "sync.removed_peers")
             .map_err(DbError::from_application_error)?
             .map(|raw| serde_json::from_str(&raw).map_err(|error| error.to_string()))
@@ -133,14 +149,29 @@ impl DbCommand for AuthenticatedCoreTaskWrite {
         {
             // Preserve the existing authenticated-sync stale no-op: it does
             // not decode malformed stale payloads or write a receipt.
+            crate::db::set_inbox_state(
+                transaction,
+                peer_id,
+                &self.inbox_message_id,
+                crate::db::InboxState::Applied,
+            )
+            .map_err(DbError::from_application_error)?;
             return Ok(RemoteCoreTaskOutcome::Stale);
         }
 
+        let inbox_message_id = self.inbox_message_id.clone();
         let remote = decode_remote(self)?;
         let result = crate::application::objects::apply_remote_core_task_write(
             &session,
             remote,
             Some(peer_id.to_owned()),
+        )
+        .map_err(DbError::from_application_error)?;
+        crate::db::set_inbox_state(
+            transaction,
+            peer_id,
+            &inbox_message_id,
+            crate::db::InboxState::Applied,
         )
         .map_err(DbError::from_application_error)?;
         Ok(if result.duplicate {

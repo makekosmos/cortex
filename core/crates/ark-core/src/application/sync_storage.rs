@@ -3,6 +3,87 @@ use std::collections::HashMap;
 use crate::canonical_types::pending::ReplayNotice;
 use crate::types::{PeerRecord, SyncEntity, VersionVector};
 
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct CommittedFeedEntry {
+    pub position: i64,
+    pub entity_type: String,
+    pub entity_id: String,
+    pub revision: String,
+    pub deleted: bool,
+    pub origin_device_id: Option<String>,
+    pub origin_sequence: Option<i64>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct FeedSnapshot {
+    /// Largest cursor that can be resumed without a resnapshot.
+    pub retained_through: i64,
+    /// Fixed upper bound for paging this snapshot.
+    pub high_watermark: i64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CommittedFeedDelivery {
+    pub entry: CommittedFeedEntry,
+    pub entity: SyncEntity,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum CommittedFeedDeliveryPage {
+    Deliveries(Vec<CommittedFeedDelivery>),
+    TooLarge {
+        position: i64,
+        entity_id: String,
+        serialized_bytes: usize,
+        max_bytes: usize,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct OutboundProgress {
+    pub policy_generation: i64,
+    pub initial_snapshot: InitialSnapshot,
+    pub scanned_through: i64,
+    pub receipt_through: i64,
+    pub applied_through: i64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum InitialSnapshot {
+    Pending { through: i64 },
+    Complete { through: i64 },
+}
+
+impl InitialSnapshot {
+    pub fn is_complete(self) -> bool {
+        matches!(self, Self::Complete { .. })
+    }
+
+    pub fn through(self) -> i64 {
+        match self {
+            Self::Pending { through } | Self::Complete { through } => through,
+        }
+    }
+}
+
+impl Default for OutboundProgress {
+    fn default() -> Self {
+        Self {
+            policy_generation: 0,
+            initial_snapshot: InitialSnapshot::Complete { through: 0 },
+            scanned_through: 0,
+            receipt_through: 0,
+            applied_through: 0,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum OutboundAck {
+    DurableReceipt,
+    Applied,
+}
+
 pub(crate) const VERSION_VECTOR_KEY: &str = "lan_sync.version_vector";
 pub(crate) const KNOWN_PEERS_KEY: &str = "sync.peers";
 pub(crate) const REMOVED_PEERS_KEY: &str = "sync.removed_peers";
@@ -77,14 +158,21 @@ pub trait SyncEntityMutationSession {
         &mut self,
         entity: &SyncEntity,
         authenticated_peer_id: Option<&str>,
-    ) -> Result<Vec<ReplayNotice>, String>;
+    ) -> Result<(InboundApplyOutcome, Vec<ReplayNotice>), String>;
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InboundApplyOutcome {
+    Applied,
+    Stale,
+    Pending,
 }
 
 pub fn apply_inbound_sync_entity(
     session: &mut dyn SyncEntityMutationSession,
     entity: &SyncEntity,
     authenticated_peer_id: Option<&str>,
-) -> Result<Vec<ReplayNotice>, String> {
+) -> Result<(InboundApplyOutcome, Vec<ReplayNotice>), String> {
     session.apply_entity(entity, authenticated_peer_id)
 }
 
@@ -97,4 +185,54 @@ pub trait PeerProgressPort: Send + Sync {
     async fn store_known_peers(&self, peers: &[PeerRecord]) -> Result<(), String>;
     async fn load_removed_peer_ids(&self) -> Result<Vec<String>, String>;
     async fn store_removed_peer_ids(&self, peer_ids: &[String]) -> Result<(), String>;
+}
+
+/// Durable recovery reads. A caller pins one high watermark and pages by
+/// committed position so concurrent writes cannot shift a page boundary.
+#[async_trait::async_trait]
+pub trait CommittedFeedPort: Send + Sync {
+    fn selective_sync_policy_generation(&self) -> i64;
+
+    async fn committed_feed_snapshot(&self) -> Result<FeedSnapshot, String>;
+
+    async fn committed_feed_page(
+        &self,
+        _after_position: i64,
+        _high_watermark: i64,
+        _limit: usize,
+    ) -> Result<Vec<CommittedFeedEntry>, String>;
+
+    async fn committed_feed_delivery_page(
+        &self,
+        after_position: i64,
+        high_watermark: i64,
+        limit: usize,
+    ) -> Result<CommittedFeedDeliveryPage, String>;
+
+    async fn begin_outbound_policy(
+        &self,
+        peer_device_id: &str,
+        policy_generation: i64,
+    ) -> Result<OutboundProgress, String>;
+
+    async fn complete_outbound_snapshot(
+        &self,
+        peer_device_id: &str,
+        policy_generation: i64,
+    ) -> Result<OutboundProgress, String>;
+
+    async fn record_outbound_scan(
+        &self,
+        peer_device_id: &str,
+        policy_generation: i64,
+        scanned_through: i64,
+    ) -> Result<OutboundProgress, String>;
+
+    async fn acknowledge_outbound(
+        &self,
+        peer_device_id: &str,
+        policy_generation: i64,
+        position: i64,
+        ack: OutboundAck,
+    ) -> Result<OutboundProgress, String>;
 }

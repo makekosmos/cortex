@@ -2,8 +2,12 @@ use super::*;
 
 #[path = "sync_client_start/client_hello.rs"]
 mod client_hello;
+#[path = "sync_client_start/connect_and_receive/feed_recovery.rs"]
+mod feed_recovery;
 #[path = "sync_client_start/send_missing_entities.rs"]
 mod send_missing_entities;
+#[path = "sync_client_start/connect_and_receive/sync_changes.rs"]
+mod sync_changes;
 
 impl SyncClient {
     /// Start connecting to the peer. Spawns a background task.
@@ -19,6 +23,7 @@ impl SyncClient {
         let auth_secret = self.auth_secret.clone();
         let stopped = self.stopped.clone();
         let authenticated_tx = self.authenticated_tx.clone();
+        let feed_in_flight = self.feed_in_flight.clone();
         let on_change = self.on_change.clone();
         let on_connected = self.on_connected.clone();
         let on_disconnected = self.on_disconnected.clone();

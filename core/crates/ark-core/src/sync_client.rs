@@ -33,7 +33,8 @@ pub type ClientOnPeerListCallback = Arc<dyn Fn(Vec<PeerRecord>) + Send + Sync>;
 
 // Authenticated peer channel: (peer device_id, outbound sender) behind the
 // shared mutex so `peer_authenticated` can publish it once the handshake lands.
-type AuthenticatedTx = Arc<Mutex<Option<(String, mpsc::UnboundedSender<Message>)>>>;
+type AuthenticatedTx = Arc<Mutex<Option<(String, mpsc::UnboundedSender<Message>, bool)>>>;
+pub(crate) type ClientFeedInFlight = Arc<Mutex<Option<i64>>>;
 
 // ---------------------------------------------------------------------------
 // SyncClient
@@ -49,6 +50,7 @@ pub struct SyncClient {
     auth_secret: Option<String>,
     stopped: Arc<std::sync::atomic::AtomicBool>,
     authenticated_tx: AuthenticatedTx,
+    feed_in_flight: ClientFeedInFlight,
     on_change: Arc<Mutex<Option<ClientOnChangeCallback>>>,
     on_connected: Arc<Mutex<Option<ClientOnConnectedCallback>>>,
     on_disconnected: Arc<Mutex<Option<ClientOnDisconnectedCallback>>>,
@@ -82,6 +84,7 @@ impl SyncClient {
             auth_secret: normalize_auth_secret(auth_secret),
             stopped: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             authenticated_tx: Arc::new(Mutex::new(None)),
+            feed_in_flight: Arc::new(Mutex::new(None)),
             on_change: Arc::new(Mutex::new(None)),
             on_connected: Arc::new(Mutex::new(None)),
             on_disconnected: Arc::new(Mutex::new(None)),
@@ -91,20 +94,22 @@ impl SyncClient {
         }
     }
 
-    /// Send a live change to the currently connected peer, if any. The
-    /// message is dropped silently if the WS connection is not up or not
-    /// authenticated — the sender on the server side is expected to keep
-    /// state.
-    pub async fn broadcast_live_change(&self, entity: SyncEntity) {
+    /// Wake the durable feed sender after a local commit. The entity itself is
+    /// read from the feed so reconnects replay the same cursor-derived ID.
+    pub async fn broadcast_live_change(&self) {
         let guard = self.authenticated_tx.lock().await;
-        if let Some((_, tx)) = guard.as_ref() {
-            let change_id = generate_id();
-            let msg = LanSyncMessage::LiveChange {
-                change_id,
-                entity,
-                origin_device_id: None,
-            };
-            let _ = tx.send(Message::Text(serialize_message(&msg).into()));
+        if let Some((peer_id, tx, sync_complete)) = guard.as_ref() {
+            if !*sync_complete {
+                return;
+            }
+            let peer_id = peer_id.clone();
+            let tx = tx.clone();
+            drop(guard);
+            if let Err(error) =
+                pump_client_committed_feed(&self.storage, &peer_id, &tx, &self.feed_in_flight).await
+            {
+                eprintln!("{TAG} committed feed wake failed: {error}");
+            }
         }
     }
 
@@ -119,7 +124,7 @@ impl SyncClient {
             return Err("signed integration frame origin is not this node".into());
         }
         let guard = self.authenticated_tx.lock().await;
-        let Some((authenticated_peer_id, tx)) = guard.as_ref() else {
+        let Some((authenticated_peer_id, tx, _)) = guard.as_ref() else {
             return Err("LAN peer is not authenticated".into());
         };
         if frame.recipient_node_id != *authenticated_peer_id {
@@ -170,7 +175,7 @@ impl SyncClient {
     pub async fn disconnect(&self) {
         self.stopped
             .store(true, std::sync::atomic::Ordering::Relaxed);
-        if let Some((_, tx)) = self.authenticated_tx.lock().await.take() {
+        if let Some((_, tx, _)) = self.authenticated_tx.lock().await.take() {
             let _ = tx.send(Message::Close(None));
         }
     }
@@ -208,6 +213,119 @@ impl SyncClient {
     pub fn is_stopped(&self) -> bool {
         self.stopped.load(std::sync::atomic::Ordering::Relaxed)
     }
+}
+
+pub(crate) async fn pump_client_committed_feed(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+    peer_device_id: &str,
+    tx: &mpsc::UnboundedSender<Message>,
+    in_flight: &ClientFeedInFlight,
+) -> Result<(), String> {
+    let mut in_flight = in_flight.lock().await;
+    if in_flight.is_some() {
+        return Ok(());
+    }
+    let generation = storage.selective_sync_policy_generation();
+    let progress = storage
+        .begin_outbound_policy(peer_device_id, generation)
+        .await?;
+    if !progress.initial_snapshot.is_complete() {
+        return Ok(());
+    }
+    let snapshot = storage.committed_feed_snapshot().await?;
+    let page = storage
+        .committed_feed_delivery_page(
+            progress.applied_through,
+            snapshot.high_watermark,
+            crate::db::MAX_FEED_PAGE_SIZE,
+        )
+        .await?;
+    let deliveries = match page {
+        crate::application::sync_storage::CommittedFeedDeliveryPage::Deliveries(deliveries) => {
+            deliveries
+        }
+        crate::application::sync_storage::CommittedFeedDeliveryPage::TooLarge {
+            position,
+            entity_id,
+            serialized_bytes,
+            max_bytes,
+        } => {
+            return Err(format!(
+                "committed_feed_entity_too_large:{position}:{entity_id}:\
+                 {serialized_bytes}:{max_bytes}"
+            ));
+        }
+    };
+
+    for delivery in deliveries {
+        let position = delivery.entry.position;
+        storage
+            .record_outbound_scan(peer_device_id, generation, position)
+            .await?;
+        let Some(entity) = storage.filter_outgoing_entity(&delivery.entity) else {
+            storage
+                .acknowledge_outbound(
+                    peer_device_id,
+                    generation,
+                    position,
+                    crate::application::sync_storage::OutboundAck::Applied,
+                )
+                .await?;
+            continue;
+        };
+        let change_id = format!("ark-feed-v1:{position}");
+        let message = LanSyncMessage::LiveChange {
+            change_id,
+            entity,
+            origin_device_id: None,
+        };
+        *in_flight = Some(position);
+        if tx
+            .send(Message::Text(serialize_message(&message).into()))
+            .is_err()
+        {
+            *in_flight = None;
+        }
+        return Ok(());
+    }
+
+    if progress.scanned_through < snapshot.high_watermark {
+        storage
+            .record_outbound_scan(peer_device_id, generation, snapshot.high_watermark)
+            .await?;
+    }
+    Ok(())
+}
+
+pub(crate) async fn acknowledge_client_feed(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+    peer_device_id: &str,
+    change_id: &str,
+    tx: &mpsc::UnboundedSender<Message>,
+    flight: &ClientFeedInFlight,
+) -> Result<(), String> {
+    let Some(position) = change_id
+        .strip_prefix("ark-feed-v1:")
+        .and_then(|value| value.parse::<i64>().ok())
+    else {
+        return Ok(());
+    };
+    let mut in_flight = flight.lock().await;
+    if *in_flight != Some(position) {
+        return Ok(());
+    }
+    let generation = storage.selective_sync_policy_generation();
+    storage
+        .acknowledge_outbound(
+            peer_device_id,
+            generation,
+            position,
+            crate::application::sync_storage::OutboundAck::Applied,
+        )
+        .await?;
+    *in_flight = None;
+    drop(in_flight);
+    pump_client_committed_feed(storage, peer_device_id, tx, flight).await
 }
 
 // ---------------------------------------------------------------------------

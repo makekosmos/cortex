@@ -34,11 +34,14 @@ pub(crate) use object_mutation::{
 };
 pub(crate) use object_read::ObjectReadQuery;
 pub(crate) use sync_mutation::{
-    ApplyAuthenticatedSyncEntityCommand, ApplySyncEntityCommand,
-    EnsureUsageSequenceMigratedCommand, SetLocalSyncKeyValueCommand, SetSyncKeyValueCommand,
+    ApplyAuthenticatedSyncEntityCommand, ApplySyncEntityCommand, CommittedFeedProgress,
+    CommittedFeedProgressCommand, CommittedFeedProgressOperation,
+    EnsureUsageSequenceMigratedCommand, ReceiveInboxReceiptCommand, SetLocalSyncKeyValueCommand,
+    SetSyncKeyValueCommand,
 };
 pub(crate) use sync_read::{
-    AuthorizedTransportKeyQuery, GetSyncKeyValueQuery, LoadEntitiesQuery, UsageCompleteThroughQuery,
+    AuthorizedTransportKeyQuery, CommittedFeedDeliveryPageQuery, CommittedFeedPageQuery,
+    CommittedFeedSnapshotQuery, GetSyncKeyValueQuery, LoadEntitiesQuery, UsageCompleteThroughQuery,
 };
 pub(crate) use system_mutation::{
     ClearAllCommand, CompactUsageSyncLogCommand, DeleteTrashedCommand,

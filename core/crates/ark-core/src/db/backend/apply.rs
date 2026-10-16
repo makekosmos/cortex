@@ -34,7 +34,7 @@ impl SqliteStorageBackend {
     ) -> Result<(), String> {
         let transaction = Transaction::new_unchecked(conn, TransactionBehavior::Immediate)
             .map_err(|error| error.to_string())?;
-        let replay_notices = Self::apply_entity_in_transaction(&transaction, entity)?;
+        let (_, replay_notices) = Self::apply_entity_in_transaction(&transaction, entity)?;
         transaction.commit().map_err(|error| error.to_string())?;
         for notice in replay_notices {
             crate::events::emit_event(notice.event_payload());
@@ -45,7 +45,13 @@ impl SqliteStorageBackend {
     pub(in crate::db) fn apply_entity_in_transaction(
         transaction: &Transaction<'_>,
         entity: &SyncEntity,
-    ) -> Result<Vec<crate::canonical_types::pending::ReplayNotice>, String> {
+    ) -> Result<
+        (
+            crate::application::sync_storage::InboundApplyOutcome,
+            Vec<crate::canonical_types::pending::ReplayNotice>,
+        ),
+        String,
+    > {
         Self::apply_entity_blocking_inner(transaction, entity)
     }
 
@@ -53,7 +59,13 @@ impl SqliteStorageBackend {
         transaction: &Transaction<'_>,
         entity: &SyncEntity,
         authenticated_peer_id: &str,
-    ) -> Result<Vec<crate::canonical_types::pending::ReplayNotice>, String> {
+    ) -> Result<
+        (
+            crate::application::sync_storage::InboundApplyOutcome,
+            Vec<crate::canonical_types::pending::ReplayNotice>,
+        ),
+        String,
+    > {
         let removed: Vec<String> = crate::db::get_sync_kv(transaction, "sync.removed_peers")?
             .map(|raw| serde_json::from_str(&raw).map_err(|error| error.to_string()))
             .transpose()?
@@ -67,7 +79,50 @@ impl SqliteStorageBackend {
     fn apply_entity_blocking_inner(
         conn: &Connection,
         entity: &SyncEntity,
-    ) -> Result<Vec<crate::canonical_types::pending::ReplayNotice>, String> {
+    ) -> Result<
+        (
+            crate::application::sync_storage::InboundApplyOutcome,
+            Vec<crate::canonical_types::pending::ReplayNotice>,
+        ),
+        String,
+    > {
+        let canonical_object = matches!(
+            entity.entity_type.as_str(),
+            "object" | "todo" | "project" | "tag"
+        );
+        let canonical_type = if canonical_object {
+            "object"
+        } else {
+            &entity.entity_type
+        };
+        let deleted = entity.deleted == Some(true);
+
+        let (outcome, notices) = Self::apply_entity_mutation_inner(conn, entity)?;
+
+        if outcome == crate::application::sync_storage::InboundApplyOutcome::Applied {
+            crate::db::append_committed_change(
+                conn,
+                canonical_type,
+                &entity.id,
+                &entity.hlc,
+                deleted,
+                entity.origin_device_id.as_deref(),
+                entity.origin_seq,
+            )?;
+        }
+        Ok((outcome, notices))
+    }
+
+    fn apply_entity_mutation_inner(
+        conn: &Connection,
+        entity: &SyncEntity,
+    ) -> Result<
+        (
+            crate::application::sync_storage::InboundApplyOutcome,
+            Vec<crate::canonical_types::pending::ReplayNotice>,
+        ),
+        String,
+    > {
         let sequenced_usage = is_sequenced_usage_entity(&entity.entity_type);
         if sequenced_usage && !usage_entity_is_newer(conn, entity)? {
             let (device_id, seq) = usage_origin_for_entity(conn, entity)?;
@@ -80,7 +135,10 @@ impl SqliteStorageBackend {
                 &entity.hlc,
                 entity.deleted == Some(true),
             )?;
-            return Ok(Vec::new());
+            return Ok((
+                crate::application::sync_storage::InboundApplyOutcome::Stale,
+                Vec::new(),
+            ));
         }
         if matches!(entity.entity_type.as_str(), "area" | "heading") {
             return Err("LegacyPlanningReadOnly".into());
@@ -93,11 +151,11 @@ impl SqliteStorageBackend {
             return crate::canonical_types::facades::apply_canonical_object_entity(
                 conn, &canonical,
             )
-            .map(|()| Vec::new());
+            .map(|outcome| (outcome, Vec::new()));
         }
         if entity.entity_type == "object" && entity.deleted == Some(true) {
             return crate::canonical_types::facades::apply_canonical_object_entity(conn, entity)
-                .map(|()| Vec::new());
+                .map(|outcome| (outcome, Vec::new()));
         }
 
         if entity.deleted == Some(true) {
@@ -118,7 +176,10 @@ impl SqliteStorageBackend {
             if sequenced_usage {
                 finish_usage_entity_sync(conn, entity)?;
             }
-            return Ok(Vec::new());
+            return Ok((
+                crate::application::sync_storage::InboundApplyOutcome::Applied,
+                Vec::new(),
+            ));
         }
 
         let mut full_data = entity.data.clone();
@@ -126,9 +187,14 @@ impl SqliteStorageBackend {
         let value = Value::Object(full_data);
 
         let mut replay_notices = Vec::new();
+        let mut outcome = crate::application::sync_storage::InboundApplyOutcome::Applied;
         let result = match entity.entity_type.as_str() {
             "todo" | "project" | "tag" => {
-                crate::canonical_types::facades::apply_legacy_compat_entity(conn, entity)
+                crate::canonical_types::facades::apply_legacy_compat_entity(conn, entity).map(
+                    |applied| {
+                        outcome = applied;
+                    },
+                )
             }
             "area" | "heading" => Err("LegacyPlanningReadOnly".into()),
             "tracked_app" => serde_json::from_value::<TrackedApp>(value)
@@ -171,9 +237,13 @@ impl SqliteStorageBackend {
                         "awaited_type_id": object.type_id,
                         "awaited_type_version": object.type_version,
                     }));
+                    outcome = crate::application::sync_storage::InboundApplyOutcome::Pending;
                     Ok(())
                 } else {
                     crate::canonical_types::facades::apply_canonical_object_entity(conn, entity)
+                        .map(|applied| {
+                            outcome = applied;
+                        })
                 }
             }
             "object_link" => serde_json::from_value::<ObjectLink>(value)
@@ -186,7 +256,7 @@ impl SqliteStorageBackend {
         if sequenced_usage {
             finish_usage_entity_sync(conn, entity)?;
         }
-        Ok(replay_notices)
+        Ok((outcome, replay_notices))
     }
 }
 

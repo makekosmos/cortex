@@ -197,13 +197,82 @@ CREATE TABLE IF NOT EXISTS entity_write_receipts (
     source_origin_device_id TEXT,
     type_id TEXT,
     payload_sha256 TEXT NOT NULL,
-    payload_json TEXT NOT NULL,
+    payload_json TEXT NOT NULL DEFAULT '',
     outcome TEXT NOT NULL CHECK (outcome IN ('applied', 'stale')),
     resulting_hlc TEXT,
     authenticated_peer_id TEXT,
     committed_at TEXT NOT NULL,
     UNIQUE(entity_kind, entity_id, representation_kind, source_hlc)
 );
+
+-- Monotonic local commit order for durable sync recovery. Rows are appended
+-- in the same SQLite transaction as the object/revision change. Payloads stay
+-- in the canonical tables; this is a bounded locator feed, not event sourcing.
+CREATE TABLE IF NOT EXISTS ark_committed_feed (
+    position INTEGER PRIMARY KEY AUTOINCREMENT,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    revision TEXT NOT NULL,
+    deleted INTEGER NOT NULL DEFAULT 0 CHECK (deleted IN (0, 1)),
+    origin_device_id TEXT,
+    origin_sequence INTEGER,
+    committed_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    UNIQUE(entity_type, entity_id, revision)
+);
+CREATE INDEX IF NOT EXISTS idx_ark_committed_feed_entity
+ON ark_committed_feed(entity_type, entity_id, position);
+
+CREATE TABLE IF NOT EXISTS ark_committed_feed_heads (
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    position INTEGER NOT NULL,
+    PRIMARY KEY(entity_type, entity_id)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_ark_committed_feed_heads_position
+ON ark_committed_feed_heads(position, entity_type, entity_id);
+CREATE TABLE IF NOT EXISTS ark_committed_feed_meta (
+    meta_key TEXT PRIMARY KEY,
+    meta_value TEXT NOT NULL
+) WITHOUT ROWID;
+
+-- Per-device policy and durable delivery progress are independent of HLC and
+-- origin sequence. `applied_position` can never exceed `received_position`.
+CREATE TABLE IF NOT EXISTS ark_feed_outbound_progress (
+    peer_device_id TEXT PRIMARY KEY,
+    policy_generation INTEGER NOT NULL DEFAULT 0 CHECK (policy_generation >= 0),
+    scanned_through INTEGER NOT NULL DEFAULT 0 CHECK (scanned_through >= 0),
+    receipt_through INTEGER NOT NULL DEFAULT 0 CHECK (receipt_through >= 0),
+    applied_through INTEGER NOT NULL DEFAULT 0 CHECK (applied_through >= 0),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    CHECK (applied_through <= receipt_through),
+    CHECK (receipt_through <= scanned_through)
+) WITHOUT ROWID;
+
+-- A peer's initial backfill is bounded by a durable feed watermark. The
+-- cursor advances to this watermark only after the terminal SyncAck arrives.
+CREATE TABLE IF NOT EXISTS ark_feed_initial_snapshot (
+    peer_device_id TEXT PRIMARY KEY,
+    policy_generation INTEGER NOT NULL CHECK (policy_generation >= 0),
+    watermark INTEGER NOT NULL CHECK (watermark >= 0),
+    complete INTEGER NOT NULL DEFAULT 0 CHECK (complete IN (0, 1)),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+) WITHOUT ROWID;
+
+-- Stable identity + digest makes retries detectable without claiming network
+-- exactly-once. Unknown schemas may remain pending, but are never marked applied.
+CREATE TABLE IF NOT EXISTS ark_sync_inbox (
+    peer_device_id TEXT NOT NULL,
+    message_id TEXT NOT NULL,
+    payload_sha256 TEXT NOT NULL,
+    payload_bytes INTEGER NOT NULL CHECK (payload_bytes >= 0),
+    payload_json TEXT NOT NULL,
+    state TEXT NOT NULL CHECK (state IN ('received', 'pending', 'applied', 'rejected')),
+    received_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    applied_at TEXT,
+    PRIMARY KEY(peer_device_id, message_id)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_ark_sync_inbox_state
+ON ark_sync_inbox(state, received_at);
 
 CREATE INDEX IF NOT EXISTS idx_objects_type_id ON objects(type_id);
 CREATE INDEX IF NOT EXISTS idx_objects_updated_at ON objects(updated_at DESC);

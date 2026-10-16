@@ -91,7 +91,9 @@ graph TD
 
 Каждый вызов outbound page выполняет один сериализованный DB-запрос, но отдельные страницы не используют закреплённый общий snapshot: записи между вызовами могут изменить последующие страницы. Входящее применение проходит через application operation и синхронный `SyncEntityMutationSession` внутри транзакции адаптера; `rusqlite::Transaction` и соединение через порт не протекают, а сетевой `await` не удерживает эту транзакцию.
 
-Committed-feed/outbox порт здесь сознательно не объявлен. Текущий sync runtime получает изменения через операции и in-memory callbacks, а production durable feed/outbox и его атомарный commit отсутствуют. KOS-420 владеет этим durable delivery/use case; порт следует добавить там, когда появятся реальный consumer и чёткий cursor/claim contract, не выдавая существующий version vector за committed feed.
+KOS-420 добавляет `ark_committed_feed`: monotonically increasing local commit position, отдельно от HLC и origin sequence. Local version-vector/usage writes и remote canonical object apply append a locator in the same SQLite transaction as the revision. Payload остаётся в canonical tables, так что это bounded locator feed, не event log. `CommittedFeedPort` читает fixed high-watermark и coalesced current entity projection одним сериализованным SQLite read; изменение после snapshot не смешивается с payload старой позиции, а cursor ниже retained floor требует resnapshot. Live notifications only wake the durable sender; startup/reconnect and the periodic server drain resume from persisted per-peer applied cursor. The current wire uses one in-flight `LiveChange` and its applied `LiveAck`, without a wire-shape change.
+
+Authenticated apply сначала сохраняет durable inbox identity и payload digest; затем canonical apply переводит receipt в `applied` в той же транзакции, что и object/feed commit. Для live feed identity — существующий wire `change_id` (`ark-feed-v1:<position>`); для legacy entity paths используется детерминированная identity из peer/locator/revision. Повтор с тем же ID и digest становится no-op; повтор того же ID с другим payload отвергается до stale/equal-HLC fast-path. Pending payload ограничен 1 MiB на entity и общим pending cap 10,000 записей / 32 MiB. После applied commit payload удаляется, digest остаётся для replay detection. Live sender держит один item in-flight на peer и сохраняет applied cursor только после текущего applied `LiveAck`; reconnect повторяет тот же ID. Global feed position не считается contiguous inbound watermark: coalescing и selective filtering законно пропускают позиции. Отдельный durable-receipt ACK, too-old negotiation и соответствующая inbound cursor семантика остаются KOS-421. Feed rows сохраняются, чтобы peer без progress row мог начать чтение с начала; receipt compaction требует определённой KOS-428 recovery boundary.
 
 Не запрещать async «для чистоты» во всех интерфейсах. Предметные правила синхронны; ожидание очереди, I/O и shutdown асинхронно. SQLite transaction не держится через сетевой `await`.
 
@@ -155,6 +157,23 @@ Production executor нельзя вводить отдельным ранним 
 - **Durable feed / inbox / outbox.** Нужен для восстановления и повторов; данные и отметка о том, что требуется доставить, фиксируются атомарно. Это может быть развитие текущих sync-структур, не обязательно отдельный event-sourcing log всей истории.
 - **Live notifications.** Дешёвый сигнал для UI и sender. Потеря сигнала допустима, если состояние можно перечитать по cursor/watermark.
 
+KOS-420 добавляет SQLite committed-feed позиции, snapshot/page чтение с
+фиксированным high-watermark, отдельные inbound/outbound progress и durable
+inbox receipt с digest. Локальный commit и feed locator фиксируются в одной
+транзакции. Входящий receipt коммитится отдельно до применения; неуспешное
+применение оставляет ограниченный `received` payload для повтора, успешное
+атомарно ставит `applied` с изменением объекта и очищает payload. Идентификатор
+inbox стабилен для peer/entity/revision; повтор с тем же ID и другим digest
+отклоняется. Повторное применение не обещает exactly-once поверх сети.
+
+KOS-420 подключает sender к durable feed и адресной cursor-пагинации. Feed
+позиция задаёт стабильный `LiveChange.change_id`, а повторная отправка после
+разрыва использует тот же ID. Feed хранит locator и revision, не immutable
+payload; чтение берёт только объекты выбранной страницы с ограничением размера.
+Текущий `LiveAck` подтверждает применённую запись. Различение durable receipt
+и applied position для батчей остаётся частью capability negotiation из
+KOS-421; wire shape здесь не меняется.
+
 После crash между COMMIT и уведомлением данные обнаруживаются из durable feed. Если receiver применил сообщение, но ACK потерян, повтор распознаётся по стабильной идентичности и не применяет эффект второй раз. Обещание — повторяемая доставка с идемпотентным применением, а не магическое exactly-once поверх сети.
 
 События scoped по экземпляру ARK и поколению открытой БД. Subscription сообщает о gap и даёт resync-контракт. Для критичных внешних эффектов одного broadcast недостаточно. Производные поисковые индексы либо обновляются в транзакции, либо имеют явный lag и процедуру rebuild.
@@ -185,7 +204,18 @@ Replay reservation, применение payload и обновление sync pr
 
 ## 9. Durability и восстановление
 
-Нужно явно выбрать, когда ответ `ok` считается устойчивым к потере питания. SQLite WAL + NORMAL сохраняет согласованность, но допускает потерю последних commit при отказе ОС/питания; FULL добавляет sync WAL на каждом commit. Это описано в [SQLite PRAGMA synchronous](https://www.sqlite.org/pragma.html#pragma_synchronous). Для основной пользовательской БД разумная исходная политика — FULL, с замером задержек и платформенных настроек. Это рекомендация для отдельного изменения, не выполненная настройка.
+Для основной пользовательской БД используется SQLite WAL + `synchronous=FULL`:
+успешный command receipt следует за синхронным WAL commit при условии, что ОС
+и устройство исполняют flush. SQLite указывает, что WAL с `NORMAL` сохраняет
+целостность, но может откатить последний commit после отказа ОС/питания, тогда
+как `FULL` синхронизирует WAL при каждом commit ([SQLite PRAGMA
+documentation](https://www.sqlite.org/pragma.html#pragma_synchronous)). Локальный
+чередующийся microbenchmark наблюдал median 0.0578 ms/commit для FULL и
+0.0154 ms для NORMAL, но не определил узкое место и не измерил Engine path;
+результат inconclusive для пользовательской задержки. Решение и значение
+commit receipt описаны в [ADR-001](adr/ADR-001-ark-wal-full.md); метод и
+ограничения приведены в [измерении WAL durability](experiments/2026-10-16-ark-sync-durability.md).
+Restore к старому backup и media failure остаются отдельными случаями.
 
 Backup создаётся SQLite backup API/согласованным snapshot, с manifest версии и проверкой. Простая копия живого `ark.db` без учёта WAL недостаточна. Проверяется восстановление на отдельной БД.
 

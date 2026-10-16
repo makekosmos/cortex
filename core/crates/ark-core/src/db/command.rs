@@ -13,17 +13,20 @@ pub(crate) use commands::{
     AcquireIntegrationRefreshLeaseCommand, ApplyAuthenticatedSyncEntityCommand,
     ApplySignedIntegrationFrameCommand, ApplySyncEntityCommand, AuthenticatedCoreTaskWrite,
     AuthorizedTransportKeyQuery, CanonicalGameUpsertCommand, ClearAllCommand,
+    CommittedFeedDeliveryPageQuery, CommittedFeedPageQuery, CommittedFeedProgress,
+    CommittedFeedProgressCommand, CommittedFeedProgressOperation, CommittedFeedSnapshotQuery,
     CompactUsageSyncLogCommand, DeleteObjectLinkCommand, DeleteObjectTypeCommand,
     DeleteTrashedCommand, EnsureUsageSequenceMigratedCommand, GetSyncKeyValueQuery,
     IdentityErrorStyle, IntegrationReadQuery, LegacyDeleteCommand, LegacyGraphWriteCommand,
     LoadEntitiesQuery, LoadOrGenerateIrohSecretKeyCommand, LocalBookCoverCommand,
     LocalCoreTaskWrite, LocalObjectDeleteCommand, LocalObjectUpsertCommand, LocalUsageWriteCommand,
     ObjectReadQuery, PersistIntegrationGrantCommand, PersistNodeAuthorizationCommand,
-    PublishIntegrationCredentialEnvelopeCommand, RegisterPackageTypesCommand,
-    ReplaceObjectLinkCommand, RestoreSnapshotCommand, SetLocalSyncKeyValueCommand,
-    SetSyncKeyValueCommand, SystemReadQuery, TrackedAppDeleteCommand, TrackedAppUpsertCommand,
-    TypeReadQuery, UpsertExternalRefCommand, UpsertObjectLinkCommand, UpsertObjectTypeCommand,
-    UsageCompleteThroughQuery, UsageReadQuery, ValidateOutboundSignedFrameQuery,
+    PublishIntegrationCredentialEnvelopeCommand, ReceiveInboxReceiptCommand,
+    RegisterPackageTypesCommand, ReplaceObjectLinkCommand, RestoreSnapshotCommand,
+    SetLocalSyncKeyValueCommand, SetSyncKeyValueCommand, SystemReadQuery, TrackedAppDeleteCommand,
+    TrackedAppUpsertCommand, TypeReadQuery, UpsertExternalRefCommand, UpsertObjectLinkCommand,
+    UpsertObjectTypeCommand, UsageCompleteThroughQuery, UsageReadQuery,
+    ValidateOutboundSignedFrameQuery,
 };
 #[cfg(test)]
 pub(crate) use operation_receipt::OperationResult;
@@ -138,6 +141,22 @@ impl CommandContext {
                 Err(DbError::Permission("sync principal required".into()))
             }
             CommandSource::Engine => Err(DbError::Permission("sync principal required".into())),
+        }
+    }
+
+    pub(crate) fn require_sync_peer_matches(&self, peer_device_id: &str) -> Result<(), DbError> {
+        if self.class != CommandClass::SyncLive && self.class != CommandClass::Backfill {
+            return Err(DbError::Invalid("sync command class required".into()));
+        }
+        match &self.source {
+            CommandSource::System => Ok(()),
+            CommandSource::DeviceId(context_peer) if context_peer == peer_device_id => Ok(()),
+            CommandSource::DeviceId(_) => {
+                Err(DbError::Permission("sync peer identity mismatch".into()))
+            }
+            CommandSource::ApplicationPackage(_) | CommandSource::Engine => {
+                Err(DbError::Permission("sync principal required".into()))
+            }
         }
     }
 

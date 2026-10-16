@@ -110,6 +110,79 @@ impl PeerProgressPort for BackfillBarrier {
 }
 
 #[async_trait::async_trait]
+impl ark_core::application::sync_storage::CommittedFeedPort for BackfillBarrier {
+    fn selective_sync_policy_generation(&self) -> i64 {
+        self.inner.selective_sync_policy_generation()
+    }
+
+    async fn committed_feed_snapshot(
+        &self,
+    ) -> Result<ark_core::application::sync_storage::FeedSnapshot, String> {
+        self.inner.committed_feed_snapshot().await
+    }
+
+    async fn committed_feed_page(
+        &self,
+        after_position: i64,
+        high_watermark: i64,
+        limit: usize,
+    ) -> Result<Vec<ark_core::application::sync_storage::CommittedFeedEntry>, String> {
+        self.inner
+            .committed_feed_page(after_position, high_watermark, limit)
+            .await
+    }
+
+    async fn committed_feed_delivery_page(
+        &self,
+        after_position: i64,
+        high_watermark: i64,
+        limit: usize,
+    ) -> Result<ark_core::application::sync_storage::CommittedFeedDeliveryPage, String> {
+        self.inner
+            .committed_feed_delivery_page(after_position, high_watermark, limit)
+            .await
+    }
+
+    async fn begin_outbound_policy(
+        &self,
+        peer: &str,
+        generation: i64,
+    ) -> Result<ark_core::application::sync_storage::OutboundProgress, String> {
+        self.inner.begin_outbound_policy(peer, generation).await
+    }
+    async fn complete_outbound_snapshot(
+        &self,
+        peer: &str,
+        generation: i64,
+    ) -> Result<ark_core::application::sync_storage::OutboundProgress, String> {
+        self.inner
+            .complete_outbound_snapshot(peer, generation)
+            .await
+    }
+    async fn record_outbound_scan(
+        &self,
+        peer: &str,
+        generation: i64,
+        through: i64,
+    ) -> Result<ark_core::application::sync_storage::OutboundProgress, String> {
+        self.inner
+            .record_outbound_scan(peer, generation, through)
+            .await
+    }
+    async fn acknowledge_outbound(
+        &self,
+        peer: &str,
+        generation: i64,
+        position: i64,
+        ack: ark_core::application::sync_storage::OutboundAck,
+    ) -> Result<ark_core::application::sync_storage::OutboundProgress, String> {
+        self.inner
+            .acknowledge_outbound(peer, generation, position, ack)
+            .await
+    }
+}
+
+#[async_trait::async_trait]
 impl IntegrationReplicationBackend for BackfillBarrier {}
 
 #[async_trait::async_trait]
@@ -260,7 +333,8 @@ async fn six_devices_converge_during_initial_import_and_local_edit() {
     let interactive =
         super::selective_object_entity("interactive-b", "core.task", "Edited during import", 1000);
     devices[0].1.apply_entity(&interactive).await.unwrap();
-    devices[0].2.broadcast_live_change(interactive).await;
+    // Deliberately drop the wake-up: the connected client's periodic durable
+    // feed drain must recover this committed update without waiting for reconnect.
     release_tx.send(true).unwrap();
 
     let deadline = tokio::time::Instant::now() + Duration::from_secs(20);

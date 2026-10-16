@@ -13,6 +13,9 @@
                 }
 
                 reconnect_delay = RECONNECT_BASE_MS;
+                // An unacknowledged cursor remains pending in durable peer
+                // progress. Releasing the connection-local claim replays it.
+                *feed_in_flight.lock().await = None;
 
                 let (mut ws_sink, mut ws_stream_rx) = ws_stream.split();
 
@@ -68,11 +71,25 @@
                 // Read messages
                 let mut authenticated = false;
                 let mut sync_complete = false;
-                let mut queued_live_changes: Vec<SyncEntity> = Vec::new();
+                let mut pending_initial_snapshot_ack: Option<String> = None;
                 let mut peer_device_id_actual = String::new();
+                let mut feed_recovery = tokio::time::interval(Duration::from_secs(1));
+                // `interval` ticks immediately; start the bounded recovery
+                // period after the connection has had a chance to authenticate.
+                feed_recovery.tick().await;
 
-                while let Some(Ok(msg)) = ws_stream_rx.next().await {
-                    match msg {
+                loop {
+                    tokio::select! {
+                        _ = feed_recovery.tick() => {
+                            if let Err(error) = feed_recovery::pump(
+                                &storage, &authenticated_tx, &feed_in_flight,
+                            ).await {
+                                eprintln!("{TAG} periodic committed feed drain failed: {error}");
+                            }
+                        }
+                        maybe_msg = ws_stream_rx.next() => {
+                            let Some(Ok(msg)) = maybe_msg else { break; };
+                            match msg {
                         Message::Text(text) => {
                             if let Some(sync_msg) = deserialize_message(&text) {
                                 match sync_msg {
@@ -122,12 +139,7 @@
                                             }
                                         }
 
-                                        // Reject self-connect: if the server's hello
-                                        // claims our own device_id, we accidentally
-                                        // connected to our own SyncServer (stale phantom
-                                        // peer record pointing at our own LAN IP). Close;
-                                        // retrying stops only when no other addresses
-                                        // remain — a pure self-reference is evicted.
+                                        // Reject self-connects and evict pure self-references.
                                         if !server_device_id.is_empty()
                                             && server_device_id == device_id
                                         {
@@ -135,12 +147,7 @@
                                                 "{TAG} Rejecting self-connect to \
                                                      {server_device_name} ({server_device_id})"
                                             );
-                                            // The winning address
-                                            // looped back to us — drop
-                                            // just that address and
-                                            // only give up when no
-                                            // others remain (a pure
-                                            // self-record).
+                                            // Drop only this address; stop if it was the last one.
                                             let remaining = {
                                                 let mut p = peer.write().await;
                                                 p.addresses.retain(|a| a != &winning_addr);
@@ -156,10 +163,21 @@
                                             break;
                                         }
 
+                                        let generation =
+                                                storage.selective_sync_policy_generation();
+                                        if let Err(error) = storage
+                                            .begin_outbound_policy(&server_device_id, generation)
+                                            .await
+                                        {
+                                            eprintln!(
+                                                "{TAG} outbound snapshot baseline failed: {error}"
+                                            );
+                                            break;
+                                        }
                                         authenticated = true;
                                         peer_device_id_actual = server_device_id.clone();
                                         *authenticated_tx.lock().await =
-                                            Some((server_device_id.clone(), tx.clone()));
+                                            Some((server_device_id.clone(), tx.clone(), false));
                                         // Adopt the authenticated
                                         // identity — bootstrap records
                                         // carry a "seed-*" placeholder
@@ -209,7 +227,7 @@
                                             continue;
                                         }
 
-                                        if let Err(error) = send_missing_entities::send(
+                                        let batch_id = match send_missing_entities::send(
                                             &storage,
                                             &tx,
                                             &peer_device_id_actual,
@@ -218,112 +236,78 @@
                                         )
                                         .await
                                         {
-                                            eprintln!("{TAG} outbound sync failed: {error}");
-                                            break;
-                                        }
+                                            Ok(batch_id) => batch_id,
+                                            Err(error) => {
+                                                eprintln!("{TAG} outbound sync failed: {error}");
+                                                break;
+                                            }
+                                        };
 
                                         sync_complete = true;
-                                        // Flush queued live changes
-                                        for entity in queued_live_changes.drain(..) {
-                                            let change_id = generate_id();
-                                            send_msg(
-                                                &tx,
-                                                &LanSyncMessage::LiveChange {
-                                                    change_id,
-                                                    entity,
-                                                    origin_device_id: None,
-                                                },
-                                            );
-                                        }
+                                        pending_initial_snapshot_ack = Some(batch_id);
+                                        // Broadcasts are wakeups only; drain the
+                                        // durable feed so reconnect can replay the
+                                        // same cursor-derived change ID.
                                     }
 
                                     LanSyncMessage::SyncChanges {
-                                        batch_id,
-                                        entities,
-                                        is_last,
-                                        usage_complete_through,
-                                        ..
+                                        batch_id, entities, is_last, usage_complete_through, ..
                                     } => {
-                                        if !authenticated {
-                                            continue;
-                                        }
-
-                                        let mut local_vector =
-                                            match load_version_vector(&storage).await {
-                                                Ok(vector) => vector,
-                                                Err(error) => {
-                                                    eprintln!(
-                                                    "{TAG} failed to load version vector: {error}"
-                                                );
-                                                    break;
-                                                }
-                                            };
-                                        let mut accepted = 0;
-                                        let mut vector_updated = false;
-
-                                        for entity in &entities {
-                                            let should_apply = is_usage_entity(entity)
-                                                || local_vector.get(&entity.id).is_none_or(|hlc| {
-                                                    HLC::is_newer(&entity.hlc, hlc)
-                                                });
-                                            if should_apply {
-                                                match storage
-                                                    .apply_authenticated_entity(
-                                                        entity,
-                                                        &peer_device_id_actual,
-                                                    )
-                                                    .await
-                                                {
-                                                    Ok(()) => {
-                                                        vector_updated |= observe_non_usage_entity(
-                                                            &mut local_vector,
-                                                            entity,
-                                                        );
-                                                        accepted += 1;
-                                                        if let Some(handler) =
-                                                            on_change.lock().await.as_ref()
-                                                        {
-                                                            handler(entity.clone());
-                                                        }
-                                                    }
-                                                    Err(e) => {
-                                                        eprintln!(
-                                                            "{TAG} Failed to apply sync entity \
-                                                                 {}:{}: {e}",
-                                                            entity.entity_type, entity.id
-                                                        );
-                                                    }
-                                                }
-                                            }
-                                        }
-
-                                        if let Err(error) = crate::sync_server::persist_pull_vector(
-                                            &storage,
-                                            &mut local_vector,
-                                            vector_updated,
-                                            is_last,
-                                            usage_complete_through.as_ref(),
-                                        )
-                                        .await
-                                        {
-                                            eprintln!(
-                                                "{TAG} failed to persist pull progress: {error}"
-                                            );
+                                        if !authenticated { continue; }
+                                        let context = sync_changes::Context {
+                                            storage: &storage,
+                                            tx: &tx,
+                                            peer_device_id: &peer_device_id_actual,
+                                            on_change: &on_change,
+                                        };
+                                        if let Err(error) = sync_changes::apply(
+                                            context, batch_id, entities, is_last,
+                                            usage_complete_through,
+                                        ).await {
+                                            eprintln!("{TAG} inbound sync batch failed: {error}");
                                             break;
-                                        }
-                                        send_msg(
-                                            &tx,
-                                            &LanSyncMessage::SyncAck { batch_id, accepted },
-                                        );
-
-                                        if is_last {
-                                            eprintln!(
-                                                "{TAG} Received all sync batches from server"
-                                            );
                                         }
                                     }
 
-                                    LanSyncMessage::SyncAck { .. } => {}
+                                    LanSyncMessage::SyncAck { batch_id, .. } => {
+                                        if pending_initial_snapshot_ack.as_deref()
+                                            == Some(batch_id.as_str())
+                                        {
+                                            let generation =
+                                                storage.selective_sync_policy_generation();
+                                            if let Err(error) = storage
+                                                .complete_outbound_snapshot(
+                                                    &peer_device_id_actual,
+                                                    generation,
+                                                )
+                                                .await
+                                            {
+                                                eprintln!(
+                                                    "{TAG} outbound snapshot completion failed: \
+                                                     {error}"
+                                                );
+                                                break;
+                                            }
+                                            pending_initial_snapshot_ack = None;
+                                            if let Some((_, _, complete)) =
+                                                authenticated_tx.lock().await.as_mut()
+                                            {
+                                                *complete = true;
+                                            }
+                                            if let Err(error) = super::pump_client_committed_feed(
+                                                &storage,
+                                                &peer_device_id_actual,
+                                                &tx,
+                                                &feed_in_flight,
+                                            )
+                                            .await
+                                            {
+                                                eprintln!(
+                                                    "{TAG} committed feed drain failed: {error}"
+                                                );
+                                            }
+                                        }
+                                    }
 
                                     LanSyncMessage::SignedIntegrationFrame { frame } => {
                                         if !authenticated {
@@ -378,16 +362,16 @@
                                                 .get(&entity.id)
                                                 .is_none_or(|hlc| HLC::is_newer(&entity.hlc, hlc));
 
-                                        if should_apply {
-                                            match storage
-                                                .apply_authenticated_entity(
-                                                    &entity,
-                                                    &peer_device_id_actual,
-                                                )
-                                                .await
-                                            {
+                                        match storage
+                                            .apply_authenticated_entity_with_id(
+                                                &entity,
+                                                &peer_device_id_actual,
+                                                &change_id,
+                                            )
+                                            .await
+                                        {
                                                 Ok(()) => {
-                                                    if observe_non_usage_entity(
+                                                    if should_apply && observe_non_usage_entity(
                                                         &mut local_vector,
                                                         &entity,
                                                     ) {
@@ -418,10 +402,12 @@
                                                         }
                                                     }
 
-                                                    if let Some(handler) =
-                                                        on_change.lock().await.as_ref()
-                                                    {
-                                                        handler(entity);
+                                                    if should_apply {
+                                                        if let Some(handler) =
+                                                            on_change.lock().await.as_ref()
+                                                        {
+                                                            handler(entity);
+                                                        }
                                                     }
                                                 }
                                                 Err(e) => {
@@ -434,13 +420,29 @@
                                                     // committed locally; the sender must retry it.
                                                     break;
                                                 }
-                                            }
                                         }
 
                                         send_msg(&tx, &LanSyncMessage::LiveAck { change_id });
                                     }
 
-                                    LanSyncMessage::LiveAck { .. } => {}
+                                    LanSyncMessage::LiveAck { change_id } => {
+                                        if sync_complete {
+                                            if let Err(error) = super::acknowledge_client_feed(
+                                                &storage,
+                                                &peer_device_id_actual,
+                                                &change_id,
+                                                &tx,
+                                                &feed_in_flight,
+                                            )
+                                            .await
+                                            {
+                                                eprintln!(
+                                                    "{TAG} committed feed ACK failed: {error}"
+                                                );
+                                                break;
+                                            }
+                                        }
+                                    }
 
                                     LanSyncMessage::PeerList { peers: peer_list } => {
                                         if !authenticated {
@@ -465,6 +467,8 @@
                         }
                         Message::Close(_) => break,
                         _ => {}
+                            }
+                        }
                     }
                 }
 

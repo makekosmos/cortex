@@ -1,5 +1,148 @@
 use super::*;
 
+const FEED_CHANGE_PREFIX: &str = "ark-feed-v1:";
+
+pub(super) async fn pump_committed_feed(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+    peers: &Arc<Mutex<HashMap<usize, PeerState>>>,
+    peer_id: usize,
+) -> Result<(), String> {
+    let (device_id, ready, in_flight) = {
+        let peers = peers.lock().await;
+        let Some(peer) = peers.get(&peer_id) else {
+            return Ok(());
+        };
+        (
+            peer.device_id.clone(),
+            peer.authenticated && peer.sync_complete,
+            peer.in_flight_feed_position,
+        )
+    };
+    if !ready || in_flight.is_some() {
+        return Ok(());
+    }
+
+    let generation = storage.selective_sync_policy_generation();
+    let progress = storage
+        .begin_outbound_policy(&device_id, generation)
+        .await?;
+    if !progress.initial_snapshot.is_complete() {
+        return Ok(());
+    }
+    let snapshot = storage.committed_feed_snapshot().await?;
+    let page = storage
+        .committed_feed_delivery_page(
+            progress.applied_through,
+            snapshot.high_watermark,
+            crate::db::MAX_FEED_PAGE_SIZE,
+        )
+        .await?;
+    let deliveries = match page {
+        crate::application::sync_storage::CommittedFeedDeliveryPage::Deliveries(deliveries) => {
+            deliveries
+        }
+        crate::application::sync_storage::CommittedFeedDeliveryPage::TooLarge {
+            position,
+            entity_id,
+            serialized_bytes,
+            max_bytes,
+        } => {
+            return Err(format!(
+                "committed_feed_entity_too_large:{position}:{entity_id}:\
+                 {serialized_bytes}:{max_bytes}"
+            ));
+        }
+    };
+
+    for delivery in deliveries {
+        let position = delivery.entry.position;
+        storage
+            .record_outbound_scan(&device_id, generation, position)
+            .await?;
+        let Some(entity) = storage.filter_outgoing_entity(&delivery.entity) else {
+            storage
+                .acknowledge_outbound(
+                    &device_id,
+                    generation,
+                    position,
+                    crate::application::sync_storage::OutboundAck::Applied,
+                )
+                .await?;
+            continue;
+        };
+        let tx = {
+            let mut peers = peers.lock().await;
+            let Some(peer) = peers.get_mut(&peer_id) else {
+                return Ok(());
+            };
+            if !peer.authenticated || !peer.sync_complete || peer.in_flight_feed_position.is_some()
+            {
+                return Ok(());
+            }
+            peer.in_flight_feed_position = Some(position);
+            peer.tx.clone()
+        };
+        let message = LanSyncMessage::LiveChange {
+            change_id: format!("{FEED_CHANGE_PREFIX}{position}"),
+            entity,
+            origin_device_id: None,
+        };
+        if tx
+            .send(Message::Text(serialize_message(&message).into()))
+            .is_err()
+        {
+            if let Some(peer) = peers.lock().await.get_mut(&peer_id) {
+                peer.in_flight_feed_position = None;
+            }
+        }
+        return Ok(());
+    }
+
+    if progress.scanned_through < snapshot.high_watermark {
+        storage
+            .record_outbound_scan(&device_id, generation, snapshot.high_watermark)
+            .await?;
+    }
+    Ok(())
+}
+
+pub(super) async fn handle_committed_feed_ack(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+    peers: &Arc<Mutex<HashMap<usize, PeerState>>>,
+    peer_id: usize,
+    change_id: &str,
+) -> Result<(), String> {
+    let Some(position) = change_id
+        .strip_prefix(FEED_CHANGE_PREFIX)
+        .and_then(|value| value.parse::<i64>().ok())
+    else {
+        return Ok(());
+    };
+    let device_id = {
+        let peers = peers.lock().await;
+        let Some(peer) = peers.get(&peer_id) else {
+            return Ok(());
+        };
+        if peer.in_flight_feed_position != Some(position) {
+            return Ok(());
+        }
+        peer.device_id.clone()
+    };
+    let generation = storage.selective_sync_policy_generation();
+    storage
+        .acknowledge_outbound(
+            &device_id,
+            generation,
+            position,
+            crate::application::sync_storage::OutboundAck::Applied,
+        )
+        .await?;
+    if let Some(peer) = peers.lock().await.get_mut(&peer_id) {
+        peer.in_flight_feed_position = None;
+    }
+    pump_committed_feed(storage, peers, peer_id).await
+}
+
 impl SyncServer {
     /// Stop the server.
     pub async fn stop(&self) {
@@ -52,33 +195,30 @@ impl SyncServer {
     }
 
     /// Broadcast a live change to all authenticated peers.
-    pub async fn broadcast_live_change(&self, entity: SyncEntity, exclude_device_id: Option<&str>) {
-        let Some(entity) = self.storage.filter_outgoing_entity(&entity) else {
-            return;
-        };
-        let change_id = generate_id();
-        let msg = LanSyncMessage::LiveChange {
-            change_id,
-            entity: entity.clone(),
-            origin_device_id: None,
-        };
-        let json = serialize_message(&msg);
-
-        let mut peers = self.peers.lock().await;
-        for peer in peers.values_mut() {
-            if !peer.authenticated {
-                continue;
-            }
-            if let Some(exclude) = exclude_device_id {
-                if peer.device_id == exclude {
+    pub async fn broadcast_live_change(&self, exclude_device_id: Option<&str>) {
+        let peer_ids = {
+            let peers = self.peers.lock().await;
+            let mut ids = Vec::new();
+            for (peer_id, peer) in peers.iter() {
+                if !peer.authenticated {
                     continue;
                 }
+                if let Some(exclude) = exclude_device_id {
+                    if peer.device_id == exclude {
+                        continue;
+                    }
+                }
+                if !peer.sync_complete {
+                    continue;
+                }
+                ids.push(*peer_id);
             }
-            if !peer.sync_complete {
-                peer.queued_live_changes.push(entity.clone());
-                continue;
+            ids
+        };
+        for peer_id in peer_ids {
+            if let Err(error) = pump_committed_feed(&self.storage, &self.peers, peer_id).await {
+                eprintln!("{TAG} committed feed wake failed: {error}");
             }
-            let _ = peer.tx.send(Message::Text(json.clone().into()));
         }
     }
 

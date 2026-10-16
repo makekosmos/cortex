@@ -11,6 +11,16 @@ pub trait AuthenticatedEntityBackend: Send + Sync {
     ) -> Result<(), String> {
         Err("authenticated_apply_unsupported".into())
     }
+
+    async fn apply_authenticated_entity_with_id(
+        &self,
+        entity: &SyncEntity,
+        authenticated_peer_id: &str,
+        _message_id: &str,
+    ) -> Result<(), String> {
+        self.apply_authenticated_entity(entity, authenticated_peer_id)
+            .await
+    }
 }
 
 /// Trusted transport identity records used while authenticating a paired peer.
@@ -106,6 +116,7 @@ where
     Self: crate::application::sync_storage::SyncEntityReadPort
         + crate::application::sync_storage::SyncEntityMutationPort
         + crate::application::sync_storage::PeerProgressPort
+        + crate::application::sync_storage::CommittedFeedPort
         + AuthenticatedEntityBackend
         + PeerIdentityBackend
         + IntegrationReplicationBackend,
@@ -116,6 +127,7 @@ impl<T> SyncRuntimeStorage for T where
     T: crate::application::sync_storage::SyncEntityReadPort
         + crate::application::sync_storage::SyncEntityMutationPort
         + crate::application::sync_storage::PeerProgressPort
+        + crate::application::sync_storage::CommittedFeedPort
         + AuthenticatedEntityBackend
         + PeerIdentityBackend
         + IntegrationReplicationBackend
