@@ -137,10 +137,7 @@ pub(super) async fn get_usage_title_total(
     state: &Arc<ServiceState>,
     query: String,
 ) -> Result<Value, String> {
-    with_conn(state, |conn| {
-        serde_json::to_value(db::get_usage_title_total(conn, &query)?)
-            .map_err(|error| error.to_string())
-    })
+    usage_read(state, db::UsageReadQuery::TitleTotal(query)).await
 }
 
 pub(super) async fn get_usage_analytics(
@@ -149,29 +146,28 @@ pub(super) async fn get_usage_analytics(
     top_apps_limit: Option<i64>,
     recent_sessions_limit: Option<i64>,
 ) -> Result<Value, String> {
-    with_conn(state, |conn| {
-        let snapshot = db::load_usage_analytics(
-            conn,
-            range_days.unwrap_or(21),
-            top_apps_limit.unwrap_or(8),
-            recent_sessions_limit.unwrap_or(24),
-            // Resolved by the Engine via GetSystemWindowsDirectoryW at service
-            // construction — a request param would let clients lie about what
-            // counts as a system app (KOS-287).
-            state.windows_dir.as_deref(),
-        )?;
-        serde_json::to_value(snapshot).map_err(|e| e.to_string())
-    })
+    usage_read(
+        state,
+        db::UsageReadQuery::Analytics {
+            range_days: range_days.unwrap_or(21),
+            top_apps_limit: top_apps_limit.unwrap_or(8),
+            recent_sessions_limit: recent_sessions_limit.unwrap_or(24),
+            // Resolved by the Engine at service construction, not from request data.
+            windows_dir: state.windows_dir.clone(),
+        },
+    )
+    .await
 }
 
 pub(super) async fn list_recent_usage_processes(
     state: &Arc<ServiceState>,
     limit: Option<i64>,
 ) -> Result<Value, String> {
-    with_conn(state, |conn| {
-        let candidates = db::list_recent_usage_processes(conn, limit.unwrap_or(10))?;
-        serde_json::to_value(candidates).map_err(|e| e.to_string())
-    })
+    usage_read(
+        state,
+        db::UsageReadQuery::RecentProcesses(limit.unwrap_or(10)),
+    )
+    .await
 }
 
 pub(super) async fn search_usage_processes(
@@ -179,10 +175,14 @@ pub(super) async fn search_usage_processes(
     query: String,
     limit: Option<i64>,
 ) -> Result<Value, String> {
-    with_conn(state, |conn| {
-        let candidates = db::search_usage_processes(conn, &query, limit.unwrap_or(10))?;
-        serde_json::to_value(candidates).map_err(|e| e.to_string())
-    })
+    usage_read(
+        state,
+        db::UsageReadQuery::SearchProcesses {
+            query,
+            limit: limit.unwrap_or(10),
+        },
+    )
+    .await
 }
 
 pub(super) async fn get_usage_game_playtime_summary(
@@ -191,13 +191,20 @@ pub(super) async fn get_usage_game_playtime_summary(
     range_start: Option<String>,
     range_end: Option<String>,
 ) -> Result<Value, String> {
-    with_conn(state, |conn| {
-        let summary = db::load_usage_game_playtime_summary(
-            conn,
-            &bindings,
-            range_start.as_deref(),
-            range_end.as_deref(),
-        )?;
-        serde_json::to_value(summary).map_err(|e| e.to_string())
-    })
+    usage_read(
+        state,
+        db::UsageReadQuery::GamePlaytimeSummary {
+            bindings,
+            range_start,
+            range_end,
+        },
+    )
+    .await
+}
+
+async fn usage_read(state: &ServiceState, query: db::UsageReadQuery) -> Result<Value, String> {
+    get_db_handle(state)?
+        .query(db::CommandContext::engine(), query)
+        .await
+        .map_err(|error| error.to_string())
 }

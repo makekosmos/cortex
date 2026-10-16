@@ -28,7 +28,7 @@ pub(crate) use command::{
     ReplaceObjectLinkCommand, RestoreSnapshotCommand, SetLocalSyncKeyValueCommand,
     SetSyncKeyValueCommand, TrackedAppDeleteCommand, TrackedAppUpsertCommand, TypeReadQuery,
     UpsertExternalRefCommand, UpsertObjectLinkCommand, UpsertObjectTypeCommand,
-    UsageCompleteThroughQuery, ValidateOutboundSignedFrameQuery,
+    UsageCompleteThroughQuery, UsageReadQuery, ValidateOutboundSignedFrameQuery,
 };
 include!("db/integration_replication_common.rs");
 include!("db/integration_replication_records.rs");

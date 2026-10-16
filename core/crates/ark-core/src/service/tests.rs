@@ -63,6 +63,7 @@ mod sync_lifecycle;
 mod sync_ticket_pending;
 mod type_mutation_commands;
 mod usage_commands;
+mod usage_read_queries;
 mod write_tx;
 
 /// Выставляет capturing-транспорт и выставляет SyncRuntime в `state.sync`.

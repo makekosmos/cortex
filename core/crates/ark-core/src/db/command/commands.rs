@@ -11,6 +11,7 @@ mod system_mutation;
 mod type_mutation;
 mod type_read;
 mod usage;
+mod usage_read;
 
 pub(crate) use core_task::{AuthenticatedCoreTaskWrite, LocalCoreTaskWrite};
 pub(crate) use external_ref::UpsertExternalRefCommand;
@@ -45,6 +46,7 @@ pub(crate) use type_mutation::{
 };
 pub(crate) use type_read::TypeReadQuery;
 pub(crate) use usage::LocalUsageWriteCommand;
+pub(crate) use usage_read::UsageReadQuery;
 
 fn serialized_weight(value: &impl serde::Serialize) -> usize {
     serde_json::to_vec(value).map_or(usize::MAX, |bytes| bytes.len())
