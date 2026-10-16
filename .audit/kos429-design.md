@@ -66,6 +66,19 @@ Every data path requires `ReadyPeer`: VersionVector, SyncChanges, LiveChange, Pe
 
 After a disable event commits, mark all matching sessions not ready, close them, cancel queued sends, and reject every inbound/outbound user-data handler. A disabled peer may only complete the restricted control exchange needed to receive the signed history containing its tombstone, then the session closes. It cannot author registry updates or send data. Offline peers learn the event when they reconnect to an admitted peer; the contract is eventual, not instantaneous revocation of a disconnected device. Data already copied to a device is not remotely erased.
 
+## RelaySync live registry continuation
+
+The original admission contract also applies after the first exchange: rename and disable events must reach currently connected devices, and a disable must close every affected session before another data frame is processed. Two source-grounded sketches were compared for the missing Iroh path (`/tmp/ark-kos429-fanout-a.md` and `/tmp/ark-kos429-fanout-b.md`). Continue with the per-peer admission reducer (candidate B): the peer entry owns its endpoint, registry session id, generation, and admission phase for the full connection lifetime. Do not create a second process-wide readiness map alongside `RelayPeerState`.
+
+Local committed events and remote `RegistryPageApply::applied_events` enter one service-owned registry-delta callback. Remote input is never relayed directly: only newly verified and committed events may fan out, so duplicate delivery is idempotent. The callback revokes every matching peer session and clears Iroh's data-ready transport gate before scheduling network writes. Each send carries the current peer-session token and is checked again at the writer boundary; a stale callback cannot target a replacement session. A disabled peer may receive only the signed registry control event on its current endpoint before the session closes. Reconnect uses the durable event history and digest exchange before user data becomes ready.
+
+This continuation does not make the custom room WebSocket relay registry-capable. Its current broadcast-only transport cannot authenticate and address a specific pending or disabled recipient. It remains fail-closed before user data until the relay protocol/server can provide authenticated peer identity, addressed delivery, and a recipient-side data gate. KOS-429 stays open until this boundary and the direct/Iroh paths are proven by transport-level tests.
+
+Acceptance evidence for this unit must include a multi-peer Iroh path, duplicate and invalid update handling, revocation of a third connected peer, stale-session rejection, and an assertion that queued user data is dropped after the disable is committed. A reconnect test must observe registry history completion before the first VersionVector. Tests should use the production SQLite registry commands and exercise the transport writer gate rather than only testing a helper map.
+
+- Candidate A used a standalone session map. Rejected because it would create a parallel admission authority next to the peer state.
+- Candidate B keeps one owner for connection and admission lifecycle and provides a callback seam for cross-transport fanout. Selected for implementation.
+
 ## Existing-code grounding
 
 - `service/sync/start.rs` starts the direct `SyncServer` and, depending on configuration, a WebSocket relay or Iroh-backed `RelaySync`; all use cases need the same readiness rule.

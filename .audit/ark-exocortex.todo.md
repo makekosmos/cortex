@@ -15,11 +15,11 @@
 
 Definition of done for this initial delivery: reviewed architecture and epic with testable children; a verified, behavior-preserving first structural change and source-name guard. This does not claim completion of later schema, merge, blob or protocol work.
 
-Throughput checkpoint: 3 gpt-6-luna workers, source ownership isolated by worktree/output directory. Reuse existing Cargo target configuration; do not parallelize heavyweight Cargo builds. Linear connection does not block local implementation.
+Throughput checkpoint for the full-epic pass: at most two read-only GPT-6-Luna reviewers; keep heavyweight Cargo builds serial. Linear connection does not block local implementation.
 
 ## Full KOS-412 execution
 
-Live Linear status checked issue-by-issue on 2026-10-16 for `KOS-413` through `KOS-429`: 9 Done, 1 In Progress, 7 Backlog (17 total). `list_issues(parentId=KOS-412)` omitted KOS-413..416 and KOS-418..419 despite their parent field; direct `get_issue` confirmed all six are children and Done. The foundation checklist above records the initial delivery only. The full goal remains open until every issue and the epic acceptance criteria pass.
+Live Linear status checked issue-by-issue on 2026-10-16 for `KOS-413` through `KOS-429`: 9 Done, 2 In Progress (`KOS-422`, `KOS-429`), 6 Backlog (17 total). `list_issues(parentId=KOS-412)` omitted several children in the past, so the count comes from direct `get_issue` results for all 17 IDs. The foundation checklist above records the initial delivery only. The full goal remains open until every issue and the epic acceptance criteria pass.
 
 - [x] KOS-413 through KOS-421: contract census, source structure, storage port, application transaction, DB executor, committed feed, and protocol negotiation (9/17 epic issues).
 - [ ] KOS-422: per-device sync policy, local eviction, and backfill.
@@ -31,7 +31,7 @@ Live Linear status checked issue-by-issue on 2026-10-16 for `KOS-413` through `K
 - [ ] KOS-428: backup, restore, and sync-identity recovery tests.
 - [ ] KOS-429: signed device registry exchange, rename, disable, and the `ReadyPeer` data gate.
 
-KOS-429 remains the active implementation. Direct WebSocket challenge proof, signed registry paging, and Engine/Manager registry operations exist. This step replaces the direct server's mutable `authenticated` flag with a connection/device/registry-session-bound `ReadyPeer`; inbound dispatch and outbound writes recheck durable admission. Revocation closes data readiness and lets the reader lifecycle deliver disconnect cleanup. A new three-device integration assertion verifies that a disabled peer learns about its revocation during reconnect without becoming data-ready or receiving newly committed user data. RelayTransport still lacks registry capability and peer-addressed delivery, so it cannot safely provide registry admission. Equivalent coverage across remaining transports, independent review, and full repository validation remain open. Finish and verify every KOS-429 path before starting dependent issues.
+KOS-429 remains in progress. Direct WebSocket challenge proof, signed registry paging, and Engine/Manager registry operations exist. Direct SyncServer uses a connection/device/registry-session-bound `ReadyPeer`; inbound dispatch and outbound writes recheck durable admission. A three-device integration assertion verifies that a disabled peer learns about revocation on reconnect without becoming data-ready or receiving newly committed user data. The custom WebSocket relay offers no registry capability; the client rejects that negotiation before data readiness because the room relay lacks authenticated peer-addressed delivery. That is a safe failure, but it does not provide registry sync over that transport. Remaining transport coverage, fanout/revocation review, and full repository validation remain open.
 
 KOS-422 partial progress: device-owned profiles now have an Engine get/set API and are read/written through DB actor commands. Revisions are monotonic per device, active replacement is atomic, and SQLite reopen plus six-device isolation are tested. This does not yet exchange the receiver's policy with peers, bind network progress/ACKs to the policy revision and digest, or implement safe eviction and receipt-aware backfill.
 
