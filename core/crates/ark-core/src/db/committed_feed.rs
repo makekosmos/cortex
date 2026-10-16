@@ -24,3 +24,6 @@ include!("committed_feed/log.rs");
 include!("committed_feed/delivery.rs");
 include!("committed_feed/inbox.rs");
 include!("committed_feed/tests.rs");
+
+#[cfg(test)]
+mod policy_tests;
