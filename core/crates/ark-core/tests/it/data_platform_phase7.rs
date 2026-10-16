@@ -56,6 +56,18 @@ fn external_refs_are_additive_and_unique() {
 
 #[test]
 fn frozen_filter_v1_is_canonical_and_bounded() {
+    let typed = data_platform::FilterV1::parse(
+        r#"{"where":{"eq":{"value":null,"field":"title"}},"version":1}"#,
+    )
+    .unwrap();
+    let reordered = data_platform::FilterV1::parse(
+        r#"{"version":1,"where":{"eq":{"field":"title","value":null}}}"#,
+    )
+    .unwrap();
+    assert_eq!(typed, reordered);
+    assert_eq!(typed.digest(), reordered.digest());
+    assert_eq!(typed.digest().len(), 32);
+
     let canonical = data_platform::validate_filter_json(
         r#"{"where":{"eq":{"value":null,"field":"title"}},"version":1}"#,
     )
@@ -76,7 +88,10 @@ fn frozen_filter_v1_is_canonical_and_bounded() {
         data_platform::validate_filter_json("{}").unwrap(),
         r#"{"version":1,"where":{"and":[]}}"#
     );
-    assert_eq!(data_platform::filter_digest("{}").unwrap().len(), 32);
+    assert_eq!(
+        data_platform::filter_digest("{}").unwrap(),
+        data_platform::FilterV1::parse("{}").unwrap().digest()
+    );
 }
 
 #[test]

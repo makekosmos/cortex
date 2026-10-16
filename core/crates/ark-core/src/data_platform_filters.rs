@@ -1,3 +1,24 @@
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FilterV1 {
+    canonical_json: String,
+}
+
+impl FilterV1 {
+    pub fn parse(input: &str) -> Result<Self, String> {
+        Ok(Self {
+            canonical_json: validate_filter_json(input)?,
+        })
+    }
+
+    pub fn canonical_json(&self) -> &str {
+        &self.canonical_json
+    }
+
+    pub fn digest(&self) -> [u8; 32] {
+        Sha256::digest(self.canonical_json.as_bytes()).into()
+    }
+}
+
 pub fn validate_filter_json(input: &str) -> Result<String, String> {
     let value: Value =
         serde_json::from_str(input).map_err(|_| "invalid filter JSON".to_string())?;
@@ -24,8 +45,7 @@ pub fn validate_filter_json(input: &str) -> Result<String, String> {
 }
 
 pub fn filter_digest(input: &str) -> Result<[u8; 32], String> {
-    let canonical = validate_filter_json(input)?;
-    Ok(Sha256::digest(canonical.as_bytes()).into())
+    Ok(FilterV1::parse(input)?.digest())
 }
 
 fn validate_predicate(value: &Value, depth: usize, count: &mut usize) -> Result<(), String> {
