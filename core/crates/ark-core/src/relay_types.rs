@@ -34,6 +34,7 @@ struct RelayPeerState {
     platform: Option<String>,
     app_version: Option<String>,
     authenticated: bool,
+    negotiated_protocol: Option<crate::protocol::NegotiatedProtocol>,
 }
 
 struct IncomingSyncState {

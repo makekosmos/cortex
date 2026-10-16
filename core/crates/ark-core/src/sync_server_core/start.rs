@@ -149,6 +149,7 @@ impl SyncServer {
                                     app_version: None,
                                     authenticated: false,
                                     sync_complete: false,
+                                    negotiated_protocol: None,
                                     in_flight_feed_position: None,
                     pending_initial_snapshot_ack: None,
                                     tx: tx.clone(),

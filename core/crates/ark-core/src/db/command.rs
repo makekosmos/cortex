@@ -22,10 +22,10 @@ pub(crate) use commands::{
     LocalCoreTaskWrite, LocalObjectDeleteCommand, LocalObjectUpsertCommand, LocalUsageWriteCommand,
     ObjectReadQuery, PersistIntegrationGrantCommand, PersistNodeAuthorizationCommand,
     PublishIntegrationCredentialEnvelopeCommand, ReceiveInboxReceiptCommand,
-    RegisterPackageTypesCommand, ReplaceObjectLinkCommand, RestoreSnapshotCommand,
-    SetLocalSyncKeyValueCommand, SetSyncKeyValueCommand, SystemReadQuery, TrackedAppDeleteCommand,
-    TrackedAppUpsertCommand, TypeReadQuery, UpsertExternalRefCommand, UpsertObjectLinkCommand,
-    UpsertObjectTypeCommand, UsageCompleteThroughQuery, UsageReadQuery,
+    RegisterPackageTypesCommand, RemoteCoreTaskOutcome, ReplaceObjectLinkCommand,
+    RestoreSnapshotCommand, SetLocalSyncKeyValueCommand, SetSyncKeyValueCommand, SystemReadQuery,
+    TrackedAppDeleteCommand, TrackedAppUpsertCommand, TypeReadQuery, UpsertExternalRefCommand,
+    UpsertObjectLinkCommand, UpsertObjectTypeCommand, UsageCompleteThroughQuery, UsageReadQuery,
     ValidateOutboundSignedFrameQuery,
 };
 #[cfg(test)]

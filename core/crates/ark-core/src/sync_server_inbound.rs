@@ -63,15 +63,42 @@ pub(super) async fn handle_live_change(
         on_change,
         ..
     } = ctx;
-    let (tx, authenticated_peer_id) = {
+    let (tx, authenticated_peer_id, receipt_ack) = {
         let peers_guard = peers.lock().await;
         match peers_guard.get(&peer_id) {
-            Some(p) if p.authenticated => (p.tx.clone(), p.device_id.clone()),
+            Some(p) if p.authenticated => (
+                p.tx.clone(),
+                p.device_id.clone(),
+                p.negotiated_protocol.as_ref().is_some_and(|protocol| {
+                    protocol
+                        .capabilities
+                        .contains(&crate::protocol::ProtocolCapability::DurableReceiptAckV1)
+                }),
+            ),
             _ => return,
         }
     };
     if authenticated_peer_id.is_empty() {
         return;
+    }
+
+    if receipt_ack {
+        match storage
+            .receive_authenticated_entity_with_id(&entity, &authenticated_peer_id, &change_id)
+            .await
+        {
+            Ok(true) => send_msg(
+                &tx,
+                &LanSyncMessage::LiveReceiptAck {
+                    change_id: change_id.clone(),
+                },
+            ),
+            Ok(false) => {}
+            Err(error) => {
+                eprintln!("{TAG} failed to persist live receipt: {error}");
+                return;
+            }
+        }
     }
 
     let mut local_vector = match load_version_vector(storage).await {
@@ -90,7 +117,7 @@ pub(super) async fn handle_live_change(
         .apply_authenticated_entity_with_id(&entity, &authenticated_peer_id, &change_id)
         .await
     {
-        Ok(()) => {
+        Ok(crate::application::sync_storage::InboundApplyOutcome::Applied) => {
             if should_apply && observe_non_usage_entity(&mut local_vector, &entity) {
                 let stored_vector = match load_version_vector(storage).await {
                     Ok(vector) => vector,
@@ -120,17 +147,19 @@ pub(super) async fn handle_live_change(
                     .unwrap_or_default()
             };
             broadcast_to_others(storage, peers, Some(&peer_device_id)).await;
+            send_msg(&tx, &LanSyncMessage::LiveAck { change_id });
         }
+        Ok(crate::application::sync_storage::InboundApplyOutcome::Stale) => {
+            send_msg(&tx, &LanSyncMessage::LiveAck { change_id });
+        }
+        Ok(crate::application::sync_storage::InboundApplyOutcome::Pending) => {}
         Err(e) => {
             eprintln!(
                 "{TAG} Failed to apply live sync entity {}:{}: {e}",
                 entity.entity_type, entity.id
             );
-            return;
         }
     }
-
-    send_msg(&tx, &LanSyncMessage::LiveAck { change_id });
 }
 
 pub(super) async fn handle_peer_list(
@@ -235,6 +264,7 @@ mod tests {
                 app_version: None,
                 authenticated: true,
                 sync_complete: true,
+                negotiated_protocol: None,
                 in_flight_feed_position: None,
                 pending_initial_snapshot_ack: None,
                 tx,

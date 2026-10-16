@@ -170,9 +170,18 @@ KOS-420 подключает sender к durable feed и адресной cursor-�
 позиция задаёт стабильный `LiveChange.change_id`, а повторная отправка после
 разрыва использует тот же ID. Feed хранит locator и revision, не immutable
 payload; чтение берёт только объекты выбранной страницы с ограничением размера.
-Текущий `LiveAck` подтверждает применённую запись. Различение durable receipt
-и applied position для батчей остаётся частью capability negotiation из
-KOS-421; wire shape здесь не меняется.
+
+KOS-421 добавляет ограниченное согласование версии и capabilities в `Hello`.
+Без новых полей соединение работает как legacy v1. Capability включается только
+после проверки HMAC, который связывает предложения и выбранные значения.
+`ProtocolRejected` адресован устройству, поэтому отказ через общий relay не
+закрывает соединение других peers. Подписанный envelope и его canonical bytes
+не меняются.
+
+Для согласованной `durable_receipt_ack_v1` получатель отправляет
+`LiveReceiptAck` после commit inbox receipt. `LiveAck` подтверждает применение.
+Новый sender возобновляет доставку с receipt cursor, legacy sender использует
+applied cursor. Receipt не означает применение и не разрешает compaction feed.
 
 После crash между COMMIT и уведомлением данные обнаруживаются из durable feed. Если receiver применил сообщение, но ACK потерян, повтор распознаётся по стабильной идентичности и не применяет эффект второй раз. Обещание — повторяемая доставка с идемпотентным применением, а не магическое exactly-once поверх сети.
 

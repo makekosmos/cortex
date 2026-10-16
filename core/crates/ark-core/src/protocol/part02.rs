@@ -15,8 +15,20 @@ mod tests {
             auth_hmac: None,
             platform: None,
             app_version: None,
+            supported_protocol_versions: None,
+            supported_capabilities: None,
+            negotiated_capabilities: None,
+            negotiation_hmac: None,
         };
         let json_str = serialize_message(&msg);
+        assert_eq!(
+            json_str,
+            concat!(
+                r#"{"type":"hello","protocol_version":1,"device_id":"dev-1","#,
+                r#""device_name":"MacBook","space_id":"abc123","addresses":["#,
+                r#""192.168.1.70:21531"]}"#
+            )
+        );
         let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
         assert_eq!(parsed["type"], "hello");
         assert_eq!(parsed["protocol_version"], 1);
@@ -240,6 +252,7 @@ mod tests {
                 auth_hmac,
                 platform,
                 app_version,
+                ..
             } => {
                 assert_eq!(protocol_version, 1);
                 assert_eq!(device_id, "dev-123");

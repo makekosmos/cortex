@@ -7,7 +7,7 @@ pub(super) async fn pump_committed_feed(
     peers: &Arc<Mutex<HashMap<usize, PeerState>>>,
     peer_id: usize,
 ) -> Result<(), String> {
-    let (device_id, ready, in_flight) = {
+    let (device_id, ready, in_flight, receipt_ack) = {
         let peers = peers.lock().await;
         let Some(peer) = peers.get(&peer_id) else {
             return Ok(());
@@ -16,6 +16,11 @@ pub(super) async fn pump_committed_feed(
             peer.device_id.clone(),
             peer.authenticated && peer.sync_complete,
             peer.in_flight_feed_position,
+            peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
+                protocol
+                    .capabilities
+                    .contains(&crate::protocol::ProtocolCapability::DurableReceiptAckV1)
+            }),
         )
     };
     if !ready || in_flight.is_some() {
@@ -32,7 +37,11 @@ pub(super) async fn pump_committed_feed(
     let snapshot = storage.committed_feed_snapshot().await?;
     let page = storage
         .committed_feed_delivery_page(
-            progress.applied_through,
+            if receipt_ack {
+                progress.receipt_through
+            } else {
+                progress.applied_through
+            },
             snapshot.high_watermark,
             crate::db::MAX_FEED_PAGE_SIZE,
         )
@@ -118,17 +127,28 @@ pub(super) async fn handle_committed_feed_ack(
     else {
         return Ok(());
     };
-    let device_id = {
+    let (device_id, receipt_ack, current_flight) = {
         let peers = peers.lock().await;
         let Some(peer) = peers.get(&peer_id) else {
             return Ok(());
         };
-        if peer.in_flight_feed_position != Some(position) {
-            return Ok(());
-        }
-        peer.device_id.clone()
+        (
+            peer.device_id.clone(),
+            peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
+                protocol
+                    .capabilities
+                    .contains(&crate::protocol::ProtocolCapability::DurableReceiptAckV1)
+            }),
+            peer.in_flight_feed_position == Some(position),
+        )
     };
     let generation = storage.selective_sync_policy_generation();
+    let progress = storage
+        .begin_outbound_policy(&device_id, generation)
+        .await?;
+    if (receipt_ack && position > progress.receipt_through) || (!receipt_ack && !current_flight) {
+        return Ok(());
+    }
     storage
         .acknowledge_outbound(
             &device_id,
@@ -137,10 +157,69 @@ pub(super) async fn handle_committed_feed_ack(
             crate::application::sync_storage::OutboundAck::Applied,
         )
         .await?;
-    if let Some(peer) = peers.lock().await.get_mut(&peer_id) {
-        peer.in_flight_feed_position = None;
+    if current_flight {
+        if let Some(peer) = peers.lock().await.get_mut(&peer_id) {
+            peer.in_flight_feed_position = None;
+        }
     }
-    pump_committed_feed(storage, peers, peer_id).await
+    if current_flight {
+        pump_committed_feed(storage, peers, peer_id).await?;
+    }
+    Ok(())
+}
+
+pub(super) async fn handle_committed_feed_receipt_ack(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+    peers: &Arc<Mutex<HashMap<usize, PeerState>>>,
+    peer_id: usize,
+    change_id: &str,
+) -> Result<(), String> {
+    let Some(position) = change_id
+        .strip_prefix(FEED_CHANGE_PREFIX)
+        .and_then(|value| value.parse::<i64>().ok())
+    else {
+        return Ok(());
+    };
+    let (device_id, receipt_ack, current_flight) = {
+        let peers = peers.lock().await;
+        let Some(peer) = peers.get(&peer_id) else {
+            return Ok(());
+        };
+        (
+            peer.device_id.clone(),
+            peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
+                protocol
+                    .capabilities
+                    .contains(&crate::protocol::ProtocolCapability::DurableReceiptAckV1)
+            }),
+            peer.in_flight_feed_position == Some(position),
+        )
+    };
+    if !receipt_ack {
+        return Ok(());
+    }
+    let generation = storage.selective_sync_policy_generation();
+    let progress = storage
+        .begin_outbound_policy(&device_id, generation)
+        .await?;
+    if !current_flight && position > progress.receipt_through {
+        return Ok(());
+    }
+    storage
+        .acknowledge_outbound(
+            &device_id,
+            generation,
+            position,
+            crate::application::sync_storage::OutboundAck::DurableReceipt,
+        )
+        .await?;
+    if current_flight {
+        if let Some(peer) = peers.lock().await.get_mut(&peer_id) {
+            peer.in_flight_feed_position = None;
+        }
+        pump_committed_feed(storage, peers, peer_id).await?;
+    }
+    Ok(())
 }
 
 impl SyncServer {

@@ -11,6 +11,8 @@ fn message_variant_name(msg: &LanSyncMessage) -> &'static str {
         LanSyncMessage::SyncAck { .. } => "SyncAck",
         LanSyncMessage::LiveChange { .. } => "LiveChange",
         LanSyncMessage::LiveAck { .. } => "LiveAck",
+        LanSyncMessage::LiveReceiptAck { .. } => "LiveReceiptAck",
+        LanSyncMessage::ProtocolRejected { .. } => "ProtocolRejected",
         LanSyncMessage::PeerList { .. } => "PeerList",
         LanSyncMessage::Ping { .. } => "Ping",
         LanSyncMessage::Pong { .. } => "Pong",

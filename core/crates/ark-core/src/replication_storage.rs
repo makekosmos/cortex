@@ -4,6 +4,17 @@ use crate::types::SyncEntity;
 /// Applies an ordinary entity only after the sync boundary authenticated its peer.
 #[async_trait::async_trait]
 pub trait AuthenticatedEntityBackend: Send + Sync {
+    /// Commits the bounded inbox receipt before applying the payload. Returns
+    /// `true` only when this backend provides that durable boundary.
+    async fn receive_authenticated_entity_with_id(
+        &self,
+        _entity: &SyncEntity,
+        _authenticated_peer_id: &str,
+        _message_id: &str,
+    ) -> Result<bool, String> {
+        Ok(false)
+    }
+
     async fn apply_authenticated_entity(
         &self,
         _entity: &SyncEntity,
@@ -17,9 +28,10 @@ pub trait AuthenticatedEntityBackend: Send + Sync {
         entity: &SyncEntity,
         authenticated_peer_id: &str,
         _message_id: &str,
-    ) -> Result<(), String> {
+    ) -> Result<crate::application::sync_storage::InboundApplyOutcome, String> {
         self.apply_authenticated_entity(entity, authenticated_peer_id)
             .await
+            .map(|()| crate::application::sync_storage::InboundApplyOutcome::Applied)
     }
 }
 

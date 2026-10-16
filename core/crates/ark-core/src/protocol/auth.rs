@@ -35,7 +35,7 @@ pub fn verify_hello_auth_hmac(
     constant_time_eq(expected.as_bytes(), provided_hmac.as_bytes())
 }
 
-fn hmac_sha256_hex(secret: &[u8], message: &[u8]) -> String {
+pub(super) fn hmac_sha256_hex(secret: &[u8], message: &[u8]) -> String {
     const BLOCK_SIZE: usize = 64;
 
     let mut key = [0u8; BLOCK_SIZE];
@@ -64,7 +64,7 @@ fn hmac_sha256_hex(secret: &[u8], message: &[u8]) -> String {
     hex_encode(&outer.finalize())
 }
 
-fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+pub(super) fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     let mut diff = a.len() ^ b.len();
     let max_len = a.len().max(b.len());
     for i in 0..max_len {

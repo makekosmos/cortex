@@ -15,7 +15,7 @@ mod type_read;
 mod usage;
 mod usage_read;
 
-pub(crate) use core_task::{AuthenticatedCoreTaskWrite, LocalCoreTaskWrite};
+pub(crate) use core_task::{AuthenticatedCoreTaskWrite, LocalCoreTaskWrite, RemoteCoreTaskOutcome};
 pub(crate) use external_ref::UpsertExternalRefCommand;
 pub(crate) use integration_admin::{
     AcquireIntegrationRefreshLeaseCommand, PersistIntegrationGrantCommand,

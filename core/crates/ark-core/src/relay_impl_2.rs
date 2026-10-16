@@ -287,6 +287,20 @@ impl RelaySync {
             }
             None => (None, None),
         };
+        let offer = ProtocolOffer::current(self.auth_secret.is_some());
+        let negotiation_hmac =
+            self.auth_secret
+                .as_deref()
+                .zip(auth_nonce.as_deref())
+                .map(|(secret, nonce)| {
+                    compute_negotiation_offer_hmac(
+                        secret,
+                        &self.config.space_id,
+                        &self.config.device_id,
+                        nonce,
+                        &offer,
+                    )
+                });
 
         LanSyncMessage::Hello {
             protocol_version: PROTOCOL_VERSION,
@@ -298,6 +312,10 @@ impl RelaySync {
             auth_hmac,
             platform: Some(crate::host::local_platform()),
             app_version: crate::host::app_version(),
+            supported_protocol_versions: Some(offer.version_ids()),
+            supported_capabilities: Some(offer.capability_ids()),
+            negotiated_capabilities: None,
+            negotiation_hmac,
         }
     }
 

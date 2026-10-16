@@ -97,6 +97,7 @@ mod tests {
                 platform: None,
                 app_version: None,
                 authenticated: true,
+                negotiated_protocol: None,
             },
         );
         let disconnect_notified = Arc::new(AtomicBool::new(false));

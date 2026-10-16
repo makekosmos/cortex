@@ -154,9 +154,18 @@ impl RelaySync {
                 auth_hmac,
                 platform,
                 app_version,
+                supported_protocol_versions,
+                supported_capabilities,
+                negotiated_capabilities,
+                negotiation_hmac,
             } => {
-                if protocol_version != PROTOCOL_VERSION {
-                    eprintln!("{TAG} protocol mismatch from relay peer {device_id}");
+                if negotiated_capabilities.is_some() {
+                    self.reject_protocol_offer(
+                        &device_id,
+                        crate::protocol::ProtocolNegotiationError::InvalidSelection,
+                        &[],
+                    )
+                    .await;
                     return;
                 }
                 if space_id != self.config.space_id {
@@ -192,6 +201,71 @@ impl RelaySync {
                     }
                 }
 
+                let local_offer = ProtocolOffer::current(self.auth_secret.is_some());
+                let remote_offer = match ProtocolOffer::new(
+                    protocol_version,
+                    supported_protocol_versions.as_deref(),
+                    supported_capabilities.as_deref(),
+                ) {
+                    Ok(offer) => offer,
+                    Err(error) => {
+                        self.reject_protocol_offer(&device_id, error, &[]).await;
+                        return;
+                    }
+                };
+                let offer_authenticated = match (
+                    self.auth_secret.as_deref(),
+                    auth_nonce.as_deref(),
+                    negotiation_hmac.as_deref(),
+                ) {
+                    (Some(secret), Some(nonce), Some(proof)) => {
+                        crate::protocol::verify_negotiation_offer_hmac(
+                            secret,
+                            &space_id,
+                            &device_id,
+                            nonce,
+                            &remote_offer,
+                            proof,
+                        )
+                    }
+                    (_, _, Some(_)) => false,
+                    _ => false,
+                };
+                if negotiation_hmac.is_some() && !offer_authenticated {
+                    self.reject_protocol_offer(
+                        &device_id,
+                        crate::protocol::ProtocolNegotiationError::InvalidSelectionProof,
+                        &remote_offer.version_ids(),
+                    )
+                    .await;
+                    return;
+                }
+                let negotiated =
+                    match negotiate_protocol(&local_offer, &remote_offer, offer_authenticated) {
+                        Ok(protocol) => protocol,
+                        Err(error) => {
+                            self.reject_protocol_offer(
+                                &device_id,
+                                error,
+                                &remote_offer.version_ids(),
+                            )
+                            .await;
+                            return;
+                        }
+                    };
+
+                if self.peers.lock().await.get(&device_id).is_some_and(|peer| {
+                    peer.authenticated && peer.negotiated_protocol.as_ref() != Some(&negotiated)
+                }) {
+                    self.reject_protocol_offer(
+                        &device_id,
+                        crate::protocol::ProtocolNegotiationError::InvalidSelection,
+                        &remote_offer.version_ids(),
+                    )
+                    .await;
+                    return;
+                }
+
                 let was_new = {
                     let mut peers = self.peers.lock().await;
                     let was_new = !peers.contains_key(&device_id);
@@ -202,6 +276,7 @@ impl RelaySync {
                             platform: platform.clone(),
                             app_version: app_version.clone(),
                             authenticated: true,
+                            negotiated_protocol: Some(negotiated),
                         },
                     );
                     was_new
@@ -301,6 +376,27 @@ impl RelaySync {
                     .await;
             }
 
+            LanSyncMessage::ProtocolRejected {
+                origin_device_id,
+                target_device_id,
+                reason,
+                supported_protocol_versions,
+                ..
+            } => {
+                if target_device_id != self.config.device_id || origin_device_id != from_device_id {
+                    return;
+                }
+                eprintln!(
+                    "{TAG} peer {origin_device_id} rejected the sync protocol ({reason}); \
+                     supported versions: {supported_protocol_versions:?}"
+                );
+                // Iroh can close just the addressed peer. The WebSocket relay
+                // is shared by every peer, so never close that socket here.
+                if transport_public_key.is_some() {
+                    let _ = self.transport.disconnect_peer(&origin_device_id);
+                }
+            }
+
             _ => {}
         }
     }
@@ -317,6 +413,30 @@ impl RelaySync {
             vector,
             origin_device_id: Some(self.config.device_id.clone()),
         });
+    }
+
+    async fn reject_protocol_offer(
+        &self,
+        target_device_id: &str,
+        error: crate::protocol::ProtocolNegotiationError,
+        offered_protocol_versions: &[u32],
+    ) {
+        let message = LanSyncMessage::ProtocolRejected {
+            origin_device_id: self.config.device_id.clone(),
+            target_device_id: target_device_id.to_owned(),
+            reason: error.code().to_owned(),
+            supported_protocol_versions: SUPPORTED_PROTOCOL_VERSIONS.to_vec(),
+            offered_protocol_versions: if offered_protocol_versions.len()
+                <= MAX_PROTOCOL_OFFER_VERSIONS
+            {
+                offered_protocol_versions.to_vec()
+            } else {
+                Vec::new()
+            },
+        };
+        if let Err(send_error) = self.transport.send(message) {
+            eprintln!("{TAG} failed to send protocol refusal: {send_error}");
+        }
     }
 
     async fn is_authenticated_peer(&self, device_id: &str) -> bool {

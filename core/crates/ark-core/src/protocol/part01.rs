@@ -57,6 +57,19 @@ pub enum LanSyncMessage {
         /// version). Optional for the same compat reason as `platform`.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         app_version: Option<String>,
+        /// Bounded wire versions understood by this peer. Missing means a
+        /// legacy peer that supports only `protocol_version`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        supported_protocol_versions: Option<Vec<u32>>,
+        /// Stable capability IDs understood by this peer.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        supported_capabilities: Option<Vec<String>>,
+        /// Capabilities selected by the responder. Initiators omit this.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        negotiated_capabilities: Option<Vec<String>>,
+        /// Domain-separated HMAC over this offer or the full selection.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        negotiation_hmac: Option<String>,
     },
 
     #[serde(rename = "version_vector")]
@@ -97,6 +110,23 @@ pub enum LanSyncMessage {
 
     #[serde(rename = "live_ack")]
     LiveAck { change_id: String },
+
+    /// The durable inbox has committed the message. This does not mean that
+    /// the entity has been applied. Sent only after receipt capability
+    /// negotiation succeeds.
+    #[serde(rename = "live_receipt_ack")]
+    LiveReceiptAck { change_id: String },
+
+    /// Refuses an incompatible protocol offer before the peer is admitted.
+    /// Relay transports broadcast this frame and use both IDs for routing.
+    #[serde(rename = "protocol_rejected")]
+    ProtocolRejected {
+        origin_device_id: String,
+        target_device_id: String,
+        reason: String,
+        supported_protocol_versions: Vec<u32>,
+        offered_protocol_versions: Vec<u32>,
+    },
 
     #[serde(rename = "signed_integration_frame")]
     SignedIntegrationFrame {
@@ -146,6 +176,9 @@ pub fn message_origin_device_id(msg: &LanSyncMessage) -> Option<String> {
         LanSyncMessage::Hello { device_id, .. } | LanSyncMessage::PairingRejected { device_id } => {
             Some(device_id.clone())
         }
+        LanSyncMessage::ProtocolRejected {
+            origin_device_id, ..
+        } => Some(origin_device_id.clone()),
         LanSyncMessage::VersionVector {
             origin_device_id, ..
         }

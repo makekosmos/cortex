@@ -64,6 +64,7 @@ struct PeerState {
     app_version: Option<String>,
     authenticated: bool,
     sync_complete: bool,
+    negotiated_protocol: Option<crate::protocol::NegotiatedProtocol>,
     in_flight_feed_position: Option<i64>,
     pending_initial_snapshot_ack: Option<String>,
     tx: mpsc::UnboundedSender<Message>,

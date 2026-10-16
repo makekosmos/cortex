@@ -282,7 +282,10 @@ impl ApplyAuthenticatedSyncEntityCommand {
 impl sealed::Sealed for ApplyAuthenticatedSyncEntityCommand {}
 
 impl DbCommand for ApplyAuthenticatedSyncEntityCommand {
-    type Output = Vec<ReplayNotice>;
+    type Output = (
+        crate::application::sync_storage::InboundApplyOutcome,
+        Vec<ReplayNotice>,
+    );
 
     const CLASS: CommandClass = CommandClass::SyncLive;
 
@@ -303,7 +306,16 @@ impl DbCommand for ApplyAuthenticatedSyncEntityCommand {
             crate::db::receive_inbox_payload(transaction, peer_id, &message_id, &payload)
                 .map_err(DbError::from_application_error)?;
         if inbox_state == crate::db::InboxState::Applied {
-            return Ok(Vec::new());
+            return Ok((
+                crate::application::sync_storage::InboundApplyOutcome::Applied,
+                Vec::new(),
+            ));
+        }
+        if inbox_state == crate::db::InboxState::Pending {
+            return Ok((
+                crate::application::sync_storage::InboundApplyOutcome::Pending,
+                Vec::new(),
+            ));
         }
         if inbox_state != crate::db::InboxState::Received {
             return Err(DbError::from_application_error(
@@ -311,20 +323,24 @@ impl DbCommand for ApplyAuthenticatedSyncEntityCommand {
             ));
         }
         let mut session = SqliteInboundSyncEntitySession(transaction);
-        let (_, notices) = crate::application::sync_storage::apply_inbound_sync_entity(
+        let (outcome, notices) = crate::application::sync_storage::apply_inbound_sync_entity(
             &mut session,
             &self.entity,
             Some(peer_id),
         )
         .map_err(DbError::from_application_error)?;
-        crate::db::set_inbox_state(
-            transaction,
-            peer_id,
-            &message_id,
-            crate::db::InboxState::Applied,
-        )
-        .map_err(DbError::from_application_error)?;
-        Ok(notices)
+        let inbox_state = match outcome {
+            crate::application::sync_storage::InboundApplyOutcome::Applied
+            | crate::application::sync_storage::InboundApplyOutcome::Stale => {
+                crate::db::InboxState::Applied
+            }
+            crate::application::sync_storage::InboundApplyOutcome::Pending => {
+                crate::db::InboxState::Pending
+            }
+        };
+        crate::db::set_inbox_state(transaction, peer_id, &message_id, inbox_state)
+            .map_err(DbError::from_application_error)?;
+        Ok((outcome, notices))
     }
 }
 

@@ -19,7 +19,7 @@
 
                 let (mut ws_sink, mut ws_stream_rx) = ws_stream.split();
 
-                let hello_json = client_hello::serialize_client_hello(
+                let client_hello = client_hello::build_client_hello(
                     &device_id,
                     &device_name,
                     &space_id,
@@ -27,7 +27,7 @@
                     auth_secret.as_deref(),
                 );
                 if ws_sink
-                    .send(Message::Text(hello_json.into()))
+                    .send(Message::Text(client_hello.message.clone().into()))
                     .await
                     .is_err()
                 {
@@ -94,6 +94,7 @@
                             if let Some(sync_msg) = deserialize_message(&text) {
                                 match sync_msg {
                                     LanSyncMessage::Hello {
+                                        protocol_version,
                                         device_id: server_device_id,
                                         device_name: server_device_name,
                                         space_id: server_space_id,
@@ -101,7 +102,11 @@
                                         auth_hmac,
                                         platform: server_platform,
                                         app_version: server_app_version,
-                                        ..
+                                        addresses: _,
+                                        supported_protocol_versions,
+                                        supported_capabilities,
+                                        negotiated_capabilities,
+                                        negotiation_hmac,
                                     } => {
                                         if authenticated {
                                             eprintln!(
@@ -138,6 +143,31 @@
                                                 break;
                                             }
                                         }
+
+                                        let negotiated_protocol = match
+                                            crate::protocol::validate_protocol_selection(
+                                            &client_hello.offer,
+                                            protocol_version,
+                                            supported_protocol_versions.as_deref(),
+                                            supported_capabilities.as_deref(),
+                                            negotiated_capabilities.as_deref(),
+                                            auth_secret.as_deref(),
+                                            &space_id,
+                                            &device_id,
+                                            &server_device_id,
+                                            client_hello.auth_nonce.as_deref(),
+                                            auth_nonce.as_deref(),
+                                            negotiation_hmac.as_deref(),
+                                        ) {
+                                            Ok(protocol) => protocol,
+                                            Err(error) => {
+                                                eprintln!(
+                                                    "{TAG} invalid protocol selection: {}",
+                                                    error.code()
+                                                );
+                                                break;
+                                            }
+                                        };
 
                                         // Reject self-connects and evict pure self-references.
                                         if !server_device_id.is_empty()
@@ -177,7 +207,12 @@
                                         authenticated = true;
                                         peer_device_id_actual = server_device_id.clone();
                                         *authenticated_tx.lock().await =
-                                            Some((server_device_id.clone(), tx.clone(), false));
+                                            Some(crate::sync_client::AuthenticatedPeerSession {
+                                                peer_id: server_device_id.clone(),
+                                                tx: tx.clone(),
+                                                sync_complete: false,
+                                                protocol: negotiated_protocol,
+                                            });
                                         // Adopt the authenticated
                                         // identity — bootstrap records
                                         // carry a "seed-*" placeholder
@@ -289,16 +324,22 @@
                                                 break;
                                             }
                                             pending_initial_snapshot_ack = None;
-                                            if let Some((_, _, complete)) =
-                                                authenticated_tx.lock().await.as_mut()
-                                            {
-                                                *complete = true;
-                                            }
+                                            let receipt_ack = if let Some(session) =
+                                                authenticated_tx.lock().await.as_mut() {
+                                                session.sync_complete = true;
+                                                session.protocol.capabilities.contains(
+                                                &crate::protocol::ProtocolCapability::
+                                                    DurableReceiptAckV1,
+                                                )
+                                            } else {
+                                                false
+                                            };
                                             if let Err(error) = super::pump_client_committed_feed(
                                                 &storage,
                                                 &peer_device_id_actual,
                                                 &tx,
                                                 &feed_in_flight,
+                                                receipt_ack,
                                             )
                                             .await
                                             {
@@ -313,126 +354,48 @@
                                         if !authenticated {
                                             continue;
                                         }
-                                        let accepted = if frame.space_id != space_id
-                                            || frame.origin_node_id != peer_device_id_actual
-                                            || frame.recipient_node_id != device_id
-                                        {
-                                            false
-                                        } else {
-                                            storage
-                                                .apply_signed_integration_frame(
-                                                    &frame,
-                                                    &space_id,
-                                                    &peer_device_id_actual,
-                                                    &device_id,
-                                                )
-                                                .await
-                                                .is_ok()
-                                        };
-                                        send_msg(
+                                        live_messages::handle_signed_integration_frame(
+                                            &storage,
+                                            &peer_device_id_actual,
+                                            &device_id,
+                                            &space_id,
                                             &tx,
-                                            &LanSyncMessage::SignedIntegrationAck {
-                                                message_id: frame.message_id,
-                                                accepted,
-                                            },
-                                        );
+                                            frame,
+                                        )
+                                        .await;
                                     }
 
                                     LanSyncMessage::SignedIntegrationAck { .. } => {}
 
-                                    LanSyncMessage::LiveChange {
-                                        change_id, entity, ..
-                                    } => {
+                                    LanSyncMessage::LiveChange { change_id, entity, .. } => {
                                         if !authenticated {
                                             continue;
                                         }
-
-                                        let mut local_vector =
-                                            match load_version_vector(&storage).await {
-                                                Ok(vector) => vector,
-                                                Err(error) => {
-                                                    eprintln!(
-                                                    "{TAG} failed to load version vector: {error}"
-                                                );
-                                                    break;
-                                                }
-                                            };
-                                        let should_apply = is_usage_entity(&entity)
-                                            || local_vector
-                                                .get(&entity.id)
-                                                .is_none_or(|hlc| HLC::is_newer(&entity.hlc, hlc));
-
-                                        match storage
-                                            .apply_authenticated_entity_with_id(
-                                                &entity,
-                                                &peer_device_id_actual,
-                                                &change_id,
-                                            )
-                                            .await
+                                        if let Err(error) = live_messages::handle_live_change(
+                                            &storage,
+                                            &authenticated_tx,
+                                            &peer_device_id_actual,
+                                            &tx,
+                                            &on_change,
+                                            change_id,
+                                            entity,
+                                        )
+                                        .await
                                         {
-                                                Ok(()) => {
-                                                    if should_apply && observe_non_usage_entity(
-                                                        &mut local_vector,
-                                                        &entity,
-                                                    ) {
-                                                        let stored_vector =
-                                                            match load_version_vector(&storage)
-                                                                .await
-                                                            {
-                                                                Ok(vector) => vector,
-                                                                Err(error) => {
-                                                                    eprintln!(
-                                                                    "{TAG} reload failed: {error}"
-                                                                );
-                                                                    break;
-                                                                }
-                                                            };
-                                                        merge_usage_cursors(
-                                                            &mut local_vector,
-                                                            &stored_vector,
-                                                        );
-                                                        if let Err(error) = save_version_vector(
-                                                            &storage,
-                                                            &local_vector,
-                                                        )
-                                                        .await
-                                                        {
-                                                            eprintln!("{TAG} save failed: {error}");
-                                                            break;
-                                                        }
-                                                    }
-
-                                                    if should_apply {
-                                                        if let Some(handler) =
-                                                            on_change.lock().await.as_ref()
-                                                        {
-                                                            handler(entity);
-                                                        }
-                                                    }
-                                                }
-                                                Err(e) => {
-                                                    eprintln!(
-                                                        "{TAG} Failed to apply live sync entity \
-                                                             {}:{}: {e}",
-                                                        entity.entity_type, entity.id
-                                                    );
-                                                    // Do not acknowledge a change that was not
-                                                    // committed locally; the sender must retry it.
-                                                    break;
-                                                }
+                                            eprintln!("{TAG} live change handling failed: {error}");
+                                            break;
                                         }
-
-                                        send_msg(&tx, &LanSyncMessage::LiveAck { change_id });
                                     }
 
                                     LanSyncMessage::LiveAck { change_id } => {
                                         if sync_complete {
-                                            if let Err(error) = super::acknowledge_client_feed(
+                                            if let Err(error) = live_messages::handle_applied_ack(
                                                 &storage,
                                                 &peer_device_id_actual,
-                                                &change_id,
                                                 &tx,
                                                 &feed_in_flight,
+                                                &authenticated_tx,
+                                                &change_id,
                                             )
                                             .await
                                             {
@@ -441,6 +404,40 @@
                                                 );
                                                 break;
                                             }
+                                        }
+                                    }
+
+                                    LanSyncMessage::LiveReceiptAck { change_id } => {
+                                        if sync_complete {
+                                            if let Err(error) = live_messages::handle_receipt_ack(
+                                                &storage,
+                                                &peer_device_id_actual,
+                                                &tx,
+                                                &feed_in_flight,
+                                                &change_id,
+                                            )
+                                            .await
+                                            {
+                                                eprintln!(
+                                                    "{TAG} receipt ACK failed: {error}"
+                                                );
+                                                break;
+                                            }
+                                        }
+                                    }
+
+                                    LanSyncMessage::ProtocolRejected {
+                                        origin_device_id,
+                                        target_device_id,
+                                        reason,
+                                        ..
+                                    } => {
+                                        if target_device_id == device_id
+                                            && (peer_device_id_actual.is_empty()
+                                                || origin_device_id == peer_device_id_actual)
+                                        {
+                                            eprintln!("{TAG} Peer rejected protocol: {reason}");
+                                            break;
                                         }
                                     }
 

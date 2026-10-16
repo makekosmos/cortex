@@ -58,6 +58,16 @@ pub(super) async fn handle_live_message(ctx: &MessageContext, peer_id: usize, ms
             }
         }
 
+        LanSyncMessage::LiveReceiptAck { change_id } => {
+            if let Err(error) = sync_server_peers::handle_committed_feed_receipt_ack(
+                storage, peers, peer_id, &change_id,
+            )
+            .await
+            {
+                eprintln!("{TAG} committed feed receipt ACK failed: {error}");
+            }
+        }
+
         LanSyncMessage::PeerList {
             peers: incoming_peers,
         } => sync_server_inbound::handle_peer_list(ctx, peer_id, incoming_peers).await,

@@ -35,11 +35,11 @@ pub(crate) use command::{
     LocalBookCoverCommand, LocalCoreTaskWrite, LocalObjectDeleteCommand, LocalObjectUpsertCommand,
     LocalUsageWriteCommand, ObjectReadQuery, PersistIntegrationGrantCommand,
     PersistNodeAuthorizationCommand, PublishIntegrationCredentialEnvelopeCommand,
-    ReceiveInboxReceiptCommand, RegisterPackageTypesCommand, ReplaceObjectLinkCommand,
-    RestoreSnapshotCommand, SetLocalSyncKeyValueCommand, SetSyncKeyValueCommand, SystemReadQuery,
-    TrackedAppDeleteCommand, TrackedAppUpsertCommand, TypeReadQuery, UpsertExternalRefCommand,
-    UpsertObjectLinkCommand, UpsertObjectTypeCommand, UsageCompleteThroughQuery, UsageReadQuery,
-    ValidateOutboundSignedFrameQuery,
+    ReceiveInboxReceiptCommand, RegisterPackageTypesCommand, RemoteCoreTaskOutcome,
+    ReplaceObjectLinkCommand, RestoreSnapshotCommand, SetLocalSyncKeyValueCommand,
+    SetSyncKeyValueCommand, SystemReadQuery, TrackedAppDeleteCommand, TrackedAppUpsertCommand,
+    TypeReadQuery, UpsertExternalRefCommand, UpsertObjectLinkCommand, UpsertObjectTypeCommand,
+    UsageCompleteThroughQuery, UsageReadQuery, ValidateOutboundSignedFrameQuery,
 };
 pub use committed_feed::{
     acknowledge_outbound, append_committed_change, begin_outbound_policy,

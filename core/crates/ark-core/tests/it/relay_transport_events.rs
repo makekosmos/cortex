@@ -106,6 +106,10 @@ fn send_hello(tx: &mpsc::UnboundedSender<TransportEvent>) {
             auth_hmac: None,
             platform: None,
             app_version: None,
+            supported_protocol_versions: None,
+            supported_capabilities: None,
+            negotiated_capabilities: None,
+            negotiation_hmac: None,
         },
     })
     .unwrap();

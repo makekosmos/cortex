@@ -18,6 +18,7 @@ async fn send_signed_integration_frame_requires_addressed_authenticated_peer() {
             app_version: None,
             authenticated: true,
             sync_complete: true,
+            negotiated_protocol: None,
             in_flight_feed_position: None,
             pending_initial_snapshot_ack: None,
             tx,
