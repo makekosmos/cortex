@@ -1,9 +1,9 @@
-use rusqlite::Connection;
+use rusqlite::{Connection, Transaction};
 use serde::{Deserialize, Serialize};
 
 use super::{AuthorizedNode, GrantStatus, IntegrationNodeGrant, NodeStatus, SignedSyncEnvelope};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum NodeAuthorizationOperation {
     Authorize,
     Revoke,
@@ -84,16 +84,36 @@ pub fn persist_node_authorization(
     device_id: &str,
 ) -> Result<(), String> {
     with_immediate_write(conn, || {
-        let current = crate::db::load_authorized_node(conn, &node.node_id)?;
-        validate_node_transition(operation, current.as_ref(), node, grant)?;
-        if current.as_ref() != Some(node) {
-            crate::db::upsert_authorized_node(conn, node, device_id)?;
-        }
-        if let Some(grant) = grant {
-            crate::db::upsert_integration_node_grant(conn, grant, device_id)?;
-        }
-        Ok(())
+        persist_node_authorization_inner(conn, operation, node, grant, device_id)
     })
+}
+
+pub(crate) fn persist_node_authorization_in_transaction(
+    transaction: &Transaction<'_>,
+    operation: NodeAuthorizationOperation,
+    node: &AuthorizedNode,
+    grant: Option<&IntegrationNodeGrant>,
+    device_id: &str,
+) -> Result<(), String> {
+    persist_node_authorization_inner(transaction, operation, node, grant, device_id)
+}
+
+fn persist_node_authorization_inner(
+    conn: &Connection,
+    operation: NodeAuthorizationOperation,
+    node: &AuthorizedNode,
+    grant: Option<&IntegrationNodeGrant>,
+    device_id: &str,
+) -> Result<(), String> {
+    let current = crate::db::load_authorized_node(conn, &node.node_id)?;
+    validate_node_transition(operation, current.as_ref(), node, grant)?;
+    if current.as_ref() != Some(node) {
+        crate::db::upsert_authorized_node(conn, node, device_id)?;
+    }
+    if let Some(grant) = grant {
+        crate::db::upsert_integration_node_grant(conn, grant, device_id)?;
+    }
+    Ok(())
 }
 
 pub fn persist_integration_grant(
@@ -102,15 +122,31 @@ pub fn persist_integration_grant(
     device_id: &str,
 ) -> Result<(), String> {
     with_immediate_write(conn, || {
-        let node = crate::db::load_authorized_node(conn, &grant.node_id)?
-            .ok_or_else(|| "integration grant node is not authorized".to_string())?;
-        if grant.node_encryption_key != node.encryption_public_key
-            || grant.grant_epoch < node.grant_epoch
-        {
-            return Err("integration grant does not match the node key epoch".into());
-        }
-        crate::db::upsert_integration_node_grant(conn, grant, device_id)
+        persist_integration_grant_inner(conn, grant, device_id)
     })
+}
+
+pub(crate) fn persist_integration_grant_in_transaction(
+    transaction: &Transaction<'_>,
+    grant: &IntegrationNodeGrant,
+    device_id: &str,
+) -> Result<(), String> {
+    persist_integration_grant_inner(transaction, grant, device_id)
+}
+
+fn persist_integration_grant_inner(
+    conn: &Connection,
+    grant: &IntegrationNodeGrant,
+    device_id: &str,
+) -> Result<(), String> {
+    let node = crate::db::load_authorized_node(conn, &grant.node_id)?
+        .ok_or_else(|| "integration grant node is not authorized".to_string())?;
+    if grant.node_encryption_key != node.encryption_public_key
+        || grant.grant_epoch < node.grant_epoch
+    {
+        return Err("integration grant does not match the node key epoch".into());
+    }
+    crate::db::upsert_integration_node_grant(conn, grant, device_id)
 }
 
 pub(crate) fn validate_node_transition(

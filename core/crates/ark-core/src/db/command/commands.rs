@@ -1,5 +1,6 @@
 mod core_task;
 mod external_ref;
+mod integration_admin;
 mod integration_replication;
 mod legacy_mutation;
 mod object_mutation;
@@ -10,6 +11,9 @@ mod usage;
 
 pub(crate) use core_task::{AuthenticatedCoreTaskWrite, LocalCoreTaskWrite};
 pub(crate) use external_ref::UpsertExternalRefCommand;
+pub(crate) use integration_admin::{
+    PersistIntegrationGrantCommand, PersistNodeAuthorizationCommand,
+};
 pub(crate) use integration_replication::{
     ApplySignedIntegrationFrameCommand, IdentityErrorStyle, ValidateOutboundSignedFrameQuery,
 };

@@ -9,11 +9,11 @@ pub(crate) use commands::{
     CanonicalGameUpsertCommand, DeleteObjectLinkCommand, DeleteObjectTypeCommand,
     GetSyncKeyValueQuery, IdentityErrorStyle, LegacyDeleteCommand, LegacyGraphWriteCommand,
     LoadEntitiesQuery, LocalBookCoverCommand, LocalCoreTaskWrite, LocalObjectDeleteCommand,
-    LocalObjectUpsertCommand, LocalUsageWriteCommand, RegisterPackageTypesCommand,
-    ReplaceObjectLinkCommand, SetLocalSyncKeyValueCommand, SetSyncKeyValueCommand,
-    TrackedAppDeleteCommand, TrackedAppUpsertCommand, UpsertExternalRefCommand,
-    UpsertObjectLinkCommand, UpsertObjectTypeCommand, UsageCompleteThroughQuery,
-    ValidateOutboundSignedFrameQuery,
+    LocalObjectUpsertCommand, LocalUsageWriteCommand, PersistIntegrationGrantCommand,
+    PersistNodeAuthorizationCommand, RegisterPackageTypesCommand, ReplaceObjectLinkCommand,
+    SetLocalSyncKeyValueCommand, SetSyncKeyValueCommand, TrackedAppDeleteCommand,
+    TrackedAppUpsertCommand, UpsertExternalRefCommand, UpsertObjectLinkCommand,
+    UpsertObjectTypeCommand, UsageCompleteThroughQuery, ValidateOutboundSignedFrameQuery,
 };
 
 // A full transport frame is admitted at 16 MiB. Leave bounded room for the

@@ -7,17 +7,15 @@ pub(super) async fn integration_persist_node_authorization(
     grant: Option<IntegrationNodeGrant>,
     device_id: String,
 ) -> Result<Value, String> {
-    with_conn(state, |conn| {
-        let operation = parse_authorization_operation(&authorization_operation)?;
-        crate::integration_replication::persist_node_authorization(
-            conn,
-            operation,
-            &node,
-            grant.as_ref(),
-            &device_id,
-        )?;
-        Ok(json!(true))
-    })
+    let operation = parse_authorization_operation(&authorization_operation)?;
+    get_db_handle(state)?
+        .submit(
+            db::CommandContext::engine(),
+            db::PersistNodeAuthorizationCommand::new(operation, node, grant, device_id),
+        )
+        .await
+        .map(|()| json!(true))
+        .map_err(|error| error.to_string())
 }
 
 pub(super) async fn integration_persist_integration_grant(
@@ -25,10 +23,14 @@ pub(super) async fn integration_persist_integration_grant(
     grant: IntegrationNodeGrant,
     device_id: String,
 ) -> Result<Value, String> {
-    with_conn(state, |conn| {
-        crate::integration_replication::persist_integration_grant(conn, &grant, &device_id)?;
-        Ok(json!(true))
-    })
+    get_db_handle(state)?
+        .submit(
+            db::CommandContext::engine(),
+            db::PersistIntegrationGrantCommand::new(grant, device_id),
+        )
+        .await
+        .map(|()| json!(true))
+        .map_err(|error| error.to_string())
 }
 
 pub(super) async fn integration_prepare_signed_sync(

@@ -19,6 +19,9 @@ pub use api::{
     persist_integration_grant, persist_node_authorization, prepare_signed_sync,
     NodeAuthorizationOperation, SignedSyncPreparation,
 };
+pub(crate) use api::{
+    persist_integration_grant_in_transaction, persist_node_authorization_in_transaction,
+};
 pub use contracts::{
     AuthorizedNode, GrantStatus, IntegrationConfiguration, IntegrationContractError,
     IntegrationCredentialEnvelope, IntegrationNodeGrant, IntegrationRefreshLease,
