@@ -170,7 +170,7 @@ async fn production_actor_panic_rolls_back_and_recovers_on_the_same_owner() {
 }
 
 #[tokio::test]
-async fn production_actor_maintenance_is_a_barrier_for_later_writes_and_reads() {
+async fn production_actor_maintenance_rejects_later_writes_and_reads() {
     let (_directory, handle, mut owner) = open_actor_fixture().await;
     let (first_entered_tx, first_entered_rx) = std::sync::mpsc::channel();
     let (first_release_tx, first_release_rx) = std::sync::mpsc::channel();
@@ -206,20 +206,20 @@ async fn production_actor_maintenance_is_a_barrier_for_later_writes_and_reads() 
             .await
     });
     wait_for_admitted_commands(&handle, 2).await;
-    let later_handle = handle.clone();
-    let later = tokio::spawn(async move {
-        later_handle
-            .submit(
-                CommandContext::engine(),
-                QueueProbe::<0> {
-                    sequence: 31,
-                    payload: vec![0],
-                    gate: None,
-                },
-            )
-            .await
-    });
-    wait_for_admitted_commands(&handle, 3).await;
+    let later = tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        handle.submit(
+            CommandContext::engine(),
+            QueueProbe::<0> {
+                sequence: 31,
+                payload: vec![0],
+                gate: None,
+            },
+        ),
+    )
+    .await
+    .expect("maintenance must reject later writes instead of queueing them");
+    assert!(matches!(later, Err(DbError::Busy)));
     assert!(matches!(
         handle
             .query(
@@ -235,13 +235,19 @@ async fn production_actor_maintenance_is_a_barrier_for_later_writes_and_reads() 
     tokio::task::spawn_blocking(move || maintenance_entered_rx.recv().unwrap())
         .await
         .unwrap();
-    assert!(
-        !later.is_finished(),
-        "later writes must wait behind maintenance"
-    );
+    let active_write = handle
+        .submit(
+            CommandContext::engine(),
+            QueueProbe::<0> {
+                sequence: 32,
+                payload: vec![0],
+                gate: None,
+            },
+        )
+        .await;
+    assert!(matches!(active_write, Err(DbError::Busy)));
     maintenance_release_tx.send(()).unwrap();
     maintenance.await.unwrap().unwrap();
-    later.await.unwrap().unwrap();
     let rows = handle.with_connection(|connection| {
         let mut statement = connection
             .prepare("SELECT sequence FROM actor_test_log ORDER BY rowid")
@@ -252,7 +258,7 @@ async fn production_actor_maintenance_is_a_barrier_for_later_writes_and_reads() 
             .collect::<Result<Vec<_>, _>>()
             .unwrap()
     });
-    assert_eq!(rows, vec![30, 31]);
+    assert_eq!(rows, vec![30]);
     owner
         .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
         .await

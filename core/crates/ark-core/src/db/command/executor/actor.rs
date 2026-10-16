@@ -8,7 +8,9 @@ use tokio::sync::oneshot;
 use super::super::{DbCommand, DbMaintenanceCommand};
 use super::AdmissionLimits;
 
+mod maintenance;
 mod runtime;
+use maintenance::has_maintenance_barrier;
 use runtime::{actor_loop, panic_message};
 
 pub(in crate::db::command) trait WriterTask: Send {
@@ -234,6 +236,9 @@ impl ActorShared {
             }
             Lifecycle::Draining | Lifecycle::Closed => return Err(DbError::Unavailable),
         }
+        if has_maintenance_barrier(&ledger) {
+            return Err(DbError::Busy);
+        }
         let new_source = !ledger.by_source.contains_key(source);
         let next_source_commands = ledger
             .by_source
@@ -324,13 +329,7 @@ impl ActorShared {
                 ))
             }
         }
-        if ledger.maintenance_active
-            || ledger
-                .slots
-                .iter()
-                .flatten()
-                .any(|slot| slot.class == CommandClass::Maintenance)
-        {
+        if has_maintenance_barrier(&ledger) {
             return Err(DbError::Busy);
         }
         let new_source = !ledger.by_source.contains_key(source);
