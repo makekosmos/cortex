@@ -1,7 +1,8 @@
 use super::*;
-use crate::application::sync_storage::SyncEntityReadPort;
+use crate::application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
 use crate::replication_storage::PeerIdentityBackend;
 use crate::sync_server::SyncServer;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -251,6 +252,33 @@ async fn direct_client_and_server_exchange_registry_before_sync_readiness() {
         .apply_device_registry_events("server-device", std::slice::from_ref(&disable_client))
         .await
         .expect("commit signed disable while the device is offline");
+    let server_only_entity = SyncEntity {
+        entity_type: "tracked_app".into(),
+        id: "revoked-client-must-not-receive".into(),
+        data: serde_json::json!({
+            "platform": "linux",
+            "exePath": "/opt/revoked-client-must-not-receive",
+            "normalizedExePath": "/opt/revoked-client-must-not-receive",
+            "processName": "revoked-client-must-not-receive",
+            "displayName": null,
+            "publisher": null,
+            "iconRef": null,
+            "firstSeenAt": "2026-10-16T00:00:00Z",
+            "lastSeenAt": "2026-10-16T00:00:00Z"
+        })
+        .as_object()
+        .expect("entity payload should be an object")
+        .clone(),
+        hlc: crate::hlc::HLC::now("server-device").to_string(),
+        deleted: None,
+        origin_device_id: Some("server-device".into()),
+        origin_seq: Some(1),
+    };
+    server_storage
+        .apply_entity(&server_only_entity)
+        .await
+        .expect("seed user data that a mistakenly admitted peer could receive");
+    let connected_callbacks = Arc::new(AtomicUsize::new(0));
     let reconnecting_client = SyncClient::new(
         client_storage.clone() as Arc<dyn crate::sync_server::SyncRuntimeStorage>,
         PeerRecord {
@@ -268,6 +296,12 @@ async fn direct_client_and_server_exchange_registry_before_sync_readiness() {
         Vec::new(),
         None,
     );
+    let callback_count = connected_callbacks.clone();
+    reconnecting_client
+        .set_on_connected(Arc::new(move |_| {
+            callback_count.fetch_add(1, Ordering::SeqCst);
+        }))
+        .await;
     reconnecting_client.start();
     tokio::time::timeout(Duration::from_secs(2), async {
         loop {
@@ -303,6 +337,17 @@ async fn direct_client_and_server_exchange_registry_before_sync_readiness() {
     assert!(client_events
         .iter()
         .any(|event| event.event_id() == disable_client.event_id()));
+    assert_eq!(
+        connected_callbacks.load(Ordering::SeqCst),
+        0,
+        "a disabled peer must not become data-ready during registry catch-up"
+    );
+    assert!(client_storage
+        .load_entities(&VersionVector::new())
+        .await
+        .expect("load client entities after control catch-up")
+        .iter()
+        .all(|entity| entity.id != server_only_entity.id));
 
     observer.stop_and_join().await;
     sync_server.stop().await;
