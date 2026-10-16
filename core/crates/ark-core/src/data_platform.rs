@@ -55,7 +55,7 @@ pub struct SyncProfileRule {
     pub resource_kind: String,
     pub resource_id: String,
     pub mode: SyncMode,
-    pub filter_json: String,
+    pub filter: FilterV1,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -132,7 +132,6 @@ pub fn upsert_sync_profile(
         ) {
             return Err("invalid sync profile mode".into());
         }
-        validate_filter_json(&rule.filter_json)?;
     }
     conn.execute_batch("SAVEPOINT sync_profile_upsert")
         .map_err(|e| e.to_string())?;
@@ -161,7 +160,7 @@ pub fn upsert_sync_profile(
                     rule.resource_kind,
                     rule.resource_id,
                     sync_mode_name(rule.mode),
-                    validate_filter_json(&rule.filter_json)?
+                    rule.filter.canonical_json()
                 ],
             )
             .map_err(|e| e.to_string())?;
@@ -203,18 +202,30 @@ pub fn load_sync_profile(
             "WHERE profile_id=?1 ORDER BY resource_kind,resource_id"
         ))
         .map_err(|e| e.to_string())?;
-    let rules = statement
+    let stored_rules = statement
         .query_map([profile_id], |row| {
-            Ok(SyncProfileRule {
-                resource_kind: row.get(0)?,
-                resource_id: row.get(1)?,
-                mode: parse_sync_mode(&row.get::<_, String>(2)?)?,
-                filter_json: row.get(3)?,
-            })
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                parse_sync_mode(&row.get::<_, String>(2)?)?,
+                row.get::<_, String>(3)?,
+            ))
         })
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, rusqlite::Error>>()
         .map_err(|e| e.to_string())?;
+    let rules = stored_rules
+        .into_iter()
+        .map(|(resource_kind, resource_id, mode, filter_json)| {
+            Ok(SyncProfileRule {
+                resource_kind,
+                resource_id,
+                mode,
+                filter: FilterV1::parse(&filter_json)
+                    .map_err(|error| format!("invalid stored filter: {error}"))?,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
     Ok(SyncProfile {
         profile_id: profile_id.into(),
         device_id,

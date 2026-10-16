@@ -313,7 +313,10 @@ fn persisted_profile_reloads_owner_revision_and_rejects_stale_or_foreign_writes(
         resource_kind: "type".into(),
         resource_id: "com.kosmos.note".into(),
         mode: data_platform::SyncMode::Full,
-        filter_json: "{}".into(),
+        filter: data_platform::FilterV1::parse(
+            r#"{"where":{"eq":{"field":"title","value":"Note"}},"version":1}"#,
+        )
+        .unwrap(),
     }];
     {
         let conn = Connection::open(&path).unwrap();
@@ -330,8 +333,8 @@ fn persisted_profile_reloads_owner_revision_and_rejects_stale_or_foreign_writes(
         assert_eq!(loaded.revision, 1);
         assert_eq!(loaded.device_id, "device-a");
         assert_eq!(
-            loaded.rules[0].filter_json,
-            r#"{"version":1,"where":{"and":[]}}"#
+            loaded.rules[0].filter.canonical_json(),
+            r#"{"version":1,"where":{"eq":{"field":"title","value":"Note"}}}"#
         );
         assert_eq!(
             data_platform::upsert_sync_profile(
