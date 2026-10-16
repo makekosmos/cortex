@@ -31,6 +31,60 @@ impl DbCommand for WriteProbe {
     }
 }
 
+#[derive(serde::Serialize)]
+pub(in crate::db::command::tests) struct FailureMutation {
+    pub(in crate::db::command::tests) payload_bytes: i64,
+}
+
+impl sealed::Sealed for FailureMutation {}
+
+impl DbCommand for FailureMutation {
+    type Output = String;
+
+    const CLASS: CommandClass = CommandClass::Interactive;
+
+    fn weight(&self) -> usize {
+        1
+    }
+
+    fn execute(
+        self,
+        _context: &CommandContext,
+        transaction: &Transaction<'_>,
+    ) -> Result<Self::Output, DbError> {
+        transaction
+            .execute(
+                "INSERT INTO production_actor_failure_probe(payload) VALUES (zeroblob(?1))",
+                [self.payload_bytes],
+            )
+            .map_err(|error| DbError::Storage(error.to_string()))?;
+        Ok(format!("inserted:{}", self.payload_bytes))
+    }
+}
+
+pub(in crate::db::command::tests) struct SetMaxPageCount {
+    pub(in crate::db::command::tests) page_count: u32,
+}
+
+impl sealed::Sealed for SetMaxPageCount {}
+
+impl DbMaintenanceCommand for SetMaxPageCount {
+    type Output = u32;
+
+    fn weight(&self) -> usize {
+        1
+    }
+
+    fn execute(self, connection: &mut Connection) -> Result<Self::Output, DbError> {
+        connection
+            .pragma_update(None, "max_page_count", self.page_count)
+            .map_err(|error| DbError::Storage(error.to_string()))?;
+        connection
+            .query_row("PRAGMA max_page_count", [], |row| row.get(0))
+            .map_err(|error| DbError::Storage(error.to_string()))
+    }
+}
+
 impl DbQuery for ReadProbe {
     type Output = bool;
 
