@@ -6,6 +6,7 @@ pub struct RegistryPageApply {
     pub digest: String,
     pub sender_is_admitted: bool,
     pub disabled_device_ids: Vec<String>,
+    pub applied_events: Vec<crate::domain::device_registry::RegistryEvent>,
 }
 
 /// Applies an ordinary entity only after the sync boundary authenticated its peer.

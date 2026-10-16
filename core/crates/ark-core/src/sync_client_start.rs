@@ -37,6 +37,7 @@ impl SyncClient {
         let on_connected = self.on_connected.clone();
         let on_disconnected = self.on_disconnected.clone();
         let on_peer_list = self.on_peer_list.clone();
+        let on_registry_events = self.on_registry_events.clone();
         let writer_tasks = self.tasks.clone();
         let task = tokio::spawn(include!("sync_client_start/part02.rs"));
         track_task(&self.tasks, task);

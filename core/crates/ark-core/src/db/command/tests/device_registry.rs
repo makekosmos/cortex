@@ -240,7 +240,12 @@ async fn registry_history_is_paged_and_remote_events_apply_idempotently() {
         )
         .await
         .unwrap();
-    assert_eq!(first_digest, retry_digest);
+    assert_eq!(first_digest.digest, retry_digest.digest);
+    assert_eq!(
+        first_digest.applied_events.as_slice(),
+        std::slice::from_ref(&rename)
+    );
+    assert!(retry_digest.applied_events.is_empty());
     handle.with_connection(|connection| {
         let alias: String = connection
             .query_row(

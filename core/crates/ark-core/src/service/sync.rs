@@ -71,6 +71,35 @@ async fn spawn_sync_client(env: &ClientEnv, peer: PeerRecord) {
 
     // Callback tasks hold `server`; `stop_and_join` waits for them.
     let registry = client.callback_registry();
+    let server_for_registry = Arc::downgrade(server);
+    let clients_for_registry = Arc::downgrade(clients);
+    let registry_tasks = registry.clone();
+    client
+        .set_on_registry_events(Arc::new(move |events| {
+            let server = server_for_registry.clone();
+            let clients = clients_for_registry.clone();
+            crate::task_set::track_task(
+                &registry_tasks,
+                tokio::spawn(async move {
+                    if let Some(server) = server.upgrade() {
+                        for event in &events {
+                            server.broadcast_registry_event(event.clone()).await;
+                        }
+                    }
+                    let Some(clients) = clients.upgrade() else {
+                        return;
+                    };
+                    let peers = clients.lock().await.values().cloned().collect::<Vec<_>>();
+                    for client in peers {
+                        for event in &events {
+                            client.broadcast_registry_event(event.clone()).await;
+                        }
+                    }
+                }),
+            );
+        }))
+        .await;
+
     let server_for_connect = server.clone();
     let peer_addrs = peer.addresses.clone();
     let registry_for_connect = registry.clone();

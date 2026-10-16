@@ -39,12 +39,16 @@ pub(crate) struct DirectRegistryAdmission {
     protocol: NegotiatedProtocol,
     session_id: Option<String>,
     phase: AdmissionPhase,
+    session_revoked: bool,
 }
 
 pub(crate) struct AdmissionUpdate {
     pub(crate) outgoing: Vec<LanSyncMessage>,
     pub(crate) became_ready: bool,
+    pub(crate) exchange_complete: bool,
+    pub(crate) close_session: bool,
     pub(crate) disabled_device_ids: Vec<String>,
+    pub(crate) applied_events: Vec<crate::domain::device_registry::RegistryEvent>,
 }
 
 impl DirectRegistryAdmission {
@@ -122,6 +126,7 @@ impl DirectRegistryAdmission {
             protocol,
             session_id: None,
             phase,
+            session_revoked: false,
         })
     }
 
@@ -130,7 +135,10 @@ impl DirectRegistryAdmission {
         storage: &dyn SyncRuntimeStorage,
         message: LanSyncMessage,
     ) -> Result<AdmissionUpdate, String> {
+        let was_ready = matches!(self.phase, AdmissionPhase::Ready);
         let mut disabled_device_ids = Vec::new();
+        let mut applied_events = Vec::new();
+        let mut close_session = false;
         let outgoing = match (&self.phase, message) {
             (
                 AdmissionPhase::WaitingForStart,
@@ -265,16 +273,12 @@ impl DirectRegistryAdmission {
                 let result = storage
                     .apply_device_registry_events(self.peer_device_id.as_str(), &events)
                     .await?;
-                if result
+                applied_events.extend(result.applied_events);
+                close_session |= result
                     .disabled_device_ids
                     .iter()
-                    .any(|device_id| device_id == self.local_device_id.as_str())
-                {
-                    return Err("registry_sync_local_device_disabled".into());
-                }
-                if !result.sender_is_admitted {
-                    return Err("registry_sync_peer_disabled".into());
-                }
+                    .any(|device_id| device_id == self.local_device_id.as_str());
+                close_session |= !result.sender_is_admitted;
                 disabled_device_ids.extend(result.disabled_device_ids);
                 let is_last = page_index + 1 == page_count;
                 if let AdmissionPhase::Exchanging {
@@ -320,25 +324,27 @@ impl DirectRegistryAdmission {
                         std::slice::from_ref(&event),
                     )
                     .await?;
-                if !result.sender_is_admitted {
-                    return Err("registry_update_sender_disabled".into());
-                }
-                if result.disabled_device_ids.iter().any(|device_id| {
+                applied_events.extend(result.applied_events);
+                close_session |= !result.sender_is_admitted;
+                close_session |= result.disabled_device_ids.iter().any(|device_id| {
                     device_id == self.local_device_id.as_str()
                         || device_id == self.peer_device_id.as_str()
-                }) {
-                    return Err("registry_update_disabled_session_participant".into());
-                }
+                });
                 disabled_device_ids.extend(result.disabled_device_ids);
                 Vec::new()
             }
             _ => return Err("registry_admission_unexpected_control".into()),
         };
         self.promote_if_ready()?;
+        let exchange_complete = matches!(self.phase, AdmissionPhase::Ready);
+        self.session_revoked |= close_session;
         Ok(AdmissionUpdate {
             outgoing,
-            became_ready: matches!(self.phase, AdmissionPhase::Ready),
+            became_ready: exchange_complete && !self.session_revoked && !was_ready,
+            exchange_complete,
+            close_session: self.session_revoked,
             disabled_device_ids,
+            applied_events,
         })
     }
 

@@ -9,7 +9,6 @@ pub(super) async fn handle_hello(ctx: &MessageContext, peer_id: usize, msg: LanS
         device_name,
         own_addresses,
         auth_secret,
-        known_peer_records: _,
         ..
     } = ctx;
     if let LanSyncMessage::Hello {

@@ -29,6 +29,7 @@ pub(super) async fn handle_registry_admission(
             return;
         }
     };
+    broadcast_registry_events(ctx, peer_id, &update.applied_events).await;
     if revoke_disabled_sessions(ctx, &update.disabled_device_ids).await {
         return;
     }
@@ -153,6 +154,38 @@ pub(super) async fn handle_registry_admission(
         send_msg(&tx, &LanSyncMessage::PeerList { peers: known });
     });
     eprintln!("{TAG} Direct registry admission ready for {device_id}");
+}
+
+async fn broadcast_registry_events(
+    ctx: &MessageContext,
+    source_peer_id: usize,
+    events: &[crate::domain::device_registry::RegistryEvent],
+) {
+    if events.is_empty() {
+        return;
+    }
+    let peers = ctx.peers.lock().await;
+    for (peer_id, peer) in peers.iter() {
+        if *peer_id == source_peer_id || !peer.authenticated {
+            continue;
+        }
+        let Some(session_id) = peer
+            .registry_admission
+            .as_ref()
+            .and_then(|admission| admission.session_id())
+        else {
+            continue;
+        };
+        for event in events {
+            send_msg(
+                &peer.tx,
+                &LanSyncMessage::RegistryEventUpdate {
+                    session_id: session_id.to_owned(),
+                    event: event.clone(),
+                },
+            );
+        }
+    }
 }
 
 async fn revoke_disabled_sessions(ctx: &MessageContext, disabled_device_ids: &[String]) -> bool {

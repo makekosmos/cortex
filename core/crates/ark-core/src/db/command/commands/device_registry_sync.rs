@@ -204,17 +204,16 @@ impl DbCommand for ApplyRegistryEventsCommand {
             return Err(DbError::Invalid("device_registry_page_bounds".into()));
         }
         require_registry_peer_admitted(transaction, &self.sender_device_id)?;
-        apply_events(transaction, &self.events)?;
-        let disabled_device_ids = self
-            .events
+        let applied_events = apply_events(transaction, &self.events)?;
+        let disabled_device_ids = applied_events
             .iter()
-            .filter_map(|event| {
+            .filter(|event| {
                 matches!(
                     event.operation(),
                     crate::domain::device_registry::RegistryOperation::Disable
                 )
-                .then(|| event.target_device_id().as_str().to_owned())
             })
+            .map(|event| event.target_device_id().as_str().to_owned())
             .collect();
         let sender_is_admitted = transaction
             .query_row(
@@ -230,6 +229,7 @@ impl DbCommand for ApplyRegistryEventsCommand {
             digest: registry_digest(transaction)?,
             sender_is_admitted,
             disabled_device_ids,
+            applied_events,
         })
     }
 }
@@ -258,8 +258,9 @@ pub(super) fn require_registry_peer_admitted(
 pub(super) fn apply_events(
     transaction: &Transaction<'_>,
     events: &[RegistryEvent],
-) -> Result<(), DbError> {
+) -> Result<Vec<RegistryEvent>, DbError> {
     let mut registry = load_registry(transaction)?;
+    let mut applied_events = Vec::new();
     for event in events {
         let event_json =
             serde_json::to_string(event).map_err(|error| DbError::Storage(error.to_string()))?;
@@ -316,8 +317,9 @@ pub(super) fn apply_events(
             )
             .map_err(storage_error)?;
         persist_projection(transaction, target)?;
+        applied_events.push(event.clone());
     }
-    Ok(())
+    Ok(applied_events)
 }
 
 pub(super) fn load_registry(transaction: &Connection) -> Result<DeviceRegistry, DbError> {

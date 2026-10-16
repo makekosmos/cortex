@@ -105,7 +105,6 @@
                                         .handle(
                                             sync_msg,
                                             &storage,
-                                            &peer_device_id_actual,
                                             &tx,
                                             &authenticated_tx,
                                             &peer,
@@ -257,6 +256,7 @@
                                                 &space_id,
                                                 negotiated_protocol.clone(),
                                                 pending_peer,
+                                                on_registry_events.clone(),
                                             )
                                             {
                                                 Ok(admission) => admission,

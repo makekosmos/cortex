@@ -142,7 +142,7 @@ fn append_local_registry_event(
         &signing_key,
     )
     .map_err(registry_error)?;
-    super::device_registry_sync::apply_events(transaction, std::slice::from_ref(&event))?;
+    let _ = super::device_registry_sync::apply_events(transaction, std::slice::from_ref(&event))?;
     Ok(Some(event))
 }
 

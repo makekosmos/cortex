@@ -23,6 +23,7 @@ fn registry_backend(device_id: &str) -> (Arc<crate::db::SqliteStorageBackend>, i
 async fn direct_client_and_server_exchange_registry_before_sync_readiness() {
     let (client_storage, client_key) = registry_backend("client-device");
     let (server_storage, server_key) = registry_backend("server-device");
+    let (observer_storage, observer_key) = registry_backend("observer-device");
     client_storage
         .enroll_paired_device(
             "client-device",
@@ -39,6 +40,22 @@ async fn direct_client_and_server_exchange_registry_before_sync_readiness() {
         )
         .await
         .expect("server must have a signed client enrollment");
+    observer_storage
+        .enroll_paired_device(
+            "observer-device",
+            "server-device",
+            &server_key.public().to_string(),
+        )
+        .await
+        .expect("observer must have a signed server enrollment");
+    server_storage
+        .enroll_paired_device(
+            "server-device",
+            "observer-device",
+            &observer_key.public().to_string(),
+        )
+        .await
+        .expect("server must have a signed observer enrollment");
 
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind port");
     let address = listener.local_addr().expect("read port");
@@ -99,6 +116,32 @@ async fn direct_client_and_server_exchange_registry_before_sync_readiness() {
     .expect("server readiness should follow the mutual registry digest");
     assert_eq!(sync_server.connected_peer_count().await, 1);
 
+    let observer = SyncClient::new(
+        observer_storage.clone() as Arc<dyn crate::sync_server::SyncRuntimeStorage>,
+        PeerRecord {
+            device_id: "server-device".into(),
+            device_name: "Server".into(),
+            addresses: vec![address.to_string()],
+            last_seen: String::new(),
+            last_address: None,
+            platform: None,
+            app_version: None,
+        },
+        "observer-device".into(),
+        "Observer".into(),
+        "space-test".into(),
+        Vec::new(),
+        None,
+    );
+    observer.start();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while sync_server.connected_peer_count().await != 2 {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("second direct peer should complete signed admission");
+
     let additional_key = iroh::SecretKey::generate();
     server_storage
         .enroll_paired_device(
@@ -135,10 +178,46 @@ async fn direct_client_and_server_exchange_registry_before_sync_readiness() {
     .await
     .expect("connected direct peer should apply signed registry update");
 
+    let child_key = iroh::SecretKey::generate();
+    client_storage
+        .enroll_paired_device(
+            "client-device",
+            "client-child",
+            &child_key.public().to_string(),
+        )
+        .await
+        .expect("client should commit a registry event for relay");
+    let (_, _, client_events) = client_storage
+        .load_device_registry_events_page(0, None, 32)
+        .await
+        .expect("load client registry history");
+    let relayed_event = client_events
+        .iter()
+        .find(|event| event.target_device_id().as_str() == "client-child")
+        .expect("client child enrollment should append one event")
+        .clone();
+    client.broadcast_registry_event(relayed_event.clone()).await;
+    tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            let (_, _, events) = observer_storage
+                .load_device_registry_events_page(0, None, 32)
+                .await
+                .expect("load observer registry history");
+            if events
+                .iter()
+                .any(|event| event.event_id() == relayed_event.event_id())
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("server should relay a newly applied event to another direct peer");
+
     let server_head = server_events
         .iter()
-        .filter(|event| event.actor_device_id().as_str() == "server-device")
-        .last()
+        .rfind(|event| event.actor_device_id().as_str() == "server-device")
         .expect("server should own its local enrollment history");
     let server_public_key = ed25519_dalek::VerifyingKey::from_bytes(server_key.public().as_bytes())
         .expect("server signing public key should be valid");
@@ -191,7 +270,7 @@ async fn direct_client_and_server_exchange_registry_before_sync_readiness() {
     })
     .await
     .expect("connected direct peer should apply the signed disable event");
-    assert_eq!(sync_server.connected_peer_count().await, 0);
+    assert_eq!(sync_server.connected_peer_count().await, 1);
     let (_, _, client_events) = client_storage
         .load_device_registry_events_page(0, None, 32)
         .await
@@ -201,6 +280,7 @@ async fn direct_client_and_server_exchange_registry_before_sync_readiness() {
         .any(|event| event.event_id() == disable_client.event_id()));
 
     client.stop_and_join().await;
+    observer.stop_and_join().await;
     sync_server.stop().await;
 }
 

@@ -170,7 +170,7 @@ pub(super) mod reject_tests {
     async fn assert_hello_rejected_with_close(hello: LanSyncMessage, port: u16) {
         let expected_target = match &hello {
             LanSyncMessage::Hello { device_id, .. } => device_id.as_str(),
-            _ => unreachable!("test helper only accepts Hello"),
+            _ => panic!("test helper only accepts Hello"),
         };
         let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}"))
             .await

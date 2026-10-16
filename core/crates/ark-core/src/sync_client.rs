@@ -30,6 +30,8 @@ pub type ClientOnChangeCallback = Arc<dyn Fn(SyncEntity) + Send + Sync>;
 pub type ClientOnConnectedCallback = Arc<dyn Fn(PeerRecord) + Send + Sync>;
 pub type ClientOnDisconnectedCallback = Arc<dyn Fn(String) + Send + Sync>;
 pub type ClientOnPeerListCallback = Arc<dyn Fn(Vec<PeerRecord>) + Send + Sync>;
+pub type ClientOnRegistryEventsCallback =
+    Arc<dyn Fn(Vec<crate::domain::device_registry::RegistryEvent>) + Send + Sync>;
 
 // Authenticated peer channel: (peer device_id, outbound sender) behind the
 // shared mutex so the connection-scoped negotiated session becomes visible
@@ -65,6 +67,7 @@ pub struct SyncClient {
     on_connected: Arc<Mutex<Option<ClientOnConnectedCallback>>>,
     on_disconnected: Arc<Mutex<Option<ClientOnDisconnectedCallback>>>,
     on_peer_list: Arc<Mutex<Option<ClientOnPeerListCallback>>>,
+    on_registry_events: Arc<Mutex<Option<ClientOnRegistryEventsCallback>>>,
     /// The connection loop from `start` and each connection's writer. They
     /// hold `storage` (the shared ark.db connection); `stop_and_join` aborts
     /// and joins them so none outlives teardown (KOS-270, KOS-369).
@@ -99,6 +102,7 @@ impl SyncClient {
             on_connected: Arc::new(Mutex::new(None)),
             on_disconnected: Arc::new(Mutex::new(None)),
             on_peer_list: Arc::new(Mutex::new(None)),
+            on_registry_events: Arc::new(Mutex::new(None)),
             tasks: Arc::new(std::sync::Mutex::new(Vec::new())),
             callbacks: Arc::new(std::sync::Mutex::new(Vec::new())),
         }
@@ -202,6 +206,10 @@ impl SyncClient {
 
     pub async fn set_on_peer_list(&self, handler: ClientOnPeerListCallback) {
         *self.on_peer_list.lock().await = Some(handler);
+    }
+
+    pub async fn set_on_registry_events(&self, handler: ClientOnRegistryEventsCallback) {
+        *self.on_registry_events.lock().await = Some(handler);
     }
 
     /// The device_id of the peer this client dials — the authenticated id

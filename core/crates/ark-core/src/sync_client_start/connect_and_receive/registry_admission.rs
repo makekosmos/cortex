@@ -4,6 +4,7 @@ pub(super) struct PendingRegistryAdmission {
     admission: crate::sync_registry_admission::DirectRegistryAdmission,
     protocol: NegotiatedProtocol,
     peer_record: PeerRecord,
+    on_registry_events: Arc<Mutex<Option<ClientOnRegistryEventsCallback>>>,
 }
 
 impl PendingRegistryAdmission {
@@ -13,6 +14,7 @@ impl PendingRegistryAdmission {
         space_id: &str,
         protocol: NegotiatedProtocol,
         peer_record: PeerRecord,
+        on_registry_events: Arc<Mutex<Option<ClientOnRegistryEventsCallback>>>,
     ) -> Result<(Self, LanSyncMessage), String> {
         let (admission, start) =
             crate::sync_registry_admission::DirectRegistryAdmission::initiator(
@@ -26,6 +28,7 @@ impl PendingRegistryAdmission {
                 admission,
                 protocol,
                 peer_record,
+                on_registry_events,
             },
             start,
         ))
@@ -35,15 +38,22 @@ impl PendingRegistryAdmission {
         &mut self,
         message: LanSyncMessage,
         storage: &Arc<dyn SyncRuntimeStorage>,
-        peer_device_id: &str,
         tx: &mpsc::UnboundedSender<Message>,
         authenticated_tx: &crate::sync_client::AuthenticatedTx,
         peer: &Arc<RwLock<PeerRecord>>,
         on_connected: &Arc<Mutex<Option<ClientOnConnectedCallback>>>,
     ) -> Result<bool, String> {
         let update = self.admission.handle(storage.as_ref(), message).await?;
+        if !update.applied_events.is_empty() {
+            if let Some(handler) = self.on_registry_events.lock().await.as_ref() {
+                handler(update.applied_events.clone());
+            }
+        }
         for outgoing in update.outgoing {
             send_msg(tx, &outgoing);
+        }
+        if update.close_session && update.exchange_complete {
+            return Err("registry_admission_session_revoked".into());
         }
         if !update.became_ready {
             return Ok(false);
@@ -51,10 +61,10 @@ impl PendingRegistryAdmission {
 
         let generation = storage.selective_sync_policy_generation();
         storage
-            .begin_outbound_policy(peer_device_id, generation)
+            .begin_outbound_policy(&self.peer_record.device_id, generation)
             .await?;
         *authenticated_tx.lock().await = Some(crate::sync_client::AuthenticatedPeerSession {
-            peer_id: peer_device_id.to_owned(),
+            peer_id: self.peer_record.device_id.clone(),
             registry_session_id: self
                 .admission
                 .session_id()

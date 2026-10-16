@@ -53,6 +53,7 @@ async fn rejects_page_after_declared_count_without_applying_its_event() {
             capabilities: BTreeSet::from([ProtocolCapability::RegistryHistoryV1]),
         },
         session_id: Some("session-test".into()),
+        session_revoked: false,
         phase: AdmissionPhase::Exchanging {
             incoming_page_count: Some(1),
             next_page_index: 1,
@@ -132,6 +133,7 @@ async fn does_not_admit_local_device_disabled_by_registry_page() {
             capabilities: BTreeSet::from([ProtocolCapability::RegistryHistoryV1]),
         },
         session_id: Some("session-test".into()),
+        session_revoked: false,
         phase: AdmissionPhase::Exchanging {
             incoming_page_count: None,
             next_page_index: 0,
@@ -152,8 +154,8 @@ async fn does_not_admit_local_device_disabled_by_registry_page() {
             },
         )
         .await;
-    match result {
-        Err(error) => assert_eq!(error, "registry_sync_local_device_disabled"),
-        Ok(_) => panic!("disabled local device must not reach data-ready"),
-    }
+    let update = result.expect("signed disable event should be committed for relay");
+    assert!(update.close_session);
+    assert!(!update.became_ready);
+    assert_eq!(update.applied_events.len(), 1);
 }
