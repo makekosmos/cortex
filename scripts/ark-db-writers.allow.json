@@ -252,27 +252,27 @@
       "count": 1
     },
     {
-      "path": "core/crates/ark-core/src/type_registry/part01.rs",
+      "path": "core/crates/ark-core/src/type_registry/version_storage.rs",
       "category": "SQLite mutation API",
       "count": 1
     },
     {
-      "path": "core/crates/ark-core/src/type_registry/part02.rs",
+      "path": "core/crates/ark-core/src/type_registry/type_catalog.rs",
       "category": "SQLite mutation API",
       "count": 2
     },
     {
-      "path": "core/crates/ark-core/src/type_registry/part03.rs",
+      "path": "core/crates/ark-core/src/type_registry/type_updates.rs",
       "category": "SQLite mutation API",
       "count": 3
     },
     {
-      "path": "core/crates/ark-core/src/type_registry/part04.rs",
+      "path": "core/crates/ark-core/src/type_registry/registration_migrations.rs",
       "category": "SQLite mutation API",
       "count": 11
     },
     {
-      "path": "core/crates/ark-core/src/type_registry/part05.rs",
+      "path": "core/crates/ark-core/src/type_registry/builtins.rs",
       "category": "SQLite mutation API",
       "count": 1
     }

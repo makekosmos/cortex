@@ -1,5 +1,5 @@
-include!("type_registry/part01.rs");
-include!("type_registry/part02.rs");
-include!("type_registry/part03.rs");
-include!("type_registry/part04.rs");
-include!("type_registry/part05.rs");
+include!("type_registry/version_storage.rs");
+include!("type_registry/type_catalog.rs");
+include!("type_registry/type_updates.rs");
+include!("type_registry/registration_migrations.rs");
+include!("type_registry/builtins.rs");
