@@ -5,6 +5,7 @@
 
 use super::*;
 
+#[cfg(test)]
 pub(super) fn with_conn<T, F>(state: &ServiceState, f: F) -> Result<T, String>
 where
     F: FnOnce(&rusqlite::Connection) -> Result<T, String>,

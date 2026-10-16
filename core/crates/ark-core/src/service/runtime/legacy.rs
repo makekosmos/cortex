@@ -20,10 +20,10 @@ pub(super) async fn init(state: &Arc<ServiceState>, db_path: String) -> Result<V
 }
 
 pub(super) async fn load_all(state: &Arc<ServiceState>) -> Result<Value, String> {
-    with_conn(state, |conn| {
-        let data = db::load_all(conn)?;
-        serde_json::to_value(data).map_err(|e| e.to_string())
-    })
+    get_db_handle(state)?
+        .query(db::CommandContext::engine(), db::ObjectReadQuery::LoadAll)
+        .await
+        .map_err(|error| error.to_string())
 }
 
 // Legacy entity write handlers: до 2026-05-18 они не вызывали
