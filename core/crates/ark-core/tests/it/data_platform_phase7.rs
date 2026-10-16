@@ -1,4 +1,5 @@
 #![allow(clippy::unwrap_used)]
+use ark_core::application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
 use ark_core::{data_platform, db};
 use rusqlite::Connection;
 use serde_json::json;
@@ -207,7 +208,6 @@ fn selective_profile_projects_closure_in_order_and_keeps_local_copy_on_disable()
 #[tokio::test]
 async fn selective_profile_is_used_by_backend_pages_and_replay_is_idempotent() {
     use ark_core::db::SqliteStorageBackend;
-    use ark_core::sync_server::StorageBackend;
     let conn = Connection::open_in_memory().unwrap();
     db::init_schema(&conn).unwrap();
     for (id, name) in [("com.example.note", "Note"), ("com.example.game", "Game")] {
@@ -255,7 +255,7 @@ async fn selective_profile_is_used_by_backend_pages_and_replay_is_idempotent() {
         data_platform::SyncMode::Metadata,
     );
     backend.set_selective_sync_profile(Some(profile));
-    let loaded = backend.load_entities(&HashMap::new()).await;
+    let loaded = backend.load_entities(&HashMap::new()).await.unwrap();
     assert_eq!(
         loaded
             .iter()
@@ -276,6 +276,7 @@ async fn selective_profile_is_used_by_backend_pages_and_replay_is_idempotent() {
         backend
             .load_entities_page(&HashMap::new(), 0, 2)
             .await
+            .unwrap()
             .len(),
         2
     );

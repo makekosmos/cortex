@@ -31,7 +31,7 @@ async fn disconnect_peer_stops_matching_outbound_client_and_emits_events() {
         app_version: None,
     };
     let client = Arc::new(SyncClient::new(
-        backend.clone() as Arc<dyn crate::sync_server::SyncStorageBackend>,
+        backend.clone() as Arc<dyn crate::sync_server::SyncRuntimeStorage>,
         peer,
         "device-local".to_string(),
         "Local Device".to_string(),
@@ -45,7 +45,7 @@ async fn disconnect_peer_stops_matching_outbound_client_and_emits_events() {
     ));
     let runtime = SyncRuntime {
         server: Arc::new(crate::sync_server::SyncServer::new(
-            backend.clone() as Arc<dyn crate::sync_server::SyncStorageBackend>
+            backend.clone() as Arc<dyn crate::sync_server::SyncRuntimeStorage>
         )),
         storage: backend,
         clients: clients.clone(),
@@ -79,6 +79,41 @@ async fn disconnect_peer_stops_matching_outbound_client_and_emits_events() {
     *state.sync.lock().await = Some(Arc::new(runtime));
 
     let mut event_rx = crate::events::subscribe();
+
+    handle_request(
+        &state,
+        Request::SetSyncKv {
+            key: crate::application::sync_storage::REMOVED_PEERS_KEY.into(),
+            value: "not-json".into(),
+        },
+    )
+    .await
+    .unwrap();
+    let error = handle_disconnect_peer(&state, "peer-123".to_string())
+        .await
+        .expect_err("failed peer persistence must be reported to the caller");
+    assert!(
+        error.contains("invalid persisted sync progress"),
+        "unexpected error: {error}"
+    );
+    assert!(
+        client.is_stopped(),
+        "outbound client must stop despite DB failure"
+    );
+    assert!(clients.lock().await.is_empty());
+    assert!(
+        event_rx.try_recv().is_err(),
+        "failed persistence must not emit a success event"
+    );
+    handle_request(
+        &state,
+        Request::SetSyncKv {
+            key: crate::application::sync_storage::REMOVED_PEERS_KEY.into(),
+            value: "[]".into(),
+        },
+    )
+    .await
+    .unwrap();
 
     handle_disconnect_peer(&state, "peer-123".to_string())
         .await

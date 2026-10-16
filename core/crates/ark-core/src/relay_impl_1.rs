@@ -1,5 +1,5 @@
 impl RelaySync {
-    pub fn new(storage: Arc<dyn SyncStorageBackend>, config: RelaySyncConfig) -> Arc<Self> {
+    pub fn new(storage: Arc<dyn SyncRuntimeStorage>, config: RelaySyncConfig) -> Arc<Self> {
         let auth_secret = normalize_auth_secret(config.auth_secret.clone());
         let transport: Arc<dyn SyncTransport> = Arc::new(RelayTransport::new(RelayConfig {
             url: config.relay_url.clone(),
@@ -18,7 +18,7 @@ impl RelaySync {
     /// `IrohTransport`), or any other `SyncTransport` impl, instead of always
     /// constructing a `RelayTransport` internally from `config.relay_url`.
     pub fn with_transport(
-        storage: Arc<dyn SyncStorageBackend>,
+        storage: Arc<dyn SyncRuntimeStorage>,
         config: RelaySyncConfig,
         transport: Arc<dyn SyncTransport>,
     ) -> Arc<Self> {
@@ -167,11 +167,14 @@ impl RelaySync {
                 }
                 // A peer the user removed via «Отключить» must not silently
                 // re-authenticate — same block as the WS server Hello path.
-                if crate::sync_server::load_removed_peer_ids(&self.storage)
-                    .await
-                    .iter()
-                    .any(|id| id == &device_id)
-                {
+                let removed = match crate::sync_server::load_removed_peer_ids(&self.storage).await {
+                    Ok(ids) => ids,
+                    Err(error) => {
+                        eprintln!("{TAG} failed to load blocked peer list: {error}");
+                        return;
+                    }
+                };
+                if removed.iter().any(|id| id == &device_id) {
                     eprintln!("{TAG} rejecting hello from removed peer {device_id}");
                     return;
                 }
@@ -218,11 +221,21 @@ impl RelaySync {
                     platform,
                     app_version,
                 };
-                let known = merge_peer_records(
-                    &crate::sync_server::load_known_peer_records(&self.storage).await,
-                    &[record],
-                );
-                crate::sync_server::save_known_peers(&self.storage, &known).await;
+                let current = match crate::sync_server::load_known_peer_records(&self.storage).await
+                {
+                    Ok(peers) => peers,
+                    Err(error) => {
+                        eprintln!("{TAG} failed to load known peers: {error}");
+                        return;
+                    }
+                };
+                let known = merge_peer_records(&current, &[record]);
+                if let Err(error) =
+                    crate::sync_server::save_known_peers(&self.storage, &known).await
+                {
+                    eprintln!("{TAG} failed to persist known peers: {error}");
+                    return;
+                }
 
                 if was_new {
                     if let Some(handler) = self.on_peer_connect.lock().await.as_ref() {
@@ -292,6 +305,20 @@ impl RelaySync {
         }
     }
 
+    async fn send_local_version_vector(&self) {
+        let vector = match load_version_vector(&self.storage).await {
+            Ok(vector) => vector,
+            Err(error) => {
+                eprintln!("{TAG} failed to load local sync progress: {error}");
+                return;
+            }
+        };
+        let _ = self.transport.send(LanSyncMessage::VersionVector {
+            vector,
+            origin_device_id: Some(self.config.device_id.clone()),
+        });
+    }
+
     async fn is_authenticated_peer(&self, device_id: &str) -> bool {
         self.peers
             .lock()
@@ -299,5 +326,42 @@ impl RelaySync {
             .get(device_id)
             .map(|peer| peer.authenticated)
             .unwrap_or(false)
+    }
+
+    /// Evict a peer before fallible persistence so failed writes cannot keep it live.
+    pub async fn disconnect_peer(&self, device_id: &str) -> Result<(), String> {
+        self.transport_keys.lock().await.remove(device_id);
+        if self
+            .pending_pairing
+            .lock()
+            .await
+            .remove(device_id)
+            .is_some()
+        {
+            self.notify_pairing_changed().await;
+        }
+        let was_connected = self.peers.lock().await.remove(device_id).is_some();
+        let transport_result = self
+            .transport
+            .disconnect_peer(device_id)
+            .map_err(|error| format!("failed to disconnect transport peer: {error}"));
+        let persistence_result = async {
+            let mut keys = crate::sync_server::load_peer_transport_keys(&self.storage).await?;
+            if keys.remove(device_id).is_some() {
+                crate::sync_server::save_peer_transport_keys(&self.storage, &keys).await?;
+            }
+            Ok::<(), String>(())
+        }
+        .await;
+        if was_connected {
+            if let Some(handler) = self.on_peer_disconnect.lock().await.as_ref() {
+                handler(device_id.to_string(), self.peers.lock().await.len());
+            }
+        }
+        match (transport_result, persistence_result) {
+            (Ok(()), Ok(())) => Ok(()),
+            (Err(error), Ok(())) | (Ok(()), Err(error)) => Err(error),
+            (Err(first), Err(second)) => Err(format!("{first}; {second}")),
+        }
     }
 }

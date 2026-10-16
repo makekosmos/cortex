@@ -74,7 +74,13 @@ pub(super) async fn handle_live_change(
         return;
     }
 
-    let mut local_vector = load_version_vector(storage).await;
+    let mut local_vector = match load_version_vector(storage).await {
+        Ok(vector) => vector,
+        Err(error) => {
+            eprintln!("{TAG} failed to load sync version vector: {error}");
+            return;
+        }
+    };
     let should_apply = is_usage_entity(&entity)
         || local_vector
             .get(&entity.id)
@@ -87,8 +93,18 @@ pub(super) async fn handle_live_change(
         {
             Ok(()) => {
                 if observe_non_usage_entity(&mut local_vector, &entity) {
-                    merge_usage_cursors(&mut local_vector, &load_version_vector(storage).await);
-                    save_version_vector(storage, &local_vector).await;
+                    let stored_vector = match load_version_vector(storage).await {
+                        Ok(vector) => vector,
+                        Err(error) => {
+                            eprintln!("{TAG} failed to reload sync progress: {error}");
+                            return;
+                        }
+                    };
+                    merge_usage_cursors(&mut local_vector, &stored_vector);
+                    if let Err(error) = save_version_vector(storage, &local_vector).await {
+                        eprintln!("{TAG} failed to save sync progress: {error}");
+                        return;
+                    }
                 }
 
                 if let Some(handler) = on_change.lock().await.as_ref() {
@@ -109,6 +125,7 @@ pub(super) async fn handle_live_change(
                     "{TAG} Failed to apply live sync entity {}:{}: {e}",
                     entity.entity_type, entity.id
                 );
+                return;
             }
         }
     }
@@ -146,7 +163,13 @@ pub(super) async fn handle_peer_list(
     // Blocked peers must not re-enter through gossiped peer lists —
     // otherwise a removed device resurrects in known_peers and gets
     // re-gossiped to the rest of the mesh.
-    let removed = load_removed_peer_ids(storage).await;
+    let removed = match load_removed_peer_ids(storage).await {
+        Ok(removed) => removed,
+        Err(error) => {
+            eprintln!("{TAG} failed to load blocked peer list: {error}");
+            return;
+        }
+    };
     // Filter self-references: our own device_id, or any record whose
     // addresses are all ours (stale phantom from prior runs).
     let filtered: Vec<PeerRecord> = incoming_peers
@@ -168,7 +191,10 @@ pub(super) async fn handle_peer_list(
     let mut known = known_peer_records.lock().await;
     let before_count = known.len();
     *known = merge_peer_records(&known, &filtered);
-    save_known_peers(storage, &known).await;
+    if let Err(error) = save_known_peers(storage, &known).await {
+        eprintln!("{TAG} failed to persist known peers: {error}");
+        return;
+    }
 
     // Notify about new peers
     if let Some(handler) = on_new_peer_discovered.lock().await.as_ref() {
@@ -183,6 +209,72 @@ pub(super) async fn handle_peer_list(
         eprintln!(
             "{TAG} Peer list updated: {before_count} -> {} known peers",
             known.len()
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sync_server::sync_server_tests::tests::MemBackend;
+
+    #[tokio::test]
+    async fn failed_live_entity_apply_does_not_ack() {
+        let backend = Arc::new(MemBackend::new());
+        backend.fail_authenticated_apply("injected write failure");
+        let storage = backend as Arc<dyn SyncRuntimeStorage>;
+        let server = SyncServer::new(storage.clone());
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        server.peers.lock().await.insert(
+            7,
+            PeerState {
+                device_id: "peer".into(),
+                device_name: "Peer".into(),
+                addresses: Vec::new(),
+                platform: None,
+                app_version: None,
+                authenticated: true,
+                sync_complete: true,
+                queued_live_changes: Vec::new(),
+                tx,
+            },
+        );
+        let ctx = MessageContext {
+            peers: server.peers.clone(),
+            storage,
+            space_id: server.space_id.clone(),
+            device_id: server.device_id.clone(),
+            device_name: server.device_name.clone(),
+            own_addresses: server.own_addresses.clone(),
+            auth_secret: server.auth_secret.clone(),
+            known_peer_records: server.known_peer_records.clone(),
+            on_change: server.on_change.clone(),
+            on_peer_connect: server.on_peer_connect.clone(),
+            on_new_peer_discovered: server.on_new_peer_discovered.clone(),
+        };
+
+        sync_server_inbound::handle_live_change(
+            &ctx,
+            7,
+            "change-1".into(),
+            SyncEntity {
+                entity_type: "object".into(),
+                id: "object-1".into(),
+                data: serde_json::json!({"name": "object"})
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+                hlc: "2026-10-16T00:00:00.000Z:000001:peer".into(),
+                deleted: None,
+                origin_device_id: None,
+                origin_seq: None,
+            },
+        )
+        .await;
+
+        assert!(
+            rx.try_recv().is_err(),
+            "failed entity apply must not emit LiveAck"
         );
     }
 }

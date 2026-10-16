@@ -1,88 +1,5 @@
-use std::collections::HashMap;
-
 use crate::integration_replication::SignedSyncEnvelope;
-use crate::types::{SyncEntity, VersionVector};
-
-/// Priority of an outbound sync read. Initial device hydration may run for a
-/// long time and must not share the live-change admission class.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SyncReadClass {
-    SyncLive,
-    Backfill,
-}
-
-impl SyncReadClass {
-    /// A live session stays in backfill mode until it completes its first sync.
-    pub fn for_sync_state(sync_complete: bool) -> Self {
-        if sync_complete {
-            Self::SyncLive
-        } else {
-            Self::Backfill
-        }
-    }
-
-    /// Usage cursors alone do not prove that the peer has received ordinary
-    /// records; treat a usage-only vector as an initial hydration.
-    pub fn for_peer_vector(vector: &VersionVector) -> Self {
-        if vector.keys().any(|key| !key.starts_with("@usage:")) {
-            Self::SyncLive
-        } else {
-            Self::Backfill
-        }
-    }
-}
-
-#[async_trait::async_trait]
-pub trait StorageBackend: Send + Sync {
-    async fn load_entities(&self, vector: &VersionVector) -> Vec<SyncEntity>;
-    async fn load_entities_page(
-        &self,
-        vector: &VersionVector,
-        offset: usize,
-        limit: usize,
-    ) -> Vec<SyncEntity>;
-
-    /// Load a page for a known peer. The peer and class are carried to storage
-    /// so per-device selection and bounded Backfill admission can be enforced
-    /// without changing the sync wire format. Backends that do not need the
-    /// context retain the original paging behavior.
-    async fn load_entities_page_for_peer(
-        &self,
-        _peer_device_id: &str,
-        _class: SyncReadClass,
-        vector: &VersionVector,
-        offset: usize,
-        limit: usize,
-    ) -> Vec<SyncEntity> {
-        self.load_entities_page(vector, offset, limit).await
-    }
-    async fn apply_entity(&self, entity: &SyncEntity) -> Result<(), String>;
-    async fn get_kv(&self, key: &str) -> Option<String>;
-    async fn set_kv(&self, key: &str, value: &str);
-
-    /// Per usage origin device, the highest seq this node can serve
-    /// completely — sent as `usage_complete_through` on the final sync page
-    /// so the receiver can raise its `@usage:` cursor past compacted holes
-    /// (KOS-302). Backends without a usage journal return an empty map and
-    /// keep contiguous-only cursor advancement.
-    async fn usage_complete_through(&self) -> HashMap<String, u64> {
-        HashMap::new()
-    }
-
-    /// Peer-aware form of the sync completeness query. The default preserves
-    /// existing backends while allowing policy-aware stores to scope it.
-    async fn usage_complete_through_for_peer(
-        &self,
-        _peer_device_id: &str,
-        _class: SyncReadClass,
-    ) -> HashMap<String, u64> {
-        self.usage_complete_through().await
-    }
-
-    fn filter_outgoing_entity(&self, entity: &SyncEntity) -> Option<SyncEntity> {
-        Some(entity.clone())
-    }
-}
+use crate::types::SyncEntity;
 
 /// Applies an ordinary entity only after the sync boundary authenticated its peer.
 #[async_trait::async_trait]
@@ -99,9 +16,17 @@ pub trait AuthenticatedEntityBackend: Send + Sync {
 /// Trusted transport identity records used while authenticating a paired peer.
 #[async_trait::async_trait]
 pub trait PeerIdentityBackend: Send + Sync {
-    async fn authorized_transport_public_key(&self, _device_id: &str) -> Option<String> {
-        None
-    }
+    async fn authorized_transport_public_key(
+        &self,
+        device_id: &str,
+    ) -> Result<Option<String>, String>;
+    async fn load_peer_transport_keys(
+        &self,
+    ) -> Result<std::collections::HashMap<String, String>, String>;
+    async fn store_peer_transport_keys(
+        &self,
+        keys: &std::collections::HashMap<String, String>,
+    ) -> Result<(), String>;
 }
 
 /// Persistence operations for signed integration replication. Kept separate
@@ -176,17 +101,21 @@ pub trait IntegrationReplicationBackend: Send + Sync {
 }
 
 /// The complete storage surface required by the sync runtime.
-pub trait SyncStorageBackend
+pub trait SyncRuntimeStorage
 where
-    Self: StorageBackend
+    Self: crate::application::sync_storage::SyncEntityReadPort
+        + crate::application::sync_storage::SyncEntityMutationPort
+        + crate::application::sync_storage::PeerProgressPort
         + AuthenticatedEntityBackend
         + PeerIdentityBackend
         + IntegrationReplicationBackend,
 {
 }
 
-impl<T> SyncStorageBackend for T where
-    T: StorageBackend
+impl<T> SyncRuntimeStorage for T where
+    T: crate::application::sync_storage::SyncEntityReadPort
+        + crate::application::sync_storage::SyncEntityMutationPort
+        + crate::application::sync_storage::PeerProgressPort
         + AuthenticatedEntityBackend
         + PeerIdentityBackend
         + IntegrationReplicationBackend
@@ -196,7 +125,8 @@ impl<T> SyncStorageBackend for T where
 
 #[cfg(test)]
 mod tests {
-    use super::{IntegrationReplicationBackend, SyncReadClass};
+    use super::IntegrationReplicationBackend;
+    use crate::application::sync_storage::SyncReadClass;
     use crate::integration_replication::SignedSyncEnvelope;
     use crate::types::VersionVector;
 

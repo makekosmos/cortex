@@ -450,7 +450,7 @@
     #[tokio::test]
     async fn persist_pull_vector_preserves_concurrent_keys() {
         let shared = Arc::new(Mutex::new(setup_db()));
-        let backend: Arc<dyn crate::sync_server::SyncStorageBackend> =
+        let backend: Arc<dyn crate::sync_server::SyncRuntimeStorage> =
             Arc::new(SqliteStorageBackend::for_test(shared.clone()));
 
         // The session snapshot predates the concurrent write.
@@ -479,9 +479,9 @@
             }
             save_stored_vector(&guard, &stored);
         }
-
-        crate::sync_server::persist_pull_vector(&backend, &mut pull_vector, true, true, None).await;
-
+        crate::sync_server::persist_pull_vector(&backend, &mut pull_vector, true, true, None)
+            .await
+            .unwrap();
         let guard = shared.lock().unwrap_or_else(|e| e.into_inner());
         let stored = stored_vector(&guard);
         let get = |key: &str| stored.get(key).map(String::as_str);

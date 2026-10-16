@@ -78,7 +78,14 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                 reject_hello(peers, peer_id).await;
                 return;
             }
-            let removed = load_removed_peer_ids(storage).await;
+            let removed = match load_removed_peer_ids(storage).await {
+                Ok(removed) => removed,
+                Err(error) => {
+                    eprintln!("{TAG} failed to load blocked peer list: {error}");
+                    reject_hello(peers, peer_id).await;
+                    return;
+                }
+            };
             if !peer_device_id.is_empty() && removed.iter().any(|id| id == &peer_device_id) {
                 eprintln!("{TAG} Rejecting blocked peer: {peer_device_id}");
                 reject_hello(peers, peer_id).await;
@@ -149,11 +156,21 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                         platform: peer_platform,
                         app_version: peer_app_version,
                     };
-                    let removed = load_removed_peer_ids(storage).await;
+                    let removed = match load_removed_peer_ids(storage).await {
+                        Ok(removed) => removed,
+                        Err(error) => {
+                            eprintln!("{TAG} failed to load blocked peer list: {error}");
+                            reject_hello(peers, peer_id).await;
+                            return;
+                        }
+                    };
                     if !removed.iter().any(|id| id == &new_record.device_id) {
                         let mut known = known_peer_records.lock().await;
                         *known = merge_peer_records(&known, &[new_record]);
-                        save_known_peers(storage, &known).await;
+                        if let Err(error) = save_known_peers(storage, &known).await {
+                            eprintln!("{TAG} failed to persist known peers: {error}");
+                            return;
+                        }
                     }
                 }
             }
@@ -188,7 +205,13 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
             }
 
             // Send version vector
-            let vector = load_version_vector(storage).await;
+            let vector = match load_version_vector(storage).await {
+                Ok(vector) => vector,
+                Err(error) => {
+                    eprintln!("{TAG} failed to load sync version vector: {error}");
+                    return;
+                }
+            };
             send_msg(
                 &tx,
                 &LanSyncMessage::VersionVector {
@@ -220,24 +243,39 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                 }
             };
 
-            let mut local_vector = load_version_vector(storage).await;
+            let mut local_vector = match load_version_vector(storage).await {
+                Ok(vector) => vector,
+                Err(error) => {
+                    eprintln!("{TAG} failed to load sync version vector: {error}");
+                    return;
+                }
+            };
 
             // Hole-tolerant cursors (KOS-302): snapshot the completeness
             // claims BEFORE the first page is read. Computed afterwards
             // they could include a seq allocated mid-pull — the peer would
             // advance its cursor past an entry it never received.
             let read_class =
-                crate::replication_storage::SyncReadClass::for_sync_state(peer_sync_complete);
-            let complete_through = storage
+                crate::application::sync_storage::SyncReadClass::for_sync_state(peer_sync_complete);
+            let complete_through = match storage
                 .usage_complete_through_for_peer(&peer_device_id, read_class)
-                .await;
+                .await
+            {
+                Ok(through) => through,
+                Err(error) => {
+                    eprintln!(
+                        "{TAG} outbound usage progress read failed for {peer_device_id}: {error}"
+                    );
+                    return;
+                }
+            };
 
             let mut vector_updated = false;
             let mut offset = 0;
             loop {
                 let mut load_vector = local_vector.clone();
                 merge_usage_cursors(&mut load_vector, &remote_vector);
-                let entities = storage
+                let entities = match storage
                     .load_entities_page_for_peer(
                         &peer_device_id,
                         read_class,
@@ -245,7 +283,16 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                         offset,
                         SYNC_LOAD_PAGE_SIZE,
                     )
-                    .await;
+                    .await
+                {
+                    Ok(entities) => entities,
+                    Err(error) => {
+                        eprintln!(
+                            "{TAG} outbound sync page read failed for {peer_device_id}: {error}"
+                        );
+                        return;
+                    }
+                };
                 if entities.is_empty() {
                     break;
                 }
@@ -274,7 +321,10 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                 }
             }
             if vector_updated {
-                save_version_vector(storage, &local_vector).await;
+                if let Err(error) = save_version_vector(storage, &local_vector).await {
+                    eprintln!("{TAG} failed to save sync version vector: {error}");
+                    return;
+                }
             }
             send_msg(
                 &tx,
@@ -325,7 +375,13 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                 }
             };
 
-            let mut local_vector = load_version_vector(storage).await;
+            let mut local_vector = match load_version_vector(storage).await {
+                Ok(vector) => vector,
+                Err(error) => {
+                    eprintln!("{TAG} failed to load sync version vector: {error}");
+                    return;
+                }
+            };
             let mut accepted = 0;
             let mut vector_updated = false;
 
@@ -362,14 +418,18 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                 }
             }
 
-            persist_pull_vector(
+            if let Err(error) = persist_pull_vector(
                 storage,
                 &mut local_vector,
                 vector_updated,
                 is_last,
                 usage_complete_through.as_ref(),
             )
-            .await;
+            .await
+            {
+                eprintln!("{TAG} failed to persist pulled sync progress: {error}");
+                return;
+            }
             send_msg(&tx, &LanSyncMessage::SyncAck { batch_id, accepted });
 
             if is_last {

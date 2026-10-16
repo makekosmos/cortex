@@ -39,11 +39,27 @@ impl RelaySync {
         }
         self.peers.lock().await.remove(responder_device_id);
         self.transport_keys.lock().await.remove(responder_device_id);
-        let mut keys = crate::sync_server::load_peer_transport_keys(&self.storage).await;
+        let mut keys = match crate::sync_server::load_peer_transport_keys(&self.storage).await {
+            Ok(keys) => keys,
+            Err(error) => {
+                eprintln!("[RelaySync] failed to load pairing keys: {error}");
+                return;
+            }
+        };
         if keys.remove(responder_device_id).is_some() {
-            crate::sync_server::save_peer_transport_keys(&self.storage, &keys).await;
+            if let Err(error) =
+                crate::sync_server::save_peer_transport_keys(&self.storage, &keys).await
+            {
+                eprintln!("[RelaySync] failed to persist pairing keys: {error}");
+                return;
+            }
         }
-        crate::sync_server::remove_peer_record(&self.storage, responder_device_id).await;
+        if let Err(error) =
+            crate::sync_server::remove_peer_record(&self.storage, responder_device_id).await
+        {
+            eprintln!("[RelaySync] failed to remove rejected peer: {error}");
+            return;
+        }
         let _ = self.transport.disconnect_transport_peer(endpoint);
         if let Some(handler) = self.on_peer_disconnect.lock().await.as_ref() {
             handler(
@@ -122,7 +138,11 @@ impl RelaySync {
         if self.is_authenticated_peer(&from_device_id).await {
             if paired_keys.get(&from_device_id) != Some(&transport_public_key) {
                 paired_keys.insert(from_device_id, transport_public_key);
-                crate::sync_server::save_peer_transport_keys(&self.storage, &paired_keys).await;
+                if let Err(error) =
+                    crate::sync_server::save_peer_transport_keys(&self.storage, &paired_keys).await
+                {
+                    eprintln!("[RelaySync] failed to persist pairing keys: {error}");
+                }
             }
         } else {
             let _ = self.transport.unbind_authenticated_peer(&from_device_id);
@@ -183,8 +203,8 @@ impl RelaySync {
             .ok_or_else(|| format!("no pending pairing request for {device_id}"))?;
         // Saying «Принять» to a previously removed device is explicit
         // re-consent — clear the removed flag before handle_message drops it.
-        crate::sync_server::unblock_peer_id(&self.storage, device_id).await;
-        let paired_keys = crate::sync_server::load_peer_transport_keys(&self.storage).await;
+        crate::sync_server::unblock_peer_id(&self.storage, device_id).await?;
+        let paired_keys = crate::sync_server::load_peer_transport_keys(&self.storage).await?;
         self.admit_transport_hello(
             device_id.to_string(),
             request.transport_public_key,

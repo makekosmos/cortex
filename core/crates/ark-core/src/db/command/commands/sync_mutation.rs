@@ -5,6 +5,27 @@ use crate::types::SyncEntity;
 use rusqlite::Transaction;
 use serde::Serialize;
 
+struct SqliteInboundSyncEntitySession<'transaction, 'connection>(
+    &'transaction Transaction<'connection>,
+);
+
+impl crate::application::sync_storage::SyncEntityMutationSession
+    for SqliteInboundSyncEntitySession<'_, '_>
+{
+    fn apply_entity(
+        &mut self,
+        entity: &SyncEntity,
+        authenticated_peer_id: Option<&str>,
+    ) -> Result<Vec<ReplayNotice>, String> {
+        match authenticated_peer_id {
+            Some(peer_id) => SqliteStorageBackend::apply_authenticated_entity_in_transaction(
+                self.0, entity, peer_id,
+            ),
+            None => SqliteStorageBackend::apply_entity_in_transaction(self.0, entity),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct EnsureUsageSequenceMigratedCommand {
     device_id: String,
@@ -65,8 +86,13 @@ impl DbCommand for ApplySyncEntityCommand {
         transaction: &Transaction<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_system_sync()?;
-        SqliteStorageBackend::apply_entity_in_transaction(transaction, &self.entity)
-            .map_err(DbError::from_application_error)
+        let mut session = SqliteInboundSyncEntitySession(transaction);
+        crate::application::sync_storage::apply_inbound_sync_entity(
+            &mut session,
+            &self.entity,
+            None,
+        )
+        .map_err(DbError::from_application_error)
     }
 }
 
@@ -98,10 +124,11 @@ impl DbCommand for ApplyAuthenticatedSyncEntityCommand {
         transaction: &Transaction<'_>,
     ) -> Result<Self::Output, DbError> {
         let peer_id = context.authenticated_peer_id()?;
-        SqliteStorageBackend::apply_authenticated_entity_in_transaction(
-            transaction,
+        let mut session = SqliteInboundSyncEntitySession(transaction);
+        crate::application::sync_storage::apply_inbound_sync_entity(
+            &mut session,
             &self.entity,
-            peer_id,
+            Some(peer_id),
         )
         .map_err(DbError::from_application_error)
     }

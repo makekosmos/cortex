@@ -9,7 +9,7 @@ async fn hmac_authenticated_sync_succeeds_with_matching_secret() {
         .unwrap();
 
     let server_a = Arc::new(SyncServer::new(
-        storage_a.clone() as Arc<dyn SyncStorageBackend>
+        storage_a.clone() as Arc<dyn SyncRuntimeStorage>
     ));
     server_a
         .set_auth_secret(Some("mesh-secret".to_string()))
@@ -37,7 +37,7 @@ async fn hmac_authenticated_sync_succeeds_with_matching_secret() {
         app_version: None,
     };
     let client = Arc::new(SyncClient::new(
-        storage_b.clone() as Arc<dyn SyncStorageBackend>,
+        storage_b.clone() as Arc<dyn SyncRuntimeStorage>,
         peer,
         "device-b".to_string(),
         "Beta".to_string(),
@@ -49,7 +49,7 @@ async fn hmac_authenticated_sync_succeeds_with_matching_secret() {
 
     tokio::time::sleep(Duration::from_millis(500)).await;
 
-    let loaded_b = storage_b.load_entities(&HashMap::new()).await;
+    let loaded_b = storage_b.load_entities(&HashMap::new()).await.unwrap();
     assert!(
         loaded_b.iter().any(|e| e.id == "hmac-entity-a"),
         "matching HMAC secret should allow initial sync; got {:?}",
@@ -75,7 +75,7 @@ async fn hmac_authenticated_sync_rejects_wrong_secret() {
         .unwrap();
 
     let server_a = Arc::new(SyncServer::new(
-        storage_a.clone() as Arc<dyn SyncStorageBackend>
+        storage_a.clone() as Arc<dyn SyncRuntimeStorage>
     ));
     server_a
         .set_auth_secret(Some("correct-secret".to_string()))
@@ -103,7 +103,7 @@ async fn hmac_authenticated_sync_rejects_wrong_secret() {
         app_version: None,
     };
     let client = Arc::new(SyncClient::new(
-        storage_b.clone() as Arc<dyn SyncStorageBackend>,
+        storage_b.clone() as Arc<dyn SyncRuntimeStorage>,
         peer,
         "device-b".to_string(),
         "Beta".to_string(),
@@ -120,7 +120,7 @@ async fn hmac_authenticated_sync_rejects_wrong_secret() {
         0,
         "server must not authenticate a peer with the wrong HMAC secret",
     );
-    let loaded_b = storage_b.load_entities(&HashMap::new()).await;
+    let loaded_b = storage_b.load_entities(&HashMap::new()).await.unwrap();
     assert!(
         !loaded_b.iter().any(|e| e.id == "hmac-denied-a"),
         "wrong-secret client must not receive protected sync data",
@@ -153,18 +153,13 @@ async fn usage_entities_sync_between_two_servers() {
     vector_a.insert(tracked_app.id.clone(), tracked_app.hlc.clone());
     vector_a.insert(session.id.clone(), session.hlc.clone());
     vector_a.insert(event.id.clone(), event.hlc.clone());
-    storage_a
-        .set_kv(
-            "lan_sync.version_vector",
-            &serde_json::to_string(&vector_a).unwrap(),
-        )
-        .await;
+    storage_a.store_version_vector(&vector_a).await.unwrap();
 
     let server_a = Arc::new(SyncServer::new(
-        storage_a.clone() as Arc<dyn SyncStorageBackend>
+        storage_a.clone() as Arc<dyn SyncRuntimeStorage>
     ));
     let server_b = Arc::new(SyncServer::new(
-        storage_b.clone() as Arc<dyn SyncStorageBackend>
+        storage_b.clone() as Arc<dyn SyncRuntimeStorage>
     ));
 
     let port_a = pick_port().await;
@@ -202,7 +197,7 @@ async fn usage_entities_sync_between_two_servers() {
         app_version: None,
     };
     let client = Arc::new(SyncClient::new(
-        storage_b.clone() as Arc<dyn SyncStorageBackend>,
+        storage_b.clone() as Arc<dyn SyncRuntimeStorage>,
         peer,
         "device-b".to_string(),
         "Beta".to_string(),
@@ -214,7 +209,7 @@ async fn usage_entities_sync_between_two_servers() {
 
     tokio::time::sleep(Duration::from_millis(500)).await;
 
-    let loaded_b = storage_b.load_entities(&HashMap::new()).await;
+    let loaded_b = storage_b.load_entities(&HashMap::new()).await.unwrap();
     assert!(
         loaded_b
             .iter()
@@ -260,7 +255,7 @@ async fn usage_entities_sync_between_two_servers() {
 
     tokio::time::sleep(Duration::from_millis(500)).await;
 
-    let loaded_b_after = storage_b.load_entities(&HashMap::new()).await;
+    let loaded_b_after = storage_b.load_entities(&HashMap::new()).await.unwrap();
     assert!(
         loaded_b_after
             .iter()

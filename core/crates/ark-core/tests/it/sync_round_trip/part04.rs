@@ -131,10 +131,10 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
     storage_b.set_selective_sync_profile(Some(profile));
 
     let server_a = Arc::new(SyncServer::new(
-        storage_a.clone() as Arc<dyn SyncStorageBackend>
+        storage_a.clone() as Arc<dyn SyncRuntimeStorage>
     ));
     let server_b = Arc::new(SyncServer::new(
-        storage_b.clone() as Arc<dyn SyncStorageBackend>
+        storage_b.clone() as Arc<dyn SyncRuntimeStorage>
     ));
     let port_a = pick_port().await;
     let port_b = pick_port().await;
@@ -169,7 +169,7 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
         app_version: None,
     };
     let client = Arc::new(SyncClient::new(
-        storage_b.clone() as Arc<dyn SyncStorageBackend>,
+        storage_b.clone() as Arc<dyn SyncRuntimeStorage>,
         peer.clone(),
         "device-b".into(),
         "Beta".into(),
@@ -180,7 +180,7 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
     client.start();
     tokio::time::sleep(Duration::from_millis(700)).await;
 
-    let loaded = storage_b.load_entities(&HashMap::new()).await;
+    let loaded = storage_b.load_entities(&HashMap::new()).await.unwrap();
     assert!(loaded.iter().any(|entity| entity.id == note.id));
     let task_copy = loaded.iter().find(|entity| entity.id == task.id).unwrap();
     assert!(task_copy.data.contains_key("contentJson"));
@@ -206,7 +206,7 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
     client.stop();
     tokio::time::sleep(Duration::from_millis(100)).await;
     let reconnect = Arc::new(SyncClient::new(
-        storage_b.clone() as Arc<dyn SyncStorageBackend>,
+        storage_b.clone() as Arc<dyn SyncRuntimeStorage>,
         peer,
         "device-b".into(),
         "Beta".into(),
@@ -216,7 +216,7 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
     ));
     reconnect.start();
     tokio::time::sleep(Duration::from_millis(700)).await;
-    let replayed = storage_b.load_entities(&HashMap::new()).await;
+    let replayed = storage_b.load_entities(&HashMap::new()).await.unwrap();
     assert_eq!(
         replayed
             .iter()
@@ -231,6 +231,7 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
     assert!(storage_b
         .load_entities(&HashMap::new())
         .await
+        .unwrap()
         .iter()
         .any(|entity| entity.id == "sync-game"));
     storage_a.set_selective_sync_profile(Some(data_platform::SelectiveSyncProfile {
@@ -250,6 +251,7 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
     assert!(storage_a
         .load_entities(&HashMap::new())
         .await
+        .unwrap()
         .iter()
         .any(|entity| entity.id == "sync-game"));
 
@@ -260,7 +262,7 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
     storage_a.apply_entity(&deleted_game).await.unwrap();
     server_a.broadcast_live_change(deleted_game, None).await;
     tokio::time::sleep(Duration::from_millis(200)).await;
-    let tombstones_b = storage_b.load_entities(&HashMap::new()).await;
+    let tombstones_b = storage_b.load_entities(&HashMap::new()).await.unwrap();
     let game_tombstone = tombstones_b
         .iter()
         .find(|entity| entity.deleted == Some(true) && entity.id == "sync-game")

@@ -286,7 +286,7 @@ impl SyncTransport for IrohTransport {
 
     fn set_outbound_storage(
         &self,
-        storage: Arc<dyn crate::replication_storage::SyncStorageBackend>,
+        storage: Arc<dyn crate::replication_storage::SyncRuntimeStorage>,
         space_id: &str,
         origin_node_id: &str,
     ) -> Result<(), String> {

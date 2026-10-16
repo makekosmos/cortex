@@ -50,8 +50,8 @@ pub use protocol::{
     MAX_BATCH_BYTES, MAX_BATCH_SIZE, PROTOCOL_VERSION,
 };
 pub use replication_storage::{
-    AuthenticatedEntityBackend, IntegrationReplicationBackend, PeerIdentityBackend, StorageBackend,
-    SyncStorageBackend,
+    AuthenticatedEntityBackend, IntegrationReplicationBackend, PeerIdentityBackend,
+    SyncRuntimeStorage,
 };
 pub use sync_bind::SyncBind;
 pub use types::{

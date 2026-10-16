@@ -9,7 +9,7 @@ use tokio_tungstenite::tungstenite::Message;
 use crate::hlc::HLC;
 use crate::integration_replication::SignedSyncEnvelope;
 use crate::protocol::*;
-use crate::replication_storage::SyncStorageBackend;
+use crate::replication_storage::SyncRuntimeStorage;
 use crate::task_set::{abort_and_join, join_all, track_task};
 
 #[path = "sync_client_start.rs"]
@@ -17,7 +17,6 @@ mod sync_client_start;
 use crate::types::*;
 
 const TAG: &str = "[SyncClient]";
-const VERSION_VECTOR_KEY: &str = "lan_sync.version_vector";
 const CONNECT_TIMEOUT_MS: u64 = 5_000;
 const RECONNECT_BASE_MS: u64 = 2_000;
 const RECONNECT_MAX_MS: u64 = 30_000;
@@ -41,7 +40,7 @@ type AuthenticatedTx = Arc<Mutex<Option<(String, mpsc::UnboundedSender<Message>)
 // ---------------------------------------------------------------------------
 
 pub struct SyncClient {
-    storage: Arc<dyn SyncStorageBackend>,
+    storage: Arc<dyn SyncRuntimeStorage>,
     peer: Arc<RwLock<PeerRecord>>,
     device_id: String,
     device_name: String,
@@ -65,7 +64,7 @@ pub struct SyncClient {
 
 impl SyncClient {
     pub fn new(
-        storage: Arc<dyn SyncStorageBackend>,
+        storage: Arc<dyn SyncRuntimeStorage>,
         peer: PeerRecord,
         device_id: String,
         device_name: String,
@@ -215,16 +214,17 @@ impl SyncClient {
 // Helpers
 // ---------------------------------------------------------------------------
 
-async fn load_version_vector(storage: &Arc<dyn SyncStorageBackend>) -> VersionVector {
-    match storage.get_kv(VERSION_VECTOR_KEY).await {
-        Some(raw) => serde_json::from_str(&raw).unwrap_or_default(),
-        None => VersionVector::new(),
-    }
+async fn load_version_vector(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+) -> Result<VersionVector, String> {
+    storage.load_version_vector().await
 }
 
-async fn save_version_vector(storage: &Arc<dyn SyncStorageBackend>, vector: &VersionVector) {
-    let json = serde_json::to_string(vector).unwrap_or_default();
-    storage.set_kv(VERSION_VECTOR_KEY, &json).await;
+async fn save_version_vector(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+    vector: &VersionVector,
+) -> Result<(), String> {
+    storage.store_version_vector(vector).await
 }
 
 fn send_msg(tx: &mpsc::UnboundedSender<Message>, msg: &LanSyncMessage) {

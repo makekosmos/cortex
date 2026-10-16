@@ -3,10 +3,13 @@
 // ---------------------------------------------------------------------------
 
 use super::*;
+use crate::application::sync_storage::SyncEntityMutationPort;
 
+mod disconnect;
 mod events;
 mod pairing;
 mod start;
+pub(crate) use self::disconnect::handle_disconnect_peer;
 use self::events::wire_relay_sync_events;
 // Re-exported so `service.rs` can import it as `self::sync::handle_start_sync`.
 pub(crate) use self::start::handle_start_sync;
@@ -48,7 +51,7 @@ async fn spawn_sync_client(env: &ClientEnv, peer: PeerRecord) {
     }
 
     let client = Arc::new(SyncClient::new(
-        storage.clone() as Arc<dyn SyncStorageBackend>,
+        storage.clone() as Arc<dyn SyncRuntimeStorage>,
         peer.clone(),
         device_id.clone(),
         device_name.clone(),
@@ -79,12 +82,15 @@ async fn spawn_sync_client(env: &ClientEnv, peer: PeerRecord) {
             crate::task_set::track_task(
                 &registry_for_connect,
                 tokio::spawn(async move {
-                    server
+                    if let Err(error) = server
                         .register_external_peer(PeerRecord {
                             addresses: addrs,
                             ..record
                         })
-                        .await;
+                        .await
+                    {
+                        eprintln!("sync failed to register connected peer: {error}");
+                    }
                 }),
             );
             emit_event(json!({
@@ -202,7 +208,7 @@ pub(super) async fn handle_broadcast_change(
     };
 
     // Stamp HLC on the outgoing entity.
-    let hlc = runtime.server.update_entity_hlc(&entity.id).await;
+    let hlc = runtime.server.update_entity_hlc(&entity.id).await?;
     entity.hlc = hlc;
 
     // Persist locally so future version-vector exchanges reflect it.
@@ -266,7 +272,7 @@ pub(super) async fn handle_get_sync_snapshot(state: &Arc<ServiceState>) -> Resul
         connected.extend(relay.get_connected_peer_entries().await);
         (incoming_pairing_requests, outgoing_pairing) = pairing::snapshot(relay).await;
     }
-    let known = runtime.server.get_known_peers().await;
+    let known = runtime.server.get_known_peers().await?;
     // Fresh Hello metadata wins over the persisted record: a peer that just
     // upgraded keeps its old platform/version in storage until it reconnects.
     let connected_meta: std::collections::HashMap<String, (Option<String>, Option<String>)> =
@@ -342,64 +348,6 @@ pub(super) async fn handle_get_sync_snapshot(state: &Arc<ServiceState>) -> Resul
     }))
 }
 
-pub(super) async fn handle_disconnect_peer(
-    state: &Arc<ServiceState>,
-    device_id: String,
-) -> Result<Value, String> {
-    let guard = state.sync.lock().await;
-    let runtime = match guard.as_ref() {
-        Some(r) => r.clone(),
-        None => return Err("Sync not running".to_string()),
-    };
-    drop(guard);
-    let device_id = device_id.trim();
-    if device_id.is_empty() {
-        return Err("device_id is empty".to_string());
-    }
-
-    let _ = runtime.server.disconnect_peer(device_id).await;
-    // Transport-paired peers (iroh) live in RelaySync's own peer table —
-    // without this eviction they keep syncing and stay "online" after
-    // «Отключить» until the Engine restarts (KOS-367).
-    if let Some(relay) = runtime.relay.as_ref() {
-        relay.disconnect_peer(device_id).await;
-    }
-
-    let client_entries: Vec<(String, Arc<SyncClient>)> = {
-        let clients = runtime.clients.lock().await;
-        clients
-            .iter()
-            .map(|(key, client)| (key.clone(), client.clone()))
-            .collect()
-    };
-    let mut removed_client_ids: Vec<String> = Vec::new();
-    for (client_key, client) in client_entries {
-        let peer = client.current_peer().await;
-        if peer.device_id == device_id {
-            client.disconnect().await;
-            removed_client_ids.push(client_key);
-        }
-    }
-    if !removed_client_ids.is_empty() {
-        let mut clients = runtime.clients.lock().await;
-        for client_id in removed_client_ids {
-            clients.remove(&client_id);
-        }
-    }
-
-    let mut remaining = runtime.server.connected_peer_count().await;
-    if let Some(relay) = runtime.relay.as_ref() {
-        remaining += relay.connected_peer_count().await;
-    }
-    emit_event(json!({
-        "event": "peer_disconnected",
-        "device_id": device_id,
-        "remaining": remaining,
-    }));
-    emit_event(json!({"event": "peer_list_updated"}));
-    Ok(json!(true))
-}
-
 pub(super) async fn handle_get_connected_peers(state: &Arc<ServiceState>) -> Result<Value, String> {
     let runtime = {
         let guard = state.sync.lock().await;
@@ -455,7 +403,6 @@ pub(super) async fn handle_get_connected_peers(state: &Arc<ServiceState>) -> Res
             seen.insert(entry.device_id.clone(), entry);
         }
     }
-
     let list: Vec<Value> = order
         .into_iter()
         .filter_map(|id| {
@@ -471,7 +418,6 @@ pub(super) async fn handle_get_connected_peers(state: &Arc<ServiceState>) -> Res
         .collect();
     Ok(json!(list))
 }
-
 pub(super) async fn handle_add_seed_peer(
     state: &Arc<ServiceState>,
     addresses: Vec<String>,

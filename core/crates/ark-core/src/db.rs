@@ -139,9 +139,9 @@ mod tests {
     use super::snapshot::{default_rollback_restore, restore_snapshot_impl, validate_snapshot_id};
     use super::usage::merge_top_apps;
     use super::*;
+    use crate::application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
     use crate::hlc::HLC;
     use crate::integration_replication::*;
-    use crate::replication_storage::StorageBackend;
     use crate::schema::*;
     use crate::type_registry;
     use crate::types::*;

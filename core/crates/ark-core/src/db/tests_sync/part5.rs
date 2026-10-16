@@ -100,7 +100,7 @@
                 .unwrap();
         }
 
-        let loaded = backend.load_entities(&VersionVector::new()).await;
+        let loaded = backend.load_entities(&VersionVector::new()).await.unwrap();
         let live_count = loaded
             .iter()
             .filter(|entity| entity.id == "session-live")

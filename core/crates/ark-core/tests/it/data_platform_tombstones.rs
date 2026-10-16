@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
+use ark_core::application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
 
 use ark_core::db::SqliteStorageBackend;
-use ark_core::sync_server::StorageBackend;
 use ark_core::{data_platform, db};
 use rusqlite::Connection;
 use serde_json::json;
@@ -41,7 +41,7 @@ async fn deleted_object_tombstone_keeps_type_through_collection_filter_and_apply
     let mut profile = data_platform::SelectiveSyncProfile::default();
     profile.set_rule("type", "com.kosmos.note", data_platform::SyncMode::Full);
     source.set_selective_sync_profile(Some(profile));
-    let loaded = source.load_entities(&HashMap::new()).await;
+    let loaded = source.load_entities(&HashMap::new()).await.unwrap();
     let tombstone = loaded
         .iter()
         .find(|entity| entity.id == "deleted-note" && entity.deleted == Some(true))

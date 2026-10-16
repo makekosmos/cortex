@@ -183,7 +183,15 @@
                                         }
 
                                         // Send version vector
-                                        let vector = load_version_vector(&storage).await;
+                                        let vector = match load_version_vector(&storage).await {
+                                            Ok(vector) => vector,
+                                            Err(error) => {
+                                                eprintln!(
+                                            "{TAG} failed to load sync version vector: {error}"
+                                        );
+                                                break;
+                                            }
+                                        };
                                         send_msg(
                                             &tx,
                                             &LanSyncMessage::VersionVector {
@@ -201,14 +209,18 @@
                                             continue;
                                         }
 
-                                        send_missing_entities::send(
+                                        if let Err(error) = send_missing_entities::send(
                                             &storage,
                                             &tx,
                                             &peer_device_id_actual,
                                             &remote_vector,
                                             sync_complete,
                                         )
-                                        .await;
+                                        .await
+                                        {
+                                            eprintln!("{TAG} outbound sync failed: {error}");
+                                            break;
+                                        }
 
                                         sync_complete = true;
                                         // Flush queued live changes
@@ -236,7 +248,16 @@
                                             continue;
                                         }
 
-                                        let mut local_vector = load_version_vector(&storage).await;
+                                        let mut local_vector =
+                                            match load_version_vector(&storage).await {
+                                                Ok(vector) => vector,
+                                                Err(error) => {
+                                                    eprintln!(
+                                                    "{TAG} failed to load version vector: {error}"
+                                                );
+                                                    break;
+                                                }
+                                            };
                                         let mut accepted = 0;
                                         let mut vector_updated = false;
 
@@ -276,14 +297,20 @@
                                             }
                                         }
 
-                                        crate::sync_server::persist_pull_vector(
+                                        if let Err(error) = crate::sync_server::persist_pull_vector(
                                             &storage,
                                             &mut local_vector,
                                             vector_updated,
                                             is_last,
                                             usage_complete_through.as_ref(),
                                         )
-                                        .await;
+                                        .await
+                                        {
+                                            eprintln!(
+                                                "{TAG} failed to persist pull progress: {error}"
+                                            );
+                                            break;
+                                        }
                                         send_msg(
                                             &tx,
                                             &LanSyncMessage::SyncAck { batch_id, accepted },
@@ -336,7 +363,16 @@
                                             continue;
                                         }
 
-                                        let mut local_vector = load_version_vector(&storage).await;
+                                        let mut local_vector =
+                                            match load_version_vector(&storage).await {
+                                                Ok(vector) => vector,
+                                                Err(error) => {
+                                                    eprintln!(
+                                                    "{TAG} failed to load version vector: {error}"
+                                                );
+                                                    break;
+                                                }
+                                            };
                                         let should_apply = is_usage_entity(&entity)
                                             || local_vector
                                                 .get(&entity.id)
@@ -355,15 +391,31 @@
                                                         &mut local_vector,
                                                         &entity,
                                                     ) {
+                                                        let stored_vector =
+                                                            match load_version_vector(&storage)
+                                                                .await
+                                                            {
+                                                                Ok(vector) => vector,
+                                                                Err(error) => {
+                                                                    eprintln!(
+                                                                    "{TAG} reload failed: {error}"
+                                                                );
+                                                                    break;
+                                                                }
+                                                            };
                                                         merge_usage_cursors(
                                                             &mut local_vector,
-                                                            &load_version_vector(&storage).await,
+                                                            &stored_vector,
                                                         );
-                                                        save_version_vector(
+                                                        if let Err(error) = save_version_vector(
                                                             &storage,
                                                             &local_vector,
                                                         )
-                                                        .await;
+                                                        .await
+                                                        {
+                                                            eprintln!("{TAG} save failed: {error}");
+                                                            break;
+                                                        }
                                                     }
 
                                                     if let Some(handler) =
@@ -378,6 +430,9 @@
                                                              {}:{}: {e}",
                                                         entity.entity_type, entity.id
                                                     );
+                                                    // Do not acknowledge a change that was not
+                                                    // committed locally; the sender must retry it.
+                                                    break;
                                                 }
                                             }
                                         }

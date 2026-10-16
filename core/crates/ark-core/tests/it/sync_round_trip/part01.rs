@@ -15,7 +15,7 @@ use std::time::Duration;
 
 use ark_core::db::{init_schema, SqliteStorageBackend};
 use ark_core::sync_client::SyncClient;
-use ark_core::sync_server::{StorageBackend, SyncServer, SyncStorageBackend};
+use ark_core::sync_server::{SyncRuntimeStorage, SyncServer};
 use ark_core::types::{
     PeerRecord, SyncEntity, TrackedApp, UsageEvent, UsageSession, VersionVector,
 };

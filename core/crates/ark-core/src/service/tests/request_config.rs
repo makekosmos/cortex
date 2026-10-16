@@ -77,7 +77,7 @@ fn pairing_restart_params_force_iroh_and_replace_ticket() {
     )));
     let runtime = SyncRuntime {
         server: Arc::new(crate::sync_server::SyncServer::new(
-            storage.clone() as Arc<dyn crate::sync_server::SyncStorageBackend>
+            storage.clone() as Arc<dyn crate::sync_server::SyncRuntimeStorage>
         )),
         storage,
         clients: Arc::new(TokioMutex::new(HashMap::new())),
@@ -132,7 +132,7 @@ fn loopback_runtime_fixture() -> SyncRuntime {
     )));
     SyncRuntime {
         server: Arc::new(crate::sync_server::SyncServer::new(
-            storage.clone() as Arc<dyn crate::sync_server::SyncStorageBackend>
+            storage.clone() as Arc<dyn crate::sync_server::SyncRuntimeStorage>
         )),
         storage,
         clients: Arc::new(TokioMutex::new(HashMap::new())),
@@ -274,6 +274,76 @@ async fn start_sync_with_use_iroh_selects_iroh_transport_and_exposes_ticket() {
         ticket.as_str().is_some_and(|s| !s.is_empty()),
         "expected a non-empty iroh ticket string, got {ticket:?}"
     );
+    handle_request(&state, Request::StopSync).await.unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn corrupt_peer_state_fails_before_listener_start_and_retry_succeeds() {
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    handle_request(
+        &state,
+        Request::Init {
+            db_path: fixture.db_path().to_string_lossy().into_owned(),
+        },
+    )
+    .await
+    .unwrap();
+    handle_request(
+        &state,
+        Request::SetSyncKv {
+            key: crate::application::sync_storage::KNOWN_PEERS_KEY.into(),
+            value: "not-json".into(),
+        },
+    )
+    .await
+    .unwrap();
+    let port = {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.local_addr().unwrap().port()
+    };
+    let params = || StartSyncParams {
+        space_id: "retry-space".into(),
+        device_id: "retry-device".into(),
+        device_name: Some("Retry Device".into()),
+        port: Some(port),
+        seed_addresses: None,
+        relay_url: None,
+        relay_api_key: None,
+        auth_secret: None,
+        use_iroh: false,
+        iroh_peer_ticket: None,
+        iroh_relay_url: None,
+        pairing_connect: false,
+        discovery_enabled: false,
+        bind: SyncBind::Loopback,
+        app_version: None,
+    };
+
+    let error = handle_request(&state, Request::StartSync(params()))
+        .await
+        .expect_err("corrupt peer state must fail sync startup");
+    assert!(
+        error.contains("invalid persisted sync progress"),
+        "unexpected error: {error}"
+    );
+    assert!(state.sync.lock().await.is_none());
+    let probe = std::net::TcpListener::bind(("127.0.0.1", port))
+        .expect("failed startup must not leak the sync listener");
+    drop(probe);
+
+    handle_request(
+        &state,
+        Request::SetSyncKv {
+            key: crate::application::sync_storage::KNOWN_PEERS_KEY.into(),
+            value: "[]".into(),
+        },
+    )
+    .await
+    .unwrap();
+    handle_request(&state, Request::StartSync(params()))
+        .await
+        .expect("retry on the same port must succeed");
     handle_request(&state, Request::StopSync).await.unwrap();
 }
 

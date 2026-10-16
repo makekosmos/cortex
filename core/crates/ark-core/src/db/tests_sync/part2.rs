@@ -18,7 +18,7 @@
         backend.apply_entity(&tombstone).await.unwrap();
 
         let empty_vector: VersionVector = std::collections::HashMap::new();
-        let loaded = backend.load_entities(&empty_vector).await;
+        let loaded = backend.load_entities(&empty_vector).await.unwrap();
         let found = loaded
             .iter()
             .find(|e| e.id == "tbk2")
@@ -48,7 +48,7 @@
 
         let recreated = SqliteStorageBackend::for_test(shared);
         let empty_vector: VersionVector = std::collections::HashMap::new();
-        let loaded = recreated.load_entities(&empty_vector).await;
+        let loaded = recreated.load_entities(&empty_vector).await.unwrap();
         assert!(
             loaded
                 .iter()
@@ -76,7 +76,7 @@
         backend.apply_entity(&live).await.unwrap();
 
         let empty_vector: VersionVector = std::collections::HashMap::new();
-        let loaded = backend.load_entities(&empty_vector).await;
+        let loaded = backend.load_entities(&empty_vector).await.unwrap();
         let matching: Vec<&SyncEntity> = loaded
             .iter()
             .filter(|e| e.id == "tbk-resurrected")
@@ -167,7 +167,7 @@
         backend.apply_entity(&tombstone).await.unwrap();
 
         let empty_vector: VersionVector = std::collections::HashMap::new();
-        let loaded = backend.load_entities(&empty_vector).await;
+        let loaded = backend.load_entities(&empty_vector).await.unwrap();
         let found = loaded
             .iter()
             .find(|e| e.id == "event-del")
@@ -178,11 +178,16 @@
     }
 
     #[tokio::test]
-    async fn storage_backend_kv_roundtrip() {
+    async fn storage_backend_persists_version_vector_progress() {
+        use crate::application::sync_storage::PeerProgressPort;
         let backend = make_backend();
-        assert_eq!(backend.get_kv("foo").await, None);
-        backend.set_kv("foo", "bar").await;
-        assert_eq!(backend.get_kv("foo").await, Some("bar".to_string()));
+        let mut vector = VersionVector::new();
+        vector.insert(
+            "entity-1".to_string(),
+            "2026-01-01T00:00:00.000Z".to_string(),
+        );
+        backend.store_version_vector(&vector).await.unwrap();
+        assert_eq!(backend.load_version_vector().await.unwrap(), vector);
     }
 
     #[tokio::test]
@@ -197,7 +202,7 @@
             "2026-03-01T00:00:00.000Z:000005:peer-b".to_string(),
         );
 
-        let loaded = backend.load_entities(&vector).await;
+        let loaded = backend.load_entities(&vector).await.unwrap();
         let found = loaded
             .iter()
             .find(|e| e.id == "tbk3")

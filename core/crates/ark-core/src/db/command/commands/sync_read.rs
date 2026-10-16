@@ -1,7 +1,7 @@
 use super::super::{sealed, CommandClass, CommandContext, DbError, DbQuery};
+use crate::application::sync_storage::SyncReadClass;
 use crate::data_platform::SelectiveSyncProfile;
 use crate::db::{get_sync_kv, usage_log_complete_through, SqliteStorageBackend};
-use crate::replication_storage::SyncReadClass;
 use crate::types::{SyncEntity, VersionVector};
 use rusqlite::Connection;
 use serde::Serialize;

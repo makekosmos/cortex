@@ -1,20 +1,20 @@
 use super::*;
 
 pub(super) async fn send(
-    storage: &Arc<dyn SyncStorageBackend>,
+    storage: &Arc<dyn SyncRuntimeStorage>,
     tx: &mpsc::UnboundedSender<Message>,
     peer_device_id: &str,
     remote_vector: &VersionVector,
     sync_complete: bool,
-) {
-    let mut local_vector = load_version_vector(storage).await;
+) -> Result<(), String> {
+    let mut local_vector = load_version_vector(storage).await?;
     // KOS-302: snapshot completeness claims before the first page. A claim
     // computed later could include a sequence allocated mid-pull that the peer
     // never received.
-    let read_class = crate::replication_storage::SyncReadClass::for_sync_state(sync_complete);
+    let read_class = crate::application::sync_storage::SyncReadClass::for_sync_state(sync_complete);
     let complete_through = storage
         .usage_complete_through_for_peer(peer_device_id, read_class)
-        .await;
+        .await?;
     let mut offset = 0;
     loop {
         let mut load_vector = local_vector.clone();
@@ -27,7 +27,7 @@ pub(super) async fn send(
                 offset,
                 SYNC_LOAD_PAGE_SIZE,
             )
-            .await;
+            .await?;
         if entities.is_empty() {
             break;
         }
@@ -54,7 +54,7 @@ pub(super) async fn send(
             );
         }
     }
-    save_version_vector(storage, &local_vector).await;
+    save_version_vector(storage, &local_vector).await?;
     send_msg(
         tx,
         &LanSyncMessage::SyncChanges {
@@ -65,4 +65,5 @@ pub(super) async fn send(
             usage_complete_through: (!complete_through.is_empty()).then_some(complete_through),
         },
     );
+    Ok(())
 }

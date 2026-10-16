@@ -1,20 +1,59 @@
 use super::apply::is_full_core_task;
 use super::SqliteStorageBackend;
+use crate::application::sync_storage::{
+    PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort, SyncReadClass,
+};
 use crate::db::{
     ApplySignedIntegrationFrameCommand, AuthenticatedCoreTaskWrite, AuthorizedTransportKeyQuery,
     CommandClass, CommandContext, GetSyncKeyValueQuery, IdentityErrorStyle, LoadEntitiesQuery,
     UsageCompleteThroughQuery, ValidateOutboundSignedFrameQuery,
 };
 use crate::replication_storage::{
-    AuthenticatedEntityBackend, IntegrationReplicationBackend, PeerIdentityBackend, StorageBackend,
-    SyncReadClass,
+    AuthenticatedEntityBackend, IntegrationReplicationBackend, PeerIdentityBackend,
 };
 use crate::types::{SyncEntity, VersionVector};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 
 fn publish_replay_notices(notices: Vec<crate::canonical_types::pending::ReplayNotice>) {
     for notice in notices {
         crate::events::emit_event(notice.event_payload());
     }
+}
+
+async fn load_progress_value<T: DeserializeOwned>(
+    storage: &SqliteStorageBackend,
+    key: &str,
+) -> Result<Option<T>, String> {
+    let raw = storage
+        .db
+        .query(
+            CommandContext::sync_system(CommandClass::SyncLive),
+            GetSyncKeyValueQuery::new(key.to_owned()),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    raw.map(|raw| {
+        serde_json::from_str(&raw)
+            .map_err(|error| format!("invalid persisted sync progress at {key}: {error}"))
+    })
+    .transpose()
+}
+
+async fn store_progress_value<T: Serialize + ?Sized>(
+    storage: &SqliteStorageBackend,
+    key: &str,
+    value: &T,
+) -> Result<(), String> {
+    let raw = serde_json::to_string(value).map_err(|error| error.to_string())?;
+    storage
+        .db
+        .submit(
+            CommandContext::sync_system(CommandClass::SyncLive),
+            crate::db::SetSyncKeyValueCommand::new(key.to_owned(), raw),
+        )
+        .await
+        .map_err(|error| error.to_string())
 }
 
 impl SqliteStorageBackend {
@@ -37,8 +76,9 @@ impl SqliteStorageBackend {
 }
 
 #[async_trait::async_trait]
-impl StorageBackend for SqliteStorageBackend {
-    async fn load_entities(&self, vector: &VersionVector) -> Vec<SyncEntity> {
+#[async_trait::async_trait]
+impl SyncEntityReadPort for SqliteStorageBackend {
+    async fn load_entities(&self, vector: &VersionVector) -> Result<Vec<SyncEntity>, String> {
         self.db
             .query(
                 CommandContext::sync_system(CommandClass::SyncLive),
@@ -50,7 +90,7 @@ impl StorageBackend for SqliteStorageBackend {
                 ),
             )
             .await
-            .unwrap_or_default()
+            .map_err(|error| error.to_string())
     }
 
     async fn load_entities_page(
@@ -58,7 +98,7 @@ impl StorageBackend for SqliteStorageBackend {
         vector: &VersionVector,
         offset: usize,
         limit: usize,
-    ) -> Vec<SyncEntity> {
+    ) -> Result<Vec<SyncEntity>, String> {
         let class = SyncReadClass::for_peer_vector(vector);
         self.db
             .query(
@@ -73,7 +113,7 @@ impl StorageBackend for SqliteStorageBackend {
                 ),
             )
             .await
-            .unwrap_or_default()
+            .map_err(|error| error.to_string())
     }
 
     async fn load_entities_page_for_peer(
@@ -83,7 +123,7 @@ impl StorageBackend for SqliteStorageBackend {
         vector: &VersionVector,
         offset: usize,
         limit: usize,
-    ) -> Vec<SyncEntity> {
+    ) -> Result<Vec<SyncEntity>, String> {
         self.db
             .query(
                 CommandContext::sync_peer(peer_device_id.to_owned(), class.into()),
@@ -97,9 +137,46 @@ impl StorageBackend for SqliteStorageBackend {
                 ),
             )
             .await
-            .unwrap_or_default()
+            .map_err(|error| error.to_string())
     }
 
+    async fn usage_complete_through(
+        &self,
+    ) -> Result<std::collections::HashMap<String, u64>, String> {
+        self.db
+            .query(
+                CommandContext::sync_system(CommandClass::SyncLive),
+                UsageCompleteThroughQuery::new(SyncReadClass::SyncLive),
+            )
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    async fn usage_complete_through_for_peer(
+        &self,
+        peer_device_id: &str,
+        class: SyncReadClass,
+    ) -> Result<std::collections::HashMap<String, u64>, String> {
+        self.db
+            .query(
+                CommandContext::sync_peer(peer_device_id.to_owned(), class.into()),
+                UsageCompleteThroughQuery::new(class),
+            )
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    fn filter_outgoing_entity(&self, entity: &SyncEntity) -> Option<SyncEntity> {
+        let Some(profile) = self.selective_sync_profile() else {
+            return Some(entity.clone());
+        };
+        crate::data_platform::filter_entities_for_profile(&profile, std::slice::from_ref(entity))
+            .into_iter()
+            .next()
+    }
+}
+#[async_trait::async_trait]
+impl SyncEntityMutationPort for SqliteStorageBackend {
     async fn apply_entity(&self, entity: &SyncEntity) -> Result<(), String> {
         let notices = self
             .db
@@ -112,58 +189,54 @@ impl StorageBackend for SqliteStorageBackend {
         publish_replay_notices(notices);
         Ok(())
     }
-
-    async fn usage_complete_through(&self) -> std::collections::HashMap<String, u64> {
-        self.db
-            .query(
-                CommandContext::sync_system(CommandClass::SyncLive),
-                UsageCompleteThroughQuery::new(SyncReadClass::SyncLive),
-            )
-            .await
-            .unwrap_or_default()
+}
+#[async_trait::async_trait]
+impl PeerProgressPort for SqliteStorageBackend {
+    async fn load_version_vector(&self) -> Result<VersionVector, String> {
+        Ok(
+            load_progress_value(self, crate::application::sync_storage::VERSION_VECTOR_KEY)
+                .await?
+                .unwrap_or_default(),
+        )
     }
 
-    async fn usage_complete_through_for_peer(
-        &self,
-        peer_device_id: &str,
-        class: SyncReadClass,
-    ) -> std::collections::HashMap<String, u64> {
-        self.db
-            .query(
-                CommandContext::sync_peer(peer_device_id.to_owned(), class.into()),
-                UsageCompleteThroughQuery::new(class),
-            )
-            .await
-            .unwrap_or_default()
+    async fn store_version_vector(&self, vector: &VersionVector) -> Result<(), String> {
+        store_progress_value(
+            self,
+            crate::application::sync_storage::VERSION_VECTOR_KEY,
+            vector,
+        )
+        .await
     }
 
-    async fn get_kv(&self, key: &str) -> Option<String> {
-        self.db
-            .query(
-                CommandContext::sync_system(CommandClass::SyncLive),
-                GetSyncKeyValueQuery::new(key.to_owned()),
-            )
-            .await
-            .unwrap_or(None)
+    async fn load_known_peers(&self) -> Result<Option<Vec<crate::types::PeerRecord>>, String> {
+        load_progress_value(self, crate::application::sync_storage::KNOWN_PEERS_KEY).await
     }
 
-    async fn set_kv(&self, key: &str, value: &str) {
-        let _ = self
-            .db
-            .submit(
-                CommandContext::sync_system(CommandClass::SyncLive),
-                crate::db::SetSyncKeyValueCommand::new(key.to_owned(), value.to_owned()),
-            )
-            .await;
+    async fn store_known_peers(&self, peers: &[crate::types::PeerRecord]) -> Result<(), String> {
+        store_progress_value(
+            self,
+            crate::application::sync_storage::KNOWN_PEERS_KEY,
+            peers,
+        )
+        .await
     }
 
-    fn filter_outgoing_entity(&self, entity: &SyncEntity) -> Option<SyncEntity> {
-        let Some(profile) = self.selective_sync_profile() else {
-            return Some(entity.clone());
-        };
-        crate::data_platform::filter_entities_for_profile(&profile, std::slice::from_ref(entity))
-            .into_iter()
-            .next()
+    async fn load_removed_peer_ids(&self) -> Result<Vec<String>, String> {
+        Ok(
+            load_progress_value(self, crate::application::sync_storage::REMOVED_PEERS_KEY)
+                .await?
+                .unwrap_or_default(),
+        )
+    }
+
+    async fn store_removed_peer_ids(&self, peer_ids: &[String]) -> Result<(), String> {
+        store_progress_value(
+            self,
+            crate::application::sync_storage::REMOVED_PEERS_KEY,
+            peer_ids,
+        )
+        .await
     }
 }
 
@@ -208,14 +281,40 @@ impl AuthenticatedEntityBackend for SqliteStorageBackend {
 
 #[async_trait::async_trait]
 impl PeerIdentityBackend for SqliteStorageBackend {
-    async fn authorized_transport_public_key(&self, device_id: &str) -> Option<String> {
+    async fn load_peer_transport_keys(
+        &self,
+    ) -> Result<std::collections::HashMap<String, String>, String> {
+        Ok(load_progress_value(
+            self,
+            crate::application::sync_storage::PEER_TRANSPORT_KEYS_KEY,
+        )
+        .await?
+        .unwrap_or_default())
+    }
+
+    async fn store_peer_transport_keys(
+        &self,
+        keys: &std::collections::HashMap<String, String>,
+    ) -> Result<(), String> {
+        store_progress_value(
+            self,
+            crate::application::sync_storage::PEER_TRANSPORT_KEYS_KEY,
+            keys,
+        )
+        .await
+    }
+
+    async fn authorized_transport_public_key(
+        &self,
+        device_id: &str,
+    ) -> Result<Option<String>, String> {
         self.db
             .query(
                 CommandContext::sync_peer(device_id.to_owned(), CommandClass::SyncLive),
                 AuthorizedTransportKeyQuery::new(device_id.to_owned()),
             )
             .await
-            .unwrap_or(None)
+            .map_err(|error| error.to_string())
     }
 }
 

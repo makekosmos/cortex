@@ -14,9 +14,10 @@ use crate::integration_replication::SignedSyncEnvelope;
 use crate::protocol::*;
 use crate::types::*;
 
+pub use crate::application::sync_storage::SyncReadClass;
 pub use crate::replication_storage::{
-    AuthenticatedEntityBackend, IntegrationReplicationBackend, PeerIdentityBackend, StorageBackend,
-    SyncStorageBackend,
+    AuthenticatedEntityBackend, IntegrationReplicationBackend, PeerIdentityBackend,
+    SyncRuntimeStorage,
 };
 
 #[path = "sync_server_core.rs"]
@@ -35,16 +36,9 @@ mod sync_server_reject_tests;
 mod sync_server_route_tests;
 #[cfg(test)]
 #[path = "sync_server_tests.rs"]
-mod sync_server_tests;
+pub(crate) mod sync_server_tests;
 
 const TAG: &str = "[SyncServer]";
-const VERSION_VECTOR_KEY: &str = "lan_sync.version_vector";
-pub(crate) const KNOWN_PEERS_KEY: &str = "sync.peers";
-const REMOVED_PEERS_KEY: &str = "sync.removed_peers";
-/// device_id → transport endpoint key for devices paired over an addressed
-/// transport (iroh). Persisted so a returning peer's Hello needs no open
-/// pairing window after a restart, and a changed key is a real mismatch.
-const PEER_TRANSPORT_KEYS_KEY: &str = "sync.peer_transport_keys";
 const SYNC_LOAD_PAGE_SIZE: usize = 100;
 
 // ---------------------------------------------------------------------------
@@ -90,7 +84,7 @@ pub struct PeerEntry {
 // ---------------------------------------------------------------------------
 
 pub struct SyncServer {
-    storage: Arc<dyn SyncStorageBackend>,
+    storage: Arc<dyn SyncRuntimeStorage>,
     space_id: Arc<RwLock<String>>,
     device_id: Arc<RwLock<String>>,
     device_name: Arc<RwLock<String>>,
@@ -113,21 +107,22 @@ pub struct SyncServer {
     next_peer_id: Arc<std::sync::atomic::AtomicUsize>,
 }
 
-async fn load_version_vector(storage: &Arc<dyn SyncStorageBackend>) -> VersionVector {
-    match storage.get_kv(VERSION_VECTOR_KEY).await {
-        Some(raw) => serde_json::from_str(&raw).unwrap_or_default(),
-        None => VersionVector::new(),
-    }
+async fn load_version_vector(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+) -> Result<VersionVector, String> {
+    storage.load_version_vector().await
 }
 
 /// Save a version vector built from a possibly stale snapshot: union it
 /// with the stored vector first so keys written concurrently (local
 /// mutations, integration-replication bumps) are not clobbered.
-async fn save_version_vector(storage: &Arc<dyn SyncStorageBackend>, vector: &VersionVector) {
-    let mut merged = load_version_vector(storage).await;
+async fn save_version_vector(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+    vector: &VersionVector,
+) -> Result<(), String> {
+    let mut merged = load_version_vector(storage).await?;
     merge_vector_entries(&mut merged, vector);
-    let json = serde_json::to_string(&merged).unwrap_or_default();
-    storage.set_kv(VERSION_VECTOR_KEY, &json).await;
+    storage.store_version_vector(&merged).await
 }
 
 /// Persist the pull-side version vector after a `SyncChanges` batch: merge
@@ -138,79 +133,80 @@ async fn save_version_vector(storage: &Arc<dyn SyncStorageBackend>, vector: &Ver
 /// never received; merging stored cursors first keeps the claims a floor,
 /// never a regression.
 pub(crate) async fn persist_pull_vector(
-    storage: &Arc<dyn SyncStorageBackend>,
+    storage: &Arc<dyn SyncRuntimeStorage>,
     vector: &mut VersionVector,
     vector_updated: bool,
     is_last: bool,
     usage_complete_through: Option<&HashMap<String, u64>>,
-) {
+) -> Result<(), String> {
     if !(vector_updated || (is_last && usage_complete_through.is_some())) {
-        return;
+        return Ok(());
     }
-    merge_usage_cursors(vector, &load_version_vector(storage).await);
+    merge_usage_cursors(vector, &load_version_vector(storage).await?);
     if is_last {
         if let Some(through) = usage_complete_through {
             apply_usage_complete_through(vector, through);
         }
     }
-    save_version_vector(storage, vector).await;
+    save_version_vector(storage, vector).await
 }
 
-pub(crate) async fn save_known_peers(storage: &Arc<dyn SyncStorageBackend>, peers: &[PeerRecord]) {
-    let json = serde_json::to_string(peers).unwrap_or_default();
-    storage.set_kv(KNOWN_PEERS_KEY, &json).await;
+pub(crate) async fn save_known_peers(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+    peers: &[PeerRecord],
+) -> Result<(), String> {
+    storage.store_known_peers(peers).await
 }
 
 pub(crate) async fn load_known_peer_records(
-    storage: &Arc<dyn SyncStorageBackend>,
-) -> Vec<PeerRecord> {
-    match storage.get_kv(KNOWN_PEERS_KEY).await {
-        Some(raw) => serde_json::from_str(&raw).unwrap_or_default(),
-        None => Vec::new(),
-    }
+    storage: &Arc<dyn SyncRuntimeStorage>,
+) -> Result<Vec<PeerRecord>, String> {
+    Ok(storage.load_known_peers().await?.unwrap_or_default())
 }
 
-pub(crate) async fn load_removed_peer_ids(storage: &Arc<dyn SyncStorageBackend>) -> Vec<String> {
-    match storage.get_kv(REMOVED_PEERS_KEY).await {
-        Some(raw) => serde_json::from_str(&raw).unwrap_or_default(),
-        None => Vec::new(),
-    }
+pub(crate) async fn load_removed_peer_ids(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+) -> Result<Vec<String>, String> {
+    storage.load_removed_peer_ids().await
 }
 
 /// Re-authorize a device the user previously removed — invoked only when
 /// they re-pair by explicitly entering that endpoint's pairing code.
-pub(crate) async fn unblock_peer_id(storage: &Arc<dyn SyncStorageBackend>, device_id: &str) {
-    let mut removed = load_removed_peer_ids(storage).await;
+pub(crate) async fn unblock_peer_id(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+    device_id: &str,
+) -> Result<(), String> {
+    let mut removed = load_removed_peer_ids(storage).await?;
     if removed.iter().any(|id| id == device_id) {
         removed.retain(|id| id != device_id);
-        save_removed_peer_ids(storage, &removed).await;
+        save_removed_peer_ids(storage, &removed).await?;
     }
+    Ok(())
 }
 
 /// Drop a peer record outright — for a declined pairing attempt, where the
 /// device was never consented to and must not linger as an offline row
 /// (distinct from `block_peer`/`removed_peers`, which is a user blacklist).
-pub(crate) async fn remove_peer_record(storage: &Arc<dyn SyncStorageBackend>, device_id: &str) {
-    let mut peers = load_known_peer_records(storage).await;
+pub(crate) async fn remove_peer_record(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+    device_id: &str,
+) -> Result<(), String> {
+    let mut peers = load_known_peer_records(storage).await?;
     peers.retain(|peer| peer.device_id != device_id);
-    save_known_peers(storage, &peers).await;
+    save_known_peers(storage, &peers).await
 }
 
 pub(crate) async fn load_peer_transport_keys(
-    storage: &Arc<dyn SyncStorageBackend>,
-) -> HashMap<String, String> {
-    match storage.get_kv(PEER_TRANSPORT_KEYS_KEY).await {
-        Some(raw) => serde_json::from_str(&raw).unwrap_or_default(),
-        None => HashMap::new(),
-    }
+    storage: &Arc<dyn SyncRuntimeStorage>,
+) -> Result<HashMap<String, String>, String> {
+    storage.load_peer_transport_keys().await
 }
 
 pub(crate) async fn save_peer_transport_keys(
-    storage: &Arc<dyn SyncStorageBackend>,
+    storage: &Arc<dyn SyncRuntimeStorage>,
     keys: &HashMap<String, String>,
-) {
-    let json = serde_json::to_string(keys).unwrap_or_default();
-    storage.set_kv(PEER_TRANSPORT_KEYS_KEY, &json).await;
+) -> Result<(), String> {
+    storage.store_peer_transport_keys(keys).await
 }
 
 /// Shared mutable state handed to `handle_message`. Every field has a
@@ -219,7 +215,7 @@ pub(crate) async fn save_peer_transport_keys(
 #[derive(Clone)]
 struct MessageContext {
     peers: Arc<Mutex<HashMap<usize, PeerState>>>,
-    storage: Arc<dyn SyncStorageBackend>,
+    storage: Arc<dyn SyncRuntimeStorage>,
     space_id: Arc<RwLock<String>>,
     device_id: Arc<RwLock<String>>,
     device_name: Arc<RwLock<String>>,
@@ -231,9 +227,11 @@ struct MessageContext {
     on_new_peer_discovered: Arc<Mutex<Option<OnNewPeerDiscoveredCallback>>>,
 }
 
-async fn save_removed_peer_ids(storage: &Arc<dyn SyncStorageBackend>, peer_ids: &[String]) {
-    let json = serde_json::to_string(peer_ids).unwrap_or_default();
-    storage.set_kv(REMOVED_PEERS_KEY, &json).await;
+async fn save_removed_peer_ids(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+    peer_ids: &[String],
+) -> Result<(), String> {
+    storage.store_removed_peer_ids(peer_ids).await
 }
 
 fn send_msg(tx: &mpsc::UnboundedSender<Message>, msg: &LanSyncMessage) {

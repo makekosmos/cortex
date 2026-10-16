@@ -23,7 +23,7 @@ pub(super) mod reject_tests {
     /// released by the time it returns, not whenever the backoff ends.
     #[tokio::test]
     async fn client_stop_and_join_releases_storage() {
-        let storage = Arc::new(MemBackend::new()) as Arc<dyn SyncStorageBackend>;
+        let storage = Arc::new(MemBackend::new()) as Arc<dyn SyncRuntimeStorage>;
         let client = crate::sync_client::SyncClient::new(
             storage.clone(),
             peer_rec("peer-dead", &["127.0.0.1:1"]),
@@ -47,7 +47,7 @@ pub(super) mod reject_tests {
 
     #[tokio::test]
     async fn stop_releases_background_tasks_holding_peers_map() {
-        let storage = Arc::new(MemBackend::new()) as Arc<dyn SyncStorageBackend>;
+        let storage = Arc::new(MemBackend::new()) as Arc<dyn SyncRuntimeStorage>;
         let server = SyncServer::new(storage);
 
         // Start + stop twice: a leaked ping task survives each start and
@@ -74,10 +74,10 @@ pub(super) mod reject_tests {
 
     #[tokio::test]
     async fn peer_list_ignores_blocked_peers() {
-        let storage = Arc::new(MemBackend::new()) as Arc<dyn SyncStorageBackend>;
+        let storage = Arc::new(MemBackend::new()) as Arc<dyn SyncRuntimeStorage>;
         let server = SyncServer::new(storage.clone());
         *server.device_id.write().await = "me".to_string();
-        server.block_peer("blocked").await;
+        server.block_peer("blocked").await.unwrap();
 
         // Authenticated session that delivers a PeerList.
         let (tx, _rx) = mpsc::unbounded_channel::<Message>();
@@ -124,6 +124,7 @@ pub(super) mod reject_tests {
         let ids: Vec<String> = server
             .get_known_peers()
             .await
+            .unwrap()
             .into_iter()
             .map(|p| p.device_id)
             .collect();
@@ -132,10 +133,14 @@ pub(super) mod reject_tests {
             !ids.contains(&"blocked".to_string()),
             "PeerList resurrected a blocked peer: {ids:?}"
         );
-        let persisted = storage.get_kv(KNOWN_PEERS_KEY).await.unwrap_or_default();
+        let persisted = storage
+            .load_known_peers()
+            .await
+            .unwrap()
+            .unwrap_or_default();
         assert!(
-            !persisted.contains("blocked"),
-            "blocked peer persisted back into {KNOWN_PEERS_KEY}: {persisted}"
+            !persisted.iter().any(|peer| peer.device_id == "blocked"),
+            "blocked peer persisted back into known peers: {persisted:?}"
         );
     }
 
@@ -171,7 +176,7 @@ pub(super) mod reject_tests {
 
     #[tokio::test]
     async fn rejected_hellos_close_connection_and_evict_session() {
-        let storage = Arc::new(MemBackend::new()) as Arc<dyn SyncStorageBackend>;
+        let storage = Arc::new(MemBackend::new()) as Arc<dyn SyncRuntimeStorage>;
         let server = SyncServer::new(storage);
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
@@ -196,7 +201,7 @@ pub(super) mod reject_tests {
         assert_hello_rejected_with_close(hello_msg("other", "space-y", PROTOCOL_VERSION), port)
             .await;
 
-        server.block_peer("blocked-remote").await;
+        server.block_peer("blocked-remote").await.unwrap();
         assert_hello_rejected_with_close(
             hello_msg("blocked-remote", "space-x", PROTOCOL_VERSION),
             port,

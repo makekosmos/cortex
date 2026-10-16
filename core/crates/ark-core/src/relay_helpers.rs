@@ -9,25 +9,114 @@ pub fn trim_process_heap() {
 }
 #[cfg(not(all(target_os = "linux", target_env = "gnu")))]
 pub fn trim_process_heap() {}
-async fn load_version_vector(storage: &Arc<dyn SyncStorageBackend>) -> VersionVector {
-    match storage.get_kv(VERSION_VECTOR_KEY).await {
-        Some(raw) => serde_json::from_str(&raw).unwrap_or_default(),
-        None => VersionVector::new(),
+async fn load_version_vector(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+) -> Result<VersionVector, String> {
+    storage.load_version_vector().await
+}
+
+async fn apply_relay_entity(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+    entity: &SyncEntity,
+    authenticated_peer_id: Option<&str>,
+) -> Result<(), String> {
+    // Relay WebSocket frames have no authenticated sender envelope. Object
+    // type and deletion state may be stored outside the payload, so every
+    // object mutation requires a transport-bound peer identity.
+    if entity.entity_type == "object" {
+        let peer_id = authenticated_peer_id
+            .ok_or_else(|| "authenticated_transport_identity_unavailable".to_string())?;
+        return storage.apply_authenticated_entity(entity, peer_id).await;
+    }
+    match authenticated_peer_id {
+        Some(peer_id) => storage.apply_authenticated_entity(entity, peer_id).await,
+        None => storage.apply_entity(entity).await,
     }
 }
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
     use crate::db::{init_schema, SqliteStorageBackend};
-    use crate::replication_storage::StorageBackend;
+    use crate::sync_server::sync_server_tests::tests::MemBackend;
+    use crate::sync_transport::{SyncTransport, TransportEvent};
     use futures_util::{SinkExt, StreamExt};
     use rusqlite::Connection;
-    use std::sync::{Arc, Mutex as StdMutex};
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex as StdMutex,
+    };
     use std::time::Duration;
     use tokio::net::TcpListener;
     use tokio_tungstenite::tungstenite::Message;
     type Room = HashMap<String, mpsc::UnboundedSender<Message>>;
     type Rooms = Arc<StdMutex<HashMap<String, Room>>>;
+
+    struct TrackingTransport(AtomicBool);
+
+    #[async_trait::async_trait]
+    impl SyncTransport for TrackingTransport {
+        async fn start(&self, _: mpsc::UnboundedSender<TransportEvent>) -> Result<(), String> {
+            Ok(())
+        }
+
+        fn send(&self, _: LanSyncMessage) -> Result<(), String> {
+            Ok(())
+        }
+
+        fn disconnect_peer(&self, _: &str) -> Result<(), String> {
+            self.0.store(true, Ordering::Relaxed);
+            Ok(())
+        }
+
+        async fn stop(&self) {}
+    }
+
+    #[tokio::test]
+    async fn disconnect_evicts_live_peer_even_when_pairing_key_read_fails() {
+        let backend = Arc::new(MemBackend::new());
+        backend.fail_peer_transport_keys_read("injected database read failure");
+        let storage = backend as Arc<dyn SyncRuntimeStorage>;
+        let transport = Arc::new(TrackingTransport(AtomicBool::new(false)));
+        let relay = RelaySync::with_transport(
+            storage,
+            RelaySyncConfig {
+                relay_url: String::new(),
+                relay_api_key: None,
+                space_id: "space".into(),
+                device_id: "local".into(),
+                device_name: "Local".into(),
+                auth_secret: None,
+            },
+            transport.clone(),
+        );
+        relay.peers.lock().await.insert(
+            "peer".into(),
+            RelayPeerState {
+                device_name: "Peer".into(),
+                platform: None,
+                app_version: None,
+                authenticated: true,
+            },
+        );
+        let disconnect_notified = Arc::new(AtomicBool::new(false));
+        let notified = disconnect_notified.clone();
+        relay
+            .set_on_peer_disconnect(Arc::new(move |_, _| {
+                notified.store(true, Ordering::Relaxed);
+            }))
+            .await;
+
+        let error = relay
+            .disconnect_peer("peer")
+            .await
+            .expect_err("persistence failure must reach the caller");
+        assert!(error.contains("injected database read failure"));
+        assert!(transport.0.load(Ordering::Relaxed));
+        assert!(!relay.peers.lock().await.contains_key("peer"));
+        assert!(disconnect_notified.load(Ordering::Relaxed));
+    }
+
     // The accept_hdr_async callback must return tungstenite's
     // `Result<Response, ErrorResponse>` — Err is the HTTP error response
     // itself, which the lint counts as oversized. Boxing is not an option:
@@ -174,7 +263,7 @@ mod tests {
         auth_secret: Option<&str>,
     ) -> Arc<RelaySync> {
         RelaySync::new(
-            storage as Arc<dyn SyncStorageBackend>,
+            storage as Arc<dyn SyncRuntimeStorage>,
             RelaySyncConfig {
                 relay_url: relay_url.to_string(),
                 relay_api_key: None,
@@ -212,7 +301,7 @@ mod tests {
         );
         relay_b.start().await.unwrap();
         tokio::time::sleep(Duration::from_millis(700)).await;
-        let loaded_b = storage_b.load_entities(&HashMap::new()).await;
+        let loaded_b = storage_b.load_entities(&HashMap::new()).await.unwrap();
         assert!(
             loaded_b.iter().all(|entity| entity.id != "relay-existing"),
             "unauthenticated WebSocket must not apply a core.task payload"
@@ -235,7 +324,7 @@ mod tests {
         storage_a.apply_entity(&live).await.unwrap();
         relay_a.broadcast_live_change(live).unwrap();
         tokio::time::sleep(Duration::from_millis(500)).await;
-        let loaded_b = storage_b.load_entities(&HashMap::new()).await;
+        let loaded_b = storage_b.load_entities(&HashMap::new()).await.unwrap();
         assert!(
             loaded_b.iter().any(|entity| entity.id == "relay-live"),
             "relay peer should receive live entity"
@@ -274,7 +363,7 @@ mod tests {
             relay_a.get_connected_peer_entries().await.is_empty(),
             "wrong-secret relay peer must not authenticate"
         );
-        let loaded_b = storage_b.load_entities(&HashMap::new()).await;
+        let loaded_b = storage_b.load_entities(&HashMap::new()).await.unwrap();
         assert!(
             !loaded_b.iter().any(|entity| entity.id == "relay-denied"),
             "wrong-secret relay peer must not receive existing entity"
@@ -290,7 +379,7 @@ mod tests {
         crate::db::set_sync_kv(&conn, "sync.removed_peers", r#"["device-blocked"]"#).unwrap();
         let shared = Arc::new(StdMutex::new(conn));
         let backend = Arc::new(SqliteStorageBackend::for_test(shared.clone()));
-        let storage = backend.clone() as Arc<dyn SyncStorageBackend>;
+        let storage = backend.clone() as Arc<dyn SyncRuntimeStorage>;
         let entity = SyncEntity {
             entity_type: "object".into(),
             id: "relay-spoofed-task".into(),

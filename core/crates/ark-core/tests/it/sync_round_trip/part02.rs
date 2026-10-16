@@ -1,3 +1,6 @@
+use ark_core::application::sync_storage::{
+    PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort,
+};
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 
 async fn round_trip_sync_between_two_servers() {
@@ -13,22 +16,17 @@ async fn round_trip_sync_between_two_servers() {
     storage_a.apply_entity(&seed).await.unwrap();
 
     // Also stamp it into the local version vector so load_entities emits the
-    // right HLC. Using the StorageBackend API via set_kv since the sync
-    // server would normally do this.
+    // right HLC. Seed application-owned progress as the sync server would
+    // normally do this.
     let mut vector_a: VersionVector = HashMap::new();
     vector_a.insert(seed.id.clone(), seed.hlc.clone());
-    storage_a
-        .set_kv(
-            "lan_sync.version_vector",
-            &serde_json::to_string(&vector_a).unwrap(),
-        )
-        .await;
+    storage_a.store_version_vector(&vector_a).await.unwrap();
 
     let server_a = Arc::new(SyncServer::new(
-        storage_a.clone() as Arc<dyn SyncStorageBackend>
+        storage_a.clone() as Arc<dyn SyncRuntimeStorage>
     ));
     let server_b = Arc::new(SyncServer::new(
-        storage_b.clone() as Arc<dyn SyncStorageBackend>
+        storage_b.clone() as Arc<dyn SyncRuntimeStorage>
     ));
 
     // Use two separate loopback ports.
@@ -108,7 +106,7 @@ async fn round_trip_sync_between_two_servers() {
         app_version: None,
     };
     let client = Arc::new(SyncClient::new(
-        storage_b.clone() as Arc<dyn SyncStorageBackend>,
+        storage_b.clone() as Arc<dyn SyncRuntimeStorage>,
         peer,
         "device-b".to_string(),
         "Beta".to_string(),
@@ -122,7 +120,7 @@ async fn round_trip_sync_between_two_servers() {
     tokio::time::sleep(Duration::from_millis(500)).await;
 
     // Side B should now see the todo on its end.
-    let loaded_b = storage_b.load_entities(&HashMap::new()).await;
+    let loaded_b = storage_b.load_entities(&HashMap::new()).await.unwrap();
     assert!(
         loaded_b.iter().any(|e| e.id == "entity-a-1"),
         "side B should have received seeded todo after initial sync; got {:?}",
@@ -144,7 +142,7 @@ async fn round_trip_sync_between_two_servers() {
 
     tokio::time::sleep(Duration::from_millis(500)).await;
 
-    let loaded_b_after = storage_b.load_entities(&HashMap::new()).await;
+    let loaded_b_after = storage_b.load_entities(&HashMap::new()).await.unwrap();
     assert!(
         loaded_b_after.iter().any(|e| e.id == "entity-a-2"),
         "side B should have received live change; got {:?}",
@@ -162,7 +160,7 @@ async fn round_trip_sync_between_two_servers() {
 async fn self_connect_is_rejected() {
     let storage = make_storage("device-self");
     let server = Arc::new(SyncServer::new(
-        storage.clone() as Arc<dyn SyncStorageBackend>
+        storage.clone() as Arc<dyn SyncRuntimeStorage>
     ));
 
     let port = pick_port().await;
@@ -190,7 +188,7 @@ async fn self_connect_is_rejected() {
     // — same as the server. The server must reject the connection and NOT
     // emit a peer_connected event.
     let client = Arc::new(SyncClient::new(
-        storage.clone() as Arc<dyn SyncStorageBackend>,
+        storage.clone() as Arc<dyn SyncRuntimeStorage>,
         peer,
         "device-self".to_string(),
         "Self".to_string(),

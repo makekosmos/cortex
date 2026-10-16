@@ -108,7 +108,7 @@ struct OutgoingMessage {
 
 #[derive(Clone)]
 struct OutboundStorage {
-    storage: Arc<dyn crate::replication_storage::SyncStorageBackend>,
+    storage: Arc<dyn crate::replication_storage::SyncRuntimeStorage>,
     space_id: String,
     origin_node_id: String,
 }

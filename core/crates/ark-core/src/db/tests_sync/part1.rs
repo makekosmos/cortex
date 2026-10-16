@@ -125,7 +125,7 @@
         backend.apply_entity(&entity).await.unwrap();
 
         let empty_vector: VersionVector = std::collections::HashMap::new();
-        let loaded = backend.load_entities(&empty_vector).await;
+        let loaded = backend.load_entities(&empty_vector).await.unwrap();
         let found = loaded
             .iter()
             .find(|e| e.id == "tbk1")
@@ -190,7 +190,7 @@
             .unwrap();
 
         let empty_vector: VersionVector = std::collections::HashMap::new();
-        let loaded = backend.load_entities(&empty_vector).await;
+        let loaded = backend.load_entities(&empty_vector).await.unwrap();
 
         let tracked_app = loaded
             .iter()
@@ -239,7 +239,10 @@
         let mut usage_event_ids = std::collections::HashSet::new();
 
         loop {
-            let page = backend.load_entities_page(&vector, offset, 100).await;
+            let page = backend
+                .load_entities_page(&vector, offset, 100)
+                .await
+                .unwrap();
             assert!(page.len() <= 100);
             if page.is_empty() {
                 break;
@@ -272,7 +275,7 @@
             .unwrap();
 
         let empty_vector: VersionVector = std::collections::HashMap::new();
-        let loaded = backend.load_entities(&empty_vector).await;
+        let loaded = backend.load_entities(&empty_vector).await.unwrap();
 
         let note = loaded
             .iter()

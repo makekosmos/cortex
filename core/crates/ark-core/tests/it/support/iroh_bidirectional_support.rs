@@ -4,6 +4,9 @@ use std::time::Duration;
 use ed25519_dalek::{Signer, SigningKey};
 use tokio::sync::mpsc;
 
+use ark_core::application::sync_storage::{
+    PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort,
+};
 use ark_core::integration_replication::{
     encode_hex, AuthorizedNode, GrantStatus, IntegrationConfiguration, IntegrationNodeGrant,
     IntegrationReplicationChange, IntegrationReplicationEntity, NodeStatus, SignedSyncEnvelope,
@@ -12,7 +15,7 @@ use ark_core::iroh_transport::{IrohConfig, IrohTransport};
 use ark_core::protocol::{generate_id, LanSyncMessage};
 use ark_core::sync_bind::SyncBind;
 use ark_core::sync_server::{
-    AuthenticatedEntityBackend, IntegrationReplicationBackend, PeerIdentityBackend, StorageBackend,
+    AuthenticatedEntityBackend, IntegrationReplicationBackend, PeerIdentityBackend,
 };
 use ark_core::sync_transport::{SyncTransport, TransportEvent};
 use ark_core::types::SyncEntity;
@@ -25,31 +28,78 @@ struct TestStorage {
 }
 
 #[async_trait::async_trait]
-impl StorageBackend for TestStorage {
-    async fn load_entities(&self, _vector: &ark_core::types::VersionVector) -> Vec<SyncEntity> {
-        Vec::new()
+#[async_trait::async_trait]
+impl SyncEntityReadPort for TestStorage {
+    async fn load_entities(
+        &self,
+        _vector: &ark_core::types::VersionVector,
+    ) -> Result<Vec<SyncEntity>, String> {
+        Ok(Vec::new())
     }
+
     async fn load_entities_page(
         &self,
         _vector: &ark_core::types::VersionVector,
         _offset: usize,
         _limit: usize,
-    ) -> Vec<SyncEntity> {
-        Vec::new()
+    ) -> Result<Vec<SyncEntity>, String> {
+        Ok(Vec::new())
     }
+    async fn load_entities_page_for_peer(
+        &self,
+        peer: &str,
+        class: ark_core::application::sync_storage::SyncReadClass,
+        vector: &ark_core::VersionVector,
+        offset: usize,
+        limit: usize,
+    ) -> Result<Vec<SyncEntity>, String> {
+        self.inner
+            .load_entities_page_for_peer(peer, class, vector, offset, limit)
+            .await
+    }
+    async fn usage_complete_through(
+        &self,
+    ) -> Result<std::collections::HashMap<String, u64>, String> {
+        self.inner.usage_complete_through().await
+    }
+    async fn usage_complete_through_for_peer(
+        &self,
+        peer: &str,
+        class: ark_core::application::sync_storage::SyncReadClass,
+    ) -> Result<std::collections::HashMap<String, u64>, String> {
+        self.inner
+            .usage_complete_through_for_peer(peer, class)
+            .await
+    }
+    fn filter_outgoing_entity(&self, entity: &SyncEntity) -> Option<SyncEntity> {
+        self.inner.filter_outgoing_entity(entity)
+    }
+}
+#[async_trait::async_trait]
+impl SyncEntityMutationPort for TestStorage {
     async fn apply_entity(&self, _entity: &SyncEntity) -> Result<(), String> {
         Ok(())
     }
-    async fn get_kv(&self, _key: &str) -> Option<String> {
-        None
-    }
-    async fn set_kv(&self, _key: &str, _value: &str) {}
 }
-
 #[async_trait::async_trait]
-impl PeerIdentityBackend for TestStorage {
-    async fn authorized_transport_public_key(&self, device_id: &str) -> Option<String> {
-        self.inner.authorized_transport_public_key(device_id).await
+impl PeerProgressPort for TestStorage {
+    async fn load_version_vector(&self) -> Result<ark_core::VersionVector, String> {
+        self.inner.load_version_vector().await
+    }
+    async fn store_version_vector(&self, value: &ark_core::VersionVector) -> Result<(), String> {
+        self.inner.store_version_vector(value).await
+    }
+    async fn load_known_peers(&self) -> Result<Option<Vec<ark_core::PeerRecord>>, String> {
+        self.inner.load_known_peers().await
+    }
+    async fn store_known_peers(&self, value: &[ark_core::PeerRecord]) -> Result<(), String> {
+        self.inner.store_known_peers(value).await
+    }
+    async fn load_removed_peer_ids(&self) -> Result<Vec<String>, String> {
+        self.inner.load_removed_peer_ids().await
+    }
+    async fn store_removed_peer_ids(&self, value: &[String]) -> Result<(), String> {
+        self.inner.store_removed_peer_ids(value).await
     }
 }
 
@@ -282,6 +332,27 @@ where
             Ok(None) => return None, // канал закрыт
             Err(_) => return None,   // таймаут
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl PeerIdentityBackend for TestStorage {
+    async fn load_peer_transport_keys(
+        &self,
+    ) -> Result<std::collections::HashMap<String, String>, String> {
+        self.inner.load_peer_transport_keys().await
+    }
+    async fn store_peer_transport_keys(
+        &self,
+        keys: &std::collections::HashMap<String, String>,
+    ) -> Result<(), String> {
+        self.inner.store_peer_transport_keys(keys).await
+    }
+    async fn authorized_transport_public_key(
+        &self,
+        device_id: &str,
+    ) -> Result<Option<String>, String> {
+        self.inner.authorized_transport_public_key(device_id).await
     }
 }
 

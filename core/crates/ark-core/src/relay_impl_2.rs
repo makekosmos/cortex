@@ -1,24 +1,5 @@
 use crate::integration_replication::SignedSyncEnvelope;
 
-async fn apply_relay_entity(
-    storage: &Arc<dyn SyncStorageBackend>,
-    entity: &SyncEntity,
-    authenticated_peer_id: Option<&str>,
-) -> Result<(), String> {
-    // Relay WebSocket frames have no authenticated sender envelope. Object
-    // type and deletion state may be stored outside the payload, so every
-    // object mutation requires a transport-bound peer identity.
-    if entity.entity_type == "object" {
-        let peer_id = authenticated_peer_id
-            .ok_or_else(|| "authenticated_transport_identity_unavailable".to_string())?;
-        return storage.apply_authenticated_entity(entity, peer_id).await;
-    }
-    match authenticated_peer_id {
-        Some(peer_id) => storage.apply_authenticated_entity(entity, peer_id).await,
-        None => storage.apply_entity(entity).await,
-    }
-}
-
 impl RelaySync {
     async fn handle_event(&self, event: TransportEvent) {
         match event {
@@ -50,12 +31,27 @@ impl RelaySync {
                     // acceptance would turn a once-disclosed ticket into a
                     // permanent key. `auth_secret` HMAC still applies inside
                     // `handle_message`.
-                    let authorized = self
+                    let authorized = match self
                         .storage
                         .authorized_transport_public_key(&from_device_id)
-                        .await;
+                        .await
+                    {
+                        Ok(key) => key,
+                        Err(error) => {
+                            eprintln!(
+                                "{TAG} failed to load authorized transport identity: {error}"
+                            );
+                            return;
+                        }
+                    };
                     let paired_keys =
-                        crate::sync_server::load_peer_transport_keys(&self.storage).await;
+                        match crate::sync_server::load_peer_transport_keys(&self.storage).await {
+                            Ok(keys) => keys,
+                            Err(error) => {
+                                eprintln!("{TAG} failed to load pairing keys: {error}");
+                                return;
+                            }
+                        };
                     let known_key = authorized
                         .as_deref()
                         .or_else(|| paired_keys.get(&from_device_id).map(String::as_str));
@@ -79,8 +75,13 @@ impl RelaySync {
                         // explicit re-consent — unblock it before
                         // handle_message's removed-peer check drops the Hello.
                         if outgoing_match {
-                            crate::sync_server::unblock_peer_id(&self.storage, &from_device_id)
-                                .await;
+                            if let Err(error) =
+                                crate::sync_server::unblock_peer_id(&self.storage, &from_device_id)
+                                    .await
+                            {
+                                eprintln!("{TAG} failed to clear peer block: {error}");
+                                return;
+                            }
                         }
                         // A repeated Hello on an already-authenticated link
                         // is the responder's post-accept announcement — the
@@ -219,38 +220,6 @@ impl RelaySync {
         })
     }
 
-    /// Evict a peer the user removed via «Отключить»: without this the
-    /// authenticated entry survives removal, so a transport-paired device
-    /// keeps syncing and stays "online" in the snapshot until the Engine
-    /// restarts. `sync.removed_peers` (written by the caller) blocks
-    /// re-authentication on the next Hello.
-    pub async fn disconnect_peer(&self, device_id: &str) {
-        self.transport_keys.lock().await.remove(device_id);
-        if self
-            .pending_pairing
-            .lock()
-            .await
-            .remove(device_id)
-            .is_some()
-        {
-            self.notify_pairing_changed().await;
-        }
-        // Forget the persisted endpoint key so the device has to pair again
-        // (a stored match would otherwise re-admit it without fresh consent).
-        let mut keys = crate::sync_server::load_peer_transport_keys(&self.storage).await;
-        if keys.remove(device_id).is_some() {
-            crate::sync_server::save_peer_transport_keys(&self.storage, &keys).await;
-        }
-        if self.peers.lock().await.remove(device_id).is_none() {
-            return;
-        }
-        let _ = self.transport.disconnect_peer(device_id);
-        if let Some(handler) = self.on_peer_disconnect.lock().await.as_ref() {
-            let remaining = self.peers.lock().await.len();
-            handler(device_id.to_string(), remaining);
-        }
-    }
-
     /// Route an addressed integration frame through the configured transport.
     /// Broadcast transports reject this message class; addressed transports
     /// such as Iroh enforce authenticated recipient and writer-time authority.
@@ -332,30 +301,38 @@ impl RelaySync {
         }
     }
 
-    async fn send_local_version_vector(&self) {
-        let vector = load_version_vector(&self.storage).await;
-        let _ = self.transport.send(LanSyncMessage::VersionVector {
-            vector,
-            origin_device_id: Some(self.config.device_id.clone()),
-        });
-    }
-
     async fn send_missing_entities(&self, peer_device_id: &str, remote_vector: &VersionVector) {
-        let mut load_vector = load_version_vector(&self.storage).await;
+        let mut load_vector = match load_version_vector(&self.storage).await {
+            Ok(vector) => vector,
+            Err(error) => {
+                eprintln!("{TAG} failed to load local sync progress for {peer_device_id}: {error}");
+                return;
+            }
+        };
         merge_usage_cursors(&mut load_vector, remote_vector);
         // Hole-tolerant cursors (KOS-302): a relay must advertise these too —
         // it may itself have compacted refs the next hop still needs a claim
         // for. Snapshot BEFORE the first page: a claim computed afterwards
         // could cover a seq allocated mid-pull that never got streamed.
-        let read_class = crate::replication_storage::SyncReadClass::for_peer_vector(remote_vector);
-        let complete_through = self
+        let read_class =
+            crate::application::sync_storage::SyncReadClass::for_peer_vector(remote_vector);
+        let complete_through = match self
             .storage
             .usage_complete_through_for_peer(peer_device_id, read_class)
-            .await;
+            .await
+        {
+            Ok(through) => through,
+            Err(error) => {
+                eprintln!(
+                    "[RelaySync] outbound usage progress read failed for {peer_device_id}: {error}"
+                );
+                return;
+            }
+        };
         let mut offset = 0;
 
         loop {
-            let entities = self
+            let entities = match self
                 .storage
                 .load_entities_page_for_peer(
                     peer_device_id,
@@ -364,7 +341,16 @@ impl RelaySync {
                     offset,
                     SYNC_LOAD_PAGE_SIZE,
                 )
-                .await;
+                .await
+            {
+                Ok(entities) => entities,
+                Err(error) => {
+                    eprintln!(
+                        "[RelaySync] outbound sync page read failed for {peer_device_id}: {error}"
+                    );
+                    return;
+                }
+            };
             if entities.is_empty() {
                 break;
             }
@@ -406,8 +392,15 @@ impl RelaySync {
     ) {
         let mut incoming = self.incoming_sync.lock().await;
         if incoming.is_none() {
+            let vector = match load_version_vector(&self.storage).await {
+                Ok(vector) => vector,
+                Err(error) => {
+                    eprintln!("{TAG} failed to load inbound sync progress: {error}");
+                    return;
+                }
+            };
             *incoming = Some(IncomingSyncState {
-                vector: load_version_vector(&self.storage).await,
+                vector,
                 changed: false,
                 last_update: Instant::now(),
             });
@@ -442,14 +435,18 @@ impl RelaySync {
         }
 
         if is_last {
-            crate::sync_server::persist_pull_vector(
+            if let Err(error) = crate::sync_server::persist_pull_vector(
                 &self.storage,
                 &mut state.vector,
                 state.changed,
                 true,
                 usage_complete_through,
             )
-            .await;
+            .await
+            {
+                eprintln!("{TAG} failed to persist relay sync progress: {error}");
+                return;
+            }
             *incoming = None;
             drop(incoming);
             trim_process_heap();

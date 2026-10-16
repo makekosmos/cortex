@@ -1,0 +1,100 @@
+use std::collections::HashMap;
+
+use crate::canonical_types::pending::ReplayNotice;
+use crate::types::{PeerRecord, SyncEntity, VersionVector};
+
+pub(crate) const VERSION_VECTOR_KEY: &str = "lan_sync.version_vector";
+pub(crate) const KNOWN_PEERS_KEY: &str = "sync.peers";
+pub(crate) const REMOVED_PEERS_KEY: &str = "sync.removed_peers";
+pub(crate) const PEER_TRANSPORT_KEYS_KEY: &str = "sync.peer_transport_keys";
+
+/// Priority of an outbound sync read. Initial hydration uses a separate
+/// admission class from live changes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SyncReadClass {
+    SyncLive,
+    Backfill,
+}
+
+impl SyncReadClass {
+    pub fn for_sync_state(sync_complete: bool) -> Self {
+        if sync_complete {
+            Self::SyncLive
+        } else {
+            Self::Backfill
+        }
+    }
+
+    pub fn for_peer_vector(vector: &VersionVector) -> Self {
+        if vector.keys().any(|key| !key.starts_with("@usage:")) {
+            Self::SyncLive
+        } else {
+            Self::Backfill
+        }
+    }
+}
+
+/// Outbound entity reads, including peer admission context.
+///
+/// Each page is collected by one serialized database query. Separate page calls
+/// do not share a pinned snapshot, so writes between calls may affect later pages.
+#[async_trait::async_trait]
+pub trait SyncEntityReadPort: Send + Sync {
+    async fn load_entities(&self, vector: &VersionVector) -> Result<Vec<SyncEntity>, String>;
+    async fn load_entities_page(
+        &self,
+        vector: &VersionVector,
+        offset: usize,
+        limit: usize,
+    ) -> Result<Vec<SyncEntity>, String>;
+    async fn load_entities_page_for_peer(
+        &self,
+        peer_device_id: &str,
+        class: SyncReadClass,
+        vector: &VersionVector,
+        offset: usize,
+        limit: usize,
+    ) -> Result<Vec<SyncEntity>, String>;
+    async fn usage_complete_through(&self) -> Result<HashMap<String, u64>, String>;
+    async fn usage_complete_through_for_peer(
+        &self,
+        peer_device_id: &str,
+        class: SyncReadClass,
+    ) -> Result<HashMap<String, u64>, String>;
+    fn filter_outgoing_entity(&self, entity: &SyncEntity) -> Option<SyncEntity>;
+}
+
+/// Applies one inbound ordinary entity atomically at the storage adapter.
+#[async_trait::async_trait]
+pub trait SyncEntityMutationPort: Send + Sync {
+    async fn apply_entity(&self, entity: &SyncEntity) -> Result<(), String>;
+}
+
+/// Transaction-scoped capability used by the inbound sync application operation.
+/// The adapter owns the transaction and exposes only this synchronous operation.
+pub trait SyncEntityMutationSession {
+    fn apply_entity(
+        &mut self,
+        entity: &SyncEntity,
+        authenticated_peer_id: Option<&str>,
+    ) -> Result<Vec<ReplayNotice>, String>;
+}
+
+pub fn apply_inbound_sync_entity(
+    session: &mut dyn SyncEntityMutationSession,
+    entity: &SyncEntity,
+    authenticated_peer_id: Option<&str>,
+) -> Result<Vec<ReplayNotice>, String> {
+    session.apply_entity(entity, authenticated_peer_id)
+}
+
+/// Persists peer vectors and peer-list progress consumed by sync workflows.
+#[async_trait::async_trait]
+pub trait PeerProgressPort: Send + Sync {
+    async fn load_version_vector(&self) -> Result<VersionVector, String>;
+    async fn store_version_vector(&self, vector: &VersionVector) -> Result<(), String>;
+    async fn load_known_peers(&self) -> Result<Option<Vec<PeerRecord>>, String>;
+    async fn store_known_peers(&self, peers: &[PeerRecord]) -> Result<(), String>;
+    async fn load_removed_peer_ids(&self) -> Result<Vec<String>, String>;
+    async fn store_removed_peer_ids(&self, peer_ids: &[String]) -> Result<(), String>;
+}

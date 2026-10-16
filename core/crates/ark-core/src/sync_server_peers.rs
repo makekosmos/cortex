@@ -83,29 +83,24 @@ impl SyncServer {
     }
 
     /// Update the version vector for a locally-mutated entity.
-    pub async fn update_entity_hlc(&self, entity_id: &str) -> String {
+    pub async fn update_entity_hlc(&self, entity_id: &str) -> Result<String, String> {
         let device_id = self.device_id.read().await.clone();
         let hlc_str = HLC::now(&device_id).to_string();
-        let mut vector = load_version_vector(&self.storage).await;
+        let mut vector = load_version_vector(&self.storage).await?;
         vector.insert(entity_id.to_string(), hlc_str.clone());
-        save_version_vector(&self.storage, &vector).await;
-        hlc_str
+        save_version_vector(&self.storage, &vector).await?;
+        Ok(hlc_str)
     }
 
-    pub(super) async fn load_known_peers(&self) {
-        if let Some(raw) = self.storage.get_kv(KNOWN_PEERS_KEY).await {
-            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&raw) {
-                if parsed.is_array() {
-                    if let Ok(peers) = serde_json::from_str::<Vec<PeerRecord>>(&raw) {
-                        let removed = load_removed_peer_ids(&self.storage).await;
-                        *self.known_peer_records.lock().await = peers
-                            .into_iter()
-                            .filter(|peer| !removed.iter().any(|id| id == &peer.device_id))
-                            .collect();
-                    }
-                }
-            }
+    pub(super) async fn load_known_peers(&self) -> Result<(), String> {
+        if let Some(peers) = self.storage.load_known_peers().await? {
+            let removed = load_removed_peer_ids(&self.storage).await?;
+            *self.known_peer_records.lock().await = peers
+                .into_iter()
+                .filter(|peer| !removed.iter().any(|id| id == &peer.device_id))
+                .collect();
         }
+        Ok(())
     }
 
     /// Purge stale self-referencing peer records. A record is "self" if:
@@ -116,7 +111,7 @@ impl SyncServer {
     /// Called on start after loading known peers. Prevents self-connect loops
     /// where stale records from dev iterations fire SyncClients that connect
     /// to our own SyncServer.
-    pub async fn purge_self_peers(&self) -> usize {
+    pub async fn purge_self_peers(&self) -> Result<usize, String> {
         let my_device_id = self.device_id.read().await.clone();
         let my_addresses = self.own_addresses.read().await.clone();
         let mut known = self.known_peer_records.lock().await;
@@ -134,8 +129,8 @@ impl SyncServer {
         let removed = before - known.len();
         if removed > 0 {
             eprintln!("{TAG} Purged {removed} stale self-peer records");
-            save_known_peers(&self.storage, &known).await;
+            save_known_peers(&self.storage, &known).await?;
         }
-        removed
+        Ok(removed)
     }
 }

@@ -2,7 +2,7 @@ use super::*;
 use crate::task_set::track_task;
 
 async fn signed_integration_write_is_authorized(
-    storage: &Arc<dyn SyncStorageBackend>,
+    storage: &Arc<dyn SyncRuntimeStorage>,
     frame: &SignedSyncEnvelope,
     expected_space_id: &str,
     expected_origin_node_id: &str,
@@ -54,7 +54,7 @@ impl SyncServer {
             ))
             .map_err(|_| "LAN peer connection is closed".into())
     }
-    pub fn new(storage: Arc<dyn SyncStorageBackend>) -> Self {
+    pub fn new(storage: Arc<dyn SyncRuntimeStorage>) -> Self {
         Self {
             storage,
             space_id: Arc::new(RwLock::new(String::new())),
@@ -96,46 +96,45 @@ impl SyncServer {
         peers.values().filter(|p| p.authenticated).count()
     }
 
-    pub async fn get_known_peers(&self) -> Vec<PeerRecord> {
+    pub async fn get_known_peers(&self) -> Result<Vec<PeerRecord>, String> {
         // `sync.peers` is written by the transport path (iroh pairing)
         // too — refresh the in-memory copy so a transport-paired peer that
         // goes offline still shows as an offline row instead of vanishing
         // until the next start (KOS-367).
-        self.load_known_peers().await;
-        self.known_peer_records.lock().await.clone()
+        self.load_known_peers().await?;
+        Ok(self.known_peer_records.lock().await.clone())
     }
 
-    pub async fn get_removed_peer_ids(&self) -> Vec<String> {
+    pub async fn get_removed_peer_ids(&self) -> Result<Vec<String>, String> {
         load_removed_peer_ids(&self.storage).await
     }
 
-    pub async fn block_peer(&self, device_id: &str) {
+    pub async fn block_peer(&self, device_id: &str) -> Result<(), String> {
         let device_id = device_id.trim();
         if device_id.is_empty() {
-            return;
+            return Ok(());
         }
-        let mut removed = load_removed_peer_ids(&self.storage).await;
+        let mut removed = load_removed_peer_ids(&self.storage).await?;
         if !removed.iter().any(|id| id == device_id) {
             removed.push(device_id.to_string());
-            save_removed_peer_ids(&self.storage, &removed).await;
+            save_removed_peer_ids(&self.storage, &removed).await?;
         }
         let mut known = self.known_peer_records.lock().await;
         let before = known.len();
         known.retain(|peer| peer.device_id != device_id);
         if known.len() != before {
-            save_known_peers(&self.storage, &known).await;
+            save_known_peers(&self.storage, &known).await?;
         }
+        Ok(())
     }
 
     /// Block a peer and explicitly tear down any live inbound sessions for it.
     /// Returns the number of active sessions that were closed.
-    pub async fn disconnect_peer(&self, device_id: &str) -> usize {
+    pub async fn disconnect_peer(&self, device_id: &str) -> Result<usize, String> {
         let device_id = device_id.trim();
         if device_id.is_empty() {
-            return 0;
+            return Ok(0);
         }
-        self.block_peer(device_id).await;
-
         let mut peers = self.peers.lock().await;
         let peer_ids: Vec<usize> = peers
             .iter()
@@ -161,14 +160,22 @@ impl SyncServer {
         for peer_id in peer_ids {
             peers.remove(&peer_id);
         }
-        closed
+        drop(peers);
+
+        // Update local discovery state even if persistence fails. Blocking a
+        // peer is fallible, but must never prevent closing its live sessions.
+        self.known_peer_records
+            .lock()
+            .await
+            .retain(|peer| peer.device_id != device_id);
+        self.block_peer(device_id).await.map(|()| closed)
     }
 
-    pub(super) async fn is_peer_blocked(&self, device_id: &str) -> bool {
-        load_removed_peer_ids(&self.storage)
-            .await
+    pub(super) async fn is_peer_blocked(&self, device_id: &str) -> Result<bool, String> {
+        Ok(load_removed_peer_ids(&self.storage)
+            .await?
             .iter()
-            .any(|id| id == device_id)
+            .any(|id| id == device_id))
     }
 
     /// Dedup connected peers by device_id. Matches the `getConnectedPeerEntries`
@@ -223,20 +230,20 @@ impl SyncServer {
     /// overwritten here; `platform`/`app_version` pass through from the
     /// caller's record (the client's authenticated Hello, or `None` for a
     /// beacon-discovered peer that hasn't connected yet).
-    pub async fn register_external_peer(&self, record: PeerRecord) {
+    pub async fn register_external_peer(&self, record: PeerRecord) -> Result<(), String> {
         let my_device_id = self.device_id.read().await.clone();
         let my_addresses = self.own_addresses.read().await.clone();
 
         if record.device_id == my_device_id {
-            return;
+            return Ok(());
         }
         if !record.addresses.is_empty() && record.addresses.iter().all(|a| my_addresses.contains(a))
         {
-            return;
+            return Ok(());
         }
 
-        if self.is_peer_blocked(&record.device_id).await {
-            return;
+        if self.is_peer_blocked(&record.device_id).await? {
+            return Ok(());
         }
         let new_record = PeerRecord {
             last_seen: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
@@ -245,7 +252,8 @@ impl SyncServer {
         };
         let mut known = self.known_peer_records.lock().await;
         *known = merge_peer_records(&known, &[new_record]);
-        save_known_peers(&self.storage, &known).await;
+        save_known_peers(&self.storage, &known).await?;
+        Ok(())
     }
 
     /// Replace the current own-addresses snapshot. Used when the host network
@@ -288,8 +296,8 @@ impl SyncServer {
         }
 
         // Load known peers and evict stale self-references.
-        self.load_known_peers().await;
-        self.purge_self_peers().await;
+        self.load_known_peers().await?;
+        self.purge_self_peers().await?;
 
         let listener = TcpListener::bind(bind_addr)
             .await

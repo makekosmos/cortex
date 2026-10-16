@@ -87,11 +87,11 @@ graph TD
 
 ### Где живёт интерфейс хранилища
 
-Владельцем порта является вызывающий сценарий в `application`, SQLite его реализует. Не переносить текущий `StorageBackend` целиком. Разделить по операциям: consistent read, atomic mutation, committed feed и peer progress. Мелкий интерфейс на каждую таблицу не нужен.
+Владельцем порта является вызывающий сценарий в `application`, SQLite его реализует. KOS-417 заменяет широкий `StorageBackend` узкими `SyncEntityReadPort`, `SyncEntityMutationPort` и `PeerProgressPort`. Составной `SyncRuntimeStorage` используется только для сборки возможностей runtime; transport identity, authenticated apply и signed integration остаются специализированными контрактами вне обычного entity-read порта. Контракт `ArkService`, схема и wire-форматы не меняются.
 
-В текущем коде сетевой runtime получает составной `SyncStorageBackend`. Обычные операции с объектами и sync key/value находятся в `StorageBackend`; проверка transport identity, authenticated apply и signed integration frames вынесены в отдельные traits. SQLite реализует их независимо. Это убирает сетевые типы из обычного storage-контракта, но пока не заменяет его набором application-портов по операциям. Пользовательские backend-ы должны реализовать нужные traits и передавать `SyncStorageBackend` в sync runtime. Контракт `ArkService` и wire-форматы не меняются.
+Каждый вызов outbound page выполняет один сериализованный DB-запрос, но отдельные страницы не используют закреплённый общий snapshot: записи между вызовами могут изменить последующие страницы. Входящее применение проходит через application operation и синхронный `SyncEntityMutationSession` внутри транзакции адаптера; `rusqlite::Transaction` и соединение через порт не протекают, а сетевой `await` не удерживает эту транзакцию.
 
-Порт транзакции должен позволять сценарию прочитать состояние, проверить права и записать изменения в одном SQLite snapshot/transaction. Набор независимых `get`/`put` не обеспечивает этого. `rusqlite::Transaction` через порт не протекает; callback/use-case исполняется синхронно на DB executor. До извлечения крейтов проверить на рабочем срезе lifetimes, rollback и при необходимости object safety; не вводить универсальную repository-платформу.
+Committed-feed/outbox порт здесь сознательно не объявлен. Текущий sync runtime получает изменения через операции и in-memory callbacks, а production durable feed/outbox и его атомарный commit отсутствуют. KOS-420 владеет этим durable delivery/use case; порт следует добавить там, когда появятся реальный consumer и чёткий cursor/claim contract, не выдавая существующий version vector за committed feed.
 
 Не запрещать async «для чистоты» во всех интерфейсах. Предметные правила синхронны; ожидание очереди, I/O и shutdown асинхронно. SQLite transaction не держится через сетевой `await`.
 
