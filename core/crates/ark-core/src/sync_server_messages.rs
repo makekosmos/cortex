@@ -15,6 +15,13 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
         on_change,
         ..
     } = ctx;
+    if is_user_data_message(&msg)
+        && current_ready_peer(storage.as_ref(), peers, peer_id)
+            .await
+            .is_none()
+    {
+        return;
+    }
     match msg {
         message @ LanSyncMessage::Hello { .. } => {
             hello::handle_hello(ctx, peer_id, message).await;
@@ -27,7 +34,7 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
             let (tx, peer_device_id, peer_sync_complete) = {
                 let peers_guard = peers.lock().await;
                 match peers_guard.get(&peer_id) {
-                    Some(p) if p.authenticated => {
+                    Some(p) if p.ready_peer.is_some() => {
                         (p.tx.clone(), p.device_id.clone(), p.sync_complete)
                     }
                     _ => return,
@@ -147,7 +154,7 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
             let (tx, peer_device_id) = {
                 let peers_guard = peers.lock().await;
                 match peers_guard.get(&peer_id) {
-                    Some(p) if p.authenticated => (p.tx.clone(), p.device_id.clone()),
+                    Some(p) if p.ready_peer.is_some() => (p.tx.clone(), p.device_id.clone()),
                     _ => return,
                 }
             };

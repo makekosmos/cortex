@@ -14,7 +14,7 @@ pub(super) async fn pump_committed_feed(
         };
         (
             peer.device_id.clone(),
-            peer.authenticated && peer.sync_complete,
+            peer.ready_peer.is_some() && peer.sync_complete,
             peer.in_flight_feed_position,
             peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
                 protocol
@@ -84,7 +84,9 @@ pub(super) async fn pump_committed_feed(
             let Some(peer) = peers.get_mut(&peer_id) else {
                 return Ok(());
             };
-            if !peer.authenticated || !peer.sync_complete || peer.in_flight_feed_position.is_some()
+            if !peer.ready_peer.is_some()
+                || !peer.sync_complete
+                || peer.in_flight_feed_position.is_some()
             {
                 return Ok(());
             }
@@ -279,7 +281,7 @@ impl SyncServer {
             let peers = self.peers.lock().await;
             let mut ids = Vec::new();
             for (peer_id, peer) in peers.iter() {
-                if !peer.authenticated {
+                if !peer.ready_peer.is_some() {
                     continue;
                 }
                 if let Some(exclude) = exclude_device_id {

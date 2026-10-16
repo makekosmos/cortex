@@ -160,7 +160,7 @@
                 addresses: vec!["192.168.1.20:21531".to_string()],
                 platform: None,
                 app_version: None,
-                authenticated: true,
+                ready_peer: ReadyPeer::new(1, "blocked".into(), "test-session".into()),
                 sync_complete: true,
                 negotiated_protocol: None,
                 registry_admission: None,
@@ -177,7 +177,7 @@
                 addresses: vec!["192.168.1.21:21531".to_string()],
                 platform: None,
                 app_version: None,
-                authenticated: true,
+                ready_peer: ReadyPeer::new(2, "blocked".into(), "test-session".into()),
                 sync_complete: true,
                 negotiated_protocol: None,
                 registry_admission: None,
@@ -194,7 +194,7 @@
                 addresses: vec!["192.168.1.22:21531".to_string()],
                 platform: None,
                 app_version: None,
-                authenticated: true,
+                ready_peer: ReadyPeer::new(3, "keep".into(), "test-session".into()),
                 sync_complete: true,
                 negotiated_protocol: None,
                 registry_admission: None,
@@ -240,7 +240,7 @@
                 addresses: vec![],
                 platform: None,
                 app_version: None,
-                authenticated: true,
+                ready_peer: ReadyPeer::new(1, "blocked".into(), "test-session".into()),
                 sync_complete: true,
                 negotiated_protocol: None,
                 registry_admission: None,
@@ -267,13 +267,17 @@
         // Simulate two authenticated sessions from the same device_id (a race
         // between old + new sessions before eviction settles).
         let (tx, _rx) = mpsc::unbounded_channel::<Message>();
-        let state = |device_id: &str| PeerState {
+        let state = |connection_id: usize, device_id: &str| PeerState {
             device_id: device_id.to_string(),
             device_name: "DupDevice".to_string(),
             addresses: vec![],
             platform: None,
             app_version: None,
-            authenticated: true,
+            ready_peer: ReadyPeer::new(
+                connection_id,
+                device_id.to_string(),
+                format!("test-session-{connection_id}"),
+            ),
             sync_complete: true,
             negotiated_protocol: None,
             registry_admission: None,
@@ -281,8 +285,8 @@
             pending_initial_snapshot_ack: None,
             tx: tx.clone(),
         };
-        server.peers.lock().await.insert(1, state("dup"));
-        server.peers.lock().await.insert(2, state("dup"));
+        server.peers.lock().await.insert(1, state(1, "dup"));
+        server.peers.lock().await.insert(2, state(2, "dup"));
 
         let entries = server.get_connected_peer_entries().await;
         assert_eq!(

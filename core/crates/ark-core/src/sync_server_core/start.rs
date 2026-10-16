@@ -1,3 +1,4 @@
+use super::super::{current_ready_peer, is_user_data_message, peer_message_allowed};
 use super::*;
 
 impl SyncServer {
@@ -57,13 +58,13 @@ impl SyncServer {
                         let peer_ids = {
                             let peers_guard = peers.lock().await;
                             for peer in peers_guard.values() {
-                            if peer.authenticated {
+                            if peer.ready_peer.is_some() {
                                 let _ = peer.tx.send(Message::Ping(vec![].into()));
                             }
                             }
                             peers_guard
                                 .iter()
-                                .filter(|(_, peer)| peer.authenticated && peer.sync_complete)
+                                .filter(|(_, peer)| peer.ready_peer.is_some() && peer.sync_complete)
                                 .map(|(peer_id, _)| *peer_id)
                                 .collect::<Vec<_>>()
                         };
@@ -106,13 +107,21 @@ impl SyncServer {
                                     while let Some(msg) = rx.recv().await {
                                         if let Message::Text(text) = &msg {
                                             if let Some(sync_message) = deserialize_message(text) {
-                                                let peer_is_authenticated = peers_writer
-                                                    .lock()
+                                                let carries_user_data =
+                                                    is_user_data_message(&sync_message);
+                                                let ready_peer = if carries_user_data {
+                                                    current_ready_peer(
+                                                        storage_writer.as_ref(),
+                                                        &peers_writer,
+                                                        peer_id,
+                                                    )
                                                     .await
-                                                    .get(&peer_id)
-                                                    .is_some_and(|peer| peer.authenticated);
-                                                if !super::super::peer_message_allowed(
-                                                    peer_is_authenticated,
+                                                } else {
+                                                    None
+                                                };
+                                                if !peer_message_allowed(
+                                                    ready_peer.as_ref(),
+                                                    peer_id,
                                                     &sync_message,
                                                 ) {
                                                     continue;
@@ -131,7 +140,8 @@ impl SyncServer {
                                                     .await
                                                     .get(&peer_id)
                                                     .is_some_and(|peer| {
-                                                        peer.authenticated
+                                                        peer.ready_peer.as_ref()
+                                                            == ready_peer.as_ref()
                                                             && peer.device_id
                                                                 == frame.recipient_node_id
                                                     });
@@ -150,6 +160,17 @@ impl SyncServer {
                                                 {
                                                     continue;
                                                 }
+                                                if current_ready_peer(
+                                                    storage_writer.as_ref(),
+                                                    &peers_writer,
+                                                    peer_id,
+                                                )
+                                                .await
+                                                .as_ref()
+                                                    != ready_peer.as_ref()
+                                                {
+                                                    continue;
+                                                }
                                             }
                                         }
                                         if ws_sink.send(msg).await.is_err() {
@@ -164,7 +185,7 @@ impl SyncServer {
                                     addresses: Vec::new(),
                                     platform: None,
                                     app_version: None,
-                                    authenticated: false,
+                                    ready_peer: None,
                                     sync_complete: false,
                                     negotiated_protocol: None,
                                     registry_admission: None,
@@ -210,14 +231,14 @@ impl SyncServer {
                                     // Peer disconnected
                                     let mut peers_guard = peers_reader.lock().await;
                                     if let Some(peer) = peers_guard.remove(&peer_id) {
-                                        if peer.authenticated {
+                                        if peer.ready_peer.is_some() {
                                             eprintln!(
                                                 "{TAG} Peer disconnected: {} ({})",
                                                 peer.device_name, peer.device_id
                                             );
                                             let remaining = peers_guard
                                                 .values()
-                                                .filter(|p| p.authenticated)
+                                                .filter(|p| p.ready_peer.is_some())
                                                 .count();
                                             drop(peers_guard);
                                             let disconnect_reader =

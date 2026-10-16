@@ -89,7 +89,7 @@ pub(super) mod reject_tests {
                 addresses: vec![],
                 platform: None,
                 app_version: None,
-                authenticated: true,
+                ready_peer: ReadyPeer::new(7, "gossip".into(), "test-session".into()),
                 sync_complete: true,
                 negotiated_protocol: None,
                 registry_admission: None,
@@ -112,15 +112,13 @@ pub(super) mod reject_tests {
             on_peer_connect: server.on_peer_connect.clone(),
             on_new_peer_discovered: server.on_new_peer_discovered.clone(),
         };
-        sync_server_messages::handle_message(
+        sync_server_inbound::handle_peer_list(
             &ctx,
             7,
-            LanSyncMessage::PeerList {
-                peers: vec![
-                    peer_rec("blocked", &["192.168.1.30:21531"]),
-                    peer_rec("fresh", &["192.168.1.31:21531"]),
-                ],
-            },
+            vec![
+                peer_rec("blocked", &["192.168.1.30:21531"]),
+                peer_rec("fresh", &["192.168.1.31:21531"]),
+            ],
         )
         .await;
 

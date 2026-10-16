@@ -31,7 +31,7 @@ Live Linear status checked issue-by-issue on 2026-10-16 for `KOS-413` through `K
 - [ ] KOS-428: backup, restore, and sync-identity recovery tests.
 - [ ] KOS-429: signed device registry exchange, rename, disable, and the `ReadyPeer` data gate.
 
-KOS-429 remains the active implementation. Current code adds direct WebSocket challenge proof and registry paging; direct admission tests cover the pre-data barrier and reject out-of-range pages. A registry page that disables the local device now fails admission in direct WebSocket and RelaySync before data readiness. The Engine persists its configured local device ID and exposes a typed registry snapshot, rename, and disable API backed by signed SQLite commands. The current full `ark-core --lib` suite passes (474 tests), and `cargo check -p ark-core --all-targets --locked` passes. RelayTransport still has no registry capability or peer-addressed delivery, so legacy peers are rejected before data sync. Disables learned after a session is already ready still need to revoke live sessions and queues. Manager wiring, active registry update delivery, control-only offline catch-up, the relay disposition, independent final review, and full repository validation remain open. Finish and verify all KOS-429 paths before starting dependent issues.
+KOS-429 remains the active implementation. Direct WebSocket challenge proof, signed registry paging, and Engine/Manager registry operations exist. This step replaces the direct server's mutable `authenticated` flag with a connection/device/registry-session-bound `ReadyPeer`; inbound dispatch and outbound writes recheck durable admission. Revocation closes data readiness and lets the reader lifecycle deliver disconnect cleanup. Full `ark-core` nextest passes (651 passed, 1 skipped), Clippy, format, source-name, and diff checks pass. RelayTransport still lacks registry capability and peer-addressed delivery, so it cannot safely provide registry admission. Post-ready registry fanout, control-only offline catch-up, relay behavior, independent review, and full repository validation remain open. Finish and verify every KOS-429 path before starting dependent issues.
 
 Current execution units:
 - [x] Revalidate current checkout and live KOS-429 acceptance criteria.
@@ -39,8 +39,10 @@ Current execution units:
 - [x] Reproduce and reject registry pages outside the declared page count before storage mutation.
 - [x] Reject local-device disable discovered in a registry page before direct WS or RelaySync data readiness.
 - [x] Expose Engine snapshot, rename, and disable operations backed by the local signed registry commands.
-- [ ] Resolve remaining KOS-429 review findings, including transaction-level disable checks and session/queue revocation.
-- [ ] Update Manager to use the Engine registry API and propagate committed events to connected peers.
+- [x] Replace direct SyncServer's mutable admission flag with a connection/device/registry-session-bound `ReadyPeer`; recheck inbound and outbound data at the socket boundary.
+- [x] Keep write authorization and existing Engine/Manager registry operations backed by durable signed registry commands.
+- [ ] Verify revocation cleanup and queued-frame behavior across remaining transports.
+- [ ] Propagate committed registry events to connected peers and implement control-only offline catch-up.
 - [ ] Establish the relay delivery contract; do not advertise registry admission while the relay broadcasts clear user data to unaddressed room members.
 - [ ] Verify offline replay, restart, replay, multi-peer propagation, and all required repository gates; update Linear and commit the verified KOS-429 unit.
 - [ ] Complete KOS-422 through KOS-428 in dependency order, updating this checklist and Linear after each verified unit.

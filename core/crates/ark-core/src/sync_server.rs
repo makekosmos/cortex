@@ -62,13 +62,83 @@ struct PeerState {
     /// peers built before those fields existed.
     platform: Option<String>,
     app_version: Option<String>,
-    authenticated: bool,
+    ready_peer: Option<ReadyPeer>,
     sync_complete: bool,
     negotiated_protocol: Option<crate::protocol::NegotiatedProtocol>,
     registry_admission: Option<crate::sync_registry_admission::DirectRegistryAdmission>,
     in_flight_feed_position: Option<i64>,
     pending_initial_snapshot_ack: Option<String>,
     tx: mpsc::UnboundedSender<Message>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ReadyPeer {
+    connection_id: usize,
+    device_id: String,
+    registry_session_id: String,
+}
+
+impl ReadyPeer {
+    fn new(connection_id: usize, device_id: String, registry_session_id: String) -> Option<Self> {
+        (!device_id.is_empty() && !registry_session_id.is_empty()).then_some(Self {
+            connection_id,
+            device_id,
+            registry_session_id,
+        })
+    }
+
+    fn matches(&self, connection_id: usize, peer: &PeerState) -> bool {
+        self.connection_id == connection_id
+            && self.device_id == peer.device_id
+            && peer
+                .registry_admission
+                .as_ref()
+                .and_then(crate::sync_registry_admission::DirectRegistryAdmission::session_id)
+                == Some(self.registry_session_id.as_str())
+    }
+}
+
+async fn current_ready_peer(
+    storage: &dyn SyncRuntimeStorage,
+    peers: &Mutex<HashMap<usize, PeerState>>,
+    connection_id: usize,
+) -> Option<ReadyPeer> {
+    let ready = {
+        let peers = peers.lock().await;
+        let peer = peers.get(&connection_id)?;
+        let ready = peer.ready_peer.as_ref()?;
+        ready.matches(connection_id, peer).then(|| ready.clone())?
+    };
+    let admitted = match storage.sync_session_is_admitted(&ready.device_id).await {
+        Ok(admitted) => admitted,
+        Err(error) => {
+            eprintln!(
+                "{TAG} direct session admission lookup failed for {}: {error}",
+                ready.device_id
+            );
+            false
+        }
+    };
+    if !admitted {
+        let mut peers = peers.lock().await;
+        if peers
+            .get(&connection_id)
+            .is_some_and(|peer| peer.ready_peer.as_ref() == Some(&ready))
+        {
+            if let Some(peer) = peers.get_mut(&connection_id) {
+                peer.ready_peer = None;
+                peer.sync_complete = false;
+                peer.in_flight_feed_position = None;
+                peer.pending_initial_snapshot_ack = None;
+                let _ = peer.tx.send(Message::Close(None));
+            }
+        }
+        return None;
+    }
+    let peers = peers.lock().await;
+    let peer = peers.get(&connection_id)?;
+    (peer.ready_peer.as_ref() == Some(&ready) && ready.matches(connection_id, peer))
+        .then_some(ready)
 }
 
 /// One authenticated connection's view of a peer, for `get_connected_peers`
@@ -252,8 +322,13 @@ pub(crate) fn is_user_data_message(message: &LanSyncMessage) -> bool {
     )
 }
 
-pub(crate) fn peer_message_allowed(authenticated: bool, message: &LanSyncMessage) -> bool {
-    authenticated || !is_user_data_message(message)
+fn peer_message_allowed(
+    ready_peer: Option<&ReadyPeer>,
+    connection_id: usize,
+    message: &LanSyncMessage,
+) -> bool {
+    ready_peer.is_some_and(|peer| peer.connection_id == connection_id)
+        || !is_user_data_message(message)
 }
 
 fn send_msg(tx: &mpsc::UnboundedSender<Message>, msg: &LanSyncMessage) {
@@ -284,7 +359,7 @@ async fn broadcast_to_others(
         peers_guard
             .iter()
             .filter(|(_, peer)| {
-                peer.authenticated
+                peer.ready_peer.is_some()
                     && peer.sync_complete
                     && exclude_device_id != Some(peer.device_id.as_str())
             })

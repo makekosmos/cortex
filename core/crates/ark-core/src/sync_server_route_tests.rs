@@ -10,9 +10,11 @@ fn peer_write_gate_allows_only_control_messages_before_admission() {
         session_id: "session-1".to_owned(),
     };
 
-    assert!(!peer_message_allowed(false, &user_data));
-    assert!(peer_message_allowed(false, &registry_control));
-    assert!(peer_message_allowed(true, &user_data));
+    let ready = ReadyPeer::new(1, "peer".into(), "test-session".into()).unwrap();
+    assert!(!peer_message_allowed(None, 1, &user_data));
+    assert!(peer_message_allowed(None, 1, &registry_control));
+    assert!(peer_message_allowed(Some(&ready), 1, &user_data));
+    assert!(!peer_message_allowed(Some(&ready), 2, &user_data));
 }
 
 #[tokio::test]
@@ -31,7 +33,7 @@ async fn send_signed_integration_frame_requires_addressed_authenticated_peer() {
             addresses: vec![],
             platform: None,
             app_version: None,
-            authenticated: true,
+            ready_peer: ReadyPeer::new(1, "peer".into(), "test-session".into()),
             sync_complete: true,
             negotiated_protocol: None,
             registry_admission: None,

@@ -33,7 +33,7 @@ impl SyncServer {
         let mut peers = self.peers.lock().await;
         let mut revoked = Vec::new();
         for (peer_id, peer) in peers.iter_mut() {
-            if !peer.authenticated {
+            if !peer.ready_peer.is_some() {
                 continue;
             }
             let Some(session_id) = peer
@@ -55,7 +55,7 @@ impl SyncServer {
                 continue;
             }
             if revokes_target && peer.device_id == target {
-                peer.authenticated = false;
+                peer.ready_peer = None;
                 peer.sync_complete = false;
                 peer.in_flight_feed_position = None;
                 peer.pending_initial_snapshot_ack = None;
@@ -104,7 +104,7 @@ impl SyncServer {
         let peers = self.peers.lock().await;
         let Some(peer) = peers
             .values()
-            .find(|peer| peer.authenticated && peer.device_id == recipient_device_id)
+            .find(|peer| peer.ready_peer.is_some() && peer.device_id == recipient_device_id)
         else {
             return Err("target LAN peer is not authenticated".into());
         };
@@ -153,7 +153,7 @@ impl SyncServer {
 
     pub async fn connected_peer_count(&self) -> usize {
         let peers = self.peers.lock().await;
-        peers.values().filter(|p| p.authenticated).count()
+        peers.values().filter(|p| p.ready_peer.is_some()).count()
     }
 
     pub async fn get_known_peers(&self) -> Result<Vec<PeerRecord>, String> {
@@ -210,8 +210,8 @@ impl SyncServer {
         let mut closed = 0usize;
         for peer_id in &peer_ids {
             if let Some(peer) = peers.get_mut(peer_id) {
-                if peer.authenticated {
-                    peer.authenticated = false;
+                if peer.ready_peer.is_some() {
+                    peer.ready_peer = None;
                     let _ = peer.tx.send(Message::Close(None));
                     closed += 1;
                 }
@@ -245,7 +245,7 @@ impl SyncServer {
         let mut seen: HashMap<String, usize> = HashMap::new();
         let mut entries: Vec<PeerEntry> = Vec::new();
         for peer in peers.values() {
-            if !peer.authenticated {
+            if !peer.ready_peer.is_some() {
                 continue;
             }
             if peer.device_id.is_empty() {
@@ -281,7 +281,7 @@ impl SyncServer {
         let peers = self.peers.lock().await;
         peers
             .values()
-            .any(|p| p.authenticated && p.device_id == device_id)
+            .any(|p| p.ready_peer.is_some() && p.device_id == device_id)
     }
 
     /// Record an externally-connected peer (e.g. a `SyncClient` we just dialled

@@ -29,6 +29,7 @@ pub(super) async fn handle_registry_admission(
             return;
         }
     };
+    let registry_session_id = admission.session_id().map(str::to_owned);
     broadcast_registry_events(ctx, peer_id, &update.applied_events).await;
     let preserve_pending_peer = update.close_session.then_some(peer_id);
     if revoke_disabled_sessions(
@@ -54,7 +55,7 @@ pub(super) async fn handle_registry_admission(
         let Some(peer) = peers.get_mut(&peer_id) else {
             return;
         };
-        let became_ready = update.became_ready && !peer.authenticated;
+        let became_ready = update.became_ready && peer.ready_peer.is_none();
         peer.registry_admission = Some(admission);
         let entry = PeerEntry {
             device_id: peer.device_id.clone(),
@@ -79,12 +80,35 @@ pub(super) async fn handle_registry_admission(
         return;
     }
 
+    let Some(registry_session_id) = registry_session_id else {
+        reject_peer(ctx, peer_id, &tx).await;
+        return;
+    };
+    let ready_peer = match ReadyPeer::new(peer_id, device_id.clone(), registry_session_id) {
+        Some(ready_peer) => ready_peer,
+        None => {
+            reject_peer(ctx, peer_id, &tx).await;
+            return;
+        }
+    };
+    if !ctx
+        .storage
+        .sync_session_is_admitted(&device_id)
+        .await
+        .unwrap_or(false)
+    {
+        reject_peer(ctx, peer_id, &tx).await;
+        return;
+    }
+
     let activated = {
         let mut peers = ctx.peers.lock().await;
         let stale_ids = peers
             .iter()
             .filter_map(|(candidate_id, peer)| {
-                (*candidate_id != peer_id && peer.authenticated && peer.device_id == device_id)
+                (*candidate_id != peer_id
+                    && peer.ready_peer.is_some()
+                    && peer.device_id == device_id)
                     .then_some(*candidate_id)
             })
             .collect::<Vec<_>>();
@@ -94,20 +118,21 @@ pub(super) async fn handle_registry_admission(
                     "{TAG} Evicting stale admitted session for {}",
                     stale.device_name
                 );
-                stale.authenticated = false;
+                stale.ready_peer = None;
                 let _ = stale.tx.send(Message::Close(None));
             }
             peers.remove(&stale_id);
         }
         peers.get_mut(&peer_id).is_some_and(|peer| {
-            if peer.authenticated || peer.device_id != device_id {
+            if peer.ready_peer.is_some() || peer.device_id != device_id {
                 return false;
             }
-            peer.authenticated = true;
+            peer.ready_peer = Some(ready_peer);
             true
         })
     };
     if !activated {
+        reject_peer(ctx, peer_id, &tx).await;
         return;
     }
 
@@ -178,7 +203,7 @@ async fn broadcast_registry_events(
     }
     let peers = ctx.peers.lock().await;
     for (peer_id, peer) in peers.iter() {
-        if *peer_id == source_peer_id || !peer.authenticated {
+        if *peer_id == source_peer_id || peer.ready_peer.is_none() {
             continue;
         }
         let Some(session_id) = peer
@@ -223,14 +248,14 @@ async fn revoke_disabled_sessions(
                 let is_disabled =
                     local_device_disabled || disabled.contains(peer.device_id.as_str());
                 let is_preserved_pending_peer = Some(*peer_id) == preserve_pending_peer
-                    && !peer.authenticated
+                    && peer.ready_peer.is_none()
                     && !local_device_disabled;
                 (is_disabled && !is_preserved_pending_peer).then_some(*peer_id)
             })
             .collect::<Vec<_>>();
         for peer_id in &revoked_ids {
             if let Some(peer) = peers.get_mut(peer_id) {
-                peer.authenticated = false;
+                peer.ready_peer = None;
                 peer.sync_complete = false;
                 peer.in_flight_feed_position = None;
                 peer.pending_initial_snapshot_ack = None;
@@ -249,7 +274,7 @@ async fn revoke_disabled_sessions(
 
 async fn reject_peer(ctx: &MessageContext, peer_id: usize, tx: &mpsc::UnboundedSender<Message>) {
     if let Some(mut peer) = ctx.peers.lock().await.remove(&peer_id) {
-        peer.authenticated = false;
+        peer.ready_peer = None;
     }
     let _ = tx.send(Message::Close(None));
 }

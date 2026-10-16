@@ -19,7 +19,7 @@ pub(super) async fn handle_signed_integration_frame(
     let (tx, authenticated_peer_id) = {
         let peers_guard = peers.lock().await;
         match peers_guard.get(&peer_id) {
-            Some(peer) if peer.authenticated => (peer.tx.clone(), peer.device_id.clone()),
+            Some(peer) if peer.ready_peer.is_some() => (peer.tx.clone(), peer.device_id.clone()),
             _ => return,
         }
     };
@@ -66,7 +66,7 @@ pub(super) async fn handle_live_change(
     let (tx, authenticated_peer_id, receipt_ack) = {
         let peers_guard = peers.lock().await;
         match peers_guard.get(&peer_id) {
-            Some(p) if p.authenticated => (
+            Some(p) if p.ready_peer.is_some() => (
                 p.tx.clone(),
                 p.device_id.clone(),
                 p.negotiated_protocol.as_ref().is_some_and(|protocol| {
@@ -180,7 +180,7 @@ pub(super) async fn handle_peer_list(
         let peers_guard = peers.lock().await;
         peers_guard
             .get(&peer_id)
-            .map(|p| p.authenticated)
+            .map(|p| p.ready_peer.is_some())
             .unwrap_or(false)
     };
     if !authenticated {
@@ -262,7 +262,7 @@ mod tests {
                 addresses: Vec::new(),
                 platform: None,
                 app_version: None,
-                authenticated: true,
+                ready_peer: ReadyPeer::new(7, "peer".into(), "test-session".into()),
                 sync_complete: true,
                 negotiated_protocol: None,
                 registry_admission: None,
