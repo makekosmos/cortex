@@ -27,8 +27,10 @@ pub struct SqliteStorageBackend {
 }
 
 impl SqliteStorageBackend {
-    pub fn new(conn: Arc<Mutex<rusqlite::Connection>>) -> Self {
-        Self::with_db_handle(DbHandle::from_shared_connection(conn))
+    /// Builds the raw-connection adapter used by SQLite test fixtures.
+    #[cfg(debug_assertions)]
+    pub fn for_test(conn: Arc<Mutex<rusqlite::Connection>>) -> Self {
+        Self::with_db_handle(DbHandle::for_test(conn))
     }
 
     pub(crate) fn with_db_handle(db: DbHandle) -> Self {

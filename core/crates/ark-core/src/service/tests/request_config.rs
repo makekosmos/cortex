@@ -72,7 +72,7 @@ fn request_deserialization_accepts_signed_sync_send() {
 
 #[test]
 fn pairing_restart_params_force_iroh_and_replace_ticket() {
-    let storage = Arc::new(crate::db::SqliteStorageBackend::new(Arc::new(
+    let storage = Arc::new(crate::db::SqliteStorageBackend::for_test(Arc::new(
         StdMutex::new(rusqlite::Connection::open_in_memory().unwrap()),
     )));
     let runtime = SyncRuntime {
@@ -127,7 +127,7 @@ fn pairing_restart_params_force_iroh_and_replace_ticket() {
 /// loopback-bound, relay transport selected, no iroh ticket — the state a
 /// no-privileges boot leaves behind.
 fn loopback_runtime_fixture() -> SyncRuntime {
-    let storage = Arc::new(crate::db::SqliteStorageBackend::new(Arc::new(
+    let storage = Arc::new(crate::db::SqliteStorageBackend::for_test(Arc::new(
         StdMutex::new(rusqlite::Connection::open_in_memory().unwrap()),
     )));
     SyncRuntime {

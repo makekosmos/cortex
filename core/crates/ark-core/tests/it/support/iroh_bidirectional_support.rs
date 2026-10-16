@@ -172,7 +172,7 @@ fn authorized_storage() -> (
         .unwrap();
     }
     (
-        Arc::new(ark_core::SqliteStorageBackend::new(conn.clone())),
+        Arc::new(ark_core::SqliteStorageBackend::for_test(conn.clone())),
         conn,
     )
 }

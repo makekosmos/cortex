@@ -27,7 +27,7 @@ fn make_storage(device_id: &str) -> Arc<SqliteStorageBackend> {
     let conn = Connection::open_in_memory().expect("in-memory db");
     init_schema(&conn).expect("schema");
     let shared = Arc::new(StdMutex::new(conn));
-    let backend = Arc::new(SqliteStorageBackend::new(shared));
+    let backend = Arc::new(SqliteStorageBackend::for_test(shared));
     backend.set_device_id(device_id).unwrap();
     backend
 }

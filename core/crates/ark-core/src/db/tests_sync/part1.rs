@@ -5,7 +5,7 @@
     fn make_backend() -> SqliteStorageBackend {
         let conn = setup_db();
         let shared = Arc::new(Mutex::new(conn));
-        let backend = SqliteStorageBackend::new(shared);
+        let backend = SqliteStorageBackend::for_test(shared);
         backend.set_device_id("device-under-test").unwrap();
         backend
     }
@@ -232,7 +232,7 @@
             .unwrap();
         }
         ensure_usage_sequence_migrated(&conn, "device-paged").unwrap();
-        let backend = SqliteStorageBackend::new(Arc::new(Mutex::new(conn)));
+        let backend = SqliteStorageBackend::for_test(Arc::new(Mutex::new(conn)));
         backend.set_device_id("device-paged").unwrap();
         let vector = VersionVector::new();
         let mut offset = 0;

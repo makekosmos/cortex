@@ -451,7 +451,7 @@
     async fn persist_pull_vector_preserves_concurrent_keys() {
         let shared = Arc::new(Mutex::new(setup_db()));
         let backend: Arc<dyn crate::sync_server::SyncStorageBackend> =
-            Arc::new(SqliteStorageBackend::new(shared.clone()));
+            Arc::new(SqliteStorageBackend::for_test(shared.clone()));
 
         // The session snapshot predates the concurrent write.
         let mut pull_vector = VersionVector::new();

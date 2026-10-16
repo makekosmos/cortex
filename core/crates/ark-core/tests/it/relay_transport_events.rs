@@ -38,7 +38,9 @@ impl SyncTransport for StubTransport {
 async fn relay_with_stub() -> (Arc<RelaySync>, mpsc::UnboundedSender<TransportEvent>) {
     let conn = Connection::open_in_memory().unwrap();
     init_schema(&conn).unwrap();
-    let backend = Arc::new(SqliteStorageBackend::new(Arc::new(StdMutex::new(conn))));
+    let backend = Arc::new(SqliteStorageBackend::for_test(Arc::new(StdMutex::new(
+        conn,
+    ))));
     backend.set_device_id("me").unwrap();
 
     let transport = Arc::new(StubTransport {

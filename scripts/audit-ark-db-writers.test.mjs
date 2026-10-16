@@ -41,7 +41,7 @@ pub(crate) mod tests {
   assert.ok(!(ranges[0].start <= productionWrite && productionWrite < ranges[0].end));
 });
 
-test("writer census excludes inline and path-based tests but retains production calls", async (t) => {
+test("writer census separates test and debug-only adapters from production", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "ark-writer-census-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const sourceRoot = path.join(root, "core", "crates", "ark-core", "src");
@@ -55,6 +55,7 @@ test("writer census excludes inline and path-based tests but retains production 
       'fn write(conn: &Connection) { conn.execute("INSERT", []); }',
       '// conn.execute("comment", []);',
       '#[cfg(test)] mod tests { fn test(conn: &Connection) { conn.execute("test", []); } }',
+      '#[cfg(debug_assertions)] pub fn test_adapter(self) { self.conn.lock(); }',
     ].join("\n"),
   );
   await writeFile(testPath, 'fn setup(conn: &Connection) { conn.execute("fixture", []); }\n');
@@ -66,6 +67,7 @@ test("writer census excludes inline and path-based tests but retains production 
       { file: "core/crates/ark-core/src/db/tests/writer.rs", line: 1, scope: "test_file" },
       { file: "core/crates/ark-core/src/service/writer.rs", line: 1, scope: "production" },
       { file: "core/crates/ark-core/src/service/writer.rs", line: 3, scope: "inline_test" },
+      { file: "core/crates/ark-core/src/service/writer.rs", line: 4, scope: "debug_only" },
     ],
   );
 });

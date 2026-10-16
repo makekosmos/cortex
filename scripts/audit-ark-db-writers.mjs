@@ -4,7 +4,12 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { collectRustFiles, inlineTestRanges, maskRustTrivia } from "./rust-source-scan.mjs";
+import {
+  collectRustFiles,
+  debugOnlyFunctionRanges,
+  inlineTestRanges,
+  maskRustTrivia,
+} from "./rust-source-scan.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const arkSourceRoot = path.join(repoRoot, "core", "crates", "ark-core", "src");
@@ -43,6 +48,7 @@ export async function collectWriterFindings(sourceRoot = arkSourceRoot, root = r
     const source = await readFile(file, "utf8");
     const masked = maskRustTrivia(source);
     const ranges = inlineTestRanges(source, masked);
+    const debugOnlyRanges = debugOnlyFunctionRanges(source, masked);
     const starts = lineStarts(source);
     const relative = path.relative(root, file).split(path.sep).join("/");
     const testFile = isTestFile(relative);
@@ -62,7 +68,12 @@ export async function collectWriterFindings(sourceRoot = arkSourceRoot, root = r
                   occurrence >= rangeStart && occurrence < rangeEnd,
               )
             ? "inline_test"
-            : "production";
+            : debugOnlyRanges.some(
+                  ({ start: rangeStart, end: rangeEnd }) =>
+                    occurrence >= rangeStart && occurrence < rangeEnd,
+                )
+              ? "debug_only"
+              : "production";
         findings.push({
           path: relative,
           line: lineIndex + 1,
@@ -133,7 +144,7 @@ function formatInventory(findings, fileCount) {
   const output = [
     "# ARK SQLite writer census",
     "",
-    `Generated from core/crates/ark-core/src; ${production.length} production matches, ${fileCount} Rust files scanned. Findings in test files and exact inline #[cfg(test)] modules are shown separately. This is a source inventory, not proof of runtime reachability or writer ownership.`,
+    `Generated from core/crates/ark-core/src; ${production.length} production matches, ${fileCount} Rust files scanned. Findings in test files, inline #[cfg(test)] modules, and #[cfg(debug_assertions)] adapters are shown separately. This is a source inventory, not proof of runtime reachability or writer ownership.`,
   ];
   for (const [category] of patterns) {
     const entries = findings.filter((finding) => finding.category === category);

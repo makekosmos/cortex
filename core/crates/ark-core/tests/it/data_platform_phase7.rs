@@ -246,7 +246,7 @@ async fn selective_profile_is_used_by_backend_pages_and_replay_is_idempotent() {
         [],
     )
     .unwrap();
-    let backend = Arc::new(SqliteStorageBackend::new(Arc::new(Mutex::new(conn))));
+    let backend = Arc::new(SqliteStorageBackend::for_test(Arc::new(Mutex::new(conn))));
     let mut profile = data_platform::SelectiveSyncProfile::default();
     profile.set_rule("type", "com.example.note", data_platform::SyncMode::Full);
     profile.set_rule(

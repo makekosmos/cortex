@@ -122,7 +122,7 @@ mod tests {
         let conn = Connection::open_in_memory().expect("in-memory db");
         init_schema(&conn).expect("schema");
         let shared = Arc::new(StdMutex::new(conn));
-        let backend = Arc::new(SqliteStorageBackend::new(shared));
+        let backend = Arc::new(SqliteStorageBackend::for_test(shared));
         backend.set_device_id(device_id).unwrap();
         backend
     }
@@ -289,7 +289,7 @@ mod tests {
         init_schema(&conn).unwrap();
         crate::db::set_sync_kv(&conn, "sync.removed_peers", r#"["device-blocked"]"#).unwrap();
         let shared = Arc::new(StdMutex::new(conn));
-        let backend = Arc::new(SqliteStorageBackend::new(shared.clone()));
+        let backend = Arc::new(SqliteStorageBackend::for_test(shared.clone()));
         let storage = backend.clone() as Arc<dyn SyncStorageBackend>;
         let entity = SyncEntity {
             entity_type: "object".into(),

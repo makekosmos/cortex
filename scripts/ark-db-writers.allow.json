@@ -82,11 +82,6 @@
       "count": 8
     },
     {
-      "path": "core/crates/ark-core/src/db/backend.rs",
-      "category": "shared connection escape",
-      "count": 1
-    },
-    {
       "path": "core/crates/ark-core/src/db/backend/apply.rs",
       "category": "SQLite mutation API",
       "count": 1

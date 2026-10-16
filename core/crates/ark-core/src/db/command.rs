@@ -74,14 +74,19 @@ impl DbHandle {
             )
             .map_err(DbError::Storage)?;
 
-            Ok(Self::from_shared_connection(Arc::new(Mutex::new(
+            Ok(Self::from_writer_connection(Arc::new(Mutex::new(
                 connection,
             ))))
         })
         .await?
     }
 
-    pub(crate) fn from_shared_connection(connection: Arc<Mutex<Connection>>) -> Self {
+    #[cfg(debug_assertions)]
+    pub(crate) fn for_test(connection: Arc<Mutex<Connection>>) -> Self {
+        Self::from_writer_connection(connection)
+    }
+
+    fn from_writer_connection(connection: Arc<Mutex<Connection>>) -> Self {
         Self {
             connection,
             admission: executor::AdmissionBudget::new(DB_ADMISSION_LIMITS),

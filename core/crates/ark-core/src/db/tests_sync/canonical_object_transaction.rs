@@ -43,7 +43,7 @@ async fn failed_authenticated_core_task_commit_rolls_back_every_write_and_releas
     )
     .unwrap();
     let shared = Arc::new(Mutex::new(conn));
-    let backend = SqliteStorageBackend::new(shared.clone());
+    let backend = SqliteStorageBackend::for_test(shared.clone());
     let entity = full_core_task_entity(
         "failed-core-task-commit",
         "Commit must roll back",
@@ -111,7 +111,7 @@ async fn failed_authenticated_core_task_commit_rolls_back_every_write_and_releas
 async fn authenticated_apply_rechecks_removed_peer_before_persisting() {
     let conn = setup_db();
     set_sync_kv(&conn, "sync.removed_peers", r#"["device-blocked"]"#).unwrap();
-    let backend = SqliteStorageBackend::new(Arc::new(Mutex::new(conn)));
+    let backend = SqliteStorageBackend::for_test(Arc::new(Mutex::new(conn)));
     let mut entity = sync_object("blocked-core-task", "core.task", "Blocked task");
     entity.data.insert("typeVersion".into(), json!("0.1.0"));
     entity.data.insert(
@@ -163,7 +163,7 @@ fn full_core_task_entity(id: &str, title: &str, hlc: &str) -> SyncEntity {
 #[tokio::test]
 async fn clear_all_removes_object_write_receipts_before_replay() {
     let conn = setup_db();
-    let backend = SqliteStorageBackend::new(Arc::new(Mutex::new(conn)));
+    let backend = SqliteStorageBackend::for_test(Arc::new(Mutex::new(conn)));
     let mut entity = sync_object("clear-receipt-task", "core.task", "Task before reset");
     entity.data.insert("typeVersion".into(), json!("0.1.0"));
     entity.data.insert(
@@ -218,7 +218,7 @@ async fn clear_all_removes_object_write_receipts_before_replay() {
 
 #[tokio::test]
 async fn authenticated_core_task_replay_is_idempotent_and_rejects_revision_reuse() {
-    let backend = SqliteStorageBackend::new(Arc::new(Mutex::new(setup_db())));
+    let backend = SqliteStorageBackend::for_test(Arc::new(Mutex::new(setup_db())));
     let mut entity = sync_object("receipt-replay-task", "core.task", "Original title");
     entity.data.insert("typeVersion".into(), json!("0.1.0"));
     entity.data.insert(

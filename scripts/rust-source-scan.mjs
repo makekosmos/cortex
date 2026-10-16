@@ -122,6 +122,20 @@ export function inlineTestRanges(source, masked = maskRustTrivia(source)) {
   return ranges;
 }
 
+export function debugOnlyFunctionRanges(source, masked = maskRustTrivia(source)) {
+  const pairs = bracePairs(masked);
+  const ranges = [];
+  const functionPattern =
+    /#\s*\[\s*cfg\s*\(\s*debug_assertions\s*\)\s*\]\s*(?:pub(?:\s*\([^)]*\))?\s+)?fn\s+[A-Za-z_][A-Za-z0-9_]*\s*\([^)]*\)[^{]*\{/g;
+  for (const match of masked.matchAll(functionPattern)) {
+    const open = match.index + match[0].lastIndexOf("{");
+    const close = pairs.get(open);
+    if (close === undefined) throw new Error(`unclosed debug-only function at byte ${open}`);
+    ranges.push({ start: match.index, end: close + 1 });
+  }
+  return ranges;
+}
+
 export async function collectRustFiles(directory, result = []) {
   const entries = await readdir(directory, { withFileTypes: true });
   for (const entry of entries) {

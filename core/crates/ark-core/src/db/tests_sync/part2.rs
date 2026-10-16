@@ -33,7 +33,7 @@
     async fn storage_backend_tombstone_survives_backend_recreation() {
         let conn = setup_db();
         let shared = Arc::new(Mutex::new(conn));
-        let backend = SqliteStorageBackend::new(shared.clone());
+        let backend = SqliteStorageBackend::for_test(shared.clone());
 
         let tombstone = SyncEntity {
             entity_type: "todo".to_string(),
@@ -46,7 +46,7 @@
         };
         backend.apply_entity(&tombstone).await.unwrap();
 
-        let recreated = SqliteStorageBackend::new(shared);
+        let recreated = SqliteStorageBackend::for_test(shared);
         let empty_vector: VersionVector = std::collections::HashMap::new();
         let loaded = recreated.load_entities(&empty_vector).await;
         assert!(

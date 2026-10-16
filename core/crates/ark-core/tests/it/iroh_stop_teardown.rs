@@ -60,7 +60,7 @@ async fn stop_joins_connection_tasks_holding_storage() {
     let transport_b = loopback_transport("device-b", None);
     transport_b
         .set_outbound_storage(
-            Arc::new(SqliteStorageBackend::new(conn_b.clone())) as Arc<dyn SyncStorageBackend>,
+            Arc::new(SqliteStorageBackend::for_test(conn_b.clone())) as Arc<dyn SyncStorageBackend>,
             "test-iroh-stop-teardown",
             "device-b",
         )
@@ -72,7 +72,7 @@ async fn stop_joins_connection_tasks_holding_storage() {
     let transport_a = loopback_transport("device-a", Some(addr_b));
     transport_a
         .set_outbound_storage(
-            Arc::new(SqliteStorageBackend::new(conn_a.clone())) as Arc<dyn SyncStorageBackend>,
+            Arc::new(SqliteStorageBackend::for_test(conn_a.clone())) as Arc<dyn SyncStorageBackend>,
             "test-iroh-stop-teardown",
             "device-a",
         )

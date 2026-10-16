@@ -35,7 +35,9 @@ async fn deleted_object_tombstone_keeps_type_through_collection_filter_and_apply
     )
     .unwrap();
 
-    let source = Arc::new(SqliteStorageBackend::new(Arc::new(Mutex::new(source_conn))));
+    let source = Arc::new(SqliteStorageBackend::for_test(Arc::new(Mutex::new(
+        source_conn,
+    ))));
     let mut profile = data_platform::SelectiveSyncProfile::default();
     profile.set_rule("type", "com.kosmos.note", data_platform::SyncMode::Full);
     source.set_selective_sync_profile(Some(profile));
@@ -59,7 +61,7 @@ async fn deleted_object_tombstone_keeps_type_through_collection_filter_and_apply
         )
         .unwrap();
     let destination_db = Arc::new(Mutex::new(destination_conn));
-    let destination = SqliteStorageBackend::new(destination_db.clone());
+    let destination = SqliteStorageBackend::for_test(destination_db.clone());
     destination.apply_entity(&tombstone).await.unwrap();
     let guard = destination_db.lock().unwrap();
     assert!(db::get_object(&guard, "deleted-note").unwrap().is_none());

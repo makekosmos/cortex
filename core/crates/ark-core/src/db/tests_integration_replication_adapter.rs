@@ -16,7 +16,7 @@ async fn signed_integration_adapter_uses_queries_and_transactional_commands() {
         )
         .unwrap();
     let connection = std::sync::Arc::new(std::sync::Mutex::new(target));
-    let backend = SqliteStorageBackend::new(connection.clone());
+    let backend = SqliteStorageBackend::for_test(connection.clone());
     let change = Change {
         entity: Entity::IntegrationConfiguration(integration_config(serde_json::json!({
             "display": {"region": "eu"}
@@ -109,7 +109,7 @@ async fn signed_integration_command_binds_context_peer_inside_transaction() {
     let connection = std::sync::Arc::new(std::sync::Mutex::new(
         rusqlite::Connection::open_in_memory().unwrap(),
     ));
-    let db = DbHandle::from_shared_connection(connection.clone());
+    let db = DbHandle::for_test(connection.clone());
     let signing_key = SigningKey::from_bytes(&[81; 32]);
     let frame = sign_replication_batch(&signing_key, 1, "message-wrong-peer", Vec::new());
 
@@ -157,7 +157,7 @@ async fn signed_integration_command_rolls_back_replay_and_earlier_changes() {
 
     let (target, origin_key) = trusted_target(91);
     let connection = std::sync::Arc::new(std::sync::Mutex::new(target));
-    let backend = SqliteStorageBackend::new(connection.clone());
+    let backend = SqliteStorageBackend::for_test(connection.clone());
     let integration_id = "integration-a";
     let mut configuration = integration_config(serde_json::json!({"atomic": true}));
     configuration.integration_id = integration_id.into();
