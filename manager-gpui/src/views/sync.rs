@@ -4,10 +4,11 @@ use ::gpui::{prelude::*, *};
 use serde_json::{json, Value};
 
 use crate::app::ManagerApp;
-use crate::device_info::{peer_caption, peer_platform, Platform};
+use crate::device_info::Platform;
 use crate::theme::*;
 use crate::widgets::*;
 
+mod devices;
 mod pairing;
 #[cfg(test)]
 mod tests;
@@ -19,6 +20,7 @@ pub fn load(app: &mut ManagerApp) {
     // escalates the bind, so the firewall prompt belongs to that click, not
     // to opening this tab (KOS-269).
     app.call("sync.snapshot", "get_sync_snapshot", json!({}));
+    app.call("sync.registry", "device_registry.snapshot", json!({}));
     app.call("sync.privileged", "system.privileged.status", json!({}));
 }
 
@@ -27,6 +29,14 @@ pub fn render(
     window: &mut Window,
     cx: &mut Context<ManagerApp>,
 ) -> AnyElement {
+    let registry = app.data("sync.registry");
+    let sync = app.data("sync.snapshot");
+    let local_id = vstr(&registry, "localDeviceId");
+    let local_name = devices::local_name(&registry, &local_id, &app.local_device.name);
+    let (local_status, local_status_color) = devices::local_status(&registry, &sync);
+    let system_name = app.local_device.name.clone();
+    let others = devices::render_others(app, &registry, &sync, &system_name, window, cx);
+
     page_stack()
         .child(
             div()
@@ -38,22 +48,15 @@ pub fn render(
                     block().child(
                         block_row(true)
                             .child(device_avatar(app.local_device.platform))
-                            .child(device_identity(
-                                &app.local_device.name,
-                                &app.local_device.caption(),
-                            ))
-                            .child(slot_or(app, "sync.snapshot", |snapshot| {
-                                let running = vbool(snapshot, "running");
-                                presence(
-                                    if running {
-                                        "Синхронизация активна"
-                                    } else {
-                                        "Синхронизация остановлена"
-                                    },
-                                    if running { SUCCESS() } else { WARN() },
-                                )
-                                .into_any_element()
-                            })),
+                            .child(device_identity(&local_name, &app.local_device.caption()))
+                            .child(presence(local_status, local_status_color))
+                            .child(devices::render_local_name_editor(
+                                app,
+                                &local_id,
+                                &local_name,
+                                window,
+                                cx,
+                            )),
                     ),
                 ),
         )
@@ -63,61 +66,10 @@ pub fn render(
                 .flex_col()
                 .gap_2()
                 .child(section_label("Другие устройства"))
-                .child(block().child(slot_or(app, "sync.snapshot", |snapshot| {
-                    let peers = varr(snapshot, "peers");
-                    let mut others = div().flex().flex_col();
-                    if peers.is_empty() {
-                        others =
-                            others.child(block_row(true).child(
-                                div().text_color(c(MUTED_FG())).child(
-                                    "Других устройств пока нет. Подключите их по коду ниже.",
-                                ),
-                            ));
-                    }
-                    for (index, peer) in peers.iter().enumerate() {
-                        let id = vstr(peer, "device_id");
-                        let name = device_name(peer);
-                        let confirmation_name = name.clone();
-                        let online = vstr(peer, "status") == "online";
-                        let can_disconnect = !id.is_empty() && !app.action_busy;
-                        others = others.child(
-                            block_row(index == 0)
-                                .child(device_avatar(peer_platform(peer)))
-                                .child(device_identity(&name, &peer_caption(peer)))
-                                .child(presence(
-                                    if online {
-                                        "В сети"
-                                    } else {
-                                        peer_status_text(&vstr(peer, "status"))
-                                    },
-                                    if online { SUCCESS() } else { MUTED_FG() },
-                                ))
-                                .child(
-                                    btn_id(
-                                        &format!("disc-{id}"),
-                                        "Отключить",
-                                        cx.listener(move |this, _, _, cx| {
-                                            this.ask_confirm("Отключить устройство",
-                            format!("«{confirmation_name}» будет удалено из списка синхронизации."),
-                            "disconnect_peer", json!({"device_id": id}), cx);
-                                        }),
-                                    )
-                                    .disabled(!can_disconnect),
-                                ),
-                        );
-                    }
-                    others.into_any_element()
-                }))),
+                .child(block().child(others)),
         )
         .child(pairing::render(app, window, cx))
         .into_any_element()
-}
-
-fn device_name(device: &Value) -> String {
-    vopt(device, "device_name")
-        .or_else(|| vopt(device, "name"))
-        .filter(|name| !name.trim().is_empty())
-        .unwrap_or_else(|| "Устройство".into())
 }
 
 fn device_identity(name: &str, detail: &str) -> Div {

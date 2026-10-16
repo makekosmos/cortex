@@ -1,4 +1,7 @@
-use super::{device_name, pairing_code, peer_status_text};
+use super::{
+    devices::{device_name, registry_devices},
+    pairing_code, peer_status_text,
+};
 use crate::app::ManagerApp;
 use gpui::{Entity, TestAppContext, VisualTestContext};
 use serde_json::{json, Value};
@@ -20,6 +23,35 @@ fn device_names_and_presence_have_safe_fallbacks() {
     assert_eq!(peer_status_text(""), "Статус неизвестен");
 }
 
+#[test]
+fn registry_names_and_admission_state_override_discovery_metadata() {
+    let rows = registry_devices(
+        &json!({
+            "localDeviceId": "this-device",
+            "devices": [
+                {"deviceId":"this-device", "displayName":"Work Mac", "enabled":true},
+                {"deviceId":"phone", "displayName":"Reading phone", "enabled":true},
+                {"deviceId":"old-laptop", "displayName":"Old laptop", "enabled":false},
+            ]
+        }),
+        &json!({"running":true,"peers":[
+            {"device_id":"phone", "device_name":"iPhone", "platform":"ios", "status":"online"},
+            {"device_id":"old-laptop", "device_name":"MacBook", "status":"online"},
+        ]}),
+        "Host name",
+    );
+
+    assert_eq!(rows.len(), 3);
+    assert_eq!(rows[0].name, "Work Mac");
+    assert_eq!(rows[0].status, "Синхронизация активна");
+    assert_eq!(rows[1].name, "Reading phone");
+    assert_eq!(rows[1].status, "В сети");
+    assert!(rows[1].has_peer);
+    assert_eq!(rows[2].name, "Old laptop");
+    assert_eq!(rows[2].status, "Отключено");
+    assert!(!rows[2].enabled);
+}
+
 #[gpui::test]
 fn pairing_form_is_hidden_until_opened(cx: &mut TestAppContext) {
     let (manager, cx) = crate::a11y_tests::launch(cx);
@@ -33,6 +65,16 @@ fn pairing_form_is_hidden_until_opened(cx: &mut TestAppContext) {
             })),
         );
         app.slots.insert(
+            "sync.registry".into(),
+            crate::app::Slot::Ready(json!({
+                "localDeviceId":"local-device",
+                "devices":[
+                    {"deviceId":"local-device", "enabled":true},
+                    {"deviceId":"peer-id", "displayName":"Renamed Mac", "enabled":true},
+                ]
+            })),
+        );
+        app.slots.insert(
             "sync.ticket".into(),
             crate::app::Slot::Ready(json!("private-pairing-code")),
         );
@@ -43,7 +85,9 @@ fn pairing_form_is_hidden_until_opened(cx: &mut TestAppContext) {
         .update(|window, _| window.debug_a11y_tree_json())
         .unwrap();
     assert!(closed.contains("Подключить устройство"));
-    assert!(closed.contains("Отключить"));
+    assert!(closed.contains("Отключить везде"));
+    assert!(closed.contains("Забыть здесь"));
+    assert!(closed.contains("Renamed Mac"));
     assert!(!closed.contains("Скопировать код"));
     assert!(!closed.contains("private-pairing-code"));
     manager.update(cx, |app, cx| {
