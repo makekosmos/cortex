@@ -35,6 +35,8 @@ KOS-429 remains the active implementation. Direct WebSocket challenge proof, sig
 
 KOS-422 partial progress: device-owned profiles now have an Engine get/set API and are read/written through DB actor commands. Revisions are monotonic per device, active replacement is atomic, and SQLite reopen plus six-device isolation are tested. This does not yet exchange the receiver's policy with peers, bind network progress/ACKs to the policy revision and digest, or implement safe eviction and receipt-aware backfill.
 
+The writer census and shrink-only allowlist are already implemented. A fresh run after KOS-429 registry commands and KOS-422 policy persistence found one newly counted mutation in each of `device_registry_command.rs` and `data_platform.rs`; both are inside the existing sealed-command or actor-owned data boundary. Their reviewed counts are recorded in `scripts/ark-db-writers.allow.json`; keep this gate green and shrink counts as callers migrate.
+
 Current execution units:
 - [x] Revalidate current checkout and live KOS-429 acceptance criteria.
 - [x] Run current full ark-core library suite and focused direct admission tests.

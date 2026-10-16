@@ -109,7 +109,12 @@
     {
       "path": "core/crates/ark-core/src/data_platform.rs",
       "category": "SQLite mutation API",
-      "count": 8
+      "count": 9
+    },
+    {
+      "path": "core/crates/ark-core/src/db/command/commands/device_registry_command.rs",
+      "category": "SQLite mutation API",
+      "count": 1
     },
     {
       "path": "core/crates/ark-core/src/db/backend/apply.rs",
