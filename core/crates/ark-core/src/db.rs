@@ -21,14 +21,15 @@ pub(crate) use command::{
     CommandContext, CompactUsageSyncLogCommand, DbHandle, DeleteObjectLinkCommand,
     DeleteObjectTypeCommand, DeleteTrashedCommand, EnsureUsageSequenceMigratedCommand,
     GetSyncKeyValueQuery, IdentityErrorStyle, IntegrationReadQuery, LegacyDeleteCommand,
-    LegacyGraphWriteCommand, LoadEntitiesQuery, LocalBookCoverCommand, LocalCoreTaskWrite,
-    LocalObjectDeleteCommand, LocalObjectUpsertCommand, LocalUsageWriteCommand, ObjectReadQuery,
-    PersistIntegrationGrantCommand, PersistNodeAuthorizationCommand,
-    PublishIntegrationCredentialEnvelopeCommand, RegisterPackageTypesCommand,
-    ReplaceObjectLinkCommand, RestoreSnapshotCommand, SetLocalSyncKeyValueCommand,
-    SetSyncKeyValueCommand, SystemReadQuery, TrackedAppDeleteCommand, TrackedAppUpsertCommand,
-    TypeReadQuery, UpsertExternalRefCommand, UpsertObjectLinkCommand, UpsertObjectTypeCommand,
-    UsageCompleteThroughQuery, UsageReadQuery, ValidateOutboundSignedFrameQuery,
+    LegacyGraphWriteCommand, LoadEntitiesQuery, LoadOrGenerateIrohSecretKeyCommand,
+    LocalBookCoverCommand, LocalCoreTaskWrite, LocalObjectDeleteCommand, LocalObjectUpsertCommand,
+    LocalUsageWriteCommand, ObjectReadQuery, PersistIntegrationGrantCommand,
+    PersistNodeAuthorizationCommand, PublishIntegrationCredentialEnvelopeCommand,
+    RegisterPackageTypesCommand, ReplaceObjectLinkCommand, RestoreSnapshotCommand,
+    SetLocalSyncKeyValueCommand, SetSyncKeyValueCommand, SystemReadQuery, TrackedAppDeleteCommand,
+    TrackedAppUpsertCommand, TypeReadQuery, UpsertExternalRefCommand, UpsertObjectLinkCommand,
+    UpsertObjectTypeCommand, UsageCompleteThroughQuery, UsageReadQuery,
+    ValidateOutboundSignedFrameQuery,
 };
 include!("db/integration_replication_common.rs");
 include!("db/integration_replication_records.rs");

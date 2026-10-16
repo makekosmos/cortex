@@ -155,10 +155,13 @@ pub(crate) async fn handle_start_sync(
         relay_sync.start().await?;
         Some(relay_sync)
     } else if transport_choice == TransportChoice::Iroh {
-        let secret_key = db_handle.with_connection(|conn| {
-            crate::iroh_transport::load_or_generate_secret_key(conn)
-                .map_err(|e| format!("iroh transport: failed to load identity: {e}"))
-        })?;
+        let secret_key = db_handle
+            .submit(
+                CommandContext::engine(),
+                crate::db::LoadOrGenerateIrohSecretKeyCommand,
+            )
+            .await
+            .map_err(|error| format!("iroh transport: failed to load identity: {error}"))?;
         let peer_addr = match iroh_peer_ticket.as_deref() {
             Some(ticket) => Some(crate::iroh_transport::from_ticket(ticket)?),
             None => None,

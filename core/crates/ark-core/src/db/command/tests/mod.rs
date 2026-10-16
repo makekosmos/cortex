@@ -99,6 +99,24 @@ async fn read_queries_share_bounded_source_admission() {
 }
 
 #[tokio::test]
+async fn iroh_secret_key_command_keeps_the_persisted_identity() {
+    let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
+    let handle = DbHandle::from_shared_connection(connection);
+    handle.with_connection(|connection| crate::db::init_schema(connection).unwrap());
+
+    let first = handle
+        .submit(CommandContext::engine(), LoadOrGenerateIrohSecretKeyCommand)
+        .await
+        .unwrap();
+    let second = handle
+        .submit(CommandContext::engine(), LoadOrGenerateIrohSecretKeyCommand)
+        .await
+        .unwrap();
+
+    assert_eq!(first.to_bytes(), second.to_bytes());
+}
+
+#[tokio::test]
 async fn usage_sequence_migration_runs_as_an_interactive_database_command() {
     let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
     let handle = DbHandle::from_shared_connection(connection);

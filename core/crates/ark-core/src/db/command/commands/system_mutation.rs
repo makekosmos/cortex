@@ -57,6 +57,29 @@ impl DbCommand for DeleteTrashedCommand {
     }
 }
 
+pub(crate) struct LoadOrGenerateIrohSecretKeyCommand;
+
+impl sealed::Sealed for LoadOrGenerateIrohSecretKeyCommand {}
+
+impl DbCommand for LoadOrGenerateIrohSecretKeyCommand {
+    type Output = iroh::SecretKey;
+
+    const CLASS: CommandClass = CommandClass::Interactive;
+
+    fn weight(&self) -> usize {
+        1
+    }
+
+    fn execute(
+        self,
+        context: &CommandContext,
+        transaction: &Transaction<'_>,
+    ) -> Result<Self::Output, DbError> {
+        context.require_engine()?;
+        crate::iroh_transport::load_or_generate_secret_key(transaction).map_err(DbError::Storage)
+    }
+}
+
 #[derive(serde::Serialize)]
 pub(crate) struct CompactUsageSyncLogCommand {
     own_device_id: Option<String>,

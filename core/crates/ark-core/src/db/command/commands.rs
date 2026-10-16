@@ -41,7 +41,8 @@ pub(crate) use sync_read::{
     AuthorizedTransportKeyQuery, GetSyncKeyValueQuery, LoadEntitiesQuery, UsageCompleteThroughQuery,
 };
 pub(crate) use system_mutation::{
-    ClearAllCommand, CompactUsageSyncLogCommand, DeleteTrashedCommand, RestoreSnapshotCommand,
+    ClearAllCommand, CompactUsageSyncLogCommand, DeleteTrashedCommand,
+    LoadOrGenerateIrohSecretKeyCommand, RestoreSnapshotCommand,
 };
 pub(crate) use system_read::SystemReadQuery;
 pub(crate) use type_mutation::{
