@@ -105,3 +105,32 @@ test("an unallowlisted production get_shared_conn fails the census", async (t) =
     "core/crates/ark-core/src/service/new_writer.rs [shared connection escape]: found 1, no allowlist entry",
   );
 });
+
+test("transaction-control execute_batch calls are not counted as SQLite writers", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ark-writer-census-savepoint-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const sourceRoot = path.join(root, "core", "crates", "ark-core", "src");
+  const writer = path.join(sourceRoot, "service", "page.rs");
+  await mkdir(path.dirname(writer), { recursive: true });
+  await writeFile(
+    writer,
+    [
+      "fn page(conn: &Connection) {",
+      '  conn.execute_batch("SAVEPOINT snapshot").unwrap();',
+      '  conn.execute_batch("RELEASE snapshot").unwrap();',
+      '  conn.execute_batch("ROLLBACK TO snapshot; RELEASE snapshot").unwrap();',
+      '  conn.execute_batch("DELETE FROM inbox").unwrap();',
+      '  conn.execute("INSERT INTO inbox VALUES (1)", []).unwrap();',
+      "}",
+    ].join("\n"),
+  );
+
+  const findings = await collectWriterFindings(sourceRoot, root);
+  assert.deepEqual(
+    findings.map(({ line, source }) => ({ line, source })),
+    [
+      { line: 5, source: 'conn.execute_batch("DELETE FROM inbox").unwrap();' },
+      { line: 6, source: 'conn.execute("INSERT INTO inbox VALUES (1)", []).unwrap();' },
+    ],
+  );
+});

@@ -61,6 +61,14 @@ export async function collectWriterFindings(sourceRoot = arkSourceRoot, root = r
         const match = matcher.exec(codeLine);
         if (!match) continue;
         const occurrence = start + match.index;
+        if (
+          category === "SQLite mutation API" &&
+          match[0].startsWith(".execute_batch") &&
+          /^\.execute_batch\s*\(\s*"(?:SAVEPOINT|RELEASE|ROLLBACK\s+TO)\b/i.test(
+            source.slice(occurrence),
+          )
+        )
+          continue;
         const scope = testFile
           ? "test_file"
           : ranges.some(
