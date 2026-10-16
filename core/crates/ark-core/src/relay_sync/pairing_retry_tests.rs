@@ -239,6 +239,7 @@ async fn registry_ready_replay_is_idempotent_but_conflicting_digest_is_rejected(
             registry_admission: RelayRegistryAdmission::Exchanging(RegistryExchangeState {
                 session_id: session_id.into(),
                 transport_public_key: endpoint.into(),
+                retry_count: 0,
                 incoming_page_count: None,
                 next_incoming_page: 0,
                 local_digest: None,

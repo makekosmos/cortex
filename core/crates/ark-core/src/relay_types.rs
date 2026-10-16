@@ -60,6 +60,7 @@ struct IncomingSyncState {
 struct RegistryExchangeState {
     session_id: String,
     transport_public_key: String,
+    retry_count: u8,
     incoming_page_count: Option<u32>,
     next_incoming_page: u32,
     local_digest: Option<String>,

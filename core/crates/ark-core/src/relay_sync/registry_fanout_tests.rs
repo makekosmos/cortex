@@ -431,6 +431,7 @@ async fn disable_during_exchange_is_applied_before_every_live_session_closes() {
             registry_admission: RelayRegistryAdmission::Exchanging(RegistryExchangeState {
                 session_id: "author-session".into(),
                 transport_public_key: author_key.public().to_string(),
+                retry_count: 0,
                 incoming_page_count: None,
                 next_incoming_page: 0,
                 local_digest: None,

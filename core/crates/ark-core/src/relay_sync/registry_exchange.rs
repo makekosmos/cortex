@@ -2,6 +2,7 @@ use super::*;
 
 const REGISTRY_PAGE_SIZE: usize = 32;
 const MAX_REGISTRY_PAGE_COUNT: u32 = 4096;
+const MAX_REGISTRY_EXCHANGE_RETRIES: u8 = 2;
 
 pub(super) fn is_user_data_message(message: &LanSyncMessage) -> bool {
     matches!(
@@ -36,6 +37,7 @@ impl RelaySync {
         peer.registry_admission = RelayRegistryAdmission::Exchanging(RegistryExchangeState {
             session_id: session_id.clone(),
             transport_public_key: transport_public_key.to_owned(),
+            retry_count: 0,
             incoming_page_count: None,
             next_incoming_page: 0,
             local_digest: None,
@@ -72,9 +74,22 @@ impl RelaySync {
         let peer = peers
             .get_mut(peer_device_id)
             .ok_or_else(|| "registry_sync_peer_state_missing".to_owned())?;
+        let retry_count = match &peer.registry_admission {
+            RelayRegistryAdmission::Exchanging(state)
+                if state.transport_public_key == transport_public_key =>
+            {
+                if state.session_id == session_id {
+                    state.retry_count
+                } else {
+                    state.retry_count.saturating_add(1)
+                }
+            }
+            _ => 0,
+        };
         peer.registry_admission = RelayRegistryAdmission::Exchanging(RegistryExchangeState {
             session_id: session_id.clone(),
             transport_public_key: transport_public_key.to_owned(),
+            retry_count,
             incoming_page_count: None,
             next_incoming_page: 0,
             local_digest: None,
@@ -298,12 +313,64 @@ impl RelaySync {
             )
         };
         if local_digest != remote_digest {
-            if let Some(peer) = self.peers.lock().await.get_mut(peer_device_id) {
-                peer.registry_admission = RelayRegistryAdmission::Waiting;
+            if self.config.device_id.as_str() < peer_device_id {
+                let retry_session = {
+                    let mut peers = self.peers.lock().await;
+                    let Some(peer) = peers.get_mut(peer_device_id) else {
+                        return Ok(());
+                    };
+                    let RelayRegistryAdmission::Exchanging(state) = &peer.registry_admission else {
+                        return Ok(());
+                    };
+                    if state.transport_public_key != endpoint
+                        || state.local_digest.as_deref() != Some(local_digest.as_str())
+                        || state.remote_digest.as_deref() != Some(remote_digest.as_str())
+                    {
+                        return Ok(());
+                    }
+                    if state.retry_count >= MAX_REGISTRY_EXCHANGE_RETRIES {
+                        peer.registry_admission = RelayRegistryAdmission::Waiting;
+                        None
+                    } else {
+                        let session_id = generate_id();
+                        let retry_count = state.retry_count + 1;
+                        peer.registry_admission =
+                            RelayRegistryAdmission::Exchanging(RegistryExchangeState {
+                                session_id: session_id.clone(),
+                                transport_public_key: endpoint.clone(),
+                                retry_count,
+                                incoming_page_count: None,
+                                next_incoming_page: 0,
+                                local_digest: None,
+                                remote_digest: None,
+                            });
+                        Some(session_id)
+                    }
+                };
+                if let Some(session_id) = retry_session {
+                    self.send_registry_control(
+                        &endpoint,
+                        LanSyncMessage::RegistrySyncStart {
+                            session_id: session_id.clone(),
+                        },
+                    )
+                    .await?;
+                    self.send_registry_pages(peer_device_id, &endpoint, &session_id)
+                        .await?;
+                    return Ok(());
+                }
+                self.transport.unbind_peer(peer_device_id)?;
+                return Err("registry_sync_digest_mismatch".into());
             }
-            self.transport.unbind_peer(peer_device_id)?;
-            self.transport.disconnect_transport_peer(&endpoint)?;
-            return Err("registry_sync_digest_mismatch".into());
+            let mut peers = self.peers.lock().await;
+            if let Some(peer) = peers.get_mut(peer_device_id) {
+                if let RelayRegistryAdmission::Exchanging(state) = &peer.registry_admission {
+                    if state.retry_count >= MAX_REGISTRY_EXCHANGE_RETRIES {
+                        peer.registry_admission = RelayRegistryAdmission::Waiting;
+                    }
+                }
+            }
+            return Ok(());
         }
         {
             let mut peers = self.peers.lock().await;
