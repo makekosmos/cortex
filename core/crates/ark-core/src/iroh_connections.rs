@@ -84,6 +84,7 @@ fn is_pre_admission_control_message(message: &LanSyncMessage) -> bool {
             | LanSyncMessage::RegistryEventsPage { .. }
             | LanSyncMessage::RegistrySyncReady { .. }
             | LanSyncMessage::RegistryEventUpdate { .. }
+            | LanSyncMessage::SyncPolicy { .. }
     )
 }
 

@@ -7,6 +7,7 @@ impl RelaySync {
         defer_initial_sync: bool,
     ) {
         if registry_exchange::is_user_data_message(&msg)
+            && !matches!(&msg, LanSyncMessage::SyncPolicy { .. })
             && !self
                 .registry_ready_for_peer(&from_device_id, transport_public_key.as_deref())
                 .await
@@ -286,6 +287,10 @@ impl RelaySync {
                 let Some(endpoint) = transport_public_key.as_deref() else {
                     return;
                 };
+                if !self.transport_key_matches(&from_device_id, endpoint).await {
+                    let _ = self.transport.disconnect_transport_peer(endpoint);
+                    return;
+                }
                 let negotiated = self
                     .peers
                     .lock()
