@@ -1,5 +1,8 @@
 use super::*;
 
+#[cfg(test)]
+mod iroh_tests;
+
 impl RelaySync {
     pub(super) async fn registry_ready_for_peer(
         &self,
@@ -144,7 +147,8 @@ impl RelaySync {
                 let control_events: Vec<crate::domain::device_registry::RegistryEvent> = events
                     .iter()
                     .filter(|event| {
-                        event.target_device_id().as_str() == control_target
+                        Some(device_id.as_str()) != origin_device_id
+                            && event.target_device_id().as_str() == control_target
                             && matches!(
                                 event.operation(),
                                 crate::domain::device_registry::RegistryOperation::Disable
