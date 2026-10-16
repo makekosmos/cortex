@@ -88,6 +88,8 @@ Two independent Luna candidates converged on per-author signed event history, ex
 
 The transport now parks the dialer's first responder Hello until it receives `PairingAccepted` from the exact Iroh endpoint and matching device ID. The responder persists the endpoint binding before sending that control frame, and it defers the initial VersionVector until the frame is sent. Pairing integration tests confirm that pending endpoints stay offline, exchange no objects, and reconnect after acceptance.
 
-The signed registry event log, durable admission projection, registry exchange, and shared `ReadyPeer` gate are not implemented. KOS-429 remains open; no later issue may treat the pairing control frame as the registry barrier.
+`domain::device_registry` now defines validated device IDs, display names, signing public keys, registry operations, signed event drafts, and a verified-event wrapper. Event signing uses a versioned, domain-separated canonical payload. Verification binds the actor and key epoch, rejects weak Ed25519 keys, and checks the per-author sequence link and HLC. Golden signature and event-hash tests pin the encoding.
+
+The signed registry event log in SQLite, durable admission projection, registry exchange, and shared `ReadyPeer` gate are still missing. KOS-429 remains open. No later issue may treat `PairingAccepted` as the registry barrier.
 
 Implementation must update this document if a source constraint requires a different contract before downstream code relies on it.

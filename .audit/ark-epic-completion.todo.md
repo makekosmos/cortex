@@ -22,6 +22,7 @@ Rigor: high. The work changes persistent storage, authorization, replication and
 - [x] Cross-judge the sketches, screen design red flags and reconcile the chosen contract with the source map.
 - [ ] Implement KOS-429 in separately verified commits, updating the contract for any accepted deviation.
   - [x] Gate new pairing on endpoint-bound `PairingAccepted`; verify pending data isolation.
+  - [x] Add the signed registry event domain model, canonical encoding, and verification tests.
   - [ ] Add signed registry events, durable projection, registry exchange, and shared `ReadyPeer` admission.
 - [ ] Implement and verify KOS-429, then KOS-422.
 - [ ] Implement and verify KOS-423, KOS-426, KOS-427 and KOS-428 against their separate acceptance criteria.
