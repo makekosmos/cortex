@@ -212,7 +212,7 @@
       "count": 4
     },
     {
-      "path": "core/crates/ark-core/src/integration_replication/signed_sync.rs",
+      "path": "core/crates/ark-core/src/db/backend/signed_integration.rs",
       "category": "SQLite mutation API",
       "count": 4
     },

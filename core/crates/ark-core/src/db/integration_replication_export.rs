@@ -127,7 +127,7 @@ fn load_vector_hlc(conn: &Connection, entity: &ExportEntity) -> Result<String, S
         })
 }
 
-fn entity_vector_key(entity: &IntegrationReplicationEntity) -> String {
+fn entity_vector_key(entity: &ExportEntity) -> String {
     let change = ExportChange {
         entity: entity.clone(),
         vector_hlc: "placeholder".into(),

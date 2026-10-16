@@ -1,12 +1,9 @@
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
-use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::signed_sync_encoding::{canonical_signing_bytes, decode_fixed};
 use super::{AuthorizedNode, IntegrationReplicationChange, NodeStatus};
-
-const SAVEPOINT: &str = "ark_signed_sync_replay";
 
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum SignedSyncError {
@@ -169,82 +166,9 @@ impl SignedSyncEnvelope {
     }
 }
 
-/// Verify, reserve, and apply a frame in one savepoint.
-pub fn verify_reserve_and_apply_signed_sync<T>(
-    conn: &Connection,
-    envelope: &SignedSyncEnvelope,
-    expected_space_id: &str,
-    expected_recipient_node_id: &str,
-    node: &AuthorizedNode,
-    reserved_at_ms: u64,
-    apply: impl FnOnce(&Connection, &VerifiedSyncEnvelope) -> Result<T, String>,
-) -> Result<T, SignedSyncError> {
-    let verified = envelope.verify(expected_space_id, expected_recipient_node_id, node)?;
-    let reserved_at_ms = i64::try_from(reserved_at_ms).map_err(|_| {
-        SignedSyncError::Storage("reserved_at_ms exceeds SQLite INTEGER range".into())
-    })?;
-    let key_epoch = i64::try_from(verified.key_epoch)
-        .map_err(|_| SignedSyncError::Storage("key_epoch exceeds SQLite INTEGER range".into()))?;
-    conn.execute_batch(&format!("SAVEPOINT {SAVEPOINT}"))
-        .map_err(|error| SignedSyncError::Storage(error.to_string()))?;
-    let result = conn.execute(
-        "INSERT INTO sync_signed_replay_reservations
-         (space_id, message_id, origin_node_id, key_epoch, reserved_at_ms)
-        VALUES (?1, ?2, ?3, ?4, ?5)",
-        params![
-            &verified.space_id,
-            &verified.message_id,
-            &verified.origin_node_id,
-            key_epoch,
-            reserved_at_ms,
-        ],
-    );
-    match result {
-        Ok(1) => match apply(conn, &verified) {
-            Ok(value) => match conn.execute_batch(&format!("RELEASE SAVEPOINT {SAVEPOINT}")) {
-                Ok(()) => Ok(value),
-                Err(error) => {
-                    rollback(conn);
-                    Err(SignedSyncError::Storage(error.to_string()))
-                }
-            },
-            Err(error) => {
-                rollback(conn);
-                Err(SignedSyncError::Apply(error))
-            }
-        },
-        Ok(_) => {
-            rollback(conn);
-            Err(SignedSyncError::Replay)
-        }
-        Err(error) => {
-            rollback(conn);
-            if is_constraint(&error) {
-                Err(SignedSyncError::Replay)
-            } else {
-                Err(SignedSyncError::Storage(error.to_string()))
-            }
-        }
-    }
-}
-
 fn require_text(value: &str, field: &'static str) -> Result<(), SignedSyncError> {
     if value.trim().is_empty() {
         return Err(SignedSyncError::EmptyField { field });
     }
     Ok(())
-}
-
-fn is_constraint(error: &rusqlite::Error) -> bool {
-    matches!(error, rusqlite::Error::SqliteFailure(code, _)
-        if code.code == rusqlite::ffi::ErrorCode::ConstraintViolation
-            && matches!(code.extended_code,
-                rusqlite::ffi::SQLITE_CONSTRAINT_PRIMARYKEY
-                    | rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE))
-}
-
-fn rollback(conn: &Connection) {
-    let _ = conn.execute_batch(&format!(
-        "ROLLBACK TO SAVEPOINT {SAVEPOINT}; RELEASE SAVEPOINT {SAVEPOINT}"
-    ));
 }

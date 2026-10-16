@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 // Canonical app identity + top-apps merge (KOS-287).
 //
 // `tracked_apps.id` historically hashed the full normalized exe path. Apps

@@ -8,6 +8,7 @@ mod canonical_object;
 mod entities;
 mod legacy_mutation;
 mod object_mutation;
+mod signed_integration;
 mod type_mutation;
 mod usage;
 
@@ -15,6 +16,7 @@ pub use apply::delete_tag;
 pub(crate) use canonical_object::SqliteObjectWriteSession;
 pub(crate) use legacy_mutation::SqliteLegacyMutationSession;
 pub(crate) use object_mutation::SqliteObjectMutationSession;
+pub(crate) use signed_integration::SqliteSignedIntegrationFrameSession;
 pub(crate) use type_mutation::SqliteTypeMutationSession;
 pub(crate) use usage::SqliteUsageWriteSession;
 

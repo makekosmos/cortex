@@ -144,13 +144,16 @@ impl DbCommand for ApplySignedIntegrationFrameCommand {
             .as_millis()
             .try_into()
             .unwrap_or(u64::MAX);
-        crate::db::apply_signed_integration_changes_in_transaction(
-            transaction,
-            &self.frame,
-            &self.expected_space_id,
-            &self.expected_recipient_node_id,
-            self.authenticated_transport_public_key.as_deref(),
-            reserved_at_ms,
+        let mut session = crate::db::SqliteSignedIntegrationFrameSession::new(transaction);
+        crate::application::signed_integration::apply_signed_integration_frame(
+            &mut session,
+            crate::application::signed_integration::ApplySignedIntegrationFrame {
+                envelope: self.frame,
+                expected_space_id: self.expected_space_id,
+                expected_recipient_node_id: self.expected_recipient_node_id,
+                authenticated_transport_public_key: self.authenticated_transport_public_key,
+                reserved_at_ms,
+            },
         )
         .map_err(|error: SignedSyncError| DbError::from_application_error(error.to_string()))
     }

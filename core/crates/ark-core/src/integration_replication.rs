@@ -39,7 +39,5 @@ pub use policy::{
     validate_envelope_recipient, validate_plaintext_free_payload, validate_public_settings,
     validate_refresh_publication,
 };
-pub use signed_sync::{
-    verify_reserve_and_apply_signed_sync, SignedSyncEnvelope, SignedSyncError, VerifiedSyncEnvelope,
-};
+pub use signed_sync::{SignedSyncEnvelope, SignedSyncError, VerifiedSyncEnvelope};
 pub use signed_sync_encoding::encode_hex;

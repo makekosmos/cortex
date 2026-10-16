@@ -53,35 +53,12 @@ fn signed(key: &SigningKey, origin: &str, epoch: u64) -> SignedSyncEnvelope {
 }
 
 #[test]
-fn signed_sync_binds_space_origin_epoch_payload_and_replay() {
+fn signed_sync_binds_space_origin_epoch_and_payload() {
     let key = SigningKey::from_bytes(&[7; 32]);
     let active = node(&key, NodeStatus::Active, 2);
-    let conn = rusqlite::Connection::open_in_memory().unwrap();
-    conn.execute_batch(crate::schema::CREATE_TABLES).unwrap();
     let frame = signed(&key, "node-a", 2);
-
-    verify_reserve_and_apply_signed_sync(
-        &conn,
-        &frame,
-        "space-a",
-        "node-b",
-        &active,
-        10,
-        |_, _| Ok(()),
-    )
-    .unwrap();
-    assert!(matches!(
-        verify_reserve_and_apply_signed_sync(
-            &conn,
-            &frame,
-            "space-a",
-            "node-b",
-            &active,
-            11,
-            |_, _| Ok(())
-        ),
-        Err(SignedSyncError::Replay)
-    ));
+    let verified = frame.verify("space-a", "node-b", &active).unwrap();
+    assert_eq!(verified.message_id, "message-a");
 
     assert!(matches!(
         frame.verify("space-b", "node-b", &active),
@@ -125,33 +102,4 @@ fn signed_sync_binds_space_origin_epoch_payload_and_replay() {
         frame.verify("space-a", "node-b", &revoked),
         Err(SignedSyncError::RevokedNode)
     ));
-
-    let mut failed = signed(&key, "node-a", 2);
-    failed.message_id = "message-b".into();
-    failed.signature = encode_hex(
-        &key.sign(&failed.canonical_signing_bytes().unwrap())
-            .to_bytes(),
-    );
-    assert!(matches!(
-        verify_reserve_and_apply_signed_sync(
-            &conn,
-            &failed,
-            "space-a",
-            "node-b",
-            &active,
-            12,
-            |_, _| { Err::<(), _>("apply failed".into()) }
-        ),
-        Err(SignedSyncError::Apply(_))
-    ));
-    verify_reserve_and_apply_signed_sync(
-        &conn,
-        &failed,
-        "space-a",
-        "node-b",
-        &active,
-        13,
-        |_, _| Ok(()),
-    )
-    .unwrap();
 }

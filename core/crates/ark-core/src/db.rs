@@ -11,6 +11,7 @@ mod command;
 pub(crate) use backend::SqliteLegacyMutationSession;
 pub(crate) use backend::SqliteObjectMutationSession;
 pub(crate) use backend::SqliteObjectWriteSession;
+pub(crate) use backend::SqliteSignedIntegrationFrameSession;
 pub(crate) use backend::SqliteTypeMutationSession;
 pub(crate) use backend::SqliteUsageWriteSession;
 pub use backend::{delete_tag, SqliteStorageBackend};
