@@ -8,6 +8,7 @@ mod object_read;
 mod sync_mutation;
 mod sync_read;
 mod system_mutation;
+mod system_read;
 mod type_mutation;
 mod type_read;
 mod usage;
@@ -40,6 +41,7 @@ pub(crate) use sync_read::{
 pub(crate) use system_mutation::{
     ClearAllCommand, CompactUsageSyncLogCommand, DeleteTrashedCommand, RestoreSnapshotCommand,
 };
+pub(crate) use system_read::SystemReadQuery;
 pub(crate) use type_mutation::{
     DeleteObjectLinkCommand, DeleteObjectTypeCommand, RegisterPackageTypesCommand,
     ReplaceObjectLinkCommand, UpsertObjectLinkCommand, UpsertObjectTypeCommand,

@@ -2,10 +2,13 @@ use super::*;
 use crate::data_platform::ExternalRefUpsert;
 
 pub(super) async fn get_sync_kv(state: &Arc<ServiceState>, key: String) -> Result<Value, String> {
-    with_conn(state, |conn| {
-        let value = db::get_sync_kv(conn, &key)?;
-        Ok(json!(value))
-    })
+    get_db_handle(state)?
+        .query(
+            db::CommandContext::engine(),
+            db::SystemReadQuery::SyncKeyValue(key),
+        )
+        .await
+        .map_err(|error| error.to_string())
 }
 
 pub(super) async fn set_sync_kv(
@@ -113,10 +116,13 @@ pub(super) async fn db_backup_validate(
     backup_id: String,
 ) -> Result<Value, String> {
     let db_path = current_db_path(state)?;
-    with_conn(state, |conn| {
-        let validation = db::validate_snapshot(conn, &db_path, &backup_id)?;
-        serde_json::to_value(validation).map_err(|e| e.to_string())
-    })
+    get_db_handle(state)?
+        .query(
+            db::CommandContext::engine(),
+            db::SystemReadQuery::ValidateSnapshot { db_path, backup_id },
+        )
+        .await
+        .map_err(|error| error.to_string())
 }
 
 // KOS-51: атомарный restore. Порядок захвата: BACKUP_GATE → DB handle.

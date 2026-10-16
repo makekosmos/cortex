@@ -26,8 +26,8 @@ pub(crate) use command::{
     PersistIntegrationGrantCommand, PersistNodeAuthorizationCommand,
     PublishIntegrationCredentialEnvelopeCommand, RegisterPackageTypesCommand,
     ReplaceObjectLinkCommand, RestoreSnapshotCommand, SetLocalSyncKeyValueCommand,
-    SetSyncKeyValueCommand, TrackedAppDeleteCommand, TrackedAppUpsertCommand, TypeReadQuery,
-    UpsertExternalRefCommand, UpsertObjectLinkCommand, UpsertObjectTypeCommand,
+    SetSyncKeyValueCommand, SystemReadQuery, TrackedAppDeleteCommand, TrackedAppUpsertCommand,
+    TypeReadQuery, UpsertExternalRefCommand, UpsertObjectLinkCommand, UpsertObjectTypeCommand,
     UsageCompleteThroughQuery, UsageReadQuery, ValidateOutboundSignedFrameQuery,
 };
 include!("db/integration_replication_common.rs");
