@@ -46,6 +46,121 @@ async fn open_publishes_only_a_database_ready_for_commands() {
 }
 
 #[tokio::test]
+async fn application_object_write_rolls_back_sqlite_transaction_on_port_error() {
+    let directory = tempfile::tempdir().unwrap();
+    let db_path = directory
+        .path()
+        .join("object-write.db")
+        .to_string_lossy()
+        .into_owned();
+    let (handle, mut owner) = DbHandle::open(db_path, "transaction-port-device".into())
+        .await
+        .unwrap();
+
+    handle.with_connection(|connection| {
+        connection
+            .execute_batch(
+                "CREATE TRIGGER reject_object_write_receipt
+                 BEFORE INSERT ON entity_write_receipts
+                 BEGIN
+                     SELECT RAISE(ABORT, 'injected application port failure');
+                 END;",
+            )
+            .unwrap();
+    });
+
+    let object = crate::types::ArkObjectWrite {
+        id: "transaction-port-rollback".into(),
+        type_id: "core.task".into(),
+        type_version: Some("0.1.0".into()),
+        title: "Must roll back".into(),
+        content_json: serde_json::json!({
+            "type": "doc",
+            "content": [{ "type": "paragraph" }]
+        }),
+        props_json: serde_json::json!({
+            "state": {"kind": "open", "at": null},
+            "planning": {"kind": "inbox", "period": "any", "date": null},
+            "deadline": null,
+            "reminders": [],
+            "recurrence": null,
+            "priority": "none",
+            "checklist": [],
+            "extensions": {}
+        }),
+        created_at: "2026-10-16T00:00:00.000Z".into(),
+        updated_at: "2026-10-16T00:00:00.000Z".into(),
+        deleted_at: None,
+    };
+
+    let failed = handle
+        .submit(
+            CommandContext::engine(),
+            LocalCoreTaskWrite::new(object.clone(), None, Some("transaction-port-device".into())),
+        )
+        .await
+        .unwrap_err();
+    assert!(
+        format!("{failed:?}").contains("injected application port failure"),
+        "expected the injected SQLite port failure, got {failed:?}"
+    );
+
+    let persisted_counts = handle.with_connection(|connection| {
+        let objects: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM objects WHERE id = ?1",
+                [&object.id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let revisions: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM object_sync_versions WHERE object_id = ?1",
+                [&object.id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let receipts: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM entity_write_receipts WHERE entity_id = ?1",
+                [&object.id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        (objects, revisions, receipts)
+    });
+    assert_eq!(persisted_counts, (0, 0, 0));
+
+    handle.with_connection(|connection| {
+        connection
+            .execute_batch("DROP TRIGGER reject_object_write_receipt;")
+            .unwrap();
+    });
+    handle
+        .submit(
+            CommandContext::engine(),
+            LocalCoreTaskWrite::new(object.clone(), None, Some("transaction-port-device".into())),
+        )
+        .await
+        .unwrap();
+    let persisted = handle.with_connection(|connection| {
+        connection
+            .query_row(
+                "SELECT COUNT(*) FROM objects WHERE id = ?1",
+                [&object.id],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap()
+    });
+    assert_eq!(persisted, 1);
+
+    owner
+        .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
 async fn open_rejects_an_unreadable_database_before_returning_a_handle() {
     let directory = tempfile::tempdir().unwrap();
     let db_path = directory.path().join("not-a-database.db");
