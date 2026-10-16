@@ -130,6 +130,11 @@ async fn pending_pairing() -> (ServiceFixture, ServiceFixture, String) {
         pending_request(&snapshot(&fixture_a.state).await, "device-b").is_some()
     })
     .await;
+    let snapshot_b = snapshot(&fixture_b.state).await;
+    assert!(
+        !peer_online(&snapshot_b, "device-a"),
+        "the dialer must not admit the responder before it accepts pairing: {snapshot_b}"
+    );
     (fixture_a, fixture_b, ticket)
 }
 

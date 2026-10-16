@@ -221,7 +221,8 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
         | LanSyncMessage::PeerList { .. }
         | LanSyncMessage::Ping { .. }
         | LanSyncMessage::Pong { .. }
-        | LanSyncMessage::PairingRejected { .. }) => {
+        | LanSyncMessage::PairingRejected { .. }
+        | LanSyncMessage::PairingAccepted { .. }) => {
             handle_live_message(ctx, peer_id, message).await;
         }
     }

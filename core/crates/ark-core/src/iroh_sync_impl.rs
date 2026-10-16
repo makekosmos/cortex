@@ -322,9 +322,11 @@ impl SyncTransport for IrohTransport {
         transport_public_key: &str,
         msg: LanSyncMessage,
     ) -> Result<(), String> {
-        // Only handshake-level replies may reach a not-yet-trusted endpoint.
-        if !matches!(msg, LanSyncMessage::PairingRejected { .. }) {
-            return Err("iroh transport-key send only supports pairing replies".into());
+        if !matches!(
+            msg,
+            LanSyncMessage::PairingRejected { .. } | LanSyncMessage::PairingAccepted { .. }
+        ) {
+            return Err("iroh transport-key send only supports pairing decisions".into());
         }
         let endpoint_id: EndpointId = transport_public_key
             .parse()

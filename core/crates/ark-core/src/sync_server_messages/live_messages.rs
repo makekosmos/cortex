@@ -87,6 +87,7 @@ pub(super) async fn handle_live_message(ctx: &MessageContext, peer_id: usize, ms
         // Pairing consent lives on the addressed (iroh) transport; a
         // rejection over the WS path is meaningless — drop it.
         LanSyncMessage::PairingRejected { .. } => {}
+        LanSyncMessage::PairingAccepted { .. } => {}
 
         _ => {}
     }

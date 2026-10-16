@@ -2,9 +2,8 @@
 // here until a human presses «Принять»/«Отклонить», and the initiator's own
 // attempt resolves through `outgoing_pairing` in the snapshot.
 impl RelaySync {
-    /// Mark `endpoint` as the device whose code this side entered. Its Hello
-    /// is pre-consented (entering the code is the consent), and a
-    /// `PairingRejected` from it resolves the attempt as declined.
+    /// Record the ticket endpoint before dialing so only its `PairingAccepted`
+    /// can complete this attempt.
     pub async fn begin_outgoing_pairing(&self, endpoint: String) {
         *self.outgoing_pairing.lock().await = Some(OutgoingPairing {
             endpoint,
@@ -15,8 +14,7 @@ impl RelaySync {
         self.notify_pairing_changed().await;
     }
 
-    /// The responder consented — a post-accept Hello or a data frame from
-    /// the endpoint we dialed.
+    /// The responder accepted the pairing request on the endpoint we dialed.
     async fn mark_outgoing_accepted(&self, transport_public_key: &str) {
         let mut guard = self.outgoing_pairing.lock().await;
         match guard.as_mut() {
@@ -38,6 +36,7 @@ impl RelaySync {
             outgoing.declined = true;
         }
         self.peers.lock().await.remove(responder_device_id);
+        self.pending_responder_hellos.lock().await.remove(endpoint);
         self.transport_keys.lock().await.remove(responder_device_id);
         let mut keys = match crate::sync_server::load_peer_transport_keys(&self.storage).await {
             Ok(keys) => keys,
@@ -126,27 +125,75 @@ impl RelaySync {
         transport_public_key: String,
         msg: LanSyncMessage,
         mut paired_keys: HashMap<String, String>,
-    ) {
-        let _ = self
-            .transport
-            .bind_authenticated_peer(&from_device_id, &transport_public_key);
+        send_pairing_accepted: bool,
+    ) -> Result<(), String> {
+        let previous_paired_keys = paired_keys.clone();
+        self.transport
+            .bind_authenticated_peer(&from_device_id, &transport_public_key)?;
         self.transport_keys
             .lock()
             .await
             .insert(from_device_id.clone(), transport_public_key.clone());
-        self.handle_message(from_device_id.clone(), msg, None).await;
+        self.handle_message(from_device_id.clone(), msg, None, send_pairing_accepted)
+            .await;
         if self.is_authenticated_peer(&from_device_id).await {
             if paired_keys.get(&from_device_id) != Some(&transport_public_key) {
-                paired_keys.insert(from_device_id, transport_public_key);
+                paired_keys.insert(from_device_id.clone(), transport_public_key.clone());
                 if let Err(error) =
                     crate::sync_server::save_peer_transport_keys(&self.storage, &paired_keys).await
                 {
-                    eprintln!("[RelaySync] failed to persist pairing keys: {error}");
+                    self.rollback_transport_admission(&from_device_id, &transport_public_key)
+                        .await;
+                    return Err(format!("failed to persist pairing identity: {error}"));
                 }
             }
+            if send_pairing_accepted {
+                if let Err(error) = self
+                    .transport
+                    .send_to_transport_peer(
+                        &transport_public_key,
+                        LanSyncMessage::PairingAccepted {
+                            device_id: self.config.device_id.clone(),
+                        },
+                    )
+                    .await
+                {
+                    self.rollback_transport_admission(&from_device_id, &transport_public_key)
+                        .await;
+                    if let Err(rollback_error) = crate::sync_server::save_peer_transport_keys(
+                        &self.storage,
+                        &previous_paired_keys,
+                    )
+                    .await
+                    {
+                        eprintln!(
+                            "[RelaySync] failed to roll back pairing identity: {rollback_error}"
+                        );
+                    }
+                    return Err(format!("failed to send pairing acceptance: {error}"));
+                }
+                self.send_local_version_vector().await;
+            }
+            Ok(())
         } else {
-            let _ = self.transport.unbind_authenticated_peer(&from_device_id);
-            self.transport_keys.lock().await.remove(&from_device_id);
+            self.rollback_transport_admission(&from_device_id, &transport_public_key)
+                .await;
+            Err(format!(
+                "pairing handshake with {from_device_id} did not authenticate"
+            ))
+        }
+    }
+
+    async fn rollback_transport_admission(&self, device_id: &str, endpoint: &str) {
+        self.peers.lock().await.remove(device_id);
+        self.transport_keys.lock().await.remove(device_id);
+        let _ = self.transport.unbind_authenticated_peer(device_id);
+        let _ = self.transport.disconnect_transport_peer(endpoint);
+        if let Err(error) = crate::sync_server::remove_peer_record(&self.storage, device_id).await {
+            eprintln!("[RelaySync] failed to roll back peer record: {error}");
+        }
+        if let Some(handler) = self.on_peer_disconnect.lock().await.as_ref() {
+            handler(device_id.to_string(), self.peers.lock().await.len());
         }
     }
 
@@ -168,7 +215,7 @@ impl RelaySync {
 
     /// Outbound pairing attempt for the snapshot: `pending` while waiting on
     /// the other side's human, `declined` on an explicit `PairingRejected`,
-    /// `connected` once the ticketed endpoint authenticated.
+    /// `connected` once the ticketed endpoint explicitly accepts.
     pub async fn outgoing_pairing_status(&self) -> Option<serde_json::Value> {
         let outgoing = self.outgoing_pairing.lock().await.clone()?;
         let endpoint = outgoing.endpoint.clone();
@@ -210,8 +257,9 @@ impl RelaySync {
             request.transport_public_key,
             request.hello,
             paired_keys,
+            true,
         )
-        .await;
+        .await?;
         self.notify_pairing_changed().await;
         let peers = self.peers.lock().await;
         peers

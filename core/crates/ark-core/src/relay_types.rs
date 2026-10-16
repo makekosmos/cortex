@@ -55,17 +55,11 @@ struct PendingPairingRequest {
     hello: LanSyncMessage,
 }
 
-/// Our own outbound pairing attempt (this device entered a code). The
-/// endpoint id ties consent to the ticketed device — its Hello is
-/// pre-consented by the user's own «Подключить».
 #[derive(Clone)]
 struct OutgoingPairing {
     endpoint: String,
     started_at: Instant,
     declined: bool,
-    /// The responder actually consented: it sent a second Hello (the accept
-    /// broadcast) or data. The conn-setup Hello alone proves nothing —
-    /// listeners inject it before a human decides.
     accepted: bool,
 }
 
@@ -91,6 +85,7 @@ pub struct RelaySync {
     /// First-contact Hellos awaiting «Принять / Отклонить», keyed by the
     /// claimed device id.
     pending_pairing: Mutex<HashMap<String, PendingPairingRequest>>,
+    pending_responder_hellos: Mutex<HashMap<String, LanSyncMessage>>,
     /// Recently declined device ids — their Hellos are dropped without
     /// re-prompting until the suppression lapses.
     declined_pairing: Mutex<HashMap<String, Instant>>,

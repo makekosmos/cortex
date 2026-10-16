@@ -17,13 +17,28 @@ fn pairing_rejected_message_roundtrips_and_unknown_frames_drop() {
     );
 }
 
+#[test]
+fn pairing_accepted_is_a_device_identified_control_frame() {
+    let msg = LanSyncMessage::PairingAccepted {
+        device_id: "device-b".to_string(),
+    };
+    let raw = serialize_message(&msg);
+    assert_eq!(deserialize_message(&raw), Some(msg.clone()));
+    assert_eq!(
+        crate::protocol::message_origin_device_id(&msg).as_deref(),
+        Some("device-b")
+    );
+}
+
 /// The exact ticket from the KOS-367 report must decode to the reported
 /// EndpointId — the wire format was never the problem.
 #[test]
 fn reported_ticket_decodes() {
-    let addr = crate::iroh_transport::from_ticket(
-        "endpointaa2bzzly2lh3s442nsu6ttlbfvozdcyk5xj6qzw7qcf7xbuxv5mxubaaenuhi5dqom5c6l3fovrtcljrfzzgk3dbpexg4mbonfzg62bonruw42zof4aqacqaaabndmydaeaj3liztwc3uaqbadakqaky2gzqg",
-    )
+    let addr = crate::iroh_transport::from_ticket(concat!(
+        "endpointaa2bzzly2lh3s442nsu6ttlbfvozdcyk5xj6qzw7qcf7xbuxv5mxubaa",
+        "enuhi5dqom5c6l3fovrtcljrfzzgk3dbpexg4mbonfzg62bonruw42zof4aqacqa",
+        "aabndmydaeaj3liztwc3uaqbadakqaky2gzqg"
+    ))
     .expect("the reported ticket is a valid EndpointTicket");
     assert_eq!(
         addr.id.to_string(),

@@ -143,6 +143,12 @@ pub enum LanSyncMessage {
     #[serde(rename = "pairing_rejected")]
     PairingRejected { device_id: String },
 
+    /// Sent by the device that received a pairing request only after the
+    /// user accepts it. The sender is still identified by the transport key;
+    /// this field must match the Hello parked for that endpoint.
+    #[serde(rename = "pairing_accepted")]
+    PairingAccepted { device_id: String },
+
     #[serde(rename = "peer_list")]
     PeerList { peers: Vec<PeerRecord> },
 
@@ -173,9 +179,9 @@ pub fn deserialize_message(raw: &str) -> Option<LanSyncMessage> {
 
 pub fn message_origin_device_id(msg: &LanSyncMessage) -> Option<String> {
     match msg {
-        LanSyncMessage::Hello { device_id, .. } | LanSyncMessage::PairingRejected { device_id } => {
-            Some(device_id.clone())
-        }
+        LanSyncMessage::Hello { device_id, .. }
+        | LanSyncMessage::PairingRejected { device_id }
+        | LanSyncMessage::PairingAccepted { device_id } => Some(device_id.clone()),
         LanSyncMessage::ProtocolRejected {
             origin_device_id, ..
         } => Some(origin_device_id.clone()),

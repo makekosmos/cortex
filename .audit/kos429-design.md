@@ -52,13 +52,15 @@ Each write command checks the current actor admission, allocates its next sequen
 
 ## Session protocol
 
-The session state is `TransportConnected -> HelloVerified -> RegistryExchange -> DataReady`. `authenticated` or an Iroh endpoint binding alone is not data readiness. On reconnect, readiness starts over.
+The session state is `TransportConnected -> HelloVerified -> PairingDecision -> RegistryExchange -> DataReady`. `authenticated` or an Iroh endpoint binding alone is not data readiness. On reconnect, readiness starts over.
+
+The device that receives a new pairing request parks the first Hello and asks for user consent. The device that entered the pairing code also parks the responder's first transport Hello. Neither side installs an authenticated sync peer or sends VersionVector while consent is pending. After the user accepts, the responder commits the pairing and enrollment event, then sends a `PairingAccepted` control frame to the exact transport endpoint. The initiator accepts that frame only for its active pairing attempt and the endpoint it dialed. It then proves its own admission and starts registry exchange. `PairingAccepted` alone does not open data exchange; both peers still reach `DataReady` only after registry history is verified and both sides confirm admission.
 
 The registry capability is mandatory for data admission. Existing protocol negotiation authenticates the selected capability list. A peer without the capability gets a bounded `upgrade_required` control refusal and closes before data. Unknown-field tolerance is not compatibility. Current clients all move together to this cutover; no old-peer fallback may exchange user data.
 
 Both peers exchange bounded signed event pages and their per-actor cursors until all available contiguous registry history is applied and each side confirms the peer remains active. An unsupported message, bad proof, oversized page, sequence gap, persistence error, or disabled peer keeps the session out of `DataReady`. Gaps request replay and survive reconnect. Duplicate events are idempotent.
 
-Every data path requires `ReadyPeer`: VersionVector, SyncChanges, LiveChange, PeerList handling, signed integration frames, ACKs, snapshot pages, committed feeds, and queued outbound work. The Iroh writer permits only Hello, pairing responses, and registry control before readiness. Direct WebSocket client and server must use the same barrier. `PeerList` remains discovery-only.
+Every data path requires `ReadyPeer`: VersionVector, SyncChanges, LiveChange, PeerList handling, signed integration frames, ACKs, snapshot pages, committed feeds, and queued outbound work. The Iroh writer permits only Hello, pairing responses, PairingAccepted, and registry control before readiness. Direct WebSocket client and server must use the same barrier. `PeerList` remains discovery-only.
 
 After a disable event commits, mark all matching sessions not ready, close them, cancel queued sends, and reject every inbound/outbound user-data handler. A disabled peer may only complete the restricted control exchange needed to receive the signed history containing its tombstone, then the session closes. It cannot author registry updates or send data. Offline peers learn the event when they reconnect to an admitted peer; the contract is eventual, not instantaneous revocation of a disconnected device. Data already copied to a device is not remotely erased.
 
@@ -76,10 +78,16 @@ See `.audit/kos429-grounding.md` and `/tmp/kos429-how.md`. The baseline `accept_
 
 ## Verification contract
 
-Use production SQLite and actual WebSocket/Iroh session code. Prove rename propagation and restart, host-name fallback, deterministic concurrent rename, atomic pairing persistence before `DataReady`, and disabled-session teardown. Before data readiness, assert no VersionVector, PeerList, entity, ACK, or feed is sent or applied. Reject old peers, forged IDs, bad signatures, gaps, replay, stale active records, and data queued before disable. Prove offline disable delivery on reconnect and local disconnect without registry mutation. Keep golden Hello and PeerList fixtures unchanged except the negotiated capability fields. Verify Engine operations and Manager use the service boundary without direct database access.
+Use production SQLite and actual WebSocket/Iroh session code. Prove rename propagation and restart, host-name fallback, deterministic concurrent rename, atomic pairing persistence before `DataReady`, and disabled-session teardown. Before user consent and before data readiness, assert no VersionVector, PeerList, entity, ACK, or feed is sent or applied. Reject old peers, forged IDs, bad signatures, gaps, replay, stale active records, and data queued before disable. Prove offline disable delivery on reconnect and local disconnect without registry mutation. Keep golden Hello and PeerList fixtures unchanged except the negotiated capability fields. Verify Engine operations and Manager use the service boundary without direct database access.
 
 ## Arena record
 
 Two independent Luna candidates converged on per-author signed event history, explicit durable enrollment, and one pre-data barrier. Candidate B is the base for `ReadyPeer`, retry semantics, and full transport gates. The cross-judge preferred B 22–21. Candidate A's explicit separation of transport identity from device policy informed the selected key-epoch transition, but its extra signing key is rejected because the current persisted Iroh identity already provides the required signature API and durable pairing anchor. The independent reviewer also flagged the arbitrary six-device cap and unbounded checkpoint claims; this design removes the cap and defers compaction rather than inventing a retention rule.
 
-No implementation has been made yet. Implementation must update this document if a source constraint requires a different contract before downstream code relies on it.
+## Implementation progress
+
+The transport now parks the dialer's first responder Hello until it receives `PairingAccepted` from the exact Iroh endpoint and matching device ID. The responder persists the endpoint binding before sending that control frame, and it defers the initial VersionVector until the frame is sent. Pairing integration tests confirm that pending endpoints stay offline, exchange no objects, and reconnect after acceptance.
+
+The signed registry event log, durable admission projection, registry exchange, and shared `ReadyPeer` gate are not implemented. KOS-429 remains open; no later issue may treat the pairing control frame as the registry barrier.
+
+Implementation must update this document if a source constraint requires a different contract before downstream code relies on it.

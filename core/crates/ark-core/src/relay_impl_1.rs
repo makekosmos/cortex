@@ -34,6 +34,7 @@ impl RelaySync {
             peers: Arc::new(Mutex::new(HashMap::new())),
             transport_keys: Arc::new(Mutex::new(HashMap::new())),
             pending_pairing: Mutex::new(HashMap::new()),
+            pending_responder_hellos: Mutex::new(HashMap::new()),
             declined_pairing: Mutex::new(HashMap::new()),
             outgoing_pairing: Mutex::new(None),
             incoming_sync: Arc::new(Mutex::new(None)),
@@ -142,6 +143,7 @@ impl RelaySync {
         from_device_id: String,
         msg: LanSyncMessage,
         transport_public_key: Option<String>,
+        defer_initial_sync: bool,
     ) {
         match msg {
             LanSyncMessage::Hello {
@@ -319,7 +321,9 @@ impl RelaySync {
                     let _ = self.transport.send(self.make_hello());
                 }
 
-                self.send_local_version_vector().await;
+                if !defer_initial_sync {
+                    self.send_local_version_vector().await;
+                }
             }
 
             LanSyncMessage::VersionVector {
