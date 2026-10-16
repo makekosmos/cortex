@@ -129,10 +129,14 @@ pub(super) async fn integration_acquire_refresh_lease(
     state: &Arc<ServiceState>,
     params: crate::db::RefreshLeaseAcquireParams,
 ) -> Result<Value, String> {
-    with_conn(state, |conn| {
-        let lease = crate::db::try_acquire_integration_refresh_lease(conn, &params)?;
-        serde_json::to_value(lease).map_err(|error| error.to_string())
-    })
+    let lease = get_db_handle(state)?
+        .submit(
+            db::CommandContext::engine(),
+            db::AcquireIntegrationRefreshLeaseCommand::new(params),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    serde_json::to_value(lease).map_err(|error| error.to_string())
 }
 
 pub(super) async fn integration_publish_credential_envelope(
@@ -141,10 +145,14 @@ pub(super) async fn integration_publish_credential_envelope(
     device_id: String,
     now_ms: u64,
 ) -> Result<Value, String> {
-    with_conn(state, |conn| {
-        crate::db::publish_integration_credential_envelope(conn, &envelope, &device_id, now_ms)?;
-        Ok(json!(true))
-    })
+    get_db_handle(state)?
+        .submit(
+            db::CommandContext::engine(),
+            db::PublishIntegrationCredentialEnvelopeCommand::new(envelope, device_id, now_ms),
+        )
+        .await
+        .map(|()| json!(true))
+        .map_err(|error| error.to_string())
 }
 
 pub(super) async fn integration_load_latest_credential_envelope(

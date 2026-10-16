@@ -15,13 +15,14 @@ pub(crate) use backend::SqliteTypeMutationSession;
 pub(crate) use backend::SqliteUsageWriteSession;
 pub use backend::{delete_tag, SqliteStorageBackend};
 pub(crate) use command::{
-    ApplyAuthenticatedSyncEntityCommand, ApplySignedIntegrationFrameCommand,
-    ApplySyncEntityCommand, AuthenticatedCoreTaskWrite, AuthorizedTransportKeyQuery,
-    CanonicalGameUpsertCommand, CommandClass, CommandContext, DbHandle, DeleteObjectLinkCommand,
-    DeleteObjectTypeCommand, GetSyncKeyValueQuery, IdentityErrorStyle, LegacyDeleteCommand,
-    LegacyGraphWriteCommand, LoadEntitiesQuery, LocalBookCoverCommand, LocalCoreTaskWrite,
-    LocalObjectDeleteCommand, LocalObjectUpsertCommand, LocalUsageWriteCommand,
-    PersistIntegrationGrantCommand, PersistNodeAuthorizationCommand, RegisterPackageTypesCommand,
+    AcquireIntegrationRefreshLeaseCommand, ApplyAuthenticatedSyncEntityCommand,
+    ApplySignedIntegrationFrameCommand, ApplySyncEntityCommand, AuthenticatedCoreTaskWrite,
+    AuthorizedTransportKeyQuery, CanonicalGameUpsertCommand, CommandClass, CommandContext,
+    DbHandle, DeleteObjectLinkCommand, DeleteObjectTypeCommand, GetSyncKeyValueQuery,
+    IdentityErrorStyle, LegacyDeleteCommand, LegacyGraphWriteCommand, LoadEntitiesQuery,
+    LocalBookCoverCommand, LocalCoreTaskWrite, LocalObjectDeleteCommand, LocalObjectUpsertCommand,
+    LocalUsageWriteCommand, PersistIntegrationGrantCommand, PersistNodeAuthorizationCommand,
+    PublishIntegrationCredentialEnvelopeCommand, RegisterPackageTypesCommand,
     ReplaceObjectLinkCommand, SetLocalSyncKeyValueCommand, SetSyncKeyValueCommand,
     TrackedAppDeleteCommand, TrackedAppUpsertCommand, UpsertExternalRefCommand,
     UpsertObjectLinkCommand, UpsertObjectTypeCommand, UsageCompleteThroughQuery,

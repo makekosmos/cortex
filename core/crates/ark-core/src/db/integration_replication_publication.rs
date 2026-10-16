@@ -1,6 +1,6 @@
 /// Params of `integration.acquire_refresh_lease` — the `Request` newtype
 /// variant wraps this struct so wire fields and the db call share one shape.
-#[derive(Clone, Debug, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct RefreshLeaseAcquireParams {
     pub integration_id: String,
     pub holder_node_id: String,
@@ -16,6 +16,22 @@ pub fn try_acquire_integration_refresh_lease(
     conn: &Connection,
     params: &RefreshLeaseAcquireParams,
 ) -> Result<ReplicatedRefreshLease, String> {
+    with_immediate_integration_write(conn, || {
+        try_acquire_integration_refresh_lease_inner(conn, params)
+    })
+}
+
+pub(crate) fn try_acquire_integration_refresh_lease_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    params: &RefreshLeaseAcquireParams,
+) -> Result<ReplicatedRefreshLease, String> {
+    try_acquire_integration_refresh_lease_inner(transaction, params)
+}
+
+fn try_acquire_integration_refresh_lease_inner(
+    conn: &Connection,
+    params: &RefreshLeaseAcquireParams,
+) -> Result<ReplicatedRefreshLease, String> {
     let RefreshLeaseAcquireParams {
         integration_id,
         holder_node_id,
@@ -28,43 +44,41 @@ pub fn try_acquire_integration_refresh_lease(
     if holder_node_id != device_id {
         return Err("refresh lease holder must be the local node".into());
     }
-    with_immediate_integration_write(conn, || {
-        let published_generation = conn
-            .query_row(
-                "SELECT MAX(credential_generation)
+    let published_generation = conn
+        .query_row(
+            "SELECT MAX(credential_generation)
                  FROM integration_credential_envelopes WHERE integration_id = ?1",
-                [integration_id],
-                |row| row.get::<_, Option<i64>>(0),
-            )
-            .map_err(storage)?
-            .map(|value| u64_value(value, "credential_generation"))
-            .transpose()?;
-        if published_generation.is_some_and(|current| *credential_generation <= current) {
-            return Err(IntegrationContractError::NonMonotonic {
-                field: "credential_generation",
-            }
-            .to_string());
-        }
-        let current = load_integration_refresh_lease(conn, integration_id)?;
-        let actual_fence = current.as_ref().map_or(0, |lease| lease.fencing_token);
-        if actual_fence != *expected_fencing_token {
-            return Err(IntegrationContractError::Mismatch {
-                field: "expected_fencing_token",
-            }
-            .to_string());
-        }
-        let lease = crate::integration_replication::acquire_refresh_lease(
-            current.as_ref(),
-            integration_id,
-            holder_node_id,
-            *credential_generation,
-            *now_ms,
-            *ttl_ms,
+            [integration_id],
+            |row| row.get::<_, Option<i64>>(0),
         )
-        .map_err(|error| error.to_string())?;
-        upsert_integration_refresh_lease_record(conn, &lease, device_id, false)?;
-        Ok(lease)
-    })
+        .map_err(storage)?
+        .map(|value| u64_value(value, "credential_generation"))
+        .transpose()?;
+    if published_generation.is_some_and(|current| *credential_generation <= current) {
+        return Err(IntegrationContractError::NonMonotonic {
+            field: "credential_generation",
+        }
+        .to_string());
+    }
+    let current = load_integration_refresh_lease(conn, integration_id)?;
+    let actual_fence = current.as_ref().map_or(0, |lease| lease.fencing_token);
+    if actual_fence != *expected_fencing_token {
+        return Err(IntegrationContractError::Mismatch {
+            field: "expected_fencing_token",
+        }
+        .to_string());
+    }
+    let lease = crate::integration_replication::acquire_refresh_lease(
+        current.as_ref(),
+        integration_id,
+        holder_node_id,
+        *credential_generation,
+        *now_ms,
+        *ttl_ms,
+    )
+    .map_err(|error| error.to_string())?;
+    upsert_integration_refresh_lease_record(conn, &lease, device_id, false)?;
+    Ok(lease)
 }
 
 /// Publish opaque credentials only while the exact lease generation and fence are current.
@@ -78,8 +92,29 @@ pub fn publish_integration_credential_envelope(
         return Err("credential envelope issuer must be the local node".into());
     }
     with_immediate_integration_write(conn, || {
-        upsert_integration_credential_envelope_record(conn, envelope, device_id, now_ms)
+        publish_integration_credential_envelope_inner(conn, envelope, device_id, now_ms)
     })
+}
+
+pub(crate) fn publish_integration_credential_envelope_in_transaction(
+    transaction: &rusqlite::Transaction<'_>,
+    envelope: &IntegrationCredentialEnvelope,
+    device_id: &str,
+    now_ms: u64,
+) -> Result<(), String> {
+    if envelope.issuer_node_id != device_id {
+        return Err("credential envelope issuer must be the local node".into());
+    }
+    publish_integration_credential_envelope_inner(transaction, envelope, device_id, now_ms)
+}
+
+fn publish_integration_credential_envelope_inner(
+    conn: &Connection,
+    envelope: &IntegrationCredentialEnvelope,
+    device_id: &str,
+    now_ms: u64,
+) -> Result<(), String> {
+    upsert_integration_credential_envelope_record(conn, envelope, device_id, now_ms)
 }
 
 fn with_immediate_integration_write<T>(

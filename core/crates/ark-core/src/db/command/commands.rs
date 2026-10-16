@@ -12,7 +12,8 @@ mod usage;
 pub(crate) use core_task::{AuthenticatedCoreTaskWrite, LocalCoreTaskWrite};
 pub(crate) use external_ref::UpsertExternalRefCommand;
 pub(crate) use integration_admin::{
-    PersistIntegrationGrantCommand, PersistNodeAuthorizationCommand,
+    AcquireIntegrationRefreshLeaseCommand, PersistIntegrationGrantCommand,
+    PersistNodeAuthorizationCommand, PublishIntegrationCredentialEnvelopeCommand,
 };
 pub(crate) use integration_replication::{
     ApplySignedIntegrationFrameCommand, IdentityErrorStyle, ValidateOutboundSignedFrameQuery,
