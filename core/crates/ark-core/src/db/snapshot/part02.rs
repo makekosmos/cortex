@@ -1,29 +1,6 @@
-/// KOS-83: при двойном провале (post-verify + rollback) pre-restore snapshot —
-/// последний путь к данным пользователя, его нельзя удалять. Переименовываем
-/// hidden `.restore-rollback-*` в обычный basename, чтобы копия попадала в
-/// `db_backup_list` и восстанавливалась штатным `db_backup_restore`.
-/// Возвращает текст для RPC-ошибки: где искать сохранённую копию.
-fn preserve_rollback_snapshot(db_path: &str, rollback: &Path, nonce: &str) -> String {
-    if !rollback.exists() {
-        return "pre-restore snapshot is missing; manual DB recovery required".to_string();
-    }
-    let kept_name = format!("ark.db.pre-restore-failed-{nonce}.db");
-    let kept = backups_dir(db_path).join(&kept_name);
-    match fs::rename(rollback, &kept) {
-        Ok(()) => format!(
-            "pre-restore snapshot preserved as '{kept_name}' in backups dir; \
-             restore it via db_backup_restore to recover prior data"
-        ),
-        Err(_) => format!(
-            "pre-restore snapshot preserved at '{}'; manual recovery required",
-            rollback.display()
-        ),
-    }
-}
-
 /// `db_backup_restore`: атомарно восстанавливает live DB из snapshot'а.
-/// Вызывается под глобальным DB mutex из RPC handler'а — параллельных
-/// reader/writer нет, backup-поток остановлен `BACKUP_GATE`.
+/// Вызывается под глобальным DB mutex из RPC handler'а.
+/// Параллельных запросов нет; backup остановлен через `BACKUP_GATE`.
 pub fn restore_snapshot(
     conn: &mut Connection,
     db_path: &str,
@@ -47,12 +24,8 @@ pub(in crate::db) fn restore_snapshot_impl(
 ) -> Result<RestoreReport, String> {
     // 1. Resolve + stage (no-follow, содержимое frozen до apply).
     let staging = stage_snapshot(db_path, id)?;
-
-    let rollback_nonce = format!("{:016x}", rand::random::<u64>());
-    let rollback = backups_dir(db_path).join(format!(".restore-rollback-{rollback_nonce}.db"));
-    let cleanup = |staging: &Path, rollback: &Path| {
+    let cleanup_staging = |staging: &Path| {
         let _ = fs::remove_file(staging);
-        let _ = fs::remove_file(rollback);
     };
 
     // 2. Validate staging: integrity + schema match против live.
@@ -65,27 +38,28 @@ pub(in crate::db) fn restore_snapshot_impl(
     let snapshot_fp = match validated {
         Ok(fp) => fp,
         Err(e) => {
-            cleanup(&staging, &rollback);
+            cleanup_staging(&staging);
             return Err(e);
         }
     };
     let live_fp = schema_fingerprint(conn)?;
     if snapshot_fp != live_fp {
-        cleanup(&staging, &rollback);
+        cleanup_staging(&staging);
         return Err("snapshot schema mismatch with live ARK DB".to_string());
     }
 
-    // 3. Pre-restore rollback snapshot live DB (Online Backup в отдельный
-    //    файл — консистентно при idle conn под mutex'ом).
-    if let Err(e) = conn.backup(rusqlite::DatabaseName::Main, &rollback, None) {
-        cleanup(&staging, &rollback);
-        return Err(format!("pre-restore rollback snapshot failed: {e}"));
-    }
-
     if let Err(e) = recovery::preserve_live_device_identity(conn, &staging) {
-        cleanup(&staging, &rollback);
+        cleanup_staging(&staging);
         return Err(format!("restore identity recovery failed: {e}"));
     }
+    let journal = match restore_journal::RestoreJournal::begin(conn, db_path, &snapshot_fp) {
+        Ok(journal) => journal,
+        Err(error) => {
+            cleanup_staging(&staging);
+            return Err(format!("pre-restore recovery journal failed: {error}"));
+        }
+    };
+    let rollback = journal.capsule_path().to_path_buf();
 
     // 4. Apply: Online Backup API пишет destination транзакционно.
     if let Err(e) = conn.restore(
@@ -93,28 +67,60 @@ pub(in crate::db) fn restore_snapshot_impl(
         &staging,
         None::<fn(rusqlite::backup::Progress)>,
     ) {
-        cleanup(&staging, &rollback);
-        return Err(format!("restore apply failed: {e}"));
+        let rollback_result = rollback_restore(conn, &rollback);
+        cleanup_staging(&staging);
+        return match rollback_result {
+            Ok(()) => match journal.finish() {
+                Ok(()) => Err(format!("restore apply failed ({e}); live DB rolled back")),
+                Err(recovery_error) => Err(format!(
+                    "restore recovery required: apply {e}; journal: {recovery_error}"
+                )),
+            },
+            Err(rollback_error) => {
+                let preserved = journal.preserve_visible_backup(db_path);
+                Err(match preserved {
+                    Ok(name) => format!(
+                        "restore recovery required: apply failed ({e}); \
+                         rollback failed ({rollback_error}); \
+                         pre-restore snapshot preserved as '{name}'"
+                    ),
+                    Err(preserve_error) => format!(
+                        "restore recovery required: apply failed ({e}); \
+                         rollback failed ({rollback_error}); backup at '{}'; \
+                         visibility failed: {preserve_error}",
+                        rollback.display()
+                    ),
+                })
+            }
+        };
     }
 
     // 5. Post-restore verification; провал → откат из rollback snapshot'а.
     if let Err(verify_err) = post_verify(conn, &snapshot_fp) {
         let rollback_result = rollback_restore(conn, &rollback);
-        // Staging — временная копия нетронутого snapshot'а из backups/,
-        // чистим всегда. Rollback-файл удаляем только при успешном откате:
-        // при двойном провале это последний путь к pre-restore данным —
-        // сохраняем под видимым для db_backup_list именем (KOS-83).
-        let _ = fs::remove_file(&staging);
+        cleanup_staging(&staging);
         return Err(match rollback_result {
-            Ok(()) => {
-                let _ = fs::remove_file(&rollback);
-                format!("post-restore verification failed ({verify_err}); live DB rolled back")
-            }
-            Err(rollback_err) => format!(
-                "post-restore verification failed ({verify_err}); rollback failed: \
-                 {rollback_err}; {}",
-                preserve_rollback_snapshot(db_path, &rollback, &rollback_nonce)
-            ),
+            Ok(()) => match journal.finish() {
+                Ok(()) => {
+                    format!("post-restore verification failed ({verify_err}); live DB rolled back")
+                }
+                Err(recovery_error) => format!(
+                    "restore recovery required: verify {verify_err}; journal: {recovery_error}"
+                ),
+            },
+            Err(rollback_err) => match journal.preserve_visible_backup(db_path) {
+                Ok(name) => format!(
+                    "restore recovery required: verification failed ({verify_err}); \
+                     rollback failed: {rollback_err}; \
+                     pre-restore snapshot preserved as '{name}'"
+                ),
+                Err(preserve_error) => format!(
+                    "restore recovery required: verification failed ({verify_err}); \
+                     rollback failed: {rollback_err}; backup at '{}'; \
+                     visibility failed: {preserve_error}",
+                    rollback.display()
+                ),
+            },
         });
     }
 
@@ -133,6 +139,39 @@ pub(in crate::db) fn restore_snapshot_impl(
             links,
         })
     })();
-    cleanup(&staging, &rollback);
-    report
+    let report = match report {
+        Ok(report) => report,
+        Err(error) => {
+            let rollback_result = rollback_restore(conn, &rollback);
+            cleanup_staging(&staging);
+            return match rollback_result {
+                Ok(()) => match journal.finish() {
+                    Ok(()) => Err(format!(
+                        "restore report failed ({error}); live DB rolled back"
+                    )),
+                    Err(recovery_error) => Err(format!(
+                        "restore recovery required: report {error}; journal: {recovery_error}"
+                    )),
+                },
+                Err(rollback_error) => match journal.preserve_visible_backup(db_path) {
+                    Ok(name) => Err(format!(
+                        "restore recovery required: report failed ({error}); \
+                         rollback failed ({rollback_error}); \
+                         pre-restore snapshot preserved as '{name}'"
+                    )),
+                    Err(preserve_error) => Err(format!(
+                        "restore recovery required: report failed ({error}); \
+                         rollback failed ({rollback_error}); backup at '{}'; \
+                         visibility failed: {preserve_error}",
+                        rollback.display()
+                    )),
+                },
+            };
+        }
+    };
+    journal
+        .finish()
+        .map_err(|error| format!("restore recovery required: {error}"))?;
+    cleanup_staging(&staging);
+    Ok(report)
 }

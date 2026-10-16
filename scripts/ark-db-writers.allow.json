@@ -219,7 +219,12 @@
     {
       "path": "core/crates/ark-core/src/db/snapshot/part02.rs",
       "category": "connection lifecycle",
-      "count": 3
+      "count": 2
+    },
+    {
+      "path": "core/crates/ark-core/src/db/snapshot/restore_journal.rs",
+      "category": "connection lifecycle",
+      "count": 2
     },
     {
       "path": "core/crates/ark-core/src/db/sync/part1.rs",

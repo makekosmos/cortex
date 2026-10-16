@@ -179,8 +179,9 @@ fn restore_preserves_rollback_snapshot_when_verify_and_rollback_both_fail() {
     );
     drop(preserved_conn);
 
-    // Полный recovery path: сохранённый snapshot восстанавливается
-    // штатным restore_snapshot.
+    drop(conn);
+    crate::db::recover_interrupted_restore(&db_path).unwrap();
+    let mut conn = crate::db::open_db(&db_path).unwrap();
     let report = restore_snapshot(&mut conn, &db_path, preserved[0]).unwrap();
     assert!(report.restored);
     assert_eq!(report.objects, 0);

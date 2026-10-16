@@ -150,7 +150,12 @@ impl DbMaintenanceCommand for RestoreSnapshotCommand {
     }
 
     fn execute(self, connection: &mut rusqlite::Connection) -> Result<Self::Output, DbError> {
-        crate::db::restore_snapshot(connection, &self.db_path, &self.backup_id)
-            .map_err(DbError::Storage)
+        crate::db::restore_snapshot(connection, &self.db_path, &self.backup_id).map_err(|error| {
+            if error.starts_with("restore recovery required:") {
+                DbError::RecoveryRequired
+            } else {
+                DbError::Storage(error)
+            }
+        })
     }
 }

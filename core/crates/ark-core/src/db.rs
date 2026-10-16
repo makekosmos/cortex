@@ -88,6 +88,7 @@ pub use open::{
     init_schema_prerequisites_for_phase3, is_sequenced_usage_entity, open_db,
 };
 pub use open::{count_pending_for_type, insert_pending_object};
+pub(crate) use snapshot::recover_interrupted_restore;
 pub use snapshot::restore_snapshot;
 pub use snapshot::{
     backups_dir, list_snapshots, schema_fingerprint, validate_snapshot, RestoreReport,

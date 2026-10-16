@@ -16,6 +16,10 @@ pub(super) fn actor_loop(
             .unwrap_or_else(|error| error.into_inner());
         ledger.lifecycle = Lifecycle::Migrating;
         drop(ledger);
+        crate::db::recover_interrupted_restore(&shared.path).map_err(|error| {
+            eprintln!("database restore recovery failed before startup: {error}");
+            DbError::RecoveryRequired
+        })?;
         let connection = crate::db::open_db(&shared.path).map_err(DbError::Storage)?;
         crate::db::init_schema(&connection).map_err(DbError::Storage)?;
         let backup_path = format!("{}.pre-core-task.bak", shared.path);
@@ -118,6 +122,15 @@ pub(super) fn actor_loop(
 fn run_task(shared: &ActorShared, connection: &mut Connection, task: Box<dyn WriterTask>) -> bool {
     match catch_unwind(AssertUnwindSafe(|| task.run(connection))) {
         Ok(Ok(())) => true,
+        Ok(Err(DbError::RecoveryRequired)) => {
+            let mut ledger = shared
+                .ledger
+                .lock()
+                .unwrap_or_else(|error| error.into_inner());
+            ledger.lifecycle = Lifecycle::Failed;
+            ledger.failure = Some("database restore requires recovery".into());
+            false
+        }
         Ok(Err(_error)) => false,
         Err(_) => {
             shared
@@ -133,10 +146,13 @@ fn run_task(shared: &ActorShared, connection: &mut Connection, task: Box<dyn Wri
                 Connection::open_in_memory().expect("temporary connection"),
             );
             drop(old);
-            match crate::db::open_db(&shared.path).and_then(|connection| {
-                crate::db::init_schema(&connection)?;
-                Ok(connection)
-            }) {
+            let recovered = crate::db::recover_interrupted_restore(&shared.path).and_then(|()| {
+                crate::db::open_db(&shared.path).and_then(|connection| {
+                    crate::db::init_schema(&connection)?;
+                    Ok(connection)
+                })
+            });
+            match recovered {
                 Ok(recovered) => {
                     *connection = recovered;
                     shared
@@ -146,6 +162,7 @@ fn run_task(shared: &ActorShared, connection: &mut Connection, task: Box<dyn Wri
                         .lifecycle = Lifecycle::Ready;
                 }
                 Err(error) => {
+                    eprintln!("database recovery after panic failed: {error}");
                     let mut ledger = shared
                         .ledger
                         .lock()
