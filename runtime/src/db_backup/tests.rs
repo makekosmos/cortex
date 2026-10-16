@@ -11,6 +11,13 @@ fn parses_backup_timestamp_round_trip() {
 }
 
 #[test]
+fn parses_legacy_and_manifest_backup_filenames() {
+    let timestamp = "2026-05-18-153045";
+    assert!(parse_backup_timestamp(&format!("ark.db.backup-v1-{timestamp}")).is_some());
+    assert!(parse_backup_timestamp(&format!("ark.db.backup-{timestamp}")).is_some());
+}
+
+#[test]
 fn rejects_non_backup_filename() {
     assert!(parse_backup_timestamp("ark.db").is_none());
     assert!(parse_backup_timestamp("ark.db.backup-not-a-date").is_none());
@@ -23,6 +30,11 @@ fn snapshot_id_accepts_only_backup_basenames() {
     assert_eq!(
         snapshot_id(&params).unwrap(),
         "ark.db.backup-2026-09-16-153045"
+    );
+    let manifest_id = serde_json::json!({ "backup_id": "ark.db.backup-v1-2026-09-16-153045" });
+    assert_eq!(
+        snapshot_id(&manifest_id).unwrap(),
+        "ark.db.backup-v1-2026-09-16-153045"
     );
     for bad in [
         "",

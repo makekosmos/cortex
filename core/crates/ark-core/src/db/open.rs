@@ -315,6 +315,15 @@ pub fn backup_to_file_chunked(
     pages_per_step: i32,
     pause: std::time::Duration,
 ) -> Result<(), String> {
+    super::snapshot::backup_to_file_chunked_verified(src_db_path, dest_path, pages_per_step, pause)
+}
+
+pub(in crate::db) fn backup_to_file_chunked_unpublished(
+    src_db_path: &str,
+    dest_path: &str,
+    pages_per_step: i32,
+    pause: std::time::Duration,
+) -> Result<(), String> {
     let src = open_db(src_db_path)?;
     let mut dst = Connection::open(dest_path)
         .map_err(|e| format!("backup_to_file_chunked open dest failed: {e}"))?;

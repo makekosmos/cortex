@@ -1,6 +1,8 @@
 // KOS-51: unit-level snapshot restore тесты. RPC-level покрытие —
 // src/main/tests/snapshot_restore.rs.
 
+use std::io::Write;
+
 /// File-backed DB в tempdir (restore работает с `db_path`, in-memory
 /// не подходит). Возвращает (TempDir, db_path, conn).
 fn setup_file_db() -> (crate::test_support::TestTempDir, String, Connection) {
@@ -239,6 +241,121 @@ fn validate_reports_integrity_and_schema_verdicts() {
 
     let missing = validate_snapshot(&conn, &db_path, "ark.db.backup-nope").unwrap();
     assert!(!missing.exists && !missing.valid);
+}
+
+#[test]
+fn verified_backup_is_published_with_manifest_and_tampering_is_rejected() {
+    let (_dir, db_path, conn) = setup_file_db();
+    seed_object(&conn, "obj-manifest", "manifest checked");
+    fs::create_dir_all(backups_dir(&db_path)).unwrap();
+    let id = "ark.db.backup-v1-2026-10-17-120000";
+    let destination = backups_dir(&db_path).join(id);
+    backup_to_file_chunked(
+        &db_path,
+        destination.to_str().unwrap(),
+        4,
+        std::time::Duration::ZERO,
+    )
+    .unwrap();
+    assert!(destination.exists());
+    assert!(destination
+        .with_file_name(format!("{id}.manifest.json"))
+        .exists());
+
+    let listed = list_snapshots(&db_path).unwrap();
+    assert!(listed.iter().any(|entry| entry.id == id));
+    assert!(validate_snapshot(&conn, &db_path, id).unwrap().valid);
+
+    fs::OpenOptions::new()
+        .append(true)
+        .open(&destination)
+        .unwrap()
+        .write_all(b"tampered")
+        .unwrap();
+    assert!(validate_snapshot(&conn, &db_path, id)
+        .unwrap_err()
+        .contains("checksum mismatch"));
+}
+
+#[test]
+fn verified_backup_orphan_without_manifest_is_hidden_and_not_restorable() {
+    let (_dir, db_path, conn) = setup_file_db();
+    seed_object(&conn, "obj-orphan", "orphan");
+    fs::create_dir_all(backups_dir(&db_path)).unwrap();
+    let id = "ark.db.backup-v1-2026-10-17-120001";
+    let destination = backups_dir(&db_path).join(id);
+    backup_to_file_chunked(
+        &db_path,
+        destination.to_str().unwrap(),
+        4,
+        std::time::Duration::ZERO,
+    )
+    .unwrap();
+    fs::remove_file(destination.with_file_name(format!("{id}.manifest.json"))).unwrap();
+
+    assert!(!list_snapshots(&db_path)
+        .unwrap()
+        .iter()
+        .any(|entry| entry.id == id));
+    assert!(validate_snapshot(&conn, &db_path, id)
+        .unwrap_err()
+        .contains("manifest unavailable"));
+}
+
+#[test]
+fn verified_backup_publication_is_no_clobber_and_ignores_manifest_only_orphans() {
+    let (_dir, db_path, conn) = setup_file_db();
+    fs::create_dir_all(backups_dir(&db_path)).unwrap();
+    let backups = backups_dir(&db_path);
+    let db_id = "ark.db.backup-v1-collision-db";
+    let db_destination = backups.join(db_id);
+    fs::write(&db_destination, b"existing database owner").unwrap();
+    let error = backup_to_file_chunked(
+        &db_path,
+        db_destination.to_str().unwrap(),
+        4,
+        std::time::Duration::ZERO,
+    )
+    .expect_err("existing database destination must not be replaced");
+    assert!(error.contains("already exists"));
+    assert_eq!(
+        fs::read(&db_destination).unwrap(),
+        b"existing database owner"
+    );
+
+    let manifest_id = "ark.db.backup-v1-collision-manifest";
+    let manifest_path = backups.join(format!("{manifest_id}.manifest.json"));
+    fs::write(&manifest_path, b"existing manifest owner").unwrap();
+    let manifest_destination = backups.join(manifest_id);
+    let error = backup_to_file_chunked(
+        &db_path,
+        manifest_destination.to_str().unwrap(),
+        4,
+        std::time::Duration::ZERO,
+    )
+    .expect_err("existing manifest destination must not be replaced");
+    assert!(error.contains("already exists"));
+    assert_eq!(
+        fs::read(&manifest_path).unwrap(),
+        b"existing manifest owner"
+    );
+    assert!(!manifest_destination.exists());
+
+    // Crash after manifest publication but before database publication leaves
+    // an orphan marker. It must remain invisible and unrestorable.
+    let orphan_id = "ark.db.backup-v1-manifest-orphan";
+    let orphan_manifest = backups.join(format!("{orphan_id}.manifest.json"));
+    fs::write(&orphan_manifest, b"partial manifest publication").unwrap();
+    assert!(!list_snapshots(&db_path)
+        .unwrap()
+        .iter()
+        .any(|entry| entry.id == orphan_id));
+    let orphan_validation = validate_snapshot(&conn, &db_path, orphan_id).unwrap();
+    assert!(!orphan_validation.exists && !orphan_validation.valid);
+    assert!(orphan_validation
+        .error
+        .as_deref()
+        .is_some_and(|error| error.contains("snapshot not found")));
 }
 
 #[test]

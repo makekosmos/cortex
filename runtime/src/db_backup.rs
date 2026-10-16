@@ -1,6 +1,6 @@
 // Periodic DB backup scheduler.
 //
-// Делает SQLite Online Backup ARK базы в `<data_dir>/backups/ark.db.backup-YYYY-MM-DD-HHMMSS`
+// Делает SQLite Online Backup ARK базы в `<data_dir>/backups/ark.db.backup-v1-YYYY-MM-DD-HHMMSS`
 // раз в N часов (default 24, override через MUNDUS_BACKUP_INTERVAL_HOURS).
 // Online Backup API не блокирует concurrent readers/writer — safe для live DB.
 //
@@ -26,7 +26,9 @@ mod retention;
 
 const SYNC_KV_LAST_BACKUP: &str = "mundus.last_backup_ts";
 const BACKUPS_SUBDIR: &str = "backups";
-const BACKUP_FILE_PREFIX: &str = "ark.db.backup-";
+const BACKUP_FILE_PREFIX: &str = "ark.db.backup-v1-";
+const LEGACY_BACKUP_FILE_PREFIX: &str = "ark.db.backup-";
+const BACKUP_MANIFEST_SUFFIX: &str = ".manifest.json";
 static BACKUP_ACTIVE: AtomicBool = AtomicBool::new(false);
 static BACKUP_LOCK: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
 
@@ -49,7 +51,9 @@ fn backup_filename(now: DateTime<Utc>) -> String {
 }
 
 fn parse_backup_timestamp(name: &str) -> Option<DateTime<Utc>> {
-    let stripped = name.strip_prefix(BACKUP_FILE_PREFIX)?;
+    let stripped = name
+        .strip_prefix(BACKUP_FILE_PREFIX)
+        .or_else(|| name.strip_prefix(LEGACY_BACKUP_FILE_PREFIX))?;
     let parsed = chrono::NaiveDateTime::parse_from_str(stripped, "%Y-%m-%d-%H%M%S").ok()?;
     Some(parsed.and_utc())
 }
@@ -120,7 +124,9 @@ fn next_backup_destination(
 ) -> Result<(DateTime<Utc>, PathBuf), String> {
     for _ in 0..86_400 {
         let path = backups_dir.join(backup_filename(now));
-        if !path.exists() {
+        let manifest =
+            backups_dir.join(format!("{}{BACKUP_MANIFEST_SUFFIX}", backup_filename(now)));
+        if !path.exists() && !manifest.exists() {
             return Ok((now, path));
         }
         now += chrono::Duration::seconds(1);

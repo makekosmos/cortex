@@ -5,8 +5,8 @@
 //!
 //! - `ark.db.backup-<ts>` — scheduler + `db_backups.create` (online backup
 //!   через Core). Политика: держим `retain` новейших (MUNDUS_BACKUP_RETAIN_COUNT,
-//!   default 7); SQLite sidecar'ы (`-shm`/`-wal`/`-journal`) удаляются вместе
-//!   с главным файлом — иначе они оставались сиротами навсегда;
+//!   default 7); manifest и SQLite sidecar'ы (`-shm`/`-wal`/`-journal`)
+//!   удаляются вместе с главным файлом — иначе они оставались сиротами навсегда;
 //! - `ark.db.pre-restore-failed-<nonce>.db` — Core сохраняет pre-restore
 //!   snapshot при двойном провале restore. Политика: держим
 //!   [`PRE_RESTORE_RETAIN`] новейших (по mtime — в имени нет timestamp);
@@ -43,7 +43,7 @@ const PRE_RESTORE_PREFIX: &str = "ark.db.pre-restore-failed-";
 /// а удаление `.restore-rollback-*` посреди restore сломало бы откат.
 const RESTORE_TEMP_GRACE: Duration = Duration::from_secs(60 * 60);
 const RESTORE_TEMP_PREFIXES: [&str; 2] = [".restore-rollback-", ".restore-src-"];
-const SIDECAR_SUFFIXES: [&str; 3] = ["-shm", "-wal", "-journal"];
+const SIDECAR_SUFFIXES: [&str; 4] = ["-shm", "-wal", "-journal", ".manifest.json"];
 
 /// Статистика одного прохода — для логов и тестов.
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -232,6 +232,7 @@ mod tests {
         let old = backup_name(10 * 24);
         let fresh = backup_name(0);
         write(dir.path(), &old);
+        write(dir.path(), &format!("{old}.manifest.json"));
         write(dir.path(), &format!("{old}-wal"));
         write(dir.path(), &format!("{old}-shm"));
         write(dir.path(), &fresh);
@@ -251,10 +252,11 @@ mod tests {
         write(dir.path(), &format!("{gone}-wal"));
         write(dir.path(), &format!("{gone}-shm"));
         write(dir.path(), &format!("{gone}-journal"));
+        write(dir.path(), &format!("{gone}.manifest.json"));
 
         let report = enforce(dir.path(), 7).unwrap();
 
-        assert_eq!(report.removed_sidecars, 3);
+        assert_eq!(report.removed_sidecars, 4);
         assert_eq!(names(dir.path()), vec![kept]);
     }
 

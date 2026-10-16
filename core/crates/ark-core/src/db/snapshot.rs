@@ -32,6 +32,9 @@ use std::path::{Component, Path, PathBuf};
 use super::open::check_integrity;
 use rusqlite::{Connection, OpenFlags};
 use serde::Serialize;
+mod manifest;
+pub(in crate::db) use manifest::backup_to_file_chunked_verified;
+use manifest::{is_manifest_file, is_uncommitted_backup, verify_snapshot_manifest};
 
 /// Записываемая в RPC ответ запись о snapshot'е в `backups/`.
 #[derive(Debug, Clone, Serialize)]
@@ -176,6 +179,10 @@ fn stage_snapshot(db_path: &str, id: &str) -> Result<PathBuf, String> {
         let _ = fs::remove_file(&staging);
         return Err(e);
     }
+    if let Err(error) = verify_snapshot_manifest(db_path, id, &staging) {
+        let _ = fs::remove_file(&staging);
+        return Err(error);
+    }
     Ok(staging)
 }
 
@@ -287,6 +294,9 @@ pub fn list_snapshots(db_path: &str) -> Result<Vec<SnapshotEntry>, String> {
         let name = entry.file_name();
         let Some(id) = name.to_str() else { continue };
         if validate_snapshot_id(id).is_err() {
+            continue;
+        }
+        if is_manifest_file(id) || is_uncommitted_backup(&dir, id) {
             continue;
         }
         // file_type() не следует symlink'ам — ссылки не попадают в list.
