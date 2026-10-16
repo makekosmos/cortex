@@ -276,12 +276,12 @@ pub fn get_object_type(conn: &Connection, id: &str) -> Result<Option<ObjectType>
     .map_err(|e| e.to_string())
 }
 
-fn ensure_object_search_fts(conn: &Connection) -> Result<(), String> {
+pub(in crate::db) fn ensure_object_search_fts(conn: &Connection) -> Result<(), String> {
     conn.execute_batch(CREATE_OBJECT_SEARCH_FTS)
         .map_err(|e| e.to_string())
 }
 
-fn object_search_fts_exists(conn: &Connection) -> Result<bool, String> {
+pub(in crate::db) fn object_search_fts_exists(conn: &Connection) -> Result<bool, String> {
     conn.query_row(
         "SELECT EXISTS(
              SELECT 1 FROM sqlite_master
@@ -294,7 +294,7 @@ fn object_search_fts_exists(conn: &Connection) -> Result<bool, String> {
     .map_err(|e| e.to_string())
 }
 
-fn rebuild_object_search_fts(conn: &Connection) -> Result<(), String> {
+pub(in crate::db) fn rebuild_object_search_fts(conn: &Connection) -> Result<(), String> {
     if !object_search_fts_exists(conn)? {
         return Ok(());
     }
@@ -349,7 +349,7 @@ fn remove_object_from_search(conn: &Connection, id: &str) -> Result<(), String> 
     Ok(())
 }
 
-fn rollback_savepoint(conn: &Connection, name: &str) {
+pub(in crate::db) fn rollback_savepoint(conn: &Connection, name: &str) {
     let _ = conn.execute_batch(&format!(
         "ROLLBACK TO SAVEPOINT {name}; RELEASE SAVEPOINT {name};"
     ));

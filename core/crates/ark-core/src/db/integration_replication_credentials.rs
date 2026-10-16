@@ -1,8 +1,16 @@
+use super::integration_replication_common::{
+    envelope_version_is_newer, json, parse, persist_with_vector, sqlite_i64, storage, u64_value,
+};
+use super::{load_authorized_node, load_integration_node_grant, load_integration_refresh_lease};
+use crate::integration_replication::{envelope_entity_id, IntegrationContractError, NodeStatus};
+use rusqlite::{params, Connection, OptionalExtension};
+use serde_json::Value;
+
 use crate::integration_replication::{
-    encryption_key_id, validate_envelope_recipient, GrantStatus, IntegrationCredentialEnvelope,
+    validate_envelope_recipient, GrantStatus, IntegrationCredentialEnvelope,
 };
 
-fn upsert_integration_credential_envelope_record(
+pub(in crate::db) fn upsert_integration_credential_envelope_record(
     conn: &Connection,
     envelope: &IntegrationCredentialEnvelope,
     device_id: &str,

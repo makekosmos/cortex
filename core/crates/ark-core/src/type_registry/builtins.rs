@@ -1,3 +1,10 @@
+use rusqlite::{params, Connection};
+
+use crate::domain::canonical_type::canonical_value;
+
+use super::version_storage::{json_empty, json_empty_array, parse_json};
+use super::{canonical_schema_hash, LEGACY_VERSION};
+
 pub fn ensure_builtin_versions(conn: &Connection) -> Result<(), String> {
     let mut stmt = conn
         .prepare(concat!(

@@ -55,7 +55,7 @@ pub struct TypeGetResponse {
     pub definition: TypeVersion,
 }
 
-fn parse_json(raw: &str, field: &str) -> Result<Value, String> {
+pub(super) fn parse_json(raw: &str, field: &str) -> Result<Value, String> {
     if raw.is_empty() {
         return Err(format!("{field} must not be empty"));
     }
@@ -75,7 +75,7 @@ fn parse_json(raw: &str, field: &str) -> Result<Value, String> {
     Ok(value)
 }
 
-fn canonical_definition(
+pub(super) fn canonical_definition(
     version: &TypeVersion,
 ) -> Result<(String, String, String, String, String), String> {
     let schema = parse_json(&version.schema_json, "schema_json")?;
@@ -100,7 +100,7 @@ fn canonical_definition(
     ))
 }
 
-fn validate_id(value: &str, kind: &str) -> Result<(), String> {
+pub(super) fn validate_id(value: &str, kind: &str) -> Result<(), String> {
     if value.is_empty()
         || value.trim() != value
         || value.len() > 255
@@ -112,7 +112,7 @@ fn validate_id(value: &str, kind: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn validate_version(value: &str) -> Result<Version, String> {
+pub(super) fn validate_version(value: &str) -> Result<Version, String> {
     if value == LEGACY_VERSION {
         return Err("reserved legacy version".into());
     }
@@ -121,6 +121,14 @@ fn validate_version(value: &str) -> Result<Version, String> {
         return Err("version is not canonical semver".into());
     }
     Ok(parsed)
+}
+
+pub(super) fn json_empty() -> Value {
+    Value::Object(Map::new())
+}
+
+pub(super) fn json_empty_array() -> Value {
+    Value::Array(Vec::new())
 }
 
 pub fn insert_type_version(

@@ -29,7 +29,9 @@ use std::fs;
 use std::io;
 use std::path::{Component, Path, PathBuf};
 
-use rusqlite::OpenFlags;
+use super::open::check_integrity;
+use rusqlite::{Connection, OpenFlags};
+use serde::Serialize;
 
 /// Записываемая в RPC ответ запись о snapshot'е в `backups/`.
 #[derive(Debug, Clone, Serialize)]
@@ -74,7 +76,7 @@ pub fn backups_dir(db_path: &str) -> PathBuf {
 
 /// `backup_id` обязан быть чистым basename'ом: ровно один `Component::Normal`,
 /// без `..`, разделителей и точечных (staging/hidden) имён.
-fn validate_snapshot_id(id: &str) -> Result<(), String> {
+pub(in crate::db) fn validate_snapshot_id(id: &str) -> Result<(), String> {
     // Reject separators explicitly: Path::components() treats `\` as a normal
     // character on Unix, so the component check alone is platform-dependent.
     if id.is_empty()
@@ -364,7 +366,10 @@ fn default_post_verify(conn: &Connection, expected: &[String]) -> Result<(), Str
 }
 
 /// Откат по умолчанию: Online Backup из rollback-файла обратно в live conn.
-fn default_rollback_restore(conn: &mut Connection, path: &Path) -> Result<(), String> {
+pub(in crate::db) fn default_rollback_restore(
+    conn: &mut Connection,
+    path: &Path,
+) -> Result<(), String> {
     conn.restore(
         rusqlite::DatabaseName::Main,
         path,

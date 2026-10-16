@@ -2,7 +2,10 @@ fn load_all_usage_sessions(conn: &Connection) -> Result<Vec<UsageSession>, Strin
     load_usage_sessions_page(conn, -1, 0)
 }
 
-fn load_usage_session(conn: &Connection, id: &str) -> Result<Option<UsageSession>, String> {
+pub(in crate::db) fn load_usage_session(
+    conn: &Connection,
+    id: &str,
+) -> Result<Option<UsageSession>, String> {
     conn.query_row(
         "SELECT id, tracked_app_id, device_id, device_name, platform, started_at,
                 ended_at, runtime_ms, foreground_ms, idle_ms, window_title, process_name,
@@ -84,7 +87,10 @@ fn load_all_usage_events(conn: &Connection) -> Result<Vec<UsageEvent>, String> {
     load_usage_events_page(conn, -1, 0)
 }
 
-fn load_usage_event(conn: &Connection, id: &str) -> Result<Option<UsageEvent>, String> {
+pub(in crate::db) fn load_usage_event(
+    conn: &Connection,
+    id: &str,
+) -> Result<Option<UsageEvent>, String> {
     conn.query_row(
         "SELECT id, tracked_app_id, usage_session_id, device_id, device_name, platform,
                 occurred_at, kind, window_title, process_name, exe_path, pid,

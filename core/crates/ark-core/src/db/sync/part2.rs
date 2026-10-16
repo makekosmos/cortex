@@ -1,4 +1,4 @@
-fn record_usage_sequence(
+pub(in crate::db) fn record_usage_sequence(
     conn: &Connection,
     entity_type: &str,
     entity_id: &str,
@@ -61,7 +61,7 @@ fn record_usage_sequence(
     )
 }
 
-fn usage_origin_for_entity(
+pub(in crate::db) fn usage_origin_for_entity(
     conn: &Connection,
     entity: &SyncEntity,
 ) -> Result<(String, u64), String> {
@@ -92,7 +92,10 @@ fn usage_origin_for_entity(
     Ok((device_id, seq))
 }
 
-fn usage_entity_is_newer(conn: &Connection, entity: &SyncEntity) -> Result<bool, String> {
+pub(in crate::db) fn usage_entity_is_newer(
+    conn: &Connection,
+    entity: &SyncEntity,
+) -> Result<bool, String> {
     let local = conn
         .query_row(
             "SELECT hlc FROM usage_sync_versions
@@ -107,7 +110,10 @@ fn usage_entity_is_newer(conn: &Connection, entity: &SyncEntity) -> Result<bool,
         .is_none_or(|hlc| HLC::is_newer(&entity.hlc, hlc)))
 }
 
-fn finish_usage_entity_sync(conn: &Connection, entity: &SyncEntity) -> Result<(), String> {
+pub(in crate::db) fn finish_usage_entity_sync(
+    conn: &Connection,
+    entity: &SyncEntity,
+) -> Result<(), String> {
     conn.execute(
         "INSERT INTO usage_sync_versions(entity_type, entity_id, hlc)
          VALUES (?1, ?2, ?3)

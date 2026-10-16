@@ -1,3 +1,8 @@
+use rusqlite::{params, Connection, OptionalExtension};
+
+use super::version_storage::validate_version;
+use super::{list_type_summaries, list_type_versions, TypeGetResponse, LEGACY_VERSION};
+
 pub fn resolve_alias(conn: &Connection, alias: &str) -> Result<Option<String>, String> {
     conn.query_row(
         "SELECT canonical_type_id FROM object_type_aliases WHERE alias=?1",

@@ -1,6 +1,13 @@
+use super::integration_replication_common::{
+    lease_entity_id, lease_epoch, persist_with_vector, sqlite_i64, storage, u64_value,
+};
+use super::{load_authorized_node, load_integration_node_grant};
+use crate::integration_replication::{GrantStatus, IntegrationContractError, NodeStatus};
+use rusqlite::{params, Connection, OptionalExtension};
+
 use crate::integration_replication::IntegrationRefreshLease as ReplicatedRefreshLease;
 
-fn upsert_integration_refresh_lease_record(
+pub(in crate::db) fn upsert_integration_refresh_lease_record(
     conn: &Connection,
     lease: &ReplicatedRefreshLease,
     device_id: &str,

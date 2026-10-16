@@ -1,27 +1,22 @@
-use std::collections::HashMap;
-
-use chrono::{Duration, Utc};
-use rusqlite::{params, params_from_iter, Connection, OptionalExtension, Row};
-use serde::Serialize;
-use serde_json::{json, Value};
+use rusqlite::Connection;
 
 use crate::canonical_types::migration;
 pub use crate::canonical_types::pending::{
     count_pending_for_type, insert_pending_object, replay_pending_for_type,
 };
-use crate::hlc::HLC;
-use crate::schema::{CREATE_OBJECT_SEARCH_FTS, CREATE_TABLES};
+use crate::schema::CREATE_TABLES;
 use crate::type_registry;
-use crate::types::*;
 
-const VERSION_VECTOR_KEY: &str = "lan_sync.version_vector";
-const USAGE_SEQUENCE_MIGRATION_KEY: &str = "usage_sync.sequence_v1";
+use super::objects::{ensure_object_search_fts, rebuild_object_search_fts};
+
+pub(in crate::db) const VERSION_VECTOR_KEY: &str = "lan_sync.version_vector";
+pub(in crate::db) const USAGE_SEQUENCE_MIGRATION_KEY: &str = "usage_sync.sequence_v1";
 
 pub fn is_sequenced_usage_entity(entity_type: &str) -> bool {
     matches!(entity_type, "usage_session" | "usage_event" | "usage_day")
 }
 
-fn usage_cursor_key(device_id: &str) -> String {
+pub(in crate::db) fn usage_cursor_key(device_id: &str) -> String {
     format!("@usage:{device_id}")
 }
 
@@ -54,7 +49,7 @@ pub fn check_integrity(conn: &Connection) -> Result<(), String> {
     Ok(())
 }
 
-fn phase3_migration_completed(conn: &Connection) -> Result<bool, String> {
+pub(in crate::db) fn phase3_migration_completed(conn: &Connection) -> Result<bool, String> {
     let table_exists: bool = conn
         .query_row(
             concat!(

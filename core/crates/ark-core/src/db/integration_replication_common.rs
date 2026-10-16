@@ -1,33 +1,36 @@
+use super::bump_sync_version_vector;
+use crate::hlc::HLC;
+use rusqlite::Connection;
+
 use serde::de::DeserializeOwned;
 
 use crate::integration_replication::{
-    envelope_entity_id, integration_node_id, IntegrationContractError,
-    IntegrationRefreshLease as CommonIntegrationRefreshLease,
+    IntegrationContractError, IntegrationRefreshLease as CommonIntegrationRefreshLease,
 };
 
 const SAVEPOINT: &str = "ark_integration_replication_write";
 
-fn storage(error: impl std::fmt::Display) -> String {
+pub(super) fn storage(error: impl std::fmt::Display) -> String {
     error.to_string()
 }
 
-fn json<T: serde::Serialize>(value: &T) -> Result<String, String> {
+pub(super) fn json<T: serde::Serialize>(value: &T) -> Result<String, String> {
     serde_json::to_string(value).map_err(storage)
 }
 
-fn parse<T: DeserializeOwned>(value: &str) -> Result<T, String> {
+pub(super) fn parse<T: DeserializeOwned>(value: &str) -> Result<T, String> {
     serde_json::from_str(value).map_err(storage)
 }
 
-fn sqlite_i64(value: u64, field: &str) -> Result<i64, String> {
+pub(super) fn sqlite_i64(value: u64, field: &str) -> Result<i64, String> {
     i64::try_from(value).map_err(|_| format!("{field} exceeds SQLite INTEGER range"))
 }
 
-fn u64_value(value: i64, field: &str) -> Result<u64, String> {
+pub(super) fn u64_value(value: i64, field: &str) -> Result<u64, String> {
     u64::try_from(value).map_err(|_| format!("{field} is negative"))
 }
 
-fn require_newer_hlc(proposed: &str, current: &str) -> Result<(), String> {
+pub(super) fn require_newer_hlc(proposed: &str, current: &str) -> Result<(), String> {
     if HLC::is_newer(proposed, current) {
         Ok(())
     } else {
@@ -35,7 +38,7 @@ fn require_newer_hlc(proposed: &str, current: &str) -> Result<(), String> {
     }
 }
 
-fn envelope_version_is_newer(
+pub(super) fn envelope_version_is_newer(
     proposed_hlc: &str,
     proposed_issuer: &str,
     current_hlc: &str,
@@ -45,7 +48,7 @@ fn envelope_version_is_newer(
         || (proposed_hlc == current_hlc && proposed_issuer > current_issuer)
 }
 
-fn with_savepoint<T>(
+pub(super) fn with_savepoint<T>(
     conn: &Connection,
     operation: impl FnOnce() -> Result<T, String>,
 ) -> Result<T, String> {
@@ -70,7 +73,7 @@ fn with_savepoint<T>(
     }
 }
 
-fn persist_with_vector(
+pub(super) fn persist_with_vector(
     conn: &Connection,
     entity_type: &str,
     entity_id: &str,
@@ -88,11 +91,13 @@ fn persist_with_vector(
     })
 }
 
-fn lease_entity_id(integration_id: &str) -> &str {
+pub(super) fn lease_entity_id(integration_id: &str) -> &str {
     integration_id
 }
 
-fn lease_epoch(lease: &CommonIntegrationRefreshLease) -> Result<(i64, i64, i64), String> {
+pub(super) fn lease_epoch(
+    lease: &CommonIntegrationRefreshLease,
+) -> Result<(i64, i64, i64), String> {
     Ok((
         sqlite_i64(lease.credential_generation, "credential_generation")?,
         sqlite_i64(lease.fencing_token, "fencing_token")?,

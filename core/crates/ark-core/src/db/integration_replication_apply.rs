@@ -1,8 +1,11 @@
 #[cfg(test)]
+use super::{get_sync_kv, VERSION_VECTOR_KEY};
+
+#[cfg(test)]
 type SignedIntegrationApplyResult = Result<(), crate::integration_replication::SignedSyncError>;
 
 #[cfg(test)]
-pub(crate) fn apply_signed_integration_changes(
+pub(in crate::db) fn apply_signed_integration_changes(
     conn: &rusqlite::Connection,
     envelope: &crate::integration_replication::SignedSyncEnvelope,
     expected_space_id: &str,
@@ -43,7 +46,7 @@ pub(crate) fn apply_signed_integration_changes(
 }
 
 #[cfg(test)]
-pub(crate) fn load_version_vector(
+pub(in crate::db) fn load_version_vector(
     conn: &rusqlite::Connection,
 ) -> Result<crate::types::VersionVector, String> {
     get_sync_kv(conn, VERSION_VECTOR_KEY)?

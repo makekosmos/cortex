@@ -1,3 +1,9 @@
+use super::integration_replication_common::{
+    json, parse, persist_with_vector, require_newer_hlc, sqlite_i64, storage, u64_value,
+};
+use rusqlite::{params, Connection, OptionalExtension};
+use serde_json::Value;
+
 use crate::integration_replication::{AuthorizedNode, IntegrationConfiguration, NodeStatus};
 fn node_status_value(status: NodeStatus) -> &'static str {
     match status {

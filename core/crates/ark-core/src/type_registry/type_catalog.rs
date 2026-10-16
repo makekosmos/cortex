@@ -1,3 +1,11 @@
+use rusqlite::{params, Connection, OptionalExtension};
+use semver::Version;
+
+use super::version_storage::{parse_json, validate_id, validate_version};
+use super::{
+    canonical_schema_hash, resolve_type_id, AliasRecord, TypeSummary, TypeVersion, LEGACY_VERSION,
+};
+
 pub fn ensure_legacy_type_version(
     conn: &Connection,
     type_id: &str,

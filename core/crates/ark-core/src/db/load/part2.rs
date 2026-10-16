@@ -1,4 +1,4 @@
-fn load_all_todos(conn: &Connection) -> Result<Vec<TodoItem>, String> {
+pub(in crate::db) fn load_all_todos(conn: &Connection) -> Result<Vec<TodoItem>, String> {
     let mut stmt = conn
         .prepare(
             "SELECT id, title, notes, priority, scheduled_date, deadline, reminder_date,
@@ -54,7 +54,7 @@ fn load_all_todos(conn: &Connection) -> Result<Vec<TodoItem>, String> {
         .map_err(|e| e.to_string())
 }
 
-fn load_all_projects(conn: &Connection) -> Result<Vec<Project>, String> {
+pub(in crate::db) fn load_all_projects(conn: &Connection) -> Result<Vec<Project>, String> {
     let mut stmt = conn
         .prepare(
             "SELECT id, title, notes, status, scheduled_date, deadline,
@@ -84,7 +84,7 @@ fn load_all_projects(conn: &Connection) -> Result<Vec<Project>, String> {
         .map_err(|e| e.to_string())
 }
 
-fn load_all_tags(conn: &Connection) -> Result<Vec<Tag>, String> {
+pub(in crate::db) fn load_all_tags(conn: &Connection) -> Result<Vec<Tag>, String> {
     let mut stmt = conn
         .prepare("SELECT id, title, color, created_at FROM tags")
         .map_err(|e| e.to_string())?;
@@ -104,7 +104,7 @@ fn load_all_tags(conn: &Connection) -> Result<Vec<Tag>, String> {
         .map_err(|e| e.to_string())
 }
 
-fn load_all_tracked_apps(conn: &Connection) -> Result<Vec<TrackedApp>, String> {
+pub(in crate::db) fn load_all_tracked_apps(conn: &Connection) -> Result<Vec<TrackedApp>, String> {
     let mut stmt = conn
         .prepare(
             "SELECT id, platform, exe_path, normalized_exe_path, process_name,

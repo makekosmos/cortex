@@ -171,7 +171,10 @@ pub fn delete_usage_day(conn: &Connection, id: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn load_usage_day(conn: &Connection, id: &str) -> Result<Option<UsageDay>, String> {
+pub(in crate::db) fn load_usage_day(
+    conn: &Connection,
+    id: &str,
+) -> Result<Option<UsageDay>, String> {
     conn.query_row(
         "SELECT id, device_id, day, payload_json, updated_at
          FROM usage_days WHERE id = ?1",

@@ -29,7 +29,7 @@ pub fn delete_object_link(conn: &Connection, id: &str) -> Result<(), String> {
 }
 
 /// Ids of links with this source and link_type, except `keep_id`.
-pub fn list_other_object_link_ids(
+pub(in crate::db) fn list_other_object_link_ids(
     conn: &Connection,
     source_id: &str,
     link_type: &str,

@@ -1,3 +1,14 @@
+use crate::domain::canonical_type::canonical_value;
+use rusqlite::{params, Connection, OptionalExtension};
+
+use super::version_storage::{
+    canonical_definition, json_empty, json_empty_array, parse_json, validate_id, validate_version,
+};
+use super::{
+    canonical_schema_hash, get_type, insert_type_version, register_alias, set_base_type,
+    set_current_version, set_status, TypeRegistration, TypeVersion, LEGACY_VERSION,
+};
+
 pub fn register_type(
     conn: &Connection,
     registration: &TypeRegistration,
@@ -316,10 +327,4 @@ pub fn migrate_phase2(conn: &Connection) -> Result<(), String> {
             Err(e)
         }
     }
-}
-fn json_empty() -> Value {
-    Value::Object(Map::new())
-}
-fn json_empty_array() -> Value {
-    Value::Array(Vec::new())
 }

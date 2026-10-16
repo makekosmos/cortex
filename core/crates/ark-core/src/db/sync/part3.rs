@@ -30,7 +30,7 @@ pub fn record_sync_tombstone_with_type(
     upsert_sync_tombstone(conn, &entity)
 }
 
-fn load_sync_tombstones(conn: &Connection) -> Result<Vec<SyncEntity>, String> {
+pub(in crate::db) fn load_sync_tombstones(conn: &Connection) -> Result<Vec<SyncEntity>, String> {
     let mut stmt = conn
         .prepare(
             "SELECT id, entity_type, hlc, type_id

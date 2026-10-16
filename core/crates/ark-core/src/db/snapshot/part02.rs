@@ -38,7 +38,7 @@ pub fn restore_snapshot(
     )
 }
 
-fn restore_snapshot_impl(
+pub(in crate::db) fn restore_snapshot_impl(
     conn: &mut Connection,
     db_path: &str,
     id: &str,

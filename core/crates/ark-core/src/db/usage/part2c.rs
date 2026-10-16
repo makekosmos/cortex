@@ -108,7 +108,7 @@ fn newer_than(a: &Option<String>, b: &Option<String>) -> bool {
 /// with the freshest `last_seen_at` — the post-update path carries the
 /// version-info display name; time and session counts are summed. Rows are
 /// sorted by active time (foreground_ms: focused and not idle) descending.
-fn merge_top_apps(
+pub(in crate::db) fn merge_top_apps(
     rows: Vec<TopAppEntry>,
     limit: usize,
     windows_dir: Option<&str>,

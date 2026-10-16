@@ -1,3 +1,10 @@
+use super::integration_replication_common::{
+    persist_with_vector, require_newer_hlc, sqlite_i64, storage, u64_value,
+};
+use super::load_authorized_node;
+use crate::integration_replication::{integration_node_id, NodeStatus};
+use rusqlite::{params, Connection, OptionalExtension};
+
 use crate::integration_replication::{
     GrantStatus as IntegrationGrantStatus, IntegrationNodeGrant as IntegrationGrant,
 };

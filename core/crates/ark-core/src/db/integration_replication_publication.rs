@@ -1,3 +1,13 @@
+use super::integration_replication_common::{storage, u64_value};
+use super::{
+    load_integration_refresh_lease, upsert_integration_credential_envelope_record,
+    upsert_integration_refresh_lease_record,
+};
+use crate::integration_replication::{IntegrationContractError, IntegrationCredentialEnvelope};
+use rusqlite::Connection;
+
+use crate::integration_replication::IntegrationRefreshLease as ReplicatedRefreshLease;
+
 /// Params of `integration.acquire_refresh_lease` — the `Request` newtype
 /// variant wraps this struct so wire fields and the db call share one shape.
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]

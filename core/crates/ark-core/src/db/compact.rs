@@ -1,3 +1,11 @@
+use rusqlite::{params_from_iter, Connection};
+use std::collections::HashMap;
+
+use crate::types::VersionVector;
+
+use super::open::VERSION_VECTOR_KEY;
+use super::sync::get_sync_kv;
+
 // ---------------------------------------------------------------------------
 // usage_sync_log compaction (KOS-302)
 // ---------------------------------------------------------------------------
