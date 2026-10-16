@@ -107,3 +107,36 @@ impl DbCommand for SetSyncKeyValueCommand {
         set_sync_kv(transaction, &self.key, &self.value).map_err(DbError::Storage)
     }
 }
+
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct SetLocalSyncKeyValueCommand {
+    key: String,
+    value: String,
+}
+
+impl SetLocalSyncKeyValueCommand {
+    pub(crate) fn new(key: String, value: String) -> Self {
+        Self { key, value }
+    }
+}
+
+impl sealed::Sealed for SetLocalSyncKeyValueCommand {}
+
+impl DbCommand for SetLocalSyncKeyValueCommand {
+    type Output = ();
+
+    const CLASS: CommandClass = CommandClass::Interactive;
+
+    fn weight(&self) -> usize {
+        super::serialized_weight(self)
+    }
+
+    fn execute(
+        self,
+        context: &CommandContext,
+        transaction: &Transaction<'_>,
+    ) -> Result<Self::Output, DbError> {
+        context.require_engine()?;
+        set_sync_kv(transaction, &self.key, &self.value).map_err(DbError::Storage)
+    }
+}

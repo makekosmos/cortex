@@ -13,10 +13,14 @@ pub(super) async fn set_sync_kv(
     key: String,
     value: String,
 ) -> Result<Value, String> {
-    with_conn(state, |conn| {
-        db::set_sync_kv(conn, &key, &value)?;
-        Ok(json!(true))
-    })
+    get_db_handle(state)?
+        .submit(
+            db::CommandContext::engine(),
+            db::SetLocalSyncKeyValueCommand::new(key, value),
+        )
+        .await
+        .map(|()| json!(true))
+        .map_err(|error| error.to_string())
 }
 
 pub(super) async fn external_refs_upsert(

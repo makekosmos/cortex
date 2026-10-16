@@ -174,3 +174,4 @@ mod canonical_rpc;
 mod external_ref_commands;
 mod integration_rpc;
 mod object_mutation_commands;
+mod system_commands;
