@@ -114,37 +114,114 @@ async fn legacy_entity_writes_bump_version_vector() {
     .await
     .unwrap();
 
+    handle_request(
+        &state,
+        Request::UpsertTrackedApp {
+            tracked_app: TrackedApp {
+                id: "tracked-app-legacy".into(),
+                platform: "test".into(),
+                exe_path: "/tmp/app".into(),
+                normalized_exe_path: "/tmp/app".into(),
+                process_name: "app".into(),
+                display_name: Some("App".into()),
+                publisher: None,
+                icon_ref: None,
+                first_seen_at: timestamp.clone(),
+                last_seen_at: timestamp.clone(),
+            },
+            device_id: device.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    handle_request(
+        &state,
+        Request::DeleteTrackedApp {
+            id: "tracked-app-legacy".into(),
+            device_id: device.clone(),
+        },
+    )
+    .await
+    .unwrap();
+
     let shared = get_db_handle(&state)
         .map(|db| db.shared_connection_for_test())
         .unwrap();
-    let guard = shared.lock().unwrap();
-    let raw = db::get_sync_kv(&guard, "lan_sync.version_vector")
-        .unwrap()
-        .expect("version vector should be stored");
-    let vector: VersionVector = serde_json::from_str(&raw).unwrap();
-    for id in [
-        "project-legacy",
-        "tag-legacy",
-        "todo-legacy",
-        "todo-batch-1",
-        "todo-batch-2",
-    ] {
-        assert!(
-            vector
-                .get(id)
-                .is_some_and(|hlc| hlc.ends_with(":device-legacy")),
-            "{id} should have a local HLC in the version vector after legacy upsert",
-        );
-    }
+    {
+        let guard = shared.lock().unwrap();
+        let raw = db::get_sync_kv(&guard, "lan_sync.version_vector")
+            .unwrap()
+            .expect("version vector should be stored");
+        let vector: VersionVector = serde_json::from_str(&raw).unwrap();
+        for id in [
+            "project-legacy",
+            "tag-legacy",
+            "todo-legacy",
+            "todo-batch-1",
+            "todo-batch-2",
+            "tracked-app-legacy",
+        ] {
+            assert!(
+                vector
+                    .get(id)
+                    .is_some_and(|hlc| hlc.ends_with(":device-legacy")),
+                "{id} should have a local HLC in the version vector after legacy upsert",
+            );
+        }
 
-    let todo_tombstone: i64 = guard
-        .query_row(
-            "SELECT COUNT(*) FROM sync_tombstones WHERE id = ?1 AND entity_type = ?2",
-            rusqlite::params!["todo-batch-1", "object"],
-            |row| row.get(0),
-        )
-        .unwrap();
-    assert_eq!(todo_tombstone, 1, "DeleteTodo должен записать tombstone");
+        let todo_tombstone: i64 = guard
+            .query_row(
+                "SELECT COUNT(*) FROM sync_tombstones WHERE id = ?1 AND entity_type = ?2",
+                rusqlite::params!["todo-batch-1", "object"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(todo_tombstone, 1, "DeleteTodo должен записать tombstone");
+        let tracked_app_tombstone: i64 = guard
+            .query_row(
+                "SELECT COUNT(*) FROM sync_tombstones WHERE id = ?1 AND entity_type = ?2",
+                rusqlite::params!["tracked-app-legacy", "tracked_app"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(tracked_app_tombstone, 1);
+
+        guard
+            .execute_batch(
+                "CREATE TRIGGER fail_legacy_batch BEFORE INSERT ON object_sync_versions
+             WHEN NEW.object_id = 'todo-fail-2'
+             BEGIN SELECT RAISE(ABORT, 'injected batch failure'); END;",
+            )
+            .unwrap();
+    }
+    let failed = handle_request(
+        &state,
+        Request::BatchUpsertTodos {
+            todos: vec![make_todo("todo-fail-1"), make_todo("todo-fail-2")],
+            device_id: device.clone(),
+        },
+    )
+    .await;
+    assert!(failed.is_err());
+    {
+        let guard = shared.lock().unwrap();
+        for id in ["todo-fail-1", "todo-fail-2"] {
+            let object_count: i64 = guard
+                .query_row("SELECT COUNT(*) FROM objects WHERE id = ?1", [id], |row| {
+                    row.get(0)
+                })
+                .unwrap();
+            let version_count: i64 = guard
+                .query_row(
+                    "SELECT COUNT(*) FROM object_sync_versions WHERE object_id = ?1",
+                    [id],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(object_count, 0, "failed batch must roll back object {id}");
+            assert_eq!(version_count, 0, "failed batch must roll back version {id}");
+        }
+    }
 }
 
 // -----------------------------------------------------------------------

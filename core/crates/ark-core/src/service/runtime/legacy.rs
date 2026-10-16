@@ -56,7 +56,18 @@ pub(super) async fn upsert_todo(
         &todo.created_at,
         None,
     );
-    let entities = with_write_tx(state, |conn| write_legacy_graph(conn, &[record], device_id))?;
+    let entities = get_db_handle(state)?
+        .submit(
+            db::CommandContext::engine(),
+            db::LegacyGraphWriteCommand::new(
+                crate::application::legacy_mutation::LegacyGraphWrite {
+                    records: vec![record],
+                    device_id,
+                },
+            ),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
     maybe_broadcast_local_changes(state, entities).await;
     Ok(json!(true))
 }
@@ -66,9 +77,17 @@ pub(super) async fn delete_todo(
     id: String,
     device_id: Option<String>,
 ) -> Result<Value, String> {
-    let entity = with_write_tx(state, |conn| {
-        tombstone_legacy(conn, &id, "core.task", device_id)
-    })?;
+    let entity = get_db_handle(state)?
+        .submit(
+            db::CommandContext::engine(),
+            db::LegacyDeleteCommand::new(crate::application::legacy_mutation::LegacyDelete {
+                id,
+                kind: crate::application::legacy_mutation::LegacyObjectKind::Task,
+                device_id,
+            }),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
     maybe_broadcast_local_change(state, entity).await;
     Ok(json!(true))
 }
@@ -78,9 +97,17 @@ pub(super) async fn delete_project(
     id: String,
     device_id: Option<String>,
 ) -> Result<Value, String> {
-    let entity = with_write_tx(state, |conn| {
-        tombstone_legacy(conn, &id, "com.kosmos.project", device_id)
-    })?;
+    let entity = get_db_handle(state)?
+        .submit(
+            db::CommandContext::engine(),
+            db::LegacyDeleteCommand::new(crate::application::legacy_mutation::LegacyDelete {
+                id,
+                kind: crate::application::legacy_mutation::LegacyObjectKind::Project,
+                device_id,
+            }),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
     maybe_broadcast_local_change(state, entity).await;
     Ok(json!(true))
 }
@@ -113,7 +140,15 @@ pub(super) async fn batch_upsert_todos(
             )
         })
         .collect::<Vec<_>>();
-    let entities = with_write_tx(state, |conn| write_legacy_graph(conn, &records, device_id))?;
+    let entities = get_db_handle(state)?
+        .submit(
+            db::CommandContext::engine(),
+            db::LegacyGraphWriteCommand::new(
+                crate::application::legacy_mutation::LegacyGraphWrite { records, device_id },
+            ),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
     maybe_broadcast_local_changes(state, entities).await;
     Ok(json!(true))
 }
@@ -136,7 +171,18 @@ pub(super) async fn upsert_project(
         &project.created_at,
         None,
     );
-    let entities = with_write_tx(state, |conn| write_legacy_graph(conn, &[record], device_id))?;
+    let entities = get_db_handle(state)?
+        .submit(
+            db::CommandContext::engine(),
+            db::LegacyGraphWriteCommand::new(
+                crate::application::legacy_mutation::LegacyGraphWrite {
+                    records: vec![record],
+                    device_id,
+                },
+            ),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
     maybe_broadcast_local_changes(state, entities).await;
     Ok(json!(true))
 }
@@ -154,7 +200,18 @@ pub(super) async fn upsert_tag(
         &tag.created_at,
         None,
     );
-    let entities = with_write_tx(state, |conn| write_legacy_graph(conn, &[record], device_id))?;
+    let entities = get_db_handle(state)?
+        .submit(
+            db::CommandContext::engine(),
+            db::LegacyGraphWriteCommand::new(
+                crate::application::legacy_mutation::LegacyGraphWrite {
+                    records: vec![record],
+                    device_id,
+                },
+            ),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
     maybe_broadcast_local_changes(state, entities).await;
     Ok(json!(true))
 }
@@ -164,17 +221,18 @@ pub(super) async fn upsert_tracked_app(
     tracked_app: TrackedApp,
     device_id: Option<String>,
 ) -> Result<Value, String> {
-    let entity = with_write_tx(state, |conn| {
-        db::upsert_tracked_app(conn, &tracked_app)?;
-        let hlc = record_local_upsert(conn, "tracked_app", &tracked_app.id, device_id)?;
-        Ok(make_sync_entity(
-            "tracked_app",
-            &tracked_app.id,
-            serde_json::to_value(&tracked_app).unwrap_or(json!({})),
-            hlc,
-            None,
-        ))
-    })?;
+    let entity = get_db_handle(state)?
+        .submit(
+            db::CommandContext::engine(),
+            db::TrackedAppUpsertCommand::new(
+                crate::application::legacy_mutation::TrackedAppUpsert {
+                    tracked_app,
+                    device_id: local_write_device_id(device_id),
+                },
+            ),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
     maybe_broadcast_local_change(state, entity).await;
     Ok(json!(true))
 }
@@ -184,17 +242,18 @@ pub(super) async fn delete_tracked_app(
     id: String,
     device_id: Option<String>,
 ) -> Result<Value, String> {
-    let entity = with_write_tx(state, |conn| {
-        db::delete_tracked_app(conn, &id)?;
-        let hlc = record_local_delete(conn, "tracked_app", &id, device_id)?;
-        Ok(make_sync_entity(
-            "tracked_app",
-            &id,
-            json!({}),
-            hlc,
-            Some(true),
-        ))
-    })?;
+    let entity = get_db_handle(state)?
+        .submit(
+            db::CommandContext::engine(),
+            db::TrackedAppDeleteCommand::new(
+                crate::application::legacy_mutation::TrackedAppDelete {
+                    id,
+                    device_id: local_write_device_id(device_id),
+                },
+            ),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
     maybe_broadcast_local_change(state, entity).await;
     Ok(json!(true))
 }

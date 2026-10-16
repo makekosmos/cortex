@@ -276,23 +276,6 @@ fn legacy_record(
     }
 }
 
-fn write_legacy_graph(
-    conn: &rusqlite::Connection,
-    records: &[crate::canonical_types::compatibility::LegacyRecord],
-    device_id: Option<String>,
-) -> Result<Vec<SyncEntity>, String> {
-    crate::canonical_types::facades::write_legacy_records(conn, records, "rpc", device_id)
-}
-
-fn tombstone_legacy(
-    conn: &rusqlite::Connection,
-    id: &str,
-    expected_type_id: &str,
-    device_id: Option<String>,
-) -> Result<SyncEntity, String> {
-    crate::canonical_types::facades::delete_legacy_object(conn, id, expected_type_id, device_id)
-}
-
 // ---------------------------------------------------------------------------
 
 mod dispatch;

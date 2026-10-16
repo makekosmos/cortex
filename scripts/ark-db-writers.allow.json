@@ -227,11 +227,6 @@
       "count": 2
     },
     {
-      "path": "core/crates/ark-core/src/service/runtime/legacy.rs",
-      "category": "service transaction boundary",
-      "count": 8
-    },
-    {
       "path": "core/crates/ark-core/src/db/backend/object_mutation.rs",
       "category": "SQLite mutation API",
       "count": 1
