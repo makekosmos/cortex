@@ -82,14 +82,40 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
             vector: remote_vector,
             ..
         } => {
-            let (tx, peer_device_id, peer_sync_complete) = {
+            let (tx, peer_device_id, peer_sync_complete, policy_bound) = {
                 let peers_guard = peers.lock().await;
                 match peers_guard.get(&peer_id) {
-                    Some(p) if p.ready_peer.is_some() => {
-                        (p.tx.clone(), p.device_id.clone(), p.sync_complete)
-                    }
+                    Some(p) if p.ready_peer.is_some() => (
+                        p.tx.clone(),
+                        p.device_id.clone(),
+                        p.sync_complete,
+                        p.negotiated_protocol.as_ref().is_some_and(|protocol| {
+                            protocol.capabilities.contains(
+                                &crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1,
+                            )
+                        }),
+                    ),
                     _ => return,
                 }
+            };
+
+            let mut policy_identity = if policy_bound {
+                match storage
+                    .accepted_policy_identity_for_peer(&peer_device_id)
+                    .await
+                {
+                    Ok(Some(identity)) => Some(identity),
+                    Ok(None) => {
+                        eprintln!("{TAG} negotiated peer has no accepted policy identity");
+                        return;
+                    }
+                    Err(error) => {
+                        eprintln!("{TAG} accepted policy identity read failed: {error}");
+                        return;
+                    }
+                }
+            } else {
+                None
             };
 
             let mut local_vector = match load_version_vector(storage).await {
@@ -119,30 +145,99 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                 }
             };
 
+            let initial_local_vector = local_vector.clone();
             let mut vector_updated = false;
             let mut offset = 0;
-            loop {
+            'snapshot: loop {
+                if policy_bound {
+                    let current_identity = match storage
+                        .accepted_policy_identity_for_peer(&peer_device_id)
+                        .await
+                    {
+                        Ok(Some(identity)) => Some(identity),
+                        Ok(None) => {
+                            eprintln!("{TAG} accepted policy identity is missing");
+                            return;
+                        }
+                        Err(error) => {
+                            eprintln!("{TAG} accepted policy identity read failed: {error}");
+                            return;
+                        }
+                    };
+                    if current_identity != policy_identity {
+                        policy_identity = current_identity;
+                        local_vector.clone_from(&initial_local_vector);
+                        vector_updated = false;
+                        offset = 0;
+                    }
+                }
                 let mut load_vector = local_vector.clone();
                 merge_usage_cursors(&mut load_vector, &remote_vector);
-                let entities = match storage
-                    .load_entities_page_for_peer(
-                        &peer_device_id,
-                        read_class,
-                        &load_vector,
-                        offset,
-                        SYNC_LOAD_PAGE_SIZE,
-                    )
-                    .await
-                {
-                    Ok(entities) => entities,
-                    Err(error) => {
-                        eprintln!(
-                            "{TAG} outbound sync page read failed for {peer_device_id}: {error}"
-                        );
-                        return;
-                    }
+                let entities = match policy_identity.as_ref() {
+                    Some(identity) => match storage
+                        .load_policy_bound_entities_page_for_peer(
+                            &peer_device_id,
+                            read_class,
+                            &load_vector,
+                            offset,
+                            SYNC_LOAD_PAGE_SIZE,
+                            identity,
+                        )
+                        .await
+                    {
+                        Ok(page) => {
+                            debug_assert_eq!(page.identity, *identity);
+                            page.entities
+                        }
+                        Err(error) if error.contains("stale_or_unnegotiated_sync_policy") => {
+                            continue 'snapshot;
+                        }
+                        Err(error) => {
+                            eprintln!(
+                                "{TAG} outbound sync page read failed for {peer_device_id}: {error}"
+                            );
+                            return;
+                        }
+                    },
+                    None => match storage
+                        .load_entities_page_for_peer(
+                            &peer_device_id,
+                            read_class,
+                            &load_vector,
+                            offset,
+                            SYNC_LOAD_PAGE_SIZE,
+                        )
+                        .await
+                    {
+                        Ok(entities) => entities,
+                        Err(error) => {
+                            eprintln!(
+                                "{TAG} outbound sync page read failed for {peer_device_id}: {error}"
+                            );
+                            return;
+                        }
+                    },
                 };
                 if entities.is_empty() {
+                    if policy_bound {
+                        let current_identity = match storage
+                            .accepted_policy_identity_for_peer(&peer_device_id)
+                            .await
+                        {
+                            Ok(identity) => identity,
+                            Err(error) => {
+                                eprintln!("{TAG} accepted policy identity read failed: {error}");
+                                return;
+                            }
+                        };
+                        if current_identity != policy_identity {
+                            policy_identity = current_identity;
+                            local_vector.clone_from(&initial_local_vector);
+                            vector_updated = false;
+                            offset = 0;
+                            continue 'snapshot;
+                        }
+                    }
                     break;
                 }
                 offset += entities.len();
@@ -156,10 +251,30 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                         to_send.push(entity);
                     }
                 }
+                if policy_bound {
+                    let current_identity = match storage
+                        .accepted_policy_identity_for_peer(&peer_device_id)
+                        .await
+                    {
+                        Ok(identity) => identity,
+                        Err(error) => {
+                            eprintln!("{TAG} accepted policy identity read failed: {error}");
+                            return;
+                        }
+                    };
+                    if current_identity != policy_identity {
+                        policy_identity = current_identity;
+                        local_vector.clone_from(&initial_local_vector);
+                        vector_updated = false;
+                        offset = 0;
+                        continue 'snapshot;
+                    }
+                }
                 for batch in split_into_batches(&to_send) {
                     send_msg(
                         &tx,
                         &LanSyncMessage::SyncChanges {
+                            policy_identity: policy_identity.clone(),
                             batch_id: generate_id(),
                             entities: batch,
                             is_last: false,
@@ -180,11 +295,13 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                 let mut peers_guard = peers.lock().await;
                 if let Some(peer) = peers_guard.get_mut(&peer_id) {
                     peer.pending_initial_snapshot_ack = Some(terminal_batch_id.clone());
+                    peer.pending_initial_snapshot_policy_identity = policy_identity.clone();
                 }
             }
             send_msg(
                 &tx,
                 &LanSyncMessage::SyncChanges {
+                    policy_identity,
                     batch_id: terminal_batch_id,
                     entities: vec![],
                     is_last: true,
@@ -199,16 +316,42 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
             batch_id,
             entities,
             is_last,
+            policy_identity,
             usage_complete_through,
             ..
         } => {
-            let (tx, peer_device_id) = {
+            let (tx, peer_device_id, policy_bound) = {
                 let peers_guard = peers.lock().await;
                 match peers_guard.get(&peer_id) {
-                    Some(p) if p.ready_peer.is_some() => (p.tx.clone(), p.device_id.clone()),
+                    Some(p) if p.ready_peer.is_some() => (
+                        p.tx.clone(),
+                        p.device_id.clone(),
+                        p.negotiated_protocol.as_ref().is_some_and(|protocol| {
+                            protocol.capabilities.contains(
+                                &crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1,
+                            )
+                        }),
+                    ),
                     _ => return,
                 }
             };
+
+            let local_device_id = ctx.device_id.read().await.clone();
+            let local_profile = match storage.load_local_sync_profile(&local_device_id).await {
+                Ok(profile) => profile,
+                Err(error) => {
+                    eprintln!("{TAG} local policy identity read failed: {error}");
+                    return;
+                }
+            };
+            let expected_identity =
+                policy_bound.then(|| crate::protocol::sync_policy_identity(local_profile.as_ref()));
+            if (policy_bound && policy_identity != expected_identity)
+                || (!policy_bound && policy_identity.is_some())
+            {
+                eprintln!("{TAG} rejected snapshot page for stale or unnegotiated policy");
+                return;
+            }
 
             let mut local_vector = match load_version_vector(storage).await {
                 Ok(vector) => vector,
@@ -228,10 +371,22 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
 
                 if should_apply {
                     match storage
-                        .apply_authenticated_entity(entity, &peer_device_id)
+                        .apply_authenticated_entity_with_policy(
+                            entity,
+                            &peer_device_id,
+                            &crate::db::entity_inbox_message_id(
+                                &peer_device_id,
+                                &entity.entity_type,
+                                &entity.id,
+                                &entity.hlc,
+                            ),
+                            &local_device_id,
+                            policy_identity.clone(),
+                        )
                         .await
                     {
-                        Ok(()) => {
+                        Ok(crate::application::sync_storage::InboundApplyOutcome::Applied)
+                        | Ok(crate::application::sync_storage::InboundApplyOutcome::Stale) => {
                             vector_updated |= observe_non_usage_entity(&mut local_vector, entity);
                             accepted += 1;
 
@@ -242,6 +397,7 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                             // Broadcast to other peers
                             broadcast_to_others(storage, peers, Some(&peer_device_id)).await;
                         }
+                        Ok(crate::application::sync_storage::InboundApplyOutcome::Pending) => {}
                         Err(e) => {
                             eprintln!(
                                 "{TAG} Failed to apply sync entity {}:{}: {e}",
@@ -252,19 +408,42 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                 }
             }
 
-            if let Err(error) = persist_pull_vector(
-                storage,
-                &mut local_vector,
-                vector_updated,
-                is_last,
-                usage_complete_through.as_ref(),
-            )
-            .await
-            {
+            let persist_result = match policy_identity.as_ref() {
+                Some(identity) => {
+                    persist_pull_vector_with_policy(
+                        storage,
+                        &local_device_id,
+                        identity,
+                        &mut local_vector,
+                        vector_updated,
+                        is_last,
+                        usage_complete_through.as_ref(),
+                    )
+                    .await
+                }
+                None => {
+                    persist_pull_vector(
+                        storage,
+                        &mut local_vector,
+                        vector_updated,
+                        is_last,
+                        usage_complete_through.as_ref(),
+                    )
+                    .await
+                }
+            };
+            if let Err(error) = persist_result {
                 eprintln!("{TAG} failed to persist pulled sync progress: {error}");
                 return;
             }
-            send_msg(&tx, &LanSyncMessage::SyncAck { batch_id, accepted });
+            send_msg(
+                &tx,
+                &LanSyncMessage::SyncAck {
+                    batch_id,
+                    accepted,
+                    policy_identity,
+                },
+            );
 
             if is_last {
                 eprintln!("{TAG} Received all sync batches from peer {peer_id}");

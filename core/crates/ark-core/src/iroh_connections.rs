@@ -476,6 +476,7 @@ mod tests {
         assert!(!control_message_is_safe_without_admission(&update, false));
         assert!(!control_message_is_safe_without_admission(
             &LanSyncMessage::LiveChange {
+                policy_identity: None,
                 change_id: "change".into(),
                 entity: crate::types::SyncEntity {
                     id: "object".into(),

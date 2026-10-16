@@ -1,5 +1,39 @@
 use super::*;
 
+pub(super) async fn is_policy_bound(
+    authenticated_tx: &Arc<Mutex<Option<AuthenticatedPeerSession>>>,
+) -> bool {
+    authenticated_tx
+        .lock()
+        .await
+        .as_ref()
+        .is_some_and(|session| {
+            session
+                .protocol
+                .capabilities
+                .contains(&crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1)
+        })
+}
+
+pub(super) async fn validate_snapshot_identity(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+    local_device_id: &str,
+    policy_bound: bool,
+    received: &Option<crate::application::sync_storage::PolicyIdentity>,
+) -> Result<(), String> {
+    let expected = if policy_bound {
+        let profile = storage.load_local_sync_profile(local_device_id).await?;
+        Some(crate::protocol::sync_policy_identity(profile.as_ref()))
+    } else {
+        None
+    };
+    if received == &expected {
+        Ok(())
+    } else {
+        Err("stale_or_unnegotiated_snapshot_policy".into())
+    }
+}
+
 pub(super) async fn accept(
     storage: &Arc<dyn SyncRuntimeStorage>,
     authenticated_tx: &Arc<Mutex<Option<AuthenticatedPeerSession>>>,

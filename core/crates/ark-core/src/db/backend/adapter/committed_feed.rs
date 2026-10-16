@@ -34,6 +34,20 @@ impl crate::application::sync_storage::CommittedFeedPort for SqliteStorageBacken
             .map_or(0, |policy| policy.revision))
     }
 
+    async fn accepted_policy_identity_for_peer(
+        &self,
+        peer_device_id: &str,
+    ) -> Result<Option<crate::application::sync_storage::PolicyIdentity>, String> {
+        Ok(Some(
+            self.load_accepted_peer_sync_policy(peer_device_id)
+                .await?
+                .map_or_else(
+                    crate::data_platform::default_sync_policy_identity,
+                    |policy| policy.identity(),
+                ),
+        ))
+    }
+
     async fn committed_feed_snapshot(
         &self,
     ) -> Result<crate::application::sync_storage::FeedSnapshot, String> {
@@ -80,6 +94,29 @@ impl crate::application::sync_storage::CommittedFeedPort for SqliteStorageBacken
             .map_err(|error| error.to_string())
     }
 
+    async fn committed_feed_delivery_page_for_peer(
+        &self,
+        peer_device_id: &str,
+        expected_identity: &crate::application::sync_storage::PolicyIdentity,
+        after_position: i64,
+        high_watermark: i64,
+        limit: usize,
+    ) -> Result<crate::application::sync_storage::PolicyBoundFeedPage, String> {
+        self.db
+            .query(
+                CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
+                crate::db::PolicyBoundFeedDeliveryPageQuery::new(
+                    peer_device_id.to_owned(),
+                    expected_identity.clone(),
+                    after_position,
+                    high_watermark,
+                    limit,
+                ),
+            )
+            .await
+            .map_err(|error| error.to_string())
+    }
+
     async fn begin_outbound_policy(
         &self,
         peer_device_id: &str,
@@ -103,6 +140,29 @@ impl crate::application::sync_storage::CommittedFeedPort for SqliteStorageBacken
         }
     }
 
+    async fn begin_outbound_policy_identity(
+        &self,
+        peer_device_id: &str,
+        identity: &crate::application::sync_storage::PolicyIdentity,
+    ) -> Result<crate::application::sync_storage::OutboundProgress, String> {
+        match self
+            .db
+            .submit(
+                CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
+                crate::db::CommittedFeedProgressCommand::new(
+                    crate::db::CommittedFeedProgressOperation::BeginOutboundPolicyIdentity {
+                        peer_device_id: peer_device_id.to_owned(),
+                        identity: identity.clone(),
+                    },
+                ),
+            )
+            .await
+            .map_err(|error| error.to_string())?
+        {
+            crate::db::CommittedFeedProgress::Outbound(progress) => Ok(progress),
+        }
+    }
+
     async fn complete_outbound_snapshot(
         &self,
         peer_device_id: &str,
@@ -116,6 +176,29 @@ impl crate::application::sync_storage::CommittedFeedPort for SqliteStorageBacken
                     crate::db::CommittedFeedProgressOperation::CompleteOutboundSnapshot {
                         peer_device_id: peer_device_id.to_owned(),
                         policy_generation,
+                    },
+                ),
+            )
+            .await
+            .map_err(|error| error.to_string())?
+        {
+            crate::db::CommittedFeedProgress::Outbound(progress) => Ok(progress),
+        }
+    }
+
+    async fn complete_outbound_snapshot_identity(
+        &self,
+        peer_device_id: &str,
+        identity: &crate::application::sync_storage::PolicyIdentity,
+    ) -> Result<crate::application::sync_storage::OutboundProgress, String> {
+        match self
+            .db
+            .submit(
+                CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
+                crate::db::CommittedFeedProgressCommand::new(
+                    crate::db::CommittedFeedProgressOperation::CompleteOutboundSnapshotIdentity {
+                        peer_device_id: peer_device_id.to_owned(),
+                        identity: identity.clone(),
                     },
                 ),
             )
@@ -151,6 +234,31 @@ impl crate::application::sync_storage::CommittedFeedPort for SqliteStorageBacken
         }
     }
 
+    async fn record_outbound_scan_identity(
+        &self,
+        peer_device_id: &str,
+        identity: &crate::application::sync_storage::PolicyIdentity,
+        scanned_through: i64,
+    ) -> Result<crate::application::sync_storage::OutboundProgress, String> {
+        match self
+            .db
+            .submit(
+                CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
+                crate::db::CommittedFeedProgressCommand::new(
+                    crate::db::CommittedFeedProgressOperation::RecordOutboundScanIdentity {
+                        peer_device_id: peer_device_id.to_owned(),
+                        identity: identity.clone(),
+                        scanned_through,
+                    },
+                ),
+            )
+            .await
+            .map_err(|error| error.to_string())?
+        {
+            crate::db::CommittedFeedProgress::Outbound(progress) => Ok(progress),
+        }
+    }
+
     async fn acknowledge_outbound(
         &self,
         peer_device_id: &str,
@@ -166,6 +274,33 @@ impl crate::application::sync_storage::CommittedFeedPort for SqliteStorageBacken
                     crate::db::CommittedFeedProgressOperation::AcknowledgeOutbound {
                         peer_device_id: peer_device_id.to_owned(),
                         policy_generation,
+                        position,
+                        ack,
+                    },
+                ),
+            )
+            .await
+            .map_err(|error| error.to_string())?
+        {
+            crate::db::CommittedFeedProgress::Outbound(progress) => Ok(progress),
+        }
+    }
+
+    async fn acknowledge_outbound_identity(
+        &self,
+        peer_device_id: &str,
+        identity: &crate::application::sync_storage::PolicyIdentity,
+        position: i64,
+        ack: crate::application::sync_storage::OutboundAck,
+    ) -> Result<crate::application::sync_storage::OutboundProgress, String> {
+        match self
+            .db
+            .submit(
+                CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
+                crate::db::CommittedFeedProgressCommand::new(
+                    crate::db::CommittedFeedProgressOperation::AcknowledgeOutboundIdentity {
+                        peer_device_id: peer_device_id.to_owned(),
+                        identity: identity.clone(),
                         position,
                         ack,
                     },

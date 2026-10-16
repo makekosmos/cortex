@@ -184,6 +184,7 @@ async fn relay_round_trip() {
 
     let change_id = "change-relay-test-001".to_string();
     let msg = LanSyncMessage::LiveChange {
+        policy_identity: None,
         change_id,
         entity: test_entity.clone(),
         origin_device_id: Some("device-A".to_string()),

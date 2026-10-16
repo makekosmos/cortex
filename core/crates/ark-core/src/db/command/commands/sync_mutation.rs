@@ -1,5 +1,6 @@
 use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError};
-use crate::application::sync_storage::{OutboundAck, OutboundProgress};
+use super::inbound_policy::require_sync_policy_identity;
+use crate::application::sync_storage::{OutboundAck, OutboundProgress, PolicyIdentity};
 use crate::canonical_types::pending::ReplayNotice;
 use crate::db::{ensure_usage_sequence_migrated, set_sync_kv, SqliteStorageBackend};
 use crate::types::SyncEntity;
@@ -27,6 +28,25 @@ pub(crate) enum CommittedFeedProgressOperation {
         position: i64,
         ack: OutboundAck,
     },
+    BeginOutboundPolicyIdentity {
+        peer_device_id: String,
+        identity: PolicyIdentity,
+    },
+    CompleteOutboundSnapshotIdentity {
+        peer_device_id: String,
+        identity: PolicyIdentity,
+    },
+    RecordOutboundScanIdentity {
+        peer_device_id: String,
+        identity: PolicyIdentity,
+        scanned_through: i64,
+    },
+    AcknowledgeOutboundIdentity {
+        peer_device_id: String,
+        identity: PolicyIdentity,
+        position: i64,
+        ack: OutboundAck,
+    },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -37,65 +57,6 @@ pub(crate) struct CommittedFeedProgressCommand {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum CommittedFeedProgress {
     Outbound(OutboundProgress),
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub(crate) struct ReceiveInboxReceiptCommand {
-    peer_device_id: String,
-    message_id: String,
-    payload_json: String,
-}
-
-impl ReceiveInboxReceiptCommand {
-    pub(crate) fn new(peer_device_id: String, message_id: String, payload_json: String) -> Self {
-        Self {
-            peer_device_id,
-            message_id,
-            payload_json,
-        }
-    }
-}
-
-impl sealed::Sealed for ReceiveInboxReceiptCommand {}
-
-impl DbCommand for ReceiveInboxReceiptCommand {
-    type Output = crate::db::InboxState;
-    const CLASS: CommandClass = CommandClass::SyncLive;
-
-    fn weight(&self) -> usize {
-        super::serialized_weight(self)
-    }
-
-    fn execute(
-        self,
-        context: &CommandContext,
-        transaction: &Transaction<'_>,
-    ) -> Result<Self::Output, DbError> {
-        context.require_sync_peer_matches(&self.peer_device_id)?;
-        super::device_registry_sync::require_registry_peer_admitted(
-            transaction,
-            &self.peer_device_id,
-        )?;
-        let removed: Vec<String> = crate::db::get_sync_kv(transaction, "sync.removed_peers")
-            .map_err(DbError::from_application_error)?
-            .map(|raw| serde_json::from_str(&raw).map_err(|error| error.to_string()))
-            .transpose()
-            .map_err(DbError::from_application_error)?
-            .unwrap_or_default();
-        if removed
-            .iter()
-            .any(|removed_id| removed_id == &self.peer_device_id)
-        {
-            return Err(DbError::Permission("sync_peer_removed".into()));
-        }
-        crate::db::receive_inbox_payload(
-            transaction,
-            &self.peer_device_id,
-            &self.message_id,
-            &self.payload_json,
-        )
-        .map_err(DbError::from_application_error)
-    }
 }
 
 impl CommittedFeedProgressCommand {
@@ -123,9 +84,20 @@ impl DbCommand for CommittedFeedProgressCommand {
             CommittedFeedProgressOperation::BeginOutboundPolicy { peer_device_id, .. }
             | CommittedFeedProgressOperation::CompleteOutboundSnapshot { peer_device_id, .. }
             | CommittedFeedProgressOperation::RecordOutboundScan { peer_device_id, .. }
-            | CommittedFeedProgressOperation::AcknowledgeOutbound { peer_device_id, .. } => {
-                peer_device_id
+            | CommittedFeedProgressOperation::AcknowledgeOutbound { peer_device_id, .. }
+            | CommittedFeedProgressOperation::BeginOutboundPolicyIdentity {
+                peer_device_id, ..
             }
+            | CommittedFeedProgressOperation::CompleteOutboundSnapshotIdentity {
+                peer_device_id,
+                ..
+            }
+            | CommittedFeedProgressOperation::RecordOutboundScanIdentity {
+                peer_device_id, ..
+            }
+            | CommittedFeedProgressOperation::AcknowledgeOutboundIdentity {
+                peer_device_id, ..
+            } => peer_device_id,
         };
         context.require_sync_peer_matches(peer_device_id)?;
         use CommittedFeedProgressOperation as Op;
@@ -164,6 +136,44 @@ impl DbCommand for CommittedFeedProgressCommand {
                 transaction,
                 &peer_device_id,
                 policy_generation,
+                position,
+                ack,
+            )
+            .map(CommittedFeedProgress::Outbound),
+            Op::BeginOutboundPolicyIdentity {
+                peer_device_id,
+                identity,
+            } => crate::db::begin_outbound_policy_identity(transaction, &peer_device_id, &identity)
+                .map(CommittedFeedProgress::Outbound),
+            Op::CompleteOutboundSnapshotIdentity {
+                peer_device_id,
+                identity,
+            } => crate::db::complete_outbound_snapshot_identity(
+                transaction,
+                &peer_device_id,
+                &identity,
+            )
+            .map(CommittedFeedProgress::Outbound),
+            Op::RecordOutboundScanIdentity {
+                peer_device_id,
+                identity,
+                scanned_through,
+            } => crate::db::record_outbound_scan_identity(
+                transaction,
+                &peer_device_id,
+                &identity,
+                scanned_through,
+            )
+            .map(CommittedFeedProgress::Outbound),
+            Op::AcknowledgeOutboundIdentity {
+                peer_device_id,
+                identity,
+                position,
+                ack,
+            } => crate::db::acknowledge_outbound_identity(
+                transaction,
+                &peer_device_id,
+                &identity,
                 position,
                 ack,
             )
@@ -275,11 +285,32 @@ impl DbCommand for ApplySyncEntityCommand {
 pub(crate) struct ApplyAuthenticatedSyncEntityCommand {
     entity: SyncEntity,
     message_id: String,
+    local_device_id: Option<String>,
+    policy_identity: Option<PolicyIdentity>,
 }
 
 impl ApplyAuthenticatedSyncEntityCommand {
     pub(crate) fn with_message_id(entity: SyncEntity, message_id: String) -> Self {
-        Self { entity, message_id }
+        Self {
+            entity,
+            message_id,
+            local_device_id: None,
+            policy_identity: None,
+        }
+    }
+
+    pub(crate) fn with_policy_identity(
+        entity: SyncEntity,
+        message_id: String,
+        local_device_id: String,
+        policy_identity: PolicyIdentity,
+    ) -> Self {
+        Self {
+            entity,
+            message_id,
+            local_device_id: Some(local_device_id),
+            policy_identity: Some(policy_identity),
+        }
     }
 }
 
@@ -303,6 +334,11 @@ impl DbCommand for ApplyAuthenticatedSyncEntityCommand {
         transaction: &Transaction<'_>,
     ) -> Result<Self::Output, DbError> {
         let peer_id = context.authenticated_peer_id()?;
+        require_sync_policy_identity(
+            transaction,
+            self.local_device_id.as_deref(),
+            self.policy_identity.as_ref(),
+        )?;
         super::device_registry_sync::require_registry_peer_admitted(transaction, peer_id)?;
         let message_id = self.message_id;
         let payload = serde_json::to_string(&self.entity)
@@ -353,11 +389,32 @@ impl DbCommand for ApplyAuthenticatedSyncEntityCommand {
 pub(crate) struct SetSyncKeyValueCommand {
     key: String,
     value: String,
+    local_device_id: Option<String>,
+    policy_identity: Option<PolicyIdentity>,
 }
 
 impl SetSyncKeyValueCommand {
     pub(crate) fn new(key: String, value: String) -> Self {
-        Self { key, value }
+        Self {
+            key,
+            value,
+            local_device_id: None,
+            policy_identity: None,
+        }
+    }
+
+    pub(crate) fn with_policy_identity(
+        key: String,
+        value: String,
+        local_device_id: String,
+        policy_identity: PolicyIdentity,
+    ) -> Self {
+        Self {
+            key,
+            value,
+            local_device_id: Some(local_device_id),
+            policy_identity: Some(policy_identity),
+        }
     }
 }
 
@@ -378,6 +435,11 @@ impl DbCommand for SetSyncKeyValueCommand {
         transaction: &Transaction<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_system_sync()?;
+        require_sync_policy_identity(
+            transaction,
+            self.local_device_id.as_deref(),
+            self.policy_identity.as_ref(),
+        )?;
         set_sync_kv(transaction, &self.key, &self.value).map_err(DbError::Storage)
     }
 }

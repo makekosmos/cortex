@@ -182,12 +182,78 @@ pub fn read_committed_feed_delivery_page(
     read_committed_feed_delivery_page_with_hook(conn, after_position, high_watermark, limit, || {})
 }
 
+pub fn read_committed_feed_delivery_page_for_peer(
+    conn: &Connection,
+    peer_device_id: &str,
+    expected_identity: &crate::application::sync_storage::PolicyIdentity,
+    after_position: i64,
+    high_watermark: i64,
+    limit: usize,
+) -> Result<crate::application::sync_storage::PolicyBoundFeedPage, String> {
+    conn.execute_batch("SAVEPOINT committed_feed_policy_snapshot")
+        .map_err(|error| error.to_string())?;
+    let result = (|| -> Result<_, String> {
+        let policy = crate::data_platform::load_accepted_peer_sync_policy(conn, peer_device_id)?;
+        let identity = policy.as_ref().map_or_else(
+            crate::data_platform::default_sync_policy_identity,
+            |policy| policy.identity(),
+        );
+        if &identity != expected_identity {
+            return Err("outbound_feed_policy_changed".into());
+        }
+        let profile = policy
+            .as_ref()
+            .filter(|policy| policy.active)
+            .map(|policy| policy.selective_profile());
+        let page = read_committed_feed_delivery_page_with_profile(
+            conn,
+            after_position,
+            high_watermark,
+            limit,
+            || {},
+            profile.as_ref(),
+        )?;
+        Ok(crate::application::sync_storage::PolicyBoundFeedPage { identity, page })
+    })();
+    match result {
+        Ok(page) => conn
+            .execute_batch("RELEASE committed_feed_policy_snapshot")
+            .map(|()| page)
+            .map_err(|error| error.to_string()),
+        Err(error) => {
+            let _ = conn.execute_batch(
+                "ROLLBACK TO committed_feed_policy_snapshot;
+                 RELEASE committed_feed_policy_snapshot",
+            );
+            Err(error)
+        }
+    }
+}
+
 fn read_committed_feed_delivery_page_with_hook(
     conn: &Connection,
     after_position: i64,
     high_watermark: i64,
     limit: usize,
     after_selection: impl FnOnce(),
+) -> Result<CommittedFeedDeliveryPage, String> {
+    read_committed_feed_delivery_page_with_profile(
+        conn,
+        after_position,
+        high_watermark,
+        limit,
+        after_selection,
+        None,
+    )
+}
+
+fn read_committed_feed_delivery_page_with_profile(
+    conn: &Connection,
+    after_position: i64,
+    high_watermark: i64,
+    limit: usize,
+    after_selection: impl FnOnce(),
+    profile: Option<&crate::data_platform::SelectiveSyncProfile>,
 ) -> Result<CommittedFeedDeliveryPage, String> {
     if after_position < 0 || high_watermark < after_position {
         return Err("invalid_committed_feed_cursor".into());
@@ -236,10 +302,26 @@ fn read_committed_feed_delivery_page_with_hook(
         drop(statement);
         after_selection();
 
+        let projected = entries
+            .iter()
+            .filter_map(|entry| project_feed_entity(conn, entry).transpose())
+            .collect::<Result<Vec<_>, _>>()?;
+        let projected = match profile {
+            Some(profile) => crate::data_platform::filter_entities_for_profile(profile, &projected),
+            None => projected,
+        };
+        let projected = projected
+            .into_iter()
+            .map(|entity| ((entity.entity_type.clone(), entity.id.clone()), entity))
+            .collect::<std::collections::HashMap<_, _>>();
+
         let mut deliveries = Vec::with_capacity(entries.len());
         let mut serialized_bytes = 0usize;
         for entry in entries {
-            let Some(entity) = project_feed_entity(conn, &entry)? else {
+            let Some(entity) = projected
+                .get(&(entry.entity_type.clone(), entry.entity_id.clone()))
+                .cloned()
+            else {
                 continue;
             };
             let entity_bytes = serde_json::to_vec(&entity)

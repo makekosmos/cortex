@@ -43,6 +43,19 @@ pub fn sync_policy_message(profile: &crate::data_platform::SyncProfile) -> LanSy
     }
 }
 
+pub fn sync_policy_identity(
+    profile: Option<&crate::data_platform::SyncProfile>,
+) -> crate::application::sync_storage::PolicyIdentity {
+    profile.map_or_else(
+        crate::data_platform::default_sync_policy_identity,
+        |profile| crate::application::sync_storage::PolicyIdentity {
+            revision: profile.revision,
+            digest: profile.digest(),
+            active: profile.active,
+        },
+    )
+}
+
 fn default_sync_policy_active() -> bool {
     true
 }

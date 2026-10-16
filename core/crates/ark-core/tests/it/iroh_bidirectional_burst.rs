@@ -62,6 +62,7 @@ fn make_burst_message(prefix: &str, i: usize) -> (String, LanSyncMessage) {
         origin_seq: None,
     };
     let msg = LanSyncMessage::LiveChange {
+        policy_identity: None,
         change_id: change_id.clone(),
         entity,
         origin_device_id: Some(prefix.to_string()),

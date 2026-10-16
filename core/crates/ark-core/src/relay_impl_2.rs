@@ -205,6 +205,7 @@ impl RelaySync {
 
             for batch in split_into_batches(&to_send) {
                 let _ = self.transport.send(LanSyncMessage::SyncChanges {
+                    policy_identity: None,
                     batch_id: generate_id(),
                     entities: batch,
                     is_last: false,
@@ -215,6 +216,7 @@ impl RelaySync {
         }
 
         let _ = self.transport.send(LanSyncMessage::SyncChanges {
+            policy_identity: None,
             batch_id: generate_id(),
             entities: vec![],
             is_last: true,

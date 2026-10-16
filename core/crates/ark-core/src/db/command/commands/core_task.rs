@@ -74,6 +74,8 @@ pub(crate) struct AuthenticatedCoreTaskWrite {
     data: Map<String, Value>,
     inbox_message_id: String,
     inbox_payload_json: String,
+    local_device_id: Option<String>,
+    policy_identity: Option<crate::application::sync_storage::PolicyIdentity>,
 }
 
 impl AuthenticatedCoreTaskWrite {
@@ -92,7 +94,33 @@ impl AuthenticatedCoreTaskWrite {
             data,
             inbox_message_id,
             inbox_payload_json,
+            local_device_id: None,
+            policy_identity: None,
         }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn with_policy_identity(
+        id: String,
+        source_hlc: String,
+        source_origin_device_id: Option<String>,
+        data: Map<String, Value>,
+        inbox_message_id: String,
+        inbox_payload_json: String,
+        local_device_id: String,
+        policy_identity: crate::application::sync_storage::PolicyIdentity,
+    ) -> Self {
+        let mut command = Self::new(
+            id,
+            source_hlc,
+            source_origin_device_id,
+            data,
+            inbox_message_id,
+            inbox_payload_json,
+        );
+        command.local_device_id = Some(local_device_id);
+        command.policy_identity = Some(policy_identity);
+        command
     }
 }
 
@@ -113,6 +141,11 @@ impl DbCommand for AuthenticatedCoreTaskWrite {
         transaction: &Transaction<'_>,
     ) -> Result<Self::Output, DbError> {
         let peer_id = context.authenticated_peer_id()?;
+        super::require_sync_policy_identity(
+            transaction,
+            self.local_device_id.as_deref(),
+            self.policy_identity.as_ref(),
+        )?;
         super::device_registry_sync::require_registry_peer_admitted(transaction, peer_id)?;
         let inbox_state = crate::db::receive_inbox_payload(
             transaction,

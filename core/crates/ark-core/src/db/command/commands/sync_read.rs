@@ -23,6 +23,10 @@ pub(crate) struct LoadEntitiesQuery {
 }
 
 impl LoadEntitiesQuery {
+    pub(super) fn class(&self) -> CommandClass {
+        self.class
+    }
+
     pub(crate) fn all(
         vector: VersionVector,
         device_id: String,
@@ -96,6 +100,23 @@ impl DbQuery for LoadEntitiesQuery {
         context: &CommandContext,
         connection: &Connection,
     ) -> Result<Self::Output, DbError> {
+        self.read_with_policy_identity(context, connection)
+            .map(|(_, entities)| entities)
+    }
+}
+
+impl LoadEntitiesQuery {
+    pub(super) fn read_with_policy_identity(
+        self,
+        context: &CommandContext,
+        connection: &Connection,
+    ) -> Result<
+        (
+            Option<crate::application::sync_storage::PolicyIdentity>,
+            Vec<SyncEntity>,
+        ),
+        DbError,
+    > {
         context.require_sync_peer_or_system()?;
         let Self {
             vector,
@@ -105,12 +126,17 @@ impl DbQuery for LoadEntitiesQuery {
             page,
             class: _,
         } = self;
+        let mut policy_identity = None;
         if let Some(peer_device_id) = peer_device_id {
             context.require_sync_peer_matches(&peer_device_id)?;
-            profile =
+            let policy =
                 crate::data_platform::load_accepted_peer_sync_policy(connection, &peer_device_id)
-                    .map_err(DbError::from_application_error)?
-                    .and_then(|policy| policy.active.then(|| policy.selective_profile()));
+                    .map_err(DbError::from_application_error)?;
+            policy_identity = Some(policy.as_ref().map_or_else(
+                crate::data_platform::default_sync_policy_identity,
+                |policy| policy.identity(),
+            ));
+            profile = policy.and_then(|policy| policy.active.then(|| policy.selective_profile()));
         }
         let entities = match page {
             None => {
@@ -133,12 +159,13 @@ impl DbQuery for LoadEntitiesQuery {
                 }
             }
         };
-        Ok(match (page, profile) {
+        let entities = match (page, profile) {
             (None, Some(profile)) => {
                 crate::data_platform::filter_entities_for_profile(&profile, &entities)
             }
             _ => entities,
-        })
+        };
+        Ok((policy_identity, entities))
     }
 }
 

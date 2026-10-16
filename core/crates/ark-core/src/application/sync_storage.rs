@@ -3,6 +3,32 @@ use std::collections::HashMap;
 use crate::canonical_types::pending::ReplayNotice;
 use crate::types::{PeerRecord, SyncEntity, VersionVector};
 
+/// Exact receiver-owned policy identity used to bind sync delivery to the
+/// policy that selected its contents.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct PolicyIdentity {
+    pub revision: i64,
+    pub digest: String,
+    pub active: bool,
+}
+
+impl PolicyIdentity {
+    pub fn new(revision: i64, digest: impl Into<String>, active: bool) -> Result<Self, String> {
+        let digest = digest.into();
+        if revision < 0
+            || digest.len() != 64
+            || !digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+        {
+            return Err("invalid_sync_policy_identity".into());
+        }
+        Ok(Self {
+            revision,
+            digest,
+            active,
+        })
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct CommittedFeedEntry {
     pub position: i64,
@@ -37,6 +63,18 @@ pub enum CommittedFeedDeliveryPage {
         serialized_bytes: usize,
         max_bytes: usize,
     },
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct PolicyBoundFeedPage {
+    pub identity: PolicyIdentity,
+    pub page: CommittedFeedDeliveryPage,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct PolicyBoundSnapshotPage {
+    pub identity: PolicyIdentity,
+    pub entities: Vec<SyncEntity>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -136,6 +174,25 @@ pub trait SyncEntityReadPort: Send + Sync {
         offset: usize,
         limit: usize,
     ) -> Result<Vec<SyncEntity>, String>;
+    async fn load_policy_bound_entities_page_for_peer(
+        &self,
+        peer_device_id: &str,
+        class: SyncReadClass,
+        vector: &VersionVector,
+        offset: usize,
+        limit: usize,
+        expected_identity: &PolicyIdentity,
+    ) -> Result<PolicyBoundSnapshotPage, String> {
+        let _ = (
+            peer_device_id,
+            class,
+            vector,
+            offset,
+            limit,
+            expected_identity,
+        );
+        Err("policy_bound_snapshot_page_unsupported".into())
+    }
     async fn usage_complete_through(&self) -> Result<HashMap<String, u64>, String>;
     async fn usage_complete_through_for_peer(
         &self,
@@ -189,6 +246,14 @@ pub fn apply_inbound_sync_entity(
 pub trait PeerProgressPort: Send + Sync {
     async fn load_version_vector(&self) -> Result<VersionVector, String>;
     async fn store_version_vector(&self, vector: &VersionVector) -> Result<(), String>;
+    async fn store_version_vector_with_policy(
+        &self,
+        _local_device_id: &str,
+        _policy_identity: &PolicyIdentity,
+        _vector: &VersionVector,
+    ) -> Result<(), String> {
+        Err("policy_bound_vector_storage_unsupported".into())
+    }
     async fn load_known_peers(&self) -> Result<Option<Vec<PeerRecord>>, String>;
     async fn store_known_peers(&self, peers: &[PeerRecord]) -> Result<(), String>;
     async fn load_removed_peer_ids(&self) -> Result<Vec<String>, String>;
@@ -208,6 +273,13 @@ pub trait CommittedFeedPort: Send + Sync {
         Ok(self.selective_sync_policy_generation())
     }
 
+    async fn accepted_policy_identity_for_peer(
+        &self,
+        _peer_device_id: &str,
+    ) -> Result<Option<PolicyIdentity>, String> {
+        Ok(None)
+    }
+
     async fn committed_feed_snapshot(&self) -> Result<FeedSnapshot, String>;
 
     async fn committed_feed_page(
@@ -224,17 +296,53 @@ pub trait CommittedFeedPort: Send + Sync {
         limit: usize,
     ) -> Result<CommittedFeedDeliveryPage, String>;
 
+    async fn committed_feed_delivery_page_for_peer(
+        &self,
+        peer_device_id: &str,
+        expected_identity: &PolicyIdentity,
+        after_position: i64,
+        high_watermark: i64,
+        limit: usize,
+    ) -> Result<PolicyBoundFeedPage, String> {
+        let _ = (
+            peer_device_id,
+            expected_identity,
+            after_position,
+            high_watermark,
+            limit,
+        );
+        Err("policy_bound_feed_page_unsupported".into())
+    }
+
     async fn begin_outbound_policy(
         &self,
         peer_device_id: &str,
         policy_generation: i64,
     ) -> Result<OutboundProgress, String>;
 
+    async fn begin_outbound_policy_identity(
+        &self,
+        peer_device_id: &str,
+        identity: &PolicyIdentity,
+    ) -> Result<OutboundProgress, String> {
+        let _ = (peer_device_id, identity);
+        Err("policy_bound_progress_unsupported".into())
+    }
+
     async fn complete_outbound_snapshot(
         &self,
         peer_device_id: &str,
         policy_generation: i64,
     ) -> Result<OutboundProgress, String>;
+
+    async fn complete_outbound_snapshot_identity(
+        &self,
+        peer_device_id: &str,
+        identity: &PolicyIdentity,
+    ) -> Result<OutboundProgress, String> {
+        let _ = (peer_device_id, identity);
+        Err("policy_bound_progress_unsupported".into())
+    }
 
     async fn record_outbound_scan(
         &self,
@@ -243,6 +351,16 @@ pub trait CommittedFeedPort: Send + Sync {
         scanned_through: i64,
     ) -> Result<OutboundProgress, String>;
 
+    async fn record_outbound_scan_identity(
+        &self,
+        peer_device_id: &str,
+        identity: &PolicyIdentity,
+        scanned_through: i64,
+    ) -> Result<OutboundProgress, String> {
+        let _ = (peer_device_id, identity, scanned_through);
+        Err("policy_bound_progress_unsupported".into())
+    }
+
     async fn acknowledge_outbound(
         &self,
         peer_device_id: &str,
@@ -250,4 +368,15 @@ pub trait CommittedFeedPort: Send + Sync {
         position: i64,
         ack: OutboundAck,
     ) -> Result<OutboundProgress, String>;
+
+    async fn acknowledge_outbound_identity(
+        &self,
+        peer_device_id: &str,
+        identity: &PolicyIdentity,
+        position: i64,
+        ack: OutboundAck,
+    ) -> Result<OutboundProgress, String> {
+        let _ = (peer_device_id, identity, position, ack);
+        Err("policy_bound_progress_unsupported".into())
+    }
 }

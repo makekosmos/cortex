@@ -94,7 +94,9 @@ pub(super) mod reject_tests {
                 negotiated_protocol: None,
                 registry_admission: None,
                 in_flight_feed_position: None,
+                in_flight_feed_policy_identity: None,
                 pending_initial_snapshot_ack: None,
+                pending_initial_snapshot_policy_identity: None,
                 tx,
             },
         );

@@ -179,6 +179,7 @@ async fn iroh_ticket_pairing_round_trip() {
     };
 
     let msg = LanSyncMessage::LiveChange {
+        policy_identity: None,
         change_id: "change-iroh-ticket-test-001".to_string(),
         entity: test_entity,
         origin_device_id: None, // намеренно None — registry должен резолвить

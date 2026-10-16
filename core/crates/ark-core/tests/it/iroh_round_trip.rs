@@ -168,6 +168,7 @@ async fn iroh_round_trip() {
     };
 
     let msg = LanSyncMessage::LiveChange {
+        policy_identity: None,
         change_id: "change-iroh-test-001".to_string(),
         entity: test_entity.clone(),
         origin_device_id: Some("device-A".to_string()),

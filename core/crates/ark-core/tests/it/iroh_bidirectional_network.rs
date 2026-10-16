@@ -95,6 +95,7 @@ async fn iroh_bidirectional_hello_and_reverse_send() {
         origin_seq: None,
     };
     let live_change = LanSyncMessage::LiveChange {
+        policy_identity: None,
         change_id: change_id.clone(),
         entity: entity.clone(),
         origin_device_id: None, // намеренно None — registry должен резолвить

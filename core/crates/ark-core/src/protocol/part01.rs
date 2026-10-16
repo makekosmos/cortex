@@ -94,6 +94,8 @@ pub enum LanSyncMessage {
         entities: Vec<SyncEntity>,
         is_last: bool,
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        policy_identity: Option<crate::application::sync_storage::PolicyIdentity>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         origin_device_id: Option<String>,
         // Per usage origin device, the highest seq the sender can serve
         // completely — its own contiguous `@usage:` coverage (compaction
@@ -107,24 +109,39 @@ pub enum LanSyncMessage {
     },
 
     #[serde(rename = "sync_ack")]
-    SyncAck { batch_id: String, accepted: usize },
+    SyncAck {
+        batch_id: String,
+        accepted: usize,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        policy_identity: Option<crate::application::sync_storage::PolicyIdentity>,
+    },
 
     #[serde(rename = "live_change")]
     LiveChange {
         change_id: String,
         entity: SyncEntity,
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        policy_identity: Option<crate::application::sync_storage::PolicyIdentity>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         origin_device_id: Option<String>,
     },
 
     #[serde(rename = "live_ack")]
-    LiveAck { change_id: String },
+    LiveAck {
+        change_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        policy_identity: Option<crate::application::sync_storage::PolicyIdentity>,
+    },
 
     /// The durable inbox has committed the message. This does not mean that
     /// the entity has been applied. Sent only after receipt capability
     /// negotiation succeeds.
     #[serde(rename = "live_receipt_ack")]
-    LiveReceiptAck { change_id: String },
+    LiveReceiptAck {
+        change_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        policy_identity: Option<crate::application::sync_storage::PolicyIdentity>,
+    },
 
     /// Refuses an incompatible protocol offer before the peer is admitted.
     /// Relay transports broadcast this frame and use both IDs for routing.

@@ -127,6 +127,7 @@ mod tests {
             origin_seq: None,
         };
         let msg = LanSyncMessage::SyncChanges {
+            policy_identity: None,
             batch_id: "123-abc".to_string(),
             entities: vec![entity],
             is_last: true,
@@ -161,6 +162,7 @@ mod tests {
         let mut through = std::collections::HashMap::new();
         through.insert("dev-a".to_string(), 42_u64);
         let msg = LanSyncMessage::SyncChanges {
+            policy_identity: None,
             batch_id: "b2".to_string(),
             entities: vec![],
             is_last: true,
@@ -204,6 +206,7 @@ mod tests {
             origin_seq: None,
         };
         let msg = LanSyncMessage::LiveChange {
+            policy_identity: None,
             change_id: "ch-1".to_string(),
             entity,
             origin_device_id: None,
@@ -251,6 +254,7 @@ mod tests {
     #[test]
     fn test_message_roundtrip() {
         let msg = LanSyncMessage::SyncAck {
+            policy_identity: None,
             batch_id: "b1".to_string(),
             accepted: 42,
         };

@@ -165,7 +165,9 @@
                 negotiated_protocol: None,
                 registry_admission: None,
                 in_flight_feed_position: None,
+                in_flight_feed_policy_identity: None,
                 pending_initial_snapshot_ack: None,
+                pending_initial_snapshot_policy_identity: None,
                 tx: tx1,
             },
         );
@@ -182,7 +184,9 @@
                 negotiated_protocol: None,
                 registry_admission: None,
                 in_flight_feed_position: None,
+                in_flight_feed_policy_identity: None,
                 pending_initial_snapshot_ack: None,
+                pending_initial_snapshot_policy_identity: None,
                 tx: tx2,
             },
         );
@@ -199,7 +203,9 @@
                 negotiated_protocol: None,
                 registry_admission: None,
                 in_flight_feed_position: None,
+                in_flight_feed_policy_identity: None,
                 pending_initial_snapshot_ack: None,
+                pending_initial_snapshot_policy_identity: None,
                 tx: tx3,
             },
         );
@@ -245,7 +251,9 @@
                 negotiated_protocol: None,
                 registry_admission: None,
                 in_flight_feed_position: None,
+                in_flight_feed_policy_identity: None,
                 pending_initial_snapshot_ack: None,
+                pending_initial_snapshot_policy_identity: None,
                 tx,
             },
         );
@@ -282,7 +290,9 @@
             negotiated_protocol: None,
             registry_admission: None,
             in_flight_feed_position: None,
+            in_flight_feed_policy_identity: None,
             pending_initial_snapshot_ack: None,
+            pending_initial_snapshot_policy_identity: None,
             tx: tx.clone(),
         };
         server.peers.lock().await.insert(1, state(1, "dup"));

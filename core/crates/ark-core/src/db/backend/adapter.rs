@@ -6,7 +6,7 @@ use crate::application::sync_storage::{
 use crate::db::{
     ApplySignedIntegrationFrameCommand, AuthenticatedCoreTaskWrite, AuthorizedTransportKeyQuery,
     CommandClass, CommandContext, GetSyncKeyValueQuery, IdentityErrorStyle, LoadEntitiesQuery,
-    UsageCompleteThroughQuery, ValidateOutboundSignedFrameQuery,
+    LoadPolicyBoundEntitiesPageQuery, UsageCompleteThroughQuery, ValidateOutboundSignedFrameQuery,
 };
 use crate::replication_storage::{
     AuthenticatedEntityBackend, IntegrationReplicationBackend, PeerIdentityBackend,
@@ -15,6 +15,7 @@ use crate::types::{SyncEntity, VersionVector};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
+mod authenticated_entities;
 mod peer_identity;
 
 fn publish_replay_notices(notices: Vec<crate::canonical_types::pending::ReplayNotice>) {
@@ -142,6 +143,32 @@ impl SyncEntityReadPort for SqliteStorageBackend {
             .map_err(|error| error.to_string())
     }
 
+    async fn load_policy_bound_entities_page_for_peer(
+        &self,
+        peer_device_id: &str,
+        class: crate::application::sync_storage::SyncReadClass,
+        vector: &VersionVector,
+        offset: usize,
+        limit: usize,
+        expected_identity: &crate::application::sync_storage::PolicyIdentity,
+    ) -> Result<crate::application::sync_storage::PolicyBoundSnapshotPage, String> {
+        self.db
+            .query(
+                CommandContext::sync_peer(peer_device_id.to_owned(), class.into()),
+                LoadPolicyBoundEntitiesPageQuery::new(
+                    vector.clone(),
+                    self.device_id(),
+                    peer_device_id.to_owned(),
+                    class,
+                    offset,
+                    limit,
+                    expected_identity.clone(),
+                ),
+            )
+            .await
+            .map_err(|error| error.to_string())
+    }
+
     async fn usage_complete_through(
         &self,
     ) -> Result<std::collections::HashMap<String, u64>, String> {
@@ -233,6 +260,27 @@ impl PeerProgressPort for SqliteStorageBackend {
         .await
     }
 
+    async fn store_version_vector_with_policy(
+        &self,
+        local_device_id: &str,
+        policy_identity: &crate::application::sync_storage::PolicyIdentity,
+        vector: &VersionVector,
+    ) -> Result<(), String> {
+        let raw = serde_json::to_string(vector).map_err(|error| error.to_string())?;
+        self.db
+            .submit(
+                CommandContext::sync_system(CommandClass::SyncLive),
+                crate::db::SetSyncKeyValueCommand::with_policy_identity(
+                    crate::application::sync_storage::VERSION_VECTOR_KEY.to_owned(),
+                    raw,
+                    local_device_id.to_owned(),
+                    policy_identity.clone(),
+                ),
+            )
+            .await
+            .map_err(|error| error.to_string())
+    }
+
     async fn load_known_peers(&self) -> Result<Option<Vec<crate::types::PeerRecord>>, String> {
         load_progress_value(self, crate::application::sync_storage::KNOWN_PEERS_KEY).await
     }
@@ -265,114 +313,6 @@ impl PeerProgressPort for SqliteStorageBackend {
 }
 
 // ---------------------------------------------------------------------------
-
-#[async_trait::async_trait]
-impl AuthenticatedEntityBackend for SqliteStorageBackend {
-    async fn receive_authenticated_entity_with_id(
-        &self,
-        entity: &SyncEntity,
-        authenticated_peer_id: &str,
-        message_id: &str,
-    ) -> Result<bool, String> {
-        let payload_json = serde_json::to_string(entity).map_err(|error| error.to_string())?;
-        self.db
-            .submit(
-                CommandContext::authenticated_peer(authenticated_peer_id.to_owned()),
-                crate::db::ReceiveInboxReceiptCommand::new(
-                    authenticated_peer_id.to_owned(),
-                    message_id.to_owned(),
-                    payload_json,
-                ),
-            )
-            .await
-            .map(|state| state != crate::db::InboxState::Rejected)
-            .map_err(|error| error.to_string())
-    }
-
-    async fn apply_authenticated_entity(
-        &self,
-        entity: &SyncEntity,
-        authenticated_peer_id: &str,
-    ) -> Result<(), String> {
-        let inbox_message_id = crate::db::entity_inbox_message_id(
-            authenticated_peer_id,
-            &entity.entity_type,
-            &entity.id,
-            &entity.hlc,
-        );
-        self.apply_authenticated_entity_with_id(entity, authenticated_peer_id, &inbox_message_id)
-            .await
-            .map(|_| ())
-    }
-
-    async fn apply_authenticated_entity_with_id(
-        &self,
-        entity: &SyncEntity,
-        authenticated_peer_id: &str,
-        inbox_message_id: &str,
-    ) -> Result<crate::application::sync_storage::InboundApplyOutcome, String> {
-        let inbox_payload_json =
-            serde_json::to_string(entity).map_err(|error| error.to_string())?;
-        let inbox_state = self
-            .db
-            .submit(
-                CommandContext::authenticated_peer(authenticated_peer_id.to_owned()),
-                crate::db::ReceiveInboxReceiptCommand::new(
-                    authenticated_peer_id.to_owned(),
-                    inbox_message_id.to_owned(),
-                    inbox_payload_json.clone(),
-                ),
-            )
-            .await
-            .map_err(|error| error.to_string())?;
-        if inbox_state == crate::db::InboxState::Applied {
-            return Ok(crate::application::sync_storage::InboundApplyOutcome::Applied);
-        }
-        if inbox_state == crate::db::InboxState::Pending {
-            return Ok(crate::application::sync_storage::InboundApplyOutcome::Pending);
-        }
-        if is_full_core_task(entity) {
-            let command = AuthenticatedCoreTaskWrite::new(
-                entity.id.clone(),
-                entity.hlc.clone(),
-                entity.origin_device_id.clone(),
-                entity.data.clone(),
-                inbox_message_id.to_owned(),
-                inbox_payload_json,
-            );
-            return self
-                .db
-                .submit(
-                    CommandContext::authenticated_peer(authenticated_peer_id.to_owned()),
-                    command,
-                )
-                .await
-                .map(|outcome| match outcome {
-                    crate::db::RemoteCoreTaskOutcome::Applied
-                    | crate::db::RemoteCoreTaskOutcome::Duplicate => {
-                        crate::application::sync_storage::InboundApplyOutcome::Applied
-                    }
-                    crate::db::RemoteCoreTaskOutcome::Stale => {
-                        crate::application::sync_storage::InboundApplyOutcome::Stale
-                    }
-                })
-                .map_err(|error| error.to_string());
-        }
-        let (outcome, notices) = self
-            .db
-            .submit(
-                CommandContext::authenticated_peer(authenticated_peer_id.to_owned()),
-                crate::db::ApplyAuthenticatedSyncEntityCommand::with_message_id(
-                    entity.clone(),
-                    inbox_message_id.to_owned(),
-                ),
-            )
-            .await
-            .map_err(|error| error.to_string())?;
-        publish_replay_notices(notices);
-        Ok(outcome)
-    }
-}
 
 #[async_trait::async_trait]
 impl IntegrationReplicationBackend for SqliteStorageBackend {

@@ -11,6 +11,14 @@ pub struct AcceptedPeerSyncPolicy {
 }
 
 impl AcceptedPeerSyncPolicy {
+    pub fn identity(&self) -> crate::application::sync_storage::PolicyIdentity {
+        crate::application::sync_storage::PolicyIdentity {
+            revision: self.revision,
+            digest: self.digest.clone(),
+            active: self.active,
+        }
+    }
+
     pub fn computed_digest(&self) -> String {
         digest_sync_policy(&self.rules)
     }
@@ -29,7 +37,7 @@ impl AcceptedPeerSyncPolicy {
     }
 }
 
-fn digest_sync_policy(rules: &[SyncProfileRule]) -> String {
+pub fn digest_sync_policy(rules: &[SyncProfileRule]) -> String {
     let mut rules = rules
         .iter()
         .map(|rule| {
@@ -47,6 +55,14 @@ fn digest_sync_policy(rules: &[SyncProfileRule]) -> String {
     digest.update(b"cortex-sync-policy-v1\0");
     digest.update(canonical);
     format!("{:x}", digest.finalize())
+}
+
+pub fn default_sync_policy_identity() -> crate::application::sync_storage::PolicyIdentity {
+    crate::application::sync_storage::PolicyIdentity {
+        revision: 0,
+        digest: digest_sync_policy(&[]),
+        active: false,
+    }
 }
 
 /// Persist an authenticated receiver policy without allowing a stale session

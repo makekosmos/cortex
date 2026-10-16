@@ -1,10 +1,13 @@
 use super::*;
 
+#[allow(clippy::too_many_arguments)]
 pub(super) async fn handle(
     storage: &Arc<dyn SyncRuntimeStorage>,
     peer_device_id: &str,
     pending_batch_id: &mut Option<String>,
+    pending_policy_identity: &mut Option<crate::application::sync_storage::PolicyIdentity>,
     batch_id: &str,
+    policy_identity: Option<crate::application::sync_storage::PolicyIdentity>,
     authenticated_tx: &Arc<Mutex<Option<AuthenticatedPeerSession>>>,
     tx: &mpsc::UnboundedSender<Message>,
     feed_in_flight: &ClientFeedInFlight,
@@ -12,22 +15,46 @@ pub(super) async fn handle(
     if pending_batch_id.as_deref() != Some(batch_id) {
         return Ok(());
     }
-    let generation = storage
-        .selective_sync_policy_generation_for_peer(peer_device_id)
-        .await?;
-    storage
-        .complete_outbound_snapshot(peer_device_id, generation)
-        .await?;
-    *pending_batch_id = None;
-    let receipt_ack = if let Some(session) = authenticated_tx.lock().await.as_mut() {
-        session.sync_complete = true;
-        session
-            .protocol
-            .capabilities
-            .contains(&crate::protocol::ProtocolCapability::DurableReceiptAckV1)
+    if pending_policy_identity != &policy_identity {
+        return Ok(());
+    }
+    if let Some(identity) = policy_identity.as_ref() {
+        storage
+            .complete_outbound_snapshot_identity(peer_device_id, identity)
+            .await?;
     } else {
-        false
+        let generation = storage
+            .selective_sync_policy_generation_for_peer(peer_device_id)
+            .await?;
+        storage
+            .complete_outbound_snapshot(peer_device_id, generation)
+            .await?;
+    }
+    *pending_batch_id = None;
+    *pending_policy_identity = None;
+    let (receipt_ack, policy_bound) = if let Some(session) = authenticated_tx.lock().await.as_mut()
+    {
+        session.sync_complete = true;
+        (
+            session
+                .protocol
+                .capabilities
+                .contains(&crate::protocol::ProtocolCapability::DurableReceiptAckV1),
+            session
+                .protocol
+                .capabilities
+                .contains(&crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1),
+        )
+    } else {
+        (false, false)
     };
-    super::pump_client_committed_feed(storage, peer_device_id, tx, feed_in_flight, receipt_ack)
-        .await
+    super::pump_client_committed_feed(
+        storage,
+        peer_device_id,
+        tx,
+        feed_in_flight,
+        receipt_ack,
+        policy_bound,
+    )
+    .await
 }

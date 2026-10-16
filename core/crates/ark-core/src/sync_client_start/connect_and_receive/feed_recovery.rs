@@ -14,12 +14,23 @@ pub(super) async fn pump(
                     .protocol
                     .capabilities
                     .contains(&crate::protocol::ProtocolCapability::DurableReceiptAckV1),
+                session
+                    .protocol
+                    .capabilities
+                    .contains(&crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1),
             )
         })
     });
-    if let Some((peer_id, tx, receipt_ack)) = authenticated_peer {
-        super::pump_client_committed_feed(storage, &peer_id, &tx, feed_in_flight, receipt_ack)
-            .await?;
+    if let Some((peer_id, tx, receipt_ack, policy_bound)) = authenticated_peer {
+        super::pump_client_committed_feed(
+            storage,
+            &peer_id,
+            &tx,
+            feed_in_flight,
+            receipt_ack,
+            policy_bound,
+        )
+        .await?;
     }
     Ok(())
 }

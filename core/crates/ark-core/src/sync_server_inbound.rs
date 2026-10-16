@@ -56,6 +56,7 @@ pub(super) async fn handle_live_change(
     peer_id: usize,
     change_id: String,
     entity: SyncEntity,
+    policy_identity: Option<crate::application::sync_storage::PolicyIdentity>,
 ) {
     let MessageContext {
         peers,
@@ -63,7 +64,7 @@ pub(super) async fn handle_live_change(
         on_change,
         ..
     } = ctx;
-    let (tx, authenticated_peer_id, receipt_ack) = {
+    let (tx, authenticated_peer_id, receipt_ack, policy_bound) = {
         let peers_guard = peers.lock().await;
         match peers_guard.get(&peer_id) {
             Some(p) if p.ready_peer.is_some() => (
@@ -74,6 +75,11 @@ pub(super) async fn handle_live_change(
                         .capabilities
                         .contains(&crate::protocol::ProtocolCapability::DurableReceiptAckV1)
                 }),
+                p.negotiated_protocol.as_ref().is_some_and(|protocol| {
+                    protocol
+                        .capabilities
+                        .contains(&crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1)
+                }),
             ),
             _ => return,
         }
@@ -82,14 +88,36 @@ pub(super) async fn handle_live_change(
         return;
     }
 
+    let local_device_id = ctx.device_id.read().await.clone();
+    let local_profile = match storage.load_local_sync_profile(&local_device_id).await {
+        Ok(profile) => profile,
+        Err(error) => {
+            eprintln!("{TAG} local policy identity read failed: {error}");
+            return;
+        }
+    };
+    let expected_identity =
+        policy_bound.then(|| crate::protocol::sync_policy_identity(local_profile.as_ref()));
+    if policy_identity != expected_identity {
+        eprintln!("{TAG} rejected live change for stale or unnegotiated policy");
+        return;
+    }
+
     if receipt_ack {
         match storage
-            .receive_authenticated_entity_with_id(&entity, &authenticated_peer_id, &change_id)
+            .receive_authenticated_entity_with_policy(
+                &entity,
+                &authenticated_peer_id,
+                &change_id,
+                &local_device_id,
+                expected_identity.clone(),
+            )
             .await
         {
             Ok(true) => send_msg(
                 &tx,
                 &LanSyncMessage::LiveReceiptAck {
+                    policy_identity: policy_identity.clone(),
                     change_id: change_id.clone(),
                 },
             ),
@@ -114,7 +142,13 @@ pub(super) async fn handle_live_change(
             .is_none_or(|hlc| HLC::is_newer(&entity.hlc, hlc));
 
     match storage
-        .apply_authenticated_entity_with_id(&entity, &authenticated_peer_id, &change_id)
+        .apply_authenticated_entity_with_policy(
+            &entity,
+            &authenticated_peer_id,
+            &change_id,
+            &local_device_id,
+            expected_identity.clone(),
+        )
         .await
     {
         Ok(crate::application::sync_storage::InboundApplyOutcome::Applied) => {
@@ -127,7 +161,19 @@ pub(super) async fn handle_live_change(
                     }
                 };
                 merge_usage_cursors(&mut local_vector, &stored_vector);
-                if let Err(error) = save_version_vector(storage, &local_vector).await {
+                let save_result = match expected_identity.as_ref() {
+                    Some(identity) => {
+                        crate::sync_server::save_version_vector_with_policy(
+                            storage,
+                            &local_device_id,
+                            identity,
+                            &local_vector,
+                        )
+                        .await
+                    }
+                    None => save_version_vector(storage, &local_vector).await,
+                };
+                if let Err(error) = save_result {
                     eprintln!("{TAG} failed to save sync progress: {error}");
                     return;
                 }
@@ -147,10 +193,22 @@ pub(super) async fn handle_live_change(
                     .unwrap_or_default()
             };
             broadcast_to_others(storage, peers, Some(&peer_device_id)).await;
-            send_msg(&tx, &LanSyncMessage::LiveAck { change_id });
+            send_msg(
+                &tx,
+                &LanSyncMessage::LiveAck {
+                    change_id,
+                    policy_identity: policy_identity.clone(),
+                },
+            );
         }
         Ok(crate::application::sync_storage::InboundApplyOutcome::Stale) => {
-            send_msg(&tx, &LanSyncMessage::LiveAck { change_id });
+            send_msg(
+                &tx,
+                &LanSyncMessage::LiveAck {
+                    change_id,
+                    policy_identity: policy_identity.clone(),
+                },
+            );
         }
         Ok(crate::application::sync_storage::InboundApplyOutcome::Pending) => {}
         Err(e) => {
@@ -267,7 +325,9 @@ mod tests {
                 negotiated_protocol: None,
                 registry_admission: None,
                 in_flight_feed_position: None,
+                in_flight_feed_policy_identity: None,
                 pending_initial_snapshot_ack: None,
+                pending_initial_snapshot_policy_identity: None,
                 tx,
             },
         );
@@ -301,6 +361,7 @@ mod tests {
                 origin_device_id: None,
                 origin_seq: None,
             },
+            None,
         )
         .await;
 

@@ -6,15 +6,13 @@
                     peer_record.device_name
                 );
 
-                // Update last_address
                 {
                     let mut p = peer.write().await;
                     p.last_address = Some(winning_addr.clone());
                 }
 
                 reconnect_delay = RECONNECT_BASE_MS;
-                // An unacknowledged cursor remains pending in durable peer
-                // progress. Releasing the connection-local claim replays it.
+                // Releasing the connection-local claim replays its durable cursor.
                 *feed_in_flight.lock().await = None;
 
                 let (mut ws_sink, mut ws_stream_rx) = ws_stream.split();
@@ -46,17 +44,16 @@
                 let writer_abort = writer.abort_handle();
                 track_task(&writer_tasks, writer);
 
-                // Read messages
                 let mut authenticated = false;
                 let mut sync_complete = false;
                 let mut pending_initial_snapshot_ack: Option<String> = None;
+                let mut pending_initial_snapshot_policy_identity = None;
                 let mut peer_device_id_actual = String::new();
                 let mut pending_registry_admission: Option<
                     registry_admission::PendingRegistryAdmission,
                 > = None;
                 let mut feed_recovery = tokio::time::interval(Duration::from_secs(1));
-                // `interval` ticks immediately; start the bounded recovery
-                // period after the connection has had a chance to authenticate.
+                // Start recovery after the connection can authenticate.
                 feed_recovery.tick().await;
 
                 loop {
@@ -73,64 +70,7 @@
                             match msg {
                         Message::Text(text) => {
                             if let Some(sync_msg) = deserialize_message(&text) {
-                                match direct_ws_control::handle(
-                                    &sync_msg,
-                                    &tx,
-                                    authenticated,
-                                    &on_peer_list,
-                                    &device_id,
-                                    &peer_device_id_actual,
-                                )
-                                .await
-                                {
-                                    direct_ws_control::DirectWsControl::Handled => continue,
-                                    direct_ws_control::DirectWsControl::CloseConnection => break,
-                                    direct_ws_control::DirectWsControl::NotControl => {}
-                                }
-                                if matches!(
-                                    &sync_msg,
-                                    LanSyncMessage::RegistryAdmissionStart { .. }
-                                        | LanSyncMessage::RegistryAdmissionProof { .. }
-                                        | LanSyncMessage::RegistryAdmissionConfirm { .. }
-                                        | LanSyncMessage::RegistrySyncStart { .. }
-                                        | LanSyncMessage::RegistryEventsPage { .. }
-                                        | LanSyncMessage::RegistrySyncReady { .. }
-                                        | LanSyncMessage::RegistryEventUpdate { .. }
-                                ) {
-                                    let Some(admission) = pending_registry_admission.as_mut() else {
-                                        eprintln!("{TAG} registry control arrived before Hello");
-                                        break;
-                                    };
-                                    let became_ready = match admission
-                                        .handle(
-                                            sync_msg,
-                                            &storage,
-                                            &tx,
-                                            &authenticated_tx,
-                                            &peer,
-                                            &on_connected,
-                                        )
-                                        .await
-                                    {
-                                        Ok(became_ready) => became_ready,
-                                        Err(error) => {
-                                            if error == "registry_admission_session_revoked" {
-                                                stopped.store(
-                                                    true,
-                                                    std::sync::atomic::Ordering::Relaxed,
-                                                );
-                                            }
-                                            eprintln!(
-                                                "{TAG} direct registry admission failed: {error}"
-                                            );
-                                            break;
-                                        }
-                                    };
-                                    if became_ready {
-                                        authenticated = true;
-                                    }
-                                    continue;
-                                }
+                                include!("connect_and_receive/registry_control.rs");
                                 match sync_msg {
                                     LanSyncMessage::Hello {
                                         protocol_version,
@@ -307,15 +247,43 @@
                                             continue;
                                         }
 
-                                        let batch_id = match send_missing_entities::send(
-                                            &storage,
-                                            &tx,
-                                            &peer_device_id_actual,
-                                            &remote_vector,
-                                            sync_complete,
-                                        )
-                                        .await
-                                        {
+                                        let policy_bound =
+                                            sync_policy::is_policy_bound(&authenticated_tx).await;
+                                        let policy_identity = if policy_bound {
+                                            match storage
+                                                .accepted_policy_identity_for_peer(
+                                                    &peer_device_id_actual,
+                                                )
+                                                .await
+                                            {
+                                                Ok(Some(identity)) => Some(identity),
+                                                Ok(None) => {
+                                                    eprintln!(
+                                                        "{TAG} bound policy identity unavailable"
+                                                    );
+                                                    break;
+                                                }
+                                                Err(error) => {
+                                                    eprintln!(
+                                                        "{TAG} accepted policy read failed: {error}"
+                                                    );
+                                                    break;
+                                                }
+                                            }
+                                        } else {
+                                            None
+                                        };
+                                        let (batch_id, policy_identity) =
+                                            match send_missing_entities::send(
+                                                &storage,
+                                                &tx,
+                                                &peer_device_id_actual,
+                                                &remote_vector,
+                                                sync_complete,
+                                                policy_identity.clone(),
+                                            )
+                                            .await
+                                            {
                                             Ok(batch_id) => batch_id,
                                             Err(error) => {
                                                 eprintln!("{TAG} outbound sync failed: {error}");
@@ -325,36 +293,56 @@
 
                                         sync_complete = true;
                                         pending_initial_snapshot_ack = Some(batch_id);
-                                        // Broadcasts are wakeups only; drain the
-                                        // durable feed so reconnect can replay the
-                                        // same cursor-derived change ID.
+                                        pending_initial_snapshot_policy_identity = policy_identity;
+                                        // Broadcasts wake the durable cursor drain.
                                     }
 
                                     LanSyncMessage::SyncChanges {
-                                        batch_id, entities, is_last, usage_complete_through, ..
+                                        batch_id, entities, is_last, policy_identity,
+                                        usage_complete_through, ..
                                     } => {
                                         if !authenticated { continue; }
+                                        let policy_bound =
+                                            sync_policy::is_policy_bound(&authenticated_tx).await;
+                                        if let Err(error) =
+                                            sync_policy::validate_snapshot_identity(
+                                                &storage,
+                                                &device_id,
+                                                policy_bound,
+                                                &policy_identity,
+                                            )
+                                            .await
+                                        {
+                                            eprintln!(
+                                                "{TAG} snapshot policy rejected: {error}"
+                                            );
+                                            break;
+                                        }
                                         let context = sync_changes::Context {
                                             storage: &storage,
                                             tx: &tx,
                                             peer_device_id: &peer_device_id_actual,
+                                            local_device_id: &device_id,
                                             on_change: &on_change,
                                         };
                                         if let Err(error) = sync_changes::apply(
                                             context, batch_id, entities, is_last,
                                             usage_complete_through,
+                                            policy_identity,
                                         ).await {
                                             eprintln!("{TAG} inbound sync batch failed: {error}");
                                             break;
                                         }
                                     }
 
-                                    LanSyncMessage::SyncAck { batch_id, .. } => {
+                                    LanSyncMessage::SyncAck { batch_id, policy_identity, .. } => {
                                         if let Err(error) = snapshot_ack::handle(
                                             &storage,
                                             &peer_device_id_actual,
                                             &mut pending_initial_snapshot_ack,
+                                            &mut pending_initial_snapshot_policy_identity,
                                             &batch_id,
+                                            policy_identity,
                                             &authenticated_tx,
                                             &tx,
                                             &feed_in_flight,
@@ -385,18 +373,25 @@
 
                                     LanSyncMessage::SignedIntegrationAck { .. } => {}
 
-                                    LanSyncMessage::LiveChange { change_id, entity, .. } => {
+                                    LanSyncMessage::LiveChange {
+                                        change_id,
+                                        entity,
+                                        policy_identity,
+                                        ..
+                                    } => {
                                         if !authenticated {
                                             continue;
                                         }
                                         if let Err(error) = live_messages::handle_live_change(
                                             &storage,
                                             &authenticated_tx,
+                                            &device_id,
                                             &peer_device_id_actual,
                                             &tx,
                                             &on_change,
                                             change_id,
                                             entity,
+                                            policy_identity,
                                         )
                                         .await
                                         {
@@ -405,7 +400,10 @@
                                         }
                                     }
 
-                                    LanSyncMessage::LiveAck { change_id } => {
+                                    LanSyncMessage::LiveAck {
+                                        change_id,
+                                        policy_identity,
+                                    } => {
                                         if sync_complete {
                                             if let Err(error) = live_messages::handle_applied_ack(
                                                 &storage,
@@ -414,6 +412,7 @@
                                                 &feed_in_flight,
                                                 &authenticated_tx,
                                                 &change_id,
+                                                policy_identity,
                                             )
                                             .await
                                             {
@@ -425,14 +424,19 @@
                                         }
                                     }
 
-                                    LanSyncMessage::LiveReceiptAck { change_id } => {
+                                    LanSyncMessage::LiveReceiptAck {
+                                        change_id,
+                                        policy_identity,
+                                    } => {
                                         if sync_complete {
                                             if let Err(error) = live_messages::handle_receipt_ack(
                                                 &storage,
                                                 &peer_device_id_actual,
                                                 &tx,
                                                 &feed_in_flight,
+                                                &authenticated_tx,
                                                 &change_id,
+                                                policy_identity,
                                             )
                                             .await
                                             {
@@ -473,7 +477,6 @@
                     }
                 }
 
-                // Connection closed
                 writer_abort.abort();
                 *authenticated_tx.lock().await = None;
 

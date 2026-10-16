@@ -35,6 +35,7 @@ async fn receive_change(
 
 fn live_change(id: &str) -> LanSyncMessage {
     LanSyncMessage::LiveChange {
+        policy_identity: None,
         change_id: format!("change-{id}"),
         entity: SyncEntity {
             entity_type: "todo".to_string(),

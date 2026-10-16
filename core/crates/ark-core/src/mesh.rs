@@ -124,6 +124,7 @@ mod tests {
 
     fn make_live_change(hlc: &str) -> LanSyncMessage {
         LanSyncMessage::LiveChange {
+            policy_identity: None,
             change_id: "cid1".to_string(),
             entity: SyncEntity {
                 id: "entity-1".to_string(),
@@ -155,6 +156,7 @@ mod tests {
     #[test]
     fn dedup_key_returns_none_for_sync_changes() {
         let msg = LanSyncMessage::SyncChanges {
+            policy_identity: None,
             batch_id: "b1".to_string(),
             entities: vec![],
             is_last: true,

@@ -12,6 +12,10 @@ use crate::protocol::*;
 use crate::replication_storage::SyncRuntimeStorage;
 use crate::task_set::{abort_and_join, join_all, track_task};
 
+#[path = "sync_client/committed_feed.rs"]
+mod committed_feed;
+pub(crate) use committed_feed::{acknowledge_client_feed, pump_client_committed_feed};
+
 #[path = "sync_client_start.rs"]
 mod sync_client_start;
 use crate::types::*;
@@ -46,7 +50,14 @@ pub(crate) struct AuthenticatedPeerSession {
 }
 
 type AuthenticatedTx = Arc<Mutex<Option<AuthenticatedPeerSession>>>;
-pub(crate) type ClientFeedInFlight = Arc<Mutex<Option<i64>>>;
+pub(crate) type ClientFeedInFlight = Arc<
+    Mutex<
+        Option<(
+            i64,
+            Option<crate::application::sync_storage::PolicyIdentity>,
+        )>,
+    >,
+>;
 
 // ---------------------------------------------------------------------------
 // SyncClient
@@ -122,6 +133,10 @@ impl SyncClient {
                 .protocol
                 .capabilities
                 .contains(&crate::protocol::ProtocolCapability::DurableReceiptAckV1);
+            let policy_bound = session
+                .protocol
+                .capabilities
+                .contains(&crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1);
             drop(guard);
             if let Err(error) = pump_client_committed_feed(
                 &self.storage,
@@ -129,6 +144,7 @@ impl SyncClient {
                 &tx,
                 &self.feed_in_flight,
                 receipt_ack,
+                policy_bound,
             )
             .await
             {
@@ -270,148 +286,6 @@ impl SyncClient {
     pub fn is_stopped(&self) -> bool {
         self.stopped.load(std::sync::atomic::Ordering::Relaxed)
     }
-}
-
-pub(crate) async fn pump_client_committed_feed(
-    storage: &Arc<dyn SyncRuntimeStorage>,
-    peer_device_id: &str,
-    tx: &mpsc::UnboundedSender<Message>,
-    in_flight: &ClientFeedInFlight,
-    receipt_ack: bool,
-) -> Result<(), String> {
-    let mut in_flight = in_flight.lock().await;
-    if in_flight.is_some() {
-        return Ok(());
-    }
-    let generation = storage
-        .selective_sync_policy_generation_for_peer(peer_device_id)
-        .await?;
-    let progress = storage
-        .begin_outbound_policy(peer_device_id, generation)
-        .await?;
-    if !progress.initial_snapshot.is_complete() {
-        return Ok(());
-    }
-    let snapshot = storage.committed_feed_snapshot().await?;
-    let page = storage
-        .committed_feed_delivery_page(
-            if receipt_ack {
-                progress.receipt_through
-            } else {
-                progress.applied_through
-            },
-            snapshot.high_watermark,
-            crate::db::MAX_FEED_PAGE_SIZE,
-        )
-        .await?;
-    let deliveries = match page {
-        crate::application::sync_storage::CommittedFeedDeliveryPage::Deliveries(deliveries) => {
-            deliveries
-        }
-        crate::application::sync_storage::CommittedFeedDeliveryPage::TooLarge {
-            position,
-            entity_id,
-            serialized_bytes,
-            max_bytes,
-        } => {
-            return Err(format!(
-                "committed_feed_entity_too_large:{position}:{entity_id}:\
-                 {serialized_bytes}:{max_bytes}"
-            ));
-        }
-    };
-
-    for delivery in deliveries {
-        let position = delivery.entry.position;
-        storage
-            .record_outbound_scan(peer_device_id, generation, position)
-            .await?;
-        let Some(entity) = storage
-            .filter_outgoing_entity_for_peer(peer_device_id, &delivery.entity)
-            .await?
-        else {
-            storage
-                .acknowledge_outbound(
-                    peer_device_id,
-                    generation,
-                    position,
-                    crate::application::sync_storage::OutboundAck::Applied,
-                )
-                .await?;
-            continue;
-        };
-        let change_id = format!("ark-feed-v1:{position}");
-        let message = LanSyncMessage::LiveChange {
-            change_id,
-            entity,
-            origin_device_id: None,
-        };
-        *in_flight = Some(position);
-        if tx
-            .send(Message::Text(serialize_message(&message).into()))
-            .is_err()
-        {
-            *in_flight = None;
-        }
-        return Ok(());
-    }
-
-    if progress.scanned_through < snapshot.high_watermark {
-        storage
-            .record_outbound_scan(peer_device_id, generation, snapshot.high_watermark)
-            .await?;
-    }
-    Ok(())
-}
-
-pub(crate) async fn acknowledge_client_feed(
-    storage: &Arc<dyn SyncRuntimeStorage>,
-    peer_device_id: &str,
-    change_id: &str,
-    tx: &mpsc::UnboundedSender<Message>,
-    flight: &ClientFeedInFlight,
-    ack: crate::application::sync_storage::OutboundAck,
-    receipt_ack: bool,
-) -> Result<(), String> {
-    let Some(position) = change_id
-        .strip_prefix("ark-feed-v1:")
-        .and_then(|value| value.parse::<i64>().ok())
-    else {
-        return Ok(());
-    };
-    let generation = storage
-        .selective_sync_policy_generation_for_peer(peer_device_id)
-        .await?;
-    let progress = storage
-        .begin_outbound_policy(peer_device_id, generation)
-        .await?;
-    let mut in_flight = flight.lock().await;
-    let current_flight = *in_flight == Some(position);
-    match ack {
-        crate::application::sync_storage::OutboundAck::DurableReceipt => {
-            if !receipt_ack || (!current_flight && position > progress.receipt_through) {
-                return Ok(());
-            }
-        }
-        crate::application::sync_storage::OutboundAck::Applied => {
-            if (receipt_ack && position > progress.receipt_through)
-                || (!receipt_ack && !current_flight)
-            {
-                return Ok(());
-            }
-        }
-    }
-    storage
-        .acknowledge_outbound(peer_device_id, generation, position, ack)
-        .await?;
-    if current_flight {
-        *in_flight = None;
-    }
-    drop(in_flight);
-    if current_flight {
-        pump_client_committed_feed(storage, peer_device_id, tx, flight, receipt_ack).await?;
-    }
-    Ok(())
 }
 
 // ---------------------------------------------------------------------------

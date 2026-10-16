@@ -35,9 +35,16 @@ async fn negotiated_receipt_ack_advances_delivery_without_claiming_application()
     let storage: Arc<dyn crate::replication_storage::SyncRuntimeStorage> = backend.clone();
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     let flight: crate::sync_client::ClientFeedInFlight = Arc::new(tokio::sync::Mutex::new(None));
-    crate::sync_client::pump_client_committed_feed(&storage, "receipt-peer", &tx, &flight, true)
-        .await
-        .unwrap();
+    crate::sync_client::pump_client_committed_feed(
+        &storage,
+        "receipt-peer",
+        &tx,
+        &flight,
+        true,
+        false,
+    )
+    .await
+    .unwrap();
     let first_id = pop_feed_live_change_id(&mut rx);
     let first_position = first_id
         .strip_prefix("ark-feed-v1:")
@@ -53,6 +60,8 @@ async fn negotiated_receipt_ack_advances_delivery_without_claiming_application()
         &flight,
         crate::application::sync_storage::OutboundAck::DurableReceipt,
         true,
+        false,
+        None,
     )
     .await
     .unwrap();
@@ -73,6 +82,8 @@ async fn negotiated_receipt_ack_advances_delivery_without_claiming_application()
         &flight,
         crate::application::sync_storage::OutboundAck::DurableReceipt,
         true,
+        false,
+        None,
     )
     .await
     .unwrap();

@@ -25,6 +25,66 @@ fn expect_feed_deliveries(
         }
     }
 }
+
+#[tokio::test]
+async fn snapshot_page_pins_filter_identity_and_rejects_policy_change_before_next_page() {
+    let backend = SqliteStorageBackend::for_test(Arc::new(Mutex::new(setup_db())));
+    let entity = sync_object("snapshot-policy-page", "note_obj", "Pinned selection");
+    backend.apply_entity(&entity).await.unwrap();
+    let full_rule = crate::data_platform::SyncProfileRule {
+        resource_kind: "type".into(),
+        resource_id: "note_obj".into(),
+        mode: crate::data_platform::SyncMode::Full,
+        filter: crate::data_platform::FilterV1::match_all(),
+    };
+    let full_digest = crate::data_platform::digest_sync_policy(std::slice::from_ref(&full_rule));
+    let selected = backend
+        .accept_peer_sync_policy(
+            "peer-a",
+            1,
+            &full_digest,
+            true,
+            std::slice::from_ref(&full_rule),
+        )
+        .await
+        .unwrap();
+    let page = backend
+        .load_policy_bound_entities_page_for_peer(
+            "peer-a",
+            crate::application::sync_storage::SyncReadClass::Backfill,
+            &crate::types::VersionVector::default(),
+            0,
+            16,
+            &selected.identity(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(page.identity, selected.identity());
+
+    let omitted_rule = crate::data_platform::SyncProfileRule {
+        resource_id: "different_type".into(),
+        ..full_rule
+    };
+    let omitted_digest =
+        crate::data_platform::digest_sync_policy(std::slice::from_ref(&omitted_rule));
+    let updated = backend
+        .accept_peer_sync_policy("peer-a", 2, &omitted_digest, true, &[omitted_rule])
+        .await
+        .unwrap();
+    assert_ne!(page.identity, updated.identity());
+    let error = backend
+        .load_policy_bound_entities_page_for_peer(
+            "peer-a",
+            crate::application::sync_storage::SyncReadClass::Backfill,
+            &crate::types::VersionVector::default(),
+            0,
+            16,
+            &page.identity,
+        )
+        .await
+        .unwrap_err();
+    assert!(error.contains("stale_or_unnegotiated_sync_policy"));
+}
 #[test]
 fn failed_outer_apply_commit_rolls_back_and_releases_connection() {
     let conn = setup_db();

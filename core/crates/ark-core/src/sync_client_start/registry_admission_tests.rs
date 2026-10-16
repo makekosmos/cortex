@@ -433,6 +433,7 @@ async fn direct_server_sends_no_data_or_ack_before_registry_admission() {
     socket
         .send(Message::Text(
             serialize_message(&LanSyncMessage::SyncChanges {
+                policy_identity: None,
                 batch_id: "pre-admission-batch".into(),
                 entities: vec![entity.clone()],
                 is_last: true,

@@ -357,6 +357,7 @@ async fn authenticated_legacy_todo_update_is_durable_and_relayable() {
         &tx,
         &flight,
         false,
+        false,
     )
     .await
     .unwrap();
@@ -373,6 +374,7 @@ async fn authenticated_legacy_todo_update_is_durable_and_relayable() {
         "relay-peer",
         &tx,
         &flight,
+        false,
         false,
     )
     .await

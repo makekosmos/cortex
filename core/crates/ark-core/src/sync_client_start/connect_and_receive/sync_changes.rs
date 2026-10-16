@@ -4,6 +4,7 @@ pub(super) struct Context<'a> {
     pub storage: &'a Arc<dyn SyncRuntimeStorage>,
     pub tx: &'a mpsc::UnboundedSender<Message>,
     pub peer_device_id: &'a str,
+    pub local_device_id: &'a str,
     pub on_change: &'a Arc<Mutex<Option<ClientOnChangeCallback>>>,
 }
 
@@ -13,11 +14,13 @@ pub(super) async fn apply(
     entities: Vec<SyncEntity>,
     is_last: bool,
     usage_complete_through: Option<std::collections::HashMap<String, u64>>,
+    policy_identity: Option<crate::application::sync_storage::PolicyIdentity>,
 ) -> Result<(), String> {
     let Context {
         storage,
         tx,
         peer_device_id,
+        local_device_id,
         on_change,
     } = context;
     let mut local_vector = load_version_vector(storage).await?;
@@ -33,16 +36,29 @@ pub(super) async fn apply(
             continue;
         }
         match storage
-            .apply_authenticated_entity(entity, peer_device_id)
+            .apply_authenticated_entity_with_policy(
+                entity,
+                peer_device_id,
+                &crate::db::entity_inbox_message_id(
+                    peer_device_id,
+                    &entity.entity_type,
+                    &entity.id,
+                    &entity.hlc,
+                ),
+                local_device_id,
+                policy_identity.clone(),
+            )
             .await
         {
-            Ok(()) => {
+            Ok(crate::application::sync_storage::InboundApplyOutcome::Applied)
+            | Ok(crate::application::sync_storage::InboundApplyOutcome::Stale) => {
                 vector_updated |= observe_non_usage_entity(&mut local_vector, entity);
                 accepted += 1;
                 if let Some(handler) = on_change.lock().await.as_ref() {
                     handler(entity.clone());
                 }
             }
+            Ok(crate::application::sync_storage::InboundApplyOutcome::Pending) => {}
             Err(error) => eprintln!(
                 "{TAG} Failed to apply sync entity {}:{}: {error}",
                 entity.entity_type, entity.id
@@ -50,15 +66,38 @@ pub(super) async fn apply(
         }
     }
 
-    crate::sync_server::persist_pull_vector(
-        storage,
-        &mut local_vector,
-        vector_updated,
-        is_last,
-        usage_complete_through.as_ref(),
-    )
-    .await?;
-    send_msg(tx, &LanSyncMessage::SyncAck { batch_id, accepted });
+    match policy_identity.as_ref() {
+        Some(identity) => {
+            crate::sync_server::persist_pull_vector_with_policy(
+                storage,
+                local_device_id,
+                identity,
+                &mut local_vector,
+                vector_updated,
+                is_last,
+                usage_complete_through.as_ref(),
+            )
+            .await?;
+        }
+        None => {
+            crate::sync_server::persist_pull_vector(
+                storage,
+                &mut local_vector,
+                vector_updated,
+                is_last,
+                usage_complete_through.as_ref(),
+            )
+            .await?;
+        }
+    }
+    send_msg(
+        tx,
+        &LanSyncMessage::SyncAck {
+            batch_id,
+            accepted,
+            policy_identity,
+        },
+    );
     if is_last {
         eprintln!("{TAG} Received all sync batches from server");
     }
