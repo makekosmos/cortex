@@ -55,6 +55,32 @@ pub(crate) struct DbHandle {
 }
 
 impl DbHandle {
+    /// Open and initialize the one production ARK database before exposing a
+    /// ready handle. This keeps schema migration and the one-time legacy task
+    /// rewrite inside the store-owned lifecycle boundary.
+    pub(crate) async fn open(
+        db_path: String,
+        legacy_task_device_id: String,
+    ) -> Result<Self, DbError> {
+        run_db_blocking(move || {
+            let connection = crate::db::open_db(&db_path).map_err(DbError::Storage)?;
+            crate::db::init_schema(&connection).map_err(DbError::Storage)?;
+
+            let backup_path = format!("{db_path}.pre-core-task.bak");
+            crate::canonical_types::core_task_rewrite::rewrite_legacy_tasks(
+                &connection,
+                &backup_path,
+                &legacy_task_device_id,
+            )
+            .map_err(DbError::Storage)?;
+
+            Ok(Self::from_shared_connection(Arc::new(Mutex::new(
+                connection,
+            ))))
+        })
+        .await?
+    }
+
     pub(crate) fn from_shared_connection(connection: Arc<Mutex<Connection>>) -> Self {
         Self {
             connection,

@@ -66,6 +66,45 @@ async fn read_query_uses_backfill_context_without_opening_a_write_transaction() 
 }
 
 #[tokio::test]
+async fn open_publishes_only_a_database_ready_for_commands() {
+    let directory = tempfile::tempdir().unwrap();
+    let db_path = directory
+        .path()
+        .join("ark.db")
+        .to_string_lossy()
+        .into_owned();
+    let handle = DbHandle::open(db_path, "device-under-test".into())
+        .await
+        .unwrap();
+
+    let first = handle
+        .submit(CommandContext::engine(), LoadOrGenerateIrohSecretKeyCommand)
+        .await
+        .unwrap();
+    let second = handle
+        .submit(CommandContext::engine(), LoadOrGenerateIrohSecretKeyCommand)
+        .await
+        .unwrap();
+
+    assert_eq!(first.to_bytes(), second.to_bytes());
+}
+
+#[tokio::test]
+async fn open_rejects_an_unreadable_database_before_returning_a_handle() {
+    let directory = tempfile::tempdir().unwrap();
+    let db_path = directory.path().join("not-a-database.db");
+    std::fs::write(&db_path, b"not a SQLite database").unwrap();
+
+    let result = DbHandle::open(
+        db_path.to_string_lossy().into_owned(),
+        "device-under-test".into(),
+    )
+    .await;
+
+    assert!(matches!(result, Err(DbError::Storage(_))));
+}
+
+#[tokio::test]
 async fn read_queries_share_bounded_source_admission() {
     let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
     let handle = DbHandle::from_shared_connection(connection);

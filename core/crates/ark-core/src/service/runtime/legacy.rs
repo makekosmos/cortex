@@ -1,20 +1,10 @@
 use super::*;
 
 pub(super) async fn init(state: &Arc<ServiceState>, db_path: String) -> Result<Value, String> {
-    let conn = db::open_db(&db_path)?;
-    db::init_schema(&conn)?;
-    // KOS-397: the one-off move of com.kosmos.task 1.1.0 to core.task 0.1.0.
-    // It backs up the legacy rows first and fails the start if a row cannot
-    // be carried over, so no task is left behind. A later start finds none.
-    let backup = format!("{db_path}.pre-core-task.bak");
-    crate::canonical_types::core_task_rewrite::rewrite_legacy_tasks(
-        &conn,
-        &backup,
-        &local_write_device_id(None),
-    )?;
-    *state.db.lock().unwrap_or_else(|e| e.into_inner()) = Some(
-        db::DbHandle::from_shared_connection(Arc::new(StdMutex::new(conn))),
-    );
+    let db = db::DbHandle::open(db_path.clone(), local_write_device_id(None))
+        .await
+        .map_err(|error| error.to_string())?;
+    *state.db.lock().unwrap_or_else(|e| e.into_inner()) = Some(db);
     *state.db_path.lock().unwrap_or_else(|e| e.into_inner()) = Some(db_path);
     Ok(json!(true))
 }

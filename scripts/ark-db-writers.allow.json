@@ -103,6 +103,11 @@
     },
     {
       "path": "core/crates/ark-core/src/db/command.rs",
+      "category": "connection lifecycle",
+      "count": 2
+    },
+    {
+      "path": "core/crates/ark-core/src/db/command.rs",
       "category": "sync blocking adapter",
       "count": 1
     },
@@ -210,11 +215,6 @@
       "path": "core/crates/ark-core/src/integration_replication/signed_sync.rs",
       "category": "SQLite mutation API",
       "count": 4
-    },
-    {
-      "path": "core/crates/ark-core/src/service/runtime/legacy.rs",
-      "category": "connection lifecycle",
-      "count": 2
     },
     {
       "path": "core/crates/ark-core/src/db/backend/object_mutation.rs",
