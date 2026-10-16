@@ -12,10 +12,11 @@ pub(crate) use handle::{DbHandle, DbOwner};
 #[cfg(test)]
 pub(crate) use commands::DeviceEnrollmentOutcome;
 pub(crate) use commands::{
-    AcquireIntegrationRefreshLeaseCommand, ApplyAuthenticatedSyncEntityCommand,
-    ApplyRegistryEventsCommand, ApplySignedIntegrationFrameCommand, ApplySyncEntityCommand,
-    AuthenticatedCoreTaskWrite, AuthorizedTransportKeyQuery, CanonicalGameUpsertCommand,
-    ClearAllCommand, CommittedFeedDeliveryPageQuery, CommittedFeedPageQuery, CommittedFeedProgress,
+    AcquireIntegrationRefreshLeaseCommand, AppendLocalRegistryEventCommand,
+    ApplyAuthenticatedSyncEntityCommand, ApplyRegistryEventsCommand,
+    ApplySignedIntegrationFrameCommand, ApplySyncEntityCommand, AuthenticatedCoreTaskWrite,
+    AuthorizedTransportKeyQuery, CanonicalGameUpsertCommand, ClearAllCommand,
+    CommittedFeedDeliveryPageQuery, CommittedFeedPageQuery, CommittedFeedProgress,
     CommittedFeedProgressCommand, CommittedFeedProgressOperation, CommittedFeedSnapshotQuery,
     CompactUsageSyncLogCommand, DeleteObjectLinkCommand, DeleteObjectTypeCommand,
     DeleteTrashedCommand, EnrollPairedDeviceCommand, EnsureUsageSequenceMigratedCommand,

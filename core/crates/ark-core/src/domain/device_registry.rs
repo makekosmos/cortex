@@ -148,6 +148,18 @@ pub enum RegistryOperation {
     },
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum RegistryCommand {
+    Rename {
+        target_device_id: DeviceId,
+        display_name: DisplayName,
+    },
+    Disable {
+        target_device_id: DeviceId,
+    },
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RegistryEventDraft {
     pub actor_device_id: DeviceId,

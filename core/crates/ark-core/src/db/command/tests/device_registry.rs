@@ -1,6 +1,8 @@
 use super::*;
 use rusqlite::OptionalExtension;
 
+#[path = "device_registry/commands.rs"]
+mod commands;
 #[path = "device_registry/handshake.rs"]
 mod handshake;
 
@@ -317,13 +319,14 @@ async fn disabled_peer_cannot_commit_an_inbound_entity_after_session_admission()
         &local_key,
     )
     .unwrap();
-    handle
+    let applied = handle
         .submit(
             CommandContext::sync_peer("paired-device".into(), CommandClass::SyncLive),
             ApplyRegistryEventsCommand::new("paired-device".into(), vec![disable]),
         )
         .await
         .unwrap();
+    assert_eq!(applied.disabled_device_ids, ["paired-device"]);
 
     let receipt = handle
         .submit(

@@ -70,7 +70,6 @@ impl DeviceRegistry {
         self.devices.get(id)
     }
 
-    #[cfg(test)]
     pub(crate) fn head(&self, id: &DeviceId) -> Option<&RegistryHead> {
         self.heads.get(id)
     }

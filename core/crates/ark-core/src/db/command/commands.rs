@@ -1,5 +1,6 @@
 mod core_task;
 mod device_registry;
+mod device_registry_command;
 mod device_registry_handshake;
 mod device_registry_sync;
 mod external_ref;
@@ -22,6 +23,7 @@ pub(crate) use core_task::{AuthenticatedCoreTaskWrite, LocalCoreTaskWrite, Remot
 #[cfg(test)]
 pub(crate) use device_registry::DeviceEnrollmentOutcome;
 pub(crate) use device_registry::EnrollPairedDeviceCommand;
+pub(crate) use device_registry_command::AppendLocalRegistryEventCommand;
 pub(crate) use device_registry_handshake::{
     SignRegistryHandshakeCommand, VerifyRegistryHandshakeQuery,
 };
