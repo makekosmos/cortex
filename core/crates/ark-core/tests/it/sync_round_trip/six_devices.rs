@@ -14,7 +14,7 @@ use ark_core::types::{PeerRecord, SyncEntity, VersionVector};
 use ark_core::SqliteStorageBackend;
 use tokio::sync::{watch, Notify};
 
-use super::{make_storage, pick_port, SyncClient, SyncServer};
+use super::{make_storage_with_identity, pick_port, SyncClient, SyncServer};
 
 struct BackfillBarrier {
     inner: Arc<SqliteStorageBackend>,
@@ -187,6 +187,10 @@ impl IntegrationReplicationBackend for BackfillBarrier {}
 
 #[async_trait::async_trait]
 impl PeerIdentityBackend for BackfillBarrier {
+    async fn sync_session_is_admitted(&self, peer_device_id: &str) -> Result<bool, String> {
+        self.inner.sync_session_is_admitted(peer_device_id).await
+    }
+
     async fn authorized_transport_public_key(
         &self,
         device_id: &str,
@@ -205,13 +209,92 @@ impl PeerIdentityBackend for BackfillBarrier {
     ) -> Result<(), String> {
         self.inner.store_peer_transport_keys(keys).await
     }
+
+    async fn enroll_paired_device(
+        &self,
+        local_device_id: &str,
+        target_device_id: &str,
+        transport_public_key: &str,
+    ) -> Result<(), String> {
+        self.inner
+            .enroll_paired_device(local_device_id, target_device_id, transport_public_key)
+            .await
+    }
+
+    async fn load_device_registry_events_page(
+        &self,
+        after_position: i64,
+        high_watermark: Option<i64>,
+        limit: usize,
+    ) -> Result<
+        (
+            i64,
+            usize,
+            Vec<ark_core::domain::device_registry::RegistryEvent>,
+        ),
+        String,
+    > {
+        self.inner
+            .load_device_registry_events_page(after_position, high_watermark, limit)
+            .await
+    }
+
+    async fn apply_device_registry_events(
+        &self,
+        sender_device_id: &str,
+        events: &[ark_core::domain::device_registry::RegistryEvent],
+    ) -> Result<ark_core::replication_storage::RegistryPageApply, String> {
+        self.inner
+            .apply_device_registry_events(sender_device_id, events)
+            .await
+    }
+
+    async fn sign_registry_handshake(
+        &self,
+        local_device_id: &str,
+        transcript: &ark_core::domain::device_registry::RegistryHandshakeTranscript,
+    ) -> Result<ark_core::domain::device_registry::RegistryHandshakeProof, String> {
+        self.inner
+            .sign_registry_handshake(local_device_id, transcript)
+            .await
+    }
+
+    async fn verify_registry_handshake(
+        &self,
+        peer_device_id: &str,
+        transcript: &ark_core::domain::device_registry::RegistryHandshakeTranscript,
+        proof: &ark_core::domain::device_registry::RegistryHandshakeProof,
+    ) -> Result<(), String> {
+        self.inner
+            .verify_registry_handshake(peer_device_id, transcript, proof)
+            .await
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn six_devices_converge_during_initial_import_and_local_edit() {
     const DEVICE_COUNT: usize = 6;
     const INITIAL_ROWS: usize = 256;
-    let source = make_storage("device-a");
+    let fixtures = (0..DEVICE_COUNT)
+        .map(|index| {
+            let device_id = format!("device-{}", char::from(b'a' + index as u8));
+            let (storage, endpoint) = make_storage_with_identity(&device_id);
+            (device_id, storage, endpoint)
+        })
+        .collect::<Vec<_>>();
+    for local_index in 0..DEVICE_COUNT {
+        for (peer_index, (peer_id, _, peer_endpoint)) in fixtures.iter().enumerate() {
+            if peer_index == local_index {
+                continue;
+            }
+            let (local_id, local_storage, _) = &fixtures[local_index];
+            local_storage
+                .enroll_paired_device(local_id, peer_id, peer_endpoint)
+                .await
+                .expect("all devices must know their peers before concurrent sync");
+        }
+    }
+    let source = fixtures[0].1.clone();
     source
         .apply_entity(&SyncEntity {
             entity_type: "object_type".into(),
@@ -287,9 +370,8 @@ async fn six_devices_converge_during_initial_import_and_local_edit() {
     let (authenticated_sender, authenticated_rx) = tokio::sync::oneshot::channel();
     let authenticated_sender = Arc::new(std::sync::Mutex::new(Some(authenticated_sender)));
     let mut devices = Vec::with_capacity(DEVICE_COUNT - 1);
-    for index in 1..DEVICE_COUNT {
-        let device_id = format!("device-{}", char::from(b'a' + index as u8));
-        let storage = make_storage(&device_id);
+    for (index, (device_id, storage, _)) in fixtures.iter().enumerate().skip(1) {
+        let storage = storage.clone();
         storage.set_selective_sync_profile(Some(profile()));
         let client = Arc::new(SyncClient::new(
             storage.clone() as Arc<dyn SyncRuntimeStorage>,
@@ -311,7 +393,7 @@ async fn six_devices_converge_during_initial_import_and_local_edit() {
                 .await;
         }
         client.start();
-        devices.push((device_id, storage, client));
+        devices.push((device_id.clone(), storage, client));
     }
 
     tokio::time::timeout(Duration::from_secs(10), page_started)

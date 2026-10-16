@@ -8,8 +8,17 @@ async fn round_trip_sync_between_two_servers() {
     // Server A — holds one todo already; Server B — empty.
     // After sync, B should contain the todo.
     // ---------------------------------------------------------------------
-    let storage_a = make_storage("device-a");
-    let storage_b = make_storage("device-b");
+    let (storage_a, endpoint_a) = make_storage_with_identity("device-a");
+    let (storage_b, endpoint_b) = make_storage_with_identity("device-b");
+    pair_storages(
+        &storage_a,
+        "device-a",
+        &endpoint_a,
+        &storage_b,
+        "device-b",
+        &endpoint_b,
+    )
+    .await;
 
     // Seed one todo on side A.
     let seed = todo_entity("entity-a-1", "Seeded on A", "device-a", 1);

@@ -17,7 +17,18 @@ async fn free_loopback_port() -> u16 {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn seed_client_adopts_authenticated_peer_identity() {
     let port = free_loopback_port().await;
-    let server = SyncServer::new(make_storage("device-server") as Arc<dyn SyncRuntimeStorage>);
+    let (server_storage, server_endpoint) = make_storage_with_identity("device-server");
+    let (client_storage, client_endpoint) = make_storage_with_identity("device-client");
+    pair_storages(
+        &server_storage,
+        "device-server",
+        &server_endpoint,
+        &client_storage,
+        "device-client",
+        &client_endpoint,
+    )
+    .await;
+    let server = SyncServer::new(server_storage as Arc<dyn SyncRuntimeStorage>);
     server
         .start_with_addr(
             "space-x",
@@ -30,7 +41,7 @@ async fn seed_client_adopts_authenticated_peer_identity() {
         .unwrap();
 
     let client = SyncClient::new(
-        make_storage("device-client") as Arc<dyn SyncRuntimeStorage>,
+        client_storage as Arc<dyn SyncRuntimeStorage>,
         PeerRecord {
             device_id: "seed-bootstrap".into(),
             device_name: "Bootstrap".into(),

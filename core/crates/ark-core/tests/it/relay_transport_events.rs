@@ -16,6 +16,7 @@ use tokio::sync::mpsc;
 use ark_core::db::{init_schema, SqliteStorageBackend};
 use ark_core::protocol::{LanSyncMessage, PROTOCOL_VERSION};
 use ark_core::relay_sync::{RelaySync, RelaySyncConfig};
+use ark_core::replication_storage::PeerIdentityBackend;
 use ark_core::sync_server::SyncRuntimeStorage;
 use ark_core::sync_transport::{SyncTransport, TransportEvent};
 
@@ -23,8 +24,22 @@ struct StubTransport {
     event_tx: StdMutex<Option<mpsc::UnboundedSender<TransportEvent>>>,
 }
 
+// These tests cover transport lifecycle events only; the stub intentionally
+// does not complete the registry-control exchange.
 #[async_trait::async_trait]
 impl SyncTransport for StubTransport {
+    fn supports_registry_admission(&self) -> bool {
+        true
+    }
+
+    fn bind_peer_for_control(
+        &self,
+        _device_id: &str,
+        _transport_public_key: &str,
+    ) -> Result<(), String> {
+        Ok(())
+    }
+
     async fn start(&self, event_tx: mpsc::UnboundedSender<TransportEvent>) -> Result<(), String> {
         *self.event_tx.lock().unwrap() = Some(event_tx);
         Ok(())
@@ -32,16 +47,34 @@ impl SyncTransport for StubTransport {
     fn send(&self, _msg: LanSyncMessage) -> Result<(), String> {
         Ok(())
     }
+
+    async fn send_to_transport_peer(
+        &self,
+        _transport_public_key: &str,
+        _msg: LanSyncMessage,
+    ) -> Result<(), String> {
+        Ok(())
+    }
+
     async fn stop(&self) {}
 }
 
-async fn relay_with_stub() -> (Arc<RelaySync>, mpsc::UnboundedSender<TransportEvent>) {
+async fn relay_with_stub() -> (
+    Arc<RelaySync>,
+    mpsc::UnboundedSender<TransportEvent>,
+    String,
+) {
     let conn = Connection::open_in_memory().unwrap();
     init_schema(&conn).unwrap();
     let backend = Arc::new(SqliteStorageBackend::for_test(Arc::new(StdMutex::new(
         conn,
     ))));
     backend.set_device_id("me").unwrap();
+    let peer_endpoint = iroh::SecretKey::generate().public().to_string();
+    backend
+        .enroll_paired_device("me", "peer-x", &peer_endpoint)
+        .await
+        .unwrap();
 
     let transport = Arc::new(StubTransport {
         event_tx: StdMutex::new(None),
@@ -66,7 +99,7 @@ async fn relay_with_stub() -> (Arc<RelaySync>, mpsc::UnboundedSender<TransportEv
         .unwrap()
         .clone()
         .expect("event_tx installed");
-    (relay, tx)
+    (relay, tx, peer_endpoint)
 }
 
 /// Generous hang guard for event waits — the peer list state is the real
@@ -93,9 +126,11 @@ async fn wait_for_no_peers(relay: &RelaySync) {
     .expect("peers never evicted");
 }
 
-fn send_hello(tx: &mpsc::UnboundedSender<TransportEvent>) {
-    tx.send(TransportEvent::MessageReceived {
+fn send_hello(tx: &mpsc::UnboundedSender<TransportEvent>, peer_endpoint: &str) {
+    let offer = ark_core::protocol::ProtocolOffer::current_with_registry_history(true);
+    tx.send(TransportEvent::MessageReceivedFromTransport {
         from_device_id: "peer-x".to_string(),
+        transport_public_key: peer_endpoint.to_owned(),
         msg: LanSyncMessage::Hello {
             protocol_version: PROTOCOL_VERSION,
             device_id: "peer-x".to_string(),
@@ -106,8 +141,8 @@ fn send_hello(tx: &mpsc::UnboundedSender<TransportEvent>) {
             auth_hmac: None,
             platform: None,
             app_version: None,
-            supported_protocol_versions: None,
-            supported_capabilities: None,
+            supported_protocol_versions: Some(offer.version_ids()),
+            supported_capabilities: Some(offer.capability_ids()),
             negotiated_capabilities: None,
             negotiation_hmac: None,
         },
@@ -117,8 +152,8 @@ fn send_hello(tx: &mpsc::UnboundedSender<TransportEvent>) {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn transport_dropped_evicts_all_peers() {
-    let (relay, tx) = relay_with_stub().await;
-    send_hello(&tx);
+    let (relay, tx, peer_endpoint) = relay_with_stub().await;
+    send_hello(&tx, &peer_endpoint);
     wait_for_peer(&relay).await;
     assert_eq!(
         relay.get_connected_peer_entries().await,
@@ -142,8 +177,8 @@ async fn transport_dropped_evicts_all_peers() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn disconnect_with_own_device_id_is_ignored() {
-    let (relay, tx) = relay_with_stub().await;
-    send_hello(&tx);
+    let (relay, tx, peer_endpoint) = relay_with_stub().await;
+    send_hello(&tx, &peer_endpoint);
     wait_for_peer(&relay).await;
 
     // A Disconnected carrying our own device id (unresolvable remote, e.g.

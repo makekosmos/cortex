@@ -1,8 +1,17 @@
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 
 async fn hmac_authenticated_sync_succeeds_with_matching_secret() {
-    let storage_a = make_storage("device-a");
-    let storage_b = make_storage("device-b");
+    let (storage_a, endpoint_a) = make_storage_with_identity("device-a");
+    let (storage_b, endpoint_b) = make_storage_with_identity("device-b");
+    pair_storages(
+        &storage_a,
+        "device-a",
+        &endpoint_a,
+        &storage_b,
+        "device-b",
+        &endpoint_b,
+    )
+    .await;
     storage_a
         .apply_entity(&todo_entity("hmac-entity-a", "Protected", "device-a", 1))
         .await
@@ -132,8 +141,17 @@ async fn hmac_authenticated_sync_rejects_wrong_secret() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn usage_entities_sync_between_two_servers() {
-    let storage_a = make_storage("device-a");
-    let storage_b = make_storage("device-b");
+    let (storage_a, endpoint_a) = make_storage_with_identity("device-a");
+    let (storage_b, endpoint_b) = make_storage_with_identity("device-b");
+    pair_storages(
+        &storage_a,
+        "device-a",
+        &endpoint_a,
+        &storage_b,
+        "device-b",
+        &endpoint_b,
+    )
+    .await;
 
     let tracked_app = tracked_app_entity("tracked-app-a", "device-a", 1);
     let session = usage_session_entity("usage-session-a", "tracked-app-a", "device-a", 2);

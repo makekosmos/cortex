@@ -46,8 +46,17 @@ fn selective_object_entity(id: &str, type_id: &str, title: &str, counter: u64) -
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_destructive() {
-    let storage_a = make_storage("device-a");
-    let storage_b = make_storage("device-b");
+    let (storage_a, endpoint_a) = make_storage_with_identity("device-a");
+    let (storage_b, endpoint_b) = make_storage_with_identity("device-b");
+    pair_storages(
+        &storage_a,
+        "device-a",
+        &endpoint_a,
+        &storage_b,
+        "device-b",
+        &endpoint_b,
+    )
+    .await;
     let note = selective_object_entity("sync-note", "com.kosmos.note", "Sync note", 1);
     let task = selective_object_entity("sync-task", "core.task", "Sync task", 2);
     let game = selective_object_entity("sync-game", "com.kosmos.game", "Sync game", 3);

@@ -14,6 +14,7 @@ use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
 
 use ark_core::db::{init_schema, SqliteStorageBackend};
+use ark_core::replication_storage::PeerIdentityBackend;
 use ark_core::sync_client::SyncClient;
 use ark_core::sync_server::{SyncRuntimeStorage, SyncServer};
 use ark_core::types::{
@@ -24,12 +25,38 @@ use serde_json::{json, Value};
 use tokio::sync::Mutex;
 
 fn make_storage(device_id: &str) -> Arc<SqliteStorageBackend> {
+    make_storage_with_identity(device_id).0
+}
+
+pub(super) fn make_storage_with_identity(device_id: &str) -> (Arc<SqliteStorageBackend>, String) {
     let conn = Connection::open_in_memory().expect("in-memory db");
     init_schema(&conn).expect("schema");
+    let endpoint = ark_core::iroh_transport::load_or_generate_secret_key(&conn)
+        .expect("device signing key")
+        .public()
+        .to_string();
     let shared = Arc::new(StdMutex::new(conn));
     let backend = Arc::new(SqliteStorageBackend::for_test(shared));
     backend.set_device_id(device_id).unwrap();
-    backend
+    (backend, endpoint)
+}
+
+pub(super) async fn pair_storages(
+    storage_a: &SqliteStorageBackend,
+    device_a: &str,
+    endpoint_a: &str,
+    storage_b: &SqliteStorageBackend,
+    device_b: &str,
+    endpoint_b: &str,
+) {
+    storage_a
+        .enroll_paired_device(device_a, device_b, endpoint_b)
+        .await
+        .expect("enroll device B on A");
+    storage_b
+        .enroll_paired_device(device_b, device_a, endpoint_a)
+        .await
+        .expect("enroll device A on B");
 }
 
 fn todo_entity(id: &str, title: &str, device_id: &str, counter: u64) -> SyncEntity {
