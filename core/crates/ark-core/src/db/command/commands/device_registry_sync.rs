@@ -1,4 +1,7 @@
-use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError, DbQuery};
+use super::super::{
+    sealed, CommandClass, CommandContext, DbCommand, DbError, DbQuery,
+    DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY,
+};
 use crate::domain::device_registry::{
     state::DeviceRegistry, DeviceId, DeviceRecord, DisplayName, RegistryEvent, RegistryHead,
     SigningPublicKey,
@@ -6,6 +9,82 @@ use crate::domain::device_registry::{
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use serde::Serialize;
 use sha2::Digest;
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DeviceRegistryEntryView {
+    pub(crate) device_id: String,
+    pub(crate) display_name: Option<String>,
+    pub(crate) enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DeviceRegistrySnapshot {
+    pub(crate) local_device_id: String,
+    pub(crate) devices: Vec<DeviceRegistryEntryView>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct LoadDeviceRegistryQuery;
+
+impl sealed::Sealed for LoadDeviceRegistryQuery {}
+
+impl DbQuery for LoadDeviceRegistryQuery {
+    type Output = DeviceRegistrySnapshot;
+
+    fn class(&self) -> CommandClass {
+        CommandClass::Interactive
+    }
+
+    fn weight(&self) -> usize {
+        super::serialized_weight(self)
+    }
+
+    fn read(
+        self,
+        context: &CommandContext,
+        connection: &Connection,
+    ) -> Result<Self::Output, DbError> {
+        context.require_engine()?;
+        let local_device_id =
+            crate::db::get_sync_kv(connection, DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY)
+                .map_err(DbError::Storage)?
+                .ok_or_else(|| DbError::Invalid("device_registry_local_identity_missing".into()))?;
+        let mut statement = connection
+            .prepare(
+                "SELECT device_id, display_name, disabled_event_id IS NULL
+                 FROM device_registry_projection ORDER BY device_id",
+            )
+            .map_err(storage_error)?;
+        let mut devices = statement
+            .query_map([], |row| {
+                Ok(DeviceRegistryEntryView {
+                    device_id: row.get(0)?,
+                    display_name: row.get(1)?,
+                    enabled: row.get(2)?,
+                })
+            })
+            .map_err(storage_error)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(storage_error)?;
+        if !devices
+            .iter()
+            .any(|device| device.device_id == local_device_id)
+        {
+            devices.push(DeviceRegistryEntryView {
+                device_id: local_device_id.clone(),
+                display_name: None,
+                enabled: true,
+            });
+            devices.sort_by(|left, right| left.device_id.cmp(&right.device_id));
+        }
+        Ok(DeviceRegistrySnapshot {
+            local_device_id,
+            devices,
+        })
+    }
+}
 
 #[derive(Debug, Clone)]
 pub(crate) struct LoadRegistryEventsQuery {

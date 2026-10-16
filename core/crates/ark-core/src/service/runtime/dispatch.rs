@@ -178,6 +178,14 @@ pub(crate) async fn handle_request(
         Request::BroadcastChange { entity } => system::broadcast_change(state, entity).await,
         Request::GetConnectedPeers => system::get_connected_peers(state).await,
         Request::GetSyncSnapshot => system::get_sync_snapshot(state).await,
+        Request::DeviceRegistrySnapshot => system::device_registry_snapshot(state).await,
+        Request::DeviceRegistryRename {
+            target_device_id,
+            display_name,
+        } => system::device_registry_rename(state, target_device_id, display_name).await,
+        Request::DeviceRegistryDisable { target_device_id } => {
+            system::device_registry_disable(state, target_device_id).await
+        }
         Request::DisconnectPeer { device_id } => system::disconnect_peer(state, device_id).await,
         Request::ConnectWithPairingCode { pairing_code } => {
             system::connect_with_pairing_code(state, pairing_code).await

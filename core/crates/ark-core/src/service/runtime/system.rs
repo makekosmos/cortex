@@ -1,6 +1,62 @@
 use super::*;
 use crate::data_platform::ExternalRefUpsert;
 
+pub(super) async fn device_registry_snapshot(state: &Arc<ServiceState>) -> Result<Value, String> {
+    let snapshot = get_db_handle(state)?
+        .query(db::CommandContext::engine(), db::LoadDeviceRegistryQuery)
+        .await
+        .map_err(|error| error.to_string())?;
+    serde_json::to_value(snapshot).map_err(|error| error.to_string())
+}
+
+async fn local_registry_device_id(state: &Arc<ServiceState>) -> Result<String, String> {
+    get_sync_kv(state, db::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY.to_owned())
+        .await?
+        .as_str()
+        .map(str::to_owned)
+        .ok_or_else(|| "device_registry_local_identity_missing".to_owned())
+}
+
+pub(super) async fn device_registry_rename(
+    state: &Arc<ServiceState>,
+    target_device_id: crate::domain::device_registry::DeviceId,
+    display_name: crate::domain::device_registry::DisplayName,
+) -> Result<Value, String> {
+    let local_device_id = local_registry_device_id(state).await?;
+    let event = get_db_handle(state)?
+        .submit(
+            db::CommandContext::engine(),
+            db::AppendLocalRegistryEventCommand::new(
+                local_device_id,
+                crate::domain::device_registry::RegistryCommand::Rename {
+                    target_device_id,
+                    display_name,
+                },
+            ),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    serde_json::to_value(event).map_err(|error| error.to_string())
+}
+
+pub(super) async fn device_registry_disable(
+    state: &Arc<ServiceState>,
+    target_device_id: crate::domain::device_registry::DeviceId,
+) -> Result<Value, String> {
+    let local_device_id = local_registry_device_id(state).await?;
+    let event = get_db_handle(state)?
+        .submit(
+            db::CommandContext::engine(),
+            db::AppendLocalRegistryEventCommand::new(
+                local_device_id,
+                crate::domain::device_registry::RegistryCommand::Disable { target_device_id },
+            ),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    serde_json::to_value(event).map_err(|error| error.to_string())
+}
+
 pub(super) async fn get_sync_kv(state: &Arc<ServiceState>, key: String) -> Result<Value, String> {
     get_db_handle(state)?
         .query(

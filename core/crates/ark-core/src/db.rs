@@ -23,15 +23,16 @@ pub(crate) use backend::SqliteUsageWriteSession;
 pub use backend::{delete_tag, SqliteStorageBackend};
 pub use command::CommandSource;
 pub(crate) use command::{
-    AcquireIntegrationRefreshLeaseCommand, ApplyAuthenticatedSyncEntityCommand,
-    ApplyRegistryEventsCommand, ApplySignedIntegrationFrameCommand, ApplySyncEntityCommand,
-    AuthenticatedCoreTaskWrite, AuthorizedTransportKeyQuery, CanonicalGameUpsertCommand,
-    ClearAllCommand, CommandClass, CommandContext, CommittedFeedDeliveryPageQuery,
-    CommittedFeedPageQuery, CommittedFeedProgress, CommittedFeedProgressCommand,
-    CommittedFeedProgressOperation, CommittedFeedSnapshotQuery, CompactUsageSyncLogCommand,
-    DbHandle, DbOwner, DeleteObjectLinkCommand, DeleteObjectTypeCommand, DeleteTrashedCommand,
-    EnrollPairedDeviceCommand, EnsureUsageSequenceMigratedCommand, GetSyncKeyValueQuery,
-    IdentityErrorStyle, IntegrationReadQuery, LegacyDeleteCommand, LegacyGraphWriteCommand,
+    AcquireIntegrationRefreshLeaseCommand, AppendLocalRegistryEventCommand,
+    ApplyAuthenticatedSyncEntityCommand, ApplyRegistryEventsCommand,
+    ApplySignedIntegrationFrameCommand, ApplySyncEntityCommand, AuthenticatedCoreTaskWrite,
+    AuthorizedTransportKeyQuery, CanonicalGameUpsertCommand, ClearAllCommand, CommandClass,
+    CommandContext, CommittedFeedDeliveryPageQuery, CommittedFeedPageQuery, CommittedFeedProgress,
+    CommittedFeedProgressCommand, CommittedFeedProgressOperation, CommittedFeedSnapshotQuery,
+    CompactUsageSyncLogCommand, DbHandle, DbOwner, DeleteObjectLinkCommand,
+    DeleteObjectTypeCommand, DeleteTrashedCommand, EnrollPairedDeviceCommand,
+    EnsureUsageSequenceMigratedCommand, GetSyncKeyValueQuery, IdentityErrorStyle,
+    IntegrationReadQuery, LegacyDeleteCommand, LegacyGraphWriteCommand, LoadDeviceRegistryQuery,
     LoadEntitiesQuery, LoadOrGenerateIrohSecretKeyCommand, LoadRegistryEventsQuery,
     LocalBookCoverCommand, LocalCoreTaskWrite, LocalObjectDeleteCommand, LocalObjectUpsertCommand,
     LocalUsageWriteCommand, ObjectReadQuery, PersistIntegrationGrantCommand,
@@ -42,6 +43,7 @@ pub(crate) use command::{
     TrackedAppUpsertCommand, TypeReadQuery, UpsertExternalRefCommand, UpsertObjectLinkCommand,
     UpsertObjectTypeCommand, UsageCompleteThroughQuery, UsageReadQuery,
     ValidateOutboundSignedFrameQuery, VerifyRegistryHandshakeQuery,
+    DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY,
 };
 pub use committed_feed::{
     acknowledge_outbound, append_committed_change, begin_outbound_policy,

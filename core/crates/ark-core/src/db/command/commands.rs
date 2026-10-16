@@ -27,7 +27,9 @@ pub(crate) use device_registry_command::AppendLocalRegistryEventCommand;
 pub(crate) use device_registry_handshake::{
     SignRegistryHandshakeCommand, VerifyRegistryHandshakeQuery,
 };
-pub(crate) use device_registry_sync::{ApplyRegistryEventsCommand, LoadRegistryEventsQuery};
+pub(crate) use device_registry_sync::{
+    ApplyRegistryEventsCommand, LoadDeviceRegistryQuery, LoadRegistryEventsQuery,
+};
 pub(crate) use external_ref::UpsertExternalRefCommand;
 pub(crate) use integration_admin::{
     AcquireIntegrationRefreshLeaseCommand, PersistIntegrationGrantCommand,

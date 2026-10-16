@@ -9,6 +9,8 @@ mod handle;
 mod operation_receipt;
 pub(crate) use handle::{DbHandle, DbOwner};
 
+pub(crate) const DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY: &str = "device_registry.local_device_id";
+
 #[cfg(test)]
 pub(crate) use commands::DeviceEnrollmentOutcome;
 pub(crate) use commands::{
@@ -21,10 +23,10 @@ pub(crate) use commands::{
     CompactUsageSyncLogCommand, DeleteObjectLinkCommand, DeleteObjectTypeCommand,
     DeleteTrashedCommand, EnrollPairedDeviceCommand, EnsureUsageSequenceMigratedCommand,
     GetSyncKeyValueQuery, IdentityErrorStyle, IntegrationReadQuery, LegacyDeleteCommand,
-    LegacyGraphWriteCommand, LoadEntitiesQuery, LoadOrGenerateIrohSecretKeyCommand,
-    LoadRegistryEventsQuery, LocalBookCoverCommand, LocalCoreTaskWrite, LocalObjectDeleteCommand,
-    LocalObjectUpsertCommand, LocalUsageWriteCommand, ObjectReadQuery,
-    PersistIntegrationGrantCommand, PersistNodeAuthorizationCommand,
+    LegacyGraphWriteCommand, LoadDeviceRegistryQuery, LoadEntitiesQuery,
+    LoadOrGenerateIrohSecretKeyCommand, LoadRegistryEventsQuery, LocalBookCoverCommand,
+    LocalCoreTaskWrite, LocalObjectDeleteCommand, LocalObjectUpsertCommand, LocalUsageWriteCommand,
+    ObjectReadQuery, PersistIntegrationGrantCommand, PersistNodeAuthorizationCommand,
     PublishIntegrationCredentialEnvelopeCommand, ReceiveInboxReceiptCommand,
     RegisterPackageTypesCommand, RemoteCoreTaskOutcome, ReplaceObjectLinkCommand,
     RestoreSnapshotCommand, SetLocalSyncKeyValueCommand, SetSyncKeyValueCommand,
