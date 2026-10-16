@@ -3,6 +3,16 @@ use crate::replication_storage::{PeerIdentityBackend, RegistryPageApply};
 
 #[async_trait::async_trait]
 impl PeerIdentityBackend for SqliteStorageBackend {
+    async fn sync_session_is_admitted(&self, peer_device_id: &str) -> Result<bool, String> {
+        self.db
+            .query(
+                CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
+                crate::db::RegistryPeerAdmissionQuery::new(peer_device_id.to_owned()),
+            )
+            .await
+            .map_err(|error| error.to_string())
+    }
+
     async fn load_peer_transport_keys(
         &self,
     ) -> Result<std::collections::HashMap<String, String>, String> {

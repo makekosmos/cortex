@@ -36,13 +36,13 @@
 
                 let (tx, rx) = mpsc::unbounded_channel::<Message>();
 
-                let writer = writer::spawn(
-                    ws_sink,
-                    rx,
+                let writer_context = writer::Context::new(
                     storage.clone(),
+                    peer.clone(),
                     space_id.clone(),
                     device_id.clone(),
                 );
+                let writer = writer::spawn(ws_sink, rx, writer_context);
                 let writer_abort = writer.abort_handle();
                 track_task(&writer_tasks, writer);
 

@@ -47,6 +47,10 @@ pub trait AuthenticatedEntityBackend: Send + Sync {
 /// Trusted transport identity records used while authenticating a paired peer.
 #[async_trait::async_trait]
 pub trait PeerIdentityBackend: Send + Sync {
+    async fn sync_session_is_admitted(&self, _peer_device_id: &str) -> Result<bool, String> {
+        Err("sync session admission lookup is unsupported by this storage backend".into())
+    }
+
     async fn authorized_transport_public_key(
         &self,
         device_id: &str,

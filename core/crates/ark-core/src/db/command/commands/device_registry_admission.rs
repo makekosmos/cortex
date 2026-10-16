@@ -1,5 +1,51 @@
-use super::super::DbError;
+use super::super::{sealed, CommandClass, CommandContext, DbError, DbQuery};
 use rusqlite::{Connection, OptionalExtension, Transaction};
+use serde::Serialize;
+
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct RegistryPeerAdmissionQuery {
+    peer_device_id: String,
+}
+
+impl RegistryPeerAdmissionQuery {
+    pub(crate) fn new(peer_device_id: String) -> Self {
+        Self { peer_device_id }
+    }
+}
+
+impl sealed::Sealed for RegistryPeerAdmissionQuery {}
+
+impl DbQuery for RegistryPeerAdmissionQuery {
+    type Output = bool;
+
+    fn class(&self) -> CommandClass {
+        CommandClass::SyncLive
+    }
+
+    fn weight(&self) -> usize {
+        self.peer_device_id.len()
+    }
+
+    fn read(
+        self,
+        context: &CommandContext,
+        connection: &Connection,
+    ) -> Result<Self::Output, DbError> {
+        context.require_sync_peer_matches(&self.peer_device_id)?;
+        let peer_admitted =
+            registry_device_is_admitted(connection, &self.peer_device_id)?.unwrap_or(false);
+        let local_device_id =
+            crate::db::get_sync_kv(connection, crate::db::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY)
+                .map_err(DbError::Storage)?;
+        let local_admitted = local_device_id
+            .as_deref()
+            .map(|device_id| registry_device_is_admitted(connection, device_id))
+            .transpose()?
+            .flatten()
+            .unwrap_or(true);
+        Ok(peer_admitted && local_admitted)
+    }
+}
 
 pub(super) fn require_registry_peer_known(
     transaction: &Transaction<'_>,

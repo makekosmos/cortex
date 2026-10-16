@@ -115,3 +115,58 @@ async fn local_registry_changes_are_signed_atomic_and_idempotent() {
         .await
         .unwrap();
 }
+
+#[tokio::test]
+async fn outbound_sync_admission_closes_after_device_disable() {
+    let directory = tempfile::tempdir().unwrap();
+    let db_path = directory
+        .path()
+        .join("device-registry-outbound-admission.db")
+        .to_string_lossy()
+        .into_owned();
+    let endpoint = iroh::SecretKey::generate().public().to_string();
+    let (handle, mut owner) = DbHandle::open(db_path, "local-device".into())
+        .await
+        .unwrap();
+    handle
+        .submit(
+            CommandContext::engine(),
+            EnrollPairedDeviceCommand::new("local-device".into(), "remote-device".into(), endpoint),
+        )
+        .await
+        .unwrap();
+
+    let query = crate::db::RegistryPeerAdmissionQuery::new("remote-device".into());
+    assert!(handle
+        .query(
+            CommandContext::sync_peer("remote-device".into(), CommandClass::SyncLive),
+            query.clone(),
+        )
+        .await
+        .unwrap());
+
+    handle
+        .submit(
+            CommandContext::engine(),
+            AppendLocalRegistryEventCommand::new(
+                "local-device".into(),
+                RegistryCommand::Disable {
+                    target_device_id: DeviceId::parse("remote-device").unwrap(),
+                },
+            ),
+        )
+        .await
+        .unwrap();
+    assert!(!handle
+        .query(
+            CommandContext::sync_peer("remote-device".into(), CommandClass::SyncLive),
+            query,
+        )
+        .await
+        .unwrap());
+
+    owner
+        .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
+        .await
+        .unwrap();
+}
