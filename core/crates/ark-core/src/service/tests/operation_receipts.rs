@@ -72,3 +72,51 @@ async fn object_mutation_json_replays_same_result_and_rejects_operation_id_reuse
     })
     .unwrap();
 }
+
+#[tokio::test]
+async fn clear_all_removes_operation_receipts_with_their_stored_results() {
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    handle_request(
+        &state,
+        Request::Init {
+            db_path: fixture.db_path().to_string_lossy().into_owned(),
+        },
+    )
+    .await
+    .unwrap();
+
+    handle_request(&state, upsert_request("Private note payload"))
+        .await
+        .unwrap();
+    with_conn(&state, |connection| {
+        let stored_result: String = connection
+            .query_row(
+                "SELECT result_json FROM ark_operation_receipts
+                 WHERE principal = 'engine' AND operation_id = 'json-operation-1'",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(|error| error.to_string())?;
+        assert!(stored_result.contains("Private note payload"));
+        Ok(())
+    })
+    .unwrap();
+
+    handle_request(&state, Request::ClearAll).await.unwrap();
+
+    with_conn(&state, |connection| {
+        let receipts: i64 = connection
+            .query_row("SELECT COUNT(*) FROM ark_operation_receipts", [], |row| {
+                row.get(0)
+            })
+            .map_err(|error| error.to_string())?;
+        let objects: i64 = connection
+            .query_row("SELECT COUNT(*) FROM objects", [], |row| row.get(0))
+            .map_err(|error| error.to_string())?;
+        assert_eq!(receipts, 0);
+        assert_eq!(objects, 0);
+        Ok(())
+    })
+    .unwrap();
+}
