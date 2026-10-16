@@ -66,7 +66,7 @@ async fn accepted_peer_policies_project_snapshot_pages_per_peer() {
         device_id: "peer-b".into(),
         revision: 1,
         name: "Game metadata".into(),
-        active: true,
+        active: false,
         rules: vec![data_platform::SyncProfileRule {
             resource_kind: "type".into(),
             resource_id: "com.example.game".into(),
@@ -79,6 +79,7 @@ async fn accepted_peer_policies_project_snapshot_pages_per_peer() {
         "peer-a",
         1,
         &note_profile.digest(),
+        note_profile.active,
         &note_profile.rules,
     )
     .unwrap();
@@ -87,6 +88,7 @@ async fn accepted_peer_policies_project_snapshot_pages_per_peer() {
         "peer-b",
         1,
         &game_profile.digest(),
+        game_profile.active,
         &game_profile.rules,
     )
     .unwrap();
@@ -102,9 +104,9 @@ async fn accepted_peer_policies_project_snapshot_pages_per_peer() {
     assert!(peer_a.iter().any(|entity| entity.id == "note"));
     assert!(!peer_a.iter().any(|entity| entity.id == "game"));
     assert!(peer_b.iter().any(|entity| entity.id == "game"));
-    assert!(!peer_b.iter().any(|entity| entity.id == "note"));
+    assert!(peer_b.iter().any(|entity| entity.id == "note"));
     let game = peer_b.iter().find(|entity| entity.id == "game").unwrap();
-    assert!(!game.data.contains_key("contentJson"));
+    assert!(game.data.contains_key("contentJson"));
     assert!(!game.data.contains_key("localState"));
 
     let live_note = peer_a.iter().find(|entity| entity.id == "note").unwrap();
@@ -117,7 +119,7 @@ async fn accepted_peer_policies_project_snapshot_pages_per_peer() {
         .filter_outgoing_entity_for_peer("peer-b", live_note)
         .await
         .unwrap()
-        .is_none());
+        .is_some());
 
     let loaded = backend.load_entities(&HashMap::new()).await.unwrap();
     assert!(loaded.iter().any(|entity| entity.id == "note"));

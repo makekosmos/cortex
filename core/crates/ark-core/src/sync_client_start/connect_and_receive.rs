@@ -280,6 +280,7 @@
                                     LanSyncMessage::SyncPolicy {
                                         revision,
                                         digest,
+                                        active,
                                         rules,
                                     } => {
                                         if let Err(error) = sync_policy::accept(
@@ -288,6 +289,7 @@
                                             authenticated,
                                             revision,
                                             &digest,
+                                            active,
                                             rules,
                                         )
                                         .await

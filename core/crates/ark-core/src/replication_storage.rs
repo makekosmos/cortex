@@ -59,6 +59,7 @@ pub trait PeerIdentityBackend: Send + Sync {
         _peer_device_id: &str,
         _revision: i64,
         _digest: &str,
+        _active: bool,
         _rules: &[crate::data_platform::SyncProfileRule],
     ) -> Result<crate::data_platform::AcceptedPeerSyncPolicy, String> {
         Err("peer sync policy persistence is unsupported by this storage backend".into())

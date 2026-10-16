@@ -185,6 +185,9 @@ impl SyncEntityReadPort for SqliteStorageBackend {
         let Some(policy) = self.load_accepted_peer_sync_policy(peer_device_id).await? else {
             return Ok(Some(entity.clone()));
         };
+        if !policy.active {
+            return Ok(Some(entity.clone()));
+        }
         Ok(crate::data_platform::filter_entities_for_profile(
             &policy.selective_profile(),
             std::slice::from_ref(entity),

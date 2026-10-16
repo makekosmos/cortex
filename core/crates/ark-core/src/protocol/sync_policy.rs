@@ -38,8 +38,13 @@ pub fn sync_policy_message(profile: &crate::data_platform::SyncProfile) -> LanSy
     LanSyncMessage::SyncPolicy {
         revision: profile.revision,
         digest: profile.digest(),
+        active: profile.active,
         rules: profile.rules.iter().map(SyncPolicyRuleWire::from).collect(),
     }
+}
+
+fn default_sync_policy_active() -> bool {
+    true
 }
 
 pub fn parse_sync_policy_rules(

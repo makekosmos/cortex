@@ -21,6 +21,7 @@ impl PeerIdentityBackend for SqliteStorageBackend {
         peer_device_id: &str,
         revision: i64,
         digest: &str,
+        active: bool,
         rules: &[crate::data_platform::SyncProfileRule],
     ) -> Result<crate::data_platform::AcceptedPeerSyncPolicy, String> {
         self.db
@@ -30,6 +31,7 @@ impl PeerIdentityBackend for SqliteStorageBackend {
                     peer_device_id.to_owned(),
                     revision,
                     digest.to_owned(),
+                    active,
                     rules.to_vec(),
                 ),
             )

@@ -32,7 +32,13 @@ async fn accepted_peer_policy_is_bound_to_authenticated_actor_peer() {
     let denied = handle
         .submit(
             CommandContext::sync_peer("tablet".into(), super::super::CommandClass::SyncLive),
-            AcceptPeerSyncPolicyCommand::new("phone".into(), 4, digest.clone(), rules.clone()),
+            AcceptPeerSyncPolicyCommand::new(
+                "phone".into(),
+                4,
+                digest.clone(),
+                true,
+                rules.clone(),
+            ),
         )
         .await;
     assert!(matches!(denied, Err(DbError::Permission(_))));
@@ -40,7 +46,7 @@ async fn accepted_peer_policy_is_bound_to_authenticated_actor_peer() {
     let accepted = handle
         .submit(
             CommandContext::sync_peer("phone".into(), super::super::CommandClass::SyncLive),
-            AcceptPeerSyncPolicyCommand::new("phone".into(), 4, digest, rules),
+            AcceptPeerSyncPolicyCommand::new("phone".into(), 4, digest, true, rules),
         )
         .await
         .unwrap();

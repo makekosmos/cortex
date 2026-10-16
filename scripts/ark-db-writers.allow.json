@@ -109,7 +109,7 @@
     {
       "path": "core/crates/ark-core/src/data_platform.rs",
       "category": "SQLite mutation API",
-      "count": 9
+      "count": 10
     },
     {
       "path": "core/crates/ark-core/src/data_platform_peer_policy.rs",

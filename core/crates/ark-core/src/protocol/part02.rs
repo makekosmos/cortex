@@ -80,14 +80,39 @@ mod tests {
         let LanSyncMessage::SyncPolicy {
             revision,
             digest,
+            active,
             rules,
         } = decoded
         else {
             panic!("expected sync policy message")
         };
         assert_eq!(revision, 3);
+        assert!(active);
         assert_eq!(digest, profile.digest());
         assert_eq!(parse_sync_policy_rules(rules).unwrap(), vec![rule]);
+    }
+
+    #[test]
+    fn sync_policy_message_preserves_inactive_revision() {
+        let profile = crate::data_platform::SyncProfile {
+            profile_id: "phone".into(),
+            device_id: "device-a".into(),
+            revision: 4,
+            name: "Phone".into(),
+            active: false,
+            rules: Vec::new(),
+        };
+        let message = sync_policy_message(&profile);
+        let raw = serialize_message(&message);
+        let decoded = deserialize_message(&raw).unwrap();
+        assert!(matches!(
+            decoded,
+            LanSyncMessage::SyncPolicy {
+                revision: 4,
+                active: false,
+                ..
+            }
+        ));
     }
 
     #[test]

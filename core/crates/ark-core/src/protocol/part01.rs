@@ -83,6 +83,8 @@ pub enum LanSyncMessage {
     SyncPolicy {
         revision: i64,
         digest: String,
+        #[serde(default = "default_sync_policy_active")]
+        active: bool,
         rules: Vec<SyncPolicyRuleWire>,
     },
 

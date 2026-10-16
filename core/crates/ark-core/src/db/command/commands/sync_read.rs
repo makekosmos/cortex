@@ -110,7 +110,7 @@ impl DbQuery for LoadEntitiesQuery {
             profile =
                 crate::data_platform::load_accepted_peer_sync_policy(connection, &peer_device_id)
                     .map_err(DbError::from_application_error)?
-                    .map(|policy| policy.selective_profile());
+                    .and_then(|policy| policy.active.then(|| policy.selective_profile()));
         }
         let entities = match page {
             None => {

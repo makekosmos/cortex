@@ -6,6 +6,7 @@ pub struct AcceptedPeerSyncPolicy {
     pub peer_device_id: String,
     pub revision: i64,
     pub digest: String,
+    pub active: bool,
     pub rules: Vec<SyncProfileRule>,
 }
 
@@ -55,6 +56,7 @@ pub fn accept_peer_sync_policy(
     peer_device_id: &str,
     revision: i64,
     digest: &str,
+    active: bool,
     rules: &[SyncProfileRule],
 ) -> Result<AcceptedPeerSyncPolicy, String> {
     if peer_device_id.is_empty() || peer_device_id.len() > 128 || revision < 1 {
@@ -77,25 +79,27 @@ pub fn accept_peer_sync_policy(
         peer_device_id: peer_device_id.to_owned(),
         revision,
         digest: digest.to_owned(),
+        active,
         rules: rules.to_vec(),
     };
     if digest.len() != 64 || policy.computed_digest() != digest {
         return Err("accepted peer sync policy digest mismatch".into());
     }
-    let current: Option<(i64, String)> = conn
+    let current: Option<(i64, String, bool)> = conn
         .query_row(
-            "SELECT revision, digest FROM accepted_peer_sync_policies WHERE peer_device_id=?1",
+            "SELECT revision, digest, active FROM accepted_peer_sync_policies \
+             WHERE peer_device_id=?1",
             [peer_device_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
         .optional()
         .map_err(|error| error.to_string())?;
-    if let Some((current_revision, current_digest)) = current {
+    if let Some((current_revision, current_digest, current_active)) = current {
         if revision < current_revision {
             return Err("accepted peer sync policy revision is stale".into());
         }
         if revision == current_revision {
-            if digest != current_digest {
+            if digest != current_digest || active != current_active {
                 return Err("accepted peer sync policy revision conflicts".into());
             }
             return Ok(policy);
@@ -103,10 +107,11 @@ pub fn accept_peer_sync_policy(
     }
     let rules_json = canonical_policy_rules_json(rules);
     conn.execute(
-        "INSERT INTO accepted_peer_sync_policies(peer_device_id,revision,digest,rules_json) \
-         VALUES(?1,?2,?3,?4) ON CONFLICT(peer_device_id) DO UPDATE SET \
-         revision=excluded.revision,digest=excluded.digest,rules_json=excluded.rules_json",
-        rusqlite::params![peer_device_id, revision, digest, rules_json],
+        "INSERT INTO accepted_peer_sync_policies(peer_device_id,revision,digest,active,rules_json) \
+         VALUES(?1,?2,?3,?4,?5) ON CONFLICT(peer_device_id) DO UPDATE SET \
+         revision=excluded.revision,digest=excluded.digest,active=excluded.active,\
+         rules_json=excluded.rules_json",
+        rusqlite::params![peer_device_id, revision, digest, active, rules_json],
     )
     .map_err(|error| error.to_string())?;
     Ok(policy)
@@ -116,22 +121,23 @@ pub fn load_accepted_peer_sync_policy(
     conn: &Connection,
     peer_device_id: &str,
 ) -> Result<Option<AcceptedPeerSyncPolicy>, String> {
-    let stored: Option<(i64, String, String)> = conn
+    let stored: Option<(i64, String, bool, String)> = conn
         .query_row(
-            "SELECT revision,digest,rules_json FROM accepted_peer_sync_policies \
+            "SELECT revision,digest,active,rules_json FROM accepted_peer_sync_policies \
              WHERE peer_device_id=?1",
             [peer_device_id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )
         .optional()
         .map_err(|error| error.to_string())?;
     stored
-        .map(|(revision, digest, rules_json)| {
+        .map(|(revision, digest, active, rules_json)| {
             let rules = parse_policy_rules_json(&rules_json)?;
             let policy = AcceptedPeerSyncPolicy {
                 peer_device_id: peer_device_id.to_owned(),
                 revision,
                 digest,
+                active,
                 rules,
             };
             if policy.computed_digest() != policy.digest {
@@ -223,13 +229,14 @@ mod accepted_peer_sync_policy_tests {
         ensure_schema(&conn).unwrap();
         let rules = vec![policy_rule("books")];
         let digest = digest_sync_policy(&rules);
-        let accepted = accept_peer_sync_policy(&conn, "phone", 2, &digest, &rules).unwrap();
+        let accepted = accept_peer_sync_policy(&conn, "phone", 2, &digest, true, &rules).unwrap();
         assert_eq!(accepted.revision, 2);
         assert_eq!(
-            accept_peer_sync_policy(&conn, "phone", 2, &digest, &rules).unwrap(),
+            accept_peer_sync_policy(&conn, "phone", 2, &digest, true, &rules).unwrap(),
             accepted
         );
-        assert!(accept_peer_sync_policy(&conn, "phone", 1, &digest, &rules).is_err());
+        assert!(accept_peer_sync_policy(&conn, "phone", 2, &digest, false, &rules).is_err());
+        assert!(accept_peer_sync_policy(&conn, "phone", 1, &digest, true, &rules).is_err());
 
         let conflicting_digest = digest_sync_policy(&[policy_rule("tasks")]);
         assert!(accept_peer_sync_policy(
@@ -237,13 +244,22 @@ mod accepted_peer_sync_policy_tests {
             "phone",
             2,
             &conflicting_digest,
+            true,
             &[policy_rule("tasks")]
         )
         .is_err());
-        assert!(accept_peer_sync_policy(&conn, "phone", 3, "bad", &rules).is_err());
+        assert!(accept_peer_sync_policy(&conn, "phone", 3, "bad", true, &rules).is_err());
 
         let newer_digest = digest_sync_policy(&[policy_rule("tasks")]);
-        accept_peer_sync_policy(&conn, "phone", 3, &newer_digest, &[policy_rule("tasks")]).unwrap();
+        accept_peer_sync_policy(
+            &conn,
+            "phone",
+            3,
+            &newer_digest,
+            false,
+            &[policy_rule("tasks")],
+        )
+        .unwrap();
         drop(conn);
 
         let reopened = Connection::open(path).unwrap();
@@ -253,10 +269,100 @@ mod accepted_peer_sync_policy_tests {
             .unwrap();
         assert_eq!(persisted.revision, 3);
         assert_eq!(persisted.digest, newer_digest);
+        assert!(!persisted.active);
         assert_eq!(persisted.rules[0].resource_id, "tasks");
         assert_eq!(
             load_accepted_peer_sync_policy(&reopened, "tablet").unwrap(),
             None
         );
+    }
+
+    #[test]
+    fn accepted_policy_schema_upgrade_preserves_existing_policies_as_active() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE accepted_peer_sync_policies (
+                peer_device_id TEXT PRIMARY KEY,
+                revision INTEGER NOT NULL,
+                digest TEXT NOT NULL,
+                rules_json TEXT NOT NULL
+            );",
+        )
+        .unwrap();
+        ensure_schema(&conn).unwrap();
+        let rules = vec![policy_rule("books")];
+        let digest = digest_sync_policy(&rules);
+        conn.execute(
+            "INSERT INTO accepted_peer_sync_policies \
+             (peer_device_id,revision,digest,rules_json) VALUES(?1,1,?2,?3)",
+            rusqlite::params!["phone", digest, canonical_policy_rules_json(&rules)],
+        )
+        .unwrap();
+        let loaded = load_accepted_peer_sync_policy(&conn, "phone")
+            .unwrap()
+            .unwrap();
+        assert!(loaded.active);
+        assert_eq!(loaded.rules, rules);
+    }
+
+    #[test]
+    fn latest_sync_profile_includes_a_newer_inactive_profile() {
+        let conn = Connection::open_in_memory().unwrap();
+        ensure_schema(&conn).unwrap();
+        let rule = policy_rule("books");
+        upsert_sync_profile(
+            &conn,
+            "phone",
+            "select-books",
+            "Books",
+            true,
+            None,
+            std::slice::from_ref(&rule),
+        )
+        .unwrap();
+        upsert_sync_profile(
+            &conn,
+            "phone",
+            "select-books",
+            "Books",
+            false,
+            Some(1),
+            &[rule],
+        )
+        .unwrap();
+        let latest = load_latest_sync_profile(&conn, "phone").unwrap().unwrap();
+        assert_eq!(latest.revision, 2);
+        assert!(!latest.active);
+        assert_eq!(load_active_sync_profile(&conn, "phone").unwrap(), None);
+    }
+
+    #[test]
+    fn sync_uses_active_profile_when_another_inactive_profile_changes() {
+        let conn = Connection::open_in_memory().unwrap();
+        ensure_schema(&conn).unwrap();
+        upsert_sync_profile(
+            &conn,
+            "phone",
+            "selected",
+            "Selected",
+            true,
+            None,
+            &[policy_rule("books")],
+        )
+        .unwrap();
+        upsert_sync_profile(
+            &conn,
+            "phone",
+            "draft",
+            "Draft",
+            false,
+            Some(1),
+            &[policy_rule("games")],
+        )
+        .unwrap();
+        let selected = load_sync_profile_for_sync(&conn, "phone").unwrap().unwrap();
+        assert_eq!(selected.profile_id, "selected");
+        assert!(selected.active);
+        assert_eq!(selected.rules[0].resource_id, "books");
     }
 }

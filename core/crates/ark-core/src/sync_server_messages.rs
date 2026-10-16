@@ -30,6 +30,7 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
         LanSyncMessage::SyncPolicy {
             revision,
             digest,
+            active,
             rules,
         } => {
             let Some(ready_peer) = current_ready_peer(storage.as_ref(), peers, peer_id).await
@@ -66,7 +67,7 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                 }
             };
             if let Err(error) = storage
-                .accept_peer_sync_policy(&ready_peer.device_id, revision, &digest, &rules)
+                .accept_peer_sync_policy(&ready_peer.device_id, revision, &digest, active, &rules)
                 .await
             {
                 eprintln!(

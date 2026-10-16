@@ -280,6 +280,7 @@ impl RelaySync {
             LanSyncMessage::SyncPolicy {
                 revision,
                 digest,
+                active,
                 rules,
             } => {
                 let Some(endpoint) = transport_public_key.as_deref() else {
@@ -312,7 +313,7 @@ impl RelaySync {
                 };
                 if let Err(error) = self
                     .storage
-                    .accept_peer_sync_policy(&from_device_id, revision, &digest, &rules)
+                    .accept_peer_sync_policy(&from_device_id, revision, &digest, active, &rules)
                     .await
                 {
                     eprintln!("{TAG} failed to accept sync policy from {from_device_id}: {error}");

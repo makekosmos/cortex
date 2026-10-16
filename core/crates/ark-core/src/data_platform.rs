@@ -51,10 +51,27 @@ pub fn ensure_schema(conn: &Connection) -> Result<(), String> {
            BETWEEN 1 AND 128),
            revision INTEGER NOT NULL CHECK(revision >= 1),
            digest TEXT NOT NULL CHECK(length(digest) = 64),
+           active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)),
            rules_json TEXT NOT NULL CHECK(length(CAST(rules_json AS BLOB)) <= 131072)
          );",
     )
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?;
+    let has_active: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM pragma_table_info('accepted_peer_sync_policies') \
+             WHERE name='active')",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|error| error.to_string())?;
+    if !has_active {
+        conn.execute_batch(
+            "ALTER TABLE accepted_peer_sync_policies ADD COLUMN active INTEGER NOT NULL \
+             DEFAULT 1 CHECK(active IN (0,1));",
+        )
+        .map_err(|error| error.to_string())?;
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -288,6 +305,37 @@ pub fn load_active_sync_profile(
     profile_id
         .map(|profile_id| load_sync_profile(conn, local_device_id, &profile_id))
         .transpose()
+}
+
+pub fn load_latest_sync_profile(
+    conn: &Connection,
+    local_device_id: &str,
+) -> Result<Option<SyncProfile>, String> {
+    if local_device_id.is_empty() {
+        return Err("invalid sync profile identity".into());
+    }
+    let profile_id = conn
+        .query_row(
+            "SELECT profile_id FROM sync_profiles WHERE device_id=?1 ORDER BY revision DESC \
+             LIMIT 1",
+            [local_device_id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
+    profile_id
+        .map(|profile_id| load_sync_profile(conn, local_device_id, &profile_id))
+        .transpose()
+}
+
+pub fn load_sync_profile_for_sync(
+    conn: &Connection,
+    local_device_id: &str,
+) -> Result<Option<SyncProfile>, String> {
+    if let Some(active) = load_active_sync_profile(conn, local_device_id)? {
+        return Ok(Some(active));
+    }
+    load_latest_sync_profile(conn, local_device_id)
 }
 
 fn sync_mode_name(mode: SyncMode) -> &'static str {

@@ -122,6 +122,7 @@ pub(crate) struct AcceptPeerSyncPolicyCommand {
     peer_device_id: String,
     revision: i64,
     digest: String,
+    active: bool,
     rules: Vec<SyncProfileRule>,
 }
 
@@ -130,12 +131,14 @@ impl AcceptPeerSyncPolicyCommand {
         peer_device_id: String,
         revision: i64,
         digest: String,
+        active: bool,
         rules: Vec<SyncProfileRule>,
     ) -> Self {
         Self {
             peer_device_id,
             revision,
             digest,
+            active,
             rules,
         }
     }
@@ -173,6 +176,7 @@ impl DbCommand for AcceptPeerSyncPolicyCommand {
             &self.peer_device_id,
             self.revision,
             &self.digest,
+            self.active,
             &self.rules,
         )
         .map_err(map_profile_error)
@@ -242,7 +246,7 @@ impl DbQuery for LoadSyncProfileForSyncQuery {
         connection: &Connection,
     ) -> Result<Self::Output, DbError> {
         context.require_system_sync()?;
-        crate::data_platform::load_active_sync_profile(connection, &self.local_device_id)
+        crate::data_platform::load_sync_profile_for_sync(connection, &self.local_device_id)
             .map_err(map_profile_error)
     }
 }

@@ -6,6 +6,7 @@ pub(super) async fn accept(
     authenticated: bool,
     revision: i64,
     digest: &str,
+    active: bool,
     rules: Vec<crate::protocol::SyncPolicyRuleWire>,
 ) -> Result<(), String> {
     if !authenticated {
@@ -25,7 +26,7 @@ pub(super) async fn accept(
     }
     let rules = crate::protocol::parse_sync_policy_rules(rules)?;
     storage
-        .accept_peer_sync_policy(&session.peer_id, revision, digest, &rules)
+        .accept_peer_sync_policy(&session.peer_id, revision, digest, active, &rules)
         .await
         .map(|_| ())
 }
