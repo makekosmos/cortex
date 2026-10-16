@@ -9,8 +9,38 @@ struct ConnectionParams {
     stop_rx: watch::Receiver<bool>,
     event_tx: mpsc::UnboundedSender<TransportEvent>,
     registry: Arc<DeviceRegistry>,
-    connections: Arc<Mutex<HashMap<EndpointId, iroh::endpoint::Connection>>>,
+    connections: Arc<Mutex<HashMap<EndpointId, (u64, iroh::endpoint::Connection)>>>,
+    connection_generation: Arc<std::sync::atomic::AtomicU64>,
     outbound_storage: Arc<tokio::sync::RwLock<Option<OutboundStorage>>>,
+}
+
+fn is_current_connection(
+    connections: &Arc<Mutex<HashMap<EndpointId, (u64, iroh::endpoint::Connection)>>>,
+    endpoint_id: &EndpointId,
+    generation: u64,
+) -> bool {
+    connections
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .get(endpoint_id)
+        .is_some_and(|(current_generation, _)| *current_generation == generation)
+}
+
+fn take_current_connection<T>(
+    connections: &mut HashMap<EndpointId, (u64, T)>,
+    endpoint_id: &EndpointId,
+    generation: u64,
+) -> Option<T> {
+    if connections
+        .get(endpoint_id)
+        .is_some_and(|(current_generation, _)| *current_generation == generation)
+    {
+        connections
+            .remove(endpoint_id)
+            .map(|(_, connection)| connection)
+    } else {
+        None
+    }
 }
 
 // Checks that the addressed transport peer still owns this connection and that
@@ -74,14 +104,22 @@ async fn handle_connection(params: ConnectionParams) {
         event_tx,
         registry,
         connections,
+        connection_generation,
         outbound_storage,
     } = params;
     let remote_endpoint_id = conn.remote_id();
     let role = if is_dialer { "dialer" } else { "listener" };
-    connections
+    let generation = connection_generation.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+    if let Some(device_id) = registry.device_id_for(&remote_endpoint_id) {
+        registry.unbind_peer(&device_id);
+    }
+    let replaced = connections
         .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .insert(remote_endpoint_id, conn.clone());
+        .unwrap_or_else(|error| error.into_inner())
+        .insert(remote_endpoint_id, (generation, conn.clone()));
+    if let Some((_, previous)) = replaced {
+        previous.close(0u32.into(), b"replaced by newer connection");
+    }
 
     // ── Получаем единственный bi-стрим для всего соединения. ─────────────────
     let (mut send, recv) = if is_dialer {
@@ -137,8 +175,7 @@ async fn handle_connection(params: ConnectionParams) {
 
     let writer_notify = done_notify.clone();
     let writer_registry = registry.clone();
-    let writer_event_tx = event_tx.clone();
-    let writer_our_device_id = our_device_id.clone();
+    let writer_connections = connections.clone();
     let mut writer_stop_rx = stop_rx.clone();
 
     conn_tasks.spawn(async move {
@@ -167,6 +204,13 @@ async fn handle_connection(params: ConnectionParams) {
                 recv_result = out_rx.recv() => {
                     match recv_result {
                         Ok(outgoing) => {
+                            if !is_current_connection(
+                                &writer_connections,
+                                &remote_endpoint_id,
+                                generation,
+                            ) {
+                                break;
+                            }
                             if outgoing.target.is_some_and(|target| target != remote_endpoint_id) {
                                 continue;
                             }
@@ -215,6 +259,13 @@ async fn handle_connection(params: ConnectionParams) {
                                 }
                                 continue;
                             }
+                            if !is_current_connection(
+                                &writer_connections,
+                                &remote_endpoint_id,
+                                generation,
+                            ) {
+                                break;
+                            }
                             let payload = serialize_message(&outgoing.msg);
                             if let Err(e) = write_frame(&mut send, payload.as_bytes()).await {
                                 if let Some(completion) = outgoing.completion {
@@ -255,15 +306,6 @@ async fn handle_connection(params: ConnectionParams) {
                 }
             }
         }
-
-        // Resolve final device_id for Disconnected from registry.
-        let disconnected_device_id = writer_registry
-            .device_id_for(&remote_endpoint_id)
-            .unwrap_or(writer_our_device_id);
-        writer_registry.remove_endpoint(&remote_endpoint_id);
-        let _ = writer_event_tx.send(TransportEvent::Disconnected {
-            device_id: disconnected_device_id,
-        });
     });
 
     // ── Reader task: владеет `recv`. ──────────────────────────────────────────
@@ -271,6 +313,7 @@ async fn handle_connection(params: ConnectionParams) {
     // safe: read_exact никогда не дропается на полуслове.
     let reader_notify = done_notify.clone();
     let reader_registry = registry.clone();
+    let reader_connections = connections.clone();
     let reader_event_tx = event_tx.clone();
 
     conn_tasks.spawn(async move {
@@ -279,6 +322,13 @@ async fn handle_connection(params: ConnectionParams) {
             match read_frame(&mut recv).await {
                 Ok(raw) => {
                     if let Some(msg) = deserialize_message(&raw) {
+                        if !is_current_connection(
+                            &reader_connections,
+                            &remote_endpoint_id,
+                            generation,
+                        ) {
+                            break;
+                        }
                         let variant = message_variant_name(&msg);
 
                         // На Hello учим реестр (EndpointId → CRDT device_id).
@@ -347,10 +397,19 @@ async fn handle_connection(params: ConnectionParams) {
     // Если stop_rx срабатывает здесь, writer увидит его сам (он тоже слушает
     // stop_rx). Мы просто ждём join'а.
     while conn_tasks.join_next().await.is_some() {}
-    connections
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .remove(&remote_endpoint_id);
+    let disconnected_connection = {
+        let mut connections = connections
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        take_current_connection(&mut connections, &remote_endpoint_id, generation)
+    };
+    if disconnected_connection.is_some() {
+        let device_id = registry
+            .device_id_for(&remote_endpoint_id)
+            .unwrap_or(our_device_id);
+        registry.remove_endpoint(&remote_endpoint_id);
+        let _ = event_tx.send(TransportEvent::Disconnected { device_id });
+    }
 
     eprintln!("[iroh] connection closed ({role}) remote={remote_endpoint_id}");
 }
@@ -361,6 +420,28 @@ mod tests {
     use crate::domain::device_registry::{
         DeviceId, DisplayName, RegistryEvent, RegistryEventDraft, RegistryOperation,
     };
+
+    #[test]
+    fn stale_connection_cleanup_cannot_remove_replacement_generation() {
+        let endpoint = iroh::SecretKey::generate().public();
+        let mut connections = HashMap::from([(endpoint, (2, "replacement"))]);
+
+        assert_eq!(
+            take_current_connection(&mut connections, &endpoint, 1),
+            None
+        );
+        assert_eq!(
+            connections
+                .get(&endpoint)
+                .map(|(generation, _)| *generation),
+            Some(2)
+        );
+        assert_eq!(
+            take_current_connection(&mut connections, &endpoint, 2),
+            Some("replacement")
+        );
+        assert!(!connections.contains_key(&endpoint));
+    }
 
     #[test]
     fn registry_event_control_must_be_addressed_before_peer_admission() {

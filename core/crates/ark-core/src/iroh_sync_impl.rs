@@ -64,6 +64,7 @@ impl SyncTransport for IrohTransport {
             let accept_event_tx = event_tx.clone();
             let accept_registry = self.registry.clone();
             let accept_connections = self.connections.clone();
+            let accept_connection_generation = self.connection_generation.clone();
             let accept_outbound_storage = self.outbound_storage.clone();
             let mut accept_stop = self.stop_rx.clone();
             let out_tx = self.out_tx.clone();
@@ -84,6 +85,7 @@ impl SyncTransport for IrohTransport {
                             let event_tx = accept_event_tx.clone();
                             let registry = accept_registry.clone();
                             let connections = accept_connections.clone();
+                            let connection_generation = accept_connection_generation.clone();
                             let outbound_storage = accept_outbound_storage.clone();
                             let out_rx = out_tx.subscribe();
                             let stop_rx = accept_stop.clone();
@@ -110,6 +112,7 @@ impl SyncTransport for IrohTransport {
                                     event_tx,
                                     registry,
                                     connections,
+                                    connection_generation,
                                     outbound_storage,
                                 })
                                 .await;
@@ -139,6 +142,7 @@ impl SyncTransport for IrohTransport {
             let dial_event_tx = event_tx.clone();
             let dial_registry = self.registry.clone();
             let dial_connections = self.connections.clone();
+            let dial_connection_generation = self.connection_generation.clone();
             let dial_suppressed = self.suppressed_endpoints.clone();
             let dial_outbound_storage = self.outbound_storage.clone();
             let mut dial_stop = self.stop_rx.clone();
@@ -198,6 +202,7 @@ impl SyncTransport for IrohTransport {
                                 event_tx: dial_event_tx.clone(),
                                 registry: dial_registry.clone(),
                                 connections: dial_connections.clone(),
+                                connection_generation: dial_connection_generation.clone(),
                                 outbound_storage: dial_outbound_storage.clone(),
                             })
                             .await;
@@ -398,7 +403,8 @@ impl SyncTransport for IrohTransport {
             .connections
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .remove(&endpoint_id);
+            .remove(&endpoint_id)
+            .map(|(_, connection)| connection);
         match conn {
             Some(conn) => {
                 conn.close(0u32.into(), b"peer removed");
