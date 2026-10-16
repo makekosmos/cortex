@@ -244,7 +244,7 @@ fn parse_sync_mode(mode: &str) -> rusqlite::Result<SyncMode> {
 
 /// Params of `external_refs.upsert` — the `Request` newtype variant wraps this
 /// struct so the wire fields and the db call share one shape.
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct ExternalRefUpsert {
     #[serde(rename = "connectorId")]
     pub connector_id: String,

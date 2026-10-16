@@ -11,8 +11,8 @@ pub(crate) use commands::{
     LoadEntitiesQuery, LocalBookCoverCommand, LocalCoreTaskWrite, LocalObjectDeleteCommand,
     LocalObjectUpsertCommand, LocalUsageWriteCommand, RegisterPackageTypesCommand,
     ReplaceObjectLinkCommand, SetSyncKeyValueCommand, TrackedAppDeleteCommand,
-    TrackedAppUpsertCommand, UpsertObjectLinkCommand, UpsertObjectTypeCommand,
-    UsageCompleteThroughQuery, ValidateOutboundSignedFrameQuery,
+    TrackedAppUpsertCommand, UpsertExternalRefCommand, UpsertObjectLinkCommand,
+    UpsertObjectTypeCommand, UsageCompleteThroughQuery, ValidateOutboundSignedFrameQuery,
 };
 
 // A full transport frame is admitted at 16 MiB. Leave bounded room for the

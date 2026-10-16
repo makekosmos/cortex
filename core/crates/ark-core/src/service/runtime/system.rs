@@ -23,11 +23,14 @@ pub(super) async fn external_refs_upsert(
     state: &Arc<ServiceState>,
     params: ExternalRefUpsert,
 ) -> Result<Value, String> {
-    with_write_tx(state, |conn| {
-        crate::data_platform::ensure_schema(conn)?;
-        crate::data_platform::upsert_external_ref(conn, &params)?;
-        Ok(json!(true))
-    })
+    get_db_handle(state)?
+        .submit(
+            db::CommandContext::engine(),
+            db::UpsertExternalRefCommand::new(params),
+        )
+        .await
+        .map(|()| json!(true))
+        .map_err(|error| error.to_string())
 }
 
 pub(super) async fn clear_all(state: &Arc<ServiceState>) -> Result<Value, String> {

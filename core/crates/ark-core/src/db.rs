@@ -22,8 +22,9 @@ pub(crate) use command::{
     LegacyGraphWriteCommand, LoadEntitiesQuery, LocalBookCoverCommand, LocalCoreTaskWrite,
     LocalObjectDeleteCommand, LocalObjectUpsertCommand, LocalUsageWriteCommand,
     RegisterPackageTypesCommand, ReplaceObjectLinkCommand, SetSyncKeyValueCommand,
-    TrackedAppDeleteCommand, TrackedAppUpsertCommand, UpsertObjectLinkCommand,
-    UpsertObjectTypeCommand, UsageCompleteThroughQuery, ValidateOutboundSignedFrameQuery,
+    TrackedAppDeleteCommand, TrackedAppUpsertCommand, UpsertExternalRefCommand,
+    UpsertObjectLinkCommand, UpsertObjectTypeCommand, UsageCompleteThroughQuery,
+    ValidateOutboundSignedFrameQuery,
 };
 include!("db/integration_replication_common.rs");
 include!("db/integration_replication_records.rs");
