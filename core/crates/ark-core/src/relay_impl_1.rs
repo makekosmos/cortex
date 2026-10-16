@@ -277,6 +277,49 @@ impl RelaySync {
                 }
             }
 
+            LanSyncMessage::SyncPolicy {
+                revision,
+                digest,
+                rules,
+            } => {
+                let Some(endpoint) = transport_public_key.as_deref() else {
+                    return;
+                };
+                let negotiated = self
+                    .peers
+                    .lock()
+                    .await
+                    .get(&from_device_id)
+                    .is_some_and(|peer| {
+                        peer.authenticated
+                            && peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
+                                protocol.capabilities.contains(
+                                    &crate::protocol::ProtocolCapability::SelectiveSyncPolicyV1,
+                                )
+                            })
+                    });
+                if !negotiated {
+                    let _ = self.transport.disconnect_transport_peer(endpoint);
+                    return;
+                }
+                let rules = match crate::protocol::parse_sync_policy_rules(rules) {
+                    Ok(rules) => rules,
+                    Err(error) => {
+                        eprintln!("{TAG} invalid sync policy from {from_device_id}: {error}");
+                        let _ = self.transport.disconnect_transport_peer(endpoint);
+                        return;
+                    }
+                };
+                if let Err(error) = self
+                    .storage
+                    .accept_peer_sync_policy(&from_device_id, revision, &digest, &rules)
+                    .await
+                {
+                    eprintln!("{TAG} failed to accept sync policy from {from_device_id}: {error}");
+                    let _ = self.transport.disconnect_transport_peer(endpoint);
+                }
+            }
+
             LanSyncMessage::VersionVector {
                 vector: remote_vector,
                 origin_device_id,

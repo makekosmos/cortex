@@ -3,6 +3,53 @@ use crate::replication_storage::{PeerIdentityBackend, RegistryPageApply};
 
 #[async_trait::async_trait]
 impl PeerIdentityBackend for SqliteStorageBackend {
+    async fn load_local_sync_profile(
+        &self,
+        local_device_id: &str,
+    ) -> Result<Option<crate::data_platform::SyncProfile>, String> {
+        self.db
+            .query(
+                CommandContext::sync_system(CommandClass::SyncLive),
+                crate::db::LoadSyncProfileForSyncQuery::new(local_device_id.to_owned()),
+            )
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    async fn accept_peer_sync_policy(
+        &self,
+        peer_device_id: &str,
+        revision: i64,
+        digest: &str,
+        rules: &[crate::data_platform::SyncProfileRule],
+    ) -> Result<crate::data_platform::AcceptedPeerSyncPolicy, String> {
+        self.db
+            .submit(
+                CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
+                crate::db::AcceptPeerSyncPolicyCommand::new(
+                    peer_device_id.to_owned(),
+                    revision,
+                    digest.to_owned(),
+                    rules.to_vec(),
+                ),
+            )
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    async fn load_accepted_peer_sync_policy(
+        &self,
+        peer_device_id: &str,
+    ) -> Result<Option<crate::data_platform::AcceptedPeerSyncPolicy>, String> {
+        self.db
+            .query(
+                CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
+                crate::db::LoadAcceptedPeerSyncPolicyQuery::new(peer_device_id.to_owned()),
+            )
+            .await
+            .map_err(|error| error.to_string())
+    }
+
     async fn sync_session_is_admitted(&self, peer_device_id: &str) -> Result<bool, String> {
         self.db
             .query(

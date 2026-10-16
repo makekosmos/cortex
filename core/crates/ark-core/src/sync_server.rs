@@ -312,6 +312,7 @@ pub(crate) fn is_user_data_message(message: &LanSyncMessage) -> bool {
         message,
         LanSyncMessage::VersionVector { .. }
             | LanSyncMessage::SyncChanges { .. }
+            | LanSyncMessage::SyncPolicy { .. }
             | LanSyncMessage::SyncAck { .. }
             | LanSyncMessage::LiveChange { .. }
             | LanSyncMessage::LiveAck { .. }

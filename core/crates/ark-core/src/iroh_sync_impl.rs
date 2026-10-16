@@ -354,8 +354,10 @@ impl SyncTransport for IrohTransport {
                 | LanSyncMessage::RegistryEventsPage { .. }
                 | LanSyncMessage::RegistrySyncReady { .. }
                 | LanSyncMessage::RegistryEventUpdate { .. }
+                | LanSyncMessage::SyncPolicy { .. }
+                | LanSyncMessage::VersionVector { .. }
         ) {
-            return Err("iroh transport-key send only supports pre-admission control".into());
+            return Err("iroh transport-key send only supports addressed messages".into());
         }
         let endpoint_id: EndpointId = transport_public_key
             .parse()

@@ -2,6 +2,7 @@ use super::super::*;
 
 pub(super) struct PendingRegistryAdmission {
     admission: crate::sync_registry_admission::DirectRegistryAdmission,
+    local_device_id: String,
     protocol: NegotiatedProtocol,
     peer_record: PeerRecord,
     on_registry_events: Arc<Mutex<Option<ClientOnRegistryEventsCallback>>>,
@@ -26,6 +27,7 @@ impl PendingRegistryAdmission {
         Ok((
             Self {
                 admission,
+                local_device_id: local_device_id.to_owned(),
                 protocol,
                 peer_record,
                 on_registry_events,
@@ -59,10 +61,24 @@ impl PendingRegistryAdmission {
             return Ok(false);
         }
 
-        let generation = storage.selective_sync_policy_generation();
+        let generation = storage
+            .selective_sync_policy_generation_for_peer(&self.peer_record.device_id)
+            .await?;
         storage
             .begin_outbound_policy(&self.peer_record.device_id, generation)
             .await?;
+        if self
+            .protocol
+            .capabilities
+            .contains(&crate::protocol::ProtocolCapability::SelectiveSyncPolicyV1)
+        {
+            if let Some(profile) = storage
+                .load_local_sync_profile(&self.local_device_id)
+                .await?
+            {
+                send_msg(tx, &crate::protocol::sync_policy_message(&profile));
+            }
+        }
         *authenticated_tx.lock().await = Some(crate::sync_client::AuthenticatedPeerSession {
             peer_id: self.peer_record.device_id.clone(),
             registry_session_id: self

@@ -188,7 +188,7 @@ impl RelaySync {
                     // Any data frame from the endpoint we dialed means the
                     // responder processed our Hello — it consented.
                     self.mark_outgoing_accepted(&transport_public_key).await;
-                    self.handle_message(from_device_id, msg, Some(transport_public_key), false)
+                    self.handle_message(from_device_id, msg, Some(transport_public_key), true)
                         .await;
                 }
             }

@@ -58,6 +58,22 @@ fn registry_history_is_required_wire_support_without_claiming_peer_identity() {
 }
 
 #[test]
+fn selective_policy_is_a_separately_negotiated_capability() {
+    let local = ProtocolOffer::current_with_registry_history(true);
+    let remote = offer(Some(&[1]), &[SELECTIVE_SYNC_POLICY_V1]);
+    let selected = negotiate_protocol(&local, &remote, true).unwrap();
+    assert!(selected
+        .capabilities
+        .contains(&ProtocolCapability::SelectiveSyncPolicyV1));
+
+    let legacy = offer(Some(&[1]), &[]);
+    let selected = negotiate_protocol(&local, &legacy, true).unwrap();
+    assert!(!selected
+        .capabilities
+        .contains(&ProtocolCapability::SelectiveSyncPolicyV1));
+}
+
+#[test]
 fn invalid_and_disjoint_offers_fail_deterministically() {
     assert_eq!(
         ProtocolOffer::new(1, Some(&[]), None),

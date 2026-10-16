@@ -69,7 +69,18 @@ pub(super) async fn handle_registry_admission(
         return;
     }
 
-    let generation = ctx.storage.selective_sync_policy_generation();
+    let generation = match ctx
+        .storage
+        .selective_sync_policy_generation_for_peer(&device_id)
+        .await
+    {
+        Ok(generation) => generation,
+        Err(error) => {
+            eprintln!("{TAG} policy generation lookup failed for {device_id}: {error}");
+            reject_peer(ctx, peer_id, &tx).await;
+            return;
+        }
+    };
     if let Err(error) = ctx
         .storage
         .begin_outbound_policy(&device_id, generation)
@@ -99,6 +110,30 @@ pub(super) async fn handle_registry_admission(
     {
         reject_peer(ctx, peer_id, &tx).await;
         return;
+    }
+
+    let policy_capability = ctx
+        .peers
+        .lock()
+        .await
+        .get(&peer_id)
+        .and_then(|peer| peer.negotiated_protocol.as_ref())
+        .is_some_and(|protocol| {
+            protocol
+                .capabilities
+                .contains(&crate::protocol::ProtocolCapability::SelectiveSyncPolicyV1)
+        });
+    if policy_capability {
+        let local_device_id = ctx.device_id.read().await.clone();
+        match ctx.storage.load_local_sync_profile(&local_device_id).await {
+            Ok(Some(profile)) => send_msg(&tx, &crate::protocol::sync_policy_message(&profile)),
+            Ok(None) => {}
+            Err(error) => {
+                eprintln!("{TAG} local sync policy load failed: {error}");
+                reject_peer(ctx, peer_id, &tx).await;
+                return;
+            }
+        }
     }
 
     let activated = {
@@ -272,7 +307,11 @@ async fn revoke_disabled_sessions(
     local_device_disabled
 }
 
-async fn reject_peer(ctx: &MessageContext, peer_id: usize, tx: &mpsc::UnboundedSender<Message>) {
+pub(super) async fn reject_peer(
+    ctx: &MessageContext,
+    peer_id: usize,
+    tx: &mpsc::UnboundedSender<Message>,
+) {
     if let Some(mut peer) = ctx.peers.lock().await.remove(&peer_id) {
         peer.ready_peer = None;
     }

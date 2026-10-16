@@ -24,6 +24,16 @@ impl crate::application::sync_storage::CommittedFeedPort for SqliteStorageBacken
         i64::from_be_bytes(bytes[..8].try_into().expect("sha256 prefix is eight bytes")) & i64::MAX
     }
 
+    async fn selective_sync_policy_generation_for_peer(
+        &self,
+        peer_device_id: &str,
+    ) -> Result<i64, String> {
+        Ok(self
+            .load_accepted_peer_sync_policy(peer_device_id)
+            .await?
+            .map_or(0, |policy| policy.revision))
+    }
+
     async fn committed_feed_snapshot(
         &self,
     ) -> Result<crate::application::sync_storage::FeedSnapshot, String> {

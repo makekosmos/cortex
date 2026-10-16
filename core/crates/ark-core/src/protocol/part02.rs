@@ -56,6 +56,41 @@ mod tests {
     }
 
     #[test]
+    fn sync_policy_message_round_trips_canonical_typed_rules() {
+        let rule = crate::data_platform::SyncProfileRule {
+            resource_kind: "type".into(),
+            resource_id: "com.example.note".into(),
+            mode: crate::data_platform::SyncMode::Metadata,
+            filter: crate::data_platform::FilterV1::parse(
+                r#"{"version":1,"where":{"eq":{"field":"kind","value":"note"}}}"#,
+            )
+            .unwrap(),
+        };
+        let profile = crate::data_platform::SyncProfile {
+            profile_id: "phone".into(),
+            device_id: "device-a".into(),
+            revision: 3,
+            name: "Phone".into(),
+            active: true,
+            rules: vec![rule.clone()],
+        };
+        let message = sync_policy_message(&profile);
+        let raw = serialize_message(&message);
+        let decoded = deserialize_message(&raw).unwrap();
+        let LanSyncMessage::SyncPolicy {
+            revision,
+            digest,
+            rules,
+        } = decoded
+        else {
+            panic!("expected sync policy message")
+        };
+        assert_eq!(revision, 3);
+        assert_eq!(digest, profile.digest());
+        assert_eq!(parse_sync_policy_rules(rules).unwrap(), vec![rule]);
+    }
+
+    #[test]
     fn test_sync_changes_serialization() {
         let entity = SyncEntity {
             entity_type: "todo".to_string(),

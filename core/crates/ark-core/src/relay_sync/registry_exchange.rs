@@ -15,6 +15,7 @@ pub(super) fn is_user_data_message(message: &LanSyncMessage) -> bool {
             | LanSyncMessage::SignedIntegrationFrame { .. }
             | LanSyncMessage::SignedIntegrationAck { .. }
             | LanSyncMessage::PeerList { .. }
+            | LanSyncMessage::SyncPolicy { .. }
     )
 }
 
@@ -272,7 +273,7 @@ impl RelaySync {
     }
 
     async fn try_complete_registry_exchange(&self, peer_device_id: &str) -> Result<(), String> {
-        let (endpoint, local_digest, remote_digest) = {
+        let (endpoint, local_digest, remote_digest, policy_negotiated) = {
             let peers = self.peers.lock().await;
             let Some(peer) = peers.get(peer_device_id) else {
                 return Ok(());
@@ -289,6 +290,11 @@ impl RelaySync {
                 state.transport_public_key.clone(),
                 local_digest.clone(),
                 remote_digest.clone(),
+                peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
+                    protocol
+                        .capabilities
+                        .contains(&crate::protocol::ProtocolCapability::SelectiveSyncPolicyV1)
+                }),
             )
         };
         if local_digest != remote_digest {
@@ -322,9 +328,37 @@ impl RelaySync {
             };
         }
         self.mark_outgoing_accepted(&endpoint).await;
-        self.send_local_version_vector().await;
+        if policy_negotiated {
+            if let Some(profile) = self
+                .storage
+                .load_local_sync_profile(&self.config.device_id)
+                .await?
+            {
+                self.send_registry_control(
+                    &endpoint,
+                    crate::protocol::sync_policy_message(&profile),
+                )
+                .await?;
+            }
+        }
+        self.send_local_version_vector_to_peer(&endpoint).await?;
         self.notify_pairing_changed().await;
         Ok(())
+    }
+
+    async fn send_local_version_vector_to_peer(
+        &self,
+        transport_public_key: &str,
+    ) -> Result<(), String> {
+        let vector = load_version_vector(&self.storage).await?;
+        self.send_registry_control(
+            transport_public_key,
+            LanSyncMessage::VersionVector {
+                vector,
+                origin_device_id: Some(self.config.device_id.clone()),
+            },
+        )
+        .await
     }
 
     pub(super) async fn send_registry_control(

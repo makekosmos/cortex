@@ -12,6 +12,13 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 async fn storage_for(device_id: &str) -> (Arc<SqliteStorageBackend>, iroh::SecretKey) {
+    storage_for_with_policy(device_id, Vec::new()).await
+}
+
+async fn storage_for_with_policy(
+    device_id: &str,
+    rules: Vec<crate::data_platform::SyncProfileRule>,
+) -> (Arc<SqliteStorageBackend>, iroh::SecretKey) {
     let connection = Connection::open_in_memory().unwrap();
     init_schema(&connection).unwrap();
     connection
@@ -21,6 +28,18 @@ async fn storage_for(device_id: &str) -> (Arc<SqliteStorageBackend>, iroh::Secre
             [device_id],
         )
         .unwrap();
+    if !rules.is_empty() {
+        crate::data_platform::upsert_sync_profile(
+            &connection,
+            device_id,
+            "phone",
+            "Phone",
+            true,
+            None,
+            &rules,
+        )
+        .unwrap();
+    }
     let secret = crate::iroh_transport::load_or_generate_secret_key(&connection).unwrap();
     let storage = Arc::new(SqliteStorageBackend::for_test(Arc::new(Mutex::new(
         connection,
@@ -313,4 +332,89 @@ async fn live_registry_events_reach_iroh_peers_and_disable_revokes_only_target()
     relay_a.stop().await;
     relay_b.stop().await;
     relay_c.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn negotiated_sync_policy_is_sent_and_persisted_for_authenticated_iroh_peer() {
+    const AUTH_SECRET: &str = "selective-sync-policy-test-secret";
+    let (storage_a, key_a) = storage_for_with_policy(
+        "policy-A",
+        vec![crate::data_platform::SyncProfileRule {
+            resource_kind: "type".into(),
+            resource_id: "com.example.note".into(),
+            mode: crate::data_platform::SyncMode::Metadata,
+            filter: crate::data_platform::FilterV1::match_all(),
+        }],
+    )
+    .await;
+    let (storage_b, key_b) = storage_for("policy-B").await;
+    let endpoint_a = key_a.public().to_string();
+    let endpoint_b = key_b.public().to_string();
+    storage_a
+        .enroll_paired_device("policy-A", "policy-B", &key_b.public().to_string())
+        .await
+        .unwrap();
+    storage_b
+        .enroll_paired_device("policy-B", "policy-A", &key_a.public().to_string())
+        .await
+        .unwrap();
+
+    let mut relay_config_a = relay_config("policy-A");
+    relay_config_a.auth_secret = Some(AUTH_SECRET.into());
+    let mut relay_config_b = relay_config("policy-B");
+    relay_config_b.auth_secret = Some(AUTH_SECRET.into());
+    let mut iroh_config_a = iroh_config("policy-A", key_a.clone(), None);
+    iroh_config_a.auth_secret = Some(AUTH_SECRET.into());
+    let transport_a = Arc::new(crate::iroh_transport::IrohTransport::new(iroh_config_a));
+    let relay_a = RelaySync::with_transport(
+        storage_a as Arc<dyn SyncRuntimeStorage>,
+        relay_config_a,
+        transport_a.clone(),
+    );
+    relay_a.start().await.unwrap();
+
+    let mut iroh_config_b = iroh_config("policy-B", key_b, transport_a.endpoint_addr());
+    iroh_config_b.auth_secret = Some(AUTH_SECRET.into());
+    let transport_b = Arc::new(crate::iroh_transport::IrohTransport::new(iroh_config_b));
+    let relay_b = RelaySync::with_transport(
+        storage_b.clone() as Arc<dyn SyncRuntimeStorage>,
+        relay_config_b,
+        transport_b.clone(),
+    );
+    relay_b.start().await.unwrap();
+
+    wait_for_registry_ready(&[(&transport_a, endpoint_b), (&transport_b, endpoint_a)]).await;
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        if let Some(accepted) = storage_b
+            .load_accepted_peer_sync_policy("policy-A")
+            .await
+            .unwrap()
+        {
+            assert_eq!(accepted.revision, 1);
+            assert_eq!(accepted.rules.len(), 1);
+            assert_eq!(accepted.rules[0].resource_id, "com.example.note");
+            assert_eq!(
+                accepted.digest,
+                crate::data_platform::SyncProfile {
+                    profile_id: "phone".into(),
+                    device_id: "policy-A".into(),
+                    revision: 1,
+                    name: "Phone".into(),
+                    active: true,
+                    rules: accepted.rules.clone(),
+                }
+                .digest()
+            );
+            break;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "negotiated sync policy was not persisted by the authenticated peer"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+
+    relay_a.stop().await;
+    relay_b.stop().await;
 }

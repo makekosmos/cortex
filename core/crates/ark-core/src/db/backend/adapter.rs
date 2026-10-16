@@ -1,20 +1,21 @@
 use super::apply::is_full_core_task;
 use super::SqliteStorageBackend;
 use crate::application::sync_storage::{
-    PeerProgressPort, PeerSyncPolicyPort, SyncEntityMutationPort, SyncEntityReadPort, SyncReadClass,
+    PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort, SyncReadClass,
 };
 use crate::db::{
     ApplySignedIntegrationFrameCommand, AuthenticatedCoreTaskWrite, AuthorizedTransportKeyQuery,
     CommandClass, CommandContext, GetSyncKeyValueQuery, IdentityErrorStyle, LoadEntitiesQuery,
     UsageCompleteThroughQuery, ValidateOutboundSignedFrameQuery,
 };
-use crate::replication_storage::{AuthenticatedEntityBackend, IntegrationReplicationBackend};
+use crate::replication_storage::{
+    AuthenticatedEntityBackend, IntegrationReplicationBackend, PeerIdentityBackend,
+};
 use crate::types::{SyncEntity, VersionVector};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 mod peer_identity;
-mod peer_sync_policy;
 
 fn publish_replay_notices(notices: Vec<crate::canonical_types::pending::ReplayNotice>) {
     for notice in notices {

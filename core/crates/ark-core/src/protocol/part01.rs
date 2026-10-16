@@ -79,6 +79,13 @@ pub enum LanSyncMessage {
         origin_device_id: Option<String>,
     },
 
+    #[serde(rename = "sync_policy")]
+    SyncPolicy {
+        revision: i64,
+        digest: String,
+        rules: Vec<SyncPolicyRuleWire>,
+    },
+
     #[serde(rename = "sync_changes")]
     SyncChanges {
         batch_id: String,

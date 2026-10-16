@@ -212,3 +212,37 @@ impl DbQuery for LoadAcceptedPeerSyncPolicyQuery {
             .map_err(map_profile_error)
     }
 }
+
+pub(crate) struct LoadSyncProfileForSyncQuery {
+    local_device_id: String,
+}
+
+impl LoadSyncProfileForSyncQuery {
+    pub(crate) fn new(local_device_id: String) -> Self {
+        Self { local_device_id }
+    }
+}
+
+impl sealed::Sealed for LoadSyncProfileForSyncQuery {}
+
+impl DbQuery for LoadSyncProfileForSyncQuery {
+    type Output = Option<SyncProfile>;
+
+    fn class(&self) -> CommandClass {
+        CommandClass::SyncLive
+    }
+
+    fn weight(&self) -> usize {
+        self.local_device_id.len().max(1)
+    }
+
+    fn read(
+        self,
+        context: &CommandContext,
+        connection: &Connection,
+    ) -> Result<Self::Output, DbError> {
+        context.require_system_sync()?;
+        crate::data_platform::load_active_sync_profile(connection, &self.local_device_id)
+            .map_err(map_profile_error)
+    }
+}

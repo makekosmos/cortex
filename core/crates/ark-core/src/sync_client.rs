@@ -283,7 +283,9 @@ pub(crate) async fn pump_client_committed_feed(
     if in_flight.is_some() {
         return Ok(());
     }
-    let generation = storage.selective_sync_policy_generation();
+    let generation = storage
+        .selective_sync_policy_generation_for_peer(peer_device_id)
+        .await?;
     let progress = storage
         .begin_outbound_policy(peer_device_id, generation)
         .await?;
@@ -377,7 +379,9 @@ pub(crate) async fn acknowledge_client_feed(
     else {
         return Ok(());
     };
-    let generation = storage.selective_sync_policy_generation();
+    let generation = storage
+        .selective_sync_policy_generation_for_peer(peer_device_id)
+        .await?;
     let progress = storage
         .begin_outbound_policy(peer_device_id, generation)
         .await?;

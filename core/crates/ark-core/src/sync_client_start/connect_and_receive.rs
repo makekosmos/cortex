@@ -277,6 +277,26 @@
                                         send_msg(&tx, &start);
                                     }
 
+                                    LanSyncMessage::SyncPolicy {
+                                        revision,
+                                        digest,
+                                        rules,
+                                    } => {
+                                        if let Err(error) = sync_policy::accept(
+                                            &storage,
+                                            &authenticated_tx,
+                                            authenticated,
+                                            revision,
+                                            &digest,
+                                            rules,
+                                        )
+                                        .await
+                                        {
+                                            eprintln!("{TAG} peer sync policy rejected: {error}");
+                                            break;
+                                        }
+                                    }
+
                                     LanSyncMessage::VersionVector {
                                         vector: remote_vector,
                                         ..
@@ -328,48 +348,21 @@
                                     }
 
                                     LanSyncMessage::SyncAck { batch_id, .. } => {
-                                        if pending_initial_snapshot_ack.as_deref()
-                                            == Some(batch_id.as_str())
+                                        if let Err(error) = snapshot_ack::handle(
+                                            &storage,
+                                            &peer_device_id_actual,
+                                            &mut pending_initial_snapshot_ack,
+                                            &batch_id,
+                                            &authenticated_tx,
+                                            &tx,
+                                            &feed_in_flight,
+                                        )
+                                        .await
                                         {
-                                            let generation =
-                                                storage.selective_sync_policy_generation();
-                                            if let Err(error) = storage
-                                                .complete_outbound_snapshot(
-                                                    &peer_device_id_actual,
-                                                    generation,
-                                                )
-                                                .await
-                                            {
-                                                eprintln!(
-                                                    "{TAG} outbound snapshot completion failed: \
-                                                     {error}"
-                                                );
-                                                break;
-                                            }
-                                            pending_initial_snapshot_ack = None;
-                                            let receipt_ack = if let Some(session) =
-                                                authenticated_tx.lock().await.as_mut() {
-                                                session.sync_complete = true;
-                                                session.protocol.capabilities.contains(
-                                                &crate::protocol::ProtocolCapability::
-                                                    DurableReceiptAckV1,
-                                                )
-                                            } else {
-                                                false
-                                            };
-                                            if let Err(error) = super::pump_client_committed_feed(
-                                                &storage,
-                                                &peer_device_id_actual,
-                                                &tx,
-                                                &feed_in_flight,
-                                                receipt_ack,
-                                            )
-                                            .await
-                                            {
-                                                eprintln!(
-                                                    "{TAG} committed feed drain failed: {error}"
-                                                );
-                                            }
+                                            eprintln!(
+                                                "{TAG} snapshot ACK handling failed: {error}"
+                                            );
+                                            break;
                                         }
                                     }
 

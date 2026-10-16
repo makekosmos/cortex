@@ -12,7 +12,18 @@ pub(super) async fn handle_live_message(ctx: &MessageContext, peer_id: usize, ms
                 })
             };
             if let Some(peer_device_id) = peer_device_id {
-                let generation = storage.selective_sync_policy_generation();
+                let generation = match storage
+                    .selective_sync_policy_generation_for_peer(&peer_device_id)
+                    .await
+                {
+                    Ok(generation) => generation,
+                    Err(error) => {
+                        eprintln!(
+                            "{TAG} policy generation lookup failed for {peer_device_id}: {error}"
+                        );
+                        return;
+                    }
+                };
                 match storage
                     .complete_outbound_snapshot(&peer_device_id, generation)
                     .await

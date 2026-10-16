@@ -13,8 +13,12 @@ mod live_messages;
 mod registry_admission;
 #[path = "sync_client_start/send_missing_entities.rs"]
 mod send_missing_entities;
+#[path = "sync_client_start/connect_and_receive/snapshot_ack.rs"]
+mod snapshot_ack;
 #[path = "sync_client_start/connect_and_receive/sync_changes.rs"]
 mod sync_changes;
+#[path = "sync_client_start/connect_and_receive/sync_policy.rs"]
+mod sync_policy;
 #[path = "sync_client_start/writer.rs"]
 mod writer;
 

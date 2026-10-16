@@ -27,6 +27,56 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
             hello::handle_hello(ctx, peer_id, message).await;
         }
 
+        LanSyncMessage::SyncPolicy {
+            revision,
+            digest,
+            rules,
+        } => {
+            let Some(ready_peer) = current_ready_peer(storage.as_ref(), peers, peer_id).await
+            else {
+                return;
+            };
+            let (tx, negotiated) = {
+                let peers = peers.lock().await;
+                let Some(peer) = peers.get(&peer_id) else {
+                    return;
+                };
+                (
+                    peer.tx.clone(),
+                    peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
+                        protocol
+                            .capabilities
+                            .contains(&crate::protocol::ProtocolCapability::SelectiveSyncPolicyV1)
+                    }),
+                )
+            };
+            if !negotiated {
+                admission::reject_peer(ctx, peer_id, &tx).await;
+                return;
+            }
+            let rules = match crate::protocol::parse_sync_policy_rules(rules) {
+                Ok(rules) => rules,
+                Err(error) => {
+                    eprintln!(
+                        "{TAG} invalid sync policy from {}: {error}",
+                        ready_peer.device_id
+                    );
+                    admission::reject_peer(ctx, peer_id, &tx).await;
+                    return;
+                }
+            };
+            if let Err(error) = storage
+                .accept_peer_sync_policy(&ready_peer.device_id, revision, &digest, &rules)
+                .await
+            {
+                eprintln!(
+                    "{TAG} failed to accept sync policy from {}: {error}",
+                    ready_peer.device_id
+                );
+                admission::reject_peer(ctx, peer_id, &tx).await;
+            }
+        }
+
         LanSyncMessage::VersionVector {
             vector: remote_vector,
             ..

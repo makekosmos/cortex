@@ -58,7 +58,7 @@ pub(crate) use sync_mutation::{
 };
 pub(crate) use sync_policy::{
     AcceptPeerSyncPolicyCommand, LoadAcceptedPeerSyncPolicyQuery, LoadActiveLocalSyncProfileQuery,
-    SaveLocalSyncProfileCommand,
+    LoadSyncProfileForSyncQuery, SaveLocalSyncProfileCommand,
 };
 pub(crate) use sync_read::{
     AuthorizedTransportKeyQuery, CommittedFeedDeliveryPageQuery, CommittedFeedPageQuery,

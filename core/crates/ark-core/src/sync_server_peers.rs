@@ -27,7 +27,9 @@ pub(super) async fn pump_committed_feed(
         return Ok(());
     }
 
-    let generation = storage.selective_sync_policy_generation();
+    let generation = storage
+        .selective_sync_policy_generation_for_peer(&device_id)
+        .await?;
     let progress = storage
         .begin_outbound_policy(&device_id, generation)
         .await?;
@@ -147,7 +149,9 @@ pub(super) async fn handle_committed_feed_ack(
             peer.in_flight_feed_position == Some(position),
         )
     };
-    let generation = storage.selective_sync_policy_generation();
+    let generation = storage
+        .selective_sync_policy_generation_for_peer(&device_id)
+        .await?;
     let progress = storage
         .begin_outbound_policy(&device_id, generation)
         .await?;
@@ -203,7 +207,9 @@ pub(super) async fn handle_committed_feed_receipt_ack(
     if !receipt_ack {
         return Ok(());
     }
-    let generation = storage.selective_sync_policy_generation();
+    let generation = storage
+        .selective_sync_policy_generation_for_peer(&device_id)
+        .await?;
     let progress = storage
         .begin_outbound_policy(&device_id, generation)
         .await?;

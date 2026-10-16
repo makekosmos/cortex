@@ -7,6 +7,7 @@ fn message_variant_name(msg: &LanSyncMessage) -> &'static str {
     match msg {
         LanSyncMessage::Hello { .. } => "Hello",
         LanSyncMessage::VersionVector { .. } => "VersionVector",
+        LanSyncMessage::SyncPolicy { .. } => "SyncPolicy",
         LanSyncMessage::SyncChanges { .. } => "SyncChanges",
         LanSyncMessage::SyncAck { .. } => "SyncAck",
         LanSyncMessage::LiveChange { .. } => "LiveChange",
