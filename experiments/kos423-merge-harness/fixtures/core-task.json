@@ -1,0 +1,31 @@
+{
+  "id": "canonical-task-ingress",
+  "type_id": "core.task",
+  "type_version": "0.1.0",
+  "title": "Canonical task",
+  "content_json": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "paragraph",
+        "content": [{ "type": "text", "text": "hello" }]
+      }
+    ]
+  },
+  "props_json": {
+    "state": { "kind": "open", "at": null },
+    "planning": { "kind": "anytime", "period": "any", "date": null },
+    "deadline": null,
+    "reminders": [],
+    "recurrence": null,
+    "priority": "medium",
+    "checklist": [{ "id": "c1", "title": "Step 1", "isCompleted": false }],
+    "extensions": { "vendor": { "opaque": true } }
+  },
+  "project": { "id": "project-1", "deleted": false, "name": "Current project" },
+  "legacy_todo": {
+    "id": "t1",
+    "project_id": "project-2",
+    "checklist_items": [{ "id": "c1", "title": "Step 1", "isCompleted": false }]
+  }
+}
