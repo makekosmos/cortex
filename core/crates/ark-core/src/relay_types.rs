@@ -35,6 +35,19 @@ struct RelayPeerState {
     app_version: Option<String>,
     authenticated: bool,
     negotiated_protocol: Option<crate::protocol::NegotiatedProtocol>,
+    registry_admission: RelayRegistryAdmission,
+}
+
+#[derive(Debug, Clone, Default)]
+enum RelayRegistryAdmission {
+    #[default]
+    Waiting,
+    Exchanging(RegistryExchangeState),
+    Ready {
+        session_id: String,
+        transport_public_key: String,
+    },
+    Revoked,
 }
 
 struct IncomingSyncState {
@@ -92,8 +105,6 @@ pub struct RelaySync {
     auth_secret: Option<String>,
     peers: Arc<Mutex<HashMap<String, RelayPeerState>>>,
     transport_keys: Arc<Mutex<HashMap<String, String>>>,
-    registry_exchanges: Arc<Mutex<HashMap<String, RegistryExchangeState>>>,
-    registry_ready: Arc<Mutex<HashMap<String, String>>>,
     /// First-contact Hellos awaiting «Принять / Отклонить», keyed by the
     /// claimed device id.
     pending_pairing: Mutex<HashMap<String, PendingPairingRequest>>,

@@ -98,6 +98,7 @@ mod tests {
                 app_version: None,
                 authenticated: true,
                 negotiated_protocol: None,
+                registry_admission: RelayRegistryAdmission::Waiting,
             },
         );
         let disconnect_notified = Arc::new(AtomicBool::new(false));

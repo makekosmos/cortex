@@ -14,6 +14,11 @@ async fn publish_registry_event(
     for client in clients.values() {
         client.broadcast_registry_event(event.clone()).await;
     }
+    if let Some(relay) = &sync.relay {
+        if let Err(error) = relay.publish_registry_event(event.clone()).await {
+            eprintln!("[sync] relay registry event publish failed: {error}");
+        }
+    }
 }
 
 pub(super) async fn device_registry_snapshot(state: &Arc<ServiceState>) -> Result<Value, String> {

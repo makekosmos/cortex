@@ -164,6 +164,7 @@ impl RelaySync {
                             app_version: app_version.clone(),
                             authenticated: true,
                             negotiated_protocol: Some(negotiated),
+                            registry_admission: RelayRegistryAdmission::Waiting,
                         },
                     );
                     was_new
@@ -259,6 +260,19 @@ impl RelaySync {
                     .await
                 {
                     eprintln!("{TAG} registry proof rejected: {error}");
+                    let _ = self.transport.disconnect_transport_peer(endpoint);
+                }
+            }
+            LanSyncMessage::RegistryEventUpdate { session_id, event } => {
+                let Some(endpoint) = transport_public_key.as_deref() else {
+                    eprintln!("{TAG} dropped registry event without transport identity");
+                    return;
+                };
+                if let Err(error) = self
+                    .handle_registry_event_update(&from_device_id, endpoint, &session_id, event)
+                    .await
+                {
+                    eprintln!("{TAG} registry event update rejected: {error}");
                     let _ = self.transport.disconnect_transport_peer(endpoint);
                 }
             }

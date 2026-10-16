@@ -348,6 +348,7 @@ impl SyncTransport for IrohTransport {
                 | LanSyncMessage::RegistrySyncStart { .. }
                 | LanSyncMessage::RegistryEventsPage { .. }
                 | LanSyncMessage::RegistrySyncReady { .. }
+                | LanSyncMessage::RegistryEventUpdate { .. }
         ) {
             return Err("iroh transport-key send only supports pre-admission control".into());
         }

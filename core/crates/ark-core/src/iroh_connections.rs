@@ -53,7 +53,15 @@ fn is_pre_admission_control_message(message: &LanSyncMessage) -> bool {
             | LanSyncMessage::RegistrySyncStart { .. }
             | LanSyncMessage::RegistryEventsPage { .. }
             | LanSyncMessage::RegistrySyncReady { .. }
+            | LanSyncMessage::RegistryEventUpdate { .. }
     )
+}
+
+fn control_message_is_safe_without_admission(message: &LanSyncMessage, addressed: bool) -> bool {
+    if matches!(message, LanSyncMessage::RegistryEventUpdate { .. }) {
+        return addressed;
+    }
+    is_pre_admission_control_message(message)
 }
 
 async fn handle_connection(params: ConnectionParams) {
@@ -163,7 +171,10 @@ async fn handle_connection(params: ConnectionParams) {
                                 continue;
                             }
                             if !writer_registry.is_data_ready_endpoint(&remote_endpoint_id)
-                                && !is_pre_admission_control_message(&outgoing.msg)
+                                && !control_message_is_safe_without_admission(
+                                    &outgoing.msg,
+                                    outgoing.target.is_some(),
+                                )
                             {
                                 if let Some(completion) = outgoing.completion {
                                     if let Some(
@@ -342,4 +353,61 @@ async fn handle_connection(params: ConnectionParams) {
         .remove(&remote_endpoint_id);
 
     eprintln!("[iroh] connection closed ({role}) remote={remote_endpoint_id}");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::device_registry::{
+        DeviceId, DisplayName, RegistryEvent, RegistryEventDraft, RegistryOperation,
+    };
+
+    #[test]
+    fn registry_event_control_must_be_addressed_before_peer_admission() {
+        let registry_event = RegistryEvent::sign(
+            RegistryEventDraft {
+                actor_device_id: DeviceId::parse("author-device").unwrap(),
+                actor_sequence: 1,
+                previous_event_hash: None,
+                target_device_id: DeviceId::parse("author-device").unwrap(),
+                actor_key_epoch: 1,
+                actor_admission_epoch: 1,
+                hlc: crate::hlc::HLC::now("author-device").to_string(),
+                operation: RegistryOperation::Rename {
+                    display_name: DisplayName::parse("Name").unwrap(),
+                },
+            },
+            &ed25519_dalek::SigningKey::from_bytes(&[8; 32]),
+        )
+        .unwrap();
+        let update = LanSyncMessage::RegistryEventUpdate {
+            session_id: "session".into(),
+            event: registry_event,
+        };
+
+        assert!(control_message_is_safe_without_admission(
+            &LanSyncMessage::RegistrySyncStart {
+                session_id: "session".into(),
+            },
+            false,
+        ));
+        assert!(control_message_is_safe_without_admission(&update, true));
+        assert!(!control_message_is_safe_without_admission(&update, false));
+        assert!(!control_message_is_safe_without_admission(
+            &LanSyncMessage::LiveChange {
+                change_id: "change".into(),
+                entity: crate::types::SyncEntity {
+                    id: "object".into(),
+                    entity_type: "note".into(),
+                    data: serde_json::Map::new(),
+                    hlc: "1:0:author-device".into(),
+                    deleted: None,
+                    origin_device_id: None,
+                    origin_seq: None,
+                },
+                origin_device_id: None,
+            },
+            true,
+        ));
+    }
 }

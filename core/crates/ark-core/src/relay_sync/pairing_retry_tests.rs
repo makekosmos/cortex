@@ -173,14 +173,17 @@ async fn persisted_pairing_retries_acceptance_after_send_failure_without_duplica
         .await
         .unwrap();
     let digest = relay
-        .registry_exchanges
+        .peers
         .lock()
         .await
         .get("remote-device")
         .unwrap()
-        .local_digest
-        .clone()
-        .unwrap();
+        .registry_admission
+        .clone();
+    let RelayRegistryAdmission::Exchanging(state) = digest else {
+        panic!("peer should still be in registry exchange before readiness proof");
+    };
+    let digest = state.local_digest.unwrap();
     relay
         .handle_registry_sync_ready(
             "remote-device",
@@ -225,15 +228,22 @@ async fn registry_ready_replay_is_idempotent_but_conflicting_digest_is_rejected(
         .lock()
         .await
         .insert("remote-device".into(), endpoint.into());
-    relay.registry_exchanges.lock().await.insert(
+    relay.peers.lock().await.insert(
         "remote-device".into(),
-        RegistryExchangeState {
-            session_id: session_id.into(),
-            transport_public_key: endpoint.into(),
-            incoming_page_count: None,
-            next_incoming_page: 0,
-            local_digest: None,
-            remote_digest: None,
+        RelayPeerState {
+            device_name: "Remote device".into(),
+            platform: None,
+            app_version: None,
+            authenticated: true,
+            negotiated_protocol: None,
+            registry_admission: RelayRegistryAdmission::Exchanging(RegistryExchangeState {
+                session_id: session_id.into(),
+                transport_public_key: endpoint.into(),
+                incoming_page_count: None,
+                next_incoming_page: 0,
+                local_digest: None,
+                remote_digest: None,
+            }),
         },
     );
 
@@ -252,7 +262,10 @@ async fn registry_ready_replay_is_idempotent_but_conflicting_digest_is_rejected(
 
     assert_eq!(error, "registry_sync_ready_conflict");
     assert_eq!(
-        relay.registry_exchanges.lock().await["remote-device"].remote_digest,
-        Some(digest)
+        match &relay.peers.lock().await["remote-device"].registry_admission {
+            RelayRegistryAdmission::Exchanging(state) => state.remote_digest.clone(),
+            _ => panic!("peer should remain in registry exchange until local digest is known"),
+        },
+        Some(digest),
     );
 }

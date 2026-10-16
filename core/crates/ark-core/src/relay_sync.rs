@@ -1,5 +1,6 @@
 mod lifecycle;
 mod registry_exchange;
+mod registry_fanout;
 mod transport_events;
 
 #[cfg(test)]

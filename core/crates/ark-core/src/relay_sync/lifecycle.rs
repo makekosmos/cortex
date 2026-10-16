@@ -35,8 +35,6 @@ impl RelaySync {
             auth_secret,
             peers: Arc::new(Mutex::new(HashMap::new())),
             transport_keys: Arc::new(Mutex::new(HashMap::new())),
-            registry_exchanges: Arc::new(Mutex::new(HashMap::new())),
-            registry_ready: Arc::new(Mutex::new(HashMap::new())),
             pending_pairing: Mutex::new(HashMap::new()),
             pending_responder_hellos: Mutex::new(HashMap::new()),
             declined_pairing: Mutex::new(HashMap::new()),

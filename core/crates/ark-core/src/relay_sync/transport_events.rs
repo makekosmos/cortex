@@ -199,8 +199,6 @@ impl RelaySync {
                 if device_id != self.config.device_id {
                     self.peers.lock().await.remove(&device_id);
                     self.transport_keys.lock().await.remove(&device_id);
-                    self.registry_ready.lock().await.remove(&device_id);
-                    self.registry_exchanges.lock().await.remove(&device_id);
                     // An initiator that hung up (cancel, Engine stop) takes
                     // its unanswered consent request down with it.
                     if self
@@ -239,8 +237,6 @@ impl RelaySync {
                     evicted
                 };
                 self.transport_keys.lock().await.clear();
-                self.registry_ready.lock().await.clear();
-                self.registry_exchanges.lock().await.clear();
                 if !self.pending_pairing.lock().await.is_empty() {
                     self.pending_pairing.lock().await.clear();
                     self.notify_pairing_changed().await;

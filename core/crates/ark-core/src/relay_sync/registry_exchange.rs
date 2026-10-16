@@ -19,21 +19,6 @@ pub(super) fn is_user_data_message(message: &LanSyncMessage) -> bool {
 }
 
 impl RelaySync {
-    pub(super) async fn registry_ready_for_peer(
-        &self,
-        peer_device_id: &str,
-        transport_public_key: Option<&str>,
-    ) -> bool {
-        let Some(endpoint) = transport_public_key else {
-            return false;
-        };
-        self.registry_ready
-            .lock()
-            .await
-            .get(peer_device_id)
-            .is_some_and(|ready_endpoint| ready_endpoint == endpoint)
-    }
-
     pub(super) async fn start_registry_exchange(
         &self,
         peer_device_id: &str,
@@ -43,18 +28,19 @@ impl RelaySync {
             return Ok(());
         }
         let session_id = generate_id();
-        self.registry_ready.lock().await.remove(peer_device_id);
-        self.registry_exchanges.lock().await.insert(
-            peer_device_id.to_owned(),
-            RegistryExchangeState {
-                session_id: session_id.clone(),
-                transport_public_key: transport_public_key.to_owned(),
-                incoming_page_count: None,
-                next_incoming_page: 0,
-                local_digest: None,
-                remote_digest: None,
-            },
-        );
+        let mut peers = self.peers.lock().await;
+        let peer = peers
+            .get_mut(peer_device_id)
+            .ok_or_else(|| "registry_sync_peer_state_missing".to_owned())?;
+        peer.registry_admission = RelayRegistryAdmission::Exchanging(RegistryExchangeState {
+            session_id: session_id.clone(),
+            transport_public_key: transport_public_key.to_owned(),
+            incoming_page_count: None,
+            next_incoming_page: 0,
+            local_digest: None,
+            remote_digest: None,
+        });
+        drop(peers);
         self.send_registry_control(
             transport_public_key,
             LanSyncMessage::RegistrySyncStart {
@@ -81,18 +67,19 @@ impl RelaySync {
         {
             return Err("registry_sync_start_identity_mismatch".into());
         }
-        self.registry_ready.lock().await.remove(peer_device_id);
-        self.registry_exchanges.lock().await.insert(
-            peer_device_id.to_owned(),
-            RegistryExchangeState {
-                session_id: session_id.clone(),
-                transport_public_key: transport_public_key.to_owned(),
-                incoming_page_count: None,
-                next_incoming_page: 0,
-                local_digest: None,
-                remote_digest: None,
-            },
-        );
+        let mut peers = self.peers.lock().await;
+        let peer = peers
+            .get_mut(peer_device_id)
+            .ok_or_else(|| "registry_sync_peer_state_missing".to_owned())?;
+        peer.registry_admission = RelayRegistryAdmission::Exchanging(RegistryExchangeState {
+            session_id: session_id.clone(),
+            transport_public_key: transport_public_key.to_owned(),
+            incoming_page_count: None,
+            next_incoming_page: 0,
+            local_digest: None,
+            remote_digest: None,
+        });
+        drop(peers);
         self.send_registry_pages(peer_device_id, transport_public_key, &session_id)
             .await
     }
@@ -174,15 +161,14 @@ impl RelaySync {
             return Err("registry_sync_page_bounds".into());
         }
         let next_index = {
-            let exchanges = self.registry_exchanges.lock().await;
-            let state = exchanges
+            let peers = self.peers.lock().await;
+            let peer = peers
                 .get(peer_device_id)
                 .ok_or_else(|| "registry_sync_without_start".to_owned())?;
-            if state.session_id != session_id
-                || state.transport_public_key != transport_public_key
-                || !self
-                    .transport_key_matches(peer_device_id, transport_public_key)
-                    .await
+            let RelayRegistryAdmission::Exchanging(state) = &peer.registry_admission else {
+                return Err("registry_sync_without_start".into());
+            };
+            if state.session_id != session_id || state.transport_public_key != transport_public_key
             {
                 return Err("registry_sync_session_mismatch".into());
             }
@@ -195,6 +181,12 @@ impl RelaySync {
             }
             state.next_incoming_page
         };
+        if !self
+            .transport_key_matches(peer_device_id, transport_public_key)
+            .await
+        {
+            return Err("registry_sync_session_mismatch".into());
+        }
         if page_index + 1 < page_count && events.len() != REGISTRY_PAGE_SIZE {
             return Err("registry_sync_short_nonterminal_page".into());
         }
@@ -202,6 +194,12 @@ impl RelaySync {
             .storage
             .apply_device_registry_events(peer_device_id, &events)
             .await?;
+        self.publish_registry_delta(
+            &page_apply.applied_events,
+            &page_apply.disabled_device_ids,
+            Some(peer_device_id),
+        )
+        .await?;
         if page_apply
             .disabled_device_ids
             .iter()
@@ -215,10 +213,13 @@ impl RelaySync {
         let digest = page_apply.digest;
         let is_last = page_index + 1 == page_count;
         {
-            let mut exchanges = self.registry_exchanges.lock().await;
-            let state = exchanges
+            let mut peers = self.peers.lock().await;
+            let peer = peers
                 .get_mut(peer_device_id)
                 .ok_or_else(|| "registry_sync_session_lost".to_owned())?;
+            let RelayRegistryAdmission::Exchanging(state) = &mut peer.registry_admission else {
+                return Err("registry_sync_session_lost".into());
+            };
             if state.session_id != session_id || state.next_incoming_page != next_index {
                 return Err("registry_sync_session_changed_during_apply".into());
             }
@@ -249,10 +250,13 @@ impl RelaySync {
         if digest.len() != 64 || !digest.bytes().all(|byte| byte.is_ascii_hexdigit()) {
             return Err("registry_sync_digest_invalid".into());
         }
-        let mut exchanges = self.registry_exchanges.lock().await;
-        let state = exchanges
+        let mut peers = self.peers.lock().await;
+        let peer = peers
             .get_mut(peer_device_id)
             .ok_or_else(|| "registry_sync_ready_without_start".to_owned())?;
+        let RelayRegistryAdmission::Exchanging(state) = &mut peer.registry_admission else {
+            return Err("registry_sync_ready_without_start".into());
+        };
         if state.session_id != session_id || state.transport_public_key != transport_public_key {
             return Err("registry_sync_session_mismatch".into());
         }
@@ -263,14 +267,17 @@ impl RelaySync {
             Some(_) => {}
             None => state.remote_digest = Some(digest),
         }
-        drop(exchanges);
+        drop(peers);
         self.try_complete_registry_exchange(peer_device_id).await
     }
 
     async fn try_complete_registry_exchange(&self, peer_device_id: &str) -> Result<(), String> {
         let (endpoint, local_digest, remote_digest) = {
-            let exchanges = self.registry_exchanges.lock().await;
-            let Some(state) = exchanges.get(peer_device_id) else {
+            let peers = self.peers.lock().await;
+            let Some(peer) = peers.get(peer_device_id) else {
+                return Ok(());
+            };
+            let RelayRegistryAdmission::Exchanging(state) = &peer.registry_admission else {
                 return Ok(());
             };
             let (Some(local_digest), Some(remote_digest)) =
@@ -285,25 +292,42 @@ impl RelaySync {
             )
         };
         if local_digest != remote_digest {
-            self.registry_exchanges.lock().await.remove(peer_device_id);
+            if let Some(peer) = self.peers.lock().await.get_mut(peer_device_id) {
+                peer.registry_admission = RelayRegistryAdmission::Waiting;
+            }
             self.transport.unbind_peer(peer_device_id)?;
             self.transport.disconnect_transport_peer(&endpoint)?;
             return Err("registry_sync_digest_mismatch".into());
         }
-        self.transport
-            .mark_peer_data_ready(peer_device_id, &endpoint)?;
-        self.registry_ready
-            .lock()
-            .await
-            .insert(peer_device_id.to_owned(), endpoint.clone());
-        self.registry_exchanges.lock().await.remove(peer_device_id);
+        {
+            let mut peers = self.peers.lock().await;
+            let peer = peers
+                .get_mut(peer_device_id)
+                .ok_or_else(|| "registry_sync_session_lost".to_owned())?;
+            let RelayRegistryAdmission::Exchanging(state) = &peer.registry_admission else {
+                return Err("registry_sync_session_lost".into());
+            };
+            if state.transport_public_key != endpoint
+                || state.local_digest.as_deref() != Some(local_digest.as_str())
+                || state.remote_digest.as_deref() != Some(remote_digest.as_str())
+            {
+                return Ok(());
+            }
+            let session_id = state.session_id.clone();
+            self.transport
+                .mark_peer_data_ready(peer_device_id, &endpoint)?;
+            peer.registry_admission = RelayRegistryAdmission::Ready {
+                session_id: session_id.clone(),
+                transport_public_key: endpoint.clone(),
+            };
+        }
         self.mark_outgoing_accepted(&endpoint).await;
         self.send_local_version_vector().await;
         self.notify_pairing_changed().await;
         Ok(())
     }
 
-    async fn send_registry_control(
+    pub(super) async fn send_registry_control(
         &self,
         transport_public_key: &str,
         message: LanSyncMessage,
@@ -313,7 +337,7 @@ impl RelaySync {
             .await
     }
 
-    async fn transport_key_matches(&self, peer_device_id: &str, endpoint: &str) -> bool {
+    pub(super) async fn transport_key_matches(&self, peer_device_id: &str, endpoint: &str) -> bool {
         self.transport_keys
             .lock()
             .await
