@@ -6,6 +6,7 @@ mod legacy_mutation;
 mod object_mutation;
 mod sync_mutation;
 mod sync_read;
+mod system_mutation;
 mod type_mutation;
 mod usage;
 
@@ -32,6 +33,7 @@ pub(crate) use sync_mutation::{
 pub(crate) use sync_read::{
     AuthorizedTransportKeyQuery, GetSyncKeyValueQuery, LoadEntitiesQuery, UsageCompleteThroughQuery,
 };
+pub(crate) use system_mutation::{ClearAllCommand, DeleteTrashedCommand};
 pub(crate) use type_mutation::{
     DeleteObjectLinkCommand, DeleteObjectTypeCommand, RegisterPackageTypesCommand,
     ReplaceObjectLinkCommand, UpsertObjectLinkCommand, UpsertObjectTypeCommand,

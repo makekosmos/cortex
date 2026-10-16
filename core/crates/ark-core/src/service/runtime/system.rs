@@ -38,17 +38,25 @@ pub(super) async fn external_refs_upsert(
 }
 
 pub(super) async fn clear_all(state: &Arc<ServiceState>) -> Result<Value, String> {
-    with_conn(state, |conn| {
-        db::clear_all(conn)?;
-        Ok(json!(null))
-    })
+    get_db_handle(state)?
+        .submit(
+            db::CommandContext::engine_maintenance(),
+            db::ClearAllCommand,
+        )
+        .await
+        .map(|()| json!(null))
+        .map_err(|error| error.to_string())
 }
 
 pub(super) async fn delete_trashed(state: &Arc<ServiceState>) -> Result<Value, String> {
-    with_conn(state, |conn| {
-        let count = db::delete_trashed(conn, &local_write_device_id(None))?;
-        Ok(json!(count))
-    })
+    get_db_handle(state)?
+        .submit(
+            db::CommandContext::engine(),
+            db::DeleteTrashedCommand::new(local_write_device_id(None)),
+        )
+        .await
+        .map(|count| json!(count))
+        .map_err(|error| error.to_string())
 }
 
 pub(super) async fn db_backup(

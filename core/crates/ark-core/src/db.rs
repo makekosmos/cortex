@@ -17,16 +17,17 @@ pub use backend::{delete_tag, SqliteStorageBackend};
 pub(crate) use command::{
     AcquireIntegrationRefreshLeaseCommand, ApplyAuthenticatedSyncEntityCommand,
     ApplySignedIntegrationFrameCommand, ApplySyncEntityCommand, AuthenticatedCoreTaskWrite,
-    AuthorizedTransportKeyQuery, CanonicalGameUpsertCommand, CommandClass, CommandContext,
-    DbHandle, DeleteObjectLinkCommand, DeleteObjectTypeCommand, EnsureUsageSequenceMigratedCommand,
-    GetSyncKeyValueQuery, IdentityErrorStyle, LegacyDeleteCommand, LegacyGraphWriteCommand,
-    LoadEntitiesQuery, LocalBookCoverCommand, LocalCoreTaskWrite, LocalObjectDeleteCommand,
-    LocalObjectUpsertCommand, LocalUsageWriteCommand, PersistIntegrationGrantCommand,
-    PersistNodeAuthorizationCommand, PublishIntegrationCredentialEnvelopeCommand,
-    RegisterPackageTypesCommand, ReplaceObjectLinkCommand, SetLocalSyncKeyValueCommand,
-    SetSyncKeyValueCommand, TrackedAppDeleteCommand, TrackedAppUpsertCommand,
-    UpsertExternalRefCommand, UpsertObjectLinkCommand, UpsertObjectTypeCommand,
-    UsageCompleteThroughQuery, ValidateOutboundSignedFrameQuery,
+    AuthorizedTransportKeyQuery, CanonicalGameUpsertCommand, ClearAllCommand, CommandClass,
+    CommandContext, DbHandle, DeleteObjectLinkCommand, DeleteObjectTypeCommand,
+    DeleteTrashedCommand, EnsureUsageSequenceMigratedCommand, GetSyncKeyValueQuery,
+    IdentityErrorStyle, LegacyDeleteCommand, LegacyGraphWriteCommand, LoadEntitiesQuery,
+    LocalBookCoverCommand, LocalCoreTaskWrite, LocalObjectDeleteCommand, LocalObjectUpsertCommand,
+    LocalUsageWriteCommand, PersistIntegrationGrantCommand, PersistNodeAuthorizationCommand,
+    PublishIntegrationCredentialEnvelopeCommand, RegisterPackageTypesCommand,
+    ReplaceObjectLinkCommand, SetLocalSyncKeyValueCommand, SetSyncKeyValueCommand,
+    TrackedAppDeleteCommand, TrackedAppUpsertCommand, UpsertExternalRefCommand,
+    UpsertObjectLinkCommand, UpsertObjectTypeCommand, UsageCompleteThroughQuery,
+    ValidateOutboundSignedFrameQuery,
 };
 include!("db/integration_replication_common.rs");
 include!("db/integration_replication_records.rs");
