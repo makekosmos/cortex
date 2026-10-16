@@ -306,8 +306,8 @@ async fn worker_loop(
                 eprintln!(
                     "[ark-service] handler panicked: {message}; reopening database (panic #{count})"
                 );
-                // Reopen unconditionally: after a panic inside `with_write_tx`
-                // the shared connection may hold a half-open transaction.
+                // Reopen unconditionally after a handler panic to reset the
+                // connection and any state left by interrupted SQLite work.
                 let _ = std::panic::AssertUnwindSafe(reopen(&state, &db_path))
                     .catch_unwind()
                     .await;

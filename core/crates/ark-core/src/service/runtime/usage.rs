@@ -120,13 +120,17 @@ pub(super) async fn compact_usage_sync_log(
         .format("%Y-%m-%dT%H:%M:%S%.3fZ")
         .to_string();
     let limit = batch_limit.unwrap_or(2_000).clamp(1, 50_000);
-    with_write_tx(state, |conn| {
-        let deleted = db::compact_usage_sync_log(conn, device_id.as_deref(), &cutoff, limit)?;
-        Ok(json!({
-            "deleted": deleted,
-            "has_more": deleted as i64 == limit,
-        }))
-    })
+    let deleted = get_db_handle(state)?
+        .submit(
+            db::CommandContext::engine_maintenance(),
+            db::CompactUsageSyncLogCommand::new(device_id, cutoff, limit),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok(json!({
+        "deleted": deleted,
+        "has_more": deleted as i64 == limit,
+    }))
 }
 
 pub(super) async fn get_usage_title_total(

@@ -33,7 +33,9 @@ pub(crate) use sync_mutation::{
 pub(crate) use sync_read::{
     AuthorizedTransportKeyQuery, GetSyncKeyValueQuery, LoadEntitiesQuery, UsageCompleteThroughQuery,
 };
-pub(crate) use system_mutation::{ClearAllCommand, DeleteTrashedCommand};
+pub(crate) use system_mutation::{
+    ClearAllCommand, CompactUsageSyncLogCommand, DeleteTrashedCommand,
+};
 pub(crate) use type_mutation::{
     DeleteObjectLinkCommand, DeleteObjectTypeCommand, RegisterPackageTypesCommand,
     ReplaceObjectLinkCommand, UpsertObjectLinkCommand, UpsertObjectTypeCommand,

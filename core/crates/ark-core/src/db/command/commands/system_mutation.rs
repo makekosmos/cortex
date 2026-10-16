@@ -54,3 +54,51 @@ impl DbCommand for DeleteTrashedCommand {
         crate::db::delete_trashed(transaction, &self.device_id).map_err(DbError::Storage)
     }
 }
+
+#[derive(serde::Serialize)]
+pub(crate) struct CompactUsageSyncLogCommand {
+    own_device_id: Option<String>,
+    cutoff_wall_time: String,
+    batch_limit: i64,
+}
+
+impl CompactUsageSyncLogCommand {
+    pub(crate) fn new(
+        own_device_id: Option<String>,
+        cutoff_wall_time: String,
+        batch_limit: i64,
+    ) -> Self {
+        Self {
+            own_device_id,
+            cutoff_wall_time,
+            batch_limit,
+        }
+    }
+}
+
+impl sealed::Sealed for CompactUsageSyncLogCommand {}
+
+impl DbCommand for CompactUsageSyncLogCommand {
+    type Output = usize;
+
+    const CLASS: CommandClass = CommandClass::Maintenance;
+
+    fn weight(&self) -> usize {
+        super::serialized_weight(self)
+    }
+
+    fn execute(
+        self,
+        context: &CommandContext,
+        transaction: &Transaction<'_>,
+    ) -> Result<Self::Output, DbError> {
+        context.require_engine()?;
+        crate::db::compact_usage_sync_log(
+            transaction,
+            self.own_device_id.as_deref(),
+            &self.cutoff_wall_time,
+            self.batch_limit,
+        )
+        .map_err(DbError::Storage)
+    }
+}

@@ -91,6 +91,9 @@ pub fn compact_usage_sync_log(
         .map(|(device_id, seq)| (device_id, seq as i64))
         .collect();
     bounds.sort_unstable();
+    if bounds.is_empty() {
+        return Ok(0);
+    }
     let mut sql = String::from(
         "DELETE FROM usage_sync_log
          WHERE (device_id, seq) IN (
@@ -130,7 +133,7 @@ pub fn compact_usage_sync_log(
 /// that can freeze the vector cursor. Compaction passes the id its writes
 /// are stamped with; the sync wire passes `None` — cursor-only claims are
 /// always a safe lower bound, including for migration backfill stamped
-/// with the sync device id (`set_device_id` feeds `ensure_usage_sequence_migrated`),
+/// with the sync device id (sync startup runs `ensure_usage_sequence_migrated`),
 /// whose cursor is contiguous by the same construction.
 pub fn usage_log_complete_through(
     conn: &Connection,

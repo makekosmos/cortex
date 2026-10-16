@@ -112,6 +112,23 @@ async fn clear_all_runs_inside_a_maintenance_database_command() {
 }
 
 #[tokio::test]
+async fn usage_compaction_runs_as_a_bounded_maintenance_command() {
+    let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
+    let handle = DbHandle::from_shared_connection(connection);
+    handle.with_connection(|connection| crate::db::init_schema(connection).unwrap());
+
+    let deleted = handle
+        .submit(
+            CommandContext::engine_maintenance(),
+            CompactUsageSyncLogCommand::new(None, "2026-09-01T00:00:00.000Z".into(), 10),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(deleted, 0);
+}
+
+#[tokio::test]
 async fn delete_trashed_runs_through_an_interactive_database_command() {
     let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
     let handle = DbHandle::from_shared_connection(connection);

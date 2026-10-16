@@ -15,6 +15,7 @@ where
 /// Выполняет write-замыкание в одной SQLite-транзакции поверх shared conn.
 /// COMMIT при Ok, ROLLBACK при Err. Гарантирует атомарность entity + FTS + sync-meta:
 /// вложенные SAVEPOINT внутри db::* работают внутри этого BEGIN, при ошибке откатывается всё.
+#[cfg(test)]
 pub(super) fn with_write_tx<T, F>(state: &ServiceState, f: F) -> Result<T, String>
 where
     F: FnOnce(&rusqlite::Connection) -> Result<T, String>,
