@@ -1,4 +1,27 @@
 use super::*;
+use std::path::Path;
+
+fn remove_test_database(path: &Path) {
+    for suffix in ["", "-wal", "-shm"] {
+        let file = if suffix.is_empty() {
+            path.to_path_buf()
+        } else {
+            path.with_file_name(format!(
+                "{}{}",
+                path.file_name().unwrap().to_string_lossy(),
+                suffix
+            ))
+        };
+        match std::fs::remove_file(&file) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => panic!(
+                "failed to remove test database file {}: {error}",
+                file.display()
+            ),
+        }
+    }
+}
 
 #[test]
 fn dotted_type_rpc_hits_real_handler_and_omitted_upsert_resolves_current() {
@@ -102,7 +125,7 @@ fn dotted_type_rpc_hits_real_handler_and_omitted_upsert_resolves_current() {
     });
     drop(runtime);
     drop(state);
-    std::fs::remove_file(&path).expect("db file must be released after teardown");
+    remove_test_database(&path);
 }
 
 #[test]
@@ -221,7 +244,7 @@ fn dotted_type_rpc_handlers_cover_aliases_versions_nulls_and_ordering() {
     });
     drop(runtime);
     drop(state);
-    std::fs::remove_file(&path).expect("db file must be released after teardown");
+    remove_test_database(&path);
 }
 
 #[test]
