@@ -260,6 +260,87 @@ async fn production_actor_maintenance_is_a_barrier_for_later_writes_and_reads() 
 }
 
 #[tokio::test]
+async fn production_actor_maintenance_waits_for_admitted_reads_before_the_reader_lock() {
+    let (_directory, handle, mut owner) = open_actor_fixture().await;
+    handle
+        .submit(
+            CommandContext::engine(),
+            QueueProbe::<0> {
+                sequence: 29,
+                payload: vec![0],
+                gate: None,
+            },
+        )
+        .await
+        .unwrap();
+    let reader_barrier = handle.hold_reader_barrier_for_test();
+    let (read_started_tx, read_started_rx) = std::sync::mpsc::channel();
+    let (read_release_tx, read_release_rx) = std::sync::mpsc::channel();
+    let read_handle = handle.clone();
+    let read = tokio::spawn(async move {
+        read_handle
+            .query(
+                CommandContext::sync_system(CommandClass::Backfill),
+                SnapshotReadProbe {
+                    started: read_started_tx,
+                    resume: read_release_rx,
+                },
+            )
+            .await
+    });
+    wait_for_admitted_commands(&handle, 1).await;
+
+    let (maintenance_entered_tx, maintenance_entered_rx) = std::sync::mpsc::channel();
+    let (maintenance_release_tx, maintenance_release_rx) = std::sync::mpsc::channel();
+    let maintenance_handle = handle.clone();
+    let maintenance = tokio::spawn(async move {
+        maintenance_handle
+            .submit_maintenance(
+                CommandContext::engine_maintenance(),
+                GateMaintenance {
+                    entered: maintenance_entered_tx,
+                    release: maintenance_release_rx,
+                },
+            )
+            .await
+    });
+    wait_for_admitted_commands(&handle, 2).await;
+
+    tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        loop {
+            let (queued, active) = handle.maintenance_state_for_test();
+            if queued || active {
+                assert!(
+                    queued && !active,
+                    "maintenance must wait for admitted reads"
+                );
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("maintenance was not scheduled");
+
+    drop(reader_barrier);
+    tokio::task::spawn_blocking(move || read_started_rx.recv().unwrap())
+        .await
+        .unwrap();
+    assert!(maintenance_entered_rx.try_recv().is_err());
+    read_release_tx.send(()).unwrap();
+    read.await.unwrap().unwrap();
+    tokio::task::spawn_blocking(move || maintenance_entered_rx.recv().unwrap())
+        .await
+        .unwrap();
+    maintenance_release_tx.send(()).unwrap();
+    maintenance.await.unwrap().unwrap();
+    owner
+        .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
 async fn production_actor_shutdown_drains_accepted_work_and_allows_reopen() {
     let directory = tempfile::tempdir().unwrap();
     let db_path = directory

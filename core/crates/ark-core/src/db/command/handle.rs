@@ -240,6 +240,27 @@ impl DbHandle {
     }
 
     #[cfg(test)]
+    pub(crate) fn maintenance_state_for_test(&self) -> (bool, bool) {
+        match &self.backend {
+            HandleBackend::Actor(actor) => actor.maintenance_state(),
+            #[cfg(debug_assertions)]
+            HandleBackend::Test(_) => (false, false),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn hold_reader_barrier_for_test(&self) -> impl Drop + '_ {
+        match &self.backend {
+            HandleBackend::Actor(actor) => actor
+                .readers
+                .write()
+                .unwrap_or_else(|error| error.into_inner()),
+            #[cfg(debug_assertions)]
+            HandleBackend::Test(_) => panic!("reader barrier requires a production actor"),
+        }
+    }
+
+    #[cfg(test)]
     pub(super) fn hold_admission_for_test(
         &self,
         class: CommandClass,

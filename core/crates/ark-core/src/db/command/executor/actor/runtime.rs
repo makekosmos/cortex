@@ -174,6 +174,9 @@ fn take_next(ledger: &mut Ledger) -> Option<usize> {
     let minimum_ticket = ledger.slots.iter().flatten().map(|slot| slot.ticket).min();
     if let (Some(barrier), Some(minimum)) = (barrier_ticket, minimum_ticket) {
         if minimum == barrier {
+            if ledger.readers > 0 {
+                return None;
+            }
             return find_source_head(ledger, barrier);
         }
     }
@@ -189,16 +192,26 @@ fn take_next(ledger: &mut Ledger) -> Option<usize> {
     for offset in 0..SCHEDULE.len() {
         let class = SCHEDULE[(ledger.scheduler_cursor + offset) % SCHEDULE.len()];
         let before_barrier = barrier_ticket.unwrap_or(u64::MAX);
-        if let Some(index) = ledger
-            .by_source
-            .values()
-            .filter_map(|queue| queue.pending.front().copied())
-            .find(|index| {
-                ledger.slots[*index]
-                    .as_ref()
-                    .is_some_and(|slot| slot.class == class && slot.ticket < before_barrier)
-            })
-        {
+        let source_position = ledger.source_order.iter().position(|source| {
+            ledger
+                .by_source
+                .get(source)
+                .and_then(|queue| queue.pending.front())
+                .and_then(|index| ledger.slots[*index].as_ref())
+                .is_some_and(|slot| slot.class == class && slot.ticket < before_barrier)
+        });
+        if let Some(position) = source_position {
+            let source = ledger
+                .source_order
+                .remove(position)
+                .expect("source position came from queue");
+            let index = ledger
+                .by_source
+                .get(&source)
+                .and_then(|queue| queue.pending.front())
+                .copied()
+                .expect("eligible source has a pending command");
+            ledger.source_order.push_back(source);
             ledger.scheduler_cursor = (ledger.scheduler_cursor + offset + 1) % SCHEDULE.len();
             return Some(index);
         }
@@ -257,6 +270,7 @@ fn release_slot(
         queue.bytes -= bytes;
         if queue.commands == 0 {
             ledger.by_source.remove(&source);
+            ledger.source_order.retain(|queued| queued != &source);
         }
     }
     shared.wake.notify_all();
@@ -280,6 +294,9 @@ fn cancel_all(ledger: &mut Ledger) {
         }
     }
     ledger.by_source.retain(|_, queue| queue.commands > 0);
+    ledger
+        .source_order
+        .retain(|source| ledger.by_source.contains_key(source));
 }
 
 fn complete_close(shared: &ActorShared) {

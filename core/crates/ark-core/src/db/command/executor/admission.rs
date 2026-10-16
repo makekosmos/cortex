@@ -13,10 +13,26 @@ pub struct AdmissionLimits {
     pub max_commands_per_source: usize,
     pub max_bytes_per_source: usize,
     pub max_sources: usize,
+    pub reserved_interactive_sources: usize,
+    pub reserved_sync_live_sources: usize,
     pub reserved_interactive_commands: usize,
     pub reserved_interactive_bytes: usize,
     pub reserved_sync_live_commands: usize,
     pub reserved_sync_live_bytes: usize,
+}
+
+impl AdmissionLimits {
+    pub fn source_capacity(self, class: CommandClass) -> usize {
+        match class {
+            CommandClass::Interactive | CommandClass::Maintenance => self.max_sources,
+            CommandClass::SyncLive => self.max_sources - self.reserved_interactive_sources,
+            CommandClass::Backfill => {
+                self.max_sources
+                    - self.reserved_interactive_sources
+                    - self.reserved_sync_live_sources
+            }
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -69,6 +85,11 @@ impl AdmissionBudget {
         );
         assert!(limits.max_command_bytes > 0);
         assert!(limits.max_sources > 0);
+        assert!(limits.max_sources > limits.reserved_interactive_sources);
+        assert!(
+            limits.max_sources
+                > limits.reserved_interactive_sources + limits.reserved_sync_live_sources
+        );
         Self {
             limits,
             usage: Arc::new(Mutex::new(Usage::default())),
@@ -89,7 +110,7 @@ impl AdmissionBudget {
         let source_usage = usage.by_source.get(source);
         let next_source_commands = source_usage.map_or(1, |value| value.commands + 1);
         let next_source_bytes = source_usage.map_or(bytes, |value| value.bytes + bytes);
-        if (source_usage.is_none() && usage.by_source.len() >= self.limits.max_sources)
+        if (source_usage.is_none() && usage.by_source.len() >= self.limits.source_capacity(class))
             || next_source_commands > self.limits.max_commands_per_source
             || next_source_bytes > self.limits.max_bytes_per_source
             || usage.commands + 1 > self.limits.max_commands
@@ -163,6 +184,8 @@ mod tests {
             max_commands_per_source: 2,
             max_bytes_per_source: 80,
             max_sources: 2,
+            reserved_interactive_sources: 0,
+            reserved_sync_live_sources: 0,
             reserved_interactive_commands: 1,
             reserved_interactive_bytes: 20,
             reserved_sync_live_commands: 1,

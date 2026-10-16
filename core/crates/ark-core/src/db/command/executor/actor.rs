@@ -123,6 +123,8 @@ struct Ledger {
     bytes: usize,
     next_ticket: u64,
     scheduler_cursor: usize,
+    source_order: VecDeque<CommandSource>,
+    readers: usize,
     maintenance_active: bool,
     lifecycle: Lifecycle,
     drain_deadline: Option<Instant>,
@@ -178,6 +180,8 @@ impl ActorShared {
                 bytes: 0,
                 next_ticket: 0,
                 scheduler_cursor: 0,
+                source_order: VecDeque::with_capacity(limits.max_sources),
+                readers: 0,
                 maintenance_active: false,
                 lifecycle: Lifecycle::Opening,
                 drain_deadline: None,
@@ -230,11 +234,17 @@ impl ActorShared {
             }
             Lifecycle::Draining | Lifecycle::Closed => return Err(DbError::Unavailable),
         }
-        let source_queue = ledger.by_source.get(source);
-        let next_source_commands = source_queue.map_or(1, |queue| queue.commands + 1);
-        let next_source_bytes = source_queue.map_or(bytes, |queue| queue.bytes + bytes);
+        let new_source = !ledger.by_source.contains_key(source);
+        let next_source_commands = ledger
+            .by_source
+            .get(source)
+            .map_or(1, |queue| queue.commands + 1);
+        let next_source_bytes = ledger
+            .by_source
+            .get(source)
+            .map_or(bytes, |queue| queue.bytes + bytes);
         if ledger.free.is_empty()
-            || (source_queue.is_none() && ledger.by_source.len() >= self.limits.max_sources)
+            || (new_source && ledger.by_source.len() >= self.limits.source_capacity(class))
             || next_source_commands > self.limits.max_commands_per_source
             || next_source_bytes > self.limits.max_bytes_per_source
             || ledger.commands + 1 > self.limits.max_commands
@@ -266,6 +276,9 @@ impl ActorShared {
             bytes,
             ticket,
         });
+        if new_source {
+            ledger.source_order.push_back(source.clone());
+        }
         let queue = ledger
             .by_source
             .entry(source.clone())
@@ -320,10 +333,16 @@ impl ActorShared {
         {
             return Err(DbError::Busy);
         }
-        let source_queue = ledger.by_source.get(source);
-        let next_source_commands = source_queue.map_or(1, |queue| queue.commands + 1);
-        let next_source_bytes = source_queue.map_or(bytes, |queue| queue.bytes + bytes);
-        if (source_queue.is_none() && ledger.by_source.len() >= self.limits.max_sources)
+        let new_source = !ledger.by_source.contains_key(source);
+        let next_source_commands = ledger
+            .by_source
+            .get(source)
+            .map_or(1, |queue| queue.commands + 1);
+        let next_source_bytes = ledger
+            .by_source
+            .get(source)
+            .map_or(bytes, |queue| queue.bytes + bytes);
+        if (new_source && ledger.by_source.len() >= self.limits.source_capacity(class))
             || next_source_commands > self.limits.max_commands_per_source
             || next_source_bytes > self.limits.max_bytes_per_source
             || ledger.commands + 1 > self.limits.max_commands
@@ -345,6 +364,9 @@ impl ActorShared {
         {
             return Err(DbError::Busy);
         }
+        if new_source {
+            ledger.source_order.push_back(source.clone());
+        }
         let queue = ledger
             .by_source
             .entry(source.clone())
@@ -355,6 +377,7 @@ impl ActorShared {
             });
         queue.commands += 1;
         queue.bytes += bytes;
+        ledger.readers += 1;
         ledger.commands += 1;
         ledger.bytes += bytes;
         Ok(ReadPermit {
@@ -398,6 +421,22 @@ impl ActorShared {
     pub(in crate::db::command) fn generation(&self) -> u64 {
         self.generation.load(std::sync::atomic::Ordering::SeqCst)
     }
+
+    #[cfg(test)]
+    pub(in crate::db::command) fn maintenance_state(&self) -> (bool, bool) {
+        let ledger = self
+            .ledger
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        (
+            ledger
+                .slots
+                .iter()
+                .flatten()
+                .any(|slot| slot.class == CommandClass::Maintenance),
+            ledger.maintenance_active,
+        )
+    }
 }
 
 impl Drop for ReadPermit {
@@ -409,11 +448,13 @@ impl Drop for ReadPermit {
             .unwrap_or_else(|error| error.into_inner());
         ledger.commands -= 1;
         ledger.bytes -= self.bytes;
+        ledger.readers -= 1;
         if let Some(queue) = ledger.by_source.get_mut(&self.source) {
             queue.commands -= 1;
             queue.bytes -= self.bytes;
             if queue.commands == 0 {
                 ledger.by_source.remove(&self.source);
+                ledger.source_order.retain(|source| source != &self.source);
             }
         }
         self.shared.wake.notify_all();

@@ -35,6 +35,8 @@ const DB_ADMISSION_LIMITS: executor::AdmissionLimits = executor::AdmissionLimits
     max_commands_per_source: 24,
     max_bytes_per_source: 20 * 1024 * 1024,
     max_sources: 64,
+    reserved_interactive_sources: 1,
+    reserved_sync_live_sources: 1,
     reserved_interactive_commands: 16,
     reserved_interactive_bytes: 16 * 1024 * 1024,
     reserved_sync_live_commands: 16,

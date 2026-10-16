@@ -192,6 +192,8 @@ pub(in crate::db::command::tests) fn actor_test_limits() -> executor::AdmissionL
         max_commands_per_source: 4,
         max_bytes_per_source: 40,
         max_sources: 4,
+        reserved_interactive_sources: 1,
+        reserved_sync_live_sources: 1,
         reserved_interactive_commands: 1,
         reserved_interactive_bytes: 16,
         reserved_sync_live_commands: 1,
