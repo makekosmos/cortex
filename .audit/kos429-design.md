@@ -1,0 +1,85 @@
+# KOS-429 device registry design
+
+## Caller contract
+
+Engine exposes a device snapshot, rename, and disable. Manager renders the canonical name and admission state, and calls Engine operations. Temporary disconnect remains a local transport operation.
+
+```rust
+let snapshot = engine.devices().await?;
+engine.rename_device(device_id, DisplayName::parse("Office Mac")?).await?;
+engine.disable_device(target_device_id).await?;
+engine.disconnect_peer(target_device_id).await?; // local session only
+```
+
+A successful rename or disable means the signed event and projection are durable. A successful pairing means the identity binding is durable and registry admission completed. Neither path returns success when persistence or signature verification fails.
+
+## Decision
+
+Use a canonical signed event log as authority and a `DeviceRecord` map as its derived projection. Keep discovery `PeerRecord` and `PeerList` separate. Exchange registry control messages after cryptographic Hello and capability negotiation, but before data readiness. This follows candidate B's explicit `ReadyPeer` barrier and deterministic conflict handling. The candidates agreed on per-device signed events and a shared pre-data barrier. The cross-judge preferred B 22–21 for its clearer transport gates and event ordering.
+
+Use the existing persisted Iroh identity as the device signing identity. Source inspection confirms `iroh::SecretKey` is persisted, `EndpointId` is its public key, Iroh exposes Ed25519 sign/verify, and pairing persists `device_id -> EndpointId`. This satisfies KOS-429's identity condition without introducing another secret to back up. A transport re-pair is an explicit key-epoch change authorized by an already admitted device; it does not change stable `device_id`, object ownership, or historical event signatures. Do not rotate the shared space secret.
+
+Do not impose a six-device lifetime cap or a time-based registry-history TTL. The user commonly has 5–6 devices, but disabled devices and future replacements must not silently consume a permanent product limit. Bound individual messages and exchange pages. Retain signed registry history until a later design can compact it without losing proof; registry events are low-volume control data. KOS-429 does not implement checkpoint compaction.
+
+## Data model and ownership
+
+`DeviceId`, `EndpointId`, `RegistryEventId`, `ActorSequence`, `AdmissionEpoch`, and `DisplayName` are validated domain types with private fields. `RegistryOperation` is `Enroll`, `Rename`, `Disable`, or `RebindKey`. `RegistryEvent` contains event ID, actor device ID, actor sequence, prior event hash, target device ID, operation, admission epoch, and canonical signature. It never contains SQLite, JSON, or transport objects.
+
+Events form one hash-linked sequence per author. Replicas merge independent authors' events by ID, verify each signature against the enrolled key epoch, deduplicate retries, and retain gaps as pending. A projection is rebuilt only from verified contiguous history. Disable adds an irreversible tombstone; no event by the target can clear it. Re-enable is outside this issue. An admitted device may rename or disable another device, but cannot disable itself and strand the identity that issued the command.
+
+Rename is a deterministic last-writer-wins register using HLC plus stable `(actor_device_id, event_id)` tie-breakers. HLC orders rename candidates only; it never proves identity or authorizes disable. The signed log retains all rename operations. `display_name` falls back to the first enrolled OS name until an explicit rename; later host-name updates cannot overwrite an alias.
+
+`PeerRecord` remains transport discovery metadata: addresses, last seen, platform, application version, and first-contact host name. Existing `sync.removed_peers` remains local-only and is never promoted to global disable. All object histories, CRDT state, HLC values, and source sequences keep their existing device owner.
+
+The domain registry module owns canonical encoding, signature verification, event ordering, projection, and admission rules. SQLite registry commands own atomic persistence through `DbHandle`. Engine service parses JSON and calls those commands. Sync orchestration owns registry exchange and constructs opaque `ReadyPeer` only after successful admission. WebSocket, Iroh, and Manager do not implement policy independently.
+
+```rust
+pub(crate) struct ReadyPeer { /* private device id and session generation */ }
+
+pub(crate) trait DeviceRegistry {
+    async fn snapshot(&self) -> Result<DeviceSnapshot, RegistryError>;
+    async fn append_local(&self, command: RegistryCommand)
+        -> Result<CommittedRegistryEvent, RegistryError>;
+    async fn apply_remote(&self, batch: RegistryBatch)
+        -> Result<RegistryDelta, RegistryError>;
+    async fn admit_session(&self, proof: RegistryProof, batch: RegistryBatch)
+        -> Result<ReadyPeer, AdmissionError>;
+    async fn is_admitted(&self, peer: &ReadyPeer) -> Result<bool, RegistryError>;
+}
+```
+
+Each write command checks the current actor admission, allocates its next sequence, signs canonical event bytes, inserts the event, updates the projection, and records replication progress in one SQLite transaction. Remote apply rechecks author key epoch, authorization, replay position, and tombstone state in that same transaction. Every inbound object apply also rechecks the peer's current admission epoch in the same transaction as the object write, so a stale `ReadyPeer` cannot race past a committed disable. Outbound page reads recheck admission before returning data; disable cancels queued sends and closes sessions. Network I/O never holds a SQLite transaction. Notify peers only after commit. Pairing first validates the existing Hello/HMAC and explicit user consent, then commits the endpoint binding and enrollment/key-epoch event before marking the session ready. A failed commit or transport bind leaves no ready session. Existing `admit_transport_hello` must propagate bind and persistence errors instead of logging and continuing.
+
+## Session protocol
+
+The session state is `TransportConnected -> HelloVerified -> RegistryExchange -> DataReady`. `authenticated` or an Iroh endpoint binding alone is not data readiness. On reconnect, readiness starts over.
+
+The registry capability is mandatory for data admission. Existing protocol negotiation authenticates the selected capability list. A peer without the capability gets a bounded `upgrade_required` control refusal and closes before data. Unknown-field tolerance is not compatibility. Current clients all move together to this cutover; no old-peer fallback may exchange user data.
+
+Both peers exchange bounded signed event pages and their per-actor cursors until all available contiguous registry history is applied and each side confirms the peer remains active. An unsupported message, bad proof, oversized page, sequence gap, persistence error, or disabled peer keeps the session out of `DataReady`. Gaps request replay and survive reconnect. Duplicate events are idempotent.
+
+Every data path requires `ReadyPeer`: VersionVector, SyncChanges, LiveChange, PeerList handling, signed integration frames, ACKs, snapshot pages, committed feeds, and queued outbound work. The Iroh writer permits only Hello, pairing responses, and registry control before readiness. Direct WebSocket client and server must use the same barrier. `PeerList` remains discovery-only.
+
+After a disable event commits, mark all matching sessions not ready, close them, cancel queued sends, and reject every inbound/outbound user-data handler. A disabled peer may only complete the restricted control exchange needed to receive the signed history containing its tombstone, then the session closes. It cannot author registry updates or send data. Offline peers learn the event when they reconnect to an admitted peer; the contract is eventual, not instantaneous revocation of a disconnected device. Data already copied to a device is not remotely erased.
+
+## Existing-code grounding
+
+- `service/sync/start.rs` starts the direct `SyncServer` and, depending on configuration, a WebSocket relay or Iroh-backed `RelaySync`; all use cases need the same readiness rule.
+- `sync_server_messages/hello.rs` and `sync_client_start/connect_and_receive.rs` set application authentication and exchange VersionVector before registry admission exists.
+- `relay_impl_1.rs` marks a relay peer authenticated and calls `send_local_version_vector`; `relay_impl_2.rs` gates Iroh transport by endpoint but handles registry-independent data.
+- `iroh_connections.rs` treats transport binding as permission for ordinary writes.
+- `relay_pairing.rs::admit_transport_hello` ignores bind errors and can continue after peer-key persistence fails.
+- `sync.peer_transport_keys` durably binds device IDs to Iroh EndpointIds, and `iroh_tail.rs` loads the corresponding persistent local key.
+- Existing `sync.removed_peers` and `PeerList` do not represent space-wide device admission.
+
+See `.audit/kos429-grounding.md` and `/tmp/kos429-how.md`. The baseline `accept_pairing_connects_persists_and_survives_restart` passes, but its trace shows VersionVector is sent before pairing consent completes; that is the behavior this issue must change.
+
+## Verification contract
+
+Use production SQLite and actual WebSocket/Iroh session code. Prove rename propagation and restart, host-name fallback, deterministic concurrent rename, atomic pairing persistence before `DataReady`, and disabled-session teardown. Before data readiness, assert no VersionVector, PeerList, entity, ACK, or feed is sent or applied. Reject old peers, forged IDs, bad signatures, gaps, replay, stale active records, and data queued before disable. Prove offline disable delivery on reconnect and local disconnect without registry mutation. Keep golden Hello and PeerList fixtures unchanged except the negotiated capability fields. Verify Engine operations and Manager use the service boundary without direct database access.
+
+## Arena record
+
+Two independent Luna candidates converged on per-author signed event history, explicit durable enrollment, and one pre-data barrier. Candidate B is the base for `ReadyPeer`, retry semantics, and full transport gates. The cross-judge preferred B 22–21. Candidate A's explicit separation of transport identity from device policy informed the selected key-epoch transition, but its extra signing key is rejected because the current persisted Iroh identity already provides the required signature API and durable pairing anchor. The independent reviewer also flagged the arbitrary six-device cap and unbounded checkpoint claims; this design removes the cap and defers compaction rather than inventing a retention rule.
+
+No implementation has been made yet. Implementation must update this document if a source constraint requires a different contract before downstream code relies on it.
