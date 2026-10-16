@@ -6,6 +6,23 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::{json, Value};
 use std::cmp::Ordering;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplayNotice {
+    pub entity_id: String,
+    pub type_id: String,
+}
+
+impl ReplayNotice {
+    pub fn event_payload(&self) -> Value {
+        json!({
+            "event": "sync_replay",
+            "entity_type": "object",
+            "entity_id": self.entity_id,
+            "type_id": self.type_id,
+        })
+    }
+}
+
 pub fn insert_pending_object(
     conn: &Connection,
     entity: &SyncEntity,
@@ -82,7 +99,7 @@ pub fn replay_pending_for_type(
     conn: &Connection,
     type_id: &str,
     type_version: &str,
-) -> Result<usize, String> {
+) -> Result<Vec<ReplayNotice>, String> {
     let exists: bool = conn
         .query_row(
             concat!(
@@ -94,7 +111,7 @@ pub fn replay_pending_for_type(
         )
         .map_err(|e| e.to_string())?;
     if !exists {
-        return Ok(0);
+        return Ok(Vec::new());
     }
     let is_v3 = exact_shape(&table_columns(conn)?, true);
     let mut stmt = conn
@@ -143,12 +160,13 @@ pub fn replay_pending_for_type(
             return Err(e);
         }
     }
-    for (id, _, _, _) in &pending {
-        crate::events::emit_event(
-            json!({"event":"sync_replay","entity_type":"object","entity_id":id,"type_id":type_id}),
-        );
-    }
-    Ok(pending.len())
+    Ok(pending
+        .into_iter()
+        .map(|(entity_id, _, _, _)| ReplayNotice {
+            entity_id,
+            type_id: type_id.to_owned(),
+        })
+        .collect())
 }
 
 pub fn count_pending_for_type(conn: &Connection, type_id: &str) -> Result<i64, String> {

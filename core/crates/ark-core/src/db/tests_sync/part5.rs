@@ -37,7 +37,7 @@
             let guard = conn.lock().unwrap();
             replay_pending_for_type(&guard, "remote-type", type_registry::LEGACY_VERSION).unwrap()
         };
-        assert_eq!(replayed, 0);
+        assert!(replayed.is_empty());
         assert!(get_object(&conn.lock().unwrap(), "remote-unknown")
             .unwrap()
             .is_none());

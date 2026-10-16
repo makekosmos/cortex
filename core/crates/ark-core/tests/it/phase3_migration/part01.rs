@@ -283,8 +283,10 @@ fn phase3_pending_replay_and_delete_are_exact_tuple_isolated() {
     )
     .unwrap();
     assert_eq!(
-        replay_pending_for_type(&conn, "future", "1.0.0").unwrap(),
-        1
+        replay_pending_for_type(&conn, "future", "1.0.0")
+            .unwrap()
+            .len(),
+        1,
     );
     assert_eq!(
         conn.query_row(

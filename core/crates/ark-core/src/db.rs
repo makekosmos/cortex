@@ -11,13 +11,16 @@ mod command;
 pub(crate) use backend::SqliteLegacyMutationSession;
 pub(crate) use backend::SqliteObjectMutationSession;
 pub(crate) use backend::SqliteObjectWriteSession;
+pub(crate) use backend::SqliteTypeMutationSession;
 pub(crate) use backend::SqliteUsageWriteSession;
 pub use backend::{delete_tag, SqliteStorageBackend};
 pub(crate) use command::{
     AuthenticatedCoreTaskWrite, CanonicalGameUpsertCommand, CommandContext, DbHandle,
-    LegacyDeleteCommand, LegacyGraphWriteCommand, LocalBookCoverCommand, LocalCoreTaskWrite,
-    LocalObjectDeleteCommand, LocalObjectUpsertCommand, LocalUsageWriteCommand,
-    TrackedAppDeleteCommand, TrackedAppUpsertCommand,
+    DeleteObjectLinkCommand, DeleteObjectTypeCommand, LegacyDeleteCommand, LegacyGraphWriteCommand,
+    LocalBookCoverCommand, LocalCoreTaskWrite, LocalObjectDeleteCommand, LocalObjectUpsertCommand,
+    LocalUsageWriteCommand, RegisterPackageTypesCommand, ReplaceObjectLinkCommand,
+    TrackedAppDeleteCommand, TrackedAppUpsertCommand, UpsertObjectLinkCommand,
+    UpsertObjectTypeCommand,
 };
 include!("db/integration_replication_common.rs");
 include!("db/integration_replication_records.rs");

@@ -1,4 +1,7 @@
-pub fn register_type(conn: &Connection, registration: &TypeRegistration) -> Result<(), String> {
+pub fn register_type(
+    conn: &Connection,
+    registration: &TypeRegistration,
+) -> Result<Vec<crate::canonical_types::pending::ReplayNotice>, String> {
     validate_id(&registration.type_id, "type id")?;
     if registration.owner_kind.trim().is_empty() {
         return Err("invalid owner kind".into());
@@ -80,7 +83,7 @@ pub fn register_type(conn: &Connection, registration: &TypeRegistration) -> Resu
             && definition.schema_hash == canonical_hash
             && definition.created_at == registration.created_at
         {
-            return Ok(());
+            return Ok(Vec::new());
         }
         return Err("canonical type already exists".into());
     }
@@ -121,7 +124,7 @@ pub fn register_type(conn: &Connection, registration: &TypeRegistration) -> Resu
             ],
         )
         .map_err(|e| e.to_string())?;
-        insert_type_version(
+        let mut notices = insert_type_version(
             conn,
             &TypeVersion {
                 type_id: registration.type_id.clone(),
@@ -146,17 +149,19 @@ pub fn register_type(conn: &Connection, registration: &TypeRegistration) -> Resu
             &registration.type_id,
             registration.base_type_id.as_deref(),
         )?;
-        crate::canonical_types::pending::replay_pending_for_type(
+        notices.extend(crate::canonical_types::pending::replay_pending_for_type(
             conn,
             &registration.type_id,
             &registration.version,
-        )?;
-        Ok::<(), String>(())
+        )?);
+        Ok::<_, String>(notices)
     })();
     match result {
-        Ok(()) => conn
-            .execute_batch("RELEASE SAVEPOINT ark_registry_registration")
-            .map_err(|e| e.to_string()),
+        Ok(notices) => {
+            conn.execute_batch("RELEASE SAVEPOINT ark_registry_registration")
+                .map_err(|e| e.to_string())?;
+            Ok(notices)
+        }
         Err(error) => {
             let _ = conn.execute_batch(concat!(
                 "ROLLBACK TO SAVEPOINT ark_registry_registration; RELEASE SAVEPOINT ",

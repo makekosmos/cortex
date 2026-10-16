@@ -127,7 +127,7 @@ pub fn insert_type_version(
     conn: &Connection,
     input: &TypeVersion,
     created_at: &str,
-) -> Result<(), String> {
+) -> Result<Vec<crate::canonical_types::pending::ReplayNotice>, String> {
     validate_id(&input.type_id, "type id")?;
     validate_version(&input.version)?;
     let (schema, ui, content, relations, hash_and_meta) = canonical_definition(input)?;
@@ -176,12 +176,11 @@ pub fn insert_type_version(
     let policy = serde_json::to_string(&canonical_value(&policy)).map_err(|e| e.to_string())?;
     if let Some((a, b, c, d, e, f, _)) = existing {
         if a == schema && b == ui && c == content && d == relations && e == policy && f == hash {
-            crate::canonical_types::pending::replay_pending_for_type(
+            return crate::canonical_types::pending::replay_pending_for_type(
                 conn,
                 &input.type_id,
                 &input.version,
-            )?;
-            return Ok(());
+            );
         }
         return Err("immutable type version conflict".into());
     }
@@ -204,6 +203,5 @@ pub fn insert_type_version(
         ],
     )
     .map_err(|e| e.to_string())?;
-    crate::canonical_types::pending::replay_pending_for_type(conn, &input.type_id, &input.version)?;
-    Ok(())
+    crate::canonical_types::pending::replay_pending_for_type(conn, &input.type_id, &input.version)
 }

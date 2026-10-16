@@ -242,11 +242,6 @@
       "count": 2
     },
     {
-      "path": "core/crates/ark-core/src/service/runtime/types.rs",
-      "category": "service transaction boundary",
-      "count": 6
-    },
-    {
       "path": "core/crates/ark-core/src/service/runtime/usage.rs",
       "category": "service transaction boundary",
       "count": 1

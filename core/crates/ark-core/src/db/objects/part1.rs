@@ -9,7 +9,10 @@ fn parse_json_or_default(raw: String) -> Value {
     serde_json::from_str(&raw).unwrap_or_else(|_| json!({}))
 }
 
-pub fn upsert_object_type(conn: &Connection, object_type: &ObjectType) -> Result<(), String> {
+pub fn upsert_object_type(
+    conn: &Connection,
+    object_type: &ObjectType,
+) -> Result<Vec<crate::canonical_types::pending::ReplayNotice>, String> {
     // A canonical ID cannot reuse an existing alias name. Check this before
     // mutating object_types so the legacy write remains fail-closed and atomic.
     let has_aliases: bool = conn
@@ -52,7 +55,7 @@ pub fn upsert_object_type(conn: &Connection, object_type: &ObjectType) -> Result
         })
         .unwrap_or(false)
     {
-        return Ok(());
+        return Ok(Vec::new());
     }
 
     conn.execute(
@@ -157,11 +160,15 @@ pub fn upsert_object_type(conn: &Connection, object_type: &ObjectType) -> Result
     } else {
         "0.0.0-legacy".to_string()
     };
-    replay_pending_for_type(conn, &object_type.id, &current_version)?;
+    let mut replay_notices = replay_pending_for_type(conn, &object_type.id, &current_version)?;
     if current_version != type_registry::LEGACY_VERSION {
-        replay_pending_for_type(conn, &object_type.id, type_registry::LEGACY_VERSION)?;
+        replay_notices.extend(replay_pending_for_type(
+            conn,
+            &object_type.id,
+            type_registry::LEGACY_VERSION,
+        )?);
     }
-    Ok(())
+    Ok(replay_notices)
 }
 
 pub fn delete_object_type(conn: &Connection, id: &str) -> Result<(), String> {

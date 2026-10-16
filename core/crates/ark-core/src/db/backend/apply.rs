@@ -31,8 +31,12 @@ impl SqliteStorageBackend {
     ) -> Result<(), String> {
         let transaction = Transaction::new_unchecked(conn, TransactionBehavior::Immediate)
             .map_err(|error| error.to_string())?;
-        Self::apply_entity_blocking_inner(&transaction, entity)?;
-        transaction.commit().map_err(|error| error.to_string())
+        let replay_notices = Self::apply_entity_blocking_inner(&transaction, entity)?;
+        transaction.commit().map_err(|error| error.to_string())?;
+        for notice in replay_notices {
+            crate::events::emit_event(notice.event_payload());
+        }
+        Ok(())
     }
 
     pub(in crate::db) fn apply_authenticated_entity_blocking(
@@ -50,15 +54,22 @@ impl SqliteStorageBackend {
             return Err("sync_peer_removed".into());
         }
 
-        Self::apply_entity_blocking_inner(&transaction, entity)?;
-        transaction.commit().map_err(|error| error.to_string())
+        let replay_notices = Self::apply_entity_blocking_inner(&transaction, entity)?;
+        transaction.commit().map_err(|error| error.to_string())?;
+        for notice in replay_notices {
+            crate::events::emit_event(notice.event_payload());
+        }
+        Ok(())
     }
 
-    fn apply_entity_blocking_inner(conn: &Connection, entity: &SyncEntity) -> Result<(), String> {
+    fn apply_entity_blocking_inner(
+        conn: &Connection,
+        entity: &SyncEntity,
+    ) -> Result<Vec<crate::canonical_types::pending::ReplayNotice>, String> {
         let sequenced_usage = is_sequenced_usage_entity(&entity.entity_type);
         if sequenced_usage && !usage_entity_is_newer(conn, entity)? {
             let (device_id, seq) = usage_origin_for_entity(conn, entity)?;
-            return record_usage_sequence(
+            record_usage_sequence(
                 conn,
                 &entity.entity_type,
                 &entity.id,
@@ -66,7 +77,8 @@ impl SqliteStorageBackend {
                 seq,
                 &entity.hlc,
                 entity.deleted == Some(true),
-            );
+            )?;
+            return Ok(Vec::new());
         }
         if matches!(entity.entity_type.as_str(), "area" | "heading") {
             return Err("LegacyPlanningReadOnly".into());
@@ -78,10 +90,12 @@ impl SqliteStorageBackend {
             canonical.entity_type = "object".into();
             return crate::canonical_types::facades::apply_canonical_object_entity(
                 conn, &canonical,
-            );
+            )
+            .map(|()| Vec::new());
         }
         if entity.entity_type == "object" && entity.deleted == Some(true) {
-            return crate::canonical_types::facades::apply_canonical_object_entity(conn, entity);
+            return crate::canonical_types::facades::apply_canonical_object_entity(conn, entity)
+                .map(|()| Vec::new());
         }
 
         if entity.deleted == Some(true) {
@@ -102,13 +116,14 @@ impl SqliteStorageBackend {
             if sequenced_usage {
                 finish_usage_entity_sync(conn, entity)?;
             }
-            return Ok(());
+            return Ok(Vec::new());
         }
 
         let mut full_data = entity.data.clone();
         full_data.insert("id".to_string(), Value::String(entity.id.clone()));
         let value = Value::Object(full_data);
 
+        let mut replay_notices = Vec::new();
         let result = match entity.entity_type.as_str() {
             "todo" | "project" | "tag" => {
                 crate::canonical_types::facades::apply_legacy_compat_entity(conn, entity)
@@ -128,7 +143,10 @@ impl SqliteStorageBackend {
                 .and_then(|day| upsert_usage_day(conn, &day)),
             "object_type" => serde_json::from_value::<ObjectType>(value)
                 .map_err(|e| e.to_string())
-                .and_then(|object_type| upsert_object_type(conn, &object_type)),
+                .and_then(|object_type| {
+                    replay_notices = upsert_object_type(conn, &object_type)?;
+                    Ok(())
+                }),
             "object" => {
                 // The canonical ingress owns identity resolution and validation;
                 // pending replay uses this same branch after the registry arrives.
@@ -166,7 +184,7 @@ impl SqliteStorageBackend {
         if sequenced_usage {
             finish_usage_entity_sync(conn, entity)?;
         }
-        Ok(())
+        Ok(replay_notices)
     }
 }
 

@@ -61,6 +61,7 @@ mod request_config;
 mod snapshot_restore;
 mod sync_lifecycle;
 mod sync_ticket_pending;
+mod type_mutation_commands;
 mod usage_commands;
 mod write_tx;
 
