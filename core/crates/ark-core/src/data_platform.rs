@@ -45,6 +45,13 @@ pub fn ensure_schema(conn: &Connection) -> Result<(), String> {
            filter_json TEXT NOT NULL DEFAULT '{}' CHECK(length(CAST(filter_json AS BLOB)) <= \
            131072),
            PRIMARY KEY(profile_id,resource_kind,resource_id)
+         );
+         CREATE TABLE IF NOT EXISTS accepted_peer_sync_policies (
+           peer_device_id TEXT PRIMARY KEY CHECK(length(CAST(peer_device_id AS BLOB)) \
+           BETWEEN 1 AND 128),
+           revision INTEGER NOT NULL CHECK(revision >= 1),
+           digest TEXT NOT NULL CHECK(length(digest) = 64),
+           rules_json TEXT NOT NULL CHECK(length(CAST(rules_json AS BLOB)) <= 131072)
          );",
     )
     .map_err(|e| e.to_string())
@@ -70,24 +77,7 @@ pub struct SyncProfile {
 
 impl SyncProfile {
     pub fn digest(&self) -> String {
-        let mut rules = self
-            .rules
-            .iter()
-            .map(|rule| {
-                (
-                    rule.resource_kind.as_str(),
-                    rule.resource_id.as_str(),
-                    sync_mode_name(rule.mode),
-                    rule.filter.canonical_json(),
-                )
-            })
-            .collect::<Vec<_>>();
-        rules.sort_unstable();
-        let canonical = serde_json::to_vec(&(1u8, rules)).expect("sync profile fields serialize");
-        let mut digest = Sha256::new();
-        digest.update(b"cortex-sync-policy-v1\0");
-        digest.update(canonical);
-        format!("{:x}", digest.finalize())
+        digest_sync_policy(&self.rules)
     }
 
     pub fn selective_profile(&self) -> SelectiveSyncProfile {
@@ -103,6 +93,8 @@ impl SyncProfile {
         profile
     }
 }
+
+include!("data_platform_peer_policy.rs");
 
 pub fn upsert_sync_profile(
     conn: &Connection,
