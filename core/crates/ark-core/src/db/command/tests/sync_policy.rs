@@ -10,6 +10,58 @@ fn profile_rule(resource_id: String) -> crate::data_platform::SyncProfileRule {
 }
 
 #[tokio::test]
+async fn accepted_peer_policy_is_bound_to_authenticated_actor_peer() {
+    let directory = tempfile::tempdir().unwrap();
+    let database_path = directory.path().join("accepted-peer-policy.db");
+    let (handle, mut owner) = DbHandle::open(
+        database_path.to_string_lossy().into_owned(),
+        "local-device".into(),
+    )
+    .await
+    .unwrap();
+    let rules = vec![profile_rule("type-books".into())];
+    let profile = crate::data_platform::SyncProfile {
+        profile_id: "remote-policy".into(),
+        device_id: "phone".into(),
+        revision: 4,
+        name: "Phone selection".into(),
+        active: true,
+        rules: rules.clone(),
+    };
+    let digest = profile.digest();
+    let denied = handle
+        .submit(
+            CommandContext::sync_peer("tablet".into(), super::super::CommandClass::SyncLive),
+            AcceptPeerSyncPolicyCommand::new("phone".into(), 4, digest.clone(), rules.clone()),
+        )
+        .await;
+    assert!(matches!(denied, Err(DbError::Permission(_))));
+
+    let accepted = handle
+        .submit(
+            CommandContext::sync_peer("phone".into(), super::super::CommandClass::SyncLive),
+            AcceptPeerSyncPolicyCommand::new("phone".into(), 4, digest, rules),
+        )
+        .await
+        .unwrap();
+    assert_eq!(accepted.peer_device_id, "phone");
+    let persisted = handle
+        .query(
+            CommandContext::sync_peer("phone".into(), super::super::CommandClass::SyncLive),
+            LoadAcceptedPeerSyncPolicyQuery::new("phone".into()),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(persisted.revision, 4);
+    assert_eq!(persisted.rules[0].resource_id, "type-books");
+    owner
+        .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
 async fn active_sync_profiles_are_device_owned_revisioned_and_durable() {
     let directory = tempfile::tempdir().unwrap();
     let database_path = directory.path().join("sync-policy.db");

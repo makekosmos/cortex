@@ -1,5 +1,5 @@
 use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError, DbQuery};
-use crate::data_platform::{SyncProfile, SyncProfileRule};
+use crate::data_platform::{AcceptedPeerSyncPolicy, SyncProfile, SyncProfileRule};
 use rusqlite::{Connection, Transaction};
 
 pub(crate) struct SaveLocalSyncProfileCommand {
@@ -115,5 +115,100 @@ fn map_profile_error(error: String) -> DbError {
             DbError::Invalid(error)
         }
         _ => DbError::Storage(error),
+    }
+}
+
+pub(crate) struct AcceptPeerSyncPolicyCommand {
+    peer_device_id: String,
+    revision: i64,
+    digest: String,
+    rules: Vec<SyncProfileRule>,
+}
+
+impl AcceptPeerSyncPolicyCommand {
+    pub(crate) fn new(
+        peer_device_id: String,
+        revision: i64,
+        digest: String,
+        rules: Vec<SyncProfileRule>,
+    ) -> Self {
+        Self {
+            peer_device_id,
+            revision,
+            digest,
+            rules,
+        }
+    }
+}
+
+impl sealed::Sealed for AcceptPeerSyncPolicyCommand {}
+
+impl DbCommand for AcceptPeerSyncPolicyCommand {
+    type Output = AcceptedPeerSyncPolicy;
+
+    const CLASS: CommandClass = CommandClass::SyncLive;
+
+    fn weight(&self) -> usize {
+        self.peer_device_id.len()
+            + self.digest.len()
+            + self
+                .rules
+                .iter()
+                .map(|rule| {
+                    rule.resource_kind.len()
+                        + rule.resource_id.len()
+                        + rule.filter.canonical_json().len()
+                })
+                .sum::<usize>()
+    }
+
+    fn execute(
+        self,
+        context: &CommandContext,
+        transaction: &Transaction<'_>,
+    ) -> Result<Self::Output, DbError> {
+        context.require_sync_peer_matches(&self.peer_device_id)?;
+        crate::data_platform::accept_peer_sync_policy(
+            transaction,
+            &self.peer_device_id,
+            self.revision,
+            &self.digest,
+            &self.rules,
+        )
+        .map_err(map_profile_error)
+    }
+}
+
+pub(crate) struct LoadAcceptedPeerSyncPolicyQuery {
+    peer_device_id: String,
+}
+
+impl LoadAcceptedPeerSyncPolicyQuery {
+    pub(crate) fn new(peer_device_id: String) -> Self {
+        Self { peer_device_id }
+    }
+}
+
+impl sealed::Sealed for LoadAcceptedPeerSyncPolicyQuery {}
+
+impl DbQuery for LoadAcceptedPeerSyncPolicyQuery {
+    type Output = Option<AcceptedPeerSyncPolicy>;
+
+    fn class(&self) -> CommandClass {
+        CommandClass::SyncLive
+    }
+
+    fn weight(&self) -> usize {
+        self.peer_device_id.len().max(1)
+    }
+
+    fn read(
+        self,
+        context: &CommandContext,
+        connection: &Connection,
+    ) -> Result<Self::Output, DbError> {
+        context.require_sync_peer_matches(&self.peer_device_id)?;
+        crate::data_platform::load_accepted_peer_sync_policy(connection, &self.peer_device_id)
+            .map_err(map_profile_error)
     }
 }

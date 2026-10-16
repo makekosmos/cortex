@@ -187,6 +187,25 @@ pub trait PeerProgressPort: Send + Sync {
     async fn store_removed_peer_ids(&self, peer_ids: &[String]) -> Result<(), String>;
 }
 
+/// Persists the receiver-owned policy a peer sent through an authenticated
+/// sync session. The accepted copy is scoped to that peer and controls only
+/// outbound selection.
+#[async_trait::async_trait]
+pub trait PeerSyncPolicyPort: Send + Sync {
+    async fn accept_peer_sync_policy(
+        &self,
+        peer_device_id: &str,
+        revision: i64,
+        digest: &str,
+        rules: &[crate::data_platform::SyncProfileRule],
+    ) -> Result<crate::data_platform::AcceptedPeerSyncPolicy, String>;
+
+    async fn load_accepted_peer_sync_policy(
+        &self,
+        peer_device_id: &str,
+    ) -> Result<Option<crate::data_platform::AcceptedPeerSyncPolicy>, String>;
+}
+
 /// Durable recovery reads. A caller pins one high watermark and pages by
 /// committed position so concurrent writes cannot shift a page boundary.
 #[async_trait::async_trait]

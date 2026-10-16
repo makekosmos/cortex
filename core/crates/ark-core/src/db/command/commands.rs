@@ -56,7 +56,10 @@ pub(crate) use sync_mutation::{
     EnsureUsageSequenceMigratedCommand, ReceiveInboxReceiptCommand, SetLocalSyncKeyValueCommand,
     SetSyncKeyValueCommand,
 };
-pub(crate) use sync_policy::{LoadActiveLocalSyncProfileQuery, SaveLocalSyncProfileCommand};
+pub(crate) use sync_policy::{
+    AcceptPeerSyncPolicyCommand, LoadAcceptedPeerSyncPolicyQuery, LoadActiveLocalSyncProfileQuery,
+    SaveLocalSyncProfileCommand,
+};
 pub(crate) use sync_read::{
     AuthorizedTransportKeyQuery, CommittedFeedDeliveryPageQuery, CommittedFeedPageQuery,
     CommittedFeedSnapshotQuery, GetSyncKeyValueQuery, LoadEntitiesQuery, UsageCompleteThroughQuery,
