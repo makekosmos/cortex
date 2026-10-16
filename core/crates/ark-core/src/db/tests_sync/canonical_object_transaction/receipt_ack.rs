@@ -3,6 +3,7 @@ async fn negotiated_receipt_ack_advances_delivery_without_claiming_application()
     let backend = Arc::new(SqliteStorageBackend::for_test(Arc::new(Mutex::new(
         setup_db(),
     ))));
+    admit_test_registry_peer(&backend, "origin-peer").await;
     let generation = backend.selective_sync_policy_generation();
     backend
         .begin_outbound_policy("receipt-peer", generation)

@@ -1,6 +1,17 @@
 use crate::application::sync_storage::CommittedFeedPort;
-use crate::replication_storage::AuthenticatedEntityBackend;
+use crate::replication_storage::{AuthenticatedEntityBackend, PeerIdentityBackend};
 use std::time::Instant;
+
+async fn admit_test_registry_peer(backend: &SqliteStorageBackend, peer_id: &str) {
+    backend
+        .enroll_paired_device(
+            "device-local",
+            peer_id,
+            &iroh::SecretKey::generate().public().to_string(),
+        )
+        .await
+        .unwrap();
+}
 
 fn expect_feed_deliveries(
     page: crate::application::sync_storage::CommittedFeedDeliveryPage,
@@ -59,6 +70,7 @@ async fn failed_authenticated_core_task_commit_rolls_back_every_write_and_releas
     .unwrap();
     let shared = Arc::new(Mutex::new(conn));
     let backend = SqliteStorageBackend::for_test(shared.clone());
+    admit_test_registry_peer(&backend, "device-a").await;
     let entity = full_core_task_entity(
         "failed-core-task-commit",
         "Commit must roll back",
@@ -160,6 +172,7 @@ async fn durable_inbox_receipt_replays_after_writer_restart() {
             .await
             .unwrap();
     let backend = SqliteStorageBackend::with_db_handle(handle);
+    admit_test_registry_peer(&backend, "device-a").await;
     let failpoint = rusqlite::Connection::open(&path).unwrap();
     failpoint
         .execute_batch(

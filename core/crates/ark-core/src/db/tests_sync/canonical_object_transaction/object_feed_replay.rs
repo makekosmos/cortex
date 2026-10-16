@@ -3,6 +3,8 @@ async fn committed_feed_replays_same_id_after_lost_ack_and_rejects_digest_reuse(
     let backend = Arc::new(SqliteStorageBackend::for_test(Arc::new(Mutex::new(
         setup_db(),
     ))));
+    admit_test_registry_peer(&backend, "origin-peer").await;
+    admit_test_registry_peer(&backend, "server-peer").await;
     let generation = backend.selective_sync_policy_generation();
     backend
         .begin_outbound_policy("server-peer", generation)

@@ -1,6 +1,7 @@
 #[tokio::test]
 async fn pending_authenticated_object_keeps_a_durable_receipt_without_applied_state() {
     let backend = SqliteStorageBackend::for_test(Arc::new(Mutex::new(setup_db())));
+    admit_test_registry_peer(&backend, "peer-a").await;
     let mut entity = sync_object("pending-receipt", "unknown-type", "Future object");
     entity.data.insert("typeVersion".into(), json!("9.9.9"));
 

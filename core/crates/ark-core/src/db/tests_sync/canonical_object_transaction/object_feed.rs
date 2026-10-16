@@ -22,6 +22,7 @@ fn full_core_task_entity(id: &str, title: &str, hlc: &str) -> SyncEntity {
 async fn clear_all_removes_object_write_receipts_before_replay() {
     let conn = setup_db();
     let backend = SqliteStorageBackend::for_test(Arc::new(Mutex::new(conn)));
+    admit_test_registry_peer(&backend, "device-a").await;
     let mut entity = sync_object("clear-receipt-task", "core.task", "Task before reset");
     entity.data.insert("typeVersion".into(), json!("0.1.0"));
     entity.data.insert(
@@ -64,6 +65,7 @@ async fn clear_all_removes_object_write_receipts_before_replay() {
             .unwrap();
         assert_eq!(count, 0);
     }
+    admit_test_registry_peer(&backend, "device-a").await;
     entity.hlc = "2026-01-02T00:00:00.000Z:000001:device-a".into();
     backend
         .apply_authenticated_entity(&entity, "device-a")
@@ -77,6 +79,8 @@ async fn clear_all_removes_object_write_receipts_before_replay() {
 #[tokio::test]
 async fn authenticated_core_task_replay_is_idempotent_and_rejects_revision_reuse() {
     let backend = SqliteStorageBackend::for_test(Arc::new(Mutex::new(setup_db())));
+    admit_test_registry_peer(&backend, "device-a").await;
+    admit_test_registry_peer(&backend, "relay-peer").await;
     let mut entity = sync_object("receipt-replay-task", "core.task", "Original title");
     entity.data.insert("typeVersion".into(), json!("0.1.0"));
     entity.data.insert(
@@ -216,6 +220,7 @@ async fn authenticated_core_task_replay_is_idempotent_and_rejects_revision_reuse
 #[tokio::test]
 async fn feed_delivery_coalesces_entity_and_keeps_payload_revision_consistent_with_watermark() {
     let backend = SqliteStorageBackend::for_test(Arc::new(Mutex::new(setup_db())));
+    admit_test_registry_peer(&backend, "device-a").await;
     let entity = full_core_task_entity(
         "feed-projection",
         "Old payload",
@@ -280,6 +285,9 @@ async fn authenticated_legacy_todo_update_is_durable_and_relayable() {
     let relay = Arc::new(SqliteStorageBackend::for_test(Arc::new(Mutex::new(
         setup_db(),
     ))));
+    admit_test_registry_peer(&source, "origin-peer").await;
+    admit_test_registry_peer(&source, "another-peer").await;
+    admit_test_registry_peer(&relay, "source-peer").await;
     let snapshot_row = sync_todo("old-feed-row", "Covered by initial snapshot");
     source.apply_entity(&snapshot_row).await.unwrap();
     let generation = source.selective_sync_policy_generation();
@@ -404,6 +412,7 @@ async fn authenticated_legacy_todo_update_is_durable_and_relayable() {
 #[tokio::test]
 async fn object_tombstone_feed_projection_preserves_type_id_for_selective_sync() {
     let backend = SqliteStorageBackend::for_test(Arc::new(Mutex::new(setup_db())));
+    admit_test_registry_peer(&backend, "origin-peer").await;
     let object = full_core_task_entity(
         "typed-feed-tombstone",
         "Delete me",
