@@ -2,6 +2,7 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 use std::sync::{Arc, Mutex};
 
 mod commands;
+mod executor;
 
 pub(crate) use commands::{
     AcquireIntegrationRefreshLeaseCommand, ApplyAuthenticatedSyncEntityCommand,
@@ -21,6 +22,16 @@ pub(crate) use commands::{
 // A full transport frame is admitted at 16 MiB. Leave bounded room for the
 // sealed query/command metadata that wraps the same frame for DbHandle.
 const MAX_COMMAND_BYTES: usize = 16 * 1024 * 1024 + 4 * 1024;
+const DB_ADMISSION_LIMITS: executor::AdmissionLimits = executor::AdmissionLimits {
+    max_commands: 128,
+    max_bytes: 64 * 1024 * 1024,
+    max_command_bytes: MAX_COMMAND_BYTES,
+    max_commands_per_source: 24,
+    max_bytes_per_source: 20 * 1024 * 1024,
+    max_sources: 64,
+    reserved_interactive_commands: 16,
+    reserved_interactive_bytes: 16 * 1024 * 1024,
+};
 
 async fn run_db_blocking<T: Send + 'static>(
     operation: impl FnOnce() -> T + Send + 'static,
@@ -38,11 +49,15 @@ async fn run_db_blocking<T: Send + 'static>(
 #[derive(Clone)]
 pub(crate) struct DbHandle {
     connection: Arc<Mutex<Connection>>,
+    admission: executor::AdmissionBudget,
 }
 
 impl DbHandle {
     pub(crate) fn from_shared_connection(connection: Arc<Mutex<Connection>>) -> Self {
-        Self { connection }
+        Self {
+            connection,
+            admission: executor::AdmissionBudget::new(DB_ADMISSION_LIMITS),
+        }
     }
 
     /// Transitional access for command families not yet migrated. This always
@@ -77,11 +92,22 @@ impl DbHandle {
         if weight == 0 || weight > MAX_COMMAND_BYTES {
             return Err(DbError::TooLarge);
         }
+        let _admission = self
+            .admission
+            .try_acquire(context.class, &context.source, weight)
+            .map_err(|error| match error {
+                executor::AdmissionError::TooLarge => DbError::TooLarge,
+                executor::AdmissionError::Saturated => DbError::Busy,
+            })?;
         // Until the atomic executor cutover, preserve the current single
         // connection and mutex. The existing Tokio blocking pool keeps SQLite
         // work off async workers; this is not a second connection or writer.
         let handle = self.clone();
-        run_db_blocking(move || handle.execute(context, command)).await?
+        run_db_blocking(move || {
+            let _admission = _admission;
+            handle.execute(context, command)
+        })
+        .await?
     }
 
     /// Execute a bounded read query off the async worker. It deliberately
@@ -129,15 +155,15 @@ impl DbHandle {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum CommandClass {
     Interactive,
     SyncLive,
     Backfill,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-enum CommandSource {
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(super) enum CommandSource {
     Engine,
     System,
     AuthenticatedPeer(String),
@@ -254,6 +280,8 @@ pub(crate) trait DbQuery: sealed::Sealed + Send + 'static {
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum DbError {
+    #[error("database command admission is saturated")]
+    Busy,
     #[error("{0}")]
     Invalid(String),
     #[error("{0}")]
@@ -300,6 +328,28 @@ mod tests {
 
     impl sealed::Sealed for ReadProbe {}
 
+    struct WriteProbe;
+
+    impl sealed::Sealed for WriteProbe {}
+
+    impl DbCommand for WriteProbe {
+        type Output = ();
+
+        const CLASS: CommandClass = CommandClass::Interactive;
+
+        fn weight(&self) -> usize {
+            1
+        }
+
+        fn execute(
+            self,
+            context: &CommandContext,
+            _transaction: &Transaction<'_>,
+        ) -> Result<Self::Output, DbError> {
+            context.require_engine()
+        }
+    }
+
     impl DbQuery for ReadProbe {
         type Output = bool;
 
@@ -337,5 +387,30 @@ mod tests {
             autocommit,
             "a read query must not start a write transaction"
         );
+    }
+
+    #[tokio::test]
+    async fn submit_rejects_more_work_than_one_source_can_admit() {
+        let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
+        let handle = DbHandle::from_shared_connection(connection);
+        let reservations: Vec<_> = (0..DB_ADMISSION_LIMITS.max_commands_per_source)
+            .map(|_| {
+                handle
+                    .admission
+                    .try_acquire(CommandClass::Interactive, &CommandSource::Engine, 1)
+                    .unwrap()
+            })
+            .collect();
+
+        assert!(matches!(
+            handle.submit(CommandContext::engine(), WriteProbe).await,
+            Err(DbError::Busy)
+        ));
+
+        drop(reservations);
+        assert!(handle
+            .submit(CommandContext::engine(), WriteProbe)
+            .await
+            .is_ok());
     }
 }
