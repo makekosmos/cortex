@@ -9,6 +9,7 @@ mod sync_mutation;
 mod sync_read;
 mod system_mutation;
 mod type_mutation;
+mod type_read;
 mod usage;
 
 pub(crate) use core_task::{AuthenticatedCoreTaskWrite, LocalCoreTaskWrite};
@@ -42,6 +43,7 @@ pub(crate) use type_mutation::{
     DeleteObjectLinkCommand, DeleteObjectTypeCommand, RegisterPackageTypesCommand,
     ReplaceObjectLinkCommand, UpsertObjectLinkCommand, UpsertObjectTypeCommand,
 };
+pub(crate) use type_read::TypeReadQuery;
 pub(crate) use usage::LocalUsageWriteCommand;
 
 fn serialized_weight(value: &impl serde::Serialize) -> usize {

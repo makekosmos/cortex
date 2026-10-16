@@ -16,7 +16,7 @@ pub(crate) use commands::{
     PersistNodeAuthorizationCommand, PublishIntegrationCredentialEnvelopeCommand,
     RegisterPackageTypesCommand, ReplaceObjectLinkCommand, RestoreSnapshotCommand,
     SetLocalSyncKeyValueCommand, SetSyncKeyValueCommand, TrackedAppDeleteCommand,
-    TrackedAppUpsertCommand, UpsertExternalRefCommand, UpsertObjectLinkCommand,
+    TrackedAppUpsertCommand, TypeReadQuery, UpsertExternalRefCommand, UpsertObjectLinkCommand,
     UpsertObjectTypeCommand, UsageCompleteThroughQuery, ValidateOutboundSignedFrameQuery,
 };
 
