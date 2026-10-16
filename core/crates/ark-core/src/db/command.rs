@@ -4,17 +4,20 @@ use std::sync::{Arc, Mutex};
 mod commands;
 
 pub(crate) use commands::{
-    ApplyAuthenticatedSyncEntityCommand, ApplySyncEntityCommand, AuthenticatedCoreTaskWrite,
-    AuthorizedTransportKeyQuery, CanonicalGameUpsertCommand, DeleteObjectLinkCommand,
-    DeleteObjectTypeCommand, GetSyncKeyValueQuery, LegacyDeleteCommand, LegacyGraphWriteCommand,
+    ApplyAuthenticatedSyncEntityCommand, ApplySignedIntegrationFrameCommand,
+    ApplySyncEntityCommand, AuthenticatedCoreTaskWrite, AuthorizedTransportKeyQuery,
+    CanonicalGameUpsertCommand, DeleteObjectLinkCommand, DeleteObjectTypeCommand,
+    GetSyncKeyValueQuery, IdentityErrorStyle, LegacyDeleteCommand, LegacyGraphWriteCommand,
     LoadEntitiesQuery, LocalBookCoverCommand, LocalCoreTaskWrite, LocalObjectDeleteCommand,
     LocalObjectUpsertCommand, LocalUsageWriteCommand, RegisterPackageTypesCommand,
     ReplaceObjectLinkCommand, SetSyncKeyValueCommand, TrackedAppDeleteCommand,
     TrackedAppUpsertCommand, UpsertObjectLinkCommand, UpsertObjectTypeCommand,
-    UsageCompleteThroughQuery,
+    UsageCompleteThroughQuery, ValidateOutboundSignedFrameQuery,
 };
 
-const MAX_COMMAND_BYTES: usize = 16 * 1024 * 1024;
+// A full transport frame is admitted at 16 MiB. Leave bounded room for the
+// sealed query/command metadata that wraps the same frame for DbHandle.
+const MAX_COMMAND_BYTES: usize = 16 * 1024 * 1024 + 4 * 1024;
 
 async fn run_db_blocking<T: Send + 'static>(
     operation: impl FnOnce() -> T + Send + 'static,

@@ -87,11 +87,6 @@
       "count": 1
     },
     {
-      "path": "core/crates/ark-core/src/db/backend/adapter.rs",
-      "category": "sync blocking adapter",
-      "count": 4
-    },
-    {
       "path": "core/crates/ark-core/src/db/backend/apply.rs",
       "category": "SQLite mutation API",
       "count": 1
@@ -115,11 +110,6 @@
       "path": "core/crates/ark-core/src/db/compact.rs",
       "category": "SQLite mutation API",
       "count": 1
-    },
-    {
-      "path": "core/crates/ark-core/src/db/integration_replication_apply.rs",
-      "category": "SQLite mutation API",
-      "count": 4
     },
     {
       "path": "core/crates/ark-core/src/db/integration_replication_common.rs",

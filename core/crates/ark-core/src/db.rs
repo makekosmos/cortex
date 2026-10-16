@@ -15,14 +15,15 @@ pub(crate) use backend::SqliteTypeMutationSession;
 pub(crate) use backend::SqliteUsageWriteSession;
 pub use backend::{delete_tag, SqliteStorageBackend};
 pub(crate) use command::{
-    ApplyAuthenticatedSyncEntityCommand, ApplySyncEntityCommand, AuthenticatedCoreTaskWrite,
-    AuthorizedTransportKeyQuery, CanonicalGameUpsertCommand, CommandClass, CommandContext,
-    DbHandle, DeleteObjectLinkCommand, DeleteObjectTypeCommand, GetSyncKeyValueQuery,
-    LegacyDeleteCommand, LegacyGraphWriteCommand, LoadEntitiesQuery, LocalBookCoverCommand,
-    LocalCoreTaskWrite, LocalObjectDeleteCommand, LocalObjectUpsertCommand, LocalUsageWriteCommand,
+    ApplyAuthenticatedSyncEntityCommand, ApplySignedIntegrationFrameCommand,
+    ApplySyncEntityCommand, AuthenticatedCoreTaskWrite, AuthorizedTransportKeyQuery,
+    CanonicalGameUpsertCommand, CommandClass, CommandContext, DbHandle, DeleteObjectLinkCommand,
+    DeleteObjectTypeCommand, GetSyncKeyValueQuery, IdentityErrorStyle, LegacyDeleteCommand,
+    LegacyGraphWriteCommand, LoadEntitiesQuery, LocalBookCoverCommand, LocalCoreTaskWrite,
+    LocalObjectDeleteCommand, LocalObjectUpsertCommand, LocalUsageWriteCommand,
     RegisterPackageTypesCommand, ReplaceObjectLinkCommand, SetSyncKeyValueCommand,
     TrackedAppDeleteCommand, TrackedAppUpsertCommand, UpsertObjectLinkCommand,
-    UpsertObjectTypeCommand, UsageCompleteThroughQuery,
+    UpsertObjectTypeCommand, UsageCompleteThroughQuery, ValidateOutboundSignedFrameQuery,
 };
 include!("db/integration_replication_common.rs");
 include!("db/integration_replication_records.rs");
@@ -51,6 +52,7 @@ mod tests {
     include!("db/tests_integration_replication_issuer_publish_lookup.rs");
     include!("db/tests_integration_replication_export.rs");
     include!("db/tests_integration_replication_apply.rs");
+    include!("db/tests_integration_replication_adapter.rs");
     include!("db/tests_integration_replication_security.rs");
     include!("db/tests_integration_replication_publication.rs");
 }

@@ -1,9 +1,9 @@
 use super::apply::is_full_core_task;
 use super::SqliteStorageBackend;
 use crate::db::{
-    apply_signed_integration_changes, AuthenticatedCoreTaskWrite, AuthorizedTransportKeyQuery,
-    CommandClass, CommandContext, GetSyncKeyValueQuery, LoadEntitiesQuery,
-    UsageCompleteThroughQuery,
+    ApplySignedIntegrationFrameCommand, AuthenticatedCoreTaskWrite, AuthorizedTransportKeyQuery,
+    CommandClass, CommandContext, GetSyncKeyValueQuery, IdentityErrorStyle, LoadEntitiesQuery,
+    UsageCompleteThroughQuery, ValidateOutboundSignedFrameQuery,
 };
 use crate::replication_storage::{
     AuthenticatedEntityBackend, IntegrationReplicationBackend, PeerIdentityBackend, StorageBackend,
@@ -227,19 +227,17 @@ impl IntegrationReplicationBackend for SqliteStorageBackend {
         expected_space_id: &str,
         expected_origin_node_id: &str,
     ) -> Result<(), String> {
-        let db = self.db.clone();
-        let frame = frame.clone();
-        let space_id = expected_space_id.to_string();
-        let origin_id = expected_origin_node_id.to_string();
-        tokio::task::spawn_blocking(move || {
-            db.with_connection(|conn| {
-                crate::integration_replication::validate_outbound_signed_sync(
-                    conn, &space_id, &origin_id, &frame,
-                )
-            })
-        })
-        .await
-        .map_err(|error| error.to_string())?
+        self.db
+            .query(
+                CommandContext::sync_system(CommandClass::SyncLive),
+                ValidateOutboundSignedFrameQuery::Authorized {
+                    frame: frame.clone(),
+                    expected_space_id: expected_space_id.to_owned(),
+                    expected_origin_node_id: expected_origin_node_id.to_owned(),
+                },
+            )
+            .await
+            .map_err(|error| error.to_string())
     }
 
     async fn validate_outbound_signed_integration_frame_with_transport(
@@ -249,24 +247,18 @@ impl IntegrationReplicationBackend for SqliteStorageBackend {
         expected_origin_node_id: &str,
         transport_public_key: &str,
     ) -> Result<(), String> {
-        let db = self.db.clone();
-        let frame = frame.clone();
-        let space_id = expected_space_id.to_string();
-        let origin_id = expected_origin_node_id.to_string();
-        let transport_key = transport_public_key.to_string();
-        tokio::task::spawn_blocking(move || {
-            db.with_connection(|conn| {
-                crate::integration_replication::validate_outbound_signed_sync_with_transport(
-                    conn,
-                    &space_id,
-                    &origin_id,
-                    &frame,
-                    &transport_key,
-                )
-            })
-        })
-        .await
-        .map_err(|error| error.to_string())?
+        self.db
+            .query(
+                CommandContext::sync_system(CommandClass::SyncLive),
+                ValidateOutboundSignedFrameQuery::BoundTransport {
+                    frame: frame.clone(),
+                    expected_space_id: expected_space_id.to_owned(),
+                    expected_origin_node_id: expected_origin_node_id.to_owned(),
+                    transport_public_key: transport_public_key.to_owned(),
+                },
+            )
+            .await
+            .map_err(|error| error.to_string())
     }
 
     async fn apply_signed_integration_frame(
@@ -286,31 +278,19 @@ impl IntegrationReplicationBackend for SqliteStorageBackend {
             return Err("signed integration frame is addressed to another node".into());
         }
 
-        let db = self.db.clone();
-        let frame = frame.clone();
-        let expected_space_id = expected_space_id.to_string();
-        let expected_recipient_node_id = expected_recipient_node_id.to_string();
-        tokio::task::spawn_blocking(move || {
-            db.with_connection(|conn| {
-                let reserved_at_ms = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_millis()
-                    .try_into()
-                    .unwrap_or(u64::MAX);
-                apply_signed_integration_changes(
-                    conn,
-                    &frame,
-                    &expected_space_id,
-                    &expected_recipient_node_id,
+        self.db
+            .submit(
+                CommandContext::authenticated_peer(authenticated_peer_id.to_owned()),
+                ApplySignedIntegrationFrameCommand::new(
+                    frame.clone(),
+                    expected_space_id.to_owned(),
+                    expected_recipient_node_id.to_owned(),
                     None,
-                    reserved_at_ms,
-                )
-                .map_err(|error| error.to_string())
-            })
-        })
-        .await
-        .map_err(|e| e.to_string())?
+                    IdentityErrorStyle::Detailed,
+                ),
+            )
+            .await
+            .map_err(|error| error.to_string())
     }
 
     async fn apply_signed_integration_frame_with_transport(
@@ -327,31 +307,18 @@ impl IntegrationReplicationBackend for SqliteStorageBackend {
         {
             return Err("signed integration frame identity mismatch".into());
         }
-        let db = self.db.clone();
-        let frame = frame.clone();
-        let expected_space_id = expected_space_id.to_string();
-        let expected_recipient_node_id = expected_recipient_node_id.to_string();
-        let transport_key = authenticated_transport_public_key.map(str::to_owned);
-        tokio::task::spawn_blocking(move || {
-            db.with_connection(|conn| {
-                let reserved_at_ms = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_millis()
-                    .try_into()
-                    .unwrap_or(u64::MAX);
-                apply_signed_integration_changes(
-                    conn,
-                    &frame,
-                    &expected_space_id,
-                    &expected_recipient_node_id,
-                    transport_key.as_deref(),
-                    reserved_at_ms,
-                )
-                .map_err(|error| error.to_string())
-            })
-        })
-        .await
-        .map_err(|e| e.to_string())?
+        self.db
+            .submit(
+                CommandContext::authenticated_peer(authenticated_peer_id.to_owned()),
+                ApplySignedIntegrationFrameCommand::new(
+                    frame.clone(),
+                    expected_space_id.to_owned(),
+                    expected_recipient_node_id.to_owned(),
+                    authenticated_transport_public_key.map(str::to_owned),
+                    IdentityErrorStyle::Generic,
+                ),
+            )
+            .await
+            .map_err(|error| error.to_string())
     }
 }

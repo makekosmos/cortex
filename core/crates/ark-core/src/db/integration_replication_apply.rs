@@ -2,10 +2,13 @@ use crate::integration_replication::{
     verify_reserve_and_apply_signed_sync, IntegrationReplicationChange,
     IntegrationReplicationEntity, SignedSyncEnvelope, SignedSyncError,
 };
+use rusqlite::Transaction;
+#[cfg(test)]
+use rusqlite::TransactionBehavior;
 use std::collections::HashSet;
 
-/// Applies an authenticated integration batch and its typed vector updates atomically.
-pub fn apply_signed_integration_changes(
+#[cfg(test)]
+pub(crate) fn apply_signed_integration_changes(
     conn: &Connection,
     envelope: &SignedSyncEnvelope,
     expected_space_id: &str,
@@ -18,49 +21,57 @@ pub fn apply_signed_integration_changes(
             "signed integration apply requires an autocommit connection".into(),
         ));
     }
-    conn.execute_batch("BEGIN IMMEDIATE")
+    let transaction = Transaction::new_unchecked(conn, TransactionBehavior::Immediate)
         .map_err(|error| SignedSyncError::Storage(error.to_string()))?;
-    let result = (|| {
-        let origin = load_authorized_node(conn, &envelope.origin_node_id)
-            .map_err(SignedSyncError::Storage)?
-            .ok_or(SignedSyncError::UnknownOrigin)?;
-        if authenticated_transport_public_key.is_some()
-            && origin.transport_public_key.as_deref() != authenticated_transport_public_key
-        {
-            return Err(SignedSyncError::TransportMismatch);
-        }
-        let recipient = load_authorized_node(conn, expected_recipient_node_id)
-            .map_err(SignedSyncError::Storage)?
-            .ok_or(SignedSyncError::UnauthorizedRecipient)?;
-        if recipient.status != crate::integration_replication::NodeStatus::Active {
-            return Err(SignedSyncError::UnauthorizedRecipient);
-        }
-        verify_reserve_and_apply_signed_sync(
-            conn,
-            envelope,
-            expected_space_id,
-            expected_recipient_node_id,
-            &origin,
-            reserved_at_ms,
-            |conn, verified| {
-                require_verified_integration_access(conn, verified, &origin, &recipient)?;
-                apply_verified_batch(conn, verified, reserved_at_ms)
-            },
-        )
-    })();
-    match result {
-        Ok(()) => match conn.execute_batch("COMMIT") {
-            Ok(()) => Ok(()),
-            Err(error) => {
-                let _ = conn.execute_batch("ROLLBACK");
-                Err(SignedSyncError::Storage(error.to_string()))
-            }
-        },
-        Err(error) => {
-            let _ = conn.execute_batch("ROLLBACK");
-            Err(error)
-        }
+    apply_signed_integration_changes_in_transaction(
+        &transaction,
+        envelope,
+        expected_space_id,
+        expected_recipient_node_id,
+        authenticated_transport_public_key,
+        reserved_at_ms,
+    )?;
+    transaction
+        .commit()
+        .map_err(|error| SignedSyncError::Storage(error.to_string()))
+}
+
+/// Applies an authenticated integration batch and its typed vector updates atomically.
+pub(crate) fn apply_signed_integration_changes_in_transaction(
+    transaction: &Transaction<'_>,
+    envelope: &SignedSyncEnvelope,
+    expected_space_id: &str,
+    expected_recipient_node_id: &str,
+    authenticated_transport_public_key: Option<&str>,
+    reserved_at_ms: u64,
+) -> Result<(), SignedSyncError> {
+    let conn = transaction;
+    let origin = load_authorized_node(conn, &envelope.origin_node_id)
+        .map_err(SignedSyncError::Storage)?
+        .ok_or(SignedSyncError::UnknownOrigin)?;
+    if authenticated_transport_public_key.is_some()
+        && origin.transport_public_key.as_deref() != authenticated_transport_public_key
+    {
+        return Err(SignedSyncError::TransportMismatch);
     }
+    let recipient = load_authorized_node(conn, expected_recipient_node_id)
+        .map_err(SignedSyncError::Storage)?
+        .ok_or(SignedSyncError::UnauthorizedRecipient)?;
+    if recipient.status != crate::integration_replication::NodeStatus::Active {
+        return Err(SignedSyncError::UnauthorizedRecipient);
+    }
+    verify_reserve_and_apply_signed_sync(
+        conn,
+        envelope,
+        expected_space_id,
+        expected_recipient_node_id,
+        &origin,
+        reserved_at_ms,
+        |conn, verified| {
+            require_verified_integration_access(conn, verified, &origin, &recipient)?;
+            apply_verified_batch(conn, verified, reserved_at_ms)
+        },
+    )
 }
 fn apply_verified_batch(
     conn: &Connection,

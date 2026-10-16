@@ -1,4 +1,5 @@
 mod core_task;
+mod integration_replication;
 mod legacy_mutation;
 mod object_mutation;
 mod sync_mutation;
@@ -7,6 +8,9 @@ mod type_mutation;
 mod usage;
 
 pub(crate) use core_task::{AuthenticatedCoreTaskWrite, LocalCoreTaskWrite};
+pub(crate) use integration_replication::{
+    ApplySignedIntegrationFrameCommand, IdentityErrorStyle, ValidateOutboundSignedFrameQuery,
+};
 pub(crate) use legacy_mutation::{
     LegacyDeleteCommand, LegacyGraphWriteCommand, TrackedAppDeleteCommand, TrackedAppUpsertCommand,
 };
