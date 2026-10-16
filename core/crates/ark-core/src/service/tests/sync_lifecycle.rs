@@ -167,6 +167,7 @@ async fn upsert_object_broadcasts_live_change_to_peers() {
         Request::UpsertObject {
             object,
             expected_snapshot: None,
+            operation_id: None,
             device_id: Some("test-device".to_string()),
         },
     )
@@ -245,6 +246,7 @@ async fn delete_object_broadcasts_live_change_with_deleted_flag() {
         Request::UpsertObject {
             object,
             expected_snapshot: None,
+            operation_id: None,
             device_id: Some("test-device".to_string()),
         },
     )
@@ -258,6 +260,7 @@ async fn delete_object_broadcasts_live_change_with_deleted_flag() {
         Request::DeleteObject {
             id: "live-obj-del".to_string(),
             expected_snapshot: None,
+            operation_id: None,
             device_id: Some("test-device".to_string()),
         },
     )

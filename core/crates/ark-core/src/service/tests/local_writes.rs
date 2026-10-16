@@ -39,6 +39,7 @@ async fn local_object_and_usage_writes_record_sync_state() {
         Request::UpsertObject {
             object,
             expected_snapshot: None,
+            operation_id: None,
             device_id: Some("device-local".to_string()),
         },
     )
@@ -127,6 +128,7 @@ async fn local_object_and_usage_writes_record_sync_state() {
         Request::DeleteObject {
             id: "obj-local-write".to_string(),
             expected_snapshot: None,
+            operation_id: None,
             device_id: Some("device-local".to_string()),
         },
     )
@@ -245,6 +247,7 @@ async fn local_object_type_and_link_writes_record_sync_state() {
         Request::UpsertObject {
             object: source,
             expected_snapshot: None,
+            operation_id: None,
             device_id: Some("device-local".to_string()),
         },
     )
@@ -255,6 +258,7 @@ async fn local_object_type_and_link_writes_record_sync_state() {
         Request::UpsertObject {
             object: target,
             expected_snapshot: None,
+            operation_id: None,
             device_id: Some("device-local".to_string()),
         },
     )

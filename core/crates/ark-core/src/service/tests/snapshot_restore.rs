@@ -50,6 +50,7 @@ async fn seed_rpc_object(state: &Arc<ServiceState>, id: &str, title: &str) {
                 deleted_at: None,
             },
             expected_snapshot: None,
+            operation_id: None,
             device_id: Some("test-device".to_string()),
         },
     )
@@ -92,6 +93,7 @@ async fn db_backup_restore_roundtrip_survives_reinit() {
         Request::DeleteObject {
             id: "obj-before".to_string(),
             expected_snapshot: None,
+            operation_id: None,
             device_id: Some("test-device".to_string()),
         },
     )

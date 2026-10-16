@@ -20,6 +20,7 @@ async fn external_ref_request_keeps_wire_shape_and_rolls_back_failed_update() {
         Request::UpsertObject {
             object,
             expected_snapshot: None,
+            operation_id: None,
             device_id: None,
         },
     )

@@ -78,3 +78,20 @@ fn ark_api_v1_requests_remain_deserializable() {
         .collect()
     );
 }
+
+#[test]
+fn object_mutation_operation_id_is_optional_and_separate_from_request_correlation() {
+    let request_json = concat!(
+        r#"{"operation":"delete_object","id":"object-a",""#,
+        r#"operationId":"retry-17","_req_id":"request-42"}"#,
+    );
+    let request: Request = serde_json::from_str(request_json).unwrap();
+    assert!(matches!(
+        request,
+        Request::DeleteObject {
+            id,
+            operation_id: Some(operation_id),
+            ..
+        } if id == "object-a" && operation_id == "retry-17"
+    ));
+}

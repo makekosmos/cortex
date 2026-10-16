@@ -6,6 +6,7 @@ use std::sync::Mutex;
 mod commands;
 mod executor;
 mod handle;
+mod operation_receipt;
 pub(crate) use handle::{DbHandle, DbOwner};
 
 pub(crate) use commands::{
@@ -24,6 +25,8 @@ pub(crate) use commands::{
     TypeReadQuery, UpsertExternalRefCommand, UpsertObjectLinkCommand, UpsertObjectTypeCommand,
     UsageCompleteThroughQuery, UsageReadQuery, ValidateOutboundSignedFrameQuery,
 };
+#[cfg(test)]
+pub(crate) use operation_receipt::OperationResult;
 
 // A full transport frame is admitted at 16 MiB. Leave bounded room for the
 // sealed query/command metadata that wraps the same frame for DbHandle.
@@ -90,6 +93,17 @@ impl CommandContext {
 
     pub(crate) fn sync_peer(peer_id: String, class: CommandClass) -> Self {
         Self::from_trusted_principal(class, CommandSource::DeviceId(peer_id))
+    }
+
+    pub(crate) fn operation_principal(&self) -> String {
+        match &self.source {
+            CommandSource::Engine => "engine".to_owned(),
+            CommandSource::System => "system".to_owned(),
+            CommandSource::ApplicationPackage(package_id) => {
+                format!("application-package:{package_id}")
+            }
+            CommandSource::DeviceId(device_id) => format!("device:{device_id}"),
+        }
     }
 
     fn authenticated_peer_id(&self) -> Result<&str, DbError> {

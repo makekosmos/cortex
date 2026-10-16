@@ -146,53 +146,65 @@ pub(super) async fn upsert_object(
     state: &Arc<ServiceState>,
     object: ArkObjectWrite,
     expected_snapshot: Option<ObjectWriteSnapshot>,
+    operation_id: Option<String>,
     device_id: Option<String>,
 ) -> Result<Value, String> {
     let object_id = object.id.clone();
     let object_type_id = object.type_id.clone();
-    let entity = if object.type_id == "core.task" {
-        let commit = get_db_handle(state)?
-            .submit(
+    let (entity, replayed) = if object.type_id == "core.task" {
+        let command = db::LocalCoreTaskWrite::new(object, expected_snapshot, device_id);
+        let result = get_db_handle(state)?
+            .submit_with_optional_operation_id(
                 db::CommandContext::engine(),
-                db::LocalCoreTaskWrite::new(object, expected_snapshot, device_id),
+                operation_id,
+                "object.upsert.v1",
+                command,
             )
             .await
             .map_err(|error| error.to_string())?;
+        let replayed = result.replayed;
+        let commit = result.value;
         let hlc = commit
             .receipt
             .resulting_hlc
             .ok_or_else(|| "object_write_receipt_missing_revision".to_string())?;
-        make_sync_entity(
-            "object",
-            &commit.object.id,
-            serde_json::to_value(&commit.object).unwrap_or(json!({})),
-            hlc,
-            None,
+        (
+            make_sync_entity(
+                "object",
+                &commit.object.id,
+                serde_json::to_value(&commit.object).unwrap_or(json!({})),
+                hlc,
+                None,
+            ),
+            replayed,
         )
     } else {
-        let commit = get_db_handle(state)?
-            .submit(
+        let command = db::LocalObjectUpsertCommand::new(
+            crate::application::object_mutation::LocalObjectUpsert {
+                object,
+                expected_snapshot,
+                device_id: local_write_device_id(device_id),
+            },
+        );
+        let result = get_db_handle(state)?
+            .submit_with_optional_operation_id(
                 db::CommandContext::engine(),
-                db::LocalObjectUpsertCommand::new(
-                    crate::application::object_mutation::LocalObjectUpsert {
-                        object,
-                        expected_snapshot,
-                        device_id: local_write_device_id(device_id),
-                    },
-                ),
+                operation_id,
+                "object.upsert.v1",
+                command,
             )
             .await
             .map_err(|error| error.to_string())?;
-        commit.entity
+        (result.value.entity, result.replayed)
     };
-    let eid = object_id.clone();
-    let etid = object_type_id.clone();
-    maybe_broadcast_local_change(state, entity).await;
-    emit_event(json!({
-        "event": "object_upserted",
-        "id": eid,
-        "type_id": etid,
-    }));
+    if !replayed {
+        maybe_broadcast_local_change(state, entity).await;
+        emit_event(json!({
+            "event": "object_upserted",
+            "id": object_id,
+            "type_id": object_type_id,
+        }));
+    }
     Ok(json!(true))
 }
 
@@ -200,28 +212,31 @@ pub(super) async fn delete_object(
     state: &Arc<ServiceState>,
     id: String,
     expected_snapshot: Option<ObjectWriteSnapshot>,
+    operation_id: Option<String>,
     device_id: Option<String>,
 ) -> Result<Value, String> {
     let object_id = id.clone();
-    let entity = get_db_handle(state)?
-        .submit(
+    let command =
+        db::LocalObjectDeleteCommand::new(crate::application::object_mutation::LocalObjectDelete {
+            id,
+            expected_snapshot,
+            device_id: local_write_device_id(device_id),
+        });
+    let result = get_db_handle(state)?
+        .submit_with_optional_operation_id(
             db::CommandContext::engine(),
-            db::LocalObjectDeleteCommand::new(
-                crate::application::object_mutation::LocalObjectDelete {
-                    id,
-                    expected_snapshot,
-                    device_id: local_write_device_id(device_id),
-                },
-            ),
+            operation_id,
+            "object.delete.v1",
+            command,
         )
         .await
-        .map_err(|error| error.to_string())?
-        .entity;
-    let eid = object_id.clone();
-    maybe_broadcast_local_change(state, entity).await;
-    emit_event(json!({
-        "event": "object_deleted",
-        "id": eid,
-    }));
+        .map_err(|error| error.to_string())?;
+    if !result.replayed {
+        maybe_broadcast_local_change(state, result.value.entity).await;
+        emit_event(json!({
+            "event": "object_deleted",
+            "id": object_id,
+        }));
+    }
     Ok(json!(true))
 }

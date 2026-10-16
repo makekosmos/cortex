@@ -158,7 +158,7 @@ pub(crate) enum RemoteCoreTaskOutcome {
     Stale,
 }
 
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct CoreTaskWriteCommit {
     pub(crate) object: ArkObject,
     pub(crate) receipt: StoredObjectReceipt,

@@ -57,6 +57,7 @@ async fn setup(state: &Arc<ServiceState>, db_path: String) {
             Request::UpsertObject {
                 object,
                 expected_snapshot: None,
+                operation_id: None,
                 device_id: device(),
             },
         )

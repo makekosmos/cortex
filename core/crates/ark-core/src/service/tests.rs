@@ -29,6 +29,22 @@ pub(super) fn service_fixture() -> ServiceFixture {
     }
 }
 
+pub(super) fn received_upsert_for(
+    receiver: &mut tokio::sync::broadcast::Receiver<serde_json::Value>,
+    object_id: &str,
+) -> bool {
+    loop {
+        match receiver.try_recv() {
+            Ok(event) if event["event"] == "object_upserted" && event["id"] == object_id => {
+                return true;
+            }
+            Ok(_) => {}
+            Err(tokio::sync::broadcast::error::TryRecvError::Empty) => return false,
+            Err(error) => panic!("unexpected event receiver error: {error}"),
+        }
+    }
+}
+
 impl ServiceFixture {
     pub(crate) fn db_path(&self) -> std::path::PathBuf {
         self.dir.path().join("ark.db")
@@ -179,4 +195,5 @@ mod canonical_rpc;
 mod external_ref_commands;
 mod integration_rpc;
 mod object_mutation_commands;
+mod operation_receipts;
 mod system_commands;

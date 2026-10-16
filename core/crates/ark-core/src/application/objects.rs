@@ -20,13 +20,13 @@ pub enum ObjectWriteOrigin {
     TrustedRemote,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ReceiptOutcome {
     Applied,
     Stale,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct StoredObjectReceipt {
     pub change_seq: i64,
     pub payload_sha256: String,

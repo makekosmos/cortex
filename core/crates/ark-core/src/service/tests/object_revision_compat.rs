@@ -111,6 +111,7 @@ async fn max_remote_hlc_counter_rolls_back_local_write() {
         Request::UpsertObject {
             object: task("max-counter-task", "original"),
             expected_snapshot: None,
+            operation_id: None,
             device_id: Some("local-writer".to_string()),
         },
     )
@@ -146,6 +147,7 @@ async fn max_remote_hlc_counter_rolls_back_local_write() {
             Request::UpsertObject {
                 object: task("max-counter-task", "must roll back"),
                 expected_snapshot: Some(snapshot),
+                operation_id: None,
                 device_id: Some("local-writer".to_string()),
             }
         )

@@ -29,6 +29,7 @@ async fn legacy_alias_object_write_read_and_filter_is_canonical() {
                 deleted_at: None,
             },
             expected_snapshot: None,
+            operation_id: None,
             device_id: None,
         },
     )
@@ -94,6 +95,7 @@ async fn upsert_object_with_invalid_type_id_is_err() {
         Request::UpsertObject {
             object,
             expected_snapshot: None,
+            operation_id: None,
             device_id: None,
         },
     )
@@ -143,6 +145,7 @@ async fn failed_upsert_object_persists_nothing() {
         Request::UpsertObject {
             object,
             expected_snapshot: None,
+            operation_id: None,
             device_id: Some("test-device".to_string()),
         },
     )

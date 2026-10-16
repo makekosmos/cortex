@@ -29,6 +29,7 @@ async fn guarded_upsert(
         Request::UpsertObject {
             object,
             expected_snapshot: Some(expected_snapshot),
+            operation_id: None,
             device_id: Some("snapshot-test".to_string()),
         },
     )
@@ -84,6 +85,7 @@ async fn guarded_object_upsert_rejects_every_stale_identity_or_revision() {
         Request::UpsertObject {
             object: task("guarded-task", "newer"),
             expected_snapshot: None,
+            operation_id: None,
             device_id: Some("competing-writer".to_string()),
         },
     )
@@ -113,6 +115,7 @@ async fn guarded_object_upsert_rejects_every_stale_identity_or_revision() {
         Request::UpsertObject {
             object: task("guarded-task", "newest"),
             expected_snapshot: None,
+            operation_id: None,
             device_id: Some("competing-writer".to_string()),
         },
     )
@@ -124,6 +127,7 @@ async fn guarded_object_upsert_rejects_every_stale_identity_or_revision() {
             Request::DeleteObject {
                 id: "guarded-task".to_string(),
                 expected_snapshot: Some(stale_delete),
+                operation_id: None,
                 device_id: Some("snapshot-test".to_string()),
             }
         )
@@ -164,6 +168,7 @@ async fn guarded_object_upsert_rejects_every_stale_identity_or_revision() {
         Request::DeleteObject {
             id: "guarded-task".to_string(),
             expected_snapshot: None,
+            operation_id: None,
             device_id: Some("competing-writer".to_string()),
         },
     )
@@ -182,6 +187,7 @@ async fn guarded_object_upsert_rejects_every_stale_identity_or_revision() {
         Request::UpsertObject {
             object: task("guarded-task", "recreated"),
             expected_snapshot: None,
+            operation_id: None,
             device_id: Some("competing-writer".to_string()),
         },
     )
@@ -213,6 +219,7 @@ async fn local_object_revision_blocks_older_remote_upsert_and_delete() {
         Request::UpsertObject {
             object: task("remote-guarded-task", "local"),
             expected_snapshot: None,
+            operation_id: None,
             device_id: Some("local-writer".to_string()),
         },
     )
@@ -268,6 +275,7 @@ async fn local_object_revision_blocks_older_remote_upsert_and_delete() {
         Request::DeleteObject {
             id: "remote-guarded-task".to_string(),
             expected_snapshot: Some(before_delete),
+            operation_id: None,
             device_id: Some("local-writer".to_string()),
         },
     )
@@ -293,6 +301,7 @@ async fn newer_remote_upsert_and_delete_invalidate_guarded_writes() {
         Request::UpsertObject {
             object: task("remote-race-task", "local"),
             expected_snapshot: None,
+            operation_id: None,
             device_id: Some("local-writer".to_string()),
         },
     )
@@ -345,6 +354,7 @@ async fn newer_remote_upsert_and_delete_invalidate_guarded_writes() {
             Request::DeleteObject {
                 id: "remote-race-task".to_string(),
                 expected_snapshot: Some(before_remote_delete),
+                operation_id: None,
                 device_id: Some("local-writer".to_string()),
             }
         )

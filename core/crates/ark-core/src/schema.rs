@@ -179,6 +179,15 @@ CREATE TABLE IF NOT EXISTS sync_tombstones (
     type_id TEXT
 );
 
+CREATE TABLE IF NOT EXISTS ark_operation_receipts (
+    principal TEXT NOT NULL,
+    operation_id TEXT NOT NULL,
+    command_type TEXT NOT NULL,
+    payload_sha256 TEXT NOT NULL,
+    result_json TEXT NOT NULL,
+    PRIMARY KEY(principal, operation_id)
+);
+
 CREATE TABLE IF NOT EXISTS entity_write_receipts (
     change_seq INTEGER PRIMARY KEY AUTOINCREMENT,
     entity_kind TEXT NOT NULL,

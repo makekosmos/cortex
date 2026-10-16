@@ -121,13 +121,17 @@ pub(crate) async fn handle_request(
         Request::UpsertObject {
             object,
             expected_snapshot,
+            operation_id,
             device_id,
-        } => objects::upsert_object(state, object, expected_snapshot, device_id).await,
+        } => {
+            objects::upsert_object(state, object, expected_snapshot, operation_id, device_id).await
+        }
         Request::DeleteObject {
             id,
             expected_snapshot,
+            operation_id,
             device_id,
-        } => objects::delete_object(state, id, expected_snapshot, device_id).await,
+        } => objects::delete_object(state, id, expected_snapshot, operation_id, device_id).await,
 
         Request::TypesList => types::types_list(state).await,
         Request::TypesRegisterPackageDefinitions { registrations } => {

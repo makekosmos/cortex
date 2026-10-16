@@ -236,6 +236,8 @@ pub(crate) enum Request {
         object: ArkObjectWrite,
         #[serde(default, rename = "expectedSnapshot")]
         expected_snapshot: Option<ObjectWriteSnapshot>,
+        #[serde(default, rename = "operationId")]
+        operation_id: Option<String>,
         #[serde(default)]
         device_id: Option<String>,
     },
@@ -243,6 +245,8 @@ pub(crate) enum Request {
         id: String,
         #[serde(default, rename = "expectedSnapshot")]
         expected_snapshot: Option<ObjectWriteSnapshot>,
+        #[serde(default, rename = "operationId")]
+        operation_id: Option<String>,
         #[serde(default)]
         device_id: Option<String>,
     },

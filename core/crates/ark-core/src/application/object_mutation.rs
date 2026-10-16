@@ -83,14 +83,14 @@ pub struct LocalBookCoverWrite {
     pub device_id: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ObjectUpsertCommit {
     pub entity: SyncEntity,
     pub id: String,
     pub type_id: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ObjectDeleteCommit {
     pub entity: SyncEntity,
     pub id: String,

@@ -314,4 +314,5 @@ async fn submit_rejects_more_work_than_one_source_can_admit() {
         .is_ok());
 }
 
+mod operation_receipts;
 mod production_actor;

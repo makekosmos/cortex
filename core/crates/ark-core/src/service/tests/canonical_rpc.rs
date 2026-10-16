@@ -92,7 +92,11 @@ fn dotted_type_rpc_hits_real_handler_and_omitted_upsert_resolves_current() {
         })
         .unwrap();
         assert_eq!(before, after);
-        assert!(!matches!(event_rx.try_recv(), Ok(event) if event["event"] == "object_upserted"));
+        let failed_object_event = received_upsert_for(&mut event_rx, "rpc-unknown");
+        assert!(
+            !failed_object_event,
+            "failed object upsert must not emit object_upserted for rpc-unknown"
+        );
         let result = handle_request(
             &state,
             Request::TypesGet {
@@ -299,6 +303,7 @@ async fn canonical_upsert_object_rpc_persists_registered_identity() {
         Request::UpsertObject {
             object: canonical_task_object(Some("0.1.0"), canonical_task_props()),
             expected_snapshot: None,
+            operation_id: None,
             device_id: Some("device-canonical".to_string()),
         },
     )
@@ -348,6 +353,7 @@ async fn canonical_task_write_keeps_legacy_local_hlc_fallback() {
         Request::UpsertObject {
             object,
             expected_snapshot: None,
+            operation_id: None,
             device_id: Some("  \t ".into()),
         },
     )
@@ -384,6 +390,7 @@ async fn canonical_upsert_object_rpc_rejects_omitted_version_without_side_effect
         Request::UpsertObject {
             object: canonical_task_object(None, canonical_task_props()),
             expected_snapshot: None,
+            operation_id: None,
             device_id: Some("device-canonical".to_string()),
         },
     )
@@ -424,6 +431,7 @@ async fn canonical_upsert_object_rpc_rejects_invalid_payload_without_sync_mutati
         Request::UpsertObject {
             object: canonical_task_object(Some("0.1.0"), props),
             expected_snapshot: None,
+            operation_id: None,
             device_id: Some("device-canonical".to_string()),
         },
     )
@@ -473,6 +481,7 @@ async fn canonical_upsert_object_rpc_rejects_legacy_alias_as_new_write() {
         Request::UpsertObject {
             object,
             expected_snapshot: None,
+            operation_id: None,
             device_id: None,
         },
     )
