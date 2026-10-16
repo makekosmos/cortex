@@ -41,17 +41,17 @@ pub(super) async fn integration_prepare_signed_sync(
     recipient_node_id: String,
     message_id: String,
 ) -> Result<Value, String> {
-    with_conn(state, |conn| {
-        let preparation = crate::integration_replication::prepare_signed_sync(
-            conn,
-            &space_id,
-            &origin_node_id,
-            &integration_id,
-            &recipient_node_id,
-            &message_id,
-        )?;
-        serde_json::to_value(preparation).map_err(|error| error.to_string())
-    })
+    integration_read(
+        state,
+        db::IntegrationReadQuery::PrepareSignedSync {
+            space_id,
+            origin_node_id,
+            integration_id,
+            recipient_node_id,
+            message_id,
+        },
+    )
+    .await
 }
 
 pub(super) async fn integration_validate_outbound_signed_sync(
@@ -60,15 +60,15 @@ pub(super) async fn integration_validate_outbound_signed_sync(
     origin_node_id: String,
     frame: SignedSyncEnvelope,
 ) -> Result<Value, String> {
-    with_conn(state, |conn| {
-        crate::integration_replication::validate_outbound_signed_sync(
-            conn,
-            &space_id,
-            &origin_node_id,
-            &frame,
-        )?;
-        Ok(json!(true))
-    })
+    integration_read(
+        state,
+        db::IntegrationReadQuery::ValidateOutbound {
+            space_id,
+            origin_node_id,
+            frame,
+        },
+    )
+    .await
 }
 
 pub(super) async fn integration_send_signed_sync(
@@ -82,14 +82,15 @@ pub(super) async fn integration_send_signed_sync(
         .as_ref()
         .cloned()
         .ok_or_else(|| "sync not running".to_string())?;
-    with_conn(state, |conn| {
-        crate::integration_replication::validate_outbound_signed_sync(
-            conn,
-            &runtime.space_id,
-            &runtime.device_id,
-            &frame,
-        )
-    })?;
+    integration_read(
+        state,
+        db::IntegrationReadQuery::ValidateOutbound {
+            space_id: runtime.space_id.clone(),
+            origin_node_id: runtime.device_id.clone(),
+            frame: frame.clone(),
+        },
+    )
+    .await?;
     if let Some(relay) = runtime.relay.as_ref() {
         if relay
             .send_signed_integration_frame(frame.clone())
@@ -160,14 +161,14 @@ pub(super) async fn integration_load_latest_credential_envelope(
     integration_id: String,
     recipient_node_id: String,
 ) -> Result<Value, String> {
-    with_conn(state, |conn| {
-        let envelope = crate::db::load_latest_integration_credential_envelope(
-            conn,
-            &integration_id,
-            &recipient_node_id,
-        )?;
-        serde_json::to_value(envelope).map_err(|error| error.to_string())
-    })
+    integration_read(
+        state,
+        db::IntegrationReadQuery::LatestCredentialEnvelope {
+            integration_id,
+            recipient_node_id,
+        },
+    )
+    .await
 }
 
 pub(super) async fn integration_lookup_issuer_encryption_key(
@@ -189,18 +190,18 @@ pub(super) async fn integration_lookup_issuer_encryption_key(
     if runtime_space_id != space_id {
         return Err("integration lookup requested for the wrong space".into());
     }
-    with_conn(state, |conn| {
-        let key = crate::db::load_issuer_encryption_key(
-            conn,
-            &space_id,
-            &integration_id,
-            &recipient_node_id,
-            &issuer_node_id,
+    integration_read(
+        state,
+        db::IntegrationReadQuery::IssuerEncryptionKey {
+            space_id,
+            integration_id,
+            recipient_node_id,
+            issuer_node_id,
             credential_generation,
-            &expected_issuer_key_id,
-        )?;
-        serde_json::to_value(key).map_err(|error| error.to_string())
-    })
+            expected_issuer_key_id,
+        },
+    )
+    .await
 }
 
 /// Storage-time fence check for a received credential envelope (KOS-270).
@@ -219,10 +220,19 @@ pub(super) async fn integration_check_credential_fence(
     if runtime_space_id != expected.space_id {
         return Err("integration lookup requested for the wrong space".into());
     }
-    with_conn(state, |conn| {
-        crate::db::check_integration_credential_fence(conn, &expected)?;
-        Ok(json!(true))
-    })
+    integration_read(
+        state,
+        db::IntegrationReadQuery::CredentialFence {
+            space_id: expected.space_id.to_owned(),
+            integration_id: expected.integration_id.to_owned(),
+            recipient_node_id: expected.recipient_node_id.to_owned(),
+            issuer_node_id: expected.issuer_node_id.to_owned(),
+            credential_generation: expected.credential_generation,
+            refresh_fencing_token: expected.refresh_fencing_token,
+            expected_issuer_key_id: expected.expected_issuer_key_id.to_owned(),
+        },
+    )
+    .await
 }
 
 pub(super) async fn integration_lookup_issuer_encryption_key_for_publish(
@@ -243,17 +253,17 @@ pub(super) async fn integration_lookup_issuer_encryption_key_for_publish(
     if runtime_space_id != space_id {
         return Err("integration lookup requested for the wrong space".into());
     }
-    with_conn(state, |conn| {
-        let key = crate::db::load_issuer_encryption_key_for_publish(
-            conn,
-            &space_id,
-            &integration_id,
-            &recipient_node_id,
-            &issuer_node_id,
-            &expected_issuer_key_id,
-        )?;
-        serde_json::to_value(key).map_err(|error| error.to_string())
-    })
+    integration_read(
+        state,
+        db::IntegrationReadQuery::IssuerEncryptionKeyForPublish {
+            space_id,
+            integration_id,
+            recipient_node_id,
+            issuer_node_id,
+            expected_issuer_key_id,
+        },
+    )
+    .await
 }
 
 pub(super) async fn integration_verification_status(
@@ -262,15 +272,25 @@ pub(super) async fn integration_verification_status(
     local_node_id: String,
     now_ms: u64,
 ) -> Result<Value, String> {
-    with_conn(state, |conn| {
-        let status = crate::db::integration_verification_status(
-            conn,
-            &integration_id,
-            &local_node_id,
+    integration_read(
+        state,
+        db::IntegrationReadQuery::VerificationStatus {
+            integration_id,
+            local_node_id,
             now_ms,
-        )?;
-        serde_json::to_value(status).map_err(|error| error.to_string())
-    })
+        },
+    )
+    .await
+}
+
+async fn integration_read(
+    state: &ServiceState,
+    query: db::IntegrationReadQuery,
+) -> Result<Value, String> {
+    get_db_handle(state)?
+        .query(db::CommandContext::engine(), query)
+        .await
+        .map_err(|error| error.to_string())
 }
 
 fn parse_authorization_operation(

@@ -1,6 +1,7 @@
 mod core_task;
 mod external_ref;
 mod integration_admin;
+mod integration_read;
 mod integration_replication;
 mod legacy_mutation;
 mod object_mutation;
@@ -20,6 +21,7 @@ pub(crate) use integration_admin::{
     AcquireIntegrationRefreshLeaseCommand, PersistIntegrationGrantCommand,
     PersistNodeAuthorizationCommand, PublishIntegrationCredentialEnvelopeCommand,
 };
+pub(crate) use integration_read::IntegrationReadQuery;
 pub(crate) use integration_replication::{
     ApplySignedIntegrationFrameCommand, IdentityErrorStyle, ValidateOutboundSignedFrameQuery,
 };
