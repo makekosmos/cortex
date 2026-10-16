@@ -8,16 +8,17 @@ impl crate::application::sync_storage::CommittedFeedPort for SqliteStorageBacken
         rules.sort_by(|left, right| left.0.cmp(&right.0));
         let mut digest = sha2::Sha256::new();
         use sha2::Digest;
-        for ((kind, id), mode) in rules {
+        for ((kind, id), rule) in rules {
             digest.update((kind.len() as u64).to_be_bytes());
             digest.update(kind.as_bytes());
             digest.update((id.len() as u64).to_be_bytes());
             digest.update(id.as_bytes());
-            digest.update([match mode {
+            digest.update([match rule.mode {
                 crate::data_platform::SyncMode::Full => 1,
                 crate::data_platform::SyncMode::Metadata => 2,
                 crate::data_platform::SyncMode::None => 3,
             }]);
+            digest.update(rule.filter.digest());
         }
         let bytes = digest.finalize();
         i64::from_be_bytes(bytes[..8].try_into().expect("sha256 prefix is eight bytes")) & i64::MAX

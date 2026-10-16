@@ -1,5 +1,7 @@
 #![allow(clippy::unwrap_used)]
-use ark_core::application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
+use ark_core::application::sync_storage::{
+    CommittedFeedPort, SyncEntityMutationPort, SyncEntityReadPort,
+};
 use ark_core::{data_platform, db};
 use rusqlite::Connection;
 use serde_json::json;
@@ -92,6 +94,63 @@ fn frozen_filter_v1_is_canonical_and_bounded() {
         data_platform::filter_digest("{}").unwrap(),
         data_platform::FilterV1::parse("{}").unwrap().digest()
     );
+}
+
+#[test]
+fn filter_v1_evaluates_predicates_against_exact_entity_fields() {
+    let fields = json!({"title":"Note", "priority":2, "enabled":true})
+        .as_object()
+        .unwrap()
+        .clone();
+    for predicate in [
+        json!({"eq":{"field":"title","value":"Note"}}),
+        json!({"in":{"field":"priority","values":[1,2,3]}}),
+        json!({"exists":{"field":"enabled","value":true}}),
+        json!({
+            "and": [
+                {"eq": {"field": "title", "value": "Note"}},
+                {"not": {"eq": {"field": "priority", "value": 1}}}
+            ]
+        }),
+        json!({
+            "or": [
+                {"eq": {"field": "title", "value": "Other"}},
+                {"eq": {"field": "enabled", "value": true}}
+            ]
+        }),
+    ] {
+        let filter = serde_json::to_string(&json!({"version":1,"where":predicate})).unwrap();
+        assert!(data_platform::FilterV1::parse(&filter)
+            .unwrap()
+            .matches(&fields));
+    }
+    assert!(!data_platform::FilterV1::parse(
+        r#"{"version":1,"where":{"eq":{"field":"missing","value":null}}}"#
+    )
+    .unwrap()
+    .matches(&fields));
+    assert!(data_platform::FilterV1::match_all().matches(&fields));
+}
+
+#[test]
+fn sync_policy_generation_changes_when_only_filter_changes() {
+    let conn = Connection::open_in_memory().unwrap();
+    let backend = db::SqliteStorageBackend::for_test(Arc::new(Mutex::new(conn)));
+    let mut profile = data_platform::SelectiveSyncProfile::default();
+    profile.set_rule("type", "com.kosmos.note", data_platform::SyncMode::Full);
+    backend.set_selective_sync_profile(Some(profile.clone()));
+    let unfiltered = backend.selective_sync_policy_generation();
+    profile.set_rule_with_filter(
+        "type",
+        "com.kosmos.note",
+        data_platform::SyncMode::Full,
+        data_platform::FilterV1::parse(
+            r#"{"version":1,"where":{"eq":{"field":"title","value":"Note"}}}"#,
+        )
+        .unwrap(),
+    );
+    backend.set_selective_sync_profile(Some(profile));
+    assert_ne!(unfiltered, backend.selective_sync_policy_generation());
 }
 
 #[test]
@@ -215,6 +274,23 @@ fn selective_profile_projects_closure_in_order_and_keeps_local_copy_on_disable()
     assert!(projected
         .iter()
         .all(|e| !e.data.contains_key("secret") && !e.data.contains_key("exePath")));
+    profile.set_rule_with_filter(
+        "type",
+        "com.kosmos.game",
+        data_platform::SyncMode::Metadata,
+        data_platform::FilterV1::parse(
+            r#"{"version":1,"where":{"eq":{"field":"title","value":"Other"}}}"#,
+        )
+        .unwrap(),
+    );
+    let filtered = data_platform::filter_entities_for_profile(&profile, &entities);
+    assert_eq!(
+        filtered
+            .iter()
+            .map(|entity| entity.id.as_str())
+            .collect::<Vec<_>>(),
+        ["com.kosmos.note", "note"]
+    );
     let disabled = data_platform::filter_entities_for_profile(&Default::default(), &projected);
     assert!(disabled.is_empty());
     assert_eq!(projected.len(), 4);
@@ -335,6 +411,28 @@ fn persisted_profile_reloads_owner_revision_and_rejects_stale_or_foreign_writes(
         assert_eq!(
             loaded.rules[0].filter.canonical_json(),
             r#"{"version":1,"where":{"eq":{"field":"title","value":"Note"}}}"#
+        );
+        let profile = loaded.selective_profile();
+        let entity = |id: &str, title: &str| ark_core::types::SyncEntity {
+            entity_type: "object".into(),
+            id: id.into(),
+            data: json!({"typeId":"com.kosmos.note", "title":title})
+                .as_object()
+                .unwrap()
+                .clone(),
+            hlc: "1@device-a".into(),
+            deleted: None,
+            origin_device_id: None,
+            origin_seq: None,
+        };
+        let matches = entity("note-match", "Note");
+        let rejected = entity("note-other", "Other");
+        assert_eq!(
+            data_platform::filter_entities_for_profile(&profile, &[matches, rejected])
+                .iter()
+                .map(|value| value.id.as_str())
+                .collect::<Vec<_>>(),
+            ["note-match"]
         );
         assert_eq!(
             data_platform::upsert_sync_profile(

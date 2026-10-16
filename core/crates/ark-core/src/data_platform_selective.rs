@@ -7,19 +7,36 @@ pub enum SyncMode {
 
 #[derive(Debug, Clone, Default)]
 pub struct SelectiveSyncProfile {
-    pub rules: HashMap<(String, String), SyncMode>,
+    pub rules: HashMap<(String, String), SelectiveSyncRule>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SelectiveSyncRule {
+    pub mode: SyncMode,
+    pub filter: FilterV1,
 }
 
 impl SelectiveSyncProfile {
     pub fn rule(&self, kind: &str, id: &str) -> SyncMode {
         self.rules
             .get(&(kind.to_string(), id.to_string()))
-            .copied()
+            .map(|rule| rule.mode)
             .unwrap_or(SyncMode::None)
     }
 
     pub fn set_rule(&mut self, kind: &str, id: &str, mode: SyncMode) {
-        self.rules.insert((kind.to_string(), id.to_string()), mode);
+        self.set_rule_with_filter(kind, id, mode, FilterV1::match_all());
+    }
+
+    pub fn set_rule_with_filter(&mut self, kind: &str, id: &str, mode: SyncMode, filter: FilterV1) {
+        self.rules.insert(
+            (kind.to_string(), id.to_string()),
+            SelectiveSyncRule { mode, filter },
+        );
+    }
+
+    fn rule_for(&self, kind: &str, id: &str) -> Option<&SelectiveSyncRule> {
+        self.rules.get(&(kind.to_string(), id.to_string()))
     }
 }
 
@@ -31,10 +48,12 @@ pub fn filter_entities_for_profile(
     let mut selected = HashSet::new();
     let mut modes = HashMap::new();
     for entity in entities {
-        let mode = entity_mode(profile, entity);
-        if mode != SyncMode::None {
+        let Some(rule) = entity_rule(profile, entity) else {
+            continue;
+        };
+        if rule_matches_entity(rule, entity) {
             selected.insert((entity.entity_type.clone(), entity.id.clone()));
-            modes.insert((entity.entity_type.clone(), entity.id.clone()), mode);
+            modes.insert((entity.entity_type.clone(), entity.id.clone()), rule.mode);
         }
     }
 
@@ -59,10 +78,13 @@ pub fn filter_entities_for_profile(
                 .iter()
                 .find(|e| e.entity_type == "object" && e.id == target)
             {
-                let mode = entity_mode(profile, object);
-                if mode != SyncMode::None && selected.insert(("object".into(), target.into())) {
-                    modes.insert(("object".into(), target.into()), mode);
-                    changed = true;
+                if let Some(rule) =
+                    entity_rule(profile, object).filter(|rule| rule_matches_entity(rule, object))
+                {
+                    if selected.insert(("object".into(), target.into())) {
+                        modes.insert(("object".into(), target.into()), rule.mode);
+                        changed = true;
+                    }
                 }
             }
         }
@@ -100,15 +122,15 @@ pub fn filter_entities_for_profile(
     result
 }
 
-fn entity_mode(profile: &SelectiveSyncProfile, entity: &crate::types::SyncEntity) -> SyncMode {
+fn entity_rule<'a>(
+    profile: &'a SelectiveSyncProfile,
+    entity: &crate::types::SyncEntity,
+) -> Option<&'a SelectiveSyncRule> {
     if entity.entity_type == "object_type" {
-        return match profile.rule("type", &entity.id) {
-            SyncMode::None => SyncMode::None,
-            _ => SyncMode::Full,
-        };
+        return profile.rule_for("type", &entity.id);
     }
     if entity.entity_type == "object" {
-        return profile.rule(
+        return profile.rule_for(
             "type",
             entity
                 .data
@@ -118,9 +140,14 @@ fn entity_mode(profile: &SelectiveSyncProfile, entity: &crate::types::SyncEntity
         );
     }
     if entity.entity_type.starts_with("usage_") {
-        return profile.rule("dataset", "usage");
+        return profile.rule_for("dataset", "usage");
     }
-    SyncMode::None
+    None
+}
+
+fn rule_matches_entity(rule: &SelectiveSyncRule, entity: &crate::types::SyncEntity) -> bool {
+    rule.mode != SyncMode::None
+        && (entity.entity_type == "object_type" || rule.filter.matches(&entity.data))
 }
 
 fn project_entity(entity: &crate::types::SyncEntity, mode: SyncMode) -> crate::types::SyncEntity {

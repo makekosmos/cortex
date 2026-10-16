@@ -1,13 +1,25 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FilterV1 {
+    value: Value,
     canonical_json: String,
 }
 
 impl FilterV1 {
     pub fn parse(input: &str) -> Result<Self, String> {
+        let canonical_json = validate_filter_json(input)?;
+        let value = serde_json::from_str(&canonical_json)
+            .map_err(|_| "canonical filter could not be decoded".to_string())?;
         Ok(Self {
-            canonical_json: validate_filter_json(input)?,
+            value,
+            canonical_json,
         })
+    }
+
+    pub fn match_all() -> Self {
+        Self {
+            value: serde_json::json!({"version": 1, "where": {"and": []}}),
+            canonical_json: r#"{"version":1,"where":{"and":[]}}"#.into(),
+        }
     }
 
     pub fn canonical_json(&self) -> &str {
@@ -16,6 +28,11 @@ impl FilterV1 {
 
     pub fn digest(&self) -> [u8; 32] {
         Sha256::digest(self.canonical_json.as_bytes()).into()
+    }
+
+    /// Filter fields name exact, case-sensitive keys in the entity's public data map.
+    pub fn matches(&self, fields: &serde_json::Map<String, Value>) -> bool {
+        evaluate_predicate(&self.value["where"], fields)
     }
 }
 
@@ -91,6 +108,50 @@ fn validate_predicate(value: &Value, depth: usize, count: &mut usize) -> Result<
         _ => return Err("unknown filter operator".into()),
     }
     Ok(())
+}
+
+fn evaluate_predicate(value: &Value, fields: &serde_json::Map<String, Value>) -> bool {
+    let Some((operator, operand)) = value.as_object().and_then(|object| object.iter().next())
+    else {
+        return false;
+    };
+    match operator.as_str() {
+        "and" => operand
+            .as_array()
+            .is_some_and(|items| items.iter().all(|item| evaluate_predicate(item, fields))),
+        "or" => operand
+            .as_array()
+            .is_some_and(|items| items.iter().any(|item| evaluate_predicate(item, fields))),
+        "not" => !evaluate_predicate(operand, fields),
+        "eq" => compare_field(operand, fields, "value", |actual, expected| {
+            actual == expected
+        }),
+        "in" => compare_field(operand, fields, "values", |actual, expected| {
+            expected
+                .as_array()
+                .is_some_and(|values| values.iter().any(|value| value == actual))
+        }),
+        "exists" => operand
+            .get("field")
+            .and_then(Value::as_str)
+            .zip(operand.get("value").and_then(Value::as_bool))
+            .is_some_and(|(field, expected)| fields.contains_key(field) == expected),
+        _ => false,
+    }
+}
+
+fn compare_field(
+    operand: &Value,
+    fields: &serde_json::Map<String, Value>,
+    expected_key: &str,
+    compare: impl FnOnce(&Value, &Value) -> bool,
+) -> bool {
+    operand
+        .get("field")
+        .and_then(Value::as_str)
+        .and_then(|field| fields.get(field))
+        .zip(operand.get(expected_key))
+        .is_some_and(|(actual, expected)| compare(actual, expected))
 }
 
 fn validate_comparison(value: &Value, many: bool) -> Result<(), String> {

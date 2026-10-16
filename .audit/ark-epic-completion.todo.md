@@ -9,7 +9,7 @@
 
 Completion predicate: all 17 children of KOS-412 are Done; each child has code, documentation, or verification evidence matching its own acceptance criteria; the full supported host/build matrix and applicable tests pass; the final diff and decision log agree with repository state. A passing subset does not close the epic.
 
-Scope at pickup: 9 children Done, KOS-429 In Progress, 7 children Backlog. KOS-430 is a separate Done fix under KOS-418. The checkout already contains foundational changes through commit `0950b184`; 69 untracked audit artifacts predate this continuation and must not be staged wholesale.
+Live Linear recheck at 2026-10-16: nine children Done (`KOS-413`, `KOS-414`, `KOS-415`, `KOS-416`, `KOS-417`, `KOS-418`, `KOS-419`, `KOS-420`, and `KOS-421`), `KOS-429` In Progress, and seven children Backlog (`KOS-422` through `KOS-428`). KOS-430 is a separate Done fix under KOS-418. The checkout already contains foundational changes through commit `0950b184`; preserve existing untracked audit artifacts and stage only named deliverables.
 
 Rigor: high. The work changes persistent storage, authorization, replication and build boundaries. Each unit must prove behavior on production SQLite or the actual target build before the next dependent unit starts.
 

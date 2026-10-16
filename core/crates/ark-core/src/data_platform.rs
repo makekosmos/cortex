@@ -72,7 +72,12 @@ impl SyncProfile {
     pub fn selective_profile(&self) -> SelectiveSyncProfile {
         let mut profile = SelectiveSyncProfile::default();
         for rule in &self.rules {
-            profile.set_rule(&rule.resource_kind, &rule.resource_id, rule.mode);
+            profile.set_rule_with_filter(
+                &rule.resource_kind,
+                &rule.resource_id,
+                rule.mode,
+                rule.filter.clone(),
+            );
         }
         profile
     }

@@ -247,11 +247,17 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
         rules: [
             (
                 ("type".into(), "com.kosmos.note".into()),
-                data_platform::SyncMode::Full,
+                data_platform::SelectiveSyncRule {
+                    mode: data_platform::SyncMode::Full,
+                    filter: data_platform::FilterV1::match_all(),
+                },
             ),
             (
                 ("type".into(), "com.kosmos.game".into()),
-                data_platform::SyncMode::Metadata,
+                data_platform::SelectiveSyncRule {
+                    mode: data_platform::SyncMode::Metadata,
+                    filter: data_platform::FilterV1::match_all(),
+                },
             ),
         ]
         .into_iter()
