@@ -178,6 +178,16 @@ pub(crate) async fn handle_request(
         Request::BroadcastChange { entity } => system::broadcast_change(state, entity).await,
         Request::GetConnectedPeers => system::get_connected_peers(state).await,
         Request::GetSyncSnapshot => system::get_sync_snapshot(state).await,
+        Request::SyncPolicyGet => system::sync_policy_get(state).await,
+        Request::SyncPolicySet {
+            profile_id,
+            name,
+            active,
+            expected_revision,
+            rules,
+        } => {
+            system::sync_policy_set(state, profile_id, name, active, expected_revision, rules).await
+        }
         Request::DeviceRegistrySnapshot => system::device_registry_snapshot(state).await,
         Request::DeviceRegistryRename {
             target_device_id,

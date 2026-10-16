@@ -33,6 +33,8 @@ Live Linear status checked issue-by-issue on 2026-10-16 for `KOS-413` through `K
 
 KOS-429 remains the active implementation. Direct WebSocket challenge proof, signed registry paging, and Engine/Manager registry operations exist. This step replaces the direct server's mutable `authenticated` flag with a connection/device/registry-session-bound `ReadyPeer`; inbound dispatch and outbound writes recheck durable admission. Revocation closes data readiness and lets the reader lifecycle deliver disconnect cleanup. Full `ark-core` nextest passes (651 passed, 1 skipped), Clippy, format, source-name, and diff checks pass. RelayTransport still lacks registry capability and peer-addressed delivery, so it cannot safely provide registry admission. Post-ready registry fanout, control-only offline catch-up, relay behavior, independent review, and full repository validation remain open. Finish and verify every KOS-429 path before starting dependent issues.
 
+KOS-422 partial progress: device-owned profiles now have an Engine get/set API and are read/written through DB actor commands. Revisions are monotonic per device, active replacement is atomic, and SQLite reopen plus six-device isolation are tested. This does not yet exchange the receiver's policy with peers, bind network progress/ACKs to the policy revision and digest, or implement safe eviction and receipt-aware backfill.
+
 Current execution units:
 - [x] Revalidate current checkout and live KOS-429 acceptance criteria.
 - [x] Run current full ark-core library suite and focused direct admission tests.

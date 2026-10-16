@@ -1,6 +1,20 @@
 use super::*;
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct SyncPolicyRuleInput {
+    pub(crate) resource_kind: String,
+    pub(crate) resource_id: String,
+    pub(crate) mode: crate::data_platform::SyncMode,
+    #[serde(default = "default_sync_filter")]
+    pub(crate) filter: Value,
+}
+
+fn default_sync_filter() -> Value {
+    json!({})
+}
+
+#[derive(Debug, Deserialize)]
 #[serde(tag = "operation", rename_all = "snake_case")]
 pub(crate) enum Request {
     // --- DB ops (unchanged wire format) ---
@@ -287,6 +301,18 @@ pub(crate) enum Request {
     },
     GetConnectedPeers,
     GetSyncSnapshot,
+    #[serde(rename = "sync_policy.get")]
+    SyncPolicyGet,
+    #[serde(rename = "sync_policy.set")]
+    SyncPolicySet {
+        #[serde(rename = "profileId")]
+        profile_id: String,
+        name: String,
+        active: bool,
+        #[serde(default, rename = "expectedRevision")]
+        expected_revision: Option<i64>,
+        rules: Vec<SyncPolicyRuleInput>,
+    },
     #[serde(rename = "device_registry.snapshot")]
     DeviceRegistrySnapshot,
     #[serde(rename = "device_registry.rename")]

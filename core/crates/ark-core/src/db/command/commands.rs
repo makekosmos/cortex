@@ -12,6 +12,7 @@ mod legacy_mutation;
 mod object_mutation;
 mod object_read;
 mod sync_mutation;
+mod sync_policy;
 mod sync_read;
 mod system_mutation;
 mod system_read;
@@ -55,6 +56,7 @@ pub(crate) use sync_mutation::{
     EnsureUsageSequenceMigratedCommand, ReceiveInboxReceiptCommand, SetLocalSyncKeyValueCommand,
     SetSyncKeyValueCommand,
 };
+pub(crate) use sync_policy::{LoadActiveLocalSyncProfileQuery, SaveLocalSyncProfileCommand};
 pub(crate) use sync_read::{
     AuthorizedTransportKeyQuery, CommittedFeedDeliveryPageQuery, CommittedFeedPageQuery,
     CommittedFeedSnapshotQuery, GetSyncKeyValueQuery, LoadEntitiesQuery, UsageCompleteThroughQuery,

@@ -69,6 +69,27 @@ pub struct SyncProfile {
 }
 
 impl SyncProfile {
+    pub fn digest(&self) -> String {
+        let mut rules = self
+            .rules
+            .iter()
+            .map(|rule| {
+                (
+                    rule.resource_kind.as_str(),
+                    rule.resource_id.as_str(),
+                    sync_mode_name(rule.mode),
+                    rule.filter.canonical_json(),
+                )
+            })
+            .collect::<Vec<_>>();
+        rules.sort_unstable();
+        let canonical = serde_json::to_vec(&(1u8, rules)).expect("sync profile fields serialize");
+        let mut digest = Sha256::new();
+        digest.update(b"cortex-sync-policy-v1\0");
+        digest.update(canonical);
+        format!("{:x}", digest.finalize())
+    }
+
     pub fn selective_profile(&self) -> SelectiveSyncProfile {
         let mut profile = SelectiveSyncProfile::default();
         for rule in &self.rules {
@@ -106,23 +127,32 @@ pub fn upsert_sync_profile(
         )
         .optional()
         .map_err(|e| e.to_string())?;
+    let latest_device_revision: i64 = conn
+        .query_row(
+            "SELECT COALESCE(MAX(revision), 0) FROM sync_profiles WHERE device_id=?1",
+            [local_device_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
     let revision = match current {
-        Some((owner, _revision)) if owner != local_device_id => {
-            return Err("PROFILE_OWNER_DENIED".into())
-        }
-        Some((_, revision)) => {
-            if expected_revision != Some(revision) {
+        Some((owner, _)) if owner != local_device_id => return Err("PROFILE_OWNER_DENIED".into()),
+        Some((_, current_revision)) => {
+            if expected_revision != Some(current_revision) {
                 return Err("PROFILE_REVISION_STALE".into());
             }
-            revision
+            latest_device_revision
                 .checked_add(1)
                 .ok_or_else(|| "profile revision overflow".to_string())?
         }
         None => {
-            if expected_revision.is_some() {
+            let expected_device_revision =
+                (latest_device_revision > 0).then_some(latest_device_revision);
+            if expected_revision != expected_device_revision {
                 return Err("PROFILE_REVISION_STALE".into());
             }
-            1
+            latest_device_revision
+                .checked_add(1)
+                .ok_or_else(|| "profile revision overflow".to_string())?
         }
     };
     for rule in rules {
@@ -141,6 +171,13 @@ pub fn upsert_sync_profile(
     conn.execute_batch("SAVEPOINT sync_profile_upsert")
         .map_err(|e| e.to_string())?;
     let result = (|| {
+        if active {
+            conn.execute(
+                "UPDATE sync_profiles SET active=0 WHERE device_id=?1 AND profile_id<>?2",
+                params![local_device_id, profile_id],
+            )
+            .map_err(|e| e.to_string())?;
+        }
         conn.execute(
             "INSERT INTO sync_profiles(profile_id,device_id,revision,name,active) \
              VALUES(?1,?2,?3,?4,?5)
@@ -239,6 +276,26 @@ pub fn load_sync_profile(
         active: active != 0,
         rules,
     })
+}
+
+pub fn load_active_sync_profile(
+    conn: &Connection,
+    local_device_id: &str,
+) -> Result<Option<SyncProfile>, String> {
+    if local_device_id.is_empty() {
+        return Err("invalid sync profile identity".into());
+    }
+    let profile_id = conn
+        .query_row(
+            "SELECT profile_id FROM sync_profiles WHERE device_id=?1 AND active=1",
+            [local_device_id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
+    profile_id
+        .map(|profile_id| load_sync_profile(conn, local_device_id, &profile_id))
+        .transpose()
 }
 
 fn sync_mode_name(mode: SyncMode) -> &'static str {

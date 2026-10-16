@@ -24,6 +24,89 @@ pub(super) async fn device_registry_snapshot(state: &Arc<ServiceState>) -> Resul
     serde_json::to_value(snapshot).map_err(|error| error.to_string())
 }
 
+pub(super) async fn sync_policy_get(state: &Arc<ServiceState>) -> Result<Value, String> {
+    let device_id = local_registry_device_id(state).await?;
+    let profile = get_db_handle(state)?
+        .query(
+            db::CommandContext::engine(),
+            db::LoadActiveLocalSyncProfileQuery::new(device_id),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok(profile
+        .map(sync_profile_json)
+        .transpose()?
+        .unwrap_or(Value::Null))
+}
+
+pub(super) async fn sync_policy_set(
+    state: &Arc<ServiceState>,
+    profile_id: String,
+    name: String,
+    active: bool,
+    expected_revision: Option<i64>,
+    rules: Vec<SyncPolicyRuleInput>,
+) -> Result<Value, String> {
+    if rules.len() > 256 {
+        return Err("too many sync profile rules".into());
+    }
+    let rules = rules
+        .into_iter()
+        .map(|rule| {
+            let filter_json =
+                serde_json::to_string(&rule.filter).map_err(|error| error.to_string())?;
+            Ok(crate::data_platform::SyncProfileRule {
+                resource_kind: rule.resource_kind,
+                resource_id: rule.resource_id,
+                mode: rule.mode,
+                filter: crate::data_platform::FilterV1::parse(&filter_json)?,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    let device_id = local_registry_device_id(state).await?;
+    let profile = get_db_handle(state)?
+        .submit(
+            db::CommandContext::engine(),
+            db::SaveLocalSyncProfileCommand::new(
+                device_id,
+                profile_id,
+                name,
+                active,
+                expected_revision,
+                rules,
+            ),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    sync_profile_json(profile)
+}
+
+fn sync_profile_json(profile: crate::data_platform::SyncProfile) -> Result<Value, String> {
+    let digest = profile.digest();
+    let rules = profile
+        .rules
+        .into_iter()
+        .map(|rule| {
+            Ok(json!({
+                "resourceKind": rule.resource_kind,
+                "resourceId": rule.resource_id,
+                "mode": rule.mode,
+                "filter": serde_json::from_str::<Value>(rule.filter.canonical_json())
+                    .map_err(|error| error.to_string())?,
+            }))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    Ok(json!({
+        "profileId": profile.profile_id,
+        "deviceId": profile.device_id,
+        "revision": profile.revision,
+        "name": profile.name,
+        "active": profile.active,
+        "digest": digest,
+        "rules": rules,
+    }))
+}
+
 async fn local_registry_device_id(state: &Arc<ServiceState>) -> Result<String, String> {
     get_sync_kv(state, db::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY.to_owned())
         .await?
