@@ -95,6 +95,7 @@
                                         | LanSyncMessage::RegistrySyncStart { .. }
                                         | LanSyncMessage::RegistryEventsPage { .. }
                                         | LanSyncMessage::RegistrySyncReady { .. }
+                                        | LanSyncMessage::RegistryEventUpdate { .. }
                                 ) {
                                     let Some(admission) = pending_registry_admission.as_mut() else {
                                         eprintln!("{TAG} registry control arrived before Hello");
@@ -452,6 +453,7 @@
                                     | LanSyncMessage::RegistrySyncStart { .. }
                                     | LanSyncMessage::RegistryEventsPage { .. }
                                     | LanSyncMessage::RegistrySyncReady { .. }
+                                    | LanSyncMessage::RegistryEventUpdate { .. }
                                     | LanSyncMessage::ProtocolRejected { .. }
                                     | LanSyncMessage::PeerList { .. } => {
                                         eprintln!(

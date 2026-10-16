@@ -55,6 +55,11 @@ impl PendingRegistryAdmission {
             .await?;
         *authenticated_tx.lock().await = Some(crate::sync_client::AuthenticatedPeerSession {
             peer_id: peer_device_id.to_owned(),
+            registry_session_id: self
+                .admission
+                .session_id()
+                .ok_or_else(|| "registry_admission_session_missing".to_owned())?
+                .to_owned(),
             tx: tx.clone(),
             sync_complete: false,
             protocol: self.protocol.clone(),

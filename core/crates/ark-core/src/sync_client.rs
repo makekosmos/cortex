@@ -37,6 +37,7 @@ pub type ClientOnPeerListCallback = Arc<dyn Fn(Vec<PeerRecord>) + Send + Sync>;
 #[derive(Clone)]
 pub(crate) struct AuthenticatedPeerSession {
     pub(crate) peer_id: String,
+    pub(crate) registry_session_id: String,
     pub(crate) tx: mpsc::UnboundedSender<Message>,
     pub(crate) sync_complete: bool,
     pub(crate) protocol: crate::protocol::NegotiatedProtocol,
@@ -129,6 +130,33 @@ impl SyncClient {
             {
                 eprintln!("{TAG} committed feed wake failed: {error}");
             }
+        }
+    }
+
+    pub async fn broadcast_registry_event(
+        &self,
+        event: crate::domain::device_registry::RegistryEvent,
+    ) {
+        let mut guard = self.authenticated_tx.lock().await;
+        let Some(session) = guard.as_mut() else {
+            return;
+        };
+        send_msg(
+            &session.tx,
+            &LanSyncMessage::RegistryEventUpdate {
+                session_id: session.registry_session_id.clone(),
+                event: event.clone(),
+            },
+        );
+        if matches!(
+            event.operation(),
+            crate::domain::device_registry::RegistryOperation::Disable
+        ) && event.target_device_id().as_str() == session.peer_id
+        {
+            self.stopped
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+            let session = guard.take().expect("authenticated session was present");
+            let _ = session.tx.send(Message::Close(None));
         }
     }
 

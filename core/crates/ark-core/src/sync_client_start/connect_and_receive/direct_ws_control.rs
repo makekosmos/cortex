@@ -35,7 +35,8 @@ pub(super) async fn handle(
         | LanSyncMessage::RegistryAdmissionConfirm { .. }
         | LanSyncMessage::RegistrySyncStart { .. }
         | LanSyncMessage::RegistryEventsPage { .. }
-        | LanSyncMessage::RegistrySyncReady { .. } => DirectWsControl::NotControl,
+        | LanSyncMessage::RegistrySyncReady { .. }
+        | LanSyncMessage::RegistryEventUpdate { .. } => DirectWsControl::NotControl,
         LanSyncMessage::ProtocolRejected {
             origin_device_id,
             target_device_id,

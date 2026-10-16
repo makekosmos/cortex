@@ -195,6 +195,13 @@ pub enum LanSyncMessage {
     #[serde(rename = "registry_sync_ready")]
     RegistrySyncReady { session_id: String, digest: String },
 
+    /// Delivers a signed registry event after initial admission completed.
+    #[serde(rename = "registry_event_update")]
+    RegistryEventUpdate {
+        session_id: String,
+        event: crate::domain::device_registry::RegistryEvent,
+    },
+
     #[serde(rename = "peer_list")]
     PeerList { peers: Vec<PeerRecord> },
 

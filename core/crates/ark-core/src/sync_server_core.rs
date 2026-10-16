@@ -21,6 +21,63 @@ async fn signed_integration_write_is_authorized(
 }
 
 impl SyncServer {
+    pub async fn broadcast_registry_event(
+        &self,
+        event: crate::domain::device_registry::RegistryEvent,
+    ) -> usize {
+        let target = event.target_device_id().as_str();
+        let revokes_target = matches!(
+            event.operation(),
+            crate::domain::device_registry::RegistryOperation::Disable
+        );
+        let mut peers = self.peers.lock().await;
+        let mut revoked = Vec::new();
+        for (peer_id, peer) in peers.iter_mut() {
+            if !peer.authenticated {
+                continue;
+            }
+            let Some(session_id) = peer
+                .registry_admission
+                .as_ref()
+                .and_then(|admission| admission.session_id())
+            else {
+                continue;
+            };
+            let update = LanSyncMessage::RegistryEventUpdate {
+                session_id: session_id.to_owned(),
+                event: event.clone(),
+            };
+            if peer
+                .tx
+                .send(Message::Text(serialize_message(&update).into()))
+                .is_err()
+            {
+                continue;
+            }
+            if revokes_target && peer.device_id == target {
+                peer.authenticated = false;
+                peer.sync_complete = false;
+                peer.in_flight_feed_position = None;
+                peer.pending_initial_snapshot_ack = None;
+                let _ = peer.tx.send(Message::Close(None));
+                revoked.push(*peer_id);
+            }
+        }
+        for peer_id in &revoked {
+            peers.remove(peer_id);
+        }
+        drop(peers);
+
+        if !revoked.is_empty() {
+            let mut known = self.known_peer_records.lock().await;
+            known.retain(|peer| peer.device_id != target);
+            if let Err(error) = save_known_peers(&self.storage, &known).await {
+                eprintln!("{TAG} failed to persist registry-revoked peer list: {error}");
+            }
+        }
+        revoked.len()
+    }
+
     pub async fn send_signed_integration_frame(
         &self,
         recipient_device_id: &str,

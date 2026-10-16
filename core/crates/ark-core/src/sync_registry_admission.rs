@@ -91,6 +91,10 @@ impl DirectRegistryAdmission {
         Ok((admission, message))
     }
 
+    pub(crate) fn session_id(&self) -> Option<&str> {
+        self.session_id.as_deref()
+    }
+
     fn new(
         local_device_id: &str,
         peer_device_id: &str,
@@ -305,6 +309,27 @@ impl DirectRegistryAdmission {
                 if let AdmissionPhase::Exchanging { remote_digest, .. } = &mut self.phase {
                     *remote_digest = Some(digest);
                 }
+                Vec::new()
+            }
+            (AdmissionPhase::Ready, LanSyncMessage::RegistryEventUpdate { session_id, event })
+                if self.session_id.as_deref() == Some(session_id.as_str()) =>
+            {
+                let result = storage
+                    .apply_device_registry_events(
+                        self.peer_device_id.as_str(),
+                        std::slice::from_ref(&event),
+                    )
+                    .await?;
+                if !result.sender_is_admitted {
+                    return Err("registry_update_sender_disabled".into());
+                }
+                if result.disabled_device_ids.iter().any(|device_id| {
+                    device_id == self.local_device_id.as_str()
+                        || device_id == self.peer_device_id.as_str()
+                }) {
+                    return Err("registry_update_disabled_session_participant".into());
+                }
+                disabled_device_ids.extend(result.disabled_device_ids);
                 Vec::new()
             }
             _ => return Err("registry_admission_unexpected_control".into()),

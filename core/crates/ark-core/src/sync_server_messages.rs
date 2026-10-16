@@ -218,7 +218,8 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
         | LanSyncMessage::RegistryAdmissionConfirm { .. }
         | LanSyncMessage::RegistrySyncStart { .. }
         | LanSyncMessage::RegistryEventsPage { .. }
-        | LanSyncMessage::RegistrySyncReady { .. }) => {
+        | LanSyncMessage::RegistrySyncReady { .. }
+        | LanSyncMessage::RegistryEventUpdate { .. }) => {
             admission::handle_registry_admission(ctx, peer_id, message).await;
         }
 

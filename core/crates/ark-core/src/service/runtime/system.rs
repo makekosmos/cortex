@@ -1,6 +1,21 @@
 use super::*;
 use crate::data_platform::ExternalRefUpsert;
 
+async fn publish_registry_event(
+    state: &Arc<ServiceState>,
+    event: &crate::domain::device_registry::RegistryEvent,
+) {
+    let sync = state.sync.lock().await;
+    let Some(sync) = sync.as_ref() else {
+        return;
+    };
+    sync.server.broadcast_registry_event(event.clone()).await;
+    let clients = sync.clients.lock().await;
+    for client in clients.values() {
+        client.broadcast_registry_event(event.clone()).await;
+    }
+}
+
 pub(super) async fn device_registry_snapshot(state: &Arc<ServiceState>) -> Result<Value, String> {
     let snapshot = get_db_handle(state)?
         .query(db::CommandContext::engine(), db::LoadDeviceRegistryQuery)
@@ -36,6 +51,9 @@ pub(super) async fn device_registry_rename(
         )
         .await
         .map_err(|error| error.to_string())?;
+    if let Some(event) = event.as_ref() {
+        publish_registry_event(state, event).await;
+    }
     serde_json::to_value(event).map_err(|error| error.to_string())
 }
 
@@ -54,6 +72,9 @@ pub(super) async fn device_registry_disable(
         )
         .await
         .map_err(|error| error.to_string())?;
+    if let Some(event) = event.as_ref() {
+        publish_registry_event(state, event).await;
+    }
     serde_json::to_value(event).map_err(|error| error.to_string())
 }
 

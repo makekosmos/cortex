@@ -26,6 +26,7 @@ fn message_variant_name(msg: &LanSyncMessage) -> &'static str {
         LanSyncMessage::RegistryEventsPage { .. } => "RegistryEventsPage",
         LanSyncMessage::RegistrySyncStart { .. } => "RegistrySyncStart",
         LanSyncMessage::RegistrySyncReady { .. } => "RegistrySyncReady",
+        LanSyncMessage::RegistryEventUpdate { .. } => "RegistryEventUpdate",
     }
 }
 
