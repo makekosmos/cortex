@@ -1,4 +1,6 @@
-use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError};
+use super::super::{
+    sealed, CommandClass, CommandContext, DbCommand, DbError, DbMaintenanceCommand,
+};
 use rusqlite::Transaction;
 
 pub(crate) struct ClearAllCommand;
@@ -100,5 +102,32 @@ impl DbCommand for CompactUsageSyncLogCommand {
             self.batch_limit,
         )
         .map_err(DbError::Storage)
+    }
+}
+
+#[derive(serde::Serialize)]
+pub(crate) struct RestoreSnapshotCommand {
+    db_path: String,
+    backup_id: String,
+}
+
+impl RestoreSnapshotCommand {
+    pub(crate) fn new(db_path: String, backup_id: String) -> Self {
+        Self { db_path, backup_id }
+    }
+}
+
+impl sealed::Sealed for RestoreSnapshotCommand {}
+
+impl DbMaintenanceCommand for RestoreSnapshotCommand {
+    type Output = crate::db::RestoreReport;
+
+    fn weight(&self) -> usize {
+        super::serialized_weight(self)
+    }
+
+    fn execute(self, connection: &mut rusqlite::Connection) -> Result<Self::Output, DbError> {
+        crate::db::restore_snapshot(connection, &self.db_path, &self.backup_id)
+            .map_err(DbError::Storage)
     }
 }

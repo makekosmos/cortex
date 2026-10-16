@@ -79,10 +79,7 @@ pub(super) async fn db_backup(
         .name("ark-db-backup".to_string())
         .spawn(move || {
             let _bg = background_priority::BackgroundThreadGuard::enter();
-            let _gate = state_for_thread
-                .backup_gate
-                .lock()
-                .unwrap_or_else(|e| e.into_inner());
+            let _gate = state_for_thread.backup_gate.blocking_lock();
             let result = db::backup_to_file_chunked(&src_path, &dest_for_thread, pages, pause);
             let event = match &result {
                 Ok(()) => json!({
@@ -122,8 +119,8 @@ pub(super) async fn db_backup_validate(
     })
 }
 
-// KOS-51: атомарный restore. Порядок захвата: BACKUP_GATE → DB mutex
-// (with_conn_mut). Restore держит оба на всю операцию — ни backup, ни
+// KOS-51: атомарный restore. Порядок захвата: BACKUP_GATE → DB handle.
+// Restore держит оба на всю операцию — ни backup, ни
 // обычные ARK ops не выполняются параллельно, момента с отсутствующей
 // или частично заменённой primary DB нет (Online Backup API пишет
 // destination транзакционно).
@@ -132,11 +129,15 @@ pub(super) async fn db_backup_restore(
     backup_id: String,
 ) -> Result<Value, String> {
     let db_path = current_db_path(state)?;
-    let _gate = state.backup_gate.lock().unwrap_or_else(|e| e.into_inner());
-    with_conn_mut(state, |conn| {
-        let report = db::restore_snapshot(conn, &db_path, &backup_id)?;
-        serde_json::to_value(report).map_err(|e| e.to_string())
-    })
+    let _gate = state.backup_gate.lock().await;
+    let report = get_db_handle(state)?
+        .submit_maintenance(
+            db::CommandContext::engine_maintenance(),
+            db::RestoreSnapshotCommand::new(db_path, backup_id),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    serde_json::to_value(report).map_err(|error| error.to_string())
 }
 
 pub(super) async fn start_sync(

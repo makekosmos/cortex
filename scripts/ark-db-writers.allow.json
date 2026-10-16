@@ -99,7 +99,7 @@
     {
       "path": "core/crates/ark-core/src/db/command.rs",
       "category": "SQLite mutation API",
-      "count": 2
+      "count": 3
     },
     {
       "path": "core/crates/ark-core/src/db/command.rs",
@@ -224,11 +224,11 @@
     {
       "path": "core/crates/ark-core/src/service/runtime/system.rs",
       "category": "connection lifecycle",
-      "count": 2
+      "count": 1
     },
     {
-      "path": "core/crates/ark-core/src/service/runtime/system.rs",
-      "category": "service transaction boundary",
+      "path": "core/crates/ark-core/src/db/command/commands/system_mutation.rs",
+      "category": "connection lifecycle",
       "count": 1
     },
     {

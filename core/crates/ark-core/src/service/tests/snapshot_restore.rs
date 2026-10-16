@@ -245,7 +245,7 @@ fn db_backup_restore_waits_for_backup_gate() {
     });
     write_snapshot(&state, &db_path, "ark.db.backup-gated");
 
-    let gate = state.backup_gate.lock().unwrap_or_else(|e| e.into_inner());
+    let gate = state.backup_gate.blocking_lock();
     let order = Arc::new(StdMutex::new(Vec::<&'static str>::new()));
     let order_in_thread = order.clone();
     let state_in_thread = state.clone();

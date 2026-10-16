@@ -14,10 +14,10 @@ pub(crate) use commands::{
     LocalBookCoverCommand, LocalCoreTaskWrite, LocalObjectDeleteCommand, LocalObjectUpsertCommand,
     LocalUsageWriteCommand, PersistIntegrationGrantCommand, PersistNodeAuthorizationCommand,
     PublishIntegrationCredentialEnvelopeCommand, RegisterPackageTypesCommand,
-    ReplaceObjectLinkCommand, SetLocalSyncKeyValueCommand, SetSyncKeyValueCommand,
-    TrackedAppDeleteCommand, TrackedAppUpsertCommand, UpsertExternalRefCommand,
-    UpsertObjectLinkCommand, UpsertObjectTypeCommand, UsageCompleteThroughQuery,
-    ValidateOutboundSignedFrameQuery,
+    ReplaceObjectLinkCommand, RestoreSnapshotCommand, SetLocalSyncKeyValueCommand,
+    SetSyncKeyValueCommand, TrackedAppDeleteCommand, TrackedAppUpsertCommand,
+    UpsertExternalRefCommand, UpsertObjectLinkCommand, UpsertObjectTypeCommand,
+    UsageCompleteThroughQuery, ValidateOutboundSignedFrameQuery,
 };
 
 // A full transport frame is admitted at 16 MiB. Leave bounded room for the
@@ -71,9 +71,7 @@ impl DbHandle {
         f(&guard)
     }
 
-    /// KOS-51 restore needs mutable access to the existing connection until
-    /// maintenance is represented by a command and lifecycle barrier.
-    pub(crate) fn with_connection_mut<T>(&self, f: impl FnOnce(&mut Connection) -> T) -> T {
+    fn with_connection_mut<T>(&self, f: impl FnOnce(&mut Connection) -> T) -> T {
         let mut guard = self
             .connection
             .lock()
@@ -107,6 +105,36 @@ impl DbHandle {
         run_db_blocking(move || {
             let _admission = _admission;
             handle.execute(context, command)
+        })
+        .await?
+    }
+
+    pub(crate) async fn submit_maintenance<C: DbMaintenanceCommand>(
+        &self,
+        context: CommandContext,
+        command: C,
+    ) -> Result<C::Output, DbError> {
+        if context.class != CommandClass::Maintenance {
+            return Err(DbError::Invalid(
+                "maintenance command class required".into(),
+            ));
+        }
+        context.require_engine()?;
+        let weight = command.weight();
+        if weight == 0 || weight > MAX_COMMAND_BYTES {
+            return Err(DbError::TooLarge);
+        }
+        let _admission = self
+            .admission
+            .try_acquire(context.class, &context.source, weight)
+            .map_err(|error| match error {
+                executor::AdmissionError::TooLarge => DbError::TooLarge,
+                executor::AdmissionError::Saturated => DbError::Busy,
+            })?;
+        let handle = self.clone();
+        run_db_blocking(move || {
+            let _admission = _admission;
+            handle.with_connection_mut(|connection| command.execute(connection))
         })
         .await?
     }
@@ -268,6 +296,14 @@ pub(crate) trait DbCommand: sealed::Sealed + Send + 'static {
         context: &CommandContext,
         transaction: &Transaction<'_>,
     ) -> Result<Self::Output, DbError>;
+}
+
+pub(crate) trait DbMaintenanceCommand: sealed::Sealed + Send + 'static {
+    type Output: Send + 'static;
+
+    fn weight(&self) -> usize;
+
+    fn execute(self, connection: &mut Connection) -> Result<Self::Output, DbError>;
 }
 
 /// Sealed read-only application surface. Query implementations receive a

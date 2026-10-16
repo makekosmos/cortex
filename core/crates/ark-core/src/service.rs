@@ -108,7 +108,7 @@ pub(crate) struct ServiceState {
     /// `db_backup_restore` — backup and restore never overlap. Always taken
     /// before the DB mutex (deadlock-safe: the backup thread works on its own
     /// read connection and never takes the DB mutex).
-    backup_gate: StdMutex<()>,
+    backup_gate: TokioMutex<()>,
     /// Host config resolved by the Engine at construction (KOS-287).
     windows_dir: Option<String>,
 }
@@ -119,7 +119,7 @@ impl ServiceState {
             db: StdMutex::new(None),
             db_path: StdMutex::new(None),
             sync: TokioMutex::new(None),
-            backup_gate: StdMutex::new(()),
+            backup_gate: TokioMutex::new(()),
             windows_dir: host_config.windows_dir,
         }
     }

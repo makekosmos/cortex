@@ -24,10 +24,10 @@ pub(crate) use command::{
     LoadEntitiesQuery, LocalBookCoverCommand, LocalCoreTaskWrite, LocalObjectDeleteCommand,
     LocalObjectUpsertCommand, LocalUsageWriteCommand, PersistIntegrationGrantCommand,
     PersistNodeAuthorizationCommand, PublishIntegrationCredentialEnvelopeCommand,
-    RegisterPackageTypesCommand, ReplaceObjectLinkCommand, SetLocalSyncKeyValueCommand,
-    SetSyncKeyValueCommand, TrackedAppDeleteCommand, TrackedAppUpsertCommand,
-    UpsertExternalRefCommand, UpsertObjectLinkCommand, UpsertObjectTypeCommand,
-    UsageCompleteThroughQuery, ValidateOutboundSignedFrameQuery,
+    RegisterPackageTypesCommand, ReplaceObjectLinkCommand, RestoreSnapshotCommand,
+    SetLocalSyncKeyValueCommand, SetSyncKeyValueCommand, TrackedAppDeleteCommand,
+    TrackedAppUpsertCommand, UpsertExternalRefCommand, UpsertObjectLinkCommand,
+    UpsertObjectTypeCommand, UsageCompleteThroughQuery, ValidateOutboundSignedFrameQuery,
 };
 include!("db/integration_replication_common.rs");
 include!("db/integration_replication_records.rs");

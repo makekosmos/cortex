@@ -40,17 +40,6 @@ pub(super) fn get_db_handle(state: &ServiceState) -> Result<db::DbHandle, String
         .ok_or_else(|| "Database not initialized. Call Init first.".to_string())
 }
 
-/// `&mut` вариант `with_conn` — для операций, меняющих саму базу под
-/// `Connection` (например `conn.restore` в `db_backup_restore`, KOS-51).
-/// Глобальный DB mutex удерживается на всё замыкание: никакой другой ARK op
-/// не выполняется параллельно.
-pub(super) fn with_conn_mut<T, F>(state: &ServiceState, f: F) -> Result<T, String>
-where
-    F: FnOnce(&mut rusqlite::Connection) -> Result<T, String>,
-{
-    get_db_handle(state)?.with_connection_mut(f)
-}
-
 /// Путь к live ARK DB (из Init). Общий accessor для `db_backup`,
 /// `db_backup_list/validate/restore` — restore резолвит `<dir>/backups/`
 /// от этого пути.
