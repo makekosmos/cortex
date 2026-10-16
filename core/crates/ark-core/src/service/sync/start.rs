@@ -1,4 +1,5 @@
 use super::*;
+use crate::db::{CommandContext, EnsureUsageSequenceMigratedCommand};
 use crate::service::runtime::get_db_handle;
 
 pub(crate) async fn handle_start_sync(
@@ -35,6 +36,13 @@ pub(crate) async fn handle_start_sync(
     };
 
     let db_handle = get_db_handle(state)?;
+    db_handle
+        .submit(
+            CommandContext::engine(),
+            EnsureUsageSequenceMigratedCommand::new(device_id.clone()),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
     let storage = Arc::new(SqliteStorageBackend::with_db_handle(db_handle.clone()));
     storage.set_device_id(&device_id)?;
 

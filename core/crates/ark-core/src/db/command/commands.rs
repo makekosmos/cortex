@@ -26,8 +26,8 @@ pub(crate) use object_mutation::{
     LocalObjectUpsertCommand,
 };
 pub(crate) use sync_mutation::{
-    ApplyAuthenticatedSyncEntityCommand, ApplySyncEntityCommand, SetLocalSyncKeyValueCommand,
-    SetSyncKeyValueCommand,
+    ApplyAuthenticatedSyncEntityCommand, ApplySyncEntityCommand,
+    EnsureUsageSequenceMigratedCommand, SetLocalSyncKeyValueCommand, SetSyncKeyValueCommand,
 };
 pub(crate) use sync_read::{
     AuthorizedTransportKeyQuery, GetSyncKeyValueQuery, LoadEntitiesQuery, UsageCompleteThroughQuery,

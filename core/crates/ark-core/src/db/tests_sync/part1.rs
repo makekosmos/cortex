@@ -231,6 +231,7 @@
             )
             .unwrap();
         }
+        ensure_usage_sequence_migrated(&conn, "device-paged").unwrap();
         let backend = SqliteStorageBackend::new(Arc::new(Mutex::new(conn)));
         backend.set_device_id("device-paged").unwrap();
         let vector = VersionVector::new();

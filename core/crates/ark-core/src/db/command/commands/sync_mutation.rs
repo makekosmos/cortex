@@ -1,9 +1,41 @@
 use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError};
 use crate::canonical_types::pending::ReplayNotice;
-use crate::db::{set_sync_kv, SqliteStorageBackend};
+use crate::db::{ensure_usage_sequence_migrated, set_sync_kv, SqliteStorageBackend};
 use crate::types::SyncEntity;
 use rusqlite::Transaction;
 use serde::Serialize;
+
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct EnsureUsageSequenceMigratedCommand {
+    device_id: String,
+}
+
+impl EnsureUsageSequenceMigratedCommand {
+    pub(crate) fn new(device_id: String) -> Self {
+        Self { device_id }
+    }
+}
+
+impl sealed::Sealed for EnsureUsageSequenceMigratedCommand {}
+
+impl DbCommand for EnsureUsageSequenceMigratedCommand {
+    type Output = ();
+
+    const CLASS: CommandClass = CommandClass::Interactive;
+
+    fn weight(&self) -> usize {
+        super::serialized_weight(self)
+    }
+
+    fn execute(
+        self,
+        context: &CommandContext,
+        transaction: &Transaction<'_>,
+    ) -> Result<Self::Output, DbError> {
+        context.require_engine()?;
+        ensure_usage_sequence_migrated(transaction, &self.device_id).map_err(DbError::Storage)
+    }
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct ApplySyncEntityCommand {

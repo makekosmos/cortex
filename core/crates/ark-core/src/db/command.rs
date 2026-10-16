@@ -8,10 +8,10 @@ pub(crate) use commands::{
     AcquireIntegrationRefreshLeaseCommand, ApplyAuthenticatedSyncEntityCommand,
     ApplySignedIntegrationFrameCommand, ApplySyncEntityCommand, AuthenticatedCoreTaskWrite,
     AuthorizedTransportKeyQuery, CanonicalGameUpsertCommand, DeleteObjectLinkCommand,
-    DeleteObjectTypeCommand, GetSyncKeyValueQuery, IdentityErrorStyle, LegacyDeleteCommand,
-    LegacyGraphWriteCommand, LoadEntitiesQuery, LocalBookCoverCommand, LocalCoreTaskWrite,
-    LocalObjectDeleteCommand, LocalObjectUpsertCommand, LocalUsageWriteCommand,
-    PersistIntegrationGrantCommand, PersistNodeAuthorizationCommand,
+    DeleteObjectTypeCommand, EnsureUsageSequenceMigratedCommand, GetSyncKeyValueQuery,
+    IdentityErrorStyle, LegacyDeleteCommand, LegacyGraphWriteCommand, LoadEntitiesQuery,
+    LocalBookCoverCommand, LocalCoreTaskWrite, LocalObjectDeleteCommand, LocalObjectUpsertCommand,
+    LocalUsageWriteCommand, PersistIntegrationGrantCommand, PersistNodeAuthorizationCommand,
     PublishIntegrationCredentialEnvelopeCommand, RegisterPackageTypesCommand,
     ReplaceObjectLinkCommand, SetLocalSyncKeyValueCommand, SetSyncKeyValueCommand,
     TrackedAppDeleteCommand, TrackedAppUpsertCommand, UpsertExternalRefCommand,
@@ -387,6 +387,29 @@ mod tests {
             autocommit,
             "a read query must not start a write transaction"
         );
+    }
+
+    #[tokio::test]
+    async fn usage_sequence_migration_runs_as_an_interactive_database_command() {
+        let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
+        let handle = DbHandle::from_shared_connection(connection);
+        handle.with_connection(|connection| crate::db::init_schema(connection).unwrap());
+
+        handle
+            .submit(
+                CommandContext::engine(),
+                EnsureUsageSequenceMigratedCommand::new("device-under-test".into()),
+            )
+            .await
+            .unwrap();
+
+        let migration_complete = handle.with_connection(|connection| {
+            crate::db::get_sync_kv(connection, crate::db::USAGE_SEQUENCE_MIGRATION_KEY)
+                .unwrap()
+                .as_deref()
+                == Some("1")
+        });
+        assert!(migration_complete);
     }
 
     #[tokio::test]

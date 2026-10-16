@@ -1,7 +1,6 @@
 use std::sync::{Arc, Mutex};
 
 use super::DbHandle;
-use crate::db::ensure_usage_sequence_migrated;
 
 mod adapter;
 mod apply;
@@ -47,9 +46,7 @@ impl SqliteStorageBackend {
         // SqliteStorageBackend lock'Р°РјРё (СЃРј. load_entities / apply_entity).
         let mut guard = self.device_id.lock().unwrap_or_else(|e| e.into_inner());
         *guard = device_id.to_string();
-        drop(guard);
-        self.db
-            .with_connection(|conn| ensure_usage_sequence_migrated(conn, device_id))
+        Ok(())
     }
 
     pub fn device_id(&self) -> String {
