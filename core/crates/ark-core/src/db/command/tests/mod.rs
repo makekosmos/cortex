@@ -179,6 +179,95 @@ async fn usage_sequence_migration_runs_as_an_interactive_database_command() {
 }
 
 #[tokio::test]
+async fn usage_write_returns_typed_validation_error_and_rolls_back() {
+    let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
+    let handle = DbHandle::for_test(connection);
+    handle.with_connection(|connection| crate::db::init_schema(connection).unwrap());
+
+    let committed = handle
+        .submit(
+            CommandContext::engine(),
+            LocalUsageWriteCommand::new(
+                "usage-command-device".into(),
+                crate::application::usage::LocalUsageWrite::UpsertSpan(
+                    crate::types::UsageSpanWrite {
+                        device_id: "usage-command-device".into(),
+                        started_at_unix: 1_777_939_199,
+                        ended_at_unix: 1_777_939_201,
+                        tracked_app_id: "usage-command-app".into(),
+                        window_title: Some("crosses midnight".into()),
+                        flags: 0,
+                        updated_at: "2026-05-01T00:00:00.000Z".into(),
+                    },
+                ),
+            ),
+        )
+        .await
+        .unwrap();
+    assert_eq!(committed.len(), 2);
+
+    let invalid = handle
+        .submit(
+            CommandContext::engine(),
+            LocalUsageWriteCommand::new(
+                "usage-command-invalid-device".into(),
+                crate::application::usage::LocalUsageWrite::UpsertSpan(
+                    crate::types::UsageSpanWrite {
+                        device_id: "usage-command-invalid-device".into(),
+                        started_at_unix: i64::MAX - 1,
+                        ended_at_unix: i64::MAX,
+                        tracked_app_id: "usage-command-app".into(),
+                        window_title: None,
+                        flags: 0,
+                        updated_at: "2026-05-01T00:00:00.000Z".into(),
+                    },
+                ),
+            ),
+        )
+        .await;
+    assert!(
+        matches!(
+            &invalid,
+            Err(DbError::Invalid(message)) if message.starts_with("invalid usage span timestamp:")
+        ),
+        "unexpected usage command result: {invalid:?}"
+    );
+
+    let failed_device_rows = handle.with_connection(|connection| {
+        let usage_days: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM usage_days WHERE device_id = ?1",
+                ["usage-command-invalid-device"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let sync_heads: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM usage_sync_heads WHERE device_id = ?1",
+                ["usage-command-invalid-device"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let sync_log: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM usage_sync_log WHERE device_id = ?1",
+                ["usage-command-invalid-device"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let sync_versions: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM usage_sync_versions WHERE entity_id LIKE ?1",
+                ["usage-day:usage-command-invalid-device:%"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        (usage_days, sync_heads, sync_log, sync_versions)
+    });
+    assert_eq!(failed_device_rows, (0, 0, 0, 0));
+}
+
+#[tokio::test]
 async fn clear_all_runs_inside_a_maintenance_database_command() {
     let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
     let handle = DbHandle::for_test(connection);
