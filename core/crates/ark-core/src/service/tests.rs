@@ -80,6 +80,7 @@ mod replace_object_link;
 mod request_config;
 /// KOS-51: atomic ARK snapshot restore RPC (list/validate/restore).
 mod snapshot_restore;
+mod snapshot_restore_identity;
 mod sync_lifecycle;
 mod sync_ticket_pending;
 mod type_mutation_commands;

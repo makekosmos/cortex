@@ -33,6 +33,7 @@ use super::open::check_integrity;
 use rusqlite::{Connection, OpenFlags};
 use serde::Serialize;
 mod manifest;
+mod recovery;
 pub(in crate::db) use manifest::backup_to_file_chunked_verified;
 use manifest::{is_manifest_file, is_uncommitted_backup, verify_snapshot_manifest};
 

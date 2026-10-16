@@ -82,6 +82,11 @@ pub(in crate::db) fn restore_snapshot_impl(
         return Err(format!("pre-restore rollback snapshot failed: {e}"));
     }
 
+    if let Err(e) = recovery::preserve_live_device_identity(conn, &staging) {
+        cleanup(&staging, &rollback);
+        return Err(format!("restore identity recovery failed: {e}"));
+    }
+
     // 4. Apply: Online Backup API пишет destination транзакционно.
     if let Err(e) = conn.restore(
         rusqlite::DatabaseName::Main,

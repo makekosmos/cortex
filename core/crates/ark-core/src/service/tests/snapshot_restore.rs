@@ -59,7 +59,7 @@ async fn seed_rpc_object(state: &Arc<ServiceState>, id: &str, title: &str) {
 }
 
 /// Пишет snapshot live DB в Core-owned `backups/` через Online Backup.
-fn write_snapshot(state: &Arc<ServiceState>, db_path: &str, id: &str) {
+pub(super) fn write_snapshot(state: &Arc<ServiceState>, db_path: &str, id: &str) {
     let dir = db::backups_dir(db_path);
     std::fs::create_dir_all(&dir).unwrap();
     let dest = dir.join(id);
