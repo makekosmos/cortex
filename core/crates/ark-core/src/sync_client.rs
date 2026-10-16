@@ -324,7 +324,10 @@ pub(crate) async fn pump_client_committed_feed(
         storage
             .record_outbound_scan(peer_device_id, generation, position)
             .await?;
-        let Some(entity) = storage.filter_outgoing_entity(&delivery.entity) else {
+        let Some(entity) = storage
+            .filter_outgoing_entity_for_peer(peer_device_id, &delivery.entity)
+            .await?
+        else {
             storage
                 .acknowledge_outbound(
                     peer_device_id,

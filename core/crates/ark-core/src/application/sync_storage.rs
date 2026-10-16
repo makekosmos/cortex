@@ -143,6 +143,14 @@ pub trait SyncEntityReadPort: Send + Sync {
         class: SyncReadClass,
     ) -> Result<HashMap<String, u64>, String>;
     fn filter_outgoing_entity(&self, entity: &SyncEntity) -> Option<SyncEntity>;
+
+    async fn filter_outgoing_entity_for_peer(
+        &self,
+        _peer_device_id: &str,
+        entity: &SyncEntity,
+    ) -> Result<Option<SyncEntity>, String> {
+        Ok(self.filter_outgoing_entity(entity))
+    }
 }
 
 /// Applies one inbound ordinary entity atomically at the storage adapter.

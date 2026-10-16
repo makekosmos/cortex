@@ -107,6 +107,18 @@ async fn accepted_peer_policies_project_snapshot_pages_per_peer() {
     assert!(!game.data.contains_key("contentJson"));
     assert!(!game.data.contains_key("localState"));
 
+    let live_note = peer_a.iter().find(|entity| entity.id == "note").unwrap();
+    assert!(backend
+        .filter_outgoing_entity_for_peer("peer-a", live_note)
+        .await
+        .unwrap()
+        .is_some());
+    assert!(backend
+        .filter_outgoing_entity_for_peer("peer-b", live_note)
+        .await
+        .unwrap()
+        .is_none());
+
     let loaded = backend.load_entities(&HashMap::new()).await.unwrap();
     assert!(loaded.iter().any(|entity| entity.id == "note"));
     assert!(loaded.iter().any(|entity| entity.id == "game"));

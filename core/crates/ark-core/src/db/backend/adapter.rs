@@ -14,6 +14,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 mod peer_identity;
+mod peer_sync_policy;
 
 fn publish_replay_notices(notices: Vec<crate::canonical_types::pending::ReplayNotice>) {
     for notice in notices {
@@ -174,42 +175,21 @@ impl SyncEntityReadPort for SqliteStorageBackend {
             .into_iter()
             .next()
     }
-}
 
-#[async_trait::async_trait]
-impl PeerSyncPolicyPort for SqliteStorageBackend {
-    async fn accept_peer_sync_policy(
+    async fn filter_outgoing_entity_for_peer(
         &self,
         peer_device_id: &str,
-        revision: i64,
-        digest: &str,
-        rules: &[crate::data_platform::SyncProfileRule],
-    ) -> Result<crate::data_platform::AcceptedPeerSyncPolicy, String> {
-        self.db
-            .submit(
-                CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
-                crate::db::AcceptPeerSyncPolicyCommand::new(
-                    peer_device_id.to_owned(),
-                    revision,
-                    digest.to_owned(),
-                    rules.to_vec(),
-                ),
-            )
-            .await
-            .map_err(|error| error.to_string())
-    }
-
-    async fn load_accepted_peer_sync_policy(
-        &self,
-        peer_device_id: &str,
-    ) -> Result<Option<crate::data_platform::AcceptedPeerSyncPolicy>, String> {
-        self.db
-            .query(
-                CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
-                crate::db::LoadAcceptedPeerSyncPolicyQuery::new(peer_device_id.to_owned()),
-            )
-            .await
-            .map_err(|error| error.to_string())
+        entity: &SyncEntity,
+    ) -> Result<Option<SyncEntity>, String> {
+        let Some(policy) = self.load_accepted_peer_sync_policy(peer_device_id).await? else {
+            return Ok(Some(entity.clone()));
+        };
+        Ok(crate::data_platform::filter_entities_for_profile(
+            &policy.selective_profile(),
+            std::slice::from_ref(entity),
+        )
+        .into_iter()
+        .next())
     }
 }
 
