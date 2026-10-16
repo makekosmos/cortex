@@ -18,8 +18,9 @@ routable-address filtering (`sync_server_peers.rs`, `net.rs`).
 
 ## Versioning
 
-- **HLC** (`hlc.rs`): hybrid logical clocks stamp every mutation; conflict
-  resolution compares `HLC` values.
+- **HLC** (`hlc.rs`): hybrid logical clocks stamp mutations and order
+  revisions. They do not detect every concurrent edit or merge conflicting
+  values; merge behavior needs causal context and a type-specific contract.
 - **Version vectors** (`db/sync/`): per-entity revisions. Every write to
   syncable data must call `ark_core::db::bump_sync_version_vector` — the
   write-boundary rule in `docs/write-boundary.md`.
