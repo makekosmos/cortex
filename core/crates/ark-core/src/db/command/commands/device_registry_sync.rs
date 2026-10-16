@@ -203,7 +203,13 @@ impl DbCommand for ApplyRegistryEventsCommand {
         if self.events.len() > 32 {
             return Err(DbError::Invalid("device_registry_page_bounds".into()));
         }
-        require_registry_peer_admitted(transaction, &self.sender_device_id)?;
+        // A disabled device may reconnect to learn the signed revocation and
+        // remaining registry history. Registry control is safe here because
+        // ordinary data still requires the separate admitted-session gate.
+        super::device_registry_admission::require_registry_peer_known(
+            transaction,
+            &self.sender_device_id,
+        )?;
         let applied_events = apply_events(transaction, &self.events)?;
         let disabled_device_ids = applied_events
             .iter()
@@ -225,9 +231,24 @@ impl DbCommand for ApplyRegistryEventsCommand {
             .optional()
             .map_err(storage_error)?
             .unwrap_or(false);
+        let local_device_id =
+            crate::db::get_sync_kv(transaction, DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY)
+                .map_err(DbError::Storage)?;
+        let local_device_is_admitted = local_device_id
+            .as_deref()
+            .map(|device_id| {
+                super::device_registry_admission::registry_device_is_admitted(
+                    transaction,
+                    device_id,
+                )
+            })
+            .transpose()?
+            .flatten()
+            .unwrap_or(true);
         Ok(crate::replication_storage::RegistryPageApply {
             digest: registry_digest(transaction)?,
             sender_is_admitted,
+            local_device_is_admitted,
             disabled_device_ids,
             applied_events,
         })

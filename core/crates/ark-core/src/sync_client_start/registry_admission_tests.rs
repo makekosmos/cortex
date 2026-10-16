@@ -246,13 +246,29 @@ async fn direct_client_and_server_exchange_registry_before_sync_readiness() {
         &ed25519_dalek::SigningKey::from_bytes(&server_key.to_bytes()),
     )
     .unwrap();
+    client.stop_and_join().await;
     server_storage
         .apply_device_registry_events("server-device", std::slice::from_ref(&disable_client))
         .await
-        .expect("commit a signed disable before notifying peers");
-    sync_server
-        .broadcast_registry_event(disable_client.clone())
-        .await;
+        .expect("commit signed disable while the device is offline");
+    let reconnecting_client = SyncClient::new(
+        client_storage.clone() as Arc<dyn crate::sync_server::SyncRuntimeStorage>,
+        PeerRecord {
+            device_id: "server-device".into(),
+            device_name: "Server".into(),
+            addresses: vec![address.to_string()],
+            last_seen: String::new(),
+            last_address: None,
+            platform: None,
+            app_version: None,
+        },
+        "client-device".into(),
+        "Client".into(),
+        "space-test".into(),
+        Vec::new(),
+        None,
+    );
+    reconnecting_client.start();
     tokio::time::timeout(Duration::from_secs(2), async {
         loop {
             let (_, _, client_events) = client_storage
@@ -269,7 +285,16 @@ async fn direct_client_and_server_exchange_registry_before_sync_readiness() {
         }
     })
     .await
-    .expect("connected direct peer should apply the signed disable event");
+    .expect("offline device should learn its signed disable during control catch-up");
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while !reconnecting_client.is_stopped() {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("revoked device should stop reconnecting after control catch-up");
+    assert_eq!(sync_server.connected_peer_count().await, 1);
+    reconnecting_client.stop_and_join().await;
     assert_eq!(sync_server.connected_peer_count().await, 1);
     let (_, _, client_events) = client_storage
         .load_device_registry_events_page(0, None, 32)
@@ -279,7 +304,6 @@ async fn direct_client_and_server_exchange_registry_before_sync_readiness() {
         .iter()
         .any(|event| event.event_id() == disable_client.event_id()));
 
-    client.stop_and_join().await;
     observer.stop_and_join().await;
     sync_server.stop().await;
 }

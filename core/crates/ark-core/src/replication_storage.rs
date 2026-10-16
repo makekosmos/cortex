@@ -5,6 +5,7 @@ use crate::types::SyncEntity;
 pub struct RegistryPageApply {
     pub digest: String,
     pub sender_is_admitted: bool,
+    pub local_device_is_admitted: bool,
     pub disabled_device_ids: Vec<String>,
     pub applied_events: Vec<crate::domain::device_registry::RegistryEvent>,
 }

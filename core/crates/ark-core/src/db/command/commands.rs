@@ -1,5 +1,6 @@
 mod core_task;
 mod device_registry;
+mod device_registry_admission;
 mod device_registry_command;
 mod device_registry_handshake;
 mod device_registry_sync;

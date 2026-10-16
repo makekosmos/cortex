@@ -47,6 +47,7 @@ pub(crate) struct AdmissionUpdate {
     pub(crate) became_ready: bool,
     pub(crate) exchange_complete: bool,
     pub(crate) close_session: bool,
+    pub(crate) local_device_is_admitted: bool,
     pub(crate) disabled_device_ids: Vec<String>,
     pub(crate) applied_events: Vec<crate::domain::device_registry::RegistryEvent>,
 }
@@ -139,6 +140,7 @@ impl DirectRegistryAdmission {
         let mut disabled_device_ids = Vec::new();
         let mut applied_events = Vec::new();
         let mut close_session = false;
+        let mut local_device_is_admitted = true;
         let outgoing = match (&self.phase, message) {
             (
                 AdmissionPhase::WaitingForStart,
@@ -279,6 +281,8 @@ impl DirectRegistryAdmission {
                     .iter()
                     .any(|device_id| device_id == self.local_device_id.as_str());
                 close_session |= !result.sender_is_admitted;
+                close_session |= !result.local_device_is_admitted;
+                local_device_is_admitted = result.local_device_is_admitted;
                 disabled_device_ids.extend(result.disabled_device_ids);
                 let is_last = page_index + 1 == page_count;
                 if let AdmissionPhase::Exchanging {
@@ -326,6 +330,8 @@ impl DirectRegistryAdmission {
                     .await?;
                 applied_events.extend(result.applied_events);
                 close_session |= !result.sender_is_admitted;
+                close_session |= !result.local_device_is_admitted;
+                local_device_is_admitted = result.local_device_is_admitted;
                 close_session |= result.disabled_device_ids.iter().any(|device_id| {
                     device_id == self.local_device_id.as_str()
                         || device_id == self.peer_device_id.as_str()
@@ -343,6 +349,7 @@ impl DirectRegistryAdmission {
             became_ready: exchange_complete && !self.session_revoked && !was_ready,
             exchange_complete,
             close_session: self.session_revoked,
+            local_device_is_admitted,
             disabled_device_ids,
             applied_events,
         })

@@ -30,11 +30,23 @@ pub(super) async fn handle_registry_admission(
         }
     };
     broadcast_registry_events(ctx, peer_id, &update.applied_events).await;
-    if revoke_disabled_sessions(ctx, &update.disabled_device_ids).await {
+    let preserve_pending_peer = update.close_session.then_some(peer_id);
+    if revoke_disabled_sessions(
+        ctx,
+        &update.disabled_device_ids,
+        preserve_pending_peer,
+        !update.local_device_is_admitted,
+    )
+    .await
+    {
         return;
     }
     for outgoing in update.outgoing {
         send_msg(&tx, &outgoing);
+    }
+    if update.close_session && update.exchange_complete {
+        reject_peer(ctx, peer_id, &tx).await;
+        return;
     }
 
     let (became_ready, peer_entry) = {
@@ -188,23 +200,32 @@ async fn broadcast_registry_events(
     }
 }
 
-async fn revoke_disabled_sessions(ctx: &MessageContext, disabled_device_ids: &[String]) -> bool {
-    if disabled_device_ids.is_empty() {
-        return false;
-    }
+async fn revoke_disabled_sessions(
+    ctx: &MessageContext,
+    disabled_device_ids: &[String],
+    preserve_pending_peer: Option<usize>,
+    local_device_revoked: bool,
+) -> bool {
     let disabled = disabled_device_ids
         .iter()
         .map(String::as_str)
         .collect::<std::collections::HashSet<_>>();
     let local_device_id = ctx.device_id.read().await.clone();
-    let local_device_disabled = disabled.contains(local_device_id.as_str());
-    let revoked_ids = {
+    let local_device_disabled = local_device_revoked || disabled.contains(local_device_id.as_str());
+    if disabled_device_ids.is_empty() && !local_device_disabled {
+        return false;
+    }
+    {
         let mut peers = ctx.peers.lock().await;
         let revoked_ids = peers
             .iter()
             .filter_map(|(peer_id, peer)| {
-                (local_device_disabled || disabled.contains(peer.device_id.as_str()))
-                    .then_some(*peer_id)
+                let is_disabled =
+                    local_device_disabled || disabled.contains(peer.device_id.as_str());
+                let is_preserved_pending_peer = Some(*peer_id) == preserve_pending_peer
+                    && !peer.authenticated
+                    && !local_device_disabled;
+                (is_disabled && !is_preserved_pending_peer).then_some(*peer_id)
             })
             .collect::<Vec<_>>();
         for peer_id in &revoked_ids {
@@ -217,12 +238,7 @@ async fn revoke_disabled_sessions(ctx: &MessageContext, disabled_device_ids: &[S
             }
             peers.remove(peer_id);
         }
-        revoked_ids
-    };
-    if revoked_ids.is_empty() && !local_device_disabled {
-        return false;
     }
-
     let mut known = ctx.known_peer_records.lock().await;
     known.retain(|peer| !local_device_disabled && !disabled.contains(peer.device_id.as_str()));
     if let Err(error) = save_known_peers(&ctx.storage, &known).await {

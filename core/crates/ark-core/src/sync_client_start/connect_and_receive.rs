@@ -114,6 +114,12 @@
                                     {
                                         Ok(became_ready) => became_ready,
                                         Err(error) => {
+                                            if error == "registry_admission_session_revoked" {
+                                                stopped.store(
+                                                    true,
+                                                    std::sync::atomic::Ordering::Relaxed,
+                                                );
+                                            }
                                             eprintln!(
                                                 "{TAG} direct registry admission failed: {error}"
                                             );

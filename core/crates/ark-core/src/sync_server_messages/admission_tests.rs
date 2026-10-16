@@ -45,7 +45,7 @@ async fn registry_disable_closes_ready_session_and_removes_discovery_record() {
         on_new_peer_discovered: Arc::new(Mutex::new(None)),
     };
 
-    assert!(!revoke_disabled_sessions(&ctx, &["disabled-device".to_owned()]).await);
+    assert!(!revoke_disabled_sessions(&ctx, &["disabled-device".to_owned()], None, false).await);
     assert!(ctx.peers.lock().await.is_empty());
     assert!(ctx.known_peer_records.lock().await.is_empty());
     assert!(matches!(rx.recv().await, Some(Message::Close(_))));
