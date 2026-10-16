@@ -66,6 +66,39 @@ async fn read_query_uses_backfill_context_without_opening_a_write_transaction() 
 }
 
 #[tokio::test]
+async fn read_queries_share_bounded_source_admission() {
+    let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
+    let handle = DbHandle::from_shared_connection(connection);
+    let reservations: Vec<_> = (0..DB_ADMISSION_LIMITS.max_commands_per_source)
+        .map(|_| {
+            handle
+                .admission
+                .try_acquire(CommandClass::Backfill, &CommandSource::System, 1)
+                .unwrap()
+        })
+        .collect();
+
+    assert!(matches!(
+        handle
+            .query(
+                CommandContext::sync_system(CommandClass::Backfill),
+                ReadProbe,
+            )
+            .await,
+        Err(DbError::Busy)
+    ));
+
+    drop(reservations);
+    assert!(handle
+        .query(
+            CommandContext::sync_system(CommandClass::Backfill),
+            ReadProbe,
+        )
+        .await
+        .is_ok());
+}
+
+#[tokio::test]
 async fn usage_sequence_migration_runs_as_an_interactive_database_command() {
     let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
     let handle = DbHandle::from_shared_connection(connection);

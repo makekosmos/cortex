@@ -22,12 +22,13 @@ pub(crate) use command::{
     DeleteObjectTypeCommand, DeleteTrashedCommand, EnsureUsageSequenceMigratedCommand,
     GetSyncKeyValueQuery, IdentityErrorStyle, LegacyDeleteCommand, LegacyGraphWriteCommand,
     LoadEntitiesQuery, LocalBookCoverCommand, LocalCoreTaskWrite, LocalObjectDeleteCommand,
-    LocalObjectUpsertCommand, LocalUsageWriteCommand, PersistIntegrationGrantCommand,
-    PersistNodeAuthorizationCommand, PublishIntegrationCredentialEnvelopeCommand,
-    RegisterPackageTypesCommand, ReplaceObjectLinkCommand, RestoreSnapshotCommand,
-    SetLocalSyncKeyValueCommand, SetSyncKeyValueCommand, TrackedAppDeleteCommand,
-    TrackedAppUpsertCommand, UpsertExternalRefCommand, UpsertObjectLinkCommand,
-    UpsertObjectTypeCommand, UsageCompleteThroughQuery, ValidateOutboundSignedFrameQuery,
+    LocalObjectUpsertCommand, LocalUsageWriteCommand, ObjectReadQuery,
+    PersistIntegrationGrantCommand, PersistNodeAuthorizationCommand,
+    PublishIntegrationCredentialEnvelopeCommand, RegisterPackageTypesCommand,
+    ReplaceObjectLinkCommand, RestoreSnapshotCommand, SetLocalSyncKeyValueCommand,
+    SetSyncKeyValueCommand, TrackedAppDeleteCommand, TrackedAppUpsertCommand,
+    UpsertExternalRefCommand, UpsertObjectLinkCommand, UpsertObjectTypeCommand,
+    UsageCompleteThroughQuery, ValidateOutboundSignedFrameQuery,
 };
 include!("db/integration_replication_common.rs");
 include!("db/integration_replication_records.rs");

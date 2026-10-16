@@ -4,6 +4,7 @@ mod integration_admin;
 mod integration_replication;
 mod legacy_mutation;
 mod object_mutation;
+mod object_read;
 mod sync_mutation;
 mod sync_read;
 mod system_mutation;
@@ -26,6 +27,7 @@ pub(crate) use object_mutation::{
     CanonicalGameUpsertCommand, LocalBookCoverCommand, LocalObjectDeleteCommand,
     LocalObjectUpsertCommand,
 };
+pub(crate) use object_read::ObjectReadQuery;
 pub(crate) use sync_mutation::{
     ApplyAuthenticatedSyncEntityCommand, ApplySyncEntityCommand,
     EnsureUsageSequenceMigratedCommand, SetLocalSyncKeyValueCommand, SetSyncKeyValueCommand,

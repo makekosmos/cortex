@@ -12,12 +12,12 @@ pub(crate) use commands::{
     DeleteTrashedCommand, EnsureUsageSequenceMigratedCommand, GetSyncKeyValueQuery,
     IdentityErrorStyle, LegacyDeleteCommand, LegacyGraphWriteCommand, LoadEntitiesQuery,
     LocalBookCoverCommand, LocalCoreTaskWrite, LocalObjectDeleteCommand, LocalObjectUpsertCommand,
-    LocalUsageWriteCommand, PersistIntegrationGrantCommand, PersistNodeAuthorizationCommand,
-    PublishIntegrationCredentialEnvelopeCommand, RegisterPackageTypesCommand,
-    ReplaceObjectLinkCommand, RestoreSnapshotCommand, SetLocalSyncKeyValueCommand,
-    SetSyncKeyValueCommand, TrackedAppDeleteCommand, TrackedAppUpsertCommand,
-    UpsertExternalRefCommand, UpsertObjectLinkCommand, UpsertObjectTypeCommand,
-    UsageCompleteThroughQuery, ValidateOutboundSignedFrameQuery,
+    LocalUsageWriteCommand, ObjectReadQuery, PersistIntegrationGrantCommand,
+    PersistNodeAuthorizationCommand, PublishIntegrationCredentialEnvelopeCommand,
+    RegisterPackageTypesCommand, ReplaceObjectLinkCommand, RestoreSnapshotCommand,
+    SetLocalSyncKeyValueCommand, SetSyncKeyValueCommand, TrackedAppDeleteCommand,
+    TrackedAppUpsertCommand, UpsertExternalRefCommand, UpsertObjectLinkCommand,
+    UpsertObjectTypeCommand, UsageCompleteThroughQuery, ValidateOutboundSignedFrameQuery,
 };
 
 // A full transport frame is admitted at 16 MiB. Leave bounded room for the
@@ -154,8 +154,16 @@ impl DbHandle {
         if weight == 0 || weight > MAX_COMMAND_BYTES {
             return Err(DbError::TooLarge);
         }
+        let _admission = self
+            .admission
+            .try_acquire(query.class(), &context.source, weight)
+            .map_err(|error| match error {
+                executor::AdmissionError::TooLarge => DbError::TooLarge,
+                executor::AdmissionError::Saturated => DbError::Busy,
+            })?;
         let handle = self.clone();
         run_db_blocking(move || {
+            let _admission = _admission;
             handle.with_connection(|connection| query.read(&context, connection))
         })
         .await?
