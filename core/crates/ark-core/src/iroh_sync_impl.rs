@@ -1,5 +1,9 @@
 #[async_trait::async_trait]
 impl SyncTransport for IrohTransport {
+    fn supports_registry_admission(&self) -> bool {
+        true
+    }
+
     /// Запускает транспорт: байндит `Endpoint`, поднимает accept-loop для
     /// входящих соединений и (если `config.peer_addr/peer_ticket`) dial-loop
     /// с экспоненциальным backoff.
@@ -242,8 +246,8 @@ impl SyncTransport for IrohTransport {
     async fn send_to(&self, device_id: &str, msg: LanSyncMessage) -> Result<(), String> {
         let target = self
             .registry
-            .authenticated_endpoint(device_id)
-            .ok_or_else(|| "iroh addressed peer is not authenticated".to_string())?;
+            .data_ready_endpoint(device_id)
+            .ok_or_else(|| "iroh addressed peer is not data-ready".to_string())?;
         if let LanSyncMessage::SignedIntegrationFrame { frame } = &msg {
             if frame.recipient_node_id != device_id {
                 return Err("iroh frame recipient does not match addressed peer".into());
@@ -302,18 +306,33 @@ impl SyncTransport for IrohTransport {
         Ok(())
     }
 
-    fn bind_authenticated_peer(
+    fn bind_peer_for_control(
         &self,
         device_id: &str,
         transport_public_key: &str,
     ) -> Result<(), String> {
         if self
             .registry
-            .bind_authenticated(device_id, transport_public_key)
+            .bind_peer_for_control(device_id, transport_public_key)
         {
             Ok(())
         } else {
             Err("iroh transport identity does not match peer endpoint".into())
+        }
+    }
+
+    fn mark_peer_data_ready(
+        &self,
+        device_id: &str,
+        transport_public_key: &str,
+    ) -> Result<(), String> {
+        if self
+            .registry
+            .mark_data_ready(device_id, transport_public_key)
+        {
+            Ok(())
+        } else {
+            Err("iroh peer binding is not ready for data admission".into())
         }
     }
 
@@ -324,9 +343,13 @@ impl SyncTransport for IrohTransport {
     ) -> Result<(), String> {
         if !matches!(
             msg,
-            LanSyncMessage::PairingRejected { .. } | LanSyncMessage::PairingAccepted { .. }
+            LanSyncMessage::PairingRejected { .. }
+                | LanSyncMessage::PairingAccepted { .. }
+                | LanSyncMessage::RegistrySyncStart { .. }
+                | LanSyncMessage::RegistryEventsPage { .. }
+                | LanSyncMessage::RegistrySyncReady { .. }
         ) {
-            return Err("iroh transport-key send only supports pairing decisions".into());
+            return Err("iroh transport-key send only supports pre-admission control".into());
         }
         let endpoint_id: EndpointId = transport_public_key
             .parse()
@@ -347,8 +370,8 @@ impl SyncTransport for IrohTransport {
             .map_err(|_| "iroh addressed writer stopped".to_string())?
     }
 
-    fn unbind_authenticated_peer(&self, device_id: &str) -> Result<(), String> {
-        self.registry.unbind_authenticated(device_id);
+    fn unbind_peer(&self, device_id: &str) -> Result<(), String> {
+        self.registry.unbind_peer(device_id);
         Ok(())
     }
 

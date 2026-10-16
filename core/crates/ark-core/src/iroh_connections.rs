@@ -22,7 +22,7 @@ async fn authorize_signed_integration_frame(
     remote_endpoint_id: &EndpointId,
 ) -> Result<(), String> {
     let target_is_current = registry
-        .authenticated_endpoint(&frame.recipient_node_id)
+        .data_ready_endpoint(&frame.recipient_node_id)
         .is_some_and(|endpoint| endpoint == *remote_endpoint_id);
     if !target_is_current {
         return Err("iroh addressed transport peer is no longer authorized".into());
@@ -41,6 +41,19 @@ async fn authorize_signed_integration_frame(
         }
         None => Err("iroh outbound integration authorization is unavailable".into()),
     }
+}
+
+fn is_pre_admission_control_message(message: &LanSyncMessage) -> bool {
+    matches!(
+        message,
+        LanSyncMessage::Hello { .. }
+            | LanSyncMessage::PairingRejected { .. }
+            | LanSyncMessage::PairingAccepted { .. }
+            | LanSyncMessage::ProtocolRejected { .. }
+            | LanSyncMessage::RegistrySyncStart { .. }
+            | LanSyncMessage::RegistryEventsPage { .. }
+            | LanSyncMessage::RegistrySyncReady { .. }
+    )
 }
 
 async fn handle_connection(params: ConnectionParams) {
@@ -149,13 +162,8 @@ async fn handle_connection(params: ConnectionParams) {
                             if outgoing.target.is_some_and(|target| target != remote_endpoint_id) {
                                 continue;
                             }
-                            if !writer_registry.is_authenticated_endpoint(&remote_endpoint_id)
-                                && !matches!(
-                                    outgoing.msg,
-                                    LanSyncMessage::Hello { .. }
-                                        | LanSyncMessage::PairingRejected { .. }
-                                        | LanSyncMessage::PairingAccepted { .. }
-                                )
+                            if !writer_registry.is_data_ready_endpoint(&remote_endpoint_id)
+                                && !is_pre_admission_control_message(&outgoing.msg)
                             {
                                 if let Some(completion) = outgoing.completion {
                                     if let Some(
@@ -273,6 +281,16 @@ async fn handle_connection(params: ConnectionParams) {
                                 );
                                 continue;
                             }
+                        }
+
+                        if !reader_registry.is_data_ready_endpoint(&remote_endpoint_id)
+                            && !is_pre_admission_control_message(&msg)
+                        {
+                            eprintln!(
+                                "[iroh] dropped pre-admission frame {} remote={remote_endpoint_id}",
+                                message_variant_name(&msg)
+                            );
+                            continue;
                         }
 
                         // Once paired, the endpoint registry is authoritative.

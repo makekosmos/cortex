@@ -24,7 +24,7 @@ pub(super) fn build_client_hello(
         }
         None => (None, None),
     };
-    let offer = ProtocolOffer::current(auth_secret.is_some());
+    let offer = ProtocolOffer::current_with_registry_history(true);
     let negotiation_hmac = auth_secret
         .zip(auth_nonce.as_deref())
         .map(|(secret, nonce)| {

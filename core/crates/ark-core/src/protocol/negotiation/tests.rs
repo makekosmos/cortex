@@ -39,6 +39,25 @@ fn only_authenticated_intersection_enables_known_capabilities() {
 }
 
 #[test]
+fn registry_history_is_required_wire_support_without_claiming_peer_identity() {
+    let local = ProtocolOffer::current_with_registry_history(true);
+    let remote = offer(None, &["registry_history_v1"]);
+    let selected = negotiate_protocol(&local, &remote, false).unwrap();
+    assert!(selected
+        .capabilities
+        .contains(&ProtocolCapability::RegistryHistoryV1));
+    assert!(!selected
+        .capabilities
+        .contains(&ProtocolCapability::DurableReceiptAckV1));
+
+    let legacy = offer(None, &[]);
+    let selected = negotiate_protocol(&local, &legacy, false).unwrap();
+    assert!(!selected
+        .capabilities
+        .contains(&ProtocolCapability::RegistryHistoryV1));
+}
+
+#[test]
 fn invalid_and_disjoint_offers_fail_deterministically() {
     assert_eq!(
         ProtocolOffer::new(1, Some(&[]), None),
@@ -158,7 +177,7 @@ fn responder_selection_requires_matching_offers_and_proof() {
 
 #[test]
 fn legacy_selection_has_no_semantic_capabilities() {
-    let local = ProtocolOffer::current(true);
+    let local = ProtocolOffer::current_with_registry_history(true);
     let selected = validate_protocol_selection(
         &local,
         1,

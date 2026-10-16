@@ -114,38 +114,38 @@ impl RelaySync {
         self.notify_pairing_changed().await;
     }
 
-    /// Apply a consented Hello: bind the endpoint so the frames we send from
-    /// `handle_message` (our Hello, the version vector) actually leave, then
-    /// persist the binding on success. On a failed handshake (HMAC,
-    /// protocol mismatch, removed list) the binding is rolled back —
-    /// transport trust must not outlive authentication.
+    /// Bind an endpoint for control traffic, validate its Hello, and persist
+    /// enrollment before promoting the transport to data-ready.
     async fn admit_transport_hello(
         &self,
         from_device_id: String,
         transport_public_key: String,
         msg: LanSyncMessage,
-        mut paired_keys: HashMap<String, String>,
         send_pairing_accepted: bool,
     ) -> Result<(), String> {
-        let previous_paired_keys = paired_keys.clone();
         self.transport
-            .bind_authenticated_peer(&from_device_id, &transport_public_key)?;
+            .bind_peer_for_control(&from_device_id, &transport_public_key)?;
         self.transport_keys
             .lock()
             .await
             .insert(from_device_id.clone(), transport_public_key.clone());
-        self.handle_message(from_device_id.clone(), msg, None, send_pairing_accepted)
+        // Authenticate the Hello and update in-memory peer state, but hold the
+        // initial sync vector until the identity is durable below.
+        self.handle_message(from_device_id.clone(), msg, None, true)
             .await;
         if self.is_authenticated_peer(&from_device_id).await {
-            if paired_keys.get(&from_device_id) != Some(&transport_public_key) {
-                paired_keys.insert(from_device_id.clone(), transport_public_key.clone());
-                if let Err(error) =
-                    crate::sync_server::save_peer_transport_keys(&self.storage, &paired_keys).await
-                {
-                    self.rollback_transport_admission(&from_device_id, &transport_public_key)
-                        .await;
-                    return Err(format!("failed to persist pairing identity: {error}"));
-                }
+            if let Err(error) = self
+                .storage
+                .enroll_paired_device(
+                    &self.config.device_id,
+                    &from_device_id,
+                    &transport_public_key,
+                )
+                .await
+            {
+                self.rollback_transport_admission(&from_device_id, &transport_public_key)
+                    .await;
+                return Err(format!("failed to persist pairing identity: {error}"));
             }
             if send_pairing_accepted {
                 if let Err(error) = self
@@ -160,19 +160,16 @@ impl RelaySync {
                 {
                     self.rollback_transport_admission(&from_device_id, &transport_public_key)
                         .await;
-                    if let Err(rollback_error) = crate::sync_server::save_peer_transport_keys(
-                        &self.storage,
-                        &previous_paired_keys,
-                    )
-                    .await
-                    {
-                        eprintln!(
-                            "[RelaySync] failed to roll back pairing identity: {rollback_error}"
-                        );
-                    }
                     return Err(format!("failed to send pairing acceptance: {error}"));
                 }
-                self.send_local_version_vector().await;
+            }
+            if let Err(error) = self
+                .start_registry_exchange(&from_device_id, &transport_public_key)
+                .await
+            {
+                self.rollback_transport_admission(&from_device_id, &transport_public_key)
+                    .await;
+                return Err(format!("failed to start registry exchange: {error}"));
             }
             Ok(())
         } else {
@@ -187,7 +184,7 @@ impl RelaySync {
     async fn rollback_transport_admission(&self, device_id: &str, endpoint: &str) {
         self.peers.lock().await.remove(device_id);
         self.transport_keys.lock().await.remove(device_id);
-        let _ = self.transport.unbind_authenticated_peer(device_id);
+        let _ = self.transport.unbind_peer(device_id);
         let _ = self.transport.disconnect_transport_peer(endpoint);
         if let Err(error) = crate::sync_server::remove_peer_record(&self.storage, device_id).await {
             eprintln!("[RelaySync] failed to roll back peer record: {error}");
@@ -251,12 +248,10 @@ impl RelaySync {
         // Saying «Принять» to a previously removed device is explicit
         // re-consent — clear the removed flag before handle_message drops it.
         crate::sync_server::unblock_peer_id(&self.storage, device_id).await?;
-        let paired_keys = crate::sync_server::load_peer_transport_keys(&self.storage).await?;
         self.admit_transport_hello(
             device_id.to_string(),
             request.transport_public_key,
             request.hello,
-            paired_keys,
             true,
         )
         .await?;

@@ -34,37 +34,15 @@
                     continue;
                 }
 
-                let (tx, mut rx) = mpsc::unbounded_channel::<Message>();
+                let (tx, rx) = mpsc::unbounded_channel::<Message>();
 
-                // Writer task. Re-check signed integration authority at the
-                // actual socket write boundary after queued revocation races.
-                let storage_writer = storage.clone();
-                let space_id_writer = space_id.clone();
-                let device_id_writer = device_id.clone();
-                let writer = tokio::spawn(async move {
-                    while let Some(msg) = rx.recv().await {
-                        if let Message::Text(text) = &msg {
-                            if let Some(LanSyncMessage::SignedIntegrationFrame { frame }) =
-                                deserialize_message(text)
-                            {
-                                if storage_writer
-                                    .validate_outbound_signed_integration_frame(
-                                        &frame,
-                                        &space_id_writer,
-                                        &device_id_writer,
-                                    )
-                                    .await
-                                    .is_err()
-                                {
-                                    continue;
-                                }
-                            }
-                        }
-                        if ws_sink.send(msg).await.is_err() {
-                            break;
-                        }
-                    }
-                });
+                let writer = writer::spawn(
+                    ws_sink,
+                    rx,
+                    storage.clone(),
+                    space_id.clone(),
+                    device_id.clone(),
+                );
                 let writer_abort = writer.abort_handle();
                 track_task(&writer_tasks, writer);
 
@@ -73,6 +51,9 @@
                 let mut sync_complete = false;
                 let mut pending_initial_snapshot_ack: Option<String> = None;
                 let mut peer_device_id_actual = String::new();
+                let mut pending_registry_admission: Option<
+                    registry_admission::PendingRegistryAdmission,
+                > = None;
                 let mut feed_recovery = tokio::time::interval(Duration::from_secs(1));
                 // `interval` ticks immediately; start the bounded recovery
                 // period after the connection has had a chance to authenticate.
@@ -92,6 +73,58 @@
                             match msg {
                         Message::Text(text) => {
                             if let Some(sync_msg) = deserialize_message(&text) {
+                                match direct_ws_control::handle(
+                                    &sync_msg,
+                                    &tx,
+                                    authenticated,
+                                    &on_peer_list,
+                                    &device_id,
+                                    &peer_device_id_actual,
+                                )
+                                .await
+                                {
+                                    direct_ws_control::DirectWsControl::Handled => continue,
+                                    direct_ws_control::DirectWsControl::CloseConnection => break,
+                                    direct_ws_control::DirectWsControl::NotControl => {}
+                                }
+                                if matches!(
+                                    &sync_msg,
+                                    LanSyncMessage::RegistryAdmissionStart { .. }
+                                        | LanSyncMessage::RegistryAdmissionProof { .. }
+                                        | LanSyncMessage::RegistryAdmissionConfirm { .. }
+                                        | LanSyncMessage::RegistrySyncStart { .. }
+                                        | LanSyncMessage::RegistryEventsPage { .. }
+                                        | LanSyncMessage::RegistrySyncReady { .. }
+                                ) {
+                                    let Some(admission) = pending_registry_admission.as_mut() else {
+                                        eprintln!("{TAG} registry control arrived before Hello");
+                                        break;
+                                    };
+                                    let became_ready = match admission
+                                        .handle(
+                                            sync_msg,
+                                            &storage,
+                                            &peer_device_id_actual,
+                                            &tx,
+                                            &authenticated_tx,
+                                            &peer,
+                                            &on_connected,
+                                        )
+                                        .await
+                                    {
+                                        Ok(became_ready) => became_ready,
+                                        Err(error) => {
+                                            eprintln!(
+                                                "{TAG} direct registry admission failed: {error}"
+                                            );
+                                            break;
+                                        }
+                                    };
+                                    if became_ready {
+                                        authenticated = true;
+                                    }
+                                    continue;
+                                }
                                 match sync_msg {
                                     LanSyncMessage::Hello {
                                         protocol_version,
@@ -168,6 +201,15 @@
                                                 break;
                                             }
                                         };
+                                        if !negotiated_protocol
+                                            .capabilities
+                                            .contains(&ProtocolCapability::RegistryHistoryV1)
+                                        {
+                                            eprintln!(
+                                                "{TAG} peer requires registry-history upgrade"
+                                            );
+                                            break;
+                                        }
 
                                         // Reject self-connects and evict pure self-references.
                                         if !server_device_id.is_empty()
@@ -193,65 +235,39 @@
                                             break;
                                         }
 
-                                        let generation =
-                                                storage.selective_sync_policy_generation();
-                                        if let Err(error) = storage
-                                            .begin_outbound_policy(&server_device_id, generation)
-                                            .await
-                                        {
-                                            eprintln!(
-                                                "{TAG} outbound snapshot baseline failed: {error}"
-                                            );
-                                            break;
-                                        }
-                                        authenticated = true;
                                         peer_device_id_actual = server_device_id.clone();
-                                        *authenticated_tx.lock().await =
-                                            Some(crate::sync_client::AuthenticatedPeerSession {
-                                                peer_id: server_device_id.clone(),
-                                                tx: tx.clone(),
-                                                sync_complete: false,
-                                                protocol: negotiated_protocol,
-                                            });
-                                        // Adopt the authenticated
-                                        // identity — bootstrap records
-                                        // carry a "seed-*" placeholder
-                                        // device_id, and DisconnectPeer /
-                                        // peer listings key off the
-                                        // stored record.
-                                        let connected_record = {
-                                            let mut p = peer.write().await;
-                                            p.device_id = server_device_id.clone();
-                                            p.device_name = server_device_name.clone();
-                                            p.platform = server_platform.clone();
-                                            p.app_version = server_app_version.clone();
-                                            p.clone()
+                                        let pending_peer = PeerRecord {
+                                            device_id: server_device_id.clone(),
+                                            device_name: server_device_name,
+                                            addresses: Vec::new(),
+                                            last_seen: chrono::Utc::now().to_rfc3339_opts(
+                                                chrono::SecondsFormat::Millis,
+                                                true,
+                                            ),
+                                            last_address: Some(winning_addr.clone()),
+                                            platform: server_platform,
+                                            app_version: server_app_version,
                                         };
-                                        eprintln!(
-                                            "{TAG} Authenticated with {server_device_name} \
-                                                 ({server_device_id})"
-                                        );
-                                        if let Some(handler) = on_connected.lock().await.as_ref() {
-                                            handler(connected_record);
-                                        }
-
-                                        // Send version vector
-                                        let vector = match load_version_vector(&storage).await {
-                                            Ok(vector) => vector,
-                                            Err(error) => {
-                                                eprintln!(
-                                            "{TAG} failed to load sync version vector: {error}"
-                                        );
-                                                break;
-                                            }
-                                        };
-                                        send_msg(
-                                            &tx,
-                                            &LanSyncMessage::VersionVector {
-                                                vector,
-                                                origin_device_id: None,
-                                            },
-                                        );
+                                        let (admission, start) =
+                                            match registry_admission::PendingRegistryAdmission::
+                                                begin(
+                                                &device_id,
+                                                &server_device_id,
+                                                &space_id,
+                                                negotiated_protocol.clone(),
+                                                pending_peer,
+                                            )
+                                            {
+                                                Ok(admission) => admission,
+                                                Err(error) => {
+                                                    eprintln!(
+                                                        "{TAG} admission start failed: {error}"
+                                                    );
+                                                    break;
+                                                }
+                                            };
+                                        pending_registry_admission = Some(admission);
+                                        send_msg(&tx, &start);
                                     }
 
                                     LanSyncMessage::VersionVector {
@@ -426,40 +442,24 @@
                                         }
                                     }
 
-                                    LanSyncMessage::ProtocolRejected {
-                                        origin_device_id,
-                                        target_device_id,
-                                        reason,
-                                        ..
-                                    } => {
-                                        if target_device_id == device_id
-                                            && (peer_device_id_actual.is_empty()
-                                                || origin_device_id == peer_device_id_actual)
-                                        {
-                                            eprintln!("{TAG} Peer rejected protocol: {reason}");
-                                            break;
-                                        }
+                                    LanSyncMessage::Ping { .. }
+                                    | LanSyncMessage::Pong { .. }
+                                    | LanSyncMessage::PairingRejected { .. }
+                                    | LanSyncMessage::PairingAccepted { .. }
+                                    | LanSyncMessage::RegistryAdmissionStart { .. }
+                                    | LanSyncMessage::RegistryAdmissionProof { .. }
+                                    | LanSyncMessage::RegistryAdmissionConfirm { .. }
+                                    | LanSyncMessage::RegistrySyncStart { .. }
+                                    | LanSyncMessage::RegistryEventsPage { .. }
+                                    | LanSyncMessage::RegistrySyncReady { .. }
+                                    | LanSyncMessage::ProtocolRejected { .. }
+                                    | LanSyncMessage::PeerList { .. } => {
+                                        eprintln!(
+                                            "{TAG} unsupported direct WebSocket control frame"
+                                        );
+                                        break;
                                     }
 
-                                    LanSyncMessage::PeerList { peers: peer_list } => {
-                                        if !authenticated {
-                                            continue;
-                                        }
-                                        if let Some(handler) = on_peer_list.lock().await.as_ref() {
-                                            handler(peer_list);
-                                        }
-                                    }
-
-                                    LanSyncMessage::Ping { ts } => {
-                                        send_msg(&tx, &LanSyncMessage::Pong { ts });
-                                    }
-
-                                    LanSyncMessage::Pong { .. } => {}
-
-                                    // Pairing consent lives on the iroh
-                                    // transport — meaningless over WS.
-                                    LanSyncMessage::PairingRejected { .. } => {}
-                                    LanSyncMessage::PairingAccepted { .. } => {}
                                 }
                             }
                         }

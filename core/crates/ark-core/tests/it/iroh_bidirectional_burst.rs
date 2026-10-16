@@ -234,17 +234,29 @@ async fn iroh_bidirectional_burst_no_desync() {
     // stand in for both sides having consented — the registry knows each
     // endpoint↔device pair once the injected Hellos have arrived.
     transport_a
-        .bind_authenticated_peer(
+        .bind_peer_for_control(
             "device-B-burst",
             &transport_b.endpoint_id().unwrap().to_string(),
         )
         .expect("A binds B");
     transport_b
-        .bind_authenticated_peer(
+        .bind_peer_for_control(
             "device-A-burst",
             &transport_a.endpoint_id().unwrap().to_string(),
         )
         .expect("B binds A");
+    transport_a
+        .mark_peer_data_ready(
+            "device-B-burst",
+            &transport_b.endpoint_id().unwrap().to_string(),
+        )
+        .expect("A admits B for data");
+    transport_b
+        .mark_peer_data_ready(
+            "device-A-burst",
+            &transport_a.endpoint_id().unwrap().to_string(),
+        )
+        .expect("B admits A for data");
 
     // ── 4. Build burst payloads. ───────────────────────────────────────────────
     let mut a_sent_ids = HashSet::new();

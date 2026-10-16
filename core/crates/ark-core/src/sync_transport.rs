@@ -44,6 +44,12 @@ pub enum TransportEvent {
 /// Uses `async_trait` to keep the transport usable behind `Arc<dyn SyncTransport>`.
 #[async_trait::async_trait]
 pub trait SyncTransport: Send + Sync {
+    /// True only when the transport enforces pre-admission control and can
+    /// exchange signed registry history before carrying user data.
+    fn supports_registry_admission(&self) -> bool {
+        false
+    }
+
     /// Start the transport. Returns immediately; background tasks drive the
     /// connection and forward events through `event_tx`.
     async fn start(&self, event_tx: mpsc::UnboundedSender<TransportEvent>) -> Result<(), String>;
@@ -64,7 +70,9 @@ pub trait SyncTransport: Send + Sync {
         Err("outbound authorization is not supported".into())
     }
 
-    fn bind_authenticated_peer(
+    /// Bind the verified endpoint for control traffic. Implementations must
+    /// keep user-data frames blocked until `mark_peer_data_ready` succeeds.
+    fn bind_peer_for_control(
         &self,
         _device_id: &str,
         _transport_public_key: &str,
@@ -72,16 +80,23 @@ pub trait SyncTransport: Send + Sync {
         Err("authenticated transport binding is not supported".into())
     }
 
-    /// Drop a binding made by `bind_authenticated_peer` when the handshake
-    /// it enabled fails afterwards (HMAC/protocol/removed-peer rejection).
-    fn unbind_authenticated_peer(&self, _device_id: &str) -> Result<(), String> {
+    /// Promote a verified transport binding after durable peer enrollment.
+    /// Data frames remain blocked until this succeeds.
+    fn mark_peer_data_ready(
+        &self,
+        _device_id: &str,
+        _transport_public_key: &str,
+    ) -> Result<(), String> {
+        Err("transport data admission is not supported".into())
+    }
+
+    /// Drop a binding made during a handshake or failed admission.
+    fn unbind_peer(&self, _device_id: &str) -> Result<(), String> {
         Err("authenticated transport binding is not supported".into())
     }
 
     /// Addressed send to a connection identified by its transport key —
-    /// before authentication, for handshake-level replies only
-    /// (`PairingRejected`; `bind_authenticated_peer` has not run yet, so
-    /// `send_to`'s authenticated lookup cannot reach the peer).
+    /// before data admission, for pairing and registry control messages.
     async fn send_to_transport_peer(
         &self,
         _transport_public_key: &str,

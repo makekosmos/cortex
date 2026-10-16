@@ -3,14 +3,20 @@ use crate::application::sync_storage::OutboundAck;
 
 #[path = "sync_client_start/client_hello.rs"]
 mod client_hello;
+#[path = "sync_client_start/connect_and_receive/direct_ws_control.rs"]
+mod direct_ws_control;
 #[path = "sync_client_start/connect_and_receive/feed_recovery.rs"]
 mod feed_recovery;
 #[path = "sync_client_start/connect_and_receive/live_messages.rs"]
 mod live_messages;
+#[path = "sync_client_start/connect_and_receive/registry_admission.rs"]
+mod registry_admission;
 #[path = "sync_client_start/send_missing_entities.rs"]
 mod send_missing_entities;
 #[path = "sync_client_start/connect_and_receive/sync_changes.rs"]
 mod sync_changes;
+#[path = "sync_client_start/writer.rs"]
+mod writer;
 
 impl SyncClient {
     /// Start connecting to the peer. Spawns a background task.
@@ -44,13 +50,14 @@ mod tests {
     use tokio::net::TcpListener;
     use tokio_tungstenite::{accept_async, tungstenite::Message};
 
+    mod registry_admission_tests {
+        include!("sync_client_start/registry_admission_tests.rs");
+    }
+
     #[tokio::test]
-    async fn failed_live_entity_apply_does_not_ack() {
+    async fn client_refuses_legacy_peer_before_registry_admission() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
-        let storage = Arc::new(crate::sync_server::sync_server_tests::tests::MemBackend::new());
-        storage.fail_authenticated_apply("injected write failure");
-
         let server = tokio::spawn(async move {
             let (stream, _) = listener.accept().await.unwrap();
             let mut socket = accept_async(stream).await.unwrap();
@@ -76,36 +83,18 @@ mod tests {
                 ))
                 .await
                 .unwrap();
-            let _version_vector = socket.next().await.unwrap().unwrap();
-            socket
-                .send(Message::Text(
-                    serialize_message(&LanSyncMessage::LiveChange {
-                        change_id: "change-1".into(),
-                        entity: SyncEntity {
-                            entity_type: "todo".into(),
-                            id: "todo-1".into(),
-                            data: serde_json::Map::new(),
-                            hlc: "2026-10-16T00:00:00.000Z-0000-test".into(),
-                            deleted: None,
-                            origin_device_id: None,
-                            origin_seq: None,
-                        },
-                        origin_device_id: None,
-                    })
-                    .into(),
-                ))
-                .await
-                .unwrap();
-
             !matches!(
-                tokio::time::timeout(std::time::Duration::from_secs(2), socket.next())
-                    .await
-                    .expect("client should close after apply failure"),
-                Some(Ok(Message::Text(text)))
-                    if matches!(deserialize_message(&text), Some(LanSyncMessage::LiveAck { .. }))
+                tokio::time::timeout(std::time::Duration::from_secs(2), socket.next()).await,
+                Ok(Some(Ok(Message::Text(text))))
+                    if matches!(deserialize_message(&text), Some(
+                        LanSyncMessage::VersionVector { .. }
+                        | LanSyncMessage::SyncChanges { .. }
+                        | LanSyncMessage::LiveChange { .. }
+                    ))
             )
         });
 
+        let storage = Arc::new(crate::sync_server::sync_server_tests::tests::MemBackend::new());
         let client = SyncClient::new(
             storage as Arc<dyn SyncRuntimeStorage>,
             PeerRecord {
@@ -124,7 +113,10 @@ mod tests {
             None,
         );
         client.start();
-        assert!(server.await.unwrap(), "failed apply must not emit LiveAck");
+        assert!(
+            server.await.unwrap(),
+            "a legacy peer must not receive data before registry admission"
+        );
         client.stop_and_join().await;
     }
 

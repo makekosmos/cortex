@@ -265,6 +265,7 @@ mod tests {
                 authenticated: true,
                 sync_complete: true,
                 negotiated_protocol: None,
+                registry_admission: None,
                 in_flight_feed_position: None,
                 pending_initial_snapshot_ack: None,
                 tx,

@@ -3,6 +3,8 @@ use super::*;
 #[path = "sync_server_messages/live_messages.rs"]
 mod live_messages;
 use live_messages::handle_live_message;
+#[path = "sync_server_messages/admission.rs"]
+mod admission;
 #[path = "sync_server_messages/hello.rs"]
 mod hello;
 
@@ -209,6 +211,15 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
             if is_last {
                 eprintln!("{TAG} Received all sync batches from peer {peer_id}");
             }
+        }
+
+        message @ (LanSyncMessage::RegistryAdmissionStart { .. }
+        | LanSyncMessage::RegistryAdmissionProof { .. }
+        | LanSyncMessage::RegistryAdmissionConfirm { .. }
+        | LanSyncMessage::RegistrySyncStart { .. }
+        | LanSyncMessage::RegistryEventsPage { .. }
+        | LanSyncMessage::RegistrySyncReady { .. }) => {
+            admission::handle_registry_admission(ctx, peer_id, message).await;
         }
 
         message @ (LanSyncMessage::SyncAck { .. }

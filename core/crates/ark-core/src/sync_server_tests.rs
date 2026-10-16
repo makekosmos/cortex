@@ -273,6 +273,23 @@ pub(crate) mod tests {
             );
             Ok(())
         }
+
+        async fn enroll_paired_device(
+            &self,
+            _local_device_id: &str,
+            target_device_id: &str,
+            transport_public_key: &str,
+        ) -> Result<(), String> {
+            let mut keys = self.load_peer_transport_keys().await?;
+            if keys
+                .get(target_device_id)
+                .is_some_and(|existing| existing != transport_public_key)
+            {
+                return Err("test transport key conflict".into());
+            }
+            keys.insert(target_device_id.into(), transport_public_key.into());
+            self.store_peer_transport_keys(&keys).await
+        }
     }
 
     #[async_trait::async_trait]

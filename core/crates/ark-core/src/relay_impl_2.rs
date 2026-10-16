@@ -105,7 +105,11 @@ impl RelaySync {
             }
             None => (None, None),
         };
-        let offer = ProtocolOffer::current(self.auth_secret.is_some());
+        let offer = if self.transport.supports_registry_admission() {
+            ProtocolOffer::current_with_registry_history(true)
+        } else {
+            ProtocolOffer::current(self.auth_secret.is_some())
+        };
         let negotiation_hmac =
             self.auth_secret
                 .as_deref()

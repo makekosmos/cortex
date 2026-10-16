@@ -12,6 +12,7 @@ mod fatsecret_type_registration;
 mod integration_schema_upgrade;
 mod iroh_bidirectional_burst;
 mod iroh_bidirectional_network;
+mod iroh_data_admission;
 mod iroh_loopback_smoke;
 mod iroh_round_trip;
 mod iroh_stop_teardown;

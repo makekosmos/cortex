@@ -1,0 +1,206 @@
+use super::super::*;
+
+#[cfg(test)]
+#[path = "admission_tests.rs"]
+mod tests;
+
+pub(super) async fn handle_registry_admission(
+    ctx: &MessageContext,
+    peer_id: usize,
+    message: LanSyncMessage,
+) {
+    let (mut admission, tx, device_id) = {
+        let mut peers = ctx.peers.lock().await;
+        let Some(peer) = peers.get_mut(&peer_id) else {
+            return;
+        };
+        let Some(admission) = peer.registry_admission.take() else {
+            let _ = peer.tx.send(Message::Close(None));
+            return;
+        };
+        (admission, peer.tx.clone(), peer.device_id.clone())
+    };
+
+    let update = match admission.handle(ctx.storage.as_ref(), message).await {
+        Ok(update) => update,
+        Err(error) => {
+            eprintln!("{TAG} direct registry admission failed for {device_id}: {error}");
+            reject_peer(ctx, peer_id, &tx).await;
+            return;
+        }
+    };
+    if revoke_disabled_sessions(ctx, &update.disabled_device_ids).await {
+        return;
+    }
+    for outgoing in update.outgoing {
+        send_msg(&tx, &outgoing);
+    }
+
+    let (became_ready, peer_entry) = {
+        let mut peers = ctx.peers.lock().await;
+        let Some(peer) = peers.get_mut(&peer_id) else {
+            return;
+        };
+        let became_ready = update.became_ready && !peer.authenticated;
+        peer.registry_admission = Some(admission);
+        let entry = PeerEntry {
+            device_id: peer.device_id.clone(),
+            device_name: peer.device_name.clone(),
+            platform: peer.platform.clone(),
+            app_version: peer.app_version.clone(),
+        };
+        (became_ready, entry)
+    };
+    if !became_ready {
+        return;
+    }
+
+    let generation = ctx.storage.selective_sync_policy_generation();
+    if let Err(error) = ctx
+        .storage
+        .begin_outbound_policy(&device_id, generation)
+        .await
+    {
+        eprintln!("{TAG} direct admission snapshot baseline failed: {error}");
+        reject_peer(ctx, peer_id, &tx).await;
+        return;
+    }
+
+    let activated = {
+        let mut peers = ctx.peers.lock().await;
+        let stale_ids = peers
+            .iter()
+            .filter_map(|(candidate_id, peer)| {
+                (*candidate_id != peer_id && peer.authenticated && peer.device_id == device_id)
+                    .then_some(*candidate_id)
+            })
+            .collect::<Vec<_>>();
+        for stale_id in stale_ids {
+            if let Some(stale) = peers.get_mut(&stale_id) {
+                eprintln!(
+                    "{TAG} Evicting stale admitted session for {}",
+                    stale.device_name
+                );
+                stale.authenticated = false;
+                let _ = stale.tx.send(Message::Close(None));
+            }
+            peers.remove(&stale_id);
+        }
+        peers.get_mut(&peer_id).is_some_and(|peer| {
+            if peer.authenticated || peer.device_id != device_id {
+                return false;
+            }
+            peer.authenticated = true;
+            true
+        })
+    };
+    if !activated {
+        return;
+    }
+
+    let peer_addresses = {
+        let peers = ctx.peers.lock().await;
+        peers
+            .get(&peer_id)
+            .map(|peer| peer.addresses.clone())
+            .unwrap_or_default()
+    };
+    let local_device_id = ctx.device_id.read().await.clone();
+    let local_addresses = ctx.own_addresses.read().await.clone();
+    let is_self = device_id == local_device_id
+        || (!peer_addresses.is_empty()
+            && peer_addresses
+                .iter()
+                .all(|address| local_addresses.contains(address)));
+    if !is_self {
+        let record = PeerRecord {
+            device_id: peer_entry.device_id.clone(),
+            device_name: peer_entry.device_name.clone(),
+            addresses: peer_addresses,
+            last_seen: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+            last_address: None,
+            platform: peer_entry.platform.clone(),
+            app_version: peer_entry.app_version.clone(),
+        };
+        let mut known = ctx.known_peer_records.lock().await;
+        *known = merge_peer_records(&known, &[record]);
+        if let Err(error) = save_known_peers(&ctx.storage, &known).await {
+            eprintln!("{TAG} failed to persist admitted peer metadata: {error}");
+        }
+    }
+
+    if let Some(handler) = ctx.on_peer_connect.lock().await.as_ref() {
+        handler(device_id.clone());
+    }
+    let vector = match load_version_vector(&ctx.storage).await {
+        Ok(vector) => vector,
+        Err(error) => {
+            eprintln!("{TAG} failed to load sync version vector: {error}");
+            reject_peer(ctx, peer_id, &tx).await;
+            return;
+        }
+    };
+    send_msg(
+        &tx,
+        &LanSyncMessage::VersionVector {
+            vector,
+            origin_device_id: None,
+        },
+    );
+    let known = ctx.known_peer_records.lock().await.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        send_msg(&tx, &LanSyncMessage::PeerList { peers: known });
+    });
+    eprintln!("{TAG} Direct registry admission ready for {device_id}");
+}
+
+async fn revoke_disabled_sessions(ctx: &MessageContext, disabled_device_ids: &[String]) -> bool {
+    if disabled_device_ids.is_empty() {
+        return false;
+    }
+    let disabled = disabled_device_ids
+        .iter()
+        .map(String::as_str)
+        .collect::<std::collections::HashSet<_>>();
+    let local_device_id = ctx.device_id.read().await.clone();
+    let local_device_disabled = disabled.contains(local_device_id.as_str());
+    let revoked_ids = {
+        let mut peers = ctx.peers.lock().await;
+        let revoked_ids = peers
+            .iter()
+            .filter_map(|(peer_id, peer)| {
+                (local_device_disabled || disabled.contains(peer.device_id.as_str()))
+                    .then_some(*peer_id)
+            })
+            .collect::<Vec<_>>();
+        for peer_id in &revoked_ids {
+            if let Some(peer) = peers.get_mut(peer_id) {
+                peer.authenticated = false;
+                peer.sync_complete = false;
+                peer.in_flight_feed_position = None;
+                peer.pending_initial_snapshot_ack = None;
+                let _ = peer.tx.send(Message::Close(None));
+            }
+            peers.remove(peer_id);
+        }
+        revoked_ids
+    };
+    if revoked_ids.is_empty() && !local_device_disabled {
+        return false;
+    }
+
+    let mut known = ctx.known_peer_records.lock().await;
+    known.retain(|peer| !local_device_disabled && !disabled.contains(peer.device_id.as_str()));
+    if let Err(error) = save_known_peers(&ctx.storage, &known).await {
+        eprintln!("{TAG} failed to persist registry revocation in peer list: {error}");
+    }
+    local_device_disabled
+}
+
+async fn reject_peer(ctx: &MessageContext, peer_id: usize, tx: &mpsc::UnboundedSender<Message>) {
+    if let Some(mut peer) = ctx.peers.lock().await.remove(&peer_id) {
+        peer.authenticated = false;
+    }
+    let _ = tx.send(Message::Close(None));
+}

@@ -311,7 +311,7 @@ mod tests {
         relay_b.stop().await;
     }
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn relay_propagates_live_change() {
+    async fn relay_rejects_legacy_peers_before_live_data() {
         let relay_url = test_relay_url().await;
         let storage_a = make_storage("device-a");
         let storage_b = make_storage("device-b");
@@ -327,8 +327,12 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(500)).await;
         let loaded_b = storage_b.load_entities(&HashMap::new()).await.unwrap();
         assert!(
-            loaded_b.iter().any(|entity| entity.id == "relay-live"),
-            "relay peer should receive live entity"
+            loaded_b.iter().all(|entity| entity.id != "relay-live"),
+            "a relay peer without registry admission must not receive live data"
+        );
+        assert!(
+            relay_b.get_connected_peer_entries().await.is_empty(),
+            "a peer without registry admission must not become connected"
         );
         relay_a.stop().await;
         relay_b.stop().await;

@@ -43,6 +43,16 @@ struct IncomingSyncState {
     last_update: Instant,
 }
 
+#[derive(Clone, Debug)]
+struct RegistryExchangeState {
+    session_id: String,
+    transport_public_key: String,
+    incoming_page_count: Option<u32>,
+    next_incoming_page: u32,
+    local_digest: Option<String>,
+    remote_digest: Option<String>,
+}
+
 /// A first-contact Hello parked for explicit user consent (KOS-369). The
 /// stored Hello is replayed through `handle_message` on «Принять», so
 /// acceptance applies exactly the same checks and persistence as a live
@@ -82,6 +92,8 @@ pub struct RelaySync {
     auth_secret: Option<String>,
     peers: Arc<Mutex<HashMap<String, RelayPeerState>>>,
     transport_keys: Arc<Mutex<HashMap<String, String>>>,
+    registry_exchanges: Arc<Mutex<HashMap<String, RegistryExchangeState>>>,
+    registry_ready: Arc<Mutex<HashMap<String, String>>>,
     /// First-contact Hellos awaiting «Принять / Отклонить», keyed by the
     /// claimed device id.
     pending_pairing: Mutex<HashMap<String, PendingPairingRequest>>,

@@ -184,6 +184,10 @@ impl PeerIdentityBackend for RevocableBackend {
     ) -> Result<(), String> {
         Ok(())
     }
+
+    async fn enroll_paired_device(&self, _: &str, _: &str, _: &str) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 #[tokio::test]

@@ -104,6 +104,15 @@ async fn transport_keys(state: &Arc<ServiceState>) -> Value {
     .unwrap()
 }
 
+fn registry_event_count(dir: &crate::test_support::TestTempDir) -> i64 {
+    let connection = rusqlite::Connection::open(dir.path().join("ark.db")).unwrap();
+    connection
+        .query_row("SELECT COUNT(*) FROM device_registry_events", [], |row| {
+            row.get(0)
+        })
+        .unwrap()
+}
+
 /// A + B running iroh, B has consumed A's ticket; A's snapshot must be
 /// carrying the pending consent request before the caller proceeds.
 /// Returns the fixtures and the ticket B dialed.
@@ -135,6 +144,8 @@ async fn pending_pairing() -> (ServiceFixture, ServiceFixture, String) {
         !peer_online(&snapshot_b, "device-a"),
         "the dialer must not admit the responder before it accepts pairing: {snapshot_b}"
     );
+    assert_eq!(registry_event_count(&fixture_a.dir), 0);
+    assert_eq!(registry_event_count(&fixture_b.dir), 0);
     (fixture_a, fixture_b, ticket)
 }
 
@@ -230,6 +241,9 @@ async fn accept_pairing_connects_persists_and_survives_restart() {
         snapshot(&state_b).await["outgoing_pairing"]["status"].as_str() == Some("connected")
     })
     .await;
+    // Both devices author one enrollment event; registry admission exchanges
+    // the peer's event before the data channel becomes ready.
+    assert_eq!(registry_event_count(&fixture_a.dir), 2);
 
     // Restart the initiator's sync the way boot restore does (same ticket):
     // the stored endpoint key re-admits it on A with no new consent prompt.
@@ -244,6 +258,7 @@ async fn accept_pairing_connects_persists_and_survives_restart() {
         peer_online(&snapshot(&state_a).await, "device-b")
     })
     .await;
+    assert_eq!(registry_event_count(&fixture_a.dir), 2);
     let snapshot_a = snapshot(&state_a).await;
     assert!(
         pending_request(&snapshot_a, "device-b").is_none(),
@@ -355,6 +370,8 @@ async fn decline_pairing_rejects_initiator_and_persists_nothing() {
                 .is_some_and(|raw| raw.contains("device-b")),
         "decline must persist no peer record: {peers_kv}"
     );
+    assert_eq!(registry_event_count(&fixture_a.dir), 0);
+    assert_eq!(registry_event_count(&fixture_b.dir), 0);
 
     handle_request(&state_a, Request::StopSync).await.unwrap();
     handle_request(&state_b, Request::StopSync).await.unwrap();
@@ -457,39 +474,4 @@ async fn cancel_pairing_clears_responder_prompt() {
     handle_request(&state_b, Request::StopSync).await.unwrap();
 }
 
-/// A ticket that decodes but whose endpoint never answers stays `pending` —
-/// the initiator waits on a human, and the background dial keeps retrying.
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn connect_with_pairing_code_to_dead_peer_stays_pending() {
-    let fixture = service_fixture();
-    let state = fixture.state.clone();
-    init_device(&state, &fixture.dir).await;
-    start_iroh(&state, "device-b", "Device B").await;
-
-    let dead_endpoint = iroh::SecretKey::generate().public();
-    let dead_addr =
-        iroh::EndpointAddr::new(dead_endpoint).with_ip_addr("127.0.0.1:9".parse().unwrap());
-    let dead_ticket = crate::iroh_transport::IrohTransport::ticket_string_for_addr(&dead_addr);
-
-    let reply = handle_request(
-        &state,
-        Request::ConnectWithPairingCode {
-            pairing_code: dead_ticket,
-        },
-    )
-    .await
-    .expect("an unreachable peer is a pending attempt, not an RPC error");
-    assert_eq!(reply["status"].as_str(), Some("pending"));
-
-    let snapshot = snapshot(&state).await;
-    assert_eq!(
-        snapshot["outgoing_pairing"]["status"].as_str(),
-        Some("pending"),
-        "{snapshot}"
-    );
-
-    handle_request(&state, Request::CancelPairing)
-        .await
-        .unwrap();
-    handle_request(&state, Request::StopSync).await.unwrap();
-}
+mod failure_cases;

@@ -149,6 +149,52 @@ pub enum LanSyncMessage {
     #[serde(rename = "pairing_accepted")]
     PairingAccepted { device_id: String },
 
+    /// Initiator's nonce for the mutual Iroh-identity proof used by direct
+    /// WebSocket sessions before they exchange registry history or data.
+    #[serde(rename = "registry_admission_start")]
+    RegistryAdmissionStart {
+        session_id: String,
+        initiator_device_id: String,
+        responder_device_id: String,
+        initiator_nonce: String,
+        protocol_version: u32,
+        negotiated_capabilities: Vec<String>,
+    },
+
+    /// Responder's proof over the full negotiated handshake transcript.
+    #[serde(rename = "registry_admission_proof")]
+    RegistryAdmissionProof {
+        session_id: String,
+        responder_nonce: String,
+        signer_device_id: String,
+        signature: String,
+    },
+
+    /// Initiator's proof, completing mutual device identity verification.
+    #[serde(rename = "registry_admission_confirm")]
+    RegistryAdmissionConfirm {
+        session_id: String,
+        signer_device_id: String,
+        signature: String,
+    },
+
+    /// Starts a bounded exchange of the append-only signed device registry history.
+    #[serde(rename = "registry_sync_start")]
+    RegistrySyncStart { session_id: String },
+
+    /// One bounded page of the append-only signed device registry history.
+    #[serde(rename = "registry_events_page")]
+    RegistryEventsPage {
+        session_id: String,
+        page_index: u32,
+        page_count: u32,
+        events: Vec<crate::domain::device_registry::RegistryEvent>,
+    },
+
+    /// Confirms that the complete registry projection for a session matches.
+    #[serde(rename = "registry_sync_ready")]
+    RegistrySyncReady { session_id: String, digest: String },
+
     #[serde(rename = "peer_list")]
     PeerList { peers: Vec<PeerRecord> },
 

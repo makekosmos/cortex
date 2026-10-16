@@ -54,25 +54,16 @@ impl RelaySync {
                     let Some(hello) = hello else {
                         return;
                     };
-                    let paired_keys =
-                        match crate::sync_server::load_peer_transport_keys(&self.storage).await {
-                            Ok(keys) => keys,
-                            Err(error) => {
-                                eprintln!("{TAG} failed to load pairing keys: {error}");
-                                return;
-                            }
-                        };
                     match self
                         .admit_transport_hello(
                             from_device_id.clone(),
                             transport_public_key.clone(),
                             hello,
-                            paired_keys,
                             false,
                         )
                         .await
                     {
-                        Ok(()) => self.mark_outgoing_accepted(&transport_public_key).await,
+                        Ok(()) => {}
                         Err(error) => eprintln!("{TAG} pairing admission failed: {error}"),
                     }
                     return;
@@ -102,6 +93,9 @@ impl RelaySync {
                     let known_key = authorized
                         .as_deref()
                         .or_else(|| paired_keys.get(&from_device_id).map(String::as_str));
+                    let paired_key_matches = paired_keys
+                        .get(&from_device_id)
+                        .is_some_and(|key| key == &transport_public_key);
                     let outgoing_match = self
                         .outgoing_pairing
                         .lock()
@@ -133,6 +127,12 @@ impl RelaySync {
                         }
                         let already_authenticated =
                             self.is_authenticated_peer(&from_device_id).await;
+                        if already_authenticated && known_key_matches {
+                            // RelaySync may announce itself with another Hello
+                            // after the Iroh stream already injected one. Do
+                            // not reset an in-flight registry exchange.
+                            return;
+                        }
                         if outgoing_match && !known_key_matches && !already_authenticated {
                             self.pending_responder_hellos
                                 .lock()
@@ -144,16 +144,12 @@ impl RelaySync {
                                     from_device_id.clone(),
                                     transport_public_key.clone(),
                                     msg,
-                                    paired_keys,
-                                    false,
+                                    paired_key_matches,
                                 )
                                 .await
                             {
                                 eprintln!("{TAG} peer admission failed: {error}");
                                 return;
-                            }
-                            if outgoing_match && already_authenticated {
-                                self.mark_outgoing_accepted(&transport_public_key).await;
                             }
                         }
                     } else if known_key.is_some() {
@@ -203,6 +199,8 @@ impl RelaySync {
                 if device_id != self.config.device_id {
                     self.peers.lock().await.remove(&device_id);
                     self.transport_keys.lock().await.remove(&device_id);
+                    self.registry_ready.lock().await.remove(&device_id);
+                    self.registry_exchanges.lock().await.remove(&device_id);
                     // An initiator that hung up (cancel, Engine stop) takes
                     // its unanswered consent request down with it.
                     if self
@@ -241,6 +239,8 @@ impl RelaySync {
                     evicted
                 };
                 self.transport_keys.lock().await.clear();
+                self.registry_ready.lock().await.clear();
+                self.registry_exchanges.lock().await.clear();
                 if !self.pending_pairing.lock().await.is_empty() {
                     self.pending_pairing.lock().await.clear();
                     self.notify_pairing_changed().await;

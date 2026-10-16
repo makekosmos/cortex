@@ -92,6 +92,7 @@ pub(super) mod reject_tests {
                 authenticated: true,
                 sync_complete: true,
                 negotiated_protocol: None,
+                registry_admission: None,
                 in_flight_feed_position: None,
                 pending_initial_snapshot_ack: None,
                 tx,
@@ -167,6 +168,10 @@ pub(super) mod reject_tests {
     /// A rejected hello must close the socket — otherwise the dialer waits
     /// forever on a half-open connection and never retries.
     async fn assert_hello_rejected_with_close(hello: LanSyncMessage, port: u16) {
+        let expected_target = match &hello {
+            LanSyncMessage::Hello { device_id, .. } => device_id.as_str(),
+            _ => unreachable!("test helper only accepts Hello"),
+        };
         let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}"))
             .await
             .expect("connect");
@@ -181,7 +186,7 @@ pub(super) mod reject_tests {
                     matches!(
                         deserialize_message(&text),
                         Some(LanSyncMessage::ProtocolRejected { target_device_id, .. })
-                            if target_device_id == "other"
+                            if target_device_id == expected_target
                     ),
                     "unexpected rejection response: {text}"
                 );
@@ -257,7 +262,7 @@ pub(super) mod reject_tests {
 
         let client_device_id = "client-device";
         let nonce = generate_auth_nonce();
-        let offer = ProtocolOffer::current(true);
+        let offer = ProtocolOffer::current_with_registry_history(true);
         let offer_hmac = compute_negotiation_offer_hmac(
             "shared-secret",
             "space-x",

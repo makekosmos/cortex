@@ -6,22 +6,26 @@ pub const MAX_PROTOCOL_CAPABILITIES: usize = 32;
 const MAX_CAPABILITY_ID_BYTES: usize = 64;
 
 const DURABLE_RECEIPT_ACK_V1: &str = "durable_receipt_ack_v1";
+const REGISTRY_HISTORY_V1: &str = "registry_history_v1";
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum ProtocolCapability {
     DurableReceiptAckV1,
+    RegistryHistoryV1,
 }
 
 impl ProtocolCapability {
     pub fn wire_id(self) -> &'static str {
         match self {
             Self::DurableReceiptAckV1 => DURABLE_RECEIPT_ACK_V1,
+            Self::RegistryHistoryV1 => REGISTRY_HISTORY_V1,
         }
     }
 
     fn parse(value: &str) -> Option<Self> {
         match value {
             DURABLE_RECEIPT_ACK_V1 => Some(Self::DurableReceiptAckV1),
+            REGISTRY_HISTORY_V1 => Some(Self::RegistryHistoryV1),
             _ => None,
         }
     }
@@ -45,6 +49,16 @@ impl ProtocolOffer {
                 BTreeSet::new()
             },
         }
+    }
+
+    pub fn current_with_registry_history(include_capabilities: bool) -> Self {
+        let mut offer = Self::current(include_capabilities);
+        if include_capabilities {
+            offer
+                .supported_capabilities
+                .insert(REGISTRY_HISTORY_V1.to_owned());
+        }
+        offer
     }
 
     pub fn new(
@@ -148,6 +162,7 @@ pub enum ProtocolNegotiationError {
     NoCommonVersion,
     InvalidSelection,
     InvalidSelectionProof,
+    MissingRegistryHistory,
 }
 
 impl ProtocolNegotiationError {
@@ -158,6 +173,7 @@ impl ProtocolNegotiationError {
             Self::NoCommonVersion => "upgrade_required",
             Self::InvalidSelection => "invalid_protocol_selection",
             Self::InvalidSelectionProof => "invalid_protocol_selection_proof",
+            Self::MissingRegistryHistory => "upgrade_required_registry_history",
         }
     }
 }
@@ -273,15 +289,21 @@ pub fn negotiate_protocol(
         .max()
         .ok_or(ProtocolNegotiationError::NoCommonVersion)?;
 
-    let capabilities = if capabilities_authenticated {
-        local
-            .supported_capabilities
-            .intersection(&remote.supported_capabilities)
-            .filter_map(|id| ProtocolCapability::parse(id))
-            .collect()
-    } else {
-        BTreeSet::new()
-    };
+    let common = local
+        .supported_capabilities
+        .intersection(&remote.supported_capabilities);
+    // Registry support only selects the wire flow; data still stays closed
+    // until signed history is verified. The durable receipt capability
+    // changes persistence guarantees and remains HMAC-authenticated.
+    let mut capabilities = common
+        .filter_map(|id| ProtocolCapability::parse(id))
+        .filter(|capability| {
+            *capability == ProtocolCapability::RegistryHistoryV1 || capabilities_authenticated
+        })
+        .collect::<BTreeSet<_>>();
+    if !capabilities_authenticated {
+        capabilities.remove(&ProtocolCapability::DurableReceiptAckV1);
+    }
 
     Ok(NegotiatedProtocol {
         version,

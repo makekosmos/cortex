@@ -1,5 +1,20 @@
 use super::*;
 
+#[test]
+fn peer_write_gate_allows_only_control_messages_before_admission() {
+    let user_data = LanSyncMessage::VersionVector {
+        vector: VersionVector::default(),
+        origin_device_id: None,
+    };
+    let registry_control = LanSyncMessage::RegistrySyncStart {
+        session_id: "session-1".to_owned(),
+    };
+
+    assert!(!peer_message_allowed(false, &user_data));
+    assert!(peer_message_allowed(false, &registry_control));
+    assert!(peer_message_allowed(true, &user_data));
+}
+
 #[tokio::test]
 async fn send_signed_integration_frame_requires_addressed_authenticated_peer() {
     let storage =
@@ -19,6 +34,7 @@ async fn send_signed_integration_frame_requires_addressed_authenticated_peer() {
             authenticated: true,
             sync_complete: true,
             negotiated_protocol: None,
+            registry_admission: None,
             in_flight_feed_position: None,
             pending_initial_snapshot_ack: None,
             tx,

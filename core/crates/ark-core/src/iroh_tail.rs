@@ -120,9 +120,9 @@ mod registry_tests {
         let old = SecretKey::generate().public();
         let new = SecretKey::generate().public();
         registry.insert(old, "device-A".to_string());
-        assert!(registry.bind_authenticated("device-A", &old.to_string()));
+        assert!(registry.bind_peer_for_control("device-A", &old.to_string()));
         registry.insert(new, "device-A".to_string());
-        assert!(registry.authenticated_endpoint("device-A").is_none());
+        assert!(registry.data_ready_endpoint("device-A").is_none());
     }
 
     #[test]
@@ -154,17 +154,15 @@ mod registry_tests {
         let endpoint_id = SecretKey::generate().public();
 
         registry.insert(endpoint_id, "device-A".to_string());
-        assert!(registry.bind_authenticated("device-A", &endpoint_id.to_string()));
+        assert!(registry.bind_peer_for_control("device-A", &endpoint_id.to_string()));
+        assert!(registry.mark_data_ready("device-A", &endpoint_id.to_string()));
 
         assert!(!registry.insert_untrusted(endpoint_id, "device-attacker".to_string()));
         assert_eq!(
             registry.device_id_for(&endpoint_id).as_deref(),
             Some("device-A")
         );
-        assert_eq!(
-            registry.authenticated_endpoint("device-A"),
-            Some(endpoint_id)
-        );
+        assert_eq!(registry.data_ready_endpoint("device-A"), Some(endpoint_id));
     }
 
     #[test]
@@ -174,14 +172,43 @@ mod registry_tests {
         let new_endpoint = SecretKey::generate().public();
 
         registry.insert(old_endpoint, "device-A".to_string());
-        assert!(registry.bind_authenticated("device-A", &old_endpoint.to_string()));
+        assert!(registry.bind_peer_for_control("device-A", &old_endpoint.to_string()));
+        assert!(registry.mark_data_ready("device-A", &old_endpoint.to_string()));
 
         assert!(!registry.insert_untrusted(new_endpoint, "device-A".to_string()));
         assert_eq!(registry.endpoint_id_for("device-A"), Some(old_endpoint));
-        assert_eq!(
-            registry.authenticated_endpoint("device-A"),
-            Some(old_endpoint)
-        );
+        assert_eq!(registry.data_ready_endpoint("device-A"), Some(old_endpoint));
+    }
+
+    #[test]
+    fn endpoint_binding_stays_closed_to_data_until_explicit_admission() {
+        let registry = DeviceRegistry::new();
+        let endpoint_id = SecretKey::generate().public();
+        registry.insert(endpoint_id, "device-A".to_string());
+
+        assert!(registry.bind_peer_for_control("device-A", &endpoint_id.to_string()));
+        assert!(!registry.is_data_ready_endpoint(&endpoint_id));
+        assert!(!registry.insert_untrusted(endpoint_id, "attacker".to_string()));
+
+        assert!(registry.mark_data_ready("device-A", &endpoint_id.to_string()));
+        assert!(registry.is_data_ready_endpoint(&endpoint_id));
+
+        registry.unbind_peer("device-A");
+        assert!(!registry.is_data_ready_endpoint(&endpoint_id));
+    }
+
+    #[test]
+    fn repeated_hello_keeps_the_existing_peer_phase() {
+        let registry = DeviceRegistry::new();
+        let endpoint_id = SecretKey::generate().public();
+        registry.insert(endpoint_id, "device-A".to_string());
+        assert!(registry.bind_peer_for_control("device-A", &endpoint_id.to_string()));
+
+        assert!(registry.insert_untrusted(endpoint_id, "device-A".to_string()));
+        assert!(registry.mark_data_ready("device-A", &endpoint_id.to_string()));
+        assert!(registry.insert_untrusted(endpoint_id, "device-A".to_string()));
+
+        assert!(registry.is_data_ready_endpoint(&endpoint_id));
     }
 
     #[test]

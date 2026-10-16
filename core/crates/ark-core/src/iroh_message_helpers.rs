@@ -20,6 +20,12 @@ fn message_variant_name(msg: &LanSyncMessage) -> &'static str {
         LanSyncMessage::SignedIntegrationAck { .. } => "SignedIntegrationAck",
         LanSyncMessage::PairingRejected { .. } => "PairingRejected",
         LanSyncMessage::PairingAccepted { .. } => "PairingAccepted",
+        LanSyncMessage::RegistryAdmissionStart { .. } => "RegistryAdmissionStart",
+        LanSyncMessage::RegistryAdmissionProof { .. } => "RegistryAdmissionProof",
+        LanSyncMessage::RegistryAdmissionConfirm { .. } => "RegistryAdmissionConfirm",
+        LanSyncMessage::RegistryEventsPage { .. } => "RegistryEventsPage",
+        LanSyncMessage::RegistrySyncStart { .. } => "RegistrySyncStart",
+        LanSyncMessage::RegistrySyncReady { .. } => "RegistrySyncReady",
     }
 }
 

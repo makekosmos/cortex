@@ -65,6 +65,7 @@ struct PeerState {
     authenticated: bool,
     sync_complete: bool,
     negotiated_protocol: Option<crate::protocol::NegotiatedProtocol>,
+    registry_admission: Option<crate::sync_registry_admission::DirectRegistryAdmission>,
     in_flight_feed_position: Option<i64>,
     pending_initial_snapshot_ack: Option<String>,
     tx: mpsc::UnboundedSender<Message>,
@@ -234,6 +235,25 @@ async fn save_removed_peer_ids(
     peer_ids: &[String],
 ) -> Result<(), String> {
     storage.store_removed_peer_ids(peer_ids).await
+}
+
+pub(crate) fn is_user_data_message(message: &LanSyncMessage) -> bool {
+    matches!(
+        message,
+        LanSyncMessage::VersionVector { .. }
+            | LanSyncMessage::SyncChanges { .. }
+            | LanSyncMessage::SyncAck { .. }
+            | LanSyncMessage::LiveChange { .. }
+            | LanSyncMessage::LiveAck { .. }
+            | LanSyncMessage::LiveReceiptAck { .. }
+            | LanSyncMessage::SignedIntegrationFrame { .. }
+            | LanSyncMessage::SignedIntegrationAck { .. }
+            | LanSyncMessage::PeerList { .. }
+    )
+}
+
+pub(crate) fn peer_message_allowed(authenticated: bool, message: &LanSyncMessage) -> bool {
+    authenticated || !is_user_data_message(message)
 }
 
 fn send_msg(tx: &mpsc::UnboundedSender<Message>, msg: &LanSyncMessage) {

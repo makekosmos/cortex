@@ -105,10 +105,27 @@ impl SyncServer {
                                 track_task(&conn_tasks, tokio::spawn(async move {
                                     while let Some(msg) = rx.recv().await {
                                         if let Message::Text(text) = &msg {
-                                            if let Some(LanSyncMessage::SignedIntegrationFrame {
-                                                frame,
-                                            }) = deserialize_message(text)
-                                            {
+                                            if let Some(sync_message) = deserialize_message(text) {
+                                                let peer_is_authenticated = peers_writer
+                                                    .lock()
+                                                    .await
+                                                    .get(&peer_id)
+                                                    .is_some_and(|peer| peer.authenticated);
+                                                if !super::super::peer_message_allowed(
+                                                    peer_is_authenticated,
+                                                    &sync_message,
+                                                ) {
+                                                    continue;
+                                                }
+                                                let LanSyncMessage::SignedIntegrationFrame {
+                                                    frame,
+                                                } = sync_message
+                                                else {
+                                                    if ws_sink.send(msg).await.is_err() {
+                                                        break;
+                                                    }
+                                                    continue;
+                                                };
                                                 let peer_is_current = peers_writer
                                                     .lock()
                                                     .await
@@ -150,6 +167,7 @@ impl SyncServer {
                                     authenticated: false,
                                     sync_complete: false,
                                     negotiated_protocol: None,
+                                    registry_admission: None,
                                     in_flight_feed_position: None,
                     pending_initial_snapshot_ack: None,
                                     tx: tx.clone(),
