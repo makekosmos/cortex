@@ -128,6 +128,93 @@ async fn db_backup_restore_roundtrip_survives_reinit() {
     assert_eq!(live_object_ids(&state), vec!["obj-before".to_string()]);
 }
 
+#[tokio::test]
+async fn db_backup_restore_quiesces_and_restarts_running_sync() {
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    let db_path = init_snapshot_db(&fixture).await;
+    seed_rpc_object(&state, "obj-before-sync", "before sync").await;
+    write_snapshot(&state, &db_path, "ark.db.backup-sync-restore");
+
+    handle_request(
+        &state,
+        Request::StartSync(StartSyncParams {
+            space_id: "restore-space".to_string(),
+            device_id: "restore-device".to_string(),
+            device_name: Some("Restore Device".to_string()),
+            port: Some(free_port()),
+            seed_addresses: None,
+            relay_url: None,
+            relay_api_key: None,
+            auth_secret: None,
+            use_iroh: false,
+            iroh_peer_ticket: None,
+            iroh_relay_url: None,
+            pairing_connect: false,
+            discovery_enabled: false,
+            bind: SyncBind::Loopback,
+            app_version: None,
+        }),
+    )
+    .await
+    .expect("loopback sync must start");
+
+    assert_eq!(
+        handle_request(&state, Request::GetSyncSnapshot)
+            .await
+            .unwrap()["running"],
+        json!(true)
+    );
+    let running_server = state
+        .sync
+        .lock()
+        .await
+        .as_ref()
+        .expect("sync runtime must be active")
+        .server
+        .clone();
+
+    let report = handle_request(
+        &state,
+        Request::DbBackupRestore {
+            backup_id: "ark.db.backup-sync-restore".to_string(),
+        },
+    )
+    .await
+    .expect("restore must finish and restart sync");
+
+    assert_eq!(report["restored"], json!(true));
+    assert_eq!(live_object_ids(&state), vec!["obj-before-sync".to_string()]);
+    let restarted_server = state
+        .sync
+        .lock()
+        .await
+        .as_ref()
+        .expect("sync runtime must be active after restore")
+        .server
+        .clone();
+    assert!(
+        !Arc::ptr_eq(&running_server, &restarted_server),
+        "restore must tear down and rebuild the sync runtime"
+    );
+    assert_eq!(
+        handle_request(&state, Request::GetSyncSnapshot)
+            .await
+            .unwrap()["running"],
+        json!(true),
+        "sync must be running again after successful restore"
+    );
+    handle_request(&state, Request::StopSync).await.unwrap();
+}
+
+fn free_port() -> u16 {
+    std::net::TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port()
+}
+
 /// AC3: невалидные id, отсутствующие, garbage и чужие схемы не трогают live DB.
 #[tokio::test]
 async fn db_backup_restore_rejects_invalid_sources_without_touching_live() {

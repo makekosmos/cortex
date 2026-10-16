@@ -301,13 +301,59 @@ pub(super) async fn db_backup_restore(
 ) -> Result<Value, String> {
     let db_path = current_db_path(state)?;
     let _gate = state.backup_gate.lock().await;
-    let report = get_db_handle(state)?
+    let db_handle = get_db_handle(state)?;
+    let validation = db_handle
+        .query(
+            db::CommandContext::engine(),
+            db::SystemReadQuery::ValidateSnapshot {
+                db_path: db_path.clone(),
+                backup_id: backup_id.clone(),
+            },
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    if validation["valid"] != json!(true) {
+        return Err(validation["error"]
+            .as_str()
+            .unwrap_or("snapshot is not valid for this ARK database")
+            .to_string());
+    }
+
+    let restart_params = state
+        .sync
+        .lock()
+        .await
+        .as_ref()
+        .map(|runtime| runtime.start_params.clone());
+    if restart_params.is_some() {
+        handle_stop_sync(state).await;
+    }
+
+    let restore_result = db_handle
         .submit_maintenance(
             db::CommandContext::engine_maintenance(),
             db::RestoreSnapshotCommand::new(db_path, backup_id),
         )
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| error.to_string());
+
+    let report = match (restore_result, restart_params) {
+        (Ok(report), Some(params)) => {
+            handle_start_sync_with_params(state, params)
+                .await
+                .map_err(|error| {
+                    format!("restore succeeded but sync could not restart: {error}")
+                })?;
+            report
+        }
+        (Ok(report), None) => report,
+        (Err(error), Some(_)) => {
+            return Err(format!(
+                "restore failed; sync stays stopped because database state is uncertain: {error}"
+            ));
+        }
+        (Err(error), None) => return Err(error),
+    };
     serde_json::to_value(report).map_err(|error| error.to_string())
 }
 
