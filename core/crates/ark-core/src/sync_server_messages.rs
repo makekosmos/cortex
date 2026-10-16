@@ -7,6 +7,9 @@ use live_messages::handle_live_message;
 mod admission;
 #[path = "sync_server_messages/hello.rs"]
 mod hello;
+#[cfg(test)]
+#[path = "sync_server_messages/live_message_tests.rs"]
+mod live_message_tests;
 
 pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: LanSyncMessage) {
     let MessageContext {

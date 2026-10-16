@@ -6,6 +6,7 @@ use crate::application::sync_storage::{
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Mutex as StdMutex;
 
     // Minimal in-memory backend for unit tests.
@@ -14,6 +15,7 @@ pub(crate) mod tests {
         entities: StdMutex<HashMap<String, SyncEntity>>,
         authenticated_apply_error: StdMutex<Option<String>>,
         peer_transport_keys_error: StdMutex<Option<String>>,
+        outbound_snapshot_identity_completions: AtomicUsize,
     }
 
     impl MemBackend {
@@ -23,7 +25,13 @@ pub(crate) mod tests {
                 entities: StdMutex::new(HashMap::new()),
                 authenticated_apply_error: StdMutex::new(None),
                 peer_transport_keys_error: StdMutex::new(None),
+                outbound_snapshot_identity_completions: AtomicUsize::new(0),
             }
+        }
+
+        pub(crate) fn outbound_snapshot_identity_completion_count(&self) -> usize {
+            self.outbound_snapshot_identity_completions
+                .load(Ordering::SeqCst)
         }
 
         pub(crate) fn fail_authenticated_apply(&self, error: &str) {
@@ -209,6 +217,15 @@ pub(crate) mod tests {
                 },
                 ..Default::default()
             })
+        }
+        async fn complete_outbound_snapshot_identity(
+            &self,
+            _: &str,
+            _: &crate::application::sync_storage::PolicyIdentity,
+        ) -> Result<crate::application::sync_storage::OutboundProgress, String> {
+            self.outbound_snapshot_identity_completions
+                .fetch_add(1, Ordering::SeqCst);
+            Err("test_policy_identity_completion_observed".into())
         }
         async fn record_outbound_scan(
             &self,
