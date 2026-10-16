@@ -43,3 +43,5 @@ mod type_registry_slice1;
 #[allow(clippy::unwrap_used)]
 #[path = "support/phase3_legacy_fixtures.rs"]
 mod phase3_legacy_fixtures;
+
+mod data_platform_peer_policy;

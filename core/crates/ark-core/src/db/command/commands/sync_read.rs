@@ -17,6 +17,7 @@ pub(crate) struct LoadEntitiesQuery {
     vector: VersionVector,
     device_id: String,
     profile: Option<SelectiveSyncProfile>,
+    peer_device_id: Option<String>,
     page: Option<(usize, usize)>,
     class: CommandClass,
 }
@@ -32,6 +33,7 @@ impl LoadEntitiesQuery {
             vector,
             device_id,
             profile,
+            peer_device_id: None,
             page: None,
             class: class.into(),
         }
@@ -49,6 +51,25 @@ impl LoadEntitiesQuery {
             vector,
             device_id,
             profile,
+            peer_device_id: None,
+            page: Some((offset, limit)),
+            class: class.into(),
+        }
+    }
+
+    pub(crate) fn page_for_peer(
+        vector: VersionVector,
+        device_id: String,
+        peer_device_id: String,
+        class: SyncReadClass,
+        offset: usize,
+        limit: usize,
+    ) -> Self {
+        Self {
+            vector,
+            device_id,
+            profile: None,
+            peer_device_id: Some(peer_device_id),
             page: Some((offset, limit)),
             class: class.into(),
         }
@@ -79,10 +100,18 @@ impl DbQuery for LoadEntitiesQuery {
         let Self {
             vector,
             device_id,
-            profile,
+            mut profile,
+            peer_device_id,
             page,
             class: _,
         } = self;
+        if let Some(peer_device_id) = peer_device_id {
+            context.require_sync_peer_matches(&peer_device_id)?;
+            profile =
+                crate::data_platform::load_accepted_peer_sync_policy(connection, &peer_device_id)
+                    .map_err(DbError::from_application_error)?
+                    .map(|policy| policy.selective_profile());
+        }
         let entities = match page {
             None => {
                 SqliteStorageBackend::collect_entities_blocking(connection, &vector, &device_id)

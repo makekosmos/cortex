@@ -127,10 +127,10 @@ impl SyncEntityReadPort for SqliteStorageBackend {
         self.db
             .query(
                 CommandContext::sync_peer(peer_device_id.to_owned(), class.into()),
-                LoadEntitiesQuery::page(
+                LoadEntitiesQuery::page_for_peer(
                     vector.clone(),
                     self.device_id(),
-                    self.selective_sync_profile(),
+                    peer_device_id.to_owned(),
                     class,
                     offset,
                     limit,

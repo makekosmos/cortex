@@ -1,0 +1,132 @@
+#![allow(clippy::unwrap_used)]
+use ark_core::application::sync_storage::{
+    SyncEntityMutationPort, SyncEntityReadPort, SyncReadClass,
+};
+use ark_core::{data_platform, db};
+use rusqlite::Connection;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
+#[tokio::test]
+async fn accepted_peer_policies_project_snapshot_pages_per_peer() {
+    use ark_core::db::SqliteStorageBackend;
+    let conn = Connection::open_in_memory().unwrap();
+    db::init_schema(&conn).unwrap();
+    for (id, name) in [("com.example.note", "Note"), ("com.example.game", "Game")] {
+        conn.execute(
+            concat!(
+                "INSERT INTO object_types(id,name,schema_json,ui_schema_json,created_at,",
+                "updated_at) VALUES(?1,?2,'{}','{}','t','t')"
+            ),
+            rusqlite::params![id, name],
+        )
+        .unwrap();
+    }
+    conn.execute(
+        concat!(
+            "INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,",
+            "created_at,updated_at) VALUES('note','com.example.note','1.0.0','Note',",
+            "'{\"body\":\"full\"}','{}','t','t')"
+        ),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        concat!(
+            "INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,",
+            "created_at,updated_at) VALUES('game','com.example.game','1.0.0','Game',",
+            "'{\"body\":\"heavy\"}','{\"localState\":{\"path\":\"C:/game\"}}','t','t')"
+        ),
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        concat!(
+            "INSERT INTO object_links(id,source_object_id,target_object_id,link_type,",
+            "created_at) VALUES('link','note','game','related','t')"
+        ),
+        [],
+    )
+    .unwrap();
+    let note_profile = data_platform::SyncProfile {
+        profile_id: "note-only".into(),
+        device_id: "peer-a".into(),
+        revision: 1,
+        name: "Notes".into(),
+        active: true,
+        rules: vec![data_platform::SyncProfileRule {
+            resource_kind: "type".into(),
+            resource_id: "com.example.note".into(),
+            mode: data_platform::SyncMode::Full,
+            filter: data_platform::FilterV1::match_all(),
+        }],
+    };
+    let game_profile = data_platform::SyncProfile {
+        profile_id: "game-metadata".into(),
+        device_id: "peer-b".into(),
+        revision: 1,
+        name: "Game metadata".into(),
+        active: true,
+        rules: vec![data_platform::SyncProfileRule {
+            resource_kind: "type".into(),
+            resource_id: "com.example.game".into(),
+            mode: data_platform::SyncMode::Metadata,
+            filter: data_platform::FilterV1::match_all(),
+        }],
+    };
+    data_platform::accept_peer_sync_policy(
+        &conn,
+        "peer-a",
+        1,
+        &note_profile.digest(),
+        &note_profile.rules,
+    )
+    .unwrap();
+    data_platform::accept_peer_sync_policy(
+        &conn,
+        "peer-b",
+        1,
+        &game_profile.digest(),
+        &game_profile.rules,
+    )
+    .unwrap();
+    let backend = Arc::new(SqliteStorageBackend::for_test(Arc::new(Mutex::new(conn))));
+    let peer_a = backend
+        .load_entities_page_for_peer("peer-a", SyncReadClass::SyncLive, &HashMap::new(), 0, 100)
+        .await
+        .unwrap();
+    let peer_b = backend
+        .load_entities_page_for_peer("peer-b", SyncReadClass::SyncLive, &HashMap::new(), 0, 100)
+        .await
+        .unwrap();
+    assert!(peer_a.iter().any(|entity| entity.id == "note"));
+    assert!(!peer_a.iter().any(|entity| entity.id == "game"));
+    assert!(peer_b.iter().any(|entity| entity.id == "game"));
+    assert!(!peer_b.iter().any(|entity| entity.id == "note"));
+    let game = peer_b.iter().find(|entity| entity.id == "game").unwrap();
+    assert!(!game.data.contains_key("contentJson"));
+    assert!(!game.data.contains_key("localState"));
+
+    let loaded = backend.load_entities(&HashMap::new()).await.unwrap();
+    assert!(loaded.iter().any(|entity| entity.id == "note"));
+    assert!(loaded.iter().any(|entity| entity.id == "game"));
+    assert!(loaded
+        .iter()
+        .any(|entity| entity.entity_type == "object_link"));
+    assert_eq!(
+        backend
+            .load_entities_page(&HashMap::new(), 0, 2)
+            .await
+            .unwrap()
+            .len(),
+        2
+    );
+    backend
+        .apply_entity(loaded.iter().find(|entity| entity.id == "note").unwrap())
+        .await
+        .unwrap();
+    backend
+        .apply_entity(loaded.iter().find(|entity| entity.id == "note").unwrap())
+        .await
+        .unwrap();
+}

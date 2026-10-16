@@ -1,11 +1,8 @@
 #![allow(clippy::unwrap_used)]
-use ark_core::application::sync_storage::{
-    CommittedFeedPort, SyncEntityMutationPort, SyncEntityReadPort,
-};
+use ark_core::application::sync_storage::CommittedFeedPort;
 use ark_core::{data_platform, db};
 use rusqlite::Connection;
 use serde_json::json;
-use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 #[test]
@@ -294,91 +291,6 @@ fn selective_profile_projects_closure_in_order_and_keeps_local_copy_on_disable()
     let disabled = data_platform::filter_entities_for_profile(&Default::default(), &projected);
     assert!(disabled.is_empty());
     assert_eq!(projected.len(), 4);
-}
-
-#[tokio::test]
-async fn selective_profile_is_used_by_backend_pages_and_replay_is_idempotent() {
-    use ark_core::db::SqliteStorageBackend;
-    let conn = Connection::open_in_memory().unwrap();
-    db::init_schema(&conn).unwrap();
-    for (id, name) in [("com.example.note", "Note"), ("com.example.game", "Game")] {
-        conn.execute(
-            concat!(
-                "INSERT INTO object_types(id,name,schema_json,ui_schema_json,created_at,",
-                "updated_at) VALUES(?1,?2,'{}','{}','t','t')"
-            ),
-            rusqlite::params![id, name],
-        )
-        .unwrap();
-    }
-    conn.execute(
-        concat!(
-            "INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,",
-            "created_at,updated_at) VALUES('note','com.example.note','1.0.0','Note',",
-            "'{\"body\":\"full\"}','{}','t','t')"
-        ),
-        [],
-    )
-    .unwrap();
-    conn.execute(
-        concat!(
-            "INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,",
-            "created_at,updated_at) VALUES('game','com.example.game','1.0.0','Game',",
-            "'{\"body\":\"heavy\"}','{\"localState\":{\"path\":\"C:/game\"}}','t','t')"
-        ),
-        [],
-    )
-    .unwrap();
-    conn.execute(
-        concat!(
-            "INSERT INTO object_links(id,source_object_id,target_object_id,link_type,",
-            "created_at) VALUES('link','note','game','related','t')"
-        ),
-        [],
-    )
-    .unwrap();
-    let backend = Arc::new(SqliteStorageBackend::for_test(Arc::new(Mutex::new(conn))));
-    let mut profile = data_platform::SelectiveSyncProfile::default();
-    profile.set_rule("type", "com.example.note", data_platform::SyncMode::Full);
-    profile.set_rule(
-        "type",
-        "com.example.game",
-        data_platform::SyncMode::Metadata,
-    );
-    backend.set_selective_sync_profile(Some(profile));
-    let loaded = backend.load_entities(&HashMap::new()).await.unwrap();
-    assert_eq!(
-        loaded
-            .iter()
-            .map(|entity| entity.entity_type.as_str())
-            .collect::<Vec<_>>(),
-        [
-            "object_type",
-            "object_type",
-            "object",
-            "object",
-            "object_link"
-        ]
-    );
-    let game = loaded.iter().find(|entity| entity.id == "game").unwrap();
-    assert!(!game.data.contains_key("contentJson"));
-    assert!(!game.data.contains_key("localState"));
-    assert_eq!(
-        backend
-            .load_entities_page(&HashMap::new(), 0, 2)
-            .await
-            .unwrap()
-            .len(),
-        2
-    );
-    backend
-        .apply_entity(loaded.iter().find(|entity| entity.id == "note").unwrap())
-        .await
-        .unwrap();
-    backend
-        .apply_entity(loaded.iter().find(|entity| entity.id == "note").unwrap())
-        .await
-        .unwrap();
 }
 
 #[test]

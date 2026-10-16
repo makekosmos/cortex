@@ -13,6 +13,19 @@ impl AcceptedPeerSyncPolicy {
     pub fn computed_digest(&self) -> String {
         digest_sync_policy(&self.rules)
     }
+
+    pub fn selective_profile(&self) -> SelectiveSyncProfile {
+        let mut profile = SelectiveSyncProfile::default();
+        for rule in &self.rules {
+            profile.set_rule_with_filter(
+                &rule.resource_kind,
+                &rule.resource_id,
+                rule.mode,
+                rule.filter.clone(),
+            );
+        }
+        profile
+    }
 }
 
 fn digest_sync_policy(rules: &[SyncProfileRule]) -> String {
