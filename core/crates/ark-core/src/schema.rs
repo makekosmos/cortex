@@ -369,6 +369,33 @@ CREATE TABLE IF NOT EXISTS sync_signed_replay_reservations (
 
 CREATE INDEX IF NOT EXISTS idx_sync_signed_replay_origin
 ON sync_signed_replay_reservations(origin_node_id, key_epoch);
+
+CREATE TABLE IF NOT EXISTS device_registry_events (
+    registry_position INTEGER NOT NULL,
+    actor_device_id TEXT NOT NULL,
+    actor_sequence INTEGER NOT NULL CHECK(actor_sequence > 0),
+    event_id TEXT NOT NULL UNIQUE,
+    target_device_id TEXT NOT NULL,
+    previous_event_hash TEXT,
+    event_hash TEXT NOT NULL,
+    event_json TEXT NOT NULL,
+    UNIQUE(actor_device_id, actor_sequence)
+);
+
+CREATE INDEX IF NOT EXISTS idx_device_registry_events_target
+ON device_registry_events(target_device_id, actor_device_id, actor_sequence);
+
+CREATE TABLE IF NOT EXISTS device_registry_projection (
+    device_id TEXT PRIMARY KEY,
+    signing_public_key BLOB NOT NULL CHECK(length(signing_public_key) = 32),
+    key_epoch INTEGER NOT NULL CHECK(key_epoch > 0),
+    admission_epoch INTEGER NOT NULL CHECK(admission_epoch > 0),
+    display_name TEXT,
+    disabled_event_id TEXT,
+    display_name_hlc TEXT,
+    updated_hlc TEXT,
+    updated_event_id TEXT
+) WITHOUT ROWID;
 ";
 
 pub const CREATE_OBJECT_SEARCH_FTS: &str = "

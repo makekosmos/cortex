@@ -2,6 +2,16 @@
   "version": 1,
   "entries": [
     {
+      "path": "core/crates/ark-core/src/db/command/commands/device_registry.rs",
+      "category": "SQLite mutation API",
+      "count": 4
+    },
+    {
+      "path": "core/crates/ark-core/src/db/command/commands/device_registry_sync.rs",
+      "category": "SQLite mutation API",
+      "count": 2
+    },
+    {
       "path": "core/crates/ark-core/src/db/committed_feed/delivery.rs",
       "category": "SQLite mutation API",
       "count": 3
@@ -194,7 +204,7 @@
     {
       "path": "core/crates/ark-core/src/db/open.rs",
       "category": "SQLite mutation API",
-      "count": 13
+      "count": 17
     },
     {
       "path": "core/crates/ark-core/src/db/snapshot.rs",

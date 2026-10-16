@@ -1,5 +1,12 @@
 mod encoding;
+mod handshake;
+pub(crate) mod state;
 mod validation;
+
+pub use handshake::{
+    RegistryHandshakeProof, RegistryHandshakeTranscript, RegistryHandshakeTranscriptDraft,
+};
+pub use state::{DeviceRecord, RegistryApplyError, RegistryApplyOutcome, RegistryHead};
 
 use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
 use encoding::{canonical_bytes, decode_signature, encode_hex};
@@ -24,7 +31,7 @@ pub enum RegistryEventError {
     KeyEpochMismatch,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(try_from = "String")]
 pub struct DeviceId(String);
 
@@ -115,6 +122,12 @@ impl SigningPublicKey {
     pub fn as_bytes(&self) -> &[u8; 32] {
         &self.0
     }
+
+    pub fn verifying_key(&self) -> Result<VerifyingKey, RegistryEventError> {
+        VerifyingKey::from_bytes(&self.0).map_err(|_| RegistryEventError::InvalidField {
+            field: "public_key",
+        })
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -123,7 +136,7 @@ pub enum RegistryOperation {
     Enroll {
         signing_public_key: SigningPublicKey,
         key_epoch: u64,
-        display_name: DisplayName,
+        display_name: Option<DisplayName>,
     },
     Rename {
         display_name: DisplayName,
@@ -278,8 +291,28 @@ impl RegistryEvent {
         &self.actor_device_id
     }
 
+    pub fn event_id(&self) -> &str {
+        &self.event_id
+    }
+
+    pub fn previous_event_hash(&self) -> Option<&str> {
+        self.previous_event_hash.as_deref()
+    }
+
     pub fn actor_sequence(&self) -> u64 {
         self.actor_sequence
+    }
+
+    pub fn actor_key_epoch(&self) -> u64 {
+        self.actor_key_epoch
+    }
+
+    pub fn actor_admission_epoch(&self) -> u64 {
+        self.actor_admission_epoch
+    }
+
+    pub fn hlc(&self) -> &str {
+        &self.hlc
     }
 
     pub fn target_device_id(&self) -> &DeviceId {

@@ -9,24 +9,28 @@ mod handle;
 mod operation_receipt;
 pub(crate) use handle::{DbHandle, DbOwner};
 
+#[cfg(test)]
+pub(crate) use commands::DeviceEnrollmentOutcome;
 pub(crate) use commands::{
     AcquireIntegrationRefreshLeaseCommand, ApplyAuthenticatedSyncEntityCommand,
-    ApplySignedIntegrationFrameCommand, ApplySyncEntityCommand, AuthenticatedCoreTaskWrite,
-    AuthorizedTransportKeyQuery, CanonicalGameUpsertCommand, ClearAllCommand,
-    CommittedFeedDeliveryPageQuery, CommittedFeedPageQuery, CommittedFeedProgress,
+    ApplyRegistryEventsCommand, ApplySignedIntegrationFrameCommand, ApplySyncEntityCommand,
+    AuthenticatedCoreTaskWrite, AuthorizedTransportKeyQuery, CanonicalGameUpsertCommand,
+    ClearAllCommand, CommittedFeedDeliveryPageQuery, CommittedFeedPageQuery, CommittedFeedProgress,
     CommittedFeedProgressCommand, CommittedFeedProgressOperation, CommittedFeedSnapshotQuery,
     CompactUsageSyncLogCommand, DeleteObjectLinkCommand, DeleteObjectTypeCommand,
-    DeleteTrashedCommand, EnsureUsageSequenceMigratedCommand, GetSyncKeyValueQuery,
-    IdentityErrorStyle, IntegrationReadQuery, LegacyDeleteCommand, LegacyGraphWriteCommand,
-    LoadEntitiesQuery, LoadOrGenerateIrohSecretKeyCommand, LocalBookCoverCommand,
-    LocalCoreTaskWrite, LocalObjectDeleteCommand, LocalObjectUpsertCommand, LocalUsageWriteCommand,
-    ObjectReadQuery, PersistIntegrationGrantCommand, PersistNodeAuthorizationCommand,
+    DeleteTrashedCommand, EnrollPairedDeviceCommand, EnsureUsageSequenceMigratedCommand,
+    GetSyncKeyValueQuery, IdentityErrorStyle, IntegrationReadQuery, LegacyDeleteCommand,
+    LegacyGraphWriteCommand, LoadEntitiesQuery, LoadOrGenerateIrohSecretKeyCommand,
+    LoadRegistryEventsQuery, LocalBookCoverCommand, LocalCoreTaskWrite, LocalObjectDeleteCommand,
+    LocalObjectUpsertCommand, LocalUsageWriteCommand, ObjectReadQuery,
+    PersistIntegrationGrantCommand, PersistNodeAuthorizationCommand,
     PublishIntegrationCredentialEnvelopeCommand, ReceiveInboxReceiptCommand,
     RegisterPackageTypesCommand, RemoteCoreTaskOutcome, ReplaceObjectLinkCommand,
-    RestoreSnapshotCommand, SetLocalSyncKeyValueCommand, SetSyncKeyValueCommand, SystemReadQuery,
-    TrackedAppDeleteCommand, TrackedAppUpsertCommand, TypeReadQuery, UpsertExternalRefCommand,
-    UpsertObjectLinkCommand, UpsertObjectTypeCommand, UsageCompleteThroughQuery, UsageReadQuery,
-    ValidateOutboundSignedFrameQuery,
+    RestoreSnapshotCommand, SetLocalSyncKeyValueCommand, SetSyncKeyValueCommand,
+    SignRegistryHandshakeCommand, SystemReadQuery, TrackedAppDeleteCommand,
+    TrackedAppUpsertCommand, TypeReadQuery, UpsertExternalRefCommand, UpsertObjectLinkCommand,
+    UpsertObjectTypeCommand, UsageCompleteThroughQuery, UsageReadQuery,
+    ValidateOutboundSignedFrameQuery, VerifyRegistryHandshakeQuery,
 };
 #[cfg(test)]
 pub(crate) use operation_receipt::OperationResult;

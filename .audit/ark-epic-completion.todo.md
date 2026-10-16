@@ -32,6 +32,14 @@ Rigor: high. The work changes persistent storage, authorization, replication and
 
 Execution order: KOS-429 -> KOS-422 -> KOS-423 -> KOS-426 -> KOS-427 -> KOS-428 -> KOS-424 -> KOS-425. This keeps policy and merge behavior inside the current crate until their contracts settle, then extracts the finished boundaries.
 
+### Roadmap reconciliation from the user's lead-agent review
+
+The attached review describes an earlier source state for KOS-417/419. The current branch already contains and has committed the census gate, `DbHandle`, sealed typed commands and queries, the bounded writer actor, lifecycle/recovery handling, `Backfill` admission, and durable operation receipts. These are not remaining implementation steps. Their acceptance still needs evidence reconciliation against Linear before the epic closes.
+
+The review's forward-looking constraints are adopted for remaining work: keep one database and principal-scoped operation receipts; pass trusted principals through both writes and reads; persist device policy separately from application grants; bind feed/snapshot progress to policy generation; model local eviction as a local-only maintenance operation with residency evidence; keep blob content outside database commands; and preserve separate `SyncLive` and low-priority `Backfill` classes. The existing KOS-422 design already captures these as release requirements.
+
+The census tests correctly classify inline test modules. The KOS-429 changes added six SQL mutations inside sealed `DbCommand` implementations and four schema-bootstrap mutations in `db/open.rs`. These are inside the existing writer-actor/bootstrap ownership boundary, so their exact counts are now recorded in `scripts/ark-db-writers.allow.json`; `pnpm run test:ark-db-writers` passes. The gate continues to reject unlisted production findings and stale counts.
+
 ## Phase C: run the loop
 
 - [ ] For each unit, record its hypothesis and a before-state check.

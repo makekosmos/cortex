@@ -115,6 +115,10 @@ impl DbCommand for ApplySignedIntegrationFrameCommand {
         transaction: &Transaction<'_>,
     ) -> Result<Self::Output, DbError> {
         let authenticated_peer_id = context.authenticated_peer_id()?;
+        super::device_registry_sync::require_registry_peer_admitted(
+            transaction,
+            authenticated_peer_id,
+        )?;
         let mismatch = |message: &str| DbError::from_application_error(message.into());
         let identity_matches = self.frame.space_id == self.expected_space_id
             && self.frame.origin_node_id == authenticated_peer_id

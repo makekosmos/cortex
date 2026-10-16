@@ -9,6 +9,8 @@ pub fn clear_all(conn: &Connection) -> Result<(), String> {
     }
     let phase3_completed = phase3_migration_completed(conn)?;
     for table in [
+        "device_registry_events",
+        "device_registry_projection",
         "object_migration_quarantine",
         "object_local_state",
         "entity_write_receipts",

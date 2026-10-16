@@ -429,5 +429,6 @@ async fn submit_rejects_more_work_than_one_source_can_admit() {
         .is_ok());
 }
 
+mod device_registry;
 mod operation_receipts;
 mod production_actor;

@@ -93,7 +93,10 @@ fn validate_operation(
                     field: "enrollment",
                 });
             }
-            DisplayName::parse(display_name.as_str()).map(|_| ())
+            display_name
+                .as_ref()
+                .map(|name| DisplayName::parse(name.as_str()).map(|_| ()))
+                .unwrap_or(Ok(()))
         }
         RegistryOperation::RebindKey { .. } | RegistryOperation::Disable => Ok(()),
     }

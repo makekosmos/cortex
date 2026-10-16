@@ -72,6 +72,10 @@ impl DbCommand for ReceiveInboxReceiptCommand {
         transaction: &Transaction<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_sync_peer_matches(&self.peer_device_id)?;
+        super::device_registry_sync::require_registry_peer_admitted(
+            transaction,
+            &self.peer_device_id,
+        )?;
         let removed: Vec<String> = crate::db::get_sync_kv(transaction, "sync.removed_peers")
             .map_err(DbError::from_application_error)?
             .map(|raw| serde_json::from_str(&raw).map_err(|error| error.to_string()))
@@ -299,6 +303,7 @@ impl DbCommand for ApplyAuthenticatedSyncEntityCommand {
         transaction: &Transaction<'_>,
     ) -> Result<Self::Output, DbError> {
         let peer_id = context.authenticated_peer_id()?;
+        super::device_registry_sync::require_registry_peer_admitted(transaction, peer_id)?;
         let message_id = self.message_id;
         let payload = serde_json::to_string(&self.entity)
             .map_err(|error| DbError::from_application_error(error.to_string()))?;

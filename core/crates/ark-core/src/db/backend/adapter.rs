@@ -8,12 +8,12 @@ use crate::db::{
     CommandClass, CommandContext, GetSyncKeyValueQuery, IdentityErrorStyle, LoadEntitiesQuery,
     UsageCompleteThroughQuery, ValidateOutboundSignedFrameQuery,
 };
-use crate::replication_storage::{
-    AuthenticatedEntityBackend, IntegrationReplicationBackend, PeerIdentityBackend,
-};
+use crate::replication_storage::{AuthenticatedEntityBackend, IntegrationReplicationBackend};
 use crate::types::{SyncEntity, VersionVector};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+
+mod peer_identity;
 
 fn publish_replay_notices(notices: Vec<crate::canonical_types::pending::ReplayNotice>) {
     for notice in notices {
@@ -350,45 +350,6 @@ impl AuthenticatedEntityBackend for SqliteStorageBackend {
             .map_err(|error| error.to_string())?;
         publish_replay_notices(notices);
         Ok(outcome)
-    }
-}
-
-#[async_trait::async_trait]
-impl PeerIdentityBackend for SqliteStorageBackend {
-    async fn load_peer_transport_keys(
-        &self,
-    ) -> Result<std::collections::HashMap<String, String>, String> {
-        Ok(load_progress_value(
-            self,
-            crate::application::sync_storage::PEER_TRANSPORT_KEYS_KEY,
-        )
-        .await?
-        .unwrap_or_default())
-    }
-
-    async fn store_peer_transport_keys(
-        &self,
-        keys: &std::collections::HashMap<String, String>,
-    ) -> Result<(), String> {
-        store_progress_value(
-            self,
-            crate::application::sync_storage::PEER_TRANSPORT_KEYS_KEY,
-            keys,
-        )
-        .await
-    }
-
-    async fn authorized_transport_public_key(
-        &self,
-        device_id: &str,
-    ) -> Result<Option<String>, String> {
-        self.db
-            .query(
-                CommandContext::sync_peer(device_id.to_owned(), CommandClass::SyncLive),
-                AuthorizedTransportKeyQuery::new(device_id.to_owned()),
-            )
-            .await
-            .map_err(|error| error.to_string())
     }
 }
 

@@ -85,6 +85,8 @@ pub fn init_schema_prerequisites_for_phase3(conn: &Connection) -> Result<(), Str
         .map_err(|e| e.to_string())?;
     conn.execute_batch(CREATE_TABLES)
         .map_err(|e| e.to_string())?;
+    ensure_device_registry_position(conn)?;
+    ensure_device_registry_updated_hlc(conn)?;
     super::committed_feed::bootstrap_committed_feed_heads(conn)?;
     ensure_integration_credential_fence_column(conn)?;
     ensure_authorized_node_transport_key(conn)?;
@@ -111,6 +113,61 @@ pub fn init_schema_prerequisites_for_phase3(conn: &Connection) -> Result<(), Str
             );
             return Err(error);
         }
+    }
+    Ok(())
+}
+
+fn ensure_device_registry_position(conn: &Connection) -> Result<(), String> {
+    let has_position = conn
+        .prepare("PRAGMA table_info(device_registry_events)")
+        .map_err(|error| error.to_string())?
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?
+        .iter()
+        .any(|name| name == "registry_position");
+    if !has_position {
+        conn.execute_batch(
+            "ALTER TABLE device_registry_events
+             ADD COLUMN registry_position INTEGER NOT NULL DEFAULT 0",
+        )
+        .map_err(|error| error.to_string())?;
+        conn.execute_batch(
+            "WITH ordered AS (
+                 SELECT actor_device_id, actor_sequence,
+                        row_number() OVER (ORDER BY actor_device_id, actor_sequence) AS position
+                 FROM device_registry_events
+             )
+             UPDATE device_registry_events
+             SET registry_position = (
+                 SELECT position FROM ordered
+                 WHERE ordered.actor_device_id = device_registry_events.actor_device_id
+                   AND ordered.actor_sequence = device_registry_events.actor_sequence
+             )",
+        )
+        .map_err(|error| error.to_string())?;
+    }
+    conn.execute_batch(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_device_registry_events_position
+         ON device_registry_events(registry_position)",
+    )
+    .map_err(|error| error.to_string())
+}
+
+fn ensure_device_registry_updated_hlc(conn: &Connection) -> Result<(), String> {
+    let has_updated_hlc = conn
+        .prepare("PRAGMA table_info(device_registry_projection)")
+        .map_err(|error| error.to_string())?
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?
+        .iter()
+        .any(|name| name == "updated_hlc");
+    if !has_updated_hlc {
+        conn.execute_batch("ALTER TABLE device_registry_projection ADD COLUMN updated_hlc TEXT")
+            .map_err(|error| error.to_string())?;
     }
     Ok(())
 }

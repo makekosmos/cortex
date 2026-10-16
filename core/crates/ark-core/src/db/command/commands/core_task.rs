@@ -113,6 +113,7 @@ impl DbCommand for AuthenticatedCoreTaskWrite {
         transaction: &Transaction<'_>,
     ) -> Result<Self::Output, DbError> {
         let peer_id = context.authenticated_peer_id()?;
+        super::device_registry_sync::require_registry_peer_admitted(transaction, peer_id)?;
         let inbox_state = crate::db::receive_inbox_payload(
             transaction,
             peer_id,

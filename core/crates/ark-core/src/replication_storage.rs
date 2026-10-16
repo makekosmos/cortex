@@ -1,6 +1,12 @@
 use crate::integration_replication::SignedSyncEnvelope;
 use crate::types::SyncEntity;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegistryPageApply {
+    pub digest: String,
+    pub sender_is_admitted: bool,
+}
+
 /// Applies an ordinary entity only after the sync boundary authenticated its peer.
 #[async_trait::async_trait]
 pub trait AuthenticatedEntityBackend: Send + Sync {
@@ -49,6 +55,58 @@ pub trait PeerIdentityBackend: Send + Sync {
         &self,
         keys: &std::collections::HashMap<String, String>,
     ) -> Result<(), String>;
+    async fn enroll_paired_device(
+        &self,
+        local_device_id: &str,
+        target_device_id: &str,
+        transport_public_key: &str,
+    ) -> Result<(), String> {
+        let _ = (local_device_id, target_device_id, transport_public_key);
+        Err("signed device registry enrollment is unsupported by this storage backend".into())
+    }
+
+    async fn load_device_registry_events_page(
+        &self,
+        after_position: i64,
+        high_watermark: Option<i64>,
+        limit: usize,
+    ) -> Result<
+        (
+            i64,
+            usize,
+            Vec<crate::domain::device_registry::RegistryEvent>,
+        ),
+        String,
+    > {
+        let _ = (after_position, high_watermark, limit);
+        Err("signed device registry history is unsupported by this storage backend".into())
+    }
+
+    async fn apply_device_registry_events(
+        &self,
+        sender_device_id: &str,
+        events: &[crate::domain::device_registry::RegistryEvent],
+    ) -> Result<RegistryPageApply, String> {
+        let _ = (sender_device_id, events);
+        Err("signed device registry history is unsupported by this storage backend".into())
+    }
+
+    async fn sign_registry_handshake(
+        &self,
+        _local_device_id: &str,
+        _transcript: &crate::domain::device_registry::RegistryHandshakeTranscript,
+    ) -> Result<crate::domain::device_registry::RegistryHandshakeProof, String> {
+        Err("registry handshake signing is unsupported by this storage backend".into())
+    }
+
+    async fn verify_registry_handshake(
+        &self,
+        _peer_device_id: &str,
+        _transcript: &crate::domain::device_registry::RegistryHandshakeTranscript,
+        _proof: &crate::domain::device_registry::RegistryHandshakeProof,
+    ) -> Result<(), String> {
+        Err("registry handshake verification is unsupported by this storage backend".into())
+    }
 }
 
 /// Persistence operations for signed integration replication. Kept separate

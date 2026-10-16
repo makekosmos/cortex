@@ -1,4 +1,7 @@
 mod core_task;
+mod device_registry;
+mod device_registry_handshake;
+mod device_registry_sync;
 mod external_ref;
 mod integration_admin;
 mod integration_read;
@@ -16,6 +19,13 @@ mod usage;
 mod usage_read;
 
 pub(crate) use core_task::{AuthenticatedCoreTaskWrite, LocalCoreTaskWrite, RemoteCoreTaskOutcome};
+#[cfg(test)]
+pub(crate) use device_registry::DeviceEnrollmentOutcome;
+pub(crate) use device_registry::EnrollPairedDeviceCommand;
+pub(crate) use device_registry_handshake::{
+    SignRegistryHandshakeCommand, VerifyRegistryHandshakeQuery,
+};
+pub(crate) use device_registry_sync::{ApplyRegistryEventsCommand, LoadRegistryEventsQuery};
 pub(crate) use external_ref::UpsertExternalRefCommand;
 pub(crate) use integration_admin::{
     AcquireIntegrationRefreshLeaseCommand, PersistIntegrationGrantCommand,
