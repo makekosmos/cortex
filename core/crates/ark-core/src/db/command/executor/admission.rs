@@ -1,5 +1,8 @@
+#[cfg(debug_assertions)]
 use super::super::{CommandClass, CommandSource};
+#[cfg(debug_assertions)]
 use std::collections::HashMap;
+#[cfg(debug_assertions)]
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Copy, Debug)]
@@ -12,15 +15,19 @@ pub struct AdmissionLimits {
     pub max_sources: usize,
     pub reserved_interactive_commands: usize,
     pub reserved_interactive_bytes: usize,
+    pub reserved_sync_live_commands: usize,
+    pub reserved_sync_live_bytes: usize,
 }
 
 #[derive(Clone)]
+#[cfg(debug_assertions)]
 pub struct AdmissionBudget {
     limits: AdmissionLimits,
     usage: Arc<Mutex<Usage>>,
 }
 
 #[derive(Default)]
+#[cfg(debug_assertions)]
 struct Usage {
     commands: usize,
     bytes: usize,
@@ -28,27 +35,38 @@ struct Usage {
 }
 
 #[derive(Default)]
+#[cfg(debug_assertions)]
 struct SourceUsage {
     commands: usize,
     bytes: usize,
 }
 
-pub struct AdmissionPermit {
+#[cfg(debug_assertions)]
+pub(in crate::db::command) struct AdmissionPermit {
     usage: Arc<Mutex<Usage>>,
     source: CommandSource,
     bytes: usize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg(debug_assertions)]
 pub enum AdmissionError {
     TooLarge,
     Saturated,
 }
 
+#[cfg(debug_assertions)]
 impl AdmissionBudget {
     pub fn new(limits: AdmissionLimits) -> Self {
         assert!(limits.max_commands > limits.reserved_interactive_commands);
         assert!(limits.max_bytes > limits.reserved_interactive_bytes);
+        assert!(
+            limits.max_commands
+                > limits.reserved_interactive_commands + limits.reserved_sync_live_commands
+        );
+        assert!(
+            limits.max_bytes > limits.reserved_interactive_bytes + limits.reserved_sync_live_bytes
+        );
         assert!(limits.max_command_bytes > 0);
         assert!(limits.max_sources > 0);
         Self {
@@ -88,6 +106,18 @@ impl AdmissionBudget {
         {
             return Err(AdmissionError::Saturated);
         }
+        if class == CommandClass::Backfill
+            && (usage.commands + 1
+                > self.limits.max_commands
+                    - self.limits.reserved_interactive_commands
+                    - self.limits.reserved_sync_live_commands
+                || usage.bytes + bytes
+                    > self.limits.max_bytes
+                        - self.limits.reserved_interactive_bytes
+                        - self.limits.reserved_sync_live_bytes)
+        {
+            return Err(AdmissionError::Saturated);
+        }
 
         usage.commands += 1;
         usage.bytes += bytes;
@@ -103,6 +133,7 @@ impl AdmissionBudget {
     }
 }
 
+#[cfg(debug_assertions)]
 impl Drop for AdmissionPermit {
     fn drop(&mut self) {
         let mut usage = self.usage.lock().unwrap_or_else(|error| error.into_inner());
@@ -134,6 +165,8 @@ mod tests {
             max_sources: 2,
             reserved_interactive_commands: 1,
             reserved_interactive_bytes: 20,
+            reserved_sync_live_commands: 1,
+            reserved_sync_live_bytes: 20,
         }
     }
 
@@ -142,7 +175,7 @@ mod tests {
     }
 
     fn peer(id: &str) -> CommandSource {
-        CommandSource::AuthenticatedPeer(id.to_owned())
+        CommandSource::DeviceId(id.to_owned())
     }
 
     #[test]

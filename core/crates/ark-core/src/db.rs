@@ -15,11 +15,12 @@ pub(crate) use backend::SqliteSignedIntegrationFrameSession;
 pub(crate) use backend::SqliteTypeMutationSession;
 pub(crate) use backend::SqliteUsageWriteSession;
 pub use backend::{delete_tag, SqliteStorageBackend};
+pub use command::CommandSource;
 pub(crate) use command::{
     AcquireIntegrationRefreshLeaseCommand, ApplyAuthenticatedSyncEntityCommand,
     ApplySignedIntegrationFrameCommand, ApplySyncEntityCommand, AuthenticatedCoreTaskWrite,
     AuthorizedTransportKeyQuery, CanonicalGameUpsertCommand, ClearAllCommand, CommandClass,
-    CommandContext, CompactUsageSyncLogCommand, DbHandle, DeleteObjectLinkCommand,
+    CommandContext, CompactUsageSyncLogCommand, DbHandle, DbOwner, DeleteObjectLinkCommand,
     DeleteObjectTypeCommand, DeleteTrashedCommand, EnsureUsageSequenceMigratedCommand,
     GetSyncKeyValueQuery, IdentityErrorStyle, IntegrationReadQuery, LegacyDeleteCommand,
     LegacyGraphWriteCommand, LoadEntitiesQuery, LoadOrGenerateIrohSecretKeyCommand,

@@ -1,0 +1,301 @@
+use super::*;
+use rusqlite::Connection;
+use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::sync::Arc;
+use std::time::Instant;
+
+pub(super) fn actor_loop(
+    shared: Arc<ActorShared>,
+    bootstrap_device_id: String,
+    ready: std::sync::mpsc::Sender<Result<(), DbError>>,
+) {
+    let connection = (|| {
+        let mut ledger = shared
+            .ledger
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        ledger.lifecycle = Lifecycle::Migrating;
+        drop(ledger);
+        let connection = crate::db::open_db(&shared.path).map_err(DbError::Storage)?;
+        crate::db::init_schema(&connection).map_err(DbError::Storage)?;
+        let backup_path = format!("{}.pre-core-task.bak", shared.path);
+        crate::canonical_types::core_task_rewrite::rewrite_legacy_tasks(
+            &connection,
+            &backup_path,
+            &bootstrap_device_id,
+        )
+        .map_err(DbError::Storage)?;
+        Ok(connection)
+    })();
+    let mut connection = match connection {
+        Ok(connection) => {
+            shared
+                .ledger
+                .lock()
+                .unwrap_or_else(|error| error.into_inner())
+                .lifecycle = Lifecycle::Ready;
+            let _ = ready.send(Ok(()));
+            connection
+        }
+        Err(error) => {
+            let _ = ready.send(Err(error));
+            let mut ledger = shared
+                .ledger
+                .lock()
+                .unwrap_or_else(|lock_error| lock_error.into_inner());
+            ledger.lifecycle = Lifecycle::Failed;
+            ledger.failure = Some("database bootstrap failed".into());
+            complete_close(&shared);
+            return;
+        }
+    };
+
+    loop {
+        let slot_index = {
+            let mut ledger = shared
+                .ledger
+                .lock()
+                .unwrap_or_else(|error| error.into_inner());
+            loop {
+                if ledger.lifecycle == Lifecycle::Draining
+                    && ledger
+                        .drain_deadline
+                        .is_some_and(|deadline| Instant::now() >= deadline)
+                {
+                    cancel_all(&mut ledger);
+                }
+                if let Some(index) = take_next(&mut ledger) {
+                    break Some(index);
+                }
+                if (ledger.lifecycle == Lifecycle::Draining
+                    || ledger.lifecycle == Lifecycle::Failed)
+                    && ledger.commands == 0
+                {
+                    ledger.lifecycle = Lifecycle::Closed;
+                    break None;
+                }
+                ledger = shared
+                    .wake
+                    .wait(ledger)
+                    .unwrap_or_else(|error| error.into_inner());
+            }
+        };
+        let Some(index) = slot_index else { break };
+        let Some(slot) = take_slot(&shared, index) else {
+            continue;
+        };
+        if slot.task.receiver_closed() {
+            slot.task.cancel_before_start();
+            release_slot(&shared, index, slot.source, slot.class, slot.bytes);
+            continue;
+        }
+
+        let committed = if slot.class == CommandClass::Maintenance {
+            let _exclusive = shared
+                .readers
+                .write()
+                .unwrap_or_else(|error| error.into_inner());
+            run_task(&shared, &mut connection, slot.task)
+        } else {
+            run_task(&shared, &mut connection, slot.task)
+        };
+        if committed {
+            shared
+                .sequence
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            if slot.class == CommandClass::Maintenance {
+                shared
+                    .generation
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            }
+        }
+        release_slot(&shared, index, slot.source, slot.class, slot.bytes);
+    }
+    drop(connection);
+    complete_close(&shared);
+}
+
+fn run_task(shared: &ActorShared, connection: &mut Connection, task: Box<dyn WriterTask>) -> bool {
+    match catch_unwind(AssertUnwindSafe(|| task.run(connection))) {
+        Ok(Ok(())) => true,
+        Ok(Err(_error)) => false,
+        Err(_) => {
+            shared
+                .ledger
+                .lock()
+                .unwrap_or_else(|error| error.into_inner())
+                .lifecycle = Lifecycle::Recovering;
+            shared
+                .generation
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let old = std::mem::replace(
+                connection,
+                Connection::open_in_memory().expect("temporary connection"),
+            );
+            drop(old);
+            match crate::db::open_db(&shared.path).and_then(|connection| {
+                crate::db::init_schema(&connection)?;
+                Ok(connection)
+            }) {
+                Ok(recovered) => {
+                    *connection = recovered;
+                    shared
+                        .ledger
+                        .lock()
+                        .unwrap_or_else(|error| error.into_inner())
+                        .lifecycle = Lifecycle::Ready;
+                }
+                Err(error) => {
+                    let mut ledger = shared
+                        .ledger
+                        .lock()
+                        .unwrap_or_else(|lock_error| lock_error.into_inner());
+                    ledger.lifecycle = Lifecycle::Failed;
+                    ledger.failure = Some(error);
+                }
+            }
+            false
+        }
+    }
+}
+
+fn take_next(ledger: &mut Ledger) -> Option<usize> {
+    if ledger.lifecycle == Lifecycle::Failed {
+        cancel_all(ledger);
+        return None;
+    }
+    let barrier_ticket = ledger
+        .slots
+        .iter()
+        .flatten()
+        .filter(|slot| slot.class == CommandClass::Maintenance)
+        .map(|slot| slot.ticket)
+        .min();
+    let minimum_ticket = ledger.slots.iter().flatten().map(|slot| slot.ticket).min();
+    if let (Some(barrier), Some(minimum)) = (barrier_ticket, minimum_ticket) {
+        if minimum == barrier {
+            return find_source_head(ledger, barrier);
+        }
+    }
+    const SCHEDULE: [CommandClass; 7] = [
+        CommandClass::Interactive,
+        CommandClass::Interactive,
+        CommandClass::Interactive,
+        CommandClass::SyncLive,
+        CommandClass::SyncLive,
+        CommandClass::Backfill,
+        CommandClass::Interactive,
+    ];
+    for offset in 0..SCHEDULE.len() {
+        let class = SCHEDULE[(ledger.scheduler_cursor + offset) % SCHEDULE.len()];
+        let before_barrier = barrier_ticket.unwrap_or(u64::MAX);
+        if let Some(index) = ledger
+            .by_source
+            .values()
+            .filter_map(|queue| queue.pending.front().copied())
+            .find(|index| {
+                ledger.slots[*index]
+                    .as_ref()
+                    .is_some_and(|slot| slot.class == class && slot.ticket < before_barrier)
+            })
+        {
+            ledger.scheduler_cursor = (ledger.scheduler_cursor + offset + 1) % SCHEDULE.len();
+            return Some(index);
+        }
+    }
+    None
+}
+
+fn find_source_head(ledger: &Ledger, ticket: u64) -> Option<usize> {
+    ledger
+        .by_source
+        .values()
+        .filter_map(|queue| queue.pending.front().copied())
+        .find(|index| {
+            ledger.slots[*index]
+                .as_ref()
+                .is_some_and(|slot| slot.ticket == ticket)
+        })
+}
+
+fn take_slot(shared: &ActorShared, index: usize) -> Option<Slot> {
+    let mut ledger = shared
+        .ledger
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
+    let slot = ledger.slots[index].take()?;
+    if slot.class == CommandClass::Maintenance {
+        ledger.maintenance_active = true;
+    }
+    if let Some(queue) = ledger.by_source.get_mut(&slot.source) {
+        if queue.pending.front() == Some(&index) {
+            queue.pending.pop_front();
+        }
+    }
+    Some(slot)
+}
+
+fn release_slot(
+    shared: &ActorShared,
+    index: usize,
+    source: CommandSource,
+    class: CommandClass,
+    bytes: usize,
+) {
+    let mut ledger = shared
+        .ledger
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
+    ledger.free.push(index);
+    if class == CommandClass::Maintenance {
+        ledger.maintenance_active = false;
+    }
+    ledger.commands -= 1;
+    ledger.bytes -= bytes;
+    if let Some(queue) = ledger.by_source.get_mut(&source) {
+        queue.commands -= 1;
+        queue.bytes -= bytes;
+        if queue.commands == 0 {
+            ledger.by_source.remove(&source);
+        }
+    }
+    shared.wake.notify_all();
+}
+
+fn cancel_all(ledger: &mut Ledger) {
+    let mut canceled = Vec::new();
+    for (index, slot) in ledger.slots.iter_mut().enumerate() {
+        if let Some(slot) = slot.take() {
+            canceled.push((index, slot));
+        }
+    }
+    for (index, slot) in canceled {
+        slot.task.cancel_before_start();
+        ledger.free.push(index);
+        ledger.commands -= 1;
+        ledger.bytes -= slot.bytes;
+        if let Some(queue) = ledger.by_source.get_mut(&slot.source) {
+            queue.commands -= 1;
+            queue.bytes -= slot.bytes;
+        }
+    }
+    ledger.by_source.retain(|_, queue| queue.commands > 0);
+}
+
+fn complete_close(shared: &ActorShared) {
+    let mut sender = shared
+        .closed
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
+    if let Some(sender) = sender.take() {
+        let _ = sender.send(());
+    }
+}
+
+pub(super) fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
+    payload
+        .downcast_ref::<&str>()
+        .map(|message| (*message).to_string())
+        .or_else(|| payload.downcast_ref::<String>().cloned())
+        .unwrap_or_else(|| "unknown database actor panic".into())
+}

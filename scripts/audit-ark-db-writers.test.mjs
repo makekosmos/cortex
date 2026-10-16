@@ -55,7 +55,8 @@ test("writer census separates test and debug-only adapters from production", asy
       'fn write(conn: &Connection) { conn.execute("INSERT", []); }',
       '// conn.execute("comment", []);',
       '#[cfg(test)] mod tests { fn test(conn: &Connection) { conn.execute("test", []); } }',
-      '#[cfg(debug_assertions)] pub fn test_adapter(self) { self.conn.lock(); }',
+      "#[cfg(debug_assertions)] pub fn test_adapter(self) { self.conn.lock(); }",
+      "#[cfg(debug_assertions)] fn generic_adapter<T: Send>() { tokio::task::spawn_blocking(|| {}); }",
     ].join("\n"),
   );
   await writeFile(testPath, 'fn setup(conn: &Connection) { conn.execute("fixture", []); }\n');
@@ -68,6 +69,7 @@ test("writer census separates test and debug-only adapters from production", asy
       { file: "core/crates/ark-core/src/service/writer.rs", line: 1, scope: "production" },
       { file: "core/crates/ark-core/src/service/writer.rs", line: 3, scope: "inline_test" },
       { file: "core/crates/ark-core/src/service/writer.rs", line: 4, scope: "debug_only" },
+      { file: "core/crates/ark-core/src/service/writer.rs", line: 5, scope: "debug_only" },
     ],
   );
 });

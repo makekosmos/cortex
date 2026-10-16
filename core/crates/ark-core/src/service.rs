@@ -34,6 +34,7 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
+use std::time::{Duration, Instant};
 
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -97,9 +98,10 @@ pub struct ArkHostConfig {
 }
 
 pub(crate) struct ServiceState {
-    /// Store-owned handle to the one shared SQLite connection. Callers clone
-    /// the handle, never the connection itself.
+    /// Cloneable producer handle. It never exposes the writer connection.
     db: StdMutex<Option<DbHandle>>,
+    /// Unique owner of the writer actor; service lifecycle alone shuts it down.
+    db_owner: StdMutex<Option<db::DbOwner>>,
     /// Path to the live ARK DB (set by `init`). `db_backup` opens a separate
     /// read connection so it does not hold the DB mutex for the whole copy.
     db_path: StdMutex<Option<String>>,
@@ -117,6 +119,7 @@ impl ServiceState {
     fn new(host_config: ArkHostConfig) -> Self {
         Self {
             db: StdMutex::new(None),
+            db_owner: StdMutex::new(None),
             db_path: StdMutex::new(None),
             sync: TokioMutex::new(None),
             backup_gate: TokioMutex::new(()),
@@ -155,6 +158,7 @@ pub struct ArkService {
     worker: Option<std::thread::JoinHandle<()>>,
     panic_count: Arc<AtomicU64>,
     db_path: String,
+    shutdown_deadline: Arc<StdMutex<Option<Instant>>>,
 }
 
 impl ArkService {
@@ -172,14 +176,21 @@ impl ArkService {
         let db_path = db_path.into();
         let state = Arc::new(ServiceState::new(host_config));
         let panic_count = Arc::new(AtomicU64::new(0));
-        let (jobs, worker) = spawn_worker(state.clone(), db_path.clone(), panic_count.clone())
-            .map_err(|e| ArkServiceError::Unavailable(format!("worker spawn failed: {e}")))?;
+        let shutdown_deadline = Arc::new(StdMutex::new(None));
+        let (jobs, worker) = spawn_worker(
+            state.clone(),
+            db_path.clone(),
+            panic_count.clone(),
+            shutdown_deadline.clone(),
+        )
+        .map_err(|e| ArkServiceError::Unavailable(format!("worker spawn failed: {e}")))?;
         let service = Self {
             jobs: Some(jobs),
             admission: RequestAdmission::new(),
             worker: Some(worker),
             panic_count,
             db_path,
+            shutdown_deadline,
         };
         service
             .call("init", json!({ "dbPath": service.db_path }))
@@ -243,16 +254,49 @@ impl ArkService {
     pub fn panic_count(&self) -> u64 {
         self.panic_count.load(Ordering::SeqCst)
     }
+
+    /// Stop ingress, finish sync producers, drain accepted DB work, and close
+    /// the unique writer owner before the deadline.
+    pub async fn shutdown(mut self, deadline: Instant) -> Result<(), ArkServiceError> {
+        *self
+            .shutdown_deadline
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = Some(deadline);
+        drop(self.jobs.take());
+        let Some(worker) = self.worker.take() else {
+            return Ok(());
+        };
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        match tokio::time::timeout(
+            remaining,
+            tokio::task::spawn_blocking(move || worker.join()),
+        )
+        .await
+        {
+            Ok(Ok(Ok(()))) => Ok(()),
+            Ok(Ok(Err(panic))) => Err(ArkServiceError::Unavailable(panic_message(&*panic))),
+            Ok(Err(error)) => Err(ArkServiceError::Unavailable(error.to_string())),
+            Err(_) => Err(ArkServiceError::Unavailable(
+                "service shutdown deadline elapsed".into(),
+            )),
+        }
+    }
 }
 
 impl Drop for ArkService {
     fn drop(&mut self) {
+        if self.worker.is_some() {
+            *self
+                .shutdown_deadline
+                .lock()
+                .unwrap_or_else(|error| error.into_inner()) = Some(Instant::now());
+        }
         // Close the job channel first — the worker drains pending requests,
         // runs stop_sync, and exits; join() would deadlock with it open.
         drop(self.jobs.take());
-        if let Some(worker) = self.worker.take() {
-            let _ = worker.join();
-        }
+        // A dropped service never blocks indefinitely. The worker drains and
+        // closes its DB owner after its current callback and sync producers end.
+        self.worker.take();
     }
 }
 
@@ -260,6 +304,7 @@ fn spawn_worker(
     state: Arc<ServiceState>,
     db_path: String,
     panic_count: Arc<AtomicU64>,
+    shutdown_deadline: Arc<StdMutex<Option<Instant>>>,
 ) -> std::io::Result<(mpsc::Sender<ServiceJob>, std::thread::JoinHandle<()>)> {
     let (tx, rx) = mpsc::channel::<ServiceJob>(admission::REQUEST_QUEUE_CAPACITY);
     let worker = std::thread::Builder::new()
@@ -281,7 +326,13 @@ fn spawn_worker(
                     return;
                 }
             };
-            rt.block_on(worker_loop(state, db_path, rx, panic_count));
+            rt.block_on(worker_loop(
+                state,
+                db_path,
+                rx,
+                panic_count,
+                shutdown_deadline,
+            ));
         })?;
     Ok((tx, worker))
 }
@@ -291,6 +342,7 @@ async fn worker_loop(
     db_path: String,
     mut rx: mpsc::Receiver<ServiceJob>,
     panic_count: Arc<AtomicU64>,
+    shutdown_deadline: Arc<StdMutex<Option<Instant>>>,
 ) {
     use futures_util::FutureExt;
     while let Some(job) = rx.recv().await {
@@ -323,6 +375,23 @@ async fn worker_loop(
     let _ = std::panic::AssertUnwindSafe(handle_stop_sync(&state))
         .catch_unwind()
         .await;
+    let deadline = shutdown_deadline
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .take()
+        .unwrap_or_else(|| Instant::now() + Duration::from_secs(30));
+    let owner = {
+        state
+            .db_owner
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .take()
+    };
+    if let Some(mut owner) = owner {
+        if let Err(error) = owner.shutdown(deadline).await {
+            eprintln!("[ark-service] database owner shutdown failed: {error}");
+        }
+    }
 }
 
 /// Re-open the database after a handler panic: stop sync, drop the shared
@@ -333,6 +402,24 @@ async fn reopen(state: &Arc<ServiceState>, db_path: &str) {
     handle_stop_sync(state).await;
     *state.db.lock().unwrap_or_else(|e| e.into_inner()) = None;
     *state.db_path.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    let owner = {
+        state
+            .db_owner
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
+    };
+    if let Some(mut owner) = owner {
+        if let Err(error) = owner
+            .shutdown(Instant::now() + Duration::from_secs(30))
+            .await
+        {
+            eprintln!(
+                "[ark-service] database owner did not close; refusing overlapping reopen: {error}"
+            );
+            return;
+        }
+    }
     match handle_request(
         state,
         Request::Init {

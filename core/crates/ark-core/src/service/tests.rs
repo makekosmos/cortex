@@ -44,6 +44,9 @@ impl Drop for ServiceFixture {
         if let Ok(mut guard) = self.state.db.lock() {
             *guard = None;
         }
+        if let Ok(mut owner) = self.state.db_owner.lock() {
+            owner.take();
+        }
     }
 }
 

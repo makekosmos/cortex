@@ -1,51 +1,7 @@
 use super::*;
+use production_actor::WriteProbe;
 
 struct ReadProbe;
-
-impl sealed::Sealed for ReadProbe {}
-
-struct WriteProbe;
-
-impl sealed::Sealed for WriteProbe {}
-
-impl DbCommand for WriteProbe {
-    type Output = ();
-
-    const CLASS: CommandClass = CommandClass::Interactive;
-
-    fn weight(&self) -> usize {
-        1
-    }
-
-    fn execute(
-        self,
-        context: &CommandContext,
-        _transaction: &Transaction<'_>,
-    ) -> Result<Self::Output, DbError> {
-        context.require_engine()
-    }
-}
-
-impl DbQuery for ReadProbe {
-    type Output = bool;
-
-    fn class(&self) -> CommandClass {
-        CommandClass::Backfill
-    }
-
-    fn weight(&self) -> usize {
-        1
-    }
-
-    fn read(
-        self,
-        context: &CommandContext,
-        connection: &Connection,
-    ) -> Result<Self::Output, DbError> {
-        context.require_system_sync()?;
-        Ok(connection.is_autocommit())
-    }
-}
 
 #[tokio::test]
 async fn read_query_uses_backfill_context_without_opening_a_write_transaction() {
@@ -73,7 +29,7 @@ async fn open_publishes_only_a_database_ready_for_commands() {
         .join("ark.db")
         .to_string_lossy()
         .into_owned();
-    let handle = DbHandle::open(db_path, "device-under-test".into())
+    let (handle, _owner) = DbHandle::open(db_path, "device-under-test".into())
         .await
         .unwrap();
 
@@ -109,12 +65,7 @@ async fn read_queries_share_bounded_source_admission() {
     let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
     let handle = DbHandle::for_test(connection);
     let reservations: Vec<_> = (0..DB_ADMISSION_LIMITS.max_commands_per_source)
-        .map(|_| {
-            handle
-                .admission
-                .try_acquire(CommandClass::Backfill, &CommandSource::System, 1)
-                .unwrap()
-        })
+        .map(|_| handle.hold_admission_for_test(CommandClass::Backfill, &CommandSource::System))
         .collect();
 
     assert!(matches!(
@@ -348,12 +299,7 @@ async fn submit_rejects_more_work_than_one_source_can_admit() {
     let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
     let handle = DbHandle::for_test(connection);
     let reservations: Vec<_> = (0..DB_ADMISSION_LIMITS.max_commands_per_source)
-        .map(|_| {
-            handle
-                .admission
-                .try_acquire(CommandClass::Interactive, &CommandSource::Engine, 1)
-                .unwrap()
-        })
+        .map(|_| handle.hold_admission_for_test(CommandClass::Interactive, &CommandSource::Engine))
         .collect();
 
     assert!(matches!(
@@ -367,3 +313,5 @@ async fn submit_rejects_more_work_than_one_source_can_admit() {
         .await
         .is_ok());
 }
+
+mod production_actor;

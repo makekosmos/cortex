@@ -1,8 +1,12 @@
-use rusqlite::{Connection, Transaction, TransactionBehavior};
-use std::sync::{Arc, Mutex};
+use rusqlite::{Connection, Transaction};
+use std::sync::Arc;
+#[cfg(debug_assertions)]
+use std::sync::Mutex;
 
 mod commands;
 mod executor;
+mod handle;
+pub(crate) use handle::{DbHandle, DbOwner};
 
 pub(crate) use commands::{
     AcquireIntegrationRefreshLeaseCommand, ApplyAuthenticatedSyncEntityCommand,
@@ -33,196 +37,9 @@ const DB_ADMISSION_LIMITS: executor::AdmissionLimits = executor::AdmissionLimits
     max_sources: 64,
     reserved_interactive_commands: 16,
     reserved_interactive_bytes: 16 * 1024 * 1024,
+    reserved_sync_live_commands: 16,
+    reserved_sync_live_bytes: 8 * 1024 * 1024,
 };
-
-async fn run_db_blocking<T: Send + 'static>(
-    operation: impl FnOnce() -> T + Send + 'static,
-) -> Result<T, DbError> {
-    tokio::task::spawn_blocking(operation)
-        .await
-        .map_err(|error| {
-            if error.is_panic() {
-                std::panic::resume_unwind(error.into_panic());
-            }
-            DbError::Unavailable
-        })
-}
-
-#[derive(Clone)]
-pub(crate) struct DbHandle {
-    connection: Arc<Mutex<Connection>>,
-    admission: executor::AdmissionBudget,
-}
-
-impl DbHandle {
-    /// Open and initialize the one production ARK database before exposing a
-    /// ready handle. This keeps schema migration and the one-time legacy task
-    /// rewrite inside the store-owned lifecycle boundary.
-    pub(crate) async fn open(
-        db_path: String,
-        legacy_task_device_id: String,
-    ) -> Result<Self, DbError> {
-        run_db_blocking(move || {
-            let connection = crate::db::open_db(&db_path).map_err(DbError::Storage)?;
-            crate::db::init_schema(&connection).map_err(DbError::Storage)?;
-
-            let backup_path = format!("{db_path}.pre-core-task.bak");
-            crate::canonical_types::core_task_rewrite::rewrite_legacy_tasks(
-                &connection,
-                &backup_path,
-                &legacy_task_device_id,
-            )
-            .map_err(DbError::Storage)?;
-
-            Ok(Self::from_writer_connection(Arc::new(Mutex::new(
-                connection,
-            ))))
-        })
-        .await?
-    }
-
-    #[cfg(debug_assertions)]
-    pub(crate) fn for_test(connection: Arc<Mutex<Connection>>) -> Self {
-        Self::from_writer_connection(connection)
-    }
-
-    fn from_writer_connection(connection: Arc<Mutex<Connection>>) -> Self {
-        Self {
-            connection,
-            admission: executor::AdmissionBudget::new(DB_ADMISSION_LIMITS),
-        }
-    }
-
-    /// Transitional access for command families not yet migrated. This always
-    /// borrows the one connection owned by this handle; it never clones it.
-    pub(crate) fn with_connection<T>(&self, f: impl FnOnce(&Connection) -> T) -> T {
-        let guard = self
-            .connection
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
-        f(&guard)
-    }
-
-    fn with_connection_mut<T>(&self, f: impl FnOnce(&mut Connection) -> T) -> T {
-        let mut guard = self
-            .connection
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
-        f(&mut guard)
-    }
-
-    pub(crate) async fn submit<C: DbCommand>(
-        &self,
-        context: CommandContext,
-        command: C,
-    ) -> Result<C::Output, DbError> {
-        if context.class != C::CLASS {
-            return Err(DbError::Invalid("database command class mismatch".into()));
-        }
-        let weight = command.weight();
-        if weight == 0 || weight > MAX_COMMAND_BYTES {
-            return Err(DbError::TooLarge);
-        }
-        let _admission = self
-            .admission
-            .try_acquire(context.class, &context.source, weight)
-            .map_err(|error| match error {
-                executor::AdmissionError::TooLarge => DbError::TooLarge,
-                executor::AdmissionError::Saturated => DbError::Busy,
-            })?;
-        // Until the atomic executor cutover, preserve the current single
-        // connection and mutex. The existing Tokio blocking pool keeps SQLite
-        // work off async workers; this is not a second connection or writer.
-        let handle = self.clone();
-        run_db_blocking(move || {
-            let _admission = _admission;
-            handle.execute(context, command)
-        })
-        .await?
-    }
-
-    pub(crate) async fn submit_maintenance<C: DbMaintenanceCommand>(
-        &self,
-        context: CommandContext,
-        command: C,
-    ) -> Result<C::Output, DbError> {
-        if context.class != CommandClass::Maintenance {
-            return Err(DbError::Invalid(
-                "maintenance command class required".into(),
-            ));
-        }
-        context.require_engine()?;
-        let weight = command.weight();
-        if weight == 0 || weight > MAX_COMMAND_BYTES {
-            return Err(DbError::TooLarge);
-        }
-        let _admission = self
-            .admission
-            .try_acquire(context.class, &context.source, weight)
-            .map_err(|error| match error {
-                executor::AdmissionError::TooLarge => DbError::TooLarge,
-                executor::AdmissionError::Saturated => DbError::Busy,
-            })?;
-        let handle = self.clone();
-        run_db_blocking(move || {
-            let _admission = _admission;
-            handle.with_connection_mut(|connection| command.execute(connection))
-        })
-        .await?
-    }
-
-    /// Execute a bounded read query off the async worker. It deliberately
-    /// does not create a write transaction; until the reader-pool cutover it
-    /// borrows the existing connection through this handle.
-    pub(crate) async fn query<Q: DbQuery>(
-        &self,
-        context: CommandContext,
-        query: Q,
-    ) -> Result<Q::Output, DbError> {
-        if context.class != query.class() {
-            return Err(DbError::Invalid("database query class mismatch".into()));
-        }
-        let weight = query.weight();
-        if weight == 0 || weight > MAX_COMMAND_BYTES {
-            return Err(DbError::TooLarge);
-        }
-        let _admission = self
-            .admission
-            .try_acquire(query.class(), &context.source, weight)
-            .map_err(|error| match error {
-                executor::AdmissionError::TooLarge => DbError::TooLarge,
-                executor::AdmissionError::Saturated => DbError::Busy,
-            })?;
-        let handle = self.clone();
-        run_db_blocking(move || {
-            let _admission = _admission;
-            handle.with_connection(|connection| query.read(&context, connection))
-        })
-        .await?
-    }
-
-    fn execute<C: DbCommand>(
-        &self,
-        context: CommandContext,
-        command: C,
-    ) -> Result<C::Output, DbError> {
-        self.with_connection(|connection| {
-            let transaction =
-                Transaction::new_unchecked(connection, TransactionBehavior::Immediate)
-                    .map_err(|error| DbError::Storage(error.to_string()))?;
-            let output = command.execute(&context, &transaction)?;
-            transaction
-                .commit()
-                .map_err(|error| DbError::Storage(error.to_string()))?;
-            Ok(output)
-        })
-    }
-
-    #[cfg(test)]
-    pub(crate) fn shared_connection_for_test(&self) -> Arc<Mutex<Connection>> {
-        self.connection.clone()
-    }
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum CommandClass {
@@ -233,10 +50,11 @@ pub(crate) enum CommandClass {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub(super) enum CommandSource {
+pub enum CommandSource {
     Engine,
     System,
-    AuthenticatedPeer(String),
+    ApplicationPackage(String),
+    DeviceId(String),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -246,45 +64,39 @@ pub(crate) struct CommandContext {
 }
 
 impl CommandContext {
+    /// Build a context from a principal already authenticated by the host or
+    /// transport boundary. This API is crate-private and never reads JSON.
+    pub(crate) fn from_trusted_principal(class: CommandClass, source: CommandSource) -> Self {
+        Self { class, source }
+    }
+
     pub(crate) fn engine() -> Self {
-        Self {
-            class: CommandClass::Interactive,
-            source: CommandSource::Engine,
-        }
+        Self::from_trusted_principal(CommandClass::Interactive, CommandSource::Engine)
     }
 
     pub(crate) fn engine_maintenance() -> Self {
-        Self {
-            class: CommandClass::Maintenance,
-            source: CommandSource::Engine,
-        }
+        Self::from_trusted_principal(CommandClass::Maintenance, CommandSource::Engine)
     }
 
     pub(crate) fn authenticated_peer(peer_id: String) -> Self {
-        Self {
-            class: CommandClass::SyncLive,
-            source: CommandSource::AuthenticatedPeer(peer_id),
-        }
+        Self::from_trusted_principal(CommandClass::SyncLive, CommandSource::DeviceId(peer_id))
     }
 
     pub(crate) fn sync_system(class: CommandClass) -> Self {
-        Self {
-            class,
-            source: CommandSource::System,
-        }
+        Self::from_trusted_principal(class, CommandSource::System)
     }
 
     pub(crate) fn sync_peer(peer_id: String, class: CommandClass) -> Self {
-        Self {
-            class,
-            source: CommandSource::AuthenticatedPeer(peer_id),
-        }
+        Self::from_trusted_principal(class, CommandSource::DeviceId(peer_id))
     }
 
     fn authenticated_peer_id(&self) -> Result<&str, DbError> {
         match &self.source {
-            CommandSource::AuthenticatedPeer(peer_id) => Ok(peer_id),
+            CommandSource::DeviceId(peer_id) => Ok(peer_id),
             CommandSource::Engine | CommandSource::System => Err(DbError::Permission(
+                "authenticated sync principal required".into(),
+            )),
+            CommandSource::ApplicationPackage(_) => Err(DbError::Permission(
                 "authenticated sync principal required".into(),
             )),
         }
@@ -305,7 +117,10 @@ impl CommandContext {
             return Err(DbError::Invalid("sync query class required".into()));
         }
         match &self.source {
-            CommandSource::System | CommandSource::AuthenticatedPeer(_) => Ok(()),
+            CommandSource::System | CommandSource::DeviceId(_) => Ok(()),
+            CommandSource::ApplicationPackage(_) => {
+                Err(DbError::Permission("sync principal required".into()))
+            }
             CommandSource::Engine => Err(DbError::Permission("sync principal required".into())),
         }
     }
@@ -313,9 +128,9 @@ impl CommandContext {
     fn require_engine(&self) -> Result<(), DbError> {
         match &self.source {
             CommandSource::Engine => Ok(()),
-            CommandSource::AuthenticatedPeer(_) | CommandSource::System => {
-                Err(DbError::Permission("engine principal required".into()))
-            }
+            CommandSource::DeviceId(_)
+            | CommandSource::ApplicationPackage(_)
+            | CommandSource::System => Err(DbError::Permission("engine principal required".into())),
         }
     }
 }
@@ -363,7 +178,7 @@ pub(crate) trait DbQuery: sealed::Sealed + Send + 'static {
     ) -> Result<Self::Output, DbError>;
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Clone, Debug, thiserror::Error)]
 pub(crate) enum DbError {
     #[error("database command admission is saturated")]
     Busy,
@@ -381,6 +196,12 @@ pub(crate) enum DbError {
     TooLarge,
     #[error("database command worker is unavailable")]
     Unavailable,
+    #[error("database actor is recovering")]
+    RecoveryRequired,
+    #[error("database command outcome is unknown")]
+    OutcomeUnknown,
+    #[error("database command was canceled before it started")]
+    CancelledBeforeStart,
 }
 
 impl DbError {

@@ -92,17 +92,17 @@
       "count": 3
     },
     {
-      "path": "core/crates/ark-core/src/db/command.rs",
+      "path": "core/crates/ark-core/src/db/command/executor/actor.rs",
       "category": "SQLite mutation API",
-      "count": 3
-    },
-    {
-      "path": "core/crates/ark-core/src/db/command.rs",
-      "category": "connection lifecycle",
       "count": 2
     },
     {
-      "path": "core/crates/ark-core/src/db/command.rs",
+      "path": "core/crates/ark-core/src/db/command/executor/actor.rs",
+      "category": "sync blocking adapter",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-core/src/service.rs",
       "category": "sync blocking adapter",
       "count": 1
     },
@@ -250,6 +250,26 @@
       "path": "core/crates/ark-core/src/type_registry/builtins.rs",
       "category": "SQLite mutation API",
       "count": 1
+    },
+    {
+      "path": "core/crates/ark-core/src/db/command/executor/actor/runtime.rs",
+      "category": "connection lifecycle",
+      "count": 4
+    },
+    {
+      "path": "core/crates/ark-core/src/db/command/handle.rs",
+      "category": "SQLite mutation API",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-core/src/db/command/handle.rs",
+      "category": "connection lifecycle",
+      "count": 2
+    },
+    {
+      "path": "core/crates/ark-core/src/db/command/handle.rs",
+      "category": "sync blocking adapter",
+      "count": 2
     }
   ]
 }

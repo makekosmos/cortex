@@ -1,9 +1,30 @@
 use super::*;
 
 pub(super) async fn init(state: &Arc<ServiceState>, db_path: String) -> Result<Value, String> {
-    let db = db::DbHandle::open(db_path.clone(), local_write_device_id(None))
+    // Re-initialization closes the current owner before opening another one;
+    // two actor writer connections must never overlap for the live database.
+    handle_stop_sync(state).await;
+    *state.db.lock().unwrap_or_else(|error| error.into_inner()) = None;
+    let previous_owner = {
+        state
+            .db_owner
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .take()
+    };
+    if let Some(mut owner) = previous_owner {
+        owner
+            .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(30))
+            .await
+            .map_err(|error| format!("database owner shutdown failed: {error}"))?;
+    }
+    let (db, owner) = db::DbHandle::open(db_path.clone(), local_write_device_id(None))
         .await
         .map_err(|error| error.to_string())?;
+    *state
+        .db_owner
+        .lock()
+        .unwrap_or_else(|error| error.into_inner()) = Some(owner);
     *state.db.lock().unwrap_or_else(|e| e.into_inner()) = Some(db);
     *state.db_path.lock().unwrap_or_else(|e| e.into_inner()) = Some(db_path);
     Ok(json!(true))
