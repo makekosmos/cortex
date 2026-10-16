@@ -340,20 +340,30 @@ impl RelaySync {
         });
     }
 
-    async fn send_missing_entities(&self, remote_vector: &VersionVector) {
+    async fn send_missing_entities(&self, peer_device_id: &str, remote_vector: &VersionVector) {
         let mut load_vector = load_version_vector(&self.storage).await;
         merge_usage_cursors(&mut load_vector, remote_vector);
         // Hole-tolerant cursors (KOS-302): a relay must advertise these too —
         // it may itself have compacted refs the next hop still needs a claim
         // for. Snapshot BEFORE the first page: a claim computed afterwards
         // could cover a seq allocated mid-pull that never got streamed.
-        let complete_through = self.storage.usage_complete_through().await;
+        let read_class = crate::replication_storage::SyncReadClass::for_peer_vector(remote_vector);
+        let complete_through = self
+            .storage
+            .usage_complete_through_for_peer(peer_device_id, read_class)
+            .await;
         let mut offset = 0;
 
         loop {
             let entities = self
                 .storage
-                .load_entities_page(&load_vector, offset, SYNC_LOAD_PAGE_SIZE)
+                .load_entities_page_for_peer(
+                    peer_device_id,
+                    read_class,
+                    &load_vector,
+                    offset,
+                    SYNC_LOAD_PAGE_SIZE,
+                )
                 .await;
             if entities.is_empty() {
                 break;

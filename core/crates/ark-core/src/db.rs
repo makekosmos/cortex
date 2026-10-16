@@ -15,12 +15,14 @@ pub(crate) use backend::SqliteTypeMutationSession;
 pub(crate) use backend::SqliteUsageWriteSession;
 pub use backend::{delete_tag, SqliteStorageBackend};
 pub(crate) use command::{
-    AuthenticatedCoreTaskWrite, CanonicalGameUpsertCommand, CommandContext, DbHandle,
-    DeleteObjectLinkCommand, DeleteObjectTypeCommand, LegacyDeleteCommand, LegacyGraphWriteCommand,
-    LocalBookCoverCommand, LocalCoreTaskWrite, LocalObjectDeleteCommand, LocalObjectUpsertCommand,
-    LocalUsageWriteCommand, RegisterPackageTypesCommand, ReplaceObjectLinkCommand,
+    ApplyAuthenticatedSyncEntityCommand, ApplySyncEntityCommand, AuthenticatedCoreTaskWrite,
+    AuthorizedTransportKeyQuery, CanonicalGameUpsertCommand, CommandClass, CommandContext,
+    DbHandle, DeleteObjectLinkCommand, DeleteObjectTypeCommand, GetSyncKeyValueQuery,
+    LegacyDeleteCommand, LegacyGraphWriteCommand, LoadEntitiesQuery, LocalBookCoverCommand,
+    LocalCoreTaskWrite, LocalObjectDeleteCommand, LocalObjectUpsertCommand, LocalUsageWriteCommand,
+    RegisterPackageTypesCommand, ReplaceObjectLinkCommand, SetSyncKeyValueCommand,
     TrackedAppDeleteCommand, TrackedAppUpsertCommand, UpsertObjectLinkCommand,
-    UpsertObjectTypeCommand,
+    UpsertObjectTypeCommand, UsageCompleteThroughQuery,
 };
 include!("db/integration_replication_common.rs");
 include!("db/integration_replication_records.rs");

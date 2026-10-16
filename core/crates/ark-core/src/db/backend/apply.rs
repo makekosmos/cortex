@@ -1,4 +1,6 @@
-use rusqlite::{params, Connection, Transaction, TransactionBehavior};
+#[cfg(test)]
+use rusqlite::TransactionBehavior;
+use rusqlite::{params, Connection, Transaction};
 use serde_json::{json, Value};
 
 use super::SqliteStorageBackend;
@@ -25,13 +27,14 @@ pub fn delete_tag(conn: &Connection, id: &str) -> Result<(), String> {
 }
 
 impl SqliteStorageBackend {
+    #[cfg(test)]
     pub(in crate::db) fn apply_entity_blocking(
         conn: &Connection,
         entity: &SyncEntity,
     ) -> Result<(), String> {
         let transaction = Transaction::new_unchecked(conn, TransactionBehavior::Immediate)
             .map_err(|error| error.to_string())?;
-        let replay_notices = Self::apply_entity_blocking_inner(&transaction, entity)?;
+        let replay_notices = Self::apply_entity_in_transaction(&transaction, entity)?;
         transaction.commit().map_err(|error| error.to_string())?;
         for notice in replay_notices {
             crate::events::emit_event(notice.event_payload());
@@ -39,27 +42,26 @@ impl SqliteStorageBackend {
         Ok(())
     }
 
-    pub(in crate::db) fn apply_authenticated_entity_blocking(
-        conn: &Connection,
+    pub(in crate::db) fn apply_entity_in_transaction(
+        transaction: &Transaction<'_>,
+        entity: &SyncEntity,
+    ) -> Result<Vec<crate::canonical_types::pending::ReplayNotice>, String> {
+        Self::apply_entity_blocking_inner(transaction, entity)
+    }
+
+    pub(in crate::db) fn apply_authenticated_entity_in_transaction(
+        transaction: &Transaction<'_>,
         entity: &SyncEntity,
         authenticated_peer_id: &str,
-    ) -> Result<(), String> {
-        let transaction = Transaction::new_unchecked(conn, TransactionBehavior::Immediate)
-            .map_err(|error| error.to_string())?;
-        let removed: Vec<String> = crate::db::get_sync_kv(&transaction, "sync.removed_peers")?
+    ) -> Result<Vec<crate::canonical_types::pending::ReplayNotice>, String> {
+        let removed: Vec<String> = crate::db::get_sync_kv(transaction, "sync.removed_peers")?
             .map(|raw| serde_json::from_str(&raw).map_err(|error| error.to_string()))
             .transpose()?
             .unwrap_or_default();
         if removed.iter().any(|peer| peer == authenticated_peer_id) {
             return Err("sync_peer_removed".into());
         }
-
-        let replay_notices = Self::apply_entity_blocking_inner(&transaction, entity)?;
-        transaction.commit().map_err(|error| error.to_string())?;
-        for notice in replay_notices {
-            crate::events::emit_event(notice.event_payload());
-        }
-        Ok(())
+        Self::apply_entity_blocking_inner(transaction, entity)
     }
 
     fn apply_entity_blocking_inner(

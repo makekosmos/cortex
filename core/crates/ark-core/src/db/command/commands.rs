@@ -1,6 +1,8 @@
 mod core_task;
 mod legacy_mutation;
 mod object_mutation;
+mod sync_mutation;
+mod sync_read;
 mod type_mutation;
 mod usage;
 
@@ -11,6 +13,12 @@ pub(crate) use legacy_mutation::{
 pub(crate) use object_mutation::{
     CanonicalGameUpsertCommand, LocalBookCoverCommand, LocalObjectDeleteCommand,
     LocalObjectUpsertCommand,
+};
+pub(crate) use sync_mutation::{
+    ApplyAuthenticatedSyncEntityCommand, ApplySyncEntityCommand, SetSyncKeyValueCommand,
+};
+pub(crate) use sync_read::{
+    AuthorizedTransportKeyQuery, GetSyncKeyValueQuery, LoadEntitiesQuery, UsageCompleteThroughQuery,
 };
 pub(crate) use type_mutation::{
     DeleteObjectLinkCommand, DeleteObjectTypeCommand, RegisterPackageTypesCommand,

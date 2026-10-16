@@ -40,7 +40,7 @@
             // Race connections to all addresses
             let result = race_connect(&addresses).await;
 
-            include!("part03.rs");
+            include!("connect_and_receive.rs");
 
             // Reconnect with backoff
             let jitter = rand::random::<f64>() * 1000.0;

@@ -242,7 +242,7 @@ impl RelaySync {
                 if !self.is_authenticated_peer(&origin).await {
                     return;
                 }
-                self.send_missing_entities(&remote_vector).await;
+                self.send_missing_entities(&origin, &remote_vector).await;
             }
 
             LanSyncMessage::SyncChanges {

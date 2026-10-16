@@ -1,13 +1,21 @@
 use super::apply::is_full_core_task;
 use super::SqliteStorageBackend;
 use crate::db::{
-    apply_signed_integration_changes, get_sync_kv, set_sync_kv, usage_log_complete_through,
-    AuthenticatedCoreTaskWrite, CommandContext,
+    apply_signed_integration_changes, AuthenticatedCoreTaskWrite, AuthorizedTransportKeyQuery,
+    CommandClass, CommandContext, GetSyncKeyValueQuery, LoadEntitiesQuery,
+    UsageCompleteThroughQuery,
 };
 use crate::replication_storage::{
     AuthenticatedEntityBackend, IntegrationReplicationBackend, PeerIdentityBackend, StorageBackend,
+    SyncReadClass,
 };
 use crate::types::{SyncEntity, VersionVector};
+
+fn publish_replay_notices(notices: Vec<crate::canonical_types::pending::ReplayNotice>) {
+    for notice in notices {
+        crate::events::emit_event(notice.event_payload());
+    }
+}
 
 impl SqliteStorageBackend {
     pub fn set_selective_sync_profile(
@@ -31,27 +39,18 @@ impl SqliteStorageBackend {
 #[async_trait::async_trait]
 impl StorageBackend for SqliteStorageBackend {
     async fn load_entities(&self, vector: &VersionVector) -> Vec<SyncEntity> {
-        let db = self.db.clone();
-        let vector = vector.clone();
-        let device_id = self.device_id();
-        let profile = self.selective_sync_profile();
-        tokio::task::spawn_blocking(move || {
-            // Poison recovery: РµСЃР»Рё earlier panic Р·Р°РїРѕР»СѓС‡РёР» lock, РјС‹ РІСЃС‘
-            // СЂР°РІРЅРѕ РјРѕР¶РµРј С‡РёС‚Р°С‚СЊ. Р­С‚Рѕ backend РґР»СЏ load (read-only path),
-            // РґР°РЅРЅС‹Рµ РІРЅСѓС‚СЂРё guard'Р° С†РµР»С‹. Р‘РµР· recovery РєР°Р¶РґС‹Р№
-            // РїРѕСЃР»РµРґСѓСЋС‰РёР№
-            // sync round РІРѕР·РІСЂР°С‰Р°РµС‚ empty list в†’ multi-device sync silent
-            // С„РµР№Р»РёС‚СЃСЏ РЅР°РІСЃРµРіРґР° РїРѕСЃР»Рµ РїРµСЂРІРѕРіРѕ panic'Р° РІ СЌС‚РѕРј
-            // РїСЂРѕС†РµСЃСЃРµ.
-            db.with_connection(|conn| {
-                let entities = Self::collect_entities_blocking(conn, &vector, &device_id);
-                profile.as_ref().map_or(entities.clone(), |profile| {
-                    crate::data_platform::filter_entities_for_profile(profile, &entities)
-                })
-            })
-        })
-        .await
-        .unwrap_or_default()
+        self.db
+            .query(
+                CommandContext::sync_system(CommandClass::SyncLive),
+                LoadEntitiesQuery::all(
+                    vector.clone(),
+                    self.device_id(),
+                    self.selective_sync_profile(),
+                    SyncReadClass::SyncLive,
+                ),
+            )
+            .await
+            .unwrap_or_default()
     }
 
     async fn load_entities_page(
@@ -60,76 +59,102 @@ impl StorageBackend for SqliteStorageBackend {
         offset: usize,
         limit: usize,
     ) -> Vec<SyncEntity> {
-        let db = self.db.clone();
-        let vector = vector.clone();
-        let device_id = self.device_id();
-        let profile = self.selective_sync_profile();
-        tokio::task::spawn_blocking(move || {
-            db.with_connection(|conn| {
-                if let Some(profile) = profile {
-                    let all = Self::collect_entities_blocking(conn, &vector, &device_id);
-                    crate::data_platform::filter_entities_for_profile(&profile, &all)
-                        .into_iter()
-                        .skip(offset)
-                        .take(limit)
-                        .collect()
-                } else {
-                    Self::collect_entities_page_blocking(conn, &vector, &device_id, offset, limit)
-                }
-            })
-        })
-        .await
-        .unwrap_or_default()
+        let class = SyncReadClass::for_peer_vector(vector);
+        self.db
+            .query(
+                CommandContext::sync_system(class.into()),
+                LoadEntitiesQuery::page(
+                    vector.clone(),
+                    self.device_id(),
+                    self.selective_sync_profile(),
+                    class,
+                    offset,
+                    limit,
+                ),
+            )
+            .await
+            .unwrap_or_default()
+    }
+
+    async fn load_entities_page_for_peer(
+        &self,
+        peer_device_id: &str,
+        class: SyncReadClass,
+        vector: &VersionVector,
+        offset: usize,
+        limit: usize,
+    ) -> Vec<SyncEntity> {
+        self.db
+            .query(
+                CommandContext::sync_peer(peer_device_id.to_owned(), class.into()),
+                LoadEntitiesQuery::page(
+                    vector.clone(),
+                    self.device_id(),
+                    self.selective_sync_profile(),
+                    class,
+                    offset,
+                    limit,
+                ),
+            )
+            .await
+            .unwrap_or_default()
     }
 
     async fn apply_entity(&self, entity: &SyncEntity) -> Result<(), String> {
-        let db = self.db.clone();
-        let entity = entity.clone();
-        tokio::task::spawn_blocking(move || {
-            // Apply вЂ” write path. Poison recovery acceptable: SQLite
-            // transactions atomic, partially-applied state РЅРµ РІРѕР·РјРѕР¶РµРЅ.
-            // РђР»СЊС‚РµСЂРЅР°С‚РёРІР° (return Err) РґРµР»Р°РµС‚ sync
-            // РЅРµСЂР°Р±РѕС‚РѕСЃРїРѕСЃРѕР±РЅС‹Рј РґРѕ process restart.
-            db.with_connection(|conn| Self::apply_entity_blocking(conn, &entity))
-        })
-        .await
-        .map_err(|e| e.to_string())?
+        let notices = self
+            .db
+            .submit(
+                CommandContext::sync_system(CommandClass::SyncLive),
+                crate::db::ApplySyncEntityCommand::new(entity.clone()),
+            )
+            .await
+            .map_err(|error| error.to_string())?;
+        publish_replay_notices(notices);
+        Ok(())
     }
 
     async fn usage_complete_through(&self) -> std::collections::HashMap<String, u64> {
-        let db = self.db.clone();
-        tokio::task::spawn_blocking(move || {
-            // Cursor-only claims (`None`): always a safe lower bound.
-            // Live usage writes are stamped with `usage_tracker.device_id`,
-            // and even where the sync id does reach the log (the one-time
-            // migration backfill via `set_device_id`) its cursor is
-            // contiguous, so it equals the head-bound claim anyway.
-            db.with_connection(|conn| usage_log_complete_through(conn, None).unwrap_or_default())
-        })
-        .await
-        .unwrap_or_default()
+        self.db
+            .query(
+                CommandContext::sync_system(CommandClass::SyncLive),
+                UsageCompleteThroughQuery::new(SyncReadClass::SyncLive),
+            )
+            .await
+            .unwrap_or_default()
+    }
+
+    async fn usage_complete_through_for_peer(
+        &self,
+        peer_device_id: &str,
+        class: SyncReadClass,
+    ) -> std::collections::HashMap<String, u64> {
+        self.db
+            .query(
+                CommandContext::sync_peer(peer_device_id.to_owned(), class.into()),
+                UsageCompleteThroughQuery::new(class),
+            )
+            .await
+            .unwrap_or_default()
     }
 
     async fn get_kv(&self, key: &str) -> Option<String> {
-        let db = self.db.clone();
-        let key = key.to_string();
-        tokio::task::spawn_blocking(move || {
-            db.with_connection(|conn| get_sync_kv(conn, &key).unwrap_or(None))
-        })
-        .await
-        .unwrap_or(None)
+        self.db
+            .query(
+                CommandContext::sync_system(CommandClass::SyncLive),
+                GetSyncKeyValueQuery::new(key.to_owned()),
+            )
+            .await
+            .unwrap_or(None)
     }
 
     async fn set_kv(&self, key: &str, value: &str) {
-        let db = self.db.clone();
-        let key = key.to_string();
-        let value = value.to_string();
-        let _ = tokio::task::spawn_blocking(move || {
-            db.with_connection(|conn| {
-                let _ = set_sync_kv(conn, &key, &value);
-            });
-        })
-        .await;
+        let _ = self
+            .db
+            .submit(
+                CommandContext::sync_system(CommandClass::SyncLive),
+                crate::db::SetSyncKeyValueCommand::new(key.to_owned(), value.to_owned()),
+            )
+            .await;
     }
 
     fn filter_outgoing_entity(&self, entity: &SyncEntity) -> Option<SyncEntity> {
@@ -168,34 +193,29 @@ impl AuthenticatedEntityBackend for SqliteStorageBackend {
                 .map(|_| ())
                 .map_err(|error| error.to_string());
         }
-        let db = self.db.clone();
-        let entity = entity.clone();
-        let authenticated_peer_id = authenticated_peer_id.to_owned();
-        tokio::task::spawn_blocking(move || {
-            db.with_connection(|conn| {
-                Self::apply_authenticated_entity_blocking(conn, &entity, &authenticated_peer_id)
-            })
-        })
-        .await
-        .map_err(|error| error.to_string())?
+        let notices = self
+            .db
+            .submit(
+                CommandContext::authenticated_peer(authenticated_peer_id.to_owned()),
+                crate::db::ApplyAuthenticatedSyncEntityCommand::new(entity.clone()),
+            )
+            .await
+            .map_err(|error| error.to_string())?;
+        publish_replay_notices(notices);
+        Ok(())
     }
 }
 
 #[async_trait::async_trait]
 impl PeerIdentityBackend for SqliteStorageBackend {
     async fn authorized_transport_public_key(&self, device_id: &str) -> Option<String> {
-        let db = self.db.clone();
-        let device_id = device_id.to_string();
-        tokio::task::spawn_blocking(move || {
-            db.with_connection(|conn| {
-                crate::db::load_authorized_node(conn, &device_id)
-                    .ok()
-                    .flatten()
-                    .and_then(|node| node.transport_public_key)
-            })
-        })
-        .await
-        .unwrap_or(None)
+        self.db
+            .query(
+                CommandContext::sync_peer(device_id.to_owned(), CommandClass::SyncLive),
+                AuthorizedTransportKeyQuery::new(device_id.to_owned()),
+            )
+            .await
+            .unwrap_or(None)
     }
 }
 

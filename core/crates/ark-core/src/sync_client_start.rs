@@ -2,6 +2,8 @@ use super::*;
 
 #[path = "sync_client_start/client_hello.rs"]
 mod client_hello;
+#[path = "sync_client_start/send_missing_entities.rs"]
+mod send_missing_entities;
 
 impl SyncClient {
     /// Start connecting to the peer. Spawns a background task.

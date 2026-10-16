@@ -210,16 +210,15 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
             vector: remote_vector,
             ..
         } => {
-            let (tx, authenticated) = {
+            let (tx, peer_device_id, peer_sync_complete) = {
                 let peers_guard = peers.lock().await;
                 match peers_guard.get(&peer_id) {
-                    Some(p) if p.authenticated => (p.tx.clone(), true),
+                    Some(p) if p.authenticated => {
+                        (p.tx.clone(), p.device_id.clone(), p.sync_complete)
+                    }
                     _ => return,
                 }
             };
-            if !authenticated {
-                return;
-            }
 
             let mut local_vector = load_version_vector(storage).await;
 
@@ -227,7 +226,11 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
             // claims BEFORE the first page is read. Computed afterwards
             // they could include a seq allocated mid-pull — the peer would
             // advance its cursor past an entry it never received.
-            let complete_through = storage.usage_complete_through().await;
+            let read_class =
+                crate::replication_storage::SyncReadClass::for_sync_state(peer_sync_complete);
+            let complete_through = storage
+                .usage_complete_through_for_peer(&peer_device_id, read_class)
+                .await;
 
             let mut vector_updated = false;
             let mut offset = 0;
@@ -235,7 +238,13 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                 let mut load_vector = local_vector.clone();
                 merge_usage_cursors(&mut load_vector, &remote_vector);
                 let entities = storage
-                    .load_entities_page(&load_vector, offset, SYNC_LOAD_PAGE_SIZE)
+                    .load_entities_page_for_peer(
+                        &peer_device_id,
+                        read_class,
+                        &load_vector,
+                        offset,
+                        SYNC_LOAD_PAGE_SIZE,
+                    )
                     .await;
                 if entities.is_empty() {
                     break;
@@ -308,28 +317,17 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
             usage_complete_through,
             ..
         } => {
-            let (tx, authenticated) = {
+            let (tx, peer_device_id) = {
                 let peers_guard = peers.lock().await;
                 match peers_guard.get(&peer_id) {
-                    Some(p) if p.authenticated => (p.tx.clone(), true),
+                    Some(p) if p.authenticated => (p.tx.clone(), p.device_id.clone()),
                     _ => return,
                 }
             };
-            if !authenticated {
-                return;
-            }
 
             let mut local_vector = load_version_vector(storage).await;
             let mut accepted = 0;
             let mut vector_updated = false;
-
-            let peer_device_id = {
-                let peers_guard = peers.lock().await;
-                peers_guard
-                    .get(&peer_id)
-                    .map(|p| p.device_id.clone())
-                    .unwrap_or_default()
-            };
 
             for entity in &entities {
                 let should_apply = is_usage_entity(entity)

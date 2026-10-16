@@ -89,7 +89,7 @@
     {
       "path": "core/crates/ark-core/src/db/backend/adapter.rs",
       "category": "sync blocking adapter",
-      "count": 12
+      "count": 4
     },
     {
       "path": "core/crates/ark-core/src/db/backend/apply.rs",

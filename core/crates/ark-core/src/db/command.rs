@@ -4,14 +4,30 @@ use std::sync::{Arc, Mutex};
 mod commands;
 
 pub(crate) use commands::{
-    AuthenticatedCoreTaskWrite, CanonicalGameUpsertCommand, DeleteObjectLinkCommand,
-    DeleteObjectTypeCommand, LegacyDeleteCommand, LegacyGraphWriteCommand, LocalBookCoverCommand,
-    LocalCoreTaskWrite, LocalObjectDeleteCommand, LocalObjectUpsertCommand, LocalUsageWriteCommand,
-    RegisterPackageTypesCommand, ReplaceObjectLinkCommand, TrackedAppDeleteCommand,
+    ApplyAuthenticatedSyncEntityCommand, ApplySyncEntityCommand, AuthenticatedCoreTaskWrite,
+    AuthorizedTransportKeyQuery, CanonicalGameUpsertCommand, DeleteObjectLinkCommand,
+    DeleteObjectTypeCommand, GetSyncKeyValueQuery, LegacyDeleteCommand, LegacyGraphWriteCommand,
+    LoadEntitiesQuery, LocalBookCoverCommand, LocalCoreTaskWrite, LocalObjectDeleteCommand,
+    LocalObjectUpsertCommand, LocalUsageWriteCommand, RegisterPackageTypesCommand,
+    ReplaceObjectLinkCommand, SetSyncKeyValueCommand, TrackedAppDeleteCommand,
     TrackedAppUpsertCommand, UpsertObjectLinkCommand, UpsertObjectTypeCommand,
+    UsageCompleteThroughQuery,
 };
 
 const MAX_COMMAND_BYTES: usize = 16 * 1024 * 1024;
+
+async fn run_db_blocking<T: Send + 'static>(
+    operation: impl FnOnce() -> T + Send + 'static,
+) -> Result<T, DbError> {
+    tokio::task::spawn_blocking(operation)
+        .await
+        .map_err(|error| {
+            if error.is_panic() {
+                std::panic::resume_unwind(error.into_panic());
+            }
+            DbError::Unavailable
+        })
+}
 
 #[derive(Clone)]
 pub(crate) struct DbHandle {
@@ -59,14 +75,29 @@ impl DbHandle {
         // connection and mutex. The existing Tokio blocking pool keeps SQLite
         // work off async workers; this is not a second connection or writer.
         let handle = self.clone();
-        tokio::task::spawn_blocking(move || handle.execute(context, command))
-            .await
-            .map_err(|error| {
-                if error.is_panic() {
-                    std::panic::resume_unwind(error.into_panic());
-                }
-                DbError::Unavailable
-            })?
+        run_db_blocking(move || handle.execute(context, command)).await?
+    }
+
+    /// Execute a bounded read query off the async worker. It deliberately
+    /// does not create a write transaction; until the reader-pool cutover it
+    /// borrows the existing connection through this handle.
+    pub(crate) async fn query<Q: DbQuery>(
+        &self,
+        context: CommandContext,
+        query: Q,
+    ) -> Result<Q::Output, DbError> {
+        if context.class != query.class() {
+            return Err(DbError::Invalid("database query class mismatch".into()));
+        }
+        let weight = query.weight();
+        if weight == 0 || weight > MAX_COMMAND_BYTES {
+            return Err(DbError::TooLarge);
+        }
+        let handle = self.clone();
+        run_db_blocking(move || {
+            handle.with_connection(|connection| query.read(&context, connection))
+        })
+        .await?
     }
 
     fn execute<C: DbCommand>(
@@ -96,11 +127,13 @@ impl DbHandle {
 pub(crate) enum CommandClass {
     Interactive,
     SyncLive,
+    Backfill,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum CommandSource {
     Engine,
+    System,
     AuthenticatedPeer(String),
 }
 
@@ -125,19 +158,53 @@ impl CommandContext {
         }
     }
 
+    pub(crate) fn sync_system(class: CommandClass) -> Self {
+        Self {
+            class,
+            source: CommandSource::System,
+        }
+    }
+
+    pub(crate) fn sync_peer(peer_id: String, class: CommandClass) -> Self {
+        Self {
+            class,
+            source: CommandSource::AuthenticatedPeer(peer_id),
+        }
+    }
+
     fn authenticated_peer_id(&self) -> Result<&str, DbError> {
         match &self.source {
             CommandSource::AuthenticatedPeer(peer_id) => Ok(peer_id),
-            CommandSource::Engine => Err(DbError::Permission(
+            CommandSource::Engine | CommandSource::System => Err(DbError::Permission(
                 "authenticated sync principal required".into(),
             )),
+        }
+    }
+
+    pub(crate) fn require_system_sync(&self) -> Result<(), DbError> {
+        if self.class != CommandClass::SyncLive && self.class != CommandClass::Backfill {
+            return Err(DbError::Invalid("sync query class required".into()));
+        }
+        match &self.source {
+            CommandSource::System => Ok(()),
+            _ => Err(DbError::Permission("system sync principal required".into())),
+        }
+    }
+
+    pub(crate) fn require_sync_peer_or_system(&self) -> Result<(), DbError> {
+        if self.class != CommandClass::SyncLive && self.class != CommandClass::Backfill {
+            return Err(DbError::Invalid("sync query class required".into()));
+        }
+        match &self.source {
+            CommandSource::System | CommandSource::AuthenticatedPeer(_) => Ok(()),
+            CommandSource::Engine => Err(DbError::Permission("sync principal required".into())),
         }
     }
 
     fn require_engine(&self) -> Result<(), DbError> {
         match &self.source {
             CommandSource::Engine => Ok(()),
-            CommandSource::AuthenticatedPeer(_) => {
+            CommandSource::AuthenticatedPeer(_) | CommandSource::System => {
                 Err(DbError::Permission("engine principal required".into()))
             }
         }
@@ -159,6 +226,23 @@ pub(crate) trait DbCommand: sealed::Sealed + Send + 'static {
         self,
         context: &CommandContext,
         transaction: &Transaction<'_>,
+    ) -> Result<Self::Output, DbError>;
+}
+
+/// Sealed read-only application surface. Query implementations receive a
+/// connection without opening an IMMEDIATE transaction and inspect their
+/// typed principal through `CommandContext`.
+pub(crate) trait DbQuery: sealed::Sealed + Send + 'static {
+    type Output: Send + 'static;
+
+    fn class(&self) -> CommandClass;
+
+    fn weight(&self) -> usize;
+
+    fn read(
+        self,
+        context: &CommandContext,
+        connection: &Connection,
     ) -> Result<Self::Output, DbError>;
 }
 
@@ -199,5 +283,53 @@ impl DbError {
         } else {
             Self::Storage(message)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct ReadProbe;
+
+    impl sealed::Sealed for ReadProbe {}
+
+    impl DbQuery for ReadProbe {
+        type Output = bool;
+
+        fn class(&self) -> CommandClass {
+            CommandClass::Backfill
+        }
+
+        fn weight(&self) -> usize {
+            1
+        }
+
+        fn read(
+            self,
+            context: &CommandContext,
+            connection: &Connection,
+        ) -> Result<Self::Output, DbError> {
+            context.require_system_sync()?;
+            Ok(connection.is_autocommit())
+        }
+    }
+
+    #[tokio::test]
+    async fn read_query_uses_backfill_context_without_opening_a_write_transaction() {
+        let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
+        let handle = DbHandle::from_shared_connection(connection);
+        let autocommit = handle
+            .query(
+                CommandContext::sync_system(CommandClass::Backfill),
+                ReadProbe,
+            )
+            .await
+            .unwrap();
+
+        assert!(
+            autocommit,
+            "a read query must not start a write transaction"
+        );
     }
 }
