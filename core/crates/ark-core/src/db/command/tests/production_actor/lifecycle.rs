@@ -75,6 +75,13 @@ async fn production_actor_skips_a_queued_command_after_caller_cancellation() {
 #[tokio::test]
 async fn production_actor_finishes_started_work_after_caller_cancellation() {
     let (_directory, handle, mut owner) = open_actor_fixture().await;
+    handle.with_connection(|connection| {
+        connection
+            .execute_batch(
+                "CREATE TABLE actor_test_log (sequence INTEGER NOT NULL, source TEXT NOT NULL)",
+            )
+            .unwrap();
+    });
     let (entered_tx, entered_rx) = std::sync::mpsc::channel();
     let (release_tx, release_rx) = std::sync::mpsc::channel();
     let command_handle = handle.clone();

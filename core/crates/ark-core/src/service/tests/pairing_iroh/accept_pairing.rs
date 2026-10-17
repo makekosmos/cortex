@@ -36,6 +36,10 @@ async fn accept_pairing_connects_persists_and_survives_restart() {
     .await;
     // Both devices author one enrollment event; registry admission exchanges
     // the peer's event before the data channel becomes ready.
+    wait_until("A receives B's enrollment event", async || {
+        registry_event_count(&fixture_a.dir) == 2
+    })
+    .await;
     assert_eq!(registry_event_count(&fixture_a.dir), 2);
 
     // Restart the initiator's sync the way boot restore does (same ticket):
@@ -49,6 +53,10 @@ async fn accept_pairing_connects_persists_and_survives_restart() {
     .unwrap();
     wait_until("B re-authenticates on A without consent", async || {
         peer_online(&snapshot(&state_a).await, "device-b")
+    })
+    .await;
+    wait_until("reconnect preserves the enrollment registry", async || {
+        registry_event_count(&fixture_a.dir) == 2
     })
     .await;
     assert_eq!(registry_event_count(&fixture_a.dir), 2);
@@ -75,6 +83,10 @@ async fn accept_pairing_connects_persists_and_survives_restart() {
                 device["deviceId"] == "device-b" && device["displayName"] == "Renamed by device A"
             })
         })
+    })
+    .await;
+    wait_until("A commits the peer rename event", async || {
+        registry_event_count(&fixture_a.dir) == 3
     })
     .await;
     assert_eq!(registry_event_count(&fixture_a.dir), 3);
