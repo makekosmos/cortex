@@ -9,7 +9,7 @@ pub(super) async fn handle_registry_admission(
     peer_id: usize,
     message: LanSyncMessage,
 ) {
-    let (mut admission, tx, device_id) = {
+    let (admission, tx, device_id) = {
         let mut peers = ctx.peers.lock().await;
         let Some(peer) = peers.get_mut(&peer_id) else {
             return;
@@ -20,48 +20,60 @@ pub(super) async fn handle_registry_admission(
         };
         (admission, peer.tx.clone(), peer.device_id.clone())
     };
+    let mut admission = Some(admission);
 
-    let update = match admission.handle(ctx.storage.as_ref(), message).await {
-        Ok(update) => update,
+    let Some(admission_session) = admission.as_mut() else {
+        return;
+    };
+    let progress = match admission_session
+        .handle(ctx.storage.as_ref(), message)
+        .await
+    {
+        Ok(progress) => progress,
         Err(error) => {
             eprintln!("{TAG} direct registry admission failed for {device_id}: {error}");
             reject_peer(ctx, peer_id, &tx).await;
             return;
         }
     };
-    let registry_session_id = admission.session_id().map(str::to_owned);
-    broadcast_registry_events(ctx, peer_id, &update.applied_events).await;
-    let preserve_pending_peer = update.close_session.then_some(peer_id);
+    broadcast_registry_events(ctx, peer_id, &progress.applied_events).await;
+    let preserve_pending_peer = progress.close_session.then_some(peer_id);
     let session_revoked = revoke_disabled_sessions(
         ctx,
-        &update.disabled_device_ids,
+        &progress.disabled_device_ids,
         preserve_pending_peer,
-        !update.local_device_is_admitted,
+        !progress.local_device_is_admitted,
     )
     .await;
-    if !update.applied_events.is_empty() {
+    if !progress.applied_events.is_empty() {
         if let Some(handler) = ctx.on_registry_events.lock().await.as_ref() {
-            handler(update.applied_events.clone());
+            handler(progress.applied_events.clone());
         }
     }
     if session_revoked {
         return;
     }
-    for outgoing in update.outgoing {
+    for outgoing in progress.outgoing {
         send_msg(&tx, &outgoing);
     }
-    if update.close_session && update.exchange_complete {
-        reject_peer(ctx, peer_id, &tx).await;
-        return;
-    }
+    let ready_admission = match progress.status {
+        ark_sync::server_session::AdmissionStatus::Ready(ready) => Some(ready),
+        ark_sync::server_session::AdmissionStatus::Pending => None,
+        ark_sync::server_session::AdmissionStatus::CloseSession => {
+            reject_peer(ctx, peer_id, &tx).await;
+            return;
+        }
+    };
 
     let (became_ready, peer_entry) = {
         let mut peers = ctx.peers.lock().await;
         let Some(peer) = peers.get_mut(&peer_id) else {
             return;
         };
-        let became_ready = update.became_ready && peer.ready_peer.is_none();
-        peer.registry_admission = Some(admission);
+        let became_ready = ready_admission.is_some() && peer.ready_peer.is_none();
+        if !became_ready {
+            peer.registry_admission = admission.take();
+        }
         let entry = PeerEntry {
             device_id: peer.device_id.clone(),
             device_name: peer.device_name.clone(),
@@ -74,57 +86,29 @@ pub(super) async fn handle_registry_admission(
         return;
     }
 
-    let selective_policy_capability = ctx
-        .peers
-        .lock()
-        .await
-        .get(&peer_id)
-        .and_then(|peer| peer.negotiated_protocol.as_ref())
-        .is_some_and(|protocol| {
-            protocol
-                .capabilities
-                .contains(&ark_sync::protocol::ProtocolCapability::SelectiveSyncPolicyV1)
-        });
-    let policy_bound_delivery = ctx
-        .peers
-        .lock()
-        .await
-        .get(&peer_id)
-        .and_then(|peer| peer.negotiated_protocol.as_ref())
-        .is_some_and(|protocol| {
-            protocol
-                .capabilities
-                .contains(&ark_sync::protocol::ProtocolCapability::PolicyBoundDeliveryV1)
-        });
-    if !policy_bound_delivery {
-        let generation = match ctx
-            .storage
-            .selective_sync_policy_generation_for_peer(&device_id)
-            .await
-        {
-            Ok(generation) => generation,
-            Err(error) => {
-                eprintln!("{TAG} policy generation lookup failed for {device_id}: {error}");
-                reject_peer(ctx, peer_id, &tx).await;
-                return;
-            }
-        };
-        if let Err(error) = ctx
-            .storage
-            .begin_outbound_policy(&device_id, generation)
-            .await
-        {
-            eprintln!("{TAG} direct admission snapshot baseline failed: {error}");
-            reject_peer(ctx, peer_id, &tx).await;
-            return;
-        }
-    }
-
-    let Some(registry_session_id) = registry_session_id else {
+    let Some(ready) = ready_admission.as_ref() else {
+        return;
+    };
+    let policy_bound_delivery = ready.policy_bound_delivery();
+    let Some(admission_ref) = admission.as_ref() else {
         reject_peer(ctx, peer_id, &tx).await;
         return;
     };
-    let ready_peer = match ReadyPeer::new(peer_id, device_id.clone(), registry_session_id) {
+    if let Err(error) = admission_ref
+        .begin_legacy_baseline(ctx.storage.as_ref())
+        .await
+    {
+        eprintln!("{TAG} direct admission snapshot baseline failed: {error}");
+        reject_peer(ctx, peer_id, &tx).await;
+        return;
+    }
+
+    let registry_session_id = ready.registry_session_id().to_owned();
+    let ready_peer = match ReadyPeer::new(
+        peer_id,
+        ready.peer_device_id().to_owned(),
+        registry_session_id,
+    ) {
         Some(ready_peer) => ready_peer,
         None => {
             reject_peer(ctx, peer_id, &tx).await;
@@ -141,16 +125,17 @@ pub(super) async fn handle_registry_admission(
         return;
     }
 
-    if selective_policy_capability {
-        let local_device_id = ctx.device_id.read().await.clone();
-        match ctx.storage.load_local_sync_profile(&local_device_id).await {
-            Ok(Some(profile)) => send_msg(&tx, &ark_sync::protocol::sync_policy_message(&profile)),
-            Ok(None) => send_msg(&tx, &ark_sync::protocol::default_sync_policy_message()),
-            Err(error) => {
-                eprintln!("{TAG} local sync policy load failed: {error}");
-                reject_peer(ctx, peer_id, &tx).await;
-                return;
-            }
+    let local_device_id = ctx.device_id.read().await.clone();
+    match admission_ref
+        .local_sync_policy_message(ctx.storage.as_ref(), &local_device_id)
+        .await
+    {
+        Ok(Some(policy)) => send_msg(&tx, &policy),
+        Ok(None) => {}
+        Err(error) => {
+            eprintln!("{TAG} local sync policy load failed: {error}");
+            reject_peer(ctx, peer_id, &tx).await;
+            return;
         }
     }
 
@@ -180,6 +165,7 @@ pub(super) async fn handle_registry_admission(
             if peer.ready_peer.is_some() || peer.device_id != device_id {
                 return false;
             }
+            peer.registry_admission = admission.take();
             peer.ready_peer = Some(ready_peer);
             peer.sync_started = !policy_bound_delivery;
             true
@@ -225,7 +211,7 @@ pub(super) async fn handle_registry_admission(
         handler(device_id.clone());
     }
     if !policy_bound_delivery {
-        let vector = match load_version_vector(&ctx.storage).await {
+        let vector = match ctx.storage.load_version_vector().await {
             Ok(vector) => vector,
             Err(error) => {
                 eprintln!("{TAG} failed to load sync version vector: {error}");
@@ -268,17 +254,11 @@ pub(super) async fn start_sync_after_policy(
         peer.sync_started = true;
         peer.tx.clone()
     };
-    let identity = ctx
-        .storage
-        .accepted_policy_identity_for_peer(&ready_peer.device_id)
-        .await?;
-    let Some(identity) = identity else {
-        return Err("accepted sync policy identity is missing".into());
-    };
-    ctx.storage
-        .begin_outbound_policy_identity(&ready_peer.device_id, &identity)
-        .await?;
-    let vector = load_version_vector(&ctx.storage).await?;
+    let vector = ark_sync::server_session::begin_policy_bound_sync(
+        ctx.storage.as_ref(),
+        &ready_peer.device_id,
+    )
+    .await?;
     send_msg(
         &tx,
         &LanSyncMessage::VersionVector {

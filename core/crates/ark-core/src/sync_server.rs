@@ -68,7 +68,7 @@ struct PeerState {
     sync_started: bool,
     sync_complete: bool,
     negotiated_protocol: Option<ark_sync::protocol::NegotiatedProtocol>,
-    registry_admission: Option<ark_sync::registry_admission::DirectRegistryAdmission>,
+    registry_admission: Option<ark_sync::server_session::DirectServerAdmission>,
     in_flight_feed_position: Option<i64>,
     in_flight_feed_policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
     pending_initial_snapshot_ack: Option<String>,
@@ -98,7 +98,7 @@ impl ReadyPeer {
             && peer
                 .registry_admission
                 .as_ref()
-                .and_then(ark_sync::registry_admission::DirectRegistryAdmission::session_id)
+                .and_then(ark_sync::server_session::DirectServerAdmission::session_id)
                 == Some(self.registry_session_id.as_str())
     }
 }

@@ -40,41 +40,34 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
             else {
                 return;
             };
-            let (tx, negotiated) = {
+            let (tx, protocol) = {
                 let peers = peers.lock().await;
                 let Some(peer) = peers.get(&peer_id) else {
                     return;
                 };
-                (
-                    peer.tx.clone(),
-                    peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
-                        protocol.capabilities.contains(
-                            &ark_sync::protocol::ProtocolCapability::SelectiveSyncPolicyV1,
-                        )
-                    }),
-                )
+                (peer.tx.clone(), peer.negotiated_protocol.clone())
             };
-            if !negotiated {
+            let Some(protocol) = protocol else {
                 admission::reject_peer(ctx, peer_id, &tx).await;
                 return;
-            }
-            let rules = match ark_sync::protocol::parse_sync_policy_rules(rules) {
-                Ok(rules) => rules,
-                Err(error) => {
-                    eprintln!(
-                        "{TAG} invalid sync policy from {}: {error}",
-                        ready_peer.device_id
-                    );
-                    admission::reject_peer(ctx, peer_id, &tx).await;
-                    return;
-                }
             };
-            if let Err(error) = storage
-                .accept_peer_sync_policy(&ready_peer.device_id, revision, &digest, active, &rules)
-                .await
+            let update = ark_sync::client_session::SyncPolicyUpdate {
+                revision,
+                digest,
+                active,
+                rules,
+            };
+            if let Err(error) = ark_sync::client_session::accept_sync_policy(
+                storage.as_ref(),
+                &ready_peer.device_id,
+                &protocol,
+                true,
+                update,
+            )
+            .await
             {
                 eprintln!(
-                    "{TAG} failed to accept sync policy from {}: {error}",
+                    "{TAG} invalid or unpersisted sync policy from {}: {error}",
                     ready_peer.device_id
                 );
                 admission::reject_peer(ctx, peer_id, &tx).await;
