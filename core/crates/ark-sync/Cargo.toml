@@ -7,10 +7,12 @@ description = "Transport-neutral replication and sync protocol contracts"
 [dependencies]
 ark-application = { path = "../ark-application" }
 ark-domain = { path = "../ark-domain" }
+async-trait.workspace = true
 rand.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+tokio = { version = "1", features = ["sync"] }
 
 [lints]
 workspace = true

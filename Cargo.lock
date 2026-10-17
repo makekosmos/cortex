@@ -202,10 +202,12 @@ version = "0.1.0"
 dependencies = [
  "ark-application",
  "ark-domain",
+ "async-trait",
  "rand 0.8.7",
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "tokio",
 ]
 
 [[package]]

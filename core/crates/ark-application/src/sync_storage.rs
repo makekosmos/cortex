@@ -8,6 +8,32 @@ pub use crate::task_merge::{
     TaskMergeJournalPage,
 };
 
+/// Complete storage surface required by the sync runtime.
+pub trait SyncRuntimeStorage:
+    SyncEntityReadPort
+    + SyncEntityMutationPort
+    + PeerProgressPort
+    + CommittedFeedPort
+    + TaskMergeDeliveryPort
+    + crate::replication_storage::AuthenticatedEntityBackend
+    + crate::replication_storage::PeerIdentityBackend
+    + crate::replication_storage::IntegrationReplicationBackend
+{
+}
+
+impl<T> SyncRuntimeStorage for T where
+    T: SyncEntityReadPort
+        + SyncEntityMutationPort
+        + PeerProgressPort
+        + CommittedFeedPort
+        + TaskMergeDeliveryPort
+        + crate::replication_storage::AuthenticatedEntityBackend
+        + crate::replication_storage::PeerIdentityBackend
+        + crate::replication_storage::IntegrationReplicationBackend
+        + ?Sized
+{
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReplayNotice {
     pub entity_id: String,

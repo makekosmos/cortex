@@ -2,33 +2,7 @@ pub use ark_application::replication_storage::{
     AuthenticatedEntityBackend, IntegrationReplicationBackend, PeerIdentityBackend,
     RegistryPageApply,
 };
-
-/// The complete storage surface required by the sync runtime.
-pub trait SyncRuntimeStorage
-where
-    Self: crate::application::sync_storage::SyncEntityReadPort
-        + crate::application::sync_storage::SyncEntityMutationPort
-        + crate::application::sync_storage::PeerProgressPort
-        + crate::application::sync_storage::CommittedFeedPort
-        + crate::application::sync_storage::TaskMergeDeliveryPort
-        + AuthenticatedEntityBackend
-        + PeerIdentityBackend
-        + IntegrationReplicationBackend,
-{
-}
-
-impl<T> SyncRuntimeStorage for T where
-    T: crate::application::sync_storage::SyncEntityReadPort
-        + crate::application::sync_storage::SyncEntityMutationPort
-        + crate::application::sync_storage::PeerProgressPort
-        + crate::application::sync_storage::CommittedFeedPort
-        + crate::application::sync_storage::TaskMergeDeliveryPort
-        + AuthenticatedEntityBackend
-        + PeerIdentityBackend
-        + IntegrationReplicationBackend
-        + ?Sized
-{
-}
+pub use ark_application::sync_storage::SyncRuntimeStorage;
 
 #[cfg(test)]
 mod tests {
