@@ -318,6 +318,9 @@ pub fn negotiate_protocol(
     if !capabilities_authenticated {
         capabilities.remove(&ProtocolCapability::DurableReceiptAckV1);
     }
+    if !capabilities.contains(&ProtocolCapability::SelectiveSyncPolicyV1) {
+        capabilities.remove(&ProtocolCapability::PolicyBoundDeliveryV1);
+    }
 
     Ok(NegotiatedProtocol {
         version,

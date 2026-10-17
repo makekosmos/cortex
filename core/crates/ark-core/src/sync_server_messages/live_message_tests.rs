@@ -17,6 +17,7 @@ async fn stale_snapshot_ack_does_not_complete_or_clear_pending_snapshot() {
         platform: None,
         app_version: None,
         ready_peer: ReadyPeer::new(7, "peer-a".into(), "session-a".into()),
+        sync_started: false,
         sync_complete: false,
         negotiated_protocol: None,
         registry_admission: None,

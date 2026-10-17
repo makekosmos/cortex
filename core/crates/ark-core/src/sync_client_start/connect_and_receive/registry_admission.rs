@@ -61,23 +61,22 @@ impl PendingRegistryAdmission {
             return Ok(false);
         }
 
-        let generation = storage
-            .selective_sync_policy_generation_for_peer(&self.peer_record.device_id)
-            .await?;
-        storage
-            .begin_outbound_policy(&self.peer_record.device_id, generation)
-            .await?;
-        if self
+        let selective_policy_capability = self
             .protocol
             .capabilities
-            .contains(&crate::protocol::ProtocolCapability::SelectiveSyncPolicyV1)
-        {
-            if let Some(profile) = storage
+            .contains(&crate::protocol::ProtocolCapability::SelectiveSyncPolicyV1);
+        let policy_bound_delivery = self
+            .protocol
+            .capabilities
+            .contains(&crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1);
+        if selective_policy_capability {
+            let policy_message = storage
                 .load_local_sync_profile(&self.local_device_id)
                 .await?
-            {
-                send_msg(tx, &crate::protocol::sync_policy_message(&profile));
-            }
+                .as_ref()
+                .map(crate::protocol::sync_policy_message)
+                .unwrap_or_else(crate::protocol::default_sync_policy_message);
+            send_msg(tx, &policy_message);
         }
         *authenticated_tx.lock().await = Some(crate::sync_client::AuthenticatedPeerSession {
             peer_id: self.peer_record.device_id.clone(),
@@ -87,6 +86,7 @@ impl PendingRegistryAdmission {
                 .ok_or_else(|| "registry_admission_session_missing".to_owned())?
                 .to_owned(),
             tx: tx.clone(),
+            sync_started: !policy_bound_delivery,
             sync_complete: false,
             protocol: self.protocol.clone(),
         });
@@ -101,16 +101,27 @@ impl PendingRegistryAdmission {
         if let Some(handler) = on_connected.lock().await.as_ref() {
             handler(connected_record);
         }
-        let vector = load_version_vector(storage)
-            .await
-            .map_err(|error| format!("failed to load sync version vector: {error}"))?;
-        send_msg(
-            tx,
-            &LanSyncMessage::VersionVector {
-                vector,
-                origin_device_id: None,
-            },
-        );
+        if !policy_bound_delivery {
+            let generation = storage
+                .selective_sync_policy_generation_for_peer(&self.peer_record.device_id)
+                .await?;
+            storage
+                .begin_outbound_policy(&self.peer_record.device_id, generation)
+                .await?;
+            let vector = load_version_vector(storage)
+                .await
+                .map_err(|error| format!("failed to load sync version vector: {error}"))?;
+            if let Some(session) = authenticated_tx.lock().await.as_mut() {
+                session.sync_started = true;
+            }
+            send_msg(
+                tx,
+                &LanSyncMessage::VersionVector {
+                    vector,
+                    origin_device_id: None,
+                },
+            );
+        }
         Ok(true)
     }
 }

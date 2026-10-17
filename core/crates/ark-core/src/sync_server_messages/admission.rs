@@ -69,26 +69,50 @@ pub(super) async fn handle_registry_admission(
         return;
     }
 
-    let generation = match ctx
-        .storage
-        .selective_sync_policy_generation_for_peer(&device_id)
+    let selective_policy_capability = ctx
+        .peers
+        .lock()
         .await
-    {
-        Ok(generation) => generation,
-        Err(error) => {
-            eprintln!("{TAG} policy generation lookup failed for {device_id}: {error}");
+        .get(&peer_id)
+        .and_then(|peer| peer.negotiated_protocol.as_ref())
+        .is_some_and(|protocol| {
+            protocol
+                .capabilities
+                .contains(&crate::protocol::ProtocolCapability::SelectiveSyncPolicyV1)
+        });
+    let policy_bound_delivery = ctx
+        .peers
+        .lock()
+        .await
+        .get(&peer_id)
+        .and_then(|peer| peer.negotiated_protocol.as_ref())
+        .is_some_and(|protocol| {
+            protocol
+                .capabilities
+                .contains(&crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1)
+        });
+    if !policy_bound_delivery {
+        let generation = match ctx
+            .storage
+            .selective_sync_policy_generation_for_peer(&device_id)
+            .await
+        {
+            Ok(generation) => generation,
+            Err(error) => {
+                eprintln!("{TAG} policy generation lookup failed for {device_id}: {error}");
+                reject_peer(ctx, peer_id, &tx).await;
+                return;
+            }
+        };
+        if let Err(error) = ctx
+            .storage
+            .begin_outbound_policy(&device_id, generation)
+            .await
+        {
+            eprintln!("{TAG} direct admission snapshot baseline failed: {error}");
             reject_peer(ctx, peer_id, &tx).await;
             return;
         }
-    };
-    if let Err(error) = ctx
-        .storage
-        .begin_outbound_policy(&device_id, generation)
-        .await
-    {
-        eprintln!("{TAG} direct admission snapshot baseline failed: {error}");
-        reject_peer(ctx, peer_id, &tx).await;
-        return;
     }
 
     let Some(registry_session_id) = registry_session_id else {
@@ -112,22 +136,11 @@ pub(super) async fn handle_registry_admission(
         return;
     }
 
-    let policy_capability = ctx
-        .peers
-        .lock()
-        .await
-        .get(&peer_id)
-        .and_then(|peer| peer.negotiated_protocol.as_ref())
-        .is_some_and(|protocol| {
-            protocol
-                .capabilities
-                .contains(&crate::protocol::ProtocolCapability::SelectiveSyncPolicyV1)
-        });
-    if policy_capability {
+    if selective_policy_capability {
         let local_device_id = ctx.device_id.read().await.clone();
         match ctx.storage.load_local_sync_profile(&local_device_id).await {
             Ok(Some(profile)) => send_msg(&tx, &crate::protocol::sync_policy_message(&profile)),
-            Ok(None) => {}
+            Ok(None) => send_msg(&tx, &crate::protocol::default_sync_policy_message()),
             Err(error) => {
                 eprintln!("{TAG} local sync policy load failed: {error}");
                 reject_peer(ctx, peer_id, &tx).await;
@@ -163,6 +176,7 @@ pub(super) async fn handle_registry_admission(
                 return false;
             }
             peer.ready_peer = Some(ready_peer);
+            peer.sync_started = !policy_bound_delivery;
             true
         })
     };
@@ -205,14 +219,61 @@ pub(super) async fn handle_registry_admission(
     if let Some(handler) = ctx.on_peer_connect.lock().await.as_ref() {
         handler(device_id.clone());
     }
-    let vector = match load_version_vector(&ctx.storage).await {
-        Ok(vector) => vector,
-        Err(error) => {
-            eprintln!("{TAG} failed to load sync version vector: {error}");
-            reject_peer(ctx, peer_id, &tx).await;
-            return;
+    if !policy_bound_delivery {
+        let vector = match load_version_vector(&ctx.storage).await {
+            Ok(vector) => vector,
+            Err(error) => {
+                eprintln!("{TAG} failed to load sync version vector: {error}");
+                reject_peer(ctx, peer_id, &tx).await;
+                return;
+            }
+        };
+        send_msg(
+            &tx,
+            &LanSyncMessage::VersionVector {
+                vector,
+                origin_device_id: None,
+            },
+        );
+    }
+    let known = ctx.known_peer_records.lock().await.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        send_msg(&tx, &LanSyncMessage::PeerList { peers: known });
+    });
+    eprintln!("{TAG} Direct registry admission ready for {device_id}");
+}
+
+pub(super) async fn start_sync_after_policy(
+    ctx: &MessageContext,
+    peer_id: usize,
+    ready_peer: &ReadyPeer,
+) -> Result<(), String> {
+    let tx = {
+        let mut peers = ctx.peers.lock().await;
+        let Some(peer) = peers.get_mut(&peer_id) else {
+            return Err("sync policy session disappeared".into());
+        };
+        if peer.ready_peer.as_ref() != Some(ready_peer) {
+            return Err("sync policy session changed before sync start".into());
         }
+        if peer.sync_started {
+            return Ok(());
+        }
+        peer.sync_started = true;
+        peer.tx.clone()
     };
+    let identity = ctx
+        .storage
+        .accepted_policy_identity_for_peer(&ready_peer.device_id)
+        .await?;
+    let Some(identity) = identity else {
+        return Err("accepted sync policy identity is missing".into());
+    };
+    ctx.storage
+        .begin_outbound_policy_identity(&ready_peer.device_id, &identity)
+        .await?;
+    let vector = load_version_vector(&ctx.storage).await?;
     send_msg(
         &tx,
         &LanSyncMessage::VersionVector {
@@ -220,12 +281,7 @@ pub(super) async fn handle_registry_admission(
             origin_device_id: None,
         },
     );
-    let known = ctx.known_peer_records.lock().await.clone();
-    tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        send_msg(&tx, &LanSyncMessage::PeerList { peers: known });
-    });
-    eprintln!("{TAG} Direct registry admission ready for {device_id}");
+    Ok(())
 }
 
 async fn broadcast_registry_events(

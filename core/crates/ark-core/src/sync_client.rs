@@ -45,6 +45,7 @@ pub(crate) struct AuthenticatedPeerSession {
     pub(crate) peer_id: String,
     pub(crate) registry_session_id: String,
     pub(crate) tx: mpsc::UnboundedSender<Message>,
+    pub(crate) sync_started: bool,
     pub(crate) sync_complete: bool,
     pub(crate) protocol: crate::protocol::NegotiatedProtocol,
 }

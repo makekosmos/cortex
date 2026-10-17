@@ -13,6 +13,7 @@ async fn registry_disable_closes_ready_session_and_removes_discovery_record() {
         platform: None,
         app_version: None,
         ready_peer: ReadyPeer::new(7, "disabled-device".into(), "test-session".into()),
+        sync_started: false,
         sync_complete: true,
         negotiated_protocol: None,
         registry_admission: None,

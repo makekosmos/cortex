@@ -74,6 +74,19 @@ fn selective_policy_is_a_separately_negotiated_capability() {
 }
 
 #[test]
+fn policy_bound_delivery_requires_selective_policy_support() {
+    let local = ProtocolOffer::current_with_registry_history(true);
+    let remote = offer(Some(&[1]), &[POLICY_BOUND_DELIVERY_V1]);
+    let selected = negotiate_protocol(&local, &remote, true).unwrap();
+    assert!(!selected
+        .capabilities
+        .contains(&ProtocolCapability::SelectiveSyncPolicyV1));
+    assert!(!selected
+        .capabilities
+        .contains(&ProtocolCapability::PolicyBoundDeliveryV1));
+}
+
+#[test]
 fn invalid_and_disjoint_offers_fail_deterministically() {
     assert_eq!(
         ProtocolOffer::new(1, Some(&[]), None),

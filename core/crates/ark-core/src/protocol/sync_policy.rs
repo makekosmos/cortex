@@ -43,6 +43,16 @@ pub fn sync_policy_message(profile: &crate::data_platform::SyncProfile) -> LanSy
     }
 }
 
+pub fn default_sync_policy_message() -> LanSyncMessage {
+    let identity = crate::data_platform::default_sync_policy_identity();
+    LanSyncMessage::SyncPolicy {
+        revision: identity.revision,
+        digest: identity.digest,
+        active: identity.active,
+        rules: Vec::new(),
+    }
+}
+
 pub fn sync_policy_identity(
     profile: Option<&crate::data_platform::SyncProfile>,
 ) -> crate::application::sync_storage::PolicyIdentity {

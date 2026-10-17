@@ -34,6 +34,7 @@ async fn send_signed_integration_frame_requires_addressed_authenticated_peer() {
             platform: None,
             app_version: None,
             ready_peer: ReadyPeer::new(1, "peer".into(), "test-session".into()),
+            sync_started: false,
             sync_complete: true,
             negotiated_protocol: None,
             registry_admission: None,

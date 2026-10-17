@@ -90,6 +90,7 @@ pub(super) mod reject_tests {
                 platform: None,
                 app_version: None,
                 ready_peer: ReadyPeer::new(7, "gossip".into(), "test-session".into()),
+                sync_started: false,
                 sync_complete: true,
                 negotiated_protocol: None,
                 registry_admission: None,

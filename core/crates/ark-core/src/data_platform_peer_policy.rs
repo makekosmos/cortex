@@ -75,7 +75,7 @@ pub fn accept_peer_sync_policy(
     active: bool,
     rules: &[SyncProfileRule],
 ) -> Result<AcceptedPeerSyncPolicy, String> {
-    if peer_device_id.is_empty() || peer_device_id.len() > 128 || revision < 1 {
+    if peer_device_id.is_empty() || peer_device_id.len() > 128 || revision < 0 {
         return Err("invalid accepted peer sync policy identity".into());
     }
     if rules.len() > 256 {
@@ -110,6 +110,16 @@ pub fn accept_peer_sync_policy(
         )
         .optional()
         .map_err(|error| error.to_string())?;
+    if revision == 0 {
+        let default = default_sync_policy_identity();
+        if active || !rules.is_empty() || digest != default.digest {
+            return Err("invalid unconfigured peer sync policy".into());
+        }
+        if current.is_some() {
+            return Err("accepted peer sync policy revision is stale".into());
+        }
+        return Ok(policy);
+    }
     if let Some((current_revision, current_digest, current_active)) = current {
         if revision < current_revision {
             return Err("accepted peer sync policy revision is stale".into());
@@ -291,6 +301,42 @@ mod accepted_peer_sync_policy_tests {
             load_accepted_peer_sync_policy(&reopened, "tablet").unwrap(),
             None
         );
+    }
+
+    #[test]
+    fn unconfigured_peer_default_policy_is_implicit_and_cannot_roll_back() {
+        let conn = Connection::open_in_memory().unwrap();
+        ensure_schema(&conn).unwrap();
+        let default = default_sync_policy_identity();
+
+        let accepted = accept_peer_sync_policy(
+            &conn,
+            "phone",
+            default.revision,
+            &default.digest,
+            default.active,
+            &[],
+        )
+        .unwrap();
+        assert_eq!(accepted.revision, 0);
+        assert_eq!(
+            load_accepted_peer_sync_policy(&conn, "phone").unwrap(),
+            None,
+            "the implicit default must not create a persisted policy row"
+        );
+
+        let rules = vec![policy_rule("books")];
+        let digest = digest_sync_policy(&rules);
+        accept_peer_sync_policy(&conn, "phone", 1, &digest, true, &rules).unwrap();
+        assert!(accept_peer_sync_policy(
+            &conn,
+            "phone",
+            default.revision,
+            &default.digest,
+            default.active,
+            &[],
+        )
+        .is_err());
     }
 
     #[test]

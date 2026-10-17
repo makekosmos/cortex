@@ -63,6 +63,7 @@ struct PeerState {
     platform: Option<String>,
     app_version: Option<String>,
     ready_peer: Option<ReadyPeer>,
+    sync_started: bool,
     sync_complete: bool,
     negotiated_protocol: Option<crate::protocol::NegotiatedProtocol>,
     registry_admission: Option<crate::sync_registry_admission::DirectRegistryAdmission>,

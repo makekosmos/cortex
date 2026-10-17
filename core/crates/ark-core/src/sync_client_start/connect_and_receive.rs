@@ -223,7 +223,7 @@
                                         active,
                                         rules,
                                     } => {
-                                        if let Err(error) = sync_policy::accept(
+                                        if let Err(error) = sync_policy::accept_and_start(
                                             &storage,
                                             &authenticated_tx,
                                             authenticated,

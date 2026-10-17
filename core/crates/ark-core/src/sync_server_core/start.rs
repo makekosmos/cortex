@@ -186,6 +186,7 @@ impl SyncServer {
                                     platform: None,
                                     app_version: None,
                                     ready_peer: None,
+                                    sync_started: false,
                                     sync_complete: false,
                                     negotiated_protocol: None,
                                     registry_admission: None,

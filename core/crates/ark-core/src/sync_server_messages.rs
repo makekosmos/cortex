@@ -78,6 +78,15 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                     ready_peer.device_id
                 );
                 admission::reject_peer(ctx, peer_id, &tx).await;
+                return;
+            }
+            if let Err(error) = admission::start_sync_after_policy(ctx, peer_id, &ready_peer).await
+            {
+                eprintln!(
+                    "{TAG} policy-gated sync start failed for {}: {error}",
+                    ready_peer.device_id
+                );
+                admission::reject_peer(ctx, peer_id, &tx).await;
             }
         }
 
