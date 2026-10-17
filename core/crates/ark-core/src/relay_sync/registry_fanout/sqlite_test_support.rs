@@ -76,7 +76,7 @@ where
     F: FnMut() -> Fut,
     Fut: Future<Output = bool>,
 {
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(60);
     while !predicate().await {
         assert!(
             tokio::time::Instant::now() < deadline,

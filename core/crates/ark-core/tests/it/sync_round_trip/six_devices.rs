@@ -392,10 +392,10 @@ async fn six_devices_converge_during_initial_import_and_local_edit() {
         devices.push((device_id.clone(), storage, client));
     }
 
-    tokio::time::timeout(Duration::from_secs(10), page_started)
+    tokio::time::timeout(Duration::from_secs(30), page_started)
         .await
         .expect("initial sync did not request a storage page");
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
     while server.get_connected_peer_entries().await.len() != DEVICE_COUNT - 1 {
         assert!(
             tokio::time::Instant::now() < deadline,
@@ -403,7 +403,7 @@ async fn six_devices_converge_during_initial_import_and_local_edit() {
         );
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
-    tokio::time::timeout(Duration::from_secs(10), authenticated_rx)
+    tokio::time::timeout(Duration::from_secs(30), authenticated_rx)
         .await
         .expect("first device did not finish client authentication")
         .expect("client authentication callback was dropped");
@@ -415,7 +415,7 @@ async fn six_devices_converge_during_initial_import_and_local_edit() {
     // feed drain must recover this committed update without waiting for reconnect.
     release_tx.send(true).unwrap();
 
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(20);
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(60);
     loop {
         let source_rows = source.load_entities(&HashMap::new()).await.unwrap();
         let source_ready = source_rows

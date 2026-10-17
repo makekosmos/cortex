@@ -20,6 +20,8 @@ impl<S: RegistryAdmissionStorage + ?Sized + 'static> RelayRegistryCoordinator<S>
             return outcome;
         }
         let local_disabled = disabled.iter().any(|id| id == &self.local_device_id);
+        // Registry events are already durable in local storage. A peer that
+        // disappears after this connection snapshot replays them next time.
         let revoked = {
             let mut peers = self.peers.lock().await;
             let mut ids = if local_disabled {
@@ -103,8 +105,8 @@ impl<S: RegistryAdmissionStorage + ?Sized + 'static> RelayRegistryCoordinator<S>
                     if !self.session_is_ready(&id, &endpoint, &session).await {
                         break;
                     }
-                    if let Err(error) = self
-                        .send(
+                    match self
+                        .send_outcome(
                             &endpoint,
                             LanSyncMessage::RegistryEventUpdate {
                                 session_id: session.clone(),
@@ -113,9 +115,11 @@ impl<S: RegistryAdmissionStorage + ?Sized + 'static> RelayRegistryCoordinator<S>
                         )
                         .await
                     {
-                        outcome.set_error(format!(
+                        Ok(crate::transport::AddressedSendOutcome::Sent)
+                        | Ok(crate::transport::AddressedSendOutcome::PeerOffline) => {}
+                        Err(error) => outcome.set_error(format!(
                             "failed to fan out registry event to {id}: {error}"
-                        ));
+                        )),
                     }
                 }
             }
@@ -144,8 +148,8 @@ impl<S: RegistryAdmissionStorage + ?Sized + 'static> RelayRegistryCoordinator<S>
                     if !self.is_revocation_current(&id, &endpoint).await {
                         break;
                     }
-                    if let Err(error) = self
-                        .send(
+                    match self
+                        .send_outcome(
                             &endpoint,
                             LanSyncMessage::RegistryEventUpdate {
                                 session_id: session.clone(),
@@ -154,7 +158,13 @@ impl<S: RegistryAdmissionStorage + ?Sized + 'static> RelayRegistryCoordinator<S>
                         )
                         .await
                     {
-                        outcome.set_error(format!("failed to send disable event to {id}: {error}"));
+                        Ok(crate::transport::AddressedSendOutcome::Sent)
+                        | Ok(crate::transport::AddressedSendOutcome::PeerOffline) => {}
+                        Err(error) => {
+                            outcome.set_error(format!(
+                                "failed to send disable event to {id}: {error}"
+                            ));
+                        }
                     }
                 }
             }

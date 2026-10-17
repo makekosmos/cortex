@@ -114,12 +114,18 @@ impl<S: RegistryAdmissionStorage + ?Sized + 'static> RelayRegistryCoordinator<S>
         self.peers.lock().await.remove(peer);
     }
 
-    pub(super) async fn send(&self, endpoint: &str, message: LanSyncMessage) -> Result<(), String> {
-        match self
-            .transport
+    pub(super) async fn send_outcome(
+        &self,
+        endpoint: &str,
+        message: LanSyncMessage,
+    ) -> Result<crate::transport::AddressedSendOutcome, String> {
+        self.transport
             .send_to_transport_peer(endpoint, message)
-            .await?
-        {
+            .await
+    }
+
+    pub(super) async fn send(&self, endpoint: &str, message: LanSyncMessage) -> Result<(), String> {
+        match self.send_outcome(endpoint, message).await? {
             crate::transport::AddressedSendOutcome::Sent => Ok(()),
             crate::transport::AddressedSendOutcome::PeerOffline => {
                 Err("transport peer is offline".into())
