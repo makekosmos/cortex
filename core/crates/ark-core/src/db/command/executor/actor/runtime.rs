@@ -20,7 +20,7 @@ pub(super) fn actor_loop(
             eprintln!("database restore recovery failed before startup: {error}");
             DbError::RecoveryRequired
         })?;
-        let connection = crate::db::open_db(&shared.path).map_err(DbError::Storage)?;
+        let connection = ark_store::open::open_db(&shared.path).map_err(DbError::Storage)?;
         crate::db::init_schema(&connection).map_err(DbError::Storage)?;
         let backup_path = format!("{}.pre-core-task.bak", shared.path);
         crate::canonical_types::core_task_rewrite::rewrite_legacy_tasks(

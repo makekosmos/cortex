@@ -15,7 +15,7 @@ mod tests {
     fn production_database_open_uses_full_wal_durability() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("ark.db");
-        let conn = crate::db::open_db(path.to_str().unwrap()).unwrap();
+        let conn = ark_store::open::open_db(path.to_str().unwrap()).unwrap();
         let synchronous: i64 = conn
             .pragma_query_value(None, "synchronous", |row| row.get(0))
             .unwrap();
@@ -151,9 +151,9 @@ mod tests {
     fn delivery_projection_keeps_selected_locator_and_payload_in_one_read_snapshot() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("feed-snapshot.db");
-        let reader = crate::db::open_db(path.to_str().unwrap()).unwrap();
+        let reader = ark_store::open::open_db(path.to_str().unwrap()).unwrap();
         crate::db::init_schema(&reader).unwrap();
-        let writer = crate::db::open_db(path.to_str().unwrap()).unwrap();
+        let writer = ark_store::open::open_db(path.to_str().unwrap()).unwrap();
         crate::db::init_schema(&writer).unwrap();
         let initial = crate::types::ArkObject {
             id: "snapshot-object".into(),

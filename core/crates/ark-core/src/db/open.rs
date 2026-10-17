@@ -1,3 +1,4 @@
+use ark_store::open::open_db;
 use rusqlite::Connection;
 
 use crate::canonical_types::migration;
@@ -18,22 +19,6 @@ pub fn is_sequenced_usage_entity(entity_type: &str) -> bool {
 
 pub(in crate::db) fn usage_cursor_key(device_id: &str) -> String {
     format!("@usage:{device_id}")
-}
-
-// ---------------------------------------------------------------------------
-// Open and init
-// ---------------------------------------------------------------------------
-
-pub fn open_db(path: &str) -> Result<Connection, String> {
-    let conn = Connection::open(path).map_err(|e| e.to_string())?;
-    conn.execute_batch(
-        "PRAGMA journal_mode = WAL;
-         PRAGMA synchronous = FULL;
-         PRAGMA foreign_keys = ON;
-         PRAGMA busy_timeout = 5000;",
-    )
-    .map_err(|e| e.to_string())?;
-    Ok(conn)
 }
 
 /// Online SQLite integrity check. Возвращает Err если DB corrupted.

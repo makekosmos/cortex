@@ -77,7 +77,7 @@ impl DbHandle {
                 f(&guard)
             }
             HandleBackend::Actor(actor) => {
-                let connection = crate::db::open_db(&actor.path).expect("test DB connection");
+                let connection = ark_store::open::open_db(&actor.path).expect("test DB connection");
                 f(&connection)
             }
         }
@@ -207,7 +207,7 @@ impl DbHandle {
         match &self.backend {
             HandleBackend::Test(connection) => Arc::clone(connection),
             HandleBackend::Actor(actor) => Arc::new(Mutex::new(
-                crate::db::open_db(&actor.path).expect("test DB connection"),
+                ark_store::open::open_db(&actor.path).expect("test DB connection"),
             )),
         }
     }

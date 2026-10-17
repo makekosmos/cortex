@@ -255,7 +255,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let db_path = directory.path().join("ark.db");
         let db_path_text = db_path.to_str().unwrap();
-        let connection = crate::db::open_db(db_path_text).unwrap();
+        let connection = ark_store::open::open_db(db_path_text).unwrap();
         crate::db::init_schema(&connection).unwrap();
         connection
             .execute_batch(

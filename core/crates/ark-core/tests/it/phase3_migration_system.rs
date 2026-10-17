@@ -1,8 +1,7 @@
 #![allow(clippy::unwrap_used)]
 use ark_core::canonical_types::migration::{migrate_phase3, retire_legacy_planning_tables};
-use ark_core::db::{
-    backup_to_file, init_schema, init_schema_prerequisites_for_phase3, load_all, open_db,
-};
+use ark_core::db::{backup_to_file, init_schema, init_schema_prerequisites_for_phase3, load_all};
+use ark_store::open::open_db;
 use rusqlite::{params, Connection};
 use serde_json::json;
 
