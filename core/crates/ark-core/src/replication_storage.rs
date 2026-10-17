@@ -106,6 +106,13 @@ pub trait PeerIdentityBackend: Send + Sync {
         Err("sync session admission lookup is unsupported by this storage backend".into())
     }
 
+    async fn registry_device_is_enabled(
+        &self,
+        _peer_device_id: &str,
+    ) -> Result<Option<bool>, String> {
+        Err("device registry lookup is unsupported by this storage backend".into())
+    }
+
     async fn authorized_transport_public_key(
         &self,
         device_id: &str,

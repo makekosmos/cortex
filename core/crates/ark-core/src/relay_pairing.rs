@@ -134,18 +134,31 @@ impl RelaySync {
         self.handle_message(from_device_id.clone(), msg, None, true)
             .await;
         if self.is_authenticated_peer(&from_device_id).await {
-            if let Err(error) = self
-                .storage
-                .enroll_paired_device(
-                    &self.config.device_id,
-                    &from_device_id,
-                    &transport_public_key,
-                )
+            let revoked_peer_control_only = match self
+                .is_pinned_revoked_peer(&from_device_id, &transport_public_key)
                 .await
             {
-                self.rollback_transport_admission(&from_device_id, &transport_public_key)
-                    .await;
-                return Err(format!("failed to persist pairing identity: {error}"));
+                Ok(revoked) => revoked,
+                Err(error) => {
+                    self.rollback_transport_admission(&from_device_id, &transport_public_key)
+                        .await;
+                    return Err(format!("failed to verify registry admission: {error}"));
+                }
+            };
+            if !revoked_peer_control_only {
+                if let Err(error) = self
+                    .storage
+                    .enroll_paired_device(
+                        &self.config.device_id,
+                        &from_device_id,
+                        &transport_public_key,
+                    )
+                    .await
+                {
+                    self.rollback_transport_admission(&from_device_id, &transport_public_key)
+                        .await;
+                    return Err(format!("failed to persist pairing identity: {error}"));
+                }
             }
             if send_pairing_accepted {
                 if let Err(error) = self
@@ -179,6 +192,32 @@ impl RelaySync {
                 "pairing handshake with {from_device_id} did not authenticate"
             ))
         }
+    }
+
+    async fn is_pinned_revoked_peer(
+        &self,
+        peer_device_id: &str,
+        transport_public_key: &str,
+    ) -> Result<bool, String> {
+        if self
+            .storage
+            .registry_device_is_enabled(peer_device_id)
+            .await?
+            != Some(false)
+        {
+            return Ok(false);
+        }
+        let authorized_key = self
+            .storage
+            .authorized_transport_public_key(peer_device_id)
+            .await?;
+        if authorized_key.as_deref() == Some(transport_public_key) {
+            return Ok(true);
+        }
+        let paired_keys = crate::sync_server::load_peer_transport_keys(&self.storage).await?;
+        Ok(paired_keys
+            .get(peer_device_id)
+            .is_some_and(|key| key == transport_public_key))
     }
 
     async fn rollback_transport_admission(&self, device_id: &str, endpoint: &str) {

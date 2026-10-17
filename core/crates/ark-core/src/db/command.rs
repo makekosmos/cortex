@@ -30,13 +30,13 @@ pub(crate) use commands::{
     LocalUsageWriteCommand, ObjectReadQuery, PersistIntegrationGrantCommand,
     PersistNodeAuthorizationCommand, PolicyBoundFeedDeliveryPageQuery,
     PublishIntegrationCredentialEnvelopeCommand, ReceiveInboxReceiptCommand,
-    RegisterPackageTypesCommand, RegistryPeerAdmissionQuery, RemoteCoreTaskOutcome,
-    ReplaceObjectLinkCommand, RestoreSnapshotCommand, SaveLocalSyncProfileCommand,
-    SetLocalSyncKeyValueCommand, SetSyncKeyValueCommand, SignRegistryHandshakeCommand,
-    SystemReadQuery, TrackedAppDeleteCommand, TrackedAppUpsertCommand, TypeReadQuery,
-    UpsertExternalRefCommand, UpsertObjectLinkCommand, UpsertObjectTypeCommand,
-    UsageCompleteThroughQuery, UsageReadQuery, ValidateOutboundSignedFrameQuery,
-    VerifyRegistryHandshakeQuery,
+    RegisterPackageTypesCommand, RegistryDeviceEnabledQuery, RegistryPeerAdmissionQuery,
+    RemoteCoreTaskOutcome, ReplaceObjectLinkCommand, RestoreSnapshotCommand,
+    SaveLocalSyncProfileCommand, SetLocalSyncKeyValueCommand, SetSyncKeyValueCommand,
+    SignRegistryHandshakeCommand, SystemReadQuery, TrackedAppDeleteCommand,
+    TrackedAppUpsertCommand, TypeReadQuery, UpsertExternalRefCommand, UpsertObjectLinkCommand,
+    UpsertObjectTypeCommand, UsageCompleteThroughQuery, UsageReadQuery,
+    ValidateOutboundSignedFrameQuery, VerifyRegistryHandshakeQuery,
 };
 #[cfg(test)]
 pub(crate) use operation_receipt::OperationResult;

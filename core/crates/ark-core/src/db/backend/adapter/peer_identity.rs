@@ -62,6 +62,19 @@ impl PeerIdentityBackend for SqliteStorageBackend {
             .map_err(|error| error.to_string())
     }
 
+    async fn registry_device_is_enabled(
+        &self,
+        peer_device_id: &str,
+    ) -> Result<Option<bool>, String> {
+        self.db
+            .query(
+                CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
+                crate::db::RegistryDeviceEnabledQuery::new(peer_device_id.to_owned()),
+            )
+            .await
+            .map_err(|error| error.to_string())
+    }
+
     async fn load_peer_transport_keys(
         &self,
     ) -> Result<std::collections::HashMap<String, String>, String> {

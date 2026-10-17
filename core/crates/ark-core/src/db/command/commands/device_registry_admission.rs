@@ -47,6 +47,40 @@ impl DbQuery for RegistryPeerAdmissionQuery {
     }
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub(crate) struct RegistryDeviceEnabledQuery {
+    peer_device_id: String,
+}
+
+impl RegistryDeviceEnabledQuery {
+    pub(crate) fn new(peer_device_id: String) -> Self {
+        Self { peer_device_id }
+    }
+}
+
+impl sealed::Sealed for RegistryDeviceEnabledQuery {}
+
+impl DbQuery for RegistryDeviceEnabledQuery {
+    type Output = Option<bool>;
+
+    fn class(&self) -> CommandClass {
+        CommandClass::SyncLive
+    }
+
+    fn weight(&self) -> usize {
+        self.peer_device_id.len()
+    }
+
+    fn read(
+        self,
+        context: &CommandContext,
+        connection: &Connection,
+    ) -> Result<Self::Output, DbError> {
+        context.require_sync_peer_matches(&self.peer_device_id)?;
+        registry_device_is_admitted(connection, &self.peer_device_id)
+    }
+}
+
 pub(super) fn require_registry_peer_known(
     transaction: &Transaction<'_>,
     device_id: &str,

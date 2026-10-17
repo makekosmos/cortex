@@ -27,7 +27,9 @@ pub(crate) use core_task::{AuthenticatedCoreTaskWrite, LocalCoreTaskWrite, Remot
 #[cfg(test)]
 pub(crate) use device_registry::DeviceEnrollmentOutcome;
 pub(crate) use device_registry::EnrollPairedDeviceCommand;
-pub(crate) use device_registry_admission::RegistryPeerAdmissionQuery;
+pub(crate) use device_registry_admission::{
+    RegistryDeviceEnabledQuery, RegistryPeerAdmissionQuery,
+};
 pub(crate) use device_registry_command::AppendLocalRegistryEventCommand;
 pub(crate) use device_registry_handshake::{
     SignRegistryHandshakeCommand, VerifyRegistryHandshakeQuery,
