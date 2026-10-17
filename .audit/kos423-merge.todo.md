@@ -24,7 +24,7 @@
 
 - [x] After each implementation commit, record the hypothesis, before-state, production test result, and next acceptance gap.
 - Verified local persistence/API slice: a sealed SQLite actor stores task-field operations append-only, exposes common ancestors and concurrent variants, keeps unresolved parents pending, rejects malformed parent shapes before storage, replays operation IDs idempotently across reopen, and atomically requires the observed digest when an operation closes a conflict frontier. Before, `SyncEntity` carried only a last-writer object snapshot and no durable variants. The 17 matching domain, DB actor, and service tests pass; strict Clippy, formatting, diff, and source-size checks pass. An independent review replaced string-based error classification with typed storage errors. Remaining acceptance gap: normal task edits are not yet converted into these operations, and operations have no committed-feed/wire delivery or legacy-write fence, so this slice does not claim cross-device convergence.
-- Full `ark-core --lib` validation currently reports 539/540 both in parallel and serial mode. The single failure, `disabled_offline_device_reopens_sqlite_and_catches_up_before_data_admission`, passes in isolation (1/1); it is an unrelated iroh live-connection race and remains an open test-suite issue.
+- Full `ark-core --lib` validation first reported 539/540 because registry revocation treated an already-closed Iroh connection as an error. `disconnect_transport_peer` now treats that state as success and removes the stale endpoint. The full serialized suite passes 540/540 after the fix; strict Clippy, formatting, diff, and source-size checks pass.
 
 ## Next implementation boundary
 
