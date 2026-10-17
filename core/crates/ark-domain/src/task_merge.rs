@@ -1,3 +1,4 @@
+use crate::types::{ArkObject, ObjectLink};
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -57,6 +58,21 @@ pub enum TaskMergeUnit {
     ObjectExistence,
 }
 
+impl TaskMergeUnit {
+    pub const ALL: [Self; 10] = [
+        Self::Title,
+        Self::Content,
+        Self::State,
+        Self::Planning,
+        Self::Deadline,
+        Self::Reminders,
+        Self::Recurrence,
+        Self::Priority,
+        Self::Checklist,
+        Self::ObjectExistence,
+    ];
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", content = "value", rename_all = "camelCase")]
 pub enum TaskMergeValue {
@@ -74,6 +90,67 @@ pub struct TaskMergeOperation {
     pub unit: TaskMergeUnit,
     pub parents: Vec<OperationId>,
     pub value: TaskMergeValue,
+}
+
+/// A complete task snapshot from which every replica derives the same baseline history.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskMergeBootstrap {
+    pub id: OperationId,
+    pub object: ArkObject,
+    pub links: Vec<ObjectLink>,
+    pub source_hlc: String,
+    pub baseline_ids: Vec<(TaskMergeUnit, OperationId)>,
+}
+
+impl TaskMergeBootstrap {
+    pub fn baseline_operations(&self) -> Result<Vec<TaskMergeOperation>, MergeError> {
+        if self.object.type_id != "core.task" || self.object.type_version != "0.1.0" {
+            return Err(MergeError::InvalidBootstrap);
+        }
+        if self.source_hlc.trim().is_empty()
+            || self
+                .links
+                .iter()
+                .any(|link| link.source_object_id != self.object.id)
+            || self
+                .links
+                .iter()
+                .map(|link| link.id.as_str())
+                .collect::<BTreeSet<_>>()
+                .len()
+                != self.links.len()
+            || self.baseline_ids.len() != TaskMergeUnit::ALL.len()
+        {
+            return Err(MergeError::InvalidBootstrap);
+        }
+
+        let ids = self
+            .baseline_ids
+            .iter()
+            .map(|(_, id)| id)
+            .collect::<BTreeSet<_>>();
+        if ids.len() != self.baseline_ids.len() || ids.contains(&&self.id) {
+            return Err(MergeError::InvalidBootstrap);
+        }
+
+        TaskMergeUnit::ALL
+            .iter()
+            .zip(&self.baseline_ids)
+            .map(|(expected_unit, (unit, id))| {
+                if unit != expected_unit {
+                    return Err(MergeError::InvalidBootstrap);
+                }
+                Ok(TaskMergeOperation {
+                    id: id.clone(),
+                    object_id: self.object.id.clone(),
+                    unit: *unit,
+                    parents: Vec::new(),
+                    value: value_for_unit(&self.object, *unit)?,
+                })
+            })
+            .collect()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -120,6 +197,8 @@ pub enum MergeError {
     InvalidTaskPayload,
     #[error("task merge projection contains more than one conflict set for a unit")]
     DuplicateMaterializedUnit,
+    #[error("task merge bootstrap is incomplete or inconsistent")]
+    InvalidBootstrap,
 }
 
 pub fn validate_operation(operation: &TaskMergeOperation) -> Result<(), MergeError> {

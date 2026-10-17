@@ -118,7 +118,7 @@ fn property_for_unit(unit: TaskMergeUnit) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::task_merge::TaskMergeUnit;
+    use crate::task_merge::{OperationId, TaskMergeBootstrap, TaskMergeUnit};
     use serde_json::json;
 
     fn task() -> ArkObject {
@@ -286,5 +286,91 @@ mod tests {
             materialize_task(&task(), &[task_set.clone(), task_set]),
             Err(MergeError::DuplicateMaterializedUnit)
         ));
+    }
+
+    #[test]
+    fn bootstrap_derives_a_complete_baseline_from_its_snapshot() {
+        let bootstrap = TaskMergeBootstrap {
+            id: OperationId::parse("10000000000000000000000000000000").unwrap(),
+            object: task(),
+            links: vec![crate::types::ObjectLink {
+                id: "link-1".into(),
+                source_object_id: "task-1".into(),
+                target_object_id: "project-1".into(),
+                link_type: "task.project".into(),
+                created_at: "2026-10-17T00:00:00Z".into(),
+            }],
+            source_hlc: "2026-10-17T00:00:00.000Z:000001:device-1".into(),
+            baseline_ids: TaskMergeUnit::ALL
+                .iter()
+                .enumerate()
+                .map(|(index, unit)| {
+                    (
+                        *unit,
+                        OperationId::parse(format!("{:032x}", index + 1)).unwrap(),
+                    )
+                })
+                .collect(),
+        };
+
+        let baseline = bootstrap.baseline_operations().unwrap();
+
+        assert_eq!(baseline.len(), TaskMergeUnit::ALL.len());
+        for (operation, unit) in baseline.iter().zip(TaskMergeUnit::ALL) {
+            assert_eq!(operation.object_id, "task-1");
+            assert_eq!(operation.unit, unit);
+            assert!(operation.parents.is_empty());
+            assert_eq!(
+                operation.value,
+                value_for_unit(&bootstrap.object, unit).unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn bootstrap_rejects_missing_units_and_foreign_links() {
+        let mut bootstrap = TaskMergeBootstrap {
+            id: OperationId::parse("10000000000000000000000000000000").unwrap(),
+            object: task(),
+            links: Vec::new(),
+            source_hlc: "2026-10-17T00:00:00.000Z:000001:device-1".into(),
+            baseline_ids: TaskMergeUnit::ALL
+                .iter()
+                .enumerate()
+                .map(|(index, unit)| {
+                    (
+                        *unit,
+                        OperationId::parse(format!("{:032x}", index + 1)).unwrap(),
+                    )
+                })
+                .collect(),
+        };
+        bootstrap.baseline_ids.pop();
+        assert_eq!(
+            bootstrap.baseline_operations().unwrap_err(),
+            MergeError::InvalidBootstrap
+        );
+
+        bootstrap.baseline_ids = TaskMergeUnit::ALL
+            .iter()
+            .enumerate()
+            .map(|(index, unit)| {
+                (
+                    *unit,
+                    OperationId::parse(format!("{:032x}", index + 1)).unwrap(),
+                )
+            })
+            .collect();
+        bootstrap.links.push(crate::types::ObjectLink {
+            id: "link-1".into(),
+            source_object_id: "another-task".into(),
+            target_object_id: "project-1".into(),
+            link_type: "task.project".into(),
+            created_at: "2026-10-17T00:00:00Z".into(),
+        });
+        assert_eq!(
+            bootstrap.baseline_operations().unwrap_err(),
+            MergeError::InvalidBootstrap
+        );
     }
 }
