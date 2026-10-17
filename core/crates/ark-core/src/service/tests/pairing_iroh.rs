@@ -375,3 +375,4 @@ async fn cancel_pairing_clears_responder_prompt() {
 
 mod accept_pairing;
 mod failure_cases;
+mod recovery_tests;
