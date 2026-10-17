@@ -88,7 +88,12 @@ fn policy_bound_delivery_requires_selective_policy_support() {
 
 #[test]
 fn task_merge_bootstrap_v2_requires_authenticated_capability_negotiation() {
-    let local = ProtocolOffer::current_with_registry_history(true);
+    let default = ProtocolOffer::current_with_registry_history(true);
+    assert!(!default
+        .supported_capabilities
+        .contains(TASK_MERGE_BOOTSTRAP_V2));
+
+    let local = default.with_task_merge_bootstrap_v2();
     let remote = offer(Some(&[1]), &[TASK_MERGE_BOOTSTRAP_V2]);
     assert!(!negotiate_protocol(&local, &remote, false)
         .unwrap()

@@ -75,11 +75,16 @@ impl ProtocolOffer {
             offer
                 .supported_capabilities
                 .insert(POLICY_BOUND_DELIVERY_V1.to_owned());
-            offer
-                .supported_capabilities
-                .insert(TASK_MERGE_BOOTSTRAP_V2.to_owned());
         }
         offer
+    }
+
+    /// Opts into the task merge wire protocol. Keep this explicit until every
+    /// local task mutation and snapshot delivery path is merge-safe.
+    pub fn with_task_merge_bootstrap_v2(mut self) -> Self {
+        self.supported_capabilities
+            .insert(TASK_MERGE_BOOTSTRAP_V2.to_owned());
+        self
     }
 
     pub fn new(
