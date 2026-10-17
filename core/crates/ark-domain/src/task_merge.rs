@@ -3,6 +3,9 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
+mod projection;
+pub use projection::{apply_unit_value, materialize_task, value_for_unit};
+
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct OperationId(String);
 
@@ -113,6 +116,10 @@ pub enum MergeError {
     UnitValueMismatch,
     #[error("merge conflict set could not be encoded")]
     DigestEncoding,
+    #[error("task merge value cannot be applied to the canonical task")]
+    InvalidTaskPayload,
+    #[error("task merge projection contains more than one conflict set for a unit")]
+    DuplicateMaterializedUnit,
 }
 
 pub fn validate_operation(operation: &TaskMergeOperation) -> Result<(), MergeError> {
