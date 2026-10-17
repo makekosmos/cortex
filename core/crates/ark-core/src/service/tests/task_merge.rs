@@ -217,6 +217,137 @@ async fn sqlite_service_replicas_converge_after_reordered_merge_delivery() {
     }
 }
 
+#[tokio::test]
+async fn sqlite_service_replicas_preserve_a_concurrent_delete_and_edit() {
+    let left = service_fixture();
+    let right = service_fixture();
+    init(&left.state, &left.db_path()).await;
+    init(&right.state, &right.db_path()).await;
+
+    let title_base = operation('1', &[], "before edit");
+    let existence_base = merge_operation(
+        '2',
+        TaskMergeUnit::ObjectExistence,
+        &[],
+        TaskMergeValue::ObjectExists,
+    );
+    for state in [&left.state, &right.state] {
+        for merge_operation in [title_base.clone(), existence_base.clone()] {
+            handle_request(
+                state,
+                Request::TaskMergeAppend {
+                    merge_operation,
+                    expected_conflict_digest: None,
+                },
+            )
+            .await
+            .unwrap();
+        }
+    }
+
+    let deletion = merge_operation(
+        '3',
+        TaskMergeUnit::ObjectExistence,
+        &['2'],
+        TaskMergeValue::ObjectDeleted {
+            deleted_at: "2026-10-17T10:00:00Z".into(),
+        },
+    );
+    let title_edit = operation('4', &['1'], "edited concurrently");
+    let edit_kept_object_alive = merge_operation(
+        '5',
+        TaskMergeUnit::ObjectExistence,
+        &['2'],
+        TaskMergeValue::ObjectExists,
+    );
+
+    for merge_operation in [
+        deletion.clone(),
+        title_edit.clone(),
+        edit_kept_object_alive.clone(),
+    ] {
+        handle_request(
+            &left.state,
+            Request::TaskMergeAppend {
+                merge_operation,
+                expected_conflict_digest: None,
+            },
+        )
+        .await
+        .unwrap();
+    }
+    for merge_operation in [title_edit, edit_kept_object_alive, deletion] {
+        handle_request(
+            &right.state,
+            Request::TaskMergeAppend {
+                merge_operation,
+                expected_conflict_digest: None,
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    let existence_sets = [
+        handle_request(
+            &left.state,
+            Request::TaskMergeConflicts {
+                object_id: "service-task".into(),
+                unit: TaskMergeUnit::ObjectExistence,
+            },
+        )
+        .await
+        .unwrap(),
+        handle_request(
+            &right.state,
+            Request::TaskMergeConflicts {
+                object_id: "service-task".into(),
+                unit: TaskMergeUnit::ObjectExistence,
+            },
+        )
+        .await
+        .unwrap(),
+    ];
+    assert_eq!(
+        existence_sets[0]["conflictSet"],
+        existence_sets[1]["conflictSet"]
+    );
+    assert_eq!(
+        existence_sets[0]["conflictSet"]["commonAncestors"][0]["id"],
+        existence_base.id.as_str()
+    );
+    assert_eq!(
+        existence_sets[0]["conflictSet"]["variants"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+
+    for state in [&left.state, &right.state] {
+        let title_set = handle_request(
+            state,
+            Request::TaskMergeConflicts {
+                object_id: "service-task".into(),
+                unit: TaskMergeUnit::Title,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            title_set["conflictSet"]["variants"][0]["value"]["value"],
+            "edited concurrently"
+        );
+        assert_eq!(
+            title_set["conflictSet"]["variants"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+}
+
 #[test]
 fn task_merge_append_request_deserializes_without_colliding_with_operation_tag() {
     let request: Request = serde_json::from_value(json!({
