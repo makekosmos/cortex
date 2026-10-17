@@ -81,8 +81,8 @@ async fn transport_blocks_outbound_and_inbound_data_until_peer_is_ready() {
     transport_a.start(a_events_tx).await.expect("start A");
 
     let hello_deadline = tokio::time::Instant::now() + Duration::from_secs(10);
-    while !transport_a.registry().endpoint_id_for("device-B").is_some()
-        || !transport_b.registry().endpoint_id_for("device-A").is_some()
+    while transport_a.registry().endpoint_id_for("device-B").is_none()
+        || transport_b.registry().endpoint_id_for("device-A").is_none()
     {
         assert!(
             tokio::time::Instant::now() < hello_deadline,
