@@ -1,19 +1,18 @@
-use crate::domain::canonical_type::canonical_value;
+use ark_domain::canonical_type::registry::{
+    canonicalize_legacy_definition, canonicalize_type_version, validate_type_id, validate_version,
+};
 use rusqlite::{params, Connection, OptionalExtension};
 
-use super::version_storage::{
-    canonical_definition, json_empty, json_empty_array, parse_json, validate_id, validate_version,
-};
 use super::{
-    canonical_schema_hash, get_type, insert_type_version, register_alias, set_base_type,
-    set_current_version, set_status, TypeRegistration, TypeVersion, LEGACY_VERSION,
+    get_type, insert_type_version, register_alias, set_base_type, set_current_version, set_status,
+    TypeRegistration, TypeVersion, LEGACY_VERSION,
 };
 
 pub fn register_type(
     conn: &Connection,
     registration: &TypeRegistration,
 ) -> Result<Vec<crate::canonical_types::pending::ReplayNotice>, String> {
-    validate_id(&registration.type_id, "type id")?;
+    validate_type_id(&registration.type_id, "type id")?;
     if registration.owner_kind.trim().is_empty() {
         return Err("invalid owner kind".into());
     }
@@ -28,7 +27,7 @@ pub fn register_type(
         return Err("invalid status".into());
     }
     if let Some(base) = &registration.base_type_id {
-        validate_id(base, "base type id")?;
+        validate_type_id(base, "base type id")?;
     }
     for alias in &registration.aliases {
         if alias.canonical_type_id != registration.type_id {
@@ -58,7 +57,7 @@ pub fn register_type(
         let existing = get_type(conn, &registration.type_id, Some(&registration.version))?
             .ok_or_else(|| "canonical type already exists".to_string())?;
         let definition = &existing.definition;
-        let canonical = canonical_definition(&TypeVersion {
+        let canonical = canonicalize_type_version(&TypeVersion {
             type_id: registration.type_id.clone(),
             version: registration.version.clone(),
             schema_json: registration.schema_json.clone(),
@@ -69,11 +68,6 @@ pub fn register_type(
             schema_hash: registration.schema_hash.clone(),
             created_at: registration.created_at.clone(),
         })?;
-        let canonical_hash = canonical
-            .4
-            .split('|')
-            .next()
-            .ok_or_else(|| "canonical hash metadata missing".to_string())?;
         if existing_name == registration.name
             && existing.summary.owner_kind == registration.owner_kind
             && existing.summary.owner_id == registration.owner_id
@@ -81,17 +75,12 @@ pub fn register_type(
             && existing.summary.base_type_id == registration.base_type_id
             && definition.type_id == registration.type_id
             && definition.version == registration.version
-            && definition.schema_json == canonical.0
-            && definition.ui_schema_json == canonical.1
-            && definition.content_contract_json == canonical.2
-            && definition.relations_json == canonical.3
-            && definition.sync_policy_json
-                == serde_json::to_string(&canonical_value(&parse_json(
-                    &registration.sync_policy_json,
-                    "sync_policy_json",
-                )?))
-                .map_err(|e| e.to_string())?
-            && definition.schema_hash == canonical_hash
+            && definition.schema_json == canonical.schema_json
+            && definition.ui_schema_json == canonical.ui_schema_json
+            && definition.content_contract_json == canonical.content_contract_json
+            && definition.relations_json == canonical.relations_json
+            && definition.sync_policy_json == canonical.sync_policy_json
+            && definition.schema_hash == canonical.schema_hash
             && definition.created_at == registration.created_at
         {
             return Ok(Vec::new());
@@ -288,15 +277,7 @@ pub fn migrate_phase2(conn: &Connection) -> Result<(), String> {
                 schema_hash: String::new(),
                 created_at: created.clone(),
             };
-            let schema_v = parse_json(&v.schema_json, "schema_json")?;
-            let ui_v = parse_json(&v.ui_schema_json, "ui_schema_json")?;
-            let hash = canonical_schema_hash(
-                &schema_v,
-                &ui_v,
-                &json_empty(),
-                &json_empty_array(),
-                &json_empty(),
-            )?;
+            let canonical = canonicalize_legacy_definition(&v.schema_json, &v.ui_schema_json)?;
             conn.execute(
                 concat!(
                     "INSERT OR IGNORE INTO object_type_versions(type_id,version,schema_json,",
@@ -306,9 +287,9 @@ pub fn migrate_phase2(conn: &Connection) -> Result<(), String> {
                 params![
                     id,
                     LEGACY_VERSION,
-                    serde_json::to_string(&canonical_value(&schema_v)).map_err(|e| e.to_string())?,
-                    serde_json::to_string(&canonical_value(&ui_v)).map_err(|e| e.to_string())?,
-                    hash,
+                    canonical.schema_json,
+                    canonical.ui_schema_json,
+                    canonical.schema_hash,
                     created
                 ],
             )

@@ -1,9 +1,7 @@
 use rusqlite::{params, Connection};
 
-use crate::domain::canonical_type::canonical_value;
-
-use super::version_storage::{json_empty, json_empty_array, parse_json};
-use super::{canonical_schema_hash, LEGACY_VERSION};
+use super::LEGACY_VERSION;
+use ark_domain::canonical_type::registry::canonicalize_legacy_definition;
 
 pub fn ensure_builtin_versions(conn: &Connection) -> Result<(), String> {
     let mut stmt = conn
@@ -39,19 +37,7 @@ fn insert_legacy_type_version(
     ui_schema: &str,
     created_at: &str,
 ) -> Result<(), String> {
-    let schema_value = parse_json(schema, "schema_json")?;
-    let ui_value = parse_json(ui_schema, "ui_schema_json")?;
-    let schema_json =
-        serde_json::to_string(&canonical_value(&schema_value)).map_err(|e| e.to_string())?;
-    let ui_schema_json =
-        serde_json::to_string(&canonical_value(&ui_value)).map_err(|e| e.to_string())?;
-    let hash = canonical_schema_hash(
-        &schema_value,
-        &ui_value,
-        &json_empty(),
-        &json_empty_array(),
-        &json_empty(),
-    )?;
+    let canonical = canonicalize_legacy_definition(schema, ui_schema)?;
     conn.execute(
         concat!(
             "INSERT OR IGNORE INTO object_type_versions(type_id,version,schema_json,",
@@ -61,9 +47,9 @@ fn insert_legacy_type_version(
         params![
             type_id,
             LEGACY_VERSION,
-            schema_json,
-            ui_schema_json,
-            hash,
+            canonical.schema_json,
+            canonical.ui_schema_json,
+            canonical.schema_hash,
             created_at
         ],
     )

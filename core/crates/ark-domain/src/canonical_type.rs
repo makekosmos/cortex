@@ -4,6 +4,7 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
 pub mod definitions;
+pub mod registry;
 pub mod validation;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

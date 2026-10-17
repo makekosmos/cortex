@@ -1,120 +1,23 @@
-use crate::domain::canonical_type::canonical_value;
 pub use crate::domain::canonical_type::{
     canonical_schema_hash, AliasRecord, TypeRegistration, TypeSummary, TypeVersion,
 };
 pub use ark_application::type_registry::TypeGetResponse;
+use ark_domain::canonical_type::registry::{
+    canonicalize_type_version, validate_type_id, validate_version,
+};
 use rusqlite::{params, Connection, OptionalExtension};
-use semver::Version;
-use serde_json::{Map, Value};
 
-pub const LEGACY_VERSION: &str = "0.0.0-legacy";
-
-pub fn legacy_compatibility_version(
-    schema_json: &str,
-    ui_schema_json: &str,
-) -> Result<(String, String), String> {
-    let schema = parse_json(schema_json, "schema_json")?;
-    let ui_schema = parse_json(ui_schema_json, "ui_schema_json")?;
-    let hash = canonical_schema_hash(
-        &schema,
-        &ui_schema,
-        &json_empty(),
-        &json_empty_array(),
-        &json_empty(),
-    )?;
-    Ok((format!("0.0.0+legacy.{}", &hash[..12]), hash))
-}
-
-pub(super) fn parse_json(raw: &str, field: &str) -> Result<Value, String> {
-    if raw.is_empty() {
-        return Err(format!("{field} must not be empty"));
-    }
-    let value: Value = serde_json::from_str(raw).map_err(|e| format!("invalid {field}: {e}"))?;
-    let expected_array = field == "relations_json";
-    let correct_shape = if expected_array {
-        value.is_array()
-    } else {
-        value.is_object()
-    };
-    if !correct_shape {
-        return Err(format!(
-            "{field} must be a JSON {}",
-            if expected_array { "array" } else { "object" }
-        ));
-    }
-    Ok(value)
-}
-
-pub(super) fn canonical_definition(
-    version: &TypeVersion,
-) -> Result<(String, String, String, String, String), String> {
-    let schema = parse_json(&version.schema_json, "schema_json")?;
-    let ui = parse_json(&version.ui_schema_json, "ui_schema_json")?;
-    let content = parse_json(&version.content_contract_json, "content_contract_json")?;
-    let relations = parse_json(&version.relations_json, "relations_json")?;
-    let policy = parse_json(&version.sync_policy_json, "sync_policy_json")?;
-    let hash = canonical_schema_hash(&schema, &ui, &content, &relations, &policy)?;
-    Ok((
-        serde_json::to_string(&canonical_value(&schema)).map_err(|e| e.to_string())?,
-        serde_json::to_string(&canonical_value(&ui)).map_err(|e| e.to_string())?,
-        serde_json::to_string(&canonical_value(&content)).map_err(|e| e.to_string())?,
-        serde_json::to_string(&canonical_value(&relations)).map_err(|e| e.to_string())?,
-        format!(
-            "{}|{}|{}|{}|{}",
-            hash,
-            serde_json::to_string(&canonical_value(&policy)).map_err(|e| e.to_string())?,
-            version.type_id,
-            version.version,
-            version.created_at
-        ),
-    ))
-}
-
-pub(super) fn validate_id(value: &str, kind: &str) -> Result<(), String> {
-    if value.is_empty()
-        || value.trim() != value
-        || value.len() > 255
-        || value.contains('\0')
-        || value.chars().any(|c| c.is_ascii_control())
-    {
-        return Err(format!("invalid {kind}"));
-    }
-    Ok(())
-}
-
-pub(super) fn validate_version(value: &str) -> Result<Version, String> {
-    if value == LEGACY_VERSION {
-        return Err("reserved legacy version".into());
-    }
-    let parsed = Version::parse(value).map_err(|e| format!("invalid semver: {e}"))?;
-    if parsed.to_string() != value {
-        return Err("version is not canonical semver".into());
-    }
-    Ok(parsed)
-}
-
-pub(super) fn json_empty() -> Value {
-    Value::Object(Map::new())
-}
-
-pub(super) fn json_empty_array() -> Value {
-    Value::Array(Vec::new())
-}
+pub use ark_domain::canonical_type::registry::{legacy_compatibility_version, LEGACY_VERSION};
 
 pub fn insert_type_version(
     conn: &Connection,
     input: &TypeVersion,
     created_at: &str,
 ) -> Result<Vec<crate::canonical_types::pending::ReplayNotice>, String> {
-    validate_id(&input.type_id, "type id")?;
+    validate_type_id(&input.type_id, "type id")?;
     validate_version(&input.version)?;
-    let (schema, ui, content, relations, hash_and_meta) = canonical_definition(input)?;
-    let hash = hash_and_meta
-        .split('|')
-        .next()
-        .ok_or_else(|| "canonical hash metadata missing".to_string())?
-        .to_string();
-    if !input.schema_hash.is_empty() && input.schema_hash != hash {
+    let canonical = canonicalize_type_version(input)?;
+    if !input.schema_hash.is_empty() && input.schema_hash != canonical.schema_hash {
         return Err("schema hash mismatch".into());
     }
     let canonical_exists = conn
@@ -150,10 +53,14 @@ pub fn insert_type_version(
         )
         .optional()
         .map_err(|e| e.to_string())?;
-    let policy = parse_json(&input.sync_policy_json, "sync_policy_json")?;
-    let policy = serde_json::to_string(&canonical_value(&policy)).map_err(|e| e.to_string())?;
     if let Some((a, b, c, d, e, f, _)) = existing {
-        if a == schema && b == ui && c == content && d == relations && e == policy && f == hash {
+        if a == canonical.schema_json
+            && b == canonical.ui_schema_json
+            && c == canonical.content_contract_json
+            && d == canonical.relations_json
+            && e == canonical.sync_policy_json
+            && f == canonical.schema_hash
+        {
             return crate::canonical_types::pending::replay_pending_for_type(
                 conn,
                 &input.type_id,
@@ -171,12 +78,12 @@ pub fn insert_type_version(
         params![
             input.type_id,
             input.version,
-            schema,
-            ui,
-            content,
-            relations,
-            policy,
-            hash,
+            canonical.schema_json,
+            canonical.ui_schema_json,
+            canonical.content_contract_json,
+            canonical.relations_json,
+            canonical.sync_policy_json,
+            canonical.schema_hash,
             created_at
         ],
     )

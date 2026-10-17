@@ -1,7 +1,7 @@
 use rusqlite::{params, Connection, OptionalExtension};
 
-use super::version_storage::validate_version;
 use super::{list_type_summaries, list_type_versions, TypeGetResponse, LEGACY_VERSION};
+use ark_domain::canonical_type::registry::validate_version;
 
 pub fn resolve_alias(conn: &Connection, alias: &str) -> Result<Option<String>, String> {
     conn.query_row(

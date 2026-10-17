@@ -1,9 +1,9 @@
 use rusqlite::{params, Connection, OptionalExtension};
 use semver::Version;
 
-use super::version_storage::{parse_json, validate_id, validate_version};
-use super::{
-    canonical_schema_hash, resolve_type_id, AliasRecord, TypeSummary, TypeVersion, LEGACY_VERSION,
+use super::{resolve_type_id, AliasRecord, TypeSummary, TypeVersion, LEGACY_VERSION};
+use ark_domain::canonical_type::registry::{
+    canonicalize_legacy_definition, validate_type_id, validate_version,
 };
 
 pub fn ensure_legacy_type_version(
@@ -41,11 +41,7 @@ pub fn ensure_legacy_type_version(
     if !has_versions {
         return Ok(());
     }
-    let schema = parse_json(schema_json, "schema_json")?;
-    let ui_schema = parse_json(ui_schema_json, "ui_schema_json")?;
-    let empty = serde_json::json!({});
-    let relations = serde_json::json!([]);
-    let hash = canonical_schema_hash(&schema, &ui_schema, &empty, &relations, &empty)?;
+    let canonical = canonicalize_legacy_definition(schema_json, ui_schema_json)?;
     conn.execute(
         concat!(
             "INSERT OR IGNORE INTO object_type_versions (type_id,version,schema_json,",
@@ -60,7 +56,7 @@ pub fn ensure_legacy_type_version(
             "{}",
             "[]",
             "{}",
-            hash,
+            canonical.schema_hash,
             created_at,
         ],
     )
@@ -241,8 +237,8 @@ pub fn list_type_versions(conn: &Connection, type_id: &str) -> Result<Vec<TypeVe
 }
 
 pub fn register_alias(conn: &Connection, alias: &AliasRecord) -> Result<(), String> {
-    validate_id(&alias.alias, "alias")?;
-    validate_id(&alias.canonical_type_id, "canonical type id")?;
+    validate_type_id(&alias.alias, "alias")?;
+    validate_type_id(&alias.canonical_type_id, "canonical type id")?;
     if alias.alias == alias.canonical_type_id {
         return Err("self alias".into());
     }
