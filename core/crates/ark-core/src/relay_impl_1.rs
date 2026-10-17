@@ -7,7 +7,6 @@ impl RelaySync {
         defer_initial_sync: bool,
     ) {
         if registry_exchange::is_user_data_message(&msg)
-            && !matches!(&msg, LanSyncMessage::SyncPolicy { .. })
             && !self
                 .registry_ready_for_peer(&from_device_id, transport_public_key.as_deref())
                 .await
