@@ -1,0 +1,12 @@
+[package]
+name = "ark-sync"
+version = "0.1.0"
+edition.workspace = true
+description = "Transport-neutral replication and sync protocol contracts"
+
+[dependencies]
+rand.workspace = true
+sha2.workspace = true
+
+[lints]
+workspace = true

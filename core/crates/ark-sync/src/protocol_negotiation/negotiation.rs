@@ -348,7 +348,7 @@ pub fn compute_negotiation_offer_hmac(
     push_field(&mut bytes, device_id.as_bytes());
     push_field(&mut bytes, nonce.as_bytes());
     push_offer(&mut bytes, offer);
-    crate::protocol::auth::hmac_sha256_hex(secret.as_bytes(), &bytes)
+    super::auth::hmac_sha256_hex(secret.as_bytes(), &bytes)
 }
 
 pub fn verify_negotiation_offer_hmac(
@@ -360,7 +360,7 @@ pub fn verify_negotiation_offer_hmac(
     provided_hmac: &str,
 ) -> bool {
     let expected = compute_negotiation_offer_hmac(secret, space_id, device_id, nonce, offer);
-    crate::protocol::auth::constant_time_eq(expected.as_bytes(), provided_hmac.as_bytes())
+    super::auth::constant_time_eq(expected.as_bytes(), provided_hmac.as_bytes())
 }
 
 pub fn compute_negotiation_selection_hmac(
@@ -388,7 +388,7 @@ pub fn compute_negotiation_selection_hmac(
     for capability in capabilities {
         push_field(&mut bytes, capability.as_bytes());
     }
-    crate::protocol::auth::hmac_sha256_hex(secret.as_bytes(), &bytes)
+    super::auth::hmac_sha256_hex(secret.as_bytes(), &bytes)
 }
 
 pub fn verify_negotiation_selection_hmac(
@@ -397,7 +397,7 @@ pub fn verify_negotiation_selection_hmac(
     provided_hmac: &str,
 ) -> bool {
     let expected = compute_negotiation_selection_hmac(secret, transcript);
-    crate::protocol::auth::constant_time_eq(expected.as_bytes(), provided_hmac.as_bytes())
+    super::auth::constant_time_eq(expected.as_bytes(), provided_hmac.as_bytes())
 }
 
 fn push_offer(bytes: &mut Vec<u8>, offer: &ProtocolOffer) {

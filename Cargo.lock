@@ -154,6 +154,7 @@ dependencies = [
  "ark-application",
  "ark-domain",
  "ark-net-policy",
+ "ark-sync",
  "async-trait",
  "chrono",
  "criterion",
@@ -194,6 +195,14 @@ dependencies = [
 [[package]]
 name = "ark-net-policy"
 version = "0.1.0"
+
+[[package]]
+name = "ark-sync"
+version = "0.1.0"
+dependencies = [
+ "rand 0.8.7",
+ "sha2 0.10.9",
+]
 
 [[package]]
 name = "array-init"
