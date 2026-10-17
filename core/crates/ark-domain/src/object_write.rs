@@ -1,3 +1,8 @@
+use serde::Serialize;
+use serde_json::{Map, Value};
+use sha2::{Digest, Sha256};
+use std::collections::BTreeMap;
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ObjectWriteSnapshot {
@@ -14,10 +19,6 @@ pub struct RemoteObjectWrite {
     pub source_hlc: String,
     pub source_origin_device_id: Option<String>,
 }
-use serde::Serialize;
-use serde_json::{Map, Value};
-use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
 
 #[derive(Serialize)]
 struct CanonicalObjectPayload<'a> {
@@ -25,7 +26,7 @@ struct CanonicalObjectPayload<'a> {
     links: &'a [crate::types::ObjectLink],
 }
 
-pub(crate) fn canonical_payload_digest(
+pub fn canonical_payload_digest(
     object: &crate::types::ArkObject,
     links: &[crate::types::ObjectLink],
 ) -> Result<(String, String), String> {

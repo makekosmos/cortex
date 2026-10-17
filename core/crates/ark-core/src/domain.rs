@@ -1,2 +1,1 @@
-pub mod object_write;
-pub use ark_domain::{canonical_type, device_registry, task_merge};
+pub use ark_domain::{canonical_type, device_registry, object_write, task_merge};
