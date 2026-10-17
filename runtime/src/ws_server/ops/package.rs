@@ -1,4 +1,5 @@
 use super::*;
+#[cfg(test)]
 pub(in crate::ws_server) async fn handle_package_op(
     subop: &str,
     params: serde_json::Value,
