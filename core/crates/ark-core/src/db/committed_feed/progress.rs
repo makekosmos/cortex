@@ -3,9 +3,9 @@ fn require_current_policy_identity(
     peer_device_id: &str,
     expected: &crate::application::sync_storage::PolicyIdentity,
 ) -> Result<(), String> {
-    let current = crate::data_platform::load_accepted_peer_sync_policy(conn, peer_device_id)?
+    let current = ark_store::data_platform::load_accepted_peer_sync_policy(conn, peer_device_id)?
         .map_or_else(
-            crate::data_platform::default_sync_policy_identity,
+            ark_application::sync_policy::default_sync_policy_identity,
             |policy| policy.identity(),
         );
     if current != *expected {

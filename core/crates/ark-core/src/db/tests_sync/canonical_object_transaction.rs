@@ -34,13 +34,14 @@ async fn snapshot_page_pins_filter_identity_and_rejects_policy_change_before_nex
     let backend = SqliteStorageBackend::for_test(Arc::new(Mutex::new(setup_db())));
     let entity = sync_object("snapshot-policy-page", "note_obj", "Pinned selection");
     backend.apply_entity(&entity).await.unwrap();
-    let full_rule = crate::data_platform::SyncProfileRule {
+    let full_rule = ark_application::sync_policy::SyncProfileRule {
         resource_kind: "type".into(),
         resource_id: "note_obj".into(),
-        mode: crate::data_platform::SyncMode::Full,
-        filter: crate::data_platform::FilterV1::match_all(),
+        mode: ark_domain::selective_sync::SyncMode::Full,
+        filter: ark_domain::selective_sync::FilterV1::match_all(),
     };
-    let full_digest = crate::data_platform::digest_sync_policy(std::slice::from_ref(&full_rule));
+    let full_digest =
+        ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&full_rule));
     let selected = backend
         .accept_peer_sync_policy(
             "peer-a",
@@ -64,12 +65,12 @@ async fn snapshot_page_pins_filter_identity_and_rejects_policy_change_before_nex
         .unwrap();
     assert_eq!(page.identity, selected.identity());
 
-    let omitted_rule = crate::data_platform::SyncProfileRule {
+    let omitted_rule = ark_application::sync_policy::SyncProfileRule {
         resource_id: "different_type".into(),
         ..full_rule
     };
     let omitted_digest =
-        crate::data_platform::digest_sync_policy(std::slice::from_ref(&omitted_rule));
+        ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&omitted_rule));
     let updated = backend
         .accept_peer_sync_policy("peer-a", 2, &omitted_digest, true, &[omitted_rule])
         .await

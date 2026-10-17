@@ -4,7 +4,7 @@ use super::*;
 fn operation_mode_task_snapshots_are_skipped_with_cursor_advance() {
     let conn = Connection::open_in_memory().unwrap();
     conn.execute_batch(crate::schema::CREATE_TABLES).unwrap();
-    crate::data_platform::ensure_schema(&conn).unwrap();
+    ark_store::data_platform::ensure_schema(&conn).unwrap();
     append_committed_change(&conn, "object", "merged-task", "r1", false, None, None).unwrap();
     conn.execute(
         "INSERT INTO task_merge_bootstraps(
@@ -58,16 +58,16 @@ fn narrowing_preserves_local_copy_and_widening_replays_latest_state() {
     crate::db::upsert_object(&receiver, &original).unwrap();
     append_committed_change(&source, "object", &original.id, "r1", false, None, None).unwrap();
 
-    let rule = |mode| crate::data_platform::SyncProfileRule {
+    let rule = |mode| ark_application::sync_policy::SyncProfileRule {
         resource_kind: "type".into(),
         resource_id: "book".into(),
         mode,
-        filter: crate::data_platform::FilterV1::match_all(),
+        filter: ark_domain::selective_sync::FilterV1::match_all(),
     };
-    let excluded_rule = rule(crate::data_platform::SyncMode::None);
+    let excluded_rule = rule(ark_domain::selective_sync::SyncMode::None);
     let excluded_digest =
-        crate::data_platform::digest_sync_policy(std::slice::from_ref(&excluded_rule));
-    let excluded = crate::data_platform::accept_peer_sync_policy(
+        ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&excluded_rule));
+    let excluded = ark_store::data_platform::accept_peer_sync_policy(
         &source,
         "receiver-device",
         1,
@@ -104,10 +104,10 @@ fn narrowing_preserves_local_copy_and_widening_replays_latest_state() {
     assert_eq!(retained.title, "Original title");
     assert!(retained.deleted_at.is_none());
 
-    let included_rule = rule(crate::data_platform::SyncMode::Full);
+    let included_rule = rule(ark_domain::selective_sync::SyncMode::Full);
     let included_digest =
-        crate::data_platform::digest_sync_policy(std::slice::from_ref(&included_rule));
-    let included = crate::data_platform::accept_peer_sync_policy(
+        ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&included_rule));
+    let included = ark_store::data_platform::accept_peer_sync_policy(
         &source,
         "receiver-device",
         2,

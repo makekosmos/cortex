@@ -25,7 +25,7 @@ pub(crate) use usage::SqliteUsageWriteSession;
 pub struct SqliteStorageBackend {
     pub(in crate::db) db: DbHandle,
     device_id: Arc<Mutex<String>>,
-    selective_profile: Arc<Mutex<Option<crate::data_platform::SelectiveSyncProfile>>>,
+    selective_profile: Arc<Mutex<Option<ark_domain::selective_sync::SelectiveSyncProfile>>>,
 }
 
 impl SqliteStorageBackend {

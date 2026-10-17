@@ -2,7 +2,7 @@
 use ark_core::application::sync_storage::{
     SyncEntityMutationPort, SyncEntityReadPort, SyncReadClass,
 };
-use ark_core::{data_platform, db};
+use ark_core::db;
 use rusqlite::Connection;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -48,33 +48,33 @@ async fn accepted_peer_policies_project_snapshot_pages_per_peer() {
         [],
     )
     .unwrap();
-    let note_profile = data_platform::SyncProfile {
+    let note_profile = ark_application::sync_policy::SyncProfile {
         profile_id: "note-only".into(),
         device_id: "peer-a".into(),
         revision: 1,
         name: "Notes".into(),
         active: true,
-        rules: vec![data_platform::SyncProfileRule {
+        rules: vec![ark_application::sync_policy::SyncProfileRule {
             resource_kind: "type".into(),
             resource_id: "com.example.note".into(),
-            mode: data_platform::SyncMode::Full,
-            filter: data_platform::FilterV1::match_all(),
+            mode: ark_domain::selective_sync::SyncMode::Full,
+            filter: ark_domain::selective_sync::FilterV1::match_all(),
         }],
     };
-    let game_profile = data_platform::SyncProfile {
+    let game_profile = ark_application::sync_policy::SyncProfile {
         profile_id: "game-metadata".into(),
         device_id: "peer-b".into(),
         revision: 1,
         name: "Game metadata".into(),
         active: false,
-        rules: vec![data_platform::SyncProfileRule {
+        rules: vec![ark_application::sync_policy::SyncProfileRule {
             resource_kind: "type".into(),
             resource_id: "com.example.game".into(),
-            mode: data_platform::SyncMode::Metadata,
-            filter: data_platform::FilterV1::match_all(),
+            mode: ark_domain::selective_sync::SyncMode::Metadata,
+            filter: ark_domain::selective_sync::FilterV1::match_all(),
         }],
     };
-    data_platform::accept_peer_sync_policy(
+    ark_store::data_platform::accept_peer_sync_policy(
         &conn,
         "peer-a",
         1,
@@ -83,7 +83,7 @@ async fn accepted_peer_policies_project_snapshot_pages_per_peer() {
         &note_profile.rules,
     )
     .unwrap();
-    data_platform::accept_peer_sync_policy(
+    ark_store::data_platform::accept_peer_sync_policy(
         &conn,
         "peer-b",
         1,

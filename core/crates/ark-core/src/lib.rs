@@ -7,7 +7,6 @@
 pub mod application;
 pub mod beacon;
 pub mod canonical_types;
-pub mod data_platform;
 pub mod db;
 pub mod delphi;
 pub mod domain;

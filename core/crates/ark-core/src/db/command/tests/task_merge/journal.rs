@@ -65,15 +65,16 @@ async fn merge_batch_requires_matching_policy_and_full_task_selection() {
     append(&handle, operation('1', &[], "first"), None)
         .await
         .unwrap();
-    let limited_policy = crate::data_platform::SyncProfileRule {
+    let limited_policy = ark_application::sync_policy::SyncProfileRule {
         resource_kind: "type".into(),
         resource_id: "core.task".into(),
-        mode: crate::data_platform::SyncMode::Metadata,
-        filter: crate::data_platform::FilterV1::match_all(),
+        mode: ark_domain::selective_sync::SyncMode::Metadata,
+        filter: ark_domain::selective_sync::FilterV1::match_all(),
     };
-    let digest = crate::data_platform::digest_sync_policy(std::slice::from_ref(&limited_policy));
+    let digest =
+        ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&limited_policy));
     handle.with_connection(|connection| {
-        crate::data_platform::accept_peer_sync_policy(
+        ark_store::data_platform::accept_peer_sync_policy(
             connection,
             "peer-a",
             1,
@@ -101,26 +102,26 @@ async fn merge_batch_requires_matching_policy_and_full_task_selection() {
             CommandContext::authenticated_peer("peer-a".into()),
             PrepareTaskMergeBatchCommand::new(
                 "peer-a".into(),
-                crate::data_platform::default_sync_policy_identity(),
+                ark_application::sync_policy::default_sync_policy_identity(),
                 1,
             ),
         )
         .await;
     assert!(matches!(stale, Err(DbError::Permission(_))));
 
-    let filtered_policy = crate::data_platform::SyncProfileRule {
+    let filtered_policy = ark_application::sync_policy::SyncProfileRule {
         resource_kind: "type".into(),
         resource_id: "core.task".into(),
-        mode: crate::data_platform::SyncMode::Full,
-        filter: crate::data_platform::FilterV1::parse(
+        mode: ark_domain::selective_sync::SyncMode::Full,
+        filter: ark_domain::selective_sync::FilterV1::parse(
             r#"{"version":1,"where":{"eq":{"field":"title","value":"visible"}}}"#,
         )
         .unwrap(),
     };
     let filtered_digest =
-        crate::data_platform::digest_sync_policy(std::slice::from_ref(&filtered_policy));
+        ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&filtered_policy));
     handle.with_connection(|connection| {
-        crate::data_platform::accept_peer_sync_policy(
+        ark_store::data_platform::accept_peer_sync_policy(
             connection,
             "peer-a",
             2,
@@ -157,7 +158,7 @@ async fn outbound_batches_are_stable_until_ack_and_isolated_by_peer() {
     append(&handle, operation('2', &['1'], "second"), None)
         .await
         .unwrap();
-    let identity = crate::data_platform::default_sync_policy_identity();
+    let identity = ark_application::sync_policy::default_sync_policy_identity();
     let peer_mismatch = handle
         .submit(
             CommandContext::authenticated_peer("peer-b".into()),
@@ -214,7 +215,7 @@ async fn prepared_batch_replays_identically_after_sqlite_reopen() {
     append(&handle, operation('1', &[], "first"), None)
         .await
         .unwrap();
-    let identity = crate::data_platform::default_sync_policy_identity();
+    let identity = ark_application::sync_policy::default_sync_policy_identity();
     let prepared = prepare_batch(&handle, "peer-a", identity.clone(), 1)
         .await
         .unwrap()
@@ -259,7 +260,7 @@ async fn outbound_journal_preserves_the_conflict_resolution_guard() {
     let batch = prepare_batch(
         &handle,
         "peer-a",
-        crate::data_platform::default_sync_policy_identity(),
+        ark_application::sync_policy::default_sync_policy_identity(),
         100,
     )
     .await
@@ -283,7 +284,7 @@ async fn outbound_merge_batches_obey_the_wire_size_budget() {
         append(&handle, large, None).await.unwrap();
     }
 
-    let identity = crate::data_platform::default_sync_policy_identity();
+    let identity = ark_application::sync_policy::default_sync_policy_identity();
     let first = prepare_batch(&handle, "peer-a", identity.clone(), 100)
         .await
         .unwrap()
@@ -325,7 +326,7 @@ async fn policy_exclusion_preserves_local_journal_and_widening_resumes_from_ack(
     append(&handle, operation('2', &['1'], "second"), None)
         .await
         .unwrap();
-    let initial_identity = crate::data_platform::default_sync_policy_identity();
+    let initial_identity = ark_application::sync_policy::default_sync_policy_identity();
     let first = prepare_batch(&handle, "peer-a", initial_identity.clone(), 1)
         .await
         .unwrap()
@@ -342,15 +343,16 @@ async fn policy_exclusion_preserves_local_journal_and_widening_resumes_from_ack(
         id('2')
     );
 
-    let excluded = crate::data_platform::SyncProfileRule {
+    let excluded = ark_application::sync_policy::SyncProfileRule {
         resource_kind: "type".into(),
         resource_id: "core.task".into(),
-        mode: crate::data_platform::SyncMode::Metadata,
-        filter: crate::data_platform::FilterV1::match_all(),
+        mode: ark_domain::selective_sync::SyncMode::Metadata,
+        filter: ark_domain::selective_sync::FilterV1::match_all(),
     };
-    let excluded_digest = crate::data_platform::digest_sync_policy(std::slice::from_ref(&excluded));
+    let excluded_digest =
+        ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&excluded));
     handle.with_connection(|connection| {
-        crate::data_platform::accept_peer_sync_policy(
+        ark_store::data_platform::accept_peer_sync_policy(
             connection,
             "peer-a",
             1,
@@ -376,15 +378,15 @@ async fn policy_exclusion_preserves_local_journal_and_widening_resumes_from_ack(
     });
     assert_eq!(local_operations, 2);
 
-    let full = crate::data_platform::SyncProfileRule {
+    let full = ark_application::sync_policy::SyncProfileRule {
         resource_kind: "type".into(),
         resource_id: "core.task".into(),
-        mode: crate::data_platform::SyncMode::Full,
-        filter: crate::data_platform::FilterV1::match_all(),
+        mode: ark_domain::selective_sync::SyncMode::Full,
+        filter: ark_domain::selective_sync::FilterV1::match_all(),
     };
-    let full_digest = crate::data_platform::digest_sync_policy(std::slice::from_ref(&full));
+    let full_digest = ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&full));
     handle.with_connection(|connection| {
-        crate::data_platform::accept_peer_sync_policy(
+        ark_store::data_platform::accept_peer_sync_policy(
             connection,
             "peer-a",
             2,
@@ -418,7 +420,7 @@ async fn policy_exclusion_preserves_local_journal_and_widening_resumes_from_ack(
     let other_peer = prepare_batch(
         &handle,
         "peer-b",
-        crate::data_platform::default_sync_policy_identity(),
+        ark_application::sync_policy::default_sync_policy_identity(),
         1,
     )
     .await

@@ -1,5 +1,4 @@
 use super::super::*;
-use crate::data_platform::{FilterV1, SyncMode, SyncProfileRule};
 use crate::db::{
     CommandContext, DbHandle, DbOwner, LoadOrGenerateIrohSecretKeyCommand, LocalCoreTaskWrite,
     ObjectReadQuery, SaveLocalSyncProfileCommand, SqliteStorageBackend,
@@ -7,6 +6,8 @@ use crate::db::{
 use crate::replication_storage::PeerIdentityBackend;
 use crate::sync_bind::SyncBind;
 use crate::types::{ArkObject, ArkObjectWrite};
+use ark_application::sync_policy::SyncProfileRule;
+use ark_domain::selective_sync::{FilterV1, SyncMode};
 use iroh::RelayMode;
 use std::future::Future;
 use std::sync::Arc;

@@ -21,7 +21,7 @@ impl TryFrom<DataVolumeScope> for ark_application::data_volume::DataVolumeScope 
 pub(crate) struct SyncPolicyRuleInput {
     pub(crate) resource_kind: String,
     pub(crate) resource_id: String,
-    pub(crate) mode: crate::data_platform::SyncMode,
+    pub(crate) mode: ark_domain::selective_sync::SyncMode,
     #[serde(default = "default_sync_filter")]
     pub(crate) filter: Value,
 }
@@ -284,7 +284,7 @@ pub(crate) enum Request {
         value: String,
     },
     #[serde(rename = "external_refs.upsert")]
-    ExternalRefsUpsert(crate::data_platform::ExternalRefUpsert),
+    ExternalRefsUpsert(ark_application::external_ref::ExternalRefUpsert),
     ClearAll,
     DeleteTrashed,
 

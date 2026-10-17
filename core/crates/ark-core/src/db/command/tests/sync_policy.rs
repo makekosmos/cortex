@@ -1,11 +1,11 @@
 use super::*;
 
-fn profile_rule(resource_id: String) -> crate::data_platform::SyncProfileRule {
-    crate::data_platform::SyncProfileRule {
+fn profile_rule(resource_id: String) -> ark_application::sync_policy::SyncProfileRule {
+    ark_application::sync_policy::SyncProfileRule {
         resource_kind: "type".into(),
         resource_id,
-        mode: crate::data_platform::SyncMode::Full,
-        filter: crate::data_platform::FilterV1::match_all(),
+        mode: ark_domain::selective_sync::SyncMode::Full,
+        filter: ark_domain::selective_sync::FilterV1::match_all(),
     }
 }
 
@@ -20,7 +20,7 @@ async fn accepted_peer_policy_is_bound_to_authenticated_actor_peer() {
     .await
     .unwrap();
     let rules = vec![profile_rule("type-books".into())];
-    let profile = crate::data_platform::SyncProfile {
+    let profile = ark_application::sync_policy::SyncProfile {
         profile_id: "remote-policy".into(),
         device_id: "phone".into(),
         revision: 4,

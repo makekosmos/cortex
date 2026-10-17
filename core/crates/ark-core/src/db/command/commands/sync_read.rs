@@ -1,13 +1,13 @@
 use super::super::{sealed, CommandClass, CommandContext, DbError, DbQuery};
 use crate::application::sync_storage::CommittedFeedDeliveryPage;
 use crate::application::sync_storage::SyncReadClass;
-use crate::data_platform::SelectiveSyncProfile;
 use crate::db::{
     committed_feed_snapshot, get_sync_kv, read_committed_feed_delivery_page,
     read_committed_feed_page, usage_log_complete_through, CommittedFeedEntry, FeedSnapshot,
     SqliteStorageBackend,
 };
 use crate::types::{SyncEntity, VersionVector};
+use ark_domain::selective_sync::SelectiveSyncProfile;
 use rusqlite::Connection;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -129,11 +129,13 @@ impl LoadEntitiesQuery {
         let mut policy_identity = None;
         if let Some(peer_device_id) = peer_device_id {
             context.require_sync_peer_matches(&peer_device_id)?;
-            let policy =
-                crate::data_platform::load_accepted_peer_sync_policy(connection, &peer_device_id)
-                    .map_err(DbError::from_application_error)?;
+            let policy = ark_store::data_platform::load_accepted_peer_sync_policy(
+                connection,
+                &peer_device_id,
+            )
+            .map_err(DbError::from_application_error)?;
             policy_identity = Some(policy.as_ref().map_or_else(
-                crate::data_platform::default_sync_policy_identity,
+                ark_application::sync_policy::default_sync_policy_identity,
                 |policy| policy.identity(),
             ));
             profile = policy.and_then(|policy| policy.active.then(|| policy.selective_profile()));
@@ -149,7 +151,7 @@ impl LoadEntitiesQuery {
                         connection, &vector, &device_id,
                     )
                     .map_err(DbError::Storage)?;
-                    crate::data_platform::filter_entities_for_profile(profile, &all)
+                    ark_domain::selective_sync::filter_entities_for_profile(profile, &all)
                         .into_iter()
                         .skip(offset)
                         .take(limit)
@@ -164,7 +166,7 @@ impl LoadEntitiesQuery {
         };
         let entities = match (page, profile) {
             (None, Some(profile)) => {
-                crate::data_platform::filter_entities_for_profile(&profile, &entities)
+                ark_domain::selective_sync::filter_entities_for_profile(&profile, &entities)
             }
             _ => entities,
         };

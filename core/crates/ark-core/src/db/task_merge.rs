@@ -85,10 +85,11 @@ pub(crate) fn require_delivery_policy(
     peer_device_id: &str,
     expected_identity: &crate::application::sync_storage::PolicyIdentity,
 ) -> Result<(), TaskMergeError> {
-    let policy = crate::data_platform::load_accepted_peer_sync_policy(connection, peer_device_id)
-        .map_err(TaskMergeError::Storage)?;
+    let policy =
+        ark_store::data_platform::load_accepted_peer_sync_policy(connection, peer_device_id)
+            .map_err(TaskMergeError::Storage)?;
     let identity = policy.as_ref().map_or_else(
-        crate::data_platform::default_sync_policy_identity,
+        ark_application::sync_policy::default_sync_policy_identity,
         |policy| policy.identity(),
     );
     if identity != *expected_identity {
@@ -103,12 +104,12 @@ pub(crate) fn require_delivery_policy(
                 "task_merge_policy_requires_full_type_sync".into(),
             ));
         };
-        if rule.mode != crate::data_platform::SyncMode::Full {
+        if rule.mode != ark_domain::selective_sync::SyncMode::Full {
             return Err(TaskMergeError::Permission(
                 "task_merge_policy_requires_full_type_sync".into(),
             ));
         }
-        if rule.filter.digest() != crate::data_platform::FilterV1::match_all().digest() {
+        if rule.filter.digest() != ark_domain::selective_sync::FilterV1::match_all().digest() {
             return Err(TaskMergeError::Permission(
                 "task_merge_policy_filter_unsupported".into(),
             ));

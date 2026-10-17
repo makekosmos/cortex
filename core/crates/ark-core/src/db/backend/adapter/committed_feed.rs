@@ -14,9 +14,9 @@ impl crate::application::sync_storage::CommittedFeedPort for SqliteStorageBacken
             digest.update((id.len() as u64).to_be_bytes());
             digest.update(id.as_bytes());
             digest.update([match rule.mode {
-                crate::data_platform::SyncMode::Full => 1,
-                crate::data_platform::SyncMode::Metadata => 2,
-                crate::data_platform::SyncMode::None => 3,
+                ark_domain::selective_sync::SyncMode::Full => 1,
+                ark_domain::selective_sync::SyncMode::Metadata => 2,
+                ark_domain::selective_sync::SyncMode::None => 3,
             }]);
             digest.update(rule.filter.digest());
         }
@@ -42,7 +42,7 @@ impl crate::application::sync_storage::CommittedFeedPort for SqliteStorageBacken
             self.load_accepted_peer_sync_policy(peer_device_id)
                 .await?
                 .map_or_else(
-                    crate::data_platform::default_sync_policy_identity,
+                    ark_application::sync_policy::default_sync_policy_identity,
                     |policy| policy.identity(),
                 ),
         ))

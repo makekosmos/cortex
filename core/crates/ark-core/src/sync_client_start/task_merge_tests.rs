@@ -113,7 +113,7 @@ async fn authenticated_direct_sync_delivers_task_merge_batches_over_the_wire() {
         )
         .await
         .unwrap();
-    let identity = crate::data_platform::default_sync_policy_identity();
+    let identity = ark_application::sync_policy::default_sync_policy_identity();
     let bootstrap = bootstrap();
     sender
         .db

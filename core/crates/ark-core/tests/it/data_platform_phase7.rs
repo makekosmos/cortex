@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used)]
 use ark_core::application::sync_storage::CommittedFeedPort;
-use ark_core::{data_platform, db};
+use ark_core::db;
 use rusqlite::Connection;
 use serde_json::json;
 use std::sync::{Arc, Mutex};
@@ -17,9 +17,9 @@ fn external_refs_are_additive_and_unique() {
         [],
     )
     .unwrap();
-    data_platform::upsert_external_ref(
+    ark_store::data_platform::upsert_external_ref(
         &conn,
-        &data_platform::ExternalRefUpsert {
+        &ark_application::external_ref::ExternalRefUpsert {
             connector_id: "obsidian".into(),
             account_id: "vault".into(),
             external_type: "markdown".into(),
@@ -37,9 +37,9 @@ fn external_refs_are_additive_and_unique() {
             .unwrap(),
         "note-1"
     );
-    assert!(data_platform::upsert_external_ref(
+    assert!(ark_store::data_platform::upsert_external_ref(
         &conn,
-        &data_platform::ExternalRefUpsert {
+        &ark_application::external_ref::ExternalRefUpsert {
             connector_id: String::new(),
             account_id: "vault".into(),
             external_type: "markdown".into(),
@@ -55,11 +55,11 @@ fn external_refs_are_additive_and_unique() {
 
 #[test]
 fn frozen_filter_v1_is_canonical_and_bounded() {
-    let typed = data_platform::FilterV1::parse(
+    let typed = ark_domain::selective_sync::FilterV1::parse(
         r#"{"where":{"eq":{"value":null,"field":"title"}},"version":1}"#,
     )
     .unwrap();
-    let reordered = data_platform::FilterV1::parse(
+    let reordered = ark_domain::selective_sync::FilterV1::parse(
         r#"{"version":1,"where":{"eq":{"field":"title","value":null}}}"#,
     )
     .unwrap();
@@ -67,7 +67,7 @@ fn frozen_filter_v1_is_canonical_and_bounded() {
     assert_eq!(typed.digest(), reordered.digest());
     assert_eq!(typed.digest().len(), 32);
 
-    let canonical = data_platform::validate_filter_json(
+    let canonical = ark_domain::selective_sync::validate_filter_json(
         r#"{"where":{"eq":{"value":null,"field":"title"}},"version":1}"#,
     )
     .unwrap();
@@ -75,21 +75,23 @@ fn frozen_filter_v1_is_canonical_and_bounded() {
         canonical,
         r#"{"version":1,"where":{"eq":{"field":"title","value":null}}}"#
     );
-    assert!(data_platform::validate_filter_json(
+    assert!(ark_domain::selective_sync::validate_filter_json(
         r#"{"version":1,"where":{"eq":{"field":"body","value":"x"},"bad":true}}"#
     )
     .is_err());
-    assert!(data_platform::validate_filter_json(
+    assert!(ark_domain::selective_sync::validate_filter_json(
         r#"{"version":1,"where":{"in":{"field":"title","values":[]}}}"#
     )
     .is_err());
     assert_eq!(
-        data_platform::validate_filter_json("{}").unwrap(),
+        ark_domain::selective_sync::validate_filter_json("{}").unwrap(),
         r#"{"version":1,"where":{"and":[]}}"#
     );
     assert_eq!(
-        data_platform::filter_digest("{}").unwrap(),
-        data_platform::FilterV1::parse("{}").unwrap().digest()
+        ark_domain::selective_sync::filter_digest("{}").unwrap(),
+        ark_domain::selective_sync::FilterV1::parse("{}")
+            .unwrap()
+            .digest()
     );
 }
 
@@ -117,31 +119,35 @@ fn filter_v1_evaluates_predicates_against_exact_entity_fields() {
         }),
     ] {
         let filter = serde_json::to_string(&json!({"version":1,"where":predicate})).unwrap();
-        assert!(data_platform::FilterV1::parse(&filter)
+        assert!(ark_domain::selective_sync::FilterV1::parse(&filter)
             .unwrap()
             .matches(&fields));
     }
-    assert!(!data_platform::FilterV1::parse(
+    assert!(!ark_domain::selective_sync::FilterV1::parse(
         r#"{"version":1,"where":{"eq":{"field":"missing","value":null}}}"#
     )
     .unwrap()
     .matches(&fields));
-    assert!(data_platform::FilterV1::match_all().matches(&fields));
+    assert!(ark_domain::selective_sync::FilterV1::match_all().matches(&fields));
 }
 
 #[test]
 fn sync_policy_generation_changes_when_only_filter_changes() {
     let conn = Connection::open_in_memory().unwrap();
     let backend = db::SqliteStorageBackend::for_test(Arc::new(Mutex::new(conn)));
-    let mut profile = data_platform::SelectiveSyncProfile::default();
-    profile.set_rule("type", "com.kosmos.note", data_platform::SyncMode::Full);
+    let mut profile = ark_domain::selective_sync::SelectiveSyncProfile::default();
+    profile.set_rule(
+        "type",
+        "com.kosmos.note",
+        ark_domain::selective_sync::SyncMode::Full,
+    );
     backend.set_selective_sync_profile(Some(profile.clone()));
     let unfiltered = backend.selective_sync_policy_generation();
     profile.set_rule_with_filter(
         "type",
         "com.kosmos.note",
-        data_platform::SyncMode::Full,
-        data_platform::FilterV1::parse(
+        ark_domain::selective_sync::SyncMode::Full,
+        ark_domain::selective_sync::FilterV1::parse(
             r#"{"version":1,"where":{"eq":{"field":"title","value":"Note"}}}"#,
         )
         .unwrap(),
@@ -154,7 +160,7 @@ fn sync_policy_generation_changes_when_only_filter_changes() {
 fn sync_profiles_store_frozen_modes_before_objects_and_cascade_rules() {
     let conn = Connection::open_in_memory().unwrap();
     conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
-    data_platform::ensure_schema(&conn).unwrap();
+    ark_store::data_platform::ensure_schema(&conn).unwrap();
     conn.execute(
         concat!(
             "INSERT INTO sync_profiles(profile_id,device_id,revision,name,active) VALUES(",
@@ -252,11 +258,23 @@ fn selective_profile_projects_closure_in_order_and_keeps_local_copy_on_disable()
         ),
         entity("object_type", "com.kosmos.note", json!({"name":"Note"})),
     ];
-    let mut profile = data_platform::SelectiveSyncProfile::default();
-    profile.set_rule("type", "com.kosmos.note", data_platform::SyncMode::Full);
-    profile.set_rule("type", "com.kosmos.game", data_platform::SyncMode::Metadata);
-    profile.set_rule("dataset", "usage", data_platform::SyncMode::None);
-    let projected = data_platform::filter_entities_for_profile(&profile, &entities);
+    let mut profile = ark_domain::selective_sync::SelectiveSyncProfile::default();
+    profile.set_rule(
+        "type",
+        "com.kosmos.note",
+        ark_domain::selective_sync::SyncMode::Full,
+    );
+    profile.set_rule(
+        "type",
+        "com.kosmos.game",
+        ark_domain::selective_sync::SyncMode::Metadata,
+    );
+    profile.set_rule(
+        "dataset",
+        "usage",
+        ark_domain::selective_sync::SyncMode::None,
+    );
+    let projected = ark_domain::selective_sync::filter_entities_for_profile(&profile, &entities);
     assert_eq!(
         projected
             .iter()
@@ -274,13 +292,13 @@ fn selective_profile_projects_closure_in_order_and_keeps_local_copy_on_disable()
     profile.set_rule_with_filter(
         "type",
         "com.kosmos.game",
-        data_platform::SyncMode::Metadata,
-        data_platform::FilterV1::parse(
+        ark_domain::selective_sync::SyncMode::Metadata,
+        ark_domain::selective_sync::FilterV1::parse(
             r#"{"version":1,"where":{"eq":{"field":"title","value":"Other"}}}"#,
         )
         .unwrap(),
     );
-    let filtered = data_platform::filter_entities_for_profile(&profile, &entities);
+    let filtered = ark_domain::selective_sync::filter_entities_for_profile(&profile, &entities);
     assert_eq!(
         filtered
             .iter()
@@ -288,7 +306,8 @@ fn selective_profile_projects_closure_in_order_and_keeps_local_copy_on_disable()
             .collect::<Vec<_>>(),
         ["com.kosmos.note", "note"]
     );
-    let disabled = data_platform::filter_entities_for_profile(&Default::default(), &projected);
+    let disabled =
+        ark_domain::selective_sync::filter_entities_for_profile(&Default::default(), &projected);
     assert!(disabled.is_empty());
     assert_eq!(projected.len(), 4);
 }
@@ -297,19 +316,19 @@ fn selective_profile_projects_closure_in_order_and_keeps_local_copy_on_disable()
 fn persisted_profile_reloads_owner_revision_and_rejects_stale_or_foreign_writes() {
     let dir = crate::support::temp_dir();
     let path = dir.path().join("profiles.db");
-    let rules = [data_platform::SyncProfileRule {
+    let rules = [ark_application::sync_policy::SyncProfileRule {
         resource_kind: "type".into(),
         resource_id: "com.kosmos.note".into(),
-        mode: data_platform::SyncMode::Full,
-        filter: data_platform::FilterV1::parse(
+        mode: ark_domain::selective_sync::SyncMode::Full,
+        filter: ark_domain::selective_sync::FilterV1::parse(
             r#"{"where":{"eq":{"field":"title","value":"Note"}},"version":1}"#,
         )
         .unwrap(),
     }];
     {
         let conn = Connection::open(&path).unwrap();
-        data_platform::ensure_schema(&conn).unwrap();
-        let created = data_platform::upsert_sync_profile(
+        ark_store::data_platform::ensure_schema(&conn).unwrap();
+        let created = ark_store::data_platform::upsert_sync_profile(
             &conn, "device-a", "phone", "Phone", true, None, &rules,
         )
         .unwrap();
@@ -317,7 +336,8 @@ fn persisted_profile_reloads_owner_revision_and_rejects_stale_or_foreign_writes(
     }
     {
         let conn = Connection::open(&path).unwrap();
-        let loaded = data_platform::load_sync_profile(&conn, "device-a", "phone").unwrap();
+        let loaded =
+            ark_store::data_platform::load_sync_profile(&conn, "device-a", "phone").unwrap();
         assert_eq!(loaded.revision, 1);
         assert_eq!(loaded.device_id, "device-a");
         assert_eq!(
@@ -340,14 +360,14 @@ fn persisted_profile_reloads_owner_revision_and_rejects_stale_or_foreign_writes(
         let matches = entity("note-match", "Note");
         let rejected = entity("note-other", "Other");
         assert_eq!(
-            data_platform::filter_entities_for_profile(&profile, &[matches, rejected])
+            ark_domain::selective_sync::filter_entities_for_profile(&profile, &[matches, rejected])
                 .iter()
                 .map(|value| value.id.as_str())
                 .collect::<Vec<_>>(),
             ["note-match"]
         );
         assert_eq!(
-            data_platform::upsert_sync_profile(
+            ark_store::data_platform::upsert_sync_profile(
                 &conn,
                 "device-b",
                 "phone",
@@ -360,7 +380,7 @@ fn persisted_profile_reloads_owner_revision_and_rejects_stale_or_foreign_writes(
             "PROFILE_OWNER_DENIED"
         );
         assert_eq!(
-            data_platform::upsert_sync_profile(
+            ark_store::data_platform::upsert_sync_profile(
                 &conn,
                 "device-a",
                 "phone",
@@ -372,7 +392,7 @@ fn persisted_profile_reloads_owner_revision_and_rejects_stale_or_foreign_writes(
             .unwrap_err(),
             "PROFILE_REVISION_STALE"
         );
-        let updated = data_platform::upsert_sync_profile(
+        let updated = ark_store::data_platform::upsert_sync_profile(
             &conn,
             "device-a",
             "phone",
@@ -385,7 +405,8 @@ fn persisted_profile_reloads_owner_revision_and_rejects_stale_or_foreign_writes(
         assert_eq!(updated.revision, 2);
     }
     let reopened = Connection::open(&path).unwrap();
-    let loaded = data_platform::load_sync_profile(&reopened, "device-a", "phone").unwrap();
+    let loaded =
+        ark_store::data_platform::load_sync_profile(&reopened, "device-a", "phone").unwrap();
     assert_eq!(
         (loaded.device_id, loaded.revision, loaded.name),
         ("device-a".into(), 2, "Phone".into())

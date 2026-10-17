@@ -17,7 +17,7 @@ async fn storage_for(device_id: &str) -> (Arc<SqliteStorageBackend>, iroh::Secre
 
 async fn storage_for_with_policy(
     device_id: &str,
-    rules: Vec<crate::data_platform::SyncProfileRule>,
+    rules: Vec<ark_application::sync_policy::SyncProfileRule>,
 ) -> (Arc<SqliteStorageBackend>, iroh::SecretKey) {
     let connection = Connection::open_in_memory().unwrap();
     init_schema(&connection).unwrap();
@@ -29,7 +29,7 @@ async fn storage_for_with_policy(
         )
         .unwrap();
     if !rules.is_empty() {
-        crate::data_platform::upsert_sync_profile(
+        ark_store::data_platform::upsert_sync_profile(
             &connection,
             device_id,
             "phone",
@@ -360,11 +360,11 @@ async fn negotiated_sync_policy_is_sent_and_persisted_for_authenticated_iroh_pee
     const AUTH_SECRET: &str = "selective-sync-policy-test-secret";
     let (storage_a, key_a) = storage_for_with_policy(
         "policy-A",
-        vec![crate::data_platform::SyncProfileRule {
+        vec![ark_application::sync_policy::SyncProfileRule {
             resource_kind: "type".into(),
             resource_id: "com.example.note".into(),
-            mode: crate::data_platform::SyncMode::Metadata,
-            filter: crate::data_platform::FilterV1::match_all(),
+            mode: ark_domain::selective_sync::SyncMode::Metadata,
+            filter: ark_domain::selective_sync::FilterV1::match_all(),
         }],
     )
     .await;
@@ -417,7 +417,7 @@ async fn negotiated_sync_policy_is_sent_and_persisted_for_authenticated_iroh_pee
             assert_eq!(accepted.rules[0].resource_id, "com.example.note");
             assert_eq!(
                 accepted.digest,
-                crate::data_platform::SyncProfile {
+                ark_application::sync_policy::SyncProfile {
                     profile_id: "phone".into(),
                     device_id: "policy-A".into(),
                     revision: 1,

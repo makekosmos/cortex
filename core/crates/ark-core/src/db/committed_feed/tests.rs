@@ -6,7 +6,7 @@ mod tests {
     fn db() -> Connection {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(crate::schema::CREATE_TABLES).unwrap();
-        crate::data_platform::ensure_schema(&conn).unwrap();
+        ark_store::data_platform::ensure_schema(&conn).unwrap();
         conn
     }
 
@@ -310,15 +310,15 @@ mod tests {
         let path = directory.path().join("policy-bound-snapshot.db");
         let conn = Connection::open(path).unwrap();
         conn.execute_batch(crate::schema::CREATE_TABLES).unwrap();
-        crate::data_platform::ensure_schema(&conn).unwrap();
-        let rule = crate::data_platform::SyncProfileRule {
+        ark_store::data_platform::ensure_schema(&conn).unwrap();
+        let rule = ark_application::sync_policy::SyncProfileRule {
             resource_kind: "type".into(),
             resource_id: "books".into(),
-            mode: crate::data_platform::SyncMode::Full,
-            filter: crate::data_platform::FilterV1::match_all(),
+            mode: ark_domain::selective_sync::SyncMode::Full,
+            filter: ark_domain::selective_sync::FilterV1::match_all(),
         };
-        let digest = crate::data_platform::digest_sync_policy(std::slice::from_ref(&rule));
-        let first = crate::data_platform::accept_peer_sync_policy(
+        let digest = ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&rule));
+        let first = ark_store::data_platform::accept_peer_sync_policy(
             &conn,
             "peer-a",
             1,
@@ -331,13 +331,13 @@ mod tests {
         let pending = begin_outbound_policy_identity(&conn, "peer-a", &first).unwrap();
         assert!(!pending.initial_snapshot.is_complete());
 
-        let next_rule = crate::data_platform::SyncProfileRule {
+        let next_rule = ark_application::sync_policy::SyncProfileRule {
             resource_id: "tasks".into(),
             ..rule
         };
         let next_digest =
-            crate::data_platform::digest_sync_policy(std::slice::from_ref(&next_rule));
-        let next = crate::data_platform::accept_peer_sync_policy(
+            ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&next_rule));
+        let next = ark_store::data_platform::accept_peer_sync_policy(
             &conn,
             "peer-a",
             2,
@@ -363,14 +363,14 @@ mod tests {
     #[test]
     fn bound_feed_ack_rejects_digest_or_active_mismatch_at_same_revision() {
         let conn = db();
-        let rule = crate::data_platform::SyncProfileRule {
+        let rule = ark_application::sync_policy::SyncProfileRule {
             resource_kind: "type".into(),
             resource_id: "books".into(),
-            mode: crate::data_platform::SyncMode::Full,
-            filter: crate::data_platform::FilterV1::match_all(),
+            mode: ark_domain::selective_sync::SyncMode::Full,
+            filter: ark_domain::selective_sync::FilterV1::match_all(),
         };
-        let digest = crate::data_platform::digest_sync_policy(std::slice::from_ref(&rule));
-        let current = crate::data_platform::accept_peer_sync_policy(
+        let digest = ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&rule));
+        let current = ark_store::data_platform::accept_peer_sync_policy(
             &conn,
             "peer-a",
             1,
@@ -427,17 +427,17 @@ mod tests {
         let path = directory.path().join("policy-bound-feed-page.db");
         let conn = Connection::open(path).unwrap();
         conn.execute_batch(crate::schema::CREATE_TABLES).unwrap();
-        crate::data_platform::ensure_schema(&conn).unwrap();
-        let rule = |resource_id: &str| crate::data_platform::SyncProfileRule {
+        ark_store::data_platform::ensure_schema(&conn).unwrap();
+        let rule = |resource_id: &str| ark_application::sync_policy::SyncProfileRule {
             resource_kind: "type".into(),
             resource_id: resource_id.into(),
-            mode: crate::data_platform::SyncMode::Full,
-            filter: crate::data_platform::FilterV1::match_all(),
+            mode: ark_domain::selective_sync::SyncMode::Full,
+            filter: ark_domain::selective_sync::FilterV1::match_all(),
         };
         let first_rule = rule("books");
         let first_digest =
-            crate::data_platform::digest_sync_policy(std::slice::from_ref(&first_rule));
-        let first = crate::data_platform::accept_peer_sync_policy(
+            ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&first_rule));
+        let first = ark_store::data_platform::accept_peer_sync_policy(
             &conn,
             "peer-a",
             1,
@@ -475,8 +475,8 @@ mod tests {
 
         let next_rule = rule("tasks");
         let next_digest =
-            crate::data_platform::digest_sync_policy(std::slice::from_ref(&next_rule));
-        crate::data_platform::accept_peer_sync_policy(
+            ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&next_rule));
+        ark_store::data_platform::accept_peer_sync_policy(
             &conn,
             "peer-a",
             2,

@@ -1,5 +1,5 @@
 use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError, DbQuery};
-use crate::data_platform::{AcceptedPeerSyncPolicy, SyncProfile, SyncProfileRule};
+use ark_application::sync_policy::{AcceptedPeerSyncPolicy, SyncProfile, SyncProfileRule};
 use rusqlite::{Connection, Transaction};
 
 pub(crate) struct SaveLocalSyncProfileCommand {
@@ -60,7 +60,7 @@ impl DbCommand for SaveLocalSyncProfileCommand {
         transaction: &Transaction<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_engine()?;
-        crate::data_platform::upsert_sync_profile(
+        ark_store::data_platform::upsert_sync_profile(
             transaction,
             &self.device_id,
             &self.profile_id,
@@ -102,7 +102,7 @@ impl DbQuery for LoadActiveLocalSyncProfileQuery {
         connection: &Connection,
     ) -> Result<Self::Output, DbError> {
         context.require_engine()?;
-        crate::data_platform::load_active_sync_profile(connection, &self.device_id)
+        ark_store::data_platform::load_active_sync_profile(connection, &self.device_id)
             .map_err(map_profile_error)
     }
 }
@@ -171,7 +171,7 @@ impl DbCommand for AcceptPeerSyncPolicyCommand {
         transaction: &Transaction<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_sync_peer_matches(&self.peer_device_id)?;
-        crate::data_platform::accept_peer_sync_policy(
+        ark_store::data_platform::accept_peer_sync_policy(
             transaction,
             &self.peer_device_id,
             self.revision,
@@ -212,7 +212,7 @@ impl DbQuery for LoadAcceptedPeerSyncPolicyQuery {
         connection: &Connection,
     ) -> Result<Self::Output, DbError> {
         context.require_sync_peer_matches(&self.peer_device_id)?;
-        crate::data_platform::load_accepted_peer_sync_policy(connection, &self.peer_device_id)
+        ark_store::data_platform::load_accepted_peer_sync_policy(connection, &self.peer_device_id)
             .map_err(map_profile_error)
     }
 }
@@ -246,7 +246,7 @@ impl DbQuery for LoadSyncProfileForSyncQuery {
         connection: &Connection,
     ) -> Result<Self::Output, DbError> {
         context.require_system_sync()?;
-        crate::data_platform::load_sync_profile_for_sync(connection, &self.local_device_id)
+        ark_store::data_platform::load_sync_profile_for_sync(connection, &self.local_device_id)
             .map_err(map_profile_error)
     }
 }

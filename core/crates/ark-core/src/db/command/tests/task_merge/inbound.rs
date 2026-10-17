@@ -123,7 +123,7 @@ async fn two_sqlite_peers_converge_on_the_same_conflict_set() {
             .await
             .unwrap();
     }
-    let identity = crate::data_platform::default_sync_policy_identity();
+    let identity = ark_application::sync_policy::default_sync_policy_identity();
     let batch = left
         .submit(
             CommandContext::authenticated_peer("right-device".into()),
@@ -169,7 +169,7 @@ async fn bootstrap_and_followup_operation_materialize_atomically_and_replay() {
         .await
         .unwrap();
 
-    let identity = crate::data_platform::default_sync_policy_identity();
+    let identity = ark_application::sync_policy::default_sync_policy_identity();
     let bootstrap = bootstrap();
     let title_baseline = bootstrap.baseline_ids[0].1.clone();
     let mut edit = operation('f', &[], "edited after bootstrap");
@@ -262,7 +262,7 @@ async fn operation_before_bootstrap_stays_unpublished_until_bootstrap_arrives() 
         )
         .await
         .unwrap();
-    let identity = crate::data_platform::default_sync_policy_identity();
+    let identity = ark_application::sync_policy::default_sync_policy_identity();
     let mut edit = operation('f', &[], "edited after bootstrap");
     edit.parents = vec![bootstrap().baseline_ids[0].1.clone()];
     let operation_batch = crate::application::sync_storage::TaskMergeBatch {
@@ -355,7 +355,7 @@ async fn inbound_batch_atomically_applies_remote_resolution_and_replays_idempote
         )
         .await
         .unwrap();
-    let identity = crate::data_platform::default_sync_policy_identity();
+    let identity = ark_application::sync_policy::default_sync_policy_identity();
     let batch = crate::application::sync_storage::TaskMergeBatch {
         batch_id: "a1".repeat(16),
         identity: identity.clone(),
@@ -455,11 +455,11 @@ async fn excluded_local_task_category_rejects_incoming_batch_without_advancing_c
                 "Phone".into(),
                 true,
                 None,
-                vec![crate::data_platform::SyncProfileRule {
+                vec![ark_application::sync_policy::SyncProfileRule {
                     resource_kind: "type".into(),
                     resource_id: "core.task".into(),
-                    mode: crate::data_platform::SyncMode::None,
-                    filter: crate::data_platform::FilterV1::match_all(),
+                    mode: ark_domain::selective_sync::SyncMode::None,
+                    filter: ark_domain::selective_sync::FilterV1::match_all(),
                 }],
             ),
         )

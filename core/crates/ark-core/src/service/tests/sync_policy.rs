@@ -29,19 +29,19 @@ fn sync_policy_request_parses_canonical_filter_inputs() {
     };
     assert_eq!(profile_id, "phone");
     assert_eq!(expected_revision, Some(2));
-    assert_eq!(rules[0].mode, crate::data_platform::SyncMode::Full);
+    assert_eq!(rules[0].mode, ark_domain::selective_sync::SyncMode::Full);
     assert!(rules[0].filter.is_object());
 }
 
 #[test]
 fn sync_policy_digest_ignores_rule_order_and_tracks_rule_changes() {
-    let rule = |resource_id: &str| crate::data_platform::SyncProfileRule {
+    let rule = |resource_id: &str| ark_application::sync_policy::SyncProfileRule {
         resource_kind: "type".into(),
         resource_id: resource_id.into(),
-        mode: crate::data_platform::SyncMode::Full,
-        filter: crate::data_platform::FilterV1::match_all(),
+        mode: ark_domain::selective_sync::SyncMode::Full,
+        filter: ark_domain::selective_sync::FilterV1::match_all(),
     };
-    let profile = crate::data_platform::SyncProfile {
+    let profile = ark_application::sync_policy::SyncProfile {
         profile_id: "phone".into(),
         device_id: "phone-device".into(),
         revision: 1,
@@ -54,7 +54,7 @@ fn sync_policy_digest_ignores_rule_order_and_tracks_rule_changes() {
     assert_eq!(profile.digest(), reordered.digest());
 
     let mut changed = profile;
-    changed.rules[0].mode = crate::data_platform::SyncMode::Metadata;
+    changed.rules[0].mode = ark_domain::selective_sync::SyncMode::Metadata;
     assert_ne!(changed.digest(), reordered.digest());
 }
 
@@ -91,7 +91,7 @@ async fn engine_sync_policy_api_round_trips_active_device_policy() {
             rules: vec![SyncPolicyRuleInput {
                 resource_kind: "type".into(),
                 resource_id: "com.kosmos.note".into(),
-                mode: crate::data_platform::SyncMode::Metadata,
+                mode: ark_domain::selective_sync::SyncMode::Metadata,
                 filter: json!({
                     "version": 1,
                     "where": {"exists": {"field": "title", "value": true}}
@@ -214,7 +214,7 @@ async fn sync_selection_does_not_revoke_an_application_grant() {
             rules: vec![crate::service::SyncPolicyRuleInput {
                 resource_kind: "type".into(),
                 resource_id: "com.kosmos.note".into(),
-                mode: crate::data_platform::SyncMode::None,
+                mode: ark_domain::selective_sync::SyncMode::None,
                 filter: json!({"version": 1, "where": {"and": []}}),
             }],
         },

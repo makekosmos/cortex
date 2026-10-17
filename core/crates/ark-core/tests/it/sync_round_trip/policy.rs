@@ -1,12 +1,13 @@
 use super::{pair_storages, pick_port, SyncClient, SyncServer};
+use ark_application::sync_policy::SyncProfileRule;
 use ark_core::application::sync_storage::{
     SyncEntityMutationPort, SyncEntityReadPort, SyncReadClass,
 };
-use ark_core::data_platform::{self, FilterV1, SyncMode, SyncProfileRule};
 use ark_core::replication_storage::PeerIdentityBackend;
 use ark_core::sync_server::SyncRuntimeStorage;
 use ark_core::types::{ArkObject, ObjectType, PeerRecord, SyncEntity};
 use ark_core::{db, SqliteStorageBackend};
+use ark_domain::selective_sync::{FilterV1, SyncMode};
 use rusqlite::Connection;
 use serde_json::json;
 use std::sync::{Arc, Mutex};
@@ -41,7 +42,7 @@ fn make_policy_storage(
     )
     .expect("register book type");
     if let Some(rules) = profile_rules {
-        data_platform::upsert_sync_profile(
+        ark_store::data_platform::upsert_sync_profile(
             &conn,
             device_id,
             &format!("profile-{device_id}"),
@@ -189,7 +190,7 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
 
     tokio::time::timeout(Duration::from_secs(10), async {
         loop {
-            if data_platform::load_accepted_peer_sync_policy(
+            if ark_store::data_platform::load_accepted_peer_sync_policy(
                 &source_conn.lock().unwrap(),
                 "device-b",
             )
@@ -242,7 +243,7 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
     .await
     .expect("another device's full policy should receive the same update");
 
-    data_platform::upsert_sync_profile(
+    ark_store::data_platform::upsert_sync_profile(
         &receiver_conn.lock().unwrap(),
         "device-b",
         "profile-device-b",

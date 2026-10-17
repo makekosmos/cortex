@@ -1,5 +1,5 @@
 use super::*;
-use crate::data_platform::ExternalRefUpsert;
+use ark_application::external_ref::ExternalRefUpsert;
 
 async fn publish_registry_event(
     state: &Arc<ServiceState>,
@@ -60,11 +60,11 @@ pub(super) async fn sync_policy_set(
         .map(|rule| {
             let filter_json =
                 serde_json::to_string(&rule.filter).map_err(|error| error.to_string())?;
-            Ok(crate::data_platform::SyncProfileRule {
+            Ok(ark_application::sync_policy::SyncProfileRule {
                 resource_kind: rule.resource_kind,
                 resource_id: rule.resource_id,
                 mode: rule.mode,
-                filter: crate::data_platform::FilterV1::parse(&filter_json)?,
+                filter: ark_domain::selective_sync::FilterV1::parse(&filter_json)?,
             })
         })
         .collect::<Result<Vec<_>, String>>()?;
@@ -86,7 +86,7 @@ pub(super) async fn sync_policy_set(
     sync_profile_json(profile)
 }
 
-fn sync_profile_json(profile: crate::data_platform::SyncProfile) -> Result<Value, String> {
+fn sync_profile_json(profile: ark_application::sync_policy::SyncProfile) -> Result<Value, String> {
     let digest = profile.digest();
     let rules = profile
         .rules

@@ -219,8 +219,9 @@ fn require_task_merge_receive_policy(
     transaction: &Transaction<'_>,
     local_device_id: &str,
 ) -> Result<(), DbError> {
-    let profile = crate::data_platform::load_sync_profile_for_sync(transaction, local_device_id)
-        .map_err(DbError::from_application_error)?;
+    let profile =
+        ark_store::data_platform::load_sync_profile_for_sync(transaction, local_device_id)
+            .map_err(DbError::from_application_error)?;
     if let Some(profile) = profile.filter(|profile| profile.active) {
         let selected = profile.selective_profile();
         let Some(rule) = selected.rules.get(&("type".into(), "core.task".into())) else {
@@ -228,8 +229,8 @@ fn require_task_merge_receive_policy(
                 "task_merge_policy_requires_full_type_sync".into(),
             ));
         };
-        if rule.mode != crate::data_platform::SyncMode::Full
-            || rule.filter.digest() != crate::data_platform::FilterV1::match_all().digest()
+        if rule.mode != ark_domain::selective_sync::SyncMode::Full
+            || rule.filter.digest() != ark_domain::selective_sync::FilterV1::match_all().digest()
         {
             return Err(DbError::Permission(
                 "task_merge_policy_requires_full_type_sync".into(),

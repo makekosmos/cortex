@@ -1,5 +1,3 @@
-use ark_core::data_platform;
-
 fn selective_object_entity(id: &str, type_id: &str, title: &str, counter: u64) -> SyncEntity {
     SyncEntity {
         entity_type: "object".into(),
@@ -131,11 +129,27 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
         .await
         .unwrap();
 
-    let mut profile = data_platform::SelectiveSyncProfile::default();
-    profile.set_rule("type", "com.kosmos.note", data_platform::SyncMode::Full);
-    profile.set_rule("type", "core.task", data_platform::SyncMode::Full);
-    profile.set_rule("type", "com.kosmos.game", data_platform::SyncMode::Metadata);
-    profile.set_rule("dataset", "usage", data_platform::SyncMode::None);
+    let mut profile = ark_domain::selective_sync::SelectiveSyncProfile::default();
+    profile.set_rule(
+        "type",
+        "com.kosmos.note",
+        ark_domain::selective_sync::SyncMode::Full,
+    );
+    profile.set_rule(
+        "type",
+        "core.task",
+        ark_domain::selective_sync::SyncMode::Full,
+    );
+    profile.set_rule(
+        "type",
+        "com.kosmos.game",
+        ark_domain::selective_sync::SyncMode::Metadata,
+    );
+    profile.set_rule(
+        "dataset",
+        "usage",
+        ark_domain::selective_sync::SyncMode::None,
+    );
     storage_a.set_selective_sync_profile(Some(profile.clone()));
     storage_b.set_selective_sync_profile(Some(profile));
 
@@ -234,7 +248,9 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
         1
     );
 
-    storage_a.set_selective_sync_profile(Some(data_platform::SelectiveSyncProfile::default()));
+    storage_a.set_selective_sync_profile(Some(
+        ark_domain::selective_sync::SelectiveSyncProfile::default(),
+    ));
     server_a.broadcast_live_change(None).await;
     tokio::time::sleep(Duration::from_millis(200)).await;
     assert!(storage_b
@@ -243,20 +259,20 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
         .unwrap()
         .iter()
         .any(|entity| entity.id == "sync-game"));
-    storage_a.set_selective_sync_profile(Some(data_platform::SelectiveSyncProfile {
+    storage_a.set_selective_sync_profile(Some(ark_domain::selective_sync::SelectiveSyncProfile {
         rules: [
             (
                 ("type".into(), "com.kosmos.note".into()),
-                data_platform::SelectiveSyncRule {
-                    mode: data_platform::SyncMode::Full,
-                    filter: data_platform::FilterV1::match_all(),
+                ark_domain::selective_sync::SelectiveSyncRule {
+                    mode: ark_domain::selective_sync::SyncMode::Full,
+                    filter: ark_domain::selective_sync::FilterV1::match_all(),
                 },
             ),
             (
                 ("type".into(), "com.kosmos.game".into()),
-                data_platform::SelectiveSyncRule {
-                    mode: data_platform::SyncMode::Metadata,
-                    filter: data_platform::FilterV1::match_all(),
+                ark_domain::selective_sync::SelectiveSyncRule {
+                    mode: ark_domain::selective_sync::SyncMode::Metadata,
+                    filter: ark_domain::selective_sync::FilterV1::match_all(),
                 },
             ),
         ]

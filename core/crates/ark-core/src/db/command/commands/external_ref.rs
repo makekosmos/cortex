@@ -1,5 +1,5 @@
 use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError};
-use crate::data_platform::{self, ExternalRefUpsert};
+use ark_application::external_ref::ExternalRefUpsert;
 use rusqlite::Transaction;
 use serde::Serialize;
 
@@ -31,8 +31,9 @@ impl DbCommand for UpsertExternalRefCommand {
         transaction: &Transaction<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_engine()?;
-        data_platform::ensure_schema(transaction).map_err(DbError::from_application_error)?;
-        data_platform::upsert_external_ref(transaction, &self.request)
+        ark_store::data_platform::ensure_schema(transaction)
+            .map_err(DbError::from_application_error)?;
+        ark_store::data_platform::upsert_external_ref(transaction, &self.request)
             .map_err(DbError::from_application_error)
     }
 }

@@ -30,8 +30,8 @@ async fn pending_authenticated_object_keeps_a_durable_receipt_without_applied_st
 fn save_test_local_policy(
     conn: &rusqlite::Connection,
     expected_revision: Option<i64>,
-) -> crate::data_platform::SyncProfile {
-    crate::data_platform::upsert_sync_profile(
+) -> ark_application::sync_policy::SyncProfile {
+    ark_store::data_platform::upsert_sync_profile(
         conn,
         "device-local",
         "local-policy",
@@ -44,7 +44,7 @@ fn save_test_local_policy(
 }
 
 fn test_policy_identity(
-    profile: &crate::data_platform::SyncProfile,
+    profile: &ark_application::sync_policy::SyncProfile,
 ) -> crate::application::sync_storage::PolicyIdentity {
     crate::protocol::sync_policy_identity(Some(profile))
 }

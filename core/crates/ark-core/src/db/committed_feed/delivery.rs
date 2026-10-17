@@ -205,9 +205,10 @@ pub fn read_committed_feed_delivery_page_for_peer(
     conn.execute_batch("SAVEPOINT committed_feed_policy_snapshot")
         .map_err(|error| error.to_string())?;
     let result = (|| -> Result<_, String> {
-        let policy = crate::data_platform::load_accepted_peer_sync_policy(conn, peer_device_id)?;
+        let policy =
+            ark_store::data_platform::load_accepted_peer_sync_policy(conn, peer_device_id)?;
         let identity = policy.as_ref().map_or_else(
-            crate::data_platform::default_sync_policy_identity,
+            ark_application::sync_policy::default_sync_policy_identity,
             |policy| policy.identity(),
         );
         if &identity != expected_identity {
@@ -265,7 +266,7 @@ fn read_committed_feed_delivery_page_with_profile(
     high_watermark: i64,
     limit: usize,
     after_selection: impl FnOnce(),
-    profile: Option<&crate::data_platform::SelectiveSyncProfile>,
+    profile: Option<&ark_domain::selective_sync::SelectiveSyncProfile>,
 ) -> Result<CommittedFeedDeliveryPage, String> {
     if after_position < 0 || high_watermark < after_position {
         return Err("invalid_committed_feed_cursor".into());
@@ -320,7 +321,9 @@ fn read_committed_feed_delivery_page_with_profile(
             .filter_map(|entry| project_feed_entity(conn, entry).transpose())
             .collect::<Result<Vec<_>, _>>()?;
         let projected = match profile {
-            Some(profile) => crate::data_platform::filter_entities_for_profile(profile, &projected),
+            Some(profile) => {
+                ark_domain::selective_sync::filter_entities_for_profile(profile, &projected)
+            }
             None => projected,
         };
         let projected = projected

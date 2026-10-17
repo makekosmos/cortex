@@ -5,7 +5,6 @@ use std::time::Duration;
 use ark_core::application::sync_storage::{
     PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort,
 };
-use ark_core::data_platform;
 use ark_core::sync_server::{
     IntegrationReplicationBackend, PeerIdentityBackend, SyncRuntimeStorage,
 };
@@ -330,8 +329,12 @@ async fn six_devices_converge_during_initial_import_and_local_edit() {
     }
 
     let profile = || {
-        let mut profile = data_platform::SelectiveSyncProfile::default();
-        profile.set_rule("type", "core.task", data_platform::SyncMode::Full);
+        let mut profile = ark_domain::selective_sync::SelectiveSyncProfile::default();
+        profile.set_rule(
+            "type",
+            "core.task",
+            ark_domain::selective_sync::SyncMode::Full,
+        );
         profile
     };
     source.set_selective_sync_profile(Some(profile()));
@@ -457,7 +460,11 @@ async fn six_devices_converge_during_initial_import_and_local_edit() {
     assert!(rows.iter().any(|entity| entity.id == "initial-255"));
     assert!(rows.iter().any(|entity| entity.id == "interactive-b"));
     let mut narrowed = profile();
-    narrowed.set_rule("type", "core.task", data_platform::SyncMode::None);
+    narrowed.set_rule(
+        "type",
+        "core.task",
+        ark_domain::selective_sync::SyncMode::None,
+    );
     devices[4].1.set_selective_sync_profile(Some(narrowed));
     let projected = devices[4].1.load_entities(&HashMap::new()).await.unwrap();
     assert_eq!(

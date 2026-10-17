@@ -90,7 +90,7 @@ async fn legacy_feed_pump_omits_policy_identity_and_legacy_ack_advances_progress
         setup_db(),
     ))));
     admit_test_registry_peer(&backend, "legacy-peer").await;
-    let digest = crate::data_platform::digest_sync_policy(&[]);
+    let digest = ark_application::sync_policy::digest_sync_policy(&[]);
     backend
         .accept_peer_sync_policy("legacy-peer", 1, &digest, false, &[])
         .await

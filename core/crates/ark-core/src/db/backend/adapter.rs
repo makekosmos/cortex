@@ -64,7 +64,7 @@ async fn store_progress_value<T: Serialize + ?Sized>(
 impl SqliteStorageBackend {
     pub fn set_selective_sync_profile(
         &self,
-        profile: Option<crate::data_platform::SelectiveSyncProfile>,
+        profile: Option<ark_domain::selective_sync::SelectiveSyncProfile>,
     ) {
         *self
             .selective_profile
@@ -72,7 +72,7 @@ impl SqliteStorageBackend {
             .unwrap_or_else(|error| error.into_inner()) = profile;
     }
 
-    fn selective_sync_profile(&self) -> Option<crate::data_platform::SelectiveSyncProfile> {
+    fn selective_sync_profile(&self) -> Option<ark_domain::selective_sync::SelectiveSyncProfile> {
         self.selective_profile
             .lock()
             .unwrap_or_else(|error| error.into_inner())
@@ -201,9 +201,12 @@ impl SyncEntityReadPort for SqliteStorageBackend {
         let Some(profile) = self.selective_sync_profile() else {
             return Some(entity.clone());
         };
-        crate::data_platform::filter_entities_for_profile(&profile, std::slice::from_ref(entity))
-            .into_iter()
-            .next()
+        ark_domain::selective_sync::filter_entities_for_profile(
+            &profile,
+            std::slice::from_ref(entity),
+        )
+        .into_iter()
+        .next()
     }
 
     async fn filter_outgoing_entity_for_peer(
@@ -217,7 +220,7 @@ impl SyncEntityReadPort for SqliteStorageBackend {
         if !policy.active {
             return Ok(Some(entity.clone()));
         }
-        Ok(crate::data_platform::filter_entities_for_profile(
+        Ok(ark_domain::selective_sync::filter_entities_for_profile(
             &policy.selective_profile(),
             std::slice::from_ref(entity),
         )

@@ -50,7 +50,7 @@ pub(crate) fn require_sync_policy_identity(
             DbError::Permission("sync_policy_identity_missing_local_device".into())
         })?;
         let profile =
-            crate::data_platform::load_sync_profile_for_sync(transaction, local_device_id)
+            ark_store::data_platform::load_sync_profile_for_sync(transaction, local_device_id)
                 .map_err(DbError::from_application_error)?;
         let actual = crate::protocol::sync_policy_identity(profile.as_ref());
         if &actual != expected {

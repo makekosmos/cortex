@@ -97,7 +97,7 @@ pub fn init_schema_prerequisites_for_phase3(conn: &Connection) -> Result<(), Str
         .map_err(|e| e.to_string())?;
     let phase2_result = (|| {
         type_registry::migrate_phase2(conn)?;
-        crate::data_platform::ensure_schema(conn)?;
+        ark_store::data_platform::ensure_schema(conn)?;
         let object_search_fts_enabled = ensure_object_search_fts(conn).is_ok();
         if object_search_fts_enabled {
             rebuild_object_search_fts(conn)?;

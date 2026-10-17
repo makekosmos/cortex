@@ -1,7 +1,7 @@
 use super::sqlite_test_support::*;
 use crate::application::sync_storage::PeerProgressPort;
-use crate::data_platform::SyncMode;
 use crate::replication_storage::PeerIdentityBackend;
+use ark_domain::selective_sync::SyncMode;
 use std::time::{Duration, Instant};
 
 #[tokio::test(flavor = "multi_thread")]
