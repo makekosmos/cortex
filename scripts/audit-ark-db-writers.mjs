@@ -12,7 +12,10 @@ import {
 } from "./rust-source-scan.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const arkSourceRoot = path.join(repoRoot, "core", "crates", "ark-core", "src");
+const arkSourceRoots = [
+  path.join(repoRoot, "core", "crates", "ark-core", "src"),
+  path.join(repoRoot, "core", "crates", "ark-store", "src"),
+];
 const allowlistPath = path.join(repoRoot, "scripts", "ark-db-writers.allow.json");
 const patterns = [
   ["service transaction boundary", /\bwith_write_tx\s*\(|\bwith_conn_mut\s*\(/],
@@ -41,8 +44,11 @@ function lineStarts(source) {
   return starts;
 }
 
-export async function collectWriterFindings(sourceRoot = arkSourceRoot, root = repoRoot) {
-  const files = (await collectRustFiles(sourceRoot)).sort();
+export async function collectWriterFindings(sourceRoots = arkSourceRoots, root = repoRoot) {
+  const roots = Array.isArray(sourceRoots) ? sourceRoots : [sourceRoots];
+  const files = (await Promise.all(roots.map((sourceRoot) => collectRustFiles(sourceRoot))))
+    .flat()
+    .sort();
   const findings = [];
   for (const file of files) {
     const source = await readFile(file, "utf8");
@@ -133,7 +139,9 @@ async function loadAllowlist(file) {
     if (entry === null || Object.getPrototypeOf(entry) !== Object.prototype)
       throw new Error(`invalid writer allowlist entry: ${JSON.stringify(entry)}`);
     if (
-      !String(entry.path ?? "").startsWith("core/crates/ark-core/src/") ||
+      !arkSourceRoots.some((root) =>
+        String(entry.path ?? "").startsWith(`${path.relative(repoRoot, root)}/`),
+      ) ||
       !patterns.some(([category]) => category === entry.category) ||
       !Number.isSafeInteger(entry.count) ||
       entry.count < 1
@@ -149,10 +157,13 @@ async function loadAllowlist(file) {
 
 function formatInventory(findings, fileCount) {
   const production = findings.filter(({ scope }) => scope === "production");
+  const sourceRoots = arkSourceRoots
+    .map((root) => path.relative(repoRoot, root).split(path.sep).join("/"))
+    .join(" and ");
   const output = [
     "# ARK SQLite writer census",
     "",
-    `Generated from core/crates/ark-core/src; ${production.length} production matches, ${fileCount} Rust files scanned. Findings in test files, inline #[cfg(test)] modules, and #[cfg(debug_assertions)] adapters are shown separately. This is a source inventory, not proof of runtime reachability or writer ownership.`,
+    `Generated from ${sourceRoots}; ${production.length} production matches, ${fileCount} Rust files scanned. Findings in test files, inline #[cfg(test)] modules, and #[cfg(debug_assertions)] adapters are shown separately. This is a source inventory, not proof of runtime reachability or writer ownership.`,
   ];
   for (const [category] of patterns) {
     const entries = findings.filter((finding) => finding.category === category);
@@ -187,7 +198,7 @@ export async function runAudit(args = process.argv.slice(2)) {
     );
     return 0;
   }
-  const files = await collectRustFiles(arkSourceRoot);
+  const files = (await Promise.all(arkSourceRoots.map((root) => collectRustFiles(root)))).flat();
   process.stdout.write(formatInventory(findings, files.length));
   return 0;
 }

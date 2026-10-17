@@ -74,6 +74,29 @@ test("writer census separates test and debug-only adapters from production", asy
   );
 });
 
+test("writer census covers the extracted ark-store SQLite owner", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ark-writer-census-store-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const coreRoot = path.join(root, "core", "crates", "ark-core", "src");
+  const storeRoot = path.join(root, "core", "crates", "ark-store", "src");
+  const writer = path.join(storeRoot, "objects.rs");
+  await mkdir(coreRoot, { recursive: true });
+  await mkdir(path.dirname(writer), { recursive: true });
+  await writeFile(writer, 'fn write(conn: &Connection) { conn.execute("INSERT", []); }\n');
+
+  const findings = await collectWriterFindings([coreRoot, storeRoot], root);
+  assert.deepEqual(
+    findings.map(({ path: file, category, scope }) => ({ file, category, scope })),
+    [
+      {
+        file: "core/crates/ark-store/src/objects.rs",
+        category: "SQLite mutation API",
+        scope: "production",
+      },
+    ],
+  );
+});
+
 test("allowlist detects both new writer findings and stale counts", () => {
   const finding = {
     path: "core/crates/ark-core/src/service/writer.rs",
