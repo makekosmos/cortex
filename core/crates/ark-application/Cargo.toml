@@ -8,6 +8,7 @@ description = "Application ports and use-case contracts for the ARK exocortex"
 ark-domain = { path = "../ark-domain" }
 async-trait.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true

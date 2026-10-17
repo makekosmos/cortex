@@ -3,25 +3,10 @@ use crate::hlc::HLC;
 use crate::types::SyncEntity;
 use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension};
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::cmp::Ordering;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReplayNotice {
-    pub entity_id: String,
-    pub type_id: String,
-}
-
-impl ReplayNotice {
-    pub fn event_payload(&self) -> Value {
-        json!({
-            "event": "sync_replay",
-            "entity_type": "object",
-            "entity_id": self.entity_id,
-            "type_id": self.type_id,
-        })
-    }
-}
+pub use ark_application::sync_storage::ReplayNotice;
 
 pub fn insert_pending_object(
     conn: &Connection,
