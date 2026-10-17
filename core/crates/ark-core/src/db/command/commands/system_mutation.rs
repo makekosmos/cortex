@@ -150,14 +150,39 @@ impl DbMaintenanceCommand for RestoreSnapshotCommand {
     }
 
     fn execute(self, connection: &mut rusqlite::Connection) -> Result<Self::Output, DbError> {
-        crate::db::restore_snapshot(connection, &self.db_path, &self.backup_id).map_err(|error| {
-            if error.starts_with("restore recovery required:") {
-                DbError::RecoveryRequired
-            } else if let Some(reason) = error.strip_prefix("restore refused:") {
-                DbError::RestoreRefused(reason.trim().to_string())
-            } else {
-                DbError::Storage(error)
-            }
-        })
+        crate::db::restore_snapshot(connection, &self.db_path, &self.backup_id)
+            .map_err(map_restore_error)
+    }
+}
+
+fn map_restore_error(error: String) -> DbError {
+    if error.starts_with("restore recovery required:") {
+        DbError::RecoveryRequired
+    } else if let Some(reason) = error.strip_prefix("restore refused:") {
+        DbError::RestoreRefused(reason.trim().to_string())
+    } else {
+        DbError::Storage(error)
+    }
+}
+
+#[cfg(test)]
+mod restore_error_tests {
+    use super::map_restore_error;
+    use crate::db::command::DbError;
+
+    #[test]
+    fn restore_recovery_required_errors_are_typed_for_fail_closed_actor_handling() {
+        assert!(matches!(
+            map_restore_error("restore recovery required: rollback failed".into()),
+            DbError::RecoveryRequired
+        ));
+        assert!(matches!(
+            map_restore_error("restore refused: stale snapshot".into()),
+            DbError::RestoreRefused(reason) if reason == "stale snapshot"
+        ));
+        assert!(matches!(
+            map_restore_error("snapshot open failed".into()),
+            DbError::Storage(message) if message == "snapshot open failed"
+        ));
     }
 }

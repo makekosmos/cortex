@@ -49,6 +49,22 @@ impl DbCommand for CommitFailure {
     }
 }
 
+struct RestoreRecoveryRequired;
+
+impl sealed::Sealed for RestoreRecoveryRequired {}
+
+impl DbMaintenanceCommand for RestoreRecoveryRequired {
+    type Output = ();
+
+    fn weight(&self) -> usize {
+        1
+    }
+
+    fn execute(self, _connection: &mut Connection) -> Result<Self::Output, DbError> {
+        Err(DbError::RecoveryRequired)
+    }
+}
+
 async fn open_failure_actor() -> (tempfile::TempDir, DbHandle, DbOwner) {
     let directory = tempfile::tempdir().unwrap();
     let (handle, owner) = DbHandle::open(actor_path(&directory), "actor-test-device".into())
@@ -258,6 +274,34 @@ async fn production_actor_commit_failure_rolls_back_receipt_and_fails_closed() {
 
     let later = apply_failure_mutation(&handle, "after-commit-failure", 0).await;
     assert!(later.is_err(), "actor accepted a write after COMMIT failed");
+
+    owner
+        .shutdown(std::time::Instant::now() + Duration::from_secs(2))
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn production_actor_restore_recovery_required_fails_closed() {
+    let (_directory, handle, mut owner) = open_failure_actor().await;
+
+    let failed = handle
+        .submit_maintenance(
+            CommandContext::engine_maintenance(),
+            RestoreRecoveryRequired,
+        )
+        .await;
+    assert!(matches!(failed, Err(DbError::RecoveryRequired)));
+    assert!(
+        !handle.actor_ready_for_test(),
+        "actor stayed Ready after restore rollback required recovery"
+    );
+
+    let later = apply_failure_mutation(&handle, "after-restore-recovery-required", 0).await;
+    assert!(
+        later.is_err(),
+        "actor accepted a write after unresolved restore"
+    );
 
     owner
         .shutdown(std::time::Instant::now() + Duration::from_secs(2))
