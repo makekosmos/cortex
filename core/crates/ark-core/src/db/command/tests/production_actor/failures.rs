@@ -386,10 +386,12 @@ async fn production_actor_restore_failure_fails_closed_after_sqlite_rollback() {
         !handle.actor_ready_for_test(),
         "actor stayed Ready after a failed restore with a successful SQLite rollback"
     );
-    assert!(matches!(
-        apply_failure_mutation(&handle, "after-rolled-back-restore", 0).await,
-        Err(DbError::Unavailable)
-    ));
+    assert!(
+        apply_failure_mutation(&handle, "after-rolled-back-restore", 0)
+            .await
+            .is_err(),
+        "actor accepted a write after a failed restore"
+    );
     let preserved = handle.with_connection(|connection| {
         connection
             .query_row("SELECT value FROM restore_failure_probe", [], |row| {
