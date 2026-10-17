@@ -348,6 +348,116 @@ async fn sqlite_service_replicas_preserve_a_concurrent_delete_and_edit() {
     }
 }
 
+#[tokio::test]
+async fn sqlite_service_replicas_keep_rich_text_documents_as_atomic_variants() {
+    let left = service_fixture();
+    let right = service_fixture();
+    init(&left.state, &left.db_path()).await;
+    init(&right.state, &right.db_path()).await;
+
+    let base = merge_operation(
+        '6',
+        TaskMergeUnit::Content,
+        &[],
+        TaskMergeValue::Field(json!({
+            "type": "doc",
+            "content": [{"type": "paragraph", "content": [{"type": "text", "text": "base"}]}]
+        })),
+    );
+    for state in [&left.state, &right.state] {
+        handle_request(
+            state,
+            Request::TaskMergeAppend {
+                merge_operation: base.clone(),
+                expected_conflict_digest: None,
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    let left_document = json!({
+        "type": "doc",
+        "content": [{"type": "paragraph", "content": [{"type": "text", "text": "left edit"}]}]
+    });
+    let right_document = json!({
+        "type": "doc",
+        "content": [{"type": "paragraph", "content": [{"type": "text", "text": "right edit"}]}]
+    });
+    let left_edit = merge_operation(
+        '7',
+        TaskMergeUnit::Content,
+        &['6'],
+        TaskMergeValue::Field(left_document.clone()),
+    );
+    let right_edit = merge_operation(
+        '8',
+        TaskMergeUnit::Content,
+        &['6'],
+        TaskMergeValue::Field(right_document.clone()),
+    );
+    for merge_operation in [left_edit.clone(), right_edit.clone()] {
+        handle_request(
+            &left.state,
+            Request::TaskMergeAppend {
+                merge_operation,
+                expected_conflict_digest: None,
+            },
+        )
+        .await
+        .unwrap();
+    }
+    for merge_operation in [right_edit, left_edit] {
+        handle_request(
+            &right.state,
+            Request::TaskMergeAppend {
+                merge_operation,
+                expected_conflict_digest: None,
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    let sets = [
+        handle_request(
+            &left.state,
+            Request::TaskMergeConflicts {
+                object_id: "service-task".into(),
+                unit: TaskMergeUnit::Content,
+            },
+        )
+        .await
+        .unwrap(),
+        handle_request(
+            &right.state,
+            Request::TaskMergeConflicts {
+                object_id: "service-task".into(),
+                unit: TaskMergeUnit::Content,
+            },
+        )
+        .await
+        .unwrap(),
+    ];
+    assert_eq!(sets[0]["conflictSet"], sets[1]["conflictSet"]);
+    assert_eq!(
+        sets[0]["conflictSet"]["commonAncestors"][0]["id"],
+        base.id.as_str()
+    );
+    assert_eq!(
+        sets[0]["conflictSet"]["variants"].as_array().unwrap().len(),
+        2
+    );
+    let variants = sets[0]["conflictSet"]["variants"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|variant| variant["value"]["value"].clone())
+        .collect::<Vec<_>>();
+    assert!(variants.contains(&left_document));
+    assert!(variants.contains(&right_document));
+}
+
 #[test]
 fn task_merge_append_request_deserializes_without_colliding_with_operation_tag() {
     let request: Request = serde_json::from_value(json!({
