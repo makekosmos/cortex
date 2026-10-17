@@ -195,7 +195,7 @@ pub(crate) async fn pump_committed_feed(
             let Some(peer) = peers.get_mut(&peer_id) else {
                 return Ok(());
             };
-            if !peer.ready_peer.is_some()
+            if peer.ready_peer.is_none()
                 || !peer.sync_complete
                 || peer.in_flight_feed_position.is_some()
             {

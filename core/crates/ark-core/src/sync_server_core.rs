@@ -33,7 +33,7 @@ impl SyncServer {
         let mut peers = self.peers.lock().await;
         let mut revoked = Vec::new();
         for (peer_id, peer) in peers.iter_mut() {
-            if !peer.ready_peer.is_some() {
+            if peer.ready_peer.is_none() {
                 continue;
             }
             let Some(session_id) = peer
@@ -257,7 +257,7 @@ impl SyncServer {
         let mut seen: HashMap<String, usize> = HashMap::new();
         let mut entries: Vec<PeerEntry> = Vec::new();
         for peer in peers.values() {
-            if !peer.ready_peer.is_some() {
+            if peer.ready_peer.is_none() {
                 continue;
             }
             if peer.device_id.is_empty() {

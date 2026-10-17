@@ -82,7 +82,7 @@ impl SyncServer {
             let peers = self.peers.lock().await;
             let mut ids = Vec::new();
             for (peer_id, peer) in peers.iter() {
-                if !peer.ready_peer.is_some() {
+                if peer.ready_peer.is_none() {
                     continue;
                 }
                 if let Some(exclude) = exclude_device_id {

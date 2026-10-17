@@ -63,7 +63,7 @@ pub(crate) async fn handle_task_merge_batch_ack(
         let Some(peer) = peers.get(&peer_id) else {
             return Ok(());
         };
-        if !peer.ready_peer.is_some()
+        if peer.ready_peer.is_none()
             || !peer.sync_complete
             || !peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
                 protocol

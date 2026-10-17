@@ -203,20 +203,6 @@ async fn save_version_vector(
     storage.store_version_vector(&merged).await
 }
 
-pub(crate) async fn save_version_vector_with_policy(
-    storage: &Arc<dyn SyncRuntimeStorage>,
-    local_device_id: &str,
-    policy_identity: &ark_application::sync_storage::PolicyIdentity,
-    vector: &VersionVector,
-) -> Result<(), String> {
-    let mut merged = load_version_vector(storage).await?;
-    merge_vector_entries(&mut merged, vector);
-    storage
-        .store_version_vector_with_policy(local_device_id, policy_identity, &merged)
-        .await
-}
-
-
 pub(crate) async fn save_known_peers(
     storage: &Arc<dyn SyncRuntimeStorage>,
     peers: &[PeerRecord],
