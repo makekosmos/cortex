@@ -87,6 +87,12 @@ fn operation_hlc_is_validated_but_does_not_replace_causal_parents() {
 
     operation.hlc = Some("2026-10-17T00:00:00.000Z:000001:device".into());
     assert_eq!(validate_operation(&operation), Ok(()));
+
+    let mut later_clock = op("00000000000000000000000000000002", &[], "later clock");
+    later_clock.hlc = Some("2999-10-17T00:00:00.000Z:000001:device".into());
+    let conflict = conflict_set(&[operation, later_clock]).unwrap();
+    assert_eq!(conflict.variants.len(), 2);
+    assert!(conflict.has_conflict());
 }
 
 #[test]
@@ -324,6 +330,44 @@ fn lifecycle_conflict_uses_cross_unit_observed_heads() {
     ])
     .unwrap()
     .is_empty());
+
+    let edit_after_deletion = lifecycle_op(
+        "00000000000000000000000000000007",
+        TaskMergeUnit::Title,
+        &[title_base.id.as_str()],
+        &[
+            title_base.id.as_str(),
+            existence_base.id.as_str(),
+            deletion.id.as_str(),
+        ],
+        TaskMergeValue::Field(Value::String("edited after delete".into())),
+    );
+    assert!(lifecycle_conflicts(&[
+        title_base.clone(),
+        existence_base.clone(),
+        deletion.clone(),
+        edit_after_deletion,
+    ])
+    .unwrap()
+    .is_empty());
+
+    let concurrent_deletion = lifecycle_op(
+        "00000000000000000000000000000008",
+        TaskMergeUnit::ObjectExistence,
+        &[existence_base.id.as_str()],
+        &[title_base.id.as_str(), existence_base.id.as_str()],
+        TaskMergeValue::ObjectDeleted {
+            deleted_at: "2026-10-17T00:00:02Z".into(),
+        },
+    );
+    let deletion_conflict = conflict_set(&[
+        existence_base.clone(),
+        deletion.clone(),
+        concurrent_deletion.clone(),
+    ])
+    .unwrap();
+    assert_eq!(deletion_conflict.variants.len(), 2);
+    assert!(deletion_conflict.has_conflict());
 
     let restore = lifecycle_op(
         "00000000000000000000000000000006",

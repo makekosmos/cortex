@@ -32,3 +32,71 @@ async fn cross_unit_observed_head_stays_pending_until_it_arrives() {
     assert_eq!(title.conflict_set.unwrap().variants.len(), 1);
     shutdown(&mut owner).await;
 }
+
+#[tokio::test]
+async fn sqlite_history_preserves_a_concurrent_delete_and_field_edit() {
+    let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
+    append(&handle, operation('1', &[], "before"), None)
+        .await
+        .unwrap();
+    let existence_base = TaskMergeOperation {
+        id: id('2'),
+        object_id: "task-1".into(),
+        unit: TaskMergeUnit::ObjectExistence,
+        parents: vec![],
+        observed_heads: vec![id('1')],
+        hlc: None,
+        value: TaskMergeValue::ObjectExists,
+    };
+    append(&handle, existence_base, None).await.unwrap();
+
+    let deletion = TaskMergeOperation {
+        id: id('3'),
+        object_id: "task-1".into(),
+        unit: TaskMergeUnit::ObjectExistence,
+        parents: vec![id('2')],
+        observed_heads: vec![id('1'), id('2')],
+        hlc: None,
+        value: TaskMergeValue::ObjectDeleted {
+            deleted_at: "2026-10-17T00:00:00Z".into(),
+        },
+    };
+    let edit = TaskMergeOperation {
+        id: id('4'),
+        object_id: "task-1".into(),
+        unit: TaskMergeUnit::Title,
+        parents: vec![id('1')],
+        observed_heads: vec![id('1'), id('2')],
+        hlc: None,
+        value: TaskMergeValue::Field(serde_json::json!("edited concurrently")),
+    };
+    append(&handle, deletion.clone(), None).await.unwrap();
+    append(&handle, edit.clone(), None).await.unwrap();
+
+    handle
+        .with_connection(|connection| {
+            let mut statement = connection
+                .prepare(
+                    "SELECT operation_json FROM task_merge_operations
+                     WHERE object_id = 'task-1' ORDER BY operation_id",
+                )
+                .map_err(|error| error.to_string())?;
+            let operations = statement
+                .query_map([], |row| row.get::<_, String>(0))
+                .map_err(|error| error.to_string())?
+                .map(|row| {
+                    let json = row.map_err(|error| error.to_string())?;
+                    serde_json::from_str::<TaskMergeOperation>(&json)
+                        .map_err(|error| error.to_string())
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            let conflicts = crate::domain::task_merge::lifecycle_conflicts(&operations)
+                .map_err(|error| error.to_string())?;
+            assert_eq!(conflicts.len(), 1);
+            assert_eq!(conflicts[0].deletion, deletion);
+            assert_eq!(conflicts[0].concurrent_head, edit);
+            Ok::<(), String>(())
+        })
+        .unwrap();
+    shutdown(&mut owner).await;
+}
