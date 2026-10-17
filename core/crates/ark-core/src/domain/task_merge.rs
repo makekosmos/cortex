@@ -105,12 +105,51 @@ pub enum MergeError {
     CausalCycle,
     #[error("merge operation lists the same parent more than once")]
     DuplicateParent,
+    #[error("merge operation has an empty object id")]
+    EmptyObjectId,
     #[error("merge history is empty")]
     EmptyHistory,
     #[error("merge unit and value kind do not match")]
     UnitValueMismatch,
     #[error("merge conflict set could not be encoded")]
     DigestEncoding,
+}
+
+pub fn validate_operation(operation: &TaskMergeOperation) -> Result<(), MergeError> {
+    if operation.object_id.trim().is_empty() {
+        return Err(MergeError::EmptyObjectId);
+    }
+    let unique_parents = operation.parents.iter().collect::<BTreeSet<_>>();
+    if unique_parents.len() != operation.parents.len() {
+        return Err(MergeError::DuplicateParent);
+    }
+    if operation.parents.contains(&operation.id) {
+        return Err(MergeError::CausalCycle);
+    }
+    let value_matches_unit = matches!(
+        (operation.unit, &operation.value),
+        (TaskMergeUnit::ObjectExistence, TaskMergeValue::ObjectExists)
+            | (
+                TaskMergeUnit::ObjectExistence,
+                TaskMergeValue::ObjectDeleted { .. }
+            )
+            | (
+                TaskMergeUnit::Title
+                    | TaskMergeUnit::Content
+                    | TaskMergeUnit::State
+                    | TaskMergeUnit::Planning
+                    | TaskMergeUnit::Deadline
+                    | TaskMergeUnit::Reminders
+                    | TaskMergeUnit::Recurrence
+                    | TaskMergeUnit::Priority
+                    | TaskMergeUnit::Checklist,
+                TaskMergeValue::Field(_) | TaskMergeValue::FieldAbsent
+            )
+    );
+    if !value_matches_unit {
+        return Err(MergeError::UnitValueMismatch);
+    }
+    Ok(())
 }
 
 pub fn conflict_set(history: &[TaskMergeOperation]) -> Result<TaskConflictSet, MergeError> {
@@ -120,29 +159,7 @@ pub fn conflict_set(history: &[TaskMergeOperation]) -> Result<TaskConflictSet, M
         if operation.object_id != first.object_id || operation.unit != first.unit {
             return Err(MergeError::MixedHistory);
         }
-        let value_matches_unit = matches!(
-            (operation.unit, &operation.value),
-            (TaskMergeUnit::ObjectExistence, TaskMergeValue::ObjectExists)
-                | (
-                    TaskMergeUnit::ObjectExistence,
-                    TaskMergeValue::ObjectDeleted { .. }
-                )
-                | (
-                    TaskMergeUnit::Title
-                        | TaskMergeUnit::Content
-                        | TaskMergeUnit::State
-                        | TaskMergeUnit::Planning
-                        | TaskMergeUnit::Deadline
-                        | TaskMergeUnit::Reminders
-                        | TaskMergeUnit::Recurrence
-                        | TaskMergeUnit::Priority
-                        | TaskMergeUnit::Checklist,
-                    TaskMergeValue::Field(_) | TaskMergeValue::FieldAbsent
-                )
-        );
-        if !value_matches_unit {
-            return Err(MergeError::UnitValueMismatch);
-        }
+        validate_operation(operation)?;
         let mut canonical_operation = operation.clone();
         canonical_operation.parents.sort();
         if let Some(previous) =
@@ -156,15 +173,8 @@ pub fn conflict_set(history: &[TaskMergeOperation]) -> Result<TaskConflictSet, M
 
     let mut children = BTreeSet::new();
     for operation in operations.values() {
-        let mut unique_parents = BTreeSet::new();
         for parent in &operation.parents {
-            if !unique_parents.insert(parent) {
-                return Err(MergeError::DuplicateParent);
-            }
-            let parent_operation = operations.get(parent).ok_or(MergeError::MissingParent)?;
-            if parent_operation.id == operation.id {
-                return Err(MergeError::CausalCycle);
-            }
+            operations.get(parent).ok_or(MergeError::MissingParent)?;
             children.insert(parent.clone());
         }
     }

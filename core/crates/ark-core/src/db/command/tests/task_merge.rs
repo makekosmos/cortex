@@ -177,6 +177,22 @@ async fn resolving_a_conflict_requires_the_current_digest() {
 }
 
 #[tokio::test]
+async fn invalid_parent_shape_is_rejected_before_persisting_pending_operation() {
+    let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
+    let result = append(&handle, operation('2', &['1', '1'], "invalid"), None).await;
+    assert!(matches!(result, Err(DbError::Invalid(_))));
+    let rows: i64 = handle.with_connection(|connection| {
+        connection
+            .query_row("SELECT COUNT(*) FROM task_merge_operations", [], |row| {
+                row.get(0)
+            })
+            .unwrap()
+    });
+    assert_eq!(rows, 0);
+    shutdown(&mut owner).await;
+}
+
+#[tokio::test]
 async fn failed_sqlite_insert_leaves_no_merge_operation() {
     let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
     handle.with_connection(|connection| {

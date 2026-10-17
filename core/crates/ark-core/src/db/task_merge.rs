@@ -208,6 +208,8 @@ fn conflict_set_for_stored(
 fn canonical_operation(
     mut operation: TaskMergeOperation,
 ) -> Result<(TaskMergeOperation, String, String), TaskMergeError> {
+    crate::domain::task_merge::validate_operation(&operation)
+        .map_err(|error| TaskMergeError::Invalid(error.to_string()))?;
     operation.parents.sort();
     let value = canonical_value(
         &serde_json::to_value(&operation)
