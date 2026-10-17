@@ -5,7 +5,6 @@
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 
 pub mod application;
-pub mod beacon;
 pub mod canonical_types;
 pub mod db;
 pub mod delphi;
@@ -32,7 +31,7 @@ pub mod transport_select;
 pub mod type_registry;
 pub mod types;
 
-pub use ark_net::{host, net, relay as relay_transport, sync_bind};
+pub use ark_net::{beacon, host, net, relay as relay_transport, sync_bind};
 
 // Re-export key types
 pub use beacon::{

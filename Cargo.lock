@@ -161,7 +161,6 @@ dependencies = [
  "criterion",
  "ed25519-dalek",
  "futures-util",
- "if-addrs",
  "iroh",
  "iroh-tickets",
  "proptest",
