@@ -35,11 +35,9 @@ impl<C: DbCommand> WriterTask for TypedCommand<C> {
         let result: Result<C::Output, DbError> = (|| {
             let transaction =
                 Transaction::new_unchecked(connection, TransactionBehavior::Immediate)
-                    .map_err(|error| DbError::Storage(error.to_string()))?;
+                    .map_err(DbError::from_sqlite)?;
             let output = command.execute(&context, &transaction)?;
-            transaction
-                .commit()
-                .map_err(|error| DbError::Storage(error.to_string()))?;
+            transaction.commit().map_err(DbError::from_sqlite)?;
             Ok(output)
         })();
         match result {

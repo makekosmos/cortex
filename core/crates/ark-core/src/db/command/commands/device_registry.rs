@@ -332,5 +332,5 @@ fn registry_apply_error(error: crate::domain::device_registry::RegistryApplyErro
 }
 
 fn storage_error(error: rusqlite::Error) -> DbError {
-    DbError::Storage(error.to_string())
+    DbError::from_sqlite(error)
 }

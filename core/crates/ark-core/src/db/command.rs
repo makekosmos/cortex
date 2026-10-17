@@ -237,6 +237,8 @@ pub(crate) enum DbError {
     Unsupported(String),
     #[error("{0}")]
     Storage(String),
+    #[error("database storage is unhealthy: {0}")]
+    StorageUnhealthy(String),
     #[error("database command exceeds admission size limits")]
     TooLarge,
     #[error("database command worker is unavailable")]
@@ -250,6 +252,24 @@ pub(crate) enum DbError {
 }
 
 impl DbError {
+    pub(crate) fn from_sqlite(error: rusqlite::Error) -> Self {
+        let message = error.to_string();
+        match error {
+            rusqlite::Error::SqliteFailure(code, _)
+                if matches!(
+                    code.code,
+                    rusqlite::ErrorCode::DiskFull
+                        | rusqlite::ErrorCode::SystemIoFailure
+                        | rusqlite::ErrorCode::DatabaseCorrupt
+                        | rusqlite::ErrorCode::NotADatabase
+                ) =>
+            {
+                Self::StorageUnhealthy(message)
+            }
+            error => Self::Storage(error.to_string()),
+        }
+    }
+
     pub(crate) fn from_application_error(message: String) -> Self {
         if message.starts_with("object_conflict:") || message == "object_revision_payload_mismatch"
         {

@@ -117,5 +117,5 @@ pub(super) fn registry_device_is_admitted(
 }
 
 fn storage_error(error: rusqlite::Error) -> DbError {
-    DbError::Storage(error.to_string())
+    DbError::from_sqlite(error)
 }

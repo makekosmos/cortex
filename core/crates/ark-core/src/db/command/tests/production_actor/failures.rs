@@ -95,8 +95,8 @@ async fn production_actor_sqlite_busy_rolls_back_and_accepts_a_retry() {
 }
 
 #[tokio::test]
-async fn production_actor_sqlite_full_rolls_back_mutation_and_receipt_then_recovers() {
-    let (_directory, handle, mut owner) = open_failure_actor().await;
+async fn production_actor_sqlite_full_rolls_back_and_fails_closed() {
+    let (directory, handle, mut owner) = open_failure_actor().await;
     handle.with_connection(|connection| {
         connection
             .execute_batch("CREATE TABLE production_actor_failure_probe(payload BLOB NOT NULL);")
@@ -122,36 +122,39 @@ async fn production_actor_sqlite_full_rolls_back_mutation_and_receipt_then_recov
     );
 
     let failed = apply_failure_mutation(&handle, "full-operation", 1_048_576).await;
-    let is_full = matches!(
-        failed,
-        Err(DbError::Storage(ref message))
-            if message.contains("database or disk is full")
-    );
+    let is_full = matches!(failed, Err(DbError::StorageUnhealthy(ref message))
+        if message.contains("database or disk is full"));
     assert!(
         is_full,
         "page limit should make the actor return SQLITE_FULL, got {failed:?}"
     );
-    assert_eq!(failure_probe_state(&handle, "full-operation"), (0, 0));
-
-    let restored_page_count = page_count + 1024;
-    assert_eq!(
-        handle
-            .submit_maintenance(
-                CommandContext::engine_maintenance(),
-                SetMaxPageCount {
-                    page_count: restored_page_count,
-                },
-            )
-            .await
-            .unwrap(),
-        restored_page_count
-    );
-    let retry = apply_failure_mutation(&handle, "full-operation", 1_048_576)
-        .await
+    let disk = Connection::open(actor_path(&directory)).unwrap();
+    let mutations = disk
+        .query_row(
+            "SELECT COUNT(*) FROM production_actor_failure_probe",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
         .unwrap();
-    assert_eq!(retry.value, "inserted:1048576");
-    assert!(!retry.replayed);
-    assert_eq!(failure_probe_state(&handle, "full-operation"), (1, 1));
+    let receipts = disk
+        .query_row(
+            "SELECT COUNT(*) FROM ark_operation_receipts WHERE operation_id = ?1",
+            ["full-operation"],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap();
+    assert_eq!((mutations, receipts), (0, 0));
+
+    let rejected = apply_failure_mutation(&handle, "later-operation", 0).await;
+    assert!(rejected.is_err(), "failed actor accepted a later write");
+    let later_receipts = disk
+        .query_row(
+            "SELECT COUNT(*) FROM ark_operation_receipts WHERE operation_id = ?1",
+            ["later-operation"],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap();
+    assert_eq!(later_receipts, 0);
 
     owner
         .shutdown(std::time::Instant::now() + Duration::from_secs(2))
