@@ -47,7 +47,7 @@ impl SqliteStorageBackend {
         entity: &SyncEntity,
     ) -> Result<
         (
-            crate::application::sync_storage::InboundApplyOutcome,
+            ark_application::sync_storage::InboundApplyOutcome,
             Vec<crate::canonical_types::pending::ReplayNotice>,
         ),
         String,
@@ -61,7 +61,7 @@ impl SqliteStorageBackend {
         authenticated_peer_id: &str,
     ) -> Result<
         (
-            crate::application::sync_storage::InboundApplyOutcome,
+            ark_application::sync_storage::InboundApplyOutcome,
             Vec<crate::canonical_types::pending::ReplayNotice>,
         ),
         String,
@@ -81,7 +81,7 @@ impl SqliteStorageBackend {
         entity: &SyncEntity,
     ) -> Result<
         (
-            crate::application::sync_storage::InboundApplyOutcome,
+            ark_application::sync_storage::InboundApplyOutcome,
             Vec<crate::canonical_types::pending::ReplayNotice>,
         ),
         String,
@@ -99,7 +99,7 @@ impl SqliteStorageBackend {
 
         let (outcome, notices) = Self::apply_entity_mutation_inner(conn, entity)?;
 
-        if outcome == crate::application::sync_storage::InboundApplyOutcome::Applied {
+        if outcome == ark_application::sync_storage::InboundApplyOutcome::Applied {
             crate::db::append_committed_change(
                 conn,
                 canonical_type,
@@ -118,7 +118,7 @@ impl SqliteStorageBackend {
         entity: &SyncEntity,
     ) -> Result<
         (
-            crate::application::sync_storage::InboundApplyOutcome,
+            ark_application::sync_storage::InboundApplyOutcome,
             Vec<crate::canonical_types::pending::ReplayNotice>,
         ),
         String,
@@ -136,7 +136,7 @@ impl SqliteStorageBackend {
                 entity.deleted == Some(true),
             )?;
             return Ok((
-                crate::application::sync_storage::InboundApplyOutcome::Stale,
+                ark_application::sync_storage::InboundApplyOutcome::Stale,
                 Vec::new(),
             ));
         }
@@ -182,7 +182,7 @@ impl SqliteStorageBackend {
                 finish_usage_entity_sync(conn, entity)?;
             }
             return Ok((
-                crate::application::sync_storage::InboundApplyOutcome::Applied,
+                ark_application::sync_storage::InboundApplyOutcome::Applied,
                 Vec::new(),
             ));
         }
@@ -192,7 +192,7 @@ impl SqliteStorageBackend {
         let value = Value::Object(full_data);
 
         let mut replay_notices = Vec::new();
-        let mut outcome = crate::application::sync_storage::InboundApplyOutcome::Applied;
+        let mut outcome = ark_application::sync_storage::InboundApplyOutcome::Applied;
         let result = match entity.entity_type.as_str() {
             "todo" | "project" | "tag" => {
                 crate::canonical_types::facades::apply_legacy_compat_entity(conn, entity).map(
@@ -242,7 +242,7 @@ impl SqliteStorageBackend {
                         "awaited_type_id": object.type_id,
                         "awaited_type_version": object.type_version,
                     }));
-                    outcome = crate::application::sync_storage::InboundApplyOutcome::Pending;
+                    outcome = ark_application::sync_storage::InboundApplyOutcome::Pending;
                     Ok(())
                 } else {
                     crate::canonical_types::facades::apply_canonical_object_entity(conn, entity)

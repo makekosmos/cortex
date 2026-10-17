@@ -77,7 +77,7 @@ impl RelaySync {
 
     pub(super) async fn notify_registry_events(
         &self,
-        events: &[crate::domain::device_registry::RegistryEvent],
+        events: &[ark_domain::device_registry::RegistryEvent],
     ) {
         if events.is_empty() {
             return;

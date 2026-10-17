@@ -56,7 +56,7 @@ pub(crate) async fn handle_task_merge_batch_ack(
     peer_id: usize,
     batch_id: &str,
     through_position: i64,
-    identity: &crate::application::sync_storage::PolicyIdentity,
+    identity: &ark_application::sync_storage::PolicyIdentity,
 ) -> Result<(), String> {
     let device_id = {
         let peers = peers.lock().await;

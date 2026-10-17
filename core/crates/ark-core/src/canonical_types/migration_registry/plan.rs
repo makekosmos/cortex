@@ -1,4 +1,4 @@
-use crate::domain::canonical_type::TypeRegistration;
+use ark_domain::canonical_type::TypeRegistration;
 use rusqlite::{params, Connection, OptionalExtension};
 use semver::Version;
 use serde::{Deserialize, Serialize};

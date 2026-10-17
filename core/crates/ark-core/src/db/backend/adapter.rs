@@ -1,8 +1,5 @@
 use super::apply::is_full_core_task;
 use super::SqliteStorageBackend;
-use crate::application::sync_storage::{
-    PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort, SyncReadClass,
-};
 use crate::db::{
     ApplySignedIntegrationFrameCommand, AuthenticatedCoreTaskWrite, AuthorizedTransportKeyQuery,
     CommandClass, CommandContext, GetSyncKeyValueQuery, IdentityErrorStyle, LoadEntitiesQuery,
@@ -12,6 +9,9 @@ use crate::replication_storage::{
     AuthenticatedEntityBackend, IntegrationReplicationBackend, PeerIdentityBackend,
 };
 use crate::types::{SyncEntity, VersionVector};
+use ark_application::sync_storage::{
+    PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort, SyncReadClass,
+};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
@@ -148,12 +148,12 @@ impl SyncEntityReadPort for SqliteStorageBackend {
     async fn load_policy_bound_entities_page_for_peer(
         &self,
         peer_device_id: &str,
-        class: crate::application::sync_storage::SyncReadClass,
+        class: ark_application::sync_storage::SyncReadClass,
         vector: &VersionVector,
         offset: usize,
         limit: usize,
-        expected_identity: &crate::application::sync_storage::PolicyIdentity,
-    ) -> Result<crate::application::sync_storage::PolicyBoundSnapshotPage, String> {
+        expected_identity: &ark_application::sync_storage::PolicyIdentity,
+    ) -> Result<ark_application::sync_storage::PolicyBoundSnapshotPage, String> {
         self.db
             .query(
                 CommandContext::sync_peer(peer_device_id.to_owned(), class.into()),
@@ -249,26 +249,19 @@ impl SyncEntityMutationPort for SqliteStorageBackend {
 #[async_trait::async_trait]
 impl PeerProgressPort for SqliteStorageBackend {
     async fn load_version_vector(&self) -> Result<VersionVector, String> {
-        Ok(
-            load_progress_value(self, crate::application::sync_storage::VERSION_VECTOR_KEY)
-                .await?
-                .unwrap_or_default(),
-        )
+        Ok(load_progress_value(self, crate::db::VERSION_VECTOR_KEY)
+            .await?
+            .unwrap_or_default())
     }
 
     async fn store_version_vector(&self, vector: &VersionVector) -> Result<(), String> {
-        store_progress_value(
-            self,
-            crate::application::sync_storage::VERSION_VECTOR_KEY,
-            vector,
-        )
-        .await
+        store_progress_value(self, crate::db::VERSION_VECTOR_KEY, vector).await
     }
 
     async fn store_version_vector_with_policy(
         &self,
         local_device_id: &str,
-        policy_identity: &crate::application::sync_storage::PolicyIdentity,
+        policy_identity: &ark_application::sync_storage::PolicyIdentity,
         vector: &VersionVector,
     ) -> Result<(), String> {
         let raw = serde_json::to_string(vector).map_err(|error| error.to_string())?;
@@ -276,7 +269,7 @@ impl PeerProgressPort for SqliteStorageBackend {
             .submit(
                 CommandContext::sync_system(CommandClass::SyncLive),
                 crate::db::SetSyncKeyValueCommand::with_policy_identity(
-                    crate::application::sync_storage::VERSION_VECTOR_KEY.to_owned(),
+                    crate::db::VERSION_VECTOR_KEY.to_owned(),
                     raw,
                     local_device_id.to_owned(),
                     policy_identity.clone(),
@@ -287,33 +280,23 @@ impl PeerProgressPort for SqliteStorageBackend {
     }
 
     async fn load_known_peers(&self) -> Result<Option<Vec<crate::types::PeerRecord>>, String> {
-        load_progress_value(self, crate::application::sync_storage::KNOWN_PEERS_KEY).await
+        load_progress_value(self, crate::db::constants::KNOWN_PEERS_KEY).await
     }
 
     async fn store_known_peers(&self, peers: &[crate::types::PeerRecord]) -> Result<(), String> {
-        store_progress_value(
-            self,
-            crate::application::sync_storage::KNOWN_PEERS_KEY,
-            peers,
-        )
-        .await
+        store_progress_value(self, crate::db::constants::KNOWN_PEERS_KEY, peers).await
     }
 
     async fn load_removed_peer_ids(&self) -> Result<Vec<String>, String> {
         Ok(
-            load_progress_value(self, crate::application::sync_storage::REMOVED_PEERS_KEY)
+            load_progress_value(self, crate::db::constants::REMOVED_PEERS_KEY)
                 .await?
                 .unwrap_or_default(),
         )
     }
 
     async fn store_removed_peer_ids(&self, peer_ids: &[String]) -> Result<(), String> {
-        store_progress_value(
-            self,
-            crate::application::sync_storage::REMOVED_PEERS_KEY,
-            peer_ids,
-        )
-        .await
+        store_progress_value(self, crate::db::constants::REMOVED_PEERS_KEY, peer_ids).await
     }
 }
 

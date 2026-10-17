@@ -1,7 +1,7 @@
 use super::*;
-use crate::application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
 use crate::replication_storage::PeerIdentityBackend;
 use crate::sync_server::SyncServer;
+use ark_application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -229,25 +229,24 @@ async fn direct_client_and_server_exchange_registry_before_sync_readiness() {
         .expect("server signing public key should be valid");
     let previous_event_hash = server_head
         .verify(
-            &crate::domain::device_registry::DeviceId::parse("server-device").unwrap(),
+            &ark_domain::device_registry::DeviceId::parse("server-device").unwrap(),
             server_head.actor_key_epoch(),
             &server_public_key,
         )
         .unwrap()
         .event_hash()
         .unwrap();
-    let disable_client = crate::domain::device_registry::RegistryEvent::sign(
-        crate::domain::device_registry::RegistryEventDraft {
-            actor_device_id: crate::domain::device_registry::DeviceId::parse("server-device")
-                .unwrap(),
+    let disable_client = ark_domain::device_registry::RegistryEvent::sign(
+        ark_domain::device_registry::RegistryEventDraft {
+            actor_device_id: ark_domain::device_registry::DeviceId::parse("server-device").unwrap(),
             actor_sequence: server_head.actor_sequence() + 1,
             previous_event_hash: Some(previous_event_hash),
-            target_device_id: crate::domain::device_registry::DeviceId::parse("client-device")
+            target_device_id: ark_domain::device_registry::DeviceId::parse("client-device")
                 .unwrap(),
             actor_key_epoch: server_head.actor_key_epoch(),
             actor_admission_epoch: server_head.actor_admission_epoch(),
             hlc: crate::hlc::HLC::now("server-device").to_string(),
-            operation: crate::domain::device_registry::RegistryOperation::Disable,
+            operation: ark_domain::device_registry::RegistryOperation::Disable,
         },
         &ed25519_dalek::SigningKey::from_bytes(&server_key.to_bytes()),
     )

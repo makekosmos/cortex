@@ -1,5 +1,5 @@
 use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError};
-use crate::application::sync_storage::PolicyIdentity;
+use ark_application::sync_storage::PolicyIdentity;
 use rusqlite::Transaction;
 use serde::Serialize;
 

@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::task_merge::{OperationId, TaskMergeOperation, TaskMergeUnit, TaskMergeValue};
+use ark_domain::task_merge::{OperationId, TaskMergeOperation, TaskMergeUnit, TaskMergeValue};
 
 fn operation(id: char, parents: &[char], value: &str) -> TaskMergeOperation {
     merge_operation(

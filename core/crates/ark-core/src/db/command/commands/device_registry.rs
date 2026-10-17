@@ -1,5 +1,5 @@
 use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError};
-use crate::domain::device_registry::{
+use ark_domain::device_registry::{
     state::DeviceRegistry, DeviceId, DeviceRecord, RegistryEvent, RegistryEventDraft, RegistryHead,
     RegistryOperation, SigningPublicKey,
 };
@@ -216,7 +216,7 @@ fn enroll_paired_device_in_transaction(
     let outcome = registry
         .apply(event.clone())
         .map_err(registry_apply_error)?;
-    let crate::domain::device_registry::RegistryApplyOutcome::Applied { event_hash } = outcome;
+    let ark_domain::device_registry::RegistryApplyOutcome::Applied { event_hash } = outcome;
     let target_projection = registry
         .device(&target_device)
         .ok_or_else(|| DbError::Storage("device_registry_projection_missing_after_apply".into()))?;
@@ -289,11 +289,8 @@ fn persist_transport_pin(
     device_id: &str,
     transport_public_key: &str,
 ) -> Result<(), DbError> {
-    let raw = crate::db::get_sync_kv(
-        transaction,
-        crate::application::sync_storage::PEER_TRANSPORT_KEYS_KEY,
-    )
-    .map_err(|error| DbError::Storage(error.to_string()))?;
+    let raw = crate::db::get_sync_kv(transaction, crate::db::constants::PEER_TRANSPORT_KEYS_KEY)
+        .map_err(|error| DbError::Storage(error.to_string()))?;
     let mut keys: HashMap<String, String> = raw
         .map(|raw| serde_json::from_str(&raw))
         .transpose()
@@ -314,20 +311,17 @@ fn persist_transport_pin(
         .execute(
             "INSERT INTO sync_kv(key, value) VALUES (?1, ?2)
              ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-            params![
-                crate::application::sync_storage::PEER_TRANSPORT_KEYS_KEY,
-                encoded
-            ],
+            params![crate::db::constants::PEER_TRANSPORT_KEYS_KEY, encoded],
         )
         .map_err(storage_error)?;
     Ok(())
 }
 
-fn registry_error(error: crate::domain::device_registry::RegistryEventError) -> DbError {
+fn registry_error(error: ark_domain::device_registry::RegistryEventError) -> DbError {
     DbError::Invalid(error.to_string())
 }
 
-fn registry_apply_error(error: crate::domain::device_registry::RegistryApplyError) -> DbError {
+fn registry_apply_error(error: ark_domain::device_registry::RegistryApplyError) -> DbError {
     DbError::Conflict(error.to_string())
 }
 

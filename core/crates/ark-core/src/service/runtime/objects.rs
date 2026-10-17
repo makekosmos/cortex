@@ -76,7 +76,7 @@ pub(super) async fn get_object_write_snapshot(
 pub(super) async fn task_merge_conflicts(
     state: &Arc<ServiceState>,
     object_id: String,
-    unit: crate::domain::task_merge::TaskMergeUnit,
+    unit: ark_domain::task_merge::TaskMergeUnit,
 ) -> Result<Value, String> {
     let result = get_db_handle(state)?
         .query(
@@ -90,7 +90,7 @@ pub(super) async fn task_merge_conflicts(
 
 pub(super) async fn task_merge_append(
     state: &Arc<ServiceState>,
-    operation: crate::domain::task_merge::TaskMergeOperation,
+    operation: ark_domain::task_merge::TaskMergeOperation,
     expected_conflict_digest: Option<String>,
 ) -> Result<Value, String> {
     let result = get_db_handle(state)?

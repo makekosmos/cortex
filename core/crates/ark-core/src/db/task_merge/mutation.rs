@@ -1,9 +1,9 @@
 use super::{append_local_bootstrap, append_operation_inner, read_conflict_set};
-use crate::domain::object_write::ObjectWriteSnapshot;
-use crate::domain::task_merge::{
+use crate::types::{ArkObject, ObjectLink, SyncEntity};
+use ark_domain::object_write::ObjectWriteSnapshot;
+use ark_domain::task_merge::{
     value_for_unit, OperationId, TaskMergeBootstrap, TaskMergeOperation, TaskMergeUnit,
 };
-use crate::types::{ArkObject, ObjectLink, SyncEntity};
 use rusqlite::{Connection, OptionalExtension};
 use std::collections::BTreeSet;
 
@@ -58,9 +58,9 @@ pub(crate) fn commit_local_task_delete(
         .collect::<Vec<_>>();
     links.sort_by(|left, right| left.id.cmp(&right.id));
     let existence_value = Some(if hard_delete {
-        crate::domain::task_merge::TaskMergeValue::ObjectHardDeleted { deleted_at }
+        ark_domain::task_merge::TaskMergeValue::ObjectHardDeleted { deleted_at }
     } else {
-        crate::domain::task_merge::TaskMergeValue::ObjectDeleted { deleted_at }
+        ark_domain::task_merge::TaskMergeValue::ObjectDeleted { deleted_at }
     });
     let entities = commit_local_task_upsert_with_existence(
         connection,
@@ -83,7 +83,7 @@ fn commit_local_task_upsert_with_existence(
     links: &[ObjectLink],
     device_id: &str,
     expected_snapshot: Option<&ObjectWriteSnapshot>,
-    existence_override: Option<crate::domain::task_merge::TaskMergeValue>,
+    existence_override: Option<ark_domain::task_merge::TaskMergeValue>,
 ) -> Result<Vec<SyncEntity>, String> {
     if object.type_id != "core.task" || object.type_version != "0.1.0" {
         return Err("object_write_slice_unsupported_type".into());
@@ -248,7 +248,7 @@ fn commit_local_task_upsert_with_existence(
     let is_hard_deleted = existence_override.is_some_and(|value| {
         matches!(
             value,
-            crate::domain::task_merge::TaskMergeValue::ObjectHardDeleted { .. }
+            ark_domain::task_merge::TaskMergeValue::ObjectHardDeleted { .. }
         )
     });
     let entity = if let Some(materialized) = materialized {

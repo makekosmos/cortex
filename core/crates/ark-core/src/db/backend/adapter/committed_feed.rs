@@ -1,5 +1,5 @@
 #[async_trait::async_trait]
-impl crate::application::sync_storage::CommittedFeedPort for SqliteStorageBackend {
+impl ark_application::sync_storage::CommittedFeedPort for SqliteStorageBackend {
     fn selective_sync_policy_generation(&self) -> i64 {
         let Some(profile) = self.selective_sync_profile() else {
             return 0;
@@ -36,7 +36,7 @@ impl crate::application::sync_storage::CommittedFeedPort for SqliteStorageBacken
 
     async fn committed_feed_snapshot(
         &self,
-    ) -> Result<crate::application::sync_storage::FeedSnapshot, String> {
+    ) -> Result<ark_application::sync_storage::FeedSnapshot, String> {
         self.db
             .query(
                 CommandContext::sync_system(CommandClass::SyncLive),
@@ -51,7 +51,7 @@ impl crate::application::sync_storage::CommittedFeedPort for SqliteStorageBacken
         after_position: i64,
         high_watermark: i64,
         limit: usize,
-    ) -> Result<Vec<crate::application::sync_storage::CommittedFeedEntry>, String> {
+    ) -> Result<Vec<ark_application::sync_storage::CommittedFeedEntry>, String> {
         self.db
             .query(
                 CommandContext::sync_system(CommandClass::SyncLive),
@@ -66,7 +66,7 @@ impl crate::application::sync_storage::CommittedFeedPort for SqliteStorageBacken
         after_position: i64,
         high_watermark: i64,
         limit: usize,
-    ) -> Result<crate::application::sync_storage::CommittedFeedDeliveryPage, String> {
+    ) -> Result<ark_application::sync_storage::CommittedFeedDeliveryPage, String> {
         self.db
             .query(
                 CommandContext::sync_system(CommandClass::SyncLive),
@@ -83,11 +83,11 @@ impl crate::application::sync_storage::CommittedFeedPort for SqliteStorageBacken
     async fn committed_feed_delivery_page_for_peer(
         &self,
         peer_device_id: &str,
-        expected_identity: &crate::application::sync_storage::PolicyIdentity,
+        expected_identity: &ark_application::sync_storage::PolicyIdentity,
         after_position: i64,
         high_watermark: i64,
         limit: usize,
-    ) -> Result<crate::application::sync_storage::PolicyBoundFeedPage, String> {
+    ) -> Result<ark_application::sync_storage::PolicyBoundFeedPage, String> {
         self.db
             .query(
                 CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
@@ -107,7 +107,7 @@ impl crate::application::sync_storage::CommittedFeedPort for SqliteStorageBacken
         &self,
         peer_device_id: &str,
         policy_generation: i64,
-    ) -> Result<crate::application::sync_storage::OutboundProgress, String> {
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
         match self
             .db
             .submit(
@@ -129,8 +129,8 @@ impl crate::application::sync_storage::CommittedFeedPort for SqliteStorageBacken
     async fn begin_outbound_policy_identity(
         &self,
         peer_device_id: &str,
-        identity: &crate::application::sync_storage::PolicyIdentity,
-    ) -> Result<crate::application::sync_storage::OutboundProgress, String> {
+        identity: &ark_application::sync_storage::PolicyIdentity,
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
         match self
             .db
             .submit(
@@ -153,7 +153,7 @@ impl crate::application::sync_storage::CommittedFeedPort for SqliteStorageBacken
         &self,
         peer_device_id: &str,
         policy_generation: i64,
-    ) -> Result<crate::application::sync_storage::OutboundProgress, String> {
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
         match self
             .db
             .submit(
@@ -175,8 +175,8 @@ impl crate::application::sync_storage::CommittedFeedPort for SqliteStorageBacken
     async fn complete_outbound_snapshot_identity(
         &self,
         peer_device_id: &str,
-        identity: &crate::application::sync_storage::PolicyIdentity,
-    ) -> Result<crate::application::sync_storage::OutboundProgress, String> {
+        identity: &ark_application::sync_storage::PolicyIdentity,
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
         match self
             .db
             .submit(
@@ -200,7 +200,7 @@ impl crate::application::sync_storage::CommittedFeedPort for SqliteStorageBacken
         peer_device_id: &str,
         policy_generation: i64,
         scanned_through: i64,
-    ) -> Result<crate::application::sync_storage::OutboundProgress, String> {
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
         match self
             .db
             .submit(
@@ -223,9 +223,9 @@ impl crate::application::sync_storage::CommittedFeedPort for SqliteStorageBacken
     async fn record_outbound_scan_identity(
         &self,
         peer_device_id: &str,
-        identity: &crate::application::sync_storage::PolicyIdentity,
+        identity: &ark_application::sync_storage::PolicyIdentity,
         scanned_through: i64,
-    ) -> Result<crate::application::sync_storage::OutboundProgress, String> {
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
         match self
             .db
             .submit(
@@ -250,8 +250,8 @@ impl crate::application::sync_storage::CommittedFeedPort for SqliteStorageBacken
         peer_device_id: &str,
         policy_generation: i64,
         position: i64,
-        ack: crate::application::sync_storage::OutboundAck,
-    ) -> Result<crate::application::sync_storage::OutboundProgress, String> {
+        ack: ark_application::sync_storage::OutboundAck,
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
         match self
             .db
             .submit(
@@ -275,10 +275,10 @@ impl crate::application::sync_storage::CommittedFeedPort for SqliteStorageBacken
     async fn acknowledge_outbound_identity(
         &self,
         peer_device_id: &str,
-        identity: &crate::application::sync_storage::PolicyIdentity,
+        identity: &ark_application::sync_storage::PolicyIdentity,
         position: i64,
-        ack: crate::application::sync_storage::OutboundAck,
-    ) -> Result<crate::application::sync_storage::OutboundProgress, String> {
+        ack: ark_application::sync_storage::OutboundAck,
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
         match self
             .db
             .submit(

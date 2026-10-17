@@ -1,7 +1,5 @@
 #![allow(clippy::unwrap_used)]
-use ark_core::application::sync_storage::{
-    SyncEntityMutationPort, SyncEntityReadPort, SyncReadClass,
-};
+use ark_application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort, SyncReadClass};
 use ark_core::db;
 use rusqlite::Connection;
 use std::collections::HashMap;

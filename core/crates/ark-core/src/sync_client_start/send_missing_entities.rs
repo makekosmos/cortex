@@ -6,11 +6,11 @@ pub(super) async fn send(
     peer_device_id: &str,
     remote_vector: &VersionVector,
     sync_complete: bool,
-    mut policy_identity: Option<crate::application::sync_storage::PolicyIdentity>,
+    mut policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
 ) -> Result<
     (
         String,
-        Option<crate::application::sync_storage::PolicyIdentity>,
+        Option<ark_application::sync_storage::PolicyIdentity>,
     ),
     String,
 > {
@@ -19,7 +19,7 @@ pub(super) async fn send(
     // KOS-302: snapshot completeness claims before the first page. A claim
     // computed later could include a sequence allocated mid-pull that the peer
     // never received.
-    let read_class = crate::application::sync_storage::SyncReadClass::for_sync_state(sync_complete);
+    let read_class = ark_application::sync_storage::SyncReadClass::for_sync_state(sync_complete);
     let complete_through = storage
         .usage_complete_through_for_peer(peer_device_id, read_class)
         .await?;

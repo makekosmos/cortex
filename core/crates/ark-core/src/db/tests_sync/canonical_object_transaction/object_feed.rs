@@ -126,7 +126,7 @@ async fn authenticated_core_task_replay_is_idempotent_and_rejects_revision_reuse
             "device-a",
             3,
             snapshot.high_watermark,
-            crate::application::sync_storage::OutboundAck::Applied,
+            ark_application::sync_storage::OutboundAck::Applied,
         )
         .await
         .unwrap();

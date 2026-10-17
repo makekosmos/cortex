@@ -179,7 +179,7 @@
 
     #[tokio::test]
     async fn storage_backend_persists_version_vector_progress() {
-        use crate::application::sync_storage::PeerProgressPort;
+        use ark_application::sync_storage::PeerProgressPort;
         let backend = make_backend();
         let mut vector = VersionVector::new();
         vector.insert(

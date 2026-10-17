@@ -1,10 +1,10 @@
 use super::SqliteStorageBackend;
-use crate::application::sync_storage::{
-    PolicyIdentity, TaskMergeBatch, TaskMergeBatchAck, TaskMergeDeliveryPort,
-};
 use crate::db::{
     AcknowledgeTaskMergeBatchCommand, ApplyTaskMergeBatchCommand, CommandClass, CommandContext,
     PrepareTaskMergeBatchCommand,
+};
+use ark_application::sync_storage::{
+    PolicyIdentity, TaskMergeBatch, TaskMergeBatchAck, TaskMergeDeliveryPort,
 };
 
 #[async_trait::async_trait]

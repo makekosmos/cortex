@@ -46,7 +46,7 @@ impl RelaySync {
         session_id: String,
         page_index: u32,
         page_count: u32,
-        events: Vec<crate::domain::device_registry::RegistryEvent>,
+        events: Vec<ark_domain::device_registry::RegistryEvent>,
     ) -> Result<(), String> {
         self.handle_registry_frame(
             peer_device_id,
@@ -81,7 +81,7 @@ impl RelaySync {
         peer_device_id: &str,
         endpoint: &str,
         session_id: &str,
-        event: crate::domain::device_registry::RegistryEvent,
+        event: ark_domain::device_registry::RegistryEvent,
     ) -> Result<(), String> {
         self.handle_registry_frame(
             peer_device_id,

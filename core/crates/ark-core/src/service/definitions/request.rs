@@ -160,12 +160,12 @@ pub(crate) enum Request {
     TaskMergeConflicts {
         #[serde(rename = "objectId")]
         object_id: String,
-        unit: crate::domain::task_merge::TaskMergeUnit,
+        unit: ark_domain::task_merge::TaskMergeUnit,
     },
     #[serde(rename = "task.merge.append")]
     TaskMergeAppend {
         #[serde(rename = "mergeOperation")]
-        merge_operation: crate::domain::task_merge::TaskMergeOperation,
+        merge_operation: ark_domain::task_merge::TaskMergeOperation,
         #[serde(default, rename = "expectedConflictDigest")]
         expected_conflict_digest: Option<String>,
     },
@@ -349,12 +349,12 @@ pub(crate) enum Request {
     DeviceRegistrySnapshot,
     #[serde(rename = "device_registry.rename")]
     DeviceRegistryRename {
-        target_device_id: crate::domain::device_registry::DeviceId,
-        display_name: crate::domain::device_registry::DisplayName,
+        target_device_id: ark_domain::device_registry::DeviceId,
+        display_name: ark_domain::device_registry::DisplayName,
     },
     #[serde(rename = "device_registry.disable")]
     DeviceRegistryDisable {
-        target_device_id: crate::domain::device_registry::DeviceId,
+        target_device_id: ark_domain::device_registry::DeviceId,
     },
     DisconnectPeer {
         device_id: String,

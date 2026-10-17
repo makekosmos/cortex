@@ -1,36 +1,34 @@
 use super::*;
 
 fn entry_operation(
-    entry: &crate::application::sync_storage::TaskMergeJournalEntry,
+    entry: &ark_application::sync_storage::TaskMergeJournalEntry,
 ) -> &TaskMergeOperation {
     match &entry.record {
-        crate::application::sync_storage::TaskMergeJournalRecord::Operation {
-            operation, ..
-        } => operation,
-        crate::application::sync_storage::TaskMergeJournalRecord::Bootstrap(_) => {
+        ark_application::sync_storage::TaskMergeJournalRecord::Operation { operation, .. } => {
+            operation
+        }
+        ark_application::sync_storage::TaskMergeJournalRecord::Bootstrap(_) => {
             panic!("expected operation journal record")
         }
     }
 }
 
-fn expected_digest(
-    entry: &crate::application::sync_storage::TaskMergeJournalEntry,
-) -> Option<&str> {
+fn expected_digest(entry: &ark_application::sync_storage::TaskMergeJournalEntry) -> Option<&str> {
     match &entry.record {
-        crate::application::sync_storage::TaskMergeJournalRecord::Operation {
+        ark_application::sync_storage::TaskMergeJournalRecord::Operation {
             expected_conflict_digest,
             ..
         } => expected_conflict_digest.as_deref(),
-        crate::application::sync_storage::TaskMergeJournalRecord::Bootstrap(_) => None,
+        ark_application::sync_storage::TaskMergeJournalRecord::Bootstrap(_) => None,
     }
 }
 
 async fn prepare_batch(
     handle: &DbHandle,
     peer_id: &str,
-    identity: crate::application::sync_storage::PolicyIdentity,
+    identity: ark_application::sync_storage::PolicyIdentity,
     limit: usize,
-) -> Result<Option<crate::application::sync_storage::TaskMergeBatch>, DbError> {
+) -> Result<Option<ark_application::sync_storage::TaskMergeBatch>, DbError> {
     handle
         .submit(
             CommandContext::authenticated_peer(peer_id.into()),
@@ -42,8 +40,8 @@ async fn prepare_batch(
 async fn acknowledge_batch(
     handle: &DbHandle,
     peer_id: &str,
-    identity: crate::application::sync_storage::PolicyIdentity,
-    batch: &crate::application::sync_storage::TaskMergeBatch,
+    identity: ark_application::sync_storage::PolicyIdentity,
+    batch: &ark_application::sync_storage::TaskMergeBatch,
     through: i64,
 ) -> Result<i64, DbError> {
     handle
@@ -84,7 +82,7 @@ async fn merge_batch_requires_matching_policy_and_full_task_selection() {
         )
         .unwrap();
     });
-    let identity = crate::application::sync_storage::PolicyIdentity {
+    let identity = ark_application::sync_storage::PolicyIdentity {
         revision: 1,
         digest,
         active: true,
@@ -136,7 +134,7 @@ async fn merge_batch_requires_matching_policy_and_full_task_selection() {
             CommandContext::authenticated_peer("peer-a".into()),
             PrepareTaskMergeBatchCommand::new(
                 "peer-a".into(),
-                crate::application::sync_storage::PolicyIdentity {
+                ark_application::sync_storage::PolicyIdentity {
                     revision: 2,
                     digest: filtered_digest,
                     active: true,
@@ -278,7 +276,7 @@ async fn outbound_merge_batches_obey_the_wire_size_budget() {
     let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
     for suffix in ['1', '2'] {
         let mut large = operation(suffix, &[], "");
-        large.value = crate::domain::task_merge::TaskMergeValue::Field(serde_json::Value::String(
+        large.value = ark_domain::task_merge::TaskMergeValue::Field(serde_json::Value::String(
             "x".repeat(600_000),
         ));
         append(&handle, large, None).await.unwrap();
@@ -298,7 +296,7 @@ async fn outbound_merge_batches_obey_the_wire_size_budget() {
         .unwrap();
 
     let mut oversized = operation('3', &[], "");
-    oversized.value = crate::domain::task_merge::TaskMergeValue::Field(serde_json::Value::String(
+    oversized.value = ark_domain::task_merge::TaskMergeValue::Field(serde_json::Value::String(
         "x".repeat(1_050_000),
     ));
     append(&handle, oversized, None).await.unwrap();
@@ -362,7 +360,7 @@ async fn policy_exclusion_preserves_local_journal_and_widening_resumes_from_ack(
         )
         .unwrap();
     });
-    let excluded_identity = crate::application::sync_storage::PolicyIdentity {
+    let excluded_identity = ark_application::sync_storage::PolicyIdentity {
         revision: 1,
         digest: excluded_digest,
         active: true,
@@ -396,7 +394,7 @@ async fn policy_exclusion_preserves_local_journal_and_widening_resumes_from_ack(
         )
         .unwrap();
     });
-    let widened_identity = crate::application::sync_storage::PolicyIdentity {
+    let widened_identity = ark_application::sync_storage::PolicyIdentity {
         revision: 2,
         digest: full_digest,
         active: true,

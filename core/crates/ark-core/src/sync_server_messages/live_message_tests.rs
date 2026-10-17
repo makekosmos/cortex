@@ -1,7 +1,7 @@
 use super::super::*;
 use super::handle_live_message;
-use crate::application::sync_storage::PolicyIdentity;
 use crate::sync_server::sync_server_tests::tests::MemBackend;
+use ark_application::sync_storage::PolicyIdentity;
 
 #[tokio::test]
 async fn stale_snapshot_ack_does_not_complete_or_clear_pending_snapshot() {

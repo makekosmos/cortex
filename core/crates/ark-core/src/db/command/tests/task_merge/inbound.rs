@@ -4,9 +4,9 @@ async fn apply_batch(
     handle: &DbHandle,
     peer_id: &str,
     local_device_id: &str,
-    identity: crate::application::sync_storage::PolicyIdentity,
-    batch: crate::application::sync_storage::TaskMergeBatch,
-) -> Result<crate::application::sync_storage::TaskMergeBatchAck, DbError> {
+    identity: ark_application::sync_storage::PolicyIdentity,
+    batch: ark_application::sync_storage::TaskMergeBatch,
+) -> Result<ark_application::sync_storage::TaskMergeBatchAck, DbError> {
     handle
         .submit(
             CommandContext::authenticated_peer(peer_id.into()),
@@ -20,8 +20,8 @@ async fn apply_batch(
         .await
 }
 
-fn bootstrap() -> crate::domain::task_merge::TaskMergeBootstrap {
-    use crate::domain::task_merge::{OperationId, TaskMergeBootstrap, TaskMergeUnit};
+fn bootstrap() -> ark_domain::task_merge::TaskMergeBootstrap {
+    use ark_domain::task_merge::{OperationId, TaskMergeBootstrap, TaskMergeUnit};
 
     TaskMergeBootstrap {
         id: OperationId::parse("10000000000000000000000000000000").unwrap(),
@@ -141,7 +141,7 @@ async fn two_sqlite_peers_converge_on_the_same_conflict_set() {
             CommandContext::engine(),
             TaskConflictSetQuery::new(
                 "task-1".into(),
-                crate::domain::task_merge::TaskMergeUnit::Title,
+                ark_domain::task_merge::TaskMergeUnit::Title,
             ),
         )
         .await
@@ -174,21 +174,19 @@ async fn bootstrap_and_followup_operation_materialize_atomically_and_replay() {
     let title_baseline = bootstrap.baseline_ids[0].1.clone();
     let mut edit = operation('f', &[], "edited after bootstrap");
     edit.parents = vec![title_baseline];
-    let batch = crate::application::sync_storage::TaskMergeBatch {
+    let batch = ark_application::sync_storage::TaskMergeBatch {
         batch_id: "b1".repeat(16),
         identity: identity.clone(),
         after_position: 0,
         through_position: 2,
         entries: vec![
-            crate::application::sync_storage::TaskMergeJournalEntry {
+            ark_application::sync_storage::TaskMergeJournalEntry {
                 position: 1,
-                record: crate::application::sync_storage::TaskMergeJournalRecord::Bootstrap(
-                    bootstrap,
-                ),
+                record: ark_application::sync_storage::TaskMergeJournalRecord::Bootstrap(bootstrap),
             },
-            crate::application::sync_storage::TaskMergeJournalEntry {
+            ark_application::sync_storage::TaskMergeJournalEntry {
                 position: 2,
-                record: crate::application::sync_storage::TaskMergeJournalRecord::Operation {
+                record: ark_application::sync_storage::TaskMergeJournalRecord::Operation {
                     operation: edit,
                     expected_conflict_digest: None,
                 },
@@ -237,11 +235,11 @@ async fn bootstrap_and_followup_operation_materialize_atomically_and_replay() {
                 .map_err(|error| error.to_string())?;
             assert!(matches!(
                 page.entries[0].record,
-                crate::application::sync_storage::TaskMergeJournalRecord::Bootstrap(_)
+                ark_application::sync_storage::TaskMergeJournalRecord::Bootstrap(_)
             ));
             assert!(matches!(
                 page.entries[1].record,
-                crate::application::sync_storage::TaskMergeJournalRecord::Operation { .. }
+                ark_application::sync_storage::TaskMergeJournalRecord::Operation { .. }
             ));
             Ok::<(), String>(())
         })
@@ -265,14 +263,14 @@ async fn operation_before_bootstrap_stays_unpublished_until_bootstrap_arrives() 
     let identity = ark_application::sync_policy::default_sync_policy_identity();
     let mut edit = operation('f', &[], "edited after bootstrap");
     edit.parents = vec![bootstrap().baseline_ids[0].1.clone()];
-    let operation_batch = crate::application::sync_storage::TaskMergeBatch {
+    let operation_batch = ark_application::sync_storage::TaskMergeBatch {
         batch_id: "c1".repeat(16),
         identity: identity.clone(),
         after_position: 0,
         through_position: 1,
-        entries: vec![crate::application::sync_storage::TaskMergeJournalEntry {
+        entries: vec![ark_application::sync_storage::TaskMergeJournalEntry {
             position: 1,
-            record: crate::application::sync_storage::TaskMergeJournalRecord::Operation {
+            record: ark_application::sync_storage::TaskMergeJournalRecord::Operation {
                 operation: edit,
                 expected_conflict_digest: None,
             },
@@ -301,13 +299,13 @@ async fn operation_before_bootstrap_stays_unpublished_until_bootstrap_arrives() 
         .unwrap();
 
     let bootstrap_record =
-        crate::application::sync_storage::TaskMergeJournalRecord::Bootstrap(bootstrap());
-    let bootstrap_batch = crate::application::sync_storage::TaskMergeBatch {
+        ark_application::sync_storage::TaskMergeJournalRecord::Bootstrap(bootstrap());
+    let bootstrap_batch = ark_application::sync_storage::TaskMergeBatch {
         batch_id: "c2".repeat(16),
         identity: identity.clone(),
         after_position: 1,
         through_position: 2,
-        entries: vec![crate::application::sync_storage::TaskMergeJournalEntry {
+        entries: vec![ark_application::sync_storage::TaskMergeJournalEntry {
             position: 2,
             record: bootstrap_record,
         }],
@@ -331,11 +329,11 @@ async fn operation_before_bootstrap_stays_unpublished_until_bootstrap_arrives() 
                 .map_err(|error| error.to_string())?;
             assert!(matches!(
                 page.entries[0].record,
-                crate::application::sync_storage::TaskMergeJournalRecord::Bootstrap(_)
+                ark_application::sync_storage::TaskMergeJournalRecord::Bootstrap(_)
             ));
             assert!(matches!(
                 page.entries[1].record,
-                crate::application::sync_storage::TaskMergeJournalRecord::Operation { .. }
+                ark_application::sync_storage::TaskMergeJournalRecord::Operation { .. }
             ));
             Ok::<(), String>(())
         })
@@ -356,22 +354,22 @@ async fn inbound_batch_atomically_applies_remote_resolution_and_replays_idempote
         .await
         .unwrap();
     let identity = ark_application::sync_policy::default_sync_policy_identity();
-    let batch = crate::application::sync_storage::TaskMergeBatch {
+    let batch = ark_application::sync_storage::TaskMergeBatch {
         batch_id: "a1".repeat(16),
         identity: identity.clone(),
         after_position: 0,
         through_position: 2,
         entries: vec![
-            crate::application::sync_storage::TaskMergeJournalEntry {
+            ark_application::sync_storage::TaskMergeJournalEntry {
                 position: 1,
-                record: crate::application::sync_storage::TaskMergeJournalRecord::Operation {
+                record: ark_application::sync_storage::TaskMergeJournalRecord::Operation {
                     operation: operation('1', &[], "remote base"),
                     expected_conflict_digest: None,
                 },
             },
-            crate::application::sync_storage::TaskMergeJournalEntry {
+            ark_application::sync_storage::TaskMergeJournalEntry {
                 position: 2,
-                record: crate::application::sync_storage::TaskMergeJournalRecord::Operation {
+                record: ark_application::sync_storage::TaskMergeJournalRecord::Operation {
                     operation: operation('2', &['1'], "remote resolution"),
                     expected_conflict_digest: Some(format!("sha256:{}", "ab".repeat(32))),
                 },
@@ -403,11 +401,10 @@ async fn inbound_batch_atomically_applies_remote_resolution_and_replays_idempote
     assert_eq!(replayed.through_position, 2);
 
     let mut altered = batch.clone();
-    altered.entries[1].record =
-        crate::application::sync_storage::TaskMergeJournalRecord::Operation {
-            operation: operation('2', &['1'], "altered resolution"),
-            expected_conflict_digest: Some(format!("sha256:{}", "ab".repeat(32))),
-        };
+    altered.entries[1].record = ark_application::sync_storage::TaskMergeJournalRecord::Operation {
+        operation: operation('2', &['1'], "altered resolution"),
+        expected_conflict_digest: Some(format!("sha256:{}", "ab".repeat(32))),
+    };
     assert!(
         apply_batch(&handle, peer_id, "merge-test-device", identity, altered)
             .await
@@ -466,14 +463,14 @@ async fn excluded_local_task_category_rejects_incoming_batch_without_advancing_c
         .await
         .unwrap();
     let identity = crate::protocol::sync_policy_identity(Some(&profile));
-    let batch = crate::application::sync_storage::TaskMergeBatch {
+    let batch = ark_application::sync_storage::TaskMergeBatch {
         batch_id: "bb".repeat(16),
         identity: identity.clone(),
         after_position: 0,
         through_position: 1,
-        entries: vec![crate::application::sync_storage::TaskMergeJournalEntry {
+        entries: vec![ark_application::sync_storage::TaskMergeJournalEntry {
             position: 1,
-            record: crate::application::sync_storage::TaskMergeJournalRecord::Operation {
+            record: ark_application::sync_storage::TaskMergeJournalRecord::Operation {
                 operation: operation('1', &[], "private on this device"),
                 expected_conflict_digest: None,
             },

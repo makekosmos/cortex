@@ -36,10 +36,10 @@ async fn apply_relay_entity(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
     use crate::db::{init_schema, SqliteStorageBackend};
     use crate::sync_server::sync_server_tests::tests::MemBackend;
     use crate::sync_transport::{SyncTransport, TransportEvent};
+    use ark_application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
     use futures_util::{SinkExt, StreamExt};
     use rusqlite::Connection;
     use std::sync::{

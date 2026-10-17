@@ -1,4 +1,4 @@
-use crate::application::sync_storage::{
+use ark_application::sync_storage::{
     CommittedFeedDelivery, CommittedFeedDeliveryPage, CommittedFeedEntry, FeedSnapshot,
     InitialSnapshot, OutboundAck, OutboundProgress,
 };

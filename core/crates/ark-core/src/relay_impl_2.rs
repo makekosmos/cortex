@@ -162,7 +162,7 @@ impl RelaySync {
         // for. Snapshot BEFORE the first page: a claim computed afterwards
         // could cover a seq allocated mid-pull that never got streamed.
         let read_class =
-            crate::application::sync_storage::SyncReadClass::for_peer_vector(remote_vector);
+            ark_application::sync_storage::SyncReadClass::for_peer_vector(remote_vector);
         let complete_through = match self
             .storage
             .usage_complete_through_for_peer(peer_device_id, read_class)
@@ -288,7 +288,7 @@ impl RelaySync {
         &self,
         from_device_id: &str,
         transport_public_key: Option<&str>,
-        batch: crate::application::sync_storage::TaskMergeBatch,
+        batch: ark_application::sync_storage::TaskMergeBatch,
     ) -> Result<(), String> {
         if !self
             .registry_ready_for_peer(from_device_id, transport_public_key)
@@ -356,7 +356,7 @@ impl RelaySync {
         from_device_id: &str,
         batch_id: &str,
         through_position: i64,
-        policy_identity: &crate::application::sync_storage::PolicyIdentity,
+        policy_identity: &ark_application::sync_storage::PolicyIdentity,
     ) -> Result<(), String> {
         let authenticated_supported = {
             let peers = self.peers.lock().await;

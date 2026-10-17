@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 pub fn apply_legacy_compat_entity(
     conn: &Connection,
     entity: &SyncEntity,
-) -> Result<crate::application::sync_storage::InboundApplyOutcome, String> {
+) -> Result<ark_application::sync_storage::InboundApplyOutcome, String> {
     let current: Option<String> = conn
         .query_row(
             "SELECT hlc FROM object_sync_versions WHERE object_id=?1",
@@ -21,7 +21,7 @@ pub fn apply_legacy_compat_entity(
         .as_deref()
         .is_some_and(|hlc| HLC::compare_str(&entity.hlc, hlc) != std::cmp::Ordering::Greater)
     {
-        return Ok(crate::application::sync_storage::InboundApplyOutcome::Stale);
+        return Ok(ark_application::sync_storage::InboundApplyOutcome::Stale);
     }
     let legacy_type = match entity.entity_type.as_str() {
         "todo" => "task_obj",
@@ -98,10 +98,10 @@ pub fn apply_legacy_compat_entity(
         .map_err(|error| error.to_string())?;
         return Ok(match outcome {
             crate::application::task_mutation::InboundTaskMutationOutcome::Applied => {
-                crate::application::sync_storage::InboundApplyOutcome::Applied
+                ark_application::sync_storage::InboundApplyOutcome::Applied
             }
             crate::application::task_mutation::InboundTaskMutationOutcome::Stale => {
-                crate::application::sync_storage::InboundApplyOutcome::Stale
+                ark_application::sync_storage::InboundApplyOutcome::Stale
             }
         });
     }
@@ -119,13 +119,13 @@ pub fn apply_legacy_compat_entity(
     )
     .map_err(|e| e.to_string())?;
     db::delete_sync_tombstone(conn, &entity.id)?;
-    Ok(crate::application::sync_storage::InboundApplyOutcome::Applied)
+    Ok(ark_application::sync_storage::InboundApplyOutcome::Applied)
 }
 
 pub fn apply_canonical_object_entity(
     conn: &Connection,
     entity: &SyncEntity,
-) -> Result<crate::application::sync_storage::InboundApplyOutcome, String> {
+) -> Result<ark_application::sync_storage::InboundApplyOutcome, String> {
     let type_id = entity
         .data
         .get("typeId")
@@ -142,12 +142,12 @@ pub fn apply_canonical_object_entity(
         .as_deref()
         .is_some_and(|hlc| HLC::compare_str(&entity.hlc, hlc) != std::cmp::Ordering::Greater)
     {
-        return Ok(crate::application::sync_storage::InboundApplyOutcome::Stale);
+        return Ok(ark_application::sync_storage::InboundApplyOutcome::Stale);
     }
     conn.execute_batch("SAVEPOINT canonical_sync_object")
         .map_err(|e| e.to_string())?;
     let result =
-        (|| -> Result<Option<crate::application::sync_storage::InboundApplyOutcome>, String> {
+        (|| -> Result<Option<ark_application::sync_storage::InboundApplyOutcome>, String> {
             if entity.deleted == Some(true) {
                 db::delete_object(conn, &entity.id)?;
                 conn.execute(
@@ -238,10 +238,10 @@ pub fn apply_canonical_object_entity(
             .map_err(|error| error.to_string())?;
                 return Ok(Some(match outcome {
                     crate::application::task_mutation::InboundTaskMutationOutcome::Applied => {
-                        crate::application::sync_storage::InboundApplyOutcome::Applied
+                        ark_application::sync_storage::InboundApplyOutcome::Applied
                     }
                     crate::application::task_mutation::InboundTaskMutationOutcome::Stale => {
-                        crate::application::sync_storage::InboundApplyOutcome::Stale
+                        ark_application::sync_storage::InboundApplyOutcome::Stale
                     }
                 }));
             }
@@ -269,7 +269,7 @@ pub fn apply_canonical_object_entity(
         Ok(outcome) => conn
             .execute_batch("RELEASE canonical_sync_object")
             .map(|()| {
-                outcome.unwrap_or(crate::application::sync_storage::InboundApplyOutcome::Applied)
+                outcome.unwrap_or(ark_application::sync_storage::InboundApplyOutcome::Applied)
             })
             .map_err(|e| e.to_string()),
         Err(error) => {

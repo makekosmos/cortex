@@ -19,7 +19,7 @@ pub(super) async fn validate_snapshot_identity(
     storage: &Arc<dyn SyncRuntimeStorage>,
     local_device_id: &str,
     policy_bound: bool,
-    received: &Option<crate::application::sync_storage::PolicyIdentity>,
+    received: &Option<ark_application::sync_storage::PolicyIdentity>,
 ) -> Result<(), String> {
     let expected = if policy_bound {
         let profile = storage.load_local_sync_profile(local_device_id).await?;

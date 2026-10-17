@@ -3,7 +3,7 @@ use ark_application::external_ref::ExternalRefUpsert;
 
 async fn publish_registry_event(
     state: &Arc<ServiceState>,
-    event: &crate::domain::device_registry::RegistryEvent,
+    event: &ark_domain::device_registry::RegistryEvent,
 ) {
     let sync = state.sync.lock().await;
     let Some(sync) = sync.as_ref() else {
@@ -122,8 +122,8 @@ async fn local_registry_device_id(state: &Arc<ServiceState>) -> Result<String, S
 
 pub(super) async fn device_registry_rename(
     state: &Arc<ServiceState>,
-    target_device_id: crate::domain::device_registry::DeviceId,
-    display_name: crate::domain::device_registry::DisplayName,
+    target_device_id: ark_domain::device_registry::DeviceId,
+    display_name: ark_domain::device_registry::DisplayName,
 ) -> Result<Value, String> {
     let local_device_id = local_registry_device_id(state).await?;
     let event = get_db_handle(state)?
@@ -131,7 +131,7 @@ pub(super) async fn device_registry_rename(
             db::CommandContext::engine(),
             db::AppendLocalRegistryEventCommand::new(
                 local_device_id,
-                crate::domain::device_registry::RegistryCommand::Rename {
+                ark_domain::device_registry::RegistryCommand::Rename {
                     target_device_id,
                     display_name,
                 },
@@ -147,7 +147,7 @@ pub(super) async fn device_registry_rename(
 
 pub(super) async fn device_registry_disable(
     state: &Arc<ServiceState>,
-    target_device_id: crate::domain::device_registry::DeviceId,
+    target_device_id: ark_domain::device_registry::DeviceId,
 ) -> Result<Value, String> {
     let local_device_id = local_registry_device_id(state).await?;
     let event = get_db_handle(state)?
@@ -155,7 +155,7 @@ pub(super) async fn device_registry_disable(
             db::CommandContext::engine(),
             db::AppendLocalRegistryEventCommand::new(
                 local_device_id,
-                crate::domain::device_registry::RegistryCommand::Disable { target_device_id },
+                ark_domain::device_registry::RegistryCommand::Disable { target_device_id },
             ),
         )
         .await

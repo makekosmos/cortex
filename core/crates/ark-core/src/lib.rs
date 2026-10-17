@@ -8,7 +8,6 @@ pub mod application;
 pub mod canonical_types;
 pub mod db;
 pub mod delphi;
-pub mod domain;
 pub mod events;
 pub mod hlc;
 pub mod integration_replication;

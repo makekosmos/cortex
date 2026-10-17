@@ -72,7 +72,7 @@ pub(crate) struct SyncRuntime {
 // Request enum
 // ---------------------------------------------------------------------------
 
-pub(crate) use crate::domain::object_write::ObjectWriteSnapshot;
+pub(crate) use ark_domain::object_write::ObjectWriteSnapshot;
 
 #[path = "definitions/request.rs"]
 mod request;

@@ -14,11 +14,11 @@ use crate::integration_replication::SignedSyncEnvelope;
 use crate::protocol::*;
 use crate::types::*;
 
-pub use crate::application::sync_storage::SyncReadClass;
 pub use crate::replication_storage::{
     AuthenticatedEntityBackend, IntegrationReplicationBackend, PeerIdentityBackend,
     SyncRuntimeStorage,
 };
+pub use ark_application::sync_storage::SyncReadClass;
 
 #[path = "sync_server_core.rs"]
 mod sync_server_core;
@@ -50,7 +50,7 @@ pub type OnPeerConnectCallback = Arc<dyn Fn(String) + Send + Sync>;
 pub type OnPeerDisconnectCallback = Arc<dyn Fn(String, usize) + Send + Sync>;
 pub type OnNewPeerDiscoveredCallback = Arc<dyn Fn(PeerRecord) + Send + Sync>;
 pub type OnRegistryEventsCallback =
-    Arc<dyn Fn(Vec<crate::domain::device_registry::RegistryEvent>) + Send + Sync>;
+    Arc<dyn Fn(Vec<ark_domain::device_registry::RegistryEvent>) + Send + Sync>;
 
 // ---------------------------------------------------------------------------
 // Peer state
@@ -70,10 +70,9 @@ struct PeerState {
     negotiated_protocol: Option<crate::protocol::NegotiatedProtocol>,
     registry_admission: Option<ark_sync::registry_admission::DirectRegistryAdmission>,
     in_flight_feed_position: Option<i64>,
-    in_flight_feed_policy_identity: Option<crate::application::sync_storage::PolicyIdentity>,
+    in_flight_feed_policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
     pending_initial_snapshot_ack: Option<String>,
-    pending_initial_snapshot_policy_identity:
-        Option<crate::application::sync_storage::PolicyIdentity>,
+    pending_initial_snapshot_policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
     tx: mpsc::UnboundedSender<Message>,
 }
 
@@ -209,7 +208,7 @@ async fn save_version_vector(
 pub(crate) async fn save_version_vector_with_policy(
     storage: &Arc<dyn SyncRuntimeStorage>,
     local_device_id: &str,
-    policy_identity: &crate::application::sync_storage::PolicyIdentity,
+    policy_identity: &ark_application::sync_storage::PolicyIdentity,
     vector: &VersionVector,
 ) -> Result<(), String> {
     let mut merged = load_version_vector(storage).await?;
@@ -248,7 +247,7 @@ pub(crate) async fn persist_pull_vector(
 pub(crate) async fn persist_pull_vector_with_policy(
     storage: &Arc<dyn SyncRuntimeStorage>,
     local_device_id: &str,
-    policy_identity: &crate::application::sync_storage::PolicyIdentity,
+    policy_identity: &ark_application::sync_storage::PolicyIdentity,
     vector: &mut VersionVector,
     vector_updated: bool,
     is_last: bool,

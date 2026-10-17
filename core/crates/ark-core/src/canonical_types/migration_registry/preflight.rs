@@ -1,7 +1,7 @@
 use super::super::definitions::canonical_type_registrations;
 use super::*;
-use crate::domain::canonical_type::TypeRegistration;
 use crate::type_registry::legacy_compatibility_version;
+use ark_domain::canonical_type::TypeRegistration;
 use rusqlite::{params, Connection, OptionalExtension};
 use semver::Version;
 use std::collections::BTreeMap;

@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::device_registry::{DeviceId, DisplayName, RegistryCommand, RegistryOperation};
+use ark_domain::device_registry::{DeviceId, DisplayName, RegistryCommand, RegistryOperation};
 
 #[tokio::test]
 async fn local_registry_changes_are_signed_atomic_and_idempotent() {

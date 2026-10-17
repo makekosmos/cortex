@@ -1,9 +1,9 @@
 use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError};
 use super::inbound_policy::require_sync_policy_identity;
-use crate::application::sync_storage::{OutboundAck, OutboundProgress, PolicyIdentity};
 use crate::canonical_types::pending::ReplayNotice;
 use crate::db::{ensure_usage_sequence_migrated, set_sync_kv, SqliteStorageBackend};
 use crate::types::SyncEntity;
+use ark_application::sync_storage::{OutboundAck, OutboundProgress, PolicyIdentity};
 use rusqlite::Transaction;
 use serde::Serialize;
 
@@ -187,7 +187,7 @@ struct SqliteInboundSyncEntitySession<'transaction, 'connection>(
     &'transaction Transaction<'connection>,
 );
 
-impl crate::application::sync_storage::SyncEntityMutationSession
+impl ark_application::sync_storage::SyncEntityMutationSession
     for SqliteInboundSyncEntitySession<'_, '_>
 {
     fn apply_entity(
@@ -196,7 +196,7 @@ impl crate::application::sync_storage::SyncEntityMutationSession
         authenticated_peer_id: Option<&str>,
     ) -> Result<
         (
-            crate::application::sync_storage::InboundApplyOutcome,
+            ark_application::sync_storage::InboundApplyOutcome,
             Vec<ReplayNotice>,
         ),
         String,
@@ -271,7 +271,7 @@ impl DbCommand for ApplySyncEntityCommand {
     ) -> Result<Self::Output, DbError> {
         context.require_system_sync()?;
         let mut session = SqliteInboundSyncEntitySession(transaction);
-        let (_, notices) = crate::application::sync_storage::apply_inbound_sync_entity(
+        let (_, notices) = ark_application::sync_storage::apply_inbound_sync_entity(
             &mut session,
             &self.entity,
             None,
@@ -318,7 +318,7 @@ impl sealed::Sealed for ApplyAuthenticatedSyncEntityCommand {}
 
 impl DbCommand for ApplyAuthenticatedSyncEntityCommand {
     type Output = (
-        crate::application::sync_storage::InboundApplyOutcome,
+        ark_application::sync_storage::InboundApplyOutcome,
         Vec<ReplayNotice>,
     );
 
@@ -348,13 +348,13 @@ impl DbCommand for ApplyAuthenticatedSyncEntityCommand {
                 .map_err(DbError::from_application_error)?;
         if inbox_state == crate::db::InboxState::Applied {
             return Ok((
-                crate::application::sync_storage::InboundApplyOutcome::Applied,
+                ark_application::sync_storage::InboundApplyOutcome::Applied,
                 Vec::new(),
             ));
         }
         if inbox_state == crate::db::InboxState::Pending {
             return Ok((
-                crate::application::sync_storage::InboundApplyOutcome::Pending,
+                ark_application::sync_storage::InboundApplyOutcome::Pending,
                 Vec::new(),
             ));
         }
@@ -364,18 +364,18 @@ impl DbCommand for ApplyAuthenticatedSyncEntityCommand {
             ));
         }
         let mut session = SqliteInboundSyncEntitySession(transaction);
-        let (outcome, notices) = crate::application::sync_storage::apply_inbound_sync_entity(
+        let (outcome, notices) = ark_application::sync_storage::apply_inbound_sync_entity(
             &mut session,
             &self.entity,
             Some(peer_id),
         )
         .map_err(DbError::from_application_error)?;
         let inbox_state = match outcome {
-            crate::application::sync_storage::InboundApplyOutcome::Applied
-            | crate::application::sync_storage::InboundApplyOutcome::Stale => {
+            ark_application::sync_storage::InboundApplyOutcome::Applied
+            | ark_application::sync_storage::InboundApplyOutcome::Stale => {
                 crate::db::InboxState::Applied
             }
-            crate::application::sync_storage::InboundApplyOutcome::Pending => {
+            ark_application::sync_storage::InboundApplyOutcome::Pending => {
                 crate::db::InboxState::Pending
             }
         };

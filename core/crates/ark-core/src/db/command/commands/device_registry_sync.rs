@@ -2,7 +2,7 @@ use super::super::{
     sealed, CommandClass, CommandContext, DbCommand, DbError, DbQuery,
     DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY,
 };
-use crate::domain::device_registry::{
+use ark_domain::device_registry::{
     state::DeviceRegistry, DeviceId, DeviceRecord, DisplayName, RegistryEvent, RegistryHead,
     SigningPublicKey,
 };
@@ -216,7 +216,7 @@ impl DbCommand for ApplyRegistryEventsCommand {
             .filter(|event| {
                 matches!(
                     event.operation(),
-                    crate::domain::device_registry::RegistryOperation::Disable
+                    ark_domain::device_registry::RegistryOperation::Disable
                 )
             })
             .map(|event| event.target_device_id().as_str().to_owned())
@@ -306,7 +306,7 @@ pub(super) fn apply_events(
         let outcome = registry
             .apply(event.clone())
             .map_err(|error| DbError::Permission(error.to_string()))?;
-        let crate::domain::device_registry::RegistryApplyOutcome::Applied { event_hash } = outcome;
+        let ark_domain::device_registry::RegistryApplyOutcome::Applied { event_hash } = outcome;
         let target = registry
             .device(event.target_device_id())
             .ok_or_else(|| DbError::Storage("device_registry_target_missing_after_apply".into()))?;
@@ -479,7 +479,7 @@ fn registry_digest(transaction: &Transaction<'_>) -> Result<String, DbError> {
     Ok(digest.iter().map(|byte| format!("{byte:02x}")).collect())
 }
 
-fn registry_error(error: crate::domain::device_registry::RegistryEventError) -> DbError {
+fn registry_error(error: ark_domain::device_registry::RegistryEventError) -> DbError {
     DbError::Invalid(error.to_string())
 }
 

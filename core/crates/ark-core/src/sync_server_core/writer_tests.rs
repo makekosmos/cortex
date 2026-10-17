@@ -1,4 +1,4 @@
-use crate::application::sync_storage::{
+use ark_application::sync_storage::{
     PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort, TaskMergeDeliveryPort,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -39,7 +39,7 @@ impl SyncEntityReadPort for RevocableBackend {
     async fn load_entities_page_for_peer(
         &self,
         _: &str,
-        _: crate::application::sync_storage::SyncReadClass,
+        _: ark_application::sync_storage::SyncReadClass,
         _: &VersionVector,
         _: usize,
         _: usize,
@@ -54,7 +54,7 @@ impl SyncEntityReadPort for RevocableBackend {
     async fn usage_complete_through_for_peer(
         &self,
         _: &str,
-        _: crate::application::sync_storage::SyncReadClass,
+        _: ark_application::sync_storage::SyncReadClass,
     ) -> Result<std::collections::HashMap<String, u64>, String> {
         Ok(std::collections::HashMap::new())
     }
@@ -92,11 +92,11 @@ impl PeerProgressPort for RevocableBackend {
 }
 
 #[async_trait::async_trait]
-impl crate::application::sync_storage::PeerSyncPolicyPort for RevocableBackend {
+impl ark_application::sync_storage::PeerSyncPolicyPort for RevocableBackend {
     async fn accepted_policy_identity_for_peer(
         &self,
         _peer_device_id: &str,
-    ) -> Result<Option<crate::application::sync_storage::PolicyIdentity>, String> {
+    ) -> Result<Option<ark_application::sync_storage::PolicyIdentity>, String> {
         Ok(Some(
             ark_application::sync_policy::default_sync_policy_identity(),
         ))
@@ -108,10 +108,10 @@ impl TaskMergeDeliveryPort for RevocableBackend {
     async fn prepare_task_merge_batch(
         &self,
         _peer_device_id: &str,
-        _expected_identity: &crate::application::sync_storage::PolicyIdentity,
+        _expected_identity: &ark_application::sync_storage::PolicyIdentity,
         _limit: usize,
     ) -> Result<
-        Option<crate::application::sync_storage::TaskMergeBatch>,
+        Option<ark_application::sync_storage::TaskMergeBatch>,
         ark_application::task_merge::TaskMergePrepareError,
     > {
         Ok(None)
@@ -120,7 +120,7 @@ impl TaskMergeDeliveryPort for RevocableBackend {
     async fn acknowledge_task_merge_batch(
         &self,
         _peer_device_id: &str,
-        _expected_identity: &crate::application::sync_storage::PolicyIdentity,
+        _expected_identity: &ark_application::sync_storage::PolicyIdentity,
         _batch_id: &str,
         through_position: i64,
     ) -> Result<i64, String> {
@@ -131,22 +131,22 @@ impl TaskMergeDeliveryPort for RevocableBackend {
         &self,
         _peer_device_id: &str,
         _local_device_id: &str,
-        _expected_identity: &crate::application::sync_storage::PolicyIdentity,
-        _batch: &crate::application::sync_storage::TaskMergeBatch,
-    ) -> Result<crate::application::sync_storage::TaskMergeBatchAck, String> {
+        _expected_identity: &ark_application::sync_storage::PolicyIdentity,
+        _batch: &ark_application::sync_storage::TaskMergeBatch,
+    ) -> Result<ark_application::sync_storage::TaskMergeBatchAck, String> {
         Err("test_task_merge_receive_unsupported".into())
     }
 }
 
 #[async_trait::async_trait]
-impl crate::application::sync_storage::CommittedFeedPort for RevocableBackend {
+impl ark_application::sync_storage::CommittedFeedPort for RevocableBackend {
     fn selective_sync_policy_generation(&self) -> i64 {
         0
     }
 
     async fn committed_feed_snapshot(
         &self,
-    ) -> Result<crate::application::sync_storage::FeedSnapshot, String> {
+    ) -> Result<ark_application::sync_storage::FeedSnapshot, String> {
         Err("test_feed_unsupported".into())
     }
 
@@ -155,7 +155,7 @@ impl crate::application::sync_storage::CommittedFeedPort for RevocableBackend {
         _: i64,
         _: i64,
         _: usize,
-    ) -> Result<Vec<crate::application::sync_storage::CommittedFeedEntry>, String> {
+    ) -> Result<Vec<ark_application::sync_storage::CommittedFeedEntry>, String> {
         Err("test_feed_unsupported".into())
     }
 
@@ -164,7 +164,7 @@ impl crate::application::sync_storage::CommittedFeedPort for RevocableBackend {
         _: i64,
         _: i64,
         _: usize,
-    ) -> Result<crate::application::sync_storage::CommittedFeedDeliveryPage, String> {
+    ) -> Result<ark_application::sync_storage::CommittedFeedDeliveryPage, String> {
         Err("test_feed_unsupported".into())
     }
 
@@ -172,9 +172,9 @@ impl crate::application::sync_storage::CommittedFeedPort for RevocableBackend {
         &self,
         _: &str,
         _: i64,
-    ) -> Result<crate::application::sync_storage::OutboundProgress, String> {
-        Ok(crate::application::sync_storage::OutboundProgress {
-            initial_snapshot: crate::application::sync_storage::InitialSnapshot::Complete {
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        Ok(ark_application::sync_storage::OutboundProgress {
+            initial_snapshot: ark_application::sync_storage::InitialSnapshot::Complete {
                 through: 0,
             },
             ..Default::default()
@@ -184,9 +184,9 @@ impl crate::application::sync_storage::CommittedFeedPort for RevocableBackend {
         &self,
         _: &str,
         _: i64,
-    ) -> Result<crate::application::sync_storage::OutboundProgress, String> {
-        Ok(crate::application::sync_storage::OutboundProgress {
-            initial_snapshot: crate::application::sync_storage::InitialSnapshot::Complete {
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        Ok(ark_application::sync_storage::OutboundProgress {
+            initial_snapshot: ark_application::sync_storage::InitialSnapshot::Complete {
                 through: 0,
             },
             ..Default::default()
@@ -197,7 +197,7 @@ impl crate::application::sync_storage::CommittedFeedPort for RevocableBackend {
         _: &str,
         _: i64,
         _: i64,
-    ) -> Result<crate::application::sync_storage::OutboundProgress, String> {
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
         Err("test_feed_unsupported".into())
     }
     async fn acknowledge_outbound(
@@ -205,8 +205,8 @@ impl crate::application::sync_storage::CommittedFeedPort for RevocableBackend {
         _: &str,
         _: i64,
         _: i64,
-        _: crate::application::sync_storage::OutboundAck,
-    ) -> Result<crate::application::sync_storage::OutboundProgress, String> {
+        _: ark_application::sync_storage::OutboundAck,
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
         Err("test_feed_unsupported".into())
     }
 }

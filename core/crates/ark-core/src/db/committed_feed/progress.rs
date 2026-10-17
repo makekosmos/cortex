@@ -1,7 +1,7 @@
 fn require_current_policy_identity(
     conn: &Connection,
     peer_device_id: &str,
-    expected: &crate::application::sync_storage::PolicyIdentity,
+    expected: &ark_application::sync_storage::PolicyIdentity,
 ) -> Result<(), String> {
     let current = ark_store::data_platform::load_accepted_peer_sync_policy(conn, peer_device_id)?
         .map_or_else(
@@ -17,7 +17,7 @@ fn require_current_policy_identity(
 pub fn begin_outbound_policy_identity(
     conn: &Connection,
     peer_device_id: &str,
-    identity: &crate::application::sync_storage::PolicyIdentity,
+    identity: &ark_application::sync_storage::PolicyIdentity,
 ) -> Result<OutboundProgress, String> {
     require_current_policy_identity(conn, peer_device_id, identity)?;
     begin_outbound_policy(conn, peer_device_id, identity.revision)
@@ -26,7 +26,7 @@ pub fn begin_outbound_policy_identity(
 pub fn complete_outbound_snapshot_identity(
     conn: &Connection,
     peer_device_id: &str,
-    identity: &crate::application::sync_storage::PolicyIdentity,
+    identity: &ark_application::sync_storage::PolicyIdentity,
 ) -> Result<OutboundProgress, String> {
     require_current_policy_identity(conn, peer_device_id, identity)?;
     complete_outbound_snapshot(conn, peer_device_id, identity.revision)
@@ -35,7 +35,7 @@ pub fn complete_outbound_snapshot_identity(
 pub fn record_outbound_scan_identity(
     conn: &Connection,
     peer_device_id: &str,
-    identity: &crate::application::sync_storage::PolicyIdentity,
+    identity: &ark_application::sync_storage::PolicyIdentity,
     scanned_through: i64,
 ) -> Result<OutboundProgress, String> {
     require_current_policy_identity(conn, peer_device_id, identity)?;
@@ -45,7 +45,7 @@ pub fn record_outbound_scan_identity(
 pub fn acknowledge_outbound_identity(
     conn: &Connection,
     peer_device_id: &str,
-    identity: &crate::application::sync_storage::PolicyIdentity,
+    identity: &ark_application::sync_storage::PolicyIdentity,
     position: i64,
     ack: OutboundAck,
 ) -> Result<OutboundProgress, String> {

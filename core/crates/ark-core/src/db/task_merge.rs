@@ -1,4 +1,4 @@
-use crate::domain::task_merge::{conflict_set, TaskConflictSet, TaskMergeOperation, TaskMergeUnit};
+use ark_domain::task_merge::{conflict_set, TaskConflictSet, TaskMergeOperation, TaskMergeUnit};
 use rusqlite::{Connection, OptionalExtension, Transaction};
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -83,7 +83,7 @@ enum DeliveryTiming {
 pub(crate) fn require_delivery_policy(
     connection: &Connection,
     peer_device_id: &str,
-    expected_identity: &crate::application::sync_storage::PolicyIdentity,
+    expected_identity: &ark_application::sync_storage::PolicyIdentity,
 ) -> Result<(), TaskMergeError> {
     let policy =
         ark_store::data_platform::load_accepted_peer_sync_policy(connection, peer_device_id)
@@ -387,7 +387,7 @@ pub(crate) fn task_causal_dependencies_pending(
         }
     }
     if !pending && !operations.is_empty() {
-        crate::domain::task_merge::lifecycle_conflicts(
+        ark_domain::task_merge::lifecycle_conflicts(
             &operations.values().cloned().collect::<Vec<_>>(),
         )
         .map_err(|error| TaskMergeError::Invalid(error.to_string()))?;
@@ -459,7 +459,7 @@ fn conflict_set_for_stored(
 fn canonical_operation(
     mut operation: TaskMergeOperation,
 ) -> Result<(TaskMergeOperation, String, String), TaskMergeError> {
-    crate::domain::task_merge::validate_operation(&operation)
+    ark_domain::task_merge::validate_operation(&operation)
         .map_err(|error| TaskMergeError::Invalid(error.to_string()))?;
     operation.parents.sort();
     operation.observed_heads.sort();

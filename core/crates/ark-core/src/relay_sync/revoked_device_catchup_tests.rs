@@ -1,10 +1,8 @@
 use super::*;
 use crate::db::{init_schema, SqliteStorageBackend};
-use crate::domain::device_registry::{
-    DeviceId, RegistryEvent, RegistryEventDraft, RegistryOperation,
-};
 use crate::replication_storage::{PeerIdentityBackend, SyncRuntimeStorage};
 use crate::sync_bind::SyncBind;
+use ark_domain::device_registry::{DeviceId, RegistryEvent, RegistryEventDraft, RegistryOperation};
 use ark_net::iroh::RelayMode;
 use rusqlite::Connection;
 use std::sync::{Arc, Mutex};

@@ -1,14 +1,14 @@
 use super::*;
-use crate::application::sync_storage::{PeerSyncPolicyPort, TaskMergeDeliveryPort};
 use crate::db::{
     AppendTaskMergeOperationCommand, ApplyTaskMergeBatchCommand, CommandContext, DbHandle, DbOwner,
     EnrollPairedDeviceCommand, LoadOrGenerateIrohSecretKeyCommand, SqliteStorageBackend,
     TaskConflictSetQuery,
 };
-use crate::domain::task_merge::{
+use crate::sync_server::SyncServer;
+use ark_application::sync_storage::{PeerSyncPolicyPort, TaskMergeDeliveryPort};
+use ark_domain::task_merge::{
     OperationId, TaskMergeBootstrap, TaskMergeOperation, TaskMergeUnit, TaskMergeValue,
 };
-use crate::sync_server::SyncServer;
 use std::time::Instant;
 
 struct PeerFixture {
@@ -123,14 +123,14 @@ async fn authenticated_direct_sync_delivers_task_merge_batches_over_the_wire() {
                 "merge-receiver".into(),
                 "merge-sender".into(),
                 identity.clone(),
-                crate::application::sync_storage::TaskMergeBatch {
+                ark_application::sync_storage::TaskMergeBatch {
                     batch_id: "c0".repeat(16),
                     identity,
                     after_position: 0,
                     through_position: 1,
-                    entries: vec![crate::application::sync_storage::TaskMergeJournalEntry {
+                    entries: vec![ark_application::sync_storage::TaskMergeJournalEntry {
                         position: 1,
-                        record: crate::application::sync_storage::TaskMergeJournalRecord::Bootstrap(
+                        record: ark_application::sync_storage::TaskMergeJournalRecord::Bootstrap(
                             bootstrap.clone(),
                         ),
                     }],

@@ -1,12 +1,12 @@
 use super::super::{sealed, CommandClass, CommandContext, DbError, DbQuery};
-use crate::application::sync_storage::CommittedFeedDeliveryPage;
-use crate::application::sync_storage::SyncReadClass;
 use crate::db::{
     committed_feed_snapshot, get_sync_kv, read_committed_feed_delivery_page,
     read_committed_feed_page, usage_log_complete_through, CommittedFeedEntry, FeedSnapshot,
     SqliteStorageBackend,
 };
 use crate::types::{SyncEntity, VersionVector};
+use ark_application::sync_storage::CommittedFeedDeliveryPage;
+use ark_application::sync_storage::SyncReadClass;
 use ark_domain::selective_sync::SelectiveSyncProfile;
 use rusqlite::Connection;
 use serde::Serialize;
@@ -112,7 +112,7 @@ impl LoadEntitiesQuery {
         connection: &Connection,
     ) -> Result<
         (
-            Option<crate::application::sync_storage::PolicyIdentity>,
+            Option<ark_application::sync_storage::PolicyIdentity>,
             Vec<SyncEntity>,
         ),
         DbError,

@@ -1,5 +1,5 @@
 use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError, DbQuery};
-use crate::domain::device_registry::{
+use ark_domain::device_registry::{
     state::DeviceRegistry, DeviceId, RegistryHandshakeProof, RegistryHandshakeTranscript,
 };
 use rusqlite::{Connection, Transaction};
@@ -43,10 +43,9 @@ impl DbCommand for SignRegistryHandshakeCommand {
         let secret = crate::iroh_transport::load_or_generate_secret_key(transaction)
             .map_err(DbError::Storage)?;
         let signing_key = ed25519_dalek::SigningKey::from_bytes(&secret.to_bytes());
-        let local_public_key = crate::domain::device_registry::SigningPublicKey::from_bytes(
-            *secret.public().as_bytes(),
-        )
-        .map_err(|error| DbError::Invalid(error.to_string()))?;
+        let local_public_key =
+            ark_domain::device_registry::SigningPublicKey::from_bytes(*secret.public().as_bytes())
+                .map_err(|error| DbError::Invalid(error.to_string()))?;
         if device.signing_public_key != local_public_key {
             return Err(DbError::Conflict(
                 "device_registry_local_identity_conflict".into(),
@@ -115,7 +114,7 @@ impl DbQuery for VerifyRegistryHandshakeQuery {
 fn known_registry_device<'a>(
     registry: &'a DeviceRegistry,
     device_id: &DeviceId,
-) -> Result<&'a crate::domain::device_registry::DeviceRecord, DbError> {
+) -> Result<&'a ark_domain::device_registry::DeviceRecord, DbError> {
     registry
         .device(device_id)
         .ok_or_else(|| DbError::Permission("device_registry_peer_unknown".into()))

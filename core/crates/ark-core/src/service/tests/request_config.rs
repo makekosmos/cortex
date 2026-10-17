@@ -292,7 +292,7 @@ async fn corrupt_peer_state_fails_before_listener_start_and_retry_succeeds() {
     handle_request(
         &state,
         Request::SetSyncKv {
-            key: crate::application::sync_storage::KNOWN_PEERS_KEY.into(),
+            key: crate::db::constants::KNOWN_PEERS_KEY.into(),
             value: "not-json".into(),
         },
     )
@@ -335,7 +335,7 @@ async fn corrupt_peer_state_fails_before_listener_start_and_retry_succeeds() {
     handle_request(
         &state,
         Request::SetSyncKv {
-            key: crate::application::sync_storage::KNOWN_PEERS_KEY.into(),
+            key: crate::db::constants::KNOWN_PEERS_KEY.into(),
             value: "[]".into(),
         },
     )

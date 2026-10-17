@@ -1,8 +1,8 @@
 use super::super::*;
 use super::sqlite_test_support::*;
 use crate::db::{AppendLocalRegistryEventCommand, CommandContext};
-use crate::domain::device_registry::{DeviceId, RegistryCommand};
 use crate::replication_storage::{PeerIdentityBackend, SyncRuntimeStorage};
+use ark_domain::device_registry::{DeviceId, RegistryCommand};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};

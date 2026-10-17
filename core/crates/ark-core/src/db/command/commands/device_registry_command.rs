@@ -1,5 +1,5 @@
 use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError};
-use crate::domain::device_registry::{
+use ark_domain::device_registry::{
     DeviceId, DeviceRecord, RegistryCommand, RegistryEvent, RegistryEventDraft, RegistryOperation,
     SigningPublicKey,
 };
@@ -146,7 +146,7 @@ fn append_local_registry_event(
     Ok(Some(event))
 }
 
-fn registry_error(error: crate::domain::device_registry::RegistryEventError) -> DbError {
+fn registry_error(error: ark_domain::device_registry::RegistryEventError) -> DbError {
     DbError::Invalid(error.to_string())
 }
 

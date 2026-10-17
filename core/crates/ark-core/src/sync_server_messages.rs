@@ -143,7 +143,7 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
             // they could include a seq allocated mid-pull — the peer would
             // advance its cursor past an entry it never received.
             let read_class =
-                crate::application::sync_storage::SyncReadClass::for_sync_state(peer_sync_complete);
+                ark_application::sync_storage::SyncReadClass::for_sync_state(peer_sync_complete);
             let complete_through = match storage
                 .usage_complete_through_for_peer(&peer_device_id, read_class)
                 .await
@@ -397,8 +397,8 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                         )
                         .await
                     {
-                        Ok(crate::application::sync_storage::InboundApplyOutcome::Applied)
-                        | Ok(crate::application::sync_storage::InboundApplyOutcome::Stale) => {
+                        Ok(ark_application::sync_storage::InboundApplyOutcome::Applied)
+                        | Ok(ark_application::sync_storage::InboundApplyOutcome::Stale) => {
                             vector_updated |= observe_non_usage_entity(&mut local_vector, entity);
                             accepted += 1;
 
@@ -409,7 +409,7 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                             // Broadcast to other peers
                             broadcast_to_others(storage, peers, Some(&peer_device_id)).await;
                         }
-                        Ok(crate::application::sync_storage::InboundApplyOutcome::Pending) => {}
+                        Ok(ark_application::sync_storage::InboundApplyOutcome::Pending) => {}
                         Err(e) => {
                             eprintln!(
                                 "{TAG} Failed to apply sync entity {}:{}: {e}",

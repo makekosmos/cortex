@@ -386,12 +386,12 @@ mod tests {
         record_outbound_scan_identity(&conn, "peer-a", &current, 1).unwrap();
 
         for stale in [
-            crate::application::sync_storage::PolicyIdentity {
+            ark_application::sync_storage::PolicyIdentity {
                 revision: 1,
                 digest: "0".repeat(64),
                 active: true,
             },
-            crate::application::sync_storage::PolicyIdentity {
+            ark_application::sync_storage::PolicyIdentity {
                 revision: 1,
                 digest: digest.clone(),
                 active: false,

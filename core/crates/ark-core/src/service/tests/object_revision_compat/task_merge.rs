@@ -3,7 +3,7 @@ use super::*;
 async fn object_snapshot(
     state: &Arc<ServiceState>,
     id: &str,
-) -> crate::domain::object_write::ObjectWriteSnapshot {
+) -> ark_domain::object_write::ObjectWriteSnapshot {
     serde_json::from_value(
         handle_request(state, Request::GetObjectWriteSnapshot { id: id.into() })
             .await
@@ -61,7 +61,7 @@ async fn ordinary_task_upsert_bootstraps_then_appends_changed_units_atomically()
     .unwrap();
     assert_eq!(
         baseline_ids.len(),
-        crate::domain::task_merge::TaskMergeUnit::ALL.len()
+        ark_domain::task_merge::TaskMergeUnit::ALL.len()
     );
     assert!(!baseline_ids.contains(&bootstrap_id));
 
@@ -91,7 +91,7 @@ async fn ordinary_task_upsert_bootstraps_then_appends_changed_units_atomically()
             .query_map([id], |row| row.get::<_, String>(0))
             .map_err(|error| error.to_string())?;
         rows.map(|row| {
-            serde_json::from_str::<crate::domain::task_merge::TaskMergeOperation>(
+            serde_json::from_str::<ark_domain::task_merge::TaskMergeOperation>(
                 &row.map_err(|error| error.to_string())?,
             )
             .map_err(|error| error.to_string())
@@ -107,12 +107,10 @@ async fn ordinary_task_upsert_bootstraps_then_appends_changed_units_atomically()
     for operation in &local_operations {
         assert_eq!(operation.parents.len(), 1);
         assert!(baseline_ids.contains(operation.parents[0].as_str()));
-        assert!(
-            operation.observed_heads.len() >= crate::domain::task_merge::TaskMergeUnit::ALL.len()
-        );
+        assert!(operation.observed_heads.len() >= ark_domain::task_merge::TaskMergeUnit::ALL.len());
         assert!(baseline_ids.iter().all(|baseline| operation
             .observed_heads
-            .contains(&crate::domain::task_merge::OperationId::parse(baseline.clone()).unwrap())));
+            .contains(&ark_domain::task_merge::OperationId::parse(baseline.clone()).unwrap())));
     }
     let final_object = handle_request(&state, Request::GetObject { id: id.into() })
         .await
@@ -165,7 +163,7 @@ async fn task_snapshot_token_changes_when_causal_heads_arrive() {
         &state,
         Request::TaskMergeConflicts {
             object_id: id.into(),
-            unit: crate::domain::task_merge::TaskMergeUnit::Title,
+            unit: ark_domain::task_merge::TaskMergeUnit::Title,
         },
     )
     .await
@@ -173,21 +171,19 @@ async fn task_snapshot_token_changes_when_causal_heads_arrive() {
         .as_str()
         .unwrap()
         .to_owned();
-    let base = crate::domain::task_merge::OperationId::parse(base).unwrap();
+    let base = ark_domain::task_merge::OperationId::parse(base).unwrap();
     handle_request(
         &state,
         Request::TaskMergeAppend {
-            merge_operation: crate::domain::task_merge::TaskMergeOperation {
-                id: crate::domain::task_merge::OperationId::parse(
-                    "00000000000000000000000000000001",
-                )
-                .unwrap(),
+            merge_operation: ark_domain::task_merge::TaskMergeOperation {
+                id: ark_domain::task_merge::OperationId::parse("00000000000000000000000000000001")
+                    .unwrap(),
                 object_id: id.into(),
-                unit: crate::domain::task_merge::TaskMergeUnit::Title,
+                unit: ark_domain::task_merge::TaskMergeUnit::Title,
                 parents: vec![base.clone()],
                 observed_heads: vec![base],
                 hlc: None,
-                value: crate::domain::task_merge::TaskMergeValue::Field(json!("remote")),
+                value: ark_domain::task_merge::TaskMergeValue::Field(json!("remote")),
             },
             expected_conflict_digest: None,
         },
@@ -268,7 +264,7 @@ async fn hard_delete_is_causal_and_a_later_upsert_restores_the_projection() {
             db::CommandContext::engine(),
             db::TaskConflictSetQuery::new(
                 id.into(),
-                crate::domain::task_merge::TaskMergeUnit::ObjectExistence,
+                ark_domain::task_merge::TaskMergeUnit::ObjectExistence,
             ),
         )
         .await
@@ -277,7 +273,7 @@ async fn hard_delete_is_causal_and_a_later_upsert_restores_the_projection() {
         .unwrap();
     assert!(matches!(
         deletion_set.variants[0].value,
-        crate::domain::task_merge::TaskMergeValue::ObjectHardDeleted { .. }
+        ark_domain::task_merge::TaskMergeValue::ObjectHardDeleted { .. }
     ));
 
     let restore_snapshot = object_snapshot(&state, id).await;
@@ -303,7 +299,7 @@ async fn hard_delete_is_causal_and_a_later_upsert_restores_the_projection() {
             db::CommandContext::engine(),
             db::TaskConflictSetQuery::new(
                 id.into(),
-                crate::domain::task_merge::TaskMergeUnit::ObjectExistence,
+                ark_domain::task_merge::TaskMergeUnit::ObjectExistence,
             ),
         )
         .await
@@ -312,7 +308,7 @@ async fn hard_delete_is_causal_and_a_later_upsert_restores_the_projection() {
         .unwrap();
     assert!(matches!(
         existence_set.variants[0].value,
-        crate::domain::task_merge::TaskMergeValue::ObjectExists
+        ark_domain::task_merge::TaskMergeValue::ObjectExists
     ));
 }
 
@@ -349,7 +345,7 @@ async fn authenticated_full_snapshot_is_rejected_for_operation_enabled_task() {
         &state,
         Request::TaskMergeConflicts {
             object_id: "snapshot-with-merge-history".into(),
-            unit: crate::domain::task_merge::TaskMergeUnit::Title,
+            unit: ark_domain::task_merge::TaskMergeUnit::Title,
         },
     )
     .await
@@ -361,22 +357,18 @@ async fn authenticated_full_snapshot_is_rejected_for_operation_enabled_task() {
     let operation = |suffix, parents: Vec<String>, title: &str| {
         let parents = parents
             .into_iter()
-            .map(crate::domain::task_merge::OperationId::parse)
+            .map(ark_domain::task_merge::OperationId::parse)
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
-        crate::domain::task_merge::TaskMergeOperation {
-            id: crate::domain::task_merge::OperationId::parse(format!(
-                "{}{}",
-                "0".repeat(31),
-                suffix
-            ))
-            .unwrap(),
+        ark_domain::task_merge::TaskMergeOperation {
+            id: ark_domain::task_merge::OperationId::parse(format!("{}{}", "0".repeat(31), suffix))
+                .unwrap(),
             object_id: "snapshot-with-merge-history".into(),
-            unit: crate::domain::task_merge::TaskMergeUnit::Title,
+            unit: ark_domain::task_merge::TaskMergeUnit::Title,
             parents: parents.clone(),
             observed_heads: parents,
             hlc: None,
-            value: crate::domain::task_merge::TaskMergeValue::Field(json!(title)),
+            value: ark_domain::task_merge::TaskMergeValue::Field(json!(title)),
         }
     };
     for merge_operation in [
@@ -427,7 +419,7 @@ async fn authenticated_full_snapshot_is_rejected_for_operation_enabled_task() {
         &state,
         Request::TaskMergeConflicts {
             object_id: "snapshot-with-merge-history".into(),
-            unit: crate::domain::task_merge::TaskMergeUnit::Title,
+            unit: ark_domain::task_merge::TaskMergeUnit::Title,
         },
     )
     .await

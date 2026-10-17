@@ -1,7 +1,7 @@
 use crate::canonical_types::facades::BookCoverMutation;
 use crate::canonical_types::game::{GameMutationResult, GameUpsertCommand};
-use crate::domain::object_write::ObjectWriteSnapshot;
 use crate::types::{ArkObject, ArkObjectWrite, SyncEntity};
+use ark_domain::object_write::ObjectWriteSnapshot;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
 

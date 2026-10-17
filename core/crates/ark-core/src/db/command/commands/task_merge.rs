@@ -1,10 +1,10 @@
 use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError, DbQuery};
-use crate::application::sync_storage::{PolicyIdentity, TaskMergeBatch, TaskMergeBatchAck};
 use crate::db::task_merge::{
     append_operation, read_conflict_set_result, TaskMergeAppendResult, TaskMergeError,
     TaskMergeReadResult,
 };
-use crate::domain::task_merge::{TaskMergeOperation, TaskMergeUnit};
+use ark_application::sync_storage::{PolicyIdentity, TaskMergeBatch, TaskMergeBatchAck};
+use ark_domain::task_merge::{TaskMergeOperation, TaskMergeUnit};
 use rusqlite::Transaction;
 use serde::Serialize;
 

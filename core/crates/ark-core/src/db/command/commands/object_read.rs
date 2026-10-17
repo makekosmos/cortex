@@ -81,7 +81,7 @@ impl DbQuery for ObjectReadQuery {
                     crate::db::get_object_revision(connection, &id).map_err(DbError::Storage)?;
                 let task_revision = crate::db::task_merge::object_snapshot_token(connection, &id)
                     .map_err(|error| DbError::Storage(error.to_string()))?;
-                let snapshot = crate::domain::object_write::ObjectWriteSnapshot {
+                let snapshot = ark_domain::object_write::ObjectWriteSnapshot {
                     exists: identity.is_some(),
                     type_id: identity.as_ref().map(|value| value.0.clone()),
                     type_version: identity.as_ref().map(|value| value.1.clone()),

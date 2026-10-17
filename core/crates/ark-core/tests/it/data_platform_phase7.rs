@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used)]
-use ark_core::application::sync_storage::CommittedFeedPort;
+use ark_application::sync_storage::CommittedFeedPort;
 use ark_core::db;
 use rusqlite::Connection;
 use serde_json::json;

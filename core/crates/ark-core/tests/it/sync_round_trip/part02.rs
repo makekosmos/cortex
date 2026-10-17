@@ -1,6 +1,4 @@
-use ark_core::application::sync_storage::{
-    PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort,
-};
+use ark_application::sync_storage::{PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort};
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 
 async fn round_trip_sync_between_two_servers() {

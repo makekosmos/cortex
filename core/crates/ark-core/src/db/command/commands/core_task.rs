@@ -1,7 +1,7 @@
 use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError};
 use crate::application::objects::{ObjectWriteResult, ObjectWriteSession, StoredObjectReceipt};
-use crate::domain::object_write::{ObjectWriteSnapshot, RemoteObjectWrite};
 use crate::types::{ArkObject, ArkObjectWrite, ObjectLink};
+use ark_domain::object_write::{ObjectWriteSnapshot, RemoteObjectWrite};
 use rusqlite::Transaction;
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -75,7 +75,7 @@ pub(crate) struct AuthenticatedCoreTaskWrite {
     inbox_message_id: String,
     inbox_payload_json: String,
     local_device_id: Option<String>,
-    policy_identity: Option<crate::application::sync_storage::PolicyIdentity>,
+    policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
 }
 
 impl AuthenticatedCoreTaskWrite {
@@ -108,7 +108,7 @@ impl AuthenticatedCoreTaskWrite {
         inbox_message_id: String,
         inbox_payload_json: String,
         local_device_id: String,
-        policy_identity: crate::application::sync_storage::PolicyIdentity,
+        policy_identity: ark_application::sync_storage::PolicyIdentity,
     ) -> Self {
         let mut command = Self::new(
             id,

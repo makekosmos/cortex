@@ -292,7 +292,7 @@ pub(super) async fn start_sync_after_policy(
 async fn broadcast_registry_events(
     ctx: &MessageContext,
     source_peer_id: usize,
-    events: &[crate::domain::device_registry::RegistryEvent],
+    events: &[ark_domain::device_registry::RegistryEvent],
 ) {
     if events.is_empty() {
         return;

@@ -166,7 +166,7 @@ async fn paired_device_enrollment_rolls_back_event_projection_and_pin_together()
 
 #[tokio::test]
 async fn registry_history_is_paged_and_remote_events_apply_idempotently() {
-    use crate::domain::device_registry::{
+    use ark_domain::device_registry::{
         DeviceId, DisplayName, RegistryEvent, RegistryEventDraft, RegistryOperation,
     };
     use ed25519_dalek::SigningKey;
@@ -277,7 +277,7 @@ async fn registry_history_is_paged_and_remote_events_apply_idempotently() {
 
 #[tokio::test]
 async fn disabled_peer_cannot_commit_an_inbound_entity_after_session_admission() {
-    use crate::domain::device_registry::{
+    use ark_domain::device_registry::{
         DeviceId, RegistryEvent, RegistryEventDraft, RegistryOperation,
     };
     use ed25519_dalek::SigningKey;

@@ -5,7 +5,7 @@ pub(super) async fn handle_task_merge_batch(
     peer_device_id: &str,
     local_device_id: &str,
     tx: &mpsc::UnboundedSender<Message>,
-    batch: crate::application::sync_storage::TaskMergeBatch,
+    batch: ark_application::sync_storage::TaskMergeBatch,
 ) -> Result<(), String> {
     let local_profile = storage.load_local_sync_profile(local_device_id).await?;
     let expected_identity = crate::protocol::sync_policy_identity(local_profile.as_ref());
@@ -34,7 +34,7 @@ pub(super) async fn handle_feed_ack_message(
     feed_in_flight: &ClientFeedInFlight,
     authenticated_tx: &AuthenticatedTx,
     change_id: &str,
-    policy_identity: Option<crate::application::sync_storage::PolicyIdentity>,
+    policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
     receipt_ack: bool,
 ) -> bool {
     let result = if receipt_ack {
@@ -133,7 +133,7 @@ pub(super) async fn handle_live_change(
     on_change: &Arc<Mutex<Option<ClientOnChangeCallback>>>,
     change_id: String,
     entity: SyncEntity,
-    policy_identity: Option<crate::application::sync_storage::PolicyIdentity>,
+    policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
 ) -> Result<(), String> {
     let (policy_bound, local_profile) = {
         let session = authenticated_tx.lock().await;
@@ -198,7 +198,7 @@ pub(super) async fn handle_live_change(
         )
         .await?;
     match outcome {
-        crate::application::sync_storage::InboundApplyOutcome::Applied => {
+        ark_application::sync_storage::InboundApplyOutcome::Applied => {
             if should_apply && observe_non_usage_entity(&mut local_vector, &entity) {
                 let stored_vector = load_version_vector(storage).await?;
                 merge_usage_cursors(&mut local_vector, &stored_vector);
@@ -221,8 +221,8 @@ pub(super) async fn handle_live_change(
                 }
             }
         }
-        crate::application::sync_storage::InboundApplyOutcome::Stale => {}
-        crate::application::sync_storage::InboundApplyOutcome::Pending => return Ok(()),
+        ark_application::sync_storage::InboundApplyOutcome::Stale => {}
+        ark_application::sync_storage::InboundApplyOutcome::Pending => return Ok(()),
     }
     send_msg(
         tx,
@@ -241,10 +241,10 @@ pub(super) async fn handle_feed_ack(
     tx: &mpsc::UnboundedSender<Message>,
     feed_in_flight: &ClientFeedInFlight,
     change_id: &str,
-    ack: crate::application::sync_storage::OutboundAck,
+    ack: ark_application::sync_storage::OutboundAck,
     receipt_ack: bool,
     policy_bound: bool,
-    policy_identity: Option<crate::application::sync_storage::PolicyIdentity>,
+    policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
 ) -> Result<(), String> {
     crate::sync_client::acknowledge_client_feed(
         storage,
@@ -267,7 +267,7 @@ pub(super) async fn handle_applied_ack(
     feed_in_flight: &ClientFeedInFlight,
     authenticated_tx: &AuthenticatedTx,
     change_id: &str,
-    policy_identity: Option<crate::application::sync_storage::PolicyIdentity>,
+    policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
 ) -> Result<(), String> {
     let receipt_ack = authenticated_tx
         .lock()
@@ -310,7 +310,7 @@ pub(super) async fn handle_receipt_ack(
     feed_in_flight: &ClientFeedInFlight,
     authenticated_tx: &AuthenticatedTx,
     change_id: &str,
-    policy_identity: Option<crate::application::sync_storage::PolicyIdentity>,
+    policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
 ) -> Result<(), String> {
     let policy_bound = authenticated_tx
         .lock()

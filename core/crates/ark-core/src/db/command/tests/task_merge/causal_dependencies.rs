@@ -90,7 +90,7 @@ async fn sqlite_history_preserves_a_concurrent_delete_and_field_edit() {
                         .map_err(|error| error.to_string())
                 })
                 .collect::<Result<Vec<_>, String>>()?;
-            let conflicts = crate::domain::task_merge::lifecycle_conflicts(&operations)
+            let conflicts = ark_domain::task_merge::lifecycle_conflicts(&operations)
                 .map_err(|error| error.to_string())?;
             assert_eq!(conflicts.len(), 1);
             assert_eq!(conflicts[0].deletion, deletion);

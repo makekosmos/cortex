@@ -59,8 +59,8 @@ async fn accept_pairing_connects_persists_and_survives_restart() {
     handle_request(
         &state_a,
         Request::DeviceRegistryRename {
-            target_device_id: crate::domain::device_registry::DeviceId::parse("device-b").unwrap(),
-            display_name: crate::domain::device_registry::DisplayName::parse("Renamed by device A")
+            target_device_id: ark_domain::device_registry::DeviceId::parse("device-b").unwrap(),
+            display_name: ark_domain::device_registry::DisplayName::parse("Renamed by device A")
                 .unwrap(),
         },
     )

@@ -1,5 +1,5 @@
 use super::BackfillBarrier;
-use ark_core::application::sync_storage::{TaskMergeBatch, TaskMergeDeliveryPort};
+use ark_application::sync_storage::{TaskMergeBatch, TaskMergeDeliveryPort};
 use ark_core::sync_server::AuthenticatedEntityBackend;
 use ark_core::types::SyncEntity;
 
@@ -17,11 +17,11 @@ impl AuthenticatedEntityBackend for BackfillBarrier {
 }
 
 #[async_trait::async_trait]
-impl ark_core::application::sync_storage::PeerSyncPolicyPort for BackfillBarrier {
+impl ark_application::sync_storage::PeerSyncPolicyPort for BackfillBarrier {
     async fn accepted_policy_identity_for_peer(
         &self,
         peer_device_id: &str,
-    ) -> Result<Option<ark_core::application::sync_storage::PolicyIdentity>, String> {
+    ) -> Result<Option<ark_application::sync_storage::PolicyIdentity>, String> {
         self.inner
             .accepted_policy_identity_for_peer(peer_device_id)
             .await
@@ -33,10 +33,9 @@ impl TaskMergeDeliveryPort for BackfillBarrier {
     async fn prepare_task_merge_batch(
         &self,
         peer_device_id: &str,
-        expected_identity: &ark_core::application::sync_storage::PolicyIdentity,
+        expected_identity: &ark_application::sync_storage::PolicyIdentity,
         limit: usize,
-    ) -> Result<Option<TaskMergeBatch>, ark_core::application::sync_storage::TaskMergePrepareError>
-    {
+    ) -> Result<Option<TaskMergeBatch>, ark_application::sync_storage::TaskMergePrepareError> {
         self.inner
             .prepare_task_merge_batch(peer_device_id, expected_identity, limit)
             .await
@@ -45,7 +44,7 @@ impl TaskMergeDeliveryPort for BackfillBarrier {
     async fn acknowledge_task_merge_batch(
         &self,
         peer_device_id: &str,
-        expected_identity: &ark_core::application::sync_storage::PolicyIdentity,
+        expected_identity: &ark_application::sync_storage::PolicyIdentity,
         batch_id: &str,
         through_position: i64,
     ) -> Result<i64, String> {
@@ -63,9 +62,9 @@ impl TaskMergeDeliveryPort for BackfillBarrier {
         &self,
         peer_device_id: &str,
         local_device_id: &str,
-        expected_identity: &ark_core::application::sync_storage::PolicyIdentity,
+        expected_identity: &ark_application::sync_storage::PolicyIdentity,
         batch: &TaskMergeBatch,
-    ) -> Result<ark_core::application::sync_storage::TaskMergeBatchAck, String> {
+    ) -> Result<ark_application::sync_storage::TaskMergeBatchAck, String> {
         self.inner
             .apply_task_merge_batch(peer_device_id, local_device_id, expected_identity, batch)
             .await

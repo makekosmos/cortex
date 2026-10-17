@@ -2,9 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ark_core::application::sync_storage::{
-    PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort,
-};
+use ark_application::sync_storage::{PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort};
 use ark_core::sync_server::{
     IntegrationReplicationBackend, PeerIdentityBackend, SyncRuntimeStorage,
 };
@@ -55,7 +53,7 @@ impl SyncEntityReadPort for BackfillBarrier {
     async fn load_entities_page_for_peer(
         &self,
         peer: &str,
-        class: ark_core::application::sync_storage::SyncReadClass,
+        class: ark_application::sync_storage::SyncReadClass,
         vector: &ark_core::VersionVector,
         offset: usize,
         limit: usize,
@@ -74,7 +72,7 @@ impl SyncEntityReadPort for BackfillBarrier {
     async fn usage_complete_through_for_peer(
         &self,
         peer: &str,
-        class: ark_core::application::sync_storage::SyncReadClass,
+        class: ark_application::sync_storage::SyncReadClass,
     ) -> Result<std::collections::HashMap<String, u64>, String> {
         self.inner
             .usage_complete_through_for_peer(peer, class)
@@ -111,14 +109,14 @@ impl PeerProgressPort for BackfillBarrier {
 }
 
 #[async_trait::async_trait]
-impl ark_core::application::sync_storage::CommittedFeedPort for BackfillBarrier {
+impl ark_application::sync_storage::CommittedFeedPort for BackfillBarrier {
     fn selective_sync_policy_generation(&self) -> i64 {
         self.inner.selective_sync_policy_generation()
     }
 
     async fn committed_feed_snapshot(
         &self,
-    ) -> Result<ark_core::application::sync_storage::FeedSnapshot, String> {
+    ) -> Result<ark_application::sync_storage::FeedSnapshot, String> {
         self.inner.committed_feed_snapshot().await
     }
 
@@ -127,7 +125,7 @@ impl ark_core::application::sync_storage::CommittedFeedPort for BackfillBarrier 
         after_position: i64,
         high_watermark: i64,
         limit: usize,
-    ) -> Result<Vec<ark_core::application::sync_storage::CommittedFeedEntry>, String> {
+    ) -> Result<Vec<ark_application::sync_storage::CommittedFeedEntry>, String> {
         self.inner
             .committed_feed_page(after_position, high_watermark, limit)
             .await
@@ -138,7 +136,7 @@ impl ark_core::application::sync_storage::CommittedFeedPort for BackfillBarrier 
         after_position: i64,
         high_watermark: i64,
         limit: usize,
-    ) -> Result<ark_core::application::sync_storage::CommittedFeedDeliveryPage, String> {
+    ) -> Result<ark_application::sync_storage::CommittedFeedDeliveryPage, String> {
         self.inner
             .committed_feed_delivery_page(after_position, high_watermark, limit)
             .await
@@ -148,14 +146,14 @@ impl ark_core::application::sync_storage::CommittedFeedPort for BackfillBarrier 
         &self,
         peer: &str,
         generation: i64,
-    ) -> Result<ark_core::application::sync_storage::OutboundProgress, String> {
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
         self.inner.begin_outbound_policy(peer, generation).await
     }
     async fn complete_outbound_snapshot(
         &self,
         peer: &str,
         generation: i64,
-    ) -> Result<ark_core::application::sync_storage::OutboundProgress, String> {
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
         self.inner
             .complete_outbound_snapshot(peer, generation)
             .await
@@ -165,7 +163,7 @@ impl ark_core::application::sync_storage::CommittedFeedPort for BackfillBarrier 
         peer: &str,
         generation: i64,
         through: i64,
-    ) -> Result<ark_core::application::sync_storage::OutboundProgress, String> {
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
         self.inner
             .record_outbound_scan(peer, generation, through)
             .await
@@ -175,8 +173,8 @@ impl ark_core::application::sync_storage::CommittedFeedPort for BackfillBarrier 
         peer: &str,
         generation: i64,
         position: i64,
-        ack: ark_core::application::sync_storage::OutboundAck,
-    ) -> Result<ark_core::application::sync_storage::OutboundProgress, String> {
+        ack: ark_application::sync_storage::OutboundAck,
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
         self.inner
             .acknowledge_outbound(peer, generation, position, ack)
             .await
@@ -227,14 +225,7 @@ impl PeerIdentityBackend for BackfillBarrier {
         after_position: i64,
         high_watermark: Option<i64>,
         limit: usize,
-    ) -> Result<
-        (
-            i64,
-            usize,
-            Vec<ark_core::domain::device_registry::RegistryEvent>,
-        ),
-        String,
-    > {
+    ) -> Result<(i64, usize, Vec<ark_domain::device_registry::RegistryEvent>), String> {
         self.inner
             .load_device_registry_events_page(after_position, high_watermark, limit)
             .await
@@ -243,7 +234,7 @@ impl PeerIdentityBackend for BackfillBarrier {
     async fn apply_device_registry_events(
         &self,
         sender_device_id: &str,
-        events: &[ark_core::domain::device_registry::RegistryEvent],
+        events: &[ark_domain::device_registry::RegistryEvent],
     ) -> Result<ark_core::replication_storage::RegistryPageApply, String> {
         self.inner
             .apply_device_registry_events(sender_device_id, events)
@@ -253,8 +244,8 @@ impl PeerIdentityBackend for BackfillBarrier {
     async fn sign_registry_handshake(
         &self,
         local_device_id: &str,
-        transcript: &ark_core::domain::device_registry::RegistryHandshakeTranscript,
-    ) -> Result<ark_core::domain::device_registry::RegistryHandshakeProof, String> {
+        transcript: &ark_domain::device_registry::RegistryHandshakeTranscript,
+    ) -> Result<ark_domain::device_registry::RegistryHandshakeProof, String> {
         self.inner
             .sign_registry_handshake(local_device_id, transcript)
             .await
@@ -263,8 +254,8 @@ impl PeerIdentityBackend for BackfillBarrier {
     async fn verify_registry_handshake(
         &self,
         peer_device_id: &str,
-        transcript: &ark_core::domain::device_registry::RegistryHandshakeTranscript,
-        proof: &ark_core::domain::device_registry::RegistryHandshakeProof,
+        transcript: &ark_domain::device_registry::RegistryHandshakeTranscript,
+        proof: &ark_domain::device_registry::RegistryHandshakeProof,
     ) -> Result<(), String> {
         self.inner
             .verify_registry_handshake(peer_device_id, transcript, proof)

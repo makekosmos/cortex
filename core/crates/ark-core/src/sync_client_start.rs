@@ -1,5 +1,5 @@
 use super::*;
-use crate::application::sync_storage::OutboundAck;
+use ark_application::sync_storage::OutboundAck;
 
 #[path = "sync_client_start/client_hello.rs"]
 mod client_hello;

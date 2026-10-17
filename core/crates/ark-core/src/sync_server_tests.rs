@@ -1,5 +1,5 @@
 use super::*;
-use crate::application::sync_storage::{
+use ark_application::sync_storage::{
     PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort, TaskMergeDeliveryPort,
 };
 
@@ -75,7 +75,7 @@ pub(crate) mod tests {
         async fn load_entities_page_for_peer(
             &self,
             _: &str,
-            _: crate::application::sync_storage::SyncReadClass,
+            _: ark_application::sync_storage::SyncReadClass,
             vector: &VersionVector,
             offset: usize,
             limit: usize,
@@ -88,7 +88,7 @@ pub(crate) mod tests {
         async fn usage_complete_through_for_peer(
             &self,
             _: &str,
-            _: crate::application::sync_storage::SyncReadClass,
+            _: ark_application::sync_storage::SyncReadClass,
         ) -> Result<HashMap<String, u64>, String> {
             Ok(HashMap::new())
         }
@@ -112,11 +112,11 @@ pub(crate) mod tests {
     }
 
     #[async_trait::async_trait]
-    impl crate::application::sync_storage::PeerSyncPolicyPort for MemBackend {
+    impl ark_application::sync_storage::PeerSyncPolicyPort for MemBackend {
         async fn accepted_policy_identity_for_peer(
             &self,
             _peer_device_id: &str,
-        ) -> Result<Option<crate::application::sync_storage::PolicyIdentity>, String> {
+        ) -> Result<Option<ark_application::sync_storage::PolicyIdentity>, String> {
             Ok(Some(
                 ark_application::sync_policy::default_sync_policy_identity(),
             ))
@@ -128,10 +128,10 @@ pub(crate) mod tests {
         async fn prepare_task_merge_batch(
             &self,
             _peer_device_id: &str,
-            _expected_identity: &crate::application::sync_storage::PolicyIdentity,
+            _expected_identity: &ark_application::sync_storage::PolicyIdentity,
             _limit: usize,
         ) -> Result<
-            Option<crate::application::sync_storage::TaskMergeBatch>,
+            Option<ark_application::sync_storage::TaskMergeBatch>,
             ark_application::task_merge::TaskMergePrepareError,
         > {
             Ok(None)
@@ -140,7 +140,7 @@ pub(crate) mod tests {
         async fn acknowledge_task_merge_batch(
             &self,
             _peer_device_id: &str,
-            _expected_identity: &crate::application::sync_storage::PolicyIdentity,
+            _expected_identity: &ark_application::sync_storage::PolicyIdentity,
             _batch_id: &str,
             through_position: i64,
         ) -> Result<i64, String> {
@@ -151,9 +151,9 @@ pub(crate) mod tests {
             &self,
             _peer_device_id: &str,
             _local_device_id: &str,
-            _expected_identity: &crate::application::sync_storage::PolicyIdentity,
-            _batch: &crate::application::sync_storage::TaskMergeBatch,
-        ) -> Result<crate::application::sync_storage::TaskMergeBatchAck, String> {
+            _expected_identity: &ark_application::sync_storage::PolicyIdentity,
+            _batch: &ark_application::sync_storage::TaskMergeBatch,
+        ) -> Result<ark_application::sync_storage::TaskMergeBatchAck, String> {
             Err("test_task_merge_receive_unsupported".into())
         }
     }
@@ -163,7 +163,7 @@ pub(crate) mod tests {
             self.kv
                 .lock()
                 .unwrap()
-                .get(crate::application::sync_storage::VERSION_VECTOR_KEY)
+                .get(crate::db::VERSION_VECTOR_KEY)
                 .and_then(|raw| serde_json::from_str(raw).ok())
                 .map_or_else(
                     || Ok(VersionVector::new()),
@@ -172,7 +172,7 @@ pub(crate) mod tests {
         }
         async fn store_version_vector(&self, vector: &VersionVector) -> Result<(), String> {
             self.kv.lock().unwrap().insert(
-                crate::application::sync_storage::VERSION_VECTOR_KEY.into(),
+                crate::db::VERSION_VECTOR_KEY.into(),
                 serde_json::to_string(vector).unwrap(),
             );
             Ok(())
@@ -181,13 +181,13 @@ pub(crate) mod tests {
             self.kv
                 .lock()
                 .unwrap()
-                .get(crate::application::sync_storage::KNOWN_PEERS_KEY)
+                .get(crate::db::constants::KNOWN_PEERS_KEY)
                 .map(|raw| serde_json::from_str(raw).map_err(|error| error.to_string()))
                 .transpose()
         }
         async fn store_known_peers(&self, peers: &[PeerRecord]) -> Result<(), String> {
             self.kv.lock().unwrap().insert(
-                crate::application::sync_storage::KNOWN_PEERS_KEY.into(),
+                crate::db::constants::KNOWN_PEERS_KEY.into(),
                 serde_json::to_string(peers).unwrap(),
             );
             Ok(())
@@ -196,7 +196,7 @@ pub(crate) mod tests {
             self.kv
                 .lock()
                 .unwrap()
-                .get(crate::application::sync_storage::REMOVED_PEERS_KEY)
+                .get(crate::db::constants::REMOVED_PEERS_KEY)
                 .map_or_else(
                     || Ok(Vec::new()),
                     |raw| serde_json::from_str(raw).map_err(|error| error.to_string()),
@@ -204,7 +204,7 @@ pub(crate) mod tests {
         }
         async fn store_removed_peer_ids(&self, ids: &[String]) -> Result<(), String> {
             self.kv.lock().unwrap().insert(
-                crate::application::sync_storage::REMOVED_PEERS_KEY.into(),
+                crate::db::constants::REMOVED_PEERS_KEY.into(),
                 serde_json::to_string(ids).unwrap(),
             );
             Ok(())
@@ -212,14 +212,14 @@ pub(crate) mod tests {
     }
 
     #[async_trait::async_trait]
-    impl crate::application::sync_storage::CommittedFeedPort for MemBackend {
+    impl ark_application::sync_storage::CommittedFeedPort for MemBackend {
         fn selective_sync_policy_generation(&self) -> i64 {
             0
         }
 
         async fn committed_feed_snapshot(
             &self,
-        ) -> Result<crate::application::sync_storage::FeedSnapshot, String> {
+        ) -> Result<ark_application::sync_storage::FeedSnapshot, String> {
             Err("test_feed_unsupported".into())
         }
 
@@ -228,7 +228,7 @@ pub(crate) mod tests {
             _: i64,
             _: i64,
             _: usize,
-        ) -> Result<Vec<crate::application::sync_storage::CommittedFeedEntry>, String> {
+        ) -> Result<Vec<ark_application::sync_storage::CommittedFeedEntry>, String> {
             Err("test_feed_unsupported".into())
         }
 
@@ -237,7 +237,7 @@ pub(crate) mod tests {
             _: i64,
             _: i64,
             _: usize,
-        ) -> Result<crate::application::sync_storage::CommittedFeedDeliveryPage, String> {
+        ) -> Result<ark_application::sync_storage::CommittedFeedDeliveryPage, String> {
             Err("test_feed_unsupported".into())
         }
 
@@ -245,9 +245,9 @@ pub(crate) mod tests {
             &self,
             _: &str,
             _: i64,
-        ) -> Result<crate::application::sync_storage::OutboundProgress, String> {
-            Ok(crate::application::sync_storage::OutboundProgress {
-                initial_snapshot: crate::application::sync_storage::InitialSnapshot::Complete {
+        ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+            Ok(ark_application::sync_storage::OutboundProgress {
+                initial_snapshot: ark_application::sync_storage::InitialSnapshot::Complete {
                     through: 0,
                 },
                 ..Default::default()
@@ -257,9 +257,9 @@ pub(crate) mod tests {
             &self,
             _: &str,
             _: i64,
-        ) -> Result<crate::application::sync_storage::OutboundProgress, String> {
-            Ok(crate::application::sync_storage::OutboundProgress {
-                initial_snapshot: crate::application::sync_storage::InitialSnapshot::Complete {
+        ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+            Ok(ark_application::sync_storage::OutboundProgress {
+                initial_snapshot: ark_application::sync_storage::InitialSnapshot::Complete {
                     through: 0,
                 },
                 ..Default::default()
@@ -268,8 +268,8 @@ pub(crate) mod tests {
         async fn complete_outbound_snapshot_identity(
             &self,
             _: &str,
-            _: &crate::application::sync_storage::PolicyIdentity,
-        ) -> Result<crate::application::sync_storage::OutboundProgress, String> {
+            _: &ark_application::sync_storage::PolicyIdentity,
+        ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
             self.outbound_snapshot_identity_completions
                 .fetch_add(1, Ordering::SeqCst);
             Err("test_policy_identity_completion_observed".into())
@@ -279,7 +279,7 @@ pub(crate) mod tests {
             _: &str,
             _: i64,
             _: i64,
-        ) -> Result<crate::application::sync_storage::OutboundProgress, String> {
+        ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
             Err("test_feed_unsupported".into())
         }
         async fn acknowledge_outbound(
@@ -287,8 +287,8 @@ pub(crate) mod tests {
             _: &str,
             _: i64,
             _: i64,
-            _: crate::application::sync_storage::OutboundAck,
-        ) -> Result<crate::application::sync_storage::OutboundProgress, String> {
+            _: ark_application::sync_storage::OutboundAck,
+        ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
             Err("test_feed_unsupported".into())
         }
     }
@@ -321,7 +321,7 @@ pub(crate) mod tests {
             self.kv
                 .lock()
                 .unwrap()
-                .get(crate::application::sync_storage::PEER_TRANSPORT_KEYS_KEY)
+                .get(crate::db::constants::PEER_TRANSPORT_KEYS_KEY)
                 .map_or_else(
                     || Ok(HashMap::new()),
                     |raw| serde_json::from_str(raw).map_err(|error| error.to_string()),
@@ -332,7 +332,7 @@ pub(crate) mod tests {
             keys: &HashMap<String, String>,
         ) -> Result<(), String> {
             self.kv.lock().unwrap().insert(
-                crate::application::sync_storage::PEER_TRANSPORT_KEYS_KEY.into(),
+                crate::db::constants::PEER_TRANSPORT_KEYS_KEY.into(),
                 serde_json::to_string(keys).unwrap(),
             );
             Ok(())

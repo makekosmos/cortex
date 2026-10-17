@@ -2,8 +2,8 @@ use crate::application::objects::{
     NewObjectReceipt, ObjectWriteSession, ReceiptOutcome, StoredObjectReceipt,
 };
 use crate::db;
-use crate::domain::object_write::ObjectWriteSnapshot;
 use crate::types::{ArkObject, ObjectLink};
+use ark_domain::object_write::ObjectWriteSnapshot;
 use rusqlite::{params, Connection, OptionalExtension};
 
 pub(crate) struct SqliteObjectWriteSession<'a> {

@@ -15,7 +15,7 @@ pub(super) async fn apply(
     entities: Vec<SyncEntity>,
     is_last: bool,
     usage_complete_through: Option<std::collections::HashMap<String, u64>>,
-    policy_identity: Option<crate::application::sync_storage::PolicyIdentity>,
+    policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
 ) -> Result<(), String> {
     let Context {
         storage,
@@ -60,15 +60,15 @@ pub(super) async fn apply(
             )
             .await
         {
-            Ok(crate::application::sync_storage::InboundApplyOutcome::Applied)
-            | Ok(crate::application::sync_storage::InboundApplyOutcome::Stale) => {
+            Ok(ark_application::sync_storage::InboundApplyOutcome::Applied)
+            | Ok(ark_application::sync_storage::InboundApplyOutcome::Stale) => {
                 vector_updated |= observe_non_usage_entity(&mut local_vector, entity);
                 accepted += 1;
                 if let Some(handler) = on_change.lock().await.as_ref() {
                     handler(entity.clone());
                 }
             }
-            Ok(crate::application::sync_storage::InboundApplyOutcome::Pending) => {}
+            Ok(ark_application::sync_storage::InboundApplyOutcome::Pending) => {}
             Err(error) => eprintln!(
                 "{TAG} Failed to apply sync entity {}:{}: {error}",
                 entity.entity_type, entity.id

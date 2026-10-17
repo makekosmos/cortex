@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::device_registry::{
+use ark_domain::device_registry::{
     DeviceId, RegistryHandshakeTranscript, RegistryHandshakeTranscriptDraft,
 };
 

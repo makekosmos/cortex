@@ -1,8 +1,6 @@
 use super::{pair_storages, pick_port, SyncClient, SyncServer};
 use ark_application::sync_policy::SyncProfileRule;
-use ark_core::application::sync_storage::{
-    SyncEntityMutationPort, SyncEntityReadPort, SyncReadClass,
-};
+use ark_application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort, SyncReadClass};
 use ark_core::replication_storage::PeerIdentityBackend;
 use ark_core::sync_server::SyncRuntimeStorage;
 use ark_core::types::{ArkObject, ObjectType, PeerRecord, SyncEntity};

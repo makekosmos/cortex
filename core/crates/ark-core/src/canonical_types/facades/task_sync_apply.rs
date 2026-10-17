@@ -4,7 +4,7 @@ use rusqlite::Connection;
 pub fn apply_remote_task_delete(
     conn: &Connection,
     entity: &SyncEntity,
-) -> Result<crate::application::sync_storage::InboundApplyOutcome, String> {
+) -> Result<ark_application::sync_storage::InboundApplyOutcome, String> {
     conn.execute_batch("SAVEPOINT canonical_sync_task_delete")
         .map_err(|error| error.to_string())?;
     let session = crate::db::SqliteObjectWriteSession::new(conn);
@@ -19,10 +19,10 @@ pub fn apply_remote_task_delete(
                 .map_err(|error| error.to_string())?;
             Ok(match outcome {
                 crate::application::task_mutation::InboundTaskMutationOutcome::Applied => {
-                    crate::application::sync_storage::InboundApplyOutcome::Applied
+                    ark_application::sync_storage::InboundApplyOutcome::Applied
                 }
                 crate::application::task_mutation::InboundTaskMutationOutcome::Stale => {
-                    crate::application::sync_storage::InboundApplyOutcome::Stale
+                    ark_application::sync_storage::InboundApplyOutcome::Stale
                 }
             })
         }

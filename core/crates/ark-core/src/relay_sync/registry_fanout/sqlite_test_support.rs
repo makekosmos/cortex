@@ -142,7 +142,7 @@ pub(super) async fn write_task(peer: &ActorPeer, id: &str, title: &str) {
             .await
             .expect("read task write snapshot");
         Some(
-            serde_json::from_value::<crate::domain::object_write::ObjectWriteSnapshot>(value)
+            serde_json::from_value::<ark_domain::object_write::ObjectWriteSnapshot>(value)
                 .expect("decode task write snapshot"),
         )
     } else {

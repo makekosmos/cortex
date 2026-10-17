@@ -7,9 +7,9 @@ pub use ark_application::sync_storage::SyncRuntimeStorage;
 #[cfg(test)]
 mod tests {
     use super::IntegrationReplicationBackend;
-    use crate::application::sync_storage::SyncReadClass;
     use crate::integration_replication::SignedSyncEnvelope;
     use crate::types::VersionVector;
+    use ark_application::sync_storage::SyncReadClass;
 
     #[test]
     fn usage_only_peer_vector_is_still_backfill() {

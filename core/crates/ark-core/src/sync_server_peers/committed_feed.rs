@@ -97,12 +97,10 @@ pub(crate) async fn pump_committed_feed(
         }
     };
     let deliveries = match page {
-        crate::application::sync_storage::CommittedFeedDeliveryPage::Deliveries(deliveries) => {
+        ark_application::sync_storage::CommittedFeedDeliveryPage::Deliveries(deliveries) => {
             deliveries
         }
-        crate::application::sync_storage::CommittedFeedDeliveryPage::SkipTo {
-            through_position,
-        } => {
+        ark_application::sync_storage::CommittedFeedDeliveryPage::SkipTo { through_position } => {
             match &policy_identity {
                 Some(identity) => {
                     storage
@@ -113,7 +111,7 @@ pub(crate) async fn pump_committed_feed(
                             &device_id,
                             identity,
                             through_position,
-                            crate::application::sync_storage::OutboundAck::Applied,
+                            ark_application::sync_storage::OutboundAck::Applied,
                         )
                         .await?;
                 }
@@ -126,14 +124,14 @@ pub(crate) async fn pump_committed_feed(
                             &device_id,
                             generation,
                             through_position,
-                            crate::application::sync_storage::OutboundAck::Applied,
+                            ark_application::sync_storage::OutboundAck::Applied,
                         )
                         .await?;
                 }
             }
             return Ok(());
         }
-        crate::application::sync_storage::CommittedFeedDeliveryPage::TooLarge {
+        ark_application::sync_storage::CommittedFeedDeliveryPage::TooLarge {
             position,
             entity_id,
             serialized_bytes,
@@ -175,7 +173,7 @@ pub(crate) async fn pump_committed_feed(
                             &device_id,
                             identity,
                             position,
-                            crate::application::sync_storage::OutboundAck::Applied,
+                            ark_application::sync_storage::OutboundAck::Applied,
                         )
                         .await?
                 }
@@ -185,7 +183,7 @@ pub(crate) async fn pump_committed_feed(
                             &device_id,
                             generation,
                             position,
-                            crate::application::sync_storage::OutboundAck::Applied,
+                            ark_application::sync_storage::OutboundAck::Applied,
                         )
                         .await?
                 }
@@ -259,7 +257,7 @@ pub(crate) async fn handle_committed_feed_ack(
     peers: &Arc<Mutex<HashMap<usize, PeerState>>>,
     peer_id: usize,
     change_id: &str,
-    policy_identity: Option<crate::application::sync_storage::PolicyIdentity>,
+    policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
 ) -> Result<(), String> {
     let Some(position) = change_id
         .strip_prefix(FEED_CHANGE_PREFIX)
@@ -315,7 +313,7 @@ pub(crate) async fn handle_committed_feed_ack(
                     &device_id,
                     identity,
                     position,
-                    crate::application::sync_storage::OutboundAck::Applied,
+                    ark_application::sync_storage::OutboundAck::Applied,
                 )
                 .await?
         }
@@ -325,7 +323,7 @@ pub(crate) async fn handle_committed_feed_ack(
                     &device_id,
                     generation,
                     position,
-                    crate::application::sync_storage::OutboundAck::Applied,
+                    ark_application::sync_storage::OutboundAck::Applied,
                 )
                 .await?
         }
@@ -347,7 +345,7 @@ pub(crate) async fn handle_committed_feed_receipt_ack(
     peers: &Arc<Mutex<HashMap<usize, PeerState>>>,
     peer_id: usize,
     change_id: &str,
-    policy_identity: Option<crate::application::sync_storage::PolicyIdentity>,
+    policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
 ) -> Result<(), String> {
     let Some(position) = change_id
         .strip_prefix(FEED_CHANGE_PREFIX)
@@ -406,7 +404,7 @@ pub(crate) async fn handle_committed_feed_receipt_ack(
                     &device_id,
                     identity,
                     position,
-                    crate::application::sync_storage::OutboundAck::DurableReceipt,
+                    ark_application::sync_storage::OutboundAck::DurableReceipt,
                 )
                 .await?
         }
@@ -416,7 +414,7 @@ pub(crate) async fn handle_committed_feed_receipt_ack(
                     &device_id,
                     generation,
                     position,
-                    crate::application::sync_storage::OutboundAck::DurableReceipt,
+                    ark_application::sync_storage::OutboundAck::DurableReceipt,
                 )
                 .await?
         }

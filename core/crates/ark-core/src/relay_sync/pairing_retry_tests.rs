@@ -261,7 +261,7 @@ async fn registry_ready_replay_is_idempotent_but_conflicting_digest_is_rejected(
 
 #[tokio::test]
 async fn applied_registry_events_are_not_lost_when_core_reports_a_later_error() {
-    use crate::domain::device_registry::{
+    use ark_domain::device_registry::{
         DeviceId, RegistryEvent, RegistryEventDraft, RegistryOperation,
     };
 

@@ -56,7 +56,7 @@ pub(super) async fn handle_live_change(
     peer_id: usize,
     change_id: String,
     entity: SyncEntity,
-    policy_identity: Option<crate::application::sync_storage::PolicyIdentity>,
+    policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
 ) {
     let MessageContext {
         peers,
@@ -151,7 +151,7 @@ pub(super) async fn handle_live_change(
         )
         .await
     {
-        Ok(crate::application::sync_storage::InboundApplyOutcome::Applied) => {
+        Ok(ark_application::sync_storage::InboundApplyOutcome::Applied) => {
             if should_apply && observe_non_usage_entity(&mut local_vector, &entity) {
                 let stored_vector = match load_version_vector(storage).await {
                     Ok(vector) => vector,
@@ -201,7 +201,7 @@ pub(super) async fn handle_live_change(
                 },
             );
         }
-        Ok(crate::application::sync_storage::InboundApplyOutcome::Stale) => {
+        Ok(ark_application::sync_storage::InboundApplyOutcome::Stale) => {
             send_msg(
                 &tx,
                 &LanSyncMessage::LiveAck {
@@ -210,7 +210,7 @@ pub(super) async fn handle_live_change(
                 },
             );
         }
-        Ok(crate::application::sync_storage::InboundApplyOutcome::Pending) => {}
+        Ok(ark_application::sync_storage::InboundApplyOutcome::Pending) => {}
         Err(e) => {
             eprintln!(
                 "{TAG} Failed to apply live sync entity {}:{}: {e}",

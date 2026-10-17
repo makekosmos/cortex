@@ -78,9 +78,9 @@ async fn db_backup_restore_preserves_live_registry_chain_and_sequence() {
     handle_request(
         &state,
         Request::DeviceRegistryRename {
-            target_device_id: crate::domain::device_registry::DeviceId::parse("remote-device")
+            target_device_id: ark_domain::device_registry::DeviceId::parse("remote-device")
                 .unwrap(),
-            display_name: crate::domain::device_registry::DisplayName::parse("Before restore")
+            display_name: ark_domain::device_registry::DisplayName::parse("Before restore")
                 .unwrap(),
         },
     )
@@ -128,10 +128,9 @@ async fn db_backup_restore_preserves_live_registry_chain_and_sequence() {
     let after_restore = handle_request(
         &state,
         Request::DeviceRegistryRename {
-            target_device_id: crate::domain::device_registry::DeviceId::parse("remote-device")
+            target_device_id: ark_domain::device_registry::DeviceId::parse("remote-device")
                 .unwrap(),
-            display_name: crate::domain::device_registry::DisplayName::parse("After restore")
-                .unwrap(),
+            display_name: ark_domain::device_registry::DisplayName::parse("After restore").unwrap(),
         },
     )
     .await

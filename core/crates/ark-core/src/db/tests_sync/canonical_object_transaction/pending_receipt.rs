@@ -1,4 +1,4 @@
-use crate::application::sync_storage::PeerProgressPort;
+use ark_application::sync_storage::PeerProgressPort;
 
 #[tokio::test]
 async fn pending_authenticated_object_keeps_a_durable_receipt_without_applied_state() {
@@ -45,7 +45,7 @@ fn save_test_local_policy(
 
 fn test_policy_identity(
     profile: &ark_application::sync_policy::SyncProfile,
-) -> crate::application::sync_storage::PolicyIdentity {
+) -> ark_application::sync_storage::PolicyIdentity {
     crate::protocol::sync_policy_identity(Some(profile))
 }
 

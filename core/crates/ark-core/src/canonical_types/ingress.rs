@@ -1,10 +1,10 @@
 //! Engine-owned canonical object write ingress.
 use crate::canonical_types::definitions::canonical_type_registrations;
 use crate::canonical_types::validation::{validate_canonical, CanonicalValidationCode};
-pub use crate::domain::canonical_type::CanonicalIngressError;
-use crate::domain::canonical_type::TypeRegistration;
 use crate::type_registry;
 use crate::types::{ArkObject, ArkObjectWrite};
+pub use ark_domain::canonical_type::CanonicalIngressError;
+use ark_domain::canonical_type::TypeRegistration;
 use rusqlite::Connection;
 
 /// Resolve and validate a new object before any persistence or sync mutation.

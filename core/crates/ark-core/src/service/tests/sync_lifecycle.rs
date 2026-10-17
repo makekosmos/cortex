@@ -83,7 +83,7 @@ async fn disconnect_peer_stops_matching_outbound_client_and_emits_events() {
     handle_request(
         &state,
         Request::SetSyncKv {
-            key: crate::application::sync_storage::REMOVED_PEERS_KEY.into(),
+            key: crate::db::constants::REMOVED_PEERS_KEY.into(),
             value: "not-json".into(),
         },
     )
@@ -108,7 +108,7 @@ async fn disconnect_peer_stops_matching_outbound_client_and_emits_events() {
     handle_request(
         &state,
         Request::SetSyncKv {
-            key: crate::application::sync_storage::REMOVED_PEERS_KEY.into(),
+            key: crate::db::constants::REMOVED_PEERS_KEY.into(),
             value: "[]".into(),
         },
     )

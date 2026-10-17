@@ -1,13 +1,13 @@
 use super::*;
-use crate::application::sync_storage::PeerSyncPolicyPort;
 use crate::replication_storage::{PeerIdentityBackend, RegistryPageApply};
+use ark_application::sync_storage::PeerSyncPolicyPort;
 
 #[async_trait::async_trait]
 impl PeerSyncPolicyPort for SqliteStorageBackend {
     async fn accepted_policy_identity_for_peer(
         &self,
         peer_device_id: &str,
-    ) -> Result<Option<crate::application::sync_storage::PolicyIdentity>, String> {
+    ) -> Result<Option<ark_application::sync_storage::PolicyIdentity>, String> {
         Ok(Some(
             self.load_accepted_peer_sync_policy(peer_device_id)
                 .await?
@@ -96,24 +96,18 @@ impl PeerIdentityBackend for SqliteStorageBackend {
     async fn load_peer_transport_keys(
         &self,
     ) -> Result<std::collections::HashMap<String, String>, String> {
-        Ok(load_progress_value(
-            self,
-            crate::application::sync_storage::PEER_TRANSPORT_KEYS_KEY,
+        Ok(
+            load_progress_value(self, crate::db::constants::PEER_TRANSPORT_KEYS_KEY)
+                .await?
+                .unwrap_or_default(),
         )
-        .await?
-        .unwrap_or_default())
     }
 
     async fn store_peer_transport_keys(
         &self,
         keys: &std::collections::HashMap<String, String>,
     ) -> Result<(), String> {
-        store_progress_value(
-            self,
-            crate::application::sync_storage::PEER_TRANSPORT_KEYS_KEY,
-            keys,
-        )
-        .await
+        store_progress_value(self, crate::db::constants::PEER_TRANSPORT_KEYS_KEY, keys).await
     }
 
     async fn enroll_paired_device(
@@ -141,14 +135,7 @@ impl PeerIdentityBackend for SqliteStorageBackend {
         after_position: i64,
         high_watermark: Option<i64>,
         limit: usize,
-    ) -> Result<
-        (
-            i64,
-            usize,
-            Vec<crate::domain::device_registry::RegistryEvent>,
-        ),
-        String,
-    > {
+    ) -> Result<(i64, usize, Vec<ark_domain::device_registry::RegistryEvent>), String> {
         self.db
             .query(
                 CommandContext::sync_system(CommandClass::SyncLive),
@@ -161,7 +148,7 @@ impl PeerIdentityBackend for SqliteStorageBackend {
     async fn apply_device_registry_events(
         &self,
         sender_device_id: &str,
-        events: &[crate::domain::device_registry::RegistryEvent],
+        events: &[ark_domain::device_registry::RegistryEvent],
     ) -> Result<RegistryPageApply, String> {
         self.db
             .submit(
@@ -178,8 +165,8 @@ impl PeerIdentityBackend for SqliteStorageBackend {
     async fn sign_registry_handshake(
         &self,
         local_device_id: &str,
-        transcript: &crate::domain::device_registry::RegistryHandshakeTranscript,
-    ) -> Result<crate::domain::device_registry::RegistryHandshakeProof, String> {
+        transcript: &ark_domain::device_registry::RegistryHandshakeTranscript,
+    ) -> Result<ark_domain::device_registry::RegistryHandshakeProof, String> {
         self.db
             .submit(
                 CommandContext::engine(),
@@ -195,8 +182,8 @@ impl PeerIdentityBackend for SqliteStorageBackend {
     async fn verify_registry_handshake(
         &self,
         peer_device_id: &str,
-        transcript: &crate::domain::device_registry::RegistryHandshakeTranscript,
-        proof: &crate::domain::device_registry::RegistryHandshakeProof,
+        transcript: &ark_domain::device_registry::RegistryHandshakeTranscript,
+        proof: &ark_domain::device_registry::RegistryHandshakeProof,
     ) -> Result<(), String> {
         self.db
             .query(

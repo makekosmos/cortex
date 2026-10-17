@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::task_merge::{OperationId, TaskMergeOperation, TaskMergeUnit, TaskMergeValue};
+use ark_domain::task_merge::{OperationId, TaskMergeOperation, TaskMergeUnit, TaskMergeValue};
 
 #[path = "task_merge/causal_dependencies.rs"]
 mod causal_dependencies;

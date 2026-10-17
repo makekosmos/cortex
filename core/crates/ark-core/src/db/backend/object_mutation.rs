@@ -2,8 +2,8 @@ use crate::application::object_mutation::{ObjectMutationSession, ObjectRevisionK
 use crate::canonical_types::facades::BookCoverMutation;
 use crate::canonical_types::game::{GameMutationResult, GameUpsertCommand};
 use crate::db;
-use crate::domain::object_write::ObjectWriteSnapshot;
 use crate::types::{ArkObject, ArkObjectWrite};
+use ark_domain::object_write::ObjectWriteSnapshot;
 use rusqlite::{params, OptionalExtension, Transaction};
 
 pub(crate) struct SqliteObjectMutationSession<'tx, 'connection> {

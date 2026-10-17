@@ -1,6 +1,6 @@
 use super::*;
 use crate::db::{CommandContext, EnrollPairedDeviceCommand, SetLocalSyncKeyValueCommand};
-use crate::domain::device_registry::{DeviceId, DisplayName};
+use ark_domain::device_registry::{DeviceId, DisplayName};
 
 #[test]
 fn device_registry_operations_have_a_stable_wire_shape() {

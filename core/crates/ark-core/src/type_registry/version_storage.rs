@@ -1,7 +1,7 @@
-pub use crate::domain::canonical_type::{
+pub use ark_application::type_registry::TypeGetResponse;
+pub use ark_domain::canonical_type::{
     canonical_schema_hash, AliasRecord, TypeRegistration, TypeSummary, TypeVersion,
 };
-pub use ark_application::type_registry::TypeGetResponse;
 use rusqlite::Connection;
 
 pub use ark_domain::canonical_type::registry::{legacy_compatibility_version, LEGACY_VERSION};

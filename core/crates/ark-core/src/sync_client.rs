@@ -35,7 +35,7 @@ pub type ClientOnConnectedCallback = Arc<dyn Fn(PeerRecord) + Send + Sync>;
 pub type ClientOnDisconnectedCallback = Arc<dyn Fn(String) + Send + Sync>;
 pub type ClientOnPeerListCallback = Arc<dyn Fn(Vec<PeerRecord>) + Send + Sync>;
 pub type ClientOnRegistryEventsCallback =
-    Arc<dyn Fn(Vec<crate::domain::device_registry::RegistryEvent>) + Send + Sync>;
+    Arc<dyn Fn(Vec<ark_domain::device_registry::RegistryEvent>) + Send + Sync>;
 
 // Authenticated peer channel: (peer device_id, outbound sender) behind the
 // shared mutex so the connection-scoped negotiated session becomes visible
@@ -51,14 +51,8 @@ pub(crate) struct AuthenticatedPeerSession {
 }
 
 type AuthenticatedTx = Arc<Mutex<Option<AuthenticatedPeerSession>>>;
-pub(crate) type ClientFeedInFlight = Arc<
-    Mutex<
-        Option<(
-            i64,
-            Option<crate::application::sync_storage::PolicyIdentity>,
-        )>,
-    >,
->;
+pub(crate) type ClientFeedInFlight =
+    Arc<Mutex<Option<(i64, Option<ark_application::sync_storage::PolicyIdentity>)>>>;
 
 // ---------------------------------------------------------------------------
 // SyncClient
@@ -164,7 +158,7 @@ impl SyncClient {
 
     pub async fn broadcast_registry_event(
         &self,
-        event: crate::domain::device_registry::RegistryEvent,
+        event: ark_domain::device_registry::RegistryEvent,
     ) {
         let mut guard = self.authenticated_tx.lock().await;
         let Some(session) = guard.as_mut() else {
@@ -179,7 +173,7 @@ impl SyncClient {
         );
         if matches!(
             event.operation(),
-            crate::domain::device_registry::RegistryOperation::Disable
+            ark_domain::device_registry::RegistryOperation::Disable
         ) && event.target_device_id().as_str() == session.peer_id
         {
             self.stopped

@@ -75,7 +75,7 @@ const PAIRING_DECLINE_SUPPRESS: Duration = Duration::from_secs(120);
 
 pub type OnPairingChangedCallback = Arc<dyn Fn() + Send + Sync>;
 pub type OnRegistryEventsCallback =
-    Arc<dyn Fn(Vec<crate::domain::device_registry::RegistryEvent>) + Send + Sync>;
+    Arc<dyn Fn(Vec<ark_domain::device_registry::RegistryEvent>) + Send + Sync>;
 
 pub struct RelaySync {
     storage: Arc<dyn SyncRuntimeStorage>,

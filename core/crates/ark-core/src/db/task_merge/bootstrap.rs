@@ -1,5 +1,5 @@
 use super::{canonical_operation, read_conflict_set, TaskMergeError};
-use crate::domain::task_merge::{materialize_task, TaskMergeBootstrap, TaskMergeUnit};
+use ark_domain::task_merge::{materialize_task, TaskMergeBootstrap, TaskMergeUnit};
 use rusqlite::{Connection, OptionalExtension};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
@@ -246,14 +246,14 @@ pub(super) fn materialize_if_ready(
     let hard_deleted = existence.is_some_and(|operation| {
         matches!(
             operation.value,
-            crate::domain::task_merge::TaskMergeValue::ObjectHardDeleted { .. }
+            ark_domain::task_merge::TaskMergeValue::ObjectHardDeleted { .. }
         )
     });
     let deleted = existence.is_some_and(|operation| {
         matches!(
             operation.value,
-            crate::domain::task_merge::TaskMergeValue::ObjectDeleted { .. }
-                | crate::domain::task_merge::TaskMergeValue::ObjectHardDeleted { .. }
+            ark_domain::task_merge::TaskMergeValue::ObjectDeleted { .. }
+                | ark_domain::task_merge::TaskMergeValue::ObjectHardDeleted { .. }
         )
     });
     if hard_deleted {
@@ -320,7 +320,7 @@ fn load_bootstrap(
 
 fn insert_baseline_operation(
     transaction: &Connection,
-    operation: crate::domain::task_merge::TaskMergeOperation,
+    operation: ark_domain::task_merge::TaskMergeOperation,
 ) -> Result<(), TaskMergeError> {
     let (operation, operation_json, payload_sha256) = canonical_operation(operation)?;
     if let Some(stored_hash) = transaction

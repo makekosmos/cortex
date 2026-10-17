@@ -24,7 +24,7 @@ async fn apply_authenticated(
     state: &Arc<ServiceState>,
     entity: &SyncEntity,
     message_id: &str,
-) -> crate::application::sync_storage::InboundApplyOutcome {
+) -> ark_application::sync_storage::InboundApplyOutcome {
     SqliteStorageBackend::with_db_handle(get_db_handle(state).unwrap())
         .apply_authenticated_entity_with_id(entity, "inbound-peer", message_id)
         .await
@@ -233,11 +233,11 @@ async fn authenticated_task_snapshot_preserves_receipt_stale_and_inbox_replay() 
     let entity = full_task_entity(&object, "2990-01-01T00:00:00.000Z:000001:inbound-peer");
     assert_eq!(
         apply_authenticated(&state, &entity, "full-task-message").await,
-        crate::application::sync_storage::InboundApplyOutcome::Applied
+        ark_application::sync_storage::InboundApplyOutcome::Applied
     );
     assert_eq!(
         apply_authenticated(&state, &entity, "full-task-message").await,
-        crate::application::sync_storage::InboundApplyOutcome::Applied
+        ark_application::sync_storage::InboundApplyOutcome::Applied
     );
 
     let mut stale = entity.clone();
@@ -245,7 +245,7 @@ async fn authenticated_task_snapshot_preserves_receipt_stale_and_inbox_replay() 
     stale.data.insert("title".into(), json!("stale"));
     assert_eq!(
         apply_authenticated(&state, &stale, "stale-task-message").await,
-        crate::application::sync_storage::InboundApplyOutcome::Stale
+        ark_application::sync_storage::InboundApplyOutcome::Stale
     );
 
     let (stored_title, receipt_count, operation_count) = with_conn(&state, |conn| {
@@ -330,11 +330,11 @@ async fn authenticated_legacy_todo_mapping_and_absent_task_tombstone_use_task_se
     };
     assert_eq!(
         apply_authenticated(&state, &legacy, "legacy-task-message").await,
-        crate::application::sync_storage::InboundApplyOutcome::Applied
+        ark_application::sync_storage::InboundApplyOutcome::Applied
     );
     assert_eq!(
         apply_authenticated(&state, &legacy, "legacy-task-message").await,
-        crate::application::sync_storage::InboundApplyOutcome::Applied
+        ark_application::sync_storage::InboundApplyOutcome::Applied
     );
     let (legacy_object, link_count, receipt_count) = with_conn(&state, |conn| {
         let object = db::get_object(conn, &legacy.id)?.unwrap();
@@ -376,7 +376,7 @@ async fn authenticated_legacy_todo_mapping_and_absent_task_tombstone_use_task_se
     };
     assert_eq!(
         apply_authenticated(&state, &tombstone, "absent-task-delete").await,
-        crate::application::sync_storage::InboundApplyOutcome::Applied
+        ark_application::sync_storage::InboundApplyOutcome::Applied
     );
     let legacy_tombstone = SyncEntity {
         entity_type: "todo".into(),
@@ -389,11 +389,11 @@ async fn authenticated_legacy_todo_mapping_and_absent_task_tombstone_use_task_se
     };
     assert_eq!(
         apply_authenticated(&state, &legacy_tombstone, "absent-legacy-task-delete").await,
-        crate::application::sync_storage::InboundApplyOutcome::Applied
+        ark_application::sync_storage::InboundApplyOutcome::Applied
     );
     assert_eq!(
         apply_authenticated(&state, &tombstone, "absent-task-delete").await,
-        crate::application::sync_storage::InboundApplyOutcome::Applied
+        ark_application::sync_storage::InboundApplyOutcome::Applied
     );
     let tombstone_state = with_conn(&state, |conn| {
         let object_count = conn

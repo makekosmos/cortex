@@ -2,6 +2,7 @@ mod backend;
 mod command;
 mod committed_feed;
 mod compact;
+pub(crate) mod constants;
 mod legacy;
 mod load;
 mod objects;
@@ -11,7 +12,7 @@ mod sync;
 mod task_merge;
 mod usage;
 
-pub use crate::application::sync_storage::{
+pub use ark_application::sync_storage::{
     CommittedFeedDeliveryPage, CommittedFeedEntry, FeedSnapshot, InitialSnapshot, OutboundAck,
     OutboundProgress,
 };
@@ -89,7 +90,7 @@ pub use objects::{
 };
 #[cfg(test)]
 pub(in crate::db) use open::USAGE_SEQUENCE_MIGRATION_KEY;
-pub(in crate::db) use open::VERSION_VECTOR_KEY;
+pub(crate) use open::VERSION_VECTOR_KEY;
 pub use open::{
     backup_to_file, backup_to_file_chunked, check_integrity, init_schema,
     init_schema_prerequisites_for_phase3, is_sequenced_usage_entity, open_db,
@@ -170,12 +171,12 @@ mod tests {
     use super::snapshot::{default_rollback_restore, restore_snapshot_impl, validate_snapshot_id};
     use super::usage::merge_top_apps;
     use super::*;
-    use crate::application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
     use crate::hlc::HLC;
     use crate::integration_replication::*;
     use crate::schema::*;
     use crate::type_registry;
     use crate::types::*;
+    use ark_application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
     use rusqlite::{params, Connection, OptionalExtension};
     use serde_json::{json, Value};
 

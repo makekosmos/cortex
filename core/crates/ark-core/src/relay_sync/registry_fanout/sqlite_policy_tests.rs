@@ -1,6 +1,6 @@
 use super::sqlite_test_support::*;
-use crate::application::sync_storage::PeerProgressPort;
 use crate::replication_storage::PeerIdentityBackend;
+use ark_application::sync_storage::PeerProgressPort;
 use ark_domain::selective_sync::SyncMode;
 use std::time::{Duration, Instant};
 

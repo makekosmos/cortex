@@ -1,5 +1,5 @@
 use super::{read_journal_page, require_delivery_policy, TaskMergeError};
-use crate::application::sync_storage::{PolicyIdentity, TaskMergeBatch};
+use ark_application::sync_storage::{PolicyIdentity, TaskMergeBatch};
 use rusqlite::{OptionalExtension, Transaction};
 
 const MAX_TASK_MERGE_PAGE_SIZE: usize = 100;
@@ -153,7 +153,7 @@ fn fit_batch(
     batch_id: String,
     identity: &PolicyIdentity,
     after_position: i64,
-    entries: Vec<crate::application::sync_storage::TaskMergeJournalEntry>,
+    entries: Vec<ark_application::sync_storage::TaskMergeJournalEntry>,
 ) -> Result<TaskMergeBatch, TaskMergeError> {
     let empty_batch = TaskMergeBatch {
         batch_id: batch_id.clone(),

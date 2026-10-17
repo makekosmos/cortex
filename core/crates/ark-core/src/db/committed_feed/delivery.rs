@@ -197,11 +197,11 @@ pub fn read_committed_feed_delivery_page(
 pub fn read_committed_feed_delivery_page_for_peer(
     conn: &Connection,
     peer_device_id: &str,
-    expected_identity: &crate::application::sync_storage::PolicyIdentity,
+    expected_identity: &ark_application::sync_storage::PolicyIdentity,
     after_position: i64,
     high_watermark: i64,
     limit: usize,
-) -> Result<crate::application::sync_storage::PolicyBoundFeedPage, String> {
+) -> Result<ark_application::sync_storage::PolicyBoundFeedPage, String> {
     conn.execute_batch("SAVEPOINT committed_feed_policy_snapshot")
         .map_err(|error| error.to_string())?;
     let result = (|| -> Result<_, String> {
@@ -226,7 +226,7 @@ pub fn read_committed_feed_delivery_page_for_peer(
             || {},
             profile.as_ref(),
         )?;
-        Ok(crate::application::sync_storage::PolicyBoundFeedPage { identity, page })
+        Ok(ark_application::sync_storage::PolicyBoundFeedPage { identity, page })
     })();
     match result {
         Ok(page) => conn

@@ -23,12 +23,12 @@ async fn signed_integration_write_is_authorized(
 impl SyncServer {
     pub async fn broadcast_registry_event(
         &self,
-        event: crate::domain::device_registry::RegistryEvent,
+        event: ark_domain::device_registry::RegistryEvent,
     ) -> usize {
         let target = event.target_device_id().as_str();
         let revokes_target = matches!(
             event.operation(),
-            crate::domain::device_registry::RegistryOperation::Disable
+            ark_domain::device_registry::RegistryOperation::Disable
         );
         let mut peers = self.peers.lock().await;
         let mut revoked = Vec::new();

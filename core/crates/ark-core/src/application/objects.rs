@@ -1,8 +1,8 @@
 use crate::canonical_types::definitions::canonical_type_registrations;
 use crate::canonical_types::ingress::prepare_resolved_object;
-use crate::domain::object_write::{ObjectWriteSnapshot, RemoteObjectWrite};
 use crate::hlc::HLC;
 use crate::types::{ArkObjectWrite, ObjectLink};
+use ark_domain::object_write::{ObjectWriteSnapshot, RemoteObjectWrite};
 use std::cmp::Ordering;
 
 pub use ark_application::object_write::{
@@ -114,7 +114,7 @@ fn apply_core_task_write(
             .ensure_legacy_task_write_allowed(&object.id)?;
     }
     let (payload_json, payload_sha256) =
-        crate::domain::object_write::canonical_payload_digest(&object, &links)?;
+        ark_domain::object_write::canonical_payload_digest(&object, &links)?;
     let representation_kind = "full";
 
     if let Some(source_hlc) = source_hlc.as_deref() {

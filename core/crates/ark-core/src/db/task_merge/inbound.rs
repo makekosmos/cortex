@@ -1,5 +1,5 @@
 use super::{append_remote_operation, TaskMergeError};
-use crate::application::sync_storage::{PolicyIdentity, TaskMergeBatch, TaskMergeBatchAck};
+use ark_application::sync_storage::{PolicyIdentity, TaskMergeBatch, TaskMergeBatchAck};
 use rusqlite::{OptionalExtension, Transaction};
 use sha2::{Digest, Sha256};
 
@@ -59,7 +59,7 @@ pub(crate) fn apply_inbound_batch(
 
     for entry in &batch.entries {
         match &entry.record {
-            crate::application::sync_storage::TaskMergeJournalRecord::Operation {
+            ark_application::sync_storage::TaskMergeJournalRecord::Operation {
                 operation,
                 expected_conflict_digest,
             } => {
@@ -69,7 +69,7 @@ pub(crate) fn apply_inbound_batch(
                     expected_conflict_digest.as_deref(),
                 )?;
             }
-            crate::application::sync_storage::TaskMergeJournalRecord::Bootstrap(bootstrap) => {
+            ark_application::sync_storage::TaskMergeJournalRecord::Bootstrap(bootstrap) => {
                 super::append_bootstrap(transaction, bootstrap.clone())?;
             }
         }

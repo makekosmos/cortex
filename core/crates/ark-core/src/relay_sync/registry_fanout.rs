@@ -37,11 +37,11 @@ impl RelaySync {
 
     pub(crate) async fn publish_registry_event(
         &self,
-        event: crate::domain::device_registry::RegistryEvent,
+        event: ark_domain::device_registry::RegistryEvent,
     ) -> Result<(), String> {
         let disabled = matches!(
             event.operation(),
-            crate::domain::device_registry::RegistryOperation::Disable
+            ark_domain::device_registry::RegistryOperation::Disable
         )
         .then(|| event.target_device_id().as_str().to_owned())
         .into_iter()

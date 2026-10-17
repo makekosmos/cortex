@@ -1,8 +1,8 @@
 use super::{canonical_operation, verify_bootstrap_payload, TaskMergeError};
-use crate::application::sync_storage::{
+use ark_application::sync_storage::{
     TaskMergeJournalEntry, TaskMergeJournalPage, TaskMergeJournalRecord,
 };
-use crate::domain::task_merge::TaskMergeOperation;
+use ark_domain::task_merge::TaskMergeOperation;
 use rusqlite::Connection;
 
 const MAX_TASK_MERGE_PAGE_SIZE: usize = 100;

@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used)]
-use ark_core::application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
+use ark_application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
 
 use ark_core::db;
 use ark_core::db::SqliteStorageBackend;

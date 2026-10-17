@@ -1,5 +1,5 @@
-use crate::application::sync_storage::CommittedFeedPort;
 use crate::replication_storage::{AuthenticatedEntityBackend, PeerIdentityBackend};
+use ark_application::sync_storage::CommittedFeedPort;
 use std::time::Instant;
 
 async fn admit_test_registry_peer(backend: &SqliteStorageBackend, peer_id: &str) {
@@ -14,16 +14,16 @@ async fn admit_test_registry_peer(backend: &SqliteStorageBackend, peer_id: &str)
 }
 
 fn expect_feed_deliveries(
-    page: crate::application::sync_storage::CommittedFeedDeliveryPage,
-) -> Vec<crate::application::sync_storage::CommittedFeedDelivery> {
+    page: ark_application::sync_storage::CommittedFeedDeliveryPage,
+) -> Vec<ark_application::sync_storage::CommittedFeedDelivery> {
     match page {
-        crate::application::sync_storage::CommittedFeedDeliveryPage::Deliveries(deliveries) => {
+        ark_application::sync_storage::CommittedFeedDeliveryPage::Deliveries(deliveries) => {
             deliveries
         }
-        crate::application::sync_storage::CommittedFeedDeliveryPage::TooLarge { .. } => {
+        ark_application::sync_storage::CommittedFeedDeliveryPage::TooLarge { .. } => {
             panic!("test feed entity exceeded the bounded projection size")
         }
-        crate::application::sync_storage::CommittedFeedDeliveryPage::SkipTo { .. } => {
+        ark_application::sync_storage::CommittedFeedDeliveryPage::SkipTo { .. } => {
             panic!("test feed page unexpectedly contained only skipped entities")
         }
     }
@@ -55,7 +55,7 @@ async fn snapshot_page_pins_filter_identity_and_rejects_policy_change_before_nex
     let page = backend
         .load_policy_bound_entities_page_for_peer(
             "peer-a",
-            crate::application::sync_storage::SyncReadClass::Backfill,
+            ark_application::sync_storage::SyncReadClass::Backfill,
             &crate::types::VersionVector::default(),
             0,
             16,
@@ -79,7 +79,7 @@ async fn snapshot_page_pins_filter_identity_and_rejects_policy_change_before_nex
     let error = backend
         .load_policy_bound_entities_page_for_peer(
             "peer-a",
-            crate::application::sync_storage::SyncReadClass::Backfill,
+            ark_application::sync_storage::SyncReadClass::Backfill,
             &crate::types::VersionVector::default(),
             0,
             16,

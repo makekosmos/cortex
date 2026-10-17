@@ -235,10 +235,7 @@
     #[tokio::test]
     async fn disconnect_peer_closes_sessions_when_blocklist_read_fails() {
         let backend = Arc::new(MemBackend::new());
-        backend.set_sync_kv(
-            crate::application::sync_storage::REMOVED_PEERS_KEY,
-            "not-json",
-        );
+        backend.set_sync_kv(crate::db::constants::REMOVED_PEERS_KEY, "not-json");
         let server = SyncServer::new(backend as Arc<dyn SyncRuntimeStorage>);
         let (tx, mut rx) = mpsc::unbounded_channel::<Message>();
         server.peers.lock().await.insert(
