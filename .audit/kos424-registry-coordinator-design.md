@@ -35,7 +35,13 @@ pub struct RelayRegistryCoordinator {
 
 pub struct RegistryOutcome {
     pub applied_events: Vec<RegistryEvent>,
-    pub pairing_changed: bool,
+    pub disabled_device_ids: Vec<String>,
+    pub sender_is_admitted: bool,
+    pub local_device_is_admitted: bool,
+    pub became_ready: bool,
+    /// A send may fail after durable application. Keep the applied events
+    /// available so Core can publish their callback before surfacing failure.
+    pub publication_error: Option<String>,
 }
 
 pub enum RegistryFrame {
@@ -83,9 +89,11 @@ impl RelayRegistryCoordinator {
 
 `RelayRegistryPeer` contains the endpoint, negotiated policy capability, retry count, incoming page bounds and cursor, both history digests, and the `Waiting`, `Exchanging`, `Ready`, or `Revoked` state. Its fields stay private. Core parses `LanSyncMessage` into `RegistryFrame` at the message boundary; the frame carries no socket or SQLite types.
 
-The coordinator uses `SyncRuntimeStorage` for durable event application, history reads, peer policy, and the current vector. It uses only the `ark-sync::SyncTransport` contract for addressed control sends, data readiness, unbinding, and disconnects. Core keeps transport construction, pairing consent and identity enrollment, peer metadata, event callbacks, and Engine lifecycle.
+The coordinator uses the application registry-admission port for durable event application and history reads, plus the narrow sync-profile/vector reads needed at readiness. It uses only the `ark-sync::SyncTransport` contract for addressed control sends, data readiness, unbinding, and disconnects. Core keeps transport construction, pairing consent and identity enrollment, peer metadata, event callbacks, and Engine lifecycle.
 
 The coordinator releases its state lock before every async storage or network call. Each operation captures the peer, endpoint, session ID, and page cursor, then revalidates them before committing state. Revocation records `Revoked` and unbinds the transport before awaiting control sends. Readiness is recorded only after `mark_peer_data_ready` succeeds while the session token is still current. These orderings preserve existing data-gate and stale-completion behavior.
+
+Core still owns the authenticated peer inventory and callbacks. For a local-device disable, pass current peer bindings into the coordinator so it can revoke every connected endpoint without taking ownership of Core's separate pairing facts. After successful readiness, Core preserves the existing order: notify pairing state, send the negotiated sync profile, then send the version vector. Applied registry events must be returned even when later fanout/revoke sends fail, so Core publishes the durable event callback before surfacing the transport error. The outcome also carries storage admission flags used by the current error behavior.
 
 ## Synthesis decision
 
@@ -93,7 +101,7 @@ Candidate A is the base because it makes registry exchange and readiness one bou
 
 ## Tradeoffs accepted
 
-- The coordinator owns a peer-state map separate from core's authenticated peer metadata. These maps represent different facts: registry data readiness and transport-authenticated peer details.
+- The coordinator owns registry state separate from core's authenticated peer metadata. These maps represent different facts: registry data readiness and transport-authenticated peer details. Core supplies its current bound peer inventory only for local-device revocation.
 - Core invokes callbacks from `RegistryOutcome`, so event publication remains at the Engine boundary.
 - The extraction uses the existing `SyncRuntimeStorage` aggregate; splitting its unrelated capabilities is outside this unit.
 
@@ -106,6 +114,7 @@ Candidate A is the base because it makes registry exchange and readiness one bou
 
 - Can concurrent peer disconnect, page application, registry revocation, and digest completion preserve the current token checks without holding a lock across I/O?
 - Do production SQLite and Iroh tests prove that revocation unbinds queued data before network sends after the move?
+- Does the implemented outcome retain applied events and admission flags when later fanout fails, while keeping sync-profile/vector ordering and Core callbacks intact?
 
 ## Next implementation step
 
