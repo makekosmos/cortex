@@ -241,6 +241,8 @@ pub(crate) enum DbError {
     Storage(String),
     #[error("database storage is unhealthy: {0}")]
     StorageUnhealthy(String),
+    #[error("database transaction commit failed: {0}")]
+    CommitFailed(String),
     #[error("database command exceeds admission size limits")]
     TooLarge,
     #[error("database command worker is unavailable")]

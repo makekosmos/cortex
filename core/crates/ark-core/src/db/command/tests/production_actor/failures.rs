@@ -14,6 +14,41 @@ fn engine() -> CommandContext {
     CommandContext::engine()
 }
 
+#[derive(serde::Serialize)]
+struct CommitFailure;
+
+impl sealed::Sealed for CommitFailure {}
+
+impl DbCommand for CommitFailure {
+    type Output = ();
+
+    const CLASS: CommandClass = CommandClass::Interactive;
+
+    fn weight(&self) -> usize {
+        1
+    }
+
+    fn execute(
+        self,
+        _context: &CommandContext,
+        transaction: &rusqlite::Transaction<'_>,
+    ) -> Result<Self::Output, DbError> {
+        transaction
+            .execute(
+                "INSERT INTO production_actor_failure_probe(payload) VALUES (zeroblob(0))",
+                [],
+            )
+            .map_err(DbError::from_sqlite)?;
+        transaction
+            .execute(
+                "INSERT INTO production_actor_deferred_child(parent_id) VALUES (99)",
+                [],
+            )
+            .map_err(DbError::from_sqlite)?;
+        Ok(())
+    }
+}
+
 async fn open_failure_actor() -> (tempfile::TempDir, DbHandle, DbOwner) {
     let directory = tempfile::tempdir().unwrap();
     let (handle, owner) = DbHandle::open(actor_path(&directory), "actor-test-device".into())
@@ -155,6 +190,74 @@ async fn production_actor_sqlite_full_rolls_back_and_fails_closed() {
         )
         .unwrap();
     assert_eq!(later_receipts, 0);
+
+    owner
+        .shutdown(std::time::Instant::now() + Duration::from_secs(2))
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn production_actor_commit_failure_rolls_back_receipt_and_fails_closed() {
+    let (directory, handle, mut owner) = open_failure_actor().await;
+    handle.with_connection(|connection| {
+        connection
+            .execute_batch(
+                "CREATE TABLE production_actor_failure_probe(payload BLOB NOT NULL);
+                 CREATE TABLE production_actor_parent(id INTEGER PRIMARY KEY);
+                 CREATE TABLE production_actor_deferred_child(
+                     parent_id INTEGER NOT NULL,
+                     FOREIGN KEY(parent_id) REFERENCES production_actor_parent(id)
+                         DEFERRABLE INITIALLY DEFERRED
+                 );",
+            )
+            .unwrap();
+    });
+
+    let failed = handle
+        .submit_with_operation_id(
+            engine(),
+            "commit-failure-operation".to_owned(),
+            "production_actor.commit_failure.v1",
+            CommitFailure,
+        )
+        .await;
+    assert!(matches!(
+        failed,
+        Err(DbError::CommitFailed(ref message)) if message.contains("FOREIGN KEY constraint failed")
+    ));
+    assert!(
+        !handle.actor_ready_for_test(),
+        "actor stayed Ready after COMMIT failed"
+    );
+
+    let disk = Connection::open(actor_path(&directory)).unwrap();
+    let mutation_rows = disk
+        .query_row(
+            "SELECT COUNT(*) FROM production_actor_failure_probe",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap();
+    let deferred_rows = disk
+        .query_row(
+            "SELECT COUNT(*) FROM production_actor_deferred_child",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap();
+    let receipt_rows = disk
+        .query_row(
+            "SELECT COUNT(*) FROM ark_operation_receipts
+             WHERE operation_id = 'commit-failure-operation'",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap();
+    assert_eq!((mutation_rows, deferred_rows, receipt_rows), (0, 0, 0));
+
+    let later = apply_failure_mutation(&handle, "after-commit-failure", 0).await;
+    assert!(later.is_err(), "actor accepted a write after COMMIT failed");
 
     owner
         .shutdown(std::time::Instant::now() + Duration::from_secs(2))

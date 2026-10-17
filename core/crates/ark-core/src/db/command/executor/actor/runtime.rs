@@ -140,6 +140,15 @@ fn run_task(shared: &ActorShared, connection: &mut Connection, task: Box<dyn Wri
             ledger.failure = Some(message);
             false
         }
+        Ok(Err(DbError::CommitFailed(message))) => {
+            let mut ledger = shared
+                .ledger
+                .lock()
+                .unwrap_or_else(|error| error.into_inner());
+            ledger.lifecycle = Lifecycle::Failed;
+            ledger.failure = Some(format!("database transaction commit failed: {message}"));
+            false
+        }
         Ok(Err(_error)) => false,
         Err(_) => {
             shared
