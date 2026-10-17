@@ -256,6 +256,7 @@ pub async fn start_hosts(setup: &support::IntegrationReplicationSetup) -> (ArkHo
         PACKAGE_ID,
     )
     .unwrap();
+    offline::wait_for_peer(&origin_host, &setup.recipient.node_id).await;
     offline::wait_for_peer(&recipient_host, &setup.origin.node_id).await;
     (origin_host, recipient_host)
 }
