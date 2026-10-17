@@ -72,6 +72,7 @@ pub struct SyncClient {
     space_id: String,
     own_addresses: Vec<String>,
     auth_secret: Option<String>,
+    task_merge_bootstrap_v2: bool,
     stopped: Arc<std::sync::atomic::AtomicBool>,
     authenticated_tx: AuthenticatedTx,
     feed_in_flight: ClientFeedInFlight,
@@ -107,6 +108,7 @@ impl SyncClient {
             space_id,
             own_addresses,
             auth_secret: normalize_auth_secret(auth_secret),
+            task_merge_bootstrap_v2: false,
             stopped: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             authenticated_tx: Arc::new(Mutex::new(None)),
             feed_in_flight: Arc::new(Mutex::new(None)),
@@ -118,6 +120,12 @@ impl SyncClient {
             tasks: Arc::new(std::sync::Mutex::new(Vec::new())),
             callbacks: Arc::new(std::sync::Mutex::new(Vec::new())),
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_task_merge_bootstrap_v2(mut self) -> Self {
+        self.task_merge_bootstrap_v2 = true;
+        self
     }
 
     /// Wake the durable feed sender after a local commit. The entity itself is

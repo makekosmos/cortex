@@ -15,6 +15,7 @@ pub(super) fn build_client_hello(
     space_id: &str,
     addresses: &[String],
     auth_secret: Option<&str>,
+    task_merge_bootstrap_v2: bool,
 ) -> ClientHello {
     let (auth_nonce, auth_hmac) = match auth_secret {
         Some(secret) => {
@@ -24,7 +25,10 @@ pub(super) fn build_client_hello(
         }
         None => (None, None),
     };
-    let offer = ProtocolOffer::current_with_registry_history(true);
+    let mut offer = ProtocolOffer::current_with_registry_history(true);
+    if task_merge_bootstrap_v2 {
+        offer = offer.with_task_merge_bootstrap_v2();
+    }
     let negotiation_hmac = auth_secret
         .zip(auth_nonce.as_deref())
         .map(|(secret, nonce)| {

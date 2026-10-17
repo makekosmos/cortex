@@ -42,6 +42,7 @@ async fn registry_disable_closes_ready_session_and_removes_discovery_record() {
         device_name: Arc::new(RwLock::new("Local".to_owned())),
         own_addresses: Arc::new(RwLock::new(Vec::new())),
         auth_secret: Arc::new(RwLock::new(None)),
+        task_merge_bootstrap_v2: false,
         known_peer_records: Arc::new(Mutex::new(vec![peer_record])),
         on_change: Arc::new(Mutex::new(None)),
         on_peer_connect: Arc::new(Mutex::new(None)),

@@ -12,8 +12,7 @@
                 }
 
                 reconnect_delay = RECONNECT_BASE_MS;
-                // Releasing the connection-local claim replays its durable cursor.
-                *feed_in_flight.lock().await = None;
+                *feed_in_flight.lock().await = None; // Replay the durable cursor after reconnect.
 
                 let (mut ws_sink, mut ws_stream_rx) = ws_stream.split();
 
@@ -23,6 +22,7 @@
                     &space_id,
                     &own_addresses,
                     auth_secret.as_deref(),
+                    task_merge_bootstrap_v2,
                 );
                 if ws_sink
                     .send(Message::Text(client_hello.message.clone().into()))

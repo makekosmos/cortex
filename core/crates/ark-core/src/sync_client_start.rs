@@ -34,6 +34,7 @@ impl SyncClient {
         let space_id = self.space_id.clone();
         let own_addresses = self.own_addresses.clone();
         let auth_secret = self.auth_secret.clone();
+        let task_merge_bootstrap_v2 = self.task_merge_bootstrap_v2;
         let stopped = self.stopped.clone();
         let authenticated_tx = self.authenticated_tx.clone();
         let feed_in_flight = self.feed_in_flight.clone();

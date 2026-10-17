@@ -40,6 +40,7 @@ impl SyncServer {
         let device_name = self.device_name.clone();
         let own_addresses = self.own_addresses.clone();
         let auth_secret = self.auth_secret.clone();
+        let task_merge_bootstrap_v2 = self.task_merge_bootstrap_v2;
         let known_peer_records = self.known_peer_records.clone();
         let on_change = self.on_change.clone();
         let on_peer_connect = self.on_peer_connect.clone();
@@ -217,6 +218,7 @@ impl SyncServer {
                                     device_name: device_name.clone(),
                                     own_addresses: own_addresses.clone(),
                                     auth_secret: auth_secret.clone(),
+                                    task_merge_bootstrap_v2,
                                     known_peer_records: known_peer_records.clone(),
                                     on_change: on_change.clone(),
                                     on_peer_connect: on_peer_connect.clone(),

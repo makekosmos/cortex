@@ -122,6 +122,7 @@ impl SyncServer {
             device_name: Arc::new(RwLock::new("ArkSync".to_string())),
             own_addresses: Arc::new(RwLock::new(Vec::new())),
             auth_secret: Arc::new(RwLock::new(None)),
+            task_merge_bootstrap_v2: false,
             peers: Arc::new(Mutex::new(HashMap::new())),
             known_peer_records: Arc::new(Mutex::new(Vec::new())),
             shutdown_tx: Arc::new(Mutex::new(None)),
@@ -134,6 +135,12 @@ impl SyncServer {
             on_registry_events: Arc::new(Mutex::new(None)),
             next_peer_id: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_task_merge_bootstrap_v2(mut self) -> Self {
+        self.task_merge_bootstrap_v2 = true;
+        self
     }
 
     pub async fn set_on_change(&self, handler: OnChangeCallback) {

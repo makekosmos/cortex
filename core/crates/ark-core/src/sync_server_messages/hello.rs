@@ -9,6 +9,7 @@ pub(super) async fn handle_hello(ctx: &MessageContext, peer_id: usize, msg: LanS
         device_name,
         own_addresses,
         auth_secret,
+        task_merge_bootstrap_v2,
         ..
     } = ctx;
     if let LanSyncMessage::Hello {
@@ -63,7 +64,10 @@ pub(super) async fn handle_hello(ctx: &MessageContext, peer_id: usize, msg: LanS
         }
 
         let secret = auth_secret.read().await.clone();
-        let local_offer = ProtocolOffer::current_with_registry_history(true);
+        let mut local_offer = ProtocolOffer::current_with_registry_history(true);
+        if *task_merge_bootstrap_v2 {
+            local_offer = local_offer.with_task_merge_bootstrap_v2();
+        }
         if negotiated_capabilities.is_some() {
             send_protocol_rejection(
                 peers,

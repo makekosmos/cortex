@@ -340,6 +340,7 @@ mod tests {
             device_name: server.device_name.clone(),
             own_addresses: server.own_addresses.clone(),
             auth_secret: server.auth_secret.clone(),
+            task_merge_bootstrap_v2: server.task_merge_bootstrap_v2,
             known_peer_records: server.known_peer_records.clone(),
             on_change: server.on_change.clone(),
             on_peer_connect: server.on_peer_connect.clone(),

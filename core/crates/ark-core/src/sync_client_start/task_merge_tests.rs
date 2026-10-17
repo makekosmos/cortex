@@ -156,7 +156,8 @@ async fn authenticated_direct_sync_delivers_task_merge_batches_over_the_wire() {
     drop(listener);
     let secret = "shared-task-merge-secret";
     let server =
-        SyncServer::new(sender.storage.clone() as Arc<dyn crate::sync_server::SyncRuntimeStorage>);
+        SyncServer::new(sender.storage.clone() as Arc<dyn crate::sync_server::SyncRuntimeStorage>)
+            .with_task_merge_bootstrap_v2();
     server.set_auth_secret(Some(secret.into())).await;
     server
         .start_with_addr(
@@ -184,7 +185,8 @@ async fn authenticated_direct_sync_delivers_task_merge_batches_over_the_wire() {
         "task-merge-space".into(),
         Vec::new(),
         Some(secret.into()),
-    );
+    )
+    .with_task_merge_bootstrap_v2();
     client.start();
 
     tokio::time::timeout(Duration::from_secs(8), async {

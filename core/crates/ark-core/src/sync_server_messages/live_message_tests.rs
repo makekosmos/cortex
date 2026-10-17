@@ -37,6 +37,7 @@ async fn stale_snapshot_ack_does_not_complete_or_clear_pending_snapshot() {
         device_name: Arc::new(RwLock::new("Local".to_owned())),
         own_addresses: Arc::new(RwLock::new(Vec::new())),
         auth_secret: Arc::new(RwLock::new(None)),
+        task_merge_bootstrap_v2: false,
         known_peer_records: Arc::new(Mutex::new(Vec::new())),
         on_change: Arc::new(Mutex::new(None)),
         on_peer_connect: Arc::new(Mutex::new(None)),
