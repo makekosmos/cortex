@@ -56,7 +56,9 @@ graph TD
     Core --> Store[ark-store: SQLite adapter и DB executor]
     Core --> Sync[ark-sync: replication sessions и wire]
     Core --> Net[ark-net: iroh, relay, discovery]
+    Core --> NetPolicy[ark-net-policy: чистые правила адресов]
     Net --> Sync
+    Net --> NetPolicy
     Sync --> App
     Store --> App
     App --> Domain[ark-domain: предметные типы и чистые правила]
@@ -71,6 +73,7 @@ graph TD
 | `ark-store` | Реализация транзакционных портов, физическая схема/миграции, индексы/FTS, snapshot/backup, inbox/outbox, исполнитель DB | Выбор получателей по бизнес-политике, сетевые соединения, решение о допустимости доменного перехода |
 | `ark-sync` | Anti-entropy, signed envelope codec, negotiation, sessions, ACK/retry, преобразование wire в application-команды | SQLite connection, собственный путь записи мимо application, сокеты конкретного транспорта |
 | `ark-net` | iroh, WebSocket relay, beacon/discovery, framing и transport authentication context | Доменные разрешения на запись и собственная конфликтная политика |
+| `ark-net-policy` | Детерминированная фильтрация адресов и имён виртуальных интерфейсов без OS-доступа | Интерфейсы ОС, сокеты, discovery и протокол синхронизации |
 | `ark-core` | Сборка зависимостей, конфигурация, lifecycle, совместимый JSON adapter `ArkService` | Новые предметные правила, SQL, альтернативные write paths |
 
 Названия ориентировочные. Не нужно сразу создавать все крейты: сначала настоящие Rust-модули и ограниченная видимость; затем физические крейты по готовым интерфейсам.

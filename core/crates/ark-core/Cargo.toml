@@ -18,6 +18,7 @@ doctest = false
 [dependencies]
 ark-application = { path = "../ark-application" }
 ark-domain = { path = "../ark-domain" }
+ark-net-policy = { path = "../ark-net-policy" }
 rusqlite.workspace = true
 tokio = { version = "1", features = [
   "rt-multi-thread",
