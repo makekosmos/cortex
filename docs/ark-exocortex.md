@@ -228,7 +228,11 @@ Restore к старому backup и media failure остаются отдель�
 
 Backup создаётся SQLite backup API/согласованным snapshot, с manifest версии и проверкой. Простая копия живого `ark.db` без учёта WAL недостаточна. Проверяется восстановление на отдельной БД.
 
-Restore — maintenance-сценарий: прекратить admission, завершить/отменить фоновую работу, согласованно закрыть connections, проверить backup, восстановить, открыть заново, обновить поколения subscriptions/read snapshots. Сохраняются или заново согласуются node identity, HLC high-watermark и origin sequences: откат БД не должен переиспользовать уже известные peers идентичности изменений. Нужен recovery epoch либо эквивалентный протокол resnapshot.
+Restore — maintenance-сценарий: остановить admission и sync, проверить backup, восстановить, открыть заново и обновить поколения subscriptions/read snapshots. До замены live DB сравнить устойчивый монотонный feed watermark live и backup. Если backup старше live, restore отказывается без изменения live DB: это сохраняет любые committed записи, которые могли ещё не попасть на peer. Watermark хранится транзакционно отдельно от feed rows и не уменьшается при compaction; если непрерывность доказать нельзя, restore также отказывается.
+
+Успешное восстановление сохраняет стабильные `device_id` и ключи, но создаёт новый случайный `sync_incarnation` в staged DB. Изменение идентичности потока отделяет новые события от последовательностей, уже известных peers. HLC high-watermark переносится вперёд для сохранения порядка новых локальных записей; весь version vector не копируется без доказательства, что соответствующие данные присутствуют в восстановленной копии. Origin sequence heads переносятся вперёд там, где их владельца можно однозначно определить.
+
+Peers обмениваются incarnation до version vectors, cursors и пользовательских данных. Другая incarnation требует авторизованного полного resnapshot; старый peer без этой capability после recovery не получает user data. Resnapshot не удаляет peer-only данные и остаётся закрытым, пока двух-peer SQLite-тест не докажет merge и tombstone semantics. Restore остаётся закрытым при неразрешённой проверке, сбое rollback или неизвестном intent.
 
 Panic recovery переводит runtime в явное состояние recovery. Пока connection/transaction не приведены в проверенное состояние, новые команды не принимаются как будто всё исправно. Catch-unwind покрывает ограниченный класс ошибок; это не процессная изоляция от abort, повреждения памяти или отказа диска.
 
