@@ -144,3 +144,91 @@ async fn engine_sync_policy_api_round_trips_active_device_policy() {
     assert!(durable.active);
     assert_eq!(durable.profile_id, "phone-minimal");
 }
+
+#[tokio::test]
+async fn sync_selection_does_not_revoke_an_application_grant() {
+    let fixture = service_fixture();
+    let state = fixture.state.clone();
+    handle_request(
+        &state,
+        Request::Init {
+            db_path: fixture.db_path().to_string_lossy().into_owned(),
+        },
+    )
+    .await
+    .expect("initialize service database");
+    get_db_handle(&state)
+        .unwrap()
+        .submit(
+            CommandContext::engine(),
+            SetLocalSyncKeyValueCommand::new(
+                crate::db::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY.into(),
+                "phone-device".into(),
+            ),
+        )
+        .await
+        .unwrap();
+
+    let authorization = serde_json::from_value(json!({
+        "operation": "integration.persist_node_authorization",
+        "authorization_operation": "authorize",
+        "node": {
+            "node_id": "app-node",
+            "key_fingerprint": "app-node-fingerprint",
+            "signing_public_key": "app-node-signing-key",
+            "encryption_public_key": "app-node-encryption-key",
+            "transport_public_key": null,
+            "grant_epoch": 1,
+            "status": "active",
+            "authorized_at": "2026-09-06T00:00:00Z",
+            "revoked_at": null,
+            "revocation_epoch": null,
+            "revision": 1,
+            "hlc": "2026-09-06T00:00:00.000Z:000001:app-node"
+        },
+        "grant": {
+            "integration_id": "notes-app",
+            "node_id": "app-node",
+            "node_encryption_key": "app-node-encryption-key",
+            "grant_epoch": 1,
+            "status": "active",
+            "authorized_at": "2026-09-06T00:00:00Z",
+            "revoked_at": null,
+            "revision": 1,
+            "hlc": "2026-09-06T00:00:00.000Z:000002:app-node"
+        },
+        "device_id": "phone-device"
+    }))
+    .expect("parse application authorization request");
+    handle_request(&state, authorization)
+        .await
+        .expect("grant access to the application");
+
+    handle_request(
+        &state,
+        Request::SyncPolicySet {
+            profile_id: "phone-minimal".into(),
+            name: "No shared notes".into(),
+            active: true,
+            expected_revision: None,
+            rules: vec![crate::service::SyncPolicyRuleInput {
+                resource_kind: "type".into(),
+                resource_id: "com.kosmos.note".into(),
+                mode: crate::data_platform::SyncMode::None,
+                filter: json!({"version": 1, "where": {"and": []}}),
+            }],
+        },
+    )
+    .await
+    .expect("exclude notes from device sync");
+
+    let grant = with_conn(&state, |connection| {
+        crate::db::load_integration_node_grant(connection, "notes-app", "app-node")
+    })
+    .expect("load application grant after changing sync selection")
+    .expect("sync selection must preserve the application grant");
+    assert_eq!(
+        grant.status,
+        crate::integration_replication::GrantStatus::Active
+    );
+}
