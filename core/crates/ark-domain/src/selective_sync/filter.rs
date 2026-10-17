@@ -1,3 +1,9 @@
+use serde_json::Value;
+use sha2::{Digest, Sha256};
+
+const MAX_FILTER_DEPTH: usize = 16;
+const MAX_PREDICATES: usize = 128;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FilterV1 {
     value: Value,

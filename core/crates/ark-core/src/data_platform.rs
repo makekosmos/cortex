@@ -2,13 +2,12 @@
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
-const MAX_FILTER_DEPTH: usize = 16;
-const MAX_PREDICATES: usize = 128;
-include!("data_platform_selective.rs");
-
-include!("data_platform_filters.rs");
+pub use ark_domain::selective_sync::{
+    filter_digest, filter_entities_for_profile, validate_filter_json, FilterV1,
+    SelectiveSyncProfile, SelectiveSyncRule, SyncMode,
+};
 
 pub fn ensure_schema(conn: &Connection) -> Result<(), String> {
     conn.execute_batch(

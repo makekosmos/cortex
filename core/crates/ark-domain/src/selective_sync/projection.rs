@@ -1,3 +1,7 @@
+use super::filter::FilterV1;
+use serde_json::Value;
+use std::collections::{HashMap, HashSet};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SyncMode {
