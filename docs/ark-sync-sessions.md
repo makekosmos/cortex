@@ -59,6 +59,16 @@ The exact public signatures are refined against current callers before implement
 
 The transport session is per connection. Its authenticated device identity is established only by the existing protocol/admission flow; transport identity is not device identity. State transitions revalidate the connection/session generation after every storage await, so late work cannot make a disconnected, revoked, or replaced session ready. Stop closes admission, signals sessions, and joins their tasks before releasing storage handles. Existing idempotency receipts define what a canceled storage call may already have committed; cancellation never implies rollback.
 
+## Source inventory
+
+The current server dispatch in `sync_server_messages` has four policy-bearing paths: Hello/negotiation; accepted sync-policy storage and policy-gated start; version-vector snapshot; and inbound snapshot pages. Registry admission frames route through `ark-sync::DirectRegistryAdmission`; the remaining live path covers committed-feed and task-merge acknowledgements, signed-integration frames, peer lists, pairing, ping, and protocol rejection. `sync_server_inbound` applies authenticated live entities and handles receipt/applied ACKs; `sync_server_peers` pumps durable feed and task-merge batches. These share one per-connection readiness/admission fact and must move as one session owner, not as isolated helper extractions.
+
+The client owns the matching hello and admission handshake, policy and vector exchange, inbound snapshot application, ACK handling, committed-feed progress, task merge, signed integration, and callbacks. Its `start` loop also owns address retry and joinable writer/reader tasks. Therefore reconnect policy moves with the sync client session; only address resolution, dialing, WebSocket framing, and close details move to `ark-net`.
+
+Storage calls already enter through `ark-application` capabilities: peer admission/identity and registry history; accepted per-peer policy; local profile; version vectors and usage-complete-through cursors; policy-bound entity pages; authenticated entity apply and durable receipts; committed-feed snapshot/ACK; task-merge delivery; and signed-integration authorization. The extraction must reuse these calls and preserve their transaction boundaries. It must not add a second executor API that simply renames each storage method.
+
+Three orderings are load-bearing. First, inbound changes are authenticated/applied through the durable receipt path, progress is persisted, then `SyncAck` is sent; callbacks and fan-out happen only for applied changes. Second, outbound snapshots capture the initial vector and usage completeness before paging, check policy identity around page reads, and mark the final batch pending before sending it. Third, durable live-feed progress advances only after the current applied ACK with its matching policy identity. Existing tests and production paths remain the oracle for these orderings; this refactor changes ownership only.
+
 Selective sync remains a per-device transfer rule. Disabling a category suppresses future delivery to that device and never deletes its local rows, books, files, history, or receipts. Other devices that opted in remain eligible. Widening a policy changes its identity and invokes the existing backfill path. A future large-file transport can use the same class policy without changing the one-personal-database model.
 
 ## Synthesis decision
@@ -84,4 +94,4 @@ Before moving production callers, inventory every server/client message branch, 
 
 ## Next implementation step
 
-Build the branch-to-storage/send/event inventory from `sync_server_messages`, `sync_server_inbound`, `sync_client_start`, and `sync_client` before defining final signatures.
+Extract the private per-connection session owner and driver against this inventory, then switch one production path at a time while retaining the current wire fixtures and SQLite/WebSocket behavior tests.
