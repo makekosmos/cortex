@@ -1,24 +1,6 @@
-mod book;
-mod core_task;
+pub use ark_domain::canonical_type::definitions::{
+    canonical_type_registrations, current_canonical_version, is_canonical_version,
+};
+
 #[cfg(test)]
 mod core_task_tests;
-mod game;
-mod image;
-mod note;
-mod person;
-mod project;
-mod registrations;
-mod tag;
-mod task;
-mod time_entry;
-pub(crate) use book::*;
-pub(crate) use core_task::*;
-pub(crate) use game::*;
-pub(crate) use image::*;
-pub(crate) use note::*;
-pub(crate) use person::*;
-pub(crate) use project::*;
-pub use registrations::*;
-pub(crate) use tag::*;
-pub(crate) use task::*;
-pub(crate) use time_entry::*;

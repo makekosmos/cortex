@@ -1,6 +1,6 @@
 use super::*;
-use crate::domain::canonical_type::TypeRegistration;
-pub use crate::domain::canonical_type::{CanonicalValidationCode, CanonicalValidationError};
+use crate::canonical_type::TypeRegistration;
+pub use crate::canonical_type::{CanonicalValidationCode, CanonicalValidationError};
 use serde_json::Value;
 
 // Pure validation for the frozen canonical props/content subset.

@@ -1,10 +1,9 @@
 use super::*;
-use crate::canonical_types::definitions::canonical_type_registrations;
-use crate::domain::canonical_type::TypeRegistration;
+use crate::canonical_type::{definitions::canonical_type_registrations, TypeRegistration};
 use serde_json::Value;
 
 /// Strict RFC 3339 full-date: exactly `YYYY-MM-DD` and a real calendar day.
-pub(crate) fn is_full_date(s: &str) -> bool {
+pub fn is_full_date(s: &str) -> bool {
     chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d")
         .map(|d| d.format("%Y-%m-%d").to_string() == s)
         .unwrap_or(false)
