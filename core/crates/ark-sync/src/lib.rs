@@ -3,6 +3,7 @@
 pub mod protocol;
 pub mod protocol_negotiation;
 pub mod transport;
+pub mod transport_select;
 
 pub use ark_application::sync_storage::SyncRuntimeStorage;
 pub use ark_domain::integration_replication::SignedSyncEnvelope;

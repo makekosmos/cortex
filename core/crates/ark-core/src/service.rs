@@ -50,12 +50,12 @@ use crate::relay_sync::{RelaySync, RelaySyncConfig};
 use crate::replication_storage::SyncRuntimeStorage;
 use crate::sync_client::SyncClient;
 use crate::sync_server::{PeerEntry, SyncServer};
-use crate::transport_select::{select_transport, TransportChoice};
 use crate::types::*;
 use ark_net::beacon::{BeaconPeer, BroadcastDiscovery, BroadcastDiscoveryOptions};
 use ark_net::host::{get_host_device_name, get_own_addresses};
 use ark_net::net::is_address_routable;
 use ark_net::sync_bind::SyncBind;
+use ark_sync::transport_select::{select_transport, TransportChoice};
 
 mod admission;
 mod definitions;

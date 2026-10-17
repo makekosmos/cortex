@@ -28,7 +28,7 @@ pub mod sync_transport;
 mod task_set;
 #[cfg(test)]
 pub(crate) mod test_support;
-pub mod transport_select;
+pub use ark_sync::transport_select;
 pub mod type_registry;
 pub mod types;
 
