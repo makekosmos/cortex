@@ -107,6 +107,9 @@ fn apply_core_task_write(
         Some(&registration),
     )
     .map_err(|error| error.to_string())?;
+    local_task_session
+        .ok_or_else(|| "object_write_origin_mismatch".to_string())?
+        .ensure_legacy_task_write_allowed(&object.id)?;
     let (payload_json, payload_sha256) =
         crate::domain::object_write::canonical_payload_digest(&object, &links)?;
     let representation_kind = "full";

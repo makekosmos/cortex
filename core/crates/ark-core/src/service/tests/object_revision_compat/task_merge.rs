@@ -1,7 +1,7 @@
 use super::*;
 
 #[tokio::test]
-async fn authenticated_full_snapshot_does_not_erase_saved_task_merge_variants() {
+async fn authenticated_full_snapshot_is_rejected_for_operation_enabled_task() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
     handle_request(
@@ -13,6 +13,21 @@ async fn authenticated_full_snapshot_does_not_erase_saved_task_merge_variants() 
     .await
     .unwrap();
     admit_inbound_peer(&state).await;
+
+    let mut initial = canonical_task_object(Some("0.1.0"), canonical_task_props());
+    initial.id = "snapshot-with-merge-history".into();
+    initial.title = "original local value".into();
+    handle_request(
+        &state,
+        Request::UpsertObject {
+            object: initial,
+            expected_snapshot: None,
+            operation_id: None,
+            device_id: Some("merge-test-device".into()),
+        },
+    )
+    .await
+    .unwrap();
 
     let operation =
         |suffix, parents: &[char], title: &str| crate::domain::task_merge::TaskMergeOperation {
@@ -53,6 +68,19 @@ async fn authenticated_full_snapshot_does_not_erase_saved_task_merge_variants() 
         .unwrap();
     }
 
+    let local_error = handle_request(
+        &state,
+        Request::UpsertObject {
+            object: task("snapshot-with-merge-history", "local legacy overwrite"),
+            expected_snapshot: None,
+            operation_id: None,
+            device_id: Some("merge-test-device".into()),
+        },
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(local_error, "task_merge_operation_mode_requires_upgrade");
+
     let object = with_conn(&state, |conn| {
         crate::canonical_types::ingress::prepare_object(
             conn,
@@ -62,10 +90,11 @@ async fn authenticated_full_snapshot_does_not_erase_saved_task_merge_variants() 
     })
     .unwrap();
     let snapshot = full_task_entity(&object, "2990-01-01T00:00:00.000Z:000001:inbound-peer");
-    assert_eq!(
-        apply_authenticated(&state, &snapshot, "merge-history-snapshot").await,
-        crate::application::sync_storage::InboundApplyOutcome::Applied
-    );
+    let error = SqliteStorageBackend::with_db_handle(get_db_handle(&state).unwrap())
+        .apply_authenticated_entity_with_id(&snapshot, "inbound-peer", "merge-history-snapshot")
+        .await
+        .unwrap_err();
+    assert_eq!(error, "task_merge_operation_mode_requires_upgrade");
 
     let conflicts = handle_request(
         &state,
@@ -90,11 +119,36 @@ async fn authenticated_full_snapshot_does_not_erase_saved_task_merge_variants() 
             .len(),
         2
     );
-    assert_eq!(
-        with_conn(&state, |conn| Ok(db::get_object(conn, &object.id)?
-            .unwrap()
-            .title))
-        .unwrap(),
-        "legacy snapshot"
-    );
+    with_conn(&state, |conn| {
+        assert_eq!(
+            db::get_object(conn, &object.id)?.unwrap().title,
+            "original local value"
+        );
+        let receipts: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM entity_write_receipts WHERE entity_id = ?1",
+                [&object.id],
+                |row| row.get(0),
+            )
+            .map_err(|error| error.to_string())?;
+        assert_eq!(receipts, 1);
+        let feed: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM ark_committed_feed WHERE entity_id = ?1",
+                [&object.id],
+                |row| row.get(0),
+            )
+            .map_err(|error| error.to_string())?;
+        assert_eq!(feed, 1);
+        let operations: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM task_merge_operations WHERE object_id = ?1",
+                [&object.id],
+                |row| row.get(0),
+            )
+            .map_err(|error| error.to_string())?;
+        assert_eq!(operations, 3);
+        Ok(())
+    })
+    .unwrap();
 }

@@ -172,6 +172,21 @@ impl ObjectWriteSession for SqliteObjectWriteSession<'_> {
 }
 
 impl crate::application::task_mutation::TaskMutationSession for SqliteObjectWriteSession<'_> {
+    fn ensure_legacy_task_write_allowed(&self, id: &str) -> Result<(), String> {
+        let operation_enabled = self
+            .conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM task_merge_operations WHERE object_id = ?1)",
+                [id],
+                |row| row.get::<_, bool>(0),
+            )
+            .map_err(|error| error.to_string())?;
+        if operation_enabled {
+            return Err("task_merge_operation_mode_requires_upgrade".into());
+        }
+        Ok(())
+    }
+
     fn persist_task(&self, object: &ArkObject, links: &[ObjectLink]) -> Result<(), String> {
         self.persist_object(object, links)
     }

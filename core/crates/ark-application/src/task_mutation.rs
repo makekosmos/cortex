@@ -6,6 +6,7 @@ use serde::Serialize;
 use serde_json::json;
 
 pub trait TaskMutationSession: ObjectWriteSession {
+    fn ensure_legacy_task_write_allowed(&self, id: &str) -> Result<(), String>;
     fn persist_task(&self, object: &ArkObject, links: &[ObjectLink]) -> Result<(), String>;
     fn record_task_upsert(&self, id: &str, device_id: &str) -> Result<String, String>;
     fn record_task_link_upsert(&self, id: &str, device_id: &str) -> Result<String, String>;
@@ -57,6 +58,7 @@ pub fn apply_inbound_task_mutation(
             source_hlc,
         } => {
             validate_task(object)?;
+            session.ensure_legacy_task_write_allowed(&object.id)?;
             session.persist_task(object, links)?;
             session.record_remote_revision(&object.id, source_hlc)?;
         }
@@ -66,6 +68,7 @@ pub fn apply_inbound_task_mutation(
             source_hlc,
         } => {
             validate_task(object)?;
+            session.ensure_legacy_task_write_allowed(&object.id)?;
             if session
                 .current_revision(&object.id)?
                 .as_deref()
@@ -84,6 +87,7 @@ pub fn apply_inbound_task_mutation(
             source_hlc,
         } => {
             validate_task(object)?;
+            session.ensure_legacy_task_write_allowed(&object.id)?;
             if session
                 .legacy_task_revision(&object.id)?
                 .as_deref()
@@ -97,6 +101,7 @@ pub fn apply_inbound_task_mutation(
             session.record_legacy_task_revision(&object.id, source_hlc)?;
         }
         InboundTaskMutation::RemoteHardDelete { entity } => {
+            session.ensure_legacy_task_write_allowed(&entity.id)?;
             if session
                 .current_revision(&entity.id)?
                 .as_deref()
@@ -148,6 +153,7 @@ pub fn apply_task_upsert(
     if object.type_id != "core.task" || object.type_version != "0.1.0" {
         return Err("object_write_slice_unsupported_type".into());
     }
+    session.ensure_legacy_task_write_allowed(&object.id)?;
     session.persist_task(object, links)?;
     let hlc = session.record_task_upsert(&object.id, device_id)?;
     let mut entities = vec![sync_entity("object", &object.id, object, &hlc, None)?];
@@ -162,6 +168,7 @@ pub fn apply_task_delete(
     session: &dyn TaskMutationSession,
     write: LocalTaskDelete,
 ) -> Result<TaskDeleteCommit, String> {
+    session.ensure_legacy_task_write_allowed(&write.id)?;
     if let Some(expected) = &write.expected_snapshot {
         if session.task_snapshot(&write.id)? != *expected {
             return Err("object_conflict:stale_snapshot".into());
