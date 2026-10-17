@@ -40,6 +40,10 @@ async fn blocked_database_accepts_agenda_write_through_service() {
             .unwrap(),
         json!(true)
     );
+    service
+        .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(5))
+        .await
+        .unwrap();
 }
 
 #[test]
