@@ -19,8 +19,10 @@ async fn registry_disable_closes_ready_session_and_removes_discovery_record() {
         registry_admission: None,
         in_flight_feed_position: Some(42),
         in_flight_feed_policy_identity: None,
-        pending_initial_snapshot_ack: Some("snapshot".to_owned()),
-        pending_initial_snapshot_policy_identity: None,
+        pending_initial_snapshot: Some(ark_sync::server_snapshot::PendingSnapshotAck {
+            batch_id: "snapshot".to_owned(),
+            policy_identity: None,
+        }),
         tx,
     };
     let mut peers = HashMap::new();

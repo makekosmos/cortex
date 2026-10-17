@@ -90,11 +90,11 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
             let (tx, peer_device_id, peer_sync_complete, policy_bound) = {
                 let peers_guard = peers.lock().await;
                 match peers_guard.get(&peer_id) {
-                    Some(p) if p.ready_peer.is_some() => (
-                        p.tx.clone(),
-                        p.device_id.clone(),
-                        p.sync_complete,
-                        p.negotiated_protocol.as_ref().is_some_and(|protocol| {
+                    Some(peer) if peer.ready_peer.is_some() => (
+                        peer.tx.clone(),
+                        peer.device_id.clone(),
+                        peer.sync_complete,
+                        peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
                             protocol.capabilities.contains(
                                 &ark_sync::protocol::ProtocolCapability::PolicyBoundDeliveryV1,
                             )
@@ -103,218 +103,51 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                     _ => return,
                 }
             };
+            let mut snapshot = match ark_sync::server_snapshot::OutboundSnapshot::begin(
+                storage.as_ref(),
+                peer_device_id.clone(),
+                remote_vector,
+                peer_sync_complete,
+                policy_bound,
+            )
+            .await
+            {
+                Ok(snapshot) => snapshot,
+                Err(error) => {
+                    eprintln!("{TAG} outbound snapshot setup failed for {peer_device_id}: {error}");
+                    return;
+                }
+            };
 
-            let mut policy_identity = if policy_bound {
-                match storage
-                    .accepted_policy_identity_for_peer(&peer_device_id)
-                    .await
-                {
-                    Ok(Some(identity)) => Some(identity),
-                    Ok(None) => {
-                        eprintln!("{TAG} negotiated peer has no accepted policy identity");
+            loop {
+                match snapshot.next_page(storage.as_ref()).await {
+                    Ok(ark_sync::server_snapshot::SnapshotEmission::Page(messages)) => {
+                        for message in messages {
+                            send_msg(&tx, &message);
+                        }
+                    }
+                    Ok(ark_sync::server_snapshot::SnapshotEmission::Terminal { ack, message }) => {
+                        let ticket_stored = {
+                            let mut peers_guard = peers.lock().await;
+                            peers_guard.get_mut(&peer_id).is_some_and(|peer| {
+                                if peer.ready_peer.is_none() {
+                                    return false;
+                                }
+                                peer.pending_initial_snapshot = Some(ack);
+                                true
+                            })
+                        };
+                        if ticket_stored {
+                            send_msg(&tx, &message);
+                        }
                         return;
                     }
                     Err(error) => {
-                        eprintln!("{TAG} accepted policy identity read failed: {error}");
+                        eprintln!("{TAG} outbound snapshot failed for {peer_device_id}: {error}");
                         return;
                     }
                 }
-            } else {
-                None
-            };
-
-            let mut local_vector = match load_version_vector(storage).await {
-                Ok(vector) => vector,
-                Err(error) => {
-                    eprintln!("{TAG} failed to load sync version vector: {error}");
-                    return;
-                }
-            };
-
-            // Hole-tolerant cursors (KOS-302): snapshot the completeness
-            // claims BEFORE the first page is read. Computed afterwards
-            // they could include a seq allocated mid-pull — the peer would
-            // advance its cursor past an entry it never received.
-            let read_class =
-                ark_application::sync_storage::SyncReadClass::for_sync_state(peer_sync_complete);
-            let complete_through = match storage
-                .usage_complete_through_for_peer(&peer_device_id, read_class)
-                .await
-            {
-                Ok(through) => through,
-                Err(error) => {
-                    eprintln!(
-                        "{TAG} outbound usage progress read failed for {peer_device_id}: {error}"
-                    );
-                    return;
-                }
-            };
-
-            let initial_local_vector = local_vector.clone();
-            let mut vector_updated = false;
-            let mut offset = 0;
-            'snapshot: loop {
-                if policy_bound {
-                    let current_identity = match storage
-                        .accepted_policy_identity_for_peer(&peer_device_id)
-                        .await
-                    {
-                        Ok(Some(identity)) => Some(identity),
-                        Ok(None) => {
-                            eprintln!("{TAG} accepted policy identity is missing");
-                            return;
-                        }
-                        Err(error) => {
-                            eprintln!("{TAG} accepted policy identity read failed: {error}");
-                            return;
-                        }
-                    };
-                    if current_identity != policy_identity {
-                        policy_identity = current_identity;
-                        local_vector.clone_from(&initial_local_vector);
-                        vector_updated = false;
-                        offset = 0;
-                    }
-                }
-                let mut load_vector = local_vector.clone();
-                merge_usage_cursors(&mut load_vector, &remote_vector);
-                let entities = match policy_identity.as_ref() {
-                    Some(identity) => match storage
-                        .load_policy_bound_entities_page_for_peer(
-                            &peer_device_id,
-                            read_class,
-                            &load_vector,
-                            offset,
-                            SYNC_LOAD_PAGE_SIZE,
-                            identity,
-                        )
-                        .await
-                    {
-                        Ok(page) => {
-                            debug_assert_eq!(page.identity, *identity);
-                            page.entities
-                        }
-                        Err(error) if error.contains("stale_or_unnegotiated_sync_policy") => {
-                            continue 'snapshot;
-                        }
-                        Err(error) => {
-                            eprintln!(
-                                "{TAG} outbound sync page read failed for {peer_device_id}: {error}"
-                            );
-                            return;
-                        }
-                    },
-                    None => match storage
-                        .load_entities_page_for_peer(
-                            &peer_device_id,
-                            read_class,
-                            &load_vector,
-                            offset,
-                            SYNC_LOAD_PAGE_SIZE,
-                        )
-                        .await
-                    {
-                        Ok(entities) => entities,
-                        Err(error) => {
-                            eprintln!(
-                                "{TAG} outbound sync page read failed for {peer_device_id}: {error}"
-                            );
-                            return;
-                        }
-                    },
-                };
-                if entities.is_empty() {
-                    if policy_bound {
-                        let current_identity = match storage
-                            .accepted_policy_identity_for_peer(&peer_device_id)
-                            .await
-                        {
-                            Ok(identity) => identity,
-                            Err(error) => {
-                                eprintln!("{TAG} accepted policy identity read failed: {error}");
-                                return;
-                            }
-                        };
-                        if current_identity != policy_identity {
-                            policy_identity = current_identity;
-                            local_vector.clone_from(&initial_local_vector);
-                            vector_updated = false;
-                            offset = 0;
-                            continue 'snapshot;
-                        }
-                    }
-                    break;
-                }
-                offset += entities.len();
-                let mut to_send = Vec::new();
-                for entity in entities {
-                    if !is_usage_entity(&entity) && !local_vector.contains_key(&entity.id) {
-                        local_vector.insert(entity.id.clone(), entity.hlc.clone());
-                        vector_updated = true;
-                    }
-                    if should_send_entity(&remote_vector, &entity) {
-                        to_send.push(entity);
-                    }
-                }
-                if policy_bound {
-                    let current_identity = match storage
-                        .accepted_policy_identity_for_peer(&peer_device_id)
-                        .await
-                    {
-                        Ok(identity) => identity,
-                        Err(error) => {
-                            eprintln!("{TAG} accepted policy identity read failed: {error}");
-                            return;
-                        }
-                    };
-                    if current_identity != policy_identity {
-                        policy_identity = current_identity;
-                        local_vector.clone_from(&initial_local_vector);
-                        vector_updated = false;
-                        offset = 0;
-                        continue 'snapshot;
-                    }
-                }
-                for batch in split_into_batches(&to_send) {
-                    send_msg(
-                        &tx,
-                        &LanSyncMessage::SyncChanges {
-                            policy_identity: policy_identity.clone(),
-                            batch_id: generate_id(),
-                            entities: batch,
-                            is_last: false,
-                            origin_device_id: None,
-                            usage_complete_through: None,
-                        },
-                    );
-                }
             }
-            if vector_updated {
-                if let Err(error) = save_version_vector(storage, &local_vector).await {
-                    eprintln!("{TAG} failed to save sync version vector: {error}");
-                    return;
-                }
-            }
-            let terminal_batch_id = generate_id();
-            {
-                let mut peers_guard = peers.lock().await;
-                if let Some(peer) = peers_guard.get_mut(&peer_id) {
-                    peer.pending_initial_snapshot_ack = Some(terminal_batch_id.clone());
-                    peer.pending_initial_snapshot_policy_identity = policy_identity.clone();
-                }
-            }
-            send_msg(
-                &tx,
-                &LanSyncMessage::SyncChanges {
-                    policy_identity,
-                    batch_id: terminal_batch_id,
-                    entities: vec![],
-                    is_last: true,
-                    origin_device_id: None,
-                    usage_complete_through: (!complete_through.is_empty())
-                        .then_some(complete_through),
-                },
-            );
         }
 
         LanSyncMessage::SyncChanges {

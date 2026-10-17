@@ -167,8 +167,7 @@
                 registry_admission: None,
                 in_flight_feed_position: None,
                 in_flight_feed_policy_identity: None,
-                pending_initial_snapshot_ack: None,
-                pending_initial_snapshot_policy_identity: None,
+                pending_initial_snapshot: None,
                 tx: tx1,
             },
         );
@@ -187,8 +186,7 @@
                 registry_admission: None,
                 in_flight_feed_position: None,
                 in_flight_feed_policy_identity: None,
-                pending_initial_snapshot_ack: None,
-                pending_initial_snapshot_policy_identity: None,
+                pending_initial_snapshot: None,
                 tx: tx2,
             },
         );
@@ -207,8 +205,7 @@
                 registry_admission: None,
                 in_flight_feed_position: None,
                 in_flight_feed_policy_identity: None,
-                pending_initial_snapshot_ack: None,
-                pending_initial_snapshot_policy_identity: None,
+                pending_initial_snapshot: None,
                 tx: tx3,
             },
         );
@@ -253,8 +250,7 @@
                 registry_admission: None,
                 in_flight_feed_position: None,
                 in_flight_feed_policy_identity: None,
-                pending_initial_snapshot_ack: None,
-                pending_initial_snapshot_policy_identity: None,
+                pending_initial_snapshot: None,
                 tx,
             },
         );
@@ -293,8 +289,7 @@
             registry_admission: None,
             in_flight_feed_position: None,
             in_flight_feed_policy_identity: None,
-            pending_initial_snapshot_ack: None,
-            pending_initial_snapshot_policy_identity: None,
+            pending_initial_snapshot: None,
             tx: tx.clone(),
         };
         server.peers.lock().await.insert(1, state(1, "dup"));

@@ -23,8 +23,10 @@ async fn stale_snapshot_ack_does_not_complete_or_clear_pending_snapshot() {
         registry_admission: None,
         in_flight_feed_position: None,
         in_flight_feed_policy_identity: None,
-        pending_initial_snapshot_ack: Some("batch-2".to_owned()),
-        pending_initial_snapshot_policy_identity: Some(expected.clone()),
+        pending_initial_snapshot: Some(ark_sync::server_snapshot::PendingSnapshotAck {
+            batch_id: "batch-2".to_owned(),
+            policy_identity: Some(expected.clone()),
+        }),
         tx,
     };
     let mut peers = HashMap::new();
@@ -60,11 +62,15 @@ async fn stale_snapshot_ack_does_not_complete_or_clear_pending_snapshot() {
     let peer = peers.get(&7).unwrap();
     assert!(!peer.sync_complete);
     assert_eq!(
-        peer.pending_initial_snapshot_ack.as_deref(),
+        peer.pending_initial_snapshot
+            .as_ref()
+            .map(|pending| pending.batch_id.as_str()),
         Some("batch-2")
     );
     assert_eq!(
-        peer.pending_initial_snapshot_policy_identity.as_ref(),
+        peer.pending_initial_snapshot
+            .as_ref()
+            .and_then(|pending| pending.policy_identity.as_ref()),
         Some(&expected)
     );
     assert_eq!(storage.outbound_snapshot_identity_completion_count(), 0);

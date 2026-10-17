@@ -11,48 +11,33 @@ pub(super) async fn handle_live_message(ctx: &MessageContext, peer_id: usize, ms
             let pending = {
                 let peers_guard = peers.lock().await;
                 peers_guard.get(&peer_id).and_then(|peer| {
-                    (peer.pending_initial_snapshot_ack.as_deref() == Some(batch_id.as_str())).then(
-                        || {
-                            (
-                                peer.device_id.clone(),
-                                peer.pending_initial_snapshot_policy_identity.clone(),
-                            )
-                        },
-                    )
+                    peer.pending_initial_snapshot
+                        .as_ref()
+                        .filter(|pending| pending.batch_id == batch_id)
+                        .map(|pending| (peer.device_id.clone(), pending.clone()))
                 })
             };
-            if let Some((peer_device_id, expected_identity)) = pending {
-                if expected_identity != policy_identity {
-                    return;
-                }
-                let completion = match expected_identity.as_ref() {
-                    Some(identity) => {
-                        storage
-                            .complete_outbound_snapshot_identity(&peer_device_id, identity)
-                            .await
-                    }
-                    None => match storage
-                        .selective_sync_policy_generation_for_peer(&peer_device_id)
-                        .await
-                    {
-                        Ok(generation) => {
-                            storage
-                                .complete_outbound_snapshot(&peer_device_id, generation)
-                                .await
-                        }
-                        Err(error) => Err(error),
-                    },
-                };
+            if let Some((peer_device_id, pending)) = pending {
+                let completion = ark_sync::server_snapshot::acknowledge_snapshot(
+                    storage.as_ref(),
+                    &peer_device_id,
+                    &pending,
+                    &batch_id,
+                    policy_identity.as_ref(),
+                )
+                .await;
                 match completion {
-                    Ok(_) => {
-                        if let Some(peer) = peers.lock().await.get_mut(&peer_id) {
-                            if peer.pending_initial_snapshot_ack.as_deref()
-                                == Some(batch_id.as_str())
-                            {
-                                peer.pending_initial_snapshot_ack = None;
-                                peer.pending_initial_snapshot_policy_identity = None;
-                                peer.sync_complete = true;
+                    Ok(true) => {
+                        let completed = peers.lock().await.get_mut(&peer_id).is_some_and(|peer| {
+                            if peer.pending_initial_snapshot.as_ref() != Some(&pending) {
+                                return false;
                             }
+                            peer.pending_initial_snapshot = None;
+                            peer.sync_complete = true;
+                            true
+                        });
+                        if !completed {
+                            return;
                         }
                         if let Err(error) =
                             sync_server_peers::pump_committed_feed(storage, peers, peer_id).await
@@ -67,6 +52,7 @@ pub(super) async fn handle_live_message(ctx: &MessageContext, peer_id: usize, ms
                             eprintln!("{TAG} task merge pump failed for {peer_device_id}: {error}");
                         }
                     }
+                    Ok(false) => {}
                     Err(error) => eprintln!("{TAG} outbound snapshot completion failed: {error}"),
                 }
             }

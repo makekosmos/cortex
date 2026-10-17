@@ -39,7 +39,6 @@ mod sync_server_route_tests;
 pub(crate) mod sync_server_tests;
 
 const TAG: &str = "[SyncServer]";
-const SYNC_LOAD_PAGE_SIZE: usize = 100;
 
 // ---------------------------------------------------------------------------
 // Callbacks
@@ -71,8 +70,7 @@ struct PeerState {
     registry_admission: Option<ark_sync::server_session::DirectServerAdmission>,
     in_flight_feed_position: Option<i64>,
     in_flight_feed_policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
-    pending_initial_snapshot_ack: Option<String>,
-    pending_initial_snapshot_policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
+    pending_initial_snapshot: Option<ark_sync::server_snapshot::PendingSnapshotAck>,
     tx: mpsc::UnboundedSender<Message>,
 }
 
@@ -134,7 +132,7 @@ async fn current_ready_peer(
                 peer.ready_peer = None;
                 peer.sync_complete = false;
                 peer.in_flight_feed_position = None;
-                peer.pending_initial_snapshot_ack = None;
+                peer.pending_initial_snapshot = None;
                 let _ = peer.tx.send(Message::Close(None));
             }
         }

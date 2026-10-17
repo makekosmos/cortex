@@ -58,7 +58,7 @@ impl SyncServer {
                 peer.ready_peer = None;
                 peer.sync_complete = false;
                 peer.in_flight_feed_position = None;
-                peer.pending_initial_snapshot_ack = None;
+                peer.pending_initial_snapshot = None;
                 let _ = peer.tx.send(Message::Close(None));
                 revoked.push(*peer_id);
             }
