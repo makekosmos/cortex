@@ -21,6 +21,73 @@ async fn apply_batch(
 }
 
 #[tokio::test]
+async fn two_sqlite_peers_converge_on_the_same_conflict_set() {
+    let (_left_dir, _left_path, left, mut left_owner) = open_merge_fixture().await;
+    let right_dir = tempfile::tempdir().unwrap();
+    let right_path = right_dir
+        .path()
+        .join("task-merge-right.db")
+        .to_string_lossy()
+        .into_owned();
+    let (right, mut right_owner) = DbHandle::open(right_path.clone(), "right-device".into())
+        .await
+        .unwrap();
+    let peer_id = "merge-test-device";
+    let left_endpoint = iroh::SecretKey::generate().public().to_string();
+    let right_endpoint = iroh::SecretKey::generate().public().to_string();
+    for (handle, local_id, remote_id, endpoint) in [
+        (&left, "merge-test-device", "right-device", right_endpoint),
+        (&right, "right-device", peer_id, left_endpoint),
+    ] {
+        handle
+            .submit(
+                CommandContext::engine(),
+                EnrollPairedDeviceCommand::new(local_id.into(), remote_id.into(), endpoint),
+            )
+            .await
+            .unwrap();
+    }
+    append(&left, operation('1', &[], "common base"), None)
+        .await
+        .unwrap();
+    for (id, title) in [('2', "left edit"), ('3', "right edit")] {
+        append(&left, operation(id, &['1'], title), None)
+            .await
+            .unwrap();
+    }
+    let identity = crate::data_platform::default_sync_policy_identity();
+    let batch = left
+        .submit(
+            CommandContext::authenticated_peer("right-device".into()),
+            PrepareTaskMergeBatchCommand::new("right-device".into(), identity.clone(), 100),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    apply_batch(&right, peer_id, "merge-test-device", identity, batch)
+        .await
+        .unwrap();
+
+    let conflict_set = right
+        .query(
+            CommandContext::engine(),
+            TaskConflictSetQuery::new(
+                "task-1".into(),
+                crate::domain::task_merge::TaskMergeUnit::Title,
+            ),
+        )
+        .await
+        .unwrap()
+        .conflict_set
+        .unwrap();
+    assert_eq!(conflict_set.common_ancestors.len(), 1);
+    assert_eq!(conflict_set.variants.len(), 2);
+    assert!(conflict_set.has_conflict());
+    shutdown(&mut left_owner).await;
+    shutdown(&mut right_owner).await;
+}
+
+#[tokio::test]
 async fn inbound_batch_atomically_applies_remote_resolution_and_replays_idempotently() {
     let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
     let peer_id = "paired-peer";
