@@ -83,6 +83,16 @@ pub fn bootstrap_committed_feed_heads(conn: &Connection) -> Result<(), String> {
             )
             .map_err(|error| error.to_string())?;
         }
+        let watermark = committed_feed_watermark(conn)?;
+        conn.execute(
+            "INSERT INTO ark_committed_feed_meta(meta_key, meta_value)
+             VALUES ('watermark-v1', ?1)
+             ON CONFLICT(meta_key) DO UPDATE SET
+                 meta_value = MAX(CAST(ark_committed_feed_meta.meta_value AS INTEGER),
+                                  CAST(excluded.meta_value AS INTEGER))",
+            [watermark.to_string()],
+        )
+        .map_err(|error| error.to_string())?;
         Ok(())
     })();
     match result {

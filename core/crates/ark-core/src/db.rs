@@ -51,11 +51,12 @@ pub(crate) use command::{
 pub use committed_feed::{
     acknowledge_outbound, acknowledge_outbound_identity, append_committed_change,
     begin_outbound_policy, begin_outbound_policy_identity, bootstrap_committed_feed_heads,
-    committed_feed_snapshot, complete_outbound_snapshot, complete_outbound_snapshot_identity,
-    entity_inbox_message_id, load_outbound_progress, read_committed_feed_delivery_page,
-    read_committed_feed_delivery_page_for_peer, read_committed_feed_page, receive_inbox_payload,
-    record_outbound_scan, record_outbound_scan_identity, set_inbox_state, InboxState,
-    MAX_FEED_PAGE_SIZE, MAX_INBOX_PAYLOAD_BYTES,
+    committed_feed_snapshot, committed_feed_watermark, complete_outbound_snapshot,
+    complete_outbound_snapshot_identity, entity_inbox_message_id, load_outbound_progress,
+    read_committed_feed_delivery_page, read_committed_feed_delivery_page_for_peer,
+    read_committed_feed_page, receive_inbox_payload, record_outbound_scan,
+    record_outbound_scan_identity, set_inbox_state, InboxState, MAX_FEED_PAGE_SIZE,
+    MAX_INBOX_PAYLOAD_BYTES,
 };
 pub use compact::{
     compact_usage_sync_log, usage_log_complete_through, USAGE_SYNC_LOG_RETENTION_DAYS,

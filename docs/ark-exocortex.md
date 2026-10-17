@@ -225,6 +225,10 @@ documentation](https://www.sqlite.org/pragma.html#pragma_synchronous)). Лока
 commit receipt описаны в [ADR-001](adr/ADR-001-ark-wal-full.md); метод и
 ограничения приведены в [измерении WAL durability](experiments/2026-10-16-ark-sync-durability.md).
 Restore к старому backup и media failure остаются отдельными случаями.
+Текущий код уже хранит монотонный committed-feed watermark и отказывает в
+восстановлении снимка, который его откатил. Новый `sync_incarnation`, обмен им
+с peers и безопасный resnapshot пока остаются целевым контрактом KOS-428, а не
+готовой функцией.
 
 Backup создаётся SQLite backup API/согласованным snapshot, с manifest версии и проверкой. Простая копия живого `ark.db` без учёта WAL недостаточна. Проверяется восстановление на отдельной БД.
 

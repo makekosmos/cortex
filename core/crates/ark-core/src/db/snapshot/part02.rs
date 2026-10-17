@@ -29,14 +29,17 @@ pub(in crate::db) fn restore_snapshot_impl(
     };
 
     // 2. Validate staging: integrity + schema match против live.
-    let validated = (|| -> Result<Vec<String>, String> {
+    let validated = (|| -> Result<(Vec<String>, i64), String> {
         let src = Connection::open_with_flags(&staging, OpenFlags::SQLITE_OPEN_READ_ONLY)
             .map_err(|e| format!("snapshot open failed: {e}"))?;
         check_integrity(&src)?;
-        schema_fingerprint(&src)
+        Ok((
+            schema_fingerprint(&src)?,
+            crate::db::committed_feed_watermark(&src)?,
+        ))
     })();
-    let snapshot_fp = match validated {
-        Ok(fp) => fp,
+    let (snapshot_fp, snapshot_feed_watermark) = match validated {
+        Ok(snapshot) => snapshot,
         Err(e) => {
             cleanup_staging(&staging);
             return Err(e);
@@ -46,6 +49,30 @@ pub(in crate::db) fn restore_snapshot_impl(
     if snapshot_fp != live_fp {
         cleanup_staging(&staging);
         return Err("snapshot schema mismatch with live ARK DB".to_string());
+    }
+
+    // Restoring an older sync cursor can make a peer-observed feed position
+    // available for reuse. The feed stores locators, not entity payloads, so
+    // it cannot reconstruct post-snapshot changes. Refuse before changing the
+    // live DB; a recovery/resnapshot protocol can safely relax this boundary.
+    let live_feed_watermark = match crate::db::committed_feed_watermark(conn) {
+        Ok(watermark) => watermark,
+        Err(error) => {
+            cleanup_staging(&staging);
+            return Err(format!(
+                "live committed feed watermark unavailable: {error}"
+            ));
+        }
+    };
+    if snapshot_feed_watermark < live_feed_watermark {
+        cleanup_staging(&staging);
+        return Err(format!(
+            concat!(
+                "snapshot predates committed sync history (snapshot feed {}, ",
+                "live feed {}); live database was not changed"
+            ),
+            snapshot_feed_watermark, live_feed_watermark
+        ));
     }
 
     if let Err(e) = recovery::preserve_live_device_identity(conn, &staging) {

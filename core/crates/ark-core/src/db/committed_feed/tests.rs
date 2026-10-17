@@ -72,6 +72,26 @@ mod tests {
     }
 
     #[test]
+    fn committed_feed_watermark_survives_pruning_and_reopen() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("ark.db");
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch(crate::schema::CREATE_TABLES).unwrap();
+        append_committed_change(&conn, "object", "a", "r1", false, None, None).unwrap();
+        append_committed_change(&conn, "object", "b", "r2", false, None, None).unwrap();
+
+        conn.execute("DELETE FROM ark_committed_feed", []).unwrap();
+        assert_eq!(committed_feed_snapshot(&conn).unwrap().high_watermark, 2);
+        drop(conn);
+
+        let conn = Connection::open(&path).unwrap();
+        assert_eq!(committed_feed_snapshot(&conn).unwrap().high_watermark, 2);
+        let next = append_committed_change(&conn, "object", "c", "r3", false, None, None).unwrap();
+        assert_eq!(next, 3);
+        assert_eq!(committed_feed_snapshot(&conn).unwrap().high_watermark, 3);
+    }
+
+    #[test]
     fn feed_heads_bootstrap_legacy_rows_once_and_is_idempotent() {
         let conn = db();
         conn.execute(

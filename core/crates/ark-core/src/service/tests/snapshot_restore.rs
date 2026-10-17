@@ -77,10 +77,10 @@ fn live_object_ids(state: &Arc<ServiceState>) -> Vec<String> {
     .unwrap()
 }
 
-/// AC1+AC4: restore через RPC заменяет live содержимое и переживает
-/// restart-equivalent (re-Init → reopen того же файла).
+/// Restore refuses a stale snapshot before changing live data, including
+/// committed object changes that may already have been observed by a peer.
 #[tokio::test]
-async fn db_backup_restore_roundtrip_survives_reinit() {
+async fn db_backup_restore_refuses_to_rollback_committed_feed() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
     let db_path = init_snapshot_db(&fixture).await;
@@ -102,21 +102,20 @@ async fn db_backup_restore_roundtrip_survives_reinit() {
     seed_rpc_object(&state, "obj-after", "after").await;
     assert_eq!(live_object_ids(&state), vec!["obj-after".to_string()]);
 
-    let report = handle_request(
+    let error = handle_request(
         &state,
         Request::DbBackupRestore {
             backup_id: "ark.db.backup-rt".to_string(),
         },
     )
     .await
-    .unwrap();
-    assert_eq!(report["restored"], json!(true));
-    assert_eq!(report["id"], json!("ark.db.backup-rt"));
-    assert_eq!(report["objects"], json!(1));
+    .expect_err("stale snapshot must not roll back committed feed progress");
+    assert!(error.contains("snapshot predates committed sync history"));
+    assert!(error.contains("live database was not changed"));
 
-    assert_eq!(live_object_ids(&state), vec!["obj-before".to_string()]);
+    assert_eq!(live_object_ids(&state), vec!["obj-after".to_string()]);
 
-    // Restart-equivalent: re-Init переоткрывает файл с диска.
+    // Restart-equivalent: refusal leaves the same live contents on disk.
     handle_request(
         &state,
         Request::Init {
@@ -125,7 +124,7 @@ async fn db_backup_restore_roundtrip_survives_reinit() {
     )
     .await
     .unwrap();
-    assert_eq!(live_object_ids(&state), vec!["obj-before".to_string()]);
+    assert_eq!(live_object_ids(&state), vec!["obj-after".to_string()]);
 }
 
 #[tokio::test]
