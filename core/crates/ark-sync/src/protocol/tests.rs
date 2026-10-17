@@ -5,12 +5,12 @@ mod tests {
 
     #[test]
     fn task_merge_batch_messages_round_trip_with_policy_identity() {
-        let identity = crate::application::sync_storage::PolicyIdentity {
+        let identity = ark_application::sync_storage::PolicyIdentity {
             revision: 7,
             digest: "ab".repeat(32),
             active: true,
         };
-        let batch = crate::application::sync_storage::TaskMergeBatch {
+        let batch = ark_application::sync_storage::TaskMergeBatch {
             batch_id: "01".repeat(16),
             identity: identity.clone(),
             after_position: 4,
@@ -65,7 +65,7 @@ mod tests {
 
     #[test]
     fn test_version_vector_serialization() {
-        let mut vector = crate::types::VersionVector::new();
+        let mut vector = ark_domain::types::VersionVector::new();
         vector.insert(
             "e1".to_string(),
             "2026-01-01T00:00:00.000Z:000000:dev".to_string(),
@@ -83,16 +83,16 @@ mod tests {
 
     #[test]
     fn sync_policy_message_round_trips_canonical_typed_rules() {
-        let rule = crate::data_platform::SyncProfileRule {
+        let rule = ark_application::sync_policy::SyncProfileRule {
             resource_kind: "type".into(),
             resource_id: "com.example.note".into(),
-            mode: crate::data_platform::SyncMode::Metadata,
-            filter: crate::data_platform::FilterV1::parse(
+            mode: ark_domain::selective_sync::SyncMode::Metadata,
+            filter: ark_domain::selective_sync::FilterV1::parse(
                 r#"{"version":1,"where":{"eq":{"field":"kind","value":"note"}}}"#,
             )
             .unwrap(),
         };
-        let profile = crate::data_platform::SyncProfile {
+        let profile = ark_application::sync_policy::SyncProfile {
             profile_id: "phone".into(),
             device_id: "device-a".into(),
             revision: 3,
@@ -120,7 +120,7 @@ mod tests {
 
     #[test]
     fn sync_policy_message_preserves_inactive_revision() {
-        let profile = crate::data_platform::SyncProfile {
+        let profile = ark_application::sync_policy::SyncProfile {
             profile_id: "phone".into(),
             device_id: "device-a".into(),
             revision: 4,
@@ -291,7 +291,7 @@ mod tests {
 
     #[test]
     fn signed_integration_messages_roundtrip() {
-        let frame = crate::integration_replication::SignedSyncEnvelope::new(
+        let frame = ark_domain::integration_replication::SignedSyncEnvelope::new(
             "space",
             "origin",
             "recipient",

@@ -1,9 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::hlc::HLC;
-use crate::types::{PeerRecord, SyncEntity, VersionVector};
+use ark_domain::hlc::HLC;
+use ark_domain::types::{PeerRecord, SyncEntity, VersionVector};
 
-use super::{MAX_BATCH_BYTES, MAX_BATCH_SIZE};
+use crate::protocol::{MAX_BATCH_BYTES, MAX_BATCH_SIZE};
 
 pub fn is_usage_entity(entity: &SyncEntity) -> bool {
     matches!(

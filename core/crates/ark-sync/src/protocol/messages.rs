@@ -1,16 +1,3 @@
-use serde::{Deserialize, Serialize};
-
-use crate::types::*;
-
-#[path = "../protocol/vector.rs"]
-mod vector;
-
-pub use vector::{
-    apply_usage_complete_through, compute_local_excess, compute_vector_diff, is_usage_entity,
-    merge_peer_records, merge_usage_cursors, merge_vector_entries, observe_non_usage_entity,
-    should_send_entity, split_into_batches,
-};
-
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -69,7 +56,7 @@ pub enum LanSyncMessage {
 
     #[serde(rename = "version_vector")]
     VersionVector {
-        vector: crate::types::VersionVector,
+        vector: ark_domain::types::VersionVector,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         origin_device_id: Option<String>,
     },
@@ -89,7 +76,7 @@ pub enum LanSyncMessage {
         entities: Vec<SyncEntity>,
         is_last: bool,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        policy_identity: Option<crate::application::sync_storage::PolicyIdentity>,
+        policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         origin_device_id: Option<String>,
         // Per usage origin device, the highest seq the sender can serve
@@ -108,7 +95,7 @@ pub enum LanSyncMessage {
         batch_id: String,
         accepted: usize,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        policy_identity: Option<crate::application::sync_storage::PolicyIdentity>,
+        policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
     },
 
     #[serde(rename = "live_change")]
@@ -116,7 +103,7 @@ pub enum LanSyncMessage {
         change_id: String,
         entity: SyncEntity,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        policy_identity: Option<crate::application::sync_storage::PolicyIdentity>,
+        policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         origin_device_id: Option<String>,
     },
@@ -125,7 +112,7 @@ pub enum LanSyncMessage {
     LiveAck {
         change_id: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        policy_identity: Option<crate::application::sync_storage::PolicyIdentity>,
+        policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
     },
 
     /// The durable inbox has committed the message. This does not mean that
@@ -135,19 +122,19 @@ pub enum LanSyncMessage {
     LiveReceiptAck {
         change_id: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        policy_identity: Option<crate::application::sync_storage::PolicyIdentity>,
+        policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
     },
 
     #[serde(rename = "task_merge_batch")]
     TaskMergeBatch {
-        batch: crate::application::sync_storage::TaskMergeBatch,
+        batch: ark_application::sync_storage::TaskMergeBatch,
     },
 
     #[serde(rename = "task_merge_batch_ack")]
     TaskMergeBatchAck {
         batch_id: String,
         through_position: i64,
-        policy_identity: crate::application::sync_storage::PolicyIdentity,
+        policy_identity: ark_application::sync_storage::PolicyIdentity,
     },
 
     /// Refuses an incompatible protocol offer before the peer is admitted.
@@ -163,7 +150,7 @@ pub enum LanSyncMessage {
 
     #[serde(rename = "signed_integration_frame")]
     SignedIntegrationFrame {
-        frame: crate::integration_replication::SignedSyncEnvelope,
+        frame: ark_domain::integration_replication::SignedSyncEnvelope,
     },
 
     #[serde(rename = "signed_integration_ack")]
@@ -221,7 +208,7 @@ pub enum LanSyncMessage {
         session_id: String,
         page_index: u32,
         page_count: u32,
-        events: Vec<crate::domain::device_registry::RegistryEvent>,
+        events: Vec<ark_domain::device_registry::RegistryEvent>,
     },
 
     /// Confirms that the complete registry projection for a session matches.
@@ -232,7 +219,7 @@ pub enum LanSyncMessage {
     #[serde(rename = "registry_event_update")]
     RegistryEventUpdate {
         session_id: String,
-        event: crate::domain::device_registry::RegistryEvent,
+        event: ark_domain::device_registry::RegistryEvent,
     },
 
     #[serde(rename = "peer_list")]

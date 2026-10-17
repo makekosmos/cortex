@@ -5,7 +5,11 @@ edition.workspace = true
 description = "Transport-neutral replication and sync protocol contracts"
 
 [dependencies]
+ark-application = { path = "../ark-application" }
+ark-domain = { path = "../ark-domain" }
 rand.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 sha2.workspace = true
 
 [lints]

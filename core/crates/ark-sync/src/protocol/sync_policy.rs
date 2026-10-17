@@ -4,12 +4,12 @@
 pub struct SyncPolicyRuleWire {
     pub resource_kind: String,
     pub resource_id: String,
-    pub mode: crate::data_platform::SyncMode,
+    pub mode: ark_domain::selective_sync::SyncMode,
     pub filter: serde_json::Value,
 }
 
-impl From<&crate::data_platform::SyncProfileRule> for SyncPolicyRuleWire {
-    fn from(rule: &crate::data_platform::SyncProfileRule) -> Self {
+impl From<&ark_application::sync_policy::SyncProfileRule> for SyncPolicyRuleWire {
+    fn from(rule: &ark_application::sync_policy::SyncProfileRule) -> Self {
         Self {
             resource_kind: rule.resource_kind.clone(),
             resource_id: rule.resource_id.clone(),
@@ -20,7 +20,7 @@ impl From<&crate::data_platform::SyncProfileRule> for SyncPolicyRuleWire {
     }
 }
 
-impl TryFrom<SyncPolicyRuleWire> for crate::data_platform::SyncProfileRule {
+impl TryFrom<SyncPolicyRuleWire> for ark_application::sync_policy::SyncProfileRule {
     type Error = String;
 
     fn try_from(rule: SyncPolicyRuleWire) -> Result<Self, Self::Error> {
@@ -29,12 +29,12 @@ impl TryFrom<SyncPolicyRuleWire> for crate::data_platform::SyncProfileRule {
             resource_kind: rule.resource_kind,
             resource_id: rule.resource_id,
             mode: rule.mode,
-            filter: crate::data_platform::FilterV1::parse(&filter_json)?,
+            filter: ark_domain::selective_sync::FilterV1::parse(&filter_json)?,
         })
     }
 }
 
-pub fn sync_policy_message(profile: &crate::data_platform::SyncProfile) -> LanSyncMessage {
+pub fn sync_policy_message(profile: &ark_application::sync_policy::SyncProfile) -> LanSyncMessage {
     LanSyncMessage::SyncPolicy {
         revision: profile.revision,
         digest: profile.digest(),
@@ -44,7 +44,7 @@ pub fn sync_policy_message(profile: &crate::data_platform::SyncProfile) -> LanSy
 }
 
 pub fn default_sync_policy_message() -> LanSyncMessage {
-    let identity = crate::data_platform::default_sync_policy_identity();
+    let identity = ark_application::sync_policy::default_sync_policy_identity();
     LanSyncMessage::SyncPolicy {
         revision: identity.revision,
         digest: identity.digest,
@@ -54,11 +54,11 @@ pub fn default_sync_policy_message() -> LanSyncMessage {
 }
 
 pub fn sync_policy_identity(
-    profile: Option<&crate::data_platform::SyncProfile>,
-) -> crate::application::sync_storage::PolicyIdentity {
+    profile: Option<&ark_application::sync_policy::SyncProfile>,
+) -> ark_application::sync_storage::PolicyIdentity {
     profile.map_or_else(
-        crate::data_platform::default_sync_policy_identity,
-        |profile| crate::application::sync_storage::PolicyIdentity {
+        ark_application::sync_policy::default_sync_policy_identity,
+        |profile| ark_application::sync_storage::PolicyIdentity {
             revision: profile.revision,
             digest: profile.digest(),
             active: profile.active,
@@ -66,12 +66,15 @@ pub fn sync_policy_identity(
     )
 }
 
-fn default_sync_policy_active() -> bool {
+pub(super) fn default_sync_policy_active() -> bool {
     true
 }
 
 pub fn parse_sync_policy_rules(
     rules: Vec<SyncPolicyRuleWire>,
-) -> Result<Vec<crate::data_platform::SyncProfileRule>, String> {
+) -> Result<Vec<ark_application::sync_policy::SyncProfileRule>, String> {
     rules.into_iter().map(TryInto::try_into).collect()
 }
+use serde::{Deserialize, Serialize};
+
+use super::LanSyncMessage;
