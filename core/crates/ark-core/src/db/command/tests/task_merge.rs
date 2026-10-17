@@ -1,6 +1,8 @@
 use super::*;
 use crate::domain::task_merge::{OperationId, TaskMergeOperation, TaskMergeUnit, TaskMergeValue};
 
+#[path = "task_merge/causal_dependencies.rs"]
+mod causal_dependencies;
 #[path = "task_merge/inbound.rs"]
 mod inbound;
 #[path = "task_merge/journal.rs"]
@@ -16,6 +18,7 @@ fn operation(operation_id: char, parents: &[char], title: &str) -> TaskMergeOper
         object_id: "task-1".into(),
         unit: TaskMergeUnit::Title,
         parents: parents.iter().copied().map(id).collect(),
+        observed_heads: parents.iter().copied().map(id).collect(),
         value: TaskMergeValue::Field(serde_json::Value::String(title.into())),
     }
 }

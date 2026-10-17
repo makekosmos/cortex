@@ -89,7 +89,19 @@ pub struct TaskMergeOperation {
     pub object_id: String,
     pub unit: TaskMergeUnit,
     pub parents: Vec<OperationId>,
+    /// Heads from every task unit visible when this operation was created.
+    /// `parents` remains the same-unit conflict graph; this records
+    /// cross-unit causality, such as a field edit observed by a later delete.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub observed_heads: Vec<OperationId>,
     pub value: TaskMergeValue,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskLifecycleConflict {
+    pub deletion: TaskMergeOperation,
+    pub concurrent_head: TaskMergeOperation,
 }
 
 /// A complete task snapshot from which every replica derives the same baseline history.
@@ -154,6 +166,7 @@ impl TaskMergeBootstrap {
                     object_id: self.object.id.clone(),
                     unit: *unit,
                     parents: Vec::new(),
+                    observed_heads: Vec::new(),
                     value: value_for_unit(&self.object, *unit)?,
                 })
             })
@@ -193,6 +206,8 @@ pub enum MergeError {
     CausalCycle,
     #[error("merge operation lists the same parent more than once")]
     DuplicateParent,
+    #[error("merge operation lists the same observed head more than once")]
+    DuplicateObservedHead,
     #[error("merge operation has an empty object id")]
     EmptyObjectId,
     #[error("merge history is empty")]
@@ -217,7 +232,14 @@ pub fn validate_operation(operation: &TaskMergeOperation) -> Result<(), MergeErr
     if unique_parents.len() != operation.parents.len() {
         return Err(MergeError::DuplicateParent);
     }
+    let unique_observed_heads = operation.observed_heads.iter().collect::<BTreeSet<_>>();
+    if unique_observed_heads.len() != operation.observed_heads.len() {
+        return Err(MergeError::DuplicateObservedHead);
+    }
     if operation.parents.contains(&operation.id) {
+        return Err(MergeError::CausalCycle);
+    }
+    if operation.observed_heads.contains(&operation.id) {
         return Err(MergeError::CausalCycle);
     }
     let value_matches_unit = matches!(
@@ -256,6 +278,7 @@ pub fn conflict_set(history: &[TaskMergeOperation]) -> Result<TaskConflictSet, M
         validate_operation(operation)?;
         let mut canonical_operation = operation.clone();
         canonical_operation.parents.sort();
+        canonical_operation.observed_heads.sort();
         if let Some(previous) =
             operations.insert(canonical_operation.id.clone(), canonical_operation.clone())
         {
@@ -309,6 +332,99 @@ pub fn conflict_set(history: &[TaskMergeOperation]) -> Result<TaskConflictSet, M
     };
     result.digest = conflict_digest(&result)?;
     Ok(result)
+}
+
+/// Finds field heads that are concurrent with a currently visible deletion.
+/// The function preserves the operation graph and never chooses whether to
+/// restore the task.
+pub fn lifecycle_conflicts(
+    history: &[TaskMergeOperation],
+) -> Result<Vec<TaskLifecycleConflict>, MergeError> {
+    let first = history.first().ok_or(MergeError::EmptyHistory)?;
+    let mut operations = BTreeMap::new();
+    let mut by_unit = BTreeMap::<TaskMergeUnit, Vec<TaskMergeOperation>>::new();
+    for operation in history {
+        if operation.object_id != first.object_id {
+            return Err(MergeError::MixedHistory);
+        }
+        validate_operation(operation)?;
+        let mut canonical = operation.clone();
+        canonical.parents.sort();
+        canonical.observed_heads.sort();
+        if let Some(previous) = operations.insert(canonical.id.clone(), canonical.clone()) {
+            if previous != canonical {
+                return Err(MergeError::OperationIdCollision);
+            }
+        }
+        by_unit.entry(operation.unit).or_default().push(canonical);
+    }
+
+    let ancestors = operations
+        .keys()
+        .map(|id| Ok((id.clone(), causal_ancestors(id, &operations)?)))
+        .collect::<Result<BTreeMap<_, _>, MergeError>>()?;
+    let Some(existence) = by_unit.get(&TaskMergeUnit::ObjectExistence) else {
+        return Ok(Vec::new());
+    };
+    let lifecycle = conflict_set(existence)?;
+    let mut conflicts = Vec::new();
+
+    for deletion in lifecycle
+        .variants
+        .into_iter()
+        .filter(|operation| matches!(operation.value, TaskMergeValue::ObjectDeleted { .. }))
+    {
+        for unit in TaskMergeUnit::ALL {
+            if unit == TaskMergeUnit::ObjectExistence {
+                continue;
+            }
+            let Some(unit_history) = by_unit.get(&unit) else {
+                continue;
+            };
+            for head in conflict_set(unit_history)?.variants {
+                if !ancestors[&deletion.id].contains(&head.id)
+                    && !ancestors[&head.id].contains(&deletion.id)
+                {
+                    conflicts.push(TaskLifecycleConflict {
+                        deletion: deletion.clone(),
+                        concurrent_head: head,
+                    });
+                }
+            }
+        }
+    }
+
+    conflicts.sort_by(|left, right| {
+        (&left.deletion.id, &left.concurrent_head.id)
+            .cmp(&(&right.deletion.id, &right.concurrent_head.id))
+    });
+    Ok(conflicts)
+}
+
+fn causal_ancestors(
+    id: &OperationId,
+    operations: &BTreeMap<OperationId, TaskMergeOperation>,
+) -> Result<BTreeSet<OperationId>, MergeError> {
+    let operation = operations.get(id).ok_or(MergeError::MissingParent)?;
+    let mut pending = operation
+        .parents
+        .iter()
+        .chain(&operation.observed_heads)
+        .cloned()
+        .collect::<Vec<_>>();
+    let mut found = BTreeSet::new();
+    while let Some(parent) = pending.pop() {
+        if !found.insert(parent.clone()) {
+            continue;
+        }
+        let parent_operation = operations.get(&parent).ok_or(MergeError::MissingParent)?;
+        if parent_operation.id == *id {
+            return Err(MergeError::CausalCycle);
+        }
+        pending.extend(parent_operation.parents.iter().cloned());
+        pending.extend(parent_operation.observed_heads.iter().cloned());
+    }
+    Ok(found)
 }
 
 fn ancestors(

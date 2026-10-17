@@ -237,7 +237,8 @@ fn append_operation_inner(
         read_conflict_set(transaction, &operation.object_id, operation.unit)?;
     Ok(TaskMergeAppendResult {
         conflict_set,
-        dependencies_pending,
+        dependencies_pending: dependencies_pending
+            || task_causal_dependencies_pending(transaction, &operation.object_id)?,
         replayed: false,
     })
 }
@@ -277,7 +278,80 @@ pub(crate) fn read_conflict_set(
             Ok(operation)
         })
         .collect::<Result<Vec<_>, _>>()?;
-    conflict_set_for_stored(operations)
+    let (conflict_set, dependencies_pending) = conflict_set_for_stored(operations)?;
+    Ok((
+        conflict_set,
+        dependencies_pending || task_causal_dependencies_pending(connection, object_id)?,
+    ))
+}
+
+pub(crate) fn task_causal_dependencies_pending(
+    connection: &Connection,
+    object_id: &str,
+) -> Result<bool, TaskMergeError> {
+    let mut statement = connection
+        .prepare(
+            "SELECT operation_id, operation_json FROM task_merge_operations
+             WHERE object_id = ?1 ORDER BY operation_id",
+        )
+        .map_err(|error| TaskMergeError::Storage(error.to_string()))?;
+    let stored = statement
+        .query_map([object_id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .map_err(|error| TaskMergeError::Storage(error.to_string()))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| TaskMergeError::Storage(error.to_string()))?;
+    drop(statement);
+
+    let mut operations = BTreeMap::new();
+    for (stored_id, json) in stored {
+        let operation = serde_json::from_str::<TaskMergeOperation>(&json)
+            .map_err(|error| TaskMergeError::Invalid(error.to_string()))?;
+        if operation.id.as_str() != stored_id || operation.object_id != object_id {
+            return Err(TaskMergeError::Invalid(
+                "task_merge_operation_identity_mismatch".into(),
+            ));
+        }
+        operations.insert(operation.id.clone(), operation);
+    }
+
+    let mut pending = false;
+    for operation in operations.values() {
+        for reference in operation.parents.iter().chain(&operation.observed_heads) {
+            if operations.contains_key(reference) {
+                continue;
+            }
+            let referenced_object = connection
+                .query_row(
+                    "SELECT object_id FROM task_merge_operations WHERE operation_id = ?1",
+                    [reference.as_str()],
+                    |row| row.get::<_, String>(0),
+                )
+                .optional()
+                .map_err(|error| TaskMergeError::Storage(error.to_string()))?;
+            match referenced_object {
+                Some(referenced_object) if referenced_object != object_id => {
+                    return Err(TaskMergeError::Invalid(
+                        "task_merge_cross_object_dependency".into(),
+                    ));
+                }
+                Some(_) => {
+                    return Err(TaskMergeError::Invalid(
+                        "task_merge_dependency_not_in_task_history".into(),
+                    ));
+                }
+                None => pending = true,
+            }
+        }
+    }
+    if !pending && !operations.is_empty() {
+        crate::domain::task_merge::lifecycle_conflicts(
+            &operations.values().cloned().collect::<Vec<_>>(),
+        )
+        .map_err(|error| TaskMergeError::Invalid(error.to_string()))?;
+    }
+    Ok(pending)
 }
 
 pub(crate) fn read_conflict_set_result(
@@ -347,6 +421,7 @@ fn canonical_operation(
     crate::domain::task_merge::validate_operation(&operation)
         .map_err(|error| TaskMergeError::Invalid(error.to_string()))?;
     operation.parents.sort();
+    operation.observed_heads.sort();
     let value = canonical_value(
         &serde_json::to_value(&operation)
             .map_err(|error| TaskMergeError::Invalid(error.to_string()))?,

@@ -24,6 +24,10 @@ fn merge_operation(
             .iter()
             .map(|id| OperationId::parse(format!("{}{}", "0".repeat(31), id)).unwrap())
             .collect(),
+        observed_heads: parents
+            .iter()
+            .map(|id| OperationId::parse(format!("{}{}", "0".repeat(31), id)).unwrap())
+            .collect(),
         value,
     }
 }

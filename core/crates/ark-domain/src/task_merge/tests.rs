@@ -9,7 +9,34 @@ fn op(id: &str, parents: &[&str], value: &str) -> TaskMergeOperation {
             .iter()
             .map(|id| OperationId::parse(*id).unwrap())
             .collect(),
+        observed_heads: parents
+            .iter()
+            .map(|id| OperationId::parse(*id).unwrap())
+            .collect(),
         value: TaskMergeValue::Field(Value::String(value.into())),
+    }
+}
+
+fn lifecycle_op(
+    id: &str,
+    unit: TaskMergeUnit,
+    parents: &[&str],
+    observed_heads: &[&str],
+    value: TaskMergeValue,
+) -> TaskMergeOperation {
+    let ids = |values: &[&str]| {
+        values
+            .iter()
+            .map(|id| OperationId::parse(*id).unwrap())
+            .collect()
+    };
+    TaskMergeOperation {
+        id: OperationId::parse(id).unwrap(),
+        object_id: "task-1".into(),
+        unit,
+        parents: ids(parents),
+        observed_heads: ids(observed_heads),
+        value,
     }
 }
 
@@ -199,6 +226,95 @@ fn deletion_is_a_distinct_concurrent_variant() {
     let conflicts = conflict_set(&[base.clone(), deletion.clone(), edit.clone()]).unwrap();
     assert_eq!(conflicts.common_ancestors, vec![base]);
     assert_eq!(conflicts.variants, vec![deletion, edit]);
+}
+
+#[test]
+fn lifecycle_conflict_uses_cross_unit_observed_heads() {
+    let title_base = lifecycle_op(
+        "00000000000000000000000000000001",
+        TaskMergeUnit::Title,
+        &[],
+        &[],
+        TaskMergeValue::Field(Value::String("base".into())),
+    );
+    let existence_base = lifecycle_op(
+        "00000000000000000000000000000002",
+        TaskMergeUnit::ObjectExistence,
+        &[],
+        &[],
+        TaskMergeValue::ObjectExists,
+    );
+    let deletion = lifecycle_op(
+        "00000000000000000000000000000003",
+        TaskMergeUnit::ObjectExistence,
+        &[existence_base.id.as_str()],
+        &[title_base.id.as_str(), existence_base.id.as_str()],
+        TaskMergeValue::ObjectDeleted {
+            deleted_at: "2026-10-17T00:00:00Z".into(),
+        },
+    );
+    let edit = lifecycle_op(
+        "00000000000000000000000000000004",
+        TaskMergeUnit::Title,
+        &[title_base.id.as_str()],
+        &[title_base.id.as_str(), existence_base.id.as_str()],
+        TaskMergeValue::Field(Value::String("edited".into())),
+    );
+
+    let conflicts = lifecycle_conflicts(&[
+        title_base.clone(),
+        existence_base.clone(),
+        deletion.clone(),
+        edit.clone(),
+    ])
+    .unwrap();
+    assert_eq!(
+        conflicts,
+        vec![TaskLifecycleConflict {
+            deletion: deletion.clone(),
+            concurrent_head: edit.clone(),
+        }]
+    );
+
+    let observed_deletion = lifecycle_op(
+        "00000000000000000000000000000005",
+        TaskMergeUnit::ObjectExistence,
+        &[existence_base.id.as_str()],
+        &[
+            title_base.id.as_str(),
+            existence_base.id.as_str(),
+            edit.id.as_str(),
+        ],
+        TaskMergeValue::ObjectDeleted {
+            deleted_at: "2026-10-17T00:00:01Z".into(),
+        },
+    );
+    assert!(lifecycle_conflicts(&[
+        title_base.clone(),
+        existence_base.clone(),
+        edit.clone(),
+        observed_deletion.clone(),
+    ])
+    .unwrap()
+    .is_empty());
+
+    let restore = lifecycle_op(
+        "00000000000000000000000000000006",
+        TaskMergeUnit::ObjectExistence,
+        &[deletion.id.as_str()],
+        &[
+            title_base.id.as_str(),
+            existence_base.id.as_str(),
+            deletion.id.as_str(),
+            edit.id.as_str(),
+        ],
+        TaskMergeValue::ObjectExists,
+    );
+    assert!(
+        lifecycle_conflicts(&[title_base, existence_base, deletion, edit, restore,])
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[test]

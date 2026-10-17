@@ -44,6 +44,7 @@ fn operation(id: char, parents: &[char], title: &str) -> TaskMergeOperation {
         object_id: "wire-task".into(),
         unit: TaskMergeUnit::Title,
         parents: parents.iter().map(|parent| operation_id(*parent)).collect(),
+        observed_heads: parents.iter().map(|parent| operation_id(*parent)).collect(),
         value: TaskMergeValue::Field(serde_json::Value::String(title.into())),
     }
 }

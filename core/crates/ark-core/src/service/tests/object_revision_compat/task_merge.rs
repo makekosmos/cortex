@@ -29,8 +29,19 @@ async fn authenticated_full_snapshot_is_rejected_for_operation_enabled_task() {
     .await
     .unwrap();
 
-    let operation =
-        |suffix, parents: &[char], title: &str| crate::domain::task_merge::TaskMergeOperation {
+    let operation = |suffix, parents: &[char], title: &str| {
+        let parents = parents
+            .iter()
+            .map(|parent| {
+                crate::domain::task_merge::OperationId::parse(format!(
+                    "{}{}",
+                    "0".repeat(31),
+                    parent
+                ))
+                .unwrap()
+            })
+            .collect::<Vec<_>>();
+        crate::domain::task_merge::TaskMergeOperation {
             id: crate::domain::task_merge::OperationId::parse(format!(
                 "{}{}",
                 "0".repeat(31),
@@ -39,19 +50,11 @@ async fn authenticated_full_snapshot_is_rejected_for_operation_enabled_task() {
             .unwrap(),
             object_id: "snapshot-with-merge-history".into(),
             unit: crate::domain::task_merge::TaskMergeUnit::Title,
-            parents: parents
-                .iter()
-                .map(|parent| {
-                    crate::domain::task_merge::OperationId::parse(format!(
-                        "{}{}",
-                        "0".repeat(31),
-                        parent
-                    ))
-                    .unwrap()
-                })
-                .collect(),
+            parents: parents.clone(),
+            observed_heads: parents,
             value: crate::domain::task_merge::TaskMergeValue::Field(json!(title)),
-        };
+        }
+    };
     for merge_operation in [
         operation('1', &[], "base"),
         operation('2', &['1'], "left edit"),
