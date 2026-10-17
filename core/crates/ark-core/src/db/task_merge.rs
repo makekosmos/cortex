@@ -142,6 +142,16 @@ pub(crate) fn append_operation(
             ],
         )
         .map_err(|error| TaskMergeError::Storage(error.to_string()))?;
+    if let Some(expected_digest) = expected_conflict_digest {
+        transaction
+            .execute(
+                "INSERT INTO task_merge_resolution_guards(
+                    operation_id, expected_conflict_digest
+                 ) VALUES (?1, ?2)",
+                rusqlite::params![operation.id.as_str(), expected_digest],
+            )
+            .map_err(|error| TaskMergeError::Storage(error.to_string()))?;
+    }
     transaction
         .execute(
             "INSERT INTO task_merge_journal(operation_id) VALUES (?1)",

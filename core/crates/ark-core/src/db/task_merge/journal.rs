@@ -35,9 +35,11 @@ pub(crate) fn read_journal_page(
     let mut statement = connection
         .prepare(
             "SELECT journal.position, operation.operation_json,
-                    operation.operation_id, operation.payload_sha256
+                    operation.operation_id, operation.payload_sha256,
+                    guard.expected_conflict_digest
              FROM task_merge_journal AS journal
              JOIN task_merge_operations AS operation USING(operation_id)
+             LEFT JOIN task_merge_resolution_guards AS guard USING(operation_id)
              WHERE journal.position > ?1 AND journal.position <= ?2
              ORDER BY journal.position LIMIT ?3",
         )
@@ -51,13 +53,14 @@ pub(crate) fn read_journal_page(
                     row.get::<_, String>(1)?,
                     row.get::<_, String>(2)?,
                     row.get::<_, String>(3)?,
+                    row.get::<_, Option<String>>(4)?,
                 ))
             },
         )
         .map_err(|error| TaskMergeError::Storage(error.to_string()))?;
     let entries = rows
         .map(|row| {
-            let (position, json, stored_id, stored_hash) =
+            let (position, json, stored_id, stored_hash, expected_conflict_digest) =
                 row.map_err(|error| TaskMergeError::Storage(error.to_string()))?;
             let operation = serde_json::from_str::<TaskMergeOperation>(&json)
                 .map_err(|error| TaskMergeError::Invalid(error.to_string()))?;
@@ -73,6 +76,7 @@ pub(crate) fn read_journal_page(
             Ok(TaskMergeJournalEntry {
                 position,
                 operation,
+                expected_conflict_digest,
             })
         })
         .collect::<Result<Vec<_>, _>>()?;

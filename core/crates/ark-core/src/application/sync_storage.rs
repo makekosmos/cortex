@@ -81,6 +81,8 @@ pub struct PolicyBoundSnapshotPage {
 pub struct TaskMergeJournalEntry {
     pub position: i64,
     pub operation: crate::domain::task_merge::TaskMergeOperation,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected_conflict_digest: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]

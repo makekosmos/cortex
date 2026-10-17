@@ -219,6 +219,12 @@ CREATE TABLE IF NOT EXISTS task_merge_journal (
     position INTEGER PRIMARY KEY AUTOINCREMENT,
     operation_id TEXT NOT NULL UNIQUE REFERENCES task_merge_operations(operation_id)
 );
+CREATE TABLE IF NOT EXISTS task_merge_resolution_guards (
+    operation_id TEXT PRIMARY KEY REFERENCES task_merge_operations(operation_id),
+    expected_conflict_digest TEXT NOT NULL
+        CHECK (length(expected_conflict_digest) = 71
+            AND substr(expected_conflict_digest, 1, 7) = 'sha256:')
+) WITHOUT ROWID;
 INSERT OR IGNORE INTO task_merge_journal(operation_id)
 SELECT operation_id FROM task_merge_operations ORDER BY rowid;
 CREATE TABLE IF NOT EXISTS task_merge_outbound_progress (

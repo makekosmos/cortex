@@ -219,6 +219,45 @@ async fn prepared_batch_replays_identically_after_sqlite_reopen() {
 }
 
 #[tokio::test]
+async fn outbound_journal_preserves_the_conflict_resolution_guard() {
+    let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
+    append(&handle, operation('1', &[], "first"), None)
+        .await
+        .unwrap();
+    let conflict = append(&handle, operation('2', &[], "second"), None)
+        .await
+        .unwrap()
+        .conflict_set
+        .unwrap();
+    let digest = conflict.digest;
+    let resolution = operation('3', &['1', '2'], "resolved");
+    append(&handle, resolution.clone(), Some(digest.clone()))
+        .await
+        .unwrap();
+    assert!(append(&handle, resolution, None).await.unwrap().replayed);
+
+    let batch = prepare_batch(
+        &handle,
+        "peer-a",
+        crate::data_platform::default_sync_policy_identity(),
+        100,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(
+        batch
+            .entries
+            .last()
+            .unwrap()
+            .expected_conflict_digest
+            .as_deref(),
+        Some(digest.as_str())
+    );
+    shutdown(&mut owner).await;
+}
+
+#[tokio::test]
 async fn outbound_merge_batches_obey_the_wire_size_budget() {
     let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
     for suffix in ['1', '2'] {
