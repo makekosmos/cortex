@@ -161,7 +161,7 @@ fn map_restore_error(error: String) -> DbError {
     } else if let Some(reason) = error.strip_prefix("restore refused:") {
         DbError::RestoreRefused(reason.trim().to_string())
     } else {
-        DbError::Storage(error)
+        DbError::RestoreFailed(error)
     }
 }
 
@@ -182,7 +182,7 @@ mod restore_error_tests {
         ));
         assert!(matches!(
             map_restore_error("snapshot open failed".into()),
-            DbError::Storage(message) if message == "snapshot open failed"
+            DbError::RestoreFailed(message) if message == "snapshot open failed"
         ));
     }
 }

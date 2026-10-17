@@ -131,6 +131,15 @@ fn run_task(shared: &ActorShared, connection: &mut Connection, task: Box<dyn Wri
             ledger.failure = Some("database restore requires recovery".into());
             false
         }
+        Ok(Err(DbError::RestoreFailed(message))) => {
+            let mut ledger = shared
+                .ledger
+                .lock()
+                .unwrap_or_else(|error| error.into_inner());
+            ledger.lifecycle = Lifecycle::Failed;
+            ledger.failure = Some(format!("database restore failed: {message}"));
+            false
+        }
         Ok(Err(DbError::StorageUnhealthy(message))) => {
             let mut ledger = shared
                 .ledger

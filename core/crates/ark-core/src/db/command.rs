@@ -237,6 +237,8 @@ pub(crate) enum DbError {
     Conflict(String),
     #[error("restore refused without changing the live database: {0}")]
     RestoreRefused(String),
+    #[error("database restore failed; explicit reopen required: {0}")]
+    RestoreFailed(String),
     #[error("{0}")]
     Unsupported(String),
     #[error("{0}")]

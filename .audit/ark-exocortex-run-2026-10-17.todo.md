@@ -57,6 +57,7 @@ Designed phases:
 - [ ] KOS-428: audit missing cases; implement and commit verified fixes; run supported-platform durability checks.
   - [x] Add a production actor test proving shutdown returns at deadline while started work finishes and new work is refused.
   - [x] Reconcile the retry-across-restore wording with the selected watermark refusal contract; run current restore-focused tests.
+  - [x] Type restore failure separately from safe refusal and recovery-required; prove a real SQLite restore failure with successful rollback still fails the actor closed.
 - [ ] KOS-424: finish the remaining sync orchestration extraction and remove obsolete internal paths.
   - [x] Migrate `ark-core` callers to direct `ark-application` / `ark-domain` dependencies and remove the obsolete `application::sync_storage` and `domain` facades.
 - [ ] KOS-425: prove negative graph/feature fixtures and capture macOS, Windows, and Android release CI results.
