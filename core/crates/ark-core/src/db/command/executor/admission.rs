@@ -1,5 +1,6 @@
+use super::super::CommandClass;
 #[cfg(debug_assertions)]
-use super::super::{CommandClass, CommandSource};
+use super::super::CommandSource;
 #[cfg(debug_assertions)]
 use std::collections::HashMap;
 #[cfg(debug_assertions)]
