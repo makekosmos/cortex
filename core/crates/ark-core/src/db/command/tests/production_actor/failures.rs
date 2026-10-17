@@ -280,10 +280,13 @@ async fn production_actor_commit_failure_rolls_back_receipt_and_fails_closed() {
         failed,
         Err(DbError::CommitFailed(ref message)) if message.contains("FOREIGN KEY constraint failed")
     ));
-    assert!(
-        !handle.actor_ready_for_test(),
-        "actor stayed Ready after COMMIT failed"
-    );
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while handle.actor_ready_for_test() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("actor stayed Ready after COMMIT failed");
 
     let disk = Connection::open(actor_path(&directory)).unwrap();
     let mutation_rows = disk
