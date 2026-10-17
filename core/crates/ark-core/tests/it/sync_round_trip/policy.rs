@@ -102,6 +102,7 @@ fn client_for(
     storage: &Arc<SqliteStorageBackend>,
     port: u16,
     auth_secret: &str,
+    device_id: &str,
 ) -> Arc<SyncClient> {
     Arc::new(SyncClient::new(
         storage.clone() as Arc<dyn SyncRuntimeStorage>,
@@ -114,8 +115,8 @@ fn client_for(
             platform: None,
             app_version: None,
         },
-        "device-b".into(),
-        "Device B".into(),
+        device_id.into(),
+        format!("Device {device_id}"),
         "policy-transfer-test".into(),
         Vec::new(),
         Some(auth_secret.into()),
@@ -127,6 +128,8 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
     let (source, source_endpoint, source_conn) = make_policy_storage("device-a", None);
     let (receiver, receiver_endpoint, receiver_conn) =
         make_policy_storage("device-b", Some(vec![policy_rule(SyncMode::None)]));
+    let (receiver_c, receiver_c_endpoint, receiver_c_conn) =
+        make_policy_storage("device-c", Some(vec![policy_rule(SyncMode::Full)]));
     source
         .apply_entity(&book_entity("Original source version", 1))
         .await
@@ -142,6 +145,15 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
         &receiver,
         "device-b",
         &receiver_endpoint,
+    )
+    .await;
+    pair_storages(
+        &source,
+        "device-a",
+        &source_endpoint,
+        &receiver_c,
+        "device-c",
+        &receiver_c_endpoint,
     )
     .await;
     assert_eq!(
@@ -170,8 +182,10 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
         )
         .await
         .unwrap();
-    let client = client_for(&receiver, port, auth_secret);
+    let client = client_for(&receiver, port, auth_secret, "device-b");
+    let client_c = client_for(&receiver_c, port, auth_secret, "device-c");
     client.start();
+    client_c.start();
 
     tokio::time::timeout(Duration::from_secs(10), async {
         loop {
@@ -181,7 +195,12 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
             )
             .unwrap()
             .is_some_and(|policy| policy.revision == 1)
-                && server.get_connected_peer_entries().await.len() == 1
+                && source
+                    .load_accepted_peer_sync_policy("device-c")
+                    .await
+                    .unwrap()
+                    .is_some_and(|policy| policy.revision == 1)
+                && server.get_connected_peer_entries().await.len() == 2
             {
                 break;
             }
@@ -195,6 +214,11 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
         stored_book_title(&receiver_conn.lock().unwrap()),
         "Local copy before narrowing"
     );
+    assert_eq!(
+        stored_book_title(&receiver_c_conn.lock().unwrap()),
+        "Original source version",
+        "a different device's full policy must remain independent"
+    );
 
     source
         .apply_entity(&book_entity("Update while excluded", 2))
@@ -207,6 +231,16 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
         "Local copy before narrowing",
         "an excluded update must not overwrite the receiver's local row"
     );
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            if stored_book_title(&receiver_c_conn.lock().unwrap()) == "Update while excluded" {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("another device's full policy should receive the same update");
 
     data_platform::upsert_sync_profile(
         &receiver_conn.lock().unwrap(),
@@ -219,7 +253,7 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
     )
     .unwrap();
     client.stop_and_join().await;
-    let widened_client = client_for(&receiver, port, auth_secret);
+    let widened_client = client_for(&receiver, port, auth_secret, "device-b");
     widened_client.start();
     tokio::time::timeout(Duration::from_secs(10), async {
         loop {
@@ -261,5 +295,6 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
     .await
     .expect("widening followed by reconnect should backfill current source state");
     widened_client.stop_and_join().await;
+    client_c.stop_and_join().await;
     server.stop().await;
 }
