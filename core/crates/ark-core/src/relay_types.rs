@@ -6,13 +6,13 @@ use tokio::sync::{mpsc, Mutex};
 
 use crate::hlc::HLC;
 use crate::protocol::*;
-use crate::relay_transport::{RelayConfig, RelayTransport};
 use crate::replication_storage::SyncRuntimeStorage;
 use crate::sync_server::{
     OnChangeCallback, OnPeerConnectCallback, OnPeerDisconnectCallback, PeerEntry,
 };
 use crate::sync_transport::{SyncTransport, TransportEvent};
 use crate::types::{PeerRecord, SyncEntity, VersionVector};
+use ark_net::relay::{RelayConfig, RelayTransport};
 
 const TAG: &str = "[RelaySync]";
 const SYNC_LOAD_PAGE_SIZE: usize = 100;

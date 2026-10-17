@@ -16,11 +16,15 @@ use tokio::sync::mpsc;
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 
-use crate::protocol::{
-    compute_hello_auth_hmac, deserialize_message, generate_auth_nonce, message_origin_device_id,
-    normalize_auth_secret, serialize_message, LanSyncMessage, PROTOCOL_VERSION,
+use ark_sync::protocol::{
+    deserialize_message, message_origin_device_id, serialize_message, LanSyncMessage,
+    PROTOCOL_VERSION,
 };
-use crate::sync_transport::{SyncTransport, TransportEvent};
+use ark_sync::protocol_negotiation::{
+    compute_hello_auth_hmac, compute_negotiation_offer_hmac, generate_auth_nonce,
+    normalize_auth_secret, ProtocolOffer,
+};
+use ark_sync::transport::{SyncTransport, TransportEvent};
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -135,12 +139,12 @@ impl SyncTransport for RelayTransport {
                             }
                             None => (None, None),
                         };
-                        let offer = crate::protocol::ProtocolOffer::current(auth_secret.is_some());
+                        let offer = ProtocolOffer::current(auth_secret.is_some());
                         let negotiation_hmac = auth_secret
                             .as_deref()
                             .zip(auth_nonce.as_deref())
                             .map(|(secret, nonce)| {
-                                crate::protocol::compute_negotiation_offer_hmac(
+                                compute_negotiation_offer_hmac(
                                     secret, &space_id, &device_id, nonce, &offer,
                                 )
                             });
@@ -152,8 +156,8 @@ impl SyncTransport for RelayTransport {
                             addresses: None,
                             auth_nonce,
                             auth_hmac,
-                            platform: Some(ark_net::host::local_platform()),
-                            app_version: ark_net::host::app_version(),
+                            platform: Some(crate::host::local_platform()),
+                            app_version: crate::host::app_version(),
                             supported_protocol_versions: Some(offer.version_ids()),
                             supported_capabilities: Some(offer.capability_ids()),
                             negotiated_capabilities: None,

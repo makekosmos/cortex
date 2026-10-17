@@ -197,10 +197,15 @@ name = "ark-net"
 version = "0.1.0"
 dependencies = [
  "ark-net-policy",
+ "ark-sync",
+ "async-trait",
+ "futures-util",
  "hostname",
  "if-addrs",
  "serde",
  "serde_json",
+ "tokio",
+ "tokio-tungstenite",
 ]
 
 [[package]]

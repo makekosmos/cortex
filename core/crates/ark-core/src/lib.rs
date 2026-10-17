@@ -17,7 +17,6 @@ pub mod iroh_transport;
 pub mod mesh;
 pub mod protocol;
 pub mod relay_sync;
-pub mod relay_transport;
 pub mod replication_storage;
 pub mod schema;
 pub mod service;
@@ -33,7 +32,7 @@ pub mod transport_select;
 pub mod type_registry;
 pub mod types;
 
-pub use ark_net::{host, net, sync_bind};
+pub use ark_net::{host, net, relay as relay_transport, sync_bind};
 
 // Re-export key types
 pub use beacon::{

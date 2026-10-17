@@ -147,7 +147,7 @@ pub(crate) async fn handle_start_sync(
     let relay = if transport_choice == TransportChoice::Relay {
         let relay_url = relay_url.clone().expect("Relay choice implies relay_url");
         let transport: Arc<dyn crate::sync_transport::SyncTransport> = Arc::new(
-            crate::relay_transport::RelayTransport::new(crate::relay_transport::RelayConfig {
+            ark_net::relay::RelayTransport::new(ark_net::relay::RelayConfig {
                 url: relay_url.clone(),
                 space_id: space_id.clone(),
                 device_id: device_id.clone(),
