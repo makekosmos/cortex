@@ -205,6 +205,16 @@ CREATE TABLE IF NOT EXISTS entity_write_receipts (
     UNIQUE(entity_kind, entity_id, representation_kind, source_hlc)
 );
 
+CREATE TABLE IF NOT EXISTS task_merge_operations (
+    operation_id TEXT PRIMARY KEY,
+    object_id TEXT NOT NULL,
+    unit TEXT NOT NULL,
+    operation_json TEXT NOT NULL,
+    payload_sha256 TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_task_merge_operations_object_unit
+ON task_merge_operations(object_id, unit, operation_id);
+
 -- Monotonic local commit order for durable sync recovery. Rows are appended
 -- in the same SQLite transaction as the object/revision change. Payloads stay
 -- in the canonical tables; this is a bounded locator feed, not event sourcing.

@@ -18,6 +18,7 @@ mod sync_read;
 mod sync_read_policy;
 mod system_mutation;
 mod system_read;
+mod task_merge;
 mod type_mutation;
 mod type_read;
 mod usage;
@@ -76,6 +77,7 @@ pub(crate) use system_mutation::{
     LoadOrGenerateIrohSecretKeyCommand, RestoreSnapshotCommand,
 };
 pub(crate) use system_read::SystemReadQuery;
+pub(crate) use task_merge::{AppendTaskMergeOperationCommand, TaskConflictSetQuery};
 pub(crate) use type_mutation::{
     DeleteObjectLinkCommand, DeleteObjectTypeCommand, RegisterPackageTypesCommand,
     ReplaceObjectLinkCommand, UpsertObjectLinkCommand, UpsertObjectTypeCommand,

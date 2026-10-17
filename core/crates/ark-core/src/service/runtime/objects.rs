@@ -61,6 +61,36 @@ pub(super) async fn get_object_write_snapshot(
     object_read(state, db::ObjectReadQuery::WriteSnapshot(id)).await
 }
 
+pub(super) async fn task_merge_conflicts(
+    state: &Arc<ServiceState>,
+    object_id: String,
+    unit: crate::domain::task_merge::TaskMergeUnit,
+) -> Result<Value, String> {
+    let result = get_db_handle(state)?
+        .query(
+            db::CommandContext::engine(),
+            db::TaskConflictSetQuery::new(object_id, unit),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    serde_json::to_value(result).map_err(|error| error.to_string())
+}
+
+pub(super) async fn task_merge_append(
+    state: &Arc<ServiceState>,
+    operation: crate::domain::task_merge::TaskMergeOperation,
+    expected_conflict_digest: Option<String>,
+) -> Result<Value, String> {
+    let result = get_db_handle(state)?
+        .submit(
+            db::CommandContext::engine(),
+            db::AppendTaskMergeOperationCommand::new(operation, expected_conflict_digest),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    serde_json::to_value(result).map_err(|error| error.to_string())
+}
+
 pub(super) async fn canonical_game_list(
     state: &Arc<ServiceState>,
     device_id: Option<String>,

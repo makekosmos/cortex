@@ -137,6 +137,19 @@ pub(crate) enum Request {
     GetObjectWriteSnapshot {
         id: String,
     },
+    #[serde(rename = "task.merge.conflicts")]
+    TaskMergeConflicts {
+        #[serde(rename = "objectId")]
+        object_id: String,
+        unit: crate::domain::task_merge::TaskMergeUnit,
+    },
+    #[serde(rename = "task.merge.append")]
+    TaskMergeAppend {
+        #[serde(rename = "mergeOperation")]
+        merge_operation: crate::domain::task_merge::TaskMergeOperation,
+        #[serde(default, rename = "expectedConflictDigest")]
+        expected_conflict_digest: Option<String>,
+    },
     #[serde(rename = "canonical.game.list")]
     CanonicalGameList {
         #[serde(default)]

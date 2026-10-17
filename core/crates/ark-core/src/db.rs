@@ -8,6 +8,7 @@ mod objects;
 mod open;
 mod snapshot;
 mod sync;
+mod task_merge;
 mod usage;
 
 pub use crate::application::sync_storage::{
@@ -24,28 +25,28 @@ pub use backend::{delete_tag, SqliteStorageBackend};
 pub use command::CommandSource;
 pub(crate) use command::{
     AcceptPeerSyncPolicyCommand, AcquireIntegrationRefreshLeaseCommand,
-    AppendLocalRegistryEventCommand, ApplyAuthenticatedSyncEntityCommand,
-    ApplyRegistryEventsCommand, ApplySignedIntegrationFrameCommand, ApplySyncEntityCommand,
-    AuthenticatedCoreTaskWrite, AuthorizedTransportKeyQuery, CanonicalGameUpsertCommand,
-    ClearAllCommand, CommandClass, CommandContext, CommittedFeedDeliveryPageQuery,
-    CommittedFeedPageQuery, CommittedFeedProgress, CommittedFeedProgressCommand,
-    CommittedFeedProgressOperation, CommittedFeedSnapshotQuery, CompactUsageSyncLogCommand,
-    DbError, DbHandle, DbOwner, DeleteObjectLinkCommand, DeleteObjectTypeCommand,
-    DeleteTrashedCommand, EnrollPairedDeviceCommand, EnsureUsageSequenceMigratedCommand,
-    GetSyncKeyValueQuery, IdentityErrorStyle, IntegrationReadQuery, LegacyDeleteCommand,
-    LegacyGraphWriteCommand, LoadAcceptedPeerSyncPolicyQuery, LoadActiveLocalSyncProfileQuery,
-    LoadDeviceRegistryQuery, LoadEntitiesQuery, LoadOrGenerateIrohSecretKeyCommand,
-    LoadPolicyBoundEntitiesPageQuery, LoadRegistryEventsQuery, LoadSyncProfileForSyncQuery,
-    LocalBookCoverCommand, LocalCoreTaskWrite, LocalObjectDeleteCommand, LocalObjectUpsertCommand,
-    LocalUsageWriteCommand, ObjectReadQuery, PersistIntegrationGrantCommand,
-    PersistNodeAuthorizationCommand, PolicyBoundFeedDeliveryPageQuery,
-    PublishIntegrationCredentialEnvelopeCommand, ReceiveInboxReceiptCommand,
-    RegisterPackageTypesCommand, RegistryDeviceEnabledQuery, RegistryPeerAdmissionQuery,
-    RemoteCoreTaskOutcome, ReplaceObjectLinkCommand, RestoreSnapshotCommand,
-    SaveLocalSyncProfileCommand, SetLocalSyncKeyValueCommand, SetSyncKeyValueCommand,
-    SignRegistryHandshakeCommand, SystemReadQuery, TrackedAppDeleteCommand,
-    TrackedAppUpsertCommand, TypeReadQuery, UpsertExternalRefCommand, UpsertObjectLinkCommand,
-    UpsertObjectTypeCommand, UsageCompleteThroughQuery, UsageReadQuery,
+    AppendLocalRegistryEventCommand, AppendTaskMergeOperationCommand,
+    ApplyAuthenticatedSyncEntityCommand, ApplyRegistryEventsCommand,
+    ApplySignedIntegrationFrameCommand, ApplySyncEntityCommand, AuthenticatedCoreTaskWrite,
+    AuthorizedTransportKeyQuery, CanonicalGameUpsertCommand, ClearAllCommand, CommandClass,
+    CommandContext, CommittedFeedDeliveryPageQuery, CommittedFeedPageQuery, CommittedFeedProgress,
+    CommittedFeedProgressCommand, CommittedFeedProgressOperation, CommittedFeedSnapshotQuery,
+    CompactUsageSyncLogCommand, DbError, DbHandle, DbOwner, DeleteObjectLinkCommand,
+    DeleteObjectTypeCommand, DeleteTrashedCommand, EnrollPairedDeviceCommand,
+    EnsureUsageSequenceMigratedCommand, GetSyncKeyValueQuery, IdentityErrorStyle,
+    IntegrationReadQuery, LegacyDeleteCommand, LegacyGraphWriteCommand,
+    LoadAcceptedPeerSyncPolicyQuery, LoadActiveLocalSyncProfileQuery, LoadDeviceRegistryQuery,
+    LoadEntitiesQuery, LoadOrGenerateIrohSecretKeyCommand, LoadPolicyBoundEntitiesPageQuery,
+    LoadRegistryEventsQuery, LoadSyncProfileForSyncQuery, LocalBookCoverCommand,
+    LocalCoreTaskWrite, LocalObjectDeleteCommand, LocalObjectUpsertCommand, LocalUsageWriteCommand,
+    ObjectReadQuery, PersistIntegrationGrantCommand, PersistNodeAuthorizationCommand,
+    PolicyBoundFeedDeliveryPageQuery, PublishIntegrationCredentialEnvelopeCommand,
+    ReceiveInboxReceiptCommand, RegisterPackageTypesCommand, RegistryDeviceEnabledQuery,
+    RegistryPeerAdmissionQuery, RemoteCoreTaskOutcome, ReplaceObjectLinkCommand,
+    RestoreSnapshotCommand, SaveLocalSyncProfileCommand, SetLocalSyncKeyValueCommand,
+    SetSyncKeyValueCommand, SignRegistryHandshakeCommand, SystemReadQuery, TaskConflictSetQuery,
+    TrackedAppDeleteCommand, TrackedAppUpsertCommand, TypeReadQuery, UpsertExternalRefCommand,
+    UpsertObjectLinkCommand, UpsertObjectTypeCommand, UsageCompleteThroughQuery, UsageReadQuery,
     ValidateOutboundSignedFrameQuery, VerifyRegistryHandshakeQuery,
     DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY,
 };

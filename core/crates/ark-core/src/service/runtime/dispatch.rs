@@ -89,6 +89,13 @@ pub(crate) async fn handle_request(
         Request::GetObjectWriteSnapshot { id } => {
             objects::get_object_write_snapshot(state, id).await
         }
+        Request::TaskMergeConflicts { object_id, unit } => {
+            objects::task_merge_conflicts(state, object_id, unit).await
+        }
+        Request::TaskMergeAppend {
+            merge_operation,
+            expected_conflict_digest,
+        } => objects::task_merge_append(state, merge_operation, expected_conflict_digest).await,
         Request::CanonicalGameList { device_id } => {
             objects::canonical_game_list(state, device_id).await
         }
