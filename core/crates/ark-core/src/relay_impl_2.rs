@@ -255,35 +255,14 @@ impl RelaySync {
         if !authenticated || !registry_ready || !supported {
             return Ok(());
         }
-        let Some(identity) = self
-            .storage
-            .accepted_policy_identity_for_peer(peer_device_id)
-            .await?
+        let Some(batch) = ark_sync::task_merge_delivery::prepare_outbound_batch(
+            self.storage.as_ref(),
+            peer_device_id,
+        )
+        .await?
         else {
             return Ok(());
         };
-        let Some(batch) = (match self
-            .storage
-            .prepare_task_merge_batch(peer_device_id, &identity, 100)
-            .await
-        {
-            Ok(batch) => batch,
-            Err(error) if error.contains("task_merge_policy_requires_full_type_sync") => {
-                return Ok(())
-            }
-            Err(error) => return Err(error),
-        }) else {
-            return Ok(());
-        };
-        if self
-            .storage
-            .accepted_policy_identity_for_peer(peer_device_id)
-            .await?
-            .as_ref()
-            != Some(&identity)
-        {
-            return Ok(());
-        }
         let still_supported = self
             .peers
             .lock()
@@ -393,25 +372,21 @@ impl RelaySync {
         };
         let registry_ready = self.registry_ready_for_connected_peer(from_device_id).await;
         let supported = authenticated_supported && registry_ready;
-        if !supported
-            || self
-                .storage
-                .accepted_policy_identity_for_peer(from_device_id)
-                .await?
-                .as_ref()
-                != Some(policy_identity)
-        {
+        if !supported {
             return Ok(());
         }
-        self.storage
-            .acknowledge_task_merge_batch(
-                from_device_id,
-                policy_identity,
-                batch_id,
-                through_position,
-            )
-            .await?;
-        self.pump_task_merge_batch(from_device_id).await
+        if ark_sync::task_merge_delivery::acknowledge_outbound_batch(
+            self.storage.as_ref(),
+            from_device_id,
+            policy_identity,
+            batch_id,
+            through_position,
+        )
+        .await?
+        {
+            self.pump_task_merge_batch(from_device_id).await?;
+        }
+        Ok(())
     }
 
     async fn apply_entities(

@@ -5,7 +5,7 @@ use ark_domain::types::{PeerRecord, SyncEntity, VersionVector};
 pub use crate::sync_policy::PolicyIdentity;
 pub use crate::task_merge::{
     TaskMergeBatch, TaskMergeBatchAck, TaskMergeDeliveryPort, TaskMergeJournalEntry,
-    TaskMergeJournalPage, TaskMergeJournalRecord,
+    TaskMergeJournalPage, TaskMergeJournalRecord, TaskMergePrepareError,
 };
 
 /// Complete storage surface required by the sync runtime.
@@ -13,6 +13,7 @@ pub trait SyncRuntimeStorage:
     SyncEntityReadPort
     + SyncEntityMutationPort
     + PeerProgressPort
+    + PeerSyncPolicyPort
     + CommittedFeedPort
     + TaskMergeDeliveryPort
     + crate::replication_storage::AuthenticatedEntityBackend
@@ -25,6 +26,7 @@ impl<T> SyncRuntimeStorage for T where
     T: SyncEntityReadPort
         + SyncEntityMutationPort
         + PeerProgressPort
+        + PeerSyncPolicyPort
         + CommittedFeedPort
         + TaskMergeDeliveryPort
         + crate::replication_storage::AuthenticatedEntityBackend
@@ -38,6 +40,14 @@ impl<T> SyncRuntimeStorage for T where
 pub struct ReplayNotice {
     pub entity_id: String,
     pub type_id: String,
+}
+
+#[async_trait::async_trait]
+pub trait PeerSyncPolicyPort: Send + Sync {
+    async fn accepted_policy_identity_for_peer(
+        &self,
+        peer_device_id: &str,
+    ) -> Result<Option<PolicyIdentity>, String>;
 }
 
 #[cfg(test)]
@@ -317,13 +327,6 @@ pub trait CommittedFeedPort: Send + Sync {
         _peer_device_id: &str,
     ) -> Result<i64, String> {
         Ok(self.selective_sync_policy_generation())
-    }
-
-    async fn accepted_policy_identity_for_peer(
-        &self,
-        _peer_device_id: &str,
-    ) -> Result<Option<PolicyIdentity>, String> {
-        Ok(None)
     }
 
     async fn committed_feed_snapshot(&self) -> Result<FeedSnapshot, String>;

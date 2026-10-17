@@ -1,5 +1,23 @@
 use super::*;
+use crate::application::sync_storage::PeerSyncPolicyPort;
 use crate::replication_storage::{PeerIdentityBackend, RegistryPageApply};
+
+#[async_trait::async_trait]
+impl PeerSyncPolicyPort for SqliteStorageBackend {
+    async fn accepted_policy_identity_for_peer(
+        &self,
+        peer_device_id: &str,
+    ) -> Result<Option<crate::application::sync_storage::PolicyIdentity>, String> {
+        Ok(Some(
+            self.load_accepted_peer_sync_policy(peer_device_id)
+                .await?
+                .map_or_else(
+                    ark_application::sync_policy::default_sync_policy_identity,
+                    |policy| policy.identity(),
+                ),
+        ))
+    }
+}
 
 #[async_trait::async_trait]
 impl PeerIdentityBackend for SqliteStorageBackend {

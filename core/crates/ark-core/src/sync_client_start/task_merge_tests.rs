@@ -1,5 +1,5 @@
 use super::*;
-use crate::application::sync_storage::{CommittedFeedPort, TaskMergeDeliveryPort};
+use crate::application::sync_storage::{PeerSyncPolicyPort, TaskMergeDeliveryPort};
 use crate::db::{
     AppendTaskMergeOperationCommand, ApplyTaskMergeBatchCommand, CommandContext, DbHandle, DbOwner,
     EnrollPairedDeviceCommand, LoadOrGenerateIrohSecretKeyCommand, SqliteStorageBackend,

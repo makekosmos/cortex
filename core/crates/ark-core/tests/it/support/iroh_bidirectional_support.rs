@@ -84,13 +84,26 @@ impl SyncEntityMutationPort for TestStorage {
 }
 
 #[async_trait::async_trait]
+impl ark_core::application::sync_storage::PeerSyncPolicyPort for TestStorage {
+    async fn accepted_policy_identity_for_peer(
+        &self,
+        peer_device_id: &str,
+    ) -> Result<Option<ark_core::application::sync_storage::PolicyIdentity>, String> {
+        self.inner
+            .accepted_policy_identity_for_peer(peer_device_id)
+            .await
+    }
+}
+
+#[async_trait::async_trait]
 impl TaskMergeDeliveryPort for TestStorage {
     async fn prepare_task_merge_batch(
         &self,
         peer_device_id: &str,
         expected_identity: &ark_core::application::sync_storage::PolicyIdentity,
         limit: usize,
-    ) -> Result<Option<TaskMergeBatch>, String> {
+    ) -> Result<Option<TaskMergeBatch>, ark_core::application::sync_storage::TaskMergePrepareError>
+    {
         self.inner
             .prepare_task_merge_batch(peer_device_id, expected_identity, limit)
             .await

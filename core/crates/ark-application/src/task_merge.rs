@@ -52,6 +52,12 @@ pub struct TaskMergeBatchAck {
     pub replayed: bool,
 }
 
+#[derive(Debug)]
+pub enum TaskMergePrepareError {
+    PolicyRejected,
+    Failure(String),
+}
+
 #[async_trait::async_trait]
 pub trait TaskMergeDeliveryPort: Send + Sync {
     async fn prepare_task_merge_batch(
@@ -59,7 +65,7 @@ pub trait TaskMergeDeliveryPort: Send + Sync {
         peer_device_id: &str,
         expected_identity: &PolicyIdentity,
         limit: usize,
-    ) -> Result<Option<TaskMergeBatch>, String>;
+    ) -> Result<Option<TaskMergeBatch>, TaskMergePrepareError>;
 
     async fn acknowledge_task_merge_batch(
         &self,

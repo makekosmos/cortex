@@ -24,26 +24,11 @@ pub(crate) async fn pump_task_merge_batch(
     if !ready || !supported {
         return Ok(());
     }
-    let Some(identity) = storage
-        .accepted_policy_identity_for_peer(&device_id)
-        .await?
-    else {
-        return Err("accepted_policy_identity_missing_for_task_merge_peer".into());
-    };
-    let Some(batch) = storage
-        .prepare_task_merge_batch(&device_id, &identity, 100)
-        .await?
+    let Some(batch) =
+        ark_sync::task_merge_delivery::prepare_outbound_batch(storage.as_ref(), &device_id).await?
     else {
         return Ok(());
     };
-    if storage
-        .accepted_policy_identity_for_peer(&device_id)
-        .await?
-        .as_ref()
-        != Some(&identity)
-    {
-        return Ok(());
-    }
     let still_ready = peers.lock().await.get(&peer_id).is_some_and(|peer| {
         peer.ready_peer.is_some()
             && peer.sync_complete
@@ -90,8 +75,16 @@ pub(crate) async fn handle_task_merge_batch_ack(
         }
         peer.device_id.clone()
     };
-    storage
-        .acknowledge_task_merge_batch(&device_id, identity, batch_id, through_position)
-        .await?;
-    pump_task_merge_batch(storage, peers, peer_id).await
+    if ark_sync::task_merge_delivery::acknowledge_outbound_batch(
+        storage.as_ref(),
+        &device_id,
+        identity,
+        batch_id,
+        through_position,
+    )
+    .await?
+    {
+        pump_task_merge_batch(storage, peers, peer_id).await?;
+    }
+    Ok(())
 }

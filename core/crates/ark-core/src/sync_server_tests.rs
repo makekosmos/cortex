@@ -112,13 +112,28 @@ pub(crate) mod tests {
     }
 
     #[async_trait::async_trait]
+    impl crate::application::sync_storage::PeerSyncPolicyPort for MemBackend {
+        async fn accepted_policy_identity_for_peer(
+            &self,
+            _peer_device_id: &str,
+        ) -> Result<Option<crate::application::sync_storage::PolicyIdentity>, String> {
+            Ok(Some(
+                ark_application::sync_policy::default_sync_policy_identity(),
+            ))
+        }
+    }
+
+    #[async_trait::async_trait]
     impl TaskMergeDeliveryPort for MemBackend {
         async fn prepare_task_merge_batch(
             &self,
             _peer_device_id: &str,
             _expected_identity: &crate::application::sync_storage::PolicyIdentity,
             _limit: usize,
-        ) -> Result<Option<crate::application::sync_storage::TaskMergeBatch>, String> {
+        ) -> Result<
+            Option<crate::application::sync_storage::TaskMergeBatch>,
+            ark_application::task_merge::TaskMergePrepareError,
+        > {
             Ok(None)
         }
 

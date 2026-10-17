@@ -14,7 +14,7 @@ impl TaskMergeDeliveryPort for SqliteStorageBackend {
         peer_device_id: &str,
         expected_identity: &PolicyIdentity,
         limit: usize,
-    ) -> Result<Option<TaskMergeBatch>, String> {
+    ) -> Result<Option<TaskMergeBatch>, ark_application::task_merge::TaskMergePrepareError> {
         self.db
             .submit(
                 CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
@@ -25,7 +25,14 @@ impl TaskMergeDeliveryPort for SqliteStorageBackend {
                 ),
             )
             .await
-            .map_err(|error| error.to_string())
+            .map_err(|error| match error {
+                crate::db::DbError::Permission(_) => {
+                    ark_application::task_merge::TaskMergePrepareError::PolicyRejected
+                }
+                error => {
+                    ark_application::task_merge::TaskMergePrepareError::Failure(error.to_string())
+                }
+            })
     }
 
     async fn acknowledge_task_merge_batch(

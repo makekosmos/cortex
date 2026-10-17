@@ -34,20 +34,6 @@ impl crate::application::sync_storage::CommittedFeedPort for SqliteStorageBacken
             .map_or(0, |policy| policy.revision))
     }
 
-    async fn accepted_policy_identity_for_peer(
-        &self,
-        peer_device_id: &str,
-    ) -> Result<Option<crate::application::sync_storage::PolicyIdentity>, String> {
-        Ok(Some(
-            self.load_accepted_peer_sync_policy(peer_device_id)
-                .await?
-                .map_or_else(
-                    ark_application::sync_policy::default_sync_policy_identity,
-                    |policy| policy.identity(),
-                ),
-        ))
-    }
-
     async fn committed_feed_snapshot(
         &self,
     ) -> Result<crate::application::sync_storage::FeedSnapshot, String> {
