@@ -165,7 +165,6 @@ impl RelaySync {
                             app_version: app_version.clone(),
                             authenticated: true,
                             negotiated_protocol: Some(negotiated),
-                            registry_admission: RelayRegistryAdmission::Waiting,
                         },
                     );
                     was_new
@@ -463,6 +462,7 @@ impl RelaySync {
 
     /// Evict a peer before fallible persistence so failed writes cannot keep it live.
     pub async fn disconnect_peer(&self, device_id: &str) -> Result<(), String> {
+        self.registry.disconnect_peer(device_id).await;
         self.transport_keys.lock().await.remove(device_id);
         if self
             .pending_pairing

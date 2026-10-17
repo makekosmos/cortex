@@ -35,6 +35,7 @@ impl RelaySync {
         if let Some(outgoing) = self.outgoing_pairing.lock().await.as_mut() {
             outgoing.declined = true;
         }
+        self.registry.disconnect_peer(responder_device_id).await;
         self.peers.lock().await.remove(responder_device_id);
         self.pending_responder_hellos.lock().await.remove(endpoint);
         self.transport_keys.lock().await.remove(responder_device_id);
@@ -228,6 +229,7 @@ impl RelaySync {
     }
 
     async fn rollback_transport_admission(&self, device_id: &str, endpoint: &str) {
+        self.registry.disconnect_peer(device_id).await;
         self.peers.lock().await.remove(device_id);
         self.transport_keys.lock().await.remove(device_id);
         let _ = self.transport.unbind_peer(device_id);

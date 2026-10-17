@@ -237,17 +237,13 @@ impl RelaySync {
     }
 
     pub(super) async fn pump_task_merge_batch(&self, peer_device_id: &str) -> Result<(), String> {
-        let (authenticated, registry_ready, supported) = {
+        let (authenticated, supported) = {
             let peers = self.peers.lock().await;
             let Some(peer) = peers.get(peer_device_id) else {
                 return Ok(());
             };
             (
                 peer.authenticated,
-                matches!(
-                    peer.registry_admission,
-                    RelayRegistryAdmission::Ready { .. }
-                ),
                 peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
                     protocol
                         .capabilities
@@ -255,6 +251,7 @@ impl RelaySync {
                 }),
             )
         };
+        let registry_ready = self.registry_ready_for_connected_peer(peer_device_id).await;
         if !authenticated || !registry_ready || !supported {
             return Ok(());
         }
@@ -382,23 +379,20 @@ impl RelaySync {
         through_position: i64,
         policy_identity: &crate::application::sync_storage::PolicyIdentity,
     ) -> Result<(), String> {
-        let supported = self
-            .peers
-            .lock()
-            .await
-            .get(from_device_id)
-            .is_some_and(|peer| {
+        let authenticated_supported = {
+            let peers = self.peers.lock().await;
+            let authenticated_supported = peers.get(from_device_id).is_some_and(|peer| {
                 peer.authenticated
-                    && matches!(
-                        peer.registry_admission,
-                        RelayRegistryAdmission::Ready { .. }
-                    )
                     && peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
                         protocol
                             .capabilities
                             .contains(&crate::protocol::ProtocolCapability::TaskMergeBootstrapV2)
                     })
             });
+            authenticated_supported
+        };
+        let registry_ready = self.registry_ready_for_connected_peer(from_device_id).await;
+        let supported = authenticated_supported && registry_ready;
         if !supported
             || self
                 .storage

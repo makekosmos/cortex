@@ -27,10 +27,16 @@ impl RelaySync {
         let auth_secret = normalize_auth_secret(config.auth_secret.clone());
         let _ =
             transport.set_outbound_storage(storage.clone(), &config.space_id, &config.device_id);
+        let registry = ark_sync::relay_registry::RelayRegistryCoordinator::new(
+            config.device_id.clone(),
+            storage.clone(),
+            transport.clone(),
+        );
 
         Arc::new(Self {
             storage,
             transport,
+            registry,
             config,
             auth_secret,
             peers: Arc::new(Mutex::new(HashMap::new())),

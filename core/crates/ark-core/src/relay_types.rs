@@ -35,36 +35,12 @@ struct RelayPeerState {
     app_version: Option<String>,
     authenticated: bool,
     negotiated_protocol: Option<crate::protocol::NegotiatedProtocol>,
-    registry_admission: RelayRegistryAdmission,
-}
-
-#[derive(Debug, Clone, Default)]
-enum RelayRegistryAdmission {
-    #[default]
-    Waiting,
-    Exchanging(RegistryExchangeState),
-    Ready {
-        session_id: String,
-        transport_public_key: String,
-    },
-    Revoked,
 }
 
 struct IncomingSyncState {
     vector: VersionVector,
     changed: bool,
     last_update: Instant,
-}
-
-#[derive(Clone, Debug)]
-struct RegistryExchangeState {
-    session_id: String,
-    transport_public_key: String,
-    retry_count: u8,
-    incoming_page_count: Option<u32>,
-    next_incoming_page: u32,
-    local_digest: Option<String>,
-    remote_digest: Option<String>,
 }
 
 /// A first-contact Hello parked for explicit user consent (KOS-369). The
@@ -104,6 +80,7 @@ pub type OnRegistryEventsCallback =
 pub struct RelaySync {
     storage: Arc<dyn SyncRuntimeStorage>,
     transport: Arc<dyn SyncTransport>,
+    registry: ark_sync::relay_registry::RelayRegistryCoordinator<dyn SyncRuntimeStorage>,
     config: RelaySyncConfig,
     auth_secret: Option<String>,
     peers: Arc<Mutex<HashMap<String, RelayPeerState>>>,

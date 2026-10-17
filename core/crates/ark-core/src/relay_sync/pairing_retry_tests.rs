@@ -12,6 +12,7 @@ struct FailOncePairingAcceptedTransport {
     fail_next_acceptance: AtomicBool,
     acceptance_attempts: AtomicUsize,
     data_ready: AtomicBool,
+    registry_ready_digest: Mutex<Option<String>>,
 }
 
 #[async_trait::async_trait]
@@ -50,6 +51,9 @@ impl SyncTransport for FailOncePairingAcceptedTransport {
         _: &str,
         message: LanSyncMessage,
     ) -> Result<crate::sync_transport::AddressedSendOutcome, String> {
+        if let LanSyncMessage::RegistrySyncReady { digest, .. } = &message {
+            *self.registry_ready_digest.lock().unwrap() = Some(digest.clone());
+        }
         if matches!(message, LanSyncMessage::PairingAccepted { .. }) {
             self.acceptance_attempts.fetch_add(1, Ordering::SeqCst);
             if self.fail_next_acceptance.swap(false, Ordering::SeqCst) {
@@ -92,6 +96,7 @@ async fn persisted_pairing_retries_acceptance_after_send_failure_without_duplica
         fail_next_acceptance: AtomicBool::new(true),
         acceptance_attempts: AtomicUsize::new(0),
         data_ready: AtomicBool::new(false),
+        registry_ready_digest: Mutex::new(None),
     });
     let relay = RelaySync::with_transport(
         storage.clone() as Arc<dyn SyncRuntimeStorage>,
@@ -176,18 +181,12 @@ async fn persisted_pairing_retries_acceptance_after_send_failure_without_duplica
         )
         .await
         .unwrap();
-    let digest = relay
-        .peers
+    let digest = transport
+        .registry_ready_digest
         .lock()
-        .await
-        .get("remote-device")
         .unwrap()
-        .registry_admission
-        .clone();
-    let RelayRegistryAdmission::Exchanging(state) = digest else {
-        panic!("peer should still be in registry exchange before readiness proof");
-    };
-    let digest = state.local_digest.unwrap();
+        .clone()
+        .expect("page completion sends registry-ready digest");
     relay
         .handle_registry_sync_ready(
             "remote-device",
@@ -207,13 +206,78 @@ async fn registry_ready_replay_is_idempotent_but_conflicting_digest_is_rejected(
     let storage = Arc::new(SqliteStorageBackend::for_test(Arc::new(Mutex::new(
         connection,
     ))));
+    storage.set_device_id("z-local-device").unwrap();
     let transport = Arc::new(FailOncePairingAcceptedTransport {
         fail_next_acceptance: AtomicBool::new(false),
         acceptance_attempts: AtomicUsize::new(0),
         data_ready: AtomicBool::new(false),
+        registry_ready_digest: Mutex::new(None),
     });
     let relay = RelaySync::with_transport(
         storage.clone() as Arc<dyn SyncRuntimeStorage>,
+        RelaySyncConfig {
+            relay_url: String::new(),
+            relay_api_key: None,
+            space_id: "retry-space".into(),
+            device_id: "z-local-device".into(),
+            device_name: "Local device".into(),
+            auth_secret: None,
+        },
+        transport.clone(),
+    );
+    let endpoint = "verified-endpoint";
+    let session_id = "registry-session";
+    let digest = "a".repeat(64);
+    relay
+        .transport_keys
+        .lock()
+        .await
+        .insert("a-peer".into(), endpoint.into());
+    relay.registry.begin_peer("a-peer", endpoint, false).await;
+    relay
+        .handle_registry_sync_start("a-peer", endpoint, session_id.into())
+        .await
+        .unwrap();
+
+    relay
+        .handle_registry_sync_ready("a-peer", endpoint, session_id.into(), digest.clone())
+        .await
+        .unwrap();
+    relay
+        .handle_registry_sync_ready("a-peer", endpoint, session_id.into(), digest.clone())
+        .await
+        .unwrap();
+    let error = relay
+        .handle_registry_sync_ready("a-peer", endpoint, session_id.into(), "b".repeat(64))
+        .await
+        .unwrap_err();
+
+    assert_eq!(error, "registry_sync_ready_conflict");
+    assert_eq!(
+        transport.registry_ready_digest.lock().unwrap().as_deref(),
+        None
+    );
+}
+
+#[tokio::test]
+async fn applied_registry_events_are_not_lost_when_core_reports_a_later_error() {
+    use crate::domain::device_registry::{
+        DeviceId, RegistryEvent, RegistryEventDraft, RegistryOperation,
+    };
+
+    let connection = Connection::open_in_memory().unwrap();
+    init_schema(&connection).unwrap();
+    let storage = Arc::new(SqliteStorageBackend::for_test(Arc::new(Mutex::new(
+        connection,
+    ))));
+    let transport = Arc::new(FailOncePairingAcceptedTransport {
+        fail_next_acceptance: AtomicBool::new(false),
+        acceptance_attempts: AtomicUsize::new(0),
+        data_ready: AtomicBool::new(false),
+        registry_ready_digest: Mutex::new(None),
+    });
+    let relay = RelaySync::with_transport(
+        storage as Arc<dyn SyncRuntimeStorage>,
         RelaySyncConfig {
             relay_url: String::new(),
             relay_api_key: None,
@@ -224,53 +288,41 @@ async fn registry_ready_replay_is_idempotent_but_conflicting_digest_is_rejected(
         },
         transport,
     );
-    let endpoint = "verified-endpoint";
-    let session_id = "registry-session";
-    let digest = "a".repeat(64);
-    relay
-        .transport_keys
-        .lock()
-        .await
-        .insert("remote-device".into(), endpoint.into());
-    relay.peers.lock().await.insert(
-        "remote-device".into(),
-        RelayPeerState {
-            device_name: "Remote device".into(),
-            platform: None,
-            app_version: None,
-            authenticated: true,
-            negotiated_protocol: None,
-            registry_admission: RelayRegistryAdmission::Exchanging(RegistryExchangeState {
-                session_id: session_id.into(),
-                transport_public_key: endpoint.into(),
-                retry_count: 0,
-                incoming_page_count: None,
-                next_incoming_page: 0,
-                local_digest: None,
-                remote_digest: None,
-            }),
+    let event = RegistryEvent::sign(
+        RegistryEventDraft {
+            actor_device_id: DeviceId::parse("local-device").unwrap(),
+            actor_sequence: 1,
+            previous_event_hash: None,
+            target_device_id: DeviceId::parse("remote-device").unwrap(),
+            actor_key_epoch: 1,
+            actor_admission_epoch: 1,
+            hlc: crate::hlc::HLC::now("local-device").to_string(),
+            operation: RegistryOperation::Disable,
         },
-    );
-
+        &ed25519_dalek::SigningKey::from_bytes(&[7; 32]),
+    )
+    .unwrap();
+    let observed_events = Arc::new(Mutex::new(Vec::new()));
+    let captured = observed_events.clone();
     relay
-        .handle_registry_sync_ready("remote-device", endpoint, session_id.into(), digest.clone())
-        .await
-        .unwrap();
-    relay
-        .handle_registry_sync_ready("remote-device", endpoint, session_id.into(), digest.clone())
-        .await
-        .unwrap();
-    let error = relay
-        .handle_registry_sync_ready("remote-device", endpoint, session_id.into(), "b".repeat(64))
-        .await
-        .unwrap_err();
+        .set_on_registry_events(Arc::new(move |events| {
+            *captured.lock().unwrap() = events;
+        }))
+        .await;
 
-    assert_eq!(error, "registry_sync_ready_conflict");
-    assert_eq!(
-        match &relay.peers.lock().await["remote-device"].registry_admission {
-            RelayRegistryAdmission::Exchanging(state) => state.remote_digest.clone(),
-            _ => panic!("peer should remain in registry exchange until local digest is known"),
-        },
-        Some(digest),
-    );
+    let result = relay
+        .finish_registry_outcome(
+            ark_sync::relay_registry::RegistryOutcome {
+                applied_events: vec![event.clone()],
+                operation_error: Some("injected fanout failure".into()),
+                ..Default::default()
+            },
+            true,
+            None,
+            false,
+        )
+        .await;
+
+    assert_eq!(result.unwrap_err(), "injected fanout failure");
+    assert_eq!(*observed_events.lock().unwrap(), vec![event]);
 }
