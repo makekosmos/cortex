@@ -1,85 +1,11 @@
 use super::super::*;
-use crate::db::{
-    AppendLocalRegistryEventCommand, CommandContext, DbHandle, DbOwner,
-    LoadOrGenerateIrohSecretKeyCommand, SqliteStorageBackend,
-};
+use super::sqlite_test_support::*;
+use crate::db::{AppendLocalRegistryEventCommand, CommandContext};
 use crate::domain::device_registry::{DeviceId, RegistryCommand};
 use crate::replication_storage::{PeerIdentityBackend, SyncRuntimeStorage};
-use crate::sync_bind::SyncBind;
-use iroh::RelayMode;
-use std::future::Future;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-
-const SPACE_ID: &str = "registry-sqlite-catchup-test";
-
-struct ActorPeer {
-    db: DbHandle,
-    storage: Arc<SqliteStorageBackend>,
-    owner: DbOwner,
-    secret: iroh::SecretKey,
-}
-
-async fn open_peer(db_path: &std::path::Path, device_id: &str) -> ActorPeer {
-    let (db, owner) = DbHandle::open(db_path.to_string_lossy().into_owned(), device_id.to_owned())
-        .await
-        .expect("open production SQLite actor");
-    let secret = db
-        .submit(CommandContext::engine(), LoadOrGenerateIrohSecretKeyCommand)
-        .await
-        .expect("load persistent Iroh identity");
-    ActorPeer {
-        storage: Arc::new(SqliteStorageBackend::with_db_handle(db.clone())),
-        db,
-        owner,
-        secret,
-    }
-}
-
-fn relay_config(device_id: &str) -> RelaySyncConfig {
-    RelaySyncConfig {
-        relay_url: String::new(),
-        relay_api_key: None,
-        space_id: SPACE_ID.into(),
-        device_id: device_id.into(),
-        device_name: device_id.into(),
-        auth_secret: None,
-    }
-}
-
-fn iroh_config(
-    device_id: &str,
-    secret_key: iroh::SecretKey,
-    peer_addr: Option<iroh::EndpointAddr>,
-) -> crate::iroh_transport::IrohConfig {
-    crate::iroh_transport::IrohConfig {
-        device_id: device_id.into(),
-        device_name: device_id.into(),
-        space_id: SPACE_ID.into(),
-        secret_key: Some(secret_key),
-        peer_addr,
-        peer_ticket: None,
-        relay_mode: Some(RelayMode::Disabled),
-        auth_secret: None,
-        bind: SyncBind::Loopback,
-    }
-}
-
-async fn wait_until<F, Fut>(description: &str, mut predicate: F)
-where
-    F: FnMut() -> Fut,
-    Fut: Future<Output = bool>,
-{
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
-    while !predicate().await {
-        assert!(
-            tokio::time::Instant::now() < deadline,
-            "timed out waiting for {description}"
-        );
-        tokio::time::sleep(Duration::from_millis(20)).await;
-    }
-}
 
 #[tokio::test(flavor = "multi_thread")]
 async fn disabled_offline_device_reopens_sqlite_and_catches_up_before_data_admission() {
