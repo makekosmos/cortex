@@ -64,22 +64,13 @@ pub(super) async fn handle_live_change(
         on_change,
         ..
     } = ctx;
-    let (tx, authenticated_peer_id, receipt_ack, policy_bound) = {
+    let (tx, authenticated_peer_id, protocol) = {
         let peers_guard = peers.lock().await;
         match peers_guard.get(&peer_id) {
             Some(p) if p.ready_peer.is_some() => (
                 p.tx.clone(),
                 p.device_id.clone(),
-                p.negotiated_protocol.as_ref().is_some_and(|protocol| {
-                    protocol
-                        .capabilities
-                        .contains(&ark_sync::protocol::ProtocolCapability::DurableReceiptAckV1)
-                }),
-                p.negotiated_protocol.as_ref().is_some_and(|protocol| {
-                    protocol
-                        .capabilities
-                        .contains(&ark_sync::protocol::ProtocolCapability::PolicyBoundDeliveryV1)
-                }),
+                p.negotiated_protocol.clone(),
             ),
             _ => return,
         }
@@ -96,92 +87,55 @@ pub(super) async fn handle_live_change(
             return;
         }
     };
-    let expected_identity =
-        policy_bound.then(|| ark_sync::protocol::sync_policy_identity(local_profile.as_ref()));
-    if policy_identity != expected_identity {
-        eprintln!("{TAG} rejected live change for stale or unnegotiated policy");
-        return;
-    }
-
-    if receipt_ack {
-        match storage
-            .receive_authenticated_entity_with_policy(
-                &entity,
-                &authenticated_peer_id,
-                &change_id,
-                &local_device_id,
-                expected_identity.clone(),
-            )
-            .await
-        {
-            Ok(true) => send_msg(
-                &tx,
-                &LanSyncMessage::LiveReceiptAck {
-                    policy_identity: policy_identity.clone(),
-                    change_id: change_id.clone(),
-                },
-            ),
-            Ok(false) => {}
-            Err(error) => {
-                eprintln!("{TAG} failed to persist live receipt: {error}");
-                return;
-            }
-        }
-    }
-
-    let mut local_vector = match load_version_vector(storage).await {
-        Ok(vector) => vector,
+    let notification_entity = entity.clone();
+    let prepared = match ark_sync::inbound_live_change::prepare_live_change(
+        storage.as_ref(),
+        ark_sync::inbound_live_change::IncomingLiveChange {
+            protocol: protocol.as_ref(),
+            local_profile: local_profile.as_ref(),
+            local_device_id: &local_device_id,
+            peer_device_id: &authenticated_peer_id,
+            change_id: change_id.clone(),
+            entity,
+            policy_identity: policy_identity.clone(),
+        },
+    )
+    .await
+    {
+        Ok(prepared) => prepared,
         Err(error) => {
-            eprintln!("{TAG} failed to load sync version vector: {error}");
+            eprintln!("{TAG} inbound live-change preparation failed: {error}");
             return;
         }
     };
-    let should_apply = is_usage_entity(&entity)
-        || local_vector
-            .get(&entity.id)
-            .is_none_or(|hlc| HLC::is_newer(&entity.hlc, hlc));
+    if prepared.receipt_recorded {
+        send_msg(
+            &tx,
+            &LanSyncMessage::LiveReceiptAck {
+                policy_identity: policy_identity.clone(),
+                change_id: change_id.clone(),
+            },
+        );
+    }
 
-    match storage
-        .apply_authenticated_entity_with_policy(
-            &entity,
-            &authenticated_peer_id,
-            &change_id,
-            &local_device_id,
-            expected_identity.clone(),
-        )
-        .await
+    let result = match ark_sync::inbound_live_change::apply_live_change(
+        storage.as_ref(),
+        prepared,
+        ark_sync::inbound_live_change::VersionVectorWriteMode::MergeConcurrent,
+    )
+    .await
     {
-        Ok(ark_application::sync_storage::InboundApplyOutcome::Applied) => {
-            if should_apply && observe_non_usage_entity(&mut local_vector, &entity) {
-                let stored_vector = match load_version_vector(storage).await {
-                    Ok(vector) => vector,
-                    Err(error) => {
-                        eprintln!("{TAG} failed to reload sync progress: {error}");
-                        return;
-                    }
-                };
-                merge_usage_cursors(&mut local_vector, &stored_vector);
-                let save_result = match expected_identity.as_ref() {
-                    Some(identity) => {
-                        crate::sync_server::save_version_vector_with_policy(
-                            storage,
-                            &local_device_id,
-                            identity,
-                            &local_vector,
-                        )
-                        .await
-                    }
-                    None => save_version_vector(storage, &local_vector).await,
-                };
-                if let Err(error) = save_result {
-                    eprintln!("{TAG} failed to save sync progress: {error}");
-                    return;
-                }
-            }
-
-            if should_apply {
+        Ok(result) => result,
+        Err(error) => {
+            eprintln!("{TAG} Failed to apply live sync entity: {error}");
+            return;
+        }
+    };
+    match result.disposition {
+        ark_sync::inbound_live_change::LiveChangeDisposition::Applied { notify_local } => {
+            if notify_local {
                 if let Some(handler) = on_change.lock().await.as_ref() {
-                    handler(entity.clone());
+                    handler(notification_entity);
                 }
             }
 
@@ -201,7 +155,7 @@ pub(super) async fn handle_live_change(
                 },
             );
         }
-        Ok(ark_application::sync_storage::InboundApplyOutcome::Stale) => {
+        ark_sync::inbound_live_change::LiveChangeDisposition::Stale => {
             send_msg(
                 &tx,
                 &LanSyncMessage::LiveAck {
@@ -210,13 +164,7 @@ pub(super) async fn handle_live_change(
                 },
             );
         }
-        Ok(ark_application::sync_storage::InboundApplyOutcome::Pending) => {}
-        Err(e) => {
-            eprintln!(
-                "{TAG} Failed to apply live sync entity {}:{}: {e}",
-                entity.entity_type, entity.id
-            );
-        }
+        ark_sync::inbound_live_change::LiveChangeDisposition::Pending => {}
     }
 }
 

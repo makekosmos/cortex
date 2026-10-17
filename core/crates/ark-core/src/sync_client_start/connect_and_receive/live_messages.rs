@@ -135,45 +135,29 @@ pub(super) async fn handle_live_change(
     entity: SyncEntity,
     policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
 ) -> Result<(), String> {
-    let (policy_bound, local_profile) = {
+    let (protocol, local_profile) = {
         let session = authenticated_tx.lock().await;
-        let policy_bound = session.as_ref().is_some_and(|session| {
-            session
-                .protocol
-                .capabilities
-                .contains(&ark_sync::protocol::ProtocolCapability::PolicyBoundDeliveryV1)
-        });
+        let profile = storage.load_local_sync_profile(local_device_id).await?;
         (
-            policy_bound,
-            storage.load_local_sync_profile(local_device_id).await?,
+            session.as_ref().map(|session| session.protocol.clone()),
+            profile,
         )
     };
-    let expected_identity =
-        policy_bound.then(|| ark_sync::protocol::sync_policy_identity(local_profile.as_ref()));
-    if policy_identity != expected_identity {
-        return Err("stale_or_unnegotiated_sync_policy".into());
-    }
-    let receipt_ack = authenticated_tx
-        .lock()
-        .await
-        .as_ref()
-        .is_some_and(|session| {
-            session
-                .protocol
-                .capabilities
-                .contains(&ark_sync::protocol::ProtocolCapability::DurableReceiptAckV1)
-        });
-    if receipt_ack
-        && storage
-            .receive_authenticated_entity_with_policy(
-                &entity,
-                peer_device_id,
-                &change_id,
-                local_device_id,
-                expected_identity.clone(),
-            )
-            .await?
-    {
+    let notification_entity = entity.clone();
+    let prepared = ark_sync::inbound_live_change::prepare_live_change(
+        storage.as_ref(),
+        ark_sync::inbound_live_change::IncomingLiveChange {
+            protocol: protocol.as_ref(),
+            local_profile: local_profile.as_ref(),
+            local_device_id,
+            peer_device_id,
+            change_id: change_id.clone(),
+            entity,
+            policy_identity: policy_identity.clone(),
+        },
+    )
+    .await?;
+    if prepared.receipt_recorded {
         send_msg(
             tx,
             &LanSyncMessage::LiveReceiptAck {
@@ -183,46 +167,26 @@ pub(super) async fn handle_live_change(
         );
     }
 
-    let mut local_vector = load_version_vector(storage).await?;
-    let should_apply = is_usage_entity(&entity)
-        || local_vector
-            .get(&entity.id)
-            .is_none_or(|hlc| HLC::is_newer(&entity.hlc, hlc));
-    let outcome = storage
-        .apply_authenticated_entity_with_policy(
-            &entity,
-            peer_device_id,
-            &change_id,
-            local_device_id,
-            expected_identity.clone(),
-        )
-        .await?;
-    match outcome {
-        ark_application::sync_storage::InboundApplyOutcome::Applied => {
-            if should_apply && observe_non_usage_entity(&mut local_vector, &entity) {
-                let stored_vector = load_version_vector(storage).await?;
-                merge_usage_cursors(&mut local_vector, &stored_vector);
-                match expected_identity.as_ref() {
-                    Some(identity) => {
-                        crate::sync_server::save_version_vector_with_policy(
-                            storage,
-                            local_device_id,
-                            identity,
-                            &local_vector,
-                        )
-                        .await?;
-                    }
-                    None => save_version_vector(storage, &local_vector).await?,
-                }
-            }
-            if should_apply {
+    let result = ark_sync::inbound_live_change::apply_live_change(
+        storage.as_ref(),
+        prepared,
+        if policy_identity.is_some() {
+            ark_sync::inbound_live_change::VersionVectorWriteMode::MergeConcurrent
+        } else {
+            ark_sync::inbound_live_change::VersionVectorWriteMode::Replace
+        },
+    )
+    .await?;
+    match result.disposition {
+        ark_sync::inbound_live_change::LiveChangeDisposition::Applied { notify_local } => {
+            if notify_local {
                 if let Some(handler) = on_change.lock().await.as_ref() {
-                    handler(entity);
+                    handler(notification_entity);
                 }
             }
         }
-        ark_application::sync_storage::InboundApplyOutcome::Stale => {}
-        ark_application::sync_storage::InboundApplyOutcome::Pending => return Ok(()),
+        ark_sync::inbound_live_change::LiveChangeDisposition::Stale => {}
+        ark_sync::inbound_live_change::LiveChangeDisposition::Pending => return Ok(()),
     }
     send_msg(
         tx,
