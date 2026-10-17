@@ -34,6 +34,26 @@ impl DbCommand for LocalObjectDeleteCommand {
         transaction: &Transaction<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_engine()?;
+        if crate::db::get_object(transaction, &self.write.id)
+            .map_err(|error| DbError::Storage(error.to_string()))?
+            .is_some_and(|object| object.type_id == "core.task")
+        {
+            let session = crate::db::SqliteObjectWriteSession::new(transaction);
+            let commit = crate::application::task_mutation::apply_task_delete(
+                &session,
+                crate::application::task_mutation::LocalTaskDelete {
+                    id: self.write.id,
+                    expected_snapshot: self.write.expected_snapshot,
+                    device_id: self.write.device_id,
+                    mode: crate::application::task_mutation::TaskDeleteMode::Hard,
+                },
+            )
+            .map_err(DbError::from_application_error)?;
+            return Ok(ObjectDeleteCommit {
+                entity: commit.entity,
+                id: commit.id,
+            });
+        }
         let session = SqliteObjectMutationSession::new(transaction);
         apply_object_delete(&session, self.write).map_err(DbError::from_application_error)
     }

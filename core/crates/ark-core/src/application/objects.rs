@@ -86,6 +86,7 @@ enum Input {
 
 fn apply_core_task_write(
     session: &dyn ObjectWriteSession,
+    local_task_session: Option<&dyn crate::application::task_mutation::TaskMutationSession>,
     origin: ObjectWriteOrigin,
     input: Input,
 ) -> Result<ObjectWriteResult, String> {
@@ -225,8 +226,20 @@ fn apply_core_task_write(
         });
     }
 
-    session.persist_object(&object, &links)?;
-    let source_hlc = session.record_local_revision(&object.id, device_id.as_deref())?;
+    let task_device_id = device_id.as_deref().unwrap_or("ark-core-rpc-local");
+    let local_task_session =
+        local_task_session.ok_or_else(|| "object_write_origin_mismatch".to_string())?;
+    let task_entities = crate::application::task_mutation::apply_task_upsert(
+        local_task_session,
+        &object,
+        &links,
+        task_device_id,
+    )?;
+    let source_hlc = task_entities
+        .into_iter()
+        .next()
+        .ok_or_else(|| "task_upsert_missing_entity".to_string())?
+        .hlc;
     let source_origin_device_id = HLC::from_string(&source_hlc).device_id;
     let receipt = session.insert_receipt(NewObjectReceipt {
         entity_id: object.id.clone(),
@@ -247,13 +260,14 @@ fn apply_core_task_write(
 }
 
 pub(crate) fn apply_local_core_task_write(
-    session: &dyn ObjectWriteSession,
+    session: &dyn crate::application::task_mutation::TaskMutationSession,
     object: ArkObjectWrite,
     expected_snapshot: Option<ObjectWriteSnapshot>,
     device_id: Option<String>,
 ) -> Result<ObjectWriteResult, String> {
     apply_core_task_write(
         session,
+        Some(session),
         ObjectWriteOrigin::Local {
             device_id,
             expected_snapshot,
@@ -275,5 +289,5 @@ pub(crate) fn apply_remote_core_task_write(
     } else {
         ObjectWriteOrigin::TrustedRemote
     };
-    apply_core_task_write(session, origin, Input::Remote(remote))
+    apply_core_task_write(session, None, origin, Input::Remote(remote))
 }

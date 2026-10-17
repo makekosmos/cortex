@@ -170,3 +170,58 @@ impl ObjectWriteSession for SqliteObjectWriteSession<'_> {
         .ok_or_else(|| "object_write_receipt_missing_after_insert".into())
     }
 }
+
+impl crate::application::task_mutation::TaskMutationSession for SqliteObjectWriteSession<'_> {
+    fn persist_task(&self, object: &ArkObject, links: &[ObjectLink]) -> Result<(), String> {
+        self.persist_object(object, links)
+    }
+
+    fn record_task_upsert(&self, id: &str, device_id: &str) -> Result<String, String> {
+        self.record_local_revision(id, Some(device_id))
+    }
+
+    fn record_task_link_upsert(&self, id: &str, device_id: &str) -> Result<String, String> {
+        db::bump_sync_version_vector(self.conn, "object_link", id, device_id, false)
+    }
+
+    fn task_snapshot(&self, id: &str) -> Result<ObjectWriteSnapshot, String> {
+        self.object_snapshot(id)
+    }
+
+    fn task_type_id(&self, id: &str) -> Result<Option<String>, String> {
+        db::get_object(self.conn, id).map(|object| object.map(|object| object.type_id))
+    }
+
+    fn hard_delete_task(&self, id: &str, device_id: &str) -> Result<String, String> {
+        db::delete_object(self.conn, id)?;
+        let hlc = db::bump_sync_version_vector(self.conn, "object", id, device_id, true)?;
+        self.conn
+            .execute(
+                "INSERT INTO object_sync_versions(object_id, hlc, deleted) VALUES (?1, ?2, 1)
+                 ON CONFLICT(object_id) DO UPDATE SET hlc = excluded.hlc, deleted = 1
+                 WHERE excluded.hlc > object_sync_versions.hlc",
+                params![id, hlc],
+            )
+            .map_err(|error| error.to_string())?;
+        db::record_sync_tombstone_with_type(self.conn, "object", id, Some("core.task"), &hlc)?;
+        Ok(hlc)
+    }
+
+    fn soft_delete_task(&self, id: &str, device_id: &str) -> Result<String, String> {
+        let mut object =
+            db::get_object(self.conn, id)?.ok_or_else(|| "MISSING_OBJECT".to_string())?;
+        object.deleted_at = Some(crate::hlc::HLC::now(device_id).wall_time);
+        db::upsert_object(self.conn, &object)?;
+        let hlc = db::bump_sync_version_vector(self.conn, "object", id, device_id, true)?;
+        self.conn
+            .execute(
+                "INSERT INTO object_sync_versions(object_id, hlc, deleted) VALUES (?1, ?2, 1)
+                 ON CONFLICT(object_id) DO UPDATE SET hlc = excluded.hlc, deleted = 1
+                 WHERE excluded.hlc > object_sync_versions.hlc",
+                params![id, hlc],
+            )
+            .map_err(|error| error.to_string())?;
+        db::record_sync_tombstone_with_type(self.conn, "object", id, Some("core.task"), &hlc)?;
+        Ok(hlc)
+    }
+}

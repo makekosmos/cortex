@@ -163,6 +163,16 @@ pub fn write_legacy_records(
     let mut entities = Vec::new();
     for item in mapped {
         let id = item.object.id.clone();
+        if item.object.type_id == "core.task" {
+            let session = crate::db::SqliteObjectWriteSession::new(conn);
+            entities.extend(crate::application::task_mutation::apply_task_upsert(
+                &session,
+                &item.object,
+                &item.links,
+                write_device,
+            )?);
+            continue;
+        }
         db::upsert_object(conn, &item.object)?;
         let hlc = db::bump_sync_version_vector(conn, "object", &id, write_device, false)?;
         conn.execute(
@@ -216,6 +226,19 @@ pub fn delete_legacy_object(
     expected_type_id: &str,
     device_id: Option<String>,
 ) -> Result<SyncEntity, String> {
+    if expected_type_id == "core.task" {
+        let session = crate::db::SqliteObjectWriteSession::new(conn);
+        let commit = crate::application::task_mutation::apply_task_delete(
+            &session,
+            crate::application::task_mutation::LocalTaskDelete {
+                id: id.into(),
+                expected_snapshot: None,
+                device_id: device_id.as_deref().unwrap_or("ark-core").into(),
+                mode: crate::application::task_mutation::TaskDeleteMode::Soft,
+            },
+        )?;
+        return Ok(commit.entity);
+    }
     let mut object = db::get_object(conn, id)?.ok_or_else(|| "MISSING_OBJECT".to_string())?;
     if object.type_id != expected_type_id {
         return Err("WRONG_TARGET".into());
