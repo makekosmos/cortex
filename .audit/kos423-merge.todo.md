@@ -28,10 +28,12 @@
 
 ## Next implementation boundary
 
+Source audit at `7257a62b` confirms the stored operation API is currently a sidecar: `AppendTaskMergeOperationCommand` appends/query conflict history but does not materialize the task, write an object receipt, or append the committed feed. Normal local upsert, local delete, legacy `todo` upsert/delete, and inbound snapshot paths therefore remain outside that history. The current feed stores revision locators and projects the latest object snapshot; it cannot preserve operation variants. Do not generate operations or enable their delivery as an isolated step.
+
 - Local canonical task edits enter through `service/runtime/objects.rs::upsert_object` and `LocalCoreTaskWrite::execute`; the object projection, HLC, receipt, and snapshot committed-feed entry are committed in one SQLite actor transaction.
 - Compatibility writes bypass that command: `LegacyGraphWriteCommand` calls `canonical_types/facades/legacy_records.rs::write_legacy_records`, and `LegacyDeleteCommand` calls `delete_legacy_object`. Both must join the operation-aware writer before operation generation is authoritative.
 - Inbound full snapshots still overwrite the projection through both `AuthenticatedCoreTaskWrite::execute` and `apply_canonical_object_entity`; include full `object`, compatibility `todo`, and tombstone/delete paths in the legacy-write fence.
-- Safe sequence: (1) converge all local task upsert/delete paths on one transactional writer; (2) add an operation-specific feed payload and negotiated capability; (3) atomically fence legacy full-object writes for operation-enabled tasks; (4) enable operation delivery only after peers negotiate the capability. Do not start local operation generation before this cutover can be completed without a mixed-mode window.
+- Safe sequence: (1) converge canonical, legacy, and delete task writes on one transactional mutation seam while preserving current projection, receipts, links, and feed behavior, with operation generation still disabled; (2) add an operation-specific committed-feed payload, authenticated capability negotiation, and inbound operation apply; (3) atomically fence legacy full-object writes and tombstones for operation-enabled tasks; (4) enable generation and peer delivery only after the entire operation path is available. Do not create a mixed-mode window where the projection or peers can lose stored variants.
 - The owner clarified receiver policy: a device's type/content selection controls what it receives. Excluding a category stops transfers to that device and preserves local copies; other selected devices can still receive them. Adding a category back requires backfill. This policy is separate from merge history and deletion semantics.
 
 ## Candidate outputs
