@@ -219,6 +219,50 @@ async fn prepared_batch_replays_identically_after_sqlite_reopen() {
 }
 
 #[tokio::test]
+async fn outbound_merge_batches_obey_the_wire_size_budget() {
+    let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
+    for suffix in ['1', '2'] {
+        let mut large = operation(suffix, &[], "");
+        large.value = crate::domain::task_merge::TaskMergeValue::Field(serde_json::Value::String(
+            "x".repeat(600_000),
+        ));
+        append(&handle, large, None).await.unwrap();
+    }
+
+    let identity = crate::data_platform::default_sync_policy_identity();
+    let first = prepare_batch(&handle, "peer-a", identity.clone(), 100)
+        .await
+        .unwrap()
+        .unwrap();
+    let encoded = serde_json::to_vec(&first).unwrap();
+    assert!(encoded.len() <= 1_048_576 - 4_096);
+    assert_eq!(first.entries.len(), 1);
+    assert_eq!(first.through_position, 1);
+    acknowledge_batch(&handle, "peer-a", identity.clone(), &first, 1)
+        .await
+        .unwrap();
+
+    let mut oversized = operation('3', &[], "");
+    oversized.value = crate::domain::task_merge::TaskMergeValue::Field(serde_json::Value::String(
+        "x".repeat(1_050_000),
+    ));
+    append(&handle, oversized, None).await.unwrap();
+    let second = prepare_batch(&handle, "peer-a", identity.clone(), 100)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(second.entries.len(), 1);
+    assert_eq!(second.through_position, 2);
+    acknowledge_batch(&handle, "peer-a", identity.clone(), &second, 2)
+        .await
+        .unwrap();
+
+    let next = prepare_batch(&handle, "peer-a", identity, 100).await;
+    assert!(matches!(next, Err(DbError::Invalid(_))));
+    shutdown(&mut owner).await;
+}
+
+#[tokio::test]
 async fn policy_exclusion_preserves_local_journal_and_widening_resumes_from_ack() {
     let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
     append(&handle, operation('1', &[], "first"), None)

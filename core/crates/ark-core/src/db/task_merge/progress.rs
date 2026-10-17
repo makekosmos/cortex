@@ -3,6 +3,8 @@ use crate::application::sync_storage::{PolicyIdentity, TaskMergeOutboundBatch};
 use rusqlite::{OptionalExtension, Transaction};
 
 const MAX_TASK_MERGE_PAGE_SIZE: usize = 100;
+// Leave room for the protocol discriminator and transport envelope.
+const MAX_TASK_MERGE_BATCH_BYTES: usize = 1_048_576 - 4_096;
 
 pub(crate) fn prepare_outbound_batch(
     transaction: &Transaction<'_>,
@@ -53,13 +55,13 @@ pub(crate) fn prepare_outbound_batch(
                     "task_merge_in_flight_batch_missing_entries".into(),
                 ));
             }
-            return Ok(Some(TaskMergeOutboundBatch {
-                batch_id,
-                identity: identity.clone(),
-                after_position: after,
-                through_position: through,
-                entries: page.entries,
-            }));
+            let batch = fit_batch(batch_id, identity, after, page.entries)?;
+            if batch.through_position != through {
+                return Err(TaskMergeError::Storage(
+                    "task_merge_in_flight_batch_size_changed".into(),
+                ));
+            }
+            return Ok(Some(batch));
         } else {
             progress.acknowledged_through
         }
@@ -90,10 +92,17 @@ pub(crate) fn prepare_outbound_batch(
         return Ok(None);
     }
     let page = read_journal_page(transaction, acknowledged_through, watermark, limit)?;
-    let Some(through_position) = page.entries.last().map(|entry| entry.position) else {
+    if page.entries.is_empty() {
         return Ok(None);
-    };
+    }
     let batch_id = format!("{:032x}", rand::random::<u128>());
+    let batch = fit_batch(
+        batch_id.clone(),
+        identity,
+        acknowledged_through,
+        page.entries,
+    )?;
+    let through_position = batch.through_position;
     let changed = transaction
         .execute(
             "UPDATE task_merge_outbound_progress
@@ -114,13 +123,57 @@ pub(crate) fn prepare_outbound_batch(
             "task_merge_progress_changed_during_prepare".into(),
         ));
     }
-    Ok(Some(TaskMergeOutboundBatch {
+    Ok(Some(batch))
+}
+
+fn fit_batch(
+    batch_id: String,
+    identity: &PolicyIdentity,
+    after_position: i64,
+    entries: Vec<crate::application::sync_storage::TaskMergeJournalEntry>,
+) -> Result<TaskMergeOutboundBatch, TaskMergeError> {
+    let empty_batch = TaskMergeOutboundBatch {
+        batch_id: batch_id.clone(),
+        identity: identity.clone(),
+        after_position,
+        through_position: after_position,
+        entries: Vec::new(),
+    };
+    let empty_encoded = serde_json::to_vec(&empty_batch)
+        .map_err(|error| TaskMergeError::Invalid(error.to_string()))?;
+    let fixed_bytes = empty_encoded.len().saturating_sub(2);
+    let mut entries_bytes = 2;
+    let mut fitting_entries = 0;
+    for entry in &entries {
+        let entry_bytes = serde_json::to_vec(entry)
+            .map_err(|error| TaskMergeError::Invalid(error.to_string()))?
+            .len();
+        let next_bytes = entries_bytes + usize::from(fitting_entries > 0) + entry_bytes;
+        if fixed_bytes + next_bytes > MAX_TASK_MERGE_BATCH_BYTES {
+            break;
+        }
+        entries_bytes = next_bytes;
+        fitting_entries += 1;
+    }
+    if fitting_entries == 0 {
+        return Err(TaskMergeError::Invalid(
+            "task_merge_operation_exceeds_batch_limit".into(),
+        ));
+    }
+    let entries = entries
+        .into_iter()
+        .take(fitting_entries)
+        .collect::<Vec<_>>();
+    let through_position = entries.last().map(|entry| entry.position).ok_or_else(|| {
+        TaskMergeError::Invalid("task_merge_operation_exceeds_batch_limit".into())
+    })?;
+    Ok(TaskMergeOutboundBatch {
         batch_id,
         identity: identity.clone(),
-        after_position: acknowledged_through,
+        after_position,
         through_position,
-        entries: page.entries,
-    }))
+        entries,
+    })
 }
 
 pub(crate) fn acknowledge_outbound_batch(
