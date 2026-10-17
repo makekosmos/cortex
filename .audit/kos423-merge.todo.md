@@ -5,9 +5,9 @@
 - [x] Ground the current task-object write, revision, sync, and SQLite paths.
 - [x] Sketch two structurally distinct merge designs with caller examples, types, signatures, and module ownership.
 - [x] Cross-judge the designs and screen them for stale-write loss, unsafe deletion, unbounded history, and wire incompatibility.
-- [ ] Implement the smallest accepted conflict-preserving contract and record any deviation.
-- [ ] Verify concurrent edits, deletion races, duplicate/reorder/restart, and stale resolution through public APIs and SQLite.
-- [ ] Add an operation-specific committed-feed representation and negotiated capability before enabling peer delivery.
+- [x] Implement the smallest accepted conflict-preserving contract and record any deviation.
+- [x] Verify concurrent edits, deletion races, duplicate/reorder/restart, and stale resolution through public APIs and SQLite.
+- [x] Add an operation-specific delivery journal and negotiated capability before enabling peer delivery. The design uses a dedicated durable journal instead of the coalescing committed feed.
 - [ ] Reject legacy full-object writes for operation-enabled objects so LWW cannot erase stored variants.
 - [ ] Scrap and redesign if implementation needs repeated exceptions outside the accepted shape.
 
@@ -30,6 +30,9 @@
 - Journal pages now carry the accepted receiver-policy identity. A stale identity is rejected, and active policies permit operation pages only when `core.task` is selected in `full` mode with no field filter. Metadata-only and filtered delivery are refused because operation history can expose values outside the current snapshot filter. The two SQLite actor page tests pass, strict Clippy passes, and formatting, source-size, and diff checks pass.
 - The actor now prepares one policy-bound outbound batch and persists its batch ID and exact range in the same SQLite transaction. ACKs are accepted only for that in-flight batch and exact end position; duplicate ACKs are idempotent. Three SQLite tests cover per-peer isolation, wrong peer and future ACK rejection, stable retry after reopen, and exclusion followed by widening while retaining the journal. This is storage progress only; transport delivery, inbound apply, mutation generation, and the legacy snapshot fence remain open.
 - Two independent production `ServiceState` instances now persist and read the same causal task operations in opposite arrival orders. The service API and SQLite adapter return identical title conflict sets with their common ancestor; a deadline edit remains a single variant on both replicas. The three service merge tests pass. This test delivers operation requests directly, so it does not prove the live sync transport, deletion/update races through SQLite, or the old-peer snapshot fence.
+- Authenticated task-merge batches now use negotiated `task_merge_operations_v1`, a bounded per-peer durable journal, policy-bound prepare/ACK, idempotent receive progress, and the SQLite actor. A direct authenticated sync test transfers a conflicting history between production SQLite peers. Receiver policy rejects excluded task categories without advancing progress; narrowing policy never deletes local rows.
+- Production service tests now cover reordered SQLite replicas retaining concurrent scalar and rich-text variants, common ancestry, delete-versus-edit branches, and stale conflict resolution. An authenticated legacy full-object snapshot can update the compatibility projection while the separate merge history retains both variants. Full `ark-core --lib` suite passes 559/559; strict Clippy, formatting, diff, and source-size checks pass.
+- Remaining KOS-423 boundary: the normal object mutation API does not yet emit/materialize task-merge operations, and the planned legacy-write fence is not implemented. Current tests verify retained conflict history beside the compatibility projection; they do not claim that the projection itself is a merge result.
 
 ## Next implementation boundary
 
