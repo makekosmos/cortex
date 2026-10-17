@@ -97,6 +97,12 @@ fn stored_book_title(conn: &Connection) -> String {
         .title
 }
 
+fn stored_book_title_if_present(conn: &Connection) -> Option<String> {
+    db::get_object(conn, "book-1")
+        .unwrap()
+        .map(|book| book.title)
+}
+
 fn client_for(
     storage: &Arc<SqliteStorageBackend>,
     port: u16,
@@ -126,15 +132,11 @@ fn client_for(
 async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
     let (source, source_endpoint, source_conn) = make_policy_storage("device-a", None);
     let (receiver, receiver_endpoint, receiver_conn) =
-        make_policy_storage("device-b", Some(vec![policy_rule(SyncMode::None)]));
+        make_policy_storage("device-b", Some(vec![policy_rule(SyncMode::Full)]));
     let (receiver_c, receiver_c_endpoint, receiver_c_conn) =
         make_policy_storage("device-c", Some(vec![policy_rule(SyncMode::Full)]));
     source
         .apply_entity(&book_entity("Original source version", 1))
-        .await
-        .unwrap();
-    receiver
-        .apply_entity(&book_entity("Local copy before narrowing", 0))
         .await
         .unwrap();
     pair_storages(
@@ -207,16 +209,64 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
         }
     })
     .await
-    .expect("receiver's excluded policy should be accepted before data sync");
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    .expect("receiver's policy should be accepted before data sync");
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            if stored_book_title_if_present(&receiver_conn.lock().unwrap()).as_deref()
+                == Some("Original source version")
+                && stored_book_title_if_present(&receiver_c_conn.lock().unwrap()).as_deref()
+                    == Some("Original source version")
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("both opted-in devices should receive the initial book");
     assert_eq!(
         stored_book_title(&receiver_conn.lock().unwrap()),
-        "Local copy before narrowing"
+        "Original source version"
     );
     assert_eq!(
         stored_book_title(&receiver_c_conn.lock().unwrap()),
         "Original source version",
         "a different device's full policy must remain independent"
+    );
+
+    ark_store::data_platform::upsert_sync_profile(
+        &receiver_conn.lock().unwrap(),
+        "device-b",
+        "profile-device-b",
+        "Device sync selection",
+        true,
+        Some(1),
+        &[policy_rule(SyncMode::None)],
+    )
+    .unwrap();
+    client.stop_and_join().await;
+    let narrowed_client = client_for(&receiver, port, auth_secret, "device-b");
+    narrowed_client.start();
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            if source
+                .load_accepted_peer_sync_policy("device-b")
+                .await
+                .unwrap()
+                .is_some_and(|policy| policy.revision == 2)
+                && server.get_connected_peer_entries().await.len() == 2
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("sender should accept the narrowed receiver policy");
+    assert_eq!(
+        stored_book_title(&receiver_conn.lock().unwrap()),
+        "Original source version",
+        "narrowing a class stops transfer but preserves the received local row"
     );
 
     source
@@ -227,7 +277,7 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
     tokio::time::sleep(Duration::from_millis(300)).await;
     assert_eq!(
         stored_book_title(&receiver_conn.lock().unwrap()),
-        "Local copy before narrowing",
+        "Original source version",
         "an excluded update must not overwrite the receiver's local row"
     );
     tokio::time::timeout(Duration::from_secs(10), async {
@@ -247,11 +297,11 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
         "profile-device-b",
         "Device sync selection",
         true,
-        Some(1),
+        Some(2),
         &[policy_rule(SyncMode::Full)],
     )
     .unwrap();
-    client.stop_and_join().await;
+    narrowed_client.stop_and_join().await;
     let widened_client = client_for(&receiver, port, auth_secret, "device-b");
     widened_client.start();
     tokio::time::timeout(Duration::from_secs(10), async {
@@ -260,7 +310,7 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
                 .load_accepted_peer_sync_policy("device-b")
                 .await
                 .unwrap()
-                .is_some_and(|policy| policy.revision == 2)
+                .is_some_and(|policy| policy.revision == 3)
             {
                 break;
             }
