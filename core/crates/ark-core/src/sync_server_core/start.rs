@@ -1,4 +1,4 @@
-use super::super::{current_ready_peer, is_user_data_message, peer_message_allowed};
+use super::super::{current_ready_peer, peer_message_allowed};
 use super::*;
 
 impl SyncServer {
@@ -119,7 +119,9 @@ impl SyncServer {
                                         if let Message::Text(text) = &msg {
                                             if let Some(sync_message) = deserialize_message(text) {
                                                 let carries_user_data =
-                                                    is_user_data_message(&sync_message);
+                                                    crate::protocol::requires_registry_admission(
+                                                        &sync_message,
+                                                    );
                                                 let ready_peer = if carries_user_data {
                                                     current_ready_peer(
                                                         storage_writer.as_ref(),

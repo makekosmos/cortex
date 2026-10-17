@@ -4,6 +4,20 @@ mod tests {
     use serde_json::json;
 
     #[test]
+    fn registry_admission_gates_data_but_allows_control_frames() {
+        let policy = LanSyncMessage::SyncPolicy {
+            revision: 1,
+            digest: "policy-digest".into(),
+            active: true,
+            rules: Vec::new(),
+        };
+        let ping = LanSyncMessage::Ping { ts: 1234567890 };
+
+        assert!(requires_registry_admission(&policy));
+        assert!(!requires_registry_admission(&ping));
+    }
+
+    #[test]
     fn task_merge_batch_messages_round_trip_with_policy_identity() {
         let identity = ark_application::sync_storage::PolicyIdentity {
             revision: 7,

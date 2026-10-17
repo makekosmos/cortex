@@ -18,5 +18,25 @@ pub use vector::{
 
 include!("protocol/messages.rs");
 
+/// Whether a frame carries replicated or peer-visible data and therefore must
+/// wait for authenticated registry admission before a transport sends it.
+pub fn requires_registry_admission(message: &LanSyncMessage) -> bool {
+    matches!(
+        message,
+        LanSyncMessage::VersionVector { .. }
+            | LanSyncMessage::SyncChanges { .. }
+            | LanSyncMessage::SyncPolicy { .. }
+            | LanSyncMessage::SyncAck { .. }
+            | LanSyncMessage::LiveChange { .. }
+            | LanSyncMessage::LiveAck { .. }
+            | LanSyncMessage::LiveReceiptAck { .. }
+            | LanSyncMessage::TaskMergeBatch { .. }
+            | LanSyncMessage::TaskMergeBatchAck { .. }
+            | LanSyncMessage::SignedIntegrationFrame { .. }
+            | LanSyncMessage::SignedIntegrationAck { .. }
+            | LanSyncMessage::PeerList { .. }
+    )
+}
+
 #[cfg(test)]
 include!("protocol/tests.rs");

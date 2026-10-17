@@ -18,7 +18,7 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
         on_change,
         ..
     } = ctx;
-    if is_user_data_message(&msg)
+    if crate::protocol::requires_registry_admission(&msg)
         && current_ready_peer(storage.as_ref(), peers, peer_id)
             .await
             .is_none()

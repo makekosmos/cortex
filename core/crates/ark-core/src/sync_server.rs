@@ -353,31 +353,13 @@ async fn save_removed_peer_ids(
     storage.store_removed_peer_ids(peer_ids).await
 }
 
-pub(crate) fn is_user_data_message(message: &LanSyncMessage) -> bool {
-    matches!(
-        message,
-        LanSyncMessage::VersionVector { .. }
-            | LanSyncMessage::SyncChanges { .. }
-            | LanSyncMessage::SyncPolicy { .. }
-            | LanSyncMessage::SyncAck { .. }
-            | LanSyncMessage::LiveChange { .. }
-            | LanSyncMessage::LiveAck { .. }
-            | LanSyncMessage::LiveReceiptAck { .. }
-            | LanSyncMessage::TaskMergeBatch { .. }
-            | LanSyncMessage::TaskMergeBatchAck { .. }
-            | LanSyncMessage::SignedIntegrationFrame { .. }
-            | LanSyncMessage::SignedIntegrationAck { .. }
-            | LanSyncMessage::PeerList { .. }
-    )
-}
-
 fn peer_message_allowed(
     ready_peer: Option<&ReadyPeer>,
     connection_id: usize,
     message: &LanSyncMessage,
 ) -> bool {
     ready_peer.is_some_and(|peer| peer.connection_id == connection_id)
-        || !is_user_data_message(message)
+        || !crate::protocol::requires_registry_admission(message)
 }
 
 fn send_msg(tx: &mpsc::UnboundedSender<Message>, msg: &LanSyncMessage) {

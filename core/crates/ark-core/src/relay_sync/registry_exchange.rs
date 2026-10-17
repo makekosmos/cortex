@@ -4,24 +4,6 @@ const REGISTRY_PAGE_SIZE: usize = 32;
 const MAX_REGISTRY_PAGE_COUNT: u32 = 4096;
 const MAX_REGISTRY_EXCHANGE_RETRIES: u8 = 2;
 
-pub(super) fn is_user_data_message(message: &LanSyncMessage) -> bool {
-    matches!(
-        message,
-        LanSyncMessage::VersionVector { .. }
-            | LanSyncMessage::SyncChanges { .. }
-            | LanSyncMessage::SyncAck { .. }
-            | LanSyncMessage::LiveChange { .. }
-            | LanSyncMessage::LiveAck { .. }
-            | LanSyncMessage::LiveReceiptAck { .. }
-            | LanSyncMessage::TaskMergeBatch { .. }
-            | LanSyncMessage::TaskMergeBatchAck { .. }
-            | LanSyncMessage::SignedIntegrationFrame { .. }
-            | LanSyncMessage::SignedIntegrationAck { .. }
-            | LanSyncMessage::PeerList { .. }
-            | LanSyncMessage::SyncPolicy { .. }
-    )
-}
-
 impl RelaySync {
     pub(super) async fn start_registry_exchange(
         &self,
@@ -458,23 +440,5 @@ impl RelaySync {
             .await
             .get(peer_device_id)
             .is_some_and(|key| key == endpoint)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::is_user_data_message;
-    use crate::protocol::LanSyncMessage;
-
-    #[test]
-    fn sync_policy_requires_registry_admission() {
-        let message = LanSyncMessage::SyncPolicy {
-            revision: 1,
-            digest: "policy-digest".into(),
-            active: true,
-            rules: Vec::new(),
-        };
-
-        assert!(is_user_data_message(&message));
     }
 }

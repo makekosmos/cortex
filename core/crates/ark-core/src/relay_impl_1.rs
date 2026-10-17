@@ -6,7 +6,7 @@ impl RelaySync {
         transport_public_key: Option<String>,
         defer_initial_sync: bool,
     ) {
-        if registry_exchange::is_user_data_message(&msg)
+        if crate::protocol::requires_registry_admission(&msg)
             && !self
                 .registry_ready_for_peer(&from_device_id, transport_public_key.as_deref())
                 .await
