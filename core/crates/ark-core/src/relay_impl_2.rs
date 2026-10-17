@@ -441,8 +441,8 @@ impl RelaySync {
         }
 
         if is_last {
-            if let Err(error) = crate::sync_server::persist_pull_vector(
-                &self.storage,
+            if let Err(error) = ark_sync::inbound_snapshot::persist_pull_vector(
+                self.storage.as_ref(),
                 &mut state.vector,
                 state.changed,
                 true,

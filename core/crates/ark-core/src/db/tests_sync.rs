@@ -6,3 +6,4 @@ include!("tests_sync/part5.rs");
 include!("tests_sync/part6.rs");
 include!("tests_sync/part7.rs");
 include!("tests_sync/canonical_object_transaction.rs");
+include!("tests_sync/pull_vector.rs");

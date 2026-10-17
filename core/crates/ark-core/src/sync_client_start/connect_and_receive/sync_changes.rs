@@ -78,8 +78,8 @@ pub(super) async fn apply(
 
     match policy_identity.as_ref() {
         Some(identity) => {
-            crate::sync_server::persist_pull_vector_with_policy(
-                storage,
+            ark_sync::inbound_snapshot::persist_pull_vector_with_policy(
+                storage.as_ref(),
                 local_device_id,
                 identity,
                 &mut local_vector,
@@ -90,8 +90,8 @@ pub(super) async fn apply(
             .await?;
         }
         None => {
-            crate::sync_server::persist_pull_vector(
-                storage,
+            ark_sync::inbound_snapshot::persist_pull_vector(
+                storage.as_ref(),
                 &mut local_vector,
                 vector_updated,
                 is_last,

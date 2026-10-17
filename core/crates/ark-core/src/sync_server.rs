@@ -216,54 +216,6 @@ pub(crate) async fn save_version_vector_with_policy(
         .await
 }
 
-/// Persist the pull-side version vector after a `SyncChanges` batch: merge
-/// the contiguous `@usage:` cursors that `apply_entity` wrote to storage,
-/// then — only on the sender's final page — raise them to its
-/// complete-through claims. Mid-pull claims would leapfrog refs still in
-/// flight, and a lost connection would leave the cursor past entities we
-/// never received; merging stored cursors first keeps the claims a floor,
-/// never a regression.
-pub(crate) async fn persist_pull_vector(
-    storage: &Arc<dyn SyncRuntimeStorage>,
-    vector: &mut VersionVector,
-    vector_updated: bool,
-    is_last: bool,
-    usage_complete_through: Option<&HashMap<String, u64>>,
-) -> Result<(), String> {
-    if !(vector_updated || (is_last && usage_complete_through.is_some())) {
-        return Ok(());
-    }
-    merge_usage_cursors(vector, &load_version_vector(storage).await?);
-    if is_last {
-        if let Some(through) = usage_complete_through {
-            apply_usage_complete_through(vector, through);
-        }
-    }
-    save_version_vector(storage, vector).await
-}
-
-pub(crate) async fn persist_pull_vector_with_policy(
-    storage: &Arc<dyn SyncRuntimeStorage>,
-    local_device_id: &str,
-    policy_identity: &ark_application::sync_storage::PolicyIdentity,
-    vector: &mut VersionVector,
-    vector_updated: bool,
-    is_last: bool,
-    usage_complete_through: Option<&HashMap<String, u64>>,
-) -> Result<(), String> {
-    if !(vector_updated || (is_last && usage_complete_through.is_some())) {
-        return Ok(());
-    }
-    merge_usage_cursors(vector, &load_version_vector(storage).await?);
-    if is_last {
-        if let Some(through) = usage_complete_through {
-            apply_usage_complete_through(vector, through);
-        }
-    }
-    storage
-        .store_version_vector_with_policy(local_device_id, policy_identity, vector)
-        .await
-}
 
 pub(crate) async fn save_known_peers(
     storage: &Arc<dyn SyncRuntimeStorage>,

@@ -158,17 +158,13 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
             usage_complete_through,
             ..
         } => {
-            let (tx, peer_device_id, policy_bound) = {
+            let (tx, peer_device_id, protocol) = {
                 let peers_guard = peers.lock().await;
                 match peers_guard.get(&peer_id) {
-                    Some(p) if p.ready_peer.is_some() => (
-                        p.tx.clone(),
-                        p.device_id.clone(),
-                        p.negotiated_protocol.as_ref().is_some_and(|protocol| {
-                            protocol.capabilities.contains(
-                                &ark_sync::protocol::ProtocolCapability::PolicyBoundDeliveryV1,
-                            )
-                        }),
+                    Some(peer) if peer.ready_peer.is_some() => (
+                        peer.tx.clone(),
+                        peer.device_id.clone(),
+                        peer.negotiated_protocol.clone(),
                     ),
                     _ => return,
                 }
@@ -182,95 +178,57 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                     return;
                 }
             };
-            let expected_identity = policy_bound
-                .then(|| ark_sync::protocol::sync_policy_identity(local_profile.as_ref()));
-            if (policy_bound && policy_identity != expected_identity)
-                || (!policy_bound && policy_identity.is_some())
+            let mut snapshot = match ark_sync::inbound_snapshot::InboundSnapshotBatch::begin(
+                storage.as_ref(),
+                local_device_id.clone(),
+                peer_device_id.clone(),
+                protocol.as_ref(),
+                local_profile.as_ref(),
+                policy_identity.clone(),
+            )
+            .await
             {
-                eprintln!("{TAG} rejected snapshot page for stale or unnegotiated policy");
-                return;
-            }
-
-            let mut local_vector = match load_version_vector(storage).await {
-                Ok(vector) => vector,
+                Ok(snapshot) => snapshot,
                 Err(error) => {
-                    eprintln!("{TAG} failed to load sync version vector: {error}");
+                    eprintln!("{TAG} rejected snapshot page: {error}");
                     return;
                 }
             };
-            let mut accepted = 0;
-            let mut vector_updated = false;
 
             for entity in &entities {
-                let should_apply = is_usage_entity(entity)
-                    || local_vector
-                        .get(&entity.id)
-                        .is_none_or(|hlc| HLC::is_newer(&entity.hlc, hlc));
-
-                if should_apply {
-                    match storage
-                        .apply_authenticated_entity_with_policy(
-                            entity,
-                            &peer_device_id,
-                            &crate::db::entity_inbox_message_id(
-                                &peer_device_id,
-                                &entity.entity_type,
-                                &entity.id,
-                                &entity.hlc,
-                            ),
-                            &local_device_id,
-                            policy_identity.clone(),
-                        )
-                        .await
-                    {
-                        Ok(ark_application::sync_storage::InboundApplyOutcome::Applied)
-                        | Ok(ark_application::sync_storage::InboundApplyOutcome::Stale) => {
-                            vector_updated |= observe_non_usage_entity(&mut local_vector, entity);
-                            accepted += 1;
-
-                            if let Some(handler) = on_change.lock().await.as_ref() {
-                                handler(entity.clone());
-                            }
-
-                            // Broadcast to other peers
-                            broadcast_to_others(storage, peers, Some(&peer_device_id)).await;
+                let message_id = crate::db::entity_inbox_message_id(
+                    &peer_device_id,
+                    &entity.entity_type,
+                    &entity.id,
+                    &entity.hlc,
+                );
+                match snapshot
+                    .apply_entity(storage.as_ref(), entity, &message_id)
+                    .await
+                {
+                    Ok(ark_sync::inbound_snapshot::SnapshotEntityResult::Accepted) => {
+                        if let Some(handler) = on_change.lock().await.as_ref() {
+                            handler(entity.clone());
                         }
-                        Ok(ark_application::sync_storage::InboundApplyOutcome::Pending) => {}
-                        Err(e) => {
-                            eprintln!(
-                                "{TAG} Failed to apply sync entity {}:{}: {e}",
-                                entity.entity_type, entity.id
-                            );
-                        }
+                        broadcast_to_others(storage, peers, Some(&peer_device_id)).await;
+                    }
+                    Ok(
+                        ark_sync::inbound_snapshot::SnapshotEntityResult::Skipped
+                        | ark_sync::inbound_snapshot::SnapshotEntityResult::Pending,
+                    ) => {}
+                    Err(error) => {
+                        eprintln!(
+                            "{TAG} Failed to apply sync entity {}:{}: {error}",
+                            entity.entity_type, entity.id
+                        );
                     }
                 }
             }
 
-            let persist_result = match policy_identity.as_ref() {
-                Some(identity) => {
-                    persist_pull_vector_with_policy(
-                        storage,
-                        &local_device_id,
-                        identity,
-                        &mut local_vector,
-                        vector_updated,
-                        is_last,
-                        usage_complete_through.as_ref(),
-                    )
-                    .await
-                }
-                None => {
-                    persist_pull_vector(
-                        storage,
-                        &mut local_vector,
-                        vector_updated,
-                        is_last,
-                        usage_complete_through.as_ref(),
-                    )
-                    .await
-                }
-            };
-            if let Err(error) = persist_result {
+            if let Err(error) = snapshot
+                .finish(storage.as_ref(), is_last, usage_complete_through.as_ref())
+                .await
+            {
                 eprintln!("{TAG} failed to persist pulled sync progress: {error}");
                 return;
             }
@@ -278,7 +236,7 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                 &tx,
                 &LanSyncMessage::SyncAck {
                     batch_id,
-                    accepted,
+                    accepted: snapshot.accepted_count(),
                     policy_identity,
                 },
             );

@@ -3,6 +3,7 @@
 pub mod client_session;
 pub mod committed_feed_delivery;
 pub mod inbound_live_change;
+pub mod inbound_snapshot;
 pub mod protocol;
 pub mod protocol_negotiation;
 pub mod registry_admission;
