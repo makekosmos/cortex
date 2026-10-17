@@ -117,11 +117,20 @@ impl DbQuery for TaskMergeJournalPageQuery {
             ));
         }
         if let Some(policy) = policy.filter(|policy| policy.active) {
-            if policy.selective_profile().rule("type", "core.task")
-                != crate::data_platform::SyncMode::Full
-            {
+            let profile = policy.selective_profile();
+            let Some(rule) = profile.rules.get(&("type".into(), "core.task".into())) else {
                 return Err(DbError::Permission(
                     "task_merge_policy_requires_full_type_sync".into(),
+                ));
+            };
+            if rule.mode != crate::data_platform::SyncMode::Full {
+                return Err(DbError::Permission(
+                    "task_merge_policy_requires_full_type_sync".into(),
+                ));
+            }
+            if rule.filter.digest() != crate::data_platform::FilterV1::match_all().digest() {
+                return Err(DbError::Permission(
+                    "task_merge_policy_filter_unsupported".into(),
                 ));
             }
         }

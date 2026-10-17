@@ -108,5 +108,45 @@ async fn journal_page_requires_matching_policy_and_full_task_selection() {
         )
         .await;
     assert!(matches!(stale, Err(DbError::Permission(_))));
+
+    let filtered_policy = crate::data_platform::SyncProfileRule {
+        resource_kind: "type".into(),
+        resource_id: "core.task".into(),
+        mode: crate::data_platform::SyncMode::Full,
+        filter: crate::data_platform::FilterV1::parse(
+            r#"{"version":1,"where":{"eq":{"field":"title","value":"visible"}}}"#,
+        )
+        .unwrap(),
+    };
+    let filtered_digest =
+        crate::data_platform::digest_sync_policy(std::slice::from_ref(&filtered_policy));
+    handle.with_connection(|connection| {
+        crate::data_platform::accept_peer_sync_policy(
+            connection,
+            "peer-a",
+            2,
+            &filtered_digest,
+            true,
+            std::slice::from_ref(&filtered_policy),
+        )
+        .unwrap();
+    });
+    let filtered = handle
+        .query(
+            CommandContext::authenticated_peer("peer-a".into()),
+            TaskMergeJournalPageQuery::new(
+                "peer-a".into(),
+                crate::application::sync_storage::PolicyIdentity {
+                    revision: 2,
+                    digest: filtered_digest,
+                    active: true,
+                },
+                0,
+                1,
+                1,
+            ),
+        )
+        .await;
+    assert!(matches!(filtered, Err(DbError::Permission(_))));
     shutdown(&mut owner).await;
 }
