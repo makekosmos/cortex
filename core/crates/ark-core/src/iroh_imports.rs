@@ -75,8 +75,8 @@ use crate::protocol::{
     compute_hello_auth_hmac, deserialize_message, generate_auth_nonce, message_origin_device_id,
     normalize_auth_secret, serialize_message, LanSyncMessage, PROTOCOL_VERSION,
 };
-use crate::sync_bind::SyncBind;
 use crate::sync_transport::{SyncTransport, TransportEvent};
+use ark_net::sync_bind::SyncBind;
 
 /// `sync_kv` ключ для персистентного iroh identity secret key (см. spec
 /// фазы 1 шаг 1). Хранится hex-кодированием 32 байт `SecretKey::to_bytes()`

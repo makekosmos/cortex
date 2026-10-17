@@ -13,6 +13,7 @@ members = [
   "core/crates/ark-application",
   "core/crates/ark-sync",
   "core/crates/ark-net-policy",
+  "core/crates/ark-net",
   "core/crates/ark-store",
   "core/crates/ark-core",
 ]

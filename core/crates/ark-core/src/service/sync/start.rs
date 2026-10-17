@@ -25,7 +25,7 @@ pub(crate) async fn handle_start_sync(
     } = params;
     // Idempotency: tear down any running runtime first.
     handle_stop_sync(state).await;
-    crate::host::set_app_version(app_version.clone());
+    ark_net::host::set_app_version(app_version.clone());
 
     let device_name = device_name.unwrap_or_else(get_host_device_name);
     // Port 0 would bind an ephemeral port while advertising ":0" to peers.

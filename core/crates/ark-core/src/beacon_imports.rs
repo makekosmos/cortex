@@ -28,9 +28,9 @@ use tokio::net::UdpSocket;
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::interval;
 
-use crate::host::{get_own_addresses, strip_ipv6_zone};
-use crate::net::{is_address_routable, is_routable_v4, is_virtual_interface};
 use crate::protocol::LAN_SYNC_PORT;
+use ark_net::host::{get_own_addresses, strip_ipv6_zone};
+use ark_net::net::{is_address_routable, is_routable_v4, is_virtual_interface};
 
 const TAG: &str = "[Beacon]";
 pub const BEACON_PORT: u16 = LAN_SYNC_PORT + 1; // 21532

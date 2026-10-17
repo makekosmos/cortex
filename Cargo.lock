@@ -153,7 +153,7 @@ version = "0.1.0"
 dependencies = [
  "ark-application",
  "ark-domain",
- "ark-net-policy",
+ "ark-net",
  "ark-store",
  "ark-sync",
  "async-trait",
@@ -161,7 +161,6 @@ dependencies = [
  "criterion",
  "ed25519-dalek",
  "futures-util",
- "hostname",
  "if-addrs",
  "iroh",
  "iroh-tickets",
@@ -191,6 +190,17 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "ark-net"
+version = "0.1.0"
+dependencies = [
+ "ark-net-policy",
+ "hostname",
+ "if-addrs",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

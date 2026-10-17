@@ -19,7 +19,7 @@ doctest = false
 ark-application = { path = "../ark-application" }
 ark-domain = { path = "../ark-domain" }
 ark-sync = { path = "../ark-sync" }
-ark-net-policy = { path = "../ark-net-policy" }
+ark-net = { path = "../ark-net" }
 ark-store = { path = "../ark-store" }
 rusqlite.workspace = true
 tokio = { version = "1", features = [
@@ -43,7 +43,6 @@ chrono.workspace = true
 rand.workspace = true
 async-trait.workspace = true
 if-addrs = "0.13"
-hostname.workspace = true
 thiserror.workspace = true
 # iroh p2p QUIC-транспорт — штатный транспорт start_sync (`use_iroh`), не
 # опциональный: release Engine собирается с ним, поэтому гейт тоже (KOS-270 —

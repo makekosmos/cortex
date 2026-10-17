@@ -12,11 +12,9 @@ pub mod delphi;
 pub mod domain;
 pub mod events;
 pub mod hlc;
-pub mod host;
 pub mod integration_replication;
 pub mod iroh_transport;
 pub mod mesh;
-pub mod net;
 pub mod protocol;
 pub mod relay_sync;
 pub mod relay_transport;
@@ -24,7 +22,6 @@ pub mod replication_storage;
 pub mod schema;
 pub mod service;
 pub mod space;
-pub mod sync_bind;
 pub mod sync_client;
 mod sync_registry_admission;
 pub mod sync_server;
@@ -35,6 +32,8 @@ pub(crate) mod test_support;
 pub mod transport_select;
 pub mod type_registry;
 pub mod types;
+
+pub use ark_net::{host, net, sync_bind};
 
 // Re-export key types
 pub use beacon::{

@@ -1,0 +1,17 @@
+[package]
+name = "ark-net"
+version = "0.1.0"
+edition.workspace = true
+description = "Host networking configuration and transports for ARK"
+
+[dependencies]
+ark-net-policy = { path = "../ark-net-policy" }
+if-addrs = "0.13"
+hostname.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

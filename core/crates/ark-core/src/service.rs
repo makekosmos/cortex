@@ -43,19 +43,19 @@ use crate::beacon::{BeaconPeer, BroadcastDiscovery, BroadcastDiscoveryOptions};
 use crate::db::{self, DbHandle, SqliteStorageBackend};
 use crate::events::emit_event;
 use crate::hlc::HLC;
-use crate::host::{get_host_device_name, get_own_addresses};
 use crate::integration_replication::{
     AuthorizedNode, IntegrationCredentialEnvelope, IntegrationNodeGrant, SignedSyncEnvelope,
 };
-use crate::net::is_address_routable;
 use crate::protocol::LAN_SYNC_PORT;
 use crate::relay_sync::{RelaySync, RelaySyncConfig};
 use crate::replication_storage::SyncRuntimeStorage;
-use crate::sync_bind::SyncBind;
 use crate::sync_client::SyncClient;
 use crate::sync_server::{PeerEntry, SyncServer};
 use crate::transport_select::{select_transport, TransportChoice};
 use crate::types::*;
+use ark_net::host::{get_host_device_name, get_own_addresses};
+use ark_net::net::is_address_routable;
+use ark_net::sync_bind::SyncBind;
 
 mod admission;
 mod definitions;
