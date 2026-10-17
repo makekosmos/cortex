@@ -165,36 +165,10 @@ pub struct UsageTitleTotal {
     pub idle_seconds: i64,
 }
 
+fn default_meta_json() -> Value {
+    json!({})
+}
+
 fn default_usage_day_payload() -> Value {
     serde_json::json!({ "a": [], "t": [], "s": [] })
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ArkObject {
-    pub id: String,
-    pub type_id: String,
-    pub type_version: String,
-    pub title: String,
-    #[serde(default = "default_content_json")]
-    pub content_json: Value,
-    #[serde(default = "default_props_json")]
-    pub props_json: Value,
-    pub created_at: String,
-    pub updated_at: String,
-    pub deleted_at: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ArkObjectSummary {
-    pub id: String,
-    pub type_id: String,
-    pub type_version: String,
-    pub title: String,
-    #[serde(default = "default_props_json")]
-    pub props_json: Value,
-    pub created_at: String,
-    pub updated_at: String,
-    pub deleted_at: Option<String>,
 }

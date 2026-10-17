@@ -1,91 +1,6 @@
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ArkObjectWrite {
-    pub id: String,
-    pub type_id: String,
-    #[serde(default)]
-    pub type_version: Option<String>,
-    pub title: String,
-    #[serde(default = "default_content_json")]
-    pub content_json: Value,
-    #[serde(default = "default_props_json")]
-    pub props_json: Value,
-    pub created_at: String,
-    pub updated_at: String,
-    pub deleted_at: Option<String>,
-}
+use serde::{Deserialize, Serialize};
 
-impl ArkObjectWrite {
-    pub fn with_type_version(self, type_version: String) -> ArkObject {
-        ArkObject {
-            id: self.id,
-            type_id: self.type_id,
-            type_version,
-            title: self.title,
-            content_json: self.content_json,
-            props_json: self.props_json,
-            created_at: self.created_at,
-            updated_at: self.updated_at,
-            deleted_at: self.deleted_at,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ObjectType {
-    pub id: String,
-    pub name: String,
-    pub schema_json: String,
-    pub ui_schema_json: String,
-    pub created_at: String,
-    pub updated_at: String,
-    pub system_locked: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ObjectLink {
-    pub id: String,
-    pub source_object_id: String,
-    pub target_object_id: String,
-    pub link_type: String,
-    pub created_at: String,
-}
-
-fn default_meta_json() -> Value {
-    json!({})
-}
-
-fn default_content_json() -> Value {
-    json!({
-        "type": "doc",
-        "content": [{ "type": "paragraph" }]
-    })
-}
-
-fn default_props_json() -> Value {
-    json!({})
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LoadAllData {
-    pub todos: Vec<TodoItem>,
-    pub projects: Vec<Project>,
-    pub areas: Vec<Area>,
-    pub tags: Vec<Tag>,
-    pub headings: Vec<Heading>,
-    pub tracked_apps: Vec<TrackedApp>,
-    pub usage_sessions: Vec<UsageSession>,
-    pub usage_events: Vec<UsageEvent>,
-    pub objects: Vec<ArkObject>,
-    pub object_types: Vec<ObjectType>,
-    pub object_type_summaries: Vec<crate::type_registry::TypeSummary>,
-    pub object_type_versions: Vec<crate::type_registry::TypeVersion>,
-    pub object_type_aliases: Vec<crate::type_registry::AliasRecord>,
-    pub object_links: Vec<ObjectLink>,
-}
+// Read models for usage analytics responses.
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -206,4 +121,20 @@ pub struct UsageGamePlaytimeAggregate {
 pub struct UsageGameDailyTotal {
     pub date: String,
     pub seconds: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageGameRangeTotal {
+    pub game_id: String,
+    pub game_name: String,
+    pub seconds: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageGamePlaytimeSummary {
+    pub aggregates: Vec<UsageGamePlaytimeAggregate>,
+    pub daily_totals: Vec<UsageGameDailyTotal>,
+    pub per_game_totals: Vec<UsageGameRangeTotal>,
 }

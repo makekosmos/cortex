@@ -1,18 +1,7 @@
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct UsageGameRangeTotal {
-    pub game_id: String,
-    pub game_name: String,
-    pub seconds: i64,
-}
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct UsageGamePlaytimeSummary {
-    pub aggregates: Vec<UsageGamePlaytimeAggregate>,
-    pub daily_totals: Vec<UsageGameDailyTotal>,
-    pub per_game_totals: Vec<UsageGameRangeTotal>,
-}
+// Wire contracts shared by synchronization and storage.
 
 // ---------------------------------------------------------------------------
 // Sync entity (snake_case JSON for protocol compatibility)

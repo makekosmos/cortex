@@ -23,7 +23,7 @@
 - [x] Keep existing `ark-core::application::sync_storage` paths as a public facade while current callers use them.
 - [x] Run `cargo test -p ark-application`, the direct authenticated sync behavior pin, and the full serial ark-core suite (521 passed).
 - [x] Run strict Clippy, format, dependency-tree, diff, and source-size gates.
-- [ ] Commit this unit and keep KOS-424 open for the remaining application, store, sync, and net boundaries.
+- [x] Commit this unit and keep KOS-424 open for the remaining application, store, sync, and net boundaries.
 
 ## Throughput checkpoint
 
