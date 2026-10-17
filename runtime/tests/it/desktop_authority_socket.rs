@@ -1,4 +1,4 @@
-#![allow(clippy::unwrap_used)]
+#![allow(clippy::panic, clippy::unwrap_used)]
 
 use engine::{
     app_index::AppIndex, ark_host::ArkHost, file_index::FileIndex, package_service::PackageService,
