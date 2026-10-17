@@ -15,6 +15,7 @@ pub use crate::application::sync_storage::{
     CommittedFeedDeliveryPage, CommittedFeedEntry, FeedSnapshot, InitialSnapshot, OutboundAck,
     OutboundProgress,
 };
+pub(crate) use backend::SqliteDataVolumeReadSession;
 pub(crate) use backend::SqliteLegacyMutationSession;
 pub(crate) use backend::SqliteObjectMutationSession;
 pub(crate) use backend::SqliteObjectWriteSession;

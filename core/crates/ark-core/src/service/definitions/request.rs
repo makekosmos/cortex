@@ -8,6 +8,14 @@ pub(crate) struct DataVolumeScope {
     pub(crate) fields: Vec<String>,
 }
 
+impl TryFrom<DataVolumeScope> for ark_application::data_volume::DataVolumeScope {
+    type Error = String;
+
+    fn try_from(scope: DataVolumeScope) -> Result<Self, Self::Error> {
+        Self::new(scope.type_id, scope.type_version, scope.fields)
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct SyncPolicyRuleInput {

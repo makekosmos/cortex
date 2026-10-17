@@ -13,7 +13,7 @@ pub(crate) enum ObjectReadQuery {
     ListSummaries,
     ListByType(String),
     ListSummariesByType(String),
-    EstimateDataVolume(Vec<crate::service::DataVolumeScope>),
+    EstimateDataVolume(ark_application::data_volume::DataVolumeQuery),
     ListRunningTime(Option<String>),
     GetByIds(Vec<String>),
     Search(String),
@@ -58,7 +58,12 @@ impl DbQuery for ObjectReadQuery {
                 crate::db::list_object_summaries_by_type(connection, &type_id),
             ),
             Self::EstimateDataVolume(scopes) => {
-                serialize(crate::db::estimate_data_volume(connection, &scopes))
+                let session = crate::db::SqliteDataVolumeReadSession::new(connection);
+                serialize(
+                    ark_application::data_volume::DataVolumeReadPort::estimate_data_volume(
+                        &session, &scopes,
+                    ),
+                )
             }
             Self::GetByIds(ids) => serialize(crate::db::get_objects_by_ids(connection, &ids)),
             Self::Search(query) => serialize(crate::db::search_objects(connection, &query)),

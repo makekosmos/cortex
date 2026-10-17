@@ -40,17 +40,12 @@ fn type_id_in_clause(ids: &[String]) -> String {
     format!("type_id IN ({placeholders})")
 }
 
-/// Estimates the JSON payload size visible under each exact type/version and
-/// field scope. Object contents are projected and measured inside Ark Core;
-/// only counts and byte totals leave the storage boundary.
 pub(crate) fn estimate_data_volume(
     conn: &Connection,
-    scopes: &[crate::service::DataVolumeScope],
-) -> Result<Vec<Value>, String> {
-    if scopes.len() > 256 {
-        return Err("too many data volume scopes".into());
-    }
-    scopes
+    query: &ark_application::data_volume::DataVolumeQuery,
+) -> Result<Vec<ark_application::data_volume::DataVolumeEstimate>, String> {
+    query
+        .scopes()
         .iter()
         .map(|scope| estimate_data_volume_scope(conn, scope))
         .collect()
@@ -58,38 +53,24 @@ pub(crate) fn estimate_data_volume(
 
 fn estimate_data_volume_scope(
     conn: &Connection,
-    scope: &crate::service::DataVolumeScope,
-) -> Result<Value, String> {
-    if scope.type_id.is_empty()
-        || scope.type_id.len() > 128
-        || scope.type_version.is_empty()
-        || scope.type_version.len() > 64
-        || scope.fields.len() > 256
-        || scope.fields.iter().any(|field| {
-            field.len() > 128
-                || !(field == "title"
-                    || field == "content"
-                    || field
-                        .strip_prefix("props.")
-                        .is_some_and(|key| !key.is_empty()))
-        })
-    {
-        return Err("invalid data volume scope".into());
-    }
-    let type_ids = query_type_ids(conn, &scope.type_id)?;
+    scope: &ark_application::data_volume::DataVolumeScope,
+) -> Result<ark_application::data_volume::DataVolumeEstimate, String> {
+    let type_ids = query_type_ids(conn, scope.type_id())?;
     let mut values = type_ids
         .iter()
         .cloned()
         .map(rusqlite::types::Value::Text)
         .collect::<Vec<_>>();
-    values.push(rusqlite::types::Value::Text(scope.type_version.clone()));
+    values.push(rusqlite::types::Value::Text(
+        scope.type_version().to_owned(),
+    ));
     let mut terms = vec![
         "length(CAST(id AS BLOB)) + length(CAST(type_id AS BLOB)) + \
          length(CAST(type_version AS BLOB)) + length(CAST(created_at AS BLOB)) + \
          length(CAST(updated_at AS BLOB)) + 58"
             .to_owned(),
     ];
-    for field in &scope.fields {
+    for field in scope.fields() {
         match field.as_str() {
             "title" => terms.push("length(CAST(title AS BLOB)) + 10".into()),
             "content" => terms.push("length(CAST(content_json AS BLOB)) + 17".into()),
@@ -119,12 +100,12 @@ fn estimate_data_volume_scope(
             Ok((row.get(0)?, row.get(1)?))
         })
         .map_err(|e| e.to_string())?;
-    Ok(serde_json::json!({
-        "type_id": scope.type_id,
-        "type_version": scope.type_version,
-        "object_count": count,
-        "estimated_json_bytes": logical_bytes,
-    }))
+    Ok(ark_application::data_volume::DataVolumeEstimate {
+        type_id: scope.type_id().to_owned(),
+        type_version: scope.type_version().to_owned(),
+        object_count: count,
+        estimated_json_bytes: logical_bytes,
+    })
 }
 
 pub fn list_objects_by_type(conn: &Connection, type_id: &str) -> Result<Vec<ArkObject>, String> {

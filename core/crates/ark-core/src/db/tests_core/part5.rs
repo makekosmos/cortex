@@ -57,36 +57,45 @@
         )
         .unwrap();
 
-        let scope = crate::service::DataVolumeScope {
-            type_id: "estimate_type".into(),
-            type_version: "1.0.0".into(),
-            fields: vec!["title".into(), "props.allowed".into()],
-        };
-        let content_scope = crate::service::DataVolumeScope {
-            type_id: "estimate_type".into(),
-            type_version: "1.0.0".into(),
-            fields: vec!["content".into()],
-        };
-        let absent_version = crate::service::DataVolumeScope {
-            type_id: "estimate_type".into(),
-            type_version: "2.0.0".into(),
-            fields: vec!["content".into()],
-        };
-        let estimate =
-            estimate_data_volume(&conn, &[scope, content_scope, absent_version]).unwrap();
+        let scope = ark_application::data_volume::DataVolumeScope::new(
+            "estimate_type".into(),
+            "1.0.0".into(),
+            vec!["title".into(), "props.allowed".into()],
+        )
+        .unwrap();
+        let content_scope = ark_application::data_volume::DataVolumeScope::new(
+            "estimate_type".into(),
+            "1.0.0".into(),
+            vec!["content".into()],
+        )
+        .unwrap();
+        let absent_version = ark_application::data_volume::DataVolumeScope::new(
+            "estimate_type".into(),
+            "2.0.0".into(),
+            vec!["content".into()],
+        )
+        .unwrap();
+        let query = ark_application::data_volume::DataVolumeQuery::new(vec![
+            scope,
+            content_scope,
+            absent_version,
+        ])
+        .unwrap();
+        let session = SqliteDataVolumeReadSession::new(&conn);
+        let estimate = ark_application::data_volume::DataVolumeReadPort::estimate_data_volume(
+            &session, &query,
+        )
+        .unwrap();
         let preview_json = serde_json::to_string(&estimate).unwrap();
         assert!(!preview_json.contains("private"), "{preview_json}");
         assert!(!preview_json.contains("Visible title"), "{preview_json}");
-        assert_eq!(estimate[0]["object_count"], 1);
-        assert!(estimate[0]["estimated_json_bytes"].as_u64().unwrap() < 200);
-        assert_eq!(estimate[0]["type_version"], "1.0.0");
-        assert_eq!(estimate[1]["object_count"], 1);
-        assert!(
-            estimate[1]["estimated_json_bytes"].as_u64().unwrap()
-                > estimate[0]["estimated_json_bytes"].as_u64().unwrap()
-        );
-        assert_eq!(estimate[2]["object_count"], 0);
-        assert_eq!(estimate[2]["estimated_json_bytes"], 0);
+        assert_eq!(estimate[0].object_count, 1);
+        assert!(estimate[0].estimated_json_bytes < 200);
+        assert_eq!(estimate[0].type_version, "1.0.0");
+        assert_eq!(estimate[1].object_count, 1);
+        assert!(estimate[1].estimated_json_bytes > estimate[0].estimated_json_bytes);
+        assert_eq!(estimate[2].object_count, 0);
+        assert_eq!(estimate[2].estimated_json_bytes, 0);
     }
 
     fn make_time_entry(

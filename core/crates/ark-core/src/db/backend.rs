@@ -5,6 +5,7 @@ use super::DbHandle;
 mod adapter;
 mod apply;
 mod canonical_object;
+mod data_volume;
 mod entities;
 mod legacy_mutation;
 mod object_mutation;
@@ -14,6 +15,7 @@ mod usage;
 
 pub use apply::delete_tag;
 pub(crate) use canonical_object::SqliteObjectWriteSession;
+pub(crate) use data_volume::SqliteDataVolumeReadSession;
 pub(crate) use legacy_mutation::SqliteLegacyMutationSession;
 pub(crate) use object_mutation::SqliteObjectMutationSession;
 pub(crate) use signed_integration::SqliteSignedIntegrationFrameSession;

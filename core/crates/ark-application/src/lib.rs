@@ -1,3 +1,4 @@
+pub mod data_volume;
 pub mod object_write;
 pub mod replication_storage;
 pub mod sync_policy;

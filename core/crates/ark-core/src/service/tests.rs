@@ -68,6 +68,7 @@ impl Drop for ServiceFixture {
 }
 
 mod api_wire_compat;
+mod data_volume;
 mod legacy_writes;
 mod load_all_query;
 mod local_writes;

@@ -33,7 +33,12 @@ pub(super) async fn estimate_data_volume(
     state: &Arc<ServiceState>,
     scopes: Vec<crate::service::DataVolumeScope>,
 ) -> Result<Value, String> {
-    object_read(state, db::ObjectReadQuery::EstimateDataVolume(scopes)).await
+    let scopes = scopes
+        .into_iter()
+        .map(ark_application::data_volume::DataVolumeScope::try_from)
+        .collect::<Result<Vec<_>, _>>()?;
+    let query = ark_application::data_volume::DataVolumeQuery::new(scopes)?;
+    object_read(state, db::ObjectReadQuery::EstimateDataVolume(query)).await
 }
 
 pub(super) async fn list_running_time_entries(
