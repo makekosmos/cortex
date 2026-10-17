@@ -4,6 +4,9 @@ use crate::replication_storage::{PeerIdentityBackend, SyncRuntimeStorage};
 use rusqlite::Connection;
 use std::sync::{Arc, Mutex};
 
+#[path = "registry_fanout/sqlite_catchup_tests.rs"]
+mod sqlite_catchup_tests;
+
 struct RegistryFanoutTransport {
     sent: Mutex<Vec<(String, LanSyncMessage)>>,
     operations: Mutex<Vec<String>>,

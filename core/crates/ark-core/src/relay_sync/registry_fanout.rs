@@ -82,13 +82,15 @@ impl RelaySync {
             .storage
             .apply_device_registry_events(peer_device_id, std::slice::from_ref(&event))
             .await?;
-        self.publish_registry_delta(
-            &applied.applied_events,
-            &applied.disabled_device_ids,
-            Some(peer_device_id),
-        )
-        .await?;
+        let publication = self
+            .publish_registry_delta(
+                &applied.applied_events,
+                &applied.disabled_device_ids,
+                Some(peer_device_id),
+            )
+            .await;
         self.notify_registry_events(&applied.applied_events).await;
+        publication?;
         if !applied.sender_is_admitted {
             return Err("registry_sync_peer_disabled".into());
         }

@@ -32,20 +32,20 @@ pub(super) async fn handle_registry_admission(
     let registry_session_id = admission.session_id().map(str::to_owned);
     broadcast_registry_events(ctx, peer_id, &update.applied_events).await;
     let preserve_pending_peer = update.close_session.then_some(peer_id);
-    if revoke_disabled_sessions(
+    let session_revoked = revoke_disabled_sessions(
         ctx,
         &update.disabled_device_ids,
         preserve_pending_peer,
         !update.local_device_is_admitted,
     )
-    .await
-    {
-        return;
-    }
+    .await;
     if !update.applied_events.is_empty() {
         if let Some(handler) = ctx.on_registry_events.lock().await.as_ref() {
             handler(update.applied_events.clone());
         }
+    }
+    if session_revoked {
+        return;
     }
     for outgoing in update.outgoing {
         send_msg(&tx, &outgoing);

@@ -210,14 +210,16 @@ impl RelaySync {
             .storage
             .apply_device_registry_events(peer_device_id, &events)
             .await?;
-        self.publish_registry_delta(
-            &page_apply.applied_events,
-            &page_apply.disabled_device_ids,
-            Some(peer_device_id),
-        )
-        .await?;
+        let publication = self
+            .publish_registry_delta(
+                &page_apply.applied_events,
+                &page_apply.disabled_device_ids,
+                Some(peer_device_id),
+            )
+            .await;
         self.notify_registry_events(&page_apply.applied_events)
             .await;
+        publication?;
         if page_apply
             .disabled_device_ids
             .iter()
