@@ -3,31 +3,11 @@ use std::collections::HashMap;
 use crate::canonical_types::pending::ReplayNotice;
 use crate::types::{PeerRecord, SyncEntity, VersionVector};
 
-/// Exact receiver-owned policy identity used to bind sync delivery to the
-/// policy that selected its contents.
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct PolicyIdentity {
-    pub revision: i64,
-    pub digest: String,
-    pub active: bool,
-}
-
-impl PolicyIdentity {
-    pub fn new(revision: i64, digest: impl Into<String>, active: bool) -> Result<Self, String> {
-        let digest = digest.into();
-        if revision < 0
-            || digest.len() != 64
-            || !digest.bytes().all(|byte| byte.is_ascii_hexdigit())
-        {
-            return Err("invalid_sync_policy_identity".into());
-        }
-        Ok(Self {
-            revision,
-            digest,
-            active,
-        })
-    }
-}
+pub use ark_application::sync_policy::PolicyIdentity;
+pub use ark_application::task_merge::{
+    TaskMergeBatch, TaskMergeBatchAck, TaskMergeDeliveryPort, TaskMergeJournalEntry,
+    TaskMergeJournalPage,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct CommittedFeedEntry {
@@ -75,62 +55,6 @@ pub struct PolicyBoundFeedPage {
 pub struct PolicyBoundSnapshotPage {
     pub identity: PolicyIdentity,
     pub entities: Vec<SyncEntity>,
-}
-
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct TaskMergeJournalEntry {
-    pub position: i64,
-    pub operation: crate::domain::task_merge::TaskMergeOperation,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub expected_conflict_digest: Option<String>,
-}
-
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct TaskMergeJournalPage {
-    pub through_position: i64,
-    pub entries: Vec<TaskMergeJournalEntry>,
-}
-
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct TaskMergeBatch {
-    pub batch_id: String,
-    pub identity: PolicyIdentity,
-    pub after_position: i64,
-    pub through_position: i64,
-    pub entries: Vec<TaskMergeJournalEntry>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct TaskMergeBatchAck {
-    pub batch_id: String,
-    pub through_position: i64,
-    pub replayed: bool,
-}
-
-#[async_trait::async_trait]
-pub trait TaskMergeDeliveryPort: Send + Sync {
-    async fn prepare_task_merge_batch(
-        &self,
-        peer_device_id: &str,
-        expected_identity: &PolicyIdentity,
-        limit: usize,
-    ) -> Result<Option<TaskMergeBatch>, String>;
-
-    async fn acknowledge_task_merge_batch(
-        &self,
-        peer_device_id: &str,
-        expected_identity: &PolicyIdentity,
-        batch_id: &str,
-        through_position: i64,
-    ) -> Result<i64, String>;
-
-    async fn apply_task_merge_batch(
-        &self,
-        peer_device_id: &str,
-        local_device_id: &str,
-        expected_identity: &PolicyIdentity,
-        batch: &TaskMergeBatch,
-    ) -> Result<TaskMergeBatchAck, String>;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

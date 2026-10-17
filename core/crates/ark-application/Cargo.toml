@@ -1,0 +1,13 @@
+[package]
+name = "ark-application"
+version = "0.1.0"
+edition.workspace = true
+description = "Application ports and use-case contracts for the ARK exocortex"
+
+[dependencies]
+ark-domain = { path = "../ark-domain" }
+async-trait.workspace = true
+serde.workspace = true
+
+[lints]
+workspace = true

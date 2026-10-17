@@ -137,9 +137,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ark-application"
+version = "0.1.0"
+dependencies = [
+ "ark-domain",
+ "async-trait",
+ "serde",
+]
+
+[[package]]
 name = "ark-core"
 version = "0.1.0"
 dependencies = [
+ "ark-application",
  "ark-domain",
  "async-trait",
  "chrono",
