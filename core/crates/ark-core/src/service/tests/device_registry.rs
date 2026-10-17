@@ -52,7 +52,7 @@ async fn engine_registry_operations_read_and_commit_signed_device_state() {
         EnrollPairedDeviceCommand::new(
             "local-device".into(),
             "remote-device".into(),
-            iroh::SecretKey::generate().public().to_string(),
+            ark_net::iroh::SecretKey::generate().public().to_string(),
         ),
     )
     .await

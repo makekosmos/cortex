@@ -16,7 +16,7 @@ async fn rejects_page_after_declared_count_without_applying_its_event() {
     backend
         .set_device_id("local-device")
         .expect("set local device id");
-    let remote_key = iroh::SecretKey::generate();
+    let remote_key = ark_net::iroh::SecretKey::generate();
     backend
         .enroll_paired_device(
             "local-device",
@@ -99,7 +99,7 @@ async fn does_not_admit_local_device_disabled_by_registry_page() {
     backend
         .set_device_id("local-device")
         .expect("set local device id");
-    let remote_key = iroh::SecretKey::generate();
+    let remote_key = ark_net::iroh::SecretKey::generate();
     backend
         .enroll_paired_device(
             "local-device",

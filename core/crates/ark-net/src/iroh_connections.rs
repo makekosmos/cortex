@@ -48,7 +48,7 @@ fn take_current_connection<T>(
 async fn authorize_signed_integration_frame(
     registry: &DeviceRegistry,
     outbound_storage: &tokio::sync::RwLock<Option<OutboundStorage>>,
-    frame: &crate::integration_replication::SignedSyncEnvelope,
+    frame: &SignedSyncEnvelope,
     remote_endpoint_id: &EndpointId,
 ) -> Result<(), String> {
     let target_is_current = registry
@@ -415,9 +415,10 @@ async fn handle_connection(params: ConnectionParams) {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
-    use crate::domain::device_registry::{
+    use ark_domain::device_registry::{
         DeviceId, DisplayName, RegistryEvent, RegistryEventDraft, RegistryOperation,
     };
 
@@ -453,7 +454,7 @@ mod tests {
                 target_device_id: DeviceId::parse("author-device").unwrap(),
                 actor_key_epoch: 1,
                 actor_admission_epoch: 1,
-                hlc: crate::hlc::HLC::now("author-device").to_string(),
+                hlc: ark_domain::hlc::HLC::now("author-device").to_string(),
                 operation: RegistryOperation::Rename {
                     display_name: DisplayName::parse("Name").unwrap(),
                 },
@@ -478,7 +479,7 @@ mod tests {
             &LanSyncMessage::LiveChange {
                 policy_identity: None,
                 change_id: "change".into(),
-                entity: crate::types::SyncEntity {
+                entity: ark_domain::types::SyncEntity {
                     id: "object".into(),
                     entity_type: "note".into(),
                     data: serde_json::Map::new(),

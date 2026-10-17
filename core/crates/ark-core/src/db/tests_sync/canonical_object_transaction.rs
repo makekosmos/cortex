@@ -7,7 +7,7 @@ async fn admit_test_registry_peer(backend: &SqliteStorageBackend, peer_id: &str)
         .enroll_paired_device(
             "device-local",
             peer_id,
-            &iroh::SecretKey::generate().public().to_string(),
+            &ark_net::iroh::SecretKey::generate().public().to_string(),
         )
         .await
         .unwrap();

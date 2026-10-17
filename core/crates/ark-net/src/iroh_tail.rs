@@ -1,53 +1,5 @@
-// Identity — Фаза 1 шаг 1: постоянный iroh `SecretKey` на устройство.
 // ---------------------------------------------------------------------------
-
-/// Загружает persisted iroh `SecretKey` из `sync_kv` (ключ
-/// `iroh.secret_key`) либо генерирует новый и сохраняет его туда же.
-///
-/// Это даёт стабильный `EndpointId` между рестартами процесса.
-///
-/// Принимает `&Connection` напрямую (как `get_sync_kv`/`set_sync_kv` в
-/// `db.rs`), а не `Arc<dyn SyncRuntimeStorage>`.
-pub fn load_or_generate_secret_key(conn: &Connection) -> Result<iroh::SecretKey, String> {
-    if let Some(stored) = get_sync_kv(conn, IROH_SECRET_KEY_KV_KEY)? {
-        let bytes = hex_decode_32(&stored)
-            .ok_or_else(|| "iroh transport: stored secret key is not valid hex".to_string())?;
-        return Ok(iroh::SecretKey::from_bytes(&bytes));
-    }
-
-    let secret_key = iroh::SecretKey::generate();
-    let encoded = hex_encode(&secret_key.to_bytes());
-    set_sync_kv(conn, IROH_SECRET_KEY_KV_KEY, &encoded)?;
-    Ok(secret_key)
-}
-
-fn hex_encode(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut out = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        out.push(HEX[(byte >> 4) as usize] as char);
-        out.push(HEX[(byte & 0x0f) as usize] as char);
-    }
-    out
-}
-
-fn hex_decode_32(s: &str) -> Option<[u8; 32]> {
-    let s = s.trim();
-    if s.len() != 64 {
-        return None;
-    }
-    let mut out = [0u8; 32];
-    let bytes = s.as_bytes();
-    for i in 0..32 {
-        let hi = (bytes[i * 2] as char).to_digit(16)?;
-        let lo = (bytes[i * 2 + 1] as char).to_digit(16)?;
-        out[i] = ((hi << 4) | lo) as u8;
-    }
-    Some(out)
-}
-
-// ---------------------------------------------------------------------------
-// Tests — unit-тесты (ticket codec, registry, identity).
+// Tests — unit-тесты (ticket codec, registry).
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
@@ -222,69 +174,6 @@ mod registry_tests {
 
         assert_eq!(registry.device_id_for(&old_endpoint), None);
         assert_eq!(registry.endpoint_id_for("device-A"), Some(new_endpoint));
-    }
-}
-
-#[cfg(test)]
-mod identity_tests {
-    use rusqlite::Connection;
-
-    use crate::db::init_schema;
-
-    use super::load_or_generate_secret_key;
-
-    fn setup_db() -> Connection {
-        let conn = Connection::open_in_memory().unwrap();
-        init_schema(&conn).unwrap();
-        conn
-    }
-
-    #[test]
-    fn secret_key_is_persisted_across_calls_on_same_storage() {
-        let conn = setup_db();
-
-        let key_a = load_or_generate_secret_key(&conn).expect("first load/generate");
-        let key_b = load_or_generate_secret_key(&conn).expect("second load/generate");
-
-        assert_eq!(
-            key_a.public(),
-            key_b.public(),
-            "EndpointId должен быть стабилен между вызовами на одном storage"
-        );
-    }
-
-    #[test]
-    fn secret_key_differs_across_independent_storages() {
-        let conn_1 = setup_db();
-        let conn_2 = setup_db();
-
-        let key_1 = load_or_generate_secret_key(&conn_1).expect("storage 1 load/generate");
-        let key_2 = load_or_generate_secret_key(&conn_2).expect("storage 2 load/generate");
-
-        assert_ne!(
-            key_1.public(),
-            key_2.public(),
-            "независимые storage должны получать разные identity"
-        );
-    }
-
-    #[test]
-    fn secret_key_is_written_to_sync_kv_after_first_call() {
-        let conn = setup_db();
-
-        assert_eq!(
-            crate::db::get_sync_kv(&conn, "iroh.secret_key").unwrap(),
-            None,
-            "до первого вызова ключа в sync_kv быть не должно"
-        );
-
-        let _ = load_or_generate_secret_key(&conn).expect("first load/generate");
-
-        let stored = crate::db::get_sync_kv(&conn, "iroh.secret_key").unwrap();
-        assert!(
-            stored.is_some(),
-            "после первого вызова secret key должен быть записан в sync_kv"
-        );
     }
 }
 

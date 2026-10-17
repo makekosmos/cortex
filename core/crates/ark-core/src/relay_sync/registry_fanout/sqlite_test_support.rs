@@ -8,7 +8,7 @@ use crate::sync_bind::SyncBind;
 use crate::types::{ArkObject, ArkObjectWrite};
 use ark_application::sync_policy::SyncProfileRule;
 use ark_domain::selective_sync::{FilterV1, SyncMode};
-use iroh::RelayMode;
+use ark_net::iroh::RelayMode;
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
@@ -19,7 +19,7 @@ pub(super) struct ActorPeer {
     pub(super) db: DbHandle,
     pub(super) storage: Arc<SqliteStorageBackend>,
     pub(super) owner: DbOwner,
-    pub(super) secret: iroh::SecretKey,
+    pub(super) secret: ark_net::iroh::SecretKey,
 }
 
 pub(super) async fn open_peer(db_path: &std::path::Path, device_id: &str) -> ActorPeer {
@@ -55,8 +55,8 @@ pub(super) fn relay_config(device_id: &str) -> RelaySyncConfig {
 
 pub(super) fn iroh_config(
     device_id: &str,
-    secret_key: iroh::SecretKey,
-    peer_addr: Option<iroh::EndpointAddr>,
+    secret_key: ark_net::iroh::SecretKey,
+    peer_addr: Option<ark_net::iroh::EndpointAddr>,
 ) -> crate::iroh_transport::IrohConfig {
     crate::iroh_transport::IrohConfig {
         device_id: device_id.into(),
@@ -215,8 +215,8 @@ pub(super) fn policy_relay_config(device_id: &str) -> RelaySyncConfig {
 
 pub(super) fn policy_iroh_config(
     device_id: &str,
-    secret: iroh::SecretKey,
-    peer_addr: Option<iroh::EndpointAddr>,
+    secret: ark_net::iroh::SecretKey,
+    peer_addr: Option<ark_net::iroh::EndpointAddr>,
 ) -> crate::iroh_transport::IrohConfig {
     let mut config = iroh_config(device_id, secret, peer_addr);
     config.auth_secret = Some("sqlite-policy-iroh-test-secret".into());
@@ -226,7 +226,7 @@ pub(super) fn policy_iroh_config(
 pub(super) fn start_policy_relay(
     peer: &ActorPeer,
     device_id: &str,
-    peer_addr: Option<iroh::EndpointAddr>,
+    peer_addr: Option<ark_net::iroh::EndpointAddr>,
 ) -> (Arc<crate::iroh_transport::IrohTransport>, Arc<RelaySync>) {
     let transport = Arc::new(crate::iroh_transport::IrohTransport::new(
         policy_iroh_config(device_id, peer.secret.clone(), peer_addr),

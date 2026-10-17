@@ -76,7 +76,7 @@ fn enroll_paired_device_in_transaction(
     if local_device == target_device {
         return Err(DbError::Invalid("device_registry_self_enrollment".into()));
     }
-    let endpoint_id: iroh::EndpointId = transport_public_key
+    let endpoint_id: ark_net::iroh::EndpointId = transport_public_key
         .parse()
         .map_err(|_| DbError::Invalid("device_registry_invalid_endpoint_id".into()))?;
     let target_key =

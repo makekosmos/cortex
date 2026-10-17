@@ -6,7 +6,7 @@ mod task_merge;
 
 async fn admit_inbound_peer(state: &Arc<ServiceState>) {
     let handle = get_db_handle(state).unwrap();
-    let endpoint = iroh::SecretKey::generate().public().to_string();
+    let endpoint = ark_net::iroh::SecretKey::generate().public().to_string();
     handle
         .submit(
             db::CommandContext::engine(),

@@ -12,6 +12,7 @@ pub mod domain;
 pub mod events;
 pub mod hlc;
 pub mod integration_replication;
+mod iroh_identity;
 pub mod iroh_transport;
 pub mod mesh;
 pub mod protocol;

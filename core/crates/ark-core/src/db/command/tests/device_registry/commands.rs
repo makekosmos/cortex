@@ -9,7 +9,7 @@ async fn local_registry_changes_are_signed_atomic_and_idempotent() {
         .join("device-registry-local-command.db")
         .to_string_lossy()
         .into_owned();
-    let remote_key = iroh::SecretKey::generate();
+    let remote_key = ark_net::iroh::SecretKey::generate();
     let (handle, mut owner) = DbHandle::open(db_path.clone(), "local-device".into())
         .await
         .unwrap();
@@ -124,7 +124,7 @@ async fn outbound_sync_admission_closes_after_device_disable() {
         .join("device-registry-outbound-admission.db")
         .to_string_lossy()
         .into_owned();
-    let endpoint = iroh::SecretKey::generate().public().to_string();
+    let endpoint = ark_net::iroh::SecretKey::generate().public().to_string();
     let (handle, mut owner) = DbHandle::open(db_path, "local-device".into())
         .await
         .unwrap();

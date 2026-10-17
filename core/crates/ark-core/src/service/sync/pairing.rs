@@ -72,7 +72,7 @@ pub(crate) async fn handle_connect_with_pairing_code(
     }
     // Validate before touching the running sync: a malformed code used to
     // tear sync down and restore it for nothing.
-    let expected_endpoint = crate::iroh_transport::from_ticket(code)
+    let expected_endpoint = ark_net::iroh::from_ticket(code)
         .map_err(|err| format!("invalid pairing code: {err}"))?
         .id
         .to_string();

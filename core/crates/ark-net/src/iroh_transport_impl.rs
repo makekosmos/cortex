@@ -53,7 +53,7 @@ impl IrohTransport {
     /// sites must push the handle in the same synchronous stretch as the
     /// `tokio::spawn` call — an abort only lands at the next await, so a
     /// task that has started but not yet registered would escape the join.
-    pub(crate) fn track(&self, handle: tokio::task::JoinHandle<()>) {
+    pub fn track(&self, handle: tokio::task::JoinHandle<()>) {
         self.tasks
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -168,14 +168,15 @@ impl IrohTransport {
             }
             None => (None, None),
         };
-        let offer = crate::protocol::ProtocolOffer::current_with_registry_history(true)
-            .with_task_merge_bootstrap_v2();
+        let offer =
+            ark_sync::protocol_negotiation::ProtocolOffer::current_with_registry_history(true)
+                .with_task_merge_bootstrap_v2();
         let negotiation_hmac =
             auth_secret
                 .as_deref()
                 .zip(auth_nonce.as_deref())
                 .map(|(secret, nonce)| {
-                    crate::protocol::compute_negotiation_offer_hmac(
+                    ark_sync::protocol_negotiation::compute_negotiation_offer_hmac(
                         secret,
                         &self.config.space_id,
                         &self.config.device_id,
@@ -191,8 +192,8 @@ impl IrohTransport {
             addresses: None,
             auth_nonce,
             auth_hmac,
-            platform: Some(ark_net::host::local_platform()),
-            app_version: ark_net::host::app_version(),
+            platform: Some(crate::host::local_platform()),
+            app_version: crate::host::app_version(),
             supported_protocol_versions: Some(offer.version_ids()),
             supported_capabilities: Some(offer.capability_ids()),
             negotiated_capabilities: None,

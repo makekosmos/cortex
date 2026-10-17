@@ -101,8 +101,8 @@ async fn two_sqlite_peers_converge_on_the_same_conflict_set() {
         .await
         .unwrap();
     let peer_id = "merge-test-device";
-    let left_endpoint = iroh::SecretKey::generate().public().to_string();
-    let right_endpoint = iroh::SecretKey::generate().public().to_string();
+    let left_endpoint = ark_net::iroh::SecretKey::generate().public().to_string();
+    let right_endpoint = ark_net::iroh::SecretKey::generate().public().to_string();
     for (handle, local_id, remote_id, endpoint) in [
         (&left, "merge-test-device", "right-device", right_endpoint),
         (&right, "right-device", peer_id, left_endpoint),
@@ -160,7 +160,7 @@ async fn bootstrap_and_followup_operation_materialize_atomically_and_replay() {
     let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
     seed_project_link_target(&handle).await;
     let peer_id = "bootstrap-peer";
-    let endpoint = iroh::SecretKey::generate().public().to_string();
+    let endpoint = ark_net::iroh::SecretKey::generate().public().to_string();
     handle
         .submit(
             CommandContext::engine(),
@@ -254,7 +254,7 @@ async fn operation_before_bootstrap_stays_unpublished_until_bootstrap_arrives() 
     let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
     seed_project_link_target(&handle).await;
     let peer_id = "pending-bootstrap-peer";
-    let endpoint = iroh::SecretKey::generate().public().to_string();
+    let endpoint = ark_net::iroh::SecretKey::generate().public().to_string();
     handle
         .submit(
             CommandContext::engine(),
@@ -347,7 +347,7 @@ async fn operation_before_bootstrap_stays_unpublished_until_bootstrap_arrives() 
 async fn inbound_batch_atomically_applies_remote_resolution_and_replays_idempotently() {
     let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
     let peer_id = "paired-peer";
-    let endpoint = iroh::SecretKey::generate().public().to_string();
+    let endpoint = ark_net::iroh::SecretKey::generate().public().to_string();
     handle
         .submit(
             CommandContext::engine(),
@@ -438,7 +438,7 @@ async fn inbound_batch_atomically_applies_remote_resolution_and_replays_idempote
 async fn excluded_local_task_category_rejects_incoming_batch_without_advancing_cursor() {
     let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
     let peer_id = "paired-peer";
-    let endpoint = iroh::SecretKey::generate().public().to_string();
+    let endpoint = ark_net::iroh::SecretKey::generate().public().to_string();
     handle
         .submit(
             CommandContext::engine(),

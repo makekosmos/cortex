@@ -297,7 +297,7 @@ impl SyncTransport for IrohTransport {
 
     fn set_outbound_storage(
         &self,
-        storage: Arc<dyn crate::replication_storage::SyncRuntimeStorage>,
+        storage: Arc<dyn SyncRuntimeStorage>,
         space_id: &str,
         origin_node_id: &str,
     ) -> Result<(), String> {
@@ -347,7 +347,7 @@ impl SyncTransport for IrohTransport {
         &self,
         transport_public_key: &str,
         msg: LanSyncMessage,
-    ) -> Result<crate::sync_transport::AddressedSendOutcome, String> {
+    ) -> Result<ark_sync::transport::AddressedSendOutcome, String> {
         if !matches!(
             msg,
             LanSyncMessage::PairingRejected { .. }
@@ -376,13 +376,13 @@ impl SyncTransport for IrohTransport {
             })
             .is_err()
         {
-            return Ok(crate::sync_transport::AddressedSendOutcome::PeerOffline);
+            return Ok(ark_sync::transport::AddressedSendOutcome::PeerOffline);
         }
         tokio::time::timeout(Duration::from_secs(5), completion_rx)
             .await
             .map_err(|_| "iroh addressed writer timed out".to_string())?
             .map_err(|_| "iroh addressed writer stopped".to_string())?
-            .map(|()| crate::sync_transport::AddressedSendOutcome::Sent)
+            .map(|()| ark_sync::transport::AddressedSendOutcome::Sent)
     }
 
     fn unbind_peer(&self, device_id: &str) -> Result<(), String> {

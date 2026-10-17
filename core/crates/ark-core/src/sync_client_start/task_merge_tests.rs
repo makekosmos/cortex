@@ -15,7 +15,7 @@ struct PeerFixture {
     db: DbHandle,
     owner: DbOwner,
     storage: Arc<SqliteStorageBackend>,
-    secret: iroh::SecretKey,
+    secret: ark_net::iroh::SecretKey,
 }
 
 async fn open_peer(path: &std::path::Path, device_id: &str) -> PeerFixture {

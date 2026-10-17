@@ -87,7 +87,7 @@ async fn persisted_pairing_retries_acceptance_after_send_failure_without_duplica
     let shared_connection = Arc::new(Mutex::new(connection));
     let storage = Arc::new(SqliteStorageBackend::for_test(shared_connection.clone()));
     storage.set_device_id("z-local-device").unwrap();
-    let remote_endpoint = iroh::SecretKey::generate().public().to_string();
+    let remote_endpoint = ark_net::iroh::SecretKey::generate().public().to_string();
     let transport = Arc::new(FailOncePairingAcceptedTransport {
         fail_next_acceptance: AtomicBool::new(true),
         acceptance_attempts: AtomicUsize::new(0),

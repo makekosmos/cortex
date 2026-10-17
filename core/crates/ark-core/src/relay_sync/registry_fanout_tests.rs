@@ -182,8 +182,8 @@ async fn inbound_registry_update_commits_once_fans_out_and_revokes_third_peer() 
         connection,
     ))));
     storage.set_device_id("local-device").unwrap();
-    let author_iroh_key = iroh::SecretKey::generate();
-    let disabled_iroh_key = iroh::SecretKey::generate();
+    let author_iroh_key = ark_net::iroh::SecretKey::generate();
+    let disabled_iroh_key = ark_net::iroh::SecretKey::generate();
     storage
         .enroll_paired_device(
             "local-device",
@@ -262,7 +262,7 @@ async fn inbound_registry_update_commits_once_fans_out_and_revokes_third_peer() 
         let endpoint = match device_id {
             "author-device" => author_iroh_key.public().to_string(),
             "disabled-device" => disabled_iroh_key.public().to_string(),
-            _ => iroh::SecretKey::generate().public().to_string(),
+            _ => ark_net::iroh::SecretKey::generate().public().to_string(),
         };
         relay.peers.lock().await.insert(
             device_id.into(),
@@ -385,7 +385,7 @@ async fn disable_during_exchange_is_applied_before_every_live_session_closes() {
         connection,
     ))));
     storage.set_device_id("local-device").unwrap();
-    let author_key = iroh::SecretKey::generate();
+    let author_key = ark_net::iroh::SecretKey::generate();
     storage
         .enroll_paired_device(
             "local-device",
@@ -426,7 +426,7 @@ async fn disable_during_exchange_is_applied_before_every_live_session_closes() {
         },
         transport.clone(),
     );
-    let observer_endpoint = iroh::SecretKey::generate().public().to_string();
+    let observer_endpoint = ark_net::iroh::SecretKey::generate().public().to_string();
     relay.peers.lock().await.insert(
         "author-device".into(),
         RelayPeerState {

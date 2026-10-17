@@ -68,7 +68,7 @@ async fn db_backup_restore_preserves_live_registry_chain_and_sequence() {
         db::EnrollPairedDeviceCommand::new(
             "restore-device".into(),
             "remote-device".into(),
-            iroh::SecretKey::generate().public().to_string(),
+            ark_net::iroh::SecretKey::generate().public().to_string(),
         ),
     )
     .await

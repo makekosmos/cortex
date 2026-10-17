@@ -6,7 +6,12 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-fn registry_backend(device_id: &str) -> (Arc<crate::db::SqliteStorageBackend>, iroh::SecretKey) {
+fn registry_backend(
+    device_id: &str,
+) -> (
+    Arc<crate::db::SqliteStorageBackend>,
+    ark_net::iroh::SecretKey,
+) {
     let connection = rusqlite::Connection::open_in_memory().expect("open test database");
     crate::db::init_schema(&connection).expect("initialize test schema");
     let secret = crate::iroh_transport::load_or_generate_secret_key(&connection)
@@ -143,7 +148,7 @@ async fn direct_client_and_server_exchange_registry_before_sync_readiness() {
     .await
     .expect("second direct peer should complete signed admission");
 
-    let additional_key = iroh::SecretKey::generate();
+    let additional_key = ark_net::iroh::SecretKey::generate();
     server_storage
         .enroll_paired_device(
             "server-device",
@@ -179,7 +184,7 @@ async fn direct_client_and_server_exchange_registry_before_sync_readiness() {
     .await
     .expect("connected direct peer should apply signed registry update");
 
-    let child_key = iroh::SecretKey::generate();
+    let child_key = ark_net::iroh::SecretKey::generate();
     client_storage
         .enroll_paired_device(
             "client-device",
@@ -356,7 +361,7 @@ async fn direct_client_and_server_exchange_registry_before_sync_readiness() {
 #[tokio::test]
 async fn direct_server_sends_no_data_or_ack_before_registry_admission() {
     let (server_storage, _server_key) = registry_backend("server-device");
-    let client_key = iroh::SecretKey::generate();
+    let client_key = ark_net::iroh::SecretKey::generate();
     server_storage
         .enroll_paired_device(
             "server-device",

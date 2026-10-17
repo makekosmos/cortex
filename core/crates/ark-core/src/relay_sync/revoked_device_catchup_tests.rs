@@ -5,12 +5,12 @@ use crate::domain::device_registry::{
 };
 use crate::replication_storage::{PeerIdentityBackend, SyncRuntimeStorage};
 use crate::sync_bind::SyncBind;
-use iroh::RelayMode;
+use ark_net::iroh::RelayMode;
 use rusqlite::Connection;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-async fn storage(device_id: &str) -> (Arc<SqliteStorageBackend>, iroh::SecretKey) {
+async fn storage(device_id: &str) -> (Arc<SqliteStorageBackend>, ark_net::iroh::SecretKey) {
     let connection = Connection::open_in_memory().unwrap();
     init_schema(&connection).unwrap();
     connection
@@ -28,8 +28,8 @@ async fn storage(device_id: &str) -> (Arc<SqliteStorageBackend>, iroh::SecretKey
 
 fn iroh_config(
     device_id: &str,
-    secret_key: iroh::SecretKey,
-    peer_addr: Option<iroh::EndpointAddr>,
+    secret_key: ark_net::iroh::SecretKey,
+    peer_addr: Option<ark_net::iroh::EndpointAddr>,
 ) -> crate::iroh_transport::IrohConfig {
     crate::iroh_transport::IrohConfig {
         device_id: device_id.into(),

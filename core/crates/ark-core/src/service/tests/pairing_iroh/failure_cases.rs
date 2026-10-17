@@ -44,9 +44,9 @@ async fn connect_with_pairing_code_to_dead_peer_stays_pending() {
     init_device(&state, &fixture.dir).await;
     start_iroh(&state, "device-b", "Device B").await;
 
-    let dead_endpoint = iroh::SecretKey::generate().public();
-    let dead_addr =
-        iroh::EndpointAddr::new(dead_endpoint).with_ip_addr("127.0.0.1:9".parse().unwrap());
+    let dead_endpoint = ark_net::iroh::SecretKey::generate().public();
+    let dead_addr = ark_net::iroh::EndpointAddr::new(dead_endpoint)
+        .with_ip_addr("127.0.0.1:9".parse().unwrap());
     let dead_ticket = crate::iroh_transport::IrohTransport::ticket_string_for_addr(&dead_addr);
 
     let reply = handle_request(

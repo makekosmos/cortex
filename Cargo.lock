@@ -162,7 +162,6 @@ dependencies = [
  "ed25519-dalek",
  "futures-util",
  "iroh",
- "iroh-tickets",
  "proptest",
  "rand 0.8.7",
  "rusqlite",
@@ -195,16 +194,21 @@ dependencies = [
 name = "ark-net"
 version = "0.1.0"
 dependencies = [
+ "ark-domain",
  "ark-net-policy",
  "ark-sync",
  "async-trait",
+ "ed25519-dalek",
  "futures-util",
  "hostname",
  "if-addrs",
+ "iroh",
+ "iroh-tickets",
  "serde",
  "serde_json",
  "tokio",
  "tokio-tungstenite",
+ "tracing",
 ]
 
 [[package]]

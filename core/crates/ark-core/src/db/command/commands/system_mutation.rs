@@ -62,7 +62,7 @@ pub(crate) struct LoadOrGenerateIrohSecretKeyCommand;
 impl sealed::Sealed for LoadOrGenerateIrohSecretKeyCommand {}
 
 impl DbCommand for LoadOrGenerateIrohSecretKeyCommand {
-    type Output = iroh::SecretKey;
+    type Output = ark_net::iroh::SecretKey;
 
     const CLASS: CommandClass = CommandClass::Interactive;
 
@@ -76,7 +76,7 @@ impl DbCommand for LoadOrGenerateIrohSecretKeyCommand {
         transaction: &Transaction<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_engine()?;
-        crate::iroh_transport::load_or_generate_secret_key(transaction).map_err(DbError::Storage)
+        crate::iroh_identity::load_or_generate_secret_key(transaction).map_err(DbError::Storage)
     }
 }
 

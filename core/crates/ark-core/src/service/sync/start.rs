@@ -180,7 +180,7 @@ pub(crate) async fn handle_start_sync(
             .await
             .map_err(|error| format!("iroh transport: failed to load identity: {error}"))?;
         let peer_addr = match iroh_peer_ticket.as_deref() {
-            Some(ticket) => Some(crate::iroh_transport::from_ticket(ticket)?),
+            Some(ticket) => Some(ark_net::iroh::from_ticket(ticket)?),
             None => None,
         };
         let peer_endpoint = peer_addr.as_ref().map(|addr| addr.id.to_string());
@@ -191,21 +191,21 @@ pub(crate) async fn handle_start_sync(
         // relays, and tests that need an unreachable relay.
         let iroh_relay_mode = match &iroh_relay_url {
             Some(url) => {
-                let relay_url: iroh::RelayUrl = url
+                let relay_url: ark_net::iroh::RelayUrl = url
                     .parse()
                     .map_err(|e| format!("invalid iroh_relay_url {url:?}: {e}"))?;
-                Some(iroh::RelayMode::custom([relay_url]))
+                Some(ark_net::iroh::RelayMode::custom([relay_url]))
             }
             None => match bind {
-                SyncBind::Loopback => Some(iroh::RelayMode::Disabled),
+                SyncBind::Loopback => Some(ark_net::iroh::RelayMode::Disabled),
                 SyncBind::AllInterfaces => None,
             },
         };
         // `our_ticket()` only waits on the network while homing on a
         // relay; with relays disabled it resolves from local addresses.
-        let ticket_is_offline = matches!(iroh_relay_mode, Some(iroh::RelayMode::Disabled));
-        let iroh_transport = Arc::new(crate::iroh_transport::IrohTransport::new(
-            crate::iroh_transport::IrohConfig {
+        let ticket_is_offline = matches!(iroh_relay_mode, Some(ark_net::iroh::RelayMode::Disabled));
+        let iroh_transport = Arc::new(ark_net::iroh::IrohTransport::new(
+            ark_net::iroh::IrohConfig {
                 device_id: device_id.clone(),
                 device_name: device_name.clone(),
                 space_id: space_id.clone(),

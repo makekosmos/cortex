@@ -14,7 +14,7 @@ async fn paired_device_enrollment_is_atomic_idempotent_and_survives_restart() {
         .join("device-registry.db")
         .to_string_lossy()
         .into_owned();
-    let endpoint = iroh::SecretKey::generate().public().to_string();
+    let endpoint = ark_net::iroh::SecretKey::generate().public().to_string();
     let (handle, mut owner) = DbHandle::open(db_path.clone(), "local-device".into())
         .await
         .unwrap();
@@ -91,7 +91,10 @@ async fn paired_device_enrollment_is_atomic_idempotent_and_survives_restart() {
         assert_eq!(event_count, 1);
         assert_eq!(
             target_key,
-            endpoint.parse::<iroh::EndpointId>().unwrap().as_bytes()
+            endpoint
+                .parse::<ark_net::iroh::EndpointId>()
+                .unwrap()
+                .as_bytes()
         );
         assert_eq!(
             serde_json::from_str::<std::collections::HashMap<String, String>>(&pinned)
@@ -114,7 +117,7 @@ async fn paired_device_enrollment_rolls_back_event_projection_and_pin_together()
         .join("device-registry-rollback.db")
         .to_string_lossy()
         .into_owned();
-    let endpoint = iroh::SecretKey::generate().public().to_string();
+    let endpoint = ark_net::iroh::SecretKey::generate().public().to_string();
     let (handle, mut owner) = DbHandle::open(db_path, "local-device".into())
         .await
         .unwrap();
@@ -174,7 +177,7 @@ async fn registry_history_is_paged_and_remote_events_apply_idempotently() {
         .join("device-registry-exchange.db")
         .to_string_lossy()
         .into_owned();
-    let remote_key = iroh::SecretKey::generate();
+    let remote_key = ark_net::iroh::SecretKey::generate();
     let endpoint = remote_key.public().to_string();
     let (handle, mut owner) = DbHandle::open(db_path, "local-device".into())
         .await
@@ -285,7 +288,7 @@ async fn disabled_peer_cannot_commit_an_inbound_entity_after_session_admission()
         .join("device-registry-revocation.db")
         .to_string_lossy()
         .into_owned();
-    let endpoint = iroh::SecretKey::generate().public().to_string();
+    let endpoint = ark_net::iroh::SecretKey::generate().public().to_string();
     let (handle, mut owner) = DbHandle::open(db_path, "local-device".into())
         .await
         .unwrap();
@@ -401,7 +404,7 @@ async fn clear_all_removes_registry_before_iroh_identity_is_cleared() {
         .join("device-registry-clear.db")
         .to_string_lossy()
         .into_owned();
-    let endpoint = iroh::SecretKey::generate().public().to_string();
+    let endpoint = ark_net::iroh::SecretKey::generate().public().to_string();
     let (handle, mut owner) = DbHandle::open(db_path, "local-device".into())
         .await
         .unwrap();
