@@ -5,15 +5,7 @@
 
 mod api;
 mod contracts;
-mod entities;
 mod outbound;
-mod policy;
-mod signed_sync;
-mod signed_sync_encoding;
-#[cfg(test)]
-mod signed_sync_tests;
-#[cfg(test)]
-mod tests;
 
 pub use api::{
     persist_integration_grant, persist_node_authorization, prepare_signed_sync,
@@ -22,22 +14,26 @@ pub use api::{
 pub(crate) use api::{
     persist_integration_grant_in_transaction, persist_node_authorization_in_transaction,
 };
+pub use ark_domain::integration_replication::encode_hex;
+pub use ark_domain::integration_replication::{
+    acquire_refresh_lease, encryption_key_id, next_credential_generation, require_newer,
+    validate_envelope_recipient, validate_plaintext_free_payload, validate_public_settings,
+    validate_refresh_publication,
+};
+pub(crate) use ark_domain::integration_replication::{envelope_entity_id, integration_node_id};
+pub use ark_domain::integration_replication::{
+    IntegrationReplicationChange, IntegrationReplicationEntity,
+};
+pub use ark_domain::integration_replication::{
+    SignedSyncEnvelope, SignedSyncError, VerifiedSyncEnvelope,
+};
 pub use contracts::{
     AuthorizedNode, GrantStatus, IntegrationConfiguration, IntegrationContractError,
     IntegrationCredentialEnvelope, IntegrationNodeGrant, IntegrationRefreshLease,
     IntegrationVerificationStatus, IssuerEncryptionKey, IssuerEncryptionKeyForPublish, NodeStatus,
     Reauthorization,
 };
-pub(crate) use entities::{envelope_entity_id, integration_node_id};
-pub use entities::{IntegrationReplicationChange, IntegrationReplicationEntity};
 pub use outbound::{
     node_may_receive_integration_frames, validate_outbound_signed_sync,
     validate_outbound_signed_sync_with_transport,
 };
-pub use policy::{
-    acquire_refresh_lease, encryption_key_id, next_credential_generation, require_newer,
-    validate_envelope_recipient, validate_plaintext_free_payload, validate_public_settings,
-    validate_refresh_publication,
-};
-pub use signed_sync::{SignedSyncEnvelope, SignedSyncError, VerifiedSyncEnvelope};
-pub use signed_sync_encoding::encode_hex;

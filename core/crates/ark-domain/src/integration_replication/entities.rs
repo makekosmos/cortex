@@ -69,13 +69,13 @@ impl IntegrationReplicationChange {
         }
     }
 
-    pub(crate) fn dependency_rank(&self) -> u8 {
+    pub fn dependency_rank(&self) -> u8 {
         self.entity.dependency_rank()
     }
 }
 
 impl IntegrationReplicationEntity {
-    pub(crate) fn dependency_rank(&self) -> u8 {
+    pub fn dependency_rank(&self) -> u8 {
         match self {
             IntegrationReplicationEntity::IntegrationConfiguration(_) => 0,
             IntegrationReplicationEntity::AuthorizedNode(_) => 1,
@@ -86,11 +86,11 @@ impl IntegrationReplicationEntity {
     }
 }
 
-pub(crate) fn integration_node_id(integration_id: &str, node_id: &str) -> String {
+pub fn integration_node_id(integration_id: &str, node_id: &str) -> String {
     format!("{}:{}{}", integration_id.len(), integration_id, node_id)
 }
 
-pub(crate) fn envelope_entity_id(
+pub fn envelope_entity_id(
     integration_id: &str,
     recipient_node_id: &str,
     generation: u64,
