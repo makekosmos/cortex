@@ -28,6 +28,18 @@ fn project_feed_entity(
 ) -> Result<Option<crate::types::SyncEntity>, String> {
     use serde_json::{Map, Value};
 
+    if entry.entity_type == "object"
+        && conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM task_merge_bootstraps WHERE object_id = ?1)",
+                [&entry.entity_id],
+                |row| row.get::<_, bool>(0),
+            )
+            .map_err(|error| error.to_string())?
+    {
+        return Ok(None);
+    }
+
     let data = if entry.deleted {
         conn.query_row(
             "SELECT type_id FROM sync_tombstones WHERE id = ?1 AND entity_type = ?2",
@@ -302,6 +314,7 @@ fn read_committed_feed_delivery_page_with_profile(
         drop(statement);
         after_selection();
 
+        let through_position = entries.last().map(|entry| entry.position);
         let projected = entries
             .iter()
             .filter_map(|entry| project_feed_entity(conn, entry).transpose())
@@ -343,6 +356,11 @@ fn read_committed_feed_delivery_page_with_profile(
             }
             serialized_bytes += entity_bytes;
             deliveries.push(CommittedFeedDelivery { entry, entity });
+        }
+        if deliveries.is_empty() {
+            if let Some(through_position) = through_position {
+                return Ok(CommittedFeedDeliveryPage::SkipTo { through_position });
+            }
         }
         Ok(CommittedFeedDeliveryPage::Deliveries(deliveries))
     })();

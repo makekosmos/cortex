@@ -99,7 +99,8 @@
             &source,
             &VersionVector::new(),
             "source-device",
-        );
+        )
+        .unwrap();
         let usage_days = entities
             .iter()
             .filter(|entity| entity.entity_type == "usage_day")
@@ -153,6 +154,7 @@
             &VersionVector::new(),
             "source-device",
         )
+        .unwrap()
         .into_iter()
         .find(|entity| entity.entity_type == "object" && entity.id == "ac8-object")
         .expect("canonical object should be exported for sync");

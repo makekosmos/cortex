@@ -23,6 +23,9 @@ fn expect_feed_deliveries(
         crate::application::sync_storage::CommittedFeedDeliveryPage::TooLarge { .. } => {
             panic!("test feed entity exceeded the bounded projection size")
         }
+        crate::application::sync_storage::CommittedFeedDeliveryPage::SkipTo { .. } => {
+            panic!("test feed page unexpectedly contained only skipped entities")
+        }
     }
 }
 
@@ -84,6 +87,63 @@ async fn snapshot_page_pins_filter_identity_and_rejects_policy_change_before_nex
         .await
         .unwrap_err();
     assert!(error.contains("stale_or_unnegotiated_sync_policy"));
+}
+
+#[test]
+fn initial_sync_snapshot_omits_tasks_owned_by_the_merge_journal() {
+    let conn = setup_db();
+    let task = full_core_task_entity(
+        "snapshot-merge-task",
+        "Must use the task merge journal",
+        "2026-10-15T00:00:00.000Z:000011:source-device",
+    );
+    SqliteStorageBackend::apply_entity_blocking(&conn, &task).unwrap();
+    let note = sync_object("snapshot-note", "note_obj", "Still uses the ordinary feed");
+    SqliteStorageBackend::apply_entity_blocking(&conn, &note).unwrap();
+    let vector = crate::types::VersionVector::default();
+
+    let before =
+        SqliteStorageBackend::collect_entities_page_blocking(&conn, &vector, "device", 0, 16)
+            .unwrap();
+    assert!(before.iter().any(|entity| entity.id == task.id));
+    assert!(before.iter().any(|entity| entity.id == note.id));
+
+    conn.execute(
+        "INSERT INTO task_merge_bootstraps(
+             bootstrap_id, object_id, bootstrap_json, payload_sha256
+         ) VALUES ('00000000000000000000000000000001', ?1, '{}', 'digest')",
+        [&task.id],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO sync_tombstones(id, entity_type, hlc, deleted_at, type_id)
+         VALUES (?1, 'object', 'r2', '2026-10-15T00:00:01Z', 'core.task')",
+        [&task.id],
+    )
+    .unwrap();
+
+    let after =
+        SqliteStorageBackend::collect_entities_page_blocking(&conn, &vector, "device", 0, 16)
+            .unwrap();
+    assert!(after.iter().all(|entity| entity.id != task.id));
+    assert!(after.iter().any(|entity| entity.id == note.id));
+}
+
+#[test]
+fn initial_sync_snapshot_fails_when_merge_mode_cannot_be_checked() {
+    let conn = setup_db();
+    conn.execute_batch("DROP TABLE task_merge_bootstraps")
+        .unwrap();
+
+    let error = SqliteStorageBackend::collect_entities_page_blocking(
+        &conn,
+        &crate::types::VersionVector::default(),
+        "device",
+        0,
+        16,
+    )
+    .unwrap_err();
+    assert!(error.contains("task_merge_bootstraps"));
 }
 #[test]
 fn failed_outer_apply_commit_rolls_back_and_releases_connection() {

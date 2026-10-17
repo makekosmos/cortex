@@ -178,6 +178,7 @@ mod tests {
 
         let deliveries = match page {
             CommittedFeedDeliveryPage::Deliveries(deliveries) => deliveries,
+            CommittedFeedDeliveryPage::SkipTo { .. } => panic!("feed page only skipped entries"),
             CommittedFeedDeliveryPage::TooLarge { .. } => panic!("small test payload is bounded"),
         };
         assert_eq!(deliveries.len(), 1);
@@ -466,6 +467,7 @@ mod tests {
         assert_eq!(pinned.identity, first);
         let deliveries = match pinned.page {
             CommittedFeedDeliveryPage::Deliveries(deliveries) => deliveries,
+            CommittedFeedDeliveryPage::SkipTo { .. } => Vec::new(),
             CommittedFeedDeliveryPage::TooLarge { .. } => Vec::new(),
         };
         assert_eq!(deliveries.len(), 1);

@@ -1,6 +1,28 @@
 use super::*;
 
 #[test]
+fn operation_mode_task_snapshots_are_skipped_with_cursor_advance() {
+    let conn = Connection::open_in_memory().unwrap();
+    conn.execute_batch(crate::schema::CREATE_TABLES).unwrap();
+    crate::data_platform::ensure_schema(&conn).unwrap();
+    append_committed_change(&conn, "object", "merged-task", "r1", false, None, None).unwrap();
+    conn.execute(
+        "INSERT INTO task_merge_bootstraps(
+             bootstrap_id, object_id, bootstrap_json, payload_sha256
+         ) VALUES ('00000000000000000000000000000001', 'merged-task', '{}', 'digest')",
+        [],
+    )
+    .unwrap();
+
+    assert_eq!(
+        read_committed_feed_delivery_page(&conn, 0, 1, 8).unwrap(),
+        CommittedFeedDeliveryPage::SkipTo {
+            through_position: 1
+        }
+    );
+}
+
+#[test]
 fn narrowing_preserves_local_copy_and_widening_replays_latest_state() {
     let directory = tempfile::tempdir().unwrap();
     let source_path = directory.path().join("policy-source.db");
@@ -68,10 +90,12 @@ fn narrowing_preserves_local_copy_and_widening_replays_latest_state() {
     let narrowed =
         read_committed_feed_delivery_page_for_peer(&source, "receiver-device", &excluded, 1, 2, 8)
             .unwrap();
-    assert!(matches!(
+    assert_eq!(
         narrowed.page,
-        CommittedFeedDeliveryPage::Deliveries(ref rows) if rows.is_empty()
-    ));
+        CommittedFeedDeliveryPage::SkipTo {
+            through_position: 2
+        }
+    );
     record_outbound_scan_identity(&source, "receiver-device", &excluded, 2).unwrap();
 
     let retained = crate::db::get_object(&receiver, "book-1")

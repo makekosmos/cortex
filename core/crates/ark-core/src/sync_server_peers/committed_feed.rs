@@ -100,6 +100,39 @@ pub(crate) async fn pump_committed_feed(
         crate::application::sync_storage::CommittedFeedDeliveryPage::Deliveries(deliveries) => {
             deliveries
         }
+        crate::application::sync_storage::CommittedFeedDeliveryPage::SkipTo {
+            through_position,
+        } => {
+            match &policy_identity {
+                Some(identity) => {
+                    storage
+                        .record_outbound_scan_identity(&device_id, identity, through_position)
+                        .await?;
+                    storage
+                        .acknowledge_outbound_identity(
+                            &device_id,
+                            identity,
+                            through_position,
+                            crate::application::sync_storage::OutboundAck::Applied,
+                        )
+                        .await?;
+                }
+                None => {
+                    storage
+                        .record_outbound_scan(&device_id, generation, through_position)
+                        .await?;
+                    storage
+                        .acknowledge_outbound(
+                            &device_id,
+                            generation,
+                            through_position,
+                            crate::application::sync_storage::OutboundAck::Applied,
+                        )
+                        .await?;
+                }
+            }
+            return Ok(());
+        }
         crate::application::sync_storage::CommittedFeedDeliveryPage::TooLarge {
             position,
             entity_id,

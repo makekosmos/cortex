@@ -102,6 +102,12 @@ pub struct CommittedFeedDelivery {
 #[derive(Clone, Debug, PartialEq)]
 pub enum CommittedFeedDeliveryPage {
     Deliveries(Vec<CommittedFeedDelivery>),
+    /// The page contained only entities this peer must not receive. The
+    /// sender can advance its cursor through this position without sending a
+    /// payload.
+    SkipTo {
+        through_position: i64,
+    },
     TooLarge {
         position: i64,
         entity_id: String,

@@ -138,18 +138,18 @@ impl SqliteStorageBackend {
         conn: &Connection,
         vector: &VersionVector,
         device_id: &str,
-    ) -> Vec<SyncEntity> {
+    ) -> Result<Vec<SyncEntity>, String> {
         let mut entities = Vec::new();
         let mut offset = 0;
         loop {
-            let page = Self::collect_entities_page_blocking(conn, vector, device_id, offset, 100);
+            let page = Self::collect_entities_page_blocking(conn, vector, device_id, offset, 100)?;
             if page.is_empty() {
                 break;
             }
             offset += page.len();
             entities.extend(page);
         }
-        entities
+        Ok(entities)
     }
 
     pub(in crate::db) fn collect_entities_page_blocking(
@@ -158,10 +158,19 @@ impl SqliteStorageBackend {
         device_id: &str,
         offset: usize,
         limit: usize,
-    ) -> Vec<SyncEntity> {
+    ) -> Result<Vec<SyncEntity>, String> {
         if limit == 0 {
-            return Vec::new();
+            return Ok(Vec::new());
         }
+
+        let mut statement = conn
+            .prepare("SELECT object_id FROM task_merge_bootstraps")
+            .map_err(|error| error.to_string())?;
+        let task_merge_object_ids = statement
+            .query_map([], |row| row.get::<_, String>(0))
+            .map_err(|error| error.to_string())?
+            .collect::<Result<std::collections::HashSet<_>, _>>()
+            .map_err(|error| error.to_string())?;
 
         fn to_data_map<T: serde::Serialize>(item: &T) -> serde_json::Map<String, Value> {
             match serde_json::to_value(item) {
@@ -225,13 +234,23 @@ impl SqliteStorageBackend {
                     (SELECT COUNT(*) FROM tags) +
                     (SELECT COUNT(*) FROM tracked_apps) +
                     (SELECT COUNT(*) FROM object_types) +
-                    (SELECT COUNT(*) FROM objects) +
+                    (SELECT COUNT(*) FROM objects AS object
+                     WHERE NOT EXISTS (
+                         SELECT 1 FROM task_merge_bootstraps AS bootstrap
+                         WHERE bootstrap.object_id = object.id
+                     )) +
                     (SELECT COUNT(*) FROM object_links) +
-                    (SELECT COUNT(*) FROM sync_tombstones)",
+                    (SELECT COUNT(*) FROM sync_tombstones AS tombstone
+                     WHERE NOT (
+                         tombstone.entity_type = 'object' AND EXISTS (
+                             SELECT 1 FROM task_merge_bootstraps AS bootstrap
+                             WHERE bootstrap.object_id = tombstone.id
+                         )
+                     ))",
                 [],
                 |row| row.get(0),
             )
-            .unwrap_or(0);
+            .map_err(|error| error.to_string())?;
         let mut fixed = Vec::new();
         macro_rules! add_entities {
             ($items:expr, $kind:literal) => {
@@ -248,17 +267,25 @@ impl SqliteStorageBackend {
             add_entities!(load_all_tags(conn), "tag");
             add_entities!(load_all_tracked_apps(conn), "tracked_app");
             add_entities!(list_object_types(conn), "object_type");
-            add_entities!(list_objects(conn), "object");
+            let objects = list_objects(conn).map(|objects| {
+                objects
+                    .into_iter()
+                    .filter(|object| !task_merge_object_ids.contains(&object.id))
+                    .collect::<Vec<_>>()
+            });
+            add_entities!(objects, "object");
             add_entities!(list_object_links(conn), "object_link");
             if let Ok(tombstones) = load_sync_tombstones(conn) {
-                fixed.extend(tombstones);
+                fixed.extend(tombstones.into_iter().filter(|entity| {
+                    entity.entity_type != "object" || !task_merge_object_ids.contains(&entity.id)
+                }));
             }
             fixed.sort_by_key(|entity| (entity.entity_type.clone(), entity.id.clone()));
         }
 
         let mut entities: Vec<_> = fixed.iter().skip(offset).take(limit).cloned().collect();
         if entities.len() == limit {
-            return entities;
+            return Ok(entities);
         }
 
         let usage_offset = offset.saturating_sub(fixed_count);
@@ -267,6 +294,6 @@ impl SqliteStorageBackend {
             Ok(usage) => entities.extend(usage),
             Err(error) => eprintln!("[ark-core] failed to load usage sync page: {error}"),
         }
-        entities
+        Ok(entities)
     }
 }

@@ -141,12 +141,14 @@ impl LoadEntitiesQuery {
         let entities = match page {
             None => {
                 SqliteStorageBackend::collect_entities_blocking(connection, &vector, &device_id)
+                    .map_err(DbError::Storage)?
             }
             Some((offset, limit)) => {
                 if let Some(profile) = &profile {
                     let all = SqliteStorageBackend::collect_entities_blocking(
                         connection, &vector, &device_id,
-                    );
+                    )
+                    .map_err(DbError::Storage)?;
                     crate::data_platform::filter_entities_for_profile(profile, &all)
                         .into_iter()
                         .skip(offset)
@@ -156,6 +158,7 @@ impl LoadEntitiesQuery {
                     SqliteStorageBackend::collect_entities_page_blocking(
                         connection, &vector, &device_id, offset, limit,
                     )
+                    .map_err(DbError::Storage)?
                 }
             }
         };

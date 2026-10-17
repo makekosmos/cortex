@@ -9,6 +9,17 @@
             .unwrap_or_default()
     }
 
+    fn sync_entity_page(
+        conn: &Connection,
+        vector: &VersionVector,
+        device_id: &str,
+        offset: usize,
+        limit: usize,
+    ) -> Vec<SyncEntity> {
+        SqliteStorageBackend::collect_entities_page_blocking(conn, vector, device_id, offset, limit)
+            .unwrap()
+    }
+
     fn save_stored_vector(conn: &Connection, vector: &VersionVector) {
         set_sync_kv(
             conn,
@@ -59,13 +70,7 @@
         loop {
             // Small pages on purpose: the pull must survive pagination, and
             // cursor claims are only valid once the stream is exhausted.
-            let entities = SqliteStorageBackend::collect_entities_page_blocking(
-                server,
-                &remote,
-                server_device,
-                offset,
-                3,
-            );
+            let entities = sync_entity_page(server, &remote, server_device, offset, 3);
             if entities.is_empty() {
                 break;
             }
@@ -227,8 +232,7 @@
         let applied = pull_usage(&server, "dev-a", &client, true);
         assert_eq!(applied, 3, "only the surviving refs are served");
         assert_eq!(count_usage_entities(&client), 3);
-        // The contiguous cursor jumped the compacted holes via the
-        // final-page claim — this is the fix under test.
+        // The final-page claim advances the cursor over compacted holes.
         assert_eq!(usage_cursor(&client, "dev-a"), 6);
 
         // The second pull serves nothing: the cursor is at the head.
@@ -244,8 +248,7 @@
         let remote = stored_vector(&client);
         // Apply exactly one small page, then stop — as a mid-pull batch
         // would. No claims yet, so no cursor jump past the hole.
-        let first_page =
-            SqliteStorageBackend::collect_entities_page_blocking(&server, &remote, "dev-a", 0, 2);
+        let first_page = sync_entity_page(&server, &remote, "dev-a", 0, 2);
         assert_eq!(first_page.len(), 2);
         for entity in &first_page {
             SqliteStorageBackend::apply_entity_blocking(&client, entity).unwrap();
@@ -399,9 +402,7 @@
         let mut offset = 0;
         let mut appended = false;
         loop {
-            let entities = SqliteStorageBackend::collect_entities_page_blocking(
-                &server, &remote, "dev-a", offset, 3,
-            );
+            let entities = sync_entity_page(&server, &remote, "dev-a", offset, 3);
             if entities.is_empty() {
                 break;
             }
@@ -411,8 +412,7 @@
             }
             if !appended {
                 appended = true;
-                // Lands between the snapshot and the stream's end: seq 7
-                // exists on the server but is not covered by the claim.
+                // The snapshot claim excludes this mid-stream append at seq 7.
                 upsert_usage_session(&server, &make_usage_session("s-4", "app-1")).unwrap();
                 record_usage_sequence(
                     &server,

@@ -24,6 +24,7 @@
     fn served_usage_ids(conn: &Connection, device_id: &str) -> Vec<String> {
         let mut ids: Vec<String> =
             SqliteStorageBackend::collect_entities_blocking(conn, &VersionVector::new(), device_id)
+                .unwrap()
                 .into_iter()
                 .filter(|entity| is_sequenced_usage_entity(&entity.entity_type))
                 .map(|entity| entity.id)
