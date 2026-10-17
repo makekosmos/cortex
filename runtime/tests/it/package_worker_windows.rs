@@ -385,8 +385,6 @@ async fn fixture_workers_validate_protocol_and_fail_closed() {
     // Drain every supervisor registry so no task keeps a worker child or
     // an ArkHost handle alive past the test's tempdir cleanup (KOS-270).
     let _ = supervisor.stop_all().await;
-    drop(supervisor);
-    shutdown_ark(ark).await;
 }
 
 #[tokio::test]
@@ -520,6 +518,8 @@ async fn worker_ark_write_uses_host_and_advances_sync_state() {
     // Drain every supervisor registry so no task keeps a worker child or
     // an ArkHost handle alive past the test's tempdir cleanup (KOS-270).
     let _ = supervisor.stop_all().await;
+    drop(supervisor);
+    shutdown_ark(ark).await;
 }
 
 #[tokio::test]
