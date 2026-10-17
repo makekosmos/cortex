@@ -235,6 +235,10 @@ pub(super) struct CapturingTransport {
 
 #[async_trait::async_trait]
 impl crate::sync_transport::SyncTransport for CapturingTransport {
+    fn supports_registry_admission(&self) -> bool {
+        true
+    }
+
     async fn start(
         &self,
         _event_tx: tokio::sync::mpsc::UnboundedSender<crate::sync_transport::TransportEvent>,

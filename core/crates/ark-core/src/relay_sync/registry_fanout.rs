@@ -88,6 +88,7 @@ impl RelaySync {
             Some(peer_device_id),
         )
         .await?;
+        self.notify_registry_events(&applied.applied_events).await;
         if !applied.sender_is_admitted {
             return Err("registry_sync_peer_disabled".into());
         }

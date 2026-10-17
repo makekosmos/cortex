@@ -157,6 +157,16 @@ async fn live_registry_events_reach_iroh_peers_and_disable_revokes_only_target()
             received_b_callback.store(true, Ordering::Relaxed);
         }))
         .await;
+    let registry_events_b = Arc::new(Mutex::new(Vec::new()));
+    let registry_events_b_callback = registry_events_b.clone();
+    relay_b
+        .set_on_registry_events(Arc::new(move |events| {
+            registry_events_b_callback
+                .lock()
+                .unwrap()
+                .extend(events.iter().map(|event| event.event_id().to_owned()));
+        }))
+        .await;
     let received_c = Arc::new(AtomicBool::new(false));
     let received_c_callback = received_c.clone();
     relay_c
@@ -237,6 +247,16 @@ async fn live_registry_events_reach_iroh_peers_and_disable_revokes_only_target()
         );
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
+    assert_eq!(
+        registry_events_b
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|event_id| event_id.as_str() == event.event_id())
+            .count(),
+        1,
+        "newly applied Iroh registry event must propagate to service-owned transports exactly once"
+    );
 
     let (_, _, updated_history) = storage_a
         .load_device_registry_events_page(0, None, 32)

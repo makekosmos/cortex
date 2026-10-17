@@ -142,6 +142,8 @@ pub(crate) async fn handle_start_sync(
         bind,
         app_version,
     };
+    let clients: Arc<TokioMutex<HashMap<String, Arc<SyncClient>>>> =
+        Arc::new(TokioMutex::new(HashMap::new()));
     let relay = if transport_choice == TransportChoice::Relay {
         let relay_url = relay_url.clone().expect("Relay choice implies relay_url");
         let transport: Arc<dyn crate::sync_transport::SyncTransport> = Arc::new(
@@ -167,6 +169,7 @@ pub(crate) async fn handle_start_sync(
             transport,
         );
         wire_relay_sync_events(&relay_sync).await;
+        wire_relay_registry_fanout(&relay_sync, &server, &clients).await;
         relay_sync.start().await?;
         Some(relay_sync)
     } else if transport_choice == TransportChoice::Iroh {
@@ -231,6 +234,7 @@ pub(crate) async fn handle_start_sync(
             iroh_transport.clone() as Arc<dyn crate::sync_transport::SyncTransport>,
         );
         wire_relay_sync_events(&relay_sync).await;
+        wire_relay_registry_fanout(&relay_sync, &server, &clients).await;
         // Only a `connect_with_pairing_code` start is a pairing intent
         // (`pairing_connect`); boot restores replay the stored ticket for an
         // already-paired endpoint, whose Hello passes on the stored key —
@@ -289,8 +293,6 @@ pub(crate) async fn handle_start_sync(
     };
 
     // Start SyncClient connections for every known peer.
-    let clients: Arc<TokioMutex<HashMap<String, Arc<SyncClient>>>> =
-        Arc::new(TokioMutex::new(HashMap::new()));
     let client_env = ClientEnv {
         server: server.clone(),
         storage: storage.clone(),
@@ -300,6 +302,7 @@ pub(crate) async fn handle_start_sync(
         space_id: space_id.clone(),
         own_addresses: own_addresses.clone(),
         auth_secret: auth_secret.clone(),
+        relay: relay.clone(),
     };
     for peer in known_peers {
         if peer.device_id == device_id || removed_peer_ids.iter().any(|id| id == &peer.device_id) {
@@ -343,6 +346,7 @@ pub(crate) async fn handle_start_sync(
         let space_id_for_beacon = space_id.clone();
         let own_addresses_for_beacon = own_addresses.clone();
         let auth_secret_for_beacon = auth_secret.clone();
+        let relay_for_beacon = relay.clone();
         beacon
             .set_on_peer_discovered(Arc::new(move |peer: BeaconPeer| {
                 // Callbacks from UDP recv run on tokio tasks — but this one is
@@ -356,6 +360,7 @@ pub(crate) async fn handle_start_sync(
                 let space_id = space_id_for_beacon.clone();
                 let own = own_addresses_for_beacon.clone();
                 let auth_secret = auth_secret_for_beacon.clone();
+                let relay = relay_for_beacon.clone();
                 tokio::spawn(async move {
                     let addrs: Vec<String> = if peer.addresses.is_empty() {
                         vec![peer.address.clone()]
@@ -452,6 +457,7 @@ pub(crate) async fn handle_start_sync(
                             space_id,
                             own_addresses: own,
                             auth_secret,
+                            relay,
                         },
                         peer_rec,
                     )

@@ -44,6 +44,7 @@ impl RelaySync {
             on_peer_connect: Arc::new(Mutex::new(None)),
             on_peer_disconnect: Arc::new(Mutex::new(None)),
             on_pairing_changed: Arc::new(Mutex::new(None)),
+            on_registry_events: Arc::new(Mutex::new(None)),
             tasks: Mutex::new(Vec::new()),
         })
     }
@@ -62,6 +63,22 @@ impl RelaySync {
 
     pub async fn set_on_pairing_changed(&self, handler: OnPairingChangedCallback) {
         *self.on_pairing_changed.lock().await = Some(handler);
+    }
+
+    pub async fn set_on_registry_events(&self, handler: OnRegistryEventsCallback) {
+        *self.on_registry_events.lock().await = Some(handler);
+    }
+
+    pub(super) async fn notify_registry_events(
+        &self,
+        events: &[crate::domain::device_registry::RegistryEvent],
+    ) {
+        if events.is_empty() {
+            return;
+        }
+        if let Some(handler) = self.on_registry_events.lock().await.as_ref() {
+            handler(events.to_vec());
+        }
     }
 
     pub(super) async fn notify_pairing_changed(&self) {

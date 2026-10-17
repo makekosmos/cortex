@@ -234,6 +234,8 @@ impl RelaySync {
             Some(peer_device_id),
         )
         .await?;
+        self.notify_registry_events(&page_apply.applied_events)
+            .await;
         if page_apply
             .disabled_device_ids
             .iter()

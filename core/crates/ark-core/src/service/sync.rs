@@ -10,7 +10,7 @@ mod events;
 mod pairing;
 mod start;
 pub(crate) use self::disconnect::handle_disconnect_peer;
-use self::events::wire_relay_sync_events;
+use self::events::{wire_relay_registry_fanout, wire_relay_sync_events};
 // Re-exported so `service.rs` can import it as `self::sync::handle_start_sync`.
 pub(crate) use self::start::handle_start_sync;
 // The pairing handlers; the param builders are exercised by tests only.
@@ -33,6 +33,7 @@ struct ClientEnv {
     space_id: String,
     own_addresses: Vec<String>,
     auth_secret: Option<String>,
+    relay: Option<Arc<RelaySync>>,
 }
 
 async fn spawn_sync_client(env: &ClientEnv, peer: PeerRecord) {
@@ -45,6 +46,7 @@ async fn spawn_sync_client(env: &ClientEnv, peer: PeerRecord) {
         space_id,
         own_addresses,
         auth_secret,
+        relay,
     } = env;
     if peer.device_id == *device_id {
         return;
@@ -73,11 +75,13 @@ async fn spawn_sync_client(env: &ClientEnv, peer: PeerRecord) {
     let registry = client.callback_registry();
     let server_for_registry = Arc::downgrade(server);
     let clients_for_registry = Arc::downgrade(clients);
+    let relay_for_registry = relay.as_ref().map(Arc::downgrade);
     let registry_tasks = registry.clone();
     client
         .set_on_registry_events(Arc::new(move |events| {
             let server = server_for_registry.clone();
             let clients = clients_for_registry.clone();
+            let relay = relay_for_registry.clone();
             crate::task_set::track_task(
                 &registry_tasks,
                 tokio::spawn(async move {
@@ -93,6 +97,15 @@ async fn spawn_sync_client(env: &ClientEnv, peer: PeerRecord) {
                     for client in peers {
                         for event in &events {
                             client.broadcast_registry_event(event.clone()).await;
+                        }
+                    }
+                    if let Some(relay) = relay.and_then(|relay| relay.upgrade()) {
+                        for event in &events {
+                            if let Err(error) = relay.publish_registry_event(event.clone()).await {
+                                eprintln!(
+                                    "sync failed to fan out registry event over Iroh: {error}"
+                                );
+                            }
                         }
                     }
                 }),
@@ -464,6 +477,7 @@ pub(super) async fn handle_add_seed_peer(
         space_id: runtime.space_id.clone(),
         own_addresses: runtime.own_addresses.lock().await.clone(),
         auth_secret: runtime.auth_secret.clone(),
+        relay: runtime.relay.clone(),
     };
     start_seed_client(&env, addresses, runtime.start_params.bind).await;
     Ok(json!(true))

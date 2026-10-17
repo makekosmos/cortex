@@ -98,6 +98,8 @@ const PAIRING_DECISION_TIMEOUT: Duration = Duration::from_secs(120);
 const PAIRING_DECLINE_SUPPRESS: Duration = Duration::from_secs(120);
 
 pub type OnPairingChangedCallback = Arc<dyn Fn() + Send + Sync>;
+pub type OnRegistryEventsCallback =
+    Arc<dyn Fn(Vec<crate::domain::device_registry::RegistryEvent>) + Send + Sync>;
 
 pub struct RelaySync {
     storage: Arc<dyn SyncRuntimeStorage>,
@@ -121,6 +123,7 @@ pub struct RelaySync {
     on_peer_connect: Arc<Mutex<Option<OnPeerConnectCallback>>>,
     on_peer_disconnect: Arc<Mutex<Option<OnPeerDisconnectCallback>>>,
     on_pairing_changed: Arc<Mutex<Option<OnPairingChangedCallback>>>,
+    on_registry_events: Arc<Mutex<Option<OnRegistryEventsCallback>>>,
     /// Background tasks spawned by `start()` — aborted and joined by
     /// `stop()` so a task holding `storage` (the shared db connection)
     /// cannot outlive teardown (KOS-270).
