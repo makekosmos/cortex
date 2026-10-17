@@ -125,7 +125,7 @@
                                         }
 
                                         let negotiated_protocol = match
-                                            crate::protocol::validate_protocol_selection(
+                                            ark_sync::protocol::validate_protocol_selection(
                                             &client_hello.offer,
                                             protocol_version,
                                             supported_protocol_versions.as_deref(),

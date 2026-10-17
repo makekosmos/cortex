@@ -1,4 +1,4 @@
-use crate::protocol::{
+use ark_sync::protocol::{
     compute_hello_auth_hmac, compute_negotiation_offer_hmac, generate_auth_nonce,
     serialize_message, LanSyncMessage, ProtocolOffer, PROTOCOL_VERSION,
 };

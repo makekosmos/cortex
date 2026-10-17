@@ -14,11 +14,11 @@ use rusqlite::Connection;
 use tokio::sync::mpsc;
 
 use ark_core::db::{init_schema, SqliteStorageBackend};
-use ark_core::protocol::{LanSyncMessage, PROTOCOL_VERSION};
 use ark_core::relay_sync::{RelaySync, RelaySyncConfig};
 use ark_core::replication_storage::PeerIdentityBackend;
 use ark_core::sync_server::SyncRuntimeStorage;
 use ark_core::sync_transport::{SyncTransport, TransportEvent};
+use ark_sync::protocol::{LanSyncMessage, PROTOCOL_VERSION};
 
 struct StubTransport {
     event_tx: StdMutex<Option<mpsc::UnboundedSender<TransportEvent>>>,
@@ -127,7 +127,7 @@ async fn wait_for_no_peers(relay: &RelaySync) {
 }
 
 fn send_hello(tx: &mpsc::UnboundedSender<TransportEvent>, peer_endpoint: &str) {
-    let offer = ark_core::protocol::ProtocolOffer::current_with_registry_history(true);
+    let offer = ark_sync::protocol::ProtocolOffer::current_with_registry_history(true);
     tx.send(TransportEvent::MessageReceivedFromTransport {
         from_device_id: "peer-x".to_string(),
         transport_public_key: peer_endpoint.to_owned(),

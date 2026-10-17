@@ -19,12 +19,12 @@ pub(crate) async fn pump_committed_feed(
             peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
                 protocol
                     .capabilities
-                    .contains(&crate::protocol::ProtocolCapability::DurableReceiptAckV1)
+                    .contains(&ark_sync::protocol::ProtocolCapability::DurableReceiptAckV1)
             }),
             peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
                 protocol
                     .capabilities
-                    .contains(&crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1)
+                    .contains(&ark_sync::protocol::ProtocolCapability::PolicyBoundDeliveryV1)
             }),
         )
     };
@@ -275,7 +275,7 @@ pub(crate) async fn handle_committed_feed_ack(
             peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
                 protocol
                     .capabilities
-                    .contains(&crate::protocol::ProtocolCapability::DurableReceiptAckV1)
+                    .contains(&ark_sync::protocol::ProtocolCapability::DurableReceiptAckV1)
             }),
             peer.in_flight_feed_position == Some(position),
             peer.in_flight_feed_policy_identity.clone(),
@@ -363,7 +363,7 @@ pub(crate) async fn handle_committed_feed_receipt_ack(
             peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
                 protocol
                     .capabilities
-                    .contains(&crate::protocol::ProtocolCapability::DurableReceiptAckV1)
+                    .contains(&ark_sync::protocol::ProtocolCapability::DurableReceiptAckV1)
             }),
             peer.in_flight_feed_position == Some(position),
             peer.in_flight_feed_policy_identity.clone(),

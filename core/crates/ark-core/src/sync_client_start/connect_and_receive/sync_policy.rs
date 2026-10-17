@@ -11,7 +11,7 @@ pub(super) async fn is_policy_bound(
             session
                 .protocol
                 .capabilities
-                .contains(&crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1)
+                .contains(&ark_sync::protocol::ProtocolCapability::PolicyBoundDeliveryV1)
         })
 }
 
@@ -23,7 +23,7 @@ pub(super) async fn validate_snapshot_identity(
 ) -> Result<(), String> {
     let expected = if policy_bound {
         let profile = storage.load_local_sync_profile(local_device_id).await?;
-        Some(crate::protocol::sync_policy_identity(profile.as_ref()))
+        Some(ark_sync::protocol::sync_policy_identity(profile.as_ref()))
     } else {
         None
     };
@@ -41,7 +41,7 @@ pub(super) async fn accept(
     revision: i64,
     digest: &str,
     active: bool,
-    rules: Vec<crate::protocol::SyncPolicyRuleWire>,
+    rules: Vec<ark_sync::protocol::SyncPolicyRuleWire>,
 ) -> Result<(), String> {
     if !authenticated {
         return Err("sync policy arrived before authentication".into());
@@ -54,11 +54,11 @@ pub(super) async fn accept(
     if !session
         .protocol
         .capabilities
-        .contains(&crate::protocol::ProtocolCapability::SelectiveSyncPolicyV1)
+        .contains(&ark_sync::protocol::ProtocolCapability::SelectiveSyncPolicyV1)
     {
         return Err("sync policy capability was not negotiated".into());
     }
-    let rules = crate::protocol::parse_sync_policy_rules(rules)?;
+    let rules = ark_sync::protocol::parse_sync_policy_rules(rules)?;
     storage
         .accept_peer_sync_policy(&session.peer_id, revision, digest, active, &rules)
         .await
@@ -72,7 +72,7 @@ pub(super) async fn accept_and_start(
     revision: i64,
     digest: &str,
     active: bool,
-    rules: Vec<crate::protocol::SyncPolicyRuleWire>,
+    rules: Vec<ark_sync::protocol::SyncPolicyRuleWire>,
 ) -> Result<(), String> {
     accept(
         storage,

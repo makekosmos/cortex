@@ -247,7 +247,7 @@ impl RelaySync {
                 peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
                     protocol
                         .capabilities
-                        .contains(&crate::protocol::ProtocolCapability::TaskMergeBootstrapV2)
+                        .contains(&ark_sync::protocol::ProtocolCapability::TaskMergeBootstrapV2)
                 }),
             )
         };
@@ -273,7 +273,7 @@ impl RelaySync {
                     && peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
                         protocol
                             .capabilities
-                            .contains(&crate::protocol::ProtocolCapability::TaskMergeBootstrapV2)
+                            .contains(&ark_sync::protocol::ProtocolCapability::TaskMergeBootstrapV2)
                     })
             });
         if still_supported {
@@ -306,7 +306,7 @@ impl RelaySync {
                     && peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
                         protocol
                             .capabilities
-                            .contains(&crate::protocol::ProtocolCapability::TaskMergeBootstrapV2)
+                            .contains(&ark_sync::protocol::ProtocolCapability::TaskMergeBootstrapV2)
                     })
             });
         if !supported {
@@ -316,7 +316,7 @@ impl RelaySync {
             .storage
             .load_local_sync_profile(&self.config.device_id)
             .await?;
-        let identity = crate::protocol::sync_policy_identity(local_profile.as_ref());
+        let identity = ark_sync::protocol::sync_policy_identity(local_profile.as_ref());
         if batch.identity != identity {
             return Ok(());
         }
@@ -365,7 +365,7 @@ impl RelaySync {
                     && peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
                         protocol
                             .capabilities
-                            .contains(&crate::protocol::ProtocolCapability::TaskMergeBootstrapV2)
+                            .contains(&ark_sync::protocol::ProtocolCapability::TaskMergeBootstrapV2)
                     })
             });
             authenticated_supported

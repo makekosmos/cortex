@@ -19,10 +19,10 @@ use tokio::sync::mpsc;
 
 use ark_core::db::{init_schema, SqliteStorageBackend};
 use ark_core::iroh_transport::{IrohConfig, IrohTransport};
-use ark_core::protocol::LanSyncMessage;
 use ark_core::sync_bind::SyncBind;
 use ark_core::sync_server::SyncRuntimeStorage;
 use ark_core::sync_transport::{SyncTransport, TransportEvent};
+use ark_sync::protocol::LanSyncMessage;
 use iroh::RelayMode;
 
 fn loopback_transport(device_id: &str, peer_addr: Option<iroh::EndpointAddr>) -> IrohTransport {

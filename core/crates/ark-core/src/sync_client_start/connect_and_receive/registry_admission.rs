@@ -63,18 +63,18 @@ impl PendingRegistryAdmission {
         let selective_policy_capability = self
             .protocol
             .capabilities
-            .contains(&crate::protocol::ProtocolCapability::SelectiveSyncPolicyV1);
+            .contains(&ark_sync::protocol::ProtocolCapability::SelectiveSyncPolicyV1);
         let policy_bound_delivery = self
             .protocol
             .capabilities
-            .contains(&crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1);
+            .contains(&ark_sync::protocol::ProtocolCapability::PolicyBoundDeliveryV1);
         if selective_policy_capability {
             let policy_message = storage
                 .load_local_sync_profile(&self.local_device_id)
                 .await?
                 .as_ref()
-                .map(crate::protocol::sync_policy_message)
-                .unwrap_or_else(crate::protocol::default_sync_policy_message);
+                .map(ark_sync::protocol::sync_policy_message)
+                .unwrap_or_else(ark_sync::protocol::default_sync_policy_message);
             send_msg(tx, &policy_message);
         }
         *authenticated_tx.lock().await = Some(crate::sync_client::AuthenticatedPeerSession {

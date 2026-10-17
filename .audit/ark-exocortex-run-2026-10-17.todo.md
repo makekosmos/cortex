@@ -60,6 +60,7 @@ Designed phases:
   - [x] Type restore failure separately from safe refusal and recovery-required; prove a real SQLite restore failure with successful rollback still fails the actor closed.
 - [ ] KOS-424: finish the remaining sync orchestration extraction and remove obsolete internal paths.
   - [x] Migrate `ark-core` callers to direct `ark-application` / `ark-domain` dependencies and remove the obsolete `application::sync_storage` and `domain` facades.
+  - [x] Migrate production and integration callers to `ark-sync::protocol`; remove the obsolete `ark-core::protocol` module and root re-exports.
   - [x] Compare two direct-session ownership designs with an independent judge; keep one session transition owner in `ark-sync`, with concrete WebSocket adapters in `ark-net` and composition in `ark-core`.
   - [ ] Inventory direct server/client branches, storage operations, message ordering, callbacks, and task ownership before finalizing interfaces.
   - [ ] Migrate production session ownership without changing wire/API behavior; remove the obsolete Core session and transport paths after callers move.

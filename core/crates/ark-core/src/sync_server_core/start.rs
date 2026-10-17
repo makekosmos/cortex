@@ -119,7 +119,7 @@ impl SyncServer {
                                         if let Message::Text(text) = &msg {
                                             if let Some(sync_message) = deserialize_message(text) {
                                                 let carries_user_data =
-                                                    crate::protocol::requires_registry_admission(
+                                                    ark_sync::protocol::requires_registry_admission(
                                                         &sync_message,
                                                     );
                                                 let ready_peer = if carries_user_data {

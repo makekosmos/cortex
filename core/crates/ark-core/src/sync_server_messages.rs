@@ -18,7 +18,7 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
         on_change,
         ..
     } = ctx;
-    if crate::protocol::requires_registry_admission(&msg)
+    if ark_sync::protocol::requires_registry_admission(&msg)
         && current_ready_peer(storage.as_ref(), peers, peer_id)
             .await
             .is_none()
@@ -48,9 +48,9 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                 (
                     peer.tx.clone(),
                     peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
-                        protocol
-                            .capabilities
-                            .contains(&crate::protocol::ProtocolCapability::SelectiveSyncPolicyV1)
+                        protocol.capabilities.contains(
+                            &ark_sync::protocol::ProtocolCapability::SelectiveSyncPolicyV1,
+                        )
                     }),
                 )
             };
@@ -58,7 +58,7 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                 admission::reject_peer(ctx, peer_id, &tx).await;
                 return;
             }
-            let rules = match crate::protocol::parse_sync_policy_rules(rules) {
+            let rules = match ark_sync::protocol::parse_sync_policy_rules(rules) {
                 Ok(rules) => rules,
                 Err(error) => {
                     eprintln!(
@@ -103,7 +103,7 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                         p.sync_complete,
                         p.negotiated_protocol.as_ref().is_some_and(|protocol| {
                             protocol.capabilities.contains(
-                                &crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1,
+                                &ark_sync::protocol::ProtocolCapability::PolicyBoundDeliveryV1,
                             )
                         }),
                     ),
@@ -340,7 +340,7 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                         p.device_id.clone(),
                         p.negotiated_protocol.as_ref().is_some_and(|protocol| {
                             protocol.capabilities.contains(
-                                &crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1,
+                                &ark_sync::protocol::ProtocolCapability::PolicyBoundDeliveryV1,
                             )
                         }),
                     ),
@@ -356,8 +356,8 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                     return;
                 }
             };
-            let expected_identity =
-                policy_bound.then(|| crate::protocol::sync_policy_identity(local_profile.as_ref()));
+            let expected_identity = policy_bound
+                .then(|| ark_sync::protocol::sync_policy_identity(local_profile.as_ref()));
             if (policy_bound && policy_identity != expected_identity)
                 || (!policy_bound && policy_identity.is_some())
             {

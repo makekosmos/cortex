@@ -3,8 +3,8 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message;
 
-use crate::protocol::{serialize_message, LanSyncMessage};
 use crate::replication_storage::SyncRuntimeStorage;
+use ark_sync::protocol::{serialize_message, LanSyncMessage};
 
 use crate::sync_client::ClientFeedInFlight;
 

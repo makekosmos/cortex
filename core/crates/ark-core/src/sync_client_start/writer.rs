@@ -43,7 +43,7 @@ where
         while let Some(message) = rx.recv().await {
             if let Message::Text(text) = &message {
                 if let Some(sync_message) = deserialize_message(text) {
-                    if crate::protocol::requires_registry_admission(&sync_message) {
+                    if ark_sync::protocol::requires_registry_admission(&sync_message) {
                         let peer_device_id = peer.read().await.device_id.clone();
                         if !matches!(
                             storage.sync_session_is_admitted(&peer_device_id).await,

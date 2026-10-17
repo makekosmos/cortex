@@ -85,7 +85,7 @@
         }
         if let Some(through) = through {
             let mut vector = stored_vector(client);
-            crate::protocol::apply_usage_complete_through(&mut vector, &through);
+            ark_sync::protocol::apply_usage_complete_through(&mut vector, &through);
             save_stored_vector(client, &vector);
         }
         applied
@@ -261,7 +261,7 @@
 
         let through = usage_log_complete_through(&server, None).unwrap();
         let mut vector = stored_vector(&client);
-        crate::protocol::apply_usage_complete_through(&mut vector, &through);
+        ark_sync::protocol::apply_usage_complete_through(&mut vector, &through);
         save_stored_vector(&client, &vector);
         assert_eq!(usage_cursor(&client, "dev-a"), 6);
     }
@@ -428,7 +428,7 @@
         }
 
         let mut vector = stored_vector(&client);
-        crate::protocol::apply_usage_complete_through(&mut vector, &through);
+        ark_sync::protocol::apply_usage_complete_through(&mut vector, &through);
         save_stored_vector(&client, &vector);
         assert_eq!(
             usage_cursor(&client, "dev-a"),

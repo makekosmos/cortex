@@ -462,7 +462,7 @@ async fn excluded_local_task_category_rejects_incoming_batch_without_advancing_c
         )
         .await
         .unwrap();
-    let identity = crate::protocol::sync_policy_identity(Some(&profile));
+    let identity = ark_sync::protocol::sync_policy_identity(Some(&profile));
     let batch = ark_application::sync_storage::TaskMergeBatch {
         batch_id: "bb".repeat(16),
         identity: identity.clone(),

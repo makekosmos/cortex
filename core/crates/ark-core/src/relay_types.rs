@@ -5,7 +5,6 @@ use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, Mutex};
 
 use crate::hlc::HLC;
-use crate::protocol::*;
 use crate::replication_storage::SyncRuntimeStorage;
 use crate::sync_server::{
     OnChangeCallback, OnPeerConnectCallback, OnPeerDisconnectCallback, PeerEntry,
@@ -13,6 +12,7 @@ use crate::sync_server::{
 use crate::sync_transport::{SyncTransport, TransportEvent};
 use crate::types::{PeerRecord, SyncEntity, VersionVector};
 use ark_net::relay::{RelayConfig, RelayTransport};
+use ark_sync::protocol::*;
 
 const TAG: &str = "[RelaySync]";
 const SYNC_LOAD_PAGE_SIZE: usize = 100;
@@ -34,7 +34,7 @@ struct RelayPeerState {
     platform: Option<String>,
     app_version: Option<String>,
     authenticated: bool,
-    negotiated_protocol: Option<crate::protocol::NegotiatedProtocol>,
+    negotiated_protocol: Option<ark_sync::protocol::NegotiatedProtocol>,
 }
 
 struct IncomingSyncState {

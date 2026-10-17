@@ -337,7 +337,7 @@ async fn legacy_entity_writes_bump_version_vector() {
 
 /// Fake SyncTransport: захватывает все отправленные LanSyncMessage в shared buf.
 pub(super) struct CapturingTransport {
-    pub(super) sent: Arc<TokioMutex<Vec<crate::protocol::LanSyncMessage>>>,
+    pub(super) sent: Arc<TokioMutex<Vec<ark_sync::protocol::LanSyncMessage>>>,
 }
 
 #[async_trait::async_trait]
@@ -353,7 +353,7 @@ impl crate::sync_transport::SyncTransport for CapturingTransport {
         Ok(())
     }
 
-    fn send(&self, msg: crate::protocol::LanSyncMessage) -> Result<(), String> {
+    fn send(&self, msg: ark_sync::protocol::LanSyncMessage) -> Result<(), String> {
         // `send` — sync, но нам нужен lock на TokioMutex из sync контекста.
         // Используем blocking_lock через spawn_blocking или try_lock; в тестах
         // конкурентности нет, try_lock гарантированно успевает.

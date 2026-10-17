@@ -129,8 +129,8 @@ async fn legacy_feed_pump_omits_policy_identity_and_legacy_ack_advances_progress
     .unwrap();
     let change_id = match rx.try_recv().unwrap() {
         tokio_tungstenite::tungstenite::Message::Text(text) => {
-            match crate::protocol::deserialize_message(&text).unwrap() {
-                crate::protocol::LanSyncMessage::LiveChange {
+            match ark_sync::protocol::deserialize_message(&text).unwrap() {
+                ark_sync::protocol::LanSyncMessage::LiveChange {
                     change_id,
                     policy_identity,
                     ..

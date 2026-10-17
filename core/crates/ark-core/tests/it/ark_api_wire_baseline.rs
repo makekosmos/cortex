@@ -5,7 +5,7 @@ use ark_core::integration_replication::{
     encode_hex, IntegrationConfiguration, IntegrationReplicationChange,
     IntegrationReplicationEntity, SignedSyncEnvelope,
 };
-use ark_core::protocol::{deserialize_message, serialize_message};
+use ark_sync::protocol::{deserialize_message, serialize_message};
 use serde::Deserialize;
 
 #[derive(Deserialize)]

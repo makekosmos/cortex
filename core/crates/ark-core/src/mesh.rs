@@ -9,7 +9,7 @@ use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
 use crate::hlc::HLC;
-use crate::protocol::LanSyncMessage;
+use ark_sync::protocol::LanSyncMessage;
 
 // ---------------------------------------------------------------------------
 // MeshConfig — companion to FfiSyncConfig for internal use
@@ -119,8 +119,8 @@ impl MeshCoordinator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::LanSyncMessage;
     use crate::types::SyncEntity;
+    use ark_sync::protocol::LanSyncMessage;
 
     fn make_live_change(hlc: &str) -> LanSyncMessage {
         LanSyncMessage::LiveChange {

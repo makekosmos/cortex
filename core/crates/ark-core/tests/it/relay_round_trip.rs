@@ -16,7 +16,7 @@ use tokio::sync::mpsc;
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 
-use ark_core::protocol::{deserialize_message, serialize_message, LanSyncMessage};
+use ark_sync::protocol::{deserialize_message, serialize_message, LanSyncMessage};
 
 // ---------------------------------------------------------------------------
 // Minimal in-process relay server

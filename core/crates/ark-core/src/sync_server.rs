@@ -11,8 +11,8 @@ use tokio_tungstenite::tungstenite::Message;
 
 use crate::hlc::HLC;
 use crate::integration_replication::SignedSyncEnvelope;
-use crate::protocol::*;
 use crate::types::*;
+use ark_sync::protocol::*;
 
 pub use crate::replication_storage::{
     AuthenticatedEntityBackend, IntegrationReplicationBackend, PeerIdentityBackend,
@@ -67,7 +67,7 @@ struct PeerState {
     ready_peer: Option<ReadyPeer>,
     sync_started: bool,
     sync_complete: bool,
-    negotiated_protocol: Option<crate::protocol::NegotiatedProtocol>,
+    negotiated_protocol: Option<ark_sync::protocol::NegotiatedProtocol>,
     registry_admission: Option<ark_sync::registry_admission::DirectRegistryAdmission>,
     in_flight_feed_position: Option<i64>,
     in_flight_feed_policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
@@ -358,7 +358,7 @@ fn peer_message_allowed(
     message: &LanSyncMessage,
 ) -> bool {
     ready_peer.is_some_and(|peer| peer.connection_id == connection_id)
-        || !crate::protocol::requires_registry_admission(message)
+        || !ark_sync::protocol::requires_registry_admission(message)
 }
 
 fn send_msg(tx: &mpsc::UnboundedSender<Message>, msg: &LanSyncMessage) {

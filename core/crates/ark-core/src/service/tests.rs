@@ -94,11 +94,11 @@ mod write_tx;
 /// Возвращает буфер перехваченных сообщений.
 async fn setup_sync_with_capturing_transport(
     state: &Arc<ServiceState>,
-) -> Arc<TokioMutex<Vec<crate::protocol::LanSyncMessage>>> {
+) -> Arc<TokioMutex<Vec<ark_sync::protocol::LanSyncMessage>>> {
     use crate::relay_sync::{RelaySync, RelaySyncConfig};
     use crate::sync_server::SyncRuntimeStorage;
 
-    let captured: Arc<TokioMutex<Vec<crate::protocol::LanSyncMessage>>> =
+    let captured: Arc<TokioMutex<Vec<ark_sync::protocol::LanSyncMessage>>> =
         Arc::new(TokioMutex::new(Vec::new()));
     let transport = Arc::new(legacy_writes::CapturingTransport {
         sent: captured.clone(),

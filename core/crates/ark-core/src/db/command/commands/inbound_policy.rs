@@ -52,7 +52,7 @@ pub(crate) fn require_sync_policy_identity(
         let profile =
             ark_store::data_platform::load_sync_profile_for_sync(transaction, local_device_id)
                 .map_err(DbError::from_application_error)?;
-        let actual = crate::protocol::sync_policy_identity(profile.as_ref());
+        let actual = ark_sync::protocol::sync_policy_identity(profile.as_ref());
         if &actual != expected {
             return Err(DbError::Permission(
                 "stale_or_unnegotiated_sync_policy".into(),

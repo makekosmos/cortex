@@ -403,8 +403,8 @@ fn pop_feed_live_change_id(
 ) -> String {
     match rx.try_recv().unwrap() {
         tokio_tungstenite::tungstenite::Message::Text(text) => {
-            match crate::protocol::deserialize_message(&text).unwrap() {
-                crate::protocol::LanSyncMessage::LiveChange { change_id, .. } => change_id,
+            match ark_sync::protocol::deserialize_message(&text).unwrap() {
+                ark_sync::protocol::LanSyncMessage::LiveChange { change_id, .. } => change_id,
                 message => panic!("unexpected message: {message:?}"),
             }
         }

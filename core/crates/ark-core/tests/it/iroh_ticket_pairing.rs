@@ -24,9 +24,9 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 use ark_core::iroh_transport::{IrohConfig, IrohTransport};
-use ark_core::protocol::LanSyncMessage;
 use ark_core::sync_bind::SyncBind;
 use ark_core::sync_transport::{SyncTransport, TransportEvent};
+use ark_sync::protocol::LanSyncMessage;
 use iroh::RelayMode;
 
 /// Generous hang guard for event drains — the awaited message is the real

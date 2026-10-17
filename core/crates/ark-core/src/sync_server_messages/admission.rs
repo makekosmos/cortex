@@ -83,7 +83,7 @@ pub(super) async fn handle_registry_admission(
         .is_some_and(|protocol| {
             protocol
                 .capabilities
-                .contains(&crate::protocol::ProtocolCapability::SelectiveSyncPolicyV1)
+                .contains(&ark_sync::protocol::ProtocolCapability::SelectiveSyncPolicyV1)
         });
     let policy_bound_delivery = ctx
         .peers
@@ -94,7 +94,7 @@ pub(super) async fn handle_registry_admission(
         .is_some_and(|protocol| {
             protocol
                 .capabilities
-                .contains(&crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1)
+                .contains(&ark_sync::protocol::ProtocolCapability::PolicyBoundDeliveryV1)
         });
     if !policy_bound_delivery {
         let generation = match ctx
@@ -144,8 +144,8 @@ pub(super) async fn handle_registry_admission(
     if selective_policy_capability {
         let local_device_id = ctx.device_id.read().await.clone();
         match ctx.storage.load_local_sync_profile(&local_device_id).await {
-            Ok(Some(profile)) => send_msg(&tx, &crate::protocol::sync_policy_message(&profile)),
-            Ok(None) => send_msg(&tx, &crate::protocol::default_sync_policy_message()),
+            Ok(Some(profile)) => send_msg(&tx, &ark_sync::protocol::sync_policy_message(&profile)),
+            Ok(None) => send_msg(&tx, &ark_sync::protocol::default_sync_policy_message()),
             Err(error) => {
                 eprintln!("{TAG} local sync policy load failed: {error}");
                 reject_peer(ctx, peer_id, &tx).await;

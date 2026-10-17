@@ -15,7 +15,7 @@ impl RelaySync {
             .is_some_and(|protocol| {
                 protocol
                     .capabilities
-                    .contains(&crate::protocol::ProtocolCapability::SelectiveSyncPolicyV1)
+                    .contains(&ark_sync::protocol::ProtocolCapability::SelectiveSyncPolicyV1)
             });
         self.registry
             .begin_peer(peer_device_id, transport_public_key, policy_negotiated)
@@ -151,7 +151,7 @@ impl RelaySync {
             {
                 self.send_registry_control(
                     endpoint,
-                    crate::protocol::sync_policy_message(&profile),
+                    ark_sync::protocol::sync_policy_message(&profile),
                 )
                 .await?;
             }

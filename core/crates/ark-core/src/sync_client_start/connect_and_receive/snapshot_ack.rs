@@ -72,11 +72,11 @@ async fn apply(
             session
                 .protocol
                 .capabilities
-                .contains(&crate::protocol::ProtocolCapability::DurableReceiptAckV1),
+                .contains(&ark_sync::protocol::ProtocolCapability::DurableReceiptAckV1),
             session
                 .protocol
                 .capabilities
-                .contains(&crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1),
+                .contains(&ark_sync::protocol::ProtocolCapability::PolicyBoundDeliveryV1),
         )
     } else {
         (false, false)

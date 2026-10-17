@@ -138,7 +138,7 @@ pub(super) async fn handle_hello(ctx: &MessageContext, peer_id: usize, msg: LanS
             };
         if !negotiated
             .capabilities
-            .contains(&crate::protocol::ProtocolCapability::RegistryHistoryV1)
+            .contains(&ark_sync::protocol::ProtocolCapability::RegistryHistoryV1)
         {
             send_protocol_rejection(
                 peers,

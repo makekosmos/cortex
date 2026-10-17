@@ -68,7 +68,7 @@ impl SyncTransport for FailOncePairingAcceptedTransport {
 
 fn hello(device_id: &str) -> LanSyncMessage {
     LanSyncMessage::Hello {
-        protocol_version: crate::protocol::PROTOCOL_VERSION,
+        protocol_version: ark_sync::protocol::PROTOCOL_VERSION,
         device_id: device_id.to_owned(),
         device_name: device_id.to_owned(),
         space_id: "retry-space".into(),
@@ -77,7 +77,7 @@ fn hello(device_id: &str) -> LanSyncMessage {
         auth_hmac: None,
         platform: None,
         app_version: None,
-        supported_protocol_versions: Some(vec![crate::protocol::PROTOCOL_VERSION]),
+        supported_protocol_versions: Some(vec![ark_sync::protocol::PROTOCOL_VERSION]),
         supported_capabilities: Some(vec!["registry_history_v1".into()]),
         negotiated_capabilities: None,
         negotiation_hmac: None,

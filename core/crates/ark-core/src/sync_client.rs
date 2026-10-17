@@ -8,9 +8,9 @@ use tokio_tungstenite::tungstenite::Message;
 
 use crate::hlc::HLC;
 use crate::integration_replication::SignedSyncEnvelope;
-use crate::protocol::*;
 use crate::replication_storage::SyncRuntimeStorage;
 use crate::task_set::{abort_and_join, join_all, track_task};
+use ark_sync::protocol::*;
 
 #[path = "sync_client/committed_feed.rs"]
 mod committed_feed;
@@ -47,7 +47,7 @@ pub(crate) struct AuthenticatedPeerSession {
     pub(crate) tx: mpsc::UnboundedSender<Message>,
     pub(crate) sync_started: bool,
     pub(crate) sync_complete: bool,
-    pub(crate) protocol: crate::protocol::NegotiatedProtocol,
+    pub(crate) protocol: ark_sync::protocol::NegotiatedProtocol,
 }
 
 type AuthenticatedTx = Arc<Mutex<Option<AuthenticatedPeerSession>>>;
@@ -135,11 +135,11 @@ impl SyncClient {
             let receipt_ack = session
                 .protocol
                 .capabilities
-                .contains(&crate::protocol::ProtocolCapability::DurableReceiptAckV1);
+                .contains(&ark_sync::protocol::ProtocolCapability::DurableReceiptAckV1);
             let policy_bound = session
                 .protocol
                 .capabilities
-                .contains(&crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1);
+                .contains(&ark_sync::protocol::ProtocolCapability::PolicyBoundDeliveryV1);
             drop(guard);
             if let Err(error) = pump_client_committed_feed(
                 &self.storage,

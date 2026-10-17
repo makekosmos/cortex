@@ -14,7 +14,6 @@ pub mod integration_replication;
 mod iroh_identity;
 pub mod iroh_transport;
 pub mod mesh;
-pub mod protocol;
 pub mod relay_sync;
 pub mod replication_storage;
 pub mod schema;
@@ -40,11 +39,6 @@ pub use beacon::{
 pub use db::SqliteStorageBackend;
 pub use hlc::HLC;
 pub use host::{get_host_device_name, get_own_addresses};
-pub use protocol::{
-    compute_local_excess, compute_vector_diff, deserialize_message, generate_id,
-    merge_peer_records, serialize_message, split_into_batches, LanSyncMessage, LAN_SYNC_PORT,
-    MAX_BATCH_BYTES, MAX_BATCH_SIZE, PROTOCOL_VERSION,
-};
 pub use replication_storage::{
     AuthenticatedEntityBackend, IntegrationReplicationBackend, PeerIdentityBackend,
     SyncRuntimeStorage,

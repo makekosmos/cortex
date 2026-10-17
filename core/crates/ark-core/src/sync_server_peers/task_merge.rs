@@ -16,7 +16,7 @@ pub(crate) async fn pump_task_merge_batch(
             peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
                 protocol
                     .capabilities
-                    .contains(&crate::protocol::ProtocolCapability::TaskMergeBootstrapV2)
+                    .contains(&ark_sync::protocol::ProtocolCapability::TaskMergeBootstrapV2)
             }),
             peer.tx.clone(),
         )
@@ -35,7 +35,7 @@ pub(crate) async fn pump_task_merge_batch(
             && peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
                 protocol
                     .capabilities
-                    .contains(&crate::protocol::ProtocolCapability::TaskMergeBootstrapV2)
+                    .contains(&ark_sync::protocol::ProtocolCapability::TaskMergeBootstrapV2)
             })
     });
     if still_ready {
@@ -68,7 +68,7 @@ pub(crate) async fn handle_task_merge_batch_ack(
             || !peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
                 protocol
                     .capabilities
-                    .contains(&crate::protocol::ProtocolCapability::TaskMergeBootstrapV2)
+                    .contains(&ark_sync::protocol::ProtocolCapability::TaskMergeBootstrapV2)
             })
         {
             return Ok(());

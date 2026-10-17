@@ -8,7 +8,7 @@ pub(super) async fn handle_task_merge_batch(
     batch: ark_application::sync_storage::TaskMergeBatch,
 ) -> Result<(), String> {
     let local_profile = storage.load_local_sync_profile(local_device_id).await?;
-    let expected_identity = crate::protocol::sync_policy_identity(local_profile.as_ref());
+    let expected_identity = ark_sync::protocol::sync_policy_identity(local_profile.as_ref());
     if batch.identity != expected_identity {
         return Ok(());
     }
@@ -141,7 +141,7 @@ pub(super) async fn handle_live_change(
             session
                 .protocol
                 .capabilities
-                .contains(&crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1)
+                .contains(&ark_sync::protocol::ProtocolCapability::PolicyBoundDeliveryV1)
         });
         (
             policy_bound,
@@ -149,7 +149,7 @@ pub(super) async fn handle_live_change(
         )
     };
     let expected_identity =
-        policy_bound.then(|| crate::protocol::sync_policy_identity(local_profile.as_ref()));
+        policy_bound.then(|| ark_sync::protocol::sync_policy_identity(local_profile.as_ref()));
     if policy_identity != expected_identity {
         return Err("stale_or_unnegotiated_sync_policy".into());
     }
@@ -161,7 +161,7 @@ pub(super) async fn handle_live_change(
             session
                 .protocol
                 .capabilities
-                .contains(&crate::protocol::ProtocolCapability::DurableReceiptAckV1)
+                .contains(&ark_sync::protocol::ProtocolCapability::DurableReceiptAckV1)
         });
     if receipt_ack
         && storage
@@ -277,7 +277,7 @@ pub(super) async fn handle_applied_ack(
             session
                 .protocol
                 .capabilities
-                .contains(&crate::protocol::ProtocolCapability::DurableReceiptAckV1)
+                .contains(&ark_sync::protocol::ProtocolCapability::DurableReceiptAckV1)
         });
     let policy_bound = authenticated_tx
         .lock()
@@ -287,7 +287,7 @@ pub(super) async fn handle_applied_ack(
             session
                 .protocol
                 .capabilities
-                .contains(&crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1)
+                .contains(&ark_sync::protocol::ProtocolCapability::PolicyBoundDeliveryV1)
         });
     handle_feed_ack(
         storage,
@@ -320,7 +320,7 @@ pub(super) async fn handle_receipt_ack(
             session
                 .protocol
                 .capabilities
-                .contains(&crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1)
+                .contains(&ark_sync::protocol::ProtocolCapability::PolicyBoundDeliveryV1)
         });
     handle_feed_ack(
         storage,

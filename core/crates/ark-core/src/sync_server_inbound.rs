@@ -73,12 +73,12 @@ pub(super) async fn handle_live_change(
                 p.negotiated_protocol.as_ref().is_some_and(|protocol| {
                     protocol
                         .capabilities
-                        .contains(&crate::protocol::ProtocolCapability::DurableReceiptAckV1)
+                        .contains(&ark_sync::protocol::ProtocolCapability::DurableReceiptAckV1)
                 }),
                 p.negotiated_protocol.as_ref().is_some_and(|protocol| {
                     protocol
                         .capabilities
-                        .contains(&crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1)
+                        .contains(&ark_sync::protocol::ProtocolCapability::PolicyBoundDeliveryV1)
                 }),
             ),
             _ => return,
@@ -97,7 +97,7 @@ pub(super) async fn handle_live_change(
         }
     };
     let expected_identity =
-        policy_bound.then(|| crate::protocol::sync_policy_identity(local_profile.as_ref()));
+        policy_bound.then(|| ark_sync::protocol::sync_policy_identity(local_profile.as_ref()));
     if policy_identity != expected_identity {
         eprintln!("{TAG} rejected live change for stale or unnegotiated policy");
         return;

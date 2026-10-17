@@ -6,6 +6,7 @@ mod sync_policy;
 mod vector;
 use sync_policy::default_sync_policy_active;
 
+pub use crate::protocol_negotiation::*;
 pub use sync_policy::{
     default_sync_policy_message, parse_sync_policy_rules, sync_policy_identity,
     sync_policy_message, SyncPolicyRuleWire,
