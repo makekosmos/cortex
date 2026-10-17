@@ -204,6 +204,7 @@ dependencies = [
  "ark-application",
  "ark-domain",
  "rusqlite",
+ "semver",
  "serde_json",
  "tempfile",
 ]

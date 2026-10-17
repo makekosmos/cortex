@@ -1,10 +1,10 @@
+use super::resolve_type_id;
+use ark_domain::canonical_type::registry::{
+    canonicalize_legacy_definition, validate_type_id, validate_version, LEGACY_VERSION,
+};
+use ark_domain::canonical_type::{AliasRecord, TypeSummary, TypeVersion};
 use rusqlite::{params, Connection, OptionalExtension};
 use semver::Version;
-
-use super::{resolve_type_id, AliasRecord, TypeSummary, TypeVersion, LEGACY_VERSION};
-use ark_domain::canonical_type::registry::{
-    canonicalize_legacy_definition, validate_type_id, validate_version,
-};
 
 pub fn ensure_legacy_type_version(
     conn: &Connection,
