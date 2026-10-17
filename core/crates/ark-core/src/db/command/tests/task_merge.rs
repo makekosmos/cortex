@@ -19,6 +19,7 @@ fn operation(operation_id: char, parents: &[char], title: &str) -> TaskMergeOper
         unit: TaskMergeUnit::Title,
         parents: parents.iter().copied().map(id).collect(),
         observed_heads: parents.iter().copied().map(id).collect(),
+        hlc: None,
         value: TaskMergeValue::Field(serde_json::Value::String(title.into())),
     }
 }

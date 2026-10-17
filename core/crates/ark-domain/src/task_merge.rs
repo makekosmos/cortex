@@ -94,6 +94,10 @@ pub struct TaskMergeOperation {
     /// cross-unit causality, such as a field edit observed by a later delete.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub observed_heads: Vec<OperationId>,
+    /// Wall-clock metadata for compatibility and display; never used to
+    /// establish causal order. Omitted on legacy operations.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hlc: Option<String>,
     pub value: TaskMergeValue,
 }
 
@@ -167,6 +171,7 @@ impl TaskMergeBootstrap {
                     unit: *unit,
                     parents: Vec::new(),
                     observed_heads: Vec::new(),
+                    hlc: Some(self.source_hlc.clone()),
                     value: value_for_unit(&self.object, *unit)?,
                 })
             })
@@ -210,6 +215,8 @@ pub enum MergeError {
     DuplicateObservedHead,
     #[error("merge operation has an empty object id")]
     EmptyObjectId,
+    #[error("merge operation has an invalid HLC")]
+    InvalidHlc,
     #[error("merge history is empty")]
     EmptyHistory,
     #[error("merge unit and value kind do not match")]
@@ -242,6 +249,9 @@ pub fn validate_operation(operation: &TaskMergeOperation) -> Result<(), MergeErr
     if operation.observed_heads.contains(&operation.id) {
         return Err(MergeError::CausalCycle);
     }
+    if operation.hlc.as_deref().is_some_and(|hlc| !valid_hlc(hlc)) {
+        return Err(MergeError::InvalidHlc);
+    }
     let value_matches_unit = matches!(
         (operation.unit, &operation.value),
         (TaskMergeUnit::ObjectExistence, TaskMergeValue::ObjectExists)
@@ -266,6 +276,13 @@ pub fn validate_operation(operation: &TaskMergeOperation) -> Result<(), MergeErr
         return Err(MergeError::UnitValueMismatch);
     }
     Ok(())
+}
+
+fn valid_hlc(value: &str) -> bool {
+    let parsed = crate::hlc::HLC::from_string(value);
+    chrono::DateTime::parse_from_rfc3339(&parsed.wall_time).is_ok()
+        && !parsed.device_id.trim().is_empty()
+        && parsed.to_string() == value
 }
 
 pub fn conflict_set(history: &[TaskMergeOperation]) -> Result<TaskConflictSet, MergeError> {

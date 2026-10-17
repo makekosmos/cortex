@@ -28,6 +28,7 @@ fn merge_operation(
             .iter()
             .map(|id| OperationId::parse(format!("{}{}", "0".repeat(31), id)).unwrap())
             .collect(),
+        hlc: None,
         value,
     }
 }

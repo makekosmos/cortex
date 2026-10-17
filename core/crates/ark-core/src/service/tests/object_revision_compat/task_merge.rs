@@ -52,6 +52,7 @@ async fn authenticated_full_snapshot_is_rejected_for_operation_enabled_task() {
             unit: crate::domain::task_merge::TaskMergeUnit::Title,
             parents: parents.clone(),
             observed_heads: parents,
+            hlc: None,
             value: crate::domain::task_merge::TaskMergeValue::Field(json!(title)),
         }
     };

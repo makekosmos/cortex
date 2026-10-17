@@ -18,6 +18,7 @@ async fn cross_unit_observed_head_stays_pending_until_it_arrives() {
         unit: TaskMergeUnit::State,
         parents: vec![],
         observed_heads: vec![id('1')],
+        hlc: None,
         value: TaskMergeValue::Field(serde_json::json!({
             "kind": "open",
             "at": null

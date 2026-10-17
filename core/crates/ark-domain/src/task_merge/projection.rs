@@ -248,6 +248,7 @@ mod tests {
             unit: TaskMergeUnit::Title,
             parents: Vec::new(),
             observed_heads: Vec::new(),
+            hlc: None,
             value: TaskMergeValue::Field(Value::String(value.into())),
         };
         let conflict_set =
@@ -269,6 +270,7 @@ mod tests {
             unit: TaskMergeUnit::Title,
             parents: Vec::new(),
             observed_heads: Vec::new(),
+            hlc: None,
             value: TaskMergeValue::Field(Value::String("other".into())),
         };
         let conflict_set = super::super::conflict_set(&[operation]).unwrap();
@@ -282,6 +284,7 @@ mod tests {
             unit: TaskMergeUnit::Title,
             parents: Vec::new(),
             observed_heads: Vec::new(),
+            hlc: None,
             value: TaskMergeValue::Field(Value::String("task".into())),
         };
         let task_set = super::super::conflict_set(&[task_operation]).unwrap();

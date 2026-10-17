@@ -13,6 +13,7 @@ fn op(id: &str, parents: &[&str], value: &str) -> TaskMergeOperation {
             .iter()
             .map(|id| OperationId::parse(*id).unwrap())
             .collect(),
+        hlc: None,
         value: TaskMergeValue::Field(Value::String(value.into())),
     }
 }
@@ -36,6 +37,7 @@ fn lifecycle_op(
         unit,
         parents: ids(parents),
         observed_heads: ids(observed_heads),
+        hlc: None,
         value,
     }
 }
@@ -60,6 +62,31 @@ fn concurrent_values_keep_the_shared_base_and_have_order_independent_digest() {
     assert_eq!(forward.variants.len(), 2);
     assert!(forward.has_conflict());
     assert_eq!(forward.digest, reverse.digest);
+}
+
+#[test]
+fn legacy_operation_json_round_trips_without_new_causal_metadata() {
+    let legacy = serde_json::json!({
+        "id": "00000000000000000000000000000001",
+        "objectId": "task-1",
+        "unit": "title",
+        "parents": [],
+        "value": {"kind": "field", "value": "legacy"}
+    });
+    let operation: TaskMergeOperation = serde_json::from_value(legacy.clone()).unwrap();
+    assert_eq!(operation.observed_heads, Vec::<OperationId>::new());
+    assert_eq!(operation.hlc, None);
+    assert_eq!(serde_json::to_value(operation).unwrap(), legacy);
+}
+
+#[test]
+fn operation_hlc_is_validated_but_does_not_replace_causal_parents() {
+    let mut operation = op("00000000000000000000000000000001", &[], "value");
+    operation.hlc = Some("not-an-hlc".into());
+    assert_eq!(validate_operation(&operation), Err(MergeError::InvalidHlc));
+
+    operation.hlc = Some("2026-10-17T00:00:00.000Z:000001:device".into());
+    assert_eq!(validate_operation(&operation), Ok(()));
 }
 
 #[test]
