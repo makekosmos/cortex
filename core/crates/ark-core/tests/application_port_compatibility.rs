@@ -43,3 +43,13 @@ fn accepts_previous_peer_identity_path<T: ark_core::replication_storage::PeerIde
 fn peer_identity_port_keeps_both_public_paths() {
     accepts_previous_peer_identity_path::<PeerBackend>();
 }
+
+#[test]
+fn application_read_model_and_domain_type_registry_keep_ark_core_paths() {
+    let _: fn(ark_application::load_all_data::LoadAllData) -> ark_core::types::LoadAllData =
+        |value| value;
+    let _: fn(ark_domain::canonical_type::TypeSummary) -> ark_core::type_registry::TypeSummary =
+        |value| value;
+    let _: fn(ark_domain::canonical_type::TypeVersion) -> ark_core::type_registry::TypeVersion =
+        |value| value;
+}

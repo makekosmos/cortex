@@ -1,36 +1,13 @@
 use crate::domain::canonical_type::canonical_value;
-pub use crate::domain::canonical_type::{canonical_schema_hash, AliasRecord, TypeRegistration};
+pub use crate::domain::canonical_type::{
+    canonical_schema_hash, AliasRecord, TypeRegistration, TypeSummary, TypeVersion,
+};
 use rusqlite::{params, Connection, OptionalExtension};
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 pub const LEGACY_VERSION: &str = "0.0.0-legacy";
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct TypeSummary {
-    pub type_id: String,
-    pub owner_kind: String,
-    pub owner_id: Option<String>,
-    pub current_version: String,
-    pub status: String,
-    pub base_type_id: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct TypeVersion {
-    pub type_id: String,
-    pub version: String,
-    pub schema_json: String,
-    pub ui_schema_json: String,
-    pub content_contract_json: String,
-    pub relations_json: String,
-    pub sync_policy_json: String,
-    pub schema_hash: String,
-    pub created_at: String,
-}
 
 pub fn legacy_compatibility_version(
     schema_json: &str,
