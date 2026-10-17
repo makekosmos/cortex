@@ -19,24 +19,24 @@ mod tests {
 
     #[test]
     fn reopened_database_keeps_durable_foreign_key_settings() {
-        let directory = tempfile::tempdir().unwrap();
+        let directory = tempfile::tempdir().expect("temporary directory opens");
         let path = directory.path().join("ark.db");
-        let path = path.to_str().unwrap();
+        let path = path.to_str().expect("temporary path is UTF-8");
 
         for _ in 0..2 {
-            let connection = open_db(path).unwrap();
+            let connection = open_db(path).expect("database opens");
             let journal: String = connection
                 .query_row("PRAGMA journal_mode", [], |row| row.get(0))
-                .unwrap();
+                .expect("journal mode reads");
             let synchronous: i64 = connection
                 .query_row("PRAGMA synchronous", [], |row| row.get(0))
-                .unwrap();
+                .expect("synchronous mode reads");
             let foreign_keys: i64 = connection
                 .query_row("PRAGMA foreign_keys", [], |row| row.get(0))
-                .unwrap();
+                .expect("foreign-key mode reads");
             let busy_timeout_ms: i64 = connection
                 .query_row("PRAGMA busy_timeout", [], |row| row.get(0))
-                .unwrap();
+                .expect("busy timeout reads");
 
             assert_eq!(journal, "wal");
             assert_eq!(synchronous, 2);

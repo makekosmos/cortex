@@ -58,10 +58,10 @@ mod tests {
 
     #[test]
     fn grant_read_preserves_valid_record_and_rejects_invalid_status() {
-        let connection = Connection::open_in_memory().unwrap();
+        let connection = Connection::open_in_memory().expect("fixture database opens");
         connection
             .execute_batch(crate::schema::CREATE_TABLES)
-            .unwrap();
+            .expect("grant schema applies");
         connection
             .execute(
                 "INSERT INTO integration_node_grants
@@ -70,17 +70,17 @@ mod tests {
                  VALUES ('app', 'device', 'public-key', 2, 'active', '2026-10-18', NULL, 3, 'hlc')",
                 [],
             )
-            .unwrap();
+            .expect("fixture grant inserts");
 
         let grant = load_integration_node_grant(&connection, "app", "device")
-            .unwrap()
-            .unwrap();
+            .expect("grant lookup succeeds")
+            .expect("fixture grant exists");
         assert_eq!(grant.grant_epoch, 2);
         assert_eq!(grant.revision, 3);
         assert_eq!(grant.status, GrantStatus::Active);
         assert_eq!(grant.node_encryption_key, "public-key");
         assert!(load_integration_node_grant(&connection, "app", "unknown")
-            .unwrap()
+            .expect("missing grant lookup succeeds")
             .is_none());
 
         connection
@@ -88,9 +88,10 @@ mod tests {
                 "UPDATE integration_node_grants SET status = 'unknown' WHERE node_id = 'device'",
                 [],
             )
-            .unwrap();
+            .expect("fixture grant status updates");
         assert_eq!(
-            load_integration_node_grant(&connection, "app", "device").unwrap_err(),
+            load_integration_node_grant(&connection, "app", "device")
+                .expect_err("unknown grant status is rejected"),
             "invalid integration grant status: unknown"
         );
     }
