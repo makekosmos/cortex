@@ -117,7 +117,7 @@
       "count": 6
     },
     {
-      "path": "core/crates/ark-core/src/db/command/executor/actor.rs",
+      "path": "core/crates/ark-core/src/db/command/executor/actor/task.rs",
       "category": "SQLite mutation API",
       "count": 2
     },
