@@ -38,9 +38,11 @@ pub(crate) fn read_journal_page(
                     operation.operation_id, operation.payload_sha256,
                     guard.expected_conflict_digest
              FROM task_merge_journal AS journal
-             JOIN task_merge_operations AS operation USING(operation_id)
-             LEFT JOIN task_merge_resolution_guards AS guard USING(operation_id)
+             JOIN task_merge_operations AS operation ON operation.operation_id = journal.record_id
+             LEFT JOIN task_merge_resolution_guards AS guard
+                 ON guard.operation_id = operation.operation_id
              WHERE journal.position > ?1 AND journal.position <= ?2
+               AND journal.record_kind = 'operation'
              ORDER BY journal.position LIMIT ?3",
         )
         .map_err(|error| TaskMergeError::Storage(error.to_string()))?;

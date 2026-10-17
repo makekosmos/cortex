@@ -162,6 +162,56 @@
     }
 
     #[test]
+    fn task_merge_journal_migration_preserves_positions_and_is_idempotent() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE task_merge_operations (
+                 operation_id TEXT PRIMARY KEY,
+                 object_id TEXT NOT NULL,
+                 unit TEXT NOT NULL,
+                 operation_json TEXT NOT NULL,
+                 payload_sha256 TEXT NOT NULL
+             );
+             CREATE TABLE task_merge_journal (
+                 position INTEGER PRIMARY KEY AUTOINCREMENT,
+                 operation_id TEXT NOT NULL UNIQUE REFERENCES task_merge_operations(operation_id)
+             );
+             INSERT INTO task_merge_operations VALUES ('op-1', 'task-1', 'title', '{}', 'hash-1');
+             INSERT INTO task_merge_operations VALUES ('op-2', 'task-1', 'title', '{}', 'hash-2');
+             INSERT INTO task_merge_journal(position, operation_id) VALUES (4, 'op-1');
+             INSERT INTO task_merge_journal(position, operation_id) VALUES (9, 'op-2');",
+        )
+        .unwrap();
+
+        super::open::ensure_task_merge_delivery_journal(&conn).unwrap();
+        super::open::ensure_task_merge_delivery_journal(&conn).unwrap();
+
+        let journal = conn
+            .prepare(
+                "SELECT position, record_kind, record_id FROM task_merge_journal
+                 ORDER BY position",
+            )
+            .unwrap()
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            })
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(
+            journal,
+            vec![
+                (4, "operation".into(), "op-1".into()),
+                (9, "operation".into(), "op-2".into())
+            ]
+        );
+    }
+
+    #[test]
     fn init_schema_fails_on_corrupted_db() {
         let tmp = tempfile::NamedTempFile::new().unwrap();
         let path = tmp.path().to_path_buf();

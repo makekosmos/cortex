@@ -85,6 +85,7 @@ pub fn init_schema_prerequisites_for_phase3(conn: &Connection) -> Result<(), Str
         .map_err(|e| e.to_string())?;
     conn.execute_batch(CREATE_TABLES)
         .map_err(|e| e.to_string())?;
+    ensure_task_merge_delivery_journal(conn)?;
     ensure_device_registry_position(conn)?;
     ensure_device_registry_updated_hlc(conn)?;
     super::committed_feed::bootstrap_committed_feed_heads(conn)?;
@@ -115,6 +116,48 @@ pub fn init_schema_prerequisites_for_phase3(conn: &Connection) -> Result<(), Str
         }
     }
     Ok(())
+}
+
+pub(in crate::db) fn ensure_task_merge_delivery_journal(conn: &Connection) -> Result<(), String> {
+    let columns = conn
+        .prepare("PRAGMA table_info(task_merge_journal)")
+        .map_err(|error| error.to_string())?
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+
+    if columns.iter().any(|column| column == "operation_id") {
+        conn.execute_batch("SAVEPOINT ark_task_merge_delivery_journal")
+            .map_err(|error| error.to_string())?;
+        let migration = conn.execute_batch(
+            "ALTER TABLE task_merge_journal RENAME TO task_merge_operation_journal_legacy;
+             CREATE TABLE task_merge_journal (
+                 position INTEGER PRIMARY KEY AUTOINCREMENT,
+                 record_kind TEXT NOT NULL CHECK (record_kind IN ('bootstrap', 'operation')),
+                 record_id TEXT NOT NULL,
+                 UNIQUE(record_kind, record_id)
+             );
+             INSERT INTO task_merge_journal(position, record_kind, record_id)
+             SELECT position, 'operation', operation_id
+             FROM task_merge_operation_journal_legacy ORDER BY position;
+             DROP TABLE task_merge_operation_journal_legacy;
+             RELEASE SAVEPOINT ark_task_merge_delivery_journal;",
+        );
+        if let Err(error) = migration {
+            let _ = conn.execute_batch(
+                "ROLLBACK TO SAVEPOINT ark_task_merge_delivery_journal;
+                 RELEASE SAVEPOINT ark_task_merge_delivery_journal;",
+            );
+            return Err(error.to_string());
+        }
+    }
+
+    conn.execute_batch(
+        "INSERT OR IGNORE INTO task_merge_journal(record_kind, record_id)
+         SELECT 'operation', operation_id FROM task_merge_operations ORDER BY rowid;",
+    )
+    .map_err(|error| error.to_string())
 }
 
 fn ensure_device_registry_position(conn: &Connection) -> Result<(), String> {

@@ -204,7 +204,8 @@ fn append_operation_inner(
     }
     transaction
         .execute(
-            "INSERT INTO task_merge_journal(operation_id) VALUES (?1)",
+            "INSERT INTO task_merge_journal(record_kind, record_id)
+             VALUES ('operation', ?1)",
             [operation.id.as_str()],
         )
         .map_err(|error| TaskMergeError::Storage(error.to_string()))?;

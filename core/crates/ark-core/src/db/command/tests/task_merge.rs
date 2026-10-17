@@ -117,7 +117,10 @@ async fn operation_replay_conflict_guard_and_sqlite_reopen() {
     assert_eq!(journal_rows, 2);
     let journal: Vec<(i64, String)> = handle.with_connection(|connection| {
         let mut statement = connection
-            .prepare("SELECT position, operation_id FROM task_merge_journal ORDER BY position")
+            .prepare(
+                "SELECT position, record_id FROM task_merge_journal
+                 WHERE record_kind = 'operation' ORDER BY position",
+            )
             .unwrap();
         statement
             .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
