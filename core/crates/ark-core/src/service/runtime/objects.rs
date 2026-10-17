@@ -29,6 +29,13 @@ pub(super) async fn list_object_summaries_by_type(
     object_read(state, db::ObjectReadQuery::ListSummariesByType(type_id)).await
 }
 
+pub(super) async fn estimate_data_volume(
+    state: &Arc<ServiceState>,
+    scopes: Vec<crate::service::DataVolumeScope>,
+) -> Result<Value, String> {
+    object_read(state, db::ObjectReadQuery::EstimateDataVolume(scopes)).await
+}
+
 pub(super) async fn list_running_time_entries(
     state: &Arc<ServiceState>,
     source: Option<String>,

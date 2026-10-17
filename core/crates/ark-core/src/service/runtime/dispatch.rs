@@ -80,6 +80,9 @@ pub(crate) async fn handle_request(
         Request::ListObjectSummariesByType { type_id } => {
             objects::list_object_summaries_by_type(state, type_id).await
         }
+        Request::EstimateDataVolume { scopes } => {
+            objects::estimate_data_volume(state, scopes).await
+        }
         Request::ListRunningTimeEntries { source } => {
             objects::list_running_time_entries(state, source).await
         }

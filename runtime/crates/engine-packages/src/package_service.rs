@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     fs,
     io::Read,
     path::{Path, PathBuf},
@@ -152,6 +152,13 @@ pub struct DisclosureMapping {
     pub fidelity: MappingFidelity,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DisclosureVolumeScope {
+    pub type_id: String,
+    pub type_version: String,
+    pub fields: Vec<String>,
+}
+
 /// Read-only projection of a package's declared permission contract. It is
 /// sourced from the signed catalog entry or the verified installed manifest,
 /// never from store listing copy.
@@ -165,6 +172,11 @@ pub struct PackageDisclosure {
     pub capabilities: Vec<PermissionRequest>,
     pub data: Vec<DisclosureDataRule>,
     pub mappings: Vec<DisclosureMapping>,
+    /// Exact field/version projections derived from the same typed registry
+    /// used to compile the eventual launch grant. Kept inside Engine; the
+    /// Manager receives only the aggregate preview.
+    #[serde(skip)]
+    pub volume_scopes: Option<Vec<DisclosureVolumeScope>>,
 }
 
 /// Configuration owned by Engine, never by the bridge worker or package archive.

@@ -75,6 +75,7 @@ pub(in crate::db) use load::{
     load_all_projects, load_all_tags, load_all_todos, load_all_tracked_apps, load_usage_event,
     load_usage_session,
 };
+pub(crate) use objects::estimate_data_volume;
 pub(in crate::db) use objects::list_other_object_link_ids;
 pub use objects::{
     delete_object, delete_object_link, delete_object_type, get_object, get_object_type,

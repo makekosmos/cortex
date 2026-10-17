@@ -13,6 +13,7 @@ pub(crate) enum ObjectReadQuery {
     ListSummaries,
     ListByType(String),
     ListSummariesByType(String),
+    EstimateDataVolume(Vec<crate::service::DataVolumeScope>),
     ListRunningTime(Option<String>),
     GetByIds(Vec<String>),
     Search(String),
@@ -56,6 +57,9 @@ impl DbQuery for ObjectReadQuery {
             Self::ListSummariesByType(type_id) => serialize(
                 crate::db::list_object_summaries_by_type(connection, &type_id),
             ),
+            Self::EstimateDataVolume(scopes) => {
+                serialize(crate::db::estimate_data_volume(connection, &scopes))
+            }
             Self::GetByIds(ids) => serialize(crate::db::get_objects_by_ids(connection, &ids)),
             Self::Search(query) => serialize(crate::db::search_objects(connection, &query)),
             Self::Get(id) => serialize(crate::db::get_object(connection, &id)),

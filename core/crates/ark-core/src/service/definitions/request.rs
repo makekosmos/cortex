@@ -1,5 +1,13 @@
 use super::*;
 
+#[derive(Debug, Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct DataVolumeScope {
+    pub(crate) type_id: String,
+    pub(crate) type_version: String,
+    pub(crate) fields: Vec<String>,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct SyncPolicyRuleInput {
@@ -120,6 +128,9 @@ pub(crate) enum Request {
     },
     ListObjectSummariesByType {
         type_id: String,
+    },
+    EstimateDataVolume {
+        scopes: Vec<DataVolumeScope>,
     },
     ListRunningTimeEntries {
         #[serde(default)]

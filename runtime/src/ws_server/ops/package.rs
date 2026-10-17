@@ -4,6 +4,15 @@ pub(in crate::ws_server) async fn handle_package_op(
     params: serde_json::Value,
     service: &Arc<PackageService>,
 ) -> LocalResponse {
+    handle_package_op_with_ark(subop, params, service, None).await
+}
+
+pub(in crate::ws_server) async fn handle_package_op_with_ark(
+    subop: &str,
+    params: serde_json::Value,
+    service: &Arc<PackageService>,
+    ark: Option<&Arc<ArkHost>>,
+) -> LocalResponse {
     match subop {
         "list" => {
             let kind = match params.get("kind").and_then(Value::as_str) {
@@ -61,7 +70,58 @@ pub(in crate::ws_server) async fn handle_package_op(
             )
         }
         "disclosure" => match package_id_resolve_version(subop, &params, service) {
-            Ok((id, version)) => package_response(subop, service.disclosure(&id, &version)),
+            Ok((id, version)) => match service.disclosure(&id, &version) {
+                Ok(disclosure) => {
+                    let scopes = disclosure.volume_scopes.clone();
+                    let mut value = serde_json::to_value(disclosure).unwrap_or(Value::Null);
+                    if let Some(ark) = ark {
+                        if let Some(scopes) = scopes {
+                            let scope_values = scopes
+                                .iter()
+                                .map(|scope| {
+                                    serde_json::json!({
+                                        "typeId": scope.type_id,
+                                        "typeVersion": scope.type_version,
+                                        "fields": scope.fields,
+                                    })
+                                })
+                                .collect::<Vec<_>>();
+                            match ark
+                                .request(
+                                    "estimate_data_volume",
+                                    serde_json::json!({ "scopes": scope_values }),
+                                )
+                                .await
+                            {
+                                Ok(response) if response.ok => {
+                                    value["data_volume_preview"] = serde_json::json!({
+                                        "status": "available",
+                                        "estimated_at": chrono::Utc::now().to_rfc3339(),
+                                        "method": concat!(
+                                            "текущие объекты с разрешёнными полями; примерный ",
+                                            "размер JSON в UTF-8, без связей и будущих изменений",
+                                        ),
+                                        "scopes": response.data,
+                                    });
+                                }
+                                _ => {
+                                    value["data_volume_preview"] = serde_json::json!({
+                                        "status": "unavailable",
+                                    });
+                                }
+                            }
+                        } else {
+                            value["data_volume_preview"] = serde_json::json!({
+                                "status": "unavailable",
+                            });
+                        }
+                    }
+                    LocalResponse::ok(value)
+                }
+                Err(error) => {
+                    package_response::<crate::package_service::PackageDisclosure>(subop, Err(error))
+                }
+            },
             Err(response) => response,
         },
         "refresh_catalog" => package_response(subop, service.refresh_catalog().await),

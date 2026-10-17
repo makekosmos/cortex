@@ -76,6 +76,6 @@ pub(crate) use crate::domain::object_write::ObjectWriteSnapshot;
 
 #[path = "definitions/request.rs"]
 mod request;
-pub(crate) use request::{Request, SyncPolicyRuleInput};
+pub(crate) use request::{DataVolumeScope, Request, SyncPolicyRuleInput};
 
 include!("definitions/start_sync.rs");

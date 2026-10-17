@@ -16,6 +16,8 @@ pub(crate) enum ConsentBlock {
     Malformed,
     /// A capability/action/direction this Manager version cannot explain.
     UnknownPermission,
+    /// The user cannot give informed consent while a required estimate is unavailable.
+    PreviewUnavailable,
 }
 
 impl ConsentBlock {
@@ -25,6 +27,9 @@ impl ConsentBlock {
             // name them must not wave them through silently.
             ConsentBlock::UnknownPermission => {
                 "Пакет запрашивает неизвестное разрешение — установка невозможна, обновите Mundus."
+            }
+            ConsentBlock::PreviewUnavailable => {
+                "Не удалось оценить объём доступных данных — установка пока невозможна."
             }
             ConsentBlock::Malformed => {
                 "Не удалось прочитать список разрешений — установка невозможна."
@@ -138,6 +143,45 @@ fn join_scopes(scopes: &[String]) -> String {
     }
 }
 
+fn append_data_volume_preview(out: &mut String, preview: &Value) -> Result<(), ConsentBlock> {
+    if strict_str(preview, "status")? != "available" {
+        return blocked(ConsentBlock::PreviewUnavailable);
+    }
+    let estimated_at = strict_str(preview, "estimated_at")?;
+    let method = strict_str(preview, "method")?;
+    let scopes = strict_arr(preview, "scopes")?;
+    let mut count = 0_u64;
+    let mut bytes = 0_u64;
+    for scope in scopes {
+        strict_str(scope, "type_id")?;
+        strict_str(scope, "type_version")?;
+        count = count.saturating_add(
+            scope
+                .get("object_count")
+                .and_then(Value::as_u64)
+                .ok_or(ConsentBlock::Malformed)?,
+        );
+        bytes = bytes.saturating_add(
+            scope
+                .get("estimated_json_bytes")
+                .and_then(Value::as_u64)
+                .ok_or(ConsentBlock::Malformed)?,
+        );
+    }
+    let size = if bytes >= 1_000_000 {
+        format!("примерно {:.1} МБ", bytes as f64 / 1_000_000.0)
+    } else if bytes >= 1_000 {
+        format!("примерно {:.1} КБ", bytes as f64 / 1_000.0)
+    } else {
+        format!("примерно {bytes} Б")
+    };
+    out.push_str(&format!(
+        "\nОценка доступных данных сейчас: {count} записей, {size}.\n"
+    ));
+    out.push_str(&format!("Метод: {method}. Снимок: {estimated_at}.\n"));
+    Ok(())
+}
+
 /// The signed disclosure contract rendered as a Russian consent list.
 /// Every entry in the payload must reach the screen — anything unexpected
 /// (unknown kind, malformed field) fails the whole render so install can be
@@ -161,6 +205,7 @@ pub(crate) fn consent_body(d: &Value) -> Result<String, ConsentBlock> {
     out.push_str(".\n");
 
     let mut wrote_header = false;
+    let mut requires_data_preview = false;
     let mut section = |out: &mut String| {
         if !wrote_header {
             out.push_str("\nПакет сможет:\n");
@@ -183,6 +228,7 @@ pub(crate) fn consent_body(d: &Value) -> Result<String, ConsentBlock> {
         let mut actions = String::new();
         for (i, action) in strict_arr(rule, "actions")?.iter().enumerate() {
             let action = action.as_str().ok_or(ConsentBlock::Malformed)?;
+            requires_data_preview |= action == "read";
             if i > 0 {
                 actions.push_str(", ");
             }
@@ -228,6 +274,12 @@ pub(crate) fn consent_body(d: &Value) -> Result<String, ConsentBlock> {
         section(&mut out);
         out.push_str(&format!("• {direction} данные «{type_id}» {fidelity}\n"));
     }
+    if requires_data_preview {
+        let preview = d
+            .get("data_volume_preview")
+            .ok_or(ConsentBlock::PreviewUnavailable)?;
+        append_data_volume_preview(&mut out, preview)?;
+    }
     if !wrote_header {
         out.push_str("\nПакет не запрашивает дополнительных разрешений.\n");
     }
@@ -263,7 +315,18 @@ mod tests {
                 "type": "task",
                 "direction": "bidirectionalSync",
                 "fidelity": "metadata-only"
-            }]
+            }],
+            "data_volume_preview": {
+                "status": "available",
+                "estimated_at": "2026-10-17T10:00:00Z",
+                "method": "projected JSON payload",
+                "scopes": [{
+                    "type_id": "task",
+                    "type_version": "1.0.0",
+                    "object_count": 12,
+                    "estimated_json_bytes": 2500
+                }]
+            }
         });
         if let (Some(dst), Some(src)) = (base.as_object_mut(), extra.as_object()) {
             for (k, v) in src {
@@ -345,6 +408,16 @@ mod tests {
             Err(ConsentBlock::Malformed)
         );
         assert_eq!(consent_body(&json!(null)), Err(ConsentBlock::Malformed));
+        assert_eq!(
+            consent_body(&disclosure(
+                json!({"data_volume_preview": {"status": "unavailable"}})
+            )),
+            Err(ConsentBlock::PreviewUnavailable)
+        );
+        assert_eq!(
+            consent_body(&disclosure(json!({"data_volume_preview": null}))),
+            Err(ConsentBlock::Malformed)
+        );
     }
 
     #[test]
@@ -375,5 +448,8 @@ mod tests {
         }
         assert!(text.contains("синхронизирует в обе стороны"), "{text}");
         assert!(text.contains("читать"), "{text}");
+        assert!(text.contains("12 записей"), "{text}");
+        assert!(text.contains("примерно 2.5 КБ"), "{text}");
+        assert!(text.contains("2026-10-17T10:00:00Z"), "{text}");
     }
 }

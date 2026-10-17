@@ -67,8 +67,8 @@ mod tests;
 
 use self::admission::{AdmissionPermit, RequestAdmission};
 pub(crate) use self::definitions::{
-    ObjectWriteSnapshot, Request, StartSyncParams, SyncPolicyRuleInput, SyncRuntime,
-    SyncStartParams,
+    DataVolumeScope, ObjectWriteSnapshot, Request, StartSyncParams, SyncPolicyRuleInput,
+    SyncRuntime, SyncStartParams,
 };
 use self::runtime::handle_request;
 #[cfg(test)]

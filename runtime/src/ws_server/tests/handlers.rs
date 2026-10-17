@@ -200,14 +200,23 @@ async fn package_state_ops_resolve_version_for_id_only_calls() {
     let dir = tempfile::tempdir().expect("tempdir");
     let (service, _, _) = crate::package_service::tests::enabled_app_service(dir.path());
     let service = Arc::new(service);
+    let ark_dir = tempfile::tempdir().expect("ark tempdir");
+    let ark_path = ark_dir.path().join("ark.db");
+    let ark = Arc::new(ArkHost::open(ark_path.to_str().unwrap()).await.unwrap());
 
-    let disclosure = handle_package_op(
+    let disclosure = handle_package_op_with_ark(
         "disclosure",
         serde_json::json!({"package_id": "com.kosmos.demo"}),
         &service,
+        Some(&ark),
     )
     .await;
     assert!(disclosure.ok, "{:?}", disclosure.error);
+    assert_eq!(
+        disclosure.data["data_volume_preview"]["status"],
+        "available"
+    );
+    assert!(disclosure.data["data_volume_preview"]["estimated_at"].is_string());
 
     let disabled = handle_package_op(
         "set_enabled",

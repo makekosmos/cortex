@@ -33,6 +33,62 @@
         assert_eq!(book_summaries[0].type_id, "summary_fixture_book_type");
     }
 
+    #[test]
+    fn data_volume_estimate_measures_only_live_objects_and_granted_fields() {
+        let conn = setup_db();
+        conn.execute_batch("PRAGMA foreign_keys = OFF").unwrap();
+        conn.execute(
+            "INSERT INTO objects (id,type_id,type_version,title,content_json,props_json,
+             created_at,updated_at,deleted_at)
+             VALUES ('estimate-1','estimate_type','1.0.0','Visible title',
+             '{\"text\":\"private body intentionally much larger than visible fields\"}',
+             '{\"allowed\":\"yes\",\"secret\":\"private property\"}',
+             '2026-01-01T00:00:00.000Z','2026-01-02T00:00:00.000Z',NULL)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO objects (id,type_id,type_version,title,content_json,props_json,
+             created_at,updated_at,deleted_at)
+             VALUES ('estimate-gone','estimate_type','1.0.0','Gone','{}','{}',
+             '2026-01-01T00:00:00.000Z','2026-01-02T00:00:00.000Z',
+             '2026-01-03T00:00:00.000Z')",
+            [],
+        )
+        .unwrap();
+
+        let scope = crate::service::DataVolumeScope {
+            type_id: "estimate_type".into(),
+            type_version: "1.0.0".into(),
+            fields: vec!["title".into(), "props.allowed".into()],
+        };
+        let content_scope = crate::service::DataVolumeScope {
+            type_id: "estimate_type".into(),
+            type_version: "1.0.0".into(),
+            fields: vec!["content".into()],
+        };
+        let absent_version = crate::service::DataVolumeScope {
+            type_id: "estimate_type".into(),
+            type_version: "2.0.0".into(),
+            fields: vec!["content".into()],
+        };
+        let estimate =
+            estimate_data_volume(&conn, &[scope, content_scope, absent_version]).unwrap();
+        let preview_json = serde_json::to_string(&estimate).unwrap();
+        assert!(!preview_json.contains("private"), "{preview_json}");
+        assert!(!preview_json.contains("Visible title"), "{preview_json}");
+        assert_eq!(estimate[0]["object_count"], 1);
+        assert!(estimate[0]["estimated_json_bytes"].as_u64().unwrap() < 200);
+        assert_eq!(estimate[0]["type_version"], "1.0.0");
+        assert_eq!(estimate[1]["object_count"], 1);
+        assert!(
+            estimate[1]["estimated_json_bytes"].as_u64().unwrap()
+                > estimate[0]["estimated_json_bytes"].as_u64().unwrap()
+        );
+        assert_eq!(estimate[2]["object_count"], 0);
+        assert_eq!(estimate[2]["estimated_json_bytes"], 0);
+    }
+
     fn make_time_entry(
         id: &str,
         started_at: &str,
