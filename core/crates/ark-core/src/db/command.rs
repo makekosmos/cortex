@@ -34,9 +34,9 @@ pub(crate) use commands::{
     RegisterPackageTypesCommand, RegistryDeviceEnabledQuery, RegistryPeerAdmissionQuery,
     RemoteCoreTaskOutcome, ReplaceObjectLinkCommand, RestoreSnapshotCommand,
     SaveLocalSyncProfileCommand, SetLocalSyncKeyValueCommand, SetSyncKeyValueCommand,
-    SignRegistryHandshakeCommand, SystemReadQuery, TaskConflictSetQuery, TrackedAppDeleteCommand,
-    TrackedAppUpsertCommand, TypeReadQuery, UpsertExternalRefCommand, UpsertObjectLinkCommand,
-    UpsertObjectTypeCommand, UsageCompleteThroughQuery, UsageReadQuery,
+    SignRegistryHandshakeCommand, SystemReadQuery, TaskConflictSetQuery, TaskMergeJournalPageQuery,
+    TrackedAppDeleteCommand, TrackedAppUpsertCommand, TypeReadQuery, UpsertExternalRefCommand,
+    UpsertObjectLinkCommand, UpsertObjectTypeCommand, UsageCompleteThroughQuery, UsageReadQuery,
     ValidateOutboundSignedFrameQuery, VerifyRegistryHandshakeQuery,
 };
 #[cfg(test)]

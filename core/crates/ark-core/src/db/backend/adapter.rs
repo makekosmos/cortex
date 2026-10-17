@@ -17,6 +17,8 @@ use serde::Serialize;
 
 mod authenticated_entities;
 mod peer_identity;
+#[path = "adapter/task_merge.rs"]
+mod task_merge;
 
 fn publish_replay_notices(notices: Vec<crate::canonical_types::pending::ReplayNotice>) {
     for notice in notices {

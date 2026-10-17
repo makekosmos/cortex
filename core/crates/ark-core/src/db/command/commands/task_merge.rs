@@ -1,7 +1,8 @@
 use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError, DbQuery};
+use crate::application::sync_storage::TaskMergeJournalPage;
 use crate::db::task_merge::{
-    append_operation, read_conflict_set_result, TaskMergeAppendResult, TaskMergeError,
-    TaskMergeReadResult,
+    append_operation, read_conflict_set_result, read_journal_page, TaskMergeAppendResult,
+    TaskMergeError, TaskMergeReadResult,
 };
 use crate::domain::task_merge::{TaskMergeOperation, TaskMergeUnit};
 use rusqlite::Transaction;
@@ -55,6 +56,59 @@ impl DbCommand for AppendTaskMergeOperationCommand {
 pub(crate) struct TaskConflictSetQuery {
     object_id: String,
     unit: TaskMergeUnit,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct TaskMergeJournalPageQuery {
+    peer_id: String,
+    after_position: i64,
+    through_position: i64,
+    limit: usize,
+}
+
+impl TaskMergeJournalPageQuery {
+    pub(crate) fn new(
+        peer_id: String,
+        after_position: i64,
+        through_position: i64,
+        limit: usize,
+    ) -> Self {
+        Self {
+            peer_id,
+            after_position,
+            through_position,
+            limit,
+        }
+    }
+}
+
+impl sealed::Sealed for TaskMergeJournalPageQuery {}
+
+impl DbQuery for TaskMergeJournalPageQuery {
+    type Output = TaskMergeJournalPage;
+
+    fn class(&self) -> CommandClass {
+        CommandClass::SyncLive
+    }
+
+    fn weight(&self) -> usize {
+        super::serialized_weight(self)
+    }
+
+    fn read(
+        self,
+        context: &CommandContext,
+        connection: &rusqlite::Connection,
+    ) -> Result<Self::Output, DbError> {
+        context.require_sync_peer_matches(&self.peer_id)?;
+        read_journal_page(
+            connection,
+            self.after_position,
+            self.through_position,
+            self.limit,
+        )
+        .map_err(map_task_merge_error)
+    }
 }
 
 impl TaskConflictSetQuery {

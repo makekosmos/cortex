@@ -1,6 +1,9 @@
 use super::*;
 use crate::domain::task_merge::{OperationId, TaskMergeOperation, TaskMergeUnit, TaskMergeValue};
 
+#[path = "task_merge/journal.rs"]
+mod journal;
+
 fn id(suffix: char) -> OperationId {
     OperationId::parse(format!("{}{}", "0".repeat(31), suffix)).unwrap()
 }

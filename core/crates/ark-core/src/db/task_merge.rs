@@ -5,6 +5,10 @@ use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
+#[path = "task_merge/journal.rs"]
+mod journal;
+pub(crate) use journal::read_journal_page;
+
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum TaskMergeError {
     #[error("task_merge_operation_id_collision")]

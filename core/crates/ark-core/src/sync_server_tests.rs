@@ -1,6 +1,7 @@
 use super::*;
 use crate::application::sync_storage::{
-    PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort,
+    PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort, TaskMergeJournalPage,
+    TaskMergeJournalPort,
 };
 
 #[cfg(test)]
@@ -108,6 +109,22 @@ pub(crate) mod tests {
                     .insert(entity.id.clone(), entity.clone());
             }
             Ok(())
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl TaskMergeJournalPort for MemBackend {
+        async fn task_merge_journal_page(
+            &self,
+            _peer_device_id: &str,
+            _after_position: i64,
+            through_position: i64,
+            _limit: usize,
+        ) -> Result<TaskMergeJournalPage, String> {
+            Ok(TaskMergeJournalPage {
+                through_position,
+                entries: Vec::new(),
+            })
         }
     }
     #[async_trait::async_trait]

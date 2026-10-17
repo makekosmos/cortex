@@ -7,8 +7,7 @@ use ark_core::application::sync_storage::{
 };
 use ark_core::data_platform;
 use ark_core::sync_server::{
-    AuthenticatedEntityBackend, IntegrationReplicationBackend, PeerIdentityBackend,
-    SyncRuntimeStorage,
+    IntegrationReplicationBackend, PeerIdentityBackend, SyncRuntimeStorage,
 };
 use ark_core::types::{PeerRecord, SyncEntity, VersionVector};
 use ark_core::SqliteStorageBackend;
@@ -16,13 +15,15 @@ use tokio::sync::{watch, Notify};
 
 use super::{make_storage_with_identity, pick_port, SyncClient, SyncServer};
 
+#[path = "six_devices/task_merge_port.rs"]
+mod task_merge_port;
+
 struct BackfillBarrier {
     inner: Arc<SqliteStorageBackend>,
     requested: Arc<Notify>,
     release: watch::Receiver<bool>,
 }
 
-#[async_trait::async_trait]
 #[async_trait::async_trait]
 impl SyncEntityReadPort for BackfillBarrier {
     async fn load_entities(&self, vector: &VersionVector) -> Result<Vec<SyncEntity>, String> {
@@ -87,6 +88,7 @@ impl SyncEntityMutationPort for BackfillBarrier {
         self.inner.apply_entity(entity).await
     }
 }
+
 #[async_trait::async_trait]
 impl PeerProgressPort for BackfillBarrier {
     async fn load_version_vector(&self) -> Result<ark_core::VersionVector, String> {
@@ -483,17 +485,4 @@ async fn six_devices_converge_during_initial_import_and_local_edit() {
         client.stop();
     }
     server.stop().await;
-}
-
-#[async_trait::async_trait]
-impl AuthenticatedEntityBackend for BackfillBarrier {
-    async fn apply_authenticated_entity(
-        &self,
-        entity: &SyncEntity,
-        authenticated_peer_id: &str,
-    ) -> Result<(), String> {
-        self.inner
-            .apply_authenticated_entity(entity, authenticated_peer_id)
-            .await
-    }
 }

@@ -77,7 +77,9 @@ pub(crate) use system_mutation::{
     LoadOrGenerateIrohSecretKeyCommand, RestoreSnapshotCommand,
 };
 pub(crate) use system_read::SystemReadQuery;
-pub(crate) use task_merge::{AppendTaskMergeOperationCommand, TaskConflictSetQuery};
+pub(crate) use task_merge::{
+    AppendTaskMergeOperationCommand, TaskConflictSetQuery, TaskMergeJournalPageQuery,
+};
 pub(crate) use type_mutation::{
     DeleteObjectLinkCommand, DeleteObjectTypeCommand, RegisterPackageTypesCommand,
     ReplaceObjectLinkCommand, UpsertObjectLinkCommand, UpsertObjectTypeCommand,

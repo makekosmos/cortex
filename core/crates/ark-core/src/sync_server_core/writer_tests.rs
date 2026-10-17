@@ -1,5 +1,6 @@
 use crate::application::sync_storage::{
-    PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort,
+    PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort, TaskMergeJournalPage,
+    TaskMergeJournalPort,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -88,6 +89,22 @@ impl PeerProgressPort for RevocableBackend {
     }
     async fn store_removed_peer_ids(&self, _: &[String]) -> Result<(), String> {
         Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl TaskMergeJournalPort for RevocableBackend {
+    async fn task_merge_journal_page(
+        &self,
+        _peer_device_id: &str,
+        _after_position: i64,
+        through_position: i64,
+        _limit: usize,
+    ) -> Result<TaskMergeJournalPage, String> {
+        Ok(TaskMergeJournalPage {
+            through_position,
+            entries: Vec::new(),
+        })
     }
 }
 

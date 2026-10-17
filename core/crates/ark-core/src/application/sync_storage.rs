@@ -77,6 +77,29 @@ pub struct PolicyBoundSnapshotPage {
     pub entities: Vec<SyncEntity>,
 }
 
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct TaskMergeJournalEntry {
+    pub position: i64,
+    pub operation: crate::domain::task_merge::TaskMergeOperation,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct TaskMergeJournalPage {
+    pub through_position: i64,
+    pub entries: Vec<TaskMergeJournalEntry>,
+}
+
+#[async_trait::async_trait]
+pub trait TaskMergeJournalPort: Send + Sync {
+    async fn task_merge_journal_page(
+        &self,
+        peer_device_id: &str,
+        after_position: i64,
+        through_position: i64,
+        limit: usize,
+    ) -> Result<TaskMergeJournalPage, String>;
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct OutboundProgress {
     pub policy_generation: i64,

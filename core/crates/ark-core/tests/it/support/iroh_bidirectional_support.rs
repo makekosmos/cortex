@@ -5,7 +5,8 @@ use ed25519_dalek::{Signer, SigningKey};
 use tokio::sync::mpsc;
 
 use ark_core::application::sync_storage::{
-    PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort,
+    PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort, TaskMergeJournalPage,
+    TaskMergeJournalPort,
 };
 use ark_core::integration_replication::{
     encode_hex, AuthorizedNode, GrantStatus, IntegrationConfiguration, IntegrationNodeGrant,
@@ -79,6 +80,21 @@ impl SyncEntityReadPort for TestStorage {
 impl SyncEntityMutationPort for TestStorage {
     async fn apply_entity(&self, _entity: &SyncEntity) -> Result<(), String> {
         Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl TaskMergeJournalPort for TestStorage {
+    async fn task_merge_journal_page(
+        &self,
+        peer_device_id: &str,
+        after_position: i64,
+        through_position: i64,
+        limit: usize,
+    ) -> Result<TaskMergeJournalPage, String> {
+        self.inner
+            .task_merge_journal_page(peer_device_id, after_position, through_position, limit)
+            .await
     }
 }
 #[async_trait::async_trait]

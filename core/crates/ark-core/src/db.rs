@@ -45,10 +45,10 @@ pub(crate) use command::{
     RegistryPeerAdmissionQuery, RemoteCoreTaskOutcome, ReplaceObjectLinkCommand,
     RestoreSnapshotCommand, SaveLocalSyncProfileCommand, SetLocalSyncKeyValueCommand,
     SetSyncKeyValueCommand, SignRegistryHandshakeCommand, SystemReadQuery, TaskConflictSetQuery,
-    TrackedAppDeleteCommand, TrackedAppUpsertCommand, TypeReadQuery, UpsertExternalRefCommand,
-    UpsertObjectLinkCommand, UpsertObjectTypeCommand, UsageCompleteThroughQuery, UsageReadQuery,
-    ValidateOutboundSignedFrameQuery, VerifyRegistryHandshakeQuery,
-    DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY,
+    TaskMergeJournalPageQuery, TrackedAppDeleteCommand, TrackedAppUpsertCommand, TypeReadQuery,
+    UpsertExternalRefCommand, UpsertObjectLinkCommand, UpsertObjectTypeCommand,
+    UsageCompleteThroughQuery, UsageReadQuery, ValidateOutboundSignedFrameQuery,
+    VerifyRegistryHandshakeQuery, DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY,
 };
 pub use committed_feed::{
     acknowledge_outbound, acknowledge_outbound_identity, append_committed_change,
