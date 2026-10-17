@@ -18,7 +18,7 @@ pub(super) async fn handle_live_message(ctx: &MessageContext, peer_id: usize, ms
                 })
             };
             if let Some((peer_device_id, pending)) = pending {
-                let completion = ark_sync::server_snapshot::acknowledge_snapshot(
+                let completion = ark_sync::outbound_snapshot::acknowledge_snapshot(
                     storage.as_ref(),
                     &peer_device_id,
                     &pending,

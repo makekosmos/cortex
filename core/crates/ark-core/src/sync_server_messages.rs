@@ -103,7 +103,7 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                     _ => return,
                 }
             };
-            let mut snapshot = match ark_sync::server_snapshot::OutboundSnapshot::begin(
+            let mut snapshot = match ark_sync::outbound_snapshot::OutboundSnapshot::begin(
                 storage.as_ref(),
                 peer_device_id.clone(),
                 remote_vector,
@@ -121,12 +121,15 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
 
             loop {
                 match snapshot.next_page(storage.as_ref()).await {
-                    Ok(ark_sync::server_snapshot::SnapshotEmission::Page(messages)) => {
+                    Ok(ark_sync::outbound_snapshot::SnapshotEmission::Page(messages)) => {
                         for message in messages {
                             send_msg(&tx, &message);
                         }
                     }
-                    Ok(ark_sync::server_snapshot::SnapshotEmission::Terminal { ack, message }) => {
+                    Ok(ark_sync::outbound_snapshot::SnapshotEmission::Terminal {
+                        ack,
+                        message,
+                    }) => {
                         let ticket_stored = {
                             let mut peers_guard = peers.lock().await;
                             peers_guard.get_mut(&peer_id).is_some_and(|peer| {

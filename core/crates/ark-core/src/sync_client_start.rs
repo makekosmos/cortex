@@ -11,8 +11,6 @@ mod feed_recovery;
 mod live_messages;
 #[path = "sync_client_start/connect_and_receive/registry_admission.rs"]
 mod registry_admission;
-#[path = "sync_client_start/send_missing_entities.rs"]
-mod send_missing_entities;
 #[path = "sync_client_start/connect_and_receive/snapshot_ack.rs"]
 mod snapshot_ack;
 #[path = "sync_client_start/connect_and_receive/sync_changes.rs"]

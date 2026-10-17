@@ -47,8 +47,9 @@
                 let mut authenticated = false;
                 let mut sync_complete = false;
                 let mut task_merge_operations = false;
-                let mut pending_initial_snapshot_ack: Option<String> = None;
-                let mut pending_initial_snapshot_policy_identity = None;
+                let mut pending_initial_snapshot_ack: Option<
+                    ark_sync::outbound_snapshot::PendingSnapshotAck,
+                > = None;
                 let mut peer_device_id_actual = String::new();
                 let mut pending_registry_admission: Option<
                     registry_admission::PendingRegistryAdmission,
@@ -56,7 +57,7 @@
                 let mut feed_recovery = tokio::time::interval(Duration::from_secs(1));
                 feed_recovery.tick().await;
 
-                loop {
+                'messages: loop {
                     tokio::select! {
                         _ = feed_recovery.tick() => {
                             if let Err(error) = feed_recovery::pump(
@@ -249,51 +250,47 @@
 
                                         let policy_bound =
                                             sync_policy::is_policy_bound(&authenticated_tx).await;
-                                        let policy_identity = if policy_bound {
-                                            match storage
-                                                .accepted_policy_identity_for_peer(
-                                                    &peer_device_id_actual,
-                                                )
-                                                .await
-                                            {
-                                                Ok(Some(identity)) => Some(identity),
-                                                Ok(None) => {
-                                                    eprintln!(
-                                                        "{TAG} bound policy identity unavailable"
-                                                    );
-                                                    break;
+                                        let mut snapshot = match
+                                            ark_sync::outbound_snapshot::OutboundSnapshot::begin(
+                                                storage.as_ref(),
+                                                peer_device_id_actual.clone(),
+                                                remote_vector,
+                                                sync_complete,
+                                                policy_bound,
+                                            )
+                                            .await
+                                        {
+                                            Ok(snapshot) => snapshot,
+                                            Err(error) => {
+                                                eprintln!(
+                                                    "{TAG} outbound snapshot setup failed: {error}"
+                                                );
+                                                break;
+                                            }
+                                        };
+                                        use ark_sync::outbound_snapshot::SnapshotEmission;
+                                        let pending_ack = 'snapshot: loop {
+                                            match snapshot.next_page(storage.as_ref()).await {
+                                                Ok(SnapshotEmission::Page(messages)) => {
+                                                    for message in messages {
+                                                        send_msg(&tx, &message);
+                                                    }
+                                                }
+                                                Ok(SnapshotEmission::Terminal { ack, message }) => {
+                                                    send_msg(&tx, &message);
+                                                    break 'snapshot ack;
                                                 }
                                                 Err(error) => {
                                                     eprintln!(
-                                                        "{TAG} accepted policy read failed: {error}"
+                                                        "{TAG} outbound snapshot failed: {error}"
                                                     );
-                                                    break;
+                                                    break 'messages;
                                                 }
-                                            }
-                                        } else {
-                                            None
-                                        };
-                                        let (batch_id, policy_identity) =
-                                            match send_missing_entities::send(
-                                                &storage,
-                                                &tx,
-                                                &peer_device_id_actual,
-                                                &remote_vector,
-                                                sync_complete,
-                                                policy_identity.clone(),
-                                            )
-                                            .await
-                                            {
-                                            Ok(batch_id) => batch_id,
-                                            Err(error) => {
-                                                eprintln!("{TAG} outbound sync failed: {error}");
-                                                break;
                                             }
                                         };
 
                                         sync_complete = true;
-                                        pending_initial_snapshot_ack = Some(batch_id);
-                                        pending_initial_snapshot_policy_identity = policy_identity;
+                                        pending_initial_snapshot_ack = Some(pending_ack);
                                     }
 
                                     LanSyncMessage::SyncChanges {
@@ -324,7 +321,6 @@
                                             &storage,
                                             &peer_device_id_actual,
                                             &mut pending_initial_snapshot_ack,
-                                            &mut pending_initial_snapshot_policy_identity,
                                             &batch_id,
                                             policy_identity,
                                             &authenticated_tx,

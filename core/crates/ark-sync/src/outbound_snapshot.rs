@@ -128,6 +128,9 @@ impl OutboundSnapshot {
                     continue;
                 }
                 self.persist_vector(storage).await?;
+                if self.refresh_policy_identity(storage).await? {
+                    continue;
+                }
                 let ack = PendingSnapshotAck {
                     batch_id: generate_id(),
                     policy_identity: self.policy_identity.clone(),

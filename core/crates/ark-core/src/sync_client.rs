@@ -24,7 +24,6 @@ const TAG: &str = "[SyncClient]";
 const CONNECT_TIMEOUT_MS: u64 = 5_000;
 const RECONNECT_BASE_MS: u64 = 2_000;
 const RECONNECT_MAX_MS: u64 = 30_000;
-const SYNC_LOAD_PAGE_SIZE: usize = 100;
 
 // ---------------------------------------------------------------------------
 // Callbacks
@@ -299,13 +298,6 @@ async fn load_version_vector(
     storage: &Arc<dyn SyncRuntimeStorage>,
 ) -> Result<VersionVector, String> {
     storage.load_version_vector().await
-}
-
-async fn save_version_vector(
-    storage: &Arc<dyn SyncRuntimeStorage>,
-    vector: &VersionVector,
-) -> Result<(), String> {
-    storage.store_version_vector(vector).await
 }
 
 fn send_msg(tx: &mpsc::UnboundedSender<Message>, msg: &LanSyncMessage) {

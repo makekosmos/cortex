@@ -70,7 +70,7 @@ struct PeerState {
     registry_admission: Option<ark_sync::server_session::DirectServerAdmission>,
     in_flight_feed_position: Option<i64>,
     in_flight_feed_policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
-    pending_initial_snapshot: Option<ark_sync::server_snapshot::PendingSnapshotAck>,
+    pending_initial_snapshot: Option<ark_sync::outbound_snapshot::PendingSnapshotAck>,
     tx: mpsc::UnboundedSender<Message>,
 }
 

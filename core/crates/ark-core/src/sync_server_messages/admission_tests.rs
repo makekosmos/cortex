@@ -19,7 +19,7 @@ async fn registry_disable_closes_ready_session_and_removes_discovery_record() {
         registry_admission: None,
         in_flight_feed_position: Some(42),
         in_flight_feed_policy_identity: None,
-        pending_initial_snapshot: Some(ark_sync::server_snapshot::PendingSnapshotAck {
+        pending_initial_snapshot: Some(ark_sync::outbound_snapshot::PendingSnapshotAck {
             batch_id: "snapshot".to_owned(),
             policy_identity: None,
         }),

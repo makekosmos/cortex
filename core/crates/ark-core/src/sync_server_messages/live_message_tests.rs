@@ -23,7 +23,7 @@ async fn stale_snapshot_ack_does_not_complete_or_clear_pending_snapshot() {
         registry_admission: None,
         in_flight_feed_position: None,
         in_flight_feed_policy_identity: None,
-        pending_initial_snapshot: Some(ark_sync::server_snapshot::PendingSnapshotAck {
+        pending_initial_snapshot: Some(ark_sync::outbound_snapshot::PendingSnapshotAck {
             batch_id: "batch-2".to_owned(),
             policy_identity: Some(expected.clone()),
         }),
