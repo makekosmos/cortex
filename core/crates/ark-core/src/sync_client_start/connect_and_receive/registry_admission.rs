@@ -1,11 +1,18 @@
 use super::super::*;
 
 pub(super) struct PendingRegistryAdmission {
-    admission: ark_sync::registry_admission::DirectRegistryAdmission,
-    local_device_id: String,
-    protocol: NegotiatedProtocol,
+    admission: ark_sync::client_session::DirectClientAdmission,
     peer_record: PeerRecord,
-    on_registry_events: Arc<Mutex<Option<ClientOnRegistryEventsCallback>>>,
+}
+
+pub(super) struct Context<'a> {
+    pub(super) local_device_id: &'a str,
+    pub(super) storage: &'a Arc<dyn SyncRuntimeStorage>,
+    pub(super) tx: &'a mpsc::UnboundedSender<Message>,
+    pub(super) authenticated_tx: &'a crate::sync_client::AuthenticatedTx,
+    pub(super) peer: &'a Arc<RwLock<PeerRecord>>,
+    pub(super) on_registry_events: &'a Arc<Mutex<Option<ClientOnRegistryEventsCallback>>>,
+    pub(super) on_connected: &'a Arc<Mutex<Option<ClientOnConnectedCallback>>>,
 }
 
 impl PendingRegistryAdmission {
@@ -15,21 +22,17 @@ impl PendingRegistryAdmission {
         space_id: &str,
         protocol: NegotiatedProtocol,
         peer_record: PeerRecord,
-        on_registry_events: Arc<Mutex<Option<ClientOnRegistryEventsCallback>>>,
     ) -> Result<(Self, LanSyncMessage), String> {
-        let (admission, start) = ark_sync::registry_admission::DirectRegistryAdmission::initiator(
+        let (admission, start) = ark_sync::client_session::DirectClientAdmission::begin(
             local_device_id,
             peer_device_id,
             space_id,
-            protocol.clone(),
+            protocol,
         )?;
         Ok((
             Self {
                 admission,
-                local_device_id: local_device_id.to_owned(),
-                protocol,
                 peer_record,
-                on_registry_events,
             },
             start,
         ))
@@ -38,56 +41,52 @@ impl PendingRegistryAdmission {
     pub(super) async fn handle(
         &mut self,
         message: LanSyncMessage,
-        storage: &Arc<dyn SyncRuntimeStorage>,
-        tx: &mpsc::UnboundedSender<Message>,
-        authenticated_tx: &crate::sync_client::AuthenticatedTx,
-        peer: &Arc<RwLock<PeerRecord>>,
-        on_connected: &Arc<Mutex<Option<ClientOnConnectedCallback>>>,
+        context: Context<'_>,
     ) -> Result<bool, String> {
-        let update = self.admission.handle(storage.as_ref(), message).await?;
-        if !update.applied_events.is_empty() {
-            if let Some(handler) = self.on_registry_events.lock().await.as_ref() {
-                handler(update.applied_events.clone());
+        let Context {
+            local_device_id,
+            storage,
+            tx,
+            authenticated_tx,
+            peer,
+            on_registry_events,
+            on_connected,
+        } = context;
+        let progress = self.admission.handle(storage.as_ref(), message).await?;
+        if !progress.applied_events.is_empty() {
+            if let Some(handler) = on_registry_events.lock().await.as_ref() {
+                handler(progress.applied_events.clone());
             }
         }
-        for outgoing in update.outgoing {
+        for outgoing in progress.outgoing {
             send_msg(tx, &outgoing);
         }
-        if update.close_session && update.exchange_complete {
-            return Err("registry_admission_session_revoked".into());
-        }
-        if !update.became_ready {
-            return Ok(false);
-        }
+        let ready = match progress.status {
+            ark_sync::client_session::AdmissionStatus::Pending => return Ok(false),
+            ark_sync::client_session::AdmissionStatus::CloseSession => {
+                return Err("registry_admission_session_revoked".into());
+            }
+            ark_sync::client_session::AdmissionStatus::Ready(ready) => ready,
+        };
 
-        let selective_policy_capability = self
-            .protocol
-            .capabilities
-            .contains(&ark_sync::protocol::ProtocolCapability::SelectiveSyncPolicyV1);
-        let policy_bound_delivery = self
-            .protocol
-            .capabilities
-            .contains(&ark_sync::protocol::ProtocolCapability::PolicyBoundDeliveryV1);
-        if selective_policy_capability {
-            let policy_message = storage
-                .load_local_sync_profile(&self.local_device_id)
-                .await?
-                .as_ref()
-                .map(ark_sync::protocol::sync_policy_message)
-                .unwrap_or_else(ark_sync::protocol::default_sync_policy_message);
+        if let Some(policy_message) = self
+            .admission
+            .sync_policy_message(storage.as_ref(), local_device_id, &ready)
+            .await?
+        {
             send_msg(tx, &policy_message);
         }
+        let policy_bound_delivery = ready
+            .protocol()
+            .capabilities
+            .contains(&ark_sync::protocol::ProtocolCapability::PolicyBoundDeliveryV1);
         *authenticated_tx.lock().await = Some(crate::sync_client::AuthenticatedPeerSession {
-            peer_id: self.peer_record.device_id.clone(),
-            registry_session_id: self
-                .admission
-                .session_id()
-                .ok_or_else(|| "registry_admission_session_missing".to_owned())?
-                .to_owned(),
+            peer_id: ready.peer_device_id().to_owned(),
+            registry_session_id: ready.registry_session_id().to_owned(),
             tx: tx.clone(),
             sync_started: !policy_bound_delivery,
             sync_complete: false,
-            protocol: self.protocol.clone(),
+            protocol: ready.protocol().clone(),
         });
 
         let mut connected_record = self.peer_record.clone();
@@ -100,16 +99,11 @@ impl PendingRegistryAdmission {
         if let Some(handler) = on_connected.lock().await.as_ref() {
             handler(connected_record);
         }
-        if !policy_bound_delivery {
-            let generation = storage
-                .selective_sync_policy_generation_for_peer(&self.peer_record.device_id)
-                .await?;
-            storage
-                .begin_outbound_policy(&self.peer_record.device_id, generation)
-                .await?;
-            let vector = load_version_vector(storage)
-                .await
-                .map_err(|error| format!("failed to load sync version vector: {error}"))?;
+        if let Some(vector) = self
+            .admission
+            .begin_initial_sync(storage.as_ref(), &ready)
+            .await?
+        {
             if let Some(session) = authenticated_tx.lock().await.as_mut() {
                 session.sync_started = true;
             }

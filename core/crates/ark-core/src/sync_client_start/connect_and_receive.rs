@@ -54,7 +54,6 @@
                     registry_admission::PendingRegistryAdmission,
                 > = None;
                 let mut feed_recovery = tokio::time::interval(Duration::from_secs(1));
-                // Start recovery after the connection can authenticate.
                 feed_recovery.tick().await;
 
                 loop {
@@ -161,7 +160,6 @@
                                             .capabilities
                                             .contains(&ProtocolCapability::TaskMergeBootstrapV2);
 
-                                        // Reject self-connects and evict pure self-references.
                                         if !server_device_id.is_empty()
                                             && server_device_id == device_id
                                         {
@@ -169,7 +167,6 @@
                                                 "{TAG} Rejecting self-connect to \
                                                      {server_device_name} ({server_device_id})"
                                             );
-                                            // Drop only this address; stop if it was the last one.
                                             let remaining = {
                                                 let mut p = peer.write().await;
                                                 p.addresses.retain(|a| a != &winning_addr);
@@ -206,7 +203,6 @@
                                                 &space_id,
                                                 negotiated_protocol.clone(),
                                                 pending_peer,
-                                                on_registry_events.clone(),
                                             )
                                             {
                                                 Ok(admission) => admission,
@@ -298,7 +294,6 @@
                                         sync_complete = true;
                                         pending_initial_snapshot_ack = Some(batch_id);
                                         pending_initial_snapshot_policy_identity = policy_identity;
-                                        // Broadcasts wake the durable cursor drain.
                                     }
 
                                     LanSyncMessage::SyncChanges {

@@ -30,11 +30,15 @@
             let became_ready = match admission
                 .handle(
                     sync_msg,
-                    &storage,
-                    &tx,
-                    &authenticated_tx,
-                    &peer,
-                    &on_connected,
+                    registry_admission::Context {
+                        local_device_id: &device_id,
+                        storage: &storage,
+                        tx: &tx,
+                        authenticated_tx: &authenticated_tx,
+                        peer: &peer,
+                        on_registry_events: &on_registry_events,
+                        on_connected: &on_connected,
+                    },
                 )
                 .await
             {
