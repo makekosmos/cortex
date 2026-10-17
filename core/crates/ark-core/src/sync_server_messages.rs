@@ -478,6 +478,8 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
         | LanSyncMessage::LiveChange { .. }
         | LanSyncMessage::LiveAck { .. }
         | LanSyncMessage::LiveReceiptAck { .. }
+        | LanSyncMessage::TaskMergeBatch { .. }
+        | LanSyncMessage::TaskMergeBatchAck { .. }
         | LanSyncMessage::ProtocolRejected { .. }
         | LanSyncMessage::PeerList { .. }
         | LanSyncMessage::Ping { .. }

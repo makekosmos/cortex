@@ -9,6 +9,7 @@ const DURABLE_RECEIPT_ACK_V1: &str = "durable_receipt_ack_v1";
 const REGISTRY_HISTORY_V1: &str = "registry_history_v1";
 const SELECTIVE_SYNC_POLICY_V1: &str = "selective_sync_policy_v1";
 const POLICY_BOUND_DELIVERY_V1: &str = "policy_bound_delivery_v1";
+const TASK_MERGE_OPERATIONS_V1: &str = "task_merge_operations_v1";
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum ProtocolCapability {
@@ -16,6 +17,7 @@ pub enum ProtocolCapability {
     RegistryHistoryV1,
     SelectiveSyncPolicyV1,
     PolicyBoundDeliveryV1,
+    TaskMergeOperationsV1,
 }
 
 impl ProtocolCapability {
@@ -25,6 +27,7 @@ impl ProtocolCapability {
             Self::RegistryHistoryV1 => REGISTRY_HISTORY_V1,
             Self::SelectiveSyncPolicyV1 => SELECTIVE_SYNC_POLICY_V1,
             Self::PolicyBoundDeliveryV1 => POLICY_BOUND_DELIVERY_V1,
+            Self::TaskMergeOperationsV1 => TASK_MERGE_OPERATIONS_V1,
         }
     }
 
@@ -34,6 +37,7 @@ impl ProtocolCapability {
             REGISTRY_HISTORY_V1 => Some(Self::RegistryHistoryV1),
             SELECTIVE_SYNC_POLICY_V1 => Some(Self::SelectiveSyncPolicyV1),
             POLICY_BOUND_DELIVERY_V1 => Some(Self::PolicyBoundDeliveryV1),
+            TASK_MERGE_OPERATIONS_V1 => Some(Self::TaskMergeOperationsV1),
             _ => None,
         }
     }
@@ -71,6 +75,9 @@ impl ProtocolOffer {
             offer
                 .supported_capabilities
                 .insert(POLICY_BOUND_DELIVERY_V1.to_owned());
+            offer
+                .supported_capabilities
+                .insert(TASK_MERGE_OPERATIONS_V1.to_owned());
         }
         offer
     }

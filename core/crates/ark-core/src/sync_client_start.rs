@@ -59,6 +59,10 @@ mod tests {
         include!("sync_client_start/registry_admission_tests.rs");
     }
 
+    mod task_merge_tests {
+        include!("sync_client_start/task_merge_tests.rs");
+    }
+
     #[tokio::test]
     async fn client_refuses_legacy_peer_before_registry_admission() {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();

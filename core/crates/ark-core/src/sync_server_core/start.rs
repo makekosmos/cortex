@@ -79,6 +79,15 @@ impl SyncServer {
                             {
                                 eprintln!("{TAG} periodic committed feed drain failed: {error}");
                             }
+                            if let Err(error) = sync_server_peers::pump_task_merge_batch(
+                                &storage,
+                                &peers,
+                                peer_id,
+                            )
+                            .await
+                            {
+                                eprintln!("{TAG} periodic task merge drain failed: {error}");
+                            }
                         }
                     }
                     result = listener.accept() => {

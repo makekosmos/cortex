@@ -95,6 +95,12 @@ pub(super) async fn task_merge_append(
         )
         .await
         .map_err(|error| error.to_string())?;
+    if !result.replayed {
+        let runtime = state.sync.lock().await.clone();
+        if let Some(runtime) = runtime {
+            runtime.server.broadcast_task_merge_batches().await;
+        }
+    }
     serde_json::to_value(result).map_err(|error| error.to_string())
 }
 

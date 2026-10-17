@@ -87,6 +87,20 @@ fn policy_bound_delivery_requires_selective_policy_support() {
 }
 
 #[test]
+fn task_merge_operations_require_authenticated_capability_negotiation() {
+    let local = ProtocolOffer::current_with_registry_history(true);
+    let remote = offer(Some(&[1]), &[TASK_MERGE_OPERATIONS_V1]);
+    assert!(!negotiate_protocol(&local, &remote, false)
+        .unwrap()
+        .capabilities
+        .contains(&ProtocolCapability::TaskMergeOperationsV1));
+    assert!(negotiate_protocol(&local, &remote, true)
+        .unwrap()
+        .capabilities
+        .contains(&ProtocolCapability::TaskMergeOperationsV1));
+}
+
+#[test]
 fn invalid_and_disjoint_offers_fail_deterministically() {
     assert_eq!(
         ProtocolOffer::new(1, Some(&[]), None),

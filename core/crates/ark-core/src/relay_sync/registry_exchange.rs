@@ -13,6 +13,8 @@ pub(super) fn is_user_data_message(message: &LanSyncMessage) -> bool {
             | LanSyncMessage::LiveChange { .. }
             | LanSyncMessage::LiveAck { .. }
             | LanSyncMessage::LiveReceiptAck { .. }
+            | LanSyncMessage::TaskMergeBatch { .. }
+            | LanSyncMessage::TaskMergeBatchAck { .. }
             | LanSyncMessage::SignedIntegrationFrame { .. }
             | LanSyncMessage::SignedIntegrationAck { .. }
             | LanSyncMessage::PeerList { .. }

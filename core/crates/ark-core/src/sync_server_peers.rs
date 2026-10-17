@@ -5,8 +5,27 @@ mod committed_feed;
 pub(super) use committed_feed::{
     handle_committed_feed_ack, handle_committed_feed_receipt_ack, pump_committed_feed,
 };
+#[path = "sync_server_peers/task_merge.rs"]
+mod task_merge;
+pub(super) use task_merge::{handle_task_merge_batch_ack, pump_task_merge_batch};
 
 impl SyncServer {
+    pub async fn broadcast_task_merge_batches(&self) {
+        let peer_ids = {
+            let peers = self.peers.lock().await;
+            peers
+                .iter()
+                .filter(|(_, peer)| peer.ready_peer.is_some() && peer.sync_complete)
+                .map(|(peer_id, _)| *peer_id)
+                .collect::<Vec<_>>()
+        };
+        for peer_id in peer_ids {
+            if let Err(error) = pump_task_merge_batch(&self.storage, &self.peers, peer_id).await {
+                eprintln!("{TAG} task merge broadcast failed: {error}");
+            }
+        }
+    }
+
     /// Stop the server.
     pub async fn stop(&self) {
         if let Some(tx) = self.shutdown_tx.lock().await.take() {

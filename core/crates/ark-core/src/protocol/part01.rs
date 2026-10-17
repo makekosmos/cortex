@@ -143,6 +143,18 @@ pub enum LanSyncMessage {
         policy_identity: Option<crate::application::sync_storage::PolicyIdentity>,
     },
 
+    #[serde(rename = "task_merge_batch")]
+    TaskMergeBatch {
+        batch: crate::application::sync_storage::TaskMergeBatch,
+    },
+
+    #[serde(rename = "task_merge_batch_ack")]
+    TaskMergeBatchAck {
+        batch_id: String,
+        through_position: i64,
+        policy_identity: crate::application::sync_storage::PolicyIdentity,
+    },
+
     /// Refuses an incompatible protocol offer before the peer is admitted.
     /// Relay transports broadcast this frame and use both IDs for routing.
     #[serde(rename = "protocol_rejected")]

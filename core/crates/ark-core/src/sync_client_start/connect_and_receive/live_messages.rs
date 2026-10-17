@@ -1,5 +1,78 @@
 use super::*;
 
+pub(super) async fn handle_task_merge_batch(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+    peer_device_id: &str,
+    local_device_id: &str,
+    tx: &mpsc::UnboundedSender<Message>,
+    batch: crate::application::sync_storage::TaskMergeBatch,
+) -> Result<(), String> {
+    let local_profile = storage.load_local_sync_profile(local_device_id).await?;
+    let expected_identity = crate::protocol::sync_policy_identity(local_profile.as_ref());
+    if batch.identity != expected_identity {
+        return Ok(());
+    }
+    let ack = storage
+        .apply_task_merge_batch(peer_device_id, local_device_id, &expected_identity, &batch)
+        .await?;
+    send_msg(
+        tx,
+        &LanSyncMessage::TaskMergeBatchAck {
+            batch_id: ack.batch_id,
+            through_position: ack.through_position,
+            policy_identity: expected_identity,
+        },
+    );
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) async fn handle_feed_ack_message(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+    peer_device_id: &str,
+    tx: &mpsc::UnboundedSender<Message>,
+    feed_in_flight: &ClientFeedInFlight,
+    authenticated_tx: &AuthenticatedTx,
+    change_id: &str,
+    policy_identity: Option<crate::application::sync_storage::PolicyIdentity>,
+    receipt_ack: bool,
+) -> bool {
+    let result = if receipt_ack {
+        handle_receipt_ack(
+            storage,
+            peer_device_id,
+            tx,
+            feed_in_flight,
+            authenticated_tx,
+            change_id,
+            policy_identity,
+        )
+        .await
+    } else {
+        handle_applied_ack(
+            storage,
+            peer_device_id,
+            tx,
+            feed_in_flight,
+            authenticated_tx,
+            change_id,
+            policy_identity,
+        )
+        .await
+    };
+    if let Err(error) = result {
+        let ack_kind = if receipt_ack {
+            "receipt"
+        } else {
+            "committed feed"
+        };
+        eprintln!("{TAG} {ack_kind} ACK failed: {error}");
+        false
+    } else {
+        true
+    }
+}
+
 pub(super) async fn handle_signed_integration_frame(
     storage: &Arc<dyn SyncRuntimeStorage>,
     peer_device_id: &str,
@@ -26,6 +99,28 @@ pub(super) async fn handle_signed_integration_frame(
             accepted,
         },
     );
+}
+
+pub(super) async fn handle_signed_integration_message(
+    authenticated: bool,
+    storage: &Arc<dyn SyncRuntimeStorage>,
+    peer_device_id: &str,
+    local_device_id: &str,
+    space_id: &str,
+    tx: &mpsc::UnboundedSender<Message>,
+    frame: SignedSyncEnvelope,
+) {
+    if authenticated {
+        handle_signed_integration_frame(
+            storage,
+            peer_device_id,
+            local_device_id,
+            space_id,
+            tx,
+            frame,
+        )
+        .await;
+    }
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -361,6 +361,8 @@ pub(crate) fn is_user_data_message(message: &LanSyncMessage) -> bool {
             | LanSyncMessage::LiveChange { .. }
             | LanSyncMessage::LiveAck { .. }
             | LanSyncMessage::LiveReceiptAck { .. }
+            | LanSyncMessage::TaskMergeBatch { .. }
+            | LanSyncMessage::TaskMergeBatchAck { .. }
             | LanSyncMessage::SignedIntegrationFrame { .. }
             | LanSyncMessage::SignedIntegrationAck { .. }
             | LanSyncMessage::PeerList { .. }
@@ -414,6 +416,10 @@ async fn broadcast_to_others(
     for peer_id in peer_ids {
         if let Err(error) = sync_server_peers::pump_committed_feed(storage, peers, peer_id).await {
             eprintln!("{TAG} committed feed wake failed: {error}");
+        }
+        if let Err(error) = sync_server_peers::pump_task_merge_batch(storage, peers, peer_id).await
+        {
+            eprintln!("{TAG} task merge wake failed: {error}");
         }
     }
 }

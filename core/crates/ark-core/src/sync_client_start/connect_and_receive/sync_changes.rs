@@ -5,6 +5,7 @@ pub(super) struct Context<'a> {
     pub tx: &'a mpsc::UnboundedSender<Message>,
     pub peer_device_id: &'a str,
     pub local_device_id: &'a str,
+    pub authenticated_tx: &'a AuthenticatedTx,
     pub on_change: &'a Arc<Mutex<Option<ClientOnChangeCallback>>>,
 }
 
@@ -21,8 +22,17 @@ pub(super) async fn apply(
         tx,
         peer_device_id,
         local_device_id,
+        authenticated_tx,
         on_change,
     } = context;
+    let policy_bound = sync_policy::is_policy_bound(authenticated_tx).await;
+    sync_policy::validate_snapshot_identity(
+        storage,
+        local_device_id,
+        policy_bound,
+        &policy_identity,
+    )
+    .await?;
     let mut local_vector = load_version_vector(storage).await?;
     let mut accepted = 0;
     let mut vector_updated = false;

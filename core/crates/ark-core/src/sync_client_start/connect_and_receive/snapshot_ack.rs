@@ -11,6 +11,39 @@ pub(super) async fn handle(
     authenticated_tx: &Arc<Mutex<Option<AuthenticatedPeerSession>>>,
     tx: &mpsc::UnboundedSender<Message>,
     feed_in_flight: &ClientFeedInFlight,
+) -> bool {
+    match apply(
+        storage,
+        peer_device_id,
+        pending_batch_id,
+        pending_policy_identity,
+        batch_id,
+        policy_identity,
+        authenticated_tx,
+        tx,
+        feed_in_flight,
+    )
+    .await
+    {
+        Ok(()) => true,
+        Err(error) => {
+            eprintln!("{TAG} snapshot ACK handling failed: {error}");
+            false
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn apply(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+    peer_device_id: &str,
+    pending_batch_id: &mut Option<String>,
+    pending_policy_identity: &mut Option<crate::application::sync_storage::PolicyIdentity>,
+    batch_id: &str,
+    policy_identity: Option<crate::application::sync_storage::PolicyIdentity>,
+    authenticated_tx: &Arc<Mutex<Option<AuthenticatedPeerSession>>>,
+    tx: &mpsc::UnboundedSender<Message>,
+    feed_in_flight: &ClientFeedInFlight,
 ) -> Result<(), String> {
     if pending_batch_id.as_deref() != Some(batch_id) {
         return Ok(());

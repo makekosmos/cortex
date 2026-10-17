@@ -4,6 +4,32 @@ mod tests {
     use serde_json::json;
 
     #[test]
+    fn task_merge_batch_messages_round_trip_with_policy_identity() {
+        let identity = crate::application::sync_storage::PolicyIdentity {
+            revision: 7,
+            digest: "ab".repeat(32),
+            active: true,
+        };
+        let batch = crate::application::sync_storage::TaskMergeBatch {
+            batch_id: "01".repeat(16),
+            identity: identity.clone(),
+            after_position: 4,
+            through_position: 4,
+            entries: Vec::new(),
+        };
+        let message = LanSyncMessage::TaskMergeBatch { batch };
+        let decoded = deserialize_message(&serialize_message(&message)).unwrap();
+        assert_eq!(decoded, message);
+
+        let ack = LanSyncMessage::TaskMergeBatchAck {
+            batch_id: "01".repeat(16),
+            through_position: 4,
+            policy_identity: identity,
+        };
+        assert_eq!(deserialize_message(&serialize_message(&ack)).unwrap(), ack);
+    }
+
+    #[test]
     fn test_hello_serialization() {
         let msg = LanSyncMessage::Hello {
             protocol_version: 1,

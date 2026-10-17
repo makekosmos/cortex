@@ -46,6 +46,7 @@
 
                 let mut authenticated = false;
                 let mut sync_complete = false;
+                let mut task_merge_operations = false;
                 let mut pending_initial_snapshot_ack: Option<String> = None;
                 let mut pending_initial_snapshot_policy_identity = None;
                 let mut peer_device_id_actual = String::new();
@@ -156,6 +157,9 @@
                                             );
                                             break;
                                         }
+                                        task_merge_operations = negotiated_protocol
+                                            .capabilities
+                                            .contains(&ProtocolCapability::TaskMergeOperationsV1);
 
                                         // Reject self-connects and evict pure self-references.
                                         if !server_device_id.is_empty()
@@ -302,27 +306,12 @@
                                         usage_complete_through, ..
                                     } => {
                                         if !authenticated { continue; }
-                                        let policy_bound =
-                                            sync_policy::is_policy_bound(&authenticated_tx).await;
-                                        if let Err(error) =
-                                            sync_policy::validate_snapshot_identity(
-                                                &storage,
-                                                &device_id,
-                                                policy_bound,
-                                                &policy_identity,
-                                            )
-                                            .await
-                                        {
-                                            eprintln!(
-                                                "{TAG} snapshot policy rejected: {error}"
-                                            );
-                                            break;
-                                        }
                                         let context = sync_changes::Context {
                                             storage: &storage,
                                             tx: &tx,
                                             peer_device_id: &peer_device_id_actual,
                                             local_device_id: &device_id,
+                                            authenticated_tx: &authenticated_tx,
                                             on_change: &on_change,
                                         };
                                         if let Err(error) = sync_changes::apply(
@@ -336,7 +325,7 @@
                                     }
 
                                     LanSyncMessage::SyncAck { batch_id, policy_identity, .. } => {
-                                        if let Err(error) = snapshot_ack::handle(
+                                        if !snapshot_ack::handle(
                                             &storage,
                                             &peer_device_id_actual,
                                             &mut pending_initial_snapshot_ack,
@@ -349,18 +338,13 @@
                                         )
                                         .await
                                         {
-                                            eprintln!(
-                                                "{TAG} snapshot ACK handling failed: {error}"
-                                            );
                                             break;
                                         }
                                     }
 
                                     LanSyncMessage::SignedIntegrationFrame { frame } => {
-                                        if !authenticated {
-                                            continue;
-                                        }
-                                        live_messages::handle_signed_integration_frame(
+                                        live_messages::handle_signed_integration_message(
+                                            authenticated,
                                             &storage,
                                             &peer_device_id_actual,
                                             &device_id,
@@ -404,8 +388,8 @@
                                         change_id,
                                         policy_identity,
                                     } => {
-                                        if sync_complete {
-                                            if let Err(error) = live_messages::handle_applied_ack(
+                                        if sync_complete
+                                            && !live_messages::handle_feed_ack_message(
                                                 &storage,
                                                 &peer_device_id_actual,
                                                 &tx,
@@ -413,14 +397,11 @@
                                                 &authenticated_tx,
                                                 &change_id,
                                                 policy_identity,
+                                                false,
                                             )
                                             .await
-                                            {
-                                                eprintln!(
-                                                    "{TAG} committed feed ACK failed: {error}"
-                                                );
-                                                break;
-                                            }
+                                        {
+                                            break;
                                         }
                                     }
 
@@ -428,8 +409,8 @@
                                         change_id,
                                         policy_identity,
                                     } => {
-                                        if sync_complete {
-                                            if let Err(error) = live_messages::handle_receipt_ack(
+                                        if sync_complete
+                                            && !live_messages::handle_feed_ack_message(
                                                 &storage,
                                                 &peer_device_id_actual,
                                                 &tx,
@@ -437,16 +418,37 @@
                                                 &authenticated_tx,
                                                 &change_id,
                                                 policy_identity,
+                                                true,
+                                            )
+                                            .await
+                                        {
+                                            break;
+                                        }
+                                    }
+
+                                    LanSyncMessage::TaskMergeBatch { batch } => {
+                                        if authenticated
+                                            && sync_complete
+                                            && task_merge_operations
+                                        {
+                                            if let Err(error) =
+                                                live_messages::handle_task_merge_batch(
+                                                &storage,
+                                                &peer_device_id_actual,
+                                                &device_id,
+                                                &tx,
+                                                batch,
                                             )
                                             .await
                                             {
                                                 eprintln!(
-                                                    "{TAG} receipt ACK failed: {error}"
+                                                    "{TAG} task merge batch rejected: {error}"
                                                 );
-                                                break;
                                             }
                                         }
                                     }
+
+                                    LanSyncMessage::TaskMergeBatchAck { .. } => {}
 
                                     LanSyncMessage::Ping { .. }
                                     | LanSyncMessage::Pong { .. }

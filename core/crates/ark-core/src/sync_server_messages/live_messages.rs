@@ -61,6 +61,11 @@ pub(super) async fn handle_live_message(ctx: &MessageContext, peer_id: usize, ms
                                 "{TAG} committed feed pump failed for {peer_device_id}: {error}"
                             );
                         }
+                        if let Err(error) =
+                            sync_server_peers::pump_task_merge_batch(storage, peers, peer_id).await
+                        {
+                            eprintln!("{TAG} task merge pump failed for {peer_device_id}: {error}");
+                        }
                     }
                     Err(error) => eprintln!("{TAG} outbound snapshot completion failed: {error}"),
                 }
@@ -120,6 +125,70 @@ pub(super) async fn handle_live_message(ctx: &MessageContext, peer_id: usize, ms
             .await
             {
                 eprintln!("{TAG} committed feed receipt ACK failed: {error}");
+            }
+        }
+
+        LanSyncMessage::TaskMergeBatch { batch } => {
+            let (tx, peer_device_id, supported) = {
+                let peers = peers.lock().await;
+                let Some(peer) = peers.get(&peer_id) else {
+                    return;
+                };
+                (
+                    peer.tx.clone(),
+                    peer.device_id.clone(),
+                    peer.sync_complete
+                        && peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
+                            protocol.capabilities.contains(
+                                &crate::protocol::ProtocolCapability::TaskMergeOperationsV1,
+                            )
+                        }),
+                )
+            };
+            if !supported {
+                return;
+            }
+            let local_device_id = ctx.device_id.read().await.clone();
+            match storage
+                .apply_task_merge_batch(&peer_device_id, &local_device_id, &batch.identity, &batch)
+                .await
+            {
+                Ok(ack) => {
+                    let message = LanSyncMessage::TaskMergeBatchAck {
+                        batch_id: ack.batch_id,
+                        through_position: ack.through_position,
+                        policy_identity: batch.identity,
+                    };
+                    send_msg(&tx, &message);
+                    let peer_ids = peers.lock().await.keys().copied().collect::<Vec<_>>();
+                    for peer_id in peer_ids {
+                        if let Err(error) =
+                            sync_server_peers::pump_task_merge_batch(storage, peers, peer_id).await
+                        {
+                            eprintln!("{TAG} task merge fanout failed: {error}");
+                        }
+                    }
+                }
+                Err(error) => eprintln!("{TAG} task merge batch rejected: {error}"),
+            }
+        }
+
+        LanSyncMessage::TaskMergeBatchAck {
+            batch_id,
+            through_position,
+            policy_identity,
+        } => {
+            if let Err(error) = sync_server_peers::handle_task_merge_batch_ack(
+                storage,
+                peers,
+                peer_id,
+                &batch_id,
+                through_position,
+                &policy_identity,
+            )
+            .await
+            {
+                eprintln!("{TAG} task merge batch ACK failed: {error}");
             }
         }
 

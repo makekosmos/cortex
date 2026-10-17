@@ -169,3 +169,64 @@ async fn inbound_batch_atomically_applies_remote_resolution_and_replays_idempote
     assert_eq!(guard, format!("sha256:{}", "ab".repeat(32)));
     shutdown(&mut owner).await;
 }
+
+#[tokio::test]
+async fn excluded_local_task_category_rejects_incoming_batch_without_advancing_cursor() {
+    let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
+    let peer_id = "paired-peer";
+    let endpoint = iroh::SecretKey::generate().public().to_string();
+    handle
+        .submit(
+            CommandContext::engine(),
+            EnrollPairedDeviceCommand::new("merge-test-device".into(), peer_id.into(), endpoint),
+        )
+        .await
+        .unwrap();
+    let profile = handle
+        .submit(
+            CommandContext::engine(),
+            SaveLocalSyncProfileCommand::new(
+                "merge-test-device".into(),
+                "phone".into(),
+                "Phone".into(),
+                true,
+                None,
+                vec![crate::data_platform::SyncProfileRule {
+                    resource_kind: "type".into(),
+                    resource_id: "core.task".into(),
+                    mode: crate::data_platform::SyncMode::None,
+                    filter: crate::data_platform::FilterV1::match_all(),
+                }],
+            ),
+        )
+        .await
+        .unwrap();
+    let identity = crate::protocol::sync_policy_identity(Some(&profile));
+    let batch = crate::application::sync_storage::TaskMergeBatch {
+        batch_id: "bb".repeat(16),
+        identity: identity.clone(),
+        after_position: 0,
+        through_position: 1,
+        entries: vec![crate::application::sync_storage::TaskMergeJournalEntry {
+            position: 1,
+            operation: operation('1', &[], "private on this device"),
+            expected_conflict_digest: None,
+        }],
+    };
+    assert!(matches!(
+        apply_batch(&handle, peer_id, "merge-test-device", identity, batch).await,
+        Err(DbError::Permission(_))
+    ));
+    let (operation_count, cursor_count): (i64, i64) = handle.with_connection(|connection| {
+        connection
+            .query_row(
+                "SELECT (SELECT COUNT(*) FROM task_merge_operations),
+                        (SELECT COUNT(*) FROM task_merge_inbound_progress)",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap()
+    });
+    assert_eq!((operation_count, cursor_count), (0, 0));
+    shutdown(&mut owner).await;
+}

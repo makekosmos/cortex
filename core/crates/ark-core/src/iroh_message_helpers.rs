@@ -13,6 +13,8 @@ fn message_variant_name(msg: &LanSyncMessage) -> &'static str {
         LanSyncMessage::LiveChange { .. } => "LiveChange",
         LanSyncMessage::LiveAck { .. } => "LiveAck",
         LanSyncMessage::LiveReceiptAck { .. } => "LiveReceiptAck",
+        LanSyncMessage::TaskMergeBatch { .. } => "TaskMergeBatch",
+        LanSyncMessage::TaskMergeBatchAck { .. } => "TaskMergeBatchAck",
         LanSyncMessage::ProtocolRejected { .. } => "ProtocolRejected",
         LanSyncMessage::PeerList { .. } => "PeerList",
         LanSyncMessage::Ping { .. } => "Ping",
