@@ -154,6 +154,7 @@ dependencies = [
  "ark-application",
  "ark-domain",
  "ark-net-policy",
+ "ark-store",
  "ark-sync",
  "async-trait",
  "chrono",
@@ -195,6 +196,17 @@ dependencies = [
 [[package]]
 name = "ark-net-policy"
 version = "0.1.0"
+
+[[package]]
+name = "ark-store"
+version = "0.1.0"
+dependencies = [
+ "ark-application",
+ "ark-domain",
+ "rusqlite",
+ "serde_json",
+ "tempfile",
+]
 
 [[package]]
 name = "ark-sync"

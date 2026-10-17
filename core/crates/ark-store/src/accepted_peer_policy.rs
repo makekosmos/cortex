@@ -1,3 +1,10 @@
+use super::{default_sync_policy_identity, sync_mode_name};
+use ark_application::sync_policy::{AcceptedPeerSyncPolicy, SyncProfileRule};
+use ark_domain::selective_sync::{FilterV1, SyncMode};
+use rusqlite::{Connection, OptionalExtension};
+use serde_json::Value;
+use std::collections::HashSet;
+
 /// Persist an authenticated receiver policy without allowing a stale session
 /// or replay to roll back the per-peer outbound selection.
 pub fn accept_peer_sync_policy(
@@ -168,8 +175,14 @@ fn parse_policy_rules_json(input: &str) -> Result<Vec<SyncProfileRule>, String> 
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod accepted_peer_sync_policy_tests {
     use super::*;
+    use crate::data_platform::{
+        ensure_schema, load_active_sync_profile, load_latest_sync_profile,
+        load_sync_profile_for_sync, upsert_sync_profile,
+    };
+    use ark_application::sync_policy::digest_sync_policy;
 
     fn policy_rule(resource_id: &str) -> SyncProfileRule {
         SyncProfileRule {

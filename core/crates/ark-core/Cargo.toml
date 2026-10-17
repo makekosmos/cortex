@@ -20,6 +20,7 @@ ark-application = { path = "../ark-application" }
 ark-domain = { path = "../ark-domain" }
 ark-sync = { path = "../ark-sync" }
 ark-net-policy = { path = "../ark-net-policy" }
+ark-store = { path = "../ark-store" }
 rusqlite.workspace = true
 tokio = { version = "1", features = [
   "rt-multi-thread",
