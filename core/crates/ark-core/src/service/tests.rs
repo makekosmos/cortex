@@ -50,6 +50,24 @@ impl ServiceFixture {
     pub(crate) fn db_path(&self) -> std::path::PathBuf {
         self.dir.path().join("ark.db")
     }
+
+    pub(crate) async fn shutdown(&self) {
+        if let Ok(mut db) = self.state.db.lock() {
+            *db = None;
+        }
+        let owner = self
+            .state
+            .db_owner
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .take();
+        if let Some(mut owner) = owner {
+            owner
+                .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(5))
+                .await
+                .expect("database actor shuts down before fixture directory removal");
+        }
+    }
 }
 
 impl Drop for ServiceFixture {

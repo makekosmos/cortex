@@ -331,6 +331,7 @@ async fn canonical_upsert_object_rpc_persists_registered_identity() {
         Ok(())
     })
     .unwrap();
+    fixture.shutdown().await;
 }
 
 #[tokio::test]
@@ -369,6 +370,7 @@ async fn canonical_task_write_keeps_legacy_local_hlc_fallback() {
         Ok(())
     })
     .unwrap();
+    fixture.shutdown().await;
 }
 
 #[tokio::test]
@@ -407,6 +409,7 @@ async fn canonical_upsert_object_rpc_rejects_omitted_version_without_side_effect
     })
     .unwrap();
     assert_eq!(object_count, 0);
+    fixture.shutdown().await;
 }
 
 #[tokio::test]
@@ -457,6 +460,7 @@ async fn canonical_upsert_object_rpc_rejects_invalid_payload_without_sync_mutati
     })
     .unwrap();
     assert_eq!((objects, versions), (0, 0));
+    fixture.shutdown().await;
 }
 
 #[tokio::test]
@@ -490,4 +494,5 @@ async fn canonical_upsert_object_rpc_rejects_legacy_alias_as_new_write() {
         result.unwrap_err(),
         "canonical_ingress:invalid_request:legacy_alias_new_write"
     );
+    fixture.shutdown().await;
 }
