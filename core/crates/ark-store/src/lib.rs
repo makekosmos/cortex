@@ -1,5 +1,6 @@
 pub mod data_platform;
 pub mod data_volume;
+pub mod integration_replication;
 pub mod open;
 pub mod schema;
 pub mod type_registry;

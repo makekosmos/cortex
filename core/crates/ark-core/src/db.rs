@@ -129,6 +129,7 @@ mod integration_replication_lease;
 mod integration_replication_publication;
 mod integration_replication_records;
 
+pub use ark_store::integration_replication::load_integration_node_grant;
 pub(in crate::db) use integration_credentials::upsert_integration_credential_envelope_record;
 pub use integration_replication_admission::integration_verification_status;
 #[cfg(test)]
@@ -140,9 +141,7 @@ pub use integration_replication_credentials::{
     load_integration_credential_envelope, load_latest_integration_credential_envelope,
 };
 pub use integration_replication_export::export_integration_replication;
-pub use integration_replication_grants::{
-    load_integration_node_grant, upsert_integration_node_grant,
-};
+pub use integration_replication_grants::upsert_integration_node_grant;
 pub use integration_replication_issuer_lookup::{
     check_integration_credential_fence, load_issuer_encryption_key,
     load_issuer_encryption_key_for_publish, CredentialFenceExpectation,

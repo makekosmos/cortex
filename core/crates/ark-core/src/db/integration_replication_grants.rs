@@ -1,5 +1,5 @@
 use super::integration_replication_common::{
-    persist_with_vector, require_newer_hlc, sqlite_i64, storage, u64_value,
+    persist_with_vector, require_newer_hlc, sqlite_i64, storage,
 };
 use super::load_authorized_node;
 use crate::integration_replication::{integration_node_id, NodeStatus};
@@ -13,14 +13,6 @@ fn status_value(status: IntegrationGrantStatus) -> &'static str {
     match status {
         IntegrationGrantStatus::Active => "active",
         IntegrationGrantStatus::Revoked => "revoked",
-    }
-}
-
-fn status(value: String) -> Result<IntegrationGrantStatus, String> {
-    match value.as_str() {
-        "active" => Ok(IntegrationGrantStatus::Active),
-        "revoked" => Ok(IntegrationGrantStatus::Revoked),
-        _ => Err(format!("invalid integration grant status: {value}")),
     }
 }
 
@@ -136,47 +128,4 @@ pub fn upsert_integration_node_grant(
             Ok(())
         },
     )
-}
-
-pub fn load_integration_node_grant(
-    conn: &Connection,
-    integration_id: &str,
-    node_id: &str,
-) -> Result<Option<IntegrationGrant>, String> {
-    let row = conn
-        .query_row(
-            "SELECT node_encryption_key, grant_epoch, status, authorized_at,
-                    revoked_at, revision, hlc FROM integration_node_grants
-             WHERE integration_id = ?1 AND node_id = ?2",
-            params![integration_id, node_id],
-            |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, i64>(1)?,
-                    row.get::<_, String>(2)?,
-                    row.get::<_, String>(3)?,
-                    row.get::<_, Option<String>>(4)?,
-                    row.get::<_, i64>(5)?,
-                    row.get::<_, String>(6)?,
-                ))
-            },
-        )
-        .optional()
-        .map_err(storage)?;
-    let Some((encryption, epoch, state, authorized, revoked, revision, hlc)) = row else {
-        return Ok(None);
-    };
-    let record = IntegrationGrant {
-        integration_id: integration_id.to_string(),
-        node_id: node_id.to_string(),
-        node_encryption_key: encryption,
-        grant_epoch: u64_value(epoch, "grant_epoch")?,
-        status: status(state)?,
-        authorized_at: authorized,
-        revoked_at: revoked,
-        revision: u64_value(revision, "revision")?,
-        hlc,
-    };
-    record.validate().map_err(|e| e.to_string())?;
-    Ok(Some(record))
 }
