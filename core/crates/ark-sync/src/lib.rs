@@ -2,6 +2,7 @@
 
 pub mod protocol;
 pub mod protocol_negotiation;
+pub mod registry_admission;
 pub mod transport;
 pub mod transport_select;
 

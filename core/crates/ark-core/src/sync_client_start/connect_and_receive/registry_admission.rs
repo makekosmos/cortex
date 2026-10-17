@@ -1,7 +1,7 @@
 use super::super::*;
 
 pub(super) struct PendingRegistryAdmission {
-    admission: crate::sync_registry_admission::DirectRegistryAdmission,
+    admission: ark_sync::registry_admission::DirectRegistryAdmission,
     local_device_id: String,
     protocol: NegotiatedProtocol,
     peer_record: PeerRecord,
@@ -17,13 +17,12 @@ impl PendingRegistryAdmission {
         peer_record: PeerRecord,
         on_registry_events: Arc<Mutex<Option<ClientOnRegistryEventsCallback>>>,
     ) -> Result<(Self, LanSyncMessage), String> {
-        let (admission, start) =
-            crate::sync_registry_admission::DirectRegistryAdmission::initiator(
-                local_device_id,
-                peer_device_id,
-                space_id,
-                protocol.clone(),
-            )?;
+        let (admission, start) = ark_sync::registry_admission::DirectRegistryAdmission::initiator(
+            local_device_id,
+            peer_device_id,
+            space_id,
+            protocol.clone(),
+        )?;
         Ok((
             Self {
                 admission,

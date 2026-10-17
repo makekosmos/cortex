@@ -1,16 +1,20 @@
-use crate::domain::device_registry::{
+//! Authenticated device-registry admission state machine for direct sync peers.
+//!
+//! The caller owns the connection and sends each returned protocol message;
+//! this module owns the challenge, proof, history exchange, and readiness rules.
+use crate::protocol::{generate_id, LanSyncMessage};
+use crate::protocol_negotiation::{generate_auth_nonce, NegotiatedProtocol, ProtocolCapability};
+use ark_application::registry_admission::RegistryAdmissionStorage;
+use ark_domain::device_registry::RegistryEvent;
+use ark_domain::device_registry::{
     DeviceId, RegistryHandshakeProof, RegistryHandshakeTranscript, RegistryHandshakeTranscriptDraft,
 };
-use crate::protocol::{
-    generate_auth_nonce, generate_id, LanSyncMessage, NegotiatedProtocol, ProtocolCapability,
-};
-use crate::replication_storage::SyncRuntimeStorage;
 
 const PAGE_SIZE: usize = 32;
 const MAX_PAGE_COUNT: u32 = 4096;
 
 #[cfg(test)]
-#[path = "sync_registry_admission_tests.rs"]
+#[path = "registry_admission_tests.rs"]
 mod tests;
 
 #[derive(Clone)]
@@ -32,7 +36,7 @@ enum AdmissionPhase {
     Ready,
 }
 
-pub(crate) struct DirectRegistryAdmission {
+pub struct DirectRegistryAdmission {
     local_device_id: DeviceId,
     peer_device_id: DeviceId,
     space_id: String,
@@ -42,18 +46,18 @@ pub(crate) struct DirectRegistryAdmission {
     session_revoked: bool,
 }
 
-pub(crate) struct AdmissionUpdate {
-    pub(crate) outgoing: Vec<LanSyncMessage>,
-    pub(crate) became_ready: bool,
-    pub(crate) exchange_complete: bool,
-    pub(crate) close_session: bool,
-    pub(crate) local_device_is_admitted: bool,
-    pub(crate) disabled_device_ids: Vec<String>,
-    pub(crate) applied_events: Vec<crate::domain::device_registry::RegistryEvent>,
+pub struct AdmissionUpdate {
+    pub outgoing: Vec<LanSyncMessage>,
+    pub became_ready: bool,
+    pub exchange_complete: bool,
+    pub close_session: bool,
+    pub local_device_is_admitted: bool,
+    pub disabled_device_ids: Vec<String>,
+    pub applied_events: Vec<RegistryEvent>,
 }
 
 impl DirectRegistryAdmission {
-    pub(crate) fn responder(
+    pub fn responder(
         local_device_id: &str,
         peer_device_id: &str,
         space_id: &str,
@@ -68,7 +72,7 @@ impl DirectRegistryAdmission {
         )
     }
 
-    pub(crate) fn initiator(
+    pub fn initiator(
         local_device_id: &str,
         peer_device_id: &str,
         space_id: &str,
@@ -96,7 +100,7 @@ impl DirectRegistryAdmission {
         Ok((admission, message))
     }
 
-    pub(crate) fn session_id(&self) -> Option<&str> {
+    pub fn session_id(&self) -> Option<&str> {
         self.session_id.as_deref()
     }
 
@@ -131,9 +135,9 @@ impl DirectRegistryAdmission {
         })
     }
 
-    pub(crate) async fn handle(
+    pub async fn handle<S: RegistryAdmissionStorage + ?Sized>(
         &mut self,
-        storage: &dyn SyncRuntimeStorage,
+        storage: &S,
         message: LanSyncMessage,
     ) -> Result<AdmissionUpdate, String> {
         let was_ready = matches!(self.phase, AdmissionPhase::Ready);
@@ -380,9 +384,9 @@ impl DirectRegistryAdmission {
         .map_err(|error| error.to_string())
     }
 
-    async fn begin_exchange(
+    async fn begin_exchange<S: RegistryAdmissionStorage + ?Sized>(
         &mut self,
-        storage: &dyn SyncRuntimeStorage,
+        storage: &S,
         session_id: &str,
     ) -> Result<Vec<LanSyncMessage>, String> {
         if self.local_device_id < self.peer_device_id {
@@ -396,9 +400,9 @@ impl DirectRegistryAdmission {
         }
     }
 
-    async fn load_pages(
+    async fn load_pages<S: RegistryAdmissionStorage + ?Sized>(
         &self,
-        storage: &dyn SyncRuntimeStorage,
+        storage: &S,
         session_id: &str,
     ) -> Result<Vec<LanSyncMessage>, String> {
         let (high_watermark, total_events, first_page) = storage

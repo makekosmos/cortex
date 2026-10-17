@@ -22,7 +22,6 @@ pub mod schema;
 pub mod service;
 pub mod space;
 pub mod sync_client;
-mod sync_registry_admission;
 pub mod sync_server;
 pub mod sync_transport;
 mod task_set;

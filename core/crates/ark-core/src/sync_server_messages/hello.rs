@@ -173,7 +173,7 @@ pub(super) async fn handle_hello(ctx: &MessageContext, peer_id: usize, msg: LanS
             return;
         }
 
-        let admission = match crate::sync_registry_admission::DirectRegistryAdmission::responder(
+        let admission = match ark_sync::registry_admission::DirectRegistryAdmission::responder(
             &my_device_id,
             &peer_device_id,
             &my_space_id,

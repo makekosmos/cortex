@@ -2,6 +2,7 @@ pub mod data_volume;
 pub mod external_ref;
 pub mod load_all_data;
 pub mod object_write;
+pub mod registry_admission;
 pub mod replication_storage;
 pub mod sync_policy;
 pub mod sync_storage;
