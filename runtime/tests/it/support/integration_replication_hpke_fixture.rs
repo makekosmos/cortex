@@ -159,7 +159,7 @@ pub fn catalog(origin: &str, size: u64, hash: &str) -> Vec<u8> {
     serde_json::to_vec(&document).unwrap()
 }
 
-pub async fn start_sync(host: &ArkHost, device: &str, port: u16, ticket: Option<&str>) {
+pub async fn start_sync(host: &ArkHost, device: &str, port: u16) {
     let response = host
         .request(
             "start_sync",
@@ -170,7 +170,7 @@ pub async fn start_sync(host: &ArkHost, device: &str, port: u16, ticket: Option<
                 "port": port,
                 "auth_secret": "hpke-replication-auth",
                 "use_iroh": true,
-                "iroh_peer_ticket": ticket,
+                "iroh_peer_ticket": null,
                 "discovery_enabled": false,
                 "bind": "loopback",
             }),
@@ -195,7 +195,7 @@ pub async fn start_hosts(setup: &support::IntegrationReplicationSetup) -> (ArkHo
     let recipient_host = ArkHost::open(setup.recipient_db.to_str().unwrap())
         .await
         .unwrap();
-    start_sync(&origin_host, &setup.origin.node_id, free_port(), None).await;
+    start_sync(&origin_host, &setup.origin.node_id, free_port()).await;
     let origin_ticket = origin_host
         .request("get_own_iroh_ticket", json!({}))
         .await
@@ -204,13 +204,7 @@ pub async fn start_hosts(setup: &support::IntegrationReplicationSetup) -> (ArkHo
         .as_str()
         .unwrap()
         .to_owned();
-    start_sync(
-        &recipient_host,
-        &setup.recipient.node_id,
-        free_port(),
-        Some(&origin_ticket),
-    )
-    .await;
+    start_sync(&recipient_host, &setup.recipient.node_id, free_port()).await;
     let recipient_ticket = recipient_host
         .request("get_own_iroh_ticket", json!({}))
         .await
@@ -219,40 +213,75 @@ pub async fn start_hosts(setup: &support::IntegrationReplicationSetup) -> (ArkHo
         .as_str()
         .unwrap()
         .to_owned();
-    start_sync(
-        &origin_host,
-        &setup.origin.node_id,
-        free_port(),
-        Some(&recipient_ticket),
-    )
-    .await;
-    let restarted_origin_ticket = origin_host
-        .request("get_own_iroh_ticket", json!({}))
+    let connect = recipient_host
+        .request(
+            "connect_with_pairing_code",
+            json!({"pairing_code": origin_ticket}),
+        )
         .await
-        .unwrap()
-        .data
-        .as_str()
-        .unwrap()
-        .to_owned();
-    start_sync(
-        &recipient_host,
-        &setup.recipient.node_id,
-        free_port(),
-        Some(&restarted_origin_ticket),
-    )
-    .await;
-    let restarted_recipient_ticket = recipient_host
-        .request("get_own_iroh_ticket", json!({}))
+        .unwrap();
+    assert!(connect.ok, "pairing connect failed: {:?}", connect.error);
+
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(45);
+    loop {
+        let snapshot = origin_host
+            .request("get_sync_snapshot", json!({}))
+            .await
+            .unwrap();
+        assert!(snapshot.ok, "sync snapshot failed: {:?}", snapshot.error);
+        let pending = snapshot
+            .data
+            .get("incoming_pairing_requests")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|requests| {
+                requests.iter().any(|request| {
+                    request.get("device_id") == Some(&json!(setup.recipient.node_id))
+                })
+            });
+        if pending {
+            break;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "origin did not receive recipient pairing request: {}",
+            snapshot.data
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    let accepted = origin_host
+        .request(
+            "accept_pairing",
+            json!({"device_id": setup.recipient.node_id}),
+        )
         .await
-        .unwrap()
-        .data
-        .as_str()
-        .unwrap()
-        .to_owned();
+        .unwrap();
+    assert!(
+        accepted.ok,
+        "pairing acceptance failed: {:?}",
+        accepted.error
+    );
+
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(45);
+    loop {
+        let snapshot = recipient_host
+            .request("get_sync_snapshot", json!({}))
+            .await
+            .unwrap();
+        assert!(snapshot.ok, "sync snapshot failed: {:?}", snapshot.error);
+        if snapshot.data["outgoing_pairing"]["status"] == "connected" {
+            break;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "recipient pairing did not complete: {}",
+            snapshot.data
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
     support::refresh_transport_public_keys_named(
         setup,
-        &restarted_origin_ticket,
-        &restarted_recipient_ticket,
+        &origin_ticket,
+        &recipient_ticket,
         PACKAGE_ID,
     )
     .unwrap();
