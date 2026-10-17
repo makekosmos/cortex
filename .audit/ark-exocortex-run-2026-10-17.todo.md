@@ -19,7 +19,7 @@ Rigor: high. The work changes replicated personal data, device admission, SQLite
 
 - [x] Decompose into atomic, independently-landable units. Sequence riskiest-unknown-first. Scaffold and verification come before features.
 - [x] Build the verification harness before the work, with the baseline captured from the pre-change state, so the check reads as "old value vs new value".
-- [ ] For one-way-door design decisions, run the architect skill. Skip it for mechanical work whose shape is already concrete.
+- [x] For one-way-door design decisions, run the architect skill. The sync-session ownership cut has a synthesized contract in `docs/ark-sync-sessions.md`.
 - [x] Decide what fans out. Parallelize only across seams, and give each worker its own worktree or branch. Don't over-fan.
 - [x] Write the designed phase list down. That list is what the human reviews.
 
@@ -60,5 +60,8 @@ Designed phases:
   - [x] Type restore failure separately from safe refusal and recovery-required; prove a real SQLite restore failure with successful rollback still fails the actor closed.
 - [ ] KOS-424: finish the remaining sync orchestration extraction and remove obsolete internal paths.
   - [x] Migrate `ark-core` callers to direct `ark-application` / `ark-domain` dependencies and remove the obsolete `application::sync_storage` and `domain` facades.
+  - [x] Compare two direct-session ownership designs with an independent judge; keep one session transition owner in `ark-sync`, with concrete WebSocket adapters in `ark-net` and composition in `ark-core`.
+  - [ ] Inventory direct server/client branches, storage operations, message ordering, callbacks, and task ownership before finalizing interfaces.
+  - [ ] Migrate production session ownership without changing wire/API behavior; remove the obsolete Core session and transport paths after callers move.
 - [ ] KOS-425: prove negative graph/feature fixtures and capture macOS, Windows, and Android release CI results.
 - [ ] Final audit, independent review, issue status reconciliation, and epic closure when every criterion is proven.
