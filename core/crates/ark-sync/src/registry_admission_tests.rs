@@ -5,22 +5,36 @@ use ark_domain::device_registry::{DeviceId, RegistryEvent, RegistryEventDraft, R
 use ed25519_dalek::SigningKey;
 use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 struct RegistryStorage {
     apply_result: RegistryPageApply,
     apply_calls: Arc<AtomicUsize>,
+    history_events: Vec<RegistryEvent>,
+    page_reads: Mutex<Vec<(i64, Option<i64>, usize)>>,
 }
 
 #[async_trait::async_trait]
 impl RegistryAdmissionStorage for RegistryStorage {
     async fn load_device_registry_events_page(
         &self,
-        _after_position: i64,
-        _high_watermark: Option<i64>,
-        _limit: usize,
+        after_position: i64,
+        high_watermark: Option<i64>,
+        limit: usize,
     ) -> Result<(i64, usize, Vec<RegistryEvent>), String> {
-        Ok((0, 0, Vec::new()))
+        self.page_reads.lock().expect("page read log lock").push((
+            after_position,
+            high_watermark,
+            limit,
+        ));
+        let high_watermark = high_watermark.unwrap_or(self.history_events.len() as i64);
+        let start = usize::try_from(after_position).map_err(|error| error.to_string())?;
+        let end = start
+            .saturating_add(limit)
+            .min(usize::try_from(high_watermark).map_err(|error| error.to_string())?)
+            .min(self.history_events.len());
+        let events = self.history_events[start.min(end)..end].to_vec();
+        Ok((high_watermark, self.history_events.len(), events))
     }
 
     async fn apply_device_registry_events(
@@ -102,7 +116,50 @@ fn storage(applied_events: Vec<RegistryEvent>, local_device_is_admitted: bool) -
             applied_events,
         },
         apply_calls: Arc::new(AtomicUsize::new(0)),
+        history_events: Vec::new(),
+        page_reads: Mutex::new(Vec::new()),
     }
+}
+
+#[tokio::test]
+async fn registry_history_pages_use_one_bounded_snapshot() {
+    let mut backend = storage(Vec::new(), true);
+    backend.history_events = vec![event(); REGISTRY_EVENT_PAGE_SIZE + 1];
+
+    let pages = load_registry_event_pages(&backend, "paging-session")
+        .await
+        .expect("build registry history pages");
+
+    assert_eq!(pages.len(), 2);
+    assert!(matches!(
+        &pages[0],
+        LanSyncMessage::RegistryEventsPage {
+            session_id,
+            page_index: 0,
+            page_count: 2,
+            events,
+        } if session_id == "paging-session" && events.len() == REGISTRY_EVENT_PAGE_SIZE
+    ));
+    assert!(matches!(
+        &pages[1],
+        LanSyncMessage::RegistryEventsPage {
+            session_id,
+            page_index: 1,
+            page_count: 2,
+            events,
+        } if session_id == "paging-session" && events.len() == 1
+    ));
+    assert_eq!(
+        *backend.page_reads.lock().expect("page read log lock"),
+        vec![
+            (0, None, REGISTRY_EVENT_PAGE_SIZE),
+            (
+                REGISTRY_EVENT_PAGE_SIZE as i64,
+                Some(33),
+                REGISTRY_EVENT_PAGE_SIZE
+            ),
+        ]
+    );
 }
 
 #[tokio::test]

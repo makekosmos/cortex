@@ -10,8 +10,8 @@ use ark_domain::device_registry::{
     DeviceId, RegistryHandshakeProof, RegistryHandshakeTranscript, RegistryHandshakeTranscriptDraft,
 };
 
-const PAGE_SIZE: usize = 32;
-const MAX_PAGE_COUNT: u32 = 4096;
+pub const REGISTRY_EVENT_PAGE_SIZE: usize = 32;
+pub const MAX_REGISTRY_EVENT_PAGE_COUNT: u32 = 4096;
 
 #[cfg(test)]
 #[path = "registry_admission_tests.rs"]
@@ -54,6 +54,59 @@ pub struct AdmissionUpdate {
     pub local_device_is_admitted: bool,
     pub disabled_device_ids: Vec<String>,
     pub applied_events: Vec<RegistryEvent>,
+}
+
+/// Build a bounded, stable registry history exchange for one admission
+/// session. Transports own sending these frames; this module owns pagination.
+pub async fn load_registry_event_pages<S: RegistryAdmissionStorage + ?Sized>(
+    storage: &S,
+    session_id: &str,
+) -> Result<Vec<LanSyncMessage>, String> {
+    let (high_watermark, total_events, first_page) = storage
+        .load_device_registry_events_page(0, None, REGISTRY_EVENT_PAGE_SIZE)
+        .await?;
+    let page_count = total_events
+        .saturating_add(REGISTRY_EVENT_PAGE_SIZE - 1)
+        .checked_div(REGISTRY_EVENT_PAGE_SIZE)
+        .unwrap_or_default()
+        .max(1);
+    let page_count = u32::try_from(page_count).map_err(|_| "registry_sync_page_count_overflow")?;
+    if page_count > MAX_REGISTRY_EVENT_PAGE_COUNT {
+        return Err("registry_sync_page_count_too_large".into());
+    }
+    let mut after_position = 0_i64;
+    let mut messages = Vec::with_capacity(page_count as usize);
+    for page_index in 0..page_count {
+        let events = if page_index == 0 {
+            first_page.clone()
+        } else {
+            storage
+                .load_device_registry_events_page(
+                    after_position,
+                    Some(high_watermark),
+                    REGISTRY_EVENT_PAGE_SIZE,
+                )
+                .await?
+                .2
+        };
+        if events.len() > REGISTRY_EVENT_PAGE_SIZE
+            || (page_index + 1 < page_count && events.len() != REGISTRY_EVENT_PAGE_SIZE)
+        {
+            return Err("registry_sync_snapshot_changed_or_invalid".into());
+        }
+        after_position = after_position
+            .checked_add(
+                i64::try_from(events.len()).map_err(|_| "registry_sync_page_size_overflow")?,
+            )
+            .ok_or("registry_sync_cursor_overflow")?;
+        messages.push(LanSyncMessage::RegistryEventsPage {
+            session_id: session_id.to_owned(),
+            page_index,
+            page_count,
+            events,
+        });
+    }
+    Ok(messages)
 }
 
 impl DirectRegistryAdmission {
@@ -267,12 +320,12 @@ impl DirectRegistryAdmission {
                     return Err("registry_sync_page_without_start".into());
                 }
                 if page_count == 0
-                    || page_count > MAX_PAGE_COUNT
-                    || events.len() > PAGE_SIZE
+                    || page_count > MAX_REGISTRY_EVENT_PAGE_COUNT
+                    || events.len() > REGISTRY_EVENT_PAGE_SIZE
                     || page_index >= page_count
                     || page_index != *next_page_index
                     || incoming_page_count.is_some_and(|count| count != page_count)
-                    || (page_index + 1 < page_count && events.len() != PAGE_SIZE)
+                    || (page_index + 1 < page_count && events.len() != REGISTRY_EVENT_PAGE_SIZE)
                 {
                     return Err("registry_sync_page_bounds_or_order".into());
                 }
@@ -405,52 +458,7 @@ impl DirectRegistryAdmission {
         storage: &S,
         session_id: &str,
     ) -> Result<Vec<LanSyncMessage>, String> {
-        let (high_watermark, total_events, first_page) = storage
-            .load_device_registry_events_page(0, None, PAGE_SIZE)
-            .await?;
-        let page_count = total_events
-            .saturating_add(PAGE_SIZE - 1)
-            .checked_div(PAGE_SIZE)
-            .unwrap_or_default()
-            .max(1);
-        let page_count =
-            u32::try_from(page_count).map_err(|_| "registry_sync_page_count_overflow")?;
-        if page_count > MAX_PAGE_COUNT {
-            return Err("registry_sync_page_count_too_large".into());
-        }
-        let mut after_position = 0_i64;
-        let mut messages = Vec::with_capacity(page_count as usize);
-        for page_index in 0..page_count {
-            let events = if page_index == 0 {
-                first_page.clone()
-            } else {
-                storage
-                    .load_device_registry_events_page(
-                        after_position,
-                        Some(high_watermark),
-                        PAGE_SIZE,
-                    )
-                    .await?
-                    .2
-            };
-            if events.len() > PAGE_SIZE
-                || (page_index + 1 < page_count && events.len() != PAGE_SIZE)
-            {
-                return Err("registry_sync_snapshot_changed_or_invalid".into());
-            }
-            after_position = after_position
-                .checked_add(
-                    i64::try_from(events.len()).map_err(|_| "registry_sync_page_size_overflow")?,
-                )
-                .ok_or("registry_sync_cursor_overflow")?;
-            messages.push(LanSyncMessage::RegistryEventsPage {
-                session_id: session_id.to_owned(),
-                page_index,
-                page_count,
-                events,
-            });
-        }
-        Ok(messages)
+        load_registry_event_pages(storage, session_id).await
     }
 
     fn capability_ids(&self) -> Vec<String> {

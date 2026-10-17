@@ -1,7 +1,5 @@
 use super::*;
 
-const REGISTRY_PAGE_SIZE: usize = 32;
-const MAX_REGISTRY_PAGE_COUNT: u32 = 4096;
 const MAX_REGISTRY_EXCHANGE_RETRIES: u8 = 2;
 
 impl RelaySync {
@@ -35,7 +33,7 @@ impl RelaySync {
             },
         )
         .await?;
-        self.send_registry_pages(peer_device_id, transport_public_key, &session_id)
+        self.send_registry_pages(transport_public_key, &session_id)
             .await
     }
 
@@ -80,67 +78,24 @@ impl RelaySync {
             remote_digest: None,
         });
         drop(peers);
-        self.send_registry_pages(peer_device_id, transport_public_key, &session_id)
+        self.send_registry_pages(transport_public_key, &session_id)
             .await
     }
 
     async fn send_registry_pages(
         &self,
-        peer_device_id: &str,
         transport_public_key: &str,
         session_id: &str,
     ) -> Result<(), String> {
-        let (high_watermark, total_events, first_page) = self
-            .storage
-            .load_device_registry_events_page(0, None, REGISTRY_PAGE_SIZE)
-            .await?;
-        let page_count = total_events
-            .saturating_add(REGISTRY_PAGE_SIZE - 1)
-            .checked_div(REGISTRY_PAGE_SIZE)
-            .unwrap_or_default()
-            .max(1);
-        let page_count = u32::try_from(page_count)
-            .map_err(|_| "registry_sync_page_count_overflow".to_owned())?;
-        if page_count > MAX_REGISTRY_PAGE_COUNT {
-            return Err("registry_sync_page_count_too_large".into());
+        for message in ark_sync::registry_admission::load_registry_event_pages(
+            self.storage.as_ref(),
+            session_id,
+        )
+        .await?
+        {
+            self.send_registry_control(transport_public_key, message)
+                .await?;
         }
-        let mut after_position = 0_i64;
-        for page_index in 0..page_count {
-            let events = if page_index == 0 {
-                first_page.clone()
-            } else {
-                self.storage
-                    .load_device_registry_events_page(
-                        after_position,
-                        Some(high_watermark),
-                        REGISTRY_PAGE_SIZE,
-                    )
-                    .await?
-                    .2
-            };
-            if events.len() > REGISTRY_PAGE_SIZE
-                || (page_index + 1 < page_count && events.len() != REGISTRY_PAGE_SIZE)
-            {
-                return Err("registry_sync_snapshot_changed_or_invalid".into());
-            }
-            after_position = after_position
-                .checked_add(
-                    i64::try_from(events.len())
-                        .map_err(|_| "registry_sync_page_size_overflow".to_owned())?,
-                )
-                .ok_or_else(|| "registry_sync_cursor_overflow".to_owned())?;
-            self.send_registry_control(
-                transport_public_key,
-                LanSyncMessage::RegistryEventsPage {
-                    session_id: session_id.to_owned(),
-                    page_index,
-                    page_count,
-                    events,
-                },
-            )
-            .await?;
-        }
-        let _ = peer_device_id;
         Ok(())
     }
 
@@ -154,9 +109,9 @@ impl RelaySync {
         events: Vec<crate::domain::device_registry::RegistryEvent>,
     ) -> Result<(), String> {
         if page_count == 0
-            || page_count > MAX_REGISTRY_PAGE_COUNT
+            || page_count > ark_sync::registry_admission::MAX_REGISTRY_EVENT_PAGE_COUNT
             || page_index >= page_count
-            || events.len() > REGISTRY_PAGE_SIZE
+            || events.len() > ark_sync::registry_admission::REGISTRY_EVENT_PAGE_SIZE
         {
             return Err("registry_sync_page_bounds".into());
         }
@@ -187,7 +142,9 @@ impl RelaySync {
         {
             return Err("registry_sync_session_mismatch".into());
         }
-        if page_index + 1 < page_count && events.len() != REGISTRY_PAGE_SIZE {
+        if page_index + 1 < page_count
+            && events.len() != ark_sync::registry_admission::REGISTRY_EVENT_PAGE_SIZE
+        {
             return Err("registry_sync_short_nonterminal_page".into());
         }
         let page_apply = self
@@ -343,8 +300,7 @@ impl RelaySync {
                         },
                     )
                     .await?;
-                    self.send_registry_pages(peer_device_id, &endpoint, &session_id)
-                        .await?;
+                    self.send_registry_pages(&endpoint, &session_id).await?;
                     return Ok(());
                 }
                 self.transport.unbind_peer(peer_device_id)?;
