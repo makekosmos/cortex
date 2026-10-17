@@ -1,5 +1,5 @@
 use super::BackfillBarrier;
-use ark_core::application::sync_storage::{TaskMergeJournalPage, TaskMergeJournalPort};
+use ark_core::application::sync_storage::{PolicyBoundTaskMergeJournalPage, TaskMergeJournalPort};
 use ark_core::sync_server::AuthenticatedEntityBackend;
 use ark_core::types::SyncEntity;
 
@@ -21,12 +21,19 @@ impl TaskMergeJournalPort for BackfillBarrier {
     async fn task_merge_journal_page(
         &self,
         peer_device_id: &str,
+        expected_identity: &ark_core::application::sync_storage::PolicyIdentity,
         after_position: i64,
         through_position: i64,
         limit: usize,
-    ) -> Result<TaskMergeJournalPage, String> {
+    ) -> Result<PolicyBoundTaskMergeJournalPage, String> {
         self.inner
-            .task_merge_journal_page(peer_device_id, after_position, through_position, limit)
+            .task_merge_journal_page(
+                peer_device_id,
+                expected_identity,
+                after_position,
+                through_position,
+                limit,
+            )
             .await
     }
 }

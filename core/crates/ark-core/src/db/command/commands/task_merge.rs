@@ -1,5 +1,5 @@
 use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError, DbQuery};
-use crate::application::sync_storage::TaskMergeJournalPage;
+use crate::application::sync_storage::{PolicyBoundTaskMergeJournalPage, PolicyIdentity};
 use crate::db::task_merge::{
     append_operation, read_conflict_set_result, read_journal_page, TaskMergeAppendResult,
     TaskMergeError, TaskMergeReadResult,
@@ -61,6 +61,7 @@ pub(crate) struct TaskConflictSetQuery {
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct TaskMergeJournalPageQuery {
     peer_id: String,
+    expected_identity: PolicyIdentity,
     after_position: i64,
     through_position: i64,
     limit: usize,
@@ -69,12 +70,14 @@ pub(crate) struct TaskMergeJournalPageQuery {
 impl TaskMergeJournalPageQuery {
     pub(crate) fn new(
         peer_id: String,
+        expected_identity: PolicyIdentity,
         after_position: i64,
         through_position: i64,
         limit: usize,
     ) -> Self {
         Self {
             peer_id,
+            expected_identity,
             after_position,
             through_position,
             limit,
@@ -85,7 +88,7 @@ impl TaskMergeJournalPageQuery {
 impl sealed::Sealed for TaskMergeJournalPageQuery {}
 
 impl DbQuery for TaskMergeJournalPageQuery {
-    type Output = TaskMergeJournalPage;
+    type Output = PolicyBoundTaskMergeJournalPage;
 
     fn class(&self) -> CommandClass {
         CommandClass::SyncLive
@@ -101,13 +104,35 @@ impl DbQuery for TaskMergeJournalPageQuery {
         connection: &rusqlite::Connection,
     ) -> Result<Self::Output, DbError> {
         context.require_sync_peer_matches(&self.peer_id)?;
-        read_journal_page(
+        let policy =
+            crate::data_platform::load_accepted_peer_sync_policy(connection, &self.peer_id)
+                .map_err(DbError::from_application_error)?;
+        let identity = policy.as_ref().map_or_else(
+            crate::data_platform::default_sync_policy_identity,
+            |policy| policy.identity(),
+        );
+        if identity != self.expected_identity {
+            return Err(DbError::Permission(
+                "stale_or_unnegotiated_sync_policy".into(),
+            ));
+        }
+        if let Some(policy) = policy.filter(|policy| policy.active) {
+            if policy.selective_profile().rule("type", "core.task")
+                != crate::data_platform::SyncMode::Full
+            {
+                return Err(DbError::Permission(
+                    "task_merge_policy_requires_full_type_sync".into(),
+                ));
+            }
+        }
+        let page = read_journal_page(
             connection,
             self.after_position,
             self.through_position,
             self.limit,
         )
-        .map_err(map_task_merge_error)
+        .map_err(map_task_merge_error)?;
+        Ok(PolicyBoundTaskMergeJournalPage { identity, page })
     }
 }
 

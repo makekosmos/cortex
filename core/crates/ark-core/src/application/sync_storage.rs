@@ -89,15 +89,22 @@ pub struct TaskMergeJournalPage {
     pub entries: Vec<TaskMergeJournalEntry>,
 }
 
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct PolicyBoundTaskMergeJournalPage {
+    pub identity: PolicyIdentity,
+    pub page: TaskMergeJournalPage,
+}
+
 #[async_trait::async_trait]
 pub trait TaskMergeJournalPort: Send + Sync {
     async fn task_merge_journal_page(
         &self,
         peer_device_id: &str,
+        expected_identity: &PolicyIdentity,
         after_position: i64,
         through_position: i64,
         limit: usize,
-    ) -> Result<TaskMergeJournalPage, String>;
+    ) -> Result<PolicyBoundTaskMergeJournalPage, String>;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

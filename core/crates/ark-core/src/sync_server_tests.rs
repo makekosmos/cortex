@@ -117,14 +117,21 @@ pub(crate) mod tests {
         async fn task_merge_journal_page(
             &self,
             _peer_device_id: &str,
+            expected_identity: &crate::application::sync_storage::PolicyIdentity,
             _after_position: i64,
             through_position: i64,
             _limit: usize,
-        ) -> Result<TaskMergeJournalPage, String> {
-            Ok(TaskMergeJournalPage {
-                through_position,
-                entries: Vec::new(),
-            })
+        ) -> Result<crate::application::sync_storage::PolicyBoundTaskMergeJournalPage, String>
+        {
+            Ok(
+                crate::application::sync_storage::PolicyBoundTaskMergeJournalPage {
+                    identity: expected_identity.clone(),
+                    page: TaskMergeJournalPage {
+                        through_position,
+                        entries: Vec::new(),
+                    },
+                },
+            )
         }
     }
     #[async_trait::async_trait]
