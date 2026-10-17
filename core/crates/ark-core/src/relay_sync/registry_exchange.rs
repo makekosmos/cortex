@@ -437,9 +437,17 @@ impl RelaySync {
         transport_public_key: &str,
         message: LanSyncMessage,
     ) -> Result<(), String> {
-        self.transport
+        match self
+            .transport
             .send_to_transport_peer(transport_public_key, message)
             .await
+        {
+            Ok(crate::sync_transport::AddressedSendOutcome::Sent) => Ok(()),
+            Ok(crate::sync_transport::AddressedSendOutcome::PeerOffline) => {
+                Err("transport peer is offline".into())
+            }
+            Err(error) => Err(error),
+        }
     }
 
     pub(super) async fn transport_key_matches(&self, peer_device_id: &str, endpoint: &str) -> bool {

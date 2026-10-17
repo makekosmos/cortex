@@ -39,6 +39,12 @@ pub enum TransportEvent {
     },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AddressedSendOutcome {
+    Sent,
+    PeerOffline,
+}
+
 /// Object-safe transport abstraction consumed by `RelaySync`.
 ///
 /// Uses `async_trait` to keep the transport usable behind `Arc<dyn SyncTransport>`.
@@ -101,7 +107,7 @@ pub trait SyncTransport: Send + Sync {
         &self,
         _transport_public_key: &str,
         _msg: LanSyncMessage,
-    ) -> Result<(), String> {
+    ) -> Result<AddressedSendOutcome, String> {
         Err("transport-key addressed send is not supported".into())
     }
 

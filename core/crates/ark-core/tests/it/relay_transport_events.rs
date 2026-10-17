@@ -52,8 +52,8 @@ impl SyncTransport for StubTransport {
         &self,
         _transport_public_key: &str,
         _msg: LanSyncMessage,
-    ) -> Result<(), String> {
-        Ok(())
+    ) -> Result<ark_core::sync_transport::AddressedSendOutcome, String> {
+        Ok(ark_core::sync_transport::AddressedSendOutcome::Sent)
     }
 
     async fn stop(&self) {}

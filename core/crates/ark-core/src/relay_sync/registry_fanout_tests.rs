@@ -50,7 +50,7 @@ impl SyncTransport for RegistryFanoutTransport {
         &self,
         endpoint: &str,
         message: LanSyncMessage,
-    ) -> Result<(), String> {
+    ) -> Result<crate::sync_transport::AddressedSendOutcome, String> {
         self.operations
             .lock()
             .unwrap()
@@ -59,7 +59,7 @@ impl SyncTransport for RegistryFanoutTransport {
             return Err("injected addressed-send failure".into());
         }
         self.sent.lock().unwrap().push((endpoint.into(), message));
-        Ok(())
+        Ok(crate::sync_transport::AddressedSendOutcome::Sent)
     }
 
     fn disconnect_transport_peer(&self, endpoint: &str) -> Result<(), String> {

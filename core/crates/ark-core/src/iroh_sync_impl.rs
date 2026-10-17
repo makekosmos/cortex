@@ -345,7 +345,7 @@ impl SyncTransport for IrohTransport {
         &self,
         transport_public_key: &str,
         msg: LanSyncMessage,
-    ) -> Result<(), String> {
+    ) -> Result<crate::sync_transport::AddressedSendOutcome, String> {
         if !matches!(
             msg,
             LanSyncMessage::PairingRejected { .. }
@@ -365,17 +365,22 @@ impl SyncTransport for IrohTransport {
         // Await the write: the caller (decline) closes the connection right
         // after, so a fire-and-forget rejection would be lost.
         let (completion_tx, completion_rx) = tokio::sync::oneshot::channel();
-        self.out_tx
+        if self
+            .out_tx
             .send(OutgoingMessage {
                 target: Some(endpoint_id),
                 msg,
                 completion: Some(Arc::new(std::sync::Mutex::new(Some(completion_tx)))),
             })
-            .map_err(|_| "iroh transport peer is not connected".to_string())?;
+            .is_err()
+        {
+            return Ok(crate::sync_transport::AddressedSendOutcome::PeerOffline);
+        }
         tokio::time::timeout(Duration::from_secs(5), completion_rx)
             .await
             .map_err(|_| "iroh addressed writer timed out".to_string())?
             .map_err(|_| "iroh addressed writer stopped".to_string())?
+            .map(|()| crate::sync_transport::AddressedSendOutcome::Sent)
     }
 
     fn unbind_peer(&self, device_id: &str) -> Result<(), String> {

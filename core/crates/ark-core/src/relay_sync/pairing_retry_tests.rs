@@ -45,14 +45,18 @@ impl SyncTransport for FailOncePairingAcceptedTransport {
         Ok(())
     }
 
-    async fn send_to_transport_peer(&self, _: &str, message: LanSyncMessage) -> Result<(), String> {
+    async fn send_to_transport_peer(
+        &self,
+        _: &str,
+        message: LanSyncMessage,
+    ) -> Result<crate::sync_transport::AddressedSendOutcome, String> {
         if matches!(message, LanSyncMessage::PairingAccepted { .. }) {
             self.acceptance_attempts.fetch_add(1, Ordering::SeqCst);
             if self.fail_next_acceptance.swap(false, Ordering::SeqCst) {
                 return Err("injected PairingAccepted send failure".into());
             }
         }
-        Ok(())
+        Ok(crate::sync_transport::AddressedSendOutcome::Sent)
     }
 
     async fn stop(&self) {}

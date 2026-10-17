@@ -219,7 +219,8 @@ impl RelaySync {
                     break;
                 }
                 if let Err(error) = self
-                    .send_registry_control(
+                    .transport
+                    .send_to_transport_peer(
                         &endpoint,
                         LanSyncMessage::RegistryEventUpdate {
                             session_id: session_id.clone(),
@@ -238,7 +239,8 @@ impl RelaySync {
             if let Some(session_id) = session_id {
                 for event in control_events {
                     if let Err(error) = self
-                        .send_registry_control(
+                        .transport
+                        .send_to_transport_peer(
                             &endpoint,
                             LanSyncMessage::RegistryEventUpdate {
                                 session_id: session_id.clone(),

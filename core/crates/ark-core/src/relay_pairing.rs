@@ -161,7 +161,7 @@ impl RelaySync {
                 }
             }
             if send_pairing_accepted {
-                if let Err(error) = self
+                let send_result = self
                     .transport
                     .send_to_transport_peer(
                         &transport_public_key,
@@ -169,8 +169,15 @@ impl RelaySync {
                             device_id: self.config.device_id.clone(),
                         },
                     )
-                    .await
-                {
+                    .await;
+                let failure = match send_result {
+                    Ok(crate::sync_transport::AddressedSendOutcome::Sent) => None,
+                    Ok(crate::sync_transport::AddressedSendOutcome::PeerOffline) => {
+                        Some("transport peer is offline".to_owned())
+                    }
+                    Err(error) => Some(error),
+                };
+                if let Some(error) = failure {
                     self.rollback_transport_admission(&from_device_id, &transport_public_key)
                         .await;
                     return Err(format!("failed to send pairing acceptance: {error}"));
