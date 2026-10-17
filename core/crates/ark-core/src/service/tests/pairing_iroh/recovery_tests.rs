@@ -42,6 +42,108 @@ async fn note_title(state: &Arc<ServiceState>, id: &str) -> Option<String> {
         .map(str::to_owned)
 }
 
+mod pending_usage_recovery_tests;
+
+async fn seed_usage_sources(state: &Arc<ServiceState>) {
+    handle_request(
+        state,
+        Request::UpsertTrackedApp {
+            tracked_app: TrackedApp {
+                id: "recovery-test-app".into(),
+                platform: "test".into(),
+                exe_path: "/recovery-test".into(),
+                normalized_exe_path: "/recovery-test".into(),
+                process_name: "recovery-test".into(),
+                display_name: Some("Recovery test".into()),
+                publisher: None,
+                icon_ref: None,
+                first_seen_at: "2026-10-17T00:00:00.000Z".into(),
+                last_seen_at: "2026-10-17T00:00:00.000Z".into(),
+            },
+            device_id: Some("device-a".into()),
+        },
+    )
+    .await
+    .expect("commit tracked app through Engine");
+    handle_request(
+        state,
+        Request::UpsertUsageSession {
+            usage_session: UsageSession {
+                id: "recovery-test-session".into(),
+                tracked_app_id: "recovery-test-app".into(),
+                device_id: "device-a".into(),
+                device_name: "Device A".into(),
+                platform: "test".into(),
+                started_at: "2026-10-17T00:00:00.000Z".into(),
+                ended_at: None,
+                runtime_ms: 0,
+                foreground_ms: 0,
+                idle_ms: 0,
+                window_title: Some("Recovery test".into()),
+                process_name: "recovery-test".into(),
+                exe_path: "/recovery-test".into(),
+                pid_start: Some(1),
+                pid_end: None,
+                meta_json: json!({}),
+            },
+            device_id: Some("device-a".into()),
+        },
+    )
+    .await
+    .expect("commit usage session through Engine");
+}
+
+async fn upsert_usage_event(state: &Arc<ServiceState>, id: &str, occurred_at: &str) {
+    handle_request(
+        state,
+        Request::UpsertUsageEvent {
+            usage_event: UsageEvent {
+                id: id.into(),
+                tracked_app_id: "recovery-test-app".into(),
+                usage_session_id: Some("recovery-test-session".into()),
+                device_id: "device-a".into(),
+                device_name: "Device A".into(),
+                platform: "test".into(),
+                occurred_at: occurred_at.into(),
+                kind: "foreground".into(),
+                window_title: Some("Recovery test".into()),
+                process_name: "recovery-test".into(),
+                exe_path: "/recovery-test".into(),
+                pid: Some(1),
+                is_foreground: true,
+                is_idle: false,
+                meta_json: json!({}),
+            },
+            device_id: Some("device-a".into()),
+        },
+    )
+    .await
+    .expect("commit usage event through Engine");
+}
+
+fn usage_event_sequence(dir: &crate::test_support::TestTempDir, id: &str) -> i64 {
+    let connection = rusqlite::Connection::open(dir.path().join("ark.db")).unwrap();
+    connection
+        .query_row(
+            "SELECT seq FROM usage_sync_log
+             WHERE device_id = 'device-a' AND entity_type = 'usage_event' AND entity_id = ?1",
+            [id],
+            |row| row.get(0),
+        )
+        .unwrap()
+}
+
+fn has_usage_event(dir: &crate::test_support::TestTempDir, id: &str) -> bool {
+    let connection = rusqlite::Connection::open(dir.path().join("ark.db")).unwrap();
+    connection
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM usage_events WHERE id = ?1)",
+            [id],
+            |row| row.get(0),
+        )
+        .unwrap()
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn stale_restore_is_refused_after_existing_iroh_peer_received_change() {
     let (fixture_a, fixture_b, _) = pending_pairing().await;
