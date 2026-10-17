@@ -1,7 +1,7 @@
 use super::*;
 #[tokio::test]
 async fn production_ws_reaps_each_sequential_request_on_one_connection() {
-    let (_dir, server) = production_ws_fixture().await;
+    let (_dir, ark, server) = production_ws_fixture().await;
     let shutdown = server.shutdown_handle();
     let dispatcher = server.dispatcher();
     let bus = server.command_bus_handle();
@@ -46,11 +46,13 @@ async fn production_ws_reaps_each_sequential_request_on_one_connection() {
     assert_eq!(shutdown.request_task_count(), 0);
     assert_eq!(dispatcher.live_owner_count(), 0);
     assert_eq!(bus.registration_count_sync(), 0);
+    drop(dispatcher);
+    shutdown_test_ark(ark).await;
 }
 
 #[tokio::test]
 async fn production_ws_disconnect_cancels_stalled_request_without_replay() {
-    let (_dir, server) = production_ws_fixture().await;
+    let (_dir, ark, server) = production_ws_fixture().await;
     let shutdown = server.shutdown_handle();
     let dispatcher = server.dispatcher();
     let bus = server.command_bus_handle();
@@ -124,4 +126,6 @@ async fn production_ws_disconnect_cancels_stalled_request_without_replay() {
     assert_eq!(shutdown.request_task_count(), 0);
     assert_eq!(dispatcher.live_owner_count(), 0);
     assert_eq!(bus.registration_count_sync(), 0);
+    drop(dispatcher);
+    shutdown_test_ark(ark).await;
 }

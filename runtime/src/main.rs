@@ -1198,7 +1198,7 @@ mod tests {
         let protocol_usage = Arc::new(ProtocolUsageStore::open(dir.path()).unwrap());
         let package_service = Arc::new(PackageService::open(dir.path()).unwrap());
         let ws = WsServer::bind(
-            ark,
+            ark.clone(),
             "t".repeat(64),
             dir.path().to_path_buf(),
             Arc::new(
@@ -1359,6 +1359,12 @@ mod tests {
         // holds fixture files past the tempdir cleanup (KOS-270).
         let _ = api_shutdown.shutdown().await;
         let _ = http_task.await;
+        drop(ws_dispatcher);
+        drop(ws_command_bus);
+        let ark = Arc::try_unwrap(ark).unwrap_or_else(|_| panic!("servers released ArkHost"));
+        ark.shutdown(std::time::Instant::now() + std::time::Duration::from_secs(30))
+            .await
+            .unwrap();
     }
 
     #[test]

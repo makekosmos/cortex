@@ -50,14 +50,16 @@ pub struct ArkResponse {
 /// unchanged). Events arrive from the service's broadcast bus and are
 /// re-published on `events_tx` together with engine-side `emit_event`s.
 pub struct ArkHost {
-    service: ArkService,
+    service: Option<ArkService>,
     events_tx: broadcast::Sender<(String, serde_json::Value)>,
-    events_task: tokio::task::JoinHandle<()>,
+    events_task: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl Drop for ArkHost {
     fn drop(&mut self) {
-        self.events_task.abort();
+        if let Some(events_task) = self.events_task.take() {
+            events_task.abort();
+        }
     }
 }
 
@@ -145,9 +147,9 @@ impl ArkHost {
             }
         });
         Ok(Self {
-            service,
+            service: Some(service),
             events_tx,
-            events_task,
+            events_task: Some(events_task),
         })
     }
 
@@ -160,7 +162,11 @@ impl ArkHost {
         operation: &str,
         params: serde_json::Value,
     ) -> ArkResult<ArkResponse> {
-        match self.service.call(operation, params).await {
+        let service = self
+            .service
+            .as_ref()
+            .expect("ArkHost service is present until shutdown");
+        match service.call(operation, params).await {
             Ok(data) => Ok(ArkResponse {
                 ok: true,
                 data,
@@ -195,7 +201,25 @@ impl ArkHost {
     /// Diagnostics: number of ARK handler panics the service worker caught
     /// (each followed by a DB reopen).
     pub fn panic_count(&self) -> u64 {
-        self.service.panic_count()
+        self.service
+            .as_ref()
+            .expect("ArkHost service is present until shutdown")
+            .panic_count()
+    }
+
+    /// Stop accepting work and wait for the ARK worker to close its database
+    /// owner before returning. Call this during orderly Engine shutdown and
+    /// before removing a database directory in tests.
+    pub async fn shutdown(mut self, deadline: std::time::Instant) -> ArkResult<()> {
+        if let Some(events_task) = self.events_task.take() {
+            events_task.abort();
+            let _ = events_task.await;
+        }
+        let service = self
+            .service
+            .take()
+            .expect("ArkHost service is present until shutdown");
+        service.shutdown(deadline).await.map_err(Into::into)
     }
 }
 
@@ -249,6 +273,12 @@ fn system_windows_dir() -> Option<&'static str> {
 mod tests {
     use super::*;
 
+    async fn shutdown(host: ArkHost) {
+        host.shutdown(std::time::Instant::now() + std::time::Duration::from_secs(30))
+            .await
+            .unwrap();
+    }
+
     /// Envelope coverage moved here from the sidecar tests: an ok:true
     /// response carries data, an ok:false carries the handler error, and an
     /// unavailable service maps to `Unavailable`.
@@ -280,6 +310,7 @@ mod tests {
             .unwrap();
         assert!(!malformed.ok);
         assert!(malformed.error.is_some());
+        shutdown(host).await;
     }
 
     #[tokio::test]
@@ -298,6 +329,7 @@ mod tests {
             .expect("admission errors remain ArkResponse values");
         assert!(!response.ok);
         assert!(response.error.unwrap().contains("admission size limits"));
+        shutdown(host).await;
     }
 
     #[tokio::test]
@@ -330,6 +362,7 @@ mod tests {
             count += 1;
         }
         assert_eq!(count, 2, "ArkResponse golden corpus is incomplete");
+        shutdown(host).await;
     }
 
     #[tokio::test]
@@ -345,6 +378,7 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(name, "ark_host_test_event");
+        shutdown(host).await;
     }
 
     /// KOS-287: the real %SystemRoot% is resolved at ArkHost::open and fed to

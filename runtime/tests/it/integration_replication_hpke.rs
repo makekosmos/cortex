@@ -239,8 +239,6 @@ async fn signed_hpke_replication_reaches_offline_provider_and_rejects_stale_inpu
         }
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
-    drop(origin_host);
-
     finish::receive_and_validate(
         &marker,
         &setup,
@@ -255,6 +253,14 @@ async fn signed_hpke_replication_reaches_offline_provider_and_rejects_stale_inpu
     // tempdir is removed (KOS-270).
     origin_packages
         .set_enabled(PACKAGE_ID, PACKAGE_VERSION, false)
+        .await
+        .unwrap();
+    origin_host
+        .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(30))
+        .await
+        .unwrap();
+    recipient_host
+        .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(30))
         .await
         .unwrap();
 }

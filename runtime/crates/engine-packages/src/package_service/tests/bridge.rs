@@ -336,6 +336,12 @@ async fn catalog_bridge_runs_through_service() {
     // Drain worker tasks so nothing holds the test dir's files past
     // tempdir cleanup (KOS-270).
     supervisor.stop_all().await.expect("stop all workers");
+    drop(service);
+    drop(supervisor);
+    let ark = Arc::try_unwrap(ark).unwrap_or_else(|_| panic!("bridge worker released ArkHost"));
+    ark.shutdown(std::time::Instant::now() + std::time::Duration::from_secs(30))
+        .await
+        .expect("ARK closes before bridge fixture cleanup");
 }
 
 // Native-app tests live in package_service/native_tests.rs (KOS-265) —

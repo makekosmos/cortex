@@ -257,4 +257,8 @@ async fn package_state_ops_resolve_version_for_id_only_calls() {
     .await;
     assert!(uninstalled.ok, "{:?}", uninstalled.error);
     assert_eq!(uninstalled.data["uninstalled"], true);
+    let ark = Arc::try_unwrap(ark).unwrap_or_else(|_| panic!("package operation released ArkHost"));
+    ark.shutdown(std::time::Instant::now() + std::time::Duration::from_secs(30))
+        .await
+        .unwrap();
 }

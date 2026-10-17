@@ -283,6 +283,13 @@ async fn cortex_consumer_runs_signed_replication_over_two_core_nodes() {
         "valid frame for an authorized but disconnected foreign recipient must fail before wire"
     );
 
-    drop(origin);
+    origin
+        .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(30))
+        .await
+        .unwrap();
     offline::verify_source_offline_refresh(&setup, &recipient, data_dir.path(), &packages).await;
+    recipient
+        .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(30))
+        .await
+        .unwrap();
 }

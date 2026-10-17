@@ -135,13 +135,21 @@ fn synthetic_two_node_fixture_is_plaintext_free_and_deterministic() {
 #[tokio::test]
 async fn core_pair_setup_and_drop_reaps_children() {
     let fixture = fixture();
-    let (_origin, _recipient) = spawn_core_pair(&fixture).await;
+    let (origin, recipient) = spawn_core_pair(&fixture).await;
+    shutdown_host(origin).await;
+    shutdown_host(recipient).await;
+}
+
+async fn shutdown_host(host: ArkHost) {
+    host.shutdown(std::time::Instant::now() + std::time::Duration::from_secs(30))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
 async fn core_rejects_malformed_authorization_before_persisting() {
     let fixture = fixture();
-    let (origin, _recipient) = spawn_core_pair(&fixture).await;
+    let (origin, recipient) = spawn_core_pair(&fixture).await;
     let response = origin
         .request(
             "integration.persist_node_authorization",
@@ -156,12 +164,14 @@ async fn core_rejects_malformed_authorization_before_persisting() {
         .unwrap();
     assert!(!response.ok, "malformed node must fail closed");
     assert_no_plaintext(&response.error.map(Value::String).unwrap_or(Value::Null));
+    shutdown_host(origin).await;
+    shutdown_host(recipient).await;
 }
 
 #[tokio::test]
 async fn trusted_cortex_authorization_survives_core_restart() {
     let fixture = fixture();
-    let (origin, _recipient) = spawn_core_pair(&fixture).await;
+    let (origin, recipient) = spawn_core_pair(&fixture).await;
     let packages_dir = tempfile::tempdir().unwrap();
     let data_dir = tempfile::tempdir().unwrap();
     let packages = PackageService::open(packages_dir.path()).unwrap();
@@ -177,7 +187,8 @@ async fn trusted_cortex_authorization_survives_core_restart() {
     .await
     .unwrap();
     assert_eq!(accepted["accepted"], true);
-    drop(origin);
+    shutdown_host(origin).await;
+    shutdown_host(recipient).await;
 
     let restarted = ArkHost::open(&fixture.origin_db).await.unwrap();
     let accepted_again = handle_operation(
@@ -193,4 +204,5 @@ async fn trusted_cortex_authorization_survives_core_restart() {
     .await
     .unwrap();
     assert_eq!(accepted_again["accepted"], true);
+    shutdown_host(restarted).await;
 }

@@ -419,7 +419,7 @@
             Arc::new(crate::protocol_usage::ProtocolUsageStore::open(dir.path()).expect("usage"));
         let token = "a".repeat(64);
         let ws = crate::ws_server::WsServer::bind(
-            ark,
+            ark.clone(),
             token.clone(),
             dir.path().to_path_buf(),
             app_index,
@@ -860,6 +860,10 @@
         // fixture files past the tempdir cleanup (KOS-270).
         let _ = api_shutdown_handle.shutdown().await;
         let _ = api_task.await;
+        let ark = Arc::try_unwrap(ark).unwrap_or_else(|_| panic!("HTTP and WS released ArkHost"));
+        ark.shutdown(std::time::Instant::now() + Duration::from_secs(30))
+            .await
+            .expect("ARK closes before fixture cleanup");
         // Shutdown must deterministically release every fixture handle: the
         // data dir is removable immediately, with no retry window (KOS-270).
         dir.close()
@@ -890,7 +894,7 @@
             Arc::new(crate::protocol_usage::ProtocolUsageStore::open(dir.path()).expect("usage"));
         let token = "a".repeat(64);
         let ws = crate::ws_server::WsServer::bind(
-            ark,
+            ark.clone(),
             token.clone(),
             dir.path().to_path_buf(),
             app_index,
@@ -914,6 +918,11 @@
         .expect("http bind");
         drop(api);
         drop(ws);
+        let ark =
+            Arc::try_unwrap(ark).unwrap_or_else(|_| panic!("dropped servers released ArkHost"));
+        ark.shutdown(std::time::Instant::now() + Duration::from_secs(30))
+            .await
+            .expect("ARK closes before fixture cleanup");
         dir.close()
             .expect("fixture dir still locked after dropping servers");
     }
@@ -1359,9 +1368,10 @@
             .with_ansi(false)
             .try_init()
             .expect("global log capture");
+        let ark_for_dispatch = ark.clone();
         let dispatcher = Arc::new(crate::engine_dispatch::EngineDispatcher::new(Arc::new(
             move |request: crate::engine_dispatch::DispatchRequest| {
-                let ark = ark.clone();
+                let ark = ark_for_dispatch.clone();
                 Box::pin(async move {
                     let mut params = request.params.clone();
                     let mode = params
@@ -1479,6 +1489,10 @@
         // fixture files past the tempdir cleanup (KOS-270).
         let _ = server_shutdown_handle.shutdown().await;
         let _ = task.await;
+        let ark = Arc::try_unwrap(ark).unwrap_or_else(|_| panic!("API task released ArkHost"));
+        ark.shutdown(std::time::Instant::now() + Duration::from_secs(30))
+            .await
+            .expect("ARK closes before fixture cleanup");
     }
 
     fn request(token: &str, method: &str, path: &str, body: &str) -> String {

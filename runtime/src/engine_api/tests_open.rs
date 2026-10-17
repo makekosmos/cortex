@@ -27,7 +27,11 @@
             } = self;
             let _ = shutdown.shutdown().await;
             let _ = task.await;
-            drop(ark);
+            let ark = Arc::try_unwrap(ark)
+                .unwrap_or_else(|_| panic!("all ARK handles released before fixture shutdown"));
+            ark.shutdown(std::time::Instant::now() + std::time::Duration::from_secs(30))
+                .await
+                .expect("ARK service shuts down before fixture cleanup");
             drop(leases);
             drop(dir);
         }
