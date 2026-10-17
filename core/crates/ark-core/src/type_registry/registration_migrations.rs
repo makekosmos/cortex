@@ -1,11 +1,12 @@
 use ark_domain::canonical_type::registry::{
     canonicalize_legacy_definition, canonicalize_type_version, validate_type_id, validate_version,
 };
+use ark_store::type_registry::{insert_type_record, type_name};
 use rusqlite::{params, Connection, OptionalExtension};
 
 use super::{
-    get_type, insert_type_version, register_alias, set_base_type, set_current_version, set_status,
-    TypeRegistration, TypeVersion, LEGACY_VERSION,
+    get_type, insert_type_version, register_alias, resolve_alias, set_base_type,
+    set_current_version, set_status, TypeRegistration, TypeVersion, LEGACY_VERSION,
 };
 
 pub fn register_type(
@@ -34,26 +35,10 @@ pub fn register_type(
             return Err("alias canonical type mismatch".into());
         }
     }
-    if conn
-        .query_row(
-            "SELECT 1 FROM object_types WHERE id=?1",
-            params![registration.type_id],
-            |_| Ok(()),
-        )
-        .optional()
-        .map_err(|e| e.to_string())?
-        .is_some()
-    {
+    if let Some(existing_name) = type_name(conn, &registration.type_id)? {
         // Package definitions are replayed on every runtime start. A replay
         // is safe only when the canonical summary and requested version are
         // identical; conflicting definitions remain errors.
-        let existing_name: String = conn
-            .query_row(
-                "SELECT name FROM object_types WHERE id=?1",
-                params![registration.type_id],
-                |row| row.get(0),
-            )
-            .map_err(|e| e.to_string())?;
         let existing = get_type(conn, &registration.type_id, Some(&registration.version))?
             .ok_or_else(|| "canonical type already exists".to_string())?;
         let definition = &existing.definition;
@@ -88,42 +73,14 @@ pub fn register_type(
         return Err("canonical type already exists".into());
     }
 
-    if conn
-        .query_row(
-            "SELECT 1 FROM object_type_aliases WHERE alias=?1",
-            params![registration.type_id],
-            |_| Ok(()),
-        )
-        .optional()
-        .map_err(|e| e.to_string())?
-        .is_some()
-    {
+    if resolve_alias(conn, &registration.type_id)?.is_some() {
         return Err("canonical type id collides with alias".into());
     }
 
     conn.execute_batch("SAVEPOINT ark_registry_registration")
         .map_err(|e| e.to_string())?;
     let result = (|| {
-        conn.execute(
-            concat!(
-                "INSERT INTO object_types (id,name,schema_json,ui_schema_json,created_at,",
-                "updated_at,system_locked,owner_kind,owner_id,current_version,status,",
-                "base_type_id) VALUES (?1,?2,?3,?4,?5,?5,0,?6,?7,?8,?9,?10)"
-            ),
-            params![
-                registration.type_id,
-                registration.name,
-                registration.schema_json,
-                registration.ui_schema_json,
-                registration.created_at,
-                registration.owner_kind,
-                registration.owner_id,
-                registration.version,
-                registration.status,
-                registration.base_type_id
-            ],
-        )
-        .map_err(|e| e.to_string())?;
+        insert_type_record(conn, registration)?;
         let mut notices = insert_type_version(
             conn,
             &TypeVersion {

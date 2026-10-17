@@ -2,9 +2,46 @@ use super::resolve_type_id;
 use ark_domain::canonical_type::registry::{
     canonicalize_legacy_definition, validate_type_id, validate_version, LEGACY_VERSION,
 };
-use ark_domain::canonical_type::{AliasRecord, TypeSummary, TypeVersion};
+use ark_domain::canonical_type::{AliasRecord, TypeRegistration, TypeSummary, TypeVersion};
 use rusqlite::{params, Connection, OptionalExtension};
 use semver::Version;
+
+pub fn type_name(conn: &Connection, type_id: &str) -> Result<Option<String>, String> {
+    conn.query_row(
+        "SELECT name FROM object_types WHERE id=?1",
+        params![type_id],
+        |row| row.get(0),
+    )
+    .optional()
+    .map_err(|error| error.to_string())
+}
+
+pub fn insert_type_record(
+    conn: &Connection,
+    registration: &TypeRegistration,
+) -> Result<(), String> {
+    conn.execute(
+        concat!(
+            "INSERT INTO object_types (id,name,schema_json,ui_schema_json,created_at,",
+            "updated_at,system_locked,owner_kind,owner_id,current_version,status,",
+            "base_type_id) VALUES (?1,?2,?3,?4,?5,?5,0,?6,?7,?8,?9,?10)"
+        ),
+        params![
+            registration.type_id,
+            registration.name,
+            registration.schema_json,
+            registration.ui_schema_json,
+            registration.created_at,
+            registration.owner_kind,
+            registration.owner_id,
+            registration.version,
+            registration.status,
+            registration.base_type_id
+        ],
+    )
+    .map(|_| ())
+    .map_err(|error| error.to_string())
+}
 
 pub fn ensure_legacy_type_version(
     conn: &Connection,
