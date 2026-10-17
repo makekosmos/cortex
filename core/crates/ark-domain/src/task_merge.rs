@@ -93,7 +93,7 @@ pub struct TaskMergeOperation {
 }
 
 /// A complete task snapshot from which every replica derives the same baseline history.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskMergeBootstrap {
     pub id: OperationId,
@@ -105,21 +105,29 @@ pub struct TaskMergeBootstrap {
 
 impl TaskMergeBootstrap {
     pub fn baseline_operations(&self) -> Result<Vec<TaskMergeOperation>, MergeError> {
-        if self.object.type_id != "core.task" || self.object.type_version != "0.1.0" {
+        let source_clock = crate::hlc::HLC::from_string(&self.source_hlc);
+        if self.object.type_id != "core.task"
+            || self.object.type_version != "0.1.0"
+            || self.object.id.trim().is_empty()
+            || source_clock.to_string() != self.source_hlc
+            || source_clock.device_id.trim().is_empty()
+            || chrono::DateTime::parse_from_rfc3339(&source_clock.wall_time).is_err()
+        {
             return Err(MergeError::InvalidBootstrap);
         }
-        if self.source_hlc.trim().is_empty()
-            || self
-                .links
-                .iter()
-                .any(|link| link.source_object_id != self.object.id)
-            || self
-                .links
-                .iter()
-                .map(|link| link.id.as_str())
-                .collect::<BTreeSet<_>>()
-                .len()
-                != self.links.len()
+        if self.links.iter().any(|link| {
+            link.source_object_id != self.object.id
+                || link.id.trim().is_empty()
+                || link.target_object_id.trim().is_empty()
+                || link.link_type.trim().is_empty()
+                || chrono::DateTime::parse_from_rfc3339(&link.created_at).is_err()
+        }) || self
+            .links
+            .iter()
+            .map(|link| link.id.as_str())
+            .collect::<BTreeSet<_>>()
+            .len()
+            != self.links.len()
             || self.baseline_ids.len() != TaskMergeUnit::ALL.len()
         {
             return Err(MergeError::InvalidBootstrap);

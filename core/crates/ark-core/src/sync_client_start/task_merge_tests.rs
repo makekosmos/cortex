@@ -1,10 +1,13 @@
 use super::*;
 use crate::application::sync_storage::{CommittedFeedPort, TaskMergeDeliveryPort};
 use crate::db::{
-    AppendTaskMergeOperationCommand, CommandContext, DbHandle, DbOwner, EnrollPairedDeviceCommand,
-    LoadOrGenerateIrohSecretKeyCommand, SqliteStorageBackend, TaskConflictSetQuery,
+    AppendTaskMergeOperationCommand, ApplyTaskMergeBatchCommand, CommandContext, DbHandle, DbOwner,
+    EnrollPairedDeviceCommand, LoadOrGenerateIrohSecretKeyCommand, SqliteStorageBackend,
+    TaskConflictSetQuery,
 };
-use crate::domain::task_merge::{OperationId, TaskMergeOperation, TaskMergeUnit, TaskMergeValue};
+use crate::domain::task_merge::{
+    OperationId, TaskMergeBootstrap, TaskMergeOperation, TaskMergeUnit, TaskMergeValue,
+};
 use crate::sync_server::SyncServer;
 use std::time::Instant;
 
@@ -45,6 +48,40 @@ fn operation(id: char, parents: &[char], title: &str) -> TaskMergeOperation {
     }
 }
 
+fn bootstrap() -> TaskMergeBootstrap {
+    TaskMergeBootstrap {
+        id: OperationId::parse("10000000000000000000000000000000").unwrap(),
+        object: crate::types::ArkObject {
+            id: "wire-task".into(),
+            type_id: "core.task".into(),
+            type_version: "0.1.0".into(),
+            title: "common base".into(),
+            content_json: serde_json::json!({"type":"doc","content":[]}),
+            props_json: serde_json::json!({
+                "state":{"kind":"open","at":null},
+                "planning":{"kind":"inbox","period":"any","date":null},
+                "deadline":null,"reminders":[],"recurrence":null,
+                "priority":"none","checklist":[]
+            }),
+            created_at: "2026-10-17T00:00:00Z".into(),
+            updated_at: "2026-10-17T00:00:00Z".into(),
+            deleted_at: None,
+        },
+        links: Vec::new(),
+        source_hlc: "2026-10-17T00:00:00.000Z:000001:merge-sender".into(),
+        baseline_ids: TaskMergeUnit::ALL
+            .iter()
+            .enumerate()
+            .map(|(index, unit)| {
+                (
+                    *unit,
+                    OperationId::parse(format!("{:032x}", index + 1)).unwrap(),
+                )
+            })
+            .collect(),
+    }
+}
+
 #[tokio::test]
 async fn authenticated_direct_sync_delivers_task_merge_batches_over_the_wire() {
     let directory = tempfile::tempdir().unwrap();
@@ -74,10 +111,35 @@ async fn authenticated_direct_sync_delivers_task_merge_batches_over_the_wire() {
         )
         .await
         .unwrap();
+    let identity = crate::data_platform::default_sync_policy_identity();
+    let bootstrap = bootstrap();
+    sender
+        .db
+        .submit(
+            CommandContext::authenticated_peer("merge-receiver".into()),
+            ApplyTaskMergeBatchCommand::new(
+                "merge-receiver".into(),
+                "merge-sender".into(),
+                identity.clone(),
+                crate::application::sync_storage::TaskMergeBatch {
+                    batch_id: "c0".repeat(16),
+                    identity,
+                    after_position: 0,
+                    through_position: 1,
+                    entries: vec![crate::application::sync_storage::TaskMergeJournalEntry {
+                        position: 1,
+                        record: crate::application::sync_storage::TaskMergeJournalRecord::Bootstrap(
+                            bootstrap.clone(),
+                        ),
+                    }],
+                },
+            ),
+        )
+        .await
+        .unwrap();
     for (id, parents, title) in [
-        ('1', vec![], "common base"),
-        ('2', vec!['1'], "first edit"),
-        ('3', vec!['1'], "second edit"),
+        ('d', vec!['1'], "first edit"),
+        ('e', vec!['1'], "second edit"),
     ] {
         sender
             .db

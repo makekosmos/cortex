@@ -140,7 +140,7 @@ pub(super) async fn handle_live_message(ctx: &MessageContext, peer_id: usize, ms
                     peer.sync_complete
                         && peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
                             protocol.capabilities.contains(
-                                &crate::protocol::ProtocolCapability::TaskMergeOperationsV1,
+                                &crate::protocol::ProtocolCapability::TaskMergeBootstrapV2,
                             )
                         }),
                 )

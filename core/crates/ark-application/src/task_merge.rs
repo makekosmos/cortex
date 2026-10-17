@@ -1,12 +1,33 @@
 use crate::sync_policy::PolicyIdentity;
-use ark_domain::task_merge::TaskMergeOperation;
+use ark_domain::task_merge::{TaskMergeBootstrap, TaskMergeOperation};
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "kind", content = "record", rename_all = "camelCase")]
+pub enum TaskMergeJournalRecord {
+    Bootstrap(TaskMergeBootstrap),
+    Operation {
+        operation: TaskMergeOperation,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        expected_conflict_digest: Option<String>,
+    },
+}
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct TaskMergeJournalEntry {
     pub position: i64,
-    pub operation: TaskMergeOperation,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub expected_conflict_digest: Option<String>,
+    pub record: TaskMergeJournalRecord,
+}
+
+impl TaskMergeJournalRecord {
+    pub fn operation(&self) -> Option<(&TaskMergeOperation, Option<&str>)> {
+        match self {
+            Self::Bootstrap(_) => None,
+            Self::Operation {
+                operation,
+                expected_conflict_digest,
+            } => Some((operation, expected_conflict_digest.as_deref())),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]

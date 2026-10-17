@@ -1,5 +1,30 @@
 use super::*;
 
+fn entry_operation(
+    entry: &crate::application::sync_storage::TaskMergeJournalEntry,
+) -> &TaskMergeOperation {
+    match &entry.record {
+        crate::application::sync_storage::TaskMergeJournalRecord::Operation {
+            operation, ..
+        } => operation,
+        crate::application::sync_storage::TaskMergeJournalRecord::Bootstrap(_) => {
+            panic!("expected operation journal record")
+        }
+    }
+}
+
+fn expected_digest(
+    entry: &crate::application::sync_storage::TaskMergeJournalEntry,
+) -> Option<&str> {
+    match &entry.record {
+        crate::application::sync_storage::TaskMergeJournalRecord::Operation {
+            expected_conflict_digest,
+            ..
+        } => expected_conflict_digest.as_deref(),
+        crate::application::sync_storage::TaskMergeJournalRecord::Bootstrap(_) => None,
+    }
+}
+
 async fn prepare_batch(
     handle: &DbHandle,
     peer_id: &str,
@@ -147,7 +172,7 @@ async fn outbound_batches_are_stable_until_ack_and_isolated_by_peer() {
         .unwrap();
     assert_eq!(first.after_position, 0);
     assert_eq!(first.through_position, 1);
-    assert_eq!(first.entries[0].operation.id, id('1'));
+    assert_eq!(entry_operation(&first.entries[0]).id, id('1'));
     let retry = prepare_batch(&handle, "peer-a", identity.clone(), 1)
         .await
         .unwrap()
@@ -174,17 +199,12 @@ async fn outbound_batches_are_stable_until_ack_and_isolated_by_peer() {
         .unwrap()
         .unwrap();
     assert_eq!(second.after_position, 1);
-    assert_eq!(second.entries[0].operation.id, id('2'));
-    assert_eq!(
-        prepare_batch(&handle, "peer-b", identity, 1)
-            .await
-            .unwrap()
-            .unwrap()
-            .entries[0]
-            .operation
-            .id,
-        id('1')
-    );
+    assert_eq!(entry_operation(&second.entries[0]).id, id('2'));
+    let other_peer = prepare_batch(&handle, "peer-b", identity, 1)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(entry_operation(&other_peer.entries[0]).id, id('1'));
     shutdown(&mut owner).await;
 }
 
@@ -246,12 +266,7 @@ async fn outbound_journal_preserves_the_conflict_resolution_guard() {
     .unwrap()
     .unwrap();
     assert_eq!(
-        batch
-            .entries
-            .last()
-            .unwrap()
-            .expected_conflict_digest
-            .as_deref(),
+        expected_digest(batch.entries.last().unwrap()),
         Some(digest.as_str())
     );
     shutdown(&mut owner).await;
@@ -322,7 +337,10 @@ async fn policy_exclusion_preserves_local_journal_and_widening_resumes_from_ack(
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(pending_before_exclusion.entries[0].operation.id, id('2'));
+    assert_eq!(
+        entry_operation(&pending_before_exclusion.entries[0]).id,
+        id('2')
+    );
 
     let excluded = crate::data_platform::SyncProfileRule {
         resource_kind: "type".into(),
@@ -387,7 +405,7 @@ async fn policy_exclusion_preserves_local_journal_and_widening_resumes_from_ack(
         .unwrap();
     assert_eq!(resumed.after_position, 1);
     assert_eq!(resumed.batch_id, pending_before_exclusion.batch_id);
-    assert_eq!(resumed.entries[0].operation.id, id('2'));
+    assert_eq!(entry_operation(&resumed.entries[0]).id, id('2'));
     let replayed_batch_ack = acknowledge_batch(
         &handle,
         "peer-a",
@@ -406,6 +424,6 @@ async fn policy_exclusion_preserves_local_journal_and_widening_resumes_from_ack(
     .await
     .unwrap()
     .unwrap();
-    assert_eq!(other_peer.entries[0].operation.id, id('1'));
+    assert_eq!(entry_operation(&other_peer.entries[0]).id, id('1'));
     shutdown(&mut owner).await;
 }

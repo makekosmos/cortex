@@ -3,7 +3,7 @@ use serde_json::{json, Value};
 
 // Persistent object records and write commands shared by storage and the API.
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ArkObject {
     pub id: String,
@@ -78,7 +78,7 @@ pub struct ObjectType {
     pub system_locked: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ObjectLink {
     pub id: String,

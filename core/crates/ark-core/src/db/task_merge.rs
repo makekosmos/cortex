@@ -5,12 +5,15 @@ use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
+#[path = "task_merge/bootstrap.rs"]
+mod bootstrap;
 #[path = "task_merge/inbound.rs"]
 mod inbound;
 #[path = "task_merge/journal.rs"]
 mod journal;
 #[path = "task_merge/progress.rs"]
 mod progress;
+use bootstrap::{append_bootstrap, materialize_if_ready, verify_bootstrap_payload};
 pub(crate) use inbound::apply_inbound_batch;
 pub(crate) use journal::read_journal_page;
 pub(crate) use progress::{acknowledge_outbound_batch, prepare_outbound_batch};
@@ -29,6 +32,12 @@ pub(crate) enum TaskMergeError {
     Invalid(String),
     #[error("{0}")]
     Storage(String),
+}
+
+#[derive(Clone, Copy)]
+enum DeliveryTiming {
+    Immediate,
+    AfterBootstrap,
 }
 
 pub(crate) fn require_delivery_policy(
@@ -94,6 +103,7 @@ pub(crate) fn append_operation(
         expected_conflict_digest,
         true,
         false,
+        DeliveryTiming::Immediate,
     )
 }
 
@@ -108,6 +118,7 @@ pub(crate) fn append_remote_operation(
         expected_conflict_digest,
         false,
         true,
+        DeliveryTiming::AfterBootstrap,
     )
 }
 
@@ -117,6 +128,7 @@ fn append_operation_inner(
     expected_conflict_digest: Option<&str>,
     check_resolution_precondition: bool,
     check_replayed_guard: bool,
+    delivery_timing: DeliveryTiming,
 ) -> Result<TaskMergeAppendResult, TaskMergeError> {
     let (operation, operation_json, payload_sha256) = canonical_operation(operation)?;
     if let Some((stored_hash,)) = transaction
@@ -202,13 +214,24 @@ fn append_operation_inner(
             )
             .map_err(|error| TaskMergeError::Storage(error.to_string()))?;
     }
-    transaction
-        .execute(
-            "INSERT INTO task_merge_journal(record_kind, record_id)
-             VALUES ('operation', ?1)",
-            [operation.id.as_str()],
+    let has_bootstrap = transaction
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM task_merge_bootstraps WHERE object_id = ?1)",
+            [&operation.object_id],
+            |row| row.get::<_, bool>(0),
         )
         .map_err(|error| TaskMergeError::Storage(error.to_string()))?;
+    if has_bootstrap || matches!(delivery_timing, DeliveryTiming::Immediate) {
+        transaction
+            .execute(
+                "INSERT INTO task_merge_journal(record_kind, record_id)
+                 VALUES ('operation', ?1)",
+                [operation.id.as_str()],
+            )
+            .map_err(|error| TaskMergeError::Storage(error.to_string()))?;
+    }
+
+    materialize_if_ready(transaction, &operation.object_id)?;
 
     let (conflict_set, dependencies_pending) =
         read_conflict_set(transaction, &operation.object_id, operation.unit)?;

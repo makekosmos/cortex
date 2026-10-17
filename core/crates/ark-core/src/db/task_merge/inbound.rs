@@ -58,11 +58,21 @@ pub(crate) fn apply_inbound_batch(
     }
 
     for entry in &batch.entries {
-        append_remote_operation(
-            transaction,
-            entry.operation.clone(),
-            entry.expected_conflict_digest.as_deref(),
-        )?;
+        match &entry.record {
+            crate::application::sync_storage::TaskMergeJournalRecord::Operation {
+                operation,
+                expected_conflict_digest,
+            } => {
+                append_remote_operation(
+                    transaction,
+                    operation.clone(),
+                    expected_conflict_digest.as_deref(),
+                )?;
+            }
+            crate::application::sync_storage::TaskMergeJournalRecord::Bootstrap(bootstrap) => {
+                super::append_bootstrap(transaction, bootstrap.clone())?;
+            }
+        }
     }
 
     transaction

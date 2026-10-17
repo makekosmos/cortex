@@ -5,7 +5,7 @@ use ark_domain::types::{PeerRecord, SyncEntity, VersionVector};
 pub use crate::sync_policy::PolicyIdentity;
 pub use crate::task_merge::{
     TaskMergeBatch, TaskMergeBatchAck, TaskMergeDeliveryPort, TaskMergeJournalEntry,
-    TaskMergeJournalPage,
+    TaskMergeJournalPage, TaskMergeJournalRecord,
 };
 
 /// Complete storage surface required by the sync runtime.

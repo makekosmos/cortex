@@ -20,6 +20,74 @@ async fn apply_batch(
         .await
 }
 
+fn bootstrap() -> crate::domain::task_merge::TaskMergeBootstrap {
+    use crate::domain::task_merge::{OperationId, TaskMergeBootstrap, TaskMergeUnit};
+
+    TaskMergeBootstrap {
+        id: OperationId::parse("10000000000000000000000000000000").unwrap(),
+        object: crate::types::ArkObject {
+            id: "task-1".into(),
+            type_id: "core.task".into(),
+            type_version: "0.1.0".into(),
+            title: "from bootstrap".into(),
+            content_json: serde_json::json!({"type":"doc","content":[]}),
+            props_json: serde_json::json!({
+                "state":{"kind":"open","at":null},
+                "planning":{"kind":"inbox","period":"any","date":null},
+                "deadline":null,"reminders":[],"recurrence":null,
+                "priority":"none","checklist":[]
+            }),
+            created_at: "2026-10-17T00:00:00Z".into(),
+            updated_at: "2026-10-17T00:00:00Z".into(),
+            deleted_at: None,
+        },
+        links: vec![crate::types::ObjectLink {
+            id: "task-project-link".into(),
+            source_object_id: "task-1".into(),
+            target_object_id: "project-1".into(),
+            link_type: "task.project".into(),
+            created_at: "2026-10-17T00:00:00Z".into(),
+        }],
+        source_hlc: "2026-10-17T00:00:00.000Z:000001:source-device".into(),
+        baseline_ids: TaskMergeUnit::ALL
+            .iter()
+            .enumerate()
+            .map(|(index, unit)| {
+                (
+                    *unit,
+                    OperationId::parse(format!("{:032x}", index + 1)).unwrap(),
+                )
+            })
+            .collect(),
+    }
+}
+
+async fn seed_project_link_target(handle: &DbHandle) {
+    handle
+        .with_connection(|connection| {
+            crate::db::upsert_object(
+                connection,
+                &crate::types::ArkObject {
+                    id: "project-1".into(),
+                    type_id: "core.task".into(),
+                    type_version: "0.1.0".into(),
+                    title: "Project".into(),
+                    content_json: serde_json::json!({}),
+                    props_json: serde_json::json!({
+                        "state":{"kind":"open","at":null},
+                        "planning":{"kind":"inbox","period":"any","date":null},
+                        "deadline":null,"reminders":[],"recurrence":null,
+                        "priority":"none","checklist":[]
+                    }),
+                    created_at: "2026-10-17T00:00:00Z".into(),
+                    updated_at: "2026-10-17T00:00:00Z".into(),
+                    deleted_at: None,
+                },
+            )
+        })
+        .unwrap();
+}
+
 #[tokio::test]
 async fn two_sqlite_peers_converge_on_the_same_conflict_set() {
     let (_left_dir, _left_path, left, mut left_owner) = open_merge_fixture().await;
@@ -88,6 +156,194 @@ async fn two_sqlite_peers_converge_on_the_same_conflict_set() {
 }
 
 #[tokio::test]
+async fn bootstrap_and_followup_operation_materialize_atomically_and_replay() {
+    let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
+    seed_project_link_target(&handle).await;
+    let peer_id = "bootstrap-peer";
+    let endpoint = iroh::SecretKey::generate().public().to_string();
+    handle
+        .submit(
+            CommandContext::engine(),
+            EnrollPairedDeviceCommand::new("merge-test-device".into(), peer_id.into(), endpoint),
+        )
+        .await
+        .unwrap();
+
+    let identity = crate::data_platform::default_sync_policy_identity();
+    let bootstrap = bootstrap();
+    let title_baseline = bootstrap.baseline_ids[0].1.clone();
+    let mut edit = operation('f', &[], "edited after bootstrap");
+    edit.parents = vec![title_baseline];
+    let batch = crate::application::sync_storage::TaskMergeBatch {
+        batch_id: "b1".repeat(16),
+        identity: identity.clone(),
+        after_position: 0,
+        through_position: 2,
+        entries: vec![
+            crate::application::sync_storage::TaskMergeJournalEntry {
+                position: 1,
+                record: crate::application::sync_storage::TaskMergeJournalRecord::Bootstrap(
+                    bootstrap,
+                ),
+            },
+            crate::application::sync_storage::TaskMergeJournalEntry {
+                position: 2,
+                record: crate::application::sync_storage::TaskMergeJournalRecord::Operation {
+                    operation: edit,
+                    expected_conflict_digest: None,
+                },
+            },
+        ],
+    };
+
+    let applied = apply_batch(
+        &handle,
+        peer_id,
+        "merge-test-device",
+        identity.clone(),
+        batch.clone(),
+    )
+    .await
+    .unwrap();
+    assert!(!applied.replayed);
+    let replayed = apply_batch(&handle, peer_id, "merge-test-device", identity, batch)
+        .await
+        .unwrap();
+    assert!(replayed.replayed);
+
+    handle
+        .with_connection(|connection| {
+            let object = crate::db::get_object(connection, "task-1")?.unwrap();
+            assert_eq!(object.title, "edited after bootstrap");
+            assert_eq!(
+                crate::db::list_object_links(connection)?
+                    .into_iter()
+                    .filter(|link| link.source_object_id == "task-1")
+                    .map(|link| link.id)
+                    .collect::<Vec<_>>(),
+                vec!["task-project-link"]
+            );
+            let (bootstraps, operations, journal): (i64, i64, i64) = connection
+                .query_row(
+                    "SELECT (SELECT COUNT(*) FROM task_merge_bootstraps),
+                        (SELECT COUNT(*) FROM task_merge_operations),
+                        (SELECT COUNT(*) FROM task_merge_journal)",
+                    [],
+                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+                )
+                .map_err(|error| error.to_string())?;
+            assert_eq!((bootstraps, operations, journal), (1, 11, 2));
+            let page = crate::db::task_merge::read_journal_page(connection, 0, 2, 10)
+                .map_err(|error| error.to_string())?;
+            assert!(matches!(
+                page.entries[0].record,
+                crate::application::sync_storage::TaskMergeJournalRecord::Bootstrap(_)
+            ));
+            assert!(matches!(
+                page.entries[1].record,
+                crate::application::sync_storage::TaskMergeJournalRecord::Operation { .. }
+            ));
+            Ok::<(), String>(())
+        })
+        .unwrap();
+    shutdown(&mut owner).await;
+}
+
+#[tokio::test]
+async fn operation_before_bootstrap_stays_unpublished_until_bootstrap_arrives() {
+    let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
+    seed_project_link_target(&handle).await;
+    let peer_id = "pending-bootstrap-peer";
+    let endpoint = iroh::SecretKey::generate().public().to_string();
+    handle
+        .submit(
+            CommandContext::engine(),
+            EnrollPairedDeviceCommand::new("merge-test-device".into(), peer_id.into(), endpoint),
+        )
+        .await
+        .unwrap();
+    let identity = crate::data_platform::default_sync_policy_identity();
+    let mut edit = operation('f', &[], "edited after bootstrap");
+    edit.parents = vec![bootstrap().baseline_ids[0].1.clone()];
+    let operation_batch = crate::application::sync_storage::TaskMergeBatch {
+        batch_id: "c1".repeat(16),
+        identity: identity.clone(),
+        after_position: 0,
+        through_position: 1,
+        entries: vec![crate::application::sync_storage::TaskMergeJournalEntry {
+            position: 1,
+            record: crate::application::sync_storage::TaskMergeJournalRecord::Operation {
+                operation: edit,
+                expected_conflict_digest: None,
+            },
+        }],
+    };
+    apply_batch(
+        &handle,
+        peer_id,
+        "merge-test-device",
+        identity.clone(),
+        operation_batch,
+    )
+    .await
+    .unwrap();
+    handle
+        .with_connection(|connection| {
+            assert!(crate::db::get_object(connection, "task-1")?.is_none());
+            let journal_rows: i64 = connection
+                .query_row("SELECT COUNT(*) FROM task_merge_journal", [], |row| {
+                    row.get(0)
+                })
+                .map_err(|error| error.to_string())?;
+            assert_eq!(journal_rows, 0);
+            Ok::<(), String>(())
+        })
+        .unwrap();
+
+    let bootstrap_record =
+        crate::application::sync_storage::TaskMergeJournalRecord::Bootstrap(bootstrap());
+    let bootstrap_batch = crate::application::sync_storage::TaskMergeBatch {
+        batch_id: "c2".repeat(16),
+        identity: identity.clone(),
+        after_position: 1,
+        through_position: 2,
+        entries: vec![crate::application::sync_storage::TaskMergeJournalEntry {
+            position: 2,
+            record: bootstrap_record,
+        }],
+    };
+    apply_batch(
+        &handle,
+        peer_id,
+        "merge-test-device",
+        identity,
+        bootstrap_batch,
+    )
+    .await
+    .unwrap();
+    handle
+        .with_connection(|connection| {
+            assert_eq!(
+                crate::db::get_object(connection, "task-1")?.unwrap().title,
+                "edited after bootstrap"
+            );
+            let page = crate::db::task_merge::read_journal_page(connection, 0, 2, 10)
+                .map_err(|error| error.to_string())?;
+            assert!(matches!(
+                page.entries[0].record,
+                crate::application::sync_storage::TaskMergeJournalRecord::Bootstrap(_)
+            ));
+            assert!(matches!(
+                page.entries[1].record,
+                crate::application::sync_storage::TaskMergeJournalRecord::Operation { .. }
+            ));
+            Ok::<(), String>(())
+        })
+        .unwrap();
+    shutdown(&mut owner).await;
+}
+
+#[tokio::test]
 async fn inbound_batch_atomically_applies_remote_resolution_and_replays_idempotently() {
     let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
     let peer_id = "paired-peer";
@@ -108,13 +364,17 @@ async fn inbound_batch_atomically_applies_remote_resolution_and_replays_idempote
         entries: vec![
             crate::application::sync_storage::TaskMergeJournalEntry {
                 position: 1,
-                operation: operation('1', &[], "remote base"),
-                expected_conflict_digest: None,
+                record: crate::application::sync_storage::TaskMergeJournalRecord::Operation {
+                    operation: operation('1', &[], "remote base"),
+                    expected_conflict_digest: None,
+                },
             },
             crate::application::sync_storage::TaskMergeJournalEntry {
                 position: 2,
-                operation: operation('2', &['1'], "remote resolution"),
-                expected_conflict_digest: Some(format!("sha256:{}", "ab".repeat(32))),
+                record: crate::application::sync_storage::TaskMergeJournalRecord::Operation {
+                    operation: operation('2', &['1'], "remote resolution"),
+                    expected_conflict_digest: Some(format!("sha256:{}", "ab".repeat(32))),
+                },
             },
         ],
     };
@@ -143,7 +403,11 @@ async fn inbound_batch_atomically_applies_remote_resolution_and_replays_idempote
     assert_eq!(replayed.through_position, 2);
 
     let mut altered = batch.clone();
-    altered.entries[1].operation = operation('2', &['1'], "altered resolution");
+    altered.entries[1].record =
+        crate::application::sync_storage::TaskMergeJournalRecord::Operation {
+            operation: operation('2', &['1'], "altered resolution"),
+            expected_conflict_digest: Some(format!("sha256:{}", "ab".repeat(32))),
+        };
     assert!(
         apply_batch(&handle, peer_id, "merge-test-device", identity, altered)
             .await
@@ -165,7 +429,7 @@ async fn inbound_batch_atomically_applies_remote_resolution_and_replays_idempote
                 )
                 .unwrap()
         });
-    assert_eq!((operation_count, journal_count, cursor), (2, 2, 2));
+    assert_eq!((operation_count, journal_count, cursor), (2, 0, 2));
     assert_eq!(guard, format!("sha256:{}", "ab".repeat(32)));
     shutdown(&mut owner).await;
 }
@@ -209,8 +473,10 @@ async fn excluded_local_task_category_rejects_incoming_batch_without_advancing_c
         through_position: 1,
         entries: vec![crate::application::sync_storage::TaskMergeJournalEntry {
             position: 1,
-            operation: operation('1', &[], "private on this device"),
-            expected_conflict_digest: None,
+            record: crate::application::sync_storage::TaskMergeJournalRecord::Operation {
+                operation: operation('1', &[], "private on this device"),
+                expected_conflict_digest: None,
+            },
         }],
     };
     assert!(matches!(

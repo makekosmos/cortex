@@ -159,7 +159,7 @@
                                         }
                                         task_merge_operations = negotiated_protocol
                                             .capabilities
-                                            .contains(&ProtocolCapability::TaskMergeOperationsV1);
+                                            .contains(&ProtocolCapability::TaskMergeBootstrapV2);
 
                                         // Reject self-connects and evict pure self-references.
                                         if !server_device_id.is_empty()
