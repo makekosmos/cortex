@@ -1,33 +1,8 @@
 use rusqlite::{params, Connection, OptionalExtension};
 
-use super::{list_type_summaries, list_type_versions, TypeGetResponse, LEGACY_VERSION};
-use ark_domain::canonical_type::registry::validate_version;
-
-pub fn resolve_alias(conn: &Connection, alias: &str) -> Result<Option<String>, String> {
-    conn.query_row(
-        "SELECT canonical_type_id FROM object_type_aliases WHERE alias=?1",
-        params![alias],
-        |r| r.get(0),
-    )
-    .optional()
-    .map_err(|e| e.to_string())
-}
-
-pub fn resolve_type_id(conn: &Connection, input: &str) -> Result<Option<String>, String> {
-    if conn
-        .query_row(
-            "SELECT 1 FROM object_types WHERE id=?1",
-            params![input],
-            |_| Ok(()),
-        )
-        .optional()
-        .map_err(|e| e.to_string())?
-        .is_some()
-    {
-        return Ok(Some(input.to_string()));
-    }
-    resolve_alias(conn, input)
-}
+use super::{list_type_summaries, list_type_versions, resolve_type_id};
+use ark_application::type_registry::TypeGetResponse;
+use ark_domain::canonical_type::registry::{validate_version, LEGACY_VERSION};
 
 pub fn get_type(
     conn: &Connection,
