@@ -39,6 +39,14 @@ pub(in crate::db) use manifest::backup_to_file_chunked_verified;
 use manifest::{is_manifest_file, is_uncommitted_backup, verify_snapshot_manifest};
 pub(crate) use restore_journal::recover_interrupted_restore;
 
+pub(super) fn sync_file(path: &Path) -> io::Result<()> {
+    fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)?
+        .sync_all()
+}
+
 /// Записываемая в RPC ответ запись о snapshot'е в `backups/`.
 #[derive(Debug, Clone, Serialize)]
 pub struct SnapshotEntry {

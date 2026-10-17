@@ -7,7 +7,7 @@ use rusqlite::{Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use super::{backups_dir, open_no_follow, schema_fingerprint};
+use super::{backups_dir, open_no_follow, schema_fingerprint, sync_file};
 use crate::db::open::check_integrity;
 
 const MANIFEST_SUFFIX: &str = ".manifest.json";
@@ -79,9 +79,7 @@ pub(in crate::db) fn backup_to_file_chunked_verified(
             .map_err(|error| format!("backup staging metadata failed: {error}"))?
             .len();
         let sha256 = digest_file(&staged_db)?;
-        fs::File::open(&staged_db)
-            .and_then(|file| file.sync_all())
-            .map_err(|error| format!("backup staging sync failed: {error}"))?;
+        sync_file(&staged_db).map_err(|error| format!("backup staging sync failed: {error}"))?;
         let bytes = serde_json::to_vec(&SnapshotManifest {
             version: MANIFEST_VERSION,
             id: id.to_string(),

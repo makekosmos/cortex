@@ -6,7 +6,7 @@ use rusqlite::{Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use super::{backups_dir, check_integrity, open_no_follow};
+use super::{backups_dir, check_integrity, open_no_follow, sync_file};
 
 const INTENT_SUFFIX: &str = ".restore-intent.json";
 const INTENT_LIMIT: u64 = 4096;
@@ -59,8 +59,7 @@ impl RestoreJournal {
                 return Err("restore recovery capsule schema changed during backup".into());
             }
             drop(capsule);
-            fs::File::open(&capsule_path)
-                .and_then(|file| file.sync_all())
+            sync_file(&capsule_path)
                 .map_err(|error| format!("restore recovery capsule sync failed: {error}"))?;
             sync_directory(&directory).map_err(|error| {
                 format!("restore recovery capsule publish sync failed: {error}")
