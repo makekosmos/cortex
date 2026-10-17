@@ -5,10 +5,13 @@ use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
+#[path = "task_merge/inbound.rs"]
+mod inbound;
 #[path = "task_merge/journal.rs"]
 mod journal;
 #[path = "task_merge/progress.rs"]
 mod progress;
+pub(crate) use inbound::apply_inbound_batch;
 pub(crate) use journal::read_journal_page;
 pub(crate) use progress::{acknowledge_outbound_batch, prepare_outbound_batch};
 
@@ -85,6 +88,36 @@ pub(crate) fn append_operation(
     operation: TaskMergeOperation,
     expected_conflict_digest: Option<&str>,
 ) -> Result<TaskMergeAppendResult, TaskMergeError> {
+    append_operation_inner(
+        transaction,
+        operation,
+        expected_conflict_digest,
+        true,
+        false,
+    )
+}
+
+pub(crate) fn append_remote_operation(
+    transaction: &Transaction<'_>,
+    operation: TaskMergeOperation,
+    expected_conflict_digest: Option<&str>,
+) -> Result<TaskMergeAppendResult, TaskMergeError> {
+    append_operation_inner(
+        transaction,
+        operation,
+        expected_conflict_digest,
+        false,
+        true,
+    )
+}
+
+fn append_operation_inner(
+    transaction: &Transaction<'_>,
+    operation: TaskMergeOperation,
+    expected_conflict_digest: Option<&str>,
+    check_resolution_precondition: bool,
+    check_replayed_guard: bool,
+) -> Result<TaskMergeAppendResult, TaskMergeError> {
     let (operation, operation_json, payload_sha256) = canonical_operation(operation)?;
     if let Some((stored_hash,)) = transaction
         .query_row(
@@ -97,6 +130,20 @@ pub(crate) fn append_operation(
     {
         if stored_hash != payload_sha256 {
             return Err(TaskMergeError::OperationIdCollision);
+        }
+        if check_replayed_guard {
+            let stored_guard = transaction
+                .query_row(
+                    "SELECT expected_conflict_digest
+                     FROM task_merge_resolution_guards WHERE operation_id = ?1",
+                    [operation.id.as_str()],
+                    |row| row.get::<_, String>(0),
+                )
+                .optional()
+                .map_err(|error| TaskMergeError::Storage(error.to_string()))?;
+            if stored_guard.as_deref() != expected_conflict_digest {
+                return Err(TaskMergeError::OperationIdCollision);
+            }
         }
         let (conflict_set, dependencies_pending) =
             read_conflict_set(transaction, &operation.object_id, operation.unit)?;
@@ -116,13 +163,16 @@ pub(crate) fn append_operation(
                 .iter()
                 .all(|variant| operation.parents.contains(&variant.id))
     });
-    if resolves_conflict && expected_conflict_digest.is_none() {
+    if check_resolution_precondition && resolves_conflict && expected_conflict_digest.is_none() {
         return Err(TaskMergeError::ConflictDigestRequired);
     }
-    if let Some(expected) = expected_conflict_digest {
-        if dependencies_pending || current.as_ref().map(|set| set.digest.as_str()) != Some(expected)
-        {
-            return Err(TaskMergeError::ConflictSetChanged);
+    if check_resolution_precondition {
+        if let Some(expected) = expected_conflict_digest {
+            if dependencies_pending
+                || current.as_ref().map(|set| set.digest.as_str()) != Some(expected)
+            {
+                return Err(TaskMergeError::ConflictSetChanged);
+            }
         }
     }
 

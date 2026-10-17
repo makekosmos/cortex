@@ -118,8 +118,7 @@ pub(crate) mod tests {
             _peer_device_id: &str,
             _expected_identity: &crate::application::sync_storage::PolicyIdentity,
             _limit: usize,
-        ) -> Result<Option<crate::application::sync_storage::TaskMergeOutboundBatch>, String>
-        {
+        ) -> Result<Option<crate::application::sync_storage::TaskMergeBatch>, String> {
             Ok(None)
         }
 
@@ -131,6 +130,16 @@ pub(crate) mod tests {
             through_position: i64,
         ) -> Result<i64, String> {
             Ok(through_position)
+        }
+
+        async fn apply_task_merge_batch(
+            &self,
+            _peer_device_id: &str,
+            _local_device_id: &str,
+            _expected_identity: &crate::application::sync_storage::PolicyIdentity,
+            _batch: &crate::application::sync_storage::TaskMergeBatch,
+        ) -> Result<crate::application::sync_storage::TaskMergeBatchAck, String> {
+            Err("test_task_merge_receive_unsupported".into())
         }
     }
     #[async_trait::async_trait]

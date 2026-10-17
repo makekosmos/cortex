@@ -251,6 +251,27 @@ CREATE TABLE IF NOT EXISTS task_merge_outbound_progress (
         AND last_acknowledged_through <= acknowledged_through
     ))
 ) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS task_merge_inbound_progress (
+    peer_device_id TEXT PRIMARY KEY,
+    policy_revision INTEGER NOT NULL CHECK (policy_revision >= 0),
+    policy_digest TEXT NOT NULL CHECK (length(policy_digest) = 64),
+    policy_active INTEGER NOT NULL CHECK (policy_active IN (0, 1)),
+    received_through INTEGER NOT NULL DEFAULT 0 CHECK (received_through >= 0),
+    last_batch_id TEXT,
+    last_batch_after INTEGER,
+    last_batch_through INTEGER,
+    last_batch_digest TEXT,
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    CHECK (
+        (last_batch_id IS NULL AND last_batch_after IS NULL AND last_batch_through IS NULL
+            AND last_batch_digest IS NULL)
+        OR (last_batch_id IS NOT NULL AND last_batch_after IS NOT NULL
+            AND last_batch_through IS NOT NULL AND last_batch_digest IS NOT NULL
+            AND length(last_batch_digest) = 64 AND last_batch_after >= 0
+            AND last_batch_through > last_batch_after
+            AND last_batch_through = received_through)
+    )
+) WITHOUT ROWID;
 
 -- Monotonic local commit order for durable sync recovery. Rows are appended
 -- in the same SQLite transaction as the object/revision change. Payloads stay

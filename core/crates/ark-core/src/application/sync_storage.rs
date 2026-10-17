@@ -92,12 +92,19 @@ pub struct TaskMergeJournalPage {
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct TaskMergeOutboundBatch {
+pub struct TaskMergeBatch {
     pub batch_id: String,
     pub identity: PolicyIdentity,
     pub after_position: i64,
     pub through_position: i64,
     pub entries: Vec<TaskMergeJournalEntry>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct TaskMergeBatchAck {
+    pub batch_id: String,
+    pub through_position: i64,
+    pub replayed: bool,
 }
 
 #[async_trait::async_trait]
@@ -107,7 +114,7 @@ pub trait TaskMergeDeliveryPort: Send + Sync {
         peer_device_id: &str,
         expected_identity: &PolicyIdentity,
         limit: usize,
-    ) -> Result<Option<TaskMergeOutboundBatch>, String>;
+    ) -> Result<Option<TaskMergeBatch>, String>;
 
     async fn acknowledge_task_merge_batch(
         &self,
@@ -116,6 +123,14 @@ pub trait TaskMergeDeliveryPort: Send + Sync {
         batch_id: &str,
         through_position: i64,
     ) -> Result<i64, String>;
+
+    async fn apply_task_merge_batch(
+        &self,
+        peer_device_id: &str,
+        local_device_id: &str,
+        expected_identity: &PolicyIdentity,
+        batch: &TaskMergeBatch,
+    ) -> Result<TaskMergeBatchAck, String>;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

@@ -5,7 +5,7 @@ async fn prepare_batch(
     peer_id: &str,
     identity: crate::application::sync_storage::PolicyIdentity,
     limit: usize,
-) -> Result<Option<crate::application::sync_storage::TaskMergeOutboundBatch>, DbError> {
+) -> Result<Option<crate::application::sync_storage::TaskMergeBatch>, DbError> {
     handle
         .submit(
             CommandContext::authenticated_peer(peer_id.into()),
@@ -18,7 +18,7 @@ async fn acknowledge_batch(
     handle: &DbHandle,
     peer_id: &str,
     identity: crate::application::sync_storage::PolicyIdentity,
-    batch: &crate::application::sync_storage::TaskMergeOutboundBatch,
+    batch: &crate::application::sync_storage::TaskMergeBatch,
     through: i64,
 ) -> Result<i64, DbError> {
     handle
@@ -386,9 +386,9 @@ async fn policy_exclusion_preserves_local_journal_and_widening_resumes_from_ack(
         .unwrap()
         .unwrap();
     assert_eq!(resumed.after_position, 1);
-    assert_ne!(resumed.batch_id, pending_before_exclusion.batch_id);
+    assert_eq!(resumed.batch_id, pending_before_exclusion.batch_id);
     assert_eq!(resumed.entries[0].operation.id, id('2'));
-    let stale_batch_ack = acknowledge_batch(
+    let replayed_batch_ack = acknowledge_batch(
         &handle,
         "peer-a",
         widened_identity,
@@ -396,7 +396,7 @@ async fn policy_exclusion_preserves_local_journal_and_widening_resumes_from_ack(
         pending_before_exclusion.through_position,
     )
     .await;
-    assert!(matches!(stale_batch_ack, Err(DbError::Invalid(_))));
+    assert_eq!(replayed_batch_ack.unwrap(), 2);
     let other_peer = prepare_batch(
         &handle,
         "peer-b",

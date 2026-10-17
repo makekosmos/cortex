@@ -78,7 +78,7 @@ pub(crate) use system_mutation::{
 };
 pub(crate) use system_read::SystemReadQuery;
 pub(crate) use task_merge::{
-    AcknowledgeTaskMergeBatchCommand, AppendTaskMergeOperationCommand,
+    AcknowledgeTaskMergeBatchCommand, AppendTaskMergeOperationCommand, ApplyTaskMergeBatchCommand,
     PrepareTaskMergeBatchCommand, TaskConflictSetQuery,
 };
 pub(crate) use type_mutation::{

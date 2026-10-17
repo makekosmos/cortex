@@ -1,6 +1,8 @@
 use super::*;
 use crate::domain::task_merge::{OperationId, TaskMergeOperation, TaskMergeUnit, TaskMergeValue};
 
+#[path = "task_merge/inbound.rs"]
+mod inbound;
 #[path = "task_merge/journal.rs"]
 mod journal;
 

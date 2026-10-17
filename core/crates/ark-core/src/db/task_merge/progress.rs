@@ -1,5 +1,5 @@
 use super::{read_journal_page, require_delivery_policy, TaskMergeError};
-use crate::application::sync_storage::{PolicyIdentity, TaskMergeOutboundBatch};
+use crate::application::sync_storage::{PolicyIdentity, TaskMergeBatch};
 use rusqlite::{OptionalExtension, Transaction};
 
 const MAX_TASK_MERGE_PAGE_SIZE: usize = 100;
@@ -11,7 +11,7 @@ pub(crate) fn prepare_outbound_batch(
     peer_device_id: &str,
     identity: &PolicyIdentity,
     limit: usize,
-) -> Result<Option<TaskMergeOutboundBatch>, TaskMergeError> {
+) -> Result<Option<TaskMergeBatch>, TaskMergeError> {
     require_delivery_policy(transaction, peer_device_id, identity)?;
     if limit == 0 || limit > MAX_TASK_MERGE_PAGE_SIZE {
         return Err(TaskMergeError::Invalid(
@@ -29,8 +29,6 @@ pub(crate) fn prepare_outbound_batch(
                 .execute(
                     "UPDATE task_merge_outbound_progress
                      SET policy_revision = ?2, policy_digest = ?3, policy_active = ?4,
-                         in_flight_batch_id = NULL, in_flight_after = NULL,
-                         in_flight_through = NULL,
                          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
                      WHERE peer_device_id = ?1",
                     rusqlite::params![
@@ -41,27 +39,26 @@ pub(crate) fn prepare_outbound_batch(
                     ],
                 )
                 .map_err(storage_error)?;
+            if let Some(batch_id) = progress.in_flight_batch_id {
+                return load_in_flight_batch(
+                    transaction,
+                    batch_id,
+                    identity,
+                    progress.in_flight_after,
+                    progress.in_flight_through,
+                )
+                .map(Some);
+            }
             progress.acknowledged_through
         } else if let Some(batch_id) = progress.in_flight_batch_id {
-            let after = progress
-                .in_flight_after
-                .ok_or_else(|| TaskMergeError::Storage("task_merge_progress_corrupt".into()))?;
-            let through = progress
-                .in_flight_through
-                .ok_or_else(|| TaskMergeError::Storage("task_merge_progress_corrupt".into()))?;
-            let page = read_journal_page(transaction, after, through, MAX_TASK_MERGE_PAGE_SIZE)?;
-            if page.entries.last().map(|entry| entry.position) != Some(through) {
-                return Err(TaskMergeError::Storage(
-                    "task_merge_in_flight_batch_missing_entries".into(),
-                ));
-            }
-            let batch = fit_batch(batch_id, identity, after, page.entries)?;
-            if batch.through_position != through {
-                return Err(TaskMergeError::Storage(
-                    "task_merge_in_flight_batch_size_changed".into(),
-                ));
-            }
-            return Ok(Some(batch));
+            return load_in_flight_batch(
+                transaction,
+                batch_id,
+                identity,
+                progress.in_flight_after,
+                progress.in_flight_through,
+            )
+            .map(Some);
         } else {
             progress.acknowledged_through
         }
@@ -126,13 +123,39 @@ pub(crate) fn prepare_outbound_batch(
     Ok(Some(batch))
 }
 
+fn load_in_flight_batch(
+    transaction: &Transaction<'_>,
+    batch_id: String,
+    identity: &PolicyIdentity,
+    after: Option<i64>,
+    through: Option<i64>,
+) -> Result<TaskMergeBatch, TaskMergeError> {
+    let after =
+        after.ok_or_else(|| TaskMergeError::Storage("task_merge_progress_corrupt".into()))?;
+    let through =
+        through.ok_or_else(|| TaskMergeError::Storage("task_merge_progress_corrupt".into()))?;
+    let page = read_journal_page(transaction, after, through, MAX_TASK_MERGE_PAGE_SIZE)?;
+    if page.entries.last().map(|entry| entry.position) != Some(through) {
+        return Err(TaskMergeError::Storage(
+            "task_merge_in_flight_batch_missing_entries".into(),
+        ));
+    }
+    let batch = fit_batch(batch_id, identity, after, page.entries)?;
+    if batch.through_position != through {
+        return Err(TaskMergeError::Storage(
+            "task_merge_in_flight_batch_size_changed".into(),
+        ));
+    }
+    Ok(batch)
+}
+
 fn fit_batch(
     batch_id: String,
     identity: &PolicyIdentity,
     after_position: i64,
     entries: Vec<crate::application::sync_storage::TaskMergeJournalEntry>,
-) -> Result<TaskMergeOutboundBatch, TaskMergeError> {
-    let empty_batch = TaskMergeOutboundBatch {
+) -> Result<TaskMergeBatch, TaskMergeError> {
+    let empty_batch = TaskMergeBatch {
         batch_id: batch_id.clone(),
         identity: identity.clone(),
         after_position,
@@ -167,7 +190,7 @@ fn fit_batch(
     let through_position = entries.last().map(|entry| entry.position).ok_or_else(|| {
         TaskMergeError::Invalid("task_merge_operation_exceeds_batch_limit".into())
     })?;
-    Ok(TaskMergeOutboundBatch {
+    Ok(TaskMergeBatch {
         batch_id,
         identity: identity.clone(),
         after_position,

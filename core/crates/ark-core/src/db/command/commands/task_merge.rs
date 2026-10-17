@@ -1,5 +1,5 @@
 use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError, DbQuery};
-use crate::application::sync_storage::{PolicyIdentity, TaskMergeOutboundBatch};
+use crate::application::sync_storage::{PolicyIdentity, TaskMergeBatch, TaskMergeBatchAck};
 use crate::db::task_merge::{
     append_operation, read_conflict_set_result, TaskMergeAppendResult, TaskMergeError,
     TaskMergeReadResult,
@@ -72,7 +72,7 @@ impl PrepareTaskMergeBatchCommand {
 impl sealed::Sealed for PrepareTaskMergeBatchCommand {}
 
 impl DbCommand for PrepareTaskMergeBatchCommand {
-    type Output = Option<TaskMergeOutboundBatch>;
+    type Output = Option<TaskMergeBatch>;
 
     const CLASS: CommandClass = CommandClass::SyncLive;
 
@@ -146,6 +146,97 @@ impl DbCommand for AcknowledgeTaskMergeBatchCommand {
         )
         .map_err(map_task_merge_error)
     }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct ApplyTaskMergeBatchCommand {
+    peer_id: String,
+    local_device_id: String,
+    expected_identity: PolicyIdentity,
+    batch: TaskMergeBatch,
+}
+
+impl ApplyTaskMergeBatchCommand {
+    pub(crate) fn new(
+        peer_id: String,
+        local_device_id: String,
+        expected_identity: PolicyIdentity,
+        batch: TaskMergeBatch,
+    ) -> Self {
+        Self {
+            peer_id,
+            local_device_id,
+            expected_identity,
+            batch,
+        }
+    }
+}
+
+impl sealed::Sealed for ApplyTaskMergeBatchCommand {}
+
+impl DbCommand for ApplyTaskMergeBatchCommand {
+    type Output = TaskMergeBatchAck;
+
+    const CLASS: CommandClass = CommandClass::SyncLive;
+
+    fn weight(&self) -> usize {
+        super::serialized_weight(self)
+    }
+
+    fn execute(
+        self,
+        context: &CommandContext,
+        transaction: &Transaction<'_>,
+    ) -> Result<Self::Output, DbError> {
+        context.require_sync_peer_matches(&self.peer_id)?;
+        super::inbound_policy::require_sync_policy_identity(
+            transaction,
+            Some(&self.local_device_id),
+            Some(&self.expected_identity),
+        )?;
+        require_task_merge_receive_policy(transaction, &self.local_device_id)?;
+        super::device_registry_sync::require_registry_peer_admitted(transaction, &self.peer_id)?;
+        let removed: Vec<String> = crate::db::get_sync_kv(transaction, "sync.removed_peers")
+            .map_err(DbError::from_application_error)?
+            .map(|raw| serde_json::from_str(&raw).map_err(|error| error.to_string()))
+            .transpose()
+            .map_err(DbError::from_application_error)?
+            .unwrap_or_default();
+        if removed.iter().any(|removed_id| removed_id == &self.peer_id) {
+            return Err(DbError::Permission("sync_peer_removed".into()));
+        }
+        crate::db::task_merge::apply_inbound_batch(
+            transaction,
+            &self.peer_id,
+            &self.expected_identity,
+            &self.batch,
+        )
+        .map_err(map_task_merge_error)
+    }
+}
+
+fn require_task_merge_receive_policy(
+    transaction: &Transaction<'_>,
+    local_device_id: &str,
+) -> Result<(), DbError> {
+    let profile = crate::data_platform::load_sync_profile_for_sync(transaction, local_device_id)
+        .map_err(DbError::from_application_error)?;
+    if let Some(profile) = profile.filter(|profile| profile.active) {
+        let selected = profile.selective_profile();
+        let Some(rule) = selected.rules.get(&("type".into(), "core.task".into())) else {
+            return Err(DbError::Permission(
+                "task_merge_policy_requires_full_type_sync".into(),
+            ));
+        };
+        if rule.mode != crate::data_platform::SyncMode::Full
+            || rule.filter.digest() != crate::data_platform::FilterV1::match_all().digest()
+        {
+            return Err(DbError::Permission(
+                "task_merge_policy_requires_full_type_sync".into(),
+            ));
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize)]
