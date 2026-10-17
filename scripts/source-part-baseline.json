@@ -8,7 +8,6 @@
   "core/crates/ark-core/src/db/objects/part3a.rs",
   "core/crates/ark-core/src/db/objects/part3b.rs",
   "core/crates/ark-core/src/db/objects/part4.rs",
-  "core/crates/ark-core/src/db/snapshot/part02.rs",
   "core/crates/ark-core/src/db/sync/part1.rs",
   "core/crates/ark-core/src/db/sync/part2.rs",
   "core/crates/ark-core/src/db/sync/part3.rs",

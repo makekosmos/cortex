@@ -399,4 +399,4 @@ pub(in crate::db) fn default_rollback_restore(
     .map_err(|e| e.to_string())
 }
 
-include!("snapshot/part02.rs");
+include!("snapshot/restore.rs");

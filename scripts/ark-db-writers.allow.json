@@ -207,7 +207,7 @@
       "count": 1
     },
     {
-      "path": "core/crates/ark-core/src/db/snapshot/part02.rs",
+      "path": "core/crates/ark-core/src/db/snapshot/restore.rs",
       "category": "connection lifecycle",
       "count": 2
     },
