@@ -2,15 +2,29 @@ use super::*;
 use crate::domain::task_merge::{OperationId, TaskMergeOperation, TaskMergeUnit, TaskMergeValue};
 
 fn operation(id: char, parents: &[char], value: &str) -> TaskMergeOperation {
+    merge_operation(
+        id,
+        TaskMergeUnit::Title,
+        parents,
+        TaskMergeValue::Field(json!(value)),
+    )
+}
+
+fn merge_operation(
+    id: char,
+    unit: TaskMergeUnit,
+    parents: &[char],
+    value: TaskMergeValue,
+) -> TaskMergeOperation {
     TaskMergeOperation {
         id: OperationId::parse(format!("{}{}", "0".repeat(31), id)).unwrap(),
         object_id: "service-task".into(),
-        unit: TaskMergeUnit::Title,
+        unit,
         parents: parents
             .iter()
             .map(|id| OperationId::parse(format!("{}{}", "0".repeat(31), id)).unwrap())
             .collect(),
-        value: TaskMergeValue::Field(json!(value)),
+        value,
     }
 }
 
@@ -82,6 +96,125 @@ async fn task_merge_public_requests_preserve_conflicts_and_reject_stale_resoluti
     .await
     .unwrap_err();
     assert_eq!(stale, "task_merge_conflict_set_changed");
+}
+
+#[tokio::test]
+async fn sqlite_service_replicas_converge_after_reordered_merge_delivery() {
+    let left = service_fixture();
+    let right = service_fixture();
+    init(&left.state, &left.db_path()).await;
+    init(&right.state, &right.db_path()).await;
+
+    let title_base = operation('1', &[], "base title");
+    let deadline_base = merge_operation(
+        '4',
+        TaskMergeUnit::Deadline,
+        &[],
+        TaskMergeValue::Field(json!("2030-01-01")),
+    );
+    for state in [&left.state, &right.state] {
+        for merge_operation in [title_base.clone(), deadline_base.clone()] {
+            handle_request(
+                state,
+                Request::TaskMergeAppend {
+                    merge_operation,
+                    expected_conflict_digest: None,
+                },
+            )
+            .await
+            .unwrap();
+        }
+    }
+
+    let title_left = operation('2', &['1'], "left title");
+    let title_right = operation('3', &['1'], "right title");
+    let deadline_edit = merge_operation(
+        '5',
+        TaskMergeUnit::Deadline,
+        &['4'],
+        TaskMergeValue::Field(json!("2030-02-01")),
+    );
+    for merge_operation in [
+        title_left.clone(),
+        title_right.clone(),
+        deadline_edit.clone(),
+    ] {
+        handle_request(
+            &left.state,
+            Request::TaskMergeAppend {
+                merge_operation,
+                expected_conflict_digest: None,
+            },
+        )
+        .await
+        .unwrap();
+    }
+    for merge_operation in [deadline_edit, title_right, title_left] {
+        handle_request(
+            &right.state,
+            Request::TaskMergeAppend {
+                merge_operation,
+                expected_conflict_digest: None,
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    let title_sets = [
+        handle_request(
+            &left.state,
+            Request::TaskMergeConflicts {
+                object_id: "service-task".into(),
+                unit: TaskMergeUnit::Title,
+            },
+        )
+        .await
+        .unwrap(),
+        handle_request(
+            &right.state,
+            Request::TaskMergeConflicts {
+                object_id: "service-task".into(),
+                unit: TaskMergeUnit::Title,
+            },
+        )
+        .await
+        .unwrap(),
+    ];
+    assert_eq!(title_sets[0]["conflictSet"], title_sets[1]["conflictSet"]);
+    assert_eq!(
+        title_sets[0]["conflictSet"]["commonAncestors"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        title_sets[0]["conflictSet"]["variants"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+
+    for state in [&left.state, &right.state] {
+        let deadline_set = handle_request(
+            state,
+            Request::TaskMergeConflicts {
+                object_id: "service-task".into(),
+                unit: TaskMergeUnit::Deadline,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            deadline_set["conflictSet"]["variants"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+    }
 }
 
 #[test]
