@@ -1,12 +1,12 @@
 use ark_domain::canonical_type::registry::{
-    canonicalize_legacy_definition, canonicalize_type_version, validate_type_id, validate_version,
+    canonicalize_type_version, validate_type_id, validate_version,
 };
 use ark_store::type_registry::{insert_type_record, type_name};
 use rusqlite::{params, Connection, OptionalExtension};
 
 use super::{
     get_type, insert_type_version, register_alias, resolve_alias, set_base_type,
-    set_current_version, set_status, TypeRegistration, TypeVersion, LEGACY_VERSION,
+    set_current_version, set_status, TypeRegistration, TypeVersion,
 };
 
 pub fn register_type(
@@ -133,36 +133,15 @@ pub fn migrate_phase2(conn: &Connection) -> Result<(), String> {
     conn.execute_batch("SAVEPOINT ark_phase2_registry")
         .map_err(|e| e.to_string())?;
     let result = (|| {
+        ark_store::type_registry::migrate_schema(conn)?;
         conn.execute_batch(concat!(
             "CREATE TABLE IF NOT EXISTS sync_pending_objects (id TEXT PRIMARY KEY, ",
             "payload TEXT NOT NULL, awaited_type_id TEXT NOT NULL, received_at TEXT NOT ",
             "NULL); CREATE INDEX IF NOT EXISTS idx_sync_pending_awaited_type ON ",
-            "sync_pending_objects(awaited_type_id); CREATE TABLE IF NOT EXISTS ",
-            "object_type_versions (type_id TEXT NOT NULL, version TEXT NOT NULL, ",
-            "schema_json TEXT NOT NULL, ui_schema_json TEXT NOT NULL DEFAULT '{}', ",
-            "content_contract_json TEXT NOT NULL DEFAULT '{}', relations_json TEXT NOT ",
-            "NULL DEFAULT '[]', sync_policy_json TEXT NOT NULL DEFAULT '{}', schema_hash ",
-            "TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(type_id,version), ",
-            "FOREIGN KEY(type_id) REFERENCES object_types(id)); CREATE TABLE IF NOT ",
-            "EXISTS object_type_aliases (alias TEXT PRIMARY KEY, canonical_type_id TEXT ",
-            "NOT NULL, created_at TEXT NOT NULL, FOREIGN KEY(canonical_type_id) ",
-            "REFERENCES object_types(id));"
+            "sync_pending_objects(awaited_type_id);"
         ))
         .map_err(|e| e.to_string())?;
         for (table, column, definition) in [
-            (
-                "object_types",
-                "owner_kind",
-                "TEXT NOT NULL DEFAULT 'system'",
-            ),
-            ("object_types", "owner_id", "TEXT"),
-            (
-                "object_types",
-                "current_version",
-                "TEXT NOT NULL DEFAULT '0.0.0-legacy'",
-            ),
-            ("object_types", "status", "TEXT NOT NULL DEFAULT 'active'"),
-            ("object_types", "base_type_id", "TEXT"),
             (
                 "objects",
                 "type_version",
@@ -191,67 +170,12 @@ pub fn migrate_phase2(conn: &Connection) -> Result<(), String> {
             }
         }
         conn.execute_batch(concat!(
-            "CREATE INDEX IF NOT EXISTS idx_object_type_versions_lookup ON ",
-            "object_type_versions(type_id,version); CREATE INDEX IF NOT EXISTS ",
-            "idx_object_type_aliases_canonical ON object_type_aliases(canonical_type_id);",
-            " CREATE INDEX IF NOT EXISTS idx_objects_type_version ON objects(type_id,",
+            "CREATE INDEX IF NOT EXISTS idx_objects_type_version ON objects(type_id,",
             "type_version); CREATE INDEX IF NOT EXISTS ",
             "idx_sync_pending_awaited_type_version ON sync_pending_objects(",
             "awaited_type_id,awaited_type_version);"
         ))
         .map_err(|e| e.to_string())?;
-        let mut stmt = conn
-            .prepare(
-                "SELECT id,schema_json,ui_schema_json,created_at,current_version FROM object_types",
-            )
-            .map_err(|e| e.to_string())?;
-        let rows = stmt
-            .query_map([], |r| {
-                Ok((
-                    r.get::<_, String>(0)?,
-                    r.get::<_, String>(1)?,
-                    r.get::<_, String>(2)?,
-                    r.get::<_, String>(3)?,
-                    r.get::<_, String>(4)?,
-                ))
-            })
-            .map_err(|e| e.to_string())?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| e.to_string())?;
-        drop(stmt);
-        for (id, schema, ui, created, current_version) in rows {
-            if current_version != LEGACY_VERSION {
-                continue;
-            }
-            let v = TypeVersion {
-                type_id: id.clone(),
-                version: LEGACY_VERSION.into(),
-                schema_json: schema,
-                ui_schema_json: ui,
-                content_contract_json: "{}".into(),
-                relations_json: "[]".into(),
-                sync_policy_json: "{}".into(),
-                schema_hash: String::new(),
-                created_at: created.clone(),
-            };
-            let canonical = canonicalize_legacy_definition(&v.schema_json, &v.ui_schema_json)?;
-            conn.execute(
-                concat!(
-                    "INSERT OR IGNORE INTO object_type_versions(type_id,version,schema_json,",
-                    "ui_schema_json,content_contract_json,relations_json,sync_policy_json,",
-                    "schema_hash,created_at) VALUES (?1,?2,?3,?4,'{}','[]','{}',?5,?6)"
-                ),
-                params![
-                    id,
-                    LEGACY_VERSION,
-                    canonical.schema_json,
-                    canonical.ui_schema_json,
-                    canonical.schema_hash,
-                    created
-                ],
-            )
-            .map_err(|e| e.to_string())?;
-        }
         Ok::<(), String>(())
     })();
     match result {
