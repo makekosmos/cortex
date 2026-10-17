@@ -2,9 +2,9 @@ use crate::domain::canonical_type::canonical_value;
 pub use crate::domain::canonical_type::{
     canonical_schema_hash, AliasRecord, TypeRegistration, TypeSummary, TypeVersion,
 };
+pub use ark_application::type_registry::TypeGetResponse;
 use rusqlite::{params, Connection, OptionalExtension};
 use semver::Version;
-use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 pub const LEGACY_VERSION: &str = "0.0.0-legacy";
@@ -23,13 +23,6 @@ pub fn legacy_compatibility_version(
         &json_empty(),
     )?;
     Ok((format!("0.0.0+legacy.{}", &hash[..12]), hash))
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TypeGetResponse {
-    pub summary: TypeSummary,
-    pub definition: TypeVersion,
 }
 
 pub(super) fn parse_json(raw: &str, field: &str) -> Result<Value, String> {

@@ -8,4 +8,5 @@ pub mod sync_storage;
 pub mod task_merge;
 pub mod task_mutation;
 pub mod type_mutation;
+pub mod type_registry;
 pub mod usage;

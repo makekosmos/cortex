@@ -52,4 +52,7 @@ fn application_read_model_and_domain_type_registry_keep_ark_core_paths() {
         |value| value;
     let _: fn(ark_domain::canonical_type::TypeVersion) -> ark_core::type_registry::TypeVersion =
         |value| value;
+    let _: fn(
+        ark_application::type_registry::TypeGetResponse,
+    ) -> ark_core::type_registry::TypeGetResponse = |value| value;
 }
