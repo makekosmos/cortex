@@ -21,6 +21,12 @@ const DESKTOP_ONLY_IROH_FEATURES = ["fast-apple-datapath", "metrics", "portmappe
 export function validateDependencyGraph(metadata) {
   const packages = new Map(metadata.packages.map((pkg) => [pkg.name, pkg]));
   const errors = [];
+  const unclassifiedPackages = [...packages.keys()]
+    .filter((name) => name.startsWith("ark-") && !Object.hasOwn(GRAPH, name))
+    .sort();
+  for (const name of unclassifiedPackages) {
+    errors.push(`${name}: ARK workspace package is missing from the dependency graph`);
+  }
   for (const [name, allowed] of Object.entries(GRAPH)) {
     const pkg = packages.get(name);
     if (!pkg) {
@@ -99,7 +105,18 @@ async function main() {
           "-i",
           "iroh",
         ]
-      : ["tree", "--locked", "-p", "engine-mobile", "--target", target, "-e", "features", "-i", "iroh"];
+      : [
+          "tree",
+          "--locked",
+          "-p",
+          "engine-mobile",
+          "--target",
+          target,
+          "-e",
+          "features",
+          "-i",
+          "iroh",
+        ];
   const featureTree = cargo(treeArgs);
   errors.push(
     ...(profile === "desktop"
@@ -117,7 +134,9 @@ async function main() {
         name,
         packages
           .get(name)
-          .dependencies.filter((dependency) => dependency.kind === null && packages.has(dependency.name))
+          .dependencies.filter(
+            (dependency) => dependency.kind === null && packages.has(dependency.name),
+          )
           .map((dependency) => dependency.name)
           .sort(),
       ]),

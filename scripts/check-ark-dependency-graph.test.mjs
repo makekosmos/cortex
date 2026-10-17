@@ -33,10 +33,12 @@ const desktopFeatures = [
 
 test("accepts the declared ARK dependency whitelist and ignores dev-only edges", () => {
   const graph = metadata();
-  graph.packages.find((pkg) => pkg.name === "ark-core").dependencies.push({
-    name: "iroh",
-    kind: "dev",
-  });
+  graph.packages
+    .find((pkg) => pkg.name === "ark-core")
+    .dependencies.push({
+      name: "iroh",
+      kind: "dev",
+    });
   assert.deepEqual(validateDependencyGraph(graph), []);
 });
 
@@ -44,6 +46,17 @@ test("rejects an injected forbidden dependency edge", () => {
   const graph = metadata({ "ark-sync": ["ark-application", "ark-core", "ark-domain"] });
   assert.deepEqual(validateDependencyGraph(graph), [
     "ark-sync: internal normal dependencies are [ark-application, ark-core, ark-domain], expected [ark-application, ark-domain]",
+  ]);
+});
+
+test("rejects ARK workspace crates missing from the dependency whitelist", () => {
+  const graph = metadata();
+  graph.packages.push({
+    name: "ark-future-adapter",
+    dependencies: [{ name: "ark-core", kind: null }],
+  });
+  assert.deepEqual(validateDependencyGraph(graph), [
+    "ark-future-adapter: ARK workspace package is missing from the dependency graph",
   ]);
 });
 
