@@ -248,6 +248,10 @@ async fn oversized_request_is_rejected_before_queue_and_service_keeps_serving() 
     assert!(matches!(result, Err(ArkServiceError::Busy(_))));
 
     assert!(service.call("load_all", json!({})).await.is_ok());
+    service
+        .shutdown(Instant::now() + Duration::from_secs(2))
+        .await
+        .expect("service shuts down before the temporary database is removed");
 }
 
 #[test]
