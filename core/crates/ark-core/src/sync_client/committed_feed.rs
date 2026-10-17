@@ -4,6 +4,7 @@ use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::replication_storage::SyncRuntimeStorage;
+use ark_sync::committed_feed_delivery::{FeedAck, FeedAckOutcome, FeedFlight};
 use ark_sync::protocol::{serialize_message, LanSyncMessage};
 
 use crate::sync_client::ClientFeedInFlight;
@@ -236,63 +237,25 @@ pub(crate) async fn acknowledge_client_feed(
     policy_bound: bool,
     policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
 ) -> Result<(), String> {
-    let Some(position) = change_id
-        .strip_prefix("ark-feed-v1:")
-        .and_then(|value| value.parse::<i64>().ok())
-    else {
-        return Ok(());
-    };
-    let generation = match &policy_identity {
-        Some(identity) => identity.revision,
-        None => {
-            storage
-                .selective_sync_policy_generation_for_peer(peer_device_id)
-                .await?
-        }
-    };
-    let progress = match &policy_identity {
-        Some(identity) => {
-            storage
-                .begin_outbound_policy_identity(peer_device_id, identity)
-                .await?
-        }
-        None => {
-            storage
-                .begin_outbound_policy(peer_device_id, generation)
-                .await?
-        }
-    };
     let mut in_flight = flight.lock().await;
-    let current_flight = in_flight
-        .as_ref()
-        .is_some_and(|(pending, pending_identity)| {
-            *pending == position && pending_identity == &policy_identity
-        });
-    match ack {
-        ark_application::sync_storage::OutboundAck::DurableReceipt => {
-            if !receipt_ack || (!current_flight && position > progress.receipt_through) {
-                return Ok(());
-            }
-        }
-        ark_application::sync_storage::OutboundAck::Applied => {
-            if (receipt_ack && position > progress.receipt_through)
-                || (!receipt_ack && !current_flight)
-            {
-                return Ok(());
-            }
-        }
-    }
-    match &policy_identity {
-        Some(identity) => {
-            storage
-                .acknowledge_outbound_identity(peer_device_id, identity, position, ack)
-                .await?
-        }
-        None => {
-            storage
-                .acknowledge_outbound(peer_device_id, generation, position, ack)
-                .await?
-        }
+    let flight_state = in_flight.as_ref().map(|(position, identity)| FeedFlight {
+        position: *position,
+        policy_identity: identity.clone(),
+    });
+    let outcome = ark_sync::committed_feed_delivery::acknowledge(
+        storage.as_ref(),
+        peer_device_id,
+        FeedAck {
+            change_id: change_id.to_owned(),
+            policy_identity,
+            acknowledgement: ack,
+            durable_receipt_ack: receipt_ack,
+            in_flight: flight_state,
+        },
+    )
+    .await?;
+    let FeedAckOutcome::Persisted { current_flight } = outcome else {
+        return Ok(());
     };
     if current_flight {
         *in_flight = None;

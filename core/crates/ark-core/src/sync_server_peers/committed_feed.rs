@@ -259,85 +259,15 @@ pub(crate) async fn handle_committed_feed_ack(
     change_id: &str,
     policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
 ) -> Result<(), String> {
-    let Some(position) = change_id
-        .strip_prefix(FEED_CHANGE_PREFIX)
-        .and_then(|value| value.parse::<i64>().ok())
-    else {
-        return Ok(());
-    };
-    let (device_id, receipt_ack, current_flight, expected_identity) = {
-        let peers = peers.lock().await;
-        let Some(peer) = peers.get(&peer_id) else {
-            return Ok(());
-        };
-        (
-            peer.device_id.clone(),
-            peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
-                protocol
-                    .capabilities
-                    .contains(&ark_sync::protocol::ProtocolCapability::DurableReceiptAckV1)
-            }),
-            peer.in_flight_feed_position == Some(position),
-            peer.in_flight_feed_policy_identity.clone(),
-        )
-    };
-    if expected_identity != policy_identity {
-        return Ok(());
-    }
-    let (generation, progress) = match &policy_identity {
-        Some(identity) => (
-            identity.revision,
-            storage
-                .begin_outbound_policy_identity(&device_id, identity)
-                .await?,
-        ),
-        None => {
-            let generation = storage
-                .selective_sync_policy_generation_for_peer(&device_id)
-                .await?;
-            (
-                generation,
-                storage
-                    .begin_outbound_policy(&device_id, generation)
-                    .await?,
-            )
-        }
-    };
-    if (receipt_ack && position > progress.receipt_through) || (!receipt_ack && !current_flight) {
-        return Ok(());
-    }
-    match &policy_identity {
-        Some(identity) => {
-            storage
-                .acknowledge_outbound_identity(
-                    &device_id,
-                    identity,
-                    position,
-                    ark_application::sync_storage::OutboundAck::Applied,
-                )
-                .await?
-        }
-        None => {
-            storage
-                .acknowledge_outbound(
-                    &device_id,
-                    generation,
-                    position,
-                    ark_application::sync_storage::OutboundAck::Applied,
-                )
-                .await?
-        }
-    };
-    if current_flight {
-        if let Some(peer) = peers.lock().await.get_mut(&peer_id) {
-            peer.in_flight_feed_position = None;
-            peer.in_flight_feed_policy_identity = None;
-        }
-    }
-    if current_flight {
-        pump_committed_feed(storage, peers, peer_id).await?;
-    }
-    Ok(())
+    handle_feed_ack(
+        storage,
+        peers,
+        peer_id,
+        change_id,
+        policy_identity,
+        ark_application::sync_storage::OutboundAck::Applied,
+    )
+    .await
 }
 
 pub(crate) async fn handle_committed_feed_receipt_ack(
@@ -347,13 +277,26 @@ pub(crate) async fn handle_committed_feed_receipt_ack(
     change_id: &str,
     policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
 ) -> Result<(), String> {
-    let Some(position) = change_id
-        .strip_prefix(FEED_CHANGE_PREFIX)
-        .and_then(|value| value.parse::<i64>().ok())
-    else {
-        return Ok(());
-    };
-    let (device_id, receipt_ack, current_flight, expected_identity) = {
+    handle_feed_ack(
+        storage,
+        peers,
+        peer_id,
+        change_id,
+        policy_identity,
+        ark_application::sync_storage::OutboundAck::DurableReceipt,
+    )
+    .await
+}
+
+async fn handle_feed_ack(
+    storage: &Arc<dyn SyncRuntimeStorage>,
+    peers: &Arc<Mutex<HashMap<usize, PeerState>>>,
+    peer_id: usize,
+    change_id: &str,
+    policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
+    acknowledgement: ark_application::sync_storage::OutboundAck,
+) -> Result<(), String> {
+    let (device_id, receipt_ack, in_flight, expected_identity) = {
         let peers = peers.lock().await;
         let Some(peer) = peers.get(&peer_id) else {
             return Ok(());
@@ -365,59 +308,37 @@ pub(crate) async fn handle_committed_feed_receipt_ack(
                     .capabilities
                     .contains(&ark_sync::protocol::ProtocolCapability::DurableReceiptAckV1)
             }),
-            peer.in_flight_feed_position == Some(position),
+            peer.in_flight_feed_position.map(|position| {
+                ark_sync::committed_feed_delivery::FeedFlight {
+                    position,
+                    policy_identity: peer.in_flight_feed_policy_identity.clone(),
+                }
+            }),
             peer.in_flight_feed_policy_identity.clone(),
         )
     };
-    if !receipt_ack {
-        return Ok(());
-    }
     if expected_identity != policy_identity {
         return Ok(());
     }
-    let (generation, progress) = match &policy_identity {
-        Some(identity) => (
-            identity.revision,
-            storage
-                .begin_outbound_policy_identity(&device_id, identity)
-                .await?,
-        ),
-        None => {
-            let generation = storage
-                .selective_sync_policy_generation_for_peer(&device_id)
-                .await?;
-            (
-                generation,
-                storage
-                    .begin_outbound_policy(&device_id, generation)
-                    .await?,
-            )
-        }
-    };
-    if !current_flight && position > progress.receipt_through {
+    if acknowledgement == ark_application::sync_storage::OutboundAck::DurableReceipt && !receipt_ack
+    {
         return Ok(());
     }
-    match &policy_identity {
-        Some(identity) => {
-            storage
-                .acknowledge_outbound_identity(
-                    &device_id,
-                    identity,
-                    position,
-                    ark_application::sync_storage::OutboundAck::DurableReceipt,
-                )
-                .await?
-        }
-        None => {
-            storage
-                .acknowledge_outbound(
-                    &device_id,
-                    generation,
-                    position,
-                    ark_application::sync_storage::OutboundAck::DurableReceipt,
-                )
-                .await?
-        }
+    let outcome = ark_sync::committed_feed_delivery::acknowledge(
+        storage.as_ref(),
+        &device_id,
+        ark_sync::committed_feed_delivery::FeedAck {
+            change_id: change_id.to_owned(),
+            policy_identity,
+            acknowledgement,
+            durable_receipt_ack: receipt_ack,
+            in_flight,
+        },
+    )
+    .await?;
+    let ark_sync::committed_feed_delivery::FeedAckOutcome::Persisted { current_flight } = outcome
+    else {
+        return Ok(());
     };
     if current_flight {
         if let Some(peer) = peers.lock().await.get_mut(&peer_id) {
