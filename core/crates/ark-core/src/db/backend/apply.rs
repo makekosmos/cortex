@@ -143,8 +143,13 @@ impl SqliteStorageBackend {
         if matches!(entity.entity_type.as_str(), "area" | "heading") {
             return Err("LegacyPlanningReadOnly".into());
         }
-        if matches!(entity.entity_type.as_str(), "todo" | "project" | "tag")
-            && entity.deleted == Some(true)
+        if entity.entity_type == "todo" && entity.deleted == Some(true) {
+            let mut canonical = entity.clone();
+            canonical.entity_type = "object".into();
+            return crate::canonical_types::facades::apply_remote_task_delete(conn, &canonical)
+                .map(|outcome| (outcome, Vec::new()));
+        }
+        if matches!(entity.entity_type.as_str(), "project" | "tag") && entity.deleted == Some(true)
         {
             let mut canonical = entity.clone();
             canonical.entity_type = "object".into();

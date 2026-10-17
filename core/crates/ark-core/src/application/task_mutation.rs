@@ -13,6 +13,111 @@ pub(crate) trait TaskMutationSession:
     fn task_type_id(&self, id: &str) -> Result<Option<String>, String>;
     fn hard_delete_task(&self, id: &str, device_id: &str) -> Result<String, String>;
     fn soft_delete_task(&self, id: &str, device_id: &str) -> Result<String, String>;
+    fn legacy_task_revision(&self, id: &str) -> Result<Option<String>, String>;
+    fn record_legacy_task_revision(&self, id: &str, source_hlc: &str) -> Result<(), String>;
+    fn record_canonical_task_revision(&self, id: &str, source_hlc: &str) -> Result<(), String>;
+    fn hard_delete_remote_task(&self, entity: &SyncEntity) -> Result<(), String>;
+}
+
+pub(crate) enum InboundTaskMutation<'a> {
+    CanonicalFullSnapshot {
+        object: &'a ArkObject,
+        links: &'a [ObjectLink],
+        source_hlc: &'a str,
+    },
+    CanonicalEntitySnapshot {
+        object: &'a ArkObject,
+        links: &'a [ObjectLink],
+        source_hlc: &'a str,
+    },
+    LegacyTodoSnapshot {
+        object: &'a ArkObject,
+        links: &'a [ObjectLink],
+        source_hlc: &'a str,
+    },
+    RemoteHardDelete {
+        entity: &'a SyncEntity,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum InboundTaskMutationOutcome {
+    Applied,
+    Stale,
+}
+
+pub(crate) fn apply_inbound_task_mutation(
+    session: &dyn TaskMutationSession,
+    mutation: InboundTaskMutation<'_>,
+) -> Result<InboundTaskMutationOutcome, String> {
+    match mutation {
+        InboundTaskMutation::CanonicalFullSnapshot {
+            object,
+            links,
+            source_hlc,
+        } => {
+            validate_task(object)?;
+            session.persist_task(object, links)?;
+            session.record_remote_revision(&object.id, source_hlc)?;
+        }
+        InboundTaskMutation::CanonicalEntitySnapshot {
+            object,
+            links,
+            source_hlc,
+        } => {
+            validate_task(object)?;
+            if session
+                .current_revision(&object.id)?
+                .as_deref()
+                .is_some_and(|current| {
+                    crate::hlc::HLC::compare_str(source_hlc, current) != std::cmp::Ordering::Greater
+                })
+            {
+                return Ok(InboundTaskMutationOutcome::Stale);
+            }
+            session.persist_task(object, links)?;
+            session.record_canonical_task_revision(&object.id, source_hlc)?;
+        }
+        InboundTaskMutation::LegacyTodoSnapshot {
+            object,
+            links,
+            source_hlc,
+        } => {
+            validate_task(object)?;
+            if session
+                .legacy_task_revision(&object.id)?
+                .as_deref()
+                .is_some_and(|current| {
+                    crate::hlc::HLC::compare_str(source_hlc, current) != std::cmp::Ordering::Greater
+                })
+            {
+                return Ok(InboundTaskMutationOutcome::Stale);
+            }
+            session.persist_task(object, links)?;
+            session.record_legacy_task_revision(&object.id, source_hlc)?;
+        }
+        InboundTaskMutation::RemoteHardDelete { entity } => {
+            if session
+                .current_revision(&entity.id)?
+                .as_deref()
+                .is_some_and(|current| {
+                    crate::hlc::HLC::compare_str(&entity.hlc, current)
+                        != std::cmp::Ordering::Greater
+                })
+            {
+                return Ok(InboundTaskMutationOutcome::Stale);
+            }
+            session.hard_delete_remote_task(entity)?;
+        }
+    }
+    Ok(InboundTaskMutationOutcome::Applied)
+}
+
+fn validate_task(object: &ArkObject) -> Result<(), String> {
+    if object.type_id != "core.task" || object.type_version != "0.1.0" {
+        return Err("object_write_slice_unsupported_type".into());
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize)]

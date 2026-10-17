@@ -85,6 +85,26 @@ pub fn apply_legacy_compat_entity(
         },
     )
     .map_err(|e| format!("invalid type at {}", e.pointer()))?;
+    if mapped.object.type_id == "core.task" {
+        let session = crate::db::SqliteObjectWriteSession::new(conn);
+        let outcome = crate::application::task_mutation::apply_inbound_task_mutation(
+            &session,
+            crate::application::task_mutation::InboundTaskMutation::LegacyTodoSnapshot {
+                object: &mapped.object,
+                links: &mapped.links,
+                source_hlc: &entity.hlc,
+            },
+        )
+        .map_err(|error| error.to_string())?;
+        return Ok(match outcome {
+            crate::application::task_mutation::InboundTaskMutationOutcome::Applied => {
+                crate::application::sync_storage::InboundApplyOutcome::Applied
+            }
+            crate::application::task_mutation::InboundTaskMutationOutcome::Stale => {
+                crate::application::sync_storage::InboundApplyOutcome::Stale
+            }
+        });
+    }
     db::upsert_object(conn, &mapped.object)?;
     for link in mapped.links {
         db::upsert_object_link(conn, &link)?;
@@ -106,6 +126,17 @@ pub fn apply_canonical_object_entity(
     conn: &Connection,
     entity: &SyncEntity,
 ) -> Result<crate::application::sync_storage::InboundApplyOutcome, String> {
+    let type_id = entity
+        .data
+        .get("typeId")
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .map(Some)
+        .unwrap_or(db::get_object(conn, &entity.id)?.map(|object| object.type_id));
+    let task_session = crate::db::SqliteObjectWriteSession::new(conn);
+    if entity.deleted == Some(true) && type_id.as_deref() == Some("core.task") {
+        return super::task_sync_apply::apply_remote_task_delete(conn, entity);
+    }
     let current = db::get_object_revision(conn, &entity.id)?;
     if current
         .as_deref()
@@ -115,101 +146,131 @@ pub fn apply_canonical_object_entity(
     }
     conn.execute_batch("SAVEPOINT canonical_sync_object")
         .map_err(|e| e.to_string())?;
-    let result = (|| -> Result<(), String> {
-        if entity.deleted == Some(true) {
-            db::delete_object(conn, &entity.id)?;
-            conn.execute(
-                concat!(
+    let result =
+        (|| -> Result<Option<crate::application::sync_storage::InboundApplyOutcome>, String> {
+            if entity.deleted == Some(true) {
+                db::delete_object(conn, &entity.id)?;
+                conn.execute(
+                    concat!(
                     "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,1) ON ",
                     "CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=1 WHERE ",
                     "excluded.hlc > object_sync_versions.hlc"
                 ),
-                params![entity.id, entity.hlc],
-            )
-            .map_err(|e| e.to_string())?;
-            db::upsert_sync_tombstone(conn, entity)?;
-            return Ok(());
-        }
-        let mut data = entity.data.clone();
-        data.insert("id".into(), Value::String(entity.id.clone()));
-        let input: ArkObjectWrite =
-            serde_json::from_value(Value::Object(data.clone())).map_err(|e| e.to_string())?;
-        let input_type_id = input.type_id.clone();
-        let input_type_version = input.type_version.clone();
-        let canonical_alias = match input_type_id.as_str() {
-            "note_obj" => Some("com.kosmos.note"),
-            "task_obj" => Some("core.task"),
-            "project_obj" => Some("com.kosmos.project"),
-            "tag_obj" => Some("com.kosmos.tag"),
-            "person_obj" => Some("com.kosmos.person"),
-            "image_obj" => Some("com.kosmos.image"),
-            "time_entry_obj" => Some("com.kosmos.time-entry"),
-            "game_obj" => Some("com.kosmos.game"),
-            "book_obj" => Some("com.kosmos.book"),
-            _ => None,
-        };
-        let object = if let Some(canonical_type_id) = canonical_alias {
-            let props = input.props_json.clone();
-            let source = serde_json::json!({
-                "id": input.id,
-                "legacy_type_id": input.type_id,
-                "title": input.title,
-                "content": input.content_json,
-                "props": props,
-                "created_at": input.created_at,
-                "updated_at": input.updated_at,
-                "deleted_at": input.deleted_at,
-            });
-            let mapped = crate::canonical_types::compatibility::map_legacy_source(
-                crate::canonical_types::compatibility::LegacySource {
-                    source_kind: "object",
-                    source_id: &entity.id,
-                    raw_json: source.to_string().as_bytes(),
+                    params![entity.id, entity.hlc],
+                )
+                .map_err(|e| e.to_string())?;
+                db::upsert_sync_tombstone(conn, entity)?;
+                return Ok(None);
+            }
+            let mut data = entity.data.clone();
+            data.insert("id".into(), Value::String(entity.id.clone()));
+            let input: ArkObjectWrite =
+                serde_json::from_value(Value::Object(data.clone())).map_err(|e| e.to_string())?;
+            let input_type_id = input.type_id.clone();
+            let input_type_version = input.type_version.clone();
+            let canonical_alias = match input_type_id.as_str() {
+                "note_obj" => Some("com.kosmos.note"),
+                "task_obj" => Some("core.task"),
+                "project_obj" => Some("com.kosmos.project"),
+                "tag_obj" => Some("com.kosmos.tag"),
+                "person_obj" => Some("com.kosmos.person"),
+                "image_obj" => Some("com.kosmos.image"),
+                "time_entry_obj" => Some("com.kosmos.time-entry"),
+                "game_obj" => Some("com.kosmos.game"),
+                "book_obj" => Some("com.kosmos.book"),
+                _ => None,
+            };
+            let object = if let Some(canonical_type_id) = canonical_alias {
+                let props = input.props_json.clone();
+                let source = serde_json::json!({
+                    "id": input.id,
+                    "legacy_type_id": input.type_id,
+                    "title": input.title,
+                    "content": input.content_json,
+                    "props": props,
+                    "created_at": input.created_at,
+                    "updated_at": input.updated_at,
+                    "deleted_at": input.deleted_at,
+                });
+                let mapped = crate::canonical_types::compatibility::map_legacy_source(
+                    crate::canonical_types::compatibility::LegacySource {
+                        source_kind: "object",
+                        source_id: &entity.id,
+                        raw_json: source.to_string().as_bytes(),
+                    },
+                )
+                .map_err(|e| format!("{} at {}", e.code(), e.pointer()))?;
+                debug_assert_eq!(mapped.object.type_id, canonical_type_id);
+                mapped.object
+            } else if crate::canonical_types::definitions::canonical_type_registrations()
+                .map_err(|e| e.to_string())?
+                .iter()
+                .any(|registration| registration.type_id == input_type_id)
+            {
+                crate::canonical_types::ingress::prepare_object(conn, input)
+                    .map_err(|e| e.to_string())?
+            } else {
+                // Generic Phase 2 objects have no canonical content contract.
+                // Preserve the wire version exactly; resolving a legacy wire
+                // version to a synthetic compatibility hash here changes the
+                // pending/version contract.
+                input.with_type_version(
+                    input_type_version
+                        .unwrap_or_else(|| crate::type_registry::LEGACY_VERSION.to_string()),
+                )
+            };
+            if object.type_id == "core.task" {
+                let links: Vec<ObjectLink> = data
+                    .get("links")
+                    .cloned()
+                    .map(serde_json::from_value)
+                    .transpose()
+                    .map_err(|e| e.to_string())?
+                    .unwrap_or_default();
+                let outcome = crate::application::task_mutation::apply_inbound_task_mutation(
+                &task_session,
+                crate::application::task_mutation::InboundTaskMutation::CanonicalEntitySnapshot {
+                    object: &object,
+                    links: &links,
+                    source_hlc: &entity.hlc,
                 },
             )
-            .map_err(|e| format!("{} at {}", e.code(), e.pointer()))?;
-            debug_assert_eq!(mapped.object.type_id, canonical_type_id);
-            mapped.object
-        } else if crate::canonical_types::definitions::canonical_type_registrations()
-            .map_err(|e| e.to_string())?
-            .iter()
-            .any(|registration| registration.type_id == input_type_id)
-        {
-            crate::canonical_types::ingress::prepare_object(conn, input)
-                .map_err(|e| e.to_string())?
-        } else {
-            // Generic Phase 2 objects have no canonical content contract.
-            // Preserve the wire version exactly; resolving a legacy wire
-            // version to a synthetic compatibility hash here changes the
-            // pending/version contract.
-            input.with_type_version(
-                input_type_version
-                    .unwrap_or_else(|| crate::type_registry::LEGACY_VERSION.to_string()),
-            )
-        };
-        db::upsert_object(conn, &object)?;
-        if let Some(raw_links) = data.get("links") {
-            let links: Vec<ObjectLink> =
-                serde_json::from_value(raw_links.clone()).map_err(|e| e.to_string())?;
-            for link in links {
-                db::upsert_object_link(conn, &link)?;
+            .map_err(|error| error.to_string())?;
+                return Ok(Some(match outcome {
+                    crate::application::task_mutation::InboundTaskMutationOutcome::Applied => {
+                        crate::application::sync_storage::InboundApplyOutcome::Applied
+                    }
+                    crate::application::task_mutation::InboundTaskMutationOutcome::Stale => {
+                        crate::application::sync_storage::InboundApplyOutcome::Stale
+                    }
+                }));
             }
-        }
-        conn.execute(
-            concat!(
-                "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,0) ON ",
-                "CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=0 WHERE ",
-                "excluded.hlc > object_sync_versions.hlc"
-            ),
-            params![object.id, entity.hlc],
-        )
-        .map_err(|e| e.to_string())?;
-        db::delete_sync_tombstone(conn, &entity.id)
-    })();
+            db::upsert_object(conn, &object)?;
+            if let Some(raw_links) = data.get("links") {
+                let links: Vec<ObjectLink> =
+                    serde_json::from_value(raw_links.clone()).map_err(|e| e.to_string())?;
+                for link in links {
+                    db::upsert_object_link(conn, &link)?;
+                }
+            }
+            conn.execute(
+                concat!(
+                    "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,0) ON ",
+                    "CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=0 WHERE ",
+                    "excluded.hlc > object_sync_versions.hlc"
+                ),
+                params![object.id, entity.hlc],
+            )
+            .map_err(|e| e.to_string())?;
+            db::delete_sync_tombstone(conn, &entity.id)?;
+            Ok(None)
+        })();
     match result {
-        Ok(()) => conn
+        Ok(outcome) => conn
             .execute_batch("RELEASE canonical_sync_object")
-            .map(|()| crate::application::sync_storage::InboundApplyOutcome::Applied)
+            .map(|()| {
+                outcome.unwrap_or(crate::application::sync_storage::InboundApplyOutcome::Applied)
+            })
             .map_err(|e| e.to_string()),
         Err(error) => {
             let _ = conn

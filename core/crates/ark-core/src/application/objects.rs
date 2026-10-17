@@ -206,8 +206,16 @@ fn apply_core_task_write(
                 duplicate: false,
             });
         }
-        session.persist_object(&object, &links)?;
-        session.record_remote_revision(&object.id, source_hlc)?;
+        let task_session =
+            local_task_session.ok_or_else(|| "object_write_origin_mismatch".to_string())?;
+        let _ = crate::application::task_mutation::apply_inbound_task_mutation(
+            task_session,
+            crate::application::task_mutation::InboundTaskMutation::CanonicalFullSnapshot {
+                object: &object,
+                links: &links,
+                source_hlc,
+            },
+        )?;
         let receipt = session.insert_receipt(NewObjectReceipt {
             entity_id: object.id.clone(),
             representation_kind: representation_kind.to_owned(),
@@ -280,7 +288,7 @@ pub(crate) fn apply_local_core_task_write(
 }
 
 pub(crate) fn apply_remote_core_task_write(
-    session: &dyn ObjectWriteSession,
+    session: &dyn crate::application::task_mutation::TaskMutationSession,
     remote: RemoteObjectWrite,
     authenticated_peer_id: Option<String>,
 ) -> Result<ObjectWriteResult, String> {
@@ -289,5 +297,5 @@ pub(crate) fn apply_remote_core_task_write(
     } else {
         ObjectWriteOrigin::TrustedRemote
     };
-    apply_core_task_write(session, None, origin, Input::Remote(remote))
+    apply_core_task_write(session, Some(session), origin, Input::Remote(remote))
 }

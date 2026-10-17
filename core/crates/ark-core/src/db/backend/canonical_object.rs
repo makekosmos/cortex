@@ -224,4 +224,52 @@ impl crate::application::task_mutation::TaskMutationSession for SqliteObjectWrit
         db::record_sync_tombstone_with_type(self.conn, "object", id, Some("core.task"), &hlc)?;
         Ok(hlc)
     }
+
+    fn legacy_task_revision(&self, id: &str) -> Result<Option<String>, String> {
+        self.conn
+            .query_row(
+                "SELECT hlc FROM object_sync_versions WHERE object_id = ?1",
+                [id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| error.to_string())
+    }
+
+    fn record_legacy_task_revision(&self, id: &str, source_hlc: &str) -> Result<(), String> {
+        self.conn
+            .execute(
+                "INSERT INTO object_sync_versions(object_id, hlc, deleted) VALUES (?1, ?2, 0)
+                 ON CONFLICT(object_id) DO UPDATE SET hlc = excluded.hlc, deleted = 0
+                 WHERE excluded.hlc > object_sync_versions.hlc",
+                params![id, source_hlc],
+            )
+            .map_err(|error| error.to_string())?;
+        db::delete_sync_tombstone(self.conn, id)
+    }
+
+    fn record_canonical_task_revision(&self, id: &str, source_hlc: &str) -> Result<(), String> {
+        self.conn
+            .execute(
+                "INSERT INTO object_sync_versions(object_id, hlc, deleted) VALUES (?1, ?2, 0)
+                 ON CONFLICT(object_id) DO UPDATE SET hlc = excluded.hlc, deleted = 0
+                 WHERE excluded.hlc > object_sync_versions.hlc",
+                params![id, source_hlc],
+            )
+            .map_err(|error| error.to_string())?;
+        db::delete_sync_tombstone(self.conn, id)
+    }
+
+    fn hard_delete_remote_task(&self, entity: &crate::types::SyncEntity) -> Result<(), String> {
+        db::delete_object(self.conn, &entity.id)?;
+        self.conn
+            .execute(
+                "INSERT INTO object_sync_versions(object_id, hlc, deleted) VALUES (?1, ?2, 1)
+                 ON CONFLICT(object_id) DO UPDATE SET hlc = excluded.hlc, deleted = 1
+                 WHERE excluded.hlc > object_sync_versions.hlc",
+                params![entity.id, entity.hlc],
+            )
+            .map_err(|error| error.to_string())?;
+        db::upsert_sync_tombstone(self.conn, entity)
+    }
 }
