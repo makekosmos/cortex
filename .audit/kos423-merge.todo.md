@@ -22,8 +22,17 @@
 
 ## Throughput checkpoint
 
-- [ ] After each implementation commit, record the hypothesis, before-state, production test result, and next acceptance gap.
+- [x] After each implementation commit, record the hypothesis, before-state, production test result, and next acceptance gap.
 - Verified local persistence/API slice: a sealed SQLite actor stores task-field operations append-only, exposes common ancestors and concurrent variants, keeps unresolved parents pending, rejects malformed parent shapes before storage, replays operation IDs idempotently across reopen, and atomically requires the observed digest when an operation closes a conflict frontier. Before, `SyncEntity` carried only a last-writer object snapshot and no durable variants. The 17 matching domain, DB actor, and service tests pass; strict Clippy, formatting, diff, and source-size checks pass. An independent review replaced string-based error classification with typed storage errors. Remaining acceptance gap: normal task edits are not yet converted into these operations, and operations have no committed-feed/wire delivery or legacy-write fence, so this slice does not claim cross-device convergence.
+- Full `ark-core --lib` validation currently reports 539/540 both in parallel and serial mode. The single failure, `disabled_offline_device_reopens_sqlite_and_catches_up_before_data_admission`, passes in isolation (1/1); it is an unrelated iroh live-connection race and remains an open test-suite issue.
+
+## Next implementation boundary
+
+- Local canonical task edits enter through `service/runtime/objects.rs::upsert_object` and `LocalCoreTaskWrite::execute`; the object projection, HLC, receipt, and snapshot committed-feed entry are committed in one SQLite actor transaction.
+- Compatibility writes bypass that command: `LegacyGraphWriteCommand` calls `canonical_types/facades/legacy_records.rs::write_legacy_records`, and `LegacyDeleteCommand` calls `delete_legacy_object`. Both must join the operation-aware writer before operation generation is authoritative.
+- Inbound full snapshots still overwrite the projection through both `AuthenticatedCoreTaskWrite::execute` and `apply_canonical_object_entity`; include full `object`, compatibility `todo`, and tombstone/delete paths in the legacy-write fence.
+- Safe sequence: (1) converge all local task upsert/delete paths on one transactional writer; (2) add an operation-specific feed payload and negotiated capability; (3) atomically fence legacy full-object writes for operation-enabled tasks; (4) enable operation delivery only after peers negotiate the capability. Do not start local operation generation before this cutover can be completed without a mixed-mode window.
+- The owner clarified receiver policy: a device's type/content selection controls what it receives. Excluding a category stops transfers to that device and preserves local copies; other selected devices can still receive them. Adding a category back requires backfill. This policy is separate from merge history and deletion semantics.
 
 ## Candidate outputs
 
