@@ -80,7 +80,7 @@ fn live_object_ids(state: &Arc<ServiceState>) -> Vec<String> {
 /// Restore refuses a stale snapshot before changing live data, including
 /// committed object changes that may already have been observed by a peer.
 #[tokio::test]
-async fn db_backup_restore_refuses_to_rollback_committed_feed() {
+async fn db_backup_restore_refuses_to_rollback_committed_feed_and_restarts_sync() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
     let db_path = init_snapshot_db(&fixture).await;
@@ -102,6 +102,29 @@ async fn db_backup_restore_refuses_to_rollback_committed_feed() {
     seed_rpc_object(&state, "obj-after", "after").await;
     assert_eq!(live_object_ids(&state), vec!["obj-after".to_string()]);
 
+    handle_request(
+        &state,
+        Request::StartSync(StartSyncParams {
+            space_id: "restore-refusal-space".to_string(),
+            device_id: "restore-refusal-device".to_string(),
+            device_name: Some("Restore Refusal Device".to_string()),
+            port: Some(free_port()),
+            seed_addresses: None,
+            relay_url: None,
+            relay_api_key: None,
+            auth_secret: None,
+            use_iroh: false,
+            iroh_peer_ticket: None,
+            iroh_relay_url: None,
+            pairing_connect: false,
+            discovery_enabled: false,
+            bind: SyncBind::Loopback,
+            app_version: None,
+        }),
+    )
+    .await
+    .expect("loopback sync must start before restore refusal");
+
     let error = handle_request(
         &state,
         Request::DbBackupRestore {
@@ -111,9 +134,17 @@ async fn db_backup_restore_refuses_to_rollback_committed_feed() {
     .await
     .expect_err("stale snapshot must not roll back committed feed progress");
     assert!(error.contains("snapshot predates committed sync history"));
-    assert!(error.contains("live database was not changed"));
+    assert!(error.contains("without changing the live database"));
 
     assert_eq!(live_object_ids(&state), vec!["obj-after".to_string()]);
+    assert_eq!(
+        handle_request(&state, Request::GetSyncSnapshot)
+            .await
+            .unwrap()["running"],
+        json!(true),
+        "safe refusal must restart sync because live database state is known intact"
+    );
+    handle_request(&state, Request::StopSync).await.unwrap();
 
     // Restart-equivalent: refusal leaves the same live contents on disk.
     handle_request(

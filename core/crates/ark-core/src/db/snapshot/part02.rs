@@ -68,8 +68,8 @@ pub(in crate::db) fn restore_snapshot_impl(
         cleanup_staging(&staging);
         return Err(format!(
             concat!(
-                "snapshot predates committed sync history (snapshot feed {}, ",
-                "live feed {}); live database was not changed"
+                "restore refused: stale snapshot predates committed sync history ",
+                "(snapshot feed {}, live feed {})"
             ),
             snapshot_feed_watermark, live_feed_watermark
         ));

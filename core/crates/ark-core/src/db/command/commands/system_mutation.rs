@@ -153,6 +153,8 @@ impl DbMaintenanceCommand for RestoreSnapshotCommand {
         crate::db::restore_snapshot(connection, &self.db_path, &self.backup_id).map_err(|error| {
             if error.starts_with("restore recovery required:") {
                 DbError::RecoveryRequired
+            } else if let Some(reason) = error.strip_prefix("restore refused:") {
+                DbError::RestoreRefused(reason.trim().to_string())
             } else {
                 DbError::Storage(error)
             }

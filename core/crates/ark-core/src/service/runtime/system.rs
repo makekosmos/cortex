@@ -334,8 +334,7 @@ pub(super) async fn db_backup_restore(
             db::CommandContext::engine_maintenance(),
             db::RestoreSnapshotCommand::new(db_path, backup_id),
         )
-        .await
-        .map_err(|error| error.to_string());
+        .await;
 
     let report = match (restore_result, restart_params) {
         (Ok(report), Some(params)) => {
@@ -347,12 +346,22 @@ pub(super) async fn db_backup_restore(
             report
         }
         (Ok(report), None) => report,
+        (Err(db::DbError::RestoreRefused(reason)), Some(params)) => {
+            handle_start_sync_with_params(state, params)
+                .await
+                .map_err(|error| {
+                    format!("restore was safely refused, but sync could not restart: {error}")
+                })?;
+            return Err(format!(
+                "restore refused without changing the live database: {reason}"
+            ));
+        }
         (Err(error), Some(_)) => {
             return Err(format!(
                 "restore failed; sync stays stopped because database state is uncertain: {error}"
             ));
         }
-        (Err(error), None) => return Err(error),
+        (Err(error), None) => return Err(error.to_string()),
     };
     serde_json::to_value(report).map_err(|error| error.to_string())
 }

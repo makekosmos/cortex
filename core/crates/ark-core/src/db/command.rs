@@ -233,6 +233,8 @@ pub(crate) enum DbError {
     Permission(String),
     #[error("{0}")]
     Conflict(String),
+    #[error("restore refused without changing the live database: {0}")]
+    RestoreRefused(String),
     #[error("{0}")]
     Unsupported(String),
     #[error("{0}")]
