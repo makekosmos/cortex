@@ -120,44 +120,9 @@ pub(super) fn actor_loop(
 }
 
 fn run_task(shared: &ActorShared, connection: &mut Connection, task: Box<dyn WriterTask>) -> bool {
-    match catch_unwind(AssertUnwindSafe(|| task.run(connection))) {
+    let mut on_error = |error: &DbError| fail_closed_for_error(shared, error);
+    match catch_unwind(AssertUnwindSafe(|| task.run(connection, &mut on_error))) {
         Ok(Ok(())) => true,
-        Ok(Err(DbError::RecoveryRequired)) => {
-            let mut ledger = shared
-                .ledger
-                .lock()
-                .unwrap_or_else(|error| error.into_inner());
-            ledger.lifecycle = Lifecycle::Failed;
-            ledger.failure = Some("database restore requires recovery".into());
-            false
-        }
-        Ok(Err(DbError::RestoreFailed(message))) => {
-            let mut ledger = shared
-                .ledger
-                .lock()
-                .unwrap_or_else(|error| error.into_inner());
-            ledger.lifecycle = Lifecycle::Failed;
-            ledger.failure = Some(format!("database restore failed: {message}"));
-            false
-        }
-        Ok(Err(DbError::StorageUnhealthy(message))) => {
-            let mut ledger = shared
-                .ledger
-                .lock()
-                .unwrap_or_else(|error| error.into_inner());
-            ledger.lifecycle = Lifecycle::Failed;
-            ledger.failure = Some(message);
-            false
-        }
-        Ok(Err(DbError::CommitFailed(message))) => {
-            let mut ledger = shared
-                .ledger
-                .lock()
-                .unwrap_or_else(|error| error.into_inner());
-            ledger.lifecycle = Lifecycle::Failed;
-            ledger.failure = Some(format!("database transaction commit failed: {message}"));
-            false
-        }
         Ok(Err(_error)) => false,
         Err(panic) => {
             let mut ledger = shared
@@ -175,6 +140,26 @@ fn run_task(shared: &ActorShared, connection: &mut Connection, task: Box<dyn Wri
                 .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             false
         }
+    }
+}
+
+fn fail_closed_for_error(shared: &ActorShared, error: &DbError) {
+    let failure = match error {
+        DbError::RecoveryRequired => Some("database restore requires recovery".to_owned()),
+        DbError::RestoreFailed(message) => Some(format!("database restore failed: {message}")),
+        DbError::StorageUnhealthy(message) => Some(message.clone()),
+        DbError::CommitFailed(message) => {
+            Some(format!("database transaction commit failed: {message}"))
+        }
+        _ => None,
+    };
+    if let Some(failure) = failure {
+        let mut ledger = shared
+            .ledger
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        ledger.lifecycle = Lifecycle::Failed;
+        ledger.failure = Some(failure);
     }
 }
 
