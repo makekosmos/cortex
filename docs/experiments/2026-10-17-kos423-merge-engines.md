@@ -34,3 +34,38 @@ KOS-423 remains open. Cortex already has a guarded `UpsertObject` path using an 
 The minimum next production step is to define a conflict-resolution request/record contract before choosing a library: object ID plus merge unit/field path; common ancestor reference; stable set of competing variants (including deletion); digest/version of that exact set; and an explicitly selected resolution. A SQLite transaction must compare the supplied digest against the current local conflict set and reject if it differs, then atomically store the resolution and append sync delivery metadata. Preserve the existing per-person/device database boundary. HLC may order metadata but cannot resolve conflicts. AI may propose a resolution, but must never apply it without explicit acceptance. Cross-object link/deletion validation and revalidation at commit must be defined in the same domain contract.
 
 After that contract is agreed, add a real `ark-core` SQLite/API test that creates two concurrent object revisions, queries accessible variants and ancestor, changes one variant, then proves an old resolution proposal is rejected transactionally. This experiment does not implement that API, schema, migration, or sync wire change.
+
+## Design review after the harness
+
+Two independently drafted production shapes were cross-judged against the current
+`ark-core` boundaries and KOS-423 acceptance. The public contract is a typed
+conflict set: report the object and merge unit, a known or explicitly unknown
+ancestor, every current competing value including deletion, and an opaque digest
+of that exact set. Resolution must reload and compare that digest inside the
+existing bounded SQLite write transaction before it writes anything. The
+existing canonical object remains the read projection. The implementation must
+still provide the per-unit causal context required by `docs/ark-exocortex.md`
+§13.2; the harness and candidate sketches do not yet justify choosing its
+physical representation (an operation ledger or a CRDT encoding) or a history
+compaction policy.
+
+Merge units belong to registered type definitions, not arbitrary JSON paths.
+For the first task prototype, title, task properties, rich-text content, and
+object existence are distinct units; rich text is atomic until an adapter proves
+that character-level merging preserves its document semantics. Cross-object
+constraints are checked before a resolution commits. An AI can prepare a
+proposal, but only an explicit caller action commits it as a new revision.
+
+Device sync selection controls transfer. If a device excludes a type or a
+large content body, that choice does not delete a local object or file and does
+not turn the omitted body into `null` or a tombstone. Existing local content
+stays in place; enabling transfer later requests missing content by backfill.
+Transfer policy, object deletion, and local retention are separate operations.
+
+This settles the caller-visible shape, not the production merge implementation
+or a CRDT library decision. The required proof remains public
+application APIs backed by SQLite: compatible edits in either order; visible
+same-unit and delete-versus-update alternatives; duplicate/reordered/restarted
+delivery; and an old resolution digest rejected with no side effects after the
+conflict set changes. Legacy whole-object writes must not flatten stored
+alternatives. See `.audit/kos423-merge.todo.md` for the implementation gate.
