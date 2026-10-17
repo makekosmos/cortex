@@ -46,6 +46,7 @@ async fn registry_disable_closes_ready_session_and_removes_discovery_record() {
         on_change: Arc::new(Mutex::new(None)),
         on_peer_connect: Arc::new(Mutex::new(None)),
         on_new_peer_discovered: Arc::new(Mutex::new(None)),
+        on_registry_events: Arc::new(Mutex::new(None)),
     };
 
     assert!(!revoke_disabled_sessions(&ctx, &["disabled-device".to_owned()], None, false).await);

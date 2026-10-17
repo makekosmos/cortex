@@ -87,3 +87,35 @@ pub(super) async fn wire_relay_registry_fanout(
         }))
         .await;
 }
+
+pub(super) async fn wire_server_registry_fanout(
+    server: &Arc<SyncServer>,
+    clients: &Arc<TokioMutex<HashMap<String, Arc<SyncClient>>>>,
+    relay_sync: Option<&Arc<RelaySync>>,
+) {
+    let clients = Arc::downgrade(clients);
+    let relay = relay_sync.map(Arc::downgrade);
+    server
+        .set_on_registry_events(Arc::new(move |events| {
+            let clients = clients.clone();
+            let relay = relay.clone();
+            tokio::spawn(async move {
+                if let Some(clients) = clients.upgrade() {
+                    let peers = clients.lock().await.values().cloned().collect::<Vec<_>>();
+                    for client in peers {
+                        for event in &events {
+                            client.broadcast_registry_event(event.clone()).await;
+                        }
+                    }
+                }
+                if let Some(relay) = relay.and_then(|relay| relay.upgrade()) {
+                    for event in &events {
+                        if let Err(error) = relay.publish_registry_event(event.clone()).await {
+                            eprintln!("registry event relay fanout failed: {error}");
+                        }
+                    }
+                }
+            });
+        }))
+        .await;
+}

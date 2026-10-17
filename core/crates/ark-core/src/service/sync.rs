@@ -10,7 +10,9 @@ mod events;
 mod pairing;
 mod start;
 pub(crate) use self::disconnect::handle_disconnect_peer;
-use self::events::{wire_relay_registry_fanout, wire_relay_sync_events};
+use self::events::{
+    wire_relay_registry_fanout, wire_relay_sync_events, wire_server_registry_fanout,
+};
 // Re-exported so `service.rs` can import it as `self::sync::handle_start_sync`.
 pub(crate) use self::start::handle_start_sync;
 // The pairing handlers; the param builders are exercised by tests only.

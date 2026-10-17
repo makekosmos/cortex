@@ -45,6 +45,7 @@ impl SyncServer {
         let on_peer_connect = self.on_peer_connect.clone();
         let on_peer_disconnect = self.on_peer_disconnect.clone();
         let on_new_peer_discovered = self.on_new_peer_discovered.clone();
+        let on_registry_events = self.on_registry_events.clone();
         let next_peer_id = self.next_peer_id.clone();
         let conn_tasks = self.conn_tasks.clone();
 
@@ -211,6 +212,7 @@ impl SyncServer {
                                     on_change: on_change.clone(),
                                     on_peer_connect: on_peer_connect.clone(),
                                     on_new_peer_discovered: on_new_peer_discovered.clone(),
+                                    on_registry_events: on_registry_events.clone(),
                                 };
                                 let peers_reader = peers.clone();
                                 let on_peer_disconnect_reader = on_peer_disconnect.clone();

@@ -169,7 +169,6 @@ pub(crate) async fn handle_start_sync(
             transport,
         );
         wire_relay_sync_events(&relay_sync).await;
-        wire_relay_registry_fanout(&relay_sync, &server, &clients).await;
         relay_sync.start().await?;
         Some(relay_sync)
     } else if transport_choice == TransportChoice::Iroh {
@@ -234,7 +233,6 @@ pub(crate) async fn handle_start_sync(
             iroh_transport.clone() as Arc<dyn crate::sync_transport::SyncTransport>,
         );
         wire_relay_sync_events(&relay_sync).await;
-        wire_relay_registry_fanout(&relay_sync, &server, &clients).await;
         // Only a `connect_with_pairing_code` start is a pairing intent
         // (`pairing_connect`); boot restores replay the stored ticket for an
         // already-paired endpoint, whose Hello passes on the stored key —
@@ -291,6 +289,10 @@ pub(crate) async fn handle_start_sync(
     } else {
         None
     };
+    if let Some(relay_sync) = relay.as_ref() {
+        wire_relay_registry_fanout(relay_sync, &server, &clients).await;
+    }
+    wire_server_registry_fanout(&server, &clients, relay.as_ref()).await;
 
     // Start SyncClient connections for every known peer.
     let client_env = ClientEnv {

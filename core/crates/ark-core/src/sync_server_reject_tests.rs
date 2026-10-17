@@ -114,6 +114,7 @@ pub(super) mod reject_tests {
             on_change: server.on_change.clone(),
             on_peer_connect: server.on_peer_connect.clone(),
             on_new_peer_discovered: server.on_new_peer_discovered.clone(),
+            on_registry_events: server.on_registry_events.clone(),
         };
         sync_server_inbound::handle_peer_list(
             &ctx,

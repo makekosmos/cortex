@@ -41,6 +41,7 @@ async fn stale_snapshot_ack_does_not_complete_or_clear_pending_snapshot() {
         on_change: Arc::new(Mutex::new(None)),
         on_peer_connect: Arc::new(Mutex::new(None)),
         on_new_peer_discovered: Arc::new(Mutex::new(None)),
+        on_registry_events: Arc::new(Mutex::new(None)),
     };
 
     handle_live_message(

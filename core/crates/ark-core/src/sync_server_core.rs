@@ -131,6 +131,7 @@ impl SyncServer {
             on_peer_connect: Arc::new(Mutex::new(None)),
             on_peer_disconnect: Arc::new(Mutex::new(None)),
             on_new_peer_discovered: Arc::new(Mutex::new(None)),
+            on_registry_events: Arc::new(Mutex::new(None)),
             next_peer_id: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
         }
     }
@@ -149,6 +150,10 @@ impl SyncServer {
 
     pub async fn set_on_new_peer_discovered(&self, handler: OnNewPeerDiscoveredCallback) {
         *self.on_new_peer_discovered.lock().await = Some(handler);
+    }
+
+    pub async fn set_on_registry_events(&self, handler: OnRegistryEventsCallback) {
+        *self.on_registry_events.lock().await = Some(handler);
     }
 
     pub async fn connected_peer_count(&self) -> usize {

@@ -20,24 +20,6 @@ pub(super) fn is_user_data_message(message: &LanSyncMessage) -> bool {
     )
 }
 
-#[cfg(test)]
-mod tests {
-    use super::is_user_data_message;
-    use crate::protocol::LanSyncMessage;
-
-    #[test]
-    fn sync_policy_requires_registry_admission() {
-        let message = LanSyncMessage::SyncPolicy {
-            revision: 1,
-            digest: "policy-digest".into(),
-            active: true,
-            rules: Vec::new(),
-        };
-
-        assert!(is_user_data_message(&message));
-    }
-}
-
 impl RelaySync {
     pub(super) async fn start_registry_exchange(
         &self,
@@ -464,5 +446,23 @@ impl RelaySync {
             .await
             .get(peer_device_id)
             .is_some_and(|key| key == endpoint)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_user_data_message;
+    use crate::protocol::LanSyncMessage;
+
+    #[test]
+    fn sync_policy_requires_registry_admission() {
+        let message = LanSyncMessage::SyncPolicy {
+            revision: 1,
+            digest: "policy-digest".into(),
+            active: true,
+            rules: Vec::new(),
+        };
+
+        assert!(is_user_data_message(&message));
     }
 }

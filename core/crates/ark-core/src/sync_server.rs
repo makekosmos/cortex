@@ -49,6 +49,8 @@ pub type OnChangeCallback = Arc<dyn Fn(SyncEntity) + Send + Sync>;
 pub type OnPeerConnectCallback = Arc<dyn Fn(String) + Send + Sync>;
 pub type OnPeerDisconnectCallback = Arc<dyn Fn(String, usize) + Send + Sync>;
 pub type OnNewPeerDiscoveredCallback = Arc<dyn Fn(PeerRecord) + Send + Sync>;
+pub type OnRegistryEventsCallback =
+    Arc<dyn Fn(Vec<crate::domain::device_registry::RegistryEvent>) + Send + Sync>;
 
 // ---------------------------------------------------------------------------
 // Peer state
@@ -181,6 +183,7 @@ pub struct SyncServer {
     on_peer_connect: Arc<Mutex<Option<OnPeerConnectCallback>>>,
     on_peer_disconnect: Arc<Mutex<Option<OnPeerDisconnectCallback>>>,
     on_new_peer_discovered: Arc<Mutex<Option<OnNewPeerDiscoveredCallback>>>,
+    on_registry_events: Arc<Mutex<Option<OnRegistryEventsCallback>>>,
     next_peer_id: Arc<std::sync::atomic::AtomicUsize>,
 }
 
@@ -338,6 +341,7 @@ struct MessageContext {
     on_change: Arc<Mutex<Option<OnChangeCallback>>>,
     on_peer_connect: Arc<Mutex<Option<OnPeerConnectCallback>>>,
     on_new_peer_discovered: Arc<Mutex<Option<OnNewPeerDiscoveredCallback>>>,
+    on_registry_events: Arc<Mutex<Option<OnRegistryEventsCallback>>>,
 }
 
 async fn save_removed_peer_ids(

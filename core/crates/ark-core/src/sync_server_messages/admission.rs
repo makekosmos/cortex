@@ -42,6 +42,11 @@ pub(super) async fn handle_registry_admission(
     {
         return;
     }
+    if !update.applied_events.is_empty() {
+        if let Some(handler) = ctx.on_registry_events.lock().await.as_ref() {
+            handler(update.applied_events.clone());
+        }
+    }
     for outgoing in update.outgoing {
         send_msg(&tx, &outgoing);
     }
