@@ -108,7 +108,7 @@ impl SyncClient {
             space_id,
             own_addresses,
             auth_secret: normalize_auth_secret(auth_secret),
-            task_merge_bootstrap_v2: false,
+            task_merge_bootstrap_v2: true,
             stopped: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             authenticated_tx: Arc::new(Mutex::new(None)),
             feed_in_flight: Arc::new(Mutex::new(None)),

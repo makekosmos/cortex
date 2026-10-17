@@ -12,12 +12,24 @@ pub trait TaskMutationSession: ObjectWriteSession {
     fn record_task_link_upsert(&self, id: &str, device_id: &str) -> Result<String, String>;
     fn task_snapshot(&self, id: &str) -> Result<ObjectWriteSnapshot, String>;
     fn task_type_id(&self, id: &str) -> Result<Option<String>, String>;
-    fn hard_delete_task(&self, id: &str, device_id: &str) -> Result<String, String>;
-    fn soft_delete_task(&self, id: &str, device_id: &str) -> Result<String, String>;
     fn legacy_task_revision(&self, id: &str) -> Result<Option<String>, String>;
     fn record_legacy_task_revision(&self, id: &str, source_hlc: &str) -> Result<(), String>;
     fn record_canonical_task_revision(&self, id: &str, source_hlc: &str) -> Result<(), String>;
     fn hard_delete_remote_task(&self, entity: &SyncEntity) -> Result<(), String>;
+    fn commit_local_task_upsert(
+        &self,
+        object: &ArkObject,
+        links: &[ObjectLink],
+        device_id: &str,
+        expected_snapshot: Option<&ObjectWriteSnapshot>,
+    ) -> Result<Vec<SyncEntity>, String>;
+    fn commit_local_task_delete(
+        &self,
+        id: &str,
+        device_id: &str,
+        expected_snapshot: Option<&ObjectWriteSnapshot>,
+        hard_delete: bool,
+    ) -> Result<String, String>;
 }
 
 pub enum InboundTaskMutation<'a> {
@@ -149,31 +161,18 @@ pub fn apply_task_upsert(
     object: &ArkObject,
     links: &[ObjectLink],
     device_id: &str,
+    expected_snapshot: Option<&ObjectWriteSnapshot>,
 ) -> Result<Vec<SyncEntity>, String> {
     if object.type_id != "core.task" || object.type_version != "0.1.0" {
         return Err("object_write_slice_unsupported_type".into());
     }
-    session.ensure_legacy_task_write_allowed(&object.id)?;
-    session.persist_task(object, links)?;
-    let hlc = session.record_task_upsert(&object.id, device_id)?;
-    let mut entities = vec![sync_entity("object", &object.id, object, &hlc, None)?];
-    for link in links {
-        let hlc = session.record_task_link_upsert(&link.id, device_id)?;
-        entities.push(sync_entity("object_link", &link.id, link, &hlc, None)?);
-    }
-    Ok(entities)
+    session.commit_local_task_upsert(object, links, device_id, expected_snapshot)
 }
 
 pub fn apply_task_delete(
     session: &dyn TaskMutationSession,
     write: LocalTaskDelete,
 ) -> Result<TaskDeleteCommit, String> {
-    session.ensure_legacy_task_write_allowed(&write.id)?;
-    if let Some(expected) = &write.expected_snapshot {
-        if session.task_snapshot(&write.id)? != *expected {
-            return Err("object_conflict:stale_snapshot".into());
-        }
-    }
     let type_id = session.task_type_id(&write.id)?;
     if type_id.as_deref() != Some("core.task") {
         return Err(if type_id.is_some() {
@@ -183,10 +182,17 @@ pub fn apply_task_delete(
         }
         .into());
     }
-    let hlc = match write.mode {
-        TaskDeleteMode::Hard => session.hard_delete_task(&write.id, &write.device_id)?,
-        TaskDeleteMode::Soft => session.soft_delete_task(&write.id, &write.device_id)?,
-    };
+    if let Some(expected) = &write.expected_snapshot {
+        if session.task_snapshot(&write.id)? != *expected {
+            return Err("object_conflict:stale_snapshot".into());
+        }
+    }
+    let hlc = session.commit_local_task_delete(
+        &write.id,
+        &write.device_id,
+        write.expected_snapshot.as_ref(),
+        matches!(write.mode, TaskDeleteMode::Hard),
+    )?;
     let data = json!({ "typeId": "core.task" });
     Ok(TaskDeleteCommit {
         entity: SyncEntity {
@@ -199,28 +205,5 @@ pub fn apply_task_delete(
             origin_seq: None,
         },
         id: write.id,
-    })
-}
-
-fn sync_entity<T: serde::Serialize>(
-    entity_type: &str,
-    id: &str,
-    value: &T,
-    hlc: &str,
-    deleted: Option<bool>,
-) -> Result<SyncEntity, String> {
-    let data = serde_json::to_value(value)
-        .map_err(|error| error.to_string())?
-        .as_object()
-        .cloned()
-        .unwrap_or_default();
-    Ok(SyncEntity {
-        entity_type: entity_type.into(),
-        id: id.into(),
-        data,
-        hlc: hlc.into(),
-        deleted,
-        origin_device_id: None,
-        origin_seq: None,
     })
 }

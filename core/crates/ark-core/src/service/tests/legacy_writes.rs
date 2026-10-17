@@ -263,14 +263,26 @@ async fn legacy_entity_writes_bump_version_vector() {
             committed_feed_count, 6,
             "task writes and deletes stay in committed feed"
         );
-        let merge_operation_count: i64 = guard
-            .query_row("SELECT COUNT(*) FROM task_merge_operations", [], |row| {
+        let merge_bootstrap_count: i64 = guard
+            .query_row("SELECT COUNT(*) FROM task_merge_bootstraps", [], |row| {
                 row.get(0)
             })
             .unwrap();
         assert_eq!(
-            merge_operation_count, 0,
-            "local task cutover does not generate merge operations"
+            merge_bootstrap_count, 4,
+            "each task enters causal sync in the same transaction as its write"
+        );
+        let existence_operation_count: i64 = guard
+            .query_row(
+                "SELECT COUNT(*) FROM task_merge_operations
+                 WHERE unit = '\"objectExistence\"'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            existence_operation_count, 6,
+            "each baseline records existence and both deletion modes append a causal tombstone"
         );
         let tracked_app_tombstone: i64 = guard
             .query_row(

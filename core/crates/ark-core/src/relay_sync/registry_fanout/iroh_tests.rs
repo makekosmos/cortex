@@ -335,6 +335,7 @@ async fn live_registry_events_reach_iroh_peers_and_disable_revokes_only_target()
             origin_device_id: Some("device-A".into()),
             origin_seq: None,
         })
+        .await
         .unwrap();
     let delivery_deadline = tokio::time::Instant::now() + Duration::from_secs(5);
     while !received_b.load(Ordering::Relaxed) {

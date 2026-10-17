@@ -1,12 +1,27 @@
 use super::{canonical_operation, read_conflict_set, TaskMergeError};
 use crate::domain::task_merge::{materialize_task, TaskMergeBootstrap, TaskMergeUnit};
-use rusqlite::{OptionalExtension, Transaction};
+use rusqlite::{Connection, OptionalExtension};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 
 pub(super) fn append_bootstrap(
-    transaction: &Transaction<'_>,
+    transaction: &Connection,
     bootstrap: TaskMergeBootstrap,
+) -> Result<bool, TaskMergeError> {
+    append_bootstrap_with_revision(transaction, bootstrap, true)
+}
+
+pub(super) fn append_local_bootstrap(
+    transaction: &Connection,
+    bootstrap: TaskMergeBootstrap,
+) -> Result<bool, TaskMergeError> {
+    append_bootstrap_with_revision(transaction, bootstrap, false)
+}
+
+fn append_bootstrap_with_revision(
+    transaction: &Connection,
+    bootstrap: TaskMergeBootstrap,
+    record_revision: bool,
 ) -> Result<bool, TaskMergeError> {
     let (bootstrap, bootstrap_json, payload_sha256) = canonical_bootstrap(bootstrap)?;
     if let Some(stored_hash) = transaction
@@ -96,29 +111,31 @@ pub(super) fn append_bootstrap(
         crate::db::upsert_object_link(transaction, link).map_err(storage_error)?;
     }
 
-    crate::db::record_remote_sync_revision(
-        transaction,
-        &bootstrap.object.id,
-        &bootstrap.source_hlc,
-    )
-    .map_err(storage_error)?;
-    transaction
-        .execute(
-            "INSERT INTO object_sync_versions(object_id, hlc, deleted)
-             VALUES (?1, ?2, ?3)
-             ON CONFLICT(object_id) DO UPDATE SET hlc = excluded.hlc,
-                 deleted = excluded.deleted
-             WHERE excluded.hlc > object_sync_versions.hlc",
-            rusqlite::params![
-                bootstrap.object.id,
-                bootstrap.source_hlc,
-                bootstrap.object.deleted_at.is_some(),
-            ],
+    if record_revision {
+        crate::db::record_remote_sync_revision(
+            transaction,
+            &bootstrap.object.id,
+            &bootstrap.source_hlc,
         )
         .map_err(storage_error)?;
-    if bootstrap.object.deleted_at.is_none() {
-        crate::db::delete_sync_tombstone(transaction, &bootstrap.object.id)
+        transaction
+            .execute(
+                "INSERT INTO object_sync_versions(object_id, hlc, deleted)
+                 VALUES (?1, ?2, ?3)
+                 ON CONFLICT(object_id) DO UPDATE SET hlc = excluded.hlc,
+                     deleted = excluded.deleted
+                 WHERE excluded.hlc > object_sync_versions.hlc",
+                rusqlite::params![
+                    bootstrap.object.id,
+                    bootstrap.source_hlc,
+                    bootstrap.object.deleted_at.is_some(),
+                ],
+            )
             .map_err(storage_error)?;
+        if bootstrap.object.deleted_at.is_none() {
+            crate::db::delete_sync_tombstone(transaction, &bootstrap.object.id)
+                .map_err(storage_error)?;
+        }
     }
 
     materialize_if_ready(transaction, &bootstrap.object.id)?;
@@ -126,7 +143,7 @@ pub(super) fn append_bootstrap(
 }
 
 fn journal_prebootstrap_operations(
-    transaction: &Transaction<'_>,
+    transaction: &Connection,
     bootstrap: &TaskMergeBootstrap,
 ) -> Result<(), TaskMergeError> {
     let baseline_ids = bootstrap
@@ -173,7 +190,7 @@ fn journal_prebootstrap_operations(
 }
 
 pub(super) fn materialize_if_ready(
-    transaction: &Transaction<'_>,
+    transaction: &Connection,
     object_id: &str,
 ) -> Result<bool, TaskMergeError> {
     let has_bootstrap = transaction
@@ -186,12 +203,23 @@ pub(super) fn materialize_if_ready(
     if !has_bootstrap {
         return Ok(false);
     }
-    let Some(mut object) = crate::db::get_object(transaction, object_id).map_err(storage_error)?
-    else {
-        return Err(TaskMergeError::Storage(
-            "task_merge_bootstrap_object_missing".into(),
-        ));
+    let current_object = crate::db::get_object(transaction, object_id).map_err(storage_error)?;
+    let projection_missing = current_object.is_none();
+    let bootstrap = if projection_missing {
+        Some(load_bootstrap(transaction, object_id)?)
+    } else {
+        None
     };
+    let object = current_object.unwrap_or_else(|| {
+        bootstrap
+            .as_ref()
+            .expect("missing projection requires bootstrap")
+            .object
+            .clone()
+    });
+    let baseline_links = bootstrap
+        .map(|bootstrap| bootstrap.links)
+        .unwrap_or_default();
 
     let mut conflict_sets = Vec::with_capacity(TaskMergeUnit::ALL.len());
     for unit in TaskMergeUnit::ALL {
@@ -206,15 +234,92 @@ pub(super) fn materialize_if_ready(
 
     let materialized = materialize_task(&object, &conflict_sets)
         .map_err(|error| TaskMergeError::Invalid(error.to_string()))?;
-    if materialized != object {
-        object = materialized;
-        crate::db::upsert_object(transaction, &object).map_err(storage_error)?;
+    let existence = conflict_sets
+        .iter()
+        .find(|set| set.unit == TaskMergeUnit::ObjectExistence)
+        .and_then(|set| {
+            set.variants
+                .iter()
+                .min_by(|left, right| left.id.cmp(&right.id))
+        });
+    let revision = existence.and_then(|operation| operation.hlc.as_deref());
+    let hard_deleted = existence.is_some_and(|operation| {
+        matches!(
+            operation.value,
+            crate::domain::task_merge::TaskMergeValue::ObjectHardDeleted { .. }
+        )
+    });
+    let deleted = existence.is_some_and(|operation| {
+        matches!(
+            operation.value,
+            crate::domain::task_merge::TaskMergeValue::ObjectDeleted { .. }
+                | crate::domain::task_merge::TaskMergeValue::ObjectHardDeleted { .. }
+        )
+    });
+    if hard_deleted {
+        crate::db::delete_object(transaction, object_id).map_err(storage_error)?;
+        transaction
+            .execute(
+                "DELETE FROM object_links WHERE source_object_id = ?1",
+                [object_id],
+            )
+            .map_err(storage_error)?;
+    } else {
+        if materialized != object || projection_missing {
+            crate::db::upsert_object(transaction, &materialized).map_err(storage_error)?;
+        }
+        if projection_missing {
+            for link in &baseline_links {
+                crate::db::upsert_object_link(transaction, link).map_err(storage_error)?;
+            }
+        }
+    }
+    if let Some(revision) = revision {
+        transaction
+            .execute(
+                "INSERT INTO object_sync_versions(object_id, hlc, deleted)
+                 VALUES (?1, ?2, ?3)
+                 ON CONFLICT(object_id) DO UPDATE SET hlc = excluded.hlc,
+                     deleted = excluded.deleted
+                 WHERE excluded.hlc >= object_sync_versions.hlc",
+                rusqlite::params![object_id, revision, deleted],
+            )
+            .map_err(storage_error)?;
+        if deleted {
+            crate::db::record_sync_tombstone_with_type(
+                transaction,
+                "object",
+                object_id,
+                Some("core.task"),
+                revision,
+            )
+            .map_err(storage_error)?;
+        } else {
+            crate::db::delete_sync_tombstone(transaction, object_id).map_err(storage_error)?;
+        }
     }
     Ok(true)
 }
 
+fn load_bootstrap(
+    connection: &Connection,
+    object_id: &str,
+) -> Result<TaskMergeBootstrap, TaskMergeError> {
+    let (json, digest) = connection
+        .query_row(
+            "SELECT bootstrap_json, payload_sha256 FROM task_merge_bootstraps
+             WHERE object_id = ?1",
+            [object_id],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+        )
+        .map_err(storage_error)?;
+    let bootstrap =
+        serde_json::from_str(&json).map_err(|error| TaskMergeError::Invalid(error.to_string()))?;
+    verify_bootstrap_payload(bootstrap, &json, &digest)
+}
+
 fn insert_baseline_operation(
-    transaction: &Transaction<'_>,
+    transaction: &Connection,
     operation: crate::domain::task_merge::TaskMergeOperation,
 ) -> Result<(), TaskMergeError> {
     let (operation, operation_json, payload_sha256) = canonical_operation(operation)?;

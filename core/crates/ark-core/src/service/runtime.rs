@@ -206,7 +206,7 @@ pub(super) async fn broadcast_local_change(state: &ServiceState, entity: SyncEnt
     }
     if let Some(relay) = runtime.relay.as_ref() {
         // Ошибку отправки логируем, но не пробрасываем — live broadcast best-effort.
-        if let Err(e) = relay.broadcast_live_change(entity.clone()) {
+        if let Err(e) = relay.broadcast_live_change(entity.clone()).await {
             eprintln!("[ark-core] broadcast_local_change relay error: {e}");
         }
     }

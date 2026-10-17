@@ -35,19 +35,28 @@ impl ObjectWriteSession for SqliteObjectWriteSession<'_> {
             )
             .optional()
             .map_err(|error| error.to_string())?;
-        let revision = db::get_object_revision(self.conn, id)?;
+        let object_revision = db::get_object_revision(self.conn, id)?;
+        let task_revision = db::task_merge::object_snapshot_token(self.conn, id)
+            .map_err(|error| error.to_string())?;
         Ok(match identity {
-            Some((type_id, type_version)) => ObjectWriteSnapshot {
-                exists: true,
-                type_id: Some(type_id),
-                type_version: Some(type_version),
-                revision,
-            },
+            Some((type_id, type_version)) => {
+                let is_task = type_id == "core.task";
+                ObjectWriteSnapshot {
+                    exists: true,
+                    type_id: Some(type_id),
+                    type_version: Some(type_version),
+                    revision: if is_task {
+                        task_revision.or(object_revision)
+                    } else {
+                        object_revision
+                    },
+                }
+            }
             None => ObjectWriteSnapshot {
                 exists: false,
                 type_id: None,
                 type_version: None,
-                revision,
+                revision: task_revision.or(object_revision),
             },
         })
     }
@@ -207,39 +216,6 @@ impl crate::application::task_mutation::TaskMutationSession for SqliteObjectWrit
         db::get_object(self.conn, id).map(|object| object.map(|object| object.type_id))
     }
 
-    fn hard_delete_task(&self, id: &str, device_id: &str) -> Result<String, String> {
-        db::delete_object(self.conn, id)?;
-        let hlc = db::bump_sync_version_vector(self.conn, "object", id, device_id, true)?;
-        self.conn
-            .execute(
-                "INSERT INTO object_sync_versions(object_id, hlc, deleted) VALUES (?1, ?2, 1)
-                 ON CONFLICT(object_id) DO UPDATE SET hlc = excluded.hlc, deleted = 1
-                 WHERE excluded.hlc > object_sync_versions.hlc",
-                params![id, hlc],
-            )
-            .map_err(|error| error.to_string())?;
-        db::record_sync_tombstone_with_type(self.conn, "object", id, Some("core.task"), &hlc)?;
-        Ok(hlc)
-    }
-
-    fn soft_delete_task(&self, id: &str, device_id: &str) -> Result<String, String> {
-        let mut object =
-            db::get_object(self.conn, id)?.ok_or_else(|| "MISSING_OBJECT".to_string())?;
-        object.deleted_at = Some(crate::hlc::HLC::now(device_id).wall_time);
-        db::upsert_object(self.conn, &object)?;
-        let hlc = db::bump_sync_version_vector(self.conn, "object", id, device_id, true)?;
-        self.conn
-            .execute(
-                "INSERT INTO object_sync_versions(object_id, hlc, deleted) VALUES (?1, ?2, 1)
-                 ON CONFLICT(object_id) DO UPDATE SET hlc = excluded.hlc, deleted = 1
-                 WHERE excluded.hlc > object_sync_versions.hlc",
-                params![id, hlc],
-            )
-            .map_err(|error| error.to_string())?;
-        db::record_sync_tombstone_with_type(self.conn, "object", id, Some("core.task"), &hlc)?;
-        Ok(hlc)
-    }
-
     fn legacy_task_revision(&self, id: &str) -> Result<Option<String>, String> {
         self.conn
             .query_row(
@@ -286,5 +262,37 @@ impl crate::application::task_mutation::TaskMutationSession for SqliteObjectWrit
             )
             .map_err(|error| error.to_string())?;
         db::upsert_sync_tombstone(self.conn, entity)
+    }
+
+    fn commit_local_task_upsert(
+        &self,
+        object: &ArkObject,
+        links: &[ObjectLink],
+        device_id: &str,
+        expected_snapshot: Option<&ObjectWriteSnapshot>,
+    ) -> Result<Vec<crate::types::SyncEntity>, String> {
+        crate::db::task_merge::commit_local_task_upsert(
+            self.conn,
+            object,
+            links,
+            device_id,
+            expected_snapshot,
+        )
+    }
+
+    fn commit_local_task_delete(
+        &self,
+        id: &str,
+        device_id: &str,
+        expected_snapshot: Option<&ObjectWriteSnapshot>,
+        hard_delete: bool,
+    ) -> Result<String, String> {
+        crate::db::task_merge::commit_local_task_delete(
+            self.conn,
+            id,
+            device_id,
+            expected_snapshot,
+            hard_delete,
+        )
     }
 }

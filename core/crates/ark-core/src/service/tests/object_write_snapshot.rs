@@ -19,6 +19,29 @@ fn task(id: &str, title: &str) -> ArkObjectWrite {
     object
 }
 
+fn project(id: &str, title: &str) -> ArkObjectWrite {
+    ArkObjectWrite {
+        id: id.to_string(),
+        type_id: "com.kosmos.project".to_string(),
+        type_version: Some("1.0.0".to_string()),
+        title: title.to_string(),
+        content_json: json!({
+            "type": "doc",
+            "content": [{ "type": "paragraph" }]
+        }),
+        props_json: json!({
+            "status": "active",
+            "scheduledAt": null,
+            "dueAt": null,
+            "color": null,
+            "extensions": {}
+        }),
+        created_at: "2026-01-01T00:00:00.000Z".to_string(),
+        updated_at: "2026-01-01T00:00:00.000Z".to_string(),
+        deleted_at: None,
+    }
+}
+
 async fn guarded_upsert(
     state: &Arc<ServiceState>,
     object: ArkObjectWrite,
@@ -80,11 +103,25 @@ async fn guarded_object_upsert_rejects_every_stale_identity_or_revision() {
     );
 
     let stale_live = snapshot(&state, "guarded-task").await;
+    assert_eq!(
+        handle_request(
+            &state,
+            Request::UpsertObject {
+                object: task("guarded-task", "missing-precondition"),
+                expected_snapshot: None,
+                operation_id: None,
+                device_id: Some("competing-writer".to_string()),
+            },
+        )
+        .await
+        .unwrap_err(),
+        "object_conflict:expected_snapshot_required"
+    );
     handle_request(
         &state,
         Request::UpsertObject {
             object: task("guarded-task", "newer"),
-            expected_snapshot: None,
+            expected_snapshot: Some(stale_live.clone()),
             operation_id: None,
             device_id: Some("competing-writer".to_string()),
         },
@@ -114,7 +151,7 @@ async fn guarded_object_upsert_rejects_every_stale_identity_or_revision() {
         &state,
         Request::UpsertObject {
             object: task("guarded-task", "newest"),
-            expected_snapshot: None,
+            expected_snapshot: Some(stale_delete.clone()),
             operation_id: None,
             device_id: Some("competing-writer".to_string()),
         },
@@ -186,7 +223,7 @@ async fn guarded_object_upsert_rejects_every_stale_identity_or_revision() {
         &state,
         Request::UpsertObject {
             object: task("guarded-task", "recreated"),
-            expected_snapshot: None,
+            expected_snapshot: Some(deleted.clone()),
             operation_id: None,
             device_id: Some("competing-writer".to_string()),
         },
@@ -217,7 +254,7 @@ async fn local_object_revision_blocks_older_remote_upsert_and_delete() {
     handle_request(
         &state,
         Request::UpsertObject {
-            object: task("remote-guarded-task", "local"),
+            object: project("remote-guarded-object", "local"),
             expected_snapshot: None,
             operation_id: None,
             device_id: Some("local-writer".to_string()),
@@ -228,10 +265,10 @@ async fn local_object_revision_blocks_older_remote_upsert_and_delete() {
 
     let backend = SqliteStorageBackend::with_db_handle(get_db_handle(&state).unwrap());
     let local = with_conn(&state, |conn| {
-        db::get_object(conn, "remote-guarded-task")?.ok_or("object missing".to_string())
+        db::get_object(conn, "remote-guarded-object")?.ok_or("object missing".to_string())
     })
     .unwrap();
-    let before_update = snapshot(&state, "remote-guarded-task").await;
+    let before_update = snapshot(&state, "remote-guarded-object").await;
     backend
         .apply_entity(&remote_entity(
             &local,
@@ -242,7 +279,7 @@ async fn local_object_revision_blocks_older_remote_upsert_and_delete() {
         .await
         .unwrap();
     assert_eq!(
-        with_conn(&state, |conn| db::get_object(conn, "remote-guarded-task"))
+        with_conn(&state, |conn| db::get_object(conn, "remote-guarded-object"))
             .unwrap()
             .unwrap()
             .title,
@@ -250,15 +287,15 @@ async fn local_object_revision_blocks_older_remote_upsert_and_delete() {
     );
     guarded_upsert(
         &state,
-        task("remote-guarded-task", "guarded"),
+        project("remote-guarded-object", "guarded"),
         before_update,
     )
     .await
     .unwrap();
 
-    let before_delete = snapshot(&state, "remote-guarded-task").await;
+    let before_delete = snapshot(&state, "remote-guarded-object").await;
     let local = with_conn(&state, |conn| {
-        db::get_object(conn, "remote-guarded-task")?.ok_or("object missing".to_string())
+        db::get_object(conn, "remote-guarded-object")?.ok_or("object missing".to_string())
     })
     .unwrap();
     backend
@@ -273,7 +310,7 @@ async fn local_object_revision_blocks_older_remote_upsert_and_delete() {
     handle_request(
         &state,
         Request::DeleteObject {
-            id: "remote-guarded-task".to_string(),
+            id: "remote-guarded-object".to_string(),
             expected_snapshot: Some(before_delete),
             operation_id: None,
             device_id: Some("local-writer".to_string()),
@@ -299,7 +336,7 @@ async fn newer_remote_upsert_and_delete_invalidate_guarded_writes() {
     handle_request(
         &state,
         Request::UpsertObject {
-            object: task("remote-race-task", "local"),
+            object: project("remote-race-object", "local"),
             expected_snapshot: None,
             operation_id: None,
             device_id: Some("local-writer".to_string()),
@@ -310,10 +347,10 @@ async fn newer_remote_upsert_and_delete_invalidate_guarded_writes() {
 
     let backend = SqliteStorageBackend::with_db_handle(get_db_handle(&state).unwrap());
     let local = with_conn(&state, |conn| {
-        db::get_object(conn, "remote-race-task")?.ok_or("object missing".to_string())
+        db::get_object(conn, "remote-race-object")?.ok_or("object missing".to_string())
     })
     .unwrap();
-    let before_remote_update = snapshot(&state, "remote-race-task").await;
+    let before_remote_update = snapshot(&state, "remote-race-object").await;
     backend
         .apply_entity(&remote_entity(
             &local,
@@ -326,7 +363,7 @@ async fn newer_remote_upsert_and_delete_invalidate_guarded_writes() {
     assert_eq!(
         guarded_upsert(
             &state,
-            task("remote-race-task", "stale"),
+            project("remote-race-object", "stale"),
             before_remote_update
         )
         .await
@@ -335,10 +372,10 @@ async fn newer_remote_upsert_and_delete_invalidate_guarded_writes() {
     );
 
     let remote = with_conn(&state, |conn| {
-        db::get_object(conn, "remote-race-task")?.ok_or("object missing".to_string())
+        db::get_object(conn, "remote-race-object")?.ok_or("object missing".to_string())
     })
     .unwrap();
-    let before_remote_delete = snapshot(&state, "remote-race-task").await;
+    let before_remote_delete = snapshot(&state, "remote-race-object").await;
     backend
         .apply_entity(&remote_entity(
             &remote,
@@ -352,7 +389,7 @@ async fn newer_remote_upsert_and_delete_invalidate_guarded_writes() {
         handle_request(
             &state,
             Request::DeleteObject {
-                id: "remote-race-task".to_string(),
+                id: "remote-race-object".to_string(),
                 expected_snapshot: Some(before_remote_delete),
                 operation_id: None,
                 device_id: Some("local-writer".to_string()),

@@ -122,7 +122,7 @@ impl SyncServer {
             device_name: Arc::new(RwLock::new("ArkSync".to_string())),
             own_addresses: Arc::new(RwLock::new(Vec::new())),
             auth_secret: Arc::new(RwLock::new(None)),
-            task_merge_bootstrap_v2: false,
+            task_merge_bootstrap_v2: true,
             peers: Arc::new(Mutex::new(HashMap::new())),
             known_peer_records: Arc::new(Mutex::new(Vec::new())),
             shutdown_tx: Arc::new(Mutex::new(None)),

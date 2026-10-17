@@ -129,13 +129,27 @@ impl RelaySync {
         }
     }
 
-    pub fn broadcast_live_change(&self, entity: SyncEntity) -> Result<(), String> {
+    pub async fn broadcast_live_change(&self, entity: SyncEntity) -> Result<(), String> {
         self.send_user_data_message(LanSyncMessage::LiveChange {
             policy_identity: None,
             change_id: generate_id(),
             entity,
             origin_device_id: Some(self.config.device_id.clone()),
-        })
+        })?;
+        let peer_ids = self
+            .peers
+            .lock()
+            .await
+            .iter()
+            .filter(|(_, peer)| peer.authenticated)
+            .map(|(device_id, _)| device_id.clone())
+            .collect::<Vec<_>>();
+        for device_id in peer_ids {
+            if let Err(error) = self.pump_task_merge_batch(&device_id).await {
+                eprintln!("{TAG} task merge live send failed for {device_id}: {error}");
+            }
+        }
+        Ok(())
     }
 
     pub async fn get_connected_peer_entries(&self) -> Vec<PeerEntry> {

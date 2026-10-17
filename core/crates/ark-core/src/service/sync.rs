@@ -267,7 +267,7 @@ pub(super) async fn handle_broadcast_change(
         client.broadcast_live_change().await;
     }
     if let Some(relay) = runtime.relay.as_ref() {
-        relay.broadcast_live_change(entity.clone())?;
+        relay.broadcast_live_change(entity.clone()).await?;
     }
     Ok(json!(true))
 }

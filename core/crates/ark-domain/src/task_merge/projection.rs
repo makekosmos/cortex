@@ -45,6 +45,9 @@ pub fn apply_unit_value(
         (TaskMergeUnit::ObjectExistence, TaskMergeValue::ObjectDeleted { deleted_at }) => {
             object.deleted_at = Some(deleted_at.clone())
         }
+        (TaskMergeUnit::ObjectExistence, TaskMergeValue::ObjectHardDeleted { deleted_at }) => {
+            object.deleted_at = Some(deleted_at.clone())
+        }
         (TaskMergeUnit::Title, TaskMergeValue::Field(Value::String(title))) => {
             object.title = title.clone();
         }

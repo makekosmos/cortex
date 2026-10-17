@@ -1,4 +1,5 @@
 use super::*;
+use crate::application::task_mutation::TaskMutationSession;
 use crate::db;
 use crate::hlc::HLC;
 use crate::types::ObjectLink;
@@ -165,11 +166,13 @@ pub fn write_legacy_records(
         let id = item.object.id.clone();
         if item.object.type_id == "core.task" {
             let session = crate::db::SqliteObjectWriteSession::new(conn);
+            let expected_snapshot = session.task_snapshot(&item.object.id)?;
             entities.extend(crate::application::task_mutation::apply_task_upsert(
                 &session,
                 &item.object,
                 &item.links,
                 write_device,
+                Some(&expected_snapshot),
             )?);
             continue;
         }

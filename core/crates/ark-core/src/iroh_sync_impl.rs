@@ -262,8 +262,10 @@ impl SyncTransport for IrohTransport {
             &msg,
             LanSyncMessage::SignedIntegrationFrame { .. }
                 | LanSyncMessage::SignedIntegrationAck { .. }
+                | LanSyncMessage::TaskMergeBatch { .. }
+                | LanSyncMessage::TaskMergeBatchAck { .. }
         ) {
-            return Err("iroh send_to only supports addressed integration messages".into());
+            return Err("iroh send_to only supports addressed messages".into());
         }
         if let LanSyncMessage::SignedIntegrationFrame { frame } = &msg {
             let context = self.outbound_storage.read().await.clone().ok_or_else(|| {

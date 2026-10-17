@@ -113,7 +113,7 @@ impl RelaySync {
             None => (None, None),
         };
         let offer = if self.transport.supports_registry_admission() {
-            ProtocolOffer::current_with_registry_history(true)
+            ProtocolOffer::current_with_registry_history(true).with_task_merge_bootstrap_v2()
         } else {
             ProtocolOffer::current(self.auth_secret.is_some())
         };
@@ -230,6 +230,194 @@ impl RelaySync {
             origin_device_id: Some(self.config.device_id.clone()),
             usage_complete_through: (!complete_through.is_empty()).then_some(complete_through),
         });
+
+        if let Err(error) = self.pump_task_merge_batch(peer_device_id).await {
+            eprintln!("{TAG} task merge backfill failed for {peer_device_id}: {error}");
+        }
+    }
+
+    pub(super) async fn pump_task_merge_batch(&self, peer_device_id: &str) -> Result<(), String> {
+        let (authenticated, registry_ready, supported) = {
+            let peers = self.peers.lock().await;
+            let Some(peer) = peers.get(peer_device_id) else {
+                return Ok(());
+            };
+            (
+                peer.authenticated,
+                matches!(
+                    peer.registry_admission,
+                    RelayRegistryAdmission::Ready { .. }
+                ),
+                peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
+                    protocol
+                        .capabilities
+                        .contains(&crate::protocol::ProtocolCapability::TaskMergeBootstrapV2)
+                }),
+            )
+        };
+        if !authenticated || !registry_ready || !supported {
+            return Ok(());
+        }
+        let Some(identity) = self
+            .storage
+            .accepted_policy_identity_for_peer(peer_device_id)
+            .await?
+        else {
+            return Ok(());
+        };
+        let Some(batch) = (match self
+            .storage
+            .prepare_task_merge_batch(peer_device_id, &identity, 100)
+            .await
+        {
+            Ok(batch) => batch,
+            Err(error) if error.contains("task_merge_policy_requires_full_type_sync") => {
+                return Ok(())
+            }
+            Err(error) => return Err(error),
+        }) else {
+            return Ok(());
+        };
+        if self
+            .storage
+            .accepted_policy_identity_for_peer(peer_device_id)
+            .await?
+            .as_ref()
+            != Some(&identity)
+        {
+            return Ok(());
+        }
+        let still_supported = self
+            .peers
+            .lock()
+            .await
+            .get(peer_device_id)
+            .is_some_and(|peer| {
+                peer.authenticated
+                    && peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
+                        protocol
+                            .capabilities
+                            .contains(&crate::protocol::ProtocolCapability::TaskMergeBootstrapV2)
+                    })
+            });
+        if still_supported {
+            self.transport
+                .send_to(peer_device_id, LanSyncMessage::TaskMergeBatch { batch })
+                .await?;
+        }
+        Ok(())
+    }
+
+    pub(super) async fn apply_task_merge_batch(
+        &self,
+        from_device_id: &str,
+        transport_public_key: Option<&str>,
+        batch: crate::application::sync_storage::TaskMergeBatch,
+    ) -> Result<(), String> {
+        if !self
+            .registry_ready_for_peer(from_device_id, transport_public_key)
+            .await
+        {
+            return Ok(());
+        }
+        let supported = self
+            .peers
+            .lock()
+            .await
+            .get(from_device_id)
+            .is_some_and(|peer| {
+                peer.authenticated
+                    && peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
+                        protocol
+                            .capabilities
+                            .contains(&crate::protocol::ProtocolCapability::TaskMergeBootstrapV2)
+                    })
+            });
+        if !supported {
+            return Ok(());
+        }
+        let local_profile = self
+            .storage
+            .load_local_sync_profile(&self.config.device_id)
+            .await?;
+        let identity = crate::protocol::sync_policy_identity(local_profile.as_ref());
+        if batch.identity != identity {
+            return Ok(());
+        }
+        let ack = self
+            .storage
+            .apply_task_merge_batch(from_device_id, &self.config.device_id, &identity, &batch)
+            .await?;
+        self.transport
+            .send_to(
+                from_device_id,
+                LanSyncMessage::TaskMergeBatchAck {
+                    batch_id: ack.batch_id,
+                    through_position: ack.through_position,
+                    policy_identity: identity,
+                },
+            )
+            .await?;
+
+        let peers = self
+            .peers
+            .lock()
+            .await
+            .iter()
+            .filter(|(_, peer)| peer.authenticated)
+            .map(|(device_id, _)| device_id.clone())
+            .collect::<Vec<_>>();
+        for device_id in peers {
+            if let Err(error) = self.pump_task_merge_batch(&device_id).await {
+                eprintln!("{TAG} task merge fanout failed for {device_id}: {error}");
+            }
+        }
+        Ok(())
+    }
+
+    pub(super) async fn acknowledge_task_merge_batch(
+        &self,
+        from_device_id: &str,
+        batch_id: &str,
+        through_position: i64,
+        policy_identity: &crate::application::sync_storage::PolicyIdentity,
+    ) -> Result<(), String> {
+        let supported = self
+            .peers
+            .lock()
+            .await
+            .get(from_device_id)
+            .is_some_and(|peer| {
+                peer.authenticated
+                    && matches!(
+                        peer.registry_admission,
+                        RelayRegistryAdmission::Ready { .. }
+                    )
+                    && peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
+                        protocol
+                            .capabilities
+                            .contains(&crate::protocol::ProtocolCapability::TaskMergeBootstrapV2)
+                    })
+            });
+        if !supported
+            || self
+                .storage
+                .accepted_policy_identity_for_peer(from_device_id)
+                .await?
+                .as_ref()
+                != Some(policy_identity)
+        {
+            return Ok(());
+        }
+        self.storage
+            .acknowledge_task_merge_batch(
+                from_device_id,
+                policy_identity,
+                batch_id,
+                through_position,
+            )
+            .await?;
+        self.pump_task_merge_batch(from_device_id).await
     }
 
     async fn apply_entities(

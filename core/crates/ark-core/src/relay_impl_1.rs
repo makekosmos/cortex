@@ -74,6 +74,7 @@ impl RelaySync {
 
                 let local_offer = if self.transport.supports_registry_admission() {
                     ProtocolOffer::current_with_registry_history(true)
+                        .with_task_merge_bootstrap_v2()
                 } else {
                     ProtocolOffer::current(self.auth_secret.is_some())
                 };
@@ -356,7 +357,16 @@ impl RelaySync {
                 )
                 .await;
             }
-
+            message @ (LanSyncMessage::TaskMergeBatch { .. }
+            | LanSyncMessage::TaskMergeBatchAck { .. }) => {
+                task_merge::handle_message(
+                    self,
+                    &from_device_id,
+                    transport_public_key.as_deref(),
+                    message,
+                )
+                .await;
+            }
             LanSyncMessage::LiveChange { entity, .. } => {
                 if !self.is_authenticated_peer(&from_device_id).await {
                     return;

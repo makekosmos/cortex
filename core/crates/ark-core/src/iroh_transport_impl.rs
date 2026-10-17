@@ -168,7 +168,8 @@ impl IrohTransport {
             }
             None => (None, None),
         };
-        let offer = crate::protocol::ProtocolOffer::current_with_registry_history(true);
+        let offer = crate::protocol::ProtocolOffer::current_with_registry_history(true)
+            .with_task_merge_bootstrap_v2();
         let negotiation_hmac =
             auth_secret
                 .as_deref()

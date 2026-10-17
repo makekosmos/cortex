@@ -80,6 +80,7 @@ pub enum TaskMergeValue {
     FieldAbsent,
     ObjectExists,
     ObjectDeleted { deleted_at: String },
+    ObjectHardDeleted { deleted_at: String },
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -260,6 +261,10 @@ pub fn validate_operation(operation: &TaskMergeOperation) -> Result<(), MergeErr
                 TaskMergeValue::ObjectDeleted { .. }
             )
             | (
+                TaskMergeUnit::ObjectExistence,
+                TaskMergeValue::ObjectHardDeleted { .. }
+            )
+            | (
                 TaskMergeUnit::Title
                     | TaskMergeUnit::Content
                     | TaskMergeUnit::State
@@ -386,11 +391,12 @@ pub fn lifecycle_conflicts(
     let lifecycle = conflict_set(existence)?;
     let mut conflicts = Vec::new();
 
-    for deletion in lifecycle
-        .variants
-        .into_iter()
-        .filter(|operation| matches!(operation.value, TaskMergeValue::ObjectDeleted { .. }))
-    {
+    for deletion in lifecycle.variants.into_iter().filter(|operation| {
+        matches!(
+            operation.value,
+            TaskMergeValue::ObjectDeleted { .. } | TaskMergeValue::ObjectHardDeleted { .. }
+        )
+    }) {
         for unit in TaskMergeUnit::ALL {
             if unit == TaskMergeUnit::ObjectExistence {
                 continue;

@@ -66,7 +66,8 @@ fn apply_core_task_write(
         };
 
     if let Some(expected) = expected_snapshot.as_ref() {
-        if session.object_snapshot(&write.id)? != *expected {
+        let current = session.object_snapshot(&write.id)?;
+        if current != *expected {
             return Err("object_conflict:stale_snapshot".into());
         }
     }
@@ -107,9 +108,11 @@ fn apply_core_task_write(
         Some(&registration),
     )
     .map_err(|error| error.to_string())?;
-    local_task_session
-        .ok_or_else(|| "object_write_origin_mismatch".to_string())?
-        .ensure_legacy_task_write_allowed(&object.id)?;
+    if source_hlc.is_some() {
+        local_task_session
+            .ok_or_else(|| "object_write_origin_mismatch".to_string())?
+            .ensure_legacy_task_write_allowed(&object.id)?;
+    }
     let (payload_json, payload_sha256) =
         crate::domain::object_write::canonical_payload_digest(&object, &links)?;
     let representation_kind = "full";
@@ -182,6 +185,7 @@ fn apply_core_task_write(
         &object,
         &links,
         task_device_id,
+        expected_snapshot.as_ref(),
     )?;
     let source_hlc = task_entities
         .into_iter()
