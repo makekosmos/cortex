@@ -1,6 +1,6 @@
 mod encoding;
 mod handshake;
-pub(crate) mod state;
+pub mod state;
 mod validation;
 
 pub use handshake::{

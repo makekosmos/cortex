@@ -52,29 +52,29 @@ pub enum RegistryApplyError {
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub(crate) struct DeviceRegistry {
+pub struct DeviceRegistry {
     devices: BTreeMap<DeviceId, DeviceRecord>,
     heads: BTreeMap<DeviceId, RegistryHead>,
 }
 
 impl DeviceRegistry {
-    pub(crate) fn add_trust_anchor(&mut self, device: DeviceRecord) {
+    pub fn add_trust_anchor(&mut self, device: DeviceRecord) {
         self.devices.insert(device.device_id.clone(), device);
     }
 
-    pub(crate) fn set_head(&mut self, head: RegistryHead) {
+    pub fn set_head(&mut self, head: RegistryHead) {
         self.heads.insert(head.actor_device_id.clone(), head);
     }
 
-    pub(crate) fn device(&self, id: &DeviceId) -> Option<&DeviceRecord> {
+    pub fn device(&self, id: &DeviceId) -> Option<&DeviceRecord> {
         self.devices.get(id)
     }
 
-    pub(crate) fn head(&self, id: &DeviceId) -> Option<&RegistryHead> {
+    pub fn head(&self, id: &DeviceId) -> Option<&RegistryHead> {
         self.heads.get(id)
     }
 
-    pub(crate) fn apply(
+    pub fn apply(
         &mut self,
         event: RegistryEvent,
     ) -> Result<RegistryApplyOutcome, RegistryApplyError> {

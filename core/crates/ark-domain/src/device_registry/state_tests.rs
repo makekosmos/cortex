@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::device_registry::RegistryEventDraft;
+use crate::device_registry::RegistryEventDraft;
 use ed25519_dalek::SigningKey;
 
 fn trust_anchor(device_id: &str, key: &SigningKey) -> DeviceRecord {

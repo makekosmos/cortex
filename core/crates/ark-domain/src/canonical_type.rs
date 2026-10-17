@@ -51,7 +51,7 @@ pub struct CanonicalIngressError {
 }
 
 impl CanonicalIngressError {
-    pub(crate) fn invalid(code: &'static str) -> Self {
+    pub fn invalid(code: &'static str) -> Self {
         Self {
             category: "invalid_request",
             code,
@@ -59,7 +59,7 @@ impl CanonicalIngressError {
         }
     }
 
-    pub(crate) fn invariant(code: &'static str) -> Self {
+    pub fn invariant(code: &'static str) -> Self {
         Self {
             category: "definition_invariant",
             code,
@@ -80,7 +80,7 @@ impl std::fmt::Display for CanonicalIngressError {
 
 impl std::error::Error for CanonicalIngressError {}
 
-pub(crate) fn canonical_value(value: &Value) -> Value {
+pub fn canonical_value(value: &Value) -> Value {
     match value {
         Value::Object(object) => {
             let mut sorted = BTreeMap::new();
@@ -130,7 +130,7 @@ mod tests {
 
     #[test]
     fn type_registration_keeps_legacy_snake_case_json_keys() {
-        let source = include_str!("../../../../integrations/fatsecret/type-registration.json");
+        let source = include_str!("../tests/fixtures/type-registration.json");
         let registration: TypeRegistration = serde_json::from_str(source).unwrap();
         let value = serde_json::to_value(registration).unwrap();
         assert!(value.get("type_id").is_some());
