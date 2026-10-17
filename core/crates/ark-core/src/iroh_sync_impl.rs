@@ -418,7 +418,10 @@ impl SyncTransport for IrohTransport {
                 self.registry.remove_endpoint(&endpoint_id);
                 Ok(())
             }
-            None => Err("iroh peer has no live connection".to_string()),
+            None => {
+                self.registry.remove_endpoint(&endpoint_id);
+                Ok(())
+            }
         }
     }
 
