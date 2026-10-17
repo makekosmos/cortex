@@ -460,7 +460,7 @@ pub(crate) enum Request {
     },
 
     /// Test-only fault-injection op: the service worker panics on it so tests
-    /// can verify catch_unwind + reopen at the service boundary.
+    /// can verify that the service fails closed at the request boundary.
     #[cfg(test)]
     #[serde(rename = "test.panic")]
     TestPanic,

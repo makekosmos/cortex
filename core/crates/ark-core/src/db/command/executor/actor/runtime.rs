@@ -150,45 +150,20 @@ fn run_task(shared: &ActorShared, connection: &mut Connection, task: Box<dyn Wri
             false
         }
         Ok(Err(_error)) => false,
-        Err(_) => {
-            shared
+        Err(panic) => {
+            let mut ledger = shared
                 .ledger
                 .lock()
-                .unwrap_or_else(|error| error.into_inner())
-                .lifecycle = Lifecycle::Recovering;
+                .unwrap_or_else(|error| error.into_inner());
+            ledger.lifecycle = Lifecycle::Failed;
+            ledger.failure = Some(format!(
+                "database writer panicked: {}",
+                panic_message(&*panic)
+            ));
+            drop(ledger);
             shared
                 .generation
                 .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            let old = std::mem::replace(
-                connection,
-                Connection::open_in_memory().expect("temporary connection"),
-            );
-            drop(old);
-            let recovered = crate::db::recover_interrupted_restore(&shared.path).and_then(|()| {
-                crate::db::open_db(&shared.path).and_then(|connection| {
-                    crate::db::init_schema(&connection)?;
-                    Ok(connection)
-                })
-            });
-            match recovered {
-                Ok(recovered) => {
-                    *connection = recovered;
-                    shared
-                        .ledger
-                        .lock()
-                        .unwrap_or_else(|error| error.into_inner())
-                        .lifecycle = Lifecycle::Ready;
-                }
-                Err(error) => {
-                    eprintln!("database recovery after panic failed: {error}");
-                    let mut ledger = shared
-                        .ledger
-                        .lock()
-                        .unwrap_or_else(|lock_error| lock_error.into_inner());
-                    ledger.lifecycle = Lifecycle::Failed;
-                    ledger.failure = Some(error);
-                }
-            }
             false
         }
     }

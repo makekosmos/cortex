@@ -123,8 +123,8 @@ async fn production_actor_finishes_started_work_after_caller_cancellation() {
 }
 
 #[tokio::test]
-async fn production_actor_panic_rolls_back_and_recovers_on_the_same_owner() {
-    let (_directory, handle, mut owner) = open_actor_fixture().await;
+async fn production_actor_panic_rolls_back_and_fails_closed_until_reopen() {
+    let (directory, handle, mut owner) = open_actor_fixture().await;
     let generation = handle.generation_for_test();
     let result = handle
         .submit(CommandContext::engine(), PanicAfterWriteProbe)
@@ -132,12 +132,12 @@ async fn production_actor_panic_rolls_back_and_recovers_on_the_same_owner() {
     assert!(matches!(result, Err(DbError::OutcomeUnknown)));
 
     tokio::time::timeout(std::time::Duration::from_secs(2), async {
-        while handle.generation_for_test() == generation || !handle.actor_ready_for_test() {
+        while handle.generation_for_test() == generation || handle.actor_ready_for_test() {
             tokio::task::yield_now().await;
         }
     })
     .await
-    .expect("actor did not recover after a command panic");
+    .expect("actor did not fail closed after a command panic");
     let table_exists = handle.with_connection(|connection| {
         connection
             .query_row(
@@ -151,7 +151,7 @@ async fn production_actor_panic_rolls_back_and_recovers_on_the_same_owner() {
             .unwrap()
     });
     assert!(!table_exists, "uncommitted panic write must be rolled back");
-    handle
+    let rejected = handle
         .submit(
             CommandContext::engine(),
             QueueProbe::<0> {
@@ -160,10 +160,34 @@ async fn production_actor_panic_rolls_back_and_recovers_on_the_same_owner() {
                 gate: None,
             },
         )
+        .await;
+    assert!(rejected.is_err(), "failed actor accepted a later write");
+    owner
+        .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
         .await
         .unwrap();
-    wait_for_admitted_commands(&handle, 0).await;
-    owner
+
+    let reopened_path = directory
+        .path()
+        .join("actor.db")
+        .to_string_lossy()
+        .into_owned();
+    let (reopened, mut reopened_owner) = DbHandle::open(reopened_path, "actor-test-device".into())
+        .await
+        .expect("explicit owner reopen");
+    assert!(reopened.actor_ready_for_test());
+    reopened
+        .submit(
+            CommandContext::engine(),
+            QueueProbe::<0> {
+                sequence: 25,
+                payload: vec![0],
+                gate: None,
+            },
+        )
+        .await
+        .expect("new owner accepts work after bootstrap");
+    reopened_owner
         .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
         .await
         .unwrap();

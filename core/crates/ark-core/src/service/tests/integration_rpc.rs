@@ -181,10 +181,9 @@ fn integration_issuer_key_lookup_uses_the_versioned_wire_shape() {
     .is_err());
 }
 
-/// Fault isolation: a panicking handler returns an error, the worker catches
-/// it, reopens the database, and keeps serving subsequent requests.
+/// A handler panic leaves its result unknown and stops the service worker.
 #[tokio::test]
-async fn panicking_request_returns_error_and_service_recovers() {
+async fn panicking_request_stops_service_until_explicit_reopen() {
     let dir = crate::test_support::temp_dir();
     let db_path = dir.path().join("ark.db");
     let service = ArkService::open(db_path.to_str().unwrap())
@@ -194,18 +193,42 @@ async fn panicking_request_returns_error_and_service_recovers() {
     let error = service
         .call("test.panic", json!({}))
         .await
-        .expect_err("panicking op must surface an error, not kill the worker");
+        .expect_err("panicking request must stop the worker");
     assert!(
-        matches!(error, ArkServiceError::Request(ref message) if message.contains("panicked")),
-        "expected a request error describing the panic, got {error:?}"
+        matches!(
+            error,
+            ArkServiceError::Unavailable(ref message)
+                if message.contains("outcome unknown") && message.contains("handler panic")
+        ),
+        "expected an unavailable error with unknown outcome, got {error:?}"
     );
 
-    let data = service
+    let unavailable = service
         .call("load_all", json!({}))
         .await
-        .expect("service must recover after a handler panic");
-    assert!(data.is_object(), "load_all returned {data:?}");
+        .expect_err("the failed service must reject later requests");
+    assert!(
+        matches!(unavailable, ArkServiceError::Unavailable(_)),
+        "expected the failed worker to be unavailable, got {unavailable:?}"
+    );
     assert_eq!(service.panic_count(), 1);
+
+    service
+        .shutdown(Instant::now() + Duration::from_secs(2))
+        .await
+        .expect("failed worker shuts down");
+    let restarted = ArkService::open(db_path.to_str().unwrap())
+        .await
+        .expect("explicit service reopen");
+    let data = restarted
+        .call("load_all", json!({}))
+        .await
+        .expect("new service serves after bootstrap");
+    assert!(data.is_object(), "load_all returned {data:?}");
+    restarted
+        .shutdown(Instant::now() + Duration::from_secs(2))
+        .await
+        .expect("reopened service shuts down");
 }
 
 #[tokio::test]

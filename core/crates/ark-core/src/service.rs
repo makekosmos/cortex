@@ -23,13 +23,12 @@
 //!
 //! ## Fault isolation
 //!
-//! `handle_request` is awaited under `catch_unwind`: a panic inside a handler
-//! returns an error for that request, is logged, and the service then reopens
-//! the database (the sync runtime is stopped and the shared connection is
-//! dropped, so SQLite rolls back any transaction the panic left open). The
-//! Engine survives an ARK panic and the next request is served on a fresh
-//! connection — the respawn the sidecar never had. Requires `panic =
-//! "unwind"` (the default; no workspace profile overrides it).
+//! `handle_request` is awaited under `catch_unwind`. A handler panic makes the
+//! active request outcome unknown and stops this service instance. The worker
+//! cancels queued requests, stops sync, and closes the database owner. The
+//! Engine must explicitly open a new service before it can serve requests
+//! again. This requires `panic = "unwind"` (the default; no workspace profile
+//! overrides it).
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -180,7 +179,6 @@ impl ArkService {
         let shutdown_deadline = Arc::new(StdMutex::new(None));
         let (jobs, worker) = spawn_worker(
             state.clone(),
-            db_path.clone(),
             panic_count.clone(),
             shutdown_deadline.clone(),
         )
@@ -250,8 +248,8 @@ impl ArkService {
         crate::events::subscribe()
     }
 
-    /// Number of handler panics the worker has caught (each followed by a DB
-    /// reopen). Exposed for Engine diagnostics.
+    /// Number of handler panics that stopped this service worker.
+    /// Exposed for Engine diagnostics.
     pub fn panic_count(&self) -> u64 {
         self.panic_count.load(Ordering::SeqCst)
     }
@@ -303,7 +301,6 @@ impl Drop for ArkService {
 
 fn spawn_worker(
     state: Arc<ServiceState>,
-    db_path: String,
     panic_count: Arc<AtomicU64>,
     shutdown_deadline: Arc<StdMutex<Option<Instant>>>,
 ) -> std::io::Result<(mpsc::Sender<ServiceJob>, std::thread::JoinHandle<()>)> {
@@ -327,20 +324,13 @@ fn spawn_worker(
                     return;
                 }
             };
-            rt.block_on(worker_loop(
-                state,
-                db_path,
-                rx,
-                panic_count,
-                shutdown_deadline,
-            ));
+            rt.block_on(worker_loop(state, rx, panic_count, shutdown_deadline));
         })?;
     Ok((tx, worker))
 }
 
 async fn worker_loop(
     state: Arc<ServiceState>,
-    db_path: String,
     mut rx: mpsc::Receiver<ServiceJob>,
     panic_count: Arc<AtomicU64>,
     shutdown_deadline: Arc<StdMutex<Option<Instant>>>,
@@ -351,28 +341,31 @@ async fn worker_loop(
             std::panic::AssertUnwindSafe(async { handle_request(&state, job.request).await })
                 .catch_unwind()
                 .await;
-        let reply = match outcome {
-            Ok(result) => result.map_err(ArkServiceError::Request),
+        match outcome {
+            Ok(result) => {
+                let _ = job.reply.send(result.map_err(ArkServiceError::Request));
+            }
             Err(panic) => {
                 let count = panic_count.fetch_add(1, Ordering::SeqCst) + 1;
                 let message = panic_message(&*panic);
                 eprintln!(
-                    "[ark-service] handler panicked: {message}; reopening database (panic #{count})"
+                    "[ark-service] handler panicked: {message}; stopping service (panic #{count})"
                 );
-                // Reopen unconditionally after a handler panic to reset the
-                // connection and any state left by interrupted SQLite work.
-                let _ = std::panic::AssertUnwindSafe(reopen(&state, &db_path))
-                    .catch_unwind()
-                    .await;
-                Err(ArkServiceError::Request(format!(
-                    "ark handler panicked: {message}"
-                )))
+                let _ = job.reply.send(Err(ArkServiceError::Unavailable(format!(
+                    "request outcome unknown after handler panic; service stopped: {message}"
+                ))));
+                rx.close();
+                while let Ok(queued) = rx.try_recv() {
+                    let _ = queued.reply.send(Err(ArkServiceError::Request(
+                        "request cancelled before start after service handler panic".into(),
+                    )));
+                }
+                break;
             }
-        };
-        let _ = job.reply.send(reply);
+        }
     }
-    // Channel closed — the service was dropped. Stop sync so beacon/relay/
-    // server sockets and client loops die with the worker.
+    // Channel closure or a handler panic stops sync producers before the
+    // writer owner closes.
     let _ = std::panic::AssertUnwindSafe(handle_stop_sync(&state))
         .catch_unwind()
         .await;
@@ -392,45 +385,6 @@ async fn worker_loop(
         if let Err(error) = owner.shutdown(deadline).await {
             eprintln!("[ark-service] database owner shutdown failed: {error}");
         }
-    }
-}
-
-/// Re-open the database after a handler panic: stop sync, drop the shared
-/// connection (SQLite rolls back a half-open transaction on drop) and run
-/// `init` again. Best-effort — failures are logged; subsequent requests then
-/// see "Database not initialized".
-async fn reopen(state: &Arc<ServiceState>, db_path: &str) {
-    handle_stop_sync(state).await;
-    *state.db.lock().unwrap_or_else(|e| e.into_inner()) = None;
-    *state.db_path.lock().unwrap_or_else(|e| e.into_inner()) = None;
-    let owner = {
-        state
-            .db_owner
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .take()
-    };
-    if let Some(mut owner) = owner {
-        if let Err(error) = owner
-            .shutdown(Instant::now() + Duration::from_secs(30))
-            .await
-        {
-            eprintln!(
-                "[ark-service] database owner did not close; refusing overlapping reopen: {error}"
-            );
-            return;
-        }
-    }
-    match handle_request(
-        state,
-        Request::Init {
-            db_path: db_path.to_string(),
-        },
-    )
-    .await
-    {
-        Ok(_) => eprintln!("[ark-service] database reopened after panic"),
-        Err(e) => eprintln!("[ark-service] reopen after panic failed: {e}"),
     }
 }
 

@@ -106,7 +106,6 @@ enum Lifecycle {
     Migrating,
     Ready,
     Draining,
-    Recovering,
     Failed,
     Closed,
 }
@@ -225,7 +224,6 @@ impl ActorShared {
         match ledger.lifecycle {
             Lifecycle::Ready => {}
             Lifecycle::Opening | Lifecycle::Migrating => return Err(DbError::Unavailable),
-            Lifecycle::Recovering => return Err(DbError::RecoveryRequired),
             Lifecycle::Failed => {
                 return Err(DbError::Storage(
                     ledger
@@ -319,7 +317,6 @@ impl ActorShared {
             Lifecycle::Opening | Lifecycle::Migrating | Lifecycle::Draining | Lifecycle::Closed => {
                 return Err(DbError::Unavailable)
             }
-            Lifecycle::Recovering => return Err(DbError::RecoveryRequired),
             Lifecycle::Failed => {
                 return Err(DbError::Storage(
                     ledger
