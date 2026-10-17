@@ -1,6 +1,9 @@
 use super::*;
 use crate::replication_storage::AuthenticatedEntityBackend;
 
+#[path = "object_revision_compat/task_merge.rs"]
+mod task_merge;
+
 async fn admit_inbound_peer(state: &Arc<ServiceState>) {
     let handle = get_db_handle(state).unwrap();
     let endpoint = iroh::SecretKey::generate().public().to_string();
