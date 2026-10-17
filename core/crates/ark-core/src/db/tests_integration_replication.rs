@@ -5,7 +5,8 @@ use crate::integration_replication::{
 
 fn integration_test_db() -> rusqlite::Connection {
     let conn = rusqlite::Connection::open_in_memory().unwrap();
-    conn.execute_batch(crate::schema::CREATE_TABLES).unwrap();
+    conn.execute_batch(ark_store::schema::CREATE_TABLES)
+        .unwrap();
     conn
 }
 

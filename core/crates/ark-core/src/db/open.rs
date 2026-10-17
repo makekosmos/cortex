@@ -4,8 +4,8 @@ use crate::canonical_types::migration;
 pub use crate::canonical_types::pending::{
     count_pending_for_type, insert_pending_object, replay_pending_for_type,
 };
-use crate::schema::CREATE_TABLES;
 use crate::type_registry;
+use ark_store::schema::CREATE_TABLES;
 
 use super::objects::{ensure_object_search_fts, rebuild_object_search_fts};
 

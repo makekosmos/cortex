@@ -139,7 +139,8 @@ mod tests {
     #[test]
     fn revoked_grant_invalidates_an_already_signed_frame() {
         let conn = rusqlite::Connection::open_in_memory().unwrap();
-        conn.execute_batch(crate::schema::CREATE_TABLES).unwrap();
+        conn.execute_batch(ark_store::schema::CREATE_TABLES)
+            .unwrap();
         let key = SigningKey::from_bytes(&[7; 32]);
         let origin = node(
             "origin",

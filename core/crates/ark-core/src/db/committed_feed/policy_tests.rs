@@ -3,7 +3,8 @@ use super::*;
 #[test]
 fn operation_mode_task_snapshots_are_skipped_with_cursor_advance() {
     let conn = Connection::open_in_memory().unwrap();
-    conn.execute_batch(crate::schema::CREATE_TABLES).unwrap();
+    conn.execute_batch(ark_store::schema::CREATE_TABLES)
+        .unwrap();
     ark_store::data_platform::ensure_schema(&conn).unwrap();
     append_committed_change(&conn, "object", "merged-task", "r1", false, None, None).unwrap();
     conn.execute(

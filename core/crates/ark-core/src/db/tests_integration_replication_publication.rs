@@ -165,7 +165,9 @@ fn concurrent_refresh_acquire_has_one_fence_winner() {
     let directory = crate::test_support::temp_dir();
     let path = directory.path().join("integration-refresh.sqlite");
     let setup = open_db(path.to_str().unwrap()).unwrap();
-    setup.execute_batch(crate::schema::CREATE_TABLES).unwrap();
+    setup
+        .execute_batch(ark_store::schema::CREATE_TABLES)
+        .unwrap();
     setup_refresh_authority(&setup);
     drop(setup);
 

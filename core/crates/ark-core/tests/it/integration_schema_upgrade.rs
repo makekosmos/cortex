@@ -1,4 +1,5 @@
-use ark_core::{db, schema::CREATE_TABLES};
+use ark_core::db;
+use ark_store::schema::CREATE_TABLES;
 use rusqlite::Connection;
 
 #[test]

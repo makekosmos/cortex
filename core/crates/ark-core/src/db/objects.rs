@@ -1,5 +1,5 @@
-use crate::schema::CREATE_OBJECT_SEARCH_FTS;
 use crate::type_registry;
+use ark_store::schema::CREATE_OBJECT_SEARCH_FTS;
 use serde::Serialize;
 
 use super::open::replay_pending_for_type;

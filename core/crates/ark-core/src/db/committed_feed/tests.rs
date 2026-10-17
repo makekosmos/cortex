@@ -5,7 +5,8 @@ mod tests {
 
     fn db() -> Connection {
         let conn = Connection::open_in_memory().unwrap();
-        conn.execute_batch(crate::schema::CREATE_TABLES).unwrap();
+        conn.execute_batch(ark_store::schema::CREATE_TABLES)
+            .unwrap();
         ark_store::data_platform::ensure_schema(&conn).unwrap();
         conn
     }
@@ -30,7 +31,8 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("ark.db");
         let conn = Connection::open(&path).unwrap();
-        conn.execute_batch(crate::schema::CREATE_TABLES).unwrap();
+        conn.execute_batch(ark_store::schema::CREATE_TABLES)
+            .unwrap();
         conn.execute_batch("BEGIN IMMEDIATE").unwrap();
         append_committed_change(&conn, "object", "a", "r1", false, Some("device-a"), None).unwrap();
         conn.execute_batch("ROLLBACK").unwrap();
@@ -76,7 +78,8 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("ark.db");
         let conn = Connection::open(&path).unwrap();
-        conn.execute_batch(crate::schema::CREATE_TABLES).unwrap();
+        conn.execute_batch(ark_store::schema::CREATE_TABLES)
+            .unwrap();
         append_committed_change(&conn, "object", "a", "r1", false, None, None).unwrap();
         append_committed_change(&conn, "object", "b", "r2", false, None, None).unwrap();
 
@@ -270,7 +273,8 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("initial-snapshot.db");
         let conn = Connection::open(&path).unwrap();
-        conn.execute_batch(crate::schema::CREATE_TABLES).unwrap();
+        conn.execute_batch(ark_store::schema::CREATE_TABLES)
+            .unwrap();
         append_committed_change(&conn, "object", "snapshot-row", "r1", false, None, None).unwrap();
 
         let started = begin_outbound_policy(&conn, "peer-a", 7).unwrap();
@@ -309,7 +313,8 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("policy-bound-snapshot.db");
         let conn = Connection::open(path).unwrap();
-        conn.execute_batch(crate::schema::CREATE_TABLES).unwrap();
+        conn.execute_batch(ark_store::schema::CREATE_TABLES)
+            .unwrap();
         ark_store::data_platform::ensure_schema(&conn).unwrap();
         let rule = ark_application::sync_policy::SyncProfileRule {
             resource_kind: "type".into(),
@@ -426,7 +431,8 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("policy-bound-feed-page.db");
         let conn = Connection::open(path).unwrap();
-        conn.execute_batch(crate::schema::CREATE_TABLES).unwrap();
+        conn.execute_batch(ark_store::schema::CREATE_TABLES)
+            .unwrap();
         ark_store::data_platform::ensure_schema(&conn).unwrap();
         let rule = |resource_id: &str| ark_application::sync_policy::SyncProfileRule {
             resource_kind: "type".into(),

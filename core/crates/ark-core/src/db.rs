@@ -171,10 +171,10 @@ mod tests {
     use super::*;
     use crate::hlc::HLC;
     use crate::integration_replication::*;
-    use crate::schema::*;
     use crate::type_registry;
     use crate::types::*;
     use ark_application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
+    use ark_store::schema::*;
     use rusqlite::{params, Connection, OptionalExtension};
     use serde_json::{json, Value};
 

@@ -16,7 +16,6 @@ pub mod iroh_transport;
 pub mod mesh;
 pub mod relay_sync;
 pub mod replication_storage;
-pub mod schema;
 pub mod service;
 pub mod space;
 pub mod sync_client;
