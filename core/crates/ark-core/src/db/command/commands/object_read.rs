@@ -58,7 +58,7 @@ impl DbQuery for ObjectReadQuery {
                 crate::db::list_object_summaries_by_type(connection, &type_id),
             ),
             Self::EstimateDataVolume(scopes) => {
-                let session = crate::db::SqliteDataVolumeReadSession::new(connection);
+                let session = ark_store::data_volume::SqliteDataVolumeReadSession::new(connection);
                 serialize(
                     ark_application::data_volume::DataVolumeReadPort::estimate_data_volume(
                         &session, &scopes,

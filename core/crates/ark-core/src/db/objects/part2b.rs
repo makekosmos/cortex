@@ -1,37 +1,3 @@
-/// Every stored type_id that answers a by-type query: the canonical id plus
-/// all registered aliases. Objects written before a type was canonicalised
-/// keep the alias in `objects.type_id`; matching only the canonical id makes
-/// them invisible to readers even though they belong to the type.
-fn query_type_ids(conn: &Connection, type_id: &str) -> Result<Vec<String>, String> {
-    let registry_ready: bool = conn
-        .query_row(
-            concat!(
-                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND ",
-                "name='object_type_aliases')"
-            ),
-            [],
-            |row| row.get::<_, i64>(0),
-        )
-        .map_err(|e| e.to_string())?
-        != 0;
-    if !registry_ready {
-        return Ok(vec![type_id.to_string()]);
-    }
-    let canonical = crate::type_registry::resolve_type_id(conn, type_id)?
-        .unwrap_or_else(|| type_id.to_string());
-    let mut ids = vec![canonical.clone()];
-    let mut stmt = conn
-        .prepare("SELECT alias FROM object_type_aliases WHERE canonical_type_id=?1 ORDER BY alias")
-        .map_err(|e| e.to_string())?;
-    let aliases = stmt
-        .query_map(params![canonical], |row| row.get::<_, String>(0))
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
-    ids.extend(aliases);
-    Ok(ids)
-}
-
 fn type_id_in_clause(ids: &[String]) -> String {
     let placeholders = (1..=ids.len())
         .map(|index| format!("?{index}"))
@@ -40,76 +6,8 @@ fn type_id_in_clause(ids: &[String]) -> String {
     format!("type_id IN ({placeholders})")
 }
 
-pub(crate) fn estimate_data_volume(
-    conn: &Connection,
-    query: &ark_application::data_volume::DataVolumeQuery,
-) -> Result<Vec<ark_application::data_volume::DataVolumeEstimate>, String> {
-    query
-        .scopes()
-        .iter()
-        .map(|scope| estimate_data_volume_scope(conn, scope))
-        .collect()
-}
-
-fn estimate_data_volume_scope(
-    conn: &Connection,
-    scope: &ark_application::data_volume::DataVolumeScope,
-) -> Result<ark_application::data_volume::DataVolumeEstimate, String> {
-    let type_ids = query_type_ids(conn, scope.type_id())?;
-    let mut values = type_ids
-        .iter()
-        .cloned()
-        .map(rusqlite::types::Value::Text)
-        .collect::<Vec<_>>();
-    values.push(rusqlite::types::Value::Text(
-        scope.type_version().to_owned(),
-    ));
-    let mut terms = vec![
-        "length(CAST(id AS BLOB)) + length(CAST(type_id AS BLOB)) + \
-         length(CAST(type_version AS BLOB)) + length(CAST(created_at AS BLOB)) + \
-         length(CAST(updated_at AS BLOB)) + 58"
-            .to_owned(),
-    ];
-    for field in scope.fields() {
-        match field.as_str() {
-            "title" => terms.push("length(CAST(title AS BLOB)) + 10".into()),
-            "content" => terms.push("length(CAST(content_json AS BLOB)) + 17".into()),
-            field => {
-                let property = field.strip_prefix("props.").expect("validated field");
-                let quoted_property =
-                    serde_json::to_string(property).map_err(|error| error.to_string())?;
-                let path = format!("$.{quoted_property}");
-                values.push(rusqlite::types::Value::Text(path));
-                let parameter = values.len();
-                terms.push(format!(
-                    "CASE WHEN json_type(props_json, ?{parameter}) IS NULL THEN 0 \
-                     ELSE length(CAST(json_extract(props_json, ?{parameter}) AS BLOB)) + 16 END"
-                ));
-            }
-        }
-    }
-    let sql = format!(
-        "SELECT COUNT(*), COALESCE(SUM({}), 0) FROM objects WHERE {} \
-         AND type_version = ?{} AND deleted_at IS NULL",
-        terms.join(" + "),
-        type_id_in_clause(&type_ids),
-        type_ids.len() + 1
-    );
-    let (count, logical_bytes): (u64, u64) = conn
-        .query_row(&sql, rusqlite::params_from_iter(values.iter()), |row| {
-            Ok((row.get(0)?, row.get(1)?))
-        })
-        .map_err(|e| e.to_string())?;
-    Ok(ark_application::data_volume::DataVolumeEstimate {
-        type_id: scope.type_id().to_owned(),
-        type_version: scope.type_version().to_owned(),
-        object_count: count,
-        estimated_json_bytes: logical_bytes,
-    })
-}
-
 pub fn list_objects_by_type(conn: &Connection, type_id: &str) -> Result<Vec<ArkObject>, String> {
-    let type_ids = query_type_ids(conn, type_id)?;
+    let type_ids = ark_store::type_registry::stored_type_ids_for_query(conn, type_id)?;
     let sql = format!(
         "SELECT id, type_id, type_version, title, content_json, props_json, created_at, updated_at,
          deleted_at
@@ -130,7 +28,7 @@ pub fn list_object_summaries_by_type(
     conn: &Connection,
     type_id: &str,
 ) -> Result<Vec<ArkObjectSummary>, String> {
-    let type_ids = query_type_ids(conn, type_id)?;
+    let type_ids = ark_store::type_registry::stored_type_ids_for_query(conn, type_id)?;
     let sql = format!(
         "SELECT id, type_id, type_version, title, props_json, created_at, updated_at, deleted_at
          FROM objects
@@ -162,7 +60,8 @@ pub fn list_running_time_entries(
     conn: &Connection,
     source_filter: Option<&str>,
 ) -> Result<Vec<ArkObject>, String> {
-    let time_entry_type_ids = query_type_ids(conn, "time_entry_obj")?;
+    let time_entry_type_ids =
+        ark_store::type_registry::stored_type_ids_for_query(conn, "time_entry_obj")?;
     let base_sql = format!(
         "SELECT id, type_id, type_version, title, content_json, props_json, created_at, updated_at,
          deleted_at
