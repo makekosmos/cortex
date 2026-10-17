@@ -2,7 +2,7 @@
 
 ## Problem
 
-`ark-core::SyncServer` and `SyncClient` still combine direct WebSocket I/O with authentication, protocol negotiation, registry admission, policy-bound snapshots, task-merge delivery, and session shutdown. Moving these files unchanged would preserve the wrong ownership. KOS-424 requires `ark-sync` to own sessions while `ark-net` owns sockets and `ark-core` remains the `ArkService` composition and JSON boundary. The wire format and storage behavior must remain unchanged during this extraction. The extraction has started: committed-feed ACK validation/persistence and staged inbound `LiveChange` policy, receipt, apply, and vector rules now live in `ark-sync`; Core still owns session state and wire effects.
+`ark-core::SyncServer` and `SyncClient` still combine direct WebSocket I/O with authentication, protocol negotiation, registry admission, policy-bound snapshots, task-merge delivery, and session shutdown. Moving these files unchanged would preserve the wrong ownership. KOS-424 requires `ark-sync` to own sessions while `ark-net` owns sockets and `ark-core` remains the `ArkService` composition and JSON boundary. The wire format and storage behavior must remain unchanged during this extraction. The extraction has started: committed-feed ACK validation, staged inbound `LiveChange` rules, and client sync-policy acceptance and initial snapshot preparation now live in `ark-sync`; Core still owns connection state and wire effects.
 
 ## Usage
 
@@ -63,7 +63,7 @@ The transport session is per connection. Its authenticated device identity is es
 
 The current server dispatch in `sync_server_messages` has four policy-bearing paths: Hello/negotiation; accepted sync-policy storage and policy-gated start; version-vector snapshot; and inbound snapshot pages. Registry admission frames route through `ark-sync::DirectRegistryAdmission`; the remaining live path covers committed-feed and task-merge acknowledgements, signed-integration frames, peer lists, pairing, ping, and protocol rejection. `sync_server_inbound` applies authenticated live entities and handles receipt/applied ACKs; `sync_server_peers` pumps durable feed and task-merge batches. These share one per-connection readiness/admission fact and must move as one session owner, not as isolated helper extractions.
 
-The client owns the matching hello and admission handshake, policy and vector exchange, inbound snapshot application, ACK handling, committed-feed progress, task merge, signed integration, and callbacks. Its `start` loop also owns address retry and joinable writer/reader tasks. Therefore reconnect policy moves with the sync client session; only address resolution, dialing, WebSocket framing, and close details move to `ark-net`.
+The client still owns Hello validation and the registry-admission handshake, policy advertisement, inbound snapshot application, ACK handling, committed-feed progress, task merge, signed integration, and callbacks. `ark-sync::client_session` owns received-policy validation and persistence plus the initial outbound-policy cursor and version-vector read. The client `start` loop also owns address retry and joinable writer/reader tasks. Reconnect policy moves with the sync client session; address resolution, dialing, WebSocket framing, and close details move to `ark-net`.
 
 Storage calls already enter through `ark-application` capabilities: peer admission/identity and registry history; accepted per-peer policy; local profile; version vectors and usage-complete-through cursors; policy-bound entity pages; authenticated entity apply and durable receipts; committed-feed snapshot/ACK; task-merge delivery; and signed-integration authorization. The extraction must reuse these calls and preserve their transaction boundaries. It must not add a second executor API that simply renames each storage method.
 
@@ -94,4 +94,4 @@ Before moving the remaining production callers, inventory every server/client me
 
 ## Next implementation step
 
-Continue consolidating the remaining per-connection protocol decisions, then extract the private session owner and driver against the full inventory. Keep socket connection lifecycle in `ark-net`, and switch production callers only when the session owner can preserve task join, policy generation, ACK order, callbacks, and wire fixtures together.
+Complete the client admission-to-sync-start path as one state owner, then move the matching server path. Keep socket connection lifecycle in `ark-net`. Preserve task joining, policy generation, ACK order, callbacks, and wire fixtures when switching each production caller.

@@ -51,18 +51,19 @@ pub(super) async fn accept(
         .await
         .clone()
         .ok_or_else(|| "sync policy has no authenticated peer session".to_owned())?;
-    if !session
-        .protocol
-        .capabilities
-        .contains(&ark_sync::protocol::ProtocolCapability::SelectiveSyncPolicyV1)
-    {
-        return Err("sync policy capability was not negotiated".into());
-    }
-    let rules = ark_sync::protocol::parse_sync_policy_rules(rules)?;
-    storage
-        .accept_peer_sync_policy(&session.peer_id, revision, digest, active, &rules)
-        .await
-        .map(|_| ())
+    ark_sync::client_session::accept_sync_policy(
+        storage.as_ref(),
+        &session.peer_id,
+        &session.protocol,
+        authenticated,
+        ark_sync::client_session::SyncPolicyUpdate {
+            revision,
+            digest: digest.to_owned(),
+            active,
+            rules,
+        },
+    )
+    .await
 }
 
 pub(super) async fn accept_and_start(
@@ -102,13 +103,7 @@ pub(super) async fn start_sync_after_policy(
         session.sync_started = true;
         (session.peer_id.clone(), session.tx.clone())
     };
-    let generation = storage
-        .selective_sync_policy_generation_for_peer(&peer_id)
-        .await?;
-    storage.begin_outbound_policy(&peer_id, generation).await?;
-    let vector = load_version_vector(storage)
-        .await
-        .map_err(|error| format!("failed to load sync version vector: {error}"))?;
+    let vector = ark_sync::client_session::begin_initial_sync(storage.as_ref(), &peer_id).await?;
     send_msg(
         &tx,
         &LanSyncMessage::VersionVector {

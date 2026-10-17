@@ -1,5 +1,6 @@
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 
+pub mod client_session;
 pub mod committed_feed_delivery;
 pub mod inbound_live_change;
 pub mod protocol;
