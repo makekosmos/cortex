@@ -412,7 +412,7 @@ impl RelaySync {
                 return;
             }
         };
-        let _ = self.transport.send(LanSyncMessage::VersionVector {
+        let _ = self.send_user_data_message(LanSyncMessage::VersionVector {
             vector,
             origin_device_id: Some(self.config.device_id.clone()),
         });

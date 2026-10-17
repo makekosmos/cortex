@@ -113,7 +113,7 @@ impl RelaySync {
     }
 
     pub fn broadcast_live_change(&self, entity: SyncEntity) -> Result<(), String> {
-        self.transport.send(LanSyncMessage::LiveChange {
+        self.send_user_data_message(LanSyncMessage::LiveChange {
             policy_identity: None,
             change_id: generate_id(),
             entity,

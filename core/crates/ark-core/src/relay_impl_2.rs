@@ -1,6 +1,13 @@
 use crate::integration_replication::SignedSyncEnvelope;
 
 impl RelaySync {
+    fn send_user_data_message(&self, message: LanSyncMessage) -> Result<(), String> {
+        if !self.transport.supports_registry_admission() {
+            return Err("transport does not support per-device registry admission".into());
+        }
+        self.transport.send(message)
+    }
+
     /// Authenticated peer count over this transport — the WS server has
     /// `connected_peer_count`; the `peer_disconnected` event's `remaining`
     /// must count both.
@@ -204,7 +211,7 @@ impl RelaySync {
             }
 
             for batch in split_into_batches(&to_send) {
-                let _ = self.transport.send(LanSyncMessage::SyncChanges {
+                let _ = self.send_user_data_message(LanSyncMessage::SyncChanges {
                     policy_identity: None,
                     batch_id: generate_id(),
                     entities: batch,
@@ -215,7 +222,7 @@ impl RelaySync {
             }
         }
 
-        let _ = self.transport.send(LanSyncMessage::SyncChanges {
+        let _ = self.send_user_data_message(LanSyncMessage::SyncChanges {
             policy_identity: None,
             batch_id: generate_id(),
             entities: vec![],

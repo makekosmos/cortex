@@ -324,7 +324,8 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(500)).await;
         let live = todo_entity("relay-live", "Live", "device-a", 2);
         storage_a.apply_entity(&live).await.unwrap();
-        relay_a.broadcast_live_change(live).unwrap();
+        let send_error = relay_a.broadcast_live_change(live).unwrap_err();
+        assert!(send_error.contains("does not support per-device registry admission"));
         tokio::time::sleep(Duration::from_millis(500)).await;
         let loaded_b = storage_b.load_entities(&HashMap::new()).await.unwrap();
         assert!(
