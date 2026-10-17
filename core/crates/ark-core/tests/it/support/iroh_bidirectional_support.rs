@@ -28,60 +28,8 @@ struct TestStorage {
     release_first: Option<Arc<tokio::sync::Notify>>,
 }
 
-#[async_trait::async_trait]
-#[async_trait::async_trait]
-impl SyncEntityReadPort for TestStorage {
-    async fn load_entities(
-        &self,
-        _vector: &ark_core::types::VersionVector,
-    ) -> Result<Vec<SyncEntity>, String> {
-        Ok(Vec::new())
-    }
-
-    async fn load_entities_page(
-        &self,
-        _vector: &ark_core::types::VersionVector,
-        _offset: usize,
-        _limit: usize,
-    ) -> Result<Vec<SyncEntity>, String> {
-        Ok(Vec::new())
-    }
-    async fn load_entities_page_for_peer(
-        &self,
-        peer: &str,
-        class: ark_application::sync_storage::SyncReadClass,
-        vector: &ark_core::VersionVector,
-        offset: usize,
-        limit: usize,
-    ) -> Result<Vec<SyncEntity>, String> {
-        self.inner
-            .load_entities_page_for_peer(peer, class, vector, offset, limit)
-            .await
-    }
-    async fn usage_complete_through(
-        &self,
-    ) -> Result<std::collections::HashMap<String, u64>, String> {
-        self.inner.usage_complete_through().await
-    }
-    async fn usage_complete_through_for_peer(
-        &self,
-        peer: &str,
-        class: ark_application::sync_storage::SyncReadClass,
-    ) -> Result<std::collections::HashMap<String, u64>, String> {
-        self.inner
-            .usage_complete_through_for_peer(peer, class)
-            .await
-    }
-    fn filter_outgoing_entity(&self, entity: &SyncEntity) -> Option<SyncEntity> {
-        self.inner.filter_outgoing_entity(entity)
-    }
-}
-#[async_trait::async_trait]
-impl SyncEntityMutationPort for TestStorage {
-    async fn apply_entity(&self, _entity: &SyncEntity) -> Result<(), String> {
-        Ok(())
-    }
-}
+#[path = "iroh_bidirectional_support/storage_entities.rs"]
+mod storage_entities;
 
 #[async_trait::async_trait]
 impl ark_application::sync_storage::PeerSyncPolicyPort for TestStorage {

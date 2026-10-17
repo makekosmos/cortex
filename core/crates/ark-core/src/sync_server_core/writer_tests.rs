@@ -23,7 +23,6 @@ impl IntegrationReplicationBackend for RevocableBackend {
 }
 
 #[async_trait::async_trait]
-#[async_trait::async_trait]
 impl SyncEntityReadPort for RevocableBackend {
     async fn load_entities(&self, _: &VersionVector) -> Result<Vec<SyncEntity>, String> {
         Ok(Vec::new())
@@ -46,6 +45,24 @@ impl SyncEntityReadPort for RevocableBackend {
     ) -> Result<Vec<SyncEntity>, String> {
         Ok(Vec::new())
     }
+    async fn load_policy_bound_entities_page_for_peer(
+        &self,
+        _peer_device_id: &str,
+        _class: ark_application::sync_storage::SyncReadClass,
+        _vector: &VersionVector,
+        _offset: usize,
+        _limit: usize,
+        expected_identity: &ark_application::sync_storage::PolicyIdentity,
+    ) -> Result<ark_application::sync_storage::PolicyBoundSnapshotPage, String> {
+        let accepted_identity = ark_application::sync_policy::default_sync_policy_identity();
+        if expected_identity != &accepted_identity {
+            return Err("stale_or_unnegotiated_sync_policy".into());
+        }
+        Ok(ark_application::sync_storage::PolicyBoundSnapshotPage {
+            identity: accepted_identity,
+            entities: Vec::new(),
+        })
+    }
     async fn usage_complete_through(
         &self,
     ) -> Result<std::collections::HashMap<String, u64>, String> {
@@ -60,6 +77,13 @@ impl SyncEntityReadPort for RevocableBackend {
     }
     fn filter_outgoing_entity(&self, entity: &SyncEntity) -> Option<SyncEntity> {
         Some(entity.clone())
+    }
+    async fn filter_outgoing_entity_for_peer(
+        &self,
+        _peer_device_id: &str,
+        entity: &SyncEntity,
+    ) -> Result<Option<SyncEntity>, String> {
+        Ok(self.filter_outgoing_entity(entity))
     }
 }
 

@@ -81,7 +81,6 @@ impl SqliteStorageBackend {
 }
 
 #[async_trait::async_trait]
-#[async_trait::async_trait]
 impl SyncEntityReadPort for SqliteStorageBackend {
     async fn load_entities(&self, vector: &VersionVector) -> Result<Vec<SyncEntity>, String> {
         self.db

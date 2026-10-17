@@ -238,17 +238,7 @@ pub trait SyncEntityReadPort: Send + Sync {
         offset: usize,
         limit: usize,
         expected_identity: &PolicyIdentity,
-    ) -> Result<PolicyBoundSnapshotPage, String> {
-        let _ = (
-            peer_device_id,
-            class,
-            vector,
-            offset,
-            limit,
-            expected_identity,
-        );
-        Err("policy_bound_snapshot_page_unsupported".into())
-    }
+    ) -> Result<PolicyBoundSnapshotPage, String>;
     async fn usage_complete_through(&self) -> Result<HashMap<String, u64>, String>;
     async fn usage_complete_through_for_peer(
         &self,
@@ -259,11 +249,9 @@ pub trait SyncEntityReadPort: Send + Sync {
 
     async fn filter_outgoing_entity_for_peer(
         &self,
-        _peer_device_id: &str,
+        peer_device_id: &str,
         entity: &SyncEntity,
-    ) -> Result<Option<SyncEntity>, String> {
-        Ok(self.filter_outgoing_entity(entity))
-    }
+    ) -> Result<Option<SyncEntity>, String>;
 }
 
 /// Applies one inbound ordinary entity atomically at the storage adapter.

@@ -74,13 +74,34 @@ pub(crate) mod tests {
         }
         async fn load_entities_page_for_peer(
             &self,
-            _: &str,
-            _: ark_application::sync_storage::SyncReadClass,
+            _peer_device_id: &str,
+            _class: ark_application::sync_storage::SyncReadClass,
             vector: &VersionVector,
             offset: usize,
             limit: usize,
         ) -> Result<Vec<SyncEntity>, String> {
             self.load_entities_page(vector, offset, limit).await
+        }
+        async fn load_policy_bound_entities_page_for_peer(
+            &self,
+            peer_device_id: &str,
+            class: ark_application::sync_storage::SyncReadClass,
+            vector: &VersionVector,
+            offset: usize,
+            limit: usize,
+            expected_identity: &ark_application::sync_storage::PolicyIdentity,
+        ) -> Result<ark_application::sync_storage::PolicyBoundSnapshotPage, String> {
+            let accepted_identity = ark_application::sync_policy::default_sync_policy_identity();
+            if expected_identity != &accepted_identity {
+                return Err("stale_or_unnegotiated_sync_policy".into());
+            }
+            let entities = self
+                .load_entities_page_for_peer(peer_device_id, class, vector, offset, limit)
+                .await?;
+            Ok(ark_application::sync_storage::PolicyBoundSnapshotPage {
+                identity: accepted_identity,
+                entities,
+            })
         }
         async fn usage_complete_through(&self) -> Result<HashMap<String, u64>, String> {
             Ok(HashMap::new())
@@ -94,6 +115,13 @@ pub(crate) mod tests {
         }
         fn filter_outgoing_entity(&self, entity: &SyncEntity) -> Option<SyncEntity> {
             Some(entity.clone())
+        }
+        async fn filter_outgoing_entity_for_peer(
+            &self,
+            _peer_device_id: &str,
+            entity: &SyncEntity,
+        ) -> Result<Option<SyncEntity>, String> {
+            Ok(self.filter_outgoing_entity(entity))
         }
     }
     #[async_trait::async_trait]
