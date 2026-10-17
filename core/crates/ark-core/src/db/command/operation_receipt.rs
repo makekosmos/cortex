@@ -77,7 +77,7 @@ where
                 },
             )
             .optional()
-            .map_err(|error| DbError::Storage(error.to_string()))?;
+            .map_err(DbError::from_sqlite)?;
 
         if let Some((stored_type, stored_hash, result_json)) = stored {
             if stored_type != self.command_type || stored_hash != payload_hash {
@@ -109,7 +109,7 @@ where
                     result_json,
                 ],
             )
-            .map_err(|error| DbError::Storage(error.to_string()))?;
+            .map_err(DbError::from_sqlite)?;
         Ok(OperationResult {
             value,
             replayed: false,
