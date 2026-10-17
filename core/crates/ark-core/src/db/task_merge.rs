@@ -7,7 +7,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 #[path = "task_merge/journal.rs"]
 mod journal;
+#[path = "task_merge/progress.rs"]
+mod progress;
 pub(crate) use journal::read_journal_page;
+pub(crate) use progress::{acknowledge_outbound_batch, prepare_outbound_batch};
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum TaskMergeError {
@@ -18,9 +21,48 @@ pub(crate) enum TaskMergeError {
     #[error("task_merge_conflict_digest_required")]
     ConflictDigestRequired,
     #[error("{0}")]
+    Permission(String),
+    #[error("{0}")]
     Invalid(String),
     #[error("{0}")]
     Storage(String),
+}
+
+pub(crate) fn require_delivery_policy(
+    connection: &Connection,
+    peer_device_id: &str,
+    expected_identity: &crate::application::sync_storage::PolicyIdentity,
+) -> Result<(), TaskMergeError> {
+    let policy = crate::data_platform::load_accepted_peer_sync_policy(connection, peer_device_id)
+        .map_err(TaskMergeError::Storage)?;
+    let identity = policy.as_ref().map_or_else(
+        crate::data_platform::default_sync_policy_identity,
+        |policy| policy.identity(),
+    );
+    if identity != *expected_identity {
+        return Err(TaskMergeError::Permission(
+            "stale_or_unnegotiated_sync_policy".into(),
+        ));
+    }
+    if let Some(policy) = policy.filter(|policy| policy.active) {
+        let profile = policy.selective_profile();
+        let Some(rule) = profile.rules.get(&("type".into(), "core.task".into())) else {
+            return Err(TaskMergeError::Permission(
+                "task_merge_policy_requires_full_type_sync".into(),
+            ));
+        };
+        if rule.mode != crate::data_platform::SyncMode::Full {
+            return Err(TaskMergeError::Permission(
+                "task_merge_policy_requires_full_type_sync".into(),
+            ));
+        }
+        if rule.filter.digest() != crate::data_platform::FilterV1::match_all().digest() {
+            return Err(TaskMergeError::Permission(
+                "task_merge_policy_filter_unsupported".into(),
+            ));
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]

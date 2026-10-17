@@ -78,7 +78,8 @@ pub(crate) use system_mutation::{
 };
 pub(crate) use system_read::SystemReadQuery;
 pub(crate) use task_merge::{
-    AppendTaskMergeOperationCommand, TaskConflictSetQuery, TaskMergeJournalPageQuery,
+    AcknowledgeTaskMergeBatchCommand, AppendTaskMergeOperationCommand,
+    PrepareTaskMergeBatchCommand, TaskConflictSetQuery,
 };
 pub(crate) use type_mutation::{
     DeleteObjectLinkCommand, DeleteObjectTypeCommand, RegisterPackageTypesCommand,

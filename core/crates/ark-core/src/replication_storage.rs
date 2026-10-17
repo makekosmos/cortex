@@ -256,7 +256,7 @@ where
         + crate::application::sync_storage::SyncEntityMutationPort
         + crate::application::sync_storage::PeerProgressPort
         + crate::application::sync_storage::CommittedFeedPort
-        + crate::application::sync_storage::TaskMergeJournalPort
+        + crate::application::sync_storage::TaskMergeDeliveryPort
         + AuthenticatedEntityBackend
         + PeerIdentityBackend
         + IntegrationReplicationBackend,
@@ -268,7 +268,7 @@ impl<T> SyncRuntimeStorage for T where
         + crate::application::sync_storage::SyncEntityMutationPort
         + crate::application::sync_storage::PeerProgressPort
         + crate::application::sync_storage::CommittedFeedPort
-        + crate::application::sync_storage::TaskMergeJournalPort
+        + crate::application::sync_storage::TaskMergeDeliveryPort
         + AuthenticatedEntityBackend
         + PeerIdentityBackend
         + IntegrationReplicationBackend

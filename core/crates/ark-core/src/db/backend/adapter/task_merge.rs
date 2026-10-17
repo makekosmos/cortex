@@ -1,28 +1,47 @@
 use super::SqliteStorageBackend;
 use crate::application::sync_storage::{
-    PolicyBoundTaskMergeJournalPage, PolicyIdentity, TaskMergeJournalPort,
+    PolicyIdentity, TaskMergeDeliveryPort, TaskMergeOutboundBatch,
 };
-use crate::db::{CommandClass, CommandContext, TaskMergeJournalPageQuery};
+use crate::db::{
+    AcknowledgeTaskMergeBatchCommand, CommandClass, CommandContext, PrepareTaskMergeBatchCommand,
+};
 
 #[async_trait::async_trait]
-impl TaskMergeJournalPort for SqliteStorageBackend {
-    async fn task_merge_journal_page(
+impl TaskMergeDeliveryPort for SqliteStorageBackend {
+    async fn prepare_task_merge_batch(
         &self,
         peer_device_id: &str,
         expected_identity: &PolicyIdentity,
-        after_position: i64,
-        through_position: i64,
         limit: usize,
-    ) -> Result<PolicyBoundTaskMergeJournalPage, String> {
+    ) -> Result<Option<TaskMergeOutboundBatch>, String> {
         self.db
-            .query(
+            .submit(
                 CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
-                TaskMergeJournalPageQuery::new(
+                PrepareTaskMergeBatchCommand::new(
                     peer_device_id.to_owned(),
                     expected_identity.clone(),
-                    after_position,
-                    through_position,
                     limit,
+                ),
+            )
+            .await
+            .map_err(|error| error.to_string())
+    }
+
+    async fn acknowledge_task_merge_batch(
+        &self,
+        peer_device_id: &str,
+        expected_identity: &PolicyIdentity,
+        batch_id: &str,
+        through_position: i64,
+    ) -> Result<i64, String> {
+        self.db
+            .submit(
+                CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
+                AcknowledgeTaskMergeBatchCommand::new(
+                    peer_device_id.to_owned(),
+                    expected_identity.clone(),
+                    batch_id.to_owned(),
+                    through_position,
                 ),
             )
             .await

@@ -1,7 +1,6 @@
 use super::*;
 use crate::application::sync_storage::{
-    PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort, TaskMergeJournalPage,
-    TaskMergeJournalPort,
+    PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort, TaskMergeDeliveryPort,
 };
 
 #[cfg(test)]
@@ -113,25 +112,25 @@ pub(crate) mod tests {
     }
 
     #[async_trait::async_trait]
-    impl TaskMergeJournalPort for MemBackend {
-        async fn task_merge_journal_page(
+    impl TaskMergeDeliveryPort for MemBackend {
+        async fn prepare_task_merge_batch(
             &self,
             _peer_device_id: &str,
-            expected_identity: &crate::application::sync_storage::PolicyIdentity,
-            _after_position: i64,
-            through_position: i64,
+            _expected_identity: &crate::application::sync_storage::PolicyIdentity,
             _limit: usize,
-        ) -> Result<crate::application::sync_storage::PolicyBoundTaskMergeJournalPage, String>
+        ) -> Result<Option<crate::application::sync_storage::TaskMergeOutboundBatch>, String>
         {
-            Ok(
-                crate::application::sync_storage::PolicyBoundTaskMergeJournalPage {
-                    identity: expected_identity.clone(),
-                    page: TaskMergeJournalPage {
-                        through_position,
-                        entries: Vec::new(),
-                    },
-                },
-            )
+            Ok(None)
+        }
+
+        async fn acknowledge_task_merge_batch(
+            &self,
+            _peer_device_id: &str,
+            _expected_identity: &crate::application::sync_storage::PolicyIdentity,
+            _batch_id: &str,
+            through_position: i64,
+        ) -> Result<i64, String> {
+            Ok(through_position)
         }
     }
     #[async_trait::async_trait]

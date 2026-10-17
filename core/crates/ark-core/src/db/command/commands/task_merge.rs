@@ -1,8 +1,8 @@
 use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError, DbQuery};
-use crate::application::sync_storage::{PolicyBoundTaskMergeJournalPage, PolicyIdentity};
+use crate::application::sync_storage::{PolicyIdentity, TaskMergeOutboundBatch};
 use crate::db::task_merge::{
-    append_operation, read_conflict_set_result, read_journal_page, TaskMergeAppendResult,
-    TaskMergeError, TaskMergeReadResult,
+    append_operation, read_conflict_set_result, TaskMergeAppendResult, TaskMergeError,
+    TaskMergeReadResult,
 };
 use crate::domain::task_merge::{TaskMergeOperation, TaskMergeUnit};
 use rusqlite::Transaction;
@@ -53,96 +53,105 @@ impl DbCommand for AppendTaskMergeOperationCommand {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub(crate) struct TaskConflictSetQuery {
-    object_id: String,
-    unit: TaskMergeUnit,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub(crate) struct TaskMergeJournalPageQuery {
+pub(crate) struct PrepareTaskMergeBatchCommand {
     peer_id: String,
     expected_identity: PolicyIdentity,
-    after_position: i64,
-    through_position: i64,
     limit: usize,
 }
 
-impl TaskMergeJournalPageQuery {
-    pub(crate) fn new(
-        peer_id: String,
-        expected_identity: PolicyIdentity,
-        after_position: i64,
-        through_position: i64,
-        limit: usize,
-    ) -> Self {
+impl PrepareTaskMergeBatchCommand {
+    pub(crate) fn new(peer_id: String, expected_identity: PolicyIdentity, limit: usize) -> Self {
         Self {
             peer_id,
             expected_identity,
-            after_position,
-            through_position,
             limit,
         }
     }
 }
 
-impl sealed::Sealed for TaskMergeJournalPageQuery {}
+impl sealed::Sealed for PrepareTaskMergeBatchCommand {}
 
-impl DbQuery for TaskMergeJournalPageQuery {
-    type Output = PolicyBoundTaskMergeJournalPage;
+impl DbCommand for PrepareTaskMergeBatchCommand {
+    type Output = Option<TaskMergeOutboundBatch>;
 
-    fn class(&self) -> CommandClass {
-        CommandClass::SyncLive
-    }
+    const CLASS: CommandClass = CommandClass::SyncLive;
 
     fn weight(&self) -> usize {
         super::serialized_weight(self)
     }
 
-    fn read(
+    fn execute(
         self,
         context: &CommandContext,
-        connection: &rusqlite::Connection,
+        transaction: &Transaction<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_sync_peer_matches(&self.peer_id)?;
-        let policy =
-            crate::data_platform::load_accepted_peer_sync_policy(connection, &self.peer_id)
-                .map_err(DbError::from_application_error)?;
-        let identity = policy.as_ref().map_or_else(
-            crate::data_platform::default_sync_policy_identity,
-            |policy| policy.identity(),
-        );
-        if identity != self.expected_identity {
-            return Err(DbError::Permission(
-                "stale_or_unnegotiated_sync_policy".into(),
-            ));
-        }
-        if let Some(policy) = policy.filter(|policy| policy.active) {
-            let profile = policy.selective_profile();
-            let Some(rule) = profile.rules.get(&("type".into(), "core.task".into())) else {
-                return Err(DbError::Permission(
-                    "task_merge_policy_requires_full_type_sync".into(),
-                ));
-            };
-            if rule.mode != crate::data_platform::SyncMode::Full {
-                return Err(DbError::Permission(
-                    "task_merge_policy_requires_full_type_sync".into(),
-                ));
-            }
-            if rule.filter.digest() != crate::data_platform::FilterV1::match_all().digest() {
-                return Err(DbError::Permission(
-                    "task_merge_policy_filter_unsupported".into(),
-                ));
-            }
-        }
-        let page = read_journal_page(
-            connection,
-            self.after_position,
-            self.through_position,
+        crate::db::task_merge::prepare_outbound_batch(
+            transaction,
+            &self.peer_id,
+            &self.expected_identity,
             self.limit,
         )
-        .map_err(map_task_merge_error)?;
-        Ok(PolicyBoundTaskMergeJournalPage { identity, page })
+        .map_err(map_task_merge_error)
     }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct AcknowledgeTaskMergeBatchCommand {
+    peer_id: String,
+    expected_identity: PolicyIdentity,
+    batch_id: String,
+    through_position: i64,
+}
+
+impl AcknowledgeTaskMergeBatchCommand {
+    pub(crate) fn new(
+        peer_id: String,
+        expected_identity: PolicyIdentity,
+        batch_id: String,
+        through_position: i64,
+    ) -> Self {
+        Self {
+            peer_id,
+            expected_identity,
+            batch_id,
+            through_position,
+        }
+    }
+}
+
+impl sealed::Sealed for AcknowledgeTaskMergeBatchCommand {}
+
+impl DbCommand for AcknowledgeTaskMergeBatchCommand {
+    type Output = i64;
+
+    const CLASS: CommandClass = CommandClass::SyncLive;
+
+    fn weight(&self) -> usize {
+        super::serialized_weight(self)
+    }
+
+    fn execute(
+        self,
+        context: &CommandContext,
+        transaction: &Transaction<'_>,
+    ) -> Result<Self::Output, DbError> {
+        context.require_sync_peer_matches(&self.peer_id)?;
+        crate::db::task_merge::acknowledge_outbound_batch(
+            transaction,
+            &self.peer_id,
+            &self.expected_identity,
+            &self.batch_id,
+            self.through_position,
+        )
+        .map_err(map_task_merge_error)
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct TaskConflictSetQuery {
+    object_id: String,
+    unit: TaskMergeUnit,
 }
 
 impl TaskConflictSetQuery {
@@ -181,6 +190,7 @@ fn map_task_merge_error(error: TaskMergeError) -> DbError {
         | TaskMergeError::ConflictSetChanged
         | TaskMergeError::ConflictDigestRequired => DbError::Conflict(error.to_string()),
         TaskMergeError::Invalid(error) => DbError::Invalid(error),
+        TaskMergeError::Permission(error) => DbError::Permission(error),
         TaskMergeError::Storage(error) => DbError::Storage(error),
     }
 }

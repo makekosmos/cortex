@@ -90,21 +90,30 @@ pub struct TaskMergeJournalPage {
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct PolicyBoundTaskMergeJournalPage {
+pub struct TaskMergeOutboundBatch {
+    pub batch_id: String,
     pub identity: PolicyIdentity,
-    pub page: TaskMergeJournalPage,
+    pub after_position: i64,
+    pub through_position: i64,
+    pub entries: Vec<TaskMergeJournalEntry>,
 }
 
 #[async_trait::async_trait]
-pub trait TaskMergeJournalPort: Send + Sync {
-    async fn task_merge_journal_page(
+pub trait TaskMergeDeliveryPort: Send + Sync {
+    async fn prepare_task_merge_batch(
         &self,
         peer_device_id: &str,
         expected_identity: &PolicyIdentity,
-        after_position: i64,
-        through_position: i64,
         limit: usize,
-    ) -> Result<PolicyBoundTaskMergeJournalPage, String>;
+    ) -> Result<Option<TaskMergeOutboundBatch>, String>;
+
+    async fn acknowledge_task_merge_batch(
+        &self,
+        peer_device_id: &str,
+        expected_identity: &PolicyIdentity,
+        batch_id: &str,
+        through_position: i64,
+    ) -> Result<i64, String>;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

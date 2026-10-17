@@ -221,6 +221,30 @@ CREATE TABLE IF NOT EXISTS task_merge_journal (
 );
 INSERT OR IGNORE INTO task_merge_journal(operation_id)
 SELECT operation_id FROM task_merge_operations ORDER BY rowid;
+CREATE TABLE IF NOT EXISTS task_merge_outbound_progress (
+    peer_device_id TEXT PRIMARY KEY,
+    policy_revision INTEGER NOT NULL CHECK (policy_revision >= 0),
+    policy_digest TEXT NOT NULL CHECK (length(policy_digest) = 64),
+    policy_active INTEGER NOT NULL CHECK (policy_active IN (0, 1)),
+    acknowledged_through INTEGER NOT NULL DEFAULT 0 CHECK (acknowledged_through >= 0),
+    in_flight_batch_id TEXT,
+    in_flight_after INTEGER,
+    in_flight_through INTEGER,
+    last_acknowledged_batch_id TEXT,
+    last_acknowledged_through INTEGER,
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    CHECK (
+        (in_flight_batch_id IS NULL AND in_flight_after IS NULL AND in_flight_through IS NULL)
+        OR (in_flight_batch_id IS NOT NULL AND in_flight_after IS NOT NULL
+            AND in_flight_through IS NOT NULL AND in_flight_after >= 0
+                AND in_flight_after = acknowledged_through
+                AND in_flight_through > in_flight_after)
+    ),
+    CHECK (last_acknowledged_through IS NULL OR (
+        last_acknowledged_through >= 0
+        AND last_acknowledged_through <= acknowledged_through
+    ))
+) WITHOUT ROWID;
 
 -- Monotonic local commit order for durable sync recovery. Rows are appended
 -- in the same SQLite transaction as the object/revision change. Payloads stay

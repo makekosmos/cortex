@@ -1,65 +1,41 @@
 use super::*;
 
-#[tokio::test]
-async fn journal_pages_pin_watermarks_and_match_authenticated_peer() {
-    let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
-    append(&handle, operation('1', &[], "first"), None)
+async fn prepare_batch(
+    handle: &DbHandle,
+    peer_id: &str,
+    identity: crate::application::sync_storage::PolicyIdentity,
+    limit: usize,
+) -> Result<Option<crate::application::sync_storage::TaskMergeOutboundBatch>, DbError> {
+    handle
+        .submit(
+            CommandContext::authenticated_peer(peer_id.into()),
+            PrepareTaskMergeBatchCommand::new(peer_id.into(), identity, limit),
+        )
         .await
-        .unwrap();
-    append(&handle, operation('2', &['1'], "second"), None)
-        .await
-        .unwrap();
+}
 
-    let page = handle
-        .query(
-            CommandContext::authenticated_peer("peer-a".into()),
-            TaskMergeJournalPageQuery::new(
-                "peer-a".into(),
-                crate::data_platform::default_sync_policy_identity(),
-                0,
-                1,
-                1,
+async fn acknowledge_batch(
+    handle: &DbHandle,
+    peer_id: &str,
+    identity: crate::application::sync_storage::PolicyIdentity,
+    batch: &crate::application::sync_storage::TaskMergeOutboundBatch,
+    through: i64,
+) -> Result<i64, DbError> {
+    handle
+        .submit(
+            CommandContext::authenticated_peer(peer_id.into()),
+            AcknowledgeTaskMergeBatchCommand::new(
+                peer_id.into(),
+                identity,
+                batch.batch_id.clone(),
+                through,
             ),
         )
         .await
-        .unwrap();
-    assert_eq!(page.page.through_position, 1);
-    assert_eq!(page.page.entries.len(), 1);
-    assert_eq!(page.page.entries[0].operation.id, id('1'));
-
-    let next = handle
-        .query(
-            CommandContext::authenticated_peer("peer-a".into()),
-            TaskMergeJournalPageQuery::new(
-                "peer-a".into(),
-                crate::data_platform::default_sync_policy_identity(),
-                1,
-                2,
-                1,
-            ),
-        )
-        .await
-        .unwrap();
-    assert_eq!(next.page.entries[0].operation.id, id('2'));
-
-    let mismatch = handle
-        .query(
-            CommandContext::authenticated_peer("peer-b".into()),
-            TaskMergeJournalPageQuery::new(
-                "peer-a".into(),
-                crate::data_platform::default_sync_policy_identity(),
-                0,
-                1,
-                1,
-            ),
-        )
-        .await;
-    assert!(matches!(mismatch, Err(DbError::Permission(_))));
-    shutdown(&mut owner).await;
 }
 
 #[tokio::test]
-async fn journal_page_requires_matching_policy_and_full_task_selection() {
+async fn merge_batch_requires_matching_policy_and_full_task_selection() {
     let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
     append(&handle, operation('1', &[], "first"), None)
         .await
@@ -88,21 +64,19 @@ async fn journal_page_requires_matching_policy_and_full_task_selection() {
         active: true,
     };
     let denied = handle
-        .query(
+        .submit(
             CommandContext::authenticated_peer("peer-a".into()),
-            TaskMergeJournalPageQuery::new("peer-a".into(), identity.clone(), 0, 1, 1),
+            PrepareTaskMergeBatchCommand::new("peer-a".into(), identity.clone(), 1),
         )
         .await;
     assert!(matches!(denied, Err(DbError::Permission(_))));
 
     let stale = handle
-        .query(
+        .submit(
             CommandContext::authenticated_peer("peer-a".into()),
-            TaskMergeJournalPageQuery::new(
+            PrepareTaskMergeBatchCommand::new(
                 "peer-a".into(),
                 crate::data_platform::default_sync_policy_identity(),
-                0,
-                1,
                 1,
             ),
         )
@@ -132,21 +106,223 @@ async fn journal_page_requires_matching_policy_and_full_task_selection() {
         .unwrap();
     });
     let filtered = handle
-        .query(
+        .submit(
             CommandContext::authenticated_peer("peer-a".into()),
-            TaskMergeJournalPageQuery::new(
+            PrepareTaskMergeBatchCommand::new(
                 "peer-a".into(),
                 crate::application::sync_storage::PolicyIdentity {
                     revision: 2,
                     digest: filtered_digest,
                     active: true,
                 },
-                0,
-                1,
                 1,
             ),
         )
         .await;
     assert!(matches!(filtered, Err(DbError::Permission(_))));
+    shutdown(&mut owner).await;
+}
+
+#[tokio::test]
+async fn outbound_batches_are_stable_until_ack_and_isolated_by_peer() {
+    let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
+    append(&handle, operation('1', &[], "first"), None)
+        .await
+        .unwrap();
+    append(&handle, operation('2', &['1'], "second"), None)
+        .await
+        .unwrap();
+    let identity = crate::data_platform::default_sync_policy_identity();
+    let peer_mismatch = handle
+        .submit(
+            CommandContext::authenticated_peer("peer-b".into()),
+            PrepareTaskMergeBatchCommand::new("peer-a".into(), identity.clone(), 1),
+        )
+        .await;
+    assert!(matches!(peer_mismatch, Err(DbError::Permission(_))));
+
+    let first = prepare_batch(&handle, "peer-a", identity.clone(), 1)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(first.after_position, 0);
+    assert_eq!(first.through_position, 1);
+    assert_eq!(first.entries[0].operation.id, id('1'));
+    let retry = prepare_batch(&handle, "peer-a", identity.clone(), 1)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(retry, first);
+
+    let wrong_end = acknowledge_batch(&handle, "peer-a", identity.clone(), &first, 2).await;
+    assert!(matches!(wrong_end, Err(DbError::Invalid(_))));
+    assert_eq!(
+        acknowledge_batch(&handle, "peer-a", identity.clone(), &first, 1)
+            .await
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        acknowledge_batch(&handle, "peer-a", identity.clone(), &first, 1)
+            .await
+            .unwrap(),
+        1
+    );
+
+    let second = prepare_batch(&handle, "peer-a", identity.clone(), 1)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(second.after_position, 1);
+    assert_eq!(second.entries[0].operation.id, id('2'));
+    assert_eq!(
+        prepare_batch(&handle, "peer-b", identity, 1)
+            .await
+            .unwrap()
+            .unwrap()
+            .entries[0]
+            .operation
+            .id,
+        id('1')
+    );
+    shutdown(&mut owner).await;
+}
+
+#[tokio::test]
+async fn prepared_batch_replays_identically_after_sqlite_reopen() {
+    let (_directory, path, handle, mut owner) = open_merge_fixture().await;
+    append(&handle, operation('1', &[], "first"), None)
+        .await
+        .unwrap();
+    let identity = crate::data_platform::default_sync_policy_identity();
+    let prepared = prepare_batch(&handle, "peer-a", identity.clone(), 1)
+        .await
+        .unwrap()
+        .unwrap();
+    shutdown(&mut owner).await;
+
+    let (reopened, mut reopened_owner) = DbHandle::open(path, "merge-test-device".into())
+        .await
+        .unwrap();
+    let replay = prepare_batch(&reopened, "peer-a", identity.clone(), 1)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(replay, prepared);
+    assert_eq!(
+        acknowledge_batch(&reopened, "peer-a", identity, &replay, 1)
+            .await
+            .unwrap(),
+        1
+    );
+    shutdown(&mut reopened_owner).await;
+}
+
+#[tokio::test]
+async fn policy_exclusion_preserves_local_journal_and_widening_resumes_from_ack() {
+    let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
+    append(&handle, operation('1', &[], "first"), None)
+        .await
+        .unwrap();
+    append(&handle, operation('2', &['1'], "second"), None)
+        .await
+        .unwrap();
+    let initial_identity = crate::data_platform::default_sync_policy_identity();
+    let first = prepare_batch(&handle, "peer-a", initial_identity.clone(), 1)
+        .await
+        .unwrap()
+        .unwrap();
+    acknowledge_batch(&handle, "peer-a", initial_identity.clone(), &first, 1)
+        .await
+        .unwrap();
+    let pending_before_exclusion = prepare_batch(&handle, "peer-a", initial_identity, 1)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(pending_before_exclusion.entries[0].operation.id, id('2'));
+
+    let excluded = crate::data_platform::SyncProfileRule {
+        resource_kind: "type".into(),
+        resource_id: "core.task".into(),
+        mode: crate::data_platform::SyncMode::Metadata,
+        filter: crate::data_platform::FilterV1::match_all(),
+    };
+    let excluded_digest = crate::data_platform::digest_sync_policy(std::slice::from_ref(&excluded));
+    handle.with_connection(|connection| {
+        crate::data_platform::accept_peer_sync_policy(
+            connection,
+            "peer-a",
+            1,
+            &excluded_digest,
+            true,
+            std::slice::from_ref(&excluded),
+        )
+        .unwrap();
+    });
+    let excluded_identity = crate::application::sync_storage::PolicyIdentity {
+        revision: 1,
+        digest: excluded_digest,
+        active: true,
+    };
+    let denied = prepare_batch(&handle, "peer-a", excluded_identity, 1).await;
+    assert!(matches!(denied, Err(DbError::Permission(_))));
+    let local_operations: i64 = handle.with_connection(|connection| {
+        connection
+            .query_row("SELECT COUNT(*) FROM task_merge_operations", [], |row| {
+                row.get(0)
+            })
+            .unwrap()
+    });
+    assert_eq!(local_operations, 2);
+
+    let full = crate::data_platform::SyncProfileRule {
+        resource_kind: "type".into(),
+        resource_id: "core.task".into(),
+        mode: crate::data_platform::SyncMode::Full,
+        filter: crate::data_platform::FilterV1::match_all(),
+    };
+    let full_digest = crate::data_platform::digest_sync_policy(std::slice::from_ref(&full));
+    handle.with_connection(|connection| {
+        crate::data_platform::accept_peer_sync_policy(
+            connection,
+            "peer-a",
+            2,
+            &full_digest,
+            true,
+            std::slice::from_ref(&full),
+        )
+        .unwrap();
+    });
+    let widened_identity = crate::application::sync_storage::PolicyIdentity {
+        revision: 2,
+        digest: full_digest,
+        active: true,
+    };
+    let resumed = prepare_batch(&handle, "peer-a", widened_identity.clone(), 1)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(resumed.after_position, 1);
+    assert_ne!(resumed.batch_id, pending_before_exclusion.batch_id);
+    assert_eq!(resumed.entries[0].operation.id, id('2'));
+    let stale_batch_ack = acknowledge_batch(
+        &handle,
+        "peer-a",
+        widened_identity,
+        &pending_before_exclusion,
+        pending_before_exclusion.through_position,
+    )
+    .await;
+    assert!(matches!(stale_batch_ack, Err(DbError::Invalid(_))));
+    let other_peer = prepare_batch(
+        &handle,
+        "peer-b",
+        crate::data_platform::default_sync_policy_identity(),
+        1,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(other_peer.entries[0].operation.id, id('1'));
     shutdown(&mut owner).await;
 }

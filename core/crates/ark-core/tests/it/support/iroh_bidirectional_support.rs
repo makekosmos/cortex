@@ -5,7 +5,8 @@ use ed25519_dalek::{Signer, SigningKey};
 use tokio::sync::mpsc;
 
 use ark_core::application::sync_storage::{
-    PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort, TaskMergeJournalPort,
+    PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort, TaskMergeDeliveryPort,
+    TaskMergeOutboundBatch,
 };
 use ark_core::integration_replication::{
     encode_hex, AuthorizedNode, GrantStatus, IntegrationConfiguration, IntegrationNodeGrant,
@@ -83,22 +84,31 @@ impl SyncEntityMutationPort for TestStorage {
 }
 
 #[async_trait::async_trait]
-impl TaskMergeJournalPort for TestStorage {
-    async fn task_merge_journal_page(
+impl TaskMergeDeliveryPort for TestStorage {
+    async fn prepare_task_merge_batch(
         &self,
         peer_device_id: &str,
         expected_identity: &ark_core::application::sync_storage::PolicyIdentity,
-        after_position: i64,
-        through_position: i64,
         limit: usize,
-    ) -> Result<ark_core::application::sync_storage::PolicyBoundTaskMergeJournalPage, String> {
+    ) -> Result<Option<TaskMergeOutboundBatch>, String> {
         self.inner
-            .task_merge_journal_page(
+            .prepare_task_merge_batch(peer_device_id, expected_identity, limit)
+            .await
+    }
+
+    async fn acknowledge_task_merge_batch(
+        &self,
+        peer_device_id: &str,
+        expected_identity: &ark_core::application::sync_storage::PolicyIdentity,
+        batch_id: &str,
+        through_position: i64,
+    ) -> Result<i64, String> {
+        self.inner
+            .acknowledge_task_merge_batch(
                 peer_device_id,
                 expected_identity,
-                after_position,
+                batch_id,
                 through_position,
-                limit,
             )
             .await
     }
