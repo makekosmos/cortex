@@ -102,6 +102,31 @@ async fn operation_replay_conflict_guard_and_sqlite_reopen() {
             .unwrap()
     });
     assert_eq!(rows, 2);
+    let journal_rows: i64 = handle.with_connection(|connection| {
+        connection
+            .query_row("SELECT COUNT(*) FROM task_merge_journal", [], |row| {
+                row.get(0)
+            })
+            .unwrap()
+    });
+    assert_eq!(journal_rows, 2);
+    let journal: Vec<(i64, String)> = handle.with_connection(|connection| {
+        let mut statement = connection
+            .prepare("SELECT position, operation_id FROM task_merge_journal ORDER BY position")
+            .unwrap();
+        statement
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap()
+    });
+    assert_eq!(
+        journal,
+        vec![
+            (1, id('1').as_str().to_owned()),
+            (2, id('2').as_str().to_owned())
+        ]
+    );
     shutdown(&mut owner).await;
     drop(handle);
 
@@ -116,6 +141,14 @@ async fn operation_replay_conflict_guard_and_sqlite_reopen() {
     );
     let replay_after_reopen = append(&reopened, child, None).await.unwrap();
     assert!(replay_after_reopen.replayed);
+    let journal_rows: i64 = reopened.with_connection(|connection| {
+        connection
+            .query_row("SELECT COUNT(*) FROM task_merge_journal", [], |row| {
+                row.get(0)
+            })
+            .unwrap()
+    });
+    assert_eq!(journal_rows, 2);
     shutdown(&mut reopened_owner).await;
 }
 
@@ -198,8 +231,8 @@ async fn failed_sqlite_insert_leaves_no_merge_operation() {
     handle.with_connection(|connection| {
         connection
             .execute_batch(
-                "CREATE TRIGGER reject_task_merge_operation
-                 BEFORE INSERT ON task_merge_operations
+                "CREATE TRIGGER reject_task_merge_journal
+                 BEFORE INSERT ON task_merge_journal
                  BEGIN
                      SELECT RAISE(ABORT, 'injected merge persistence failure');
                  END;",
@@ -218,5 +251,13 @@ async fn failed_sqlite_insert_leaves_no_merge_operation() {
             .unwrap()
     });
     assert_eq!(rows, 0);
+    let journal_rows: i64 = handle.with_connection(|connection| {
+        connection
+            .query_row("SELECT COUNT(*) FROM task_merge_journal", [], |row| {
+                row.get(0)
+            })
+            .unwrap()
+    });
+    assert_eq!(journal_rows, 0);
     shutdown(&mut owner).await;
 }

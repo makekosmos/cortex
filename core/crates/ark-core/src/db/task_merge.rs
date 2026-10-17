@@ -96,6 +96,12 @@ pub(crate) fn append_operation(
             ],
         )
         .map_err(|error| TaskMergeError::Storage(error.to_string()))?;
+    transaction
+        .execute(
+            "INSERT INTO task_merge_journal(operation_id) VALUES (?1)",
+            [operation.id.as_str()],
+        )
+        .map_err(|error| TaskMergeError::Storage(error.to_string()))?;
 
     let (conflict_set, dependencies_pending) =
         read_conflict_set(transaction, &operation.object_id, operation.unit)?;
