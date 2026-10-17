@@ -11,3 +11,35 @@ fn accepts_previous_module_path<T: ModuleAuthenticatedEntityBackend>() {}
 fn authenticated_storage_port_keeps_both_public_paths() {
     accepts_previous_module_path::<Backend>();
 }
+
+struct PeerBackend;
+
+#[async_trait::async_trait]
+impl ark_core::PeerIdentityBackend for PeerBackend {
+    async fn authorized_transport_public_key(
+        &self,
+        _device_id: &str,
+    ) -> Result<Option<String>, String> {
+        Ok(None)
+    }
+
+    async fn load_peer_transport_keys(
+        &self,
+    ) -> Result<std::collections::HashMap<String, String>, String> {
+        Ok(std::collections::HashMap::new())
+    }
+
+    async fn store_peer_transport_keys(
+        &self,
+        _keys: &std::collections::HashMap<String, String>,
+    ) -> Result<(), String> {
+        Ok(())
+    }
+}
+
+fn accepts_previous_peer_identity_path<T: ark_core::replication_storage::PeerIdentityBackend>() {}
+
+#[test]
+fn peer_identity_port_keeps_both_public_paths() {
+    accepts_previous_peer_identity_path::<PeerBackend>();
+}

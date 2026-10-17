@@ -1,7 +1,6 @@
 //! Additive ARK-owned state for external mappings and device-local sync policy.
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 
 pub use ark_domain::selective_sync::{
@@ -73,42 +72,10 @@ pub fn ensure_schema(conn: &Connection) -> Result<(), String> {
     Ok(())
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SyncProfileRule {
-    pub resource_kind: String,
-    pub resource_id: String,
-    pub mode: SyncMode,
-    pub filter: FilterV1,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SyncProfile {
-    pub profile_id: String,
-    pub device_id: String,
-    pub revision: i64,
-    pub name: String,
-    pub active: bool,
-    pub rules: Vec<SyncProfileRule>,
-}
-
-impl SyncProfile {
-    pub fn digest(&self) -> String {
-        digest_sync_policy(&self.rules)
-    }
-
-    pub fn selective_profile(&self) -> SelectiveSyncProfile {
-        let mut profile = SelectiveSyncProfile::default();
-        for rule in &self.rules {
-            profile.set_rule_with_filter(
-                &rule.resource_kind,
-                &rule.resource_id,
-                rule.mode,
-                rule.filter.clone(),
-            );
-        }
-        profile
-    }
-}
+pub use ark_application::sync_policy::{
+    default_sync_policy_identity, digest_sync_policy, AcceptedPeerSyncPolicy, SyncProfile,
+    SyncProfileRule,
+};
 
 include!("data_platform_peer_policy.rs");
 

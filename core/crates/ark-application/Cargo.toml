@@ -9,6 +9,7 @@ ark-domain = { path = "../ark-domain" }
 async-trait.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 
 [lints]
 workspace = true
