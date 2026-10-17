@@ -56,9 +56,8 @@ graph TD
     Core --> Store[ark-store: SQLite adapter и DB executor]
     Core --> Sync[ark-sync: replication sessions и wire]
     Core --> Net[ark-net: iroh, relay, discovery]
-    Core --> NetPolicy[ark-net-policy: чистые правила адресов]
     Net --> Sync
-    Net --> NetPolicy
+    Net --> NetPolicy[ark-net-policy: чистые правила адресов]
     Sync --> App
     Store --> App
     App --> Domain[ark-domain: предметные типы и чистые правила]
@@ -264,9 +263,9 @@ Lifecycle: `open → migrate → ready → draining → closed`, с термин
 
 ## 10. Desktop, mobile и Cargo features
 
-`desktop-net` живёт в `ark-net`; `ark-core` может только пробросить feature ради старых callers. Mobile использует те же domain/application/store/sync и выбирает доступные transport capabilities, без portmapper/desktop diagnostics по умолчанию.
+`desktop-net` живёт в `ark-net`; `ark-core` может только пробросить feature ради старых callers. `ark-net-policy` входит в граф через `ark-net`. Mobile использует те же domain/application/store/sync и выбирает доступные transport capabilities, без portmapper/desktop diagnostics по умолчанию.
 
-Cargo features складываются при объединении зависимостей. `default-features=false` у mobile не гарантирует отсутствие desktop feature, если другой участник того же build graph включил её. Проверять отдельную release-сборку mobile и фактический feature graph; см. [Cargo feature unification](https://doc.rust-lang.org/cargo/reference/features.html#feature-unification).
+Cargo features складываются при объединении зависимостей. `default-features=false` у mobile не гарантирует отсутствие desktop feature, если другой участник того же build graph включил её. `scripts/check-ark-dependency-graph.mjs` сверяет whitelist прямых внутренних зависимостей и desktop/mobile feature graph; CI сохраняет JSON-снимок графа и проверяет release-профили macOS, Windows и Android. См. [Cargo feature unification](https://doc.rust-lang.org/cargo/reference/features.html#feature-unification).
 
 Mobile-host отвечает за foreground/background/suspend и возобновление sync по правилам ОС. Ядро не обещает, что произвольная фоновая сеть всегда доступна. OS facts, keychain и secure randomness приходят через подходящие host adapters; не добавлять глобальное чтение конфигурации из каждого слоя.
 

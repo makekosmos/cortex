@@ -71,6 +71,9 @@ jobs:
           cargo deny check bans
           node scripts/check-dep-pins.mjs
 
+      - name: ARK dependency graph checker tests
+        run: node --test scripts/check-ark-dependency-graph.test.mjs
+
       # Warn-only until the KOS-340 dep cleanup clears the existing advisories;
       # keep the signal visible without gating PRs on sibling-ticket upgrades.
       - name: Advisories (non-blocking)
@@ -85,7 +88,11 @@ jobs:
       # these runners build what releases ship, so image upgrades must break
       # here first — a pinned year-version would drift from the release path.
       matrix:
-        os: [windows-latest, macos-latest]
+        include:
+          - os: windows-latest
+            ark_target: x86_64-pc-windows-msvc
+          - os: macos-latest
+            ark_target: aarch64-apple-darwin
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     defaults:
@@ -110,6 +117,7 @@ jobs:
         run: |
           rustup toolchain install "$RUST_VERSION" --profile minimal --component rustfmt --component clippy
           rustup default "$RUST_VERSION"
+          rustup target add "${{ matrix.ark_target }}"
 
       # gpui needs the Metal shader compiler; recent macOS runners no longer
       # ship it by default.
@@ -134,6 +142,17 @@ jobs:
             core -> target
             manager-gpui -> target
           save-if: ${{ github.event_name != 'pull_request' }}
+
+      - name: Verify desktop ARK graph and release target
+        run: |
+          node scripts/check-ark-dependency-graph.mjs --profile desktop --target "${{ matrix.ark_target }}"
+          cargo check --locked --release -p ark-core --features desktop-net --target "${{ matrix.ark_target }}"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ark-dependency-graph-desktop-${{ matrix.ark_target }}
+          path: target/ark-dependency-graph/desktop-${{ matrix.ark_target }}.json
+          if-no-files-found: error
 
       # Mirrors `pnpm run clippy` from the local gate, plus --locked so a
       # lockfile drift cannot reach main.
@@ -200,3 +219,40 @@ jobs:
           else
             echo "::warning::could not download latest release DMG; skipping before/after evidence"
           fi
+
+  mobile-architecture:
+    name: ARK graph / Android release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Read toolchain pins
+        run: node -e 'const t=require("./toolchain.json");console.log("NODE_VERSION="+t.node+"\nRUST_VERSION="+t.rust)' >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Android Rust target
+        run: |
+          rustup toolchain install "$RUST_VERSION" --profile minimal
+          rustup default "$RUST_VERSION"
+          rustup target add aarch64-linux-android
+          echo "CC_aarch64_linux_android=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang" >> "$GITHUB_ENV"
+
+      - name: Verify mobile ARK graph and release target
+        run: |
+          node scripts/check-ark-dependency-graph.mjs --profile mobile --target aarch64-linux-android
+          cargo check --locked --release -p engine-mobile --target aarch64-linux-android
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ark-dependency-graph-mobile-aarch64-linux-android
+          path: target/ark-dependency-graph/mobile-aarch64-linux-android.json
+          if-no-files-found: error
