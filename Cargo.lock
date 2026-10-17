@@ -140,6 +140,7 @@ dependencies = [
 name = "ark-core"
 version = "0.1.0"
 dependencies = [
+ "ark-domain",
  "async-trait",
  "chrono",
  "criterion",
@@ -162,6 +163,16 @@ dependencies = [
  "tokio-tungstenite",
  "tracing",
  "windows",
+]
+
+[[package]]
+name = "ark-domain"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
