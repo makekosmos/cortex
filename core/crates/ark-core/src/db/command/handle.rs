@@ -331,6 +331,23 @@ impl DbOwner {
     pub(crate) async fn shutdown(&mut self, deadline: Instant) -> Result<(), DbError> {
         self.actor.shutdown(deadline).await
     }
+
+    #[cfg(test)]
+    pub(crate) fn shutdown_blocking(self, deadline: Instant) -> Result<(), DbError> {
+        std::thread::Builder::new()
+            .name("ark-test-db-shutdown".into())
+            .spawn(move || {
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .map_err(|error| DbError::Storage(error.to_string()))?;
+                let mut owner = self;
+                runtime.block_on(owner.shutdown(deadline))
+            })
+            .map_err(|error| DbError::Storage(error.to_string()))?
+            .join()
+            .map_err(|_| DbError::Storage("database shutdown thread panicked".into()))?
+    }
 }
 
 fn open_reader(path: &str) -> Result<Connection, DbError> {

@@ -126,6 +126,7 @@ fn dotted_type_rpc_hits_real_handler_and_omitted_upsert_resolves_current() {
         .await
         .unwrap();
         assert_eq!(versions, json!([]));
+        shutdown_test_state(&state).await;
     });
     drop(runtime);
     drop(state);
@@ -245,6 +246,7 @@ fn dotted_type_rpc_handlers_cover_aliases_versions_nulls_and_ordering() {
         assert!(
             exact_keys.contains(&"summary".into()) && exact_keys.contains(&"definition".into())
         );
+        shutdown_test_state(&state).await;
     });
     drop(runtime);
     drop(state);

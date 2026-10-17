@@ -52,21 +52,24 @@ impl ServiceFixture {
     }
 
     pub(crate) async fn shutdown(&self) {
-        if let Ok(mut db) = self.state.db.lock() {
-            *db = None;
-        }
-        let owner = self
-            .state
-            .db_owner
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())
-            .take();
-        if let Some(mut owner) = owner {
-            owner
-                .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(5))
-                .await
-                .expect("database actor shuts down before fixture directory removal");
-        }
+        shutdown_test_state(&self.state).await;
+    }
+}
+
+pub(super) async fn shutdown_test_state(state: &Arc<ServiceState>) {
+    if let Ok(mut db) = state.db.lock() {
+        *db = None;
+    }
+    let owner = state
+        .db_owner
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .take();
+    if let Some(mut owner) = owner {
+        owner
+            .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(5))
+            .await
+            .expect("database actor shuts down before fixture directory removal");
     }
 }
 
@@ -79,8 +82,20 @@ impl Drop for ServiceFixture {
         if let Ok(mut guard) = self.state.db.lock() {
             *guard = None;
         }
-        if let Ok(mut owner) = self.state.db_owner.lock() {
-            owner.take();
+        let owner = self
+            .state
+            .db_owner
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .take();
+        if let Some(owner) = owner {
+            if let Err(error) = owner
+                .shutdown_blocking(std::time::Instant::now() + std::time::Duration::from_secs(5))
+            {
+                if !std::thread::panicking() {
+                    panic!("database actor shuts down before fixture directory removal: {error}");
+                }
+            }
         }
     }
 }
