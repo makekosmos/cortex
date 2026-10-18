@@ -1,7 +1,6 @@
 use super::super::{current_ready_peer, peer_message_allowed};
 use super::{signed_integration_write_is_authorized, *};
 use ark_sync::outbound_snapshot::OutboundSnapshotProgress;
-use ark_sync::session_io::SessionIoEvent;
 
 struct ServerPeerOutboundGuard {
     storage: Arc<dyn SyncRuntimeStorage>,
@@ -235,23 +234,19 @@ impl SyncServer {
                                 let on_peer_disconnect_reader = on_peer_disconnect.clone();
 
                                 track_task(&conn_tasks, tokio::spawn(async move {
-                                    while let Some(event) = session_io.receive().await {
-                                        match event {
-                                            SessionIoEvent::Message(message) => {
-                                                sync_server_messages::handle_message(
-                                                    &ctx, peer_id, *message,
-                                                )
-                                                .await;
-                                            }
-                                            SessionIoEvent::MalformedMessage => {
-                                                eprintln!(
-                                                    "{TAG} ignoring malformed peer sync message"
-                                                );
-                                            }
-                                            SessionIoEvent::Closed | SessionIoEvent::Failed(_) => {
-                                                break;
-                                            }
-                                        }
+                                    let handler = sync_server_messages::ConnectedSessionHandler {
+                                        ctx: &ctx,
+                                        peer_id,
+                                    };
+                                    if let ark_sync::server_session::DirectServerSessionEnd::Failed(
+                                        error,
+                                    ) = ark_sync::server_session::run_connected_server_session(
+                                        &mut session_io,
+                                        &handler,
+                                    )
+                                    .await
+                                    {
+                                        eprintln!("{TAG} peer session transport failed: {error}");
                                     }
                                     if let Err(error) = session_io.finish().await {
                                         eprintln!(

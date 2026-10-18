@@ -16,10 +16,14 @@ use crate::{
 };
 
 mod direct;
+mod runner;
 pub use direct::{
     classify_server_message, DirectServerMessage, DirectServerSession,
     DirectServerSessionCloseReason, DirectServerSessionEffect, DirectServerSessionInput,
     DirectServerSessionTransition, DirectServerSyncChanges, DirectServerSyncStartPolicy,
+};
+pub use runner::{
+    run_connected_server_session, DirectServerSessionEnd, DirectServerSessionHandler,
 };
 
 #[derive(Clone)]

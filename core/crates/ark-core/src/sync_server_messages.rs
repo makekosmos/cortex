@@ -250,3 +250,19 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
         }
     }
 }
+
+pub(super) struct ConnectedSessionHandler<'a> {
+    pub(super) ctx: &'a MessageContext,
+    pub(super) peer_id: usize,
+}
+
+#[async_trait::async_trait]
+impl ark_sync::server_session::DirectServerSessionHandler for ConnectedSessionHandler<'_> {
+    async fn on_message(&self, message: Box<LanSyncMessage>) {
+        handle_message(self.ctx, self.peer_id, *message).await;
+    }
+
+    async fn on_malformed_message(&self) {
+        eprintln!("{TAG} ignoring malformed peer sync message");
+    }
+}
