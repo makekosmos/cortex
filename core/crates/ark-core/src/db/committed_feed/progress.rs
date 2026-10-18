@@ -274,20 +274,6 @@ pub fn acknowledge_outbound(
     load_outbound_progress(conn, peer_device_id)
 }
 
-pub fn entity_inbox_message_id(
-    peer_device_id: &str,
-    entity_type: &str,
-    entity_id: &str,
-    revision: &str,
-) -> String {
-    let mut hasher = Sha256::new();
-    for component in [peer_device_id, entity_type, entity_id, revision] {
-        hasher.update((component.len() as u64).to_be_bytes());
-        hasher.update(component.as_bytes());
-    }
-    format!("entity:{:x}", hasher.finalize())
-}
-
 impl InboxState {
     fn as_str(self) -> &'static str {
         match self {

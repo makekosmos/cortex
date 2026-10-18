@@ -146,7 +146,7 @@ async fn authenticated_core_task_replay_is_idempotent_and_rejects_revision_reuse
             .query_row(
                 "SELECT state, payload_bytes FROM ark_sync_inbox
                  WHERE peer_device_id = 'device-a' AND message_id = ?1",
-                [crate::db::entity_inbox_message_id(
+                [ark_application::sync_storage::entity_inbox_message_id(
                     "device-a",
                     &entity.entity_type,
                     &entity.id,

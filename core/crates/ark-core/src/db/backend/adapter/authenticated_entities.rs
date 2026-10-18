@@ -61,7 +61,7 @@ impl AuthenticatedEntityBackend for SqliteStorageBackend {
         entity: &SyncEntity,
         authenticated_peer_id: &str,
     ) -> Result<(), String> {
-        let inbox_message_id = crate::db::entity_inbox_message_id(
+        let inbox_message_id = ark_application::sync_storage::entity_inbox_message_id(
             authenticated_peer_id,
             &entity.entity_type,
             &entity.id,

@@ -1,12 +1,30 @@
 use std::collections::HashMap;
 
 use ark_domain::types::{PeerRecord, SyncEntity, VersionVector};
+use sha2::{Digest, Sha256};
 
 pub use crate::sync_policy::PolicyIdentity;
 pub use crate::task_merge::{
     TaskMergeBatch, TaskMergeBatchAck, TaskMergeDeliveryPort, TaskMergeJournalEntry,
     TaskMergeJournalPage, TaskMergeJournalRecord, TaskMergePrepareError,
 };
+
+/// Stable identity for the durable receipt of one authenticated entity revision.
+/// Length-prefixing keeps component boundaries unambiguous without changing
+/// the persisted inbox key format.
+pub fn entity_inbox_message_id(
+    peer_device_id: &str,
+    entity_type: &str,
+    entity_id: &str,
+    revision: &str,
+) -> String {
+    let mut hasher = Sha256::new();
+    for component in [peer_device_id, entity_type, entity_id, revision] {
+        hasher.update((component.len() as u64).to_be_bytes());
+        hasher.update(component.as_bytes());
+    }
+    format!("entity:{:x}", hasher.finalize())
+}
 
 /// Complete storage surface required by the sync runtime.
 pub trait SyncRuntimeStorage:
@@ -52,7 +70,19 @@ pub trait PeerSyncPolicyPort: Send + Sync {
 
 #[cfg(test)]
 mod tests {
-    use super::ReplayNotice;
+    use super::{entity_inbox_message_id, ReplayNotice};
+
+    #[test]
+    fn entity_inbox_message_id_preserves_stable_receipt_key() {
+        assert_eq!(
+            entity_inbox_message_id("peer", "object", "id-1", "hlc-1"),
+            "entity:39e1e96a889887856dd2ac05c363cffc1ba5ce7af69dec35ea188b685313d914"
+        );
+        assert_ne!(
+            entity_inbox_message_id("peer", "object", "id-1", "hlc-1"),
+            entity_inbox_message_id("peer", "obj", "ectid-1", "hlc-1")
+        );
+    }
 
     #[test]
     fn replay_notice_keeps_its_event_wire_shape() {

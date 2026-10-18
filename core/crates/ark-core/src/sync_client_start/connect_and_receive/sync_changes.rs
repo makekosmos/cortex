@@ -49,7 +49,7 @@ pub(super) async fn apply(
             .apply_authenticated_entity_with_policy(
                 entity,
                 peer_device_id,
-                &crate::db::entity_inbox_message_id(
+                &ark_application::sync_storage::entity_inbox_message_id(
                     peer_device_id,
                     &entity.entity_type,
                     &entity.id,

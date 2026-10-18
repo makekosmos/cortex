@@ -201,7 +201,7 @@ pub(super) async fn handle_message(
             };
 
             for entity in &entities {
-                let message_id = crate::db::entity_inbox_message_id(
+                let message_id = ark_application::sync_storage::entity_inbox_message_id(
                     &peer_device_id,
                     &entity.entity_type,
                     &entity.id,
