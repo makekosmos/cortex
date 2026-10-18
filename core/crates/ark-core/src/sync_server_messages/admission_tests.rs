@@ -22,7 +22,6 @@ async fn registry_disable_closes_ready_session_and_removes_discovery_record() {
             ),
         negotiated_protocol: None,
         registry_admission: None,
-        server_session: None,
         in_flight_feed_position: Some(42),
         in_flight_feed_policy_identity: None,
         tx: PeerMessageSender::test(tx),

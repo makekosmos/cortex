@@ -207,7 +207,6 @@ impl SyncServer {
                                     outbound_snapshot: OutboundSnapshotProgress::not_sent(),
                                     negotiated_protocol: None,
                                     registry_admission: None,
-                                    server_session: None,
                                     in_flight_feed_position: None,
                                     in_flight_feed_policy_identity: None,
                                     tx: tx.clone(),
@@ -234,15 +233,17 @@ impl SyncServer {
                                 let on_peer_disconnect_reader = on_peer_disconnect.clone();
 
                                 track_task(&conn_tasks, tokio::spawn(async move {
-                                    let handler = sync_server_messages::ConnectedSessionHandler {
+                                    let mut handler =
+                                        sync_server_messages::ConnectedSessionHandler {
                                         ctx: &ctx,
                                         peer_id,
+                                        session: None,
                                     };
                                     if let ark_sync::server_session::DirectServerSessionEnd::Failed(
                                         error,
                                     ) = ark_sync::server_session::run_connected_server_session(
                                         &mut session_io,
-                                        &handler,
+                                        &mut handler,
                                     )
                                     .await
                                     {

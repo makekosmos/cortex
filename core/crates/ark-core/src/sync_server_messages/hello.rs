@@ -1,6 +1,11 @@
 use super::*;
 
-pub(super) async fn handle_hello(ctx: &MessageContext, peer_id: usize, msg: LanSyncMessage) {
+pub(super) async fn handle_hello(
+    ctx: &MessageContext,
+    peer_id: usize,
+    session: &mut Option<ark_sync::server_session::DirectServerSession>,
+    msg: LanSyncMessage,
+) {
     let MessageContext {
         peers,
         space_id,
@@ -23,51 +28,47 @@ pub(super) async fn handle_hello(ctx: &MessageContext, peer_id: usize, msg: LanS
         app_version: ark_net::host::app_version(),
     };
     let my_space_id = request.space_id.clone();
-    let effect = {
-        let mut peers = peers.lock().await;
-        let Some(peer) = peers.get_mut(&peer_id) else {
-            return;
-        };
-        let session = peer
-            .server_session
-            .get_or_insert_with(|| ark_sync::server_session::DirectServerSession::new(request));
-        session
-            .transition(ark_sync::server_session::DirectServerSessionInput::Message(
-                Box::new(msg),
-            ))
-            .effect
-    };
-    apply_hello_effect(ctx, peer_id, &my_device_id, &my_space_id, effect).await;
+    if !peers.lock().await.contains_key(&peer_id) {
+        return;
+    }
+    let session =
+        session.get_or_insert_with(|| ark_sync::server_session::DirectServerSession::new(request));
+    let effect = session
+        .transition(ark_sync::server_session::DirectServerSessionInput::Message(
+            Box::new(msg),
+        ))
+        .effect;
+    apply_hello_effect(ctx, peer_id, session, &my_device_id, &my_space_id, effect).await;
 }
 
 pub(super) async fn route_session_message(
     ctx: &MessageContext,
     peer_id: usize,
+    session: &mut Option<ark_sync::server_session::DirectServerSession>,
     msg: LanSyncMessage,
     ready_peer: Option<&ReadyPeer>,
 ) -> Option<ark_sync::server_session::DirectServerMessage> {
     if matches!(msg, LanSyncMessage::Hello { .. }) {
-        handle_hello(ctx, peer_id, msg).await;
+        handle_hello(ctx, peer_id, session, msg).await;
         return None;
     }
 
-    let (tx, effect) = {
-        let mut peers = ctx.peers.lock().await;
-        let peer = peers.get_mut(&peer_id)?;
+    let tx = {
+        let peers = ctx.peers.lock().await;
+        let peer = peers.get(&peer_id)?;
         if ready_peer.is_some_and(|ready_peer| peer.ready_peer.as_ref() != Some(ready_peer)) {
             return None;
         }
-        let tx = peer.tx.clone();
-        let Some(session) = peer.server_session.as_mut() else {
-            return Some(ark_sync::server_session::classify_server_message(msg));
-        };
-        let effect = session
-            .transition(ark_sync::server_session::DirectServerSessionInput::Message(
-                Box::new(msg),
-            ))
-            .effect;
-        (tx, effect)
+        peer.tx.clone()
     };
+    let Some(session) = session.as_mut() else {
+        return Some(ark_sync::server_session::classify_server_message(msg));
+    };
+    let effect = session
+        .transition(ark_sync::server_session::DirectServerSessionInput::Message(
+            Box::new(msg),
+        ))
+        .effect;
 
     match effect {
         ark_sync::server_session::DirectServerSessionEffect::Dispatch(message) => Some(*message),
@@ -88,6 +89,7 @@ pub(super) async fn route_session_message(
 async fn apply_hello_effect(
     ctx: &MessageContext,
     peer_id: usize,
+    session: &mut ark_sync::server_session::DirectServerSession,
     my_device_id: &str,
     my_space_id: &str,
     mut effect: ark_sync::server_session::DirectServerSessionEffect,
@@ -110,16 +112,10 @@ async fn apply_hello_effect(
                 };
                 // Connection ids are monotonically allocated. Recheck membership after the
                 // storage await so a completion cannot revive a peer already removed.
-                effect = {
-                    let mut peers = ctx.peers.lock().await;
-                    let Some(peer) = peers.get_mut(&peer_id) else {
-                        return;
-                    };
-                    let Some(session) = peer.server_session.as_mut() else {
-                        return;
-                    };
-                    session.transition(Input::RemovedPeerResult(result)).effect
-                };
+                if !ctx.peers.lock().await.contains_key(&peer_id) {
+                    return;
+                }
+                effect = session.transition(Input::RemovedPeerResult(result)).effect;
                 continue;
             }
             Effect::Accepted(accepted) => {

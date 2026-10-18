@@ -11,7 +11,12 @@ mod hello;
 #[path = "sync_server_messages/live_message_tests.rs"]
 mod live_message_tests;
 
-pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: LanSyncMessage) {
+pub(super) async fn handle_message(
+    ctx: &MessageContext,
+    peer_id: usize,
+    session: &mut Option<ark_sync::server_session::DirectServerSession>,
+    msg: LanSyncMessage,
+) {
     let MessageContext {
         peers,
         storage,
@@ -26,8 +31,12 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
     } else {
         None
     };
-    let Some(msg) = hello::route_session_message(ctx, peer_id, msg, ready_peer.as_ref()).await
+    let Some(msg) =
+        hello::route_session_message(ctx, peer_id, session, msg, ready_peer.as_ref()).await
     else {
+        return;
+    };
+    let Some(session) = session.as_mut() else {
         return;
     };
     match msg {
@@ -62,7 +71,9 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                 admission::reject_peer(ctx, peer_id, &tx).await;
                 return;
             }
-            if let Err(error) = admission::start_sync_after_policy(ctx, peer_id, ready_peer).await {
+            if let Err(error) =
+                admission::start_sync_after_policy(ctx, peer_id, session, ready_peer).await
+            {
                 eprintln!(
                     "{TAG} policy-gated sync start failed for {}: {error}",
                     ready_peer.device_id
@@ -242,7 +253,7 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
         }
 
         ark_sync::server_session::DirectServerMessage::RegistryAdmission(message) => {
-            admission::handle_registry_admission(ctx, peer_id, message).await;
+            admission::handle_registry_admission(ctx, peer_id, session, message).await;
         }
 
         ark_sync::server_session::DirectServerMessage::Live(message) => {
@@ -254,15 +265,16 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
 pub(super) struct ConnectedSessionHandler<'a> {
     pub(super) ctx: &'a MessageContext,
     pub(super) peer_id: usize,
+    pub(super) session: Option<ark_sync::server_session::DirectServerSession>,
 }
 
 #[async_trait::async_trait]
 impl ark_sync::server_session::DirectServerSessionHandler for ConnectedSessionHandler<'_> {
-    async fn on_message(&self, message: Box<LanSyncMessage>) {
-        handle_message(self.ctx, self.peer_id, *message).await;
+    async fn on_message(&mut self, message: Box<LanSyncMessage>) {
+        handle_message(self.ctx, self.peer_id, &mut self.session, *message).await;
     }
 
-    async fn on_malformed_message(&self) {
+    async fn on_malformed_message(&mut self) {
         eprintln!("{TAG} ignoring malformed peer sync message");
     }
 }

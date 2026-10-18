@@ -65,7 +65,6 @@ struct PeerState {
     outbound_snapshot: ark_sync::outbound_snapshot::OutboundSnapshotProgress,
     negotiated_protocol: Option<ark_sync::protocol::NegotiatedProtocol>,
     registry_admission: Option<ark_sync::server_session::DirectServerAdmission>,
-    server_session: Option<ark_sync::server_session::DirectServerSession>,
     in_flight_feed_position: Option<i64>,
     in_flight_feed_policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
     tx: PeerMessageSender,

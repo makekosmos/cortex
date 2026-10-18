@@ -26,7 +26,6 @@ async fn stale_snapshot_ack_does_not_complete_or_clear_pending_snapshot() {
             ),
         negotiated_protocol: None,
         registry_admission: None,
-        server_session: None,
         in_flight_feed_position: None,
         in_flight_feed_policy_identity: None,
         tx: PeerMessageSender::test(tx),

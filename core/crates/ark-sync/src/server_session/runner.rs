@@ -11,13 +11,13 @@ pub enum DirectServerSessionEnd {
 
 #[async_trait::async_trait]
 pub trait DirectServerSessionHandler: Send + Sync {
-    async fn on_message(&self, message: Box<LanSyncMessage>);
-    async fn on_malformed_message(&self);
+    async fn on_message(&mut self, message: Box<LanSyncMessage>);
+    async fn on_malformed_message(&mut self);
 }
 
 pub async fn run_connected_server_session(
     session_io: &mut SessionIo,
-    handler: &dyn DirectServerSessionHandler,
+    handler: &mut dyn DirectServerSessionHandler,
 ) -> DirectServerSessionEnd {
     loop {
         match session_io.receive().await {
