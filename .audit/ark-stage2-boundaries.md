@@ -87,6 +87,20 @@ Peer export keeps recipient authorization in Core. After Core verifies the live 
 
 `ark-sync::client_session::build_client_hello` owns the transport-neutral handshake offer, nonce generation, and authentication HMACs. Core supplies a named `ClientHelloRequest` with the local identity and addresses plus platform/version metadata from `ark-net`; it still owns socket I/O and the subsequent reconnect loop. The request struct keeps this cross-crate boundary explicit and prevents a growing list of positional handshake arguments.
 
+## Connected direct-session ownership
+
+Move the message loop for one connected client or server peer into `ark-sync`. Keep peer discovery, client reconnect, server accept and ping scheduling, public callbacks, and spawned-task ownership in `ark-core`. Keep WebSocket reads, writes, framing, and socket close in `ark-net`. The existing `SyncClient` and `SyncServer` stay as Core facades with their current constructors and public methods.
+
+The session owns one typed phase instead of separate admission, negotiated-protocol, ready, and sync-started flags. It accepts a typed incoming message and returns explicit effects: outbound protocol messages, durable state work requested through existing application ports, peer-ready or peer-closed changes, and registry events. Core applies storage and callback effects. It must recheck the connection generation after each awaited storage operation before it publishes a ready peer. No SQLite transaction crosses a network await.
+
+The session loop consumes a bounded, typed connection interface supplied by `ark-net`. Queue saturation applies backpressure. Queue closure, remote close, cancellation, and malformed frames each produce an explicit end or transport error. The transport adapter owns and joins any socket worker it starts. `ark-sync` creates no detached transport tasks. A returned session cannot leave a reader or writer running.
+
+Candidate A moved only the client/server phase state machines into `ark-sync`, with Core still deciding protocol message order. It has a smaller first step, but leaves the remaining session orchestration in Core and repeats the existing split between Hello/admission helpers and the Core loops. Candidate B moved the connected session loops into `ark-sync` behind a typed connection interface. It matches the ownership target, but needs the phase model and stale-generation checks from Candidate A. The design uses B's connected-session ownership and A's typed phase and explicit effects. It rejects moving reconnect, accept, callbacks, or Core task lifecycle into `ark-sync`, and it rejects passing a raw WebSocket sink and stream across the boundary.
+
+The design candidates and cross-judge used the same inherited model because the operator's instructions prohibit changing models and prohibit GPT-6-Luna. The judge favored connected-session ownership, with bounded I/O, supervised transport workers, one authoritative phase, and existing narrow application ports. Candidate convergence and the independent verdict support this choice; model diversity was reduced.
+
+Before removing a Core flag, add session tests that prove the old ordering: no user data before registry admission, no initial version vector before policy admission when required, exactly one sync start, stale connection results cannot revive a peer, and remote close or cancellation ends the session and joins transport work. Retain the two-Core sync integration tests as wire-level checks.
+
 ## Snapshot and restore ownership decision
 
 The snapshot unit is one lifecycle, not a bag of filesystem helpers: it validates a caller-supplied backup identifier, stages an immutable source, verifies schema and integrity, protects device identity and committed-feed monotonicity, writes a durable recovery capsule and intent, applies through SQLite Online Backup, verifies the result, rolls back on failure, and reports entity counts. Keeping only file helpers in `ark-store` would leave failure ordering and recovery split across crates, so the full lifecycle belongs in `ark-store::snapshot`.
