@@ -113,6 +113,7 @@ pub struct SessionIo {
     pub(crate) incoming: mpsc::Receiver<SessionIoEvent>,
     outgoing: SessionIoSender,
     close_result: watch::Receiver<Option<Result<(), String>>>,
+    worker_result: watch::Receiver<Option<Result<(), String>>>,
     shutdown: Option<watch::Sender<bool>>,
     worker: Option<JoinHandle<()>>,
 }
@@ -125,8 +126,31 @@ pub struct SessionIoDriver {
     pub close_after_flush: mpsc::Receiver<()>,
     pub pending_sends: SessionIoPendingSends,
     pub close_result: watch::Sender<Option<Result<(), String>>>,
+    pub worker_completion: SessionIoWorkerCompletion,
     pub shutdown: watch::Receiver<bool>,
     pub stop: watch::Sender<bool>,
+}
+
+pub struct SessionIoWorkerCompletion {
+    result: watch::Sender<Option<Result<(), String>>>,
+    completed: bool,
+}
+
+impl SessionIoWorkerCompletion {
+    pub fn complete(mut self) {
+        self.completed = true;
+        let _ = self.result.send(Some(Ok(())));
+    }
+}
+
+impl Drop for SessionIoWorkerCompletion {
+    fn drop(&mut self) {
+        if !self.completed {
+            let _ = self
+                .result
+                .send(Some(Err("transport worker exited unexpectedly".into())));
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -159,6 +183,7 @@ impl SessionIo {
         let (control_outgoing, control_outgoing_rx) = mpsc::channel(capacity);
         let (shutdown, shutdown_rx) = watch::channel(false);
         let (close_result, close_result_rx) = watch::channel(None);
+        let (worker_result_tx, worker_result) = watch::channel(None);
         let (close_after_flush, close_after_flush_rx) = mpsc::channel(1);
         let pending_sends = SessionIoPendingSends::new();
         let worker = start_worker(SessionIoDriver {
@@ -169,6 +194,10 @@ impl SessionIo {
             close_after_flush: close_after_flush_rx,
             pending_sends: pending_sends.clone(),
             close_result: close_result.clone(),
+            worker_completion: SessionIoWorkerCompletion {
+                result: worker_result_tx,
+                completed: false,
+            },
             shutdown: shutdown_rx,
             stop: shutdown.clone(),
         });
@@ -176,6 +205,7 @@ impl SessionIo {
         Ok(Self {
             incoming,
             close_result: close_result_rx,
+            worker_result,
             outgoing: SessionIoSender {
                 outgoing,
                 control_outgoing,
@@ -210,18 +240,37 @@ impl SessionIo {
         if let Some(shutdown) = self.shutdown.take() {
             let _ = shutdown.send(true);
         }
-        let finish_result = if let Some(worker) = self.worker.take() {
-            worker
-                .await
-                .map_err(|error| SessionIoError::TransportTask(error.to_string()))
+        let (join_result, finish_result) = if let Some(worker) = self.worker.take() {
+            (
+                worker
+                    .await
+                    .map_err(|error| SessionIoError::TransportTask(error.to_string())),
+                Ok(()),
+            )
         } else {
-            Ok(())
+            (Ok(()), self.wait_for_worker_result().await)
         };
         if let Some(flush_result) = flush_result {
             flush_result?;
         }
+        join_result?;
         finish_result?;
         Ok(())
+    }
+
+    pub fn take_transport_task(&mut self) -> Option<JoinHandle<()>> {
+        self.worker.take()
+    }
+
+    async fn wait_for_worker_result(&mut self) -> Result<(), SessionIoError> {
+        loop {
+            if let Some(result) = self.worker_result.borrow().clone() {
+                return result.map_err(SessionIoError::TransportTask);
+            }
+            self.worker_result.changed().await.map_err(|_| {
+                SessionIoError::TransportTask("worker stopped without a result".into())
+            })?;
+        }
     }
 
     pub async fn finish_after_flush(self) -> Result<(), SessionIoError> {
@@ -323,174 +372,5 @@ impl Drop for SessionIo {
 }
 
 #[cfg(test)]
-mod tests {
-    #![allow(clippy::unwrap_used)]
-
-    use super::*;
-    use tokio::sync::oneshot;
-
-    #[test]
-    fn transport_requires_a_nonzero_queue_capacity() {
-        let mut worker_started = false;
-        let result = SessionIo::start_transport(0, |_| {
-            worker_started = true;
-            tokio::spawn(async {})
-        });
-
-        assert_eq!(result.err(), Some(SessionIoError::InvalidCapacity));
-        assert!(!worker_started);
-    }
-
-    #[tokio::test]
-    async fn outbound_queue_backpressures_senders_until_transport_drains() {
-        let (ready_tx, ready_rx) = oneshot::channel();
-        let (release_tx, release_rx) = oneshot::channel();
-        let session = SessionIo::start_transport(1, move |mut driver| {
-            tokio::spawn(async move {
-                let _ = ready_tx.send(());
-                let _ = release_rx.await;
-                let _ = driver.control_outgoing.recv().await;
-                let _ = driver.control_outgoing.recv().await;
-            })
-        })
-        .unwrap();
-        ready_rx.await.unwrap();
-
-        session.send(LanSyncMessage::Ping { ts: 1 }).await.unwrap();
-        let sender = session.sender();
-        let blocked_send =
-            tokio::spawn(async move { sender.send(LanSyncMessage::Ping { ts: 2 }).await });
-        tokio::task::yield_now().await;
-        assert!(!blocked_send.is_finished());
-
-        let _ = release_tx.send(());
-        blocked_send.await.unwrap().unwrap();
-        session.finish().await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn finish_waits_for_a_sender_close_after_flush_request() {
-        let (joined_tx, joined_rx) = oneshot::channel();
-        let session = SessionIo::start_transport(1, move |mut driver| {
-            tokio::spawn(async move {
-                assert_eq!(driver.close_after_flush.recv().await, Some(()));
-                driver.close_result.send(Some(Ok(()))).unwrap();
-                joined_tx.send(()).unwrap();
-            })
-        })
-        .unwrap();
-
-        session.sender().close_after_flush();
-        session.finish().await.unwrap();
-        joined_rx.await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn bulk_sender_waits_for_capacity_without_dropping_the_frame() {
-        let (started_tx, started_rx) = oneshot::channel();
-        let (release_tx, release_rx) = oneshot::channel();
-        let session = SessionIo::start_transport(1, move |mut driver| {
-            tokio::spawn(async move {
-                let _ = started_tx.send(());
-                let _ = release_rx.await;
-                let first = driver.outgoing.recv().await;
-                let second = driver.outgoing.recv().await;
-                assert!(matches!(
-                    first,
-                    Some(LanSyncMessage::SyncChanges { batch_id, .. }) if batch_id == "first"
-                ));
-                assert!(matches!(
-                    second,
-                    Some(LanSyncMessage::SyncChanges { batch_id, .. }) if batch_id == "second"
-                ));
-            })
-        })
-        .unwrap();
-        started_rx.await.unwrap();
-
-        let sender = session.sender();
-        sender
-            .send(LanSyncMessage::SyncChanges {
-                policy_identity: None,
-                batch_id: "first".into(),
-                entities: Vec::new(),
-                is_last: false,
-                origin_device_id: None,
-                usage_complete_through: None,
-            })
-            .await
-            .unwrap();
-        let blocked_send = tokio::spawn(async move {
-            sender
-                .send_bulk_wait(LanSyncMessage::SyncChanges {
-                    policy_identity: None,
-                    batch_id: "second".into(),
-                    entities: Vec::new(),
-                    is_last: false,
-                    origin_device_id: None,
-                    usage_complete_through: None,
-                })
-                .await
-        });
-        tokio::task::yield_now().await;
-        assert!(!blocked_send.is_finished());
-
-        release_tx.send(()).unwrap();
-        blocked_send.await.unwrap().unwrap();
-        session.finish().await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn control_messages_keep_a_reserved_queue_when_bulk_queue_is_full() {
-        let (release_tx, release_rx) = oneshot::channel();
-        let session = SessionIo::start_transport(1, move |mut driver| {
-            tokio::spawn(async move {
-                let _ = release_rx.await;
-                let control = driver.control_outgoing.recv().await;
-                let bulk = driver.outgoing.recv().await;
-                assert!(matches!(control, Some(LanSyncMessage::SyncAck { .. })));
-                assert!(matches!(bulk, Some(LanSyncMessage::SyncChanges { .. })));
-            })
-        })
-        .unwrap();
-
-        session
-            .sender()
-            .send(LanSyncMessage::SyncChanges {
-                policy_identity: None,
-                batch_id: "batch-1".into(),
-                entities: Vec::new(),
-                is_last: false,
-                origin_device_id: None,
-                usage_complete_through: None,
-            })
-            .await
-            .unwrap();
-        assert_eq!(
-            session
-                .sender()
-                .send(LanSyncMessage::SyncChanges {
-                    policy_identity: None,
-                    batch_id: "batch-2".into(),
-                    entities: Vec::new(),
-                    is_last: false,
-                    origin_device_id: None,
-                    usage_complete_through: None,
-                })
-                .await,
-            Err(SessionIoError::OutboundFull)
-        );
-        session
-            .sender()
-            .send(LanSyncMessage::SyncAck {
-                batch_id: "batch-0".into(),
-                accepted: 1,
-                policy_identity: None,
-            })
-            .await
-            .unwrap();
-
-        let _ = release_tx.send(());
-        session.finish().await.unwrap();
-    }
-}
+#[path = "session_io_tests.rs"]
+mod tests;

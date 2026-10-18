@@ -61,6 +61,15 @@ impl SyncServer {
             .drain(..)
             .collect();
         join_connection_tasks(tasks, Duration::from_secs(2)).await;
+        // An aborted handler drops SessionIo, which signals its transport
+        // supervisor to close. Keep and join those handles separately.
+        let transport_tasks: Vec<tokio::task::JoinHandle<()>> = self
+            .transport_tasks
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .drain(..)
+            .collect();
+        join_connection_tasks(transport_tasks, Duration::from_secs(2)).await;
         eprintln!("{TAG} Server stopped");
     }
 
@@ -187,7 +196,7 @@ mod connection_task_tests {
     #[tokio::test]
     async fn timed_out_connection_tasks_are_aborted_and_joined() {
         let (started_tx, started_rx) = oneshot::channel();
-        let (dropped_tx, dropped_rx) = oneshot::channel();
+        let (dropped_tx, mut dropped_rx) = oneshot::channel();
         let task = tokio::spawn(async move {
             let _notice = DropNotice(Some(dropped_tx));
             let _ = started_tx.send(());
@@ -196,8 +205,10 @@ mod connection_task_tests {
         started_rx.await.expect("connection task started");
 
         join_connection_tasks(vec![task], Duration::ZERO).await;
-        dropped_rx
-            .await
-            .expect("aborted task is dropped before shutdown returns");
+        assert_eq!(
+            dropped_rx.try_recv(),
+            Ok(()),
+            "aborted task is dropped before shutdown returns"
+        );
     }
 }

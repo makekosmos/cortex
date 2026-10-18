@@ -98,6 +98,45 @@ mod listener_tests {
     }
 
     #[tokio::test]
+    async fn transport_supervisor_is_joined_after_connection_handler_abort() {
+        let listener = Listener::bind("127.0.0.1:0").await.expect("listener binds");
+        let address = listener
+            .listener
+            .local_addr()
+            .expect("listener address is available");
+        let client = tokio::spawn(async move {
+            let (mut socket, _) = connect_async(format!("ws://{address}"))
+                .await
+                .expect("client connects");
+            assert!(matches!(
+                socket.next().await,
+                Some(Ok(Message::Close(_))) | None
+            ));
+        });
+
+        let (websocket, _) = listener.accept().await.expect("server accepts client");
+        let mut session = session_io(websocket).expect("session transport starts");
+        let transport = session
+            .take_transport_task()
+            .expect("transport task transfers to server owner");
+        let connection = tokio::spawn(async move {
+            let _session = session;
+            std::future::pending::<()>().await;
+        });
+        connection.abort();
+        assert!(connection
+            .await
+            .expect_err("handler was aborted")
+            .is_cancelled());
+
+        tokio::time::timeout(Duration::from_secs(2), transport)
+            .await
+            .expect("server owner waits for transport shutdown")
+            .expect("transport supervisor exits cleanly");
+        client.await.expect("client observes the server close");
+    }
+
+    #[tokio::test]
     async fn finish_after_flush_delivers_terminal_frame_before_websocket_close() {
         let listener = Listener::bind("127.0.0.1:0").await.expect("listener binds");
         let address = listener

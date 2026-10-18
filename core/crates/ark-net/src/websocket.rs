@@ -6,7 +6,6 @@ use futures_util::{SinkExt, StreamExt};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{mpsc, oneshot, watch, Mutex};
-use tokio::task::JoinSet;
 use tokio_tungstenite::{
     accept_async, connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream,
 };
@@ -15,6 +14,12 @@ pub type ClientWebSocket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 pub type ServerWebSocket = WebSocketStream<TcpStream>;
 
 const SESSION_QUEUE_CAPACITY: usize = 64;
+
+enum SessionTransportFinish {
+    Shutdown,
+    Writer,
+    Reader,
+}
 
 pub struct Listener {
     listener: TcpListener,
@@ -68,14 +73,14 @@ where
         close_after_flush,
         pending_sends,
         close_result,
+        worker_completion,
         outbound_guard,
         shutdown,
         stop,
     } = driver;
     let (sink, stream) = websocket.split();
     let (control_tx, control_rx) = mpsc::channel(8);
-    let mut tasks = JoinSet::new();
-    tasks.spawn(write_session_frames(SessionWriter {
+    let mut writer = Box::pin(write_session_frames(SessionWriter {
         sink,
         outgoing,
         control_outgoing,
@@ -87,7 +92,7 @@ where
         incoming: incoming.clone(),
         shutdown: shutdown.clone(),
     }));
-    tasks.spawn(read_session_frames(
+    let mut reader = Box::pin(read_session_frames(
         stream,
         incoming.clone(),
         control_tx,
@@ -95,22 +100,20 @@ where
     ));
 
     let mut shutdown = shutdown;
-    tokio::select! {
-        _ = shutdown.changed() => {}
-        result = tasks.join_next() => {
-            if let Some(Err(error)) = result {
-                let _ = incoming.try_send(SessionIoEvent::Failed(error.to_string()));
-            }
-        }
-    }
+    let finished = tokio::select! {
+        _ = shutdown.changed() => SessionTransportFinish::Shutdown,
+        _ = &mut writer => SessionTransportFinish::Writer,
+        _ = &mut reader => SessionTransportFinish::Reader,
+    };
     let _ = stop.send(true);
-    while let Some(result) = tasks.join_next().await {
-        if let Err(error) = result {
-            if !error.is_cancelled() {
-                let _ = incoming.try_send(SessionIoEvent::Failed(error.to_string()));
-            }
+    match finished {
+        SessionTransportFinish::Shutdown => {
+            tokio::join!(writer, reader);
         }
+        SessionTransportFinish::Writer => reader.await,
+        SessionTransportFinish::Reader => writer.await,
     }
+    worker_completion.complete();
 }
 
 enum WebSocketControl {

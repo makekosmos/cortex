@@ -121,6 +121,7 @@ impl SyncServer {
         let on_registry_events = self.on_registry_events.clone();
         let next_peer_id = self.next_peer_id.clone();
         let conn_tasks = self.conn_tasks.clone();
+        let transport_tasks = self.transport_tasks.clone();
         let (accept_ready_tx, accept_ready_rx) = oneshot::channel();
 
         // Ping ticker shares the accept task: a separate ping task had no
@@ -199,6 +200,9 @@ impl SyncServer {
                                         continue;
                                     }
                                 };
+                                if let Some(transport_task) = session_io.take_transport_task() {
+                                    track_task(&transport_tasks, transport_task);
+                                }
                                 let tx = PeerMessageSender::session(session_io.sender());
 
                                 let peer_state = PeerState {

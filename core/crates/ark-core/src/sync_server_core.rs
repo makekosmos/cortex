@@ -125,6 +125,7 @@ impl SyncServer {
             shutdown_tx: Arc::new(Mutex::new(None)),
             accept_task: Arc::new(Mutex::new(None)),
             conn_tasks: Arc::new(std::sync::Mutex::new(Vec::new())),
+            transport_tasks: Arc::new(std::sync::Mutex::new(Vec::new())),
             on_change: Arc::new(Mutex::new(None)),
             on_peer_connect: Arc::new(Mutex::new(None)),
             on_peer_disconnect: Arc::new(Mutex::new(None)),
