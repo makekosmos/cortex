@@ -1,6 +1,51 @@
 use ark_domain::integration_replication::{GrantStatus, IntegrationNodeGrant};
 use rusqlite::{params, Connection, OptionalExtension};
 
+fn status_value(status: GrantStatus) -> &'static str {
+    match status {
+        GrantStatus::Active => "active",
+        GrantStatus::Revoked => "revoked",
+    }
+}
+
+pub fn upsert_integration_node_grant_record(
+    connection: &Connection,
+    grant: &IntegrationNodeGrant,
+) -> Result<(), String> {
+    let epoch = i64::try_from(grant.grant_epoch)
+        .map_err(|_| "grant_epoch exceeds SQLite INTEGER range".to_owned())?;
+    let revision = i64::try_from(grant.revision)
+        .map_err(|_| "revision exceeds SQLite INTEGER range".to_owned())?;
+    connection
+        .execute(
+            "INSERT INTO integration_node_grants
+             (integration_id, node_id, node_encryption_key, grant_epoch, status,
+              authorized_at, revoked_at, revision, hlc)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+             ON CONFLICT(integration_id, node_id) DO UPDATE SET
+                node_encryption_key = excluded.node_encryption_key,
+                grant_epoch = excluded.grant_epoch,
+                status = excluded.status,
+                authorized_at = excluded.authorized_at,
+                revoked_at = excluded.revoked_at,
+                revision = excluded.revision,
+                hlc = excluded.hlc",
+            params![
+                grant.integration_id,
+                grant.node_id,
+                grant.node_encryption_key,
+                epoch,
+                status_value(grant.status),
+                grant.authorized_at,
+                grant.revoked_at,
+                revision,
+                grant.hlc,
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
 fn grant_status(value: String) -> Result<GrantStatus, String> {
     match value.as_str() {
         "active" => Ok(GrantStatus::Active),
@@ -93,6 +138,43 @@ mod tests {
             load_integration_node_grant(&connection, "app", "device")
                 .expect_err("unknown grant status is rejected"),
             "invalid integration grant status: unknown"
+        );
+    }
+
+    #[test]
+    fn grant_write_roundtrips_a_valid_record_and_rejects_integer_overflow() {
+        let connection = Connection::open_in_memory().expect("fixture database opens");
+        connection
+            .execute_batch(crate::schema::CREATE_TABLES)
+            .expect("grant schema applies");
+        let grant = IntegrationNodeGrant {
+            integration_id: "app".to_owned(),
+            node_id: "device".to_owned(),
+            node_encryption_key: "public-key".to_owned(),
+            grant_epoch: 2,
+            status: GrantStatus::Active,
+            authorized_at: "2026-10-18".to_owned(),
+            revoked_at: None,
+            revision: 3,
+            hlc: "2026-10-18T00:00:00.000Z:000003:device".to_owned(),
+        };
+
+        upsert_integration_node_grant_record(&connection, &grant)
+            .expect("grant persistence succeeds");
+
+        assert_eq!(
+            load_integration_node_grant(&connection, "app", "device")
+                .expect("grant query succeeds"),
+            Some(grant.clone())
+        );
+        let overflow = IntegrationNodeGrant {
+            grant_epoch: u64::MAX,
+            ..grant
+        };
+        assert_eq!(
+            upsert_integration_node_grant_record(&connection, &overflow)
+                .expect_err("SQLite integer overflow is rejected"),
+            "grant_epoch exceeds SQLite INTEGER range"
         );
     }
 }
