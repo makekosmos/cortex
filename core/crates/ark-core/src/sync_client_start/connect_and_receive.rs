@@ -72,21 +72,7 @@
                             if let Some(sync_msg) = deserialize_message(&text) {
                                 include!("connect_and_receive/registry_control.rs");
                                 match sync_msg {
-                                    LanSyncMessage::Hello {
-                                        protocol_version,
-                                        device_id: server_device_id,
-                                        device_name: server_device_name,
-                                        space_id: server_space_id,
-                                        auth_nonce,
-                                        auth_hmac,
-                                        platform: server_platform,
-                                        app_version: server_app_version,
-                                        addresses: _,
-                                        supported_protocol_versions,
-                                        supported_capabilities,
-                                        negotiated_capabilities,
-                                        negotiation_hmac,
-                                    } => {
+                                    hello @ LanSyncMessage::Hello { .. } => {
                                         if authenticated {
                                             eprintln!(
                                                 "{TAG} Rejecting repeated hello on an \
@@ -94,68 +80,32 @@
                                             );
                                             break;
                                         }
-                                        if server_space_id != space_id {
-                                            eprintln!(
-                                                "{TAG} Rejecting peer hello from a different space"
-                                            );
-                                            break;
-                                        }
-                                        if let Some(secret) = auth_secret.as_ref() {
-                                            let valid =
-                                                match (auth_nonce.as_deref(), auth_hmac.as_deref())
-                                                {
-                                                    (Some(nonce), Some(hmac)) => {
-                                                        verify_hello_auth_hmac(
-                                                            secret,
-                                                            &server_space_id,
-                                                            &server_device_id,
-                                                            nonce,
-                                                            hmac,
-                                                        )
-                                                    }
-                                                    _ => false,
-                                                };
-                                            if !valid {
-                                                eprintln!(
-                                                    "{TAG} Rejecting peer hello with invalid HMAC"
-                                                );
-                                                break;
-                                            }
-                                        }
-
-                                        let negotiated_protocol = match
-                                            ark_sync::protocol::validate_protocol_selection(
-                                            &client_hello.offer,
-                                            protocol_version,
-                                            supported_protocol_versions.as_deref(),
-                                            supported_capabilities.as_deref(),
-                                            negotiated_capabilities.as_deref(),
-                                            auth_secret.as_deref(),
-                                            &space_id,
-                                            &device_id,
-                                            &server_device_id,
-                                            client_hello.auth_nonce.as_deref(),
-                                            auth_nonce.as_deref(),
-                                            negotiation_hmac.as_deref(),
+                                        let accepted = match
+                                            ark_sync::client_session::accept_server_hello(
+                                            hello,
+                                            ark_sync::client_session::ServerHelloValidationRequest {
+                                                local_device_id: &device_id,
+                                                local_space_id: &space_id,
+                                                auth_secret: auth_secret.as_deref(),
+                                                local_offer: &client_hello.offer,
+                                                local_auth_nonce: client_hello
+                                                    .auth_nonce
+                                                    .as_deref(),
+                                            },
                                         ) {
-                                            Ok(protocol) => protocol,
+                                            Ok(accepted) => accepted,
                                             Err(error) => {
-                                                eprintln!(
-                                                    "{TAG} invalid protocol selection: {}",
-                                                    error.code()
-                                                );
+                                                eprintln!("{TAG} {error}");
                                                 break;
                                             }
                                         };
-                                        if !negotiated_protocol
-                                            .capabilities
-                                            .contains(&ProtocolCapability::RegistryHistoryV1)
-                                        {
-                                            eprintln!(
-                                                "{TAG} peer requires registry-history upgrade"
-                                            );
-                                            break;
-                                        }
+                                        let ark_sync::client_session::AcceptedServerHello {
+                                            device_id: server_device_id,
+                                            device_name: server_device_name,
+                                            platform: server_platform,
+                                            app_version: server_app_version,
+                                            protocol: negotiated_protocol,
+                                        } = accepted;
                                         if !server_device_id.is_empty()
                                             && server_device_id == device_id
                                         {

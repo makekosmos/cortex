@@ -13,6 +13,11 @@ use crate::{
     registry_admission::AdmissionUpdate,
 };
 
+mod hello;
+pub use hello::{
+    accept_server_hello, AcceptedServerHello, ServerHelloRejection, ServerHelloValidationRequest,
+};
+
 pub struct ClientHello {
     pub message: String,
     pub offer: ProtocolOffer,
