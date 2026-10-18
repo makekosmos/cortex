@@ -10,14 +10,6 @@ pub(super) fn storage(error: impl std::fmt::Display) -> String {
     error.to_string()
 }
 
-pub(super) fn json<T: serde::Serialize>(value: &T) -> Result<String, String> {
-    serde_json::to_string(value).map_err(storage)
-}
-
-pub(super) fn sqlite_i64(value: u64, field: &str) -> Result<i64, String> {
-    i64::try_from(value).map_err(|_| format!("{field} exceeds SQLite INTEGER range"))
-}
-
 pub(super) fn u64_value(value: i64, field: &str) -> Result<u64, String> {
     u64::try_from(value).map_err(|_| format!("{field} is negative"))
 }

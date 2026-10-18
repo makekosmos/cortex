@@ -1,12 +1,10 @@
-use super::integration_replication_common::{
-    envelope_version_is_newer, json, persist_with_vector, sqlite_i64, storage,
-};
+use super::integration_replication_common::{envelope_version_is_newer, persist_with_vector};
 use super::load_integration_node_grant;
 use crate::integration_replication::{envelope_entity_id, IntegrationContractError, NodeStatus};
 use crate::integration_replication::{
     validate_envelope_recipient, GrantStatus, IntegrationCredentialEnvelope,
 };
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::Connection;
 
 pub(in crate::db) fn upsert_integration_credential_envelope_record(
     conn: &Connection,
@@ -20,15 +18,6 @@ pub(in crate::db) fn upsert_integration_credential_envelope_record(
         &envelope.recipient_node_id,
         envelope.credential_generation,
     );
-    let epoch = sqlite_i64(envelope.grant_epoch, "grant_epoch")?;
-    let generation = sqlite_i64(envelope.credential_generation, "credential_generation")?;
-    let refresh_fence = sqlite_i64(envelope.refresh_fencing_token, "refresh_fencing_token")?;
-    let revision = sqlite_i64(envelope.revision, "revision")?;
-    let metadata = envelope
-        .authenticated_metadata
-        .as_ref()
-        .map(json)
-        .transpose()?;
     persist_with_vector(
         conn,
         "integration_credential_envelope",
@@ -115,15 +104,12 @@ pub(in crate::db) fn upsert_integration_credential_envelope_record(
             if lease.fencing_token != envelope.refresh_fencing_token {
                 return Err(IntegrationContractError::LeaseFenceMismatch.to_string());
             }
-            let current = conn
-                .query_row(
-                    "SELECT MAX(credential_generation)
-                 FROM integration_credential_envelopes WHERE integration_id = ?1",
-                    params![envelope.integration_id],
-                    |row| row.get::<_, Option<i64>>(0),
-                )
-                .map_err(storage)?;
-            if current.is_some_and(|value| generation < value) {
+            let current =
+                ark_store::integration_replication::load_max_integration_credential_generation(
+                    conn,
+                    &envelope.integration_id,
+                )?;
+            if current.is_some_and(|value| envelope.credential_generation < value) {
                 return Err(
                     crate::integration_replication::IntegrationContractError::NonMonotonic {
                         field: "credential_generation",
@@ -131,67 +117,26 @@ pub(in crate::db) fn upsert_integration_credential_envelope_record(
                     .to_string(),
                 );
             }
-            if let Some((hlc, issuer)) = conn
-                .query_row(
-                    "SELECT hlc, issuer_node_id FROM integration_credential_envelopes
-                 WHERE envelope_id = ?1",
-                    params![envelope_id],
-                    |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
-                )
-                .optional()
-                .map_err(storage)?
+            if let Some(current) =
+                ark_store::integration_replication::load_integration_credential_envelope_record(
+                    conn,
+                    &envelope.integration_id,
+                    &envelope.recipient_node_id,
+                    envelope.credential_generation,
+                )?
             {
                 if !envelope_version_is_newer(
                     &envelope.hlc,
                     &envelope.issuer_node_id,
-                    &hlc,
-                    &issuer,
+                    &current.hlc,
+                    &current.issuer_node_id,
                 ) {
                     return Err(IntegrationContractError::NonMonotonic { field: "hlc" }.to_string());
                 }
             }
-            conn.execute(
-                "INSERT INTO integration_credential_envelopes
-             (envelope_id, integration_id, recipient_node_id, grant_epoch,
-              credential_generation, refresh_fencing_token, key_id, algorithm, nonce, \
-              ciphertext,
-              authenticated_metadata_json, issuer_node_id, issued_at, revision, hlc)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
-             ON CONFLICT(envelope_id) DO UPDATE SET
-                integration_id = excluded.integration_id,
-                recipient_node_id = excluded.recipient_node_id,
-                grant_epoch = excluded.grant_epoch,
-                credential_generation = excluded.credential_generation,
-                refresh_fencing_token = excluded.refresh_fencing_token,
-                key_id = excluded.key_id,
-                algorithm = excluded.algorithm,
-                nonce = excluded.nonce,
-                ciphertext = excluded.ciphertext,
-                authenticated_metadata_json = excluded.authenticated_metadata_json,
-                issuer_node_id = excluded.issuer_node_id,
-                issued_at = excluded.issued_at,
-                revision = excluded.revision,
-                hlc = excluded.hlc",
-                params![
-                    envelope_id,
-                    envelope.integration_id,
-                    envelope.recipient_node_id,
-                    epoch,
-                    generation,
-                    refresh_fence,
-                    envelope.key_id,
-                    envelope.algorithm,
-                    envelope.nonce,
-                    envelope.ciphertext,
-                    metadata,
-                    envelope.issuer_node_id,
-                    envelope.issued_at,
-                    revision,
-                    envelope.hlc,
-                ],
+            ark_store::integration_replication::upsert_integration_credential_envelope_record(
+                conn, envelope,
             )
-            .map_err(storage)?;
-            Ok(())
         },
     )
 }

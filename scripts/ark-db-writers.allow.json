@@ -147,11 +147,6 @@
       "count": 4
     },
     {
-      "path": "core/crates/ark-core/src/db/integration_replication_credentials.rs",
-      "category": "SQLite mutation API",
-      "count": 1
-    },
-    {
       "path": "core/crates/ark-core/src/db/integration_replication_publication.rs",
       "category": "SQLite mutation API",
       "count": 4
@@ -388,6 +383,11 @@
     },
     {
       "path": "core/crates/ark-store/src/integration_replication/leases.rs",
+      "category": "SQLite mutation API",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-store/src/integration_replication/credentials.rs",
       "category": "SQLite mutation API",
       "count": 1
     }

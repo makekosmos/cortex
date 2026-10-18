@@ -1,6 +1,90 @@
-use ark_domain::integration_replication::IntegrationCredentialEnvelope;
+use ark_domain::integration_replication::{envelope_entity_id, IntegrationCredentialEnvelope};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::Value;
+
+pub fn load_max_integration_credential_generation(
+    connection: &Connection,
+    integration_id: &str,
+) -> Result<Option<u64>, String> {
+    let generation = connection
+        .query_row(
+            "SELECT MAX(credential_generation) FROM integration_credential_envelopes
+             WHERE integration_id = ?1",
+            params![integration_id],
+            |row| row.get::<_, Option<i64>>(0),
+        )
+        .map_err(|error| error.to_string())?;
+    generation
+        .map(|value| u64_value(value, "credential_generation"))
+        .transpose()
+}
+
+pub fn upsert_integration_credential_envelope_record(
+    connection: &Connection,
+    envelope: &IntegrationCredentialEnvelope,
+) -> Result<(), String> {
+    let envelope_id = envelope_entity_id(
+        &envelope.integration_id,
+        &envelope.recipient_node_id,
+        envelope.credential_generation,
+    );
+    let epoch = sqlite_i64(envelope.grant_epoch, "grant_epoch")?;
+    let generation = sqlite_i64(envelope.credential_generation, "credential_generation")?;
+    let refresh_fence = sqlite_i64(envelope.refresh_fencing_token, "refresh_fencing_token")?;
+    let revision = sqlite_i64(envelope.revision, "revision")?;
+    let metadata = envelope
+        .authenticated_metadata
+        .as_ref()
+        .map(serde_json::to_string)
+        .transpose()
+        .map_err(|error| error.to_string())?;
+    connection
+        .execute(
+            "INSERT INTO integration_credential_envelopes
+             (envelope_id, integration_id, recipient_node_id, grant_epoch,
+              credential_generation, refresh_fencing_token, key_id, algorithm, nonce, ciphertext,
+              authenticated_metadata_json, issuer_node_id, issued_at, revision, hlc)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
+             ON CONFLICT(envelope_id) DO UPDATE SET
+                integration_id = excluded.integration_id,
+                recipient_node_id = excluded.recipient_node_id,
+                grant_epoch = excluded.grant_epoch,
+                credential_generation = excluded.credential_generation,
+                refresh_fencing_token = excluded.refresh_fencing_token,
+                key_id = excluded.key_id,
+                algorithm = excluded.algorithm,
+                nonce = excluded.nonce,
+                ciphertext = excluded.ciphertext,
+                authenticated_metadata_json = excluded.authenticated_metadata_json,
+                issuer_node_id = excluded.issuer_node_id,
+                issued_at = excluded.issued_at,
+                revision = excluded.revision,
+                hlc = excluded.hlc",
+            params![
+                envelope_id,
+                envelope.integration_id,
+                envelope.recipient_node_id,
+                epoch,
+                generation,
+                refresh_fence,
+                envelope.key_id,
+                envelope.algorithm,
+                envelope.nonce,
+                envelope.ciphertext,
+                metadata,
+                envelope.issuer_node_id,
+                envelope.issued_at,
+                revision,
+                envelope.hlc,
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+fn sqlite_i64(value: u64, field: &str) -> Result<i64, String> {
+    i64::try_from(value).map_err(|_| format!("{field} exceeds SQLite INTEGER range"))
+}
 
 fn u64_value(value: i64, field: &str) -> Result<u64, String> {
     u64::try_from(value).map_err(|_| format!("{field} is negative"))
@@ -131,33 +215,8 @@ mod tests {
             revision: 3,
             hlc: "2026-08-30T00:00:00.000Z:000003:issuer".to_owned(),
         };
-        connection
-            .execute(
-                "INSERT INTO integration_credential_envelopes
-                 (envelope_id, integration_id, recipient_node_id, grant_epoch,
-                  credential_generation, refresh_fencing_token, key_id, algorithm, nonce,
-                  ciphertext, authenticated_metadata_json, issuer_node_id, issued_at,
-                  revision, hlc)
-                 VALUES ('id', ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
-                params![
-                    envelope.integration_id,
-                    envelope.recipient_node_id,
-                    envelope.grant_epoch,
-                    envelope.credential_generation,
-                    envelope.refresh_fencing_token,
-                    envelope.key_id,
-                    envelope.algorithm,
-                    envelope.nonce,
-                    envelope.ciphertext,
-                    serde_json::to_string(&envelope.authenticated_metadata)
-                        .expect("metadata serializes"),
-                    envelope.issuer_node_id,
-                    envelope.issued_at,
-                    envelope.revision,
-                    envelope.hlc,
-                ],
-            )
-            .expect("fixture envelope inserts");
+        upsert_integration_credential_envelope_record(&connection, &envelope)
+            .expect("envelope write succeeds");
 
         assert_eq!(
             load_integration_credential_envelope_record(&connection, "app", "device", 3)
@@ -168,6 +227,16 @@ mod tests {
             load_latest_integration_credential_envelope_record(&connection, "app", "device")
                 .expect("latest query succeeds"),
             Some(envelope)
+        );
+        assert_eq!(
+            load_max_integration_credential_generation(&connection, "app")
+                .expect("maximum generation query succeeds"),
+            Some(3)
+        );
+        assert_eq!(
+            load_max_integration_credential_generation(&connection, "missing")
+                .expect("missing maximum generation query succeeds"),
+            None
         );
         assert!(
             load_latest_integration_credential_envelope_record(&connection, "app", "missing")
