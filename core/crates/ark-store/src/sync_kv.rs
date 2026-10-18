@@ -1,5 +1,7 @@
 use rusqlite::{params, Connection, OptionalExtension};
 
+pub const DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY: &str = "device_registry.local_device_id";
+
 pub fn get_sync_kv(conn: &Connection, key: &str) -> Result<Option<String>, String> {
     conn.query_row(
         "SELECT value FROM sync_kv WHERE key = ?1",

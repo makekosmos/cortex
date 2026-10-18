@@ -54,7 +54,7 @@ impl RestoreJournal {
             let capsule =
                 Connection::open_with_flags(&capsule_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
                     .map_err(|error| format!("restore recovery capsule open failed: {error}"))?;
-            ark_store::open::check_integrity(&capsule)?;
+            crate::open::check_integrity(&capsule)?;
             if super::schema_fingerprint(&capsule)? != expected_schema {
                 return Err("restore recovery capsule schema changed during backup".into());
             }
@@ -125,7 +125,7 @@ impl RestoreJournal {
     }
 }
 
-pub(crate) fn recover_interrupted_restore(db_path: &str) -> Result<(), String> {
+pub fn recover_interrupted_restore(db_path: &str) -> Result<(), String> {
     let directory = recovery_directory(db_path)?;
     let intent_path = intent_path(db_path, &directory)?;
     if !intent_path.exists() {
@@ -165,7 +165,7 @@ pub(crate) fn recover_interrupted_restore(db_path: &str) -> Result<(), String> {
     }
     let capsule = Connection::open_with_flags(&capsule_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
         .map_err(|error| format!("restore recovery capsule open failed: {error}"))?;
-    ark_store::open::check_integrity(&capsule)?;
+    crate::open::check_integrity(&capsule)?;
     drop(capsule);
 
     let mut live = Connection::open(db_path)
@@ -176,7 +176,7 @@ pub(crate) fn recover_interrupted_restore(db_path: &str) -> Result<(), String> {
         None::<fn(rusqlite::backup::Progress)>,
     )
     .map_err(|error| format!("restore recovery rollback failed: {error}"))?;
-    ark_store::open::check_integrity(&live)?;
+    crate::open::check_integrity(&live)?;
     drop(live);
 
     fs::remove_file(&intent_path)
@@ -250,84 +250,79 @@ fn intent_path(db_path: &str, directory: &Path) -> Result<PathBuf, String> {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn production_actor_rolls_back_an_interrupted_restore_before_ready() {
-        let directory = tempfile::tempdir().unwrap();
-        let db_path = directory.path().join("ark.db");
-        let db_path_text = db_path.to_str().unwrap();
-        let connection = ark_store::open::open_db(db_path_text).unwrap();
-        crate::db::init_schema(&connection).unwrap();
-        connection
-            .execute_batch(
-                "CREATE TABLE restore_journal_test(value TEXT NOT NULL);
-                 INSERT INTO restore_journal_test VALUES ('before');",
-            )
-            .unwrap();
-        let expected_schema = super::super::schema_fingerprint(&connection).unwrap();
-        let _journal = RestoreJournal::begin(&connection, db_path_text, &expected_schema).unwrap();
-        connection
-            .execute("UPDATE restore_journal_test SET value = 'partial'", [])
-            .unwrap();
-        drop(connection);
-
-        let (handle, mut owner) =
-            crate::db::DbHandle::open(db_path_text.to_owned(), "device-a".into())
-                .await
-                .unwrap();
-        let value = handle.with_connection(|connection| {
-            connection
-                .query_row("SELECT value FROM restore_journal_test", [], |row| {
-                    row.get::<_, String>(0)
-                })
-                .unwrap()
-        });
-        assert_eq!(value, "before");
-        assert!(
-            !intent_path(db_path_text, &recovery_directory(db_path_text).unwrap())
-                .unwrap()
-                .exists()
-        );
-        owner
-            .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
-            .await
-            .unwrap();
-
-        recover_interrupted_restore(db_path_text).unwrap();
-    }
-
     #[test]
-    fn invalid_capsule_keeps_intent_and_does_not_mutate_live_database() {
-        let directory = tempfile::tempdir().unwrap();
+    fn recovery_rolls_back_an_interrupted_restore_before_returning() {
+        let directory = tempfile::tempdir().expect("test operation succeeds");
         let db_path = directory.path().join("ark.db");
-        let db_path_text = db_path.to_str().unwrap();
-        let connection = Connection::open(&db_path).unwrap();
+        let db_path_text = db_path.to_str().expect("test operation succeeds");
+        let connection = crate::open::open_db(db_path_text).expect("test operation succeeds");
         connection
             .execute_batch(
                 "CREATE TABLE restore_journal_test(value TEXT NOT NULL);
                  INSERT INTO restore_journal_test VALUES ('before');",
             )
-            .unwrap();
-        let expected_schema = super::super::schema_fingerprint(&connection).unwrap();
-        let journal = RestoreJournal::begin(&connection, db_path_text, &expected_schema).unwrap();
+            .expect("test operation succeeds");
+        let expected_schema =
+            super::super::schema_fingerprint(&connection).expect("test operation succeeds");
+        let _journal = RestoreJournal::begin(&connection, db_path_text, &expected_schema)
+            .expect("test operation succeeds");
         connection
             .execute("UPDATE restore_journal_test SET value = 'partial'", [])
-            .unwrap();
-        fs::write(journal.capsule_path(), b"corrupt capsule").unwrap();
-        drop(journal);
+            .expect("test operation succeeds");
         drop(connection);
 
-        assert!(recover_interrupted_restore(db_path_text).is_err());
-        let live = Connection::open(&db_path).unwrap();
+        recover_interrupted_restore(db_path_text).expect("test operation succeeds");
+        let live = Connection::open(&db_path).expect("test operation succeeds");
         let value: String = live
             .query_row("SELECT value FROM restore_journal_test", [], |row| {
                 row.get(0)
             })
-            .unwrap();
+            .expect("test operation succeeds");
+        assert_eq!(value, "before");
+        assert!(!intent_path(
+            db_path_text,
+            &recovery_directory(db_path_text).expect("test operation succeeds")
+        )
+        .expect("test operation succeeds")
+        .exists());
+    }
+
+    #[test]
+    fn invalid_capsule_keeps_intent_and_does_not_mutate_live_database() {
+        let directory = tempfile::tempdir().expect("test operation succeeds");
+        let db_path = directory.path().join("ark.db");
+        let db_path_text = db_path.to_str().expect("test operation succeeds");
+        let connection = Connection::open(&db_path).expect("test operation succeeds");
+        connection
+            .execute_batch(
+                "CREATE TABLE restore_journal_test(value TEXT NOT NULL);
+                 INSERT INTO restore_journal_test VALUES ('before');",
+            )
+            .expect("test operation succeeds");
+        let expected_schema =
+            super::super::schema_fingerprint(&connection).expect("test operation succeeds");
+        let journal = RestoreJournal::begin(&connection, db_path_text, &expected_schema)
+            .expect("test operation succeeds");
+        connection
+            .execute("UPDATE restore_journal_test SET value = 'partial'", [])
+            .expect("test operation succeeds");
+        fs::write(journal.capsule_path(), b"corrupt capsule").expect("test operation succeeds");
+        drop(journal);
+        drop(connection);
+
+        assert!(recover_interrupted_restore(db_path_text).is_err());
+        let live = Connection::open(&db_path).expect("test operation succeeds");
+        let value: String = live
+            .query_row("SELECT value FROM restore_journal_test", [], |row| {
+                row.get(0)
+            })
+            .expect("test operation succeeds");
         assert_eq!(value, "partial");
-        assert!(
-            intent_path(db_path_text, &recovery_directory(db_path_text).unwrap())
-                .unwrap()
-                .exists()
-        );
+        assert!(intent_path(
+            db_path_text,
+            &recovery_directory(db_path_text).expect("test operation succeeds")
+        )
+        .expect("test operation succeeds")
+        .exists());
     }
 }

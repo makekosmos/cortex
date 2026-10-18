@@ -28,7 +28,7 @@ fn make_snapshot(conn: &Connection, db_path: &str, name: &str) {
 
 #[test]
 fn snapshot_id_validation_accepts_only_plain_basenames() {
-    assert!(validate_snapshot_id("ark.db.backup-2026-09-15").is_ok());
+    assert!(validate_snapshot_id_for_test("ark.db.backup-2026-09-15").is_ok());
     for bad in [
         "",
         ".hidden",
@@ -40,7 +40,10 @@ fn snapshot_id_validation_accepts_only_plain_basenames() {
         "C:\\abs.db",
         "/abs.db",
     ] {
-        assert!(validate_snapshot_id(bad).is_err(), "rejected: {bad:?}");
+        assert!(
+            validate_snapshot_id_for_test(bad).is_err(),
+            "rejected: {bad:?}"
+        );
     }
 }
 
@@ -78,12 +81,12 @@ fn restore_rolls_back_to_pre_restore_state_when_post_verify_fails() {
     let failing_verify = |_conn: &Connection, _fp: &[String]| -> Result<(), String> {
         Err("injected post-verify failure".to_string())
     };
-    let result = restore_snapshot_impl(
+    let result = restore_snapshot_with_hooks(
         &mut conn,
         &db_path,
         "ark.db.backup-rollback",
-        &failing_verify,
-        &default_rollback_restore,
+        failing_verify,
+        default_rollback_restore_for_test,
     );
     let err = result.expect_err("post-verify failure must fail the restore");
     assert!(
@@ -126,12 +129,12 @@ fn restore_preserves_rollback_snapshot_when_verify_and_rollback_both_fail() {
     let failing_rollback = |_conn: &mut Connection, _path: &Path| -> Result<(), String> {
         Err("injected rollback failure".to_string())
     };
-    let result = restore_snapshot_impl(
+    let result = restore_snapshot_with_hooks(
         &mut conn,
         &db_path,
         "ark.db.backup-dblfail",
-        &failing_verify,
-        &failing_rollback,
+        failing_verify,
+        failing_rollback,
     );
     let err = result.expect_err("double failure must fail the restore");
     assert!(

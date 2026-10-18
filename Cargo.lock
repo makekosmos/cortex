@@ -221,10 +221,14 @@ version = "0.1.0"
 dependencies = [
  "ark-application",
  "ark-domain",
+ "rand 0.8.7",
  "rusqlite",
  "semver",
+ "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tempfile",
+ "windows",
 ]
 
 [[package]]

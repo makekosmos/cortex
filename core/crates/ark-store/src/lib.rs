@@ -4,6 +4,7 @@ pub mod data_volume;
 pub mod integration_replication;
 pub mod open;
 pub mod schema;
+pub mod snapshot;
 pub mod sync_kv;
 pub mod type_registry;
 pub mod usage_sync_log;

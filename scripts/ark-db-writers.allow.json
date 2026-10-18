@@ -207,17 +207,17 @@
       "count": 13
     },
     {
-      "path": "core/crates/ark-core/src/db/snapshot.rs",
+      "path": "core/crates/ark-store/src/snapshot.rs",
       "category": "connection lifecycle",
       "count": 1
     },
     {
-      "path": "core/crates/ark-core/src/db/snapshot/restore.rs",
+      "path": "core/crates/ark-store/src/snapshot/restore.rs",
       "category": "connection lifecycle",
       "count": 2
     },
     {
-      "path": "core/crates/ark-core/src/db/snapshot/restore_journal.rs",
+      "path": "core/crates/ark-store/src/snapshot/restore_journal.rs",
       "category": "connection lifecycle",
       "count": 2
     },
@@ -292,7 +292,7 @@
       "count": 2
     },
     {
-      "path": "core/crates/ark-core/src/db/snapshot/recovery.rs",
+      "path": "core/crates/ark-store/src/snapshot/recovery.rs",
       "category": "SQLite mutation API",
       "count": 6
     },

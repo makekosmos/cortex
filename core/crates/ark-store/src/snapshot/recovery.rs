@@ -2,7 +2,7 @@ use rusqlite::{params, Connection, OptionalExtension, Transaction};
 
 const IDENTITY_KEYS: [&str; 3] = [
     "iroh.secret_key",
-    crate::db::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY,
+    crate::sync_kv::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY,
     "sync.peer_transport_keys",
 ];
 
@@ -52,7 +52,7 @@ pub(super) fn preserve_live_device_identity(
         .commit()
         .map_err(|error| format!("restore identity commit failed: {error}"))?;
     verify_live_identity(&target, &identity)?;
-    ark_store::open::check_integrity(&target)
+    crate::open::check_integrity(&target)
 }
 
 fn load_live_identity(connection: &Connection) -> Result<LiveDeviceIdentity, String> {

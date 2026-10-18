@@ -58,6 +58,7 @@ windows = { version = "0.62", features = [
 ] }
 
 [dev-dependencies]
+ark-store = { path = "../ark-store", features = ["test-support"] }
 iroh = { version = "1.0.0", default-features = false, features = ["tls-ring"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
 tempfile.workspace = true

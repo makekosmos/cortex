@@ -9,8 +9,6 @@ mod handle;
 mod operation_receipt;
 pub(crate) use handle::{DbHandle, DbOwner};
 
-pub(crate) const DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY: &str = "device_registry.local_device_id";
-
 #[cfg(test)]
 pub(crate) use commands::DeviceEnrollmentOutcome;
 pub(crate) use commands::{

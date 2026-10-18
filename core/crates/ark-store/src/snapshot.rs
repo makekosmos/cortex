@@ -33,10 +33,15 @@ use rusqlite::{Connection, OpenFlags};
 use serde::Serialize;
 mod manifest;
 mod recovery;
+mod restore;
 mod restore_journal;
-pub(in crate::db) use manifest::backup_to_file_chunked_verified;
+pub use manifest::backup_to_file_chunked_verified;
 use manifest::{is_manifest_file, is_uncommitted_backup, verify_snapshot_manifest};
-pub(crate) use restore_journal::recover_interrupted_restore;
+pub use restore::restore_snapshot;
+#[cfg(feature = "test-support")]
+#[doc(hidden)]
+pub use restore::restore_snapshot_with_hooks;
+pub use restore_journal::recover_interrupted_restore;
 
 pub(super) fn sync_file(path: &Path) -> io::Result<()> {
     fs::OpenOptions::new()
@@ -89,7 +94,7 @@ pub fn backups_dir(db_path: &str) -> PathBuf {
 
 /// `backup_id` обязан быть чистым basename'ом: ровно один `Component::Normal`,
 /// без `..`, разделителей и точечных (staging/hidden) имён.
-pub(in crate::db) fn validate_snapshot_id(id: &str) -> Result<(), String> {
+fn validate_snapshot_id(id: &str) -> Result<(), String> {
     // Reject separators explicitly: Path::components() treats `\` as a normal
     // character on Unix, so the component check alone is platform-dependent.
     if id.is_empty()
@@ -105,6 +110,23 @@ pub(in crate::db) fn validate_snapshot_id(id: &str) -> Result<(), String> {
         (Some(Component::Normal(name)), None) if name == std::ffi::OsStr::new(id) => Ok(()),
         _ => Err(format!("invalid snapshot id: {id:?}")),
     }
+}
+
+#[cfg(feature = "test-support")]
+#[doc(hidden)]
+pub fn validate_snapshot_id_for_test(id: &str) -> Result<(), String> {
+    validate_snapshot_id(id)
+}
+
+#[cfg(feature = "test-support")]
+#[doc(hidden)]
+pub fn leave_restore_journal_for_test(
+    connection: &Connection,
+    db_path: &str,
+) -> Result<(), String> {
+    let expected_schema = schema_fingerprint(connection)?;
+    let _journal = restore_journal::RestoreJournal::begin(connection, db_path, &expected_schema)?;
+    Ok(())
 }
 
 /// Разрешённый путь snapshot'а: `<backups>/<basename>` + проверка, что
@@ -277,7 +299,7 @@ fn validate_staged(
         Ok(conn) => conn,
         Err(e) => return Ok((false, false, Some(format!("open failed: {e}")))),
     };
-    if let Err(e) = ark_store::open::check_integrity(&src) {
+    if let Err(e) = crate::open::check_integrity(&src) {
         return Ok((false, false, Some(e)));
     }
     let src_fp = schema_fingerprint(&src)?;
@@ -368,16 +390,16 @@ pub fn validate_snapshot(
 }
 
 /// Seam для тестов: `(live_conn, expected_snapshot_fingerprint)`.
-type PostVerify = dyn Fn(&Connection, &[String]) -> Result<(), String>;
+type PostVerify<'a> = dyn Fn(&Connection, &[String]) -> Result<(), String> + 'a;
 
 /// Seam для тестов: `(live_conn, rollback_snapshot_path)` — откат live DB
 /// из pre-restore snapshot'а.
-type RollbackRestore = dyn Fn(&mut Connection, &Path) -> Result<(), String>;
+type RollbackRestore<'a> = dyn Fn(&mut Connection, &Path) -> Result<(), String> + 'a;
 
 /// Post-restore verification по умолчанию: integrity live DB + schema
 /// fingerprint совпадает с fingerprint'ом применённого snapshot'а.
 fn default_post_verify(conn: &Connection, expected: &[String]) -> Result<(), String> {
-    ark_store::open::check_integrity(conn)?;
+    crate::open::check_integrity(conn)?;
     let actual = schema_fingerprint(conn)?;
     if actual != expected {
         return Err("post-restore schema fingerprint mismatch".to_string());
@@ -386,10 +408,7 @@ fn default_post_verify(conn: &Connection, expected: &[String]) -> Result<(), Str
 }
 
 /// Откат по умолчанию: Online Backup из rollback-файла обратно в live conn.
-pub(in crate::db) fn default_rollback_restore(
-    conn: &mut Connection,
-    path: &Path,
-) -> Result<(), String> {
+fn default_rollback_restore(conn: &mut Connection, path: &Path) -> Result<(), String> {
     conn.restore(
         rusqlite::DatabaseName::Main,
         path,
@@ -398,4 +417,8 @@ pub(in crate::db) fn default_rollback_restore(
     .map_err(|e| e.to_string())
 }
 
-include!("snapshot/restore.rs");
+#[cfg(feature = "test-support")]
+#[doc(hidden)]
+pub fn default_rollback_restore_for_test(conn: &mut Connection, path: &Path) -> Result<(), String> {
+    default_rollback_restore(conn, path)
+}

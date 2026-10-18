@@ -1,11 +1,9 @@
-use super::super::{
-    sealed, CommandClass, CommandContext, DbCommand, DbError, DbQuery,
-    DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY,
-};
+use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError, DbQuery};
 use ark_domain::device_registry::{
     state::DeviceRegistry, DeviceId, DeviceRecord, DisplayName, RegistryEvent, RegistryHead,
     SigningPublicKey,
 };
+use ark_store::sync_kv::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY;
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use serde::Serialize;
 use sha2::Digest;

@@ -91,12 +91,12 @@ impl DbMaintenanceCommand for RestorePostVerifyFailure {
             )
             .map_err(|error| error.to_string())
         };
-        crate::db::snapshot::restore_snapshot_impl(
+        ark_store::snapshot::restore_snapshot_with_hooks(
             connection,
             &self.db_path,
             &self.backup_id,
-            &fail_verification,
-            &rollback_succeeds,
+            fail_verification,
+            rollback_succeeds,
         )
         .map(|_| ())
         .map_err(DbError::RestoreFailed)
@@ -109,6 +109,48 @@ async fn open_failure_actor() -> (tempfile::TempDir, DbHandle, DbOwner) {
         .await
         .unwrap();
     (directory, handle, owner)
+}
+
+#[tokio::test]
+async fn production_actor_recovers_interrupted_restore_before_ready() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = actor_path(&directory);
+    let (handle, mut owner) = DbHandle::open(path.clone(), "actor-test-device".into())
+        .await
+        .unwrap();
+    handle.with_connection(|connection| {
+        connection
+            .execute_batch(
+                "CREATE TABLE restore_journal_test(value TEXT NOT NULL);
+                 INSERT INTO restore_journal_test VALUES ('before');",
+            )
+            .unwrap();
+        ark_store::snapshot::leave_restore_journal_for_test(connection, &path).unwrap();
+        connection
+            .execute("UPDATE restore_journal_test SET value = 'partial'", [])
+            .unwrap();
+    });
+    owner
+        .shutdown(std::time::Instant::now() + Duration::from_secs(2))
+        .await
+        .unwrap();
+
+    let (handle, mut owner) = DbHandle::open(path.clone(), "actor-test-device".into())
+        .await
+        .unwrap();
+    let value = handle.with_connection(|connection| {
+        connection
+            .query_row("SELECT value FROM restore_journal_test", [], |row| {
+                row.get::<_, String>(0)
+            })
+            .unwrap()
+    });
+    assert_eq!(value, "before");
+    assert!(ark_store::snapshot::recover_interrupted_restore(&path).is_ok());
+    owner
+        .shutdown(std::time::Instant::now() + Duration::from_secs(2))
+        .await
+        .unwrap();
 }
 
 fn failure_probe_state(handle: &DbHandle, operation_id: &str) -> (i64, i64) {

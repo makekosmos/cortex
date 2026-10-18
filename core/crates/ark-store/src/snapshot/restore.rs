@@ -1,3 +1,13 @@
+use std::fs;
+use std::path::Path;
+
+use rusqlite::{Connection, OpenFlags};
+
+use super::{
+    default_post_verify, default_rollback_restore, recovery, restore_journal, schema_fingerprint,
+    stage_snapshot, PostVerify, RestoreReport, RollbackRestore,
+};
+
 /// `db_backup_restore`: атомарно восстанавливает live DB из snapshot'а.
 /// Вызывается под глобальным DB mutex из RPC handler'а.
 /// Параллельных запросов нет; backup остановлен через `BACKUP_GATE`.
@@ -15,12 +25,12 @@ pub fn restore_snapshot(
     )
 }
 
-pub(in crate::db) fn restore_snapshot_impl(
+fn restore_snapshot_impl(
     conn: &mut Connection,
     db_path: &str,
     id: &str,
-    post_verify: &PostVerify,
-    rollback_restore: &RollbackRestore,
+    post_verify: &PostVerify<'_>,
+    rollback_restore: &RollbackRestore<'_>,
 ) -> Result<RestoreReport, String> {
     // 1. Resolve + stage (no-follow, содержимое frozen до apply).
     let staging = stage_snapshot(db_path, id)?;
@@ -32,10 +42,10 @@ pub(in crate::db) fn restore_snapshot_impl(
     let validated = (|| -> Result<(Vec<String>, i64), String> {
         let src = Connection::open_with_flags(&staging, OpenFlags::SQLITE_OPEN_READ_ONLY)
             .map_err(|e| format!("snapshot open failed: {e}"))?;
-        ark_store::open::check_integrity(&src)?;
+        crate::open::check_integrity(&src)?;
         Ok((
             schema_fingerprint(&src)?,
-            ark_store::committed_feed::watermark(&src)?,
+            crate::committed_feed::watermark(&src)?,
         ))
     })();
     let (snapshot_fp, snapshot_feed_watermark) = match validated {
@@ -55,7 +65,7 @@ pub(in crate::db) fn restore_snapshot_impl(
     // available for reuse. The feed stores locators, not entity payloads, so
     // it cannot reconstruct post-snapshot changes. Refuse before changing the
     // live DB; a recovery/resnapshot protocol can safely relax this boundary.
-    let live_feed_watermark = match ark_store::committed_feed::watermark(conn) {
+    let live_feed_watermark = match crate::committed_feed::watermark(conn) {
         Ok(watermark) => watermark,
         Err(error) => {
             cleanup_staging(&staging);
@@ -201,4 +211,16 @@ pub(in crate::db) fn restore_snapshot_impl(
         .map_err(|error| format!("restore recovery required: {error}"))?;
     cleanup_staging(&staging);
     Ok(report)
+}
+
+#[cfg(feature = "test-support")]
+#[doc(hidden)]
+pub fn restore_snapshot_with_hooks(
+    conn: &mut Connection,
+    db_path: &str,
+    id: &str,
+    post_verify: impl Fn(&Connection, &[String]) -> Result<(), String>,
+    rollback_restore: impl Fn(&mut Connection, &Path) -> Result<(), String>,
+) -> Result<RestoreReport, String> {
+    restore_snapshot_impl(conn, db_path, id, &post_verify, &rollback_restore)
 }

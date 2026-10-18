@@ -6,7 +6,6 @@ mod legacy;
 mod load;
 mod objects;
 mod open;
-mod snapshot;
 mod sync;
 mod task_merge;
 mod usage;
@@ -15,6 +14,13 @@ pub use ark_application::sync_storage::{
     CommittedFeedDeliveryPage, CommittedFeedEntry, FeedSnapshot, InitialSnapshot, OutboundAck,
     OutboundProgress,
 };
+pub(crate) use ark_store::snapshot::recover_interrupted_restore;
+pub use ark_store::snapshot::restore_snapshot;
+pub use ark_store::snapshot::{
+    backups_dir, list_snapshots, schema_fingerprint, validate_snapshot, RestoreReport,
+    SnapshotEntry, SnapshotValidation,
+};
+pub(crate) use ark_store::sync_kv::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY;
 pub(crate) use backend::SqliteLegacyMutationSession;
 pub(crate) use backend::SqliteObjectMutationSession;
 pub(crate) use backend::SqliteObjectWriteSession;
@@ -50,7 +56,6 @@ pub(crate) use command::{
     TrackedAppUpsertCommand, TypeReadQuery, UpsertExternalRefCommand, UpsertObjectLinkCommand,
     UpsertObjectTypeCommand, UsageCompleteThroughQuery, UsageReadQuery,
     ValidateOutboundSignedFrameQuery, VerifyRegistryHandshakeQuery,
-    DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY,
 };
 pub use committed_feed::{
     acknowledge_outbound, acknowledge_outbound_identity, append_committed_change,
@@ -89,12 +94,6 @@ pub use open::{
     is_sequenced_usage_entity,
 };
 pub use open::{count_pending_for_type, insert_pending_object};
-pub(crate) use snapshot::recover_interrupted_restore;
-pub use snapshot::restore_snapshot;
-pub use snapshot::{
-    backups_dir, list_snapshots, schema_fingerprint, validate_snapshot, RestoreReport,
-    SnapshotEntry, SnapshotValidation,
-};
 pub(crate) use sync::upsert_sync_tombstone;
 pub use sync::{
     bump_sync_version_vector, delete_sync_tombstone, ensure_usage_sequence_migrated,
@@ -160,7 +159,6 @@ mod tests {
 
     use super::objects::object_search_fts_exists;
     use super::open::replay_pending_for_type;
-    use super::snapshot::{default_rollback_restore, restore_snapshot_impl, validate_snapshot_id};
     use super::usage::merge_top_apps;
     use super::*;
     use crate::hlc::HLC;
@@ -170,6 +168,10 @@ mod tests {
     use ark_application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
     use ark_store::open::open_db;
     use ark_store::schema::*;
+    use ark_store::snapshot::{
+        default_rollback_restore_for_test, restore_snapshot_with_hooks,
+        validate_snapshot_id_for_test,
+    };
     use ark_store::usage_sync_log::{compact_usage_sync_log, usage_log_complete_through};
     use rusqlite::{params, Connection, OptionalExtension};
     use serde_json::{json, Value};
