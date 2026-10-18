@@ -105,7 +105,7 @@ pub(super) async fn upsert_usage_span(
 }
 
 /// Один батч компакции журнала usage-синка (правило — в
-/// `db::compact_usage_sync_log`). Возвращает `has_more`, чтобы Engine loop
+/// `ark-store::usage_sync_log`). Возвращает `has_more`, чтобы Engine loop
 /// знал, когда остановиться.
 pub(super) async fn compact_usage_sync_log(
     state: &Arc<ServiceState>,
@@ -115,7 +115,7 @@ pub(super) async fn compact_usage_sync_log(
 ) -> Result<Value, String> {
     let days = older_than_days
         .filter(|days| *days > 0)
-        .unwrap_or(db::USAGE_SYNC_LOG_RETENTION_DAYS);
+        .unwrap_or(ark_store::usage_sync_log::USAGE_SYNC_LOG_RETENTION_DAYS);
     let cutoff = (chrono::Utc::now() - chrono::Duration::days(days))
         .format("%Y-%m-%dT%H:%M:%S%.3fZ")
         .to_string();

@@ -1,8 +1,7 @@
 use super::super::{sealed, CommandClass, CommandContext, DbError, DbQuery};
 use crate::db::{
     committed_feed_snapshot, get_sync_kv, read_committed_feed_delivery_page,
-    read_committed_feed_page, usage_log_complete_through, CommittedFeedEntry, FeedSnapshot,
-    SqliteStorageBackend,
+    read_committed_feed_page, CommittedFeedEntry, FeedSnapshot, SqliteStorageBackend,
 };
 use crate::types::{SyncEntity, VersionVector};
 use ark_application::sync_storage::CommittedFeedDeliveryPage;
@@ -209,7 +208,10 @@ impl DbQuery for UsageCompleteThroughQuery {
             return Err(DbError::Invalid("sync query class mismatch".into()));
         }
         context.require_sync_peer_or_system()?;
-        Ok(usage_log_complete_through(connection, None).unwrap_or_default())
+        Ok(
+            ark_store::usage_sync_log::usage_log_complete_through(connection, None)
+                .unwrap_or_default(),
+        )
     }
 }
 

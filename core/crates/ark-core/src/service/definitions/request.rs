@@ -310,7 +310,8 @@ pub(crate) enum Request {
     },
 
     /// KOS-302: один батч компакции `usage_sync_log` (правило — в
-    /// `db::compact_usage_sync_log`). Engine maintenance loop вызывает его
+    /// Компактор usage-журнала находится в
+    /// `ark-store::usage_sync_log`). Engine maintenance loop вызывает его
     /// повторно: каждый вызов — короткая транзакция ≤ batch_limit строк,
     /// worker остаётся отзывчивым между батчами.
     CompactUsageSyncLog {
@@ -320,7 +321,7 @@ pub(crate) enum Request {
         batch_limit: Option<i64>,
         /// The device id our own usage writes are stamped with — own refs
         /// are bounded by the journal head; anything else is bounded by our
-        /// contiguous cursor (rule 3 in `db::compact_usage_sync_log`).
+        /// contiguous cursor (rule 3 in `ark-store::usage_sync_log`).
         #[serde(default)]
         device_id: Option<String>,
     },

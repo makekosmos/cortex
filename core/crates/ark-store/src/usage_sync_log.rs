@@ -1,10 +1,9 @@
-use rusqlite::{params_from_iter, Connection};
+use rusqlite::{params_from_iter, Connection, OptionalExtension};
 use std::collections::HashMap;
 
-use crate::types::VersionVector;
+use ark_domain::types::VersionVector;
 
-use super::open::VERSION_VECTOR_KEY;
-use super::sync::get_sync_kv;
+use crate::VERSION_VECTOR_KEY;
 
 // ---------------------------------------------------------------------------
 // usage_sync_log compaction (KOS-302)
@@ -62,7 +61,14 @@ use super::sync::get_sync_kv;
 pub const USAGE_SYNC_LOG_RETENTION_DAYS: i64 = 30;
 
 fn usage_cursors(conn: &Connection) -> Result<Vec<(String, i64)>, String> {
-    let raw = get_sync_kv(conn, VERSION_VECTOR_KEY)?;
+    let raw = conn
+        .query_row(
+            "SELECT value FROM sync_kv WHERE key = ?1",
+            [VERSION_VECTOR_KEY],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
     let vector: VersionVector = raw
         .as_deref()
         .filter(|value| !value.trim().is_empty())
@@ -168,4 +174,31 @@ pub fn usage_log_complete_through(
         through.insert(device_id, claim);
     }
     Ok(through)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::usage_log_complete_through;
+    use rusqlite::Connection;
+
+    #[test]
+    fn complete_through_uses_the_persisted_sync_cursor() {
+        let connection = Connection::open_in_memory().expect("database opens");
+        connection
+            .execute_batch(concat!(
+                "CREATE TABLE sync_kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);\n",
+                "CREATE TABLE usage_sync_heads (\n",
+                "    device_id TEXT PRIMARY KEY, max_seq INTEGER NOT NULL\n",
+                ");\n",
+                "INSERT INTO sync_kv VALUES ",
+                "('lan_sync.version_vector', '{\"@usage:remote\":\"7\"}');\n",
+                "INSERT INTO usage_sync_heads VALUES ('remote', 9);",
+            ))
+            .expect("usage sync schema initializes");
+
+        let bounds =
+            usage_log_complete_through(&connection, None).expect("complete-through bounds load");
+
+        assert_eq!(bounds.get("remote"), Some(&7));
+    }
 }

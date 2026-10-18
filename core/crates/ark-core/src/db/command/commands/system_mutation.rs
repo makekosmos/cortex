@@ -118,7 +118,7 @@ impl DbCommand for CompactUsageSyncLogCommand {
         transaction: &Transaction<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_engine()?;
-        crate::db::compact_usage_sync_log(
+        ark_store::usage_sync_log::compact_usage_sync_log(
             transaction,
             self.own_device_id.as_deref(),
             &self.cutoff_wall_time,

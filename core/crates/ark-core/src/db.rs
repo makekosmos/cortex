@@ -1,7 +1,6 @@
 mod backend;
 mod command;
 mod committed_feed;
-mod compact;
 pub(crate) mod constants;
 mod legacy;
 mod load;
@@ -62,9 +61,6 @@ pub use committed_feed::{
     read_committed_feed_page, receive_inbox_payload, record_outbound_scan,
     record_outbound_scan_identity, set_inbox_state, InboxState, MAX_FEED_PAGE_SIZE,
     MAX_INBOX_PAYLOAD_BYTES,
-};
-pub use compact::{
-    compact_usage_sync_log, usage_log_complete_through, USAGE_SYNC_LOG_RETENTION_DAYS,
 };
 pub(in crate::db) use integration_replication_publication::{
     publish_integration_credential_envelope_in_transaction,
@@ -175,6 +171,7 @@ mod tests {
     use ark_application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
     use ark_store::open::open_db;
     use ark_store::schema::*;
+    use ark_store::usage_sync_log::{compact_usage_sync_log, usage_log_complete_through};
     use rusqlite::{params, Connection, OptionalExtension};
     use serde_json::{json, Value};
 

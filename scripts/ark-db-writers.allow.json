@@ -132,7 +132,7 @@
       "count": 1
     },
     {
-      "path": "core/crates/ark-core/src/db/compact.rs",
+      "path": "core/crates/ark-store/src/usage_sync_log.rs",
       "category": "SQLite mutation API",
       "count": 1
     },

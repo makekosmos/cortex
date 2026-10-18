@@ -10,7 +10,7 @@ use ark_store::schema::CREATE_TABLES;
 
 use super::objects::{ensure_object_search_fts, rebuild_object_search_fts};
 
-pub(crate) const VERSION_VECTOR_KEY: &str = "lan_sync.version_vector";
+pub(crate) use ark_store::VERSION_VECTOR_KEY;
 pub(in crate::db) const USAGE_SEQUENCE_MIGRATION_KEY: &str = "usage_sync.sequence_v1";
 
 pub fn is_sequenced_usage_entity(entity_type: &str) -> bool {
