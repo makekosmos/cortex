@@ -87,7 +87,10 @@ async fn snapshot_page_pins_filter_identity_and_rejects_policy_change_before_nex
         )
         .await
         .unwrap_err();
-    assert!(error.contains("stale_or_unnegotiated_sync_policy"));
+    assert_eq!(
+        error,
+        ark_application::sync_storage::PolicyBoundSnapshotReadError::StalePolicy
+    );
 }
 
 #[test]

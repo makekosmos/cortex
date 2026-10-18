@@ -20,6 +20,16 @@ impl IntegrationReplicationBackend for RevocableBackend {
             .then_some(())
             .ok_or_else(|| "revoked".to_string())
     }
+
+    async fn apply_signed_integration_frame(
+        &self,
+        _frame: &SignedSyncEnvelope,
+        _expected_space_id: &str,
+        _authenticated_peer_id: &str,
+        _expected_recipient_node_id: &str,
+    ) -> Result<(), String> {
+        Err("signed integration replication unsupported in test backend".into())
+    }
 }
 
 #[async_trait::async_trait]
@@ -53,10 +63,13 @@ impl SyncEntityReadPort for RevocableBackend {
         _offset: usize,
         _limit: usize,
         expected_identity: &ark_application::sync_storage::PolicyIdentity,
-    ) -> Result<ark_application::sync_storage::PolicyBoundSnapshotPage, String> {
+    ) -> Result<
+        ark_application::sync_storage::PolicyBoundSnapshotPage,
+        ark_application::sync_storage::PolicyBoundSnapshotReadError,
+    > {
         let accepted_identity = ark_application::sync_policy::default_sync_policy_identity();
         if expected_identity != &accepted_identity {
-            return Err("stale_or_unnegotiated_sync_policy".into());
+            return Err(ark_application::sync_storage::PolicyBoundSnapshotReadError::StalePolicy);
         }
         Ok(ark_application::sync_storage::PolicyBoundSnapshotPage {
             identity: accepted_identity,
@@ -99,6 +112,14 @@ impl PeerProgressPort for RevocableBackend {
         Ok(VersionVector::new())
     }
     async fn store_version_vector(&self, _: &VersionVector) -> Result<(), String> {
+        Ok(())
+    }
+    async fn store_version_vector_with_policy(
+        &self,
+        _local_device_id: &str,
+        _policy_identity: &ark_application::sync_storage::PolicyIdentity,
+        _vector: &VersionVector,
+    ) -> Result<(), String> {
         Ok(())
     }
     async fn load_known_peers(&self) -> Result<Option<Vec<crate::types::PeerRecord>>, String> {

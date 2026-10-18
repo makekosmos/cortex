@@ -62,7 +62,10 @@ impl SyncEntityReadPort for BackfillBarrier {
         offset: usize,
         limit: usize,
         expected_identity: &ark_application::sync_storage::PolicyIdentity,
-    ) -> Result<ark_application::sync_storage::PolicyBoundSnapshotPage, String> {
+    ) -> Result<
+        ark_application::sync_storage::PolicyBoundSnapshotPage,
+        ark_application::sync_storage::PolicyBoundSnapshotReadError,
+    > {
         self.inner
             .load_policy_bound_entities_page_for_peer(
                 peer,
@@ -107,6 +110,16 @@ impl PeerProgressPort for BackfillBarrier {
     }
     async fn store_version_vector(&self, value: &ark_core::VersionVector) -> Result<(), String> {
         self.inner.store_version_vector(value).await
+    }
+    async fn store_version_vector_with_policy(
+        &self,
+        local_device_id: &str,
+        policy_identity: &ark_application::sync_storage::PolicyIdentity,
+        vector: &ark_core::VersionVector,
+    ) -> Result<(), String> {
+        self.inner
+            .store_version_vector_with_policy(local_device_id, policy_identity, vector)
+            .await
     }
     async fn load_known_peers(&self) -> Result<Option<Vec<ark_core::PeerRecord>>, String> {
         self.inner.load_known_peers().await
@@ -196,7 +209,30 @@ impl ark_application::sync_storage::CommittedFeedPort for BackfillBarrier {
 }
 
 #[async_trait::async_trait]
-impl IntegrationReplicationBackend for BackfillBarrier {}
+impl IntegrationReplicationBackend for BackfillBarrier {
+    async fn validate_outbound_signed_integration_frame(
+        &self,
+        frame: &ark_core::integration_replication::SignedSyncEnvelope,
+        space: &str,
+        origin: &str,
+    ) -> Result<(), String> {
+        self.inner
+            .validate_outbound_signed_integration_frame(frame, space, origin)
+            .await
+    }
+
+    async fn apply_signed_integration_frame(
+        &self,
+        frame: &ark_core::integration_replication::SignedSyncEnvelope,
+        space: &str,
+        peer: &str,
+        recipient: &str,
+    ) -> Result<(), String> {
+        self.inner
+            .apply_signed_integration_frame(frame, space, peer, recipient)
+            .await
+    }
+}
 
 #[async_trait::async_trait]
 impl PeerIdentityBackend for BackfillBarrier {

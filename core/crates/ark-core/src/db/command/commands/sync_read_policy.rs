@@ -70,9 +70,7 @@ impl DbQuery for LoadPolicyBoundEntitiesPageQuery {
                         "ROLLBACK TO sync_policy_snapshot_page; RELEASE sync_policy_snapshot_page",
                     )
                     .map_err(|error| DbError::Storage(error.to_string()))?;
-                Err(DbError::Permission(
-                    "stale_or_unnegotiated_sync_policy".into(),
-                ))
+                Err(DbError::StaleSyncPolicy)
             }
             Ok((None, _)) => {
                 connection

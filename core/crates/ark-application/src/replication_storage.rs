@@ -8,12 +8,10 @@ use ark_domain::types::SyncEntity;
 pub trait IntegrationReplicationBackend: Send + Sync {
     async fn validate_outbound_signed_integration_frame(
         &self,
-        _frame: &SignedSyncEnvelope,
-        _expected_space_id: &str,
-        _expected_origin_node_id: &str,
-    ) -> Result<(), String> {
-        Err("signed integration outbound validation is unsupported by this storage backend".into())
-    }
+        frame: &SignedSyncEnvelope,
+        expected_space_id: &str,
+        expected_origin_node_id: &str,
+    ) -> Result<(), String>;
     async fn validate_outbound_signed_integration_frame_with_transport(
         &self,
         frame: &SignedSyncEnvelope,
@@ -39,15 +37,7 @@ pub trait IntegrationReplicationBackend: Send + Sync {
         expected_space_id: &str,
         authenticated_peer_id: &str,
         expected_recipient_node_id: &str,
-    ) -> Result<(), String> {
-        let _ = (
-            frame,
-            expected_space_id,
-            authenticated_peer_id,
-            expected_recipient_node_id,
-        );
-        Err("signed integration replication is unsupported by this storage backend".into())
-    }
+    ) -> Result<(), String>;
     async fn apply_signed_integration_frame_with_transport(
         &self,
         frame: &SignedSyncEnvelope,

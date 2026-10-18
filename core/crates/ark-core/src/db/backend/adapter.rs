@@ -152,7 +152,10 @@ impl SyncEntityReadPort for SqliteStorageBackend {
         offset: usize,
         limit: usize,
         expected_identity: &ark_application::sync_storage::PolicyIdentity,
-    ) -> Result<ark_application::sync_storage::PolicyBoundSnapshotPage, String> {
+    ) -> Result<
+        ark_application::sync_storage::PolicyBoundSnapshotPage,
+        ark_application::sync_storage::PolicyBoundSnapshotReadError,
+    > {
         self.db
             .query(
                 CommandContext::sync_peer(peer_device_id.to_owned(), class.into()),
@@ -167,7 +170,14 @@ impl SyncEntityReadPort for SqliteStorageBackend {
                 ),
             )
             .await
-            .map_err(|error| error.to_string())
+            .map_err(|error| match error {
+                crate::db::DbError::StaleSyncPolicy => {
+                    ark_application::sync_storage::PolicyBoundSnapshotReadError::StalePolicy
+                }
+                error => ark_application::sync_storage::PolicyBoundSnapshotReadError::Storage(
+                    error.to_string(),
+                ),
+            })
     }
 
     async fn usage_complete_through(

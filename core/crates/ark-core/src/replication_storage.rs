@@ -43,6 +43,15 @@ mod tests {
 
     #[async_trait::async_trait]
     impl IntegrationReplicationBackend for BaseOnlyBackend {
+        async fn validate_outbound_signed_integration_frame(
+            &self,
+            _frame: &SignedSyncEnvelope,
+            _expected_space_id: &str,
+            _expected_origin_node_id: &str,
+        ) -> Result<(), String> {
+            Err("signed integration outbound validation unsupported in test backend".into())
+        }
+
         async fn apply_signed_integration_frame(
             &self,
             _frame: &SignedSyncEnvelope,

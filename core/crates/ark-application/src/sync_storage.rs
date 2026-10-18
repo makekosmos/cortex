@@ -138,6 +138,23 @@ pub struct PolicyBoundSnapshotPage {
     pub entities: Vec<SyncEntity>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PolicyBoundSnapshotReadError {
+    StalePolicy,
+    Storage(String),
+}
+
+impl std::fmt::Display for PolicyBoundSnapshotReadError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::StalePolicy => formatter.write_str("stale_or_unnegotiated_sync_policy"),
+            Self::Storage(error) => formatter.write_str(error),
+        }
+    }
+}
+
+impl std::error::Error for PolicyBoundSnapshotReadError {}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct OutboundProgress {
     pub policy_generation: i64,
@@ -238,7 +255,7 @@ pub trait SyncEntityReadPort: Send + Sync {
         offset: usize,
         limit: usize,
         expected_identity: &PolicyIdentity,
-    ) -> Result<PolicyBoundSnapshotPage, String>;
+    ) -> Result<PolicyBoundSnapshotPage, PolicyBoundSnapshotReadError>;
     async fn usage_complete_through(&self) -> Result<HashMap<String, u64>, String>;
     async fn usage_complete_through_for_peer(
         &self,
@@ -292,12 +309,10 @@ pub trait PeerProgressPort: Send + Sync {
     async fn store_version_vector(&self, vector: &VersionVector) -> Result<(), String>;
     async fn store_version_vector_with_policy(
         &self,
-        _local_device_id: &str,
-        _policy_identity: &PolicyIdentity,
-        _vector: &VersionVector,
-    ) -> Result<(), String> {
-        Err("policy_bound_vector_storage_unsupported".into())
-    }
+        local_device_id: &str,
+        policy_identity: &PolicyIdentity,
+        vector: &VersionVector,
+    ) -> Result<(), String>;
     async fn load_known_peers(&self) -> Result<Option<Vec<PeerRecord>>, String>;
     async fn store_known_peers(&self, peers: &[PeerRecord]) -> Result<(), String>;
     async fn load_removed_peer_ids(&self) -> Result<Vec<String>, String>;

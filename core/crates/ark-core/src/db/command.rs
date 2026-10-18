@@ -231,6 +231,8 @@ pub(crate) enum DbError {
     Invalid(String),
     #[error("{0}")]
     Permission(String),
+    #[error("stale_or_unnegotiated_sync_policy")]
+    StaleSyncPolicy,
     #[error("{0}")]
     Conflict(String),
     #[error("restore refused without changing the live database: {0}")]

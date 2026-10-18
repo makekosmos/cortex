@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::future::Future;
 
 use ark_application::sync_storage::{
-    CommittedFeedPort, PeerProgressPort, PeerSyncPolicyPort, PolicyIdentity, SyncEntityReadPort,
-    SyncReadClass,
+    CommittedFeedPort, PeerProgressPort, PeerSyncPolicyPort, PolicyBoundSnapshotReadError,
+    PolicyIdentity, SyncEntityReadPort, SyncReadClass,
 };
 use ark_domain::types::{SyncEntity, VersionVector};
 
@@ -184,8 +184,8 @@ impl OutboundSnapshot {
                         debug_assert_eq!(page.identity, *identity);
                         page.entities
                     }
-                    Err(error) if error.contains("stale_or_unnegotiated_sync_policy") => continue,
-                    Err(error) => return Err(error),
+                    Err(PolicyBoundSnapshotReadError::StalePolicy) => continue,
+                    Err(PolicyBoundSnapshotReadError::Storage(error)) => return Err(error),
                 },
                 None => {
                     storage

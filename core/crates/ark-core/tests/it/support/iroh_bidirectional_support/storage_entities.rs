@@ -37,7 +37,10 @@ impl SyncEntityReadPort for TestStorage {
         offset: usize,
         limit: usize,
         expected_identity: &ark_application::sync_storage::PolicyIdentity,
-    ) -> Result<ark_application::sync_storage::PolicyBoundSnapshotPage, String> {
+    ) -> Result<
+        ark_application::sync_storage::PolicyBoundSnapshotPage,
+        ark_application::sync_storage::PolicyBoundSnapshotReadError,
+    > {
         self.inner
             .load_policy_bound_entities_page_for_peer(
                 peer,

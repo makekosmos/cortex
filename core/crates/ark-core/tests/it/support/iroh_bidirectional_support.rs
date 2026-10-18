@@ -93,6 +93,16 @@ impl PeerProgressPort for TestStorage {
     async fn store_version_vector(&self, value: &ark_core::VersionVector) -> Result<(), String> {
         self.inner.store_version_vector(value).await
     }
+    async fn store_version_vector_with_policy(
+        &self,
+        local_device_id: &str,
+        policy_identity: &ark_application::sync_storage::PolicyIdentity,
+        vector: &ark_core::VersionVector,
+    ) -> Result<(), String> {
+        self.inner
+            .store_version_vector_with_policy(local_device_id, policy_identity, vector)
+            .await
+    }
     async fn load_known_peers(&self) -> Result<Option<Vec<ark_core::PeerRecord>>, String> {
         self.inner.load_known_peers().await
     }
@@ -214,6 +224,18 @@ impl IntegrationReplicationBackend for TestStorage {
             release.notified().await;
         }
         Ok(())
+    }
+
+    async fn apply_signed_integration_frame(
+        &self,
+        frame: &SignedSyncEnvelope,
+        space: &str,
+        peer: &str,
+        recipient: &str,
+    ) -> Result<(), String> {
+        self.inner
+            .apply_signed_integration_frame(frame, space, peer, recipient)
+            .await
     }
 }
 

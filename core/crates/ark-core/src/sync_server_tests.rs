@@ -90,14 +90,20 @@ pub(crate) mod tests {
             offset: usize,
             limit: usize,
             expected_identity: &ark_application::sync_storage::PolicyIdentity,
-        ) -> Result<ark_application::sync_storage::PolicyBoundSnapshotPage, String> {
+        ) -> Result<
+            ark_application::sync_storage::PolicyBoundSnapshotPage,
+            ark_application::sync_storage::PolicyBoundSnapshotReadError,
+        > {
             let accepted_identity = ark_application::sync_policy::default_sync_policy_identity();
             if expected_identity != &accepted_identity {
-                return Err("stale_or_unnegotiated_sync_policy".into());
+                return Err(
+                    ark_application::sync_storage::PolicyBoundSnapshotReadError::StalePolicy,
+                );
             }
             let entities = self
                 .load_entities_page_for_peer(peer_device_id, class, vector, offset, limit)
-                .await?;
+                .await
+                .map_err(ark_application::sync_storage::PolicyBoundSnapshotReadError::Storage)?;
             Ok(ark_application::sync_storage::PolicyBoundSnapshotPage {
                 identity: accepted_identity,
                 entities,
@@ -204,6 +210,14 @@ pub(crate) mod tests {
                 serde_json::to_string(vector).unwrap(),
             );
             Ok(())
+        }
+        async fn store_version_vector_with_policy(
+            &self,
+            _local_device_id: &str,
+            _policy_identity: &ark_application::sync_storage::PolicyIdentity,
+            vector: &VersionVector,
+        ) -> Result<(), String> {
+            self.store_version_vector(vector).await
         }
         async fn load_known_peers(&self) -> Result<Option<Vec<PeerRecord>>, String> {
             self.kv
@@ -330,6 +344,16 @@ pub(crate) mod tests {
             _expected_origin_node_id: &str,
         ) -> Result<(), String> {
             Ok(())
+        }
+
+        async fn apply_signed_integration_frame(
+            &self,
+            _frame: &SignedSyncEnvelope,
+            _expected_space_id: &str,
+            _authenticated_peer_id: &str,
+            _expected_recipient_node_id: &str,
+        ) -> Result<(), String> {
+            Err("signed integration replication unsupported in test backend".into())
         }
     }
 
