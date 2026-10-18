@@ -23,8 +23,8 @@ use ark_sync::protocol::{
 use ark_sync::protocol_negotiation::{
     compute_hello_auth_hmac, generate_auth_nonce, normalize_auth_secret,
 };
-use ark_sync::transport::{SyncTransport, TransportEvent};
-use ark_sync::{SignedSyncEnvelope, SyncRuntimeStorage};
+use ark_sync::transport::{OutboundIntegrationFrameAuthorizer, SyncTransport, TransportEvent};
+use ark_sync::SignedSyncEnvelope;
 
 /// ALPN-идентификатор протокола ark-sync поверх iroh QUIC-стримов.
 /// Версионируем отдельно от `protocol::PROTOCOL_VERSION` (см. spec §3.3).
@@ -46,11 +46,4 @@ struct OutgoingMessage {
     target: Option<EndpointId>,
     msg: LanSyncMessage,
     completion: SharedCompletion,
-}
-
-#[derive(Clone)]
-struct OutboundStorage {
-    storage: Arc<dyn SyncRuntimeStorage>,
-    space_id: String,
-    origin_node_id: String,
 }

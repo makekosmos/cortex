@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   validateDependencyGraph,
+  validateArkNetSourceBoundary,
   validateDesktopFeatureTree,
   validateMobileFeatureTree,
 } from "./check-ark-dependency-graph.mjs";
@@ -47,6 +48,21 @@ test("rejects an injected forbidden dependency edge", () => {
   assert.deepEqual(validateDependencyGraph(graph), [
     "ark-sync: internal normal dependencies are [ark-application, ark-core, ark-domain], expected [ark-application, ark-domain]",
   ]);
+});
+
+test("rejects storage contracts and SQLite imports from ark-net source", () => {
+  assert.deepEqual(
+    validateArkNetSourceBoundary([
+      {
+        path: "iroh.rs",
+        source: "use ark_sync::SyncRuntimeStorage; use rusqlite::Connection;",
+      },
+    ]),
+    [
+      "ark-net iroh.rs: forbidden storage dependency SyncRuntimeStorage",
+      "ark-net iroh.rs: forbidden storage dependency rusqlite",
+    ],
+  );
 });
 
 test("rejects ARK workspace crates missing from the dependency whitelist", () => {

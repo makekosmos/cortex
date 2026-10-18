@@ -11,7 +11,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 
 use crate::protocol::LanSyncMessage;
-use ark_application::sync_storage::SyncRuntimeStorage;
+use ark_application::replication_storage::IntegrationReplicationBackend;
 
 /// Lifecycle/message events emitted by a sync transport into the orchestration
 /// layer. Structurally identical across transports.
@@ -45,6 +45,56 @@ pub enum AddressedSendOutcome {
     PeerOffline,
 }
 
+/// Narrow capability used by an addressed transport immediately before it
+/// writes a signed integration frame. The implementation owns the policy and
+/// persistence access; transports only provide the live recipient key.
+#[async_trait::async_trait]
+pub trait OutboundIntegrationFrameAuthorizer: Send + Sync {
+    async fn authorize(
+        &self,
+        frame: &crate::SignedSyncEnvelope,
+        transport_public_key: &str,
+    ) -> Result<(), String>;
+}
+
+pub struct StorageBackedOutboundIntegrationFrameAuthorizer {
+    storage: std::sync::Arc<dyn IntegrationReplicationBackend>,
+    expected_space_id: String,
+    expected_origin_node_id: String,
+}
+
+impl StorageBackedOutboundIntegrationFrameAuthorizer {
+    pub fn new(
+        storage: std::sync::Arc<dyn IntegrationReplicationBackend>,
+        expected_space_id: impl Into<String>,
+        expected_origin_node_id: impl Into<String>,
+    ) -> Self {
+        Self {
+            storage,
+            expected_space_id: expected_space_id.into(),
+            expected_origin_node_id: expected_origin_node_id.into(),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl OutboundIntegrationFrameAuthorizer for StorageBackedOutboundIntegrationFrameAuthorizer {
+    async fn authorize(
+        &self,
+        frame: &crate::SignedSyncEnvelope,
+        transport_public_key: &str,
+    ) -> Result<(), String> {
+        self.storage
+            .validate_outbound_signed_integration_frame_with_transport(
+                frame,
+                &self.expected_space_id,
+                &self.expected_origin_node_id,
+                transport_public_key,
+            )
+            .await
+    }
+}
+
 /// Object-safe transport abstraction consumed by `RelaySync`.
 ///
 /// Uses `async_trait` to keep the transport usable behind `Arc<dyn SyncTransport>`.
@@ -67,11 +117,9 @@ pub trait SyncTransport: Send + Sync {
         Err("addressed transport is not supported".into())
     }
 
-    fn set_outbound_storage(
+    fn set_outbound_authorizer(
         &self,
-        _storage: Arc<dyn SyncRuntimeStorage>,
-        _space_id: &str,
-        _origin_node_id: &str,
+        _authorizer: Arc<dyn OutboundIntegrationFrameAuthorizer>,
     ) -> Result<(), String> {
         Err("outbound authorization is not supported".into())
     }
@@ -120,9 +168,7 @@ pub trait SyncTransport: Send + Sync {
     }
 
     /// Stop the transport and join its background tasks. Must not return
-    /// while a spawned task is still running: tasks hold `outbound_storage`
-    /// (the open `ark.db` connection), and a task that outlives `stop()`
-    /// keeps the database file open past teardown — on Windows the
-    /// containing directory then cannot be deleted (KOS-369).
+    /// while a spawned task is still running: tasks hold transport callbacks
+    /// until teardown completes.
     async fn stop(&self);
 }

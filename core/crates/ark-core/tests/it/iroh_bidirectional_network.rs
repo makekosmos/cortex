@@ -163,15 +163,17 @@ async fn iroh_bidirectional_hello_and_reverse_send() {
         .expect_err("missing outbound authorization must fail closed");
     assert!(error.contains("authorization"));
     transport_b
-        .set_outbound_storage(
-            Arc::new(TestStorage {
-                inner: backend.clone(),
-                first_check: None,
-                release_first: None,
-            }),
-            "test-space-iroh-bidirectional",
-            "device-B",
-        )
+        .set_outbound_authorizer(Arc::new(
+            ark_sync::transport::StorageBackedOutboundIntegrationFrameAuthorizer::new(
+                Arc::new(TestStorage {
+                    inner: backend.clone(),
+                    first_check: None,
+                    release_first: None,
+                }),
+                "test-space-iroh-bidirectional",
+                "device-B",
+            ),
+        ))
         .expect("outbound authorization context");
     transport_b
         .send_to("device-A", LanSyncMessage::SignedIntegrationFrame { frame })
@@ -187,28 +189,32 @@ async fn iroh_bidirectional_hello_and_reverse_send() {
         LanSyncMessage::SignedIntegrationFrame { .. }
     ));
     transport_b
-        .set_outbound_storage(
-            Arc::new(TestStorage {
-                inner: backend.clone(),
-                first_check: None,
-                release_first: None,
-            }),
-            "test-space-iroh-bidirectional",
-            "device-B",
-        )
+        .set_outbound_authorizer(Arc::new(
+            ark_sync::transport::StorageBackedOutboundIntegrationFrameAuthorizer::new(
+                Arc::new(TestStorage {
+                    inner: backend.clone(),
+                    first_check: None,
+                    release_first: None,
+                }),
+                "test-space-iroh-bidirectional",
+                "device-B",
+            ),
+        ))
         .expect("revoking authorization context");
     let first_check = Arc::new(tokio::sync::Notify::new());
     let release_first = Arc::new(tokio::sync::Notify::new());
     transport_b
-        .set_outbound_storage(
-            Arc::new(TestStorage {
-                inner: backend,
-                first_check: Some(first_check.clone()),
-                release_first: Some(release_first.clone()),
-            }),
-            "test-space-iroh-bidirectional",
-            "device-B",
-        )
+        .set_outbound_authorizer(Arc::new(
+            ark_sync::transport::StorageBackedOutboundIntegrationFrameAuthorizer::new(
+                Arc::new(TestStorage {
+                    inner: backend,
+                    first_check: Some(first_check.clone()),
+                    release_first: Some(release_first.clone()),
+                }),
+                "test-space-iroh-bidirectional",
+                "device-B",
+            ),
+        ))
         .expect("barrier authorization context");
     let pending = tokio::spawn({
         let transport_b = transport_b.clone();

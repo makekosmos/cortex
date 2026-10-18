@@ -11,7 +11,8 @@ struct ConnectionParams {
     registry: Arc<DeviceRegistry>,
     connections: Arc<Mutex<HashMap<EndpointId, (u64, iroh::endpoint::Connection)>>>,
     connection_generation: Arc<std::sync::atomic::AtomicU64>,
-    outbound_storage: Arc<tokio::sync::RwLock<Option<OutboundStorage>>>,
+    outbound_authorizer:
+        Arc<tokio::sync::RwLock<Option<Arc<dyn OutboundIntegrationFrameAuthorizer>>>>,
 }
 
 fn is_current_connection(
@@ -43,11 +44,11 @@ fn take_current_connection<T>(
     }
 }
 
-// Checks that the addressed transport peer still owns this connection and that
-// the outbound storage allows the signed frame for this transport endpoint.
+// Checks that the addressed transport peer still owns this connection and
+// delegates the policy decision to the sync-owned capability.
 async fn authorize_signed_integration_frame(
     registry: &DeviceRegistry,
-    outbound_storage: &tokio::sync::RwLock<Option<OutboundStorage>>,
+    outbound_authorizer: &tokio::sync::RwLock<Option<Arc<dyn OutboundIntegrationFrameAuthorizer>>>,
     frame: &SignedSyncEnvelope,
     remote_endpoint_id: &EndpointId,
 ) -> Result<(), String> {
@@ -57,20 +58,14 @@ async fn authorize_signed_integration_frame(
     if !target_is_current {
         return Err("iroh addressed transport peer is no longer authorized".into());
     }
-    match outbound_storage.read().await.clone() {
-        Some(context) => {
-            context
-                .storage
-                .validate_outbound_signed_integration_frame_with_transport(
-                    frame,
-                    &context.space_id,
-                    &context.origin_node_id,
-                    &remote_endpoint_id.to_string(),
-                )
-                .await
-        }
-        None => Err("iroh outbound integration authorization is unavailable".into()),
-    }
+    let authorizer = outbound_authorizer
+        .read()
+        .await
+        .clone()
+        .ok_or_else(|| "iroh outbound integration authorization is unavailable".to_string())?;
+    authorizer
+        .authorize(frame, &remote_endpoint_id.to_string())
+        .await
 }
 
 fn is_pre_admission_control_message(message: &LanSyncMessage) -> bool {
@@ -106,7 +101,7 @@ async fn handle_connection(params: ConnectionParams) {
         registry,
         connections,
         connection_generation,
-        outbound_storage,
+        outbound_authorizer,
     } = params;
     let remote_endpoint_id = conn.remote_id();
     let role = if is_dialer { "dialer" } else { "listener" };
@@ -170,7 +165,7 @@ async fn handle_connection(params: ConnectionParams) {
     // больше не может быть дропнут во время частичного чтения.
     // A JoinSet — not two detached handles: when the transport's `stop()`
     // aborts this connection task, the set drops and aborts writer and
-    // reader, so they cannot outlive teardown holding `outbound_storage`
+    // reader, so they cannot outlive teardown holding the authorizer
     // (KOS-369).
     let mut conn_tasks = tokio::task::JoinSet::new();
 
@@ -240,7 +235,7 @@ async fn handle_connection(params: ConnectionParams) {
                             } = &outgoing.msg {
                                 authorize_signed_integration_frame(
                                     &writer_registry,
-                                    &outbound_storage,
+                                    &outbound_authorizer,
                                     frame,
                                     &remote_endpoint_id,
                                 )

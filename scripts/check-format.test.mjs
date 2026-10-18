@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { delimiter, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 
@@ -68,6 +68,16 @@ test("format discovery ignores unstaged files and fails closed on an invalid bas
       env: { ...process.env, FORMAT_BASE: "not-a-commit" },
     });
     assert.notEqual(invalidBase.status, 0, "git discovery errors must fail the format gate");
+
+    const pathWithoutPackageBins = (process.env.PATH ?? "")
+      .split(delimiter)
+      .filter((entry) => !entry.replaceAll("\\", "/").includes("/node_modules/.bin"))
+      .join(delimiter);
+    const noPackageBin = spawnSync(process.execPath, [script], {
+      cwd,
+      env: { ...process.env, PATH: pathWithoutPackageBins },
+    });
+    assert.equal(noPackageBin.status, 0, "formatting must resolve oxfmt from the project package");
 
     writeFileSync(resolve(cwd, "sample.ts"), "export const value = 1;\n");
 

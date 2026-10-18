@@ -65,7 +65,7 @@ impl SyncTransport for IrohTransport {
             let accept_registry = self.registry.clone();
             let accept_connections = self.connections.clone();
             let accept_connection_generation = self.connection_generation.clone();
-            let accept_outbound_storage = self.outbound_storage.clone();
+            let accept_outbound_authorizer = self.outbound_authorizer.clone();
             let mut accept_stop = self.stop_rx.clone();
             let out_tx = self.out_tx.clone();
             let hello = self.make_hello();
@@ -86,7 +86,7 @@ impl SyncTransport for IrohTransport {
                             let registry = accept_registry.clone();
                             let connections = accept_connections.clone();
                             let connection_generation = accept_connection_generation.clone();
-                            let outbound_storage = accept_outbound_storage.clone();
+                            let outbound_authorizer = accept_outbound_authorizer.clone();
                             let out_rx = out_tx.subscribe();
                             let stop_rx = accept_stop.clone();
                             let hello = hello.clone();
@@ -113,7 +113,7 @@ impl SyncTransport for IrohTransport {
                                     registry,
                                     connections,
                                     connection_generation,
-                                    outbound_storage,
+                                    outbound_authorizer,
                                 })
                                 .await;
                             });
@@ -144,7 +144,7 @@ impl SyncTransport for IrohTransport {
             let dial_connections = self.connections.clone();
             let dial_connection_generation = self.connection_generation.clone();
             let dial_suppressed = self.suppressed_endpoints.clone();
-            let dial_outbound_storage = self.outbound_storage.clone();
+            let dial_outbound_authorizer = self.outbound_authorizer.clone();
             let mut dial_stop = self.stop_rx.clone();
             let out_tx = self.out_tx.clone();
             let hello = self.make_hello();
@@ -203,7 +203,7 @@ impl SyncTransport for IrohTransport {
                                 registry: dial_registry.clone(),
                                 connections: dial_connections.clone(),
                                 connection_generation: dial_connection_generation.clone(),
-                                outbound_storage: dial_outbound_storage.clone(),
+                                outbound_authorizer: dial_outbound_authorizer.clone(),
                             })
                             .await;
 
@@ -268,18 +268,15 @@ impl SyncTransport for IrohTransport {
             return Err("iroh send_to only supports addressed messages".into());
         }
         if let LanSyncMessage::SignedIntegrationFrame { frame } = &msg {
-            let context = self.outbound_storage.read().await.clone().ok_or_else(|| {
-                "iroh outbound integration authorization is unavailable".to_string()
-            })?;
-            context
-                .storage
-                .validate_outbound_signed_integration_frame_with_transport(
-                    frame,
-                    &context.space_id,
-                    &context.origin_node_id,
-                    &target.to_string(),
-                )
-                .await?;
+            let authorizer = self
+                .outbound_authorizer
+                .read()
+                .await
+                .clone()
+                .ok_or_else(|| {
+                    "iroh outbound integration authorization is unavailable".to_string()
+                })?;
+            authorizer.authorize(frame, &target.to_string()).await?;
         }
         let (completion_tx, completion_rx) = tokio::sync::oneshot::channel();
         self.out_tx
@@ -295,18 +292,12 @@ impl SyncTransport for IrohTransport {
             .map_err(|_| "iroh addressed writer stopped".to_string())?
     }
 
-    fn set_outbound_storage(
+    fn set_outbound_authorizer(
         &self,
-        storage: Arc<dyn SyncRuntimeStorage>,
-        space_id: &str,
-        origin_node_id: &str,
+        authorizer: Arc<dyn OutboundIntegrationFrameAuthorizer>,
     ) -> Result<(), String> {
-        if let Ok(mut guard) = self.outbound_storage.try_write() {
-            *guard = Some(OutboundStorage {
-                storage,
-                space_id: space_id.to_string(),
-                origin_node_id: origin_node_id.to_string(),
-            });
+        if let Ok(mut guard) = self.outbound_authorizer.try_write() {
+            *guard = Some(authorizer);
         } else {
             return Err("iroh outbound authorization context is busy".into());
         }
@@ -429,9 +420,7 @@ impl SyncTransport for IrohTransport {
 
     /// Останавливает транспорт: сигналит фоновым задачам, закрывает
     /// `Endpoint` (это будит `accept()` и рвёт чтение в reader-тасках), затем
-    /// abort+join всего зарегистрированного — пока задача жива, она держит
-    /// `outbound_storage` (открытый `ark.db`), и на Windows tempdir теста
-    /// потом не удаляется (KOS-369).
+    /// abort+join всего зарегистрированного.
     async fn stop(&self) {
         let _ = self.stop_tx.send(true);
         // Закрываем endpoint явно — это разбудит accept_endpoint.accept().
@@ -463,5 +452,6 @@ impl SyncTransport for IrohTransport {
                 let _ = task.await;
             }
         }
+        *self.outbound_authorizer.write().await = None;
     }
 }

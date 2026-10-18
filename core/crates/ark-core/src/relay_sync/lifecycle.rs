@@ -25,8 +25,14 @@ impl RelaySync {
         transport: Arc<dyn SyncTransport>,
     ) -> Arc<Self> {
         let auth_secret = normalize_auth_secret(config.auth_secret.clone());
-        let _ =
-            transport.set_outbound_storage(storage.clone(), &config.space_id, &config.device_id);
+        let _ = transport.set_outbound_authorizer(Arc::new(
+            ark_sync::transport::StorageBackedOutboundIntegrationFrameAuthorizer::new(
+                storage.clone()
+                    as Arc<dyn ark_application::replication_storage::IntegrationReplicationBackend>,
+                config.space_id.clone(),
+                config.device_id.clone(),
+            ),
+        ));
         let registry = ark_sync::relay_registry::RelayRegistryCoordinator::new(
             config.device_id.clone(),
             storage.clone(),

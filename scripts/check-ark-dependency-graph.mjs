@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -47,6 +47,15 @@ export function validateDependencyGraph(metadata) {
   return errors;
 }
 
+export function validateArkNetSourceBoundary(sources) {
+  const forbidden = ["SyncRuntimeStorage", "ark_store", "rusqlite"];
+  return sources.flatMap(({ path: sourcePath, source }) =>
+    forbidden
+      .filter((dependency) => new RegExp(`\\b${dependency}\\b`).test(source))
+      .map((dependency) => `ark-net ${sourcePath}: forbidden storage dependency ${dependency}`),
+  );
+}
+
 export function validateMobileFeatureTree(tree) {
   const enabled = DESKTOP_ONLY_IROH_FEATURES.filter((feature) =>
     tree.includes(`iroh feature "${feature}"`),
@@ -78,6 +87,24 @@ function cargo(args) {
   }).trim();
 }
 
+async function rustSources(directory, relativeTo) {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const sources = await Promise.all(
+    entries.map(async (entry) => {
+      const absolutePath = path.join(directory, entry.name);
+      if (entry.isDirectory()) return rustSources(absolutePath, relativeTo);
+      if (!entry.isFile() || !entry.name.endsWith(".rs")) return [];
+      return [
+        {
+          path: path.relative(relativeTo, absolutePath),
+          source: await readFile(absolutePath, "utf8"),
+        },
+      ];
+    }),
+  );
+  return sources.flat();
+}
+
 async function main() {
   const profile = option("--profile");
   const target = option("--target");
@@ -88,7 +115,10 @@ async function main() {
   }
 
   const metadata = JSON.parse(cargo(["metadata", "--locked", "--no-deps", "--format-version=1"]));
-  const errors = validateDependencyGraph(metadata);
+  const sourceBoundary = validateArkNetSourceBoundary(
+    await rustSources(path.join(ROOT, "core/crates/ark-net/src"), ROOT),
+  );
+  const errors = [...validateDependencyGraph(metadata), ...sourceBoundary];
   const treeArgs =
     profile === "desktop"
       ? [
