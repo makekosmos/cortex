@@ -1,5 +1,5 @@
-use super::integration_replication_common::{persist_with_vector, require_newer_hlc, storage};
-use rusqlite::{params, Connection, OptionalExtension};
+use super::integration_replication_common::{persist_with_vector, require_newer_hlc};
+use rusqlite::Connection;
 
 use crate::integration_replication::{AuthorizedNode, IntegrationConfiguration, NodeStatus};
 pub fn upsert_integration_configuration(
@@ -14,23 +14,15 @@ pub fn upsert_integration_configuration(
         &configuration.integration_id,
         device_id,
         || {
-            if let Some((provider, subject, hlc)) = conn
-                .query_row(
-                    "SELECT provider, account_subject, hlc FROM integration_configurations
-                     WHERE integration_id = ?1",
-                    params![configuration.integration_id],
-                    |row| {
-                        Ok((
-                            row.get::<_, String>(0)?,
-                            row.get::<_, String>(1)?,
-                            row.get::<_, String>(2)?,
-                        ))
-                    },
-                )
-                .optional()
-                .map_err(storage)?
+            if let Some(current) =
+                ark_store::integration_replication::load_integration_configuration(
+                    conn,
+                    &configuration.integration_id,
+                )?
             {
-                if provider != configuration.provider || subject != configuration.account_subject {
+                if current.provider != configuration.provider
+                    || current.account_subject != configuration.account_subject
+                {
                     return Err(
                         crate::integration_replication::IntegrationContractError::Mismatch {
                             field: "provider_account_identity",
@@ -38,7 +30,7 @@ pub fn upsert_integration_configuration(
                         .to_string(),
                     );
                 }
-                require_newer_hlc(&configuration.hlc, &hlc)?;
+                require_newer_hlc(&configuration.hlc, &current.hlc)?;
             }
             ark_store::integration_replication::upsert_integration_configuration_record(
                 conn,

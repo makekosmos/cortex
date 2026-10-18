@@ -69,6 +69,7 @@ The SQL that computes the durable committed-feed watermark now lives in `ark-sto
 `ark-store::integration_replication` also owns integration-grant row decoding and the insert/upsert statement. Core still checks that active grants match an active authorized node and the node's current key epoch; it also enforces monotonic grant epochs, no same-epoch revival after revocation, key binding, HLC ordering, and version-vector updates in the existing transaction.
 
 Store owns the integration-configuration insert/upsert and encoding of its JSON and SQLite integer fields. Core retains provider/account identity immutability and HLC ordering checks, and continues to include the upsert plus version-vector bump in the existing transaction.
+Core performs this identity check through the Store configuration loader inside its current savepoint. The loader's legacy opaque-cursor cleanup remains part of that transaction, so a rejected identity/HLC update rolls the cleanup back with the savepoint.
 
 Store owns authorized-node row encoding and its insert/upsert alongside the read adapter. Core uses the validated Store record to enforce grant-epoch monotonicity, prevent same-epoch revival and key changes, and check HLC order before persisting and bumping the version vector in the existing transaction.
 
