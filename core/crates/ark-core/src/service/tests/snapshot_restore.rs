@@ -288,7 +288,7 @@ async fn db_backup_restore_rejects_invalid_sources_without_touching_live() {
     }
 
     assert_eq!(live_object_ids(&state), vec!["obj-live".to_string()]);
-    with_conn(&state, db::check_integrity).unwrap();
+    with_conn(&state, ark_store::open::check_integrity).unwrap();
 }
 
 /// AC6: list возвращает только regular files из backups/; validate даёт

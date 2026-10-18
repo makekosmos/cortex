@@ -1,4 +1,3 @@
-use ark_store::open::open_db;
 use rusqlite::Connection;
 
 use crate::canonical_types::migration;
@@ -19,19 +18,6 @@ pub fn is_sequenced_usage_entity(entity_type: &str) -> bool {
 
 pub(in crate::db) fn usage_cursor_key(device_id: &str) -> String {
     format!("@usage:{device_id}")
-}
-
-/// Online SQLite integrity check. Возвращает Err если DB corrupted.
-/// Вызывается из init_schema до миграций — silent corruption хуже чем
-/// fail-loud при старте (см. 2026-05-18 hardening loop AC2).
-pub fn check_integrity(conn: &Connection) -> Result<(), String> {
-    let result: String = conn
-        .query_row("PRAGMA integrity_check", [], |row| row.get(0))
-        .map_err(|e| format!("integrity_check query failed: {e}"))?;
-    if result != "ok" {
-        return Err(format!("ARK DB integrity check failed: {result}"));
-    }
-    Ok(())
 }
 
 pub(in crate::db) fn phase3_migration_completed(conn: &Connection) -> Result<bool, String> {
@@ -62,7 +48,7 @@ pub(in crate::db) fn phase3_migration_completed(conn: &Connection) -> Result<boo
 /// Initializes the schema and all Phase 2 prerequisites, but does not run Phase 3.
 #[doc(hidden)]
 pub fn init_schema_prerequisites_for_phase3(conn: &Connection) -> Result<(), String> {
-    check_integrity(conn)?;
+    ark_store::open::check_integrity(conn)?;
     // Prevent repeated replacement of the large sync version-vector value
     // from leaving permanent freelist growth. Existing databases adopt this
     // mode after the explicit maintenance VACUUM.
@@ -344,26 +330,6 @@ pub fn backup_to_file_chunked(
     pause: std::time::Duration,
 ) -> Result<(), String> {
     super::snapshot::backup_to_file_chunked_verified(src_db_path, dest_path, pages_per_step, pause)
-}
-
-pub(in crate::db) fn backup_to_file_chunked_unpublished(
-    src_db_path: &str,
-    dest_path: &str,
-    pages_per_step: i32,
-    pause: std::time::Duration,
-) -> Result<(), String> {
-    let src = open_db(src_db_path)?;
-    let mut dst = Connection::open(dest_path)
-        .map_err(|e| format!("backup_to_file_chunked open dest failed: {e}"))?;
-    let backup = rusqlite::backup::Backup::new(&src, &mut dst)
-        .map_err(|e| format!("backup_to_file_chunked init failed: {e}"))?;
-    backup
-        .run_to_completion(
-            pages_per_step,
-            pause,
-            None::<fn(rusqlite::backup::Progress)>,
-        )
-        .map_err(|e| format!("backup_to_file_chunked run failed: {e}"))
 }
 
 // Legacy registry definitions are owned by canonical_types::definitions.

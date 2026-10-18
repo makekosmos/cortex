@@ -32,7 +32,7 @@ pub(in crate::db) fn restore_snapshot_impl(
     let validated = (|| -> Result<(Vec<String>, i64), String> {
         let src = Connection::open_with_flags(&staging, OpenFlags::SQLITE_OPEN_READ_ONLY)
             .map_err(|e| format!("snapshot open failed: {e}"))?;
-        check_integrity(&src)?;
+        ark_store::open::check_integrity(&src)?;
         Ok((
             schema_fingerprint(&src)?,
             ark_store::committed_feed::watermark(&src)?,

@@ -29,7 +29,6 @@ use std::fs;
 use std::io;
 use std::path::{Component, Path, PathBuf};
 
-use super::open::check_integrity;
 use rusqlite::{Connection, OpenFlags};
 use serde::Serialize;
 mod manifest;
@@ -278,7 +277,7 @@ fn validate_staged(
         Ok(conn) => conn,
         Err(e) => return Ok((false, false, Some(format!("open failed: {e}")))),
     };
-    if let Err(e) = check_integrity(&src) {
+    if let Err(e) = ark_store::open::check_integrity(&src) {
         return Ok((false, false, Some(e)));
     }
     let src_fp = schema_fingerprint(&src)?;
@@ -378,7 +377,7 @@ type RollbackRestore = dyn Fn(&mut Connection, &Path) -> Result<(), String>;
 /// Post-restore verification по умолчанию: integrity live DB + schema
 /// fingerprint совпадает с fingerprint'ом применённого snapshot'а.
 fn default_post_verify(conn: &Connection, expected: &[String]) -> Result<(), String> {
-    check_integrity(conn)?;
+    ark_store::open::check_integrity(conn)?;
     let actual = schema_fingerprint(conn)?;
     if actual != expected {
         return Err("post-restore schema fingerprint mismatch".to_string());

@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use super::{backups_dir, open_no_follow, schema_fingerprint, sync_file};
-use crate::db::open::check_integrity;
 
 const MANIFEST_SUFFIX: &str = ".manifest.json";
 const MANIFEST_VERSION: u32 = 1;
@@ -57,7 +56,7 @@ pub(in crate::db) fn backup_to_file_chunked_verified(
             .create_new(true)
             .open(&staged_db)
             .map_err(|error| format!("backup staging create failed: {error}"))?;
-        super::super::open::backup_to_file_chunked_unpublished(
+        ark_store::open::backup_to_file_chunked_unpublished(
             src_db_path,
             staged_db
                 .to_str()
@@ -68,7 +67,7 @@ pub(in crate::db) fn backup_to_file_chunked_verified(
 
         let staged = Connection::open_with_flags(&staged_db, OpenFlags::SQLITE_OPEN_READ_ONLY)
             .map_err(|error| format!("backup verification open failed: {error}"))?;
-        check_integrity(&staged)?;
+        ark_store::open::check_integrity(&staged)?;
         let schema_sha256 = digest_bytes(
             &serde_json::to_vec(&schema_fingerprint(&staged)?)
                 .map_err(|error| format!("backup schema fingerprint encode failed: {error}"))?,
@@ -213,7 +212,7 @@ pub(super) fn verify_snapshot_manifest(
     }
     let staged_conn = Connection::open_with_flags(staged, OpenFlags::SQLITE_OPEN_READ_ONLY)
         .map_err(|error| format!("staged snapshot open failed: {error}"))?;
-    check_integrity(&staged_conn)?;
+    ark_store::open::check_integrity(&staged_conn)?;
     let schema = serde_json::to_vec(&schema_fingerprint(&staged_conn)?)
         .map_err(|error| format!("snapshot schema fingerprint encode failed: {error}"))?;
     if manifest.schema_sha256 != digest_bytes(&schema) {

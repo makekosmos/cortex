@@ -6,7 +6,7 @@ use rusqlite::{Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use super::{backups_dir, check_integrity, open_no_follow, sync_file};
+use super::{backups_dir, open_no_follow, sync_file};
 
 const INTENT_SUFFIX: &str = ".restore-intent.json";
 const INTENT_LIMIT: u64 = 4096;
@@ -54,7 +54,7 @@ impl RestoreJournal {
             let capsule =
                 Connection::open_with_flags(&capsule_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
                     .map_err(|error| format!("restore recovery capsule open failed: {error}"))?;
-            check_integrity(&capsule)?;
+            ark_store::open::check_integrity(&capsule)?;
             if super::schema_fingerprint(&capsule)? != expected_schema {
                 return Err("restore recovery capsule schema changed during backup".into());
             }
@@ -165,7 +165,7 @@ pub(crate) fn recover_interrupted_restore(db_path: &str) -> Result<(), String> {
     }
     let capsule = Connection::open_with_flags(&capsule_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
         .map_err(|error| format!("restore recovery capsule open failed: {error}"))?;
-    check_integrity(&capsule)?;
+    ark_store::open::check_integrity(&capsule)?;
     drop(capsule);
 
     let mut live = Connection::open(db_path)
@@ -176,7 +176,7 @@ pub(crate) fn recover_interrupted_restore(db_path: &str) -> Result<(), String> {
         None::<fn(rusqlite::backup::Progress)>,
     )
     .map_err(|error| format!("restore recovery rollback failed: {error}"))?;
-    check_integrity(&live)?;
+    ark_store::open::check_integrity(&live)?;
     drop(live);
 
     fs::remove_file(&intent_path)

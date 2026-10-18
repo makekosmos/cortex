@@ -85,8 +85,8 @@ pub use objects::{
 pub(in crate::db) use open::USAGE_SEQUENCE_MIGRATION_KEY;
 pub(crate) use open::VERSION_VECTOR_KEY;
 pub use open::{
-    backup_to_file, backup_to_file_chunked, check_integrity, init_schema,
-    init_schema_prerequisites_for_phase3, is_sequenced_usage_entity,
+    backup_to_file, backup_to_file_chunked, init_schema, init_schema_prerequisites_for_phase3,
+    is_sequenced_usage_entity,
 };
 pub use open::{count_pending_for_type, insert_pending_object};
 pub(crate) use snapshot::recover_interrupted_restore;

@@ -96,7 +96,7 @@ fn restore_rolls_back_to_pre_restore_state_when_post_verify_fails() {
         list_objects(&conn).unwrap().is_empty(),
         "rollback must restore the PRE-RESTORE live state, not the snapshot"
     );
-    check_integrity(&conn).unwrap();
+    ark_store::open::check_integrity(&conn).unwrap();
 
     // Успешный откат подчищает staging и rollback — в backups/ остаётся
     // только исходный snapshot.
@@ -172,7 +172,7 @@ fn restore_preserves_rollback_snapshot_when_verify_and_rollback_both_fail() {
     // а не данные snapshot'а.
     let preserved_path = backups_dir(&db_path).join(preserved[0]);
     let preserved_conn = Connection::open(&preserved_path).unwrap();
-    check_integrity(&preserved_conn).unwrap();
+    ark_store::open::check_integrity(&preserved_conn).unwrap();
     assert!(
         list_objects(&preserved_conn).unwrap().is_empty(),
         "preserved snapshot must hold the PRE-RESTORE state"
@@ -189,7 +189,7 @@ fn restore_preserves_rollback_snapshot_when_verify_and_rollback_both_fail() {
         list_objects(&conn).unwrap().is_empty(),
         "restoring the preserved snapshot must return live DB to pre-restore state"
     );
-    check_integrity(&conn).unwrap();
+    ark_store::open::check_integrity(&conn).unwrap();
 }
 
 #[test]
@@ -377,5 +377,5 @@ fn restore_replaces_live_content_and_stays_valid() {
     let objects = list_objects(&conn).unwrap();
     assert_eq!(objects.len(), 1);
     assert_eq!(objects[0].id, "obj-a");
-    check_integrity(&conn).unwrap();
+    ark_store::open::check_integrity(&conn).unwrap();
 }

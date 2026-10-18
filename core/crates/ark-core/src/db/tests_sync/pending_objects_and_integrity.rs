@@ -150,14 +150,14 @@
     #[test]
     fn check_integrity_passes_on_fresh_db() {
         let conn = Connection::open_in_memory().unwrap();
-        check_integrity(&conn)
+        ark_store::open::check_integrity(&conn)
             .expect("РїСѓСЃС‚Р°СЏ DB РґРѕР»Р¶РЅР° РїСЂРѕС…РѕРґРёС‚СЊ integrity_check");
     }
 
     #[test]
     fn check_integrity_passes_after_init_schema() {
         let conn = setup_db();
-        check_integrity(&conn)
+        ark_store::open::check_integrity(&conn)
             .expect("DB РїРѕСЃР»Рµ init_schema РґРѕР»Р¶РЅР° Р±С‹С‚СЊ С†РµР»РѕСЃС‚РЅРѕР№");
     }
 

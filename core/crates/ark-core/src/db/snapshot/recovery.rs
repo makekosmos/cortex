@@ -52,7 +52,7 @@ pub(super) fn preserve_live_device_identity(
         .commit()
         .map_err(|error| format!("restore identity commit failed: {error}"))?;
     verify_live_identity(&target, &identity)?;
-    crate::db::open::check_integrity(&target)
+    ark_store::open::check_integrity(&target)
 }
 
 fn load_live_identity(connection: &Connection) -> Result<LiveDeviceIdentity, String> {
