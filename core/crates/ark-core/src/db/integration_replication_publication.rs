@@ -1,4 +1,4 @@
-use super::integration_replication_common::{storage, u64_value};
+use super::integration_replication_common::storage;
 use super::{
     upsert_integration_credential_envelope_record, upsert_integration_refresh_lease_record,
 };
@@ -53,16 +53,11 @@ fn try_acquire_integration_refresh_lease_inner(
     if holder_node_id != device_id {
         return Err("refresh lease holder must be the local node".into());
     }
-    let published_generation = conn
-        .query_row(
-            "SELECT MAX(credential_generation)
-                 FROM integration_credential_envelopes WHERE integration_id = ?1",
-            [integration_id],
-            |row| row.get::<_, Option<i64>>(0),
-        )
-        .map_err(storage)?
-        .map(|value| u64_value(value, "credential_generation"))
-        .transpose()?;
+    let published_generation =
+        ark_store::integration_replication::load_max_integration_credential_generation(
+            conn,
+            integration_id,
+        )?;
     if published_generation.is_some_and(|current| *credential_generation <= current) {
         return Err(IntegrationContractError::NonMonotonic {
             field: "credential_generation",
