@@ -6,9 +6,227 @@ use ark_application::{
 use ark_domain::types::VersionVector;
 
 use crate::{
-    protocol::{LanSyncMessage, NegotiatedProtocol, ProtocolCapability},
+    protocol::{
+        compute_hello_auth_hmac, compute_negotiation_selection_hmac, generate_auth_nonce,
+        negotiate_protocol, verify_hello_auth_hmac, verify_negotiation_offer_hmac, LanSyncMessage,
+        NegotiatedProtocol, ProtocolCapability, ProtocolNegotiationError, ProtocolOffer,
+        ProtocolSelectionTranscript, MAX_PROTOCOL_OFFER_VERSIONS,
+    },
     registry_admission::AdmissionUpdate,
 };
+
+pub struct ResponderHelloRequest {
+    pub device_id: String,
+    pub device_name: String,
+    pub space_id: String,
+    pub addresses: Vec<String>,
+    pub auth_secret: Option<String>,
+    pub task_merge_bootstrap_v2: bool,
+    pub platform: Option<String>,
+    pub app_version: Option<String>,
+}
+
+pub struct AcceptedClientHello {
+    pub peer_device_id: String,
+    pub peer_device_name: String,
+    pub peer_addresses: Vec<String>,
+    pub peer_platform: Option<String>,
+    pub peer_app_version: Option<String>,
+    pub protocol: NegotiatedProtocol,
+    pub reply: LanSyncMessage,
+}
+
+pub enum ClientHelloRejection {
+    DifferentSpace,
+    InvalidAuthentication,
+    Protocol {
+        peer_device_id: String,
+        error: ProtocolNegotiationError,
+        offered_protocol_versions: Vec<u32>,
+    },
+}
+
+pub fn accept_client_hello(
+    message: LanSyncMessage,
+    request: ResponderHelloRequest,
+) -> Result<AcceptedClientHello, ClientHelloRejection> {
+    let LanSyncMessage::Hello {
+        protocol_version,
+        device_id: peer_device_id,
+        device_name: peer_device_name,
+        space_id: peer_space_id,
+        addresses,
+        auth_nonce,
+        auth_hmac,
+        platform: peer_platform,
+        app_version: peer_app_version,
+        supported_protocol_versions,
+        supported_capabilities,
+        negotiated_capabilities,
+        negotiation_hmac: peer_negotiation_hmac,
+    } = message
+    else {
+        return Err(ClientHelloRejection::Protocol {
+            peer_device_id: String::new(),
+            error: ProtocolNegotiationError::InvalidSelection,
+            offered_protocol_versions: Vec::new(),
+        });
+    };
+
+    if peer_space_id != request.space_id {
+        return Err(ClientHelloRejection::DifferentSpace);
+    }
+    if let Some(secret) = request.auth_secret.as_deref() {
+        let valid = match (auth_nonce.as_deref(), auth_hmac.as_deref()) {
+            (Some(nonce), Some(hmac)) => {
+                verify_hello_auth_hmac(secret, &request.space_id, &peer_device_id, nonce, hmac)
+            }
+            _ => false,
+        };
+        if !valid {
+            return Err(ClientHelloRejection::InvalidAuthentication);
+        }
+    }
+
+    let mut local_offer = ProtocolOffer::current_with_registry_history(true);
+    if request.task_merge_bootstrap_v2 {
+        local_offer = local_offer.with_task_merge_bootstrap_v2();
+    }
+    if negotiated_capabilities.is_some() {
+        return Err(protocol_rejection(
+            peer_device_id,
+            ProtocolNegotiationError::InvalidCapabilityOffer,
+            Vec::new(),
+        ));
+    }
+    let peer_offer = ProtocolOffer::new(
+        protocol_version,
+        supported_protocol_versions.as_deref(),
+        supported_capabilities.as_deref(),
+    )
+    .map_err(|error| protocol_rejection(peer_device_id.clone(), error, Vec::new()))?;
+    let peer_offer_authenticated = match (
+        request.auth_secret.as_deref(),
+        auth_nonce.as_deref(),
+        peer_negotiation_hmac.as_deref(),
+    ) {
+        (Some(secret), Some(nonce), Some(hmac)) => verify_negotiation_offer_hmac(
+            secret,
+            &request.space_id,
+            &peer_device_id,
+            nonce,
+            &peer_offer,
+            hmac,
+        ),
+        (_, _, Some(_)) => false,
+        _ => false,
+    };
+    if peer_negotiation_hmac.is_some() && !peer_offer_authenticated {
+        return Err(protocol_rejection(
+            peer_device_id,
+            ProtocolNegotiationError::InvalidSelectionProof,
+            peer_offer.version_ids(),
+        ));
+    }
+    let negotiated = negotiate_protocol(&local_offer, &peer_offer, peer_offer_authenticated)
+        .map_err(|error| {
+            protocol_rejection(peer_device_id.clone(), error, peer_offer.version_ids())
+        })?;
+    if !negotiated
+        .capabilities
+        .contains(&ProtocolCapability::RegistryHistoryV1)
+    {
+        return Err(protocol_rejection(
+            peer_device_id,
+            ProtocolNegotiationError::MissingRegistryHistory,
+            peer_offer.version_ids(),
+        ));
+    }
+
+    let (reply_auth_nonce, reply_auth_hmac) = match request.auth_secret.as_deref() {
+        Some(secret) => {
+            let nonce = generate_auth_nonce();
+            let hmac =
+                compute_hello_auth_hmac(secret, &request.space_id, &request.device_id, &nonce);
+            (Some(nonce), Some(hmac))
+        }
+        None => (None, None),
+    };
+    let negotiated_capabilities = negotiated
+        .capabilities
+        .iter()
+        .map(|capability| capability.wire_id().to_owned())
+        .collect();
+    let reply_negotiation_hmac = if peer_offer_authenticated {
+        request
+            .auth_secret
+            .as_deref()
+            .zip(auth_nonce.as_deref())
+            .zip(reply_auth_nonce.as_deref())
+            .map(|((secret, peer_nonce), reply_nonce)| {
+                compute_negotiation_selection_hmac(
+                    secret,
+                    &ProtocolSelectionTranscript {
+                        space_id: &request.space_id,
+                        initiator_device_id: &peer_device_id,
+                        responder_device_id: &request.device_id,
+                        initiator_nonce: peer_nonce,
+                        responder_nonce: reply_nonce,
+                        initiator_offer: &peer_offer,
+                        responder_offer: &local_offer,
+                        selection: &negotiated,
+                    },
+                )
+            })
+    } else {
+        None
+    };
+
+    Ok(AcceptedClientHello {
+        peer_device_id,
+        peer_device_name,
+        peer_addresses: addresses.unwrap_or_default(),
+        peer_platform,
+        peer_app_version,
+        protocol: negotiated.clone(),
+        reply: LanSyncMessage::Hello {
+            protocol_version: negotiated.version,
+            device_id: request.device_id,
+            device_name: request.device_name,
+            space_id: request.space_id,
+            addresses: Some(request.addresses),
+            auth_nonce: reply_auth_nonce,
+            auth_hmac: reply_auth_hmac,
+            platform: request.platform,
+            app_version: request.app_version,
+            supported_protocol_versions: Some(local_offer.version_ids()),
+            supported_capabilities: Some(local_offer.capability_ids()),
+            negotiated_capabilities: Some(negotiated_capabilities),
+            negotiation_hmac: reply_negotiation_hmac,
+        },
+    })
+}
+
+fn protocol_rejection(
+    peer_device_id: String,
+    error: ProtocolNegotiationError,
+    offered_protocol_versions: Vec<u32>,
+) -> ClientHelloRejection {
+    ClientHelloRejection::Protocol {
+        peer_device_id,
+        error,
+        offered_protocol_versions: if offered_protocol_versions.len() <= MAX_PROTOCOL_OFFER_VERSIONS
+        {
+            offered_protocol_versions
+        } else {
+            Vec::new()
+        },
+    }
+}
+
+#[cfg(test)]
+#[path = "server_session/hello_tests.rs"]
+mod hello_tests;
 
 pub struct DirectServerAdmission {
     admission: crate::registry_admission::DirectRegistryAdmission,
