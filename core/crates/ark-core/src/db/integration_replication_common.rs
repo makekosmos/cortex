@@ -10,10 +10,6 @@ pub(super) fn storage(error: impl std::fmt::Display) -> String {
     error.to_string()
 }
 
-pub(super) fn u64_value(value: i64, field: &str) -> Result<u64, String> {
-    u64::try_from(value).map_err(|_| format!("{field} is negative"))
-}
-
 pub(super) fn require_newer_hlc(proposed: &str, current: &str) -> Result<(), String> {
     if HLC::is_newer(proposed, current) {
         Ok(())
