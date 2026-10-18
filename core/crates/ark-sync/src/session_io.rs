@@ -37,6 +37,7 @@ pub struct SessionIoPendingSends {
 #[derive(Default)]
 struct OutboundState {
     closing: bool,
+    close_after_flush: bool,
     pending: usize,
 }
 
@@ -65,6 +66,21 @@ impl SessionIoPendingSends {
             .unwrap_or_else(|error| error.into_inner())
             .closing = true;
         self.changed.notify_one();
+    }
+
+    fn close_after_flush(&self) {
+        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        state.closing = true;
+        state.close_after_flush = true;
+        drop(state);
+        self.changed.notify_one();
+    }
+
+    fn is_close_after_flush(&self) -> bool {
+        self.state
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .close_after_flush
     }
 
     pub fn has_pending(&self) -> bool {
@@ -185,22 +201,37 @@ impl SessionIo {
     }
 
     pub async fn finish(mut self) -> Result<(), SessionIoError> {
+        let flush_result = if self.outgoing.pending_sends.is_close_after_flush() {
+            Some(self.wait_for_close_flush().await)
+        } else {
+            None
+        };
         self.outgoing.pending_sends.close();
         if let Some(shutdown) = self.shutdown.take() {
             let _ = shutdown.send(true);
         }
-        if let Some(worker) = self.worker.take() {
+        let finish_result = if let Some(worker) = self.worker.take() {
             worker
                 .await
-                .map_err(|error| SessionIoError::TransportTask(error.to_string()))?;
+                .map_err(|error| SessionIoError::TransportTask(error.to_string()))
+        } else {
+            Ok(())
+        };
+        if let Some(flush_result) = flush_result {
+            flush_result?;
         }
+        finish_result?;
         Ok(())
     }
 
     pub async fn finish_after_flush(self) -> Result<(), SessionIoError> {
         self.outgoing.close_after_flush();
+        self.finish().await
+    }
+
+    async fn wait_for_close_flush(&mut self) -> Result<(), SessionIoError> {
         let mut close_result = self.close_result.clone();
-        let flush_result = tokio::time::timeout(Duration::from_secs(2), async {
+        tokio::time::timeout(Duration::from_secs(2), async {
             loop {
                 if let Some(result) = close_result.borrow().clone() {
                     return result.map_err(SessionIoError::CloseFlushFailed);
@@ -212,10 +243,7 @@ impl SessionIo {
             }
         })
         .await
-        .map_err(|_| SessionIoError::CloseFlushTimeout)?;
-        let finish_result = self.finish().await;
-        flush_result?;
-        finish_result
+        .map_err(|_| SessionIoError::CloseFlushTimeout)?
     }
 }
 
@@ -267,7 +295,7 @@ impl SessionIoSender {
     }
 
     pub fn close_after_flush(&self) {
-        self.pending_sends.close();
+        self.pending_sends.close_after_flush();
         let _ = self.close_after_flush.try_send(());
     }
 }
@@ -338,6 +366,23 @@ mod tests {
         let _ = release_tx.send(());
         blocked_send.await.unwrap().unwrap();
         session.finish().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn finish_waits_for_a_sender_close_after_flush_request() {
+        let (joined_tx, joined_rx) = oneshot::channel();
+        let session = SessionIo::start_transport(1, move |mut driver| {
+            tokio::spawn(async move {
+                assert_eq!(driver.close_after_flush.recv().await, Some(()));
+                driver.close_result.send(Some(Ok(()))).unwrap();
+                joined_tx.send(()).unwrap();
+            })
+        })
+        .unwrap();
+
+        session.sender().close_after_flush();
+        session.finish().await.unwrap();
+        joined_rx.await.unwrap();
     }
 
     #[tokio::test]
