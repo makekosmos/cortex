@@ -44,8 +44,6 @@ fn take_current_connection<T>(
     }
 }
 
-// Checks that the addressed transport peer still owns this connection and
-// delegates the policy decision to the sync-owned capability.
 async fn authorize_signed_integration_frame(
     registry: &DeviceRegistry,
     outbound_authorizer: &tokio::sync::RwLock<Option<Arc<dyn OutboundIntegrationFrameAuthorizer>>>,
