@@ -1,14 +1,12 @@
 use super::integration_replication_common::{
-    envelope_version_is_newer, json, parse, persist_with_vector, sqlite_i64, storage, u64_value,
+    envelope_version_is_newer, json, persist_with_vector, sqlite_i64, storage,
 };
 use super::load_integration_node_grant;
 use crate::integration_replication::{envelope_entity_id, IntegrationContractError, NodeStatus};
-use rusqlite::{params, Connection, OptionalExtension};
-use serde_json::Value;
-
 use crate::integration_replication::{
     validate_envelope_recipient, GrantStatus, IntegrationCredentialEnvelope,
 };
+use rusqlite::{params, Connection, OptionalExtension};
 
 pub(in crate::db) fn upsert_integration_credential_envelope_record(
     conn: &Connection,
@@ -204,82 +202,18 @@ pub fn load_integration_credential_envelope(
     recipient_node_id: &str,
     credential_generation: u64,
 ) -> Result<Option<IntegrationCredentialEnvelope>, String> {
-    let generation = sqlite_i64(credential_generation, "credential_generation")?;
-    let row = conn
-        .query_row(
-            "SELECT grant_epoch, refresh_fencing_token, key_id, algorithm, nonce, ciphertext,
-                    authenticated_metadata_json, issuer_node_id, issued_at,
-                    revision, hlc FROM integration_credential_envelopes
-             WHERE integration_id = ?1 AND recipient_node_id = ?2
-               AND credential_generation = ?3",
-            params![integration_id, recipient_node_id, generation],
-            |row| {
-                Ok((
-                    row.get::<_, i64>(0)?,
-                    row.get::<_, i64>(1)?,
-                    row.get::<_, String>(2)?,
-                    row.get::<_, String>(3)?,
-                    row.get::<_, String>(4)?,
-                    row.get::<_, String>(5)?,
-                    row.get::<_, Option<String>>(6)?,
-                    row.get::<_, String>(7)?,
-                    row.get::<_, String>(8)?,
-                    row.get::<_, i64>(9)?,
-                    row.get::<_, String>(10)?,
-                ))
-            },
-        )
-        .optional()
-        .map_err(storage)?;
-    let Some((
-        epoch,
-        refresh_fence,
-        key_id,
-        algorithm,
-        nonce,
-        ciphertext,
-        metadata,
-        issuer,
-        issued,
-        revision,
-        hlc,
-    )) = row
+    let Some(envelope) =
+        ark_store::integration_replication::load_integration_credential_envelope_record(
+            conn,
+            integration_id,
+            recipient_node_id,
+            credential_generation,
+        )?
     else {
         return Ok(None);
     };
-    let record = IntegrationCredentialEnvelope {
-        integration_id: integration_id.to_string(),
-        recipient_node_id: recipient_node_id.to_string(),
-        grant_epoch: u64_value(epoch, "grant_epoch")?,
-        credential_generation,
-        refresh_fencing_token: u64_value(refresh_fence, "refresh_fencing_token")?,
-        key_id,
-        algorithm,
-        nonce,
-        ciphertext,
-        authenticated_metadata: metadata.map(|value| parse::<Value>(&value)).transpose()?,
-        issuer_node_id: issuer,
-        issued_at: issued,
-        revision: u64_value(revision, "revision")?,
-        hlc,
-    };
-    record.validate().map_err(|e| e.to_string())?;
-    let node = ark_store::integration_replication::load_authorized_node(conn, recipient_node_id)?
-        .ok_or_else(|| {
-        IntegrationContractError::Mismatch {
-            field: "authorized_node",
-        }
-        .to_string()
-    })?;
-    let grant =
-        load_integration_node_grant(conn, integration_id, recipient_node_id)?.ok_or_else(|| {
-            IntegrationContractError::Mismatch {
-                field: "integration_node_grant",
-            }
-            .to_string()
-        })?;
-    validate_envelope_recipient(&record, &node, &grant).map_err(|error| error.to_string())?;
-    Ok(Some(record))
+    validate_loaded_envelope_recipient(conn, &envelope)?;
+    Ok(Some(envelope))
 }
 
 pub fn load_latest_integration_credential_envelope(
@@ -287,23 +221,40 @@ pub fn load_latest_integration_credential_envelope(
     integration_id: &str,
     recipient_node_id: &str,
 ) -> Result<Option<IntegrationCredentialEnvelope>, String> {
-    let generation = conn
-        .query_row(
-            "SELECT MAX(credential_generation) FROM integration_credential_envelopes
-             WHERE integration_id = ?1 AND recipient_node_id = ?2",
-            params![integration_id, recipient_node_id],
-            |row| row.get::<_, Option<i64>>(0),
-        )
-        .map_err(storage)?;
-    generation
-        .map(|value| {
-            load_integration_credential_envelope(
-                conn,
-                integration_id,
-                recipient_node_id,
-                u64_value(value, "credential_generation")?,
-            )
-        })
-        .transpose()
-        .map(Option::flatten)
+    let Some(envelope) =
+        ark_store::integration_replication::load_latest_integration_credential_envelope_record(
+            conn,
+            integration_id,
+            recipient_node_id,
+        )?
+    else {
+        return Ok(None);
+    };
+    validate_loaded_envelope_recipient(conn, &envelope)?;
+    Ok(Some(envelope))
+}
+
+fn validate_loaded_envelope_recipient(
+    conn: &Connection,
+    envelope: &IntegrationCredentialEnvelope,
+) -> Result<(), String> {
+    let node = ark_store::integration_replication::load_authorized_node(
+        conn,
+        &envelope.recipient_node_id,
+    )?
+    .ok_or_else(|| {
+        IntegrationContractError::Mismatch {
+            field: "authorized_node",
+        }
+        .to_string()
+    })?;
+    let grant =
+        load_integration_node_grant(conn, &envelope.integration_id, &envelope.recipient_node_id)?
+            .ok_or_else(|| {
+            IntegrationContractError::Mismatch {
+                field: "integration_node_grant",
+            }
+            .to_string()
+        })?;
+    validate_envelope_recipient(envelope, &node, &grant).map_err(|error| error.to_string())
 }

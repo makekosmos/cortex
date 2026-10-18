@@ -2,8 +2,6 @@ use super::bump_sync_version_vector;
 use crate::hlc::HLC;
 use rusqlite::Connection;
 
-use serde::de::DeserializeOwned;
-
 use crate::integration_replication::{
     IntegrationContractError, IntegrationRefreshLease as CommonIntegrationRefreshLease,
 };
@@ -16,10 +14,6 @@ pub(super) fn storage(error: impl std::fmt::Display) -> String {
 
 pub(super) fn json<T: serde::Serialize>(value: &T) -> Result<String, String> {
     serde_json::to_string(value).map_err(storage)
-}
-
-pub(super) fn parse<T: DeserializeOwned>(value: &str) -> Result<T, String> {
-    serde_json::from_str(value).map_err(storage)
 }
 
 pub(super) fn sqlite_i64(value: u64, field: &str) -> Result<i64, String> {
