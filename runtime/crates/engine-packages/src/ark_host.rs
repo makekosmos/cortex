@@ -448,5 +448,6 @@ mod tests {
             .find(|r| r["processName"] == "explorer.exe")
             .expect("explorer row present");
         assert_eq!(explorer["isSystem"], true);
+        shutdown(host).await;
     }
 }
