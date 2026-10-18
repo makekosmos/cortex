@@ -37,7 +37,10 @@ impl SignedIntegrationFrameStore for SqliteSignedIntegrationFrameSession<'_, '_>
         &self,
         integration_id: &str,
     ) -> Result<Option<IntegrationConfiguration>, String> {
-        crate::db::load_integration_configuration(self.transaction, integration_id)
+        ark_store::integration_replication::load_integration_configuration(
+            self.transaction,
+            integration_id,
+        )
     }
 
     fn load_current_entity(
@@ -46,8 +49,11 @@ impl SignedIntegrationFrameStore for SqliteSignedIntegrationFrameSession<'_, '_>
     ) -> Result<Option<IntegrationReplicationEntity>, String> {
         let current = match entity {
             IntegrationReplicationEntity::IntegrationConfiguration(value) => {
-                crate::db::load_integration_configuration(self.transaction, &value.integration_id)?
-                    .map(IntegrationReplicationEntity::IntegrationConfiguration)
+                ark_store::integration_replication::load_integration_configuration(
+                    self.transaction,
+                    &value.integration_id,
+                )?
+                .map(IntegrationReplicationEntity::IntegrationConfiguration)
             }
             IntegrationReplicationEntity::AuthorizedNode(value) => {
                 ark_store::integration_replication::load_authorized_node(

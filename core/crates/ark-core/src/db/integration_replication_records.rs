@@ -1,8 +1,7 @@
 use super::integration_replication_common::{
-    json, parse, persist_with_vector, require_newer_hlc, sqlite_i64, storage, u64_value,
+    json, persist_with_vector, require_newer_hlc, sqlite_i64, storage,
 };
 use rusqlite::{params, Connection, OptionalExtension};
-use serde_json::Value;
 
 use crate::integration_replication::{AuthorizedNode, IntegrationConfiguration, NodeStatus};
 fn node_status_value(status: NodeStatus) -> &'static str {
@@ -87,79 +86,6 @@ pub fn upsert_integration_configuration(
         },
     )
 }
-pub fn load_integration_configuration(
-    conn: &Connection,
-    integration_id: &str,
-) -> Result<Option<IntegrationConfiguration>, String> {
-    let row = conn
-        .query_row(
-            "SELECT provider, account_subject, public_scopes_json,
-                    public_settings_json, enabled, sync_cursor, revision, hlc
-             FROM integration_configurations WHERE integration_id = ?1",
-            params![integration_id],
-            |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, String>(2)?,
-                    row.get::<_, String>(3)?,
-                    row.get::<_, i64>(4)? != 0,
-                    row.get::<_, Option<rusqlite::types::Value>>(5)?,
-                    row.get::<_, i64>(6)?,
-                    row.get::<_, String>(7)?,
-                ))
-            },
-        )
-        .optional()
-        .map_err(storage)?;
-    let Some((provider, subject, scopes, settings, enabled, cursor, revision, hlc)) = row else {
-        return Ok(None);
-    };
-    let sync_cursor = match parse_sync_cursor(cursor) {
-        Ok(value) => value,
-        Err(_) => {
-            // Legacy databases may contain an opaque provider cursor here.
-            // Remove it before returning any configuration or exporting a
-            // replication frame; opaque provider state belongs in ciphertext.
-            conn.execute(
-                "UPDATE integration_configurations SET sync_cursor = NULL
-                 WHERE integration_id = ?1",
-                params![integration_id],
-            )
-            .map_err(storage)?;
-            None
-        }
-    };
-    let record = IntegrationConfiguration {
-        integration_id: integration_id.to_string(),
-        provider,
-        account_subject: subject,
-        public_scopes: parse(&scopes)?,
-        public_settings: parse::<Value>(&settings)?,
-        enabled,
-        sync_cursor,
-        revision: u64_value(revision, "revision")?,
-        hlc,
-    };
-    record.validate().map_err(|e| e.to_string())?;
-    Ok(Some(record))
-}
-fn parse_sync_cursor(cursor: Option<rusqlite::types::Value>) -> Result<Option<u64>, String> {
-    cursor
-        .map(|value| match value {
-            rusqlite::types::Value::Integer(value) => u64_value(value, "sync_cursor"),
-            rusqlite::types::Value::Text(value) => value
-                .parse::<u64>()
-                .map_err(|_| "sync_cursor must be a non-negative integer".to_string())
-                .and_then(|value| {
-                    sqlite_i64(value, "sync_cursor")?;
-                    Ok(value)
-                }),
-            _ => Err("sync_cursor must be a non-negative integer".to_string()),
-        })
-        .transpose()
-}
-
 pub fn upsert_authorized_node(
     conn: &Connection,
     node: &AuthorizedNode,

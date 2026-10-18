@@ -144,10 +144,12 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
     drop(source);
     apply_signed_integration_changes(&target, &frame, "space-a", "node-b", None, 15).unwrap();
 
-    assert_eq!(
-        load_integration_configuration(&target, "integration-a").unwrap(),
-        Some(config.clone())
-    );
+    let loaded = ark_store::integration_replication::load_integration_configuration(
+        &target,
+        "integration-a",
+    )
+    .unwrap();
+    assert_eq!(loaded, Some(config.clone()));
     assert_eq!(
         ark_store::integration_replication::load_authorized_node(&target, "node-b").unwrap(),
         Some(recipient)
@@ -245,10 +247,13 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
     continued_config.hlc = "2026-08-31T00:00:02.000Z:000001:node-b".into();
     upsert_integration_configuration(&target, &continued_config, "node-b").unwrap();
     assert_eq!(
-        load_integration_configuration(&target, "integration-a")
-            .unwrap()
-            .unwrap()
-            .sync_cursor,
+        ark_store::integration_replication::load_integration_configuration(
+            &target,
+            "integration-a"
+        )
+        .unwrap()
+        .unwrap()
+        .sync_cursor,
         Some(4)
     );
     let target_vector: VersionVector = serde_json::from_str(

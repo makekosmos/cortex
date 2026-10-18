@@ -22,7 +22,7 @@ fn legacy_opaque_sync_cursor_is_scrubbed_before_configuration_load() {
     )
     .unwrap();
     assert_eq!(
-        load_integration_configuration(&conn, "opaque")
+        ark_store::integration_replication::load_integration_configuration(&conn, "opaque")
             .unwrap()
             .unwrap()
             .sync_cursor,
@@ -40,7 +40,7 @@ fn legacy_opaque_sync_cursor_is_scrubbed_before_configuration_load() {
         .unwrap();
     assert_eq!(persisted, None);
     assert_eq!(
-        load_integration_configuration(&conn, "numeric")
+        ark_store::integration_replication::load_integration_configuration(&conn, "numeric")
             .unwrap()
             .unwrap()
             .sync_cursor,
@@ -118,9 +118,14 @@ fn signed_apply_rejects_payload_authorization_without_preexisting_local_trust() 
         apply_signed_integration_changes(&target, &frame, "space-a", "node-b", None, 15),
         Err(SignedSyncError::Apply(error)) if error.contains("pre-existing integration grant")
     ));
-    assert!(load_integration_configuration(&target, "integration-a")
+    assert!(
+        ark_store::integration_replication::load_integration_configuration(
+            &target,
+            "integration-a"
+        )
         .unwrap()
-        .is_none());
+        .is_none()
+    );
 }
 
 #[test]

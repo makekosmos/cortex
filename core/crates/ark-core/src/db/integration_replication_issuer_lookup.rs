@@ -1,6 +1,6 @@
 use super::{
-    load_integration_configuration, load_integration_credential_envelope,
-    load_integration_node_grant, load_latest_integration_credential_envelope,
+    load_integration_credential_envelope, load_integration_node_grant,
+    load_latest_integration_credential_envelope,
 };
 use crate::integration_replication::{
     encryption_key_id, GrantStatus, IntegrationContractError, NodeStatus,
@@ -190,7 +190,9 @@ pub fn load_issuer_encryption_key_for_publish(
             return Err(IntegrationContractError::EmptyField { field }.to_string());
         }
     }
-    if load_integration_configuration(conn, integration_id)?.is_none() {
+    if ark_store::integration_replication::load_integration_configuration(conn, integration_id)?
+        .is_none()
+    {
         return Err(IntegrationContractError::Mismatch {
             field: "integration_configuration",
         }

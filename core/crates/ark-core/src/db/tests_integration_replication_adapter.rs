@@ -92,7 +92,7 @@ async fn signed_integration_adapter_uses_queries_and_transactional_commands() {
     let guard = connection.lock().unwrap();
     assert!(guard.is_autocommit());
     assert_eq!(
-        load_integration_configuration(&guard, "integration-a")
+        ark_store::integration_replication::load_integration_configuration(&guard, "integration-a")
             .unwrap()
             .unwrap()
             .public_settings,
@@ -195,9 +195,14 @@ async fn signed_integration_command_rolls_back_replay_and_earlier_changes() {
     assert!(error.contains("refresh lease holder does not match signed origin"));
     {
         let guard = connection.lock().unwrap();
-        assert!(load_integration_configuration(&guard, integration_id)
+        assert!(
+            ark_store::integration_replication::load_integration_configuration(
+                &guard,
+                integration_id
+            )
             .unwrap()
-            .is_none());
+            .is_none()
+        );
         assert!(!load_version_vector(&guard)
             .unwrap()
             .contains_key(&format!("integration_configuration:{integration_id}")));

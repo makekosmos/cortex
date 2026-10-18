@@ -1,7 +1,6 @@
 use super::integration_replication_common::{storage, u64_value};
 use super::{
-    load_integration_configuration, load_integration_credential_envelope,
-    load_integration_node_grant, VERSION_VECTOR_KEY,
+    load_integration_credential_envelope, load_integration_node_grant, VERSION_VECTOR_KEY,
 };
 use crate::types::VersionVector;
 use rusqlite::{params, Connection};
@@ -27,7 +26,9 @@ pub fn export_integration_replication(
     }
 
     let mut changes = Vec::<ExportChange>::new();
-    if let Some(configuration) = load_integration_configuration(conn, integration_id)? {
+    if let Some(configuration) =
+        ark_store::integration_replication::load_integration_configuration(conn, integration_id)?
+    {
         changes.push(export_change(
             conn,
             ExportEntity::IntegrationConfiguration(configuration),
