@@ -2,12 +2,14 @@
 
 use super::*;
 use std::sync::{Arc, Mutex};
+use tokio::sync::oneshot;
 
 #[tokio::test]
 async fn connected_server_session_routes_messages_and_reports_transport_end() {
     let received = Arc::new(Mutex::new(Vec::new()));
     let mut handler = RecordingHandler(Arc::clone(&received));
-    let mut session_io = SessionIo::start_transport(4, |driver| {
+    let (pong_tx, pong_rx) = oneshot::channel();
+    let mut session_io = SessionIo::start_transport(4, |mut driver| {
         tokio::spawn(async move {
             for event in [
                 SessionIoEvent::MalformedMessage,
@@ -18,6 +20,11 @@ async fn connected_server_session_routes_messages_and_reports_transport_end() {
                     return;
                 }
             }
+            let pong = tokio::select! {
+                message = driver.control_outgoing.recv() => message,
+                _ = driver.shutdown.changed() => None,
+            };
+            let _ = pong_tx.send(pong);
         })
     })
     .unwrap();
@@ -25,10 +32,11 @@ async fn connected_server_session_routes_messages_and_reports_transport_end() {
     let end = run_connected_server_session(&mut session_io, &mut handler).await;
     assert_eq!(end, DirectServerSessionEnd::Closed);
     session_io.finish().await.unwrap();
-    assert_eq!(
-        *received.lock().unwrap(),
-        ["malformed", "message:Ping { ts: 7 }"]
-    );
+    assert_eq!(*received.lock().unwrap(), ["malformed"]);
+    assert!(matches!(
+        pong_rx.await.unwrap(),
+        Some(LanSyncMessage::Pong { ts: 7 })
+    ));
 }
 
 #[tokio::test]

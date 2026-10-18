@@ -177,18 +177,6 @@ pub(super) async fn handle_live_message(ctx: &MessageContext, peer_id: usize, ms
             peers: incoming_peers,
         } => sync_server_inbound::handle_peer_list(ctx, peer_id, incoming_peers).await,
 
-        LanSyncMessage::Ping { ts } => {
-            let tx = {
-                let peers_guard = peers.lock().await;
-                peers_guard.get(&peer_id).map(|p| p.tx.clone())
-            };
-            if let Some(tx) = tx {
-                send_msg(&tx, &LanSyncMessage::Pong { ts }).await;
-            }
-        }
-
-        LanSyncMessage::Pong { .. } => {}
-
         // Pairing consent lives on the addressed (iroh) transport; a
         // rejection over the WS path is meaningless — drop it.
         LanSyncMessage::PairingRejected { .. } => {}

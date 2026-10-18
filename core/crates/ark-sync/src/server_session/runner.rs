@@ -21,7 +21,15 @@ pub async fn run_connected_server_session(
 ) -> DirectServerSessionEnd {
     loop {
         match session_io.receive().await {
-            Some(SessionIoEvent::Message(message)) => handler.on_message(message).await,
+            Some(SessionIoEvent::Message(message)) => match *message {
+                LanSyncMessage::Ping { ts } => {
+                    if let Err(error) = session_io.send(LanSyncMessage::Pong { ts }).await {
+                        return DirectServerSessionEnd::Failed(format!("{error:?}"));
+                    }
+                }
+                LanSyncMessage::Pong { .. } => {}
+                message => handler.on_message(Box::new(message)).await,
+            },
             Some(SessionIoEvent::MalformedMessage) => handler.on_malformed_message().await,
             Some(SessionIoEvent::Closed) | None => return DirectServerSessionEnd::Closed,
             Some(SessionIoEvent::Failed(error)) => {
