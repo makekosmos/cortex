@@ -213,6 +213,13 @@ pub async fn start_hosts(setup: &support::IntegrationReplicationSetup) -> (ArkHo
         .as_str()
         .unwrap()
         .to_owned();
+    support::refresh_transport_public_keys_named(
+        setup,
+        &origin_ticket,
+        &recipient_ticket,
+        PACKAGE_ID,
+    )
+    .unwrap();
     let connect = recipient_host
         .request(
             "connect_with_pairing_code",
@@ -278,13 +285,6 @@ pub async fn start_hosts(setup: &support::IntegrationReplicationSetup) -> (ArkHo
         );
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
-    support::refresh_transport_public_keys_named(
-        setup,
-        &origin_ticket,
-        &recipient_ticket,
-        PACKAGE_ID,
-    )
-    .unwrap();
     offline::wait_for_peer(&origin_host, &setup.recipient.node_id).await;
     offline::wait_for_peer(&recipient_host, &setup.origin.node_id).await;
     (origin_host, recipient_host)
