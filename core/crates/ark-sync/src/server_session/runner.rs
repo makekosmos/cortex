@@ -23,7 +23,7 @@ pub async fn run_connected_server_session(
         match session_io.receive().await {
             Some(SessionIoEvent::Message(message)) => match *message {
                 LanSyncMessage::Ping { ts } => {
-                    if let Err(error) = session_io.send(LanSyncMessage::Pong { ts }).await {
+                    if let Err(error) = session_io.sender().try_send(LanSyncMessage::Pong { ts }) {
                         return DirectServerSessionEnd::Failed(format!("{error:?}"));
                     }
                 }
