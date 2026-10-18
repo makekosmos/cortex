@@ -342,6 +342,16 @@
       "count": 1
     },
     {
+      "path": "core/crates/ark-store/src/writer.rs",
+      "category": "connection lifecycle",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-store/src/writer.rs",
+      "category": "SQLite mutation API",
+      "count": 1
+    },
+    {
       "path": "core/crates/ark-store/src/type_registry/builtins.rs",
       "category": "SQLite mutation API",
       "count": 1

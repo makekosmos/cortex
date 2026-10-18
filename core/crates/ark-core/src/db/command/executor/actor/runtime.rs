@@ -1,5 +1,5 @@
 use super::*;
-use rusqlite::Connection;
+use ark_store::writer::SqliteWriter;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::Arc;
 use std::time::Instant;
@@ -31,7 +31,7 @@ pub(super) fn actor_loop(
         .map_err(DbError::Storage)?;
         Ok(connection)
     })();
-    let mut connection = match connection {
+    let mut writer = match connection {
         Ok(connection) => {
             shared
                 .ledger
@@ -39,7 +39,7 @@ pub(super) fn actor_loop(
                 .unwrap_or_else(|error| error.into_inner())
                 .lifecycle = Lifecycle::Ready;
             let _ = ready.send(Ok(()));
-            connection
+            SqliteWriter::from_connection(connection)
         }
         Err(error) => {
             let _ = ready.send(Err(error));
@@ -99,9 +99,9 @@ pub(super) fn actor_loop(
                 .readers
                 .write()
                 .unwrap_or_else(|error| error.into_inner());
-            run_task(&shared, &mut connection, slot.task)
+            run_task(&shared, &mut writer, slot.task)
         } else {
-            run_task(&shared, &mut connection, slot.task)
+            run_task(&shared, &mut writer, slot.task)
         };
         if committed {
             shared
@@ -118,17 +118,17 @@ pub(super) fn actor_loop(
             publish();
         }
     }
-    drop(connection);
+    drop(writer);
     complete_close(&shared);
 }
 
 fn run_task(
     shared: &ActorShared,
-    connection: &mut Connection,
+    writer: &mut SqliteWriter,
     task: Box<dyn WriterTask>,
 ) -> (bool, Option<Publish>) {
     let mut on_error = |error: &DbError| fail_closed_for_error(shared, error);
-    match catch_unwind(AssertUnwindSafe(|| task.run(connection, &mut on_error))) {
+    match catch_unwind(AssertUnwindSafe(|| task.run(writer, &mut on_error))) {
         Ok((Ok(()), publish)) => (true, Some(publish)),
         Ok((Err(_error), publish)) => (false, Some(publish)),
         Err(panic) => {

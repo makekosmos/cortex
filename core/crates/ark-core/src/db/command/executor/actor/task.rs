@@ -1,5 +1,5 @@
 use super::super::super::{CommandContext, DbCommand, DbError, DbMaintenanceCommand};
-use rusqlite::{Connection, Transaction, TransactionBehavior};
+use ark_store::writer::{SqliteWriter, TransactionFailure};
 use tokio::sync::oneshot;
 
 /// Delivers a reply. The writer calls it only after the slot is released, so a
@@ -9,7 +9,7 @@ pub(in crate::db::command) type Publish = Box<dyn FnOnce()>;
 pub(in crate::db::command) trait WriterTask: Send {
     fn run(
         self: Box<Self>,
-        connection: &mut Connection,
+        writer: &mut SqliteWriter,
         on_error: &mut dyn FnMut(&DbError),
     ) -> (Result<(), DbError>, Publish);
     fn cancel_before_start(self: Box<Self>);
@@ -43,7 +43,7 @@ pub(in crate::db::command) struct TypedCommand<C: DbCommand> {
 impl<C: DbCommand> WriterTask for TypedCommand<C> {
     fn run(
         self: Box<Self>,
-        connection: &mut Connection,
+        writer: &mut SqliteWriter,
         on_error: &mut dyn FnMut(&DbError),
     ) -> (Result<(), DbError>, Publish) {
         let Self {
@@ -51,16 +51,13 @@ impl<C: DbCommand> WriterTask for TypedCommand<C> {
             command,
             reply,
         } = *self;
-        let result: Result<C::Output, DbError> = (|| {
-            let transaction =
-                Transaction::new_unchecked(connection, TransactionBehavior::Immediate)
-                    .map_err(DbError::from_sqlite)?;
-            let output = command.execute(&context, &transaction)?;
-            transaction
-                .commit()
-                .map_err(|error| DbError::CommitFailed(error.to_string()))?;
-            Ok(output)
-        })();
+        let result = writer
+            .immediate(|transaction| command.execute(&context, transaction))
+            .map_err(|failure| match failure {
+                TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+                TransactionFailure::Operation(error) => error,
+                TransactionFailure::Commit(error) => DbError::CommitFailed(error.to_string()),
+            });
         settle(result, reply, on_error)
     }
 
@@ -81,11 +78,12 @@ pub(in crate::db::command) struct TypedMaintenance<C: DbMaintenanceCommand> {
 impl<C: DbMaintenanceCommand> WriterTask for TypedMaintenance<C> {
     fn run(
         self: Box<Self>,
-        connection: &mut Connection,
+        writer: &mut SqliteWriter,
         on_error: &mut dyn FnMut(&DbError),
     ) -> (Result<(), DbError>, Publish) {
         let Self { command, reply } = *self;
-        settle(command.execute(connection), reply, on_error)
+        let result = writer.with_connection_mut(|connection| command.execute(connection));
+        settle(result, reply, on_error)
     }
 
     fn cancel_before_start(self: Box<Self>) {

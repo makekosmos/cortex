@@ -1,6 +1,6 @@
 use super::*;
 use crate::db::command::executor::actor::{ActorShared, Publish, WriterTask};
-use rusqlite::Connection;
+use ark_store::writer::SqliteWriter;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::oneshot;
@@ -10,7 +10,7 @@ struct ReplyOrderNoop;
 impl WriterTask for ReplyOrderNoop {
     fn run(
         self: Box<Self>,
-        _connection: &mut Connection,
+        _writer: &mut SqliteWriter,
         _on_error: &mut dyn FnMut(&DbError),
     ) -> (Result<(), DbError>, Publish) {
         (Ok(()), Box::new(|| {}))
@@ -31,7 +31,7 @@ struct ReplyOrderProbe {
 impl WriterTask for ReplyOrderProbe {
     fn run(
         self: Box<Self>,
-        _connection: &mut Connection,
+        _writer: &mut SqliteWriter,
         _on_error: &mut dyn FnMut(&DbError),
     ) -> (Result<(), DbError>, Publish) {
         let Self { shared, admitted } = *self;

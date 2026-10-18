@@ -8,6 +8,7 @@ pub mod snapshot;
 pub mod sync_kv;
 pub mod type_registry;
 pub mod usage_sync_log;
+pub mod writer;
 
 pub const VERSION_VECTOR_KEY: &str = "lan_sync.version_vector";
 
