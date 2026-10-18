@@ -13,7 +13,6 @@ async fn registry_disable_closes_ready_session_and_removes_discovery_record() {
         platform: None,
         app_version: None,
         ready_peer: ReadyPeer::new(7, "disabled-device".into(), "test-session".into()),
-        sync_started: false,
         outbound_snapshot:
             ark_sync::outbound_snapshot::OutboundSnapshotProgress::acknowledged_awaiting_ack(
                 ark_sync::outbound_snapshot::PendingSnapshotAck {
@@ -23,7 +22,7 @@ async fn registry_disable_closes_ready_session_and_removes_discovery_record() {
             ),
         negotiated_protocol: None,
         registry_admission: None,
-        server_hello: None,
+        server_session: None,
         in_flight_feed_position: Some(42),
         in_flight_feed_policy_identity: None,
         tx: PeerMessageSender::test(tx),

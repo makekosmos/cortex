@@ -17,7 +17,6 @@ async fn stale_snapshot_ack_does_not_complete_or_clear_pending_snapshot() {
         platform: None,
         app_version: None,
         ready_peer: ReadyPeer::new(7, "peer-a".into(), "session-a".into()),
-        sync_started: false,
         outbound_snapshot:
             ark_sync::outbound_snapshot::OutboundSnapshotProgress::awaiting_first_ack(
                 ark_sync::outbound_snapshot::PendingSnapshotAck {
@@ -27,7 +26,7 @@ async fn stale_snapshot_ack_does_not_complete_or_clear_pending_snapshot() {
             ),
         negotiated_protocol: None,
         registry_admission: None,
-        server_hello: None,
+        server_session: None,
         in_flight_feed_position: None,
         in_flight_feed_policy_identity: None,
         tx: PeerMessageSender::test(tx),

@@ -3,15 +3,23 @@ use super::{
 };
 use crate::protocol::LanSyncMessage;
 
-pub struct DirectServerHelloSession {
+pub struct DirectServerSession {
     request: ResponderHelloRequest,
     phase: DirectServerHelloPhase,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DirectServerSyncStartPolicy {
+    Immediate,
+    AfterPolicyPersistence,
 }
 
 enum DirectServerHelloPhase {
     AwaitingHello,
     CheckingRemovedPeer(Box<AcceptedClientHello>),
     AwaitingRegistryAdmission,
+    AwaitingPolicy,
+    Ready,
     Closed,
 }
 
@@ -41,12 +49,36 @@ pub struct DirectServerHelloTransition {
     pub effect: DirectServerHelloEffect,
 }
 
-impl DirectServerHelloSession {
+impl DirectServerSession {
     pub fn new(request: ResponderHelloRequest) -> Self {
         Self {
             request,
             phase: DirectServerHelloPhase::AwaitingHello,
         }
+    }
+
+    pub fn mark_ready(&mut self, sync_start_policy: DirectServerSyncStartPolicy) -> bool {
+        if !matches!(
+            self.phase,
+            DirectServerHelloPhase::AwaitingRegistryAdmission
+        ) {
+            return false;
+        }
+        self.phase = match sync_start_policy {
+            DirectServerSyncStartPolicy::Immediate => DirectServerHelloPhase::Ready,
+            DirectServerSyncStartPolicy::AfterPolicyPersistence => {
+                DirectServerHelloPhase::AwaitingPolicy
+            }
+        };
+        true
+    }
+
+    pub fn start_sync_after_policy_persisted(&mut self) -> bool {
+        if !matches!(self.phase, DirectServerHelloPhase::AwaitingPolicy) {
+            return false;
+        }
+        self.phase = DirectServerHelloPhase::Ready;
+        true
     }
 
     pub fn transition(&mut self, input: DirectServerHelloInput) -> DirectServerHelloTransition {
@@ -102,6 +134,14 @@ impl DirectServerHelloSession {
                 DirectServerHelloEffect::Close(DirectServerHelloCloseReason::RepeatedHello)
             }
             (phase @ DirectServerHelloPhase::AwaitingRegistryAdmission, _) => {
+                self.phase = phase;
+                DirectServerHelloEffect::Close(DirectServerHelloCloseReason::UnexpectedInput)
+            }
+            (phase @ DirectServerHelloPhase::AwaitingPolicy, _) => {
+                self.phase = phase;
+                DirectServerHelloEffect::Close(DirectServerHelloCloseReason::UnexpectedInput)
+            }
+            (phase @ DirectServerHelloPhase::Ready, _) => {
                 self.phase = phase;
                 DirectServerHelloEffect::Close(DirectServerHelloCloseReason::UnexpectedInput)
             }

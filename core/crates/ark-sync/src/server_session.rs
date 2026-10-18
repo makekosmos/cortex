@@ -18,7 +18,7 @@ use crate::{
 mod direct_hello;
 pub use direct_hello::{
     DirectServerHelloCloseReason, DirectServerHelloEffect, DirectServerHelloInput,
-    DirectServerHelloSession, DirectServerHelloTransition,
+    DirectServerHelloTransition, DirectServerSession, DirectServerSyncStartPolicy,
 };
 
 #[derive(Clone)]

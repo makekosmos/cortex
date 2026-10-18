@@ -121,9 +121,9 @@ fn client_hello(space_id: &str, offer: &ProtocolOffer) -> LanSyncMessage {
 }
 
 #[test]
-fn direct_server_hello_waits_for_block_check_and_accepts_only_once() {
+fn direct_server_session_waits_for_block_check_and_accepts_only_once() {
     let offer = ProtocolOffer::current_with_registry_history(true);
-    let mut session = DirectServerHelloSession::new(responder_request(None));
+    let mut session = DirectServerSession::new(responder_request(None));
 
     let first = session.transition(DirectServerHelloInput::Message(Box::new(client_hello(
         "space-a", &offer,
@@ -144,9 +144,9 @@ fn direct_server_hello_waits_for_block_check_and_accepts_only_once() {
 }
 
 #[test]
-fn direct_server_hello_accepts_after_clear_block_check_and_fails_closed() {
+fn direct_server_session_accepts_after_clear_block_check_and_fails_closed() {
     let offer = ProtocolOffer::current_with_registry_history(true);
-    let mut allowed = DirectServerHelloSession::new(responder_request(None));
+    let mut allowed = DirectServerSession::new(responder_request(None));
     allowed.transition(DirectServerHelloInput::Message(Box::new(client_hello(
         "space-a", &offer,
     ))));
@@ -158,7 +158,7 @@ fn direct_server_hello_accepts_after_clear_block_check_and_fails_closed() {
     ));
 
     for result in [Ok(true), Err("storage unavailable".to_owned())] {
-        let mut blocked = DirectServerHelloSession::new(responder_request(None));
+        let mut blocked = DirectServerSession::new(responder_request(None));
         blocked.transition(DirectServerHelloInput::Message(Box::new(client_hello(
             "space-a", &offer,
         ))));
@@ -174,21 +174,21 @@ fn direct_server_hello_accepts_after_clear_block_check_and_fails_closed() {
 }
 
 #[test]
-fn direct_server_hello_rejects_self_and_protocol_mismatches() {
+fn direct_server_session_rejects_self_and_protocol_mismatches() {
     let offer = ProtocolOffer::current_with_registry_history(true);
     let mut self_hello = client_hello("space-a", &offer);
     let LanSyncMessage::Hello { device_id, .. } = &mut self_hello else {
         panic!("test helper builds a Hello message");
     };
     *device_id = "server-device".to_owned();
-    let mut session = DirectServerHelloSession::new(responder_request(None));
+    let mut session = DirectServerSession::new(responder_request(None));
     let self_result = session.transition(DirectServerHelloInput::Message(Box::new(self_hello)));
     assert!(matches!(
         &self_result.effect,
         DirectServerHelloEffect::Close(DirectServerHelloCloseReason::SelfConnection)
     ));
 
-    let mut wrong_space = DirectServerHelloSession::new(responder_request(None));
+    let mut wrong_space = DirectServerSession::new(responder_request(None));
     let mismatch = wrong_space.transition(DirectServerHelloInput::Message(Box::new(client_hello(
         "other-space",
         &offer,
@@ -198,7 +198,7 @@ fn direct_server_hello_rejects_self_and_protocol_mismatches() {
         DirectServerHelloEffect::Rejected(ClientHelloRejection::DifferentSpace)
     ));
 
-    let mut invalid_auth = DirectServerHelloSession::new(responder_request(Some("secret")));
+    let mut invalid_auth = DirectServerSession::new(responder_request(Some("secret")));
     let invalid = invalid_auth.transition(DirectServerHelloInput::Message(Box::new(client_hello(
         "space-a", &offer,
     ))));
@@ -206,4 +206,27 @@ fn direct_server_hello_rejects_self_and_protocol_mismatches() {
         &invalid.effect,
         DirectServerHelloEffect::Rejected(ClientHelloRejection::InvalidAuthentication)
     ));
+}
+
+#[test]
+fn policy_bound_sync_starts_once_only_after_session_admission() {
+    let offer = ProtocolOffer::current_with_registry_history(true);
+    let mut session = DirectServerSession::new(responder_request(None));
+    session.transition(DirectServerHelloInput::Message(Box::new(client_hello(
+        "space-a", &offer,
+    ))));
+    session.transition(DirectServerHelloInput::RemovedPeerResult(Ok(false)));
+
+    assert!(!session.start_sync_after_policy_persisted());
+    assert!(session.mark_ready(DirectServerSyncStartPolicy::AfterPolicyPersistence));
+    assert!(session.start_sync_after_policy_persisted());
+    assert!(!session.start_sync_after_policy_persisted());
+
+    let mut legacy_session = DirectServerSession::new(responder_request(None));
+    legacy_session.transition(DirectServerHelloInput::Message(Box::new(client_hello(
+        "space-a", &offer,
+    ))));
+    legacy_session.transition(DirectServerHelloInput::RemovedPeerResult(Ok(false)));
+    assert!(legacy_session.mark_ready(DirectServerSyncStartPolicy::Immediate));
+    assert!(!legacy_session.start_sync_after_policy_persisted());
 }

@@ -164,9 +164,21 @@ pub(super) async fn handle_registry_admission(
             if peer.ready_peer.is_some() || peer.device_id != device_id {
                 return false;
             }
+            let Some(session) = peer.server_session.as_mut() else {
+                eprintln!("{TAG} peer handshake state missing at registry admission");
+                return false;
+            };
+            let sync_start_policy = if policy_bound_delivery {
+                ark_sync::server_session::DirectServerSyncStartPolicy::AfterPolicyPersistence
+            } else {
+                ark_sync::server_session::DirectServerSyncStartPolicy::Immediate
+            };
+            if !session.mark_ready(sync_start_policy) {
+                eprintln!("{TAG} peer handshake was not awaiting registry admission");
+                return false;
+            }
             peer.registry_admission = admission.take();
             peer.ready_peer = Some(ready_peer);
-            peer.sync_started = !policy_bound_delivery;
             true
         })
     };
@@ -251,10 +263,12 @@ pub(super) async fn start_sync_after_policy(
         if peer.ready_peer.as_ref() != Some(ready_peer) {
             return Err("sync policy session changed before sync start".into());
         }
-        if peer.sync_started {
+        let Some(session) = peer.server_session.as_mut() else {
+            return Err("sync policy session state is missing".into());
+        };
+        if !session.start_sync_after_policy_persisted() {
             return Ok(());
         }
-        peer.sync_started = true;
         peer.tx.clone()
     };
     let vector = ark_sync::server_session::begin_policy_bound_sync(
