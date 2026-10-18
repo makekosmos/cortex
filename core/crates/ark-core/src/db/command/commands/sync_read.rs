@@ -399,9 +399,11 @@ impl DbQuery for AuthorizedTransportKeyQuery {
         if context.authenticated_peer_id()? != self.device_id {
             return Err(DbError::Permission("sync peer principal mismatch".into()));
         }
-        Ok(crate::db::load_authorized_node(connection, &self.device_id)
-            .map_err(DbError::Storage)?
-            .and_then(|node| node.transport_public_key))
+        Ok(
+            ark_store::integration_replication::load_authorized_node(connection, &self.device_id)
+                .map_err(DbError::Storage)?
+                .and_then(|node| node.transport_public_key),
+        )
     }
 }
 

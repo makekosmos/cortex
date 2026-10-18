@@ -147,8 +147,7 @@ pub use integration_replication_publication::{
     RefreshLeaseAcquireParams,
 };
 pub use integration_replication_records::{
-    load_authorized_node, load_integration_configuration, upsert_authorized_node,
-    upsert_integration_configuration,
+    load_integration_configuration, upsert_authorized_node, upsert_integration_configuration,
 };
 
 #[cfg(test)]

@@ -1,7 +1,7 @@
 use super::integration_replication_common::{
     envelope_version_is_newer, json, parse, persist_with_vector, sqlite_i64, storage, u64_value,
 };
-use super::{load_authorized_node, load_integration_node_grant, load_integration_refresh_lease};
+use super::{load_integration_node_grant, load_integration_refresh_lease};
 use crate::integration_replication::{envelope_entity_id, IntegrationContractError, NodeStatus};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::Value;
@@ -37,13 +37,16 @@ pub(in crate::db) fn upsert_integration_credential_envelope_record(
         &envelope_id,
         device_id,
         || {
-            let node =
-                load_authorized_node(conn, &envelope.recipient_node_id)?.ok_or_else(|| {
-                    IntegrationContractError::Mismatch {
-                        field: "authorized_node",
-                    }
-                    .to_string()
-                })?;
+            let node = ark_store::integration_replication::load_authorized_node(
+                conn,
+                &envelope.recipient_node_id,
+            )?
+            .ok_or_else(|| {
+                IntegrationContractError::Mismatch {
+                    field: "authorized_node",
+                }
+                .to_string()
+            })?;
             let grant = load_integration_node_grant(
                 conn,
                 &envelope.integration_id,
@@ -57,13 +60,16 @@ pub(in crate::db) fn upsert_integration_credential_envelope_record(
             })?;
             validate_envelope_recipient(envelope, &node, &grant)
                 .map_err(|error| error.to_string())?;
-            let issuer =
-                load_authorized_node(conn, &envelope.issuer_node_id)?.ok_or_else(|| {
-                    IntegrationContractError::Mismatch {
-                        field: "issuer_authorized_node",
-                    }
-                    .to_string()
-                })?;
+            let issuer = ark_store::integration_replication::load_authorized_node(
+                conn,
+                &envelope.issuer_node_id,
+            )?
+            .ok_or_else(|| {
+                IntegrationContractError::Mismatch {
+                    field: "issuer_authorized_node",
+                }
+                .to_string()
+            })?;
             let issuer_grant = load_integration_node_grant(
                 conn,
                 &envelope.integration_id,
@@ -255,7 +261,8 @@ pub fn load_integration_credential_envelope(
         hlc,
     };
     record.validate().map_err(|e| e.to_string())?;
-    let node = load_authorized_node(conn, recipient_node_id)?.ok_or_else(|| {
+    let node = ark_store::integration_replication::load_authorized_node(conn, recipient_node_id)?
+        .ok_or_else(|| {
         IntegrationContractError::Mismatch {
             field: "authorized_node",
         }

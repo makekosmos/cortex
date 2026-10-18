@@ -15,13 +15,15 @@ pub fn validate_outbound_signed_sync(
     if frame.origin_node_id != expected_origin_node_id {
         return Err("signed integration frame origin is not this node".into());
     }
-    let origin = crate::db::load_authorized_node(conn, expected_origin_node_id)?
-        .ok_or_else(|| "origin node is not authorized in this database".to_string())?;
+    let origin =
+        ark_store::integration_replication::load_authorized_node(conn, expected_origin_node_id)?
+            .ok_or_else(|| "origin node is not authorized in this database".to_string())?;
     let verified = frame
         .verify(expected_space_id, &frame.recipient_node_id, &origin)
         .map_err(|error| error.to_string())?;
-    let recipient = crate::db::load_authorized_node(conn, &frame.recipient_node_id)?
-        .ok_or_else(|| "recipient node is not authorized in this database".to_string())?;
+    let recipient =
+        ark_store::integration_replication::load_authorized_node(conn, &frame.recipient_node_id)?
+            .ok_or_else(|| "recipient node is not authorized in this database".to_string())?;
     if recipient.status != NodeStatus::Active {
         return Err("recipient node is revoked".into());
     }
@@ -68,8 +70,9 @@ pub fn validate_outbound_signed_sync_with_transport(
     transport_public_key: &str,
 ) -> Result<(), String> {
     validate_outbound_signed_sync(conn, expected_space_id, expected_origin_node_id, frame)?;
-    let recipient = crate::db::load_authorized_node(conn, &frame.recipient_node_id)?
-        .ok_or_else(|| "recipient node is not authorized in this database".to_string())?;
+    let recipient =
+        ark_store::integration_replication::load_authorized_node(conn, &frame.recipient_node_id)?
+            .ok_or_else(|| "recipient node is not authorized in this database".to_string())?;
     if recipient.transport_public_key.as_deref() != Some(transport_public_key) {
         return Err("recipient transport identity is no longer authorized".into());
     }
@@ -82,7 +85,8 @@ pub fn node_may_receive_integration_frames(
     conn: &Connection,
     node_id: &str,
 ) -> Result<bool, String> {
-    let Some(node) = crate::db::load_authorized_node(conn, node_id)? else {
+    let Some(node) = ark_store::integration_replication::load_authorized_node(conn, node_id)?
+    else {
         return Ok(false);
     };
     if node.status != NodeStatus::Active {

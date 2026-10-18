@@ -1,6 +1,6 @@
 use super::{
-    load_authorized_node, load_integration_configuration, load_integration_node_grant,
-    load_integration_refresh_lease, load_latest_integration_credential_envelope,
+    load_integration_configuration, load_integration_node_grant, load_integration_refresh_lease,
+    load_latest_integration_credential_envelope,
 };
 use rusqlite::Connection;
 
@@ -16,7 +16,7 @@ pub fn integration_verification_status(
         return Err("integration and local node ids must not be empty".into());
     }
     let configuration = load_integration_configuration(conn, integration_id)?;
-    let node = load_authorized_node(conn, local_node_id)?;
+    let node = ark_store::integration_replication::load_authorized_node(conn, local_node_id)?;
     let grant = load_integration_node_grant(conn, integration_id, local_node_id)?;
     let grant_key_matches_node = node
         .as_ref()

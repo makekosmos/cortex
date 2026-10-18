@@ -38,14 +38,15 @@ pub fn prepare_signed_sync(
         }
     }
 
-    let origin = crate::db::load_authorized_node(conn, origin_node_id)?
+    let origin = ark_store::integration_replication::load_authorized_node(conn, origin_node_id)?
         .ok_or_else(|| "origin node is not authorized in this database".to_string())?;
     if origin.status != NodeStatus::Active {
         return Err("origin node is revoked".into());
     }
     require_current_grant(conn, integration_id, &origin)?;
-    let recipient = crate::db::load_authorized_node(conn, recipient_node_id)?
-        .ok_or_else(|| "recipient node is not authorized in this database".to_string())?;
+    let recipient =
+        ark_store::integration_replication::load_authorized_node(conn, recipient_node_id)?
+            .ok_or_else(|| "recipient node is not authorized in this database".to_string())?;
     if recipient.status != NodeStatus::Active {
         return Err("recipient node is revoked".into());
     }
@@ -105,7 +106,7 @@ fn persist_node_authorization_inner(
     grant: Option<&IntegrationNodeGrant>,
     device_id: &str,
 ) -> Result<(), String> {
-    let current = crate::db::load_authorized_node(conn, &node.node_id)?;
+    let current = ark_store::integration_replication::load_authorized_node(conn, &node.node_id)?;
     validate_node_transition(operation, current.as_ref(), node, grant)?;
     if current.as_ref() != Some(node) {
         crate::db::upsert_authorized_node(conn, node, device_id)?;
@@ -139,7 +140,7 @@ fn persist_integration_grant_inner(
     grant: &IntegrationNodeGrant,
     device_id: &str,
 ) -> Result<(), String> {
-    let node = crate::db::load_authorized_node(conn, &grant.node_id)?
+    let node = ark_store::integration_replication::load_authorized_node(conn, &grant.node_id)?
         .ok_or_else(|| "integration grant node is not authorized".to_string())?;
     if grant.node_encryption_key != node.encryption_public_key
         || grant.grant_epoch < node.grant_epoch

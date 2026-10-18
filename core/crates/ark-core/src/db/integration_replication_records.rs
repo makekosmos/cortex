@@ -11,13 +11,6 @@ fn node_status_value(status: NodeStatus) -> &'static str {
         NodeStatus::Revoked => "revoked",
     }
 }
-fn node_status(value: String) -> Result<NodeStatus, String> {
-    match value.as_str() {
-        "active" => Ok(NodeStatus::Active),
-        "revoked" => Ok(NodeStatus::Revoked),
-        _ => Err(format!("invalid authorized node status: {value}")),
-    }
-}
 pub fn upsert_integration_configuration(
     conn: &Connection,
     configuration: &IntegrationConfiguration,
@@ -269,68 +262,4 @@ pub fn upsert_authorized_node(
         .map_err(storage)?;
         Ok(())
     })
-}
-
-pub fn load_authorized_node(
-    conn: &Connection,
-    node_id: &str,
-) -> Result<Option<AuthorizedNode>, String> {
-    let row = conn
-        .query_row(
-            "SELECT key_fingerprint, signing_public_key, encryption_public_key,
-                    transport_public_key, grant_epoch, status, authorized_at, revoked_at,
-                    revocation_epoch, revision, hlc FROM authorized_nodes WHERE node_id = ?1",
-            params![node_id],
-            |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, String>(2)?,
-                    row.get::<_, Option<String>>(3)?,
-                    row.get::<_, i64>(4)?,
-                    row.get::<_, String>(5)?,
-                    row.get::<_, String>(6)?,
-                    row.get::<_, Option<String>>(7)?,
-                    row.get::<_, Option<i64>>(8)?,
-                    row.get::<_, i64>(9)?,
-                    row.get::<_, String>(10)?,
-                ))
-            },
-        )
-        .optional()
-        .map_err(storage)?;
-    let Some((
-        fingerprint,
-        signing,
-        encryption,
-        transport,
-        epoch,
-        status,
-        authorized,
-        revoked,
-        revocation,
-        revision,
-        hlc,
-    )) = row
-    else {
-        return Ok(None);
-    };
-    let record = AuthorizedNode {
-        node_id: node_id.to_string(),
-        key_fingerprint: fingerprint,
-        signing_public_key: signing,
-        encryption_public_key: encryption,
-        transport_public_key: transport,
-        grant_epoch: u64_value(epoch, "grant_epoch")?,
-        status: node_status(status)?,
-        authorized_at: authorized,
-        revoked_at: revoked,
-        revocation_epoch: revocation
-            .map(|v| u64_value(v, "revocation_epoch"))
-            .transpose()?,
-        revision: u64_value(revision, "revision")?,
-        hlc,
-    };
-    record.validate().map_err(|e| e.to_string())?;
-    Ok(Some(record))
 }

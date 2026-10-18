@@ -1,7 +1,7 @@
 use super::integration_replication_common::{
     lease_entity_id, lease_epoch, persist_with_vector, sqlite_i64, storage, u64_value,
 };
-use super::{load_authorized_node, load_integration_node_grant};
+use super::load_integration_node_grant;
 use crate::integration_replication::{GrantStatus, IntegrationContractError, NodeStatus};
 use rusqlite::{params, Connection, OptionalExtension};
 
@@ -16,12 +16,14 @@ pub(in crate::db) fn upsert_integration_refresh_lease_record(
     lease.validate().map_err(|e| e.to_string())?;
     let (generation, fence, issued) = lease_epoch(lease)?;
     let expires = sqlite_i64(lease.expires_at_ms, "expires_at_ms")?;
-    let holder = load_authorized_node(conn, &lease.holder_node_id)?.ok_or_else(|| {
-        IntegrationContractError::Mismatch {
-            field: "authorized_node",
-        }
-        .to_string()
-    })?;
+    let holder =
+        ark_store::integration_replication::load_authorized_node(conn, &lease.holder_node_id)?
+            .ok_or_else(|| {
+                IntegrationContractError::Mismatch {
+                    field: "authorized_node",
+                }
+                .to_string()
+            })?;
     let grant = load_integration_node_grant(conn, &lease.integration_id, &lease.holder_node_id)?
         .ok_or_else(|| {
             IntegrationContractError::Mismatch {

@@ -22,7 +22,7 @@ impl<'a, 'connection> SqliteSignedIntegrationFrameSession<'a, 'connection> {
 
 impl SignedIntegrationFrameStore for SqliteSignedIntegrationFrameSession<'_, '_> {
     fn load_authorized_node(&self, node_id: &str) -> Result<Option<AuthorizedNode>, String> {
-        crate::db::load_authorized_node(self.transaction, node_id)
+        ark_store::integration_replication::load_authorized_node(self.transaction, node_id)
     }
 
     fn load_integration_grant(
@@ -50,8 +50,11 @@ impl SignedIntegrationFrameStore for SqliteSignedIntegrationFrameSession<'_, '_>
                     .map(IntegrationReplicationEntity::IntegrationConfiguration)
             }
             IntegrationReplicationEntity::AuthorizedNode(value) => {
-                crate::db::load_authorized_node(self.transaction, &value.node_id)?
-                    .map(IntegrationReplicationEntity::AuthorizedNode)
+                ark_store::integration_replication::load_authorized_node(
+                    self.transaction,
+                    &value.node_id,
+                )?
+                .map(IntegrationReplicationEntity::AuthorizedNode)
             }
             IntegrationReplicationEntity::IntegrationNodeGrant(value) => {
                 crate::db::load_integration_node_grant(
@@ -130,7 +133,7 @@ impl SignedIntegrationFrameStore for SqliteSignedIntegrationFrameSession<'_, '_>
 
 impl SignedIntegrationFrameSession for SqliteSignedIntegrationFrameSession<'_, '_> {
     fn load_authorized_node(&self, node_id: &str) -> Result<Option<AuthorizedNode>, String> {
-        crate::db::load_authorized_node(self.transaction, node_id)
+        ark_store::integration_replication::load_authorized_node(self.transaction, node_id)
     }
 
     fn with_replay_reservation(

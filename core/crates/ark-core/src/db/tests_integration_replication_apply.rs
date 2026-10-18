@@ -149,7 +149,7 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
         Some(config.clone())
     );
     assert_eq!(
-        load_authorized_node(&target, "node-b").unwrap(),
+        ark_store::integration_replication::load_authorized_node(&target, "node-b").unwrap(),
         Some(recipient)
     );
     assert_eq!(

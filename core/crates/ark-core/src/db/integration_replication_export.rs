@@ -1,6 +1,6 @@
 use super::integration_replication_common::{storage, u64_value};
 use super::{
-    load_authorized_node, load_integration_configuration, load_integration_credential_envelope,
+    load_integration_configuration, load_integration_credential_envelope,
     load_integration_node_grant, load_integration_refresh_lease, VERSION_VECTOR_KEY,
 };
 use crate::types::VersionVector;
@@ -84,7 +84,9 @@ fn lease_holder_is_current(
     conn: &Connection,
     lease: &ReplicatedRefreshLease,
 ) -> Result<bool, String> {
-    let Some(node) = load_authorized_node(conn, &lease.holder_node_id)? else {
+    let Some(node) =
+        ark_store::integration_replication::load_authorized_node(conn, &lease.holder_node_id)?
+    else {
         return Ok(false);
     };
     let Some(grant) =
@@ -103,7 +105,9 @@ fn target_is_current_recipient(
     integration_id: &str,
     target_node_id: &str,
 ) -> Result<bool, String> {
-    let Some(node) = load_authorized_node(conn, target_node_id)? else {
+    let Some(node) =
+        ark_store::integration_replication::load_authorized_node(conn, target_node_id)?
+    else {
         return Ok(false);
     };
     let Some(grant) = load_integration_node_grant(conn, integration_id, target_node_id)? else {

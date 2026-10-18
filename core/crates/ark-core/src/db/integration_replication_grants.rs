@@ -1,7 +1,6 @@
 use super::integration_replication_common::{
     persist_with_vector, require_newer_hlc, sqlite_i64, storage,
 };
-use super::load_authorized_node;
 use crate::integration_replication::{integration_node_id, NodeStatus};
 use rusqlite::{params, Connection, OptionalExtension};
 
@@ -32,12 +31,14 @@ pub fn upsert_integration_node_grant(
         device_id,
         || {
             if grant.status == IntegrationGrantStatus::Active {
-                let node = load_authorized_node(conn, &grant.node_id)?.ok_or_else(|| {
-                    crate::integration_replication::IntegrationContractError::Mismatch {
-                        field: "authorized_node",
-                    }
-                    .to_string()
-                })?;
+                let node =
+                    ark_store::integration_replication::load_authorized_node(conn, &grant.node_id)?
+                        .ok_or_else(|| {
+                            crate::integration_replication::IntegrationContractError::Mismatch {
+                                field: "authorized_node",
+                            }
+                            .to_string()
+                        })?;
                 if node.status != NodeStatus::Active {
                     return Err(
                         crate::integration_replication::IntegrationContractError::RevokedNode

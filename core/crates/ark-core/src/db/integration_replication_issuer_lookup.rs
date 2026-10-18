@@ -1,5 +1,5 @@
 use super::{
-    load_authorized_node, load_integration_configuration, load_integration_credential_envelope,
+    load_integration_configuration, load_integration_credential_envelope,
     load_integration_node_grant, load_integration_refresh_lease,
     load_latest_integration_credential_envelope,
 };
@@ -62,12 +62,13 @@ pub fn load_issuer_encryption_key(
         }
         .to_string());
     }
-    let issuer = load_authorized_node(conn, issuer_node_id)?.ok_or_else(|| {
-        IntegrationContractError::Mismatch {
-            field: "issuer_authorized_node",
-        }
-        .to_string()
-    })?;
+    let issuer = ark_store::integration_replication::load_authorized_node(conn, issuer_node_id)?
+        .ok_or_else(|| {
+            IntegrationContractError::Mismatch {
+                field: "issuer_authorized_node",
+            }
+            .to_string()
+        })?;
     let issuer_grant = load_integration_node_grant(conn, integration_id, issuer_node_id)?
         .ok_or_else(|| {
             IntegrationContractError::Mismatch {
@@ -193,12 +194,14 @@ pub fn load_issuer_encryption_key_for_publish(
         }
         .to_string());
     }
-    let recipient = load_authorized_node(conn, recipient_node_id)?.ok_or_else(|| {
-        IntegrationContractError::Mismatch {
-            field: "recipient_authorized_node",
-        }
-        .to_string()
-    })?;
+    let recipient =
+        ark_store::integration_replication::load_authorized_node(conn, recipient_node_id)?
+            .ok_or_else(|| {
+                IntegrationContractError::Mismatch {
+                    field: "recipient_authorized_node",
+                }
+                .to_string()
+            })?;
     let recipient_grant = load_integration_node_grant(conn, integration_id, recipient_node_id)?
         .ok_or_else(|| {
             IntegrationContractError::Mismatch {
@@ -220,12 +223,13 @@ pub fn load_issuer_encryption_key_for_publish(
         }
         .to_string());
     }
-    let issuer = load_authorized_node(conn, issuer_node_id)?.ok_or_else(|| {
-        IntegrationContractError::Mismatch {
-            field: "issuer_authorized_node",
-        }
-        .to_string()
-    })?;
+    let issuer = ark_store::integration_replication::load_authorized_node(conn, issuer_node_id)?
+        .ok_or_else(|| {
+            IntegrationContractError::Mismatch {
+                field: "issuer_authorized_node",
+            }
+            .to_string()
+        })?;
     let issuer_grant = load_integration_node_grant(conn, integration_id, issuer_node_id)?
         .ok_or_else(|| {
             IntegrationContractError::Mismatch {

@@ -152,7 +152,11 @@ fn signed_apply_rejects_new_node_authorization_without_local_trust() {
         apply_signed_integration_changes(&target, &frame, "space-a", "node-b", None, 15),
         Err(SignedSyncError::Apply(error)) if error.contains("pre-existing authorization")
     ));
-    assert!(load_authorized_node(&target, "node-c").unwrap().is_none());
+    assert!(
+        ark_store::integration_replication::load_authorized_node(&target, "node-c")
+            .unwrap()
+            .is_none()
+    );
 }
 
 #[test]
