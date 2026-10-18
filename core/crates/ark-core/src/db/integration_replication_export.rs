@@ -1,9 +1,9 @@
-use super::integration_replication_common::{storage, u64_value};
+use super::integration_replication_common::storage;
 use super::{
     load_integration_credential_envelope, load_integration_node_grant, VERSION_VECTOR_KEY,
 };
 use crate::types::VersionVector;
-use rusqlite::{params, Connection};
+use rusqlite::Connection;
 
 use crate::integration_replication::IntegrationRefreshLease as ReplicatedRefreshLease;
 
@@ -46,27 +46,15 @@ pub fn export_integration_replication(
         }
     }
 
-    if target_is_current_recipient(conn, integration_id, target_node_id)? {
-        let mut statement = conn
-            .prepare(
-                "SELECT credential_generation
-                 FROM integration_credential_envelopes
-                 WHERE integration_id = ?1 AND recipient_node_id = ?2
-                   AND grant_epoch = (SELECT grant_epoch FROM authorized_nodes WHERE node_id = \
-                   ?2)
-                 ORDER BY credential_generation ASC",
-            )
-            .map_err(storage)?;
-        let generations = statement
-            .query_map(params![integration_id, target_node_id], |row| {
-                row.get::<_, i64>(0)
-            })
-            .map_err(storage)?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(storage)?;
-        drop(statement);
+    if let Some(grant_epoch) = current_recipient_epoch(conn, integration_id, target_node_id)? {
+        let generations =
+            ark_store::integration_replication::list_integration_credential_generations_for_epoch(
+                conn,
+                integration_id,
+                target_node_id,
+                grant_epoch,
+            )?;
         for generation in generations {
-            let generation = u64_value(generation, "credential_generation")?;
             if let Some(envelope) = load_integration_credential_envelope(
                 conn,
                 integration_id,
@@ -103,23 +91,28 @@ fn lease_holder_is_current(
         && node.encryption_public_key == grant.node_encryption_key)
 }
 
-fn target_is_current_recipient(
+fn current_recipient_epoch(
     conn: &Connection,
     integration_id: &str,
     target_node_id: &str,
-) -> Result<bool, String> {
+) -> Result<Option<u64>, String> {
     let Some(node) =
         ark_store::integration_replication::load_authorized_node(conn, target_node_id)?
     else {
-        return Ok(false);
+        return Ok(None);
     };
     let Some(grant) = load_integration_node_grant(conn, integration_id, target_node_id)? else {
-        return Ok(false);
+        return Ok(None);
     };
-    Ok(node.status == ExportNodeStatus::Active
+    if node.status == ExportNodeStatus::Active
         && grant.status == ExportGrantStatus::Active
         && node.grant_epoch == grant.grant_epoch
-        && node.encryption_public_key == grant.node_encryption_key)
+        && node.encryption_public_key == grant.node_encryption_key
+    {
+        Ok(Some(node.grant_epoch))
+    } else {
+        Ok(None)
+    }
 }
 
 fn export_change(conn: &Connection, entity: ExportEntity) -> Result<ExportChange, String> {

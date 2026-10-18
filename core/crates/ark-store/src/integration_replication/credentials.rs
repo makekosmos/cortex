@@ -19,6 +19,34 @@ pub fn load_max_integration_credential_generation(
         .transpose()
 }
 
+pub fn list_integration_credential_generations_for_epoch(
+    connection: &Connection,
+    integration_id: &str,
+    recipient_node_id: &str,
+    grant_epoch: u64,
+) -> Result<Vec<u64>, String> {
+    let grant_epoch = sqlite_i64(grant_epoch, "grant_epoch")?;
+    let mut statement = connection
+        .prepare(
+            "SELECT credential_generation FROM integration_credential_envelopes
+             WHERE integration_id = ?1 AND recipient_node_id = ?2 AND grant_epoch = ?3
+             ORDER BY credential_generation ASC",
+        )
+        .map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map(
+            params![integration_id, recipient_node_id, grant_epoch],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(|error| error.to_string())?;
+    rows.map(|generation| {
+        generation
+            .map_err(|error| error.to_string())
+            .and_then(|value| u64_value(value, "credential_generation"))
+    })
+    .collect()
+}
+
 pub fn upsert_integration_credential_envelope_record(
     connection: &Connection,
     envelope: &IntegrationCredentialEnvelope,
@@ -237,6 +265,16 @@ mod tests {
             load_max_integration_credential_generation(&connection, "missing")
                 .expect("missing maximum generation query succeeds"),
             None
+        );
+        assert_eq!(
+            list_integration_credential_generations_for_epoch(&connection, "app", "device", 2,)
+                .expect("recipient generation query succeeds"),
+            vec![3]
+        );
+        assert!(
+            list_integration_credential_generations_for_epoch(&connection, "app", "device", 1,)
+                .expect("stale epoch returns no envelope candidates")
+                .is_empty()
         );
         assert!(
             load_latest_integration_credential_envelope_record(&connection, "app", "missing")

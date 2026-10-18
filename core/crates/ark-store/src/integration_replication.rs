@@ -6,7 +6,7 @@ mod nodes;
 
 pub use configurations::{load_integration_configuration, upsert_integration_configuration_record};
 pub use credentials::{
-    load_integration_credential_envelope_record,
+    list_integration_credential_generations_for_epoch, load_integration_credential_envelope_record,
     load_latest_integration_credential_envelope_record, load_max_integration_credential_generation,
     upsert_integration_credential_envelope_record,
 };
