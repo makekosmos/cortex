@@ -266,23 +266,33 @@
                                             }
                                         };
                                         use ark_sync::outbound_snapshot::SnapshotEmission;
-                                        let pending_ack = 'snapshot: loop {
-                                            match snapshot.next_page(storage.as_ref()).await {
-                                                Ok(SnapshotEmission::Page(messages)) => {
-                                                    for message in messages {
-                                                        send_msg(&tx, &message);
+                                        let pending_ack = match snapshot
+                                            .drive(storage.as_ref(), |emission| {
+                                                let tx = tx.clone();
+                                                async move {
+                                                    match emission {
+                                                        SnapshotEmission::Page(messages) => {
+                                                            for message in messages {
+                                                                send_msg(&tx, &message);
+                                                            }
+                                                        }
+                                                        SnapshotEmission::Terminal {
+                                                            message, ..
+                                                        } => {
+                                                            send_msg(&tx, &message);
+                                                        }
                                                     }
+                                                    Ok(())
                                                 }
-                                                Ok(SnapshotEmission::Terminal { ack, message }) => {
-                                                    send_msg(&tx, &message);
-                                                    break 'snapshot ack;
-                                                }
-                                                Err(error) => {
-                                                    eprintln!(
-                                                        "{TAG} outbound snapshot failed: {error}"
-                                                    );
-                                                    break 'messages;
-                                                }
+                                            })
+                                            .await
+                                        {
+                                            Ok(ack) => ack,
+                                            Err(error) => {
+                                                eprintln!(
+                                                    "{TAG} outbound snapshot failed: {error}"
+                                                );
+                                                break 'messages;
                                             }
                                         };
 

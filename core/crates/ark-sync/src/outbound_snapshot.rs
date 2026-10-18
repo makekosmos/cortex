@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::future::Future;
 
 use ark_application::sync_storage::{
     CommittedFeedPort, PeerProgressPort, PeerSyncPolicyPort, PolicyIdentity, SyncEntityReadPort,
@@ -250,6 +251,33 @@ impl OutboundSnapshot {
                 })
                 .collect();
             return Ok(SnapshotEmission::Page(messages));
+        }
+    }
+
+    pub async fn drive<S, Emit, EmitFuture>(
+        &mut self,
+        storage: &S,
+        mut emit: Emit,
+    ) -> Result<PendingSnapshotAck, String>
+    where
+        S: SyncEntityReadPort + PeerProgressPort + PeerSyncPolicyPort + ?Sized,
+        Emit: FnMut(SnapshotEmission) -> EmitFuture,
+        EmitFuture: Future<Output = Result<(), String>>,
+    {
+        loop {
+            match self.next_page(storage).await? {
+                SnapshotEmission::Page(messages) => {
+                    emit(SnapshotEmission::Page(messages)).await?;
+                }
+                SnapshotEmission::Terminal { ack, message } => {
+                    emit(SnapshotEmission::Terminal {
+                        ack: ack.clone(),
+                        message,
+                    })
+                    .await?;
+                    return Ok(ack);
+                }
+            }
         }
     }
 

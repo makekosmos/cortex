@@ -119,37 +119,42 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                 }
             };
 
-            loop {
-                match snapshot.next_page(storage.as_ref()).await {
-                    Ok(ark_sync::outbound_snapshot::SnapshotEmission::Page(messages)) => {
-                        for message in messages {
-                            send_msg(&tx, &message);
-                        }
-                    }
-                    Ok(ark_sync::outbound_snapshot::SnapshotEmission::Terminal {
-                        ack,
-                        message,
-                    }) => {
-                        let ticket_stored = {
-                            let mut peers_guard = peers.lock().await;
-                            peers_guard.get_mut(&peer_id).is_some_and(|peer| {
-                                if peer.ready_peer.is_none() {
-                                    return false;
+            if let Err(error) = snapshot
+                .drive(storage.as_ref(), |emission| {
+                    let peers = Arc::clone(peers);
+                    let tx = tx.clone();
+                    async move {
+                        match emission {
+                            ark_sync::outbound_snapshot::SnapshotEmission::Page(messages) => {
+                                for message in messages {
+                                    send_msg(&tx, &message);
                                 }
-                                peer.outbound_snapshot.record_sent(ack);
-                                true
-                            })
-                        };
-                        if ticket_stored {
-                            send_msg(&tx, &message);
+                            }
+                            ark_sync::outbound_snapshot::SnapshotEmission::Terminal {
+                                ack,
+                                message,
+                            } => {
+                                let ticket_stored = {
+                                    let mut peers_guard = peers.lock().await;
+                                    peers_guard.get_mut(&peer_id).is_some_and(|peer| {
+                                        if peer.ready_peer.is_none() {
+                                            return false;
+                                        }
+                                        peer.outbound_snapshot.record_sent(ack);
+                                        true
+                                    })
+                                };
+                                if ticket_stored {
+                                    send_msg(&tx, &message);
+                                }
+                            }
                         }
-                        return;
+                        Ok(())
                     }
-                    Err(error) => {
-                        eprintln!("{TAG} outbound snapshot failed for {peer_device_id}: {error}");
-                        return;
-                    }
-                }
+                })
+                .await
+            {
+                eprintln!("{TAG} outbound snapshot failed for {peer_device_id}: {error}");
             }
         }
 
