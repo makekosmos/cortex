@@ -1,5 +1,5 @@
 use super::{sealed, CommandClass, CommandContext, DbCommand, DbError, DbHandle};
-use rusqlite::{OptionalExtension, Transaction};
+use rusqlite::Transaction;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -62,30 +62,17 @@ where
         let payload_hash = format!("{:x}", Sha256::digest(canonical_payload));
         let principal = context.operation_principal();
 
-        let stored = transaction
-            .query_row(
-                "SELECT command_type, payload_sha256, result_json
-                 FROM ark_operation_receipts
-                 WHERE principal = ?1 AND operation_id = ?2",
-                rusqlite::params![principal, self.operation_id],
-                |row| {
-                    Ok((
-                        row.get::<_, String>(0)?,
-                        row.get::<_, String>(1)?,
-                        row.get::<_, String>(2)?,
-                    ))
-                },
-            )
-            .optional()
-            .map_err(DbError::from_sqlite)?;
+        let stored =
+            ark_store::operation_receipt::load(transaction, &principal, &self.operation_id)
+                .map_err(DbError::from_sqlite)?;
 
-        if let Some((stored_type, stored_hash, result_json)) = stored {
-            if stored_type != self.command_type || stored_hash != payload_hash {
+        if let Some(stored) = stored {
+            if stored.command_type != self.command_type || stored.payload_sha256 != payload_hash {
                 return Err(DbError::Conflict(
                     "operationId was already used with a different command payload".into(),
                 ));
             }
-            let value = serde_json::from_str(&result_json)
+            let value = serde_json::from_str(&stored.result_json)
                 .map_err(|error| DbError::Storage(error.to_string()))?;
             return Ok(OperationResult {
                 value,
@@ -96,20 +83,17 @@ where
         let value = self.command.execute(context, transaction)?;
         let result_json =
             serde_json::to_string(&value).map_err(|error| DbError::Storage(error.to_string()))?;
-        transaction
-            .execute(
-                "INSERT INTO ark_operation_receipts
-                 (principal, operation_id, command_type, payload_sha256, result_json)
-                 VALUES (?1, ?2, ?3, ?4, ?5)",
-                rusqlite::params![
-                    principal,
-                    self.operation_id,
-                    self.command_type,
-                    payload_hash,
-                    result_json,
-                ],
-            )
-            .map_err(DbError::from_sqlite)?;
+        ark_store::operation_receipt::insert(
+            transaction,
+            &principal,
+            &self.operation_id,
+            &ark_store::operation_receipt::OperationReceipt {
+                command_type: self.command_type.to_owned(),
+                payload_sha256: payload_hash,
+                result_json,
+            },
+        )
+        .map_err(DbError::from_sqlite)?;
         Ok(OperationResult {
             value,
             replayed: false,
