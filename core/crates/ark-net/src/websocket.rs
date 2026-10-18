@@ -1,10 +1,32 @@
 use std::time::Duration;
+use std::{io, net::SocketAddr};
 
-use tokio::net::TcpStream;
+use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{oneshot, Mutex};
-use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
+use tokio_tungstenite::{accept_async, connect_async, MaybeTlsStream, WebSocketStream};
 
 pub type ClientWebSocket = WebSocketStream<MaybeTlsStream<TcpStream>>;
+pub type ServerWebSocket = WebSocketStream<TcpStream>;
+
+pub struct Listener {
+    listener: TcpListener,
+}
+
+impl Listener {
+    pub async fn bind(address: &str) -> io::Result<Self> {
+        Ok(Self {
+            listener: TcpListener::bind(address).await?,
+        })
+    }
+
+    pub async fn accept(&self) -> io::Result<(ServerWebSocket, SocketAddr)> {
+        let (stream, peer_address) = self.listener.accept().await?;
+        let websocket = accept_async(stream)
+            .await
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+        Ok((websocket, peer_address))
+    }
+}
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -42,6 +64,38 @@ pub async fn race_connect(addresses: &[String]) -> Option<(ClientWebSocket, Stri
             Some(result)
         }
         Err(_) => None,
+    }
+}
+
+#[cfg(test)]
+mod listener_tests {
+    use super::*;
+    use futures_util::{SinkExt, StreamExt};
+    use tokio_tungstenite::tungstenite::Message;
+
+    #[tokio::test]
+    async fn listener_accepts_a_websocket_and_receives_a_text_frame() {
+        let listener = Listener::bind("127.0.0.1:0").await.expect("listener binds");
+        let address = listener
+            .listener
+            .local_addr()
+            .expect("listener address is available");
+        let client = tokio::spawn(async move {
+            let (mut socket, _) = connect_async(format!("ws://{address}"))
+                .await
+                .expect("client handshake succeeds");
+            socket
+                .send(Message::Text("hello".into()))
+                .await
+                .expect("client sends text");
+        });
+        let (mut socket, peer_address) = listener.accept().await.expect("server accepts client");
+        assert!(peer_address.ip().is_loopback());
+        assert!(matches!(
+            socket.next().await,
+            Some(Ok(Message::Text(text))) if text == "hello"
+        ));
+        client.await.expect("client task completes");
     }
 }
 

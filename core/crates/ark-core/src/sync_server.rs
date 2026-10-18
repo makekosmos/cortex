@@ -3,10 +3,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
-use tokio::net::TcpListener;
 use tokio::sync::{mpsc, Mutex, RwLock};
 use tokio::time::interval;
-use tokio_tungstenite::accept_async;
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::hlc::HLC;

@@ -24,7 +24,7 @@ impl SyncServer {
         self.load_known_peers().await?;
         self.purge_self_peers().await?;
 
-        let listener = TcpListener::bind(bind_addr)
+        let listener = ark_net::websocket::Listener::bind(bind_addr)
             .await
             .map_err(|e| format!("Failed to bind {bind_addr}: {e}"))?;
 
@@ -93,16 +93,9 @@ impl SyncServer {
                     }
                     result = listener.accept() => {
                         match result {
-                            Ok((stream, _)) => {
+                            Ok((ws_stream, _)) => {
                                 let ordering = std::sync::atomic::Ordering::Relaxed;
                                 let peer_id = next_peer_id.fetch_add(1, ordering);
-                                let ws_stream = match accept_async(stream).await {
-                                    Ok(ws) => ws,
-                                    Err(e) => {
-                                        eprintln!("{TAG} WS accept error: {e}");
-                                        continue;
-                                    }
-                                };
 
                                 let (mut ws_sink, mut ws_stream_rx) = ws_stream.split();
                                 let (tx, mut rx) = mpsc::unbounded_channel::<Message>();
