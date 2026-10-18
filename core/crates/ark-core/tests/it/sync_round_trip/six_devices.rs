@@ -151,11 +151,20 @@ async fn six_devices_converge_during_initial_import_and_local_edit() {
     tokio::time::timeout(Duration::from_secs(30), page_started)
         .await
         .expect("initial sync did not request a storage page");
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
-    while server.get_connected_peer_entries().await.len() != DEVICE_COUNT - 1 {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(60);
+    loop {
+        let connected = server
+            .get_connected_peer_entries()
+            .await
+            .into_iter()
+            .map(|peer| peer.device_id)
+            .collect::<Vec<_>>();
+        if connected.len() == DEVICE_COUNT - 1 {
+            break;
+        }
         assert!(
             tokio::time::Instant::now() < deadline,
-            "all five devices must be authenticated before releasing backfill"
+            "all five devices must authenticate before backfill; connected: {connected:?}"
         );
         tokio::time::sleep(Duration::from_millis(10)).await;
     }

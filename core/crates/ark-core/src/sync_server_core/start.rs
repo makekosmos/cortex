@@ -1,6 +1,7 @@
 use super::super::{current_ready_peer, peer_message_allowed};
 use super::{signed_integration_write_is_authorized, *};
 use ark_sync::outbound_snapshot::OutboundSnapshotProgress;
+use tokio::sync::oneshot;
 
 struct ServerPeerOutboundGuard {
     storage: Arc<dyn SyncRuntimeStorage>,
@@ -120,11 +121,14 @@ impl SyncServer {
         let on_registry_events = self.on_registry_events.clone();
         let next_peer_id = self.next_peer_id.clone();
         let conn_tasks = self.conn_tasks.clone();
+        let (accept_ready_tx, accept_ready_rx) = oneshot::channel();
 
         // Ping ticker shares the accept task: a separate ping task had no
         // shutdown path and leaked (plus duplicated pings) on every restart.
         let accept_task = tokio::spawn(async move {
             let mut ticker = interval(Duration::from_millis(PING_INTERVAL_MS));
+            ticker.tick().await;
+            let _ = accept_ready_tx.send(());
             loop {
                 tokio::select! {
                     _ = ticker.tick() => {
@@ -289,6 +293,9 @@ impl SyncServer {
             }
         });
         *self.accept_task.lock().await = Some(accept_task);
+        accept_ready_rx
+            .await
+            .map_err(|_| "Sync server stopped before accepting connections".to_owned())?;
 
         Ok(())
     }

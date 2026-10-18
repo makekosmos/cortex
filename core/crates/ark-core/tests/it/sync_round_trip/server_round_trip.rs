@@ -123,11 +123,10 @@ async fn round_trip_sync_between_two_servers() {
     ));
     client.start();
 
-    // Wait for initial sync to settle.
-    tokio::time::sleep(Duration::from_millis(500)).await;
-
-    // Side B should now see the todo on its end.
-    let loaded_b = storage_b.load_entities(&HashMap::new()).await.unwrap();
+    let loaded_b = wait_for_entities(storage_b.as_ref(), |entities| {
+        entities.iter().any(|entity| entity.id == "entity-a-1")
+    })
+    .await;
     assert!(
         loaded_b.iter().any(|e| e.id == "entity-a-1"),
         "side B should have received seeded todo after initial sync; got {:?}",
@@ -147,9 +146,10 @@ async fn round_trip_sync_between_two_servers() {
     storage_a.apply_entity(&live).await.unwrap();
     server_a.broadcast_live_change(None).await;
 
-    tokio::time::sleep(Duration::from_millis(500)).await;
-
-    let loaded_b_after = storage_b.load_entities(&HashMap::new()).await.unwrap();
+    let loaded_b_after = wait_for_entities(storage_b.as_ref(), |entities| {
+        entities.iter().any(|entity| entity.id == "entity-a-2")
+    })
+    .await;
     assert!(
         loaded_b_after.iter().any(|e| e.id == "entity-a-2"),
         "side B should have received live change; got {:?}",

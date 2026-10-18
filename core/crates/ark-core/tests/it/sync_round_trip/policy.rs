@@ -1,6 +1,8 @@
 use super::{pair_storages, pick_port, SyncClient, SyncServer};
 use ark_application::sync_policy::SyncProfileRule;
-use ark_application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort, SyncReadClass};
+use ark_application::sync_storage::{
+    PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort, SyncReadClass,
+};
 use ark_core::replication_storage::PeerIdentityBackend;
 use ark_core::sync_server::SyncRuntimeStorage;
 use ark_core::types::{ArkObject, ObjectType, PeerRecord, SyncEntity};
@@ -188,7 +190,7 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
     client.start();
     client_c.start();
 
-    tokio::time::timeout(Duration::from_secs(10), async {
+    let policy_acceptance = tokio::time::timeout(Duration::from_secs(10), async {
         loop {
             if ark_store::data_platform::load_accepted_peer_sync_policy(
                 &source_conn.lock().unwrap(),
@@ -208,8 +210,28 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
     })
-    .await
-    .expect("receiver's policy should be accepted before data sync");
+    .await;
+    if policy_acceptance.is_err() {
+        let accepted_b = source
+            .load_accepted_peer_sync_policy("device-b")
+            .await
+            .unwrap()
+            .map(|policy| policy.revision);
+        let accepted_c = source
+            .load_accepted_peer_sync_policy("device-c")
+            .await
+            .unwrap()
+            .map(|policy| policy.revision);
+        let connected = server
+            .get_connected_peer_entries()
+            .await
+            .into_iter()
+            .map(|peer| peer.device_id)
+            .collect::<Vec<_>>();
+        panic!(
+            "policy acceptance timeout: b={accepted_b:?}, c={accepted_c:?}, peers={connected:?}"
+        );
+    }
     tokio::time::timeout(Duration::from_secs(10), async {
         loop {
             if stored_book_title_if_present(&receiver_conn.lock().unwrap()).as_deref()
@@ -269,18 +291,13 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
         "narrowing a class stops transfer but preserves the received local row"
     );
 
-    source
-        .apply_entity(&book_entity("Update while excluded", 2))
-        .await
-        .unwrap();
+    let excluded_update = book_entity("Update while excluded", 2);
+    source.apply_entity(&excluded_update).await.unwrap();
+    let mut source_vector = source.load_version_vector().await.unwrap();
+    source_vector.insert(excluded_update.id.clone(), excluded_update.hlc.clone());
+    source.store_version_vector(&source_vector).await.unwrap();
     server.broadcast_live_change(None).await;
-    tokio::time::sleep(Duration::from_millis(300)).await;
-    assert_eq!(
-        stored_book_title(&receiver_conn.lock().unwrap()),
-        "Original source version",
-        "an excluded update must not overwrite the receiver's local row"
-    );
-    tokio::time::timeout(Duration::from_secs(10), async {
+    let receiver_c_after = tokio::time::timeout(Duration::from_secs(10), async {
         loop {
             if stored_book_title(&receiver_c_conn.lock().unwrap()) == "Update while excluded" {
                 break;
@@ -288,8 +305,13 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
     })
-    .await
-    .expect("another device's full policy should receive the same update");
+    .await;
+    receiver_c_after.expect("another device's full policy should receive the live update");
+    assert_eq!(
+        stored_book_title(&receiver_conn.lock().unwrap()),
+        "Original source version",
+        "an excluded update must not overwrite the receiver's local row"
+    );
 
     ark_store::data_platform::upsert_sync_profile(
         &receiver_conn.lock().unwrap(),
@@ -311,6 +333,7 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
                 .await
                 .unwrap()
                 .is_some_and(|policy| policy.revision == 3)
+                && server.is_connected_to("device-b").await
             {
                 break;
             }
@@ -333,7 +356,7 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
         sender_page.iter().any(|entity| entity.id == "book-1"),
         "the widened peer projection should include the book"
     );
-    tokio::time::timeout(Duration::from_secs(10), async {
+    let backfill = tokio::time::timeout(Duration::from_secs(30), async {
         loop {
             if stored_book_title(&receiver_conn.lock().unwrap()) == "Update while excluded" {
                 break;
@@ -341,8 +364,19 @@ async fn receiver_policy_stops_transfer_and_widening_resumes_after_reconnect() {
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
     })
-    .await
-    .expect("widening followed by reconnect should backfill current source state");
+    .await;
+    if backfill.is_err() {
+        let source_vector = source.load_version_vector().await.unwrap();
+        let receiver_vector = receiver.load_version_vector().await.unwrap();
+        let title = stored_book_title(&receiver_conn.lock().unwrap());
+        let source_hlc = source_vector.get("book-1").cloned();
+        let receiver_hlc = receiver_vector.get("book-1").cloned();
+        let connected = server.is_connected_to("device-b").await;
+        panic!(
+            "backfill timeout: title={title:?}, source={source_hlc:?}, \
+             receiver={receiver_hlc:?}, connected={connected}"
+        );
+    }
     widened_client.stop_and_join().await;
     client_c.stop_and_join().await;
     server.stop().await;

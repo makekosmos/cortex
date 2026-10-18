@@ -56,7 +56,19 @@ async fn hmac_authenticated_sync_succeeds_with_matching_secret() {
     ));
     client.start();
 
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    tokio::time::timeout(Duration::from_secs(10), async {
+        loop {
+            let loaded = storage_b.load_entities(&HashMap::new()).await.unwrap();
+            if loaded.iter().any(|entity| entity.id == "hmac-entity-a")
+                && server_a.connected_peer_count().await == 1
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("matching HMAC secret should allow initial sync and peer admission");
 
     let loaded_b = storage_b.load_entities(&HashMap::new()).await.unwrap();
     assert!(
@@ -225,9 +237,12 @@ async fn usage_entities_sync_between_two_servers() {
     ));
     client.start();
 
-    tokio::time::sleep(Duration::from_millis(500)).await;
-
-    let loaded_b = storage_b.load_entities(&HashMap::new()).await.unwrap();
+    let loaded_b = wait_for_entities(storage_b.as_ref(), |entities| {
+        ["tracked-app-a", "usage-session-a", "usage-event-a"]
+            .iter()
+            .all(|id| entities.iter().any(|entity| entity.id == *id))
+    })
+    .await;
     assert!(
         loaded_b
             .iter()
@@ -269,9 +284,12 @@ async fn usage_entities_sync_between_two_servers() {
     storage_a.apply_entity(&live_event).await.unwrap();
     server_a.broadcast_live_change(None).await;
 
-    tokio::time::sleep(Duration::from_millis(500)).await;
-
-    let loaded_b_after = storage_b.load_entities(&HashMap::new()).await.unwrap();
+    let loaded_b_after = wait_for_entities(storage_b.as_ref(), |entities| {
+        entities
+            .iter()
+            .any(|entity| entity.entity_type == "usage_event" && entity.id == "usage-event-live")
+    })
+    .await;
     assert!(
         loaded_b_after
             .iter()

@@ -263,8 +263,16 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
         "type definitions must precede objects in transport"
     );
 
-    client.stop();
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    client.stop_and_join().await;
+    storage_a
+        .apply_entity(&selective_object_entity(
+            "sync-note",
+            "com.kosmos.note",
+            "Updated while disconnected",
+            7,
+        ))
+        .await
+        .unwrap();
     let reconnect = Arc::new(SyncClient::new(
         storage_b.clone() as Arc<dyn SyncRuntimeStorage>,
         peer,
@@ -275,8 +283,14 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
         None,
     ));
     reconnect.start();
-    tokio::time::sleep(Duration::from_millis(700)).await;
-    let replayed = storage_b.load_entities(&HashMap::new()).await.unwrap();
+    let replayed = wait_for_entities(storage_b.as_ref(), |entities| {
+        entities.iter().any(|entity| {
+            entity.id == note.id
+                && entity.data.get("title").and_then(|value| value.as_str())
+                    == Some("Updated while disconnected")
+        })
+    })
+    .await;
     assert_eq!(
         replayed
             .iter()

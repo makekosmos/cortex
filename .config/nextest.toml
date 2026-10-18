@@ -19,7 +19,12 @@ leak-timeout = { period = "1s", result = "fail" }
 # (runtime/tests/it/support/integration_replication_setup.rs, HOST_IDENTITIES).
 [test-groups]
 os-keyring = { max-threads = 1 }
+ark-core-sync-round-trip = { max-threads = 1 }
 
 [[profile.default.overrides]]
 filter = 'binary_id(engine::it) & (test(/^integration_replication_/) | test(/^support::/))'
 test-group = "os-keyring"
+
+[[profile.default.overrides]]
+filter = 'binary_id(ark-core::it) & test(/^sync_round_trip::/)'
+test-group = "ark-core-sync-round-trip"
