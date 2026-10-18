@@ -269,7 +269,12 @@
     {
       "path": "core/crates/ark-core/src/db/command/operation_receipt.rs",
       "category": "SQLite mutation API",
-      "count": 2
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-store/src/operation_receipt.rs",
+      "category": "SQLite mutation API",
+      "count": 1
     },
     {
       "path": "core/crates/ark-store/src/snapshot/recovery.rs",

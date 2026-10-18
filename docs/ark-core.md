@@ -14,15 +14,22 @@ longer exists (`runtime/src/ark_host.rs` is the host wrapper).
 - Dispatch is sequential FIFO on a **dedicated worker thread** with a private
   multi-thread tokio runtime (4 workers). SQLite never runs on Engine
   threads; ordering equals the sidecar's serial stdin loop.
-- Handlers run under `catch_unwind`: a panic becomes a request error and the
-  database is reopened (sync runtime stopped, shared connection dropped,
-  in-flight transaction rolled back). Workspace lints deny `unwrap_used` and
-  warn on `panic` — return errors instead.
+- Handlers run under `catch_unwind`. A handler panic makes the current request
+  outcome unknown, cancels queued requests, stops sync, and terminates the
+  service worker. The service does not reopen the database in place. A new
+  service instance must pass normal startup and recovery before accepting
+  requests. Workspace lints deny `unwrap_used` and warn on `panic`; handlers
+  should return errors instead.
 - Events flow through the process-wide `crate::events` broadcast bus
   (`ArkService::subscribe`); the Engine re-publishes them via `events_tx` and
   its own `emit_event`s. Exactly one `ArkService` per process.
 
-## Data model (schema.rs)
+## Data model and storage
+
+`ark-store` owns the SQLite writer connection, snapshots, and the schema and
+storage adapters already moved out of Core. Canonical type migration
+coordination and some SQL-backed runtime paths still live in `ark-core`; the
+SQLite boundary remains an active extraction.
 
 - Typed objects: `object_types` + `objects` (+ `object_links`), registered
   through `type_registry` / `TypeRegistration`.
@@ -37,20 +44,19 @@ longer exists (`runtime/src/ark_host.rs` is the host wrapper).
   object rewrite needs an explicit approval per issue, a transaction and a
   `ark.db` backup taken before it runs (see `core/crates/ark-core/AGENTS.md`).
 
-## Layout
+## Crate ownership
 
-- `src/db/` — storage backend (`SqliteStorageBackend`), loaders, `sync/` for
-  version-vector + sequencing logic.
-- `src/service/` + `src/service.rs` — `ArkService`, request dispatcher
-  (`runtime::handle_request`), op handlers.
-- `src/sync_server*.rs`, `src/sync_client*.rs` — sync peers; transports in
-  `src/iroh_*` (p2p QUIC), `src/relay_*` (WebSocket relay), `src/beacon_*`
-  (LAN broadcast discovery). Selection: `src/transport_select.rs`.
-- `src/hlc.rs`, `src/net.rs`, `src/protocol/` — hybrid logical clock,
-  routable-address rules, wire protocol.
-- `src/canonical_types/`, `src/type_registry/` — built-in object types.
+- `ark-domain` contains shared domain values and protocol-independent types.
+- `ark-application` defines capabilities used by runtime, sync, and storage.
+- `ark-store` owns SQLite opening, the writer actor, snapshots, and extracted
+  query and persistence adapters. Some SQL and migration work remains in Core.
+- `ark-sync` owns extracted sync policy and session decisions. Core still runs
+  parts of the direct client/server loops and applies their effects.
+- `ark-net` owns concrete WebSocket, relay, Iroh, and discovery transports.
+- `ark-core` exposes `ArkService` and composes these crates. It still owns
+  request handlers, migration coordination, and portions of sync orchestration.
 
 ## Tests
 
-`cargo nextest run -p ark-core` (from repo root; the crate builds only via
-the workspace). `cargo shear`/`clippy`/`deny` run repo-wide.
+From the Cortex repository root, run `cargo nextest run -p ark-core`. The crate builds through the root workspace.
+`cargo shear`, clippy, and deny run repo-wide.

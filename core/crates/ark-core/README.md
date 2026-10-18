@@ -4,16 +4,23 @@ ARK Core is the canonical local-first data runtime for Kosmos. It is a Rust libr
 
 ## Source Layout
 
-- `crates/ark-core` - Rust crate `ark-core`
-- `crates/ark-core/src/service.rs` - `ArkService` in-process API
-- `crates/ark-core/src/db.rs` - SQLite schema, CRUD, sync storage adapter
-- `crates/ark-core/src/sync_server.rs` and `sync_client.rs` - LAN sync runtime
-- `@makekosmos/ark@0.1.1` - pinned TypeScript SDK package for Electron main/Node callers
+The Rust workspace lives in `core/`. Its main crate boundaries are:
+
+- `ark-core` exposes `ArkService` and composes runtime, storage, sync, and
+  network components. Some database and direct-session orchestration remains
+  here while the extraction proceeds.
+- `ark-store` owns SQLite opening, the writer actor, snapshots, and extracted
+  SQL adapters.
+- `ark-application` defines the capabilities shared between Core, sync, and
+  storage.
+- `ark-sync` owns extracted sync policy and session decisions.
+- `ark-net` owns concrete network transports.
+- `ark-domain` contains shared domain types.
 
 ## Build And Test
 
 ```powershell
-cargo test --manifest-path crates/ark-core/Cargo.toml
+cargo nextest run -p ark-core
 bun run ark:smoke
 ```
 
@@ -48,7 +55,9 @@ Production backups use `ark.db.backup-v1-*` plus a JSON manifest containing the 
 
 ## TypeScript Integration
 
-Use `@kosmos/ark` from Electron main or another trusted Node process:
+Historical TypeScript callers used `@kosmos/ark` from Electron main or another
+trusted Node process. The sidecar-based example below is retained for migration
+reference and does not describe the current in-process Engine integration.
 
 ```ts
 import { ArkClient } from "@kosmos/ark";
