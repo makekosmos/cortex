@@ -5,9 +5,80 @@ use ark_application::{
 use ark_domain::types::VersionVector;
 
 use crate::{
-    protocol::{LanSyncMessage, NegotiatedProtocol, ProtocolCapability, SyncPolicyRuleWire},
+    protocol::{
+        compute_hello_auth_hmac, compute_negotiation_offer_hmac, generate_auth_nonce,
+        serialize_message, LanSyncMessage, NegotiatedProtocol, ProtocolCapability, ProtocolOffer,
+        SyncPolicyRuleWire, PROTOCOL_VERSION,
+    },
     registry_admission::AdmissionUpdate,
 };
+
+pub struct ClientHello {
+    pub message: String,
+    pub offer: ProtocolOffer,
+    pub auth_nonce: Option<String>,
+}
+
+pub struct ClientHelloRequest<'a> {
+    pub device_id: &'a str,
+    pub device_name: &'a str,
+    pub space_id: &'a str,
+    pub addresses: &'a [String],
+    pub auth_secret: Option<&'a str>,
+    pub task_merge_bootstrap_v2: bool,
+    pub platform: Option<String>,
+    pub app_version: Option<String>,
+}
+
+pub fn build_client_hello(request: ClientHelloRequest<'_>) -> ClientHello {
+    let ClientHelloRequest {
+        device_id,
+        device_name,
+        space_id,
+        addresses,
+        auth_secret,
+        task_merge_bootstrap_v2,
+        platform,
+        app_version,
+    } = request;
+    let (auth_nonce, auth_hmac) = match auth_secret {
+        Some(secret) => {
+            let nonce = generate_auth_nonce();
+            let hmac = compute_hello_auth_hmac(secret, space_id, device_id, &nonce);
+            (Some(nonce), Some(hmac))
+        }
+        None => (None, None),
+    };
+    let mut offer = ProtocolOffer::current_with_registry_history(true);
+    if task_merge_bootstrap_v2 {
+        offer = offer.with_task_merge_bootstrap_v2();
+    }
+    let negotiation_hmac = auth_secret
+        .zip(auth_nonce.as_deref())
+        .map(|(secret, nonce)| {
+            compute_negotiation_offer_hmac(secret, space_id, device_id, nonce, &offer)
+        });
+    let hello = LanSyncMessage::Hello {
+        protocol_version: PROTOCOL_VERSION,
+        device_id: device_id.to_owned(),
+        device_name: device_name.to_owned(),
+        space_id: space_id.to_owned(),
+        addresses: Some(addresses.to_owned()),
+        auth_nonce: auth_nonce.clone(),
+        auth_hmac,
+        platform,
+        app_version,
+        supported_protocol_versions: Some(offer.version_ids()),
+        supported_capabilities: Some(offer.capability_ids()),
+        negotiated_capabilities: None,
+        negotiation_hmac,
+    };
+    ClientHello {
+        message: serialize_message(&hello),
+        offer,
+        auth_nonce,
+    }
+}
 
 pub struct DirectClientAdmission {
     admission: crate::registry_admission::DirectRegistryAdmission,
@@ -214,4 +285,66 @@ where
         .load_version_vector()
         .await
         .map_err(|error| format!("failed to load sync version vector: {error}"))
+}
+
+#[cfg(test)]
+mod hello_tests {
+    use super::*;
+
+    #[test]
+    fn client_hello_preserves_metadata_and_authenticated_offer() {
+        let addresses = vec!["127.0.0.1:1234".to_owned()];
+        let hello = build_client_hello(ClientHelloRequest {
+            device_id: "device-a",
+            device_name: "Device A",
+            space_id: "space-a",
+            addresses: &addresses,
+            auth_secret: Some("secret"),
+            task_merge_bootstrap_v2: true,
+            platform: Some("linux".to_owned()),
+            app_version: Some("1.2.3".to_owned()),
+        });
+        let Some(LanSyncMessage::Hello {
+            protocol_version,
+            device_id,
+            device_name,
+            space_id,
+            addresses: advertised_addresses,
+            auth_nonce: Some(nonce),
+            auth_hmac: Some(auth_hmac),
+            platform,
+            app_version,
+            supported_protocol_versions: Some(versions),
+            supported_capabilities: Some(capabilities),
+            negotiated_capabilities,
+            negotiation_hmac: Some(negotiation_hmac),
+        }) = crate::protocol::deserialize_message(&hello.message)
+        else {
+            panic!("builder must serialize a complete Hello");
+        };
+
+        assert_eq!(protocol_version, PROTOCOL_VERSION);
+        assert_eq!(device_id, "device-a");
+        assert_eq!(device_name, "Device A");
+        assert_eq!(space_id, "space-a");
+        assert_eq!(advertised_addresses, Some(addresses));
+        assert_eq!(platform.as_deref(), Some("linux"));
+        assert_eq!(app_version.as_deref(), Some("1.2.3"));
+        assert_eq!(negotiated_capabilities, None);
+        assert_eq!(
+            versions,
+            hello.offer.version_ids(),
+            "serialized offer must match the offer retained for selection validation"
+        );
+        assert_eq!(capabilities, hello.offer.capability_ids());
+        assert_eq!(
+            auth_hmac,
+            compute_hello_auth_hmac("secret", "space-a", "device-a", &nonce)
+        );
+        assert_eq!(
+            negotiation_hmac,
+            compute_negotiation_offer_hmac("secret", "space-a", "device-a", &nonce, &hello.offer)
+        );
+        assert_eq!(hello.auth_nonce.as_deref(), Some(nonce.as_str()));
+    }
 }

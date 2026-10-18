@@ -1,8 +1,6 @@
 use super::*;
 use ark_application::sync_storage::OutboundAck;
 
-#[path = "sync_client_start/client_hello.rs"]
-mod client_hello;
 #[path = "sync_client_start/connect_and_receive/direct_ws_control.rs"]
 mod direct_ws_control;
 #[path = "sync_client_start/connect_and_receive/feed_recovery.rs"]

@@ -16,13 +16,17 @@
 
                 let (mut ws_sink, mut ws_stream_rx) = ws_stream.split();
 
-                let client_hello = client_hello::build_client_hello(
-                    &device_id,
-                    &device_name,
-                    &space_id,
-                    &own_addresses,
-                    auth_secret.as_deref(),
-                    task_merge_bootstrap_v2,
+                let client_hello = ark_sync::client_session::build_client_hello(
+                    ark_sync::client_session::ClientHelloRequest {
+                        device_id: &device_id,
+                        device_name: &device_name,
+                        space_id: &space_id,
+                        addresses: &own_addresses,
+                        auth_secret: auth_secret.as_deref(),
+                        task_merge_bootstrap_v2,
+                        platform: Some(ark_net::host::local_platform()),
+                        app_version: ark_net::host::app_version(),
+                    },
                 );
                 if ws_sink
                     .send(Message::Text(client_hello.message.clone().into()))
