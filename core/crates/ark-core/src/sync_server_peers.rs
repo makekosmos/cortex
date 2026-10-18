@@ -60,21 +60,7 @@ impl SyncServer {
             .unwrap_or_else(|e| e.into_inner())
             .drain(..)
             .collect();
-        let aborts: Vec<tokio::task::AbortHandle> =
-            tasks.iter().map(|t| t.abort_handle()).collect();
-        let joined = async {
-            for task in tasks {
-                let _ = task.await;
-            }
-        };
-        if tokio::time::timeout(Duration::from_secs(2), joined)
-            .await
-            .is_err()
-        {
-            for abort in aborts {
-                abort.abort();
-            }
-        }
+        join_connection_tasks(tasks, Duration::from_secs(2)).await;
         eprintln!("{TAG} Server stopped");
     }
 
@@ -156,5 +142,62 @@ impl SyncServer {
             save_known_peers(&self.storage, &known).await?;
         }
         Ok(removed)
+    }
+}
+
+async fn join_connection_tasks(tasks: Vec<tokio::task::JoinHandle<()>>, grace_period: Duration) {
+    let deadline = tokio::time::Instant::now() + grace_period;
+    while tasks.iter().any(|task| !task.is_finished()) {
+        if tokio::time::Instant::now() >= deadline {
+            for task in &tasks {
+                if !task.is_finished() {
+                    task.abort();
+                }
+            }
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+
+    for task in tasks {
+        if let Err(error) = task.await {
+            if !error.is_cancelled() {
+                eprintln!("{TAG} connection task ended abnormally: {error}");
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod connection_task_tests {
+    use super::join_connection_tasks;
+    use std::time::Duration;
+    use tokio::sync::oneshot;
+
+    struct DropNotice(Option<oneshot::Sender<()>>);
+
+    impl Drop for DropNotice {
+        fn drop(&mut self) {
+            if let Some(sender) = self.0.take() {
+                let _ = sender.send(());
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn timed_out_connection_tasks_are_aborted_and_joined() {
+        let (started_tx, started_rx) = oneshot::channel();
+        let (dropped_tx, dropped_rx) = oneshot::channel();
+        let task = tokio::spawn(async move {
+            let _notice = DropNotice(Some(dropped_tx));
+            let _ = started_tx.send(());
+            std::future::pending::<()>().await;
+        });
+        started_rx.await.expect("connection task started");
+
+        join_connection_tasks(vec![task], Duration::ZERO).await;
+        dropped_rx
+            .await
+            .expect("aborted task is dropped before shutdown returns");
     }
 }
