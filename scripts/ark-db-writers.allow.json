@@ -162,11 +162,6 @@
       "count": 4
     },
     {
-      "path": "core/crates/ark-core/src/db/integration_replication_records.rs",
-      "category": "SQLite mutation API",
-      "count": 1
-    },
-    {
       "path": "core/crates/ark-core/src/db/legacy.rs",
       "category": "SQLite mutation API",
       "count": 5
@@ -388,6 +383,11 @@
     },
     {
       "path": "core/crates/ark-store/src/integration_replication/grants.rs",
+      "category": "SQLite mutation API",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-store/src/integration_replication/nodes.rs",
       "category": "SQLite mutation API",
       "count": 1
     }

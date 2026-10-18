@@ -10,4 +10,4 @@ pub use credentials::{
 };
 pub use grants::{load_integration_node_grant, upsert_integration_node_grant_record};
 pub use leases::load_integration_refresh_lease;
-pub use nodes::load_authorized_node;
+pub use nodes::{load_authorized_node, upsert_authorized_node_record};

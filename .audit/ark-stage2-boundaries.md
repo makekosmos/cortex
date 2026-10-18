@@ -70,6 +70,8 @@ The SQL that computes the durable committed-feed watermark now lives in `ark-sto
 
 Store owns the integration-configuration insert/upsert and encoding of its JSON and SQLite integer fields. Core retains provider/account identity immutability and HLC ordering checks, and continues to include the upsert plus version-vector bump in the existing transaction.
 
+Store owns authorized-node row encoding and its insert/upsert alongside the read adapter. Core uses the validated Store record to enforce grant-epoch monotonicity, prevent same-epoch revival and key changes, and check HLC order before persisting and bumping the version vector in the existing transaction.
+
 `ark-net::websocket::race_connect` owns racing direct WebSocket addresses, the five-second per-address timeout, and cancellation of losing attempts. `ark-core::SyncClient` keeps peer selection, reconnect delay, authentication, and protocol exchange. Keeping the returned socket type in `ark-net` makes this a concrete transport API rather than a sync policy interface. Moving the whole client into `ark-sync` would also move listener and socket details into the policy layer, so that larger cut remains separate.
 
 `ark-net::websocket::Listener` now owns the TCP listener and WebSocket server handshake as one transport operation. Core still selects between accepting a peer and its ping timer, then owns peer identity, admission, connection tasks, and shutdown. This moves concrete socket setup to `ark-net` without moving session lifecycle into the network package.
