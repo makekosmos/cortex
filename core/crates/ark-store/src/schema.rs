@@ -1,3 +1,5 @@
+pub mod migrations;
+
 /// SQL statements for creating the ARK core database schema.
 pub const CREATE_TABLES: &str = "
 CREATE TABLE IF NOT EXISTS todos (

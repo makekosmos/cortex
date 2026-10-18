@@ -95,59 +95,6 @@ mod tests {
     }
 
     #[test]
-    fn feed_heads_bootstrap_legacy_rows_once_and_is_idempotent() {
-        let conn = db();
-        conn.execute(
-            "INSERT INTO ark_committed_feed(
-                position, entity_type, entity_id, revision, deleted
-             ) VALUES (1, 'object', 'legacy', 'r1', 0),
-                      (2, 'object', 'legacy', 'r2', 0),
-                      (3, 'todo', 'other', 'r3', 0)",
-            [],
-        )
-        .unwrap();
-
-        bootstrap_committed_feed_heads(&conn).unwrap();
-        let first: Vec<(String, String, i64)> = conn
-            .prepare(
-                "SELECT entity_type, entity_id, position FROM ark_committed_feed_heads
-                 ORDER BY entity_type, entity_id",
-            )
-            .unwrap()
-            .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
-            .unwrap()
-            .collect::<Result<_, _>>()
-            .unwrap();
-        assert_eq!(
-            first,
-            vec![
-                ("object".into(), "legacy".into(), 2),
-                ("todo".into(), "other".into(), 3)
-            ]
-        );
-
-        conn.execute(
-            "UPDATE ark_committed_feed_heads SET position = 1
-             WHERE entity_type = 'object' AND entity_id = 'legacy'",
-            [],
-        )
-        .unwrap();
-        bootstrap_committed_feed_heads(&conn).unwrap();
-        let position: i64 = conn
-            .query_row(
-                "SELECT position FROM ark_committed_feed_heads
-                 WHERE entity_type = 'object' AND entity_id = 'legacy'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(
-            position, 1,
-            "the completion marker prevents a second rebuild"
-        );
-    }
-
-    #[test]
     fn delivery_projection_keeps_selected_locator_and_payload_in_one_read_snapshot() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("feed-snapshot.db");

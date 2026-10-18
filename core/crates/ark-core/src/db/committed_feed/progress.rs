@@ -53,61 +53,6 @@ pub fn acknowledge_outbound_identity(
     acknowledge_outbound(conn, peer_device_id, identity.revision, position, ack)
 }
 
-pub fn bootstrap_committed_feed_heads(conn: &Connection) -> Result<(), String> {
-    conn.execute_batch("SAVEPOINT ark_feed_heads_bootstrap")
-        .map_err(|error| error.to_string())?;
-    let result = (|| -> Result<(), String> {
-        let bootstrapped = conn
-            .query_row(
-                "SELECT EXISTS(SELECT 1 FROM ark_committed_feed_meta
-                 WHERE meta_key = 'heads-v1')",
-                [],
-                |row| row.get::<_, i64>(0),
-            )
-            .map_err(|error| error.to_string())?
-            != 0;
-        if !bootstrapped {
-            conn.execute(
-                "INSERT INTO ark_committed_feed_heads(entity_type, entity_id, position)
-                 SELECT entity_type, entity_id, MAX(position)
-                 FROM ark_committed_feed WHERE 1 GROUP BY entity_type, entity_id
-                 ON CONFLICT(entity_type, entity_id) DO UPDATE SET
-                     position = MAX(ark_committed_feed_heads.position, excluded.position)",
-                [],
-            )
-            .map_err(|error| error.to_string())?;
-            conn.execute(
-                "INSERT INTO ark_committed_feed_meta(meta_key, meta_value)
-                 VALUES ('heads-v1', 'complete')",
-                [],
-            )
-            .map_err(|error| error.to_string())?;
-        }
-        let watermark = ark_store::committed_feed::watermark(conn)?;
-        conn.execute(
-            "INSERT INTO ark_committed_feed_meta(meta_key, meta_value)
-             VALUES ('watermark-v1', ?1)
-             ON CONFLICT(meta_key) DO UPDATE SET
-                 meta_value = MAX(CAST(ark_committed_feed_meta.meta_value AS INTEGER),
-                                  CAST(excluded.meta_value AS INTEGER))",
-            [watermark.to_string()],
-        )
-        .map_err(|error| error.to_string())?;
-        Ok(())
-    })();
-    match result {
-        Ok(()) => conn
-            .execute_batch("RELEASE ark_feed_heads_bootstrap")
-            .map_err(|error| error.to_string()),
-        Err(error) => {
-            let _ = conn.execute_batch(
-                "ROLLBACK TO ark_feed_heads_bootstrap; RELEASE ark_feed_heads_bootstrap",
-            );
-            Err(error)
-        }
-    }
-}
-
 pub fn begin_outbound_policy(
     conn: &Connection,
     peer_device_id: &str,
