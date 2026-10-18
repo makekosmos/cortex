@@ -29,7 +29,7 @@ async fn open_publishes_only_a_database_ready_for_commands() {
         .join("ark.db")
         .to_string_lossy()
         .into_owned();
-    let (handle, _owner) = DbHandle::open(db_path, "device-under-test".into())
+    let (handle, mut owner) = DbHandle::open(db_path, "device-under-test".into())
         .await
         .unwrap();
 
@@ -43,6 +43,10 @@ async fn open_publishes_only_a_database_ready_for_commands() {
         .unwrap();
 
     assert_eq!(first.to_bytes(), second.to_bytes());
+    owner
+        .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
