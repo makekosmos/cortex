@@ -16,11 +16,17 @@ use crate::{
 };
 
 mod direct;
+mod handle;
 mod runner;
 pub use direct::{
     classify_server_message, DirectServerMessage, DirectServerSession,
     DirectServerSessionCloseReason, DirectServerSessionEffect, DirectServerSessionInput,
     DirectServerSessionTransition, DirectServerSyncChanges, DirectServerSyncStartPolicy,
+};
+pub use handle::{
+    ServerConnectionLease, ServerPeerProjection, ServerPeerReadiness, ServerSessionActivation,
+    ServerSessionActivationError, ServerSessionActor, ServerSessionControl,
+    ServerSessionCreateError, ServerSessionHandle, ServerSessionIntent, ServerSessionIntentError,
 };
 pub use runner::{
     run_connected_server_session, DirectServerSessionEnd, DirectServerSessionHandler,
