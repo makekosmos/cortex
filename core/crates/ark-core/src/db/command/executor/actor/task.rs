@@ -2,14 +2,36 @@ use super::super::super::{CommandContext, DbCommand, DbError, DbMaintenanceComma
 use rusqlite::{Connection, Transaction, TransactionBehavior};
 use tokio::sync::oneshot;
 
+/// Delivers a reply. The writer calls it only after the slot is released, so a
+/// caller that receives the reply can submit again without hitting the barrier.
+pub(in crate::db::command) type Publish = Box<dyn FnOnce()>;
+
 pub(in crate::db::command) trait WriterTask: Send {
     fn run(
         self: Box<Self>,
         connection: &mut Connection,
         on_error: &mut dyn FnMut(&DbError),
-    ) -> Result<(), DbError>;
+    ) -> (Result<(), DbError>, Publish);
     fn cancel_before_start(self: Box<Self>);
     fn receiver_closed(&self) -> bool;
+}
+
+fn settle<T: 'static>(
+    result: Result<T, DbError>,
+    reply: oneshot::Sender<Result<T, DbError>>,
+    on_error: &mut dyn FnMut(&DbError),
+) -> (Result<(), DbError>, Publish) {
+    let status = match &result {
+        Ok(_) => Ok(()),
+        Err(error) => {
+            on_error(error);
+            Err(error.clone())
+        }
+    };
+    let publish: Publish = Box::new(move || {
+        let _ = reply.send(result);
+    });
+    (status, publish)
 }
 
 pub(in crate::db::command) struct TypedCommand<C: DbCommand> {
@@ -23,7 +45,7 @@ impl<C: DbCommand> WriterTask for TypedCommand<C> {
         self: Box<Self>,
         connection: &mut Connection,
         on_error: &mut dyn FnMut(&DbError),
-    ) -> Result<(), DbError> {
+    ) -> (Result<(), DbError>, Publish) {
         let Self {
             context,
             command,
@@ -39,17 +61,7 @@ impl<C: DbCommand> WriterTask for TypedCommand<C> {
                 .map_err(|error| DbError::CommitFailed(error.to_string()))?;
             Ok(output)
         })();
-        match result {
-            Ok(output) => {
-                let _ = reply.send(Ok(output));
-                Ok(())
-            }
-            Err(error) => {
-                on_error(&error);
-                let _ = reply.send(Err(error.clone()));
-                Err(error)
-            }
-        }
+        settle(result, reply, on_error)
     }
 
     fn cancel_before_start(self: Box<Self>) {
@@ -71,19 +83,9 @@ impl<C: DbMaintenanceCommand> WriterTask for TypedMaintenance<C> {
         self: Box<Self>,
         connection: &mut Connection,
         on_error: &mut dyn FnMut(&DbError),
-    ) -> Result<(), DbError> {
+    ) -> (Result<(), DbError>, Publish) {
         let Self { command, reply } = *self;
-        match command.execute(connection) {
-            Ok(output) => {
-                let _ = reply.send(Ok(output));
-                Ok(())
-            }
-            Err(error) => {
-                on_error(&error);
-                let _ = reply.send(Err(error.clone()));
-                Err(error)
-            }
-        }
+        settle(command.execute(connection), reply, on_error)
     }
 
     fn cancel_before_start(self: Box<Self>) {

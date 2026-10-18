@@ -94,7 +94,7 @@ pub(super) fn actor_loop(
             continue;
         }
 
-        let committed = if slot.class == CommandClass::Maintenance {
+        let (committed, publish) = if slot.class == CommandClass::Maintenance {
             let _exclusive = shared
                 .readers
                 .write()
@@ -114,16 +114,23 @@ pub(super) fn actor_loop(
             }
         }
         release_slot(&shared, index, slot.source, slot.class, slot.bytes);
+        if let Some(publish) = publish {
+            publish();
+        }
     }
     drop(connection);
     complete_close(&shared);
 }
 
-fn run_task(shared: &ActorShared, connection: &mut Connection, task: Box<dyn WriterTask>) -> bool {
+fn run_task(
+    shared: &ActorShared,
+    connection: &mut Connection,
+    task: Box<dyn WriterTask>,
+) -> (bool, Option<Publish>) {
     let mut on_error = |error: &DbError| fail_closed_for_error(shared, error);
     match catch_unwind(AssertUnwindSafe(|| task.run(connection, &mut on_error))) {
-        Ok(Ok(())) => true,
-        Ok(Err(_error)) => false,
+        Ok((Ok(()), publish)) => (true, Some(publish)),
+        Ok((Err(_error), publish)) => (false, Some(publish)),
         Err(panic) => {
             let mut ledger = shared
                 .ledger
@@ -138,7 +145,7 @@ fn run_task(shared: &ActorShared, connection: &mut Connection, task: Box<dyn Wri
             shared
                 .generation
                 .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            false
+            (false, None)
         }
     }
 }
