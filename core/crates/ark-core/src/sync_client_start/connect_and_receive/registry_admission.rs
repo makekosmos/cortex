@@ -85,7 +85,7 @@ impl PendingRegistryAdmission {
             registry_session_id: ready.registry_session_id().to_owned(),
             tx: tx.clone(),
             sync_started: !policy_bound_delivery,
-            sync_complete: false,
+            outbound_snapshot: ark_sync::outbound_snapshot::OutboundSnapshotProgress::not_sent(),
             protocol: ready.protocol().clone(),
         });
 

@@ -6,7 +6,7 @@ pub(super) async fn pump(
     feed_in_flight: &ClientFeedInFlight,
 ) -> Result<(), String> {
     let authenticated_peer = authenticated_tx.lock().await.as_ref().and_then(|session| {
-        session.sync_complete.then(|| {
+        session.outbound_snapshot.has_been_acknowledged().then(|| {
             (
                 session.peer_id.clone(),
                 session.tx.clone(),

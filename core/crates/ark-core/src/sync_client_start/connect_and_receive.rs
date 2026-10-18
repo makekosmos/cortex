@@ -49,11 +49,6 @@
                 track_task(&writer_tasks, writer);
 
                 let mut authenticated = false;
-                let mut sync_complete = false;
-                let mut task_merge_operations = false;
-                let mut pending_initial_snapshot_ack: Option<
-                    ark_sync::outbound_snapshot::PendingSnapshotAck,
-                > = None;
                 let mut peer_device_id_actual = String::new();
                 let mut pending_registry_admission: Option<
                     registry_admission::PendingRegistryAdmission,
@@ -161,10 +156,6 @@
                                             );
                                             break;
                                         }
-                                        task_merge_operations = negotiated_protocol
-                                            .capabilities
-                                            .contains(&ProtocolCapability::TaskMergeBootstrapV2);
-
                                         if !server_device_id.is_empty()
                                             && server_device_id == device_id
                                         {
@@ -254,12 +245,14 @@
 
                                         let policy_bound =
                                             sync_policy::is_policy_bound(&authenticated_tx).await;
+                                        let snapshot_already_sent =
+                                            snapshot_ack::was_sent(&authenticated_tx).await;
                                         let mut snapshot = match
                                             ark_sync::outbound_snapshot::OutboundSnapshot::begin(
                                                 storage.as_ref(),
                                                 peer_device_id_actual.clone(),
                                                 remote_vector,
-                                                sync_complete,
+                                                snapshot_already_sent,
                                                 policy_bound,
                                             )
                                             .await
@@ -293,8 +286,11 @@
                                             }
                                         };
 
-                                        sync_complete = true;
-                                        pending_initial_snapshot_ack = Some(pending_ack);
+                                        if let Some(session) =
+                                            authenticated_tx.lock().await.as_mut()
+                                        {
+                                            session.outbound_snapshot.record_sent(pending_ack);
+                                        }
                                     }
 
                                     LanSyncMessage::SyncChanges {
@@ -324,7 +320,6 @@
                                         if !snapshot_ack::handle(
                                             &storage,
                                             &peer_device_id_actual,
-                                            &mut pending_initial_snapshot_ack,
                                             &batch_id,
                                             policy_identity,
                                             &authenticated_tx,
@@ -383,19 +378,17 @@
                                         change_id,
                                         policy_identity,
                                     } => {
-                                        if sync_complete
-                                            && !live_messages::handle_feed_ack_message(
-                                                &storage,
-                                                &peer_device_id_actual,
-                                                &tx,
-                                                &feed_in_flight,
-                                                &authenticated_tx,
-                                                &change_id,
-                                                policy_identity,
-                                                false,
-                                            )
-                                            .await
-                                        {
+                                        if !live_messages::handle_feed_ack_message(
+                                            &storage,
+                                            &peer_device_id_actual,
+                                            &tx,
+                                            &feed_in_flight,
+                                            &authenticated_tx,
+                                            &change_id,
+                                            policy_identity,
+                                            false,
+                                        )
+                                        .await {
                                             break;
                                         }
                                     }
@@ -404,42 +397,33 @@
                                         change_id,
                                         policy_identity,
                                     } => {
-                                        if sync_complete
-                                            && !live_messages::handle_feed_ack_message(
-                                                &storage,
-                                                &peer_device_id_actual,
-                                                &tx,
-                                                &feed_in_flight,
-                                                &authenticated_tx,
-                                                &change_id,
-                                                policy_identity,
-                                                true,
-                                            )
-                                            .await
-                                        {
+                                        if !live_messages::handle_feed_ack_message(
+                                            &storage,
+                                            &peer_device_id_actual,
+                                            &tx,
+                                            &feed_in_flight,
+                                            &authenticated_tx,
+                                            &change_id,
+                                            policy_identity,
+                                            true,
+                                        )
+                                        .await {
                                             break;
                                         }
                                     }
 
                                     LanSyncMessage::TaskMergeBatch { batch } => {
-                                        if authenticated
-                                            && sync_complete
-                                            && task_merge_operations
+                                        if let Err(error) = live_messages::handle_task_merge_batch(
+                                            &storage,
+                                            &peer_device_id_actual,
+                                            &device_id,
+                                            &tx,
+                                            &authenticated_tx,
+                                            batch,
+                                        )
+                                        .await
                                         {
-                                            if let Err(error) =
-                                                live_messages::handle_task_merge_batch(
-                                                &storage,
-                                                &peer_device_id_actual,
-                                                &device_id,
-                                                &tx,
-                                                batch,
-                                            )
-                                            .await
-                                            {
-                                                eprintln!(
-                                                    "{TAG} task merge batch rejected: {error}"
-                                                );
-                                            }
+                                            eprintln!("{TAG} task merge batch rejected: {error}");
                                         }
                                     }
 

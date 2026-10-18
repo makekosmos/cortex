@@ -1,10 +1,19 @@
 use super::*;
 
+pub(super) async fn was_sent(
+    authenticated_tx: &Arc<Mutex<Option<AuthenticatedPeerSession>>>,
+) -> bool {
+    authenticated_tx
+        .lock()
+        .await
+        .as_ref()
+        .is_some_and(|session| session.outbound_snapshot.has_been_sent())
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn handle(
     storage: &Arc<dyn SyncRuntimeStorage>,
     peer_device_id: &str,
-    pending_snapshot: &mut Option<ark_sync::outbound_snapshot::PendingSnapshotAck>,
     batch_id: &str,
     policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
     authenticated_tx: &Arc<Mutex<Option<AuthenticatedPeerSession>>>,
@@ -14,7 +23,6 @@ pub(super) async fn handle(
     match apply(
         storage,
         peer_device_id,
-        pending_snapshot,
         batch_id,
         policy_identity,
         authenticated_tx,
@@ -35,20 +43,25 @@ pub(super) async fn handle(
 async fn apply(
     storage: &Arc<dyn SyncRuntimeStorage>,
     peer_device_id: &str,
-    pending_snapshot: &mut Option<ark_sync::outbound_snapshot::PendingSnapshotAck>,
     batch_id: &str,
     policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
     authenticated_tx: &Arc<Mutex<Option<AuthenticatedPeerSession>>>,
     tx: &mpsc::UnboundedSender<Message>,
     feed_in_flight: &ClientFeedInFlight,
 ) -> Result<(), String> {
-    let Some(pending) = pending_snapshot.as_ref() else {
+    let pending = authenticated_tx
+        .lock()
+        .await
+        .as_ref()
+        .filter(|session| session.peer_id == peer_device_id)
+        .and_then(|session| session.outbound_snapshot.pending_ack().cloned());
+    let Some(pending) = pending else {
         return Ok(());
     };
     if !ark_sync::outbound_snapshot::acknowledge_snapshot(
         storage.as_ref(),
         peer_device_id,
-        pending,
+        &pending,
         batch_id,
         policy_identity.as_ref(),
     )
@@ -56,23 +69,25 @@ async fn apply(
     {
         return Ok(());
     }
-    *pending_snapshot = None;
-    let (receipt_ack, policy_bound) = if let Some(session) = authenticated_tx.lock().await.as_mut()
-    {
-        session.sync_complete = true;
-        (
-            session
-                .protocol
-                .capabilities
-                .contains(&ark_sync::protocol::ProtocolCapability::DurableReceiptAckV1),
-            session
-                .protocol
-                .capabilities
-                .contains(&ark_sync::protocol::ProtocolCapability::PolicyBoundDeliveryV1),
-        )
-    } else {
-        (false, false)
+    let mut session_guard = authenticated_tx.lock().await;
+    let Some(session) = session_guard
+        .as_mut()
+        .filter(|session| session.peer_id == peer_device_id)
+    else {
+        return Ok(());
     };
+    if !session.outbound_snapshot.record_acknowledged(&pending) {
+        return Ok(());
+    }
+    let receipt_ack = session
+        .protocol
+        .capabilities
+        .contains(&ark_sync::protocol::ProtocolCapability::DurableReceiptAckV1);
+    let policy_bound = session
+        .protocol
+        .capabilities
+        .contains(&ark_sync::protocol::ProtocolCapability::PolicyBoundDeliveryV1);
+    drop(session_guard);
     super::pump_client_committed_feed(
         storage,
         peer_device_id,

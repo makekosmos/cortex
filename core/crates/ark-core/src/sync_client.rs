@@ -43,7 +43,7 @@ pub(crate) struct AuthenticatedPeerSession {
     pub(crate) registry_session_id: String,
     pub(crate) tx: mpsc::UnboundedSender<Message>,
     pub(crate) sync_started: bool,
-    pub(crate) sync_complete: bool,
+    pub(crate) outbound_snapshot: ark_sync::outbound_snapshot::OutboundSnapshotProgress,
     pub(crate) protocol: ark_sync::protocol::NegotiatedProtocol,
 }
 
@@ -124,7 +124,7 @@ impl SyncClient {
     pub async fn broadcast_live_change(&self) {
         let guard = self.authenticated_tx.lock().await;
         if let Some(session) = guard.as_ref() {
-            if !session.sync_complete {
+            if !session.outbound_snapshot.has_been_acknowledged() {
                 return;
             }
             let peer_id = session.peer_id.clone();

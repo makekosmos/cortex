@@ -5,8 +5,24 @@ pub(super) async fn handle_task_merge_batch(
     peer_device_id: &str,
     local_device_id: &str,
     tx: &mpsc::UnboundedSender<Message>,
+    authenticated_tx: &AuthenticatedTx,
     batch: ark_application::sync_storage::TaskMergeBatch,
 ) -> Result<(), String> {
+    let supported = authenticated_tx
+        .lock()
+        .await
+        .as_ref()
+        .is_some_and(|session| {
+            session.peer_id == peer_device_id
+                && session.outbound_snapshot.has_been_sent()
+                && session
+                    .protocol
+                    .capabilities
+                    .contains(&ark_sync::protocol::ProtocolCapability::TaskMergeBootstrapV2)
+        });
+    if !supported {
+        return Ok(());
+    }
     let local_profile = storage.load_local_sync_profile(local_device_id).await?;
     let expected_identity = ark_sync::protocol::sync_policy_identity(local_profile.as_ref());
     if batch.identity != expected_identity {
@@ -37,6 +53,9 @@ pub(super) async fn handle_feed_ack_message(
     policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
     receipt_ack: bool,
 ) -> bool {
+    if !super::snapshot_ack::was_sent(authenticated_tx).await {
+        return true;
+    }
     let result = if receipt_ack {
         handle_receipt_ack(
             storage,
