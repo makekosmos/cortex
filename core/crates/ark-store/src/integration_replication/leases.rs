@@ -5,6 +5,43 @@ fn u64_value(value: i64, field: &str) -> Result<u64, String> {
     u64::try_from(value).map_err(|_| format!("{field} is negative"))
 }
 
+fn sqlite_i64(value: u64, field: &str) -> Result<i64, String> {
+    i64::try_from(value).map_err(|_| format!("{field} exceeds SQLite INTEGER range"))
+}
+
+pub fn upsert_integration_refresh_lease_record(
+    connection: &Connection,
+    lease: &IntegrationRefreshLease,
+) -> Result<(), String> {
+    let generation = sqlite_i64(lease.credential_generation, "credential_generation")?;
+    let fence = sqlite_i64(lease.fencing_token, "fencing_token")?;
+    let issued = sqlite_i64(lease.issued_at_ms, "issued_at_ms")?;
+    let expires = sqlite_i64(lease.expires_at_ms, "expires_at_ms")?;
+    connection
+        .execute(
+            "INSERT INTO integration_refresh_leases
+             (integration_id, credential_generation, holder_node_id, fencing_token,
+              issued_at_ms, expires_at_ms)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(integration_id) DO UPDATE SET
+                credential_generation = excluded.credential_generation,
+                holder_node_id = excluded.holder_node_id,
+                fencing_token = excluded.fencing_token,
+                issued_at_ms = excluded.issued_at_ms,
+                expires_at_ms = excluded.expires_at_ms",
+            params![
+                lease.integration_id,
+                generation,
+                lease.holder_node_id,
+                fence,
+                issued,
+                expires,
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
 pub fn load_integration_refresh_lease(
     connection: &Connection,
     integration_id: &str,
@@ -84,6 +121,39 @@ mod tests {
             load_integration_refresh_lease(&connection, "app")
                 .expect_err("negative fence is rejected"),
             "fencing_token is negative"
+        );
+    }
+
+    #[test]
+    fn refresh_lease_write_roundtrips_and_rejects_integer_overflow() {
+        let connection = Connection::open_in_memory().expect("fixture database opens");
+        connection
+            .execute_batch(crate::schema::CREATE_TABLES)
+            .expect("refresh-lease schema applies");
+        let lease = IntegrationRefreshLease {
+            integration_id: "app".to_owned(),
+            credential_generation: 2,
+            holder_node_id: "device".to_owned(),
+            fencing_token: 3,
+            issued_at_ms: 1000,
+            expires_at_ms: 2000,
+        };
+
+        upsert_integration_refresh_lease_record(&connection, &lease)
+            .expect("lease persistence succeeds");
+
+        assert_eq!(
+            load_integration_refresh_lease(&connection, "app").expect("lease query succeeds"),
+            Some(lease.clone())
+        );
+        let overflow = IntegrationRefreshLease {
+            credential_generation: u64::MAX,
+            ..lease
+        };
+        assert_eq!(
+            upsert_integration_refresh_lease_record(&connection, &overflow)
+                .expect_err("SQLite integer overflow is rejected"),
+            "credential_generation exceeds SQLite INTEGER range"
         );
     }
 }

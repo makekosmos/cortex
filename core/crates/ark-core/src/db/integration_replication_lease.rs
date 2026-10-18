@@ -1,9 +1,7 @@
-use super::integration_replication_common::{
-    lease_entity_id, lease_epoch, persist_with_vector, sqlite_i64, storage,
-};
+use super::integration_replication_common::{lease_entity_id, persist_with_vector};
 use super::load_integration_node_grant;
 use crate::integration_replication::{GrantStatus, IntegrationContractError, NodeStatus};
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::Connection;
 
 use crate::integration_replication::IntegrationRefreshLease as ReplicatedRefreshLease;
 
@@ -14,8 +12,6 @@ pub(in crate::db) fn upsert_integration_refresh_lease_record(
     allow_equal_fence: bool,
 ) -> Result<(), String> {
     lease.validate().map_err(|e| e.to_string())?;
-    let (generation, fence, issued) = lease_epoch(lease)?;
-    let expires = sqlite_i64(lease.expires_at_ms, "expires_at_ms")?;
     let holder =
         ark_store::integration_replication::load_authorized_node(conn, &lease.holder_node_id)?
             .ok_or_else(|| {
@@ -51,51 +47,27 @@ pub(in crate::db) fn upsert_integration_refresh_lease_record(
         lease_entity_id(&lease.integration_id),
         device_id,
         || {
-            let current = conn
-                .query_row(
-                    "SELECT credential_generation, fencing_token FROM integration_refresh_leases
-                     WHERE integration_id = ?1",
-                    params![lease.integration_id],
-                    |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?)),
-                )
-                .optional()
-                .map_err(storage)?;
-            if let Some((old_generation, old_fence)) = current {
-                if generation < old_generation {
+            let current = ark_store::integration_replication::load_integration_refresh_lease(
+                conn,
+                &lease.integration_id,
+            )?;
+            if let Some(current) = current {
+                if lease.credential_generation < current.credential_generation {
                     return Err(IntegrationContractError::NonMonotonic {
                         field: "credential_generation",
                     }
                     .to_string());
                 }
-                if fence < old_fence || (!allow_equal_fence && fence == old_fence) {
+                if lease.fencing_token < current.fencing_token
+                    || (!allow_equal_fence && lease.fencing_token == current.fencing_token)
+                {
                     return Err(IntegrationContractError::NonMonotonic {
                         field: "fencing_token",
                     }
                     .to_string());
                 }
             }
-            conn.execute(
-                "INSERT INTO integration_refresh_leases
-                 (integration_id, credential_generation, holder_node_id, fencing_token,
-                  issued_at_ms, expires_at_ms)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-                 ON CONFLICT(integration_id) DO UPDATE SET
-                    credential_generation = excluded.credential_generation,
-                    holder_node_id = excluded.holder_node_id,
-                    fencing_token = excluded.fencing_token,
-                    issued_at_ms = excluded.issued_at_ms,
-                    expires_at_ms = excluded.expires_at_ms",
-                params![
-                    lease.integration_id,
-                    generation,
-                    lease.holder_node_id,
-                    fence,
-                    issued,
-                    expires,
-                ],
-            )
-            .map_err(storage)?;
-            Ok(())
+            ark_store::integration_replication::upsert_integration_refresh_lease_record(conn, lease)
         },
     )
 }

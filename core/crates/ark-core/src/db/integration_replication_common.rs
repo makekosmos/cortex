@@ -2,9 +2,7 @@ use super::bump_sync_version_vector;
 use crate::hlc::HLC;
 use rusqlite::Connection;
 
-use crate::integration_replication::{
-    IntegrationContractError, IntegrationRefreshLease as CommonIntegrationRefreshLease,
-};
+use crate::integration_replication::IntegrationContractError;
 
 const SAVEPOINT: &str = "ark_integration_replication_write";
 
@@ -87,14 +85,4 @@ pub(super) fn persist_with_vector(
 
 pub(super) fn lease_entity_id(integration_id: &str) -> &str {
     integration_id
-}
-
-pub(super) fn lease_epoch(
-    lease: &CommonIntegrationRefreshLease,
-) -> Result<(i64, i64, i64), String> {
-    Ok((
-        sqlite_i64(lease.credential_generation, "credential_generation")?,
-        sqlite_i64(lease.fencing_token, "fencing_token")?,
-        sqlite_i64(lease.issued_at_ms, "issued_at_ms")?,
-    ))
 }
