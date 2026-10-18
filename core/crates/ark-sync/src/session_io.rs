@@ -1,4 +1,5 @@
 use std::num::NonZeroUsize;
+use std::time::Duration;
 
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
@@ -22,6 +23,8 @@ pub enum SessionIoError {
     InvalidCapacity,
     OutboundClosed,
     OutboundFull,
+    CloseFlushFailed(String),
+    CloseFlushTimeout,
     TransportTask(String),
 }
 
@@ -93,6 +96,7 @@ impl Drop for PendingSend {
 pub struct SessionIo {
     pub(crate) incoming: mpsc::Receiver<SessionIoEvent>,
     outgoing: SessionIoSender,
+    close_result: watch::Receiver<Option<Result<(), String>>>,
     shutdown: Option<watch::Sender<bool>>,
     worker: Option<JoinHandle<()>>,
 }
@@ -104,6 +108,7 @@ pub struct SessionIoDriver {
     pub outbound_guard: Option<std::sync::Arc<dyn SessionOutboundGuard>>,
     pub close_after_flush: mpsc::Receiver<()>,
     pub pending_sends: SessionIoPendingSends,
+    pub close_result: watch::Sender<Option<Result<(), String>>>,
     pub shutdown: watch::Receiver<bool>,
     pub stop: watch::Sender<bool>,
 }
@@ -137,6 +142,7 @@ impl SessionIo {
         let (outgoing, outgoing_rx) = mpsc::channel(capacity);
         let (control_outgoing, control_outgoing_rx) = mpsc::channel(capacity);
         let (shutdown, shutdown_rx) = watch::channel(false);
+        let (close_result, close_result_rx) = watch::channel(None);
         let (close_after_flush, close_after_flush_rx) = mpsc::channel(1);
         let pending_sends = SessionIoPendingSends::new();
         let worker = start_worker(SessionIoDriver {
@@ -146,12 +152,14 @@ impl SessionIo {
             outbound_guard,
             close_after_flush: close_after_flush_rx,
             pending_sends: pending_sends.clone(),
+            close_result: close_result.clone(),
             shutdown: shutdown_rx,
             stop: shutdown.clone(),
         });
 
         Ok(Self {
             incoming,
+            close_result: close_result_rx,
             outgoing: SessionIoSender {
                 outgoing,
                 control_outgoing,
@@ -187,6 +195,27 @@ impl SessionIo {
                 .map_err(|error| SessionIoError::TransportTask(error.to_string()))?;
         }
         Ok(())
+    }
+
+    pub async fn finish_after_flush(self) -> Result<(), SessionIoError> {
+        self.outgoing.close_after_flush();
+        let mut close_result = self.close_result.clone();
+        let flush_result = tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if let Some(result) = close_result.borrow().clone() {
+                    return result.map_err(SessionIoError::CloseFlushFailed);
+                }
+                close_result
+                    .changed()
+                    .await
+                    .map_err(|_| SessionIoError::CloseFlushFailed("transport stopped".into()))?;
+            }
+        })
+        .await
+        .map_err(|_| SessionIoError::CloseFlushTimeout)?;
+        let finish_result = self.finish().await;
+        flush_result?;
+        finish_result
     }
 }
 

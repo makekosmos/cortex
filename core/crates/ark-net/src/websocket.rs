@@ -67,6 +67,7 @@ where
         control_outgoing,
         close_after_flush,
         pending_sends,
+        close_result,
         outbound_guard,
         shutdown,
         stop,
@@ -82,6 +83,7 @@ where
         control: control_rx,
         close_after_flush,
         pending_sends,
+        close_result,
         incoming: incoming.clone(),
         shutdown: shutdown.clone(),
     }));
@@ -123,6 +125,7 @@ struct SessionWriter<S> {
     control: mpsc::Receiver<WebSocketControl>,
     close_after_flush: mpsc::Receiver<()>,
     pending_sends: ark_sync::session_io::SessionIoPendingSends,
+    close_result: watch::Sender<Option<Result<(), String>>>,
     incoming: mpsc::Sender<SessionIoEvent>,
     shutdown: watch::Receiver<bool>,
 }
@@ -139,6 +142,7 @@ where
         mut control,
         mut close_after_flush,
         pending_sends,
+        close_result,
         incoming,
         mut shutdown,
     } = writer;
@@ -210,7 +214,21 @@ where
             break;
         }
     }
-    let _ = tokio::time::timeout(Duration::from_secs(2), sink.close()).await;
+    match tokio::time::timeout(Duration::from_secs(2), sink.close()).await {
+        Ok(Ok(())) => {
+            let _ = close_result.send(Some(Ok(())));
+        }
+        Ok(Err(error)) => {
+            let _ = close_result.send(Some(Err(error.to_string())));
+            let _ = incoming.try_send(SessionIoEvent::Failed(error.to_string()));
+        }
+        Err(_) => {
+            let _ = close_result.send(Some(Err("websocket close after flush timed out".into())));
+            let _ = incoming.try_send(SessionIoEvent::Failed(
+                "websocket close after flush timed out".into(),
+            ));
+        }
+    }
 }
 
 async fn write_sync_frame<S>(

@@ -98,6 +98,50 @@ mod listener_tests {
     }
 
     #[tokio::test]
+    async fn finish_after_flush_delivers_terminal_frame_before_websocket_close() {
+        let listener = Listener::bind("127.0.0.1:0").await.expect("listener binds");
+        let address = listener
+            .listener
+            .local_addr()
+            .expect("listener address is available");
+        let client = tokio::spawn(async move {
+            let (mut socket, _) = connect_async(format!("ws://{address}"))
+                .await
+                .expect("client connects");
+            let Some(Ok(Message::Text(text))) = socket.next().await else {
+                panic!("terminal protocol frame arrives before close");
+            };
+            assert!(matches!(
+                serde_json::from_str::<ark_sync::protocol::LanSyncMessage>(&text)
+                    .expect("terminal frame deserializes"),
+                ark_sync::protocol::LanSyncMessage::ProtocolRejected { .. }
+            ));
+            assert!(matches!(
+                socket.next().await,
+                Some(Ok(Message::Close(_))) | None
+            ));
+        });
+
+        let (websocket, _) = listener.accept().await.expect("server accepts client");
+        let session = session_io(websocket).expect("session transport starts");
+        session
+            .send(ark_sync::protocol::LanSyncMessage::ProtocolRejected {
+                origin_device_id: "server".into(),
+                target_device_id: "client".into(),
+                reason: "unsupported protocol".into(),
+                supported_protocol_versions: vec![1],
+                offered_protocol_versions: vec![2],
+            })
+            .await
+            .expect("terminal protocol frame queues");
+        session
+            .finish_after_flush()
+            .await
+            .expect("terminal frame flushes and transport workers join");
+        client.await.expect("client observes ordered close");
+    }
+
+    #[tokio::test]
     async fn session_io_rechecks_outbound_messages_at_the_write_boundary() {
         let listener = Listener::bind("127.0.0.1:0").await.expect("listener binds");
         let address = listener
