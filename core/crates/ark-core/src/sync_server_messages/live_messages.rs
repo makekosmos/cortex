@@ -1,7 +1,7 @@
 use super::*;
 
-pub(super) async fn handle_live_message(ctx: &MessageContext, peer_id: usize, msg: LanSyncMessage) {
-    let MessageContext { peers, storage, .. } = ctx;
+pub(super) async fn handle_live_message(ctx: &SyncDataPorts, peer_id: usize, msg: LanSyncMessage) {
+    let SyncDataPorts { peers, storage, .. } = ctx;
     match msg {
         LanSyncMessage::SyncAck {
             batch_id,

@@ -16,7 +16,7 @@ impl SyncServer {
             peers
                 .iter()
                 .filter(|(_, peer)| {
-                    peer.ready_peer.is_some() && peer.outbound_snapshot.has_been_acknowledged()
+                    peer.is_ready() && peer.outbound_snapshot.has_been_acknowledged()
                 })
                 .map(|(peer_id, _)| *peer_id)
                 .collect::<Vec<_>>()
@@ -80,7 +80,7 @@ impl SyncServer {
             let peers = self.peers.lock().await;
             let mut ids = Vec::new();
             for (peer_id, peer) in peers.iter() {
-                if peer.ready_peer.is_none() {
+                if !peer.is_ready() {
                     continue;
                 }
                 if let Some(exclude) = exclude_device_id {

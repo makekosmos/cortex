@@ -3,90 +3,29 @@ use super::*;
 #[path = "sync_server_messages/live_messages.rs"]
 mod live_messages;
 use live_messages::handle_live_message;
-#[path = "sync_server_messages/admission.rs"]
-mod admission;
-#[path = "sync_server_messages/hello.rs"]
-mod hello;
 #[cfg(test)]
 #[path = "sync_server_messages/live_message_tests.rs"]
 mod live_message_tests;
 
 pub(super) async fn handle_message(
-    ctx: &MessageContext,
+    ctx: &SyncDataPorts,
     peer_id: usize,
-    session: &mut Option<ark_sync::server_session::DirectServerSession>,
-    msg: LanSyncMessage,
+    msg: ark_sync::server_session::DirectServerMessage,
 ) {
-    let MessageContext {
+    let SyncDataPorts {
         peers,
         storage,
         on_change,
         ..
     } = ctx;
-    let ready_peer = if ark_sync::protocol::requires_registry_admission(&msg) {
-        let Some(ready_peer) = current_ready_peer(storage.as_ref(), peers, peer_id).await else {
-            return;
-        };
-        Some(ready_peer)
-    } else {
-        None
-    };
-    let Some(msg) =
-        hello::route_session_message(ctx, peer_id, session, msg, ready_peer.as_ref()).await
-    else {
-        return;
-    };
-    let Some(session) = session.as_mut() else {
-        return;
-    };
     match msg {
-        ark_sync::server_session::DirectServerMessage::SyncPolicy(update) => {
-            let Some(ready_peer) = ready_peer.as_ref() else {
-                return;
-            };
-            let (tx, protocol) = {
-                let peers = peers.lock().await;
-                let Some(peer) = peers.get(&peer_id) else {
-                    return;
-                };
-                (peer.tx.clone(), peer.negotiated_protocol.clone())
-            };
-            let Some(protocol) = protocol else {
-                admission::reject_peer(ctx, peer_id, &tx).await;
-                return;
-            };
-            if let Err(error) = ark_sync::client_session::accept_sync_policy(
-                storage.as_ref(),
-                &ready_peer.device_id,
-                &protocol,
-                true,
-                update,
-            )
-            .await
-            {
-                eprintln!(
-                    "{TAG} invalid or unpersisted sync policy from {}: {error}",
-                    ready_peer.device_id
-                );
-                admission::reject_peer(ctx, peer_id, &tx).await;
-                return;
-            }
-            if let Err(error) =
-                admission::start_sync_after_policy(ctx, peer_id, session, ready_peer).await
-            {
-                eprintln!(
-                    "{TAG} policy-gated sync start failed for {}: {error}",
-                    ready_peer.device_id
-                );
-                admission::reject_peer(ctx, peer_id, &tx).await;
-            }
-        }
-
+        ark_sync::server_session::DirectServerMessage::SyncPolicy(_)
+        | ark_sync::server_session::DirectServerMessage::RegistryAdmission(_) => (),
         ark_sync::server_session::DirectServerMessage::VersionVector(remote_vector) => {
             let (tx, peer_device_id, peer_sync_complete, policy_bound) = {
                 let peers_guard = peers.lock().await;
                 match peers_guard.get(&peer_id) {
-                    Some(peer) if peer.ready_peer.is_some() => (
+                    Some(peer) if peer.is_ready() => (
                         peer.tx.clone(),
                         peer.device_id.clone(),
                         peer.outbound_snapshot.has_been_acknowledged(),
@@ -133,7 +72,7 @@ pub(super) async fn handle_message(
                                 let ticket_stored = {
                                     let mut peers_guard = peers.lock().await;
                                     peers_guard.get_mut(&peer_id).is_some_and(|peer| {
-                                        if peer.ready_peer.is_none() {
+                                        if !peer.is_ready() {
                                             return false;
                                         }
                                         peer.outbound_snapshot.record_sent(ack);
@@ -166,7 +105,7 @@ pub(super) async fn handle_message(
             let (tx, peer_device_id, protocol) = {
                 let peers_guard = peers.lock().await;
                 match peers_guard.get(&peer_id) {
-                    Some(peer) if peer.ready_peer.is_some() => (
+                    Some(peer) if peer.is_ready() => (
                         peer.tx.clone(),
                         peer.device_id.clone(),
                         peer.negotiated_protocol.clone(),
@@ -252,10 +191,6 @@ pub(super) async fn handle_message(
             }
         }
 
-        ark_sync::server_session::DirectServerMessage::RegistryAdmission(message) => {
-            admission::handle_registry_admission(ctx, peer_id, session, message).await;
-        }
-
         ark_sync::server_session::DirectServerMessage::Live(message) => {
             handle_live_message(ctx, peer_id, message).await;
         }
@@ -263,15 +198,14 @@ pub(super) async fn handle_message(
 }
 
 pub(super) struct ConnectedSessionHandler<'a> {
-    pub(super) ctx: &'a MessageContext,
+    pub(super) ctx: &'a SyncDataPorts,
     pub(super) peer_id: usize,
-    pub(super) session: Option<ark_sync::server_session::DirectServerSession>,
 }
 
 #[async_trait::async_trait]
 impl ark_sync::server_session::DirectServerSessionHandler for ConnectedSessionHandler<'_> {
-    async fn on_message(&mut self, message: Box<LanSyncMessage>) {
-        handle_message(self.ctx, self.peer_id, &mut self.session, *message).await;
+    async fn on_message(&mut self, message: ark_sync::server_session::DirectServerMessage) {
+        handle_message(self.ctx, self.peer_id, message).await;
     }
 
     async fn on_malformed_message(&mut self) {

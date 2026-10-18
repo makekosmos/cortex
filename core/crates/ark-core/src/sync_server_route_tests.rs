@@ -1,22 +1,5 @@
 use super::*;
 
-#[test]
-fn peer_write_gate_allows_only_control_messages_before_admission() {
-    let user_data = LanSyncMessage::VersionVector {
-        vector: VersionVector::default(),
-        origin_device_id: None,
-    };
-    let registry_control = LanSyncMessage::RegistrySyncStart {
-        session_id: "session-1".to_owned(),
-    };
-
-    let ready = ReadyPeer::new(1, "peer".into(), "test-session".into()).unwrap();
-    assert!(!peer_message_allowed(None, 1, &user_data));
-    assert!(peer_message_allowed(None, 1, &registry_control));
-    assert!(peer_message_allowed(Some(&ready), 1, &user_data));
-    assert!(!peer_message_allowed(Some(&ready), 2, &user_data));
-}
-
 #[tokio::test]
 async fn send_signed_integration_frame_requires_addressed_authenticated_peer() {
     let storage =
@@ -25,20 +8,19 @@ async fn send_signed_integration_frame_requires_addressed_authenticated_peer() {
     *server.space_id.write().await = "space".to_string();
     *server.device_id.write().await = "me".to_string();
     let (tx, mut rx) = mpsc::unbounded_channel::<Message>();
+    let (session, _actor) = test_server_session_with_actor("peer");
     server.peers.lock().await.insert(
         1,
         PeerState {
-            session: test_server_session_handle(),
+            session,
             device_id: "peer".to_string(),
             device_name: "Peer".to_string(),
             addresses: vec![],
             platform: None,
             app_version: None,
-            ready_peer: ReadyPeer::new(1, "peer".into(), "test-session".into()),
             outbound_snapshot: ark_sync::outbound_snapshot::OutboundSnapshotProgress::acknowledged(
             ),
             negotiated_protocol: None,
-            registry_admission: None,
             in_flight_feed: None,
             tx: PeerMessageSender::test(tx),
         },
@@ -48,11 +30,8 @@ async fn send_signed_integration_frame_requires_addressed_authenticated_peer() {
     server
         .send_signed_integration_frame("peer", frame)
         .await
-        .expect("addressed authenticated peer should receive the frame");
-    assert!(matches!(
-        rx.try_recv().expect("frame should be enqueued"),
-        Message::Text(_)
-    ));
+        .expect("addressed authenticated peer should accept the frame intent");
+    assert!(rx.try_recv().is_err());
 
     let wrong_recipient =
         SignedSyncEnvelope::new("space", "me", "other", 1, "message-2", vec![], "sig");

@@ -1,5 +1,9 @@
 use super::*;
 
+#[path = "sync_server_core/server_session_cleanup.rs"]
+mod server_session_cleanup;
+#[path = "sync_server_core/server_session_host.rs"]
+mod server_session_host;
 #[path = "sync_server_core/start.rs"]
 mod start;
 use crate::task_set::track_task;
@@ -33,27 +37,26 @@ impl SyncServer {
         let mut peers = self.peers.lock().await;
         let mut revoked = Vec::new();
         for (peer_id, peer) in peers.iter_mut() {
-            if peer.ready_peer.is_none() {
+            if !peer.is_ready() {
                 continue;
             }
-            let Some(session_id) = peer
-                .registry_admission
-                .as_ref()
-                .and_then(|admission| admission.session_id())
-            else {
+            if peer.session.projection().registry_session_id.is_none() {
                 continue;
-            };
-            let update = LanSyncMessage::RegistryEventUpdate {
-                session_id: session_id.to_owned(),
-                event: event.clone(),
-            };
-            if peer.tx.try_send(update).is_err() {
+            }
+            if peer
+                .session
+                .try_send(
+                    ark_sync::server_session::ServerSessionIntent::BroadcastRegistryEvent(
+                        event.clone(),
+                    ),
+                )
+                .is_err()
+            {
                 peer.session.revoke();
                 peer.tx.close();
                 continue;
             }
             if revokes_target && peer.device_id == target {
-                peer.ready_peer = None;
                 peer.outbound_snapshot.reset();
                 peer.in_flight_feed = None;
                 peer.session.revoke();
@@ -99,18 +102,18 @@ impl SyncServer {
                 &expected_origin_node_id,
             )
             .await?;
-        let tx = {
+        let session = {
             let peers = self.peers.lock().await;
             let Some(peer) = peers
                 .values()
-                .find(|peer| peer.ready_peer.is_some() && peer.device_id == recipient_device_id)
+                .find(|peer| peer.is_ready() && peer.device_id == recipient_device_id)
             else {
                 return Err("target LAN peer is not authenticated".into());
             };
-            peer.tx.clone()
+            peer.session.clone()
         };
-        tx.send(LanSyncMessage::SignedIntegrationFrame { frame })
-            .await
+        session
+            .try_send(ark_sync::server_session::ServerSessionIntent::SendSignedFrame(frame))
             .map_err(|_| "LAN peer connection is closed".into())
     }
     pub fn new(storage: Arc<dyn SyncRuntimeStorage>) -> Self {
@@ -165,7 +168,7 @@ impl SyncServer {
 
     pub async fn connected_peer_count(&self) -> usize {
         let peers = self.peers.lock().await;
-        peers.values().filter(|p| p.ready_peer.is_some()).count()
+        peers.values().filter(|p| p.is_ready()).count()
     }
 
     pub async fn get_known_peers(&self) -> Result<Vec<PeerRecord>, String> {
@@ -222,8 +225,7 @@ impl SyncServer {
         let mut closed = 0usize;
         for peer_id in &peer_ids {
             if let Some(peer) = peers.get_mut(peer_id) {
-                if peer.ready_peer.is_some() {
-                    peer.ready_peer = None;
+                if peer.is_ready() {
                     peer.session.revoke();
                     peer.tx.close();
                     closed += 1;
@@ -258,7 +260,7 @@ impl SyncServer {
         let mut seen: HashMap<String, usize> = HashMap::new();
         let mut entries: Vec<PeerEntry> = Vec::new();
         for peer in peers.values() {
-            if peer.ready_peer.is_none() {
+            if !peer.is_ready() {
                 continue;
             }
             if peer.device_id.is_empty() {
@@ -294,7 +296,7 @@ impl SyncServer {
         let peers = self.peers.lock().await;
         peers
             .values()
-            .any(|p| p.ready_peer.is_some() && p.device_id == device_id)
+            .any(|p| p.is_ready() && p.device_id == device_id)
     }
 
     /// Record an externally-connected peer (e.g. a `SyncClient` we just dialled

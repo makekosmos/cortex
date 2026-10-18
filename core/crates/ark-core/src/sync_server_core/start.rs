@@ -1,7 +1,10 @@
-use super::super::{current_ready_peer, peer_message_allowed};
+use super::super::current_ready_peer;
+use super::server_session_cleanup::finish_rejected_session;
+use super::server_session_host::ServerSessionHostAdapter;
 use super::{signed_integration_write_is_authorized, *};
 use ark_sync::outbound_snapshot::OutboundSnapshotProgress;
 use ark_sync::server_session::run_connected_server_session_controlled;
+use ark_sync::server_session::{ConnectedServerSession, ConnectedServerSessionHost};
 use tokio::sync::oneshot;
 
 struct ServerPeerOutboundGuard {
@@ -20,7 +23,7 @@ impl ark_sync::session_io::SessionOutboundGuard for ServerPeerOutboundGuard {
         } else {
             None
         };
-        if !peer_message_allowed(ready_peer.as_ref(), self.peer_id, message) {
+        if ark_sync::protocol::requires_registry_admission(message) && ready_peer.is_none() {
             return false;
         }
 
@@ -33,7 +36,9 @@ impl ark_sync::session_io::SessionOutboundGuard for ServerPeerOutboundGuard {
             .await
             .get(&self.peer_id)
             .is_some_and(|peer| {
-                peer.ready_peer.as_ref() == ready_peer.as_ref()
+                ready_peer
+                    .as_ref()
+                    .is_some_and(|ready| ready.matches(self.peer_id, peer))
                     && peer.device_id == frame.recipient_node_id
             });
         let expected_space_id = self.space_id.read().await.clone();
@@ -123,6 +128,16 @@ impl SyncServer {
         let next_peer_id = self.next_peer_id.clone();
         let conn_tasks = self.conn_tasks.clone();
         let transport_tasks = self.transport_tasks.clone();
+        let session_host: Arc<dyn ConnectedServerSessionHost> =
+            Arc::new(ServerSessionHostAdapter {
+                peers: peers.clone(),
+                known_peer_records: known_peer_records.clone(),
+                storage: storage.clone(),
+                device_id: device_id.clone(),
+                own_addresses: own_addresses.clone(),
+                on_peer_connect: on_peer_connect.clone(),
+                on_registry_events: on_registry_events.clone(),
+            });
         let (accept_ready_tx, accept_ready_rx) = oneshot::channel();
 
         // Ping ticker shares the accept task: a separate ping task had no
@@ -137,7 +152,7 @@ impl SyncServer {
                         let peer_ids = {
                             let peers_guard = peers.lock().await;
                             for peer in peers_guard.values() {
-                            if peer.ready_peer.is_some() {
+                            if peer.is_ready() {
                                 let ts = std::time::SystemTime::now()
                                     .duration_since(std::time::UNIX_EPOCH)
                                     .unwrap_or_default()
@@ -148,7 +163,7 @@ impl SyncServer {
                             peers_guard
                                 .iter()
                                 .filter(|(_, peer)| {
-                                    peer.ready_peer.is_some()
+                                    peer.is_ready()
                                         && peer.outbound_snapshot.has_been_acknowledged()
                                 })
                                 .map(|(peer_id, _)| *peer_id)
@@ -204,7 +219,8 @@ impl SyncServer {
                                 if let Some(transport_task) = session_io.take_transport_task() {
                                     track_task(&transport_tasks, transport_task);
                                 }
-                                let tx = PeerMessageSender::session(session_io.sender());
+                                let session_sender = session_io.sender();
+                                let tx = PeerMessageSender::session(session_sender.clone());
                                 let (session, mut session_actor, _lease, mut activation) =
                                     match ark_sync::server_session::ServerSessionHandle::channel(
                                         std::num::NonZeroUsize::new(64)
@@ -215,9 +231,34 @@ impl SyncServer {
                                             eprintln!(
                                             "{TAG} session lease allocation failed: {error:?}"
                                             );
+                                            let finish_result =
+                                                finish_rejected_session(session_io, &session_sender)
+                                                    .await;
+                                            if let Err(finish_error) = finish_result {
+                                                eprintln!(
+                                                    "{TAG} rejected peer shutdown: {:?}",
+                                                    finish_error
+                                                );
+                                            }
                                             continue;
                                         }
                                     };
+                                let hello_request =
+                                    ark_sync::server_session::ResponderHelloRequest {
+                                        device_id: device_id.read().await.clone(),
+                                        device_name: device_name.read().await.clone(),
+                                        space_id: space_id.read().await.clone(),
+                                        addresses: own_addresses.read().await.clone(),
+                                        auth_secret: auth_secret.read().await.clone(),
+                                        task_merge_bootstrap_v2,
+                                        platform: Some(ark_net::host::local_platform()),
+                                        app_version: ark_net::host::app_version(),
+                                    };
+                                session_actor.configure_connected(ConnectedServerSession::new(
+                                    hello_request,
+                                    storage.clone(),
+                                    session_host.clone(),
+                                ));
 
                                 let peer_state = PeerState {
                                     session: session.clone(),
@@ -226,14 +267,12 @@ impl SyncServer {
                                     addresses: Vec::new(),
                                     platform: None,
                                     app_version: None,
-                                    ready_peer: None,
                                     outbound_snapshot: OutboundSnapshotProgress::not_sent(),
                                     negotiated_protocol: None,
-                                    registry_admission: None,
                                     in_flight_feed: None,
                                     tx: tx.clone(),
                                 };
-                                {
+                                let activated = {
                                     let mut peers = peers.lock().await;
                                     peers.insert(peer_id, peer_state);
                                     if let Err(error) = activation.activate() {
@@ -241,25 +280,33 @@ impl SyncServer {
                                         eprintln!(
                                             "{TAG} could not activate peer session: {error:?}"
                                         );
-                                        continue;
+                                        false
+                                    } else {
+                                        true
                                     }
+                                };
+                                if !activated {
+                                    let finish_result =
+                                        finish_rejected_session(session_io, &session_sender).await;
+                                    if let Err(error) = finish_result {
+                                        eprintln!(
+                                            "{TAG} rejected peer shutdown: {:?}",
+                                            error
+                                        );
+                                    }
+                                    continue;
                                 }
 
                                 // Reader task
-                                let ctx = MessageContext {
+                                let ctx = SyncDataPorts {
                                     peers: peers.clone(),
                                     storage: storage.clone(),
                                     space_id: space_id.clone(),
                                     device_id: device_id.clone(),
-                                    device_name: device_name.clone(),
                                     own_addresses: own_addresses.clone(),
-                                    auth_secret: auth_secret.clone(),
-                                    task_merge_bootstrap_v2,
                                     known_peer_records: known_peer_records.clone(),
                                     on_change: on_change.clone(),
-                                    on_peer_connect: on_peer_connect.clone(),
                                     on_new_peer_discovered: on_new_peer_discovered.clone(),
-                                    on_registry_events: on_registry_events.clone(),
                                 };
                                 let peers_reader = peers.clone();
                                 let on_peer_disconnect_reader = on_peer_disconnect.clone();
@@ -271,7 +318,6 @@ impl SyncServer {
                                         &mut sync_server_messages::ConnectedSessionHandler {
                                             ctx: &ctx,
                                             peer_id,
-                                            session: None,
                                         },
                                     )
                                     .await;
@@ -290,14 +336,14 @@ impl SyncServer {
                                     // Peer disconnected
                                     let mut peers_guard = peers_reader.lock().await;
                                     if let Some(peer) = peers_guard.remove(&peer_id) {
-                                        if peer.ready_peer.is_some() {
+                                        if peer.is_ready() {
                                             eprintln!(
                                                 "{TAG} Peer disconnected: {} ({})",
                                                 peer.device_name, peer.device_id
                                             );
                                             let remaining = peers_guard
                                                 .values()
-                                                .filter(|p| p.ready_peer.is_some())
+                                                .filter(|p| p.is_ready())
                                                 .count();
                                             drop(peers_guard);
                                             let disconnect_reader =

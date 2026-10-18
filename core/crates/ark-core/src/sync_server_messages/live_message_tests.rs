@@ -11,13 +11,12 @@ async fn stale_snapshot_ack_does_not_complete_or_clear_pending_snapshot() {
     let stale = PolicyIdentity::new(1, "b".repeat(64), true).unwrap();
     let (tx, _rx) = mpsc::unbounded_channel();
     let peer = PeerState {
-        session: test_server_session_handle(),
+        session: test_server_session_handle("peer-a"),
         device_id: "peer-a".to_owned(),
         device_name: "Peer A".to_owned(),
         addresses: Vec::new(),
         platform: None,
         app_version: None,
-        ready_peer: ReadyPeer::new(7, "peer-a".into(), "session-a".into()),
         outbound_snapshot:
             ark_sync::outbound_snapshot::OutboundSnapshotProgress::awaiting_first_ack(
                 ark_sync::outbound_snapshot::PendingSnapshotAck {
@@ -26,26 +25,20 @@ async fn stale_snapshot_ack_does_not_complete_or_clear_pending_snapshot() {
                 },
             ),
         negotiated_protocol: None,
-        registry_admission: None,
         in_flight_feed: None,
         tx: PeerMessageSender::test(tx),
     };
     let mut peers = HashMap::new();
     peers.insert(7, peer);
-    let ctx = MessageContext {
+    let ctx = SyncDataPorts {
         peers: Arc::new(Mutex::new(peers)),
         storage: storage_port,
         space_id: Arc::new(RwLock::new("space".to_owned())),
         device_id: Arc::new(RwLock::new("local-device".to_owned())),
-        device_name: Arc::new(RwLock::new("Local".to_owned())),
         own_addresses: Arc::new(RwLock::new(Vec::new())),
-        auth_secret: Arc::new(RwLock::new(None)),
-        task_merge_bootstrap_v2: false,
         known_peer_records: Arc::new(Mutex::new(Vec::new())),
         on_change: Arc::new(Mutex::new(None)),
-        on_peer_connect: Arc::new(Mutex::new(None)),
         on_new_peer_discovered: Arc::new(Mutex::new(None)),
-        on_registry_events: Arc::new(Mutex::new(None)),
     };
 
     handle_live_message(

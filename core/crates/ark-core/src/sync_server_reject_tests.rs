@@ -84,36 +84,29 @@ pub(super) mod reject_tests {
         server.peers.lock().await.insert(
             7,
             PeerState {
-                session: test_server_session_handle(),
+                session: test_server_session_handle("gossip"),
                 device_id: "gossip".to_string(),
                 device_name: "Gossip".to_string(),
                 addresses: vec![],
                 platform: None,
                 app_version: None,
-                ready_peer: ReadyPeer::new(7, "gossip".into(), "test-session".into()),
                 outbound_snapshot:
                     ark_sync::outbound_snapshot::OutboundSnapshotProgress::acknowledged(),
                 negotiated_protocol: None,
-                registry_admission: None,
                 in_flight_feed: None,
                 tx: PeerMessageSender::test(tx),
             },
         );
 
-        let ctx = MessageContext {
+        let ctx = SyncDataPorts {
             peers: server.peers.clone(),
             storage: storage.clone(),
             space_id: server.space_id.clone(),
             device_id: server.device_id.clone(),
-            device_name: server.device_name.clone(),
             own_addresses: server.own_addresses.clone(),
-            auth_secret: server.auth_secret.clone(),
-            task_merge_bootstrap_v2: server.task_merge_bootstrap_v2,
             known_peer_records: server.known_peer_records.clone(),
             on_change: server.on_change.clone(),
-            on_peer_connect: server.on_peer_connect.clone(),
             on_new_peer_discovered: server.on_new_peer_discovered.clone(),
-            on_registry_events: server.on_registry_events.clone(),
         };
         sync_server_inbound::handle_peer_list(
             &ctx,

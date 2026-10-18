@@ -15,14 +15,18 @@ use crate::{
     registry_admission::AdmissionUpdate,
 };
 
+mod connected;
 mod direct;
 mod handle;
 mod runner;
-pub use direct::{
-    classify_server_message, DirectServerMessage, DirectServerSession,
-    DirectServerSessionCloseReason, DirectServerSessionEffect, DirectServerSessionInput,
-    DirectServerSessionTransition, DirectServerSyncChanges, DirectServerSyncStartPolicy,
+pub use connected::{ConnectedServerSession, ConnectedServerSessionHost};
+#[cfg(test)]
+use direct::DirectServerSessionCloseReason;
+use direct::{
+    classify_server_message, DirectServerSession, DirectServerSessionEffect,
+    DirectServerSessionInput, DirectServerSyncStartPolicy,
 };
+pub use direct::{DirectServerMessage, DirectServerSyncChanges};
 pub use handle::{
     ServerConnectionLease, ServerPeerProjection, ServerPeerReadiness, ServerSessionActivation,
     ServerSessionActivationError, ServerSessionActor, ServerSessionControl,

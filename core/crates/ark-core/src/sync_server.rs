@@ -62,23 +62,40 @@ struct PeerState {
     /// peers built before those fields existed.
     platform: Option<String>,
     app_version: Option<String>,
-    ready_peer: Option<ReadyPeer>,
     outbound_snapshot: ark_sync::outbound_snapshot::OutboundSnapshotProgress,
     negotiated_protocol: Option<ark_sync::protocol::NegotiatedProtocol>,
-    registry_admission: Option<ark_sync::server_session::DirectServerAdmission>,
     in_flight_feed: Option<ark_sync::committed_feed_delivery::FeedFlight>,
     tx: PeerMessageSender,
 }
 
 #[cfg(test)]
-pub(crate) fn test_server_session_handle() -> ark_sync::server_session::ServerSessionHandle {
-    let (handle, _actor, _lease, mut activation) =
+pub(crate) fn test_server_session_handle(
+    device_id: &str,
+) -> ark_sync::server_session::ServerSessionHandle {
+    test_server_session_with_actor(device_id).0
+}
+
+#[cfg(test)]
+pub(crate) fn test_server_session_with_actor(
+    device_id: &str,
+) -> (
+    ark_sync::server_session::ServerSessionHandle,
+    ark_sync::server_session::ServerSessionActor,
+) {
+    let (handle, actor, _lease, mut activation) =
         ark_sync::server_session::ServerSessionHandle::channel(
             std::num::NonZeroUsize::new(1).expect("one is nonzero"),
         )
         .expect("session identity is available");
     activation.activate().expect("test session activates once");
-    handle
+    actor.publish_projection(ark_sync::server_session::ServerPeerProjection {
+        device_id: Some(device_id.to_owned()),
+        device_name: Some(device_id.to_owned()),
+        registry_session_id: Some("test-session".to_owned()),
+        readiness: ark_sync::server_session::ServerPeerReadiness::Ready,
+        ..Default::default()
+    });
+    (handle, actor)
 }
 
 #[derive(Clone)]
@@ -149,23 +166,19 @@ struct ReadyPeer {
 }
 
 impl ReadyPeer {
-    fn new(connection_id: usize, device_id: String, registry_session_id: String) -> Option<Self> {
-        (!device_id.is_empty() && !registry_session_id.is_empty()).then_some(Self {
-            connection_id,
-            device_id,
-            registry_session_id,
-        })
-    }
-
     fn matches(&self, connection_id: usize, peer: &PeerState) -> bool {
+        let projection = peer.session.projection();
         self.connection_id == connection_id
             && peer.session.control() == ark_sync::server_session::ServerSessionControl::Active
-            && self.device_id == peer.device_id
-            && peer
-                .registry_admission
-                .as_ref()
-                .and_then(ark_sync::server_session::DirectServerAdmission::session_id)
-                == Some(self.registry_session_id.as_str())
+            && projection.readiness == ark_sync::server_session::ServerPeerReadiness::Ready
+            && projection.device_id.as_deref() == Some(self.device_id.as_str())
+            && projection.registry_session_id.as_deref() == Some(self.registry_session_id.as_str())
+    }
+}
+
+impl PeerState {
+    fn is_ready(&self) -> bool {
+        self.session.projection().readiness == ark_sync::server_session::ServerPeerReadiness::Ready
     }
 }
 
@@ -177,8 +190,16 @@ async fn current_ready_peer(
     let ready = {
         let peers = peers.lock().await;
         let peer = peers.get(&connection_id)?;
-        let ready = peer.ready_peer.as_ref()?;
-        ready.matches(connection_id, peer).then(|| ready.clone())?
+        let projection = peer.session.projection();
+        if projection.readiness != ark_sync::server_session::ServerPeerReadiness::Ready {
+            return None;
+        }
+        let ready = ReadyPeer {
+            connection_id,
+            device_id: projection.device_id?,
+            registry_session_id: projection.registry_session_id?,
+        };
+        ready.matches(connection_id, peer).then_some(ready)?
     };
     let admitted = match storage.sync_session_is_admitted(&ready.device_id).await {
         Ok(admitted) => admitted,
@@ -192,12 +213,14 @@ async fn current_ready_peer(
     };
     if !admitted {
         let mut peers = peers.lock().await;
-        if peers
-            .get(&connection_id)
-            .is_some_and(|peer| peer.ready_peer.as_ref() == Some(&ready))
-        {
+        if peers.get(&connection_id).is_some_and(|peer| {
+            peer.session.projection().readiness
+                == ark_sync::server_session::ServerPeerReadiness::Ready
+                && peer.session.projection().device_id.as_deref() == Some(ready.device_id.as_str())
+                && peer.session.projection().registry_session_id.as_deref()
+                    == Some(ready.registry_session_id.as_str())
+        }) {
             if let Some(peer) = peers.get_mut(&connection_id) {
-                peer.ready_peer = None;
                 peer.outbound_snapshot.reset();
                 peer.in_flight_feed = None;
                 peer.session.revoke();
@@ -208,8 +231,7 @@ async fn current_ready_peer(
     }
     let peers = peers.lock().await;
     let peer = peers.get(&connection_id)?;
-    (peer.ready_peer.as_ref() == Some(&ready) && ready.matches(connection_id, peer))
-        .then_some(ready)
+    (ready.matches(connection_id, peer)).then_some(ready)
 }
 
 /// One authenticated connection's view of a peer, for `get_connected_peers`
@@ -331,24 +353,17 @@ pub(crate) async fn save_peer_transport_keys(
     storage.store_peer_transport_keys(keys).await
 }
 
-/// Shared mutable state handed to `handle_message`. Every field has a
-/// different owner; the struct only bundles the Arcs the peer reader task
-/// already clones per connection.
+/// Application ports needed by already-authenticated sync data messages.
 #[derive(Clone)]
-struct MessageContext {
+struct SyncDataPorts {
     peers: Arc<Mutex<HashMap<usize, PeerState>>>,
     storage: Arc<dyn SyncRuntimeStorage>,
     space_id: Arc<RwLock<String>>,
     device_id: Arc<RwLock<String>>,
-    device_name: Arc<RwLock<String>>,
     own_addresses: Arc<RwLock<Vec<String>>>,
-    auth_secret: Arc<RwLock<Option<String>>>,
-    task_merge_bootstrap_v2: bool,
     known_peer_records: Arc<Mutex<Vec<PeerRecord>>>,
     on_change: Arc<Mutex<Option<OnChangeCallback>>>,
-    on_peer_connect: Arc<Mutex<Option<OnPeerConnectCallback>>>,
     on_new_peer_discovered: Arc<Mutex<Option<OnNewPeerDiscoveredCallback>>>,
-    on_registry_events: Arc<Mutex<Option<OnRegistryEventsCallback>>>,
 }
 
 async fn save_removed_peer_ids(
@@ -358,28 +373,9 @@ async fn save_removed_peer_ids(
     storage.store_removed_peer_ids(peer_ids).await
 }
 
-fn peer_message_allowed(
-    ready_peer: Option<&ReadyPeer>,
-    connection_id: usize,
-    message: &LanSyncMessage,
-) -> bool {
-    ready_peer.is_some_and(|peer| peer.connection_id == connection_id)
-        || !ark_sync::protocol::requires_registry_admission(message)
-}
-
 async fn send_msg(tx: &PeerMessageSender, msg: &LanSyncMessage) {
     if tx.send(msg.clone()).await.is_err() {
         tx.close();
-    }
-}
-
-/// Drops a rejected hello's session and closes its socket. A bare return would
-/// leave a phantom unauthenticated peer and a half-open connection the dialer
-/// waits on forever.
-async fn reject_hello(peers: &Mutex<HashMap<usize, PeerState>>, peer_id: usize) {
-    if let Some(peer) = peers.lock().await.remove(&peer_id) {
-        peer.session.close_after_flush();
-        peer.tx.close_after_flush();
     }
 }
 
@@ -397,7 +393,7 @@ async fn broadcast_to_others(
         peers_guard
             .iter()
             .filter(|(_, peer)| {
-                peer.ready_peer.is_some()
+                peer.is_ready()
                     && peer.outbound_snapshot.has_been_acknowledged()
                     && exclude_device_id != Some(peer.device_id.as_str())
             })

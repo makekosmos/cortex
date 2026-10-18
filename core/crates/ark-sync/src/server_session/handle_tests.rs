@@ -78,6 +78,7 @@ async fn projection_updates_are_visible_to_core() {
         addresses: vec!["127.0.0.1:7".to_owned()],
         platform: Some("linux".to_owned()),
         app_version: Some("1.2.3".to_owned()),
+        registry_session_id: None,
         readiness: ServerPeerReadiness::Ready,
     };
 

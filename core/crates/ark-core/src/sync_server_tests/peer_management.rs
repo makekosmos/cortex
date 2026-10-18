@@ -155,17 +155,15 @@
         server.peers.lock().await.insert(
             1,
             PeerState {
-                session: test_server_session_handle(),
+                session: test_server_session_handle("blocked"),
                 device_id: "blocked".to_string(),
                 device_name: "Blocked One".to_string(),
                 addresses: vec!["192.168.1.20:21531".to_string()],
                 platform: None,
                 app_version: None,
-                ready_peer: ReadyPeer::new(1, "blocked".into(), "test-session".into()),
                 outbound_snapshot:
                     ark_sync::outbound_snapshot::OutboundSnapshotProgress::acknowledged(),
                 negotiated_protocol: None,
-                registry_admission: None,
                 in_flight_feed: None,
                 tx: PeerMessageSender::test(tx1),
             },
@@ -173,17 +171,15 @@
         server.peers.lock().await.insert(
             2,
             PeerState {
-                session: test_server_session_handle(),
+                session: test_server_session_handle("blocked"),
                 device_id: "blocked".to_string(),
                 device_name: "Blocked Two".to_string(),
                 addresses: vec!["192.168.1.21:21531".to_string()],
                 platform: None,
                 app_version: None,
-                ready_peer: ReadyPeer::new(2, "blocked".into(), "test-session".into()),
                 outbound_snapshot:
                     ark_sync::outbound_snapshot::OutboundSnapshotProgress::acknowledged(),
                 negotiated_protocol: None,
-                registry_admission: None,
                 in_flight_feed: None,
                 tx: PeerMessageSender::test(tx2),
             },
@@ -191,17 +187,15 @@
         server.peers.lock().await.insert(
             3,
             PeerState {
-                session: test_server_session_handle(),
+                session: test_server_session_handle("keep"),
                 device_id: "keep".to_string(),
                 device_name: "Keep".to_string(),
                 addresses: vec!["192.168.1.22:21531".to_string()],
                 platform: None,
                 app_version: None,
-                ready_peer: ReadyPeer::new(3, "keep".into(), "test-session".into()),
                 outbound_snapshot:
                     ark_sync::outbound_snapshot::OutboundSnapshotProgress::acknowledged(),
                 negotiated_protocol: None,
-                registry_admission: None,
                 in_flight_feed: None,
                 tx: PeerMessageSender::test(tx3),
             },
@@ -235,17 +229,15 @@
         server.peers.lock().await.insert(
             1,
             PeerState {
-                session: test_server_session_handle(),
+                session: test_server_session_handle("blocked"),
                 device_id: "blocked".to_string(),
                 device_name: "Blocked".to_string(),
                 addresses: vec![],
                 platform: None,
                 app_version: None,
-                ready_peer: ReadyPeer::new(1, "blocked".into(), "test-session".into()),
                 outbound_snapshot:
                     ark_sync::outbound_snapshot::OutboundSnapshotProgress::acknowledged(),
                 negotiated_protocol: None,
-                registry_admission: None,
                 in_flight_feed: None,
                 tx: PeerMessageSender::test(tx),
             },
@@ -268,22 +260,16 @@
         // Simulate two authenticated sessions from the same device_id (a race
         // between old + new sessions before eviction settles).
         let (tx, _rx) = mpsc::unbounded_channel::<Message>();
-        let state = |connection_id: usize, device_id: &str| PeerState {
-            session: test_server_session_handle(),
+        let state = |_connection_id: usize, device_id: &str| PeerState {
+            session: test_server_session_handle(device_id),
             device_id: device_id.to_string(),
             device_name: "DupDevice".to_string(),
             addresses: vec![],
             platform: None,
             app_version: None,
-            ready_peer: ReadyPeer::new(
-                connection_id,
-                device_id.to_string(),
-                format!("test-session-{connection_id}"),
-            ),
             outbound_snapshot: ark_sync::outbound_snapshot::OutboundSnapshotProgress::acknowledged(
             ),
             negotiated_protocol: None,
-            registry_admission: None,
             in_flight_feed: None,
             tx: PeerMessageSender::test(tx.clone()),
         };

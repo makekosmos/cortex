@@ -2,14 +2,14 @@ use super::*;
 
 // Inbound replication handlers moved out of `handle_message`'s match — the
 // arm bodies are unchanged, they just run as functions taking the shared
-// MessageContext.
+// SyncDataPorts.
 
 pub(super) async fn handle_signed_integration_frame(
-    ctx: &MessageContext,
+    ctx: &SyncDataPorts,
     peer_id: usize,
     frame: SignedSyncEnvelope,
 ) {
-    let MessageContext {
+    let SyncDataPorts {
         peers,
         storage,
         space_id,
@@ -19,7 +19,7 @@ pub(super) async fn handle_signed_integration_frame(
     let (tx, authenticated_peer_id) = {
         let peers_guard = peers.lock().await;
         match peers_guard.get(&peer_id) {
-            Some(peer) if peer.ready_peer.is_some() => (peer.tx.clone(), peer.device_id.clone()),
+            Some(peer) if peer.is_ready() => (peer.tx.clone(), peer.device_id.clone()),
             _ => return,
         }
     };
@@ -53,13 +53,13 @@ pub(super) async fn handle_signed_integration_frame(
 }
 
 pub(super) async fn handle_live_change(
-    ctx: &MessageContext,
+    ctx: &SyncDataPorts,
     peer_id: usize,
     change_id: String,
     entity: SyncEntity,
     policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
 ) {
-    let MessageContext {
+    let SyncDataPorts {
         peers,
         storage,
         on_change,
@@ -68,7 +68,7 @@ pub(super) async fn handle_live_change(
     let (tx, authenticated_peer_id, protocol) = {
         let peers_guard = peers.lock().await;
         match peers_guard.get(&peer_id) {
-            Some(p) if p.ready_peer.is_some() => (
+            Some(p) if p.is_ready() => (
                 p.tx.clone(),
                 p.device_id.clone(),
                 p.negotiated_protocol.clone(),
@@ -173,11 +173,11 @@ pub(super) async fn handle_live_change(
 }
 
 pub(super) async fn handle_peer_list(
-    ctx: &MessageContext,
+    ctx: &SyncDataPorts,
     peer_id: usize,
     incoming_peers: Vec<PeerRecord>,
 ) {
-    let MessageContext {
+    let SyncDataPorts {
         peers,
         storage,
         device_id,
@@ -190,7 +190,7 @@ pub(super) async fn handle_peer_list(
         let peers_guard = peers.lock().await;
         peers_guard
             .get(&peer_id)
-            .map(|p| p.ready_peer.is_some())
+            .map(|p| p.is_ready())
             .unwrap_or(false)
     };
     if !authenticated {
@@ -267,35 +267,28 @@ mod tests {
         server.peers.lock().await.insert(
             7,
             PeerState {
-                session: test_server_session_handle(),
+                session: test_server_session_handle("peer"),
                 device_id: "peer".into(),
                 device_name: "Peer".into(),
                 addresses: Vec::new(),
                 platform: None,
                 app_version: None,
-                ready_peer: ReadyPeer::new(7, "peer".into(), "test-session".into()),
                 outbound_snapshot:
                     ark_sync::outbound_snapshot::OutboundSnapshotProgress::acknowledged(),
                 negotiated_protocol: None,
-                registry_admission: None,
                 in_flight_feed: None,
                 tx: PeerMessageSender::test(tx),
             },
         );
-        let ctx = MessageContext {
+        let ctx = SyncDataPorts {
             peers: server.peers.clone(),
             storage,
             space_id: server.space_id.clone(),
             device_id: server.device_id.clone(),
-            device_name: server.device_name.clone(),
             own_addresses: server.own_addresses.clone(),
-            auth_secret: server.auth_secret.clone(),
-            task_merge_bootstrap_v2: server.task_merge_bootstrap_v2,
             known_peer_records: server.known_peer_records.clone(),
             on_change: server.on_change.clone(),
-            on_peer_connect: server.on_peer_connect.clone(),
             on_new_peer_discovered: server.on_new_peer_discovered.clone(),
-            on_registry_events: server.on_registry_events.clone(),
         };
 
         sync_server_inbound::handle_live_change(

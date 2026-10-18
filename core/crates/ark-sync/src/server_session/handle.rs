@@ -51,6 +51,7 @@ pub struct ServerPeerProjection {
     pub addresses: Vec<String>,
     pub platform: Option<String>,
     pub app_version: Option<String>,
+    pub registry_session_id: Option<String>,
     pub readiness: ServerPeerReadiness,
 }
 
@@ -78,10 +79,12 @@ pub struct ServerSessionHandle {
 
 pub struct ServerSessionActor {
     lease: ServerConnectionLease,
-    intents: mpsc::Receiver<ServerSessionIntent>,
-    control: watch::Receiver<ServerSessionControl>,
+    pub(super) intents: mpsc::Receiver<ServerSessionIntent>,
+    pub(super) control: watch::Receiver<ServerSessionControl>,
     projection: watch::Sender<ServerPeerProjection>,
     lifecycle: Arc<AtomicU8>,
+    pub(super) connected: Option<super::ConnectedServerSession>,
+    pending_peer_list: Option<super::connected::PendingPeerList>,
 }
 
 pub struct ServerSessionActivation {
@@ -128,6 +131,8 @@ impl ServerSessionHandle {
                 control: control_rx,
                 projection: projection_tx,
                 lifecycle: lifecycle.clone(),
+                connected: None,
+                pending_peer_list: None,
             },
             lease,
             ServerSessionActivation {
@@ -245,6 +250,10 @@ pub enum ServerSessionActivationError {
 }
 
 impl ServerSessionActor {
+    pub fn configure_connected(&mut self, session: super::ConnectedServerSession) {
+        self.connected = Some(session);
+    }
+
     pub fn lease(&self) -> ServerConnectionLease {
         self.lease
     }
@@ -260,19 +269,55 @@ impl ServerSessionActor {
         control_for(self.lifecycle.load(Ordering::Acquire))
     }
 
-    pub async fn control_changed(
+    #[cfg(test)]
+    pub(super) async fn control_changed(
         &mut self,
     ) -> Result<ServerSessionControl, watch::error::RecvError> {
         self.control.changed().await?;
         Ok(self.control())
     }
 
-    pub async fn recv_intent(&mut self) -> Option<ServerSessionIntent> {
-        self.intents.recv().await
-    }
-
     pub fn publish_projection(&self, projection: ServerPeerProjection) {
         self.projection.send_replace(projection);
+    }
+
+    pub(super) fn schedule_peer_list(&mut self, peers: Vec<ark_domain::types::PeerRecord>) {
+        if !peers.is_empty() && !self.is_revoked() {
+            self.pending_peer_list = Some(super::connected::PendingPeerList::new(peers));
+        }
+    }
+
+    #[cfg(test)]
+    pub(super) fn schedule_peer_list_at(
+        &mut self,
+        deadline: tokio::time::Instant,
+        peers: Vec<ark_domain::types::PeerRecord>,
+    ) {
+        self.pending_peer_list = Some(super::connected::PendingPeerList::at(deadline, peers));
+    }
+
+    pub(super) fn peer_list_deadline(&self) -> Option<tokio::time::Instant> {
+        self.pending_peer_list
+            .as_ref()
+            .map(super::connected::PendingPeerList::deadline)
+    }
+
+    pub(super) fn try_send_due_peer_list(
+        &mut self,
+        sender: &crate::session_io::SessionIoSender,
+    ) -> Result<(), crate::session_io::SessionIoError> {
+        if self.is_revoked() {
+            self.pending_peer_list = None;
+            return Err(crate::session_io::SessionIoError::OutboundClosed);
+        }
+        let Some(pending) = self.pending_peer_list.as_mut() else {
+            return Ok(());
+        };
+        let sent = pending.try_send_due(tokio::time::Instant::now(), sender)?;
+        if sent {
+            self.pending_peer_list = None;
+        }
+        Ok(())
     }
 }
 

@@ -14,7 +14,7 @@ pub(crate) async fn pump_committed_feed(
         };
         (
             peer.device_id.clone(),
-            peer.ready_peer.is_some() && peer.outbound_snapshot.has_been_acknowledged(),
+            peer.is_ready() && peer.outbound_snapshot.has_been_acknowledged(),
             peer.in_flight_feed.clone(),
             peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
                 protocol
@@ -195,7 +195,7 @@ pub(crate) async fn pump_committed_feed(
             let Some(peer) = peers.get_mut(&peer_id) else {
                 return Ok(());
             };
-            if peer.ready_peer.is_none()
+            if !peer.is_ready()
                 || !peer.outbound_snapshot.has_been_acknowledged()
                 || peer.in_flight_feed.is_some()
             {

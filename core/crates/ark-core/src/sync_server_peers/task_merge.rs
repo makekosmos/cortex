@@ -12,7 +12,7 @@ pub(crate) async fn pump_task_merge_batch(
         };
         (
             peer.device_id.clone(),
-            peer.ready_peer.is_some() && peer.outbound_snapshot.has_been_acknowledged(),
+            peer.is_ready() && peer.outbound_snapshot.has_been_acknowledged(),
             peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
                 protocol
                     .capabilities
@@ -30,7 +30,7 @@ pub(crate) async fn pump_task_merge_batch(
         return Ok(());
     };
     let still_ready = peers.lock().await.get(&peer_id).is_some_and(|peer| {
-        peer.ready_peer.is_some()
+        peer.is_ready()
             && peer.outbound_snapshot.has_been_acknowledged()
             && peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
                 protocol
@@ -61,7 +61,7 @@ pub(crate) async fn handle_task_merge_batch_ack(
         let Some(peer) = peers.get(&peer_id) else {
             return Ok(());
         };
-        if peer.ready_peer.is_none()
+        if !peer.is_ready()
             || !peer.outbound_snapshot.has_been_acknowledged()
             || !peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
                 protocol
