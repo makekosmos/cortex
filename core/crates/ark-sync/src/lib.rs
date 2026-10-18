@@ -10,6 +10,7 @@ pub mod protocol_negotiation;
 pub mod registry_admission;
 pub mod relay_registry;
 pub mod server_session;
+pub mod session_io;
 pub mod task_merge_delivery;
 pub mod transport;
 pub mod transport_select;
