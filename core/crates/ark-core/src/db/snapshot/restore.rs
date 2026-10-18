@@ -35,7 +35,7 @@ pub(in crate::db) fn restore_snapshot_impl(
         check_integrity(&src)?;
         Ok((
             schema_fingerprint(&src)?,
-            crate::db::committed_feed_watermark(&src)?,
+            ark_store::committed_feed::watermark(&src)?,
         ))
     })();
     let (snapshot_fp, snapshot_feed_watermark) = match validated {
@@ -55,7 +55,7 @@ pub(in crate::db) fn restore_snapshot_impl(
     // available for reuse. The feed stores locators, not entity payloads, so
     // it cannot reconstruct post-snapshot changes. Refuse before changing the
     // live DB; a recovery/resnapshot protocol can safely relax this boundary.
-    let live_feed_watermark = match crate::db::committed_feed_watermark(conn) {
+    let live_feed_watermark = match ark_store::committed_feed::watermark(conn) {
         Ok(watermark) => watermark,
         Err(error) => {
             cleanup_staging(&staging);

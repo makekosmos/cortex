@@ -83,7 +83,7 @@ pub fn bootstrap_committed_feed_heads(conn: &Connection) -> Result<(), String> {
             )
             .map_err(|error| error.to_string())?;
         }
-        let watermark = committed_feed_watermark(conn)?;
+        let watermark = ark_store::committed_feed::watermark(conn)?;
         conn.execute(
             "INSERT INTO ark_committed_feed_meta(meta_key, meta_value)
              VALUES ('watermark-v1', ?1)

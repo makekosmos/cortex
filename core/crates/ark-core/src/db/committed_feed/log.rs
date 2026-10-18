@@ -59,54 +59,11 @@ pub fn committed_feed_snapshot(conn: &Connection) -> Result<FeedSnapshot, String
             row.get(0)
         })
         .map_err(|error| error.to_string())?;
-    let high = committed_feed_watermark(conn)?;
+    let high = ark_store::committed_feed::watermark(conn)?;
     Ok(FeedSnapshot {
         retained_through: low.map_or(high, |position| position.saturating_sub(1)),
         high_watermark: high,
     })
-}
-
-pub fn committed_feed_watermark(conn: &Connection) -> Result<i64, String> {
-    let persisted: Option<String> = conn
-        .query_row(
-            "SELECT meta_value FROM ark_committed_feed_meta WHERE meta_key = 'watermark-v1'",
-            [],
-            |row| row.get(0),
-        )
-        .optional()
-        .map_err(|error| error.to_string())?;
-    let persisted = persisted
-        .map(|value| {
-            value
-                .parse::<i64>()
-                .map_err(|_| "invalid_committed_feed_watermark".to_string())
-        })
-        .transpose()?
-        .unwrap_or_default();
-    if persisted < 0 {
-        return Err("invalid_committed_feed_watermark".into());
-    }
-
-    // Older databases have no explicit watermark. AUTOINCREMENT's durable
-    // sqlite_sequence survives feed pruning and is the strongest available
-    // lower bound; retained rows cover databases created before AUTOINCREMENT
-    // state was populated.
-    let retained: i64 = conn
-        .query_row(
-            "SELECT COALESCE(MAX(position), 0) FROM ark_committed_feed",
-            [],
-            |row| row.get(0),
-        )
-        .map_err(|error| error.to_string())?;
-    let sequence: Option<i64> = conn
-        .query_row(
-            "SELECT seq FROM sqlite_sequence WHERE name = 'ark_committed_feed'",
-            [],
-            |row| row.get(0),
-        )
-        .optional()
-        .map_err(|error| error.to_string())?;
-    Ok(persisted.max(retained).max(sequence.unwrap_or_default()))
 }
 
 pub fn read_committed_feed_page(
