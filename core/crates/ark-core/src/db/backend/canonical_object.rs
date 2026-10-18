@@ -66,10 +66,11 @@ impl ObjectWriteSession for SqliteObjectWriteSession<'_> {
     }
 
     fn is_peer_removed(&self, peer_id: &str) -> Result<bool, String> {
-        let removed: Vec<String> = db::get_sync_kv(self.conn, "sync.removed_peers")?
-            .map(|raw| serde_json::from_str(&raw).map_err(|error| error.to_string()))
-            .transpose()?
-            .unwrap_or_default();
+        let removed: Vec<String> =
+            ark_store::sync_kv::get_sync_kv(self.conn, "sync.removed_peers")?
+                .map(|raw| serde_json::from_str(&raw).map_err(|error| error.to_string()))
+                .transpose()?
+                .unwrap_or_default();
         Ok(removed.iter().any(|removed_id| removed_id == peer_id))
     }
 

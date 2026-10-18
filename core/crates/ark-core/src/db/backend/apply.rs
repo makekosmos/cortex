@@ -66,10 +66,11 @@ impl SqliteStorageBackend {
         ),
         String,
     > {
-        let removed: Vec<String> = crate::db::get_sync_kv(transaction, "sync.removed_peers")?
-            .map(|raw| serde_json::from_str(&raw).map_err(|error| error.to_string()))
-            .transpose()?
-            .unwrap_or_default();
+        let removed: Vec<String> =
+            ark_store::sync_kv::get_sync_kv(transaction, "sync.removed_peers")?
+                .map(|raw| serde_json::from_str(&raw).map_err(|error| error.to_string()))
+                .transpose()?
+                .unwrap_or_default();
         if removed.iter().any(|peer| peer == authenticated_peer_id) {
             return Err("sync_peer_removed".into());
         }

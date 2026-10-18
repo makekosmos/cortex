@@ -69,7 +69,7 @@ fn dotted_type_rpc_hits_real_handler_and_omitted_upsert_resolves_current() {
             Ok((
                 conn.query_row("SELECT COUNT(*) FROM objects", [], |r| r.get::<_, i64>(0))
                     .map_err(|e| e.to_string())?,
-                db::get_sync_kv(conn, "lan_sync.version_vector")?,
+                ark_store::sync_kv::get_sync_kv(conn, "lan_sync.version_vector")?,
             ))
         })
         .unwrap();
@@ -87,7 +87,7 @@ fn dotted_type_rpc_hits_real_handler_and_omitted_upsert_resolves_current() {
             Ok((
                 conn.query_row("SELECT COUNT(*) FROM objects", [], |r| r.get::<_, i64>(0))
                     .map_err(|e| e.to_string())?,
-                db::get_sync_kv(conn, "lan_sync.version_vector")?,
+                ark_store::sync_kv::get_sync_kv(conn, "lan_sync.version_vector")?,
             ))
         })
         .unwrap();

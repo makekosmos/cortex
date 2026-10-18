@@ -1,5 +1,5 @@
 #[cfg(test)]
-use super::{get_sync_kv, VERSION_VECTOR_KEY};
+use super::VERSION_VECTOR_KEY;
 
 #[cfg(test)]
 type SignedIntegrationApplyResult = Result<(), crate::integration_replication::SignedSyncError>;
@@ -49,7 +49,7 @@ pub(in crate::db) fn apply_signed_integration_changes(
 pub(in crate::db) fn load_version_vector(
     conn: &rusqlite::Connection,
 ) -> Result<crate::types::VersionVector, String> {
-    get_sync_kv(conn, VERSION_VECTOR_KEY)?
+    ark_store::sync_kv::get_sync_kv(conn, VERSION_VECTOR_KEY)?
         .filter(|value| !value.trim().is_empty())
         .map(|value| serde_json::from_str(&value).map_err(|error| error.to_string()))
         .transpose()

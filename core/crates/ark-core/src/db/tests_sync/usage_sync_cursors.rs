@@ -3,7 +3,7 @@
     // -------------------------------------------------------------------
 
     fn stored_vector(conn: &Connection) -> VersionVector {
-        get_sync_kv(conn, VERSION_VECTOR_KEY)
+        ark_store::sync_kv::get_sync_kv(conn, VERSION_VECTOR_KEY)
             .unwrap_or(None)
             .and_then(|raw| serde_json::from_str(&raw).ok())
             .unwrap_or_default()
@@ -21,7 +21,7 @@
     }
 
     fn save_stored_vector(conn: &Connection, vector: &VersionVector) {
-        set_sync_kv(
+        ark_store::sync_kv::set_sync_kv(
             conn,
             VERSION_VECTOR_KEY,
             &serde_json::to_string(vector).unwrap(),

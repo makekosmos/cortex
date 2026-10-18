@@ -258,10 +258,12 @@ async fn failed_authenticated_core_task_commit_rolls_back_every_write_and_releas
             )
             .unwrap();
         assert_eq!(feed_rows, 0, "feed row must roll back with failed apply");
-        assert!(!get_sync_kv(&conn, "lan_sync.version_vector")
-            .unwrap_or_default()
-            .unwrap_or_default()
-            .contains(&entity.id));
+        assert!(
+            !ark_store::sync_kv::get_sync_kv(&conn, "lan_sync.version_vector")
+                .unwrap_or_default()
+                .unwrap_or_default()
+                .contains(&entity.id)
+        );
         conn.execute_batch("DROP TRIGGER fail_core_task_commit")
             .unwrap();
     }
@@ -363,7 +365,7 @@ async fn durable_inbox_receipt_replays_after_writer_restart() {
 #[tokio::test]
 async fn authenticated_apply_rechecks_removed_peer_before_persisting() {
     let conn = setup_db();
-    set_sync_kv(&conn, "sync.removed_peers", r#"["device-blocked"]"#).unwrap();
+    ark_store::sync_kv::set_sync_kv(&conn, "sync.removed_peers", r#"["device-blocked"]"#).unwrap();
     let backend = SqliteStorageBackend::for_test(Arc::new(Mutex::new(conn)));
     let mut entity = sync_object("blocked-core-task", "core.task", "Blocked task");
     entity.data.insert("typeVersion".into(), json!("0.1.0"));

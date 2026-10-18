@@ -3,14 +3,14 @@ use rusqlite::Connection;
 const IROH_SECRET_KEY_KV_KEY: &str = "iroh.secret_key";
 
 pub fn load_or_generate_secret_key(conn: &Connection) -> Result<ark_net::iroh::SecretKey, String> {
-    if let Some(stored) = crate::db::get_sync_kv(conn, IROH_SECRET_KEY_KV_KEY)? {
+    if let Some(stored) = ark_store::sync_kv::get_sync_kv(conn, IROH_SECRET_KEY_KV_KEY)? {
         let bytes = hex_decode_32(&stored)
             .ok_or_else(|| "iroh transport: stored secret key is not valid hex".to_string())?;
         return Ok(ark_net::iroh::SecretKey::from_bytes(&bytes));
     }
 
     let secret_key = ark_net::iroh::SecretKey::generate();
-    crate::db::set_sync_kv(
+    ark_store::sync_kv::set_sync_kv(
         conn,
         IROH_SECRET_KEY_KV_KEY,
         &hex_encode(&secret_key.to_bytes()),
@@ -76,12 +76,14 @@ mod tests {
     fn secret_key_is_written_to_sync_kv_after_first_call() {
         let conn = setup_db();
         assert_eq!(
-            crate::db::get_sync_kv(&conn, IROH_SECRET_KEY_KV_KEY).unwrap(),
+            ark_store::sync_kv::get_sync_kv(&conn, IROH_SECRET_KEY_KV_KEY).unwrap(),
             None
         );
         let _ = load_or_generate_secret_key(&conn).expect("first load/generate");
-        assert!(crate::db::get_sync_kv(&conn, IROH_SECRET_KEY_KV_KEY)
-            .unwrap()
-            .is_some());
+        assert!(
+            ark_store::sync_kv::get_sync_kv(&conn, IROH_SECRET_KEY_KV_KEY)
+                .unwrap()
+                .is_some()
+        );
     }
 }

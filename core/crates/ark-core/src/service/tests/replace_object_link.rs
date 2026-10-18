@@ -124,7 +124,7 @@ async fn replace_object_link_moves_task_to_new_project_and_records_sync() {
         )
         .unwrap();
     assert_eq!(removed_tombstones, 1, "removal of link-a must be recorded");
-    let raw = db::get_sync_kv(&guard, "lan_sync.version_vector")
+    let raw = ark_store::sync_kv::get_sync_kv(&guard, "lan_sync.version_vector")
         .unwrap()
         .expect("version vector should be stored");
     let vector: VersionVector = serde_json::from_str(&raw).unwrap();

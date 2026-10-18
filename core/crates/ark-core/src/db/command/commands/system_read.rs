@@ -26,7 +26,7 @@ impl DbQuery for SystemReadQuery {
     ) -> Result<Self::Output, DbError> {
         context.require_engine()?;
         match self {
-            Self::SyncKeyValue(key) => crate::db::get_sync_kv(connection, &key)
+            Self::SyncKeyValue(key) => ark_store::sync_kv::get_sync_kv(connection, &key)
                 .map(|value| serde_json::json!(value))
                 .map_err(DbError::Storage),
             Self::ValidateSnapshot { db_path, backup_id } => {

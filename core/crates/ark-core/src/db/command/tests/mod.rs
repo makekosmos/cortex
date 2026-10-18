@@ -240,7 +240,7 @@ async fn usage_sequence_migration_runs_as_an_interactive_database_command() {
         .unwrap();
 
     let migration_complete = handle.with_connection(|connection| {
-        crate::db::get_sync_kv(connection, crate::db::USAGE_SEQUENCE_MIGRATION_KEY)
+        ark_store::sync_kv::get_sync_kv(connection, crate::db::USAGE_SEQUENCE_MIGRATION_KEY)
             .unwrap()
             .as_deref()
             == Some("1")
@@ -355,8 +355,9 @@ async fn clear_all_runs_inside_a_maintenance_database_command() {
         .await
         .unwrap();
 
-    let value = handle
-        .with_connection(|connection| crate::db::get_sync_kv(connection, "test-key").unwrap());
+    let value = handle.with_connection(|connection| {
+        ark_store::sync_kv::get_sync_kv(connection, "test-key").unwrap()
+    });
     assert_eq!(value, None);
 }
 

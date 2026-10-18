@@ -2,26 +2,6 @@
 // sync_kv
 // ---------------------------------------------------------------------------
 
-pub fn get_sync_kv(conn: &Connection, key: &str) -> Result<Option<String>, String> {
-    conn.query_row(
-        "SELECT value FROM sync_kv WHERE key = ?1",
-        params![key],
-        |row| row.get::<_, String>(0),
-    )
-    .optional()
-    .map_err(|e| e.to_string())
-}
-
-pub fn set_sync_kv(conn: &Connection, key: &str, value: &str) -> Result<(), String> {
-    conn.execute(
-        "INSERT INTO sync_kv (key, value) VALUES (?1, ?2)
-         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-        params![key, value],
-    )
-    .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
 pub(crate) fn upsert_sync_tombstone(conn: &Connection, entity: &SyncEntity) -> Result<(), String> {
     let type_id = entity.data.get("typeId").and_then(|value| value.as_str());
     conn.execute(
@@ -70,11 +50,12 @@ pub fn ensure_usage_sequence_migrated(conn: &Connection, device_id: &str) -> Res
 }
 
 fn ensure_usage_sequence_migrated_inner(conn: &Connection, device_id: &str) -> Result<(), String> {
-    if get_sync_kv(conn, USAGE_SEQUENCE_MIGRATION_KEY)?.as_deref() == Some("1") {
+    if ark_store::sync_kv::get_sync_kv(conn, USAGE_SEQUENCE_MIGRATION_KEY)?.as_deref() == Some("1")
+    {
         return Ok(());
     }
 
-    let raw = get_sync_kv(conn, VERSION_VECTOR_KEY)?;
+    let raw = ark_store::sync_kv::get_sync_kv(conn, VERSION_VECTOR_KEY)?;
     let mut vector: VersionVector = raw
         .as_deref()
         .filter(|value| !value.trim().is_empty())
@@ -154,12 +135,12 @@ fn ensure_usage_sequence_migrated_inner(conn: &Connection, device_id: &str) -> R
     )
     .map_err(|e| e.to_string())?;
     vector.insert(usage_cursor_key(device_id), head.to_string());
-    set_sync_kv(
+    ark_store::sync_kv::set_sync_kv(
         conn,
         VERSION_VECTOR_KEY,
         &serde_json::to_string(&vector).map_err(|e| e.to_string())?,
     )?;
-    set_sync_kv(conn, USAGE_SEQUENCE_MIGRATION_KEY, "1")
+    ark_store::sync_kv::set_sync_kv(conn, USAGE_SEQUENCE_MIGRATION_KEY, "1")
 }
 
 fn next_usage_sequence(conn: &Connection, device_id: &str) -> Result<u64, String> {

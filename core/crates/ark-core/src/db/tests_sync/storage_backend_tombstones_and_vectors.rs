@@ -98,7 +98,7 @@
             bump_sync_version_vector(&conn, "object", "obj-local", "device-local", false).unwrap();
 
         assert!(HLC::is_newer(&second, &first) || second > first);
-        let raw = get_sync_kv(&conn, VERSION_VECTOR_KEY)
+        let raw = ark_store::sync_kv::get_sync_kv(&conn, VERSION_VECTOR_KEY)
             .unwrap()
             .expect("version vector should be stored");
         let vector: VersionVector = serde_json::from_str(&raw).unwrap();

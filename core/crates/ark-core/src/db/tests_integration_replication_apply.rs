@@ -127,7 +127,7 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
             "2000-01-01T00:00:00.000Z:000001:bootstrap".into(),
         ),
     ]);
-    set_sync_kv(
+    ark_store::sync_kv::set_sync_kv(
         &target,
         VERSION_VECTOR_KEY,
         &serde_json::to_string(&target_vector).unwrap(),
@@ -160,8 +160,12 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
         load_integration_credential_envelope(&target, "integration-a", "node-b", 3).unwrap(),
         Some(envelope)
     );
-    let target_vector: VersionVector =
-        serde_json::from_str(&get_sync_kv(&target, VERSION_VECTOR_KEY).unwrap().unwrap()).unwrap();
+    let target_vector: VersionVector = serde_json::from_str(
+        &ark_store::sync_kv::get_sync_kv(&target, VERSION_VECTOR_KEY)
+            .unwrap()
+            .unwrap(),
+    )
+    .unwrap();
     for (key, hlc) in &expected_vectors {
         let merged = target_vector.get(key).expect("missing merged typed vector");
         assert!(
@@ -173,7 +177,7 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
     let (missing_key, expected_hlc) = expected_vectors.last().unwrap();
     let mut missing_vector = target_vector;
     missing_vector.remove(missing_key);
-    set_sync_kv(
+    ark_store::sync_kv::set_sync_kv(
         &target,
         VERSION_VECTOR_KEY,
         &serde_json::to_string(&missing_vector).unwrap(),
@@ -187,8 +191,12 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
     );
     apply_signed_integration_changes(&target, &repair_frame, "space-a", "node-b", None, 16)
         .unwrap();
-    let repaired_vector: VersionVector =
-        serde_json::from_str(&get_sync_kv(&target, VERSION_VECTOR_KEY).unwrap().unwrap()).unwrap();
+    let repaired_vector: VersionVector = serde_json::from_str(
+        &ark_store::sync_kv::get_sync_kv(&target, VERSION_VECTOR_KEY)
+            .unwrap()
+            .unwrap(),
+    )
+    .unwrap();
     assert_eq!(repaired_vector.get(missing_key), Some(expected_hlc));
 
     let consumed = load_integration_credential_envelope(&target, "integration-a", "node-b", 3)
@@ -243,8 +251,12 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
             .sync_cursor,
         Some(4)
     );
-    let target_vector: VersionVector =
-        serde_json::from_str(&get_sync_kv(&target, VERSION_VECTOR_KEY).unwrap().unwrap()).unwrap();
+    let target_vector: VersionVector = serde_json::from_str(
+        &ark_store::sync_kv::get_sync_kv(&target, VERSION_VECTOR_KEY)
+            .unwrap()
+            .unwrap(),
+    )
+    .unwrap();
     let configuration_vector = target_vector
         .get("integration_configuration:integration-a")
         .expect("local configuration write must advance its typed vector");

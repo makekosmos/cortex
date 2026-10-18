@@ -1,8 +1,7 @@
 use super::integration_replication_common::{storage, u64_value};
 use super::{
-    get_sync_kv, load_authorized_node, load_integration_configuration,
-    load_integration_credential_envelope, load_integration_node_grant,
-    load_integration_refresh_lease, VERSION_VECTOR_KEY,
+    load_authorized_node, load_integration_configuration, load_integration_credential_envelope,
+    load_integration_node_grant, load_integration_refresh_lease, VERSION_VECTOR_KEY,
 };
 use crate::types::VersionVector;
 use rusqlite::{params, Connection};
@@ -124,7 +123,7 @@ fn export_change(conn: &Connection, entity: ExportEntity) -> Result<ExportChange
 }
 
 fn load_vector_hlc(conn: &Connection, entity: &ExportEntity) -> Result<String, String> {
-    let raw = get_sync_kv(conn, VERSION_VECTOR_KEY)?
+    let raw = ark_store::sync_kv::get_sync_kv(conn, VERSION_VECTOR_KEY)?
         .ok_or_else(|| "integration replication version vector is missing".to_string())?;
     let vector: VersionVector = serde_json::from_str(&raw).map_err(storage)?;
     vector

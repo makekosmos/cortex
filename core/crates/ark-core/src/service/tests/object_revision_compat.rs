@@ -93,7 +93,7 @@ async fn pre_version_table_revisions_reject_stale_remote_resurrection() {
         )
         .map_err(|error| error.to_string())?;
         db::upsert_object(conn, &vector_object)?;
-        db::set_sync_kv(
+        ark_store::sync_kv::set_sync_kv(
             conn,
             "lan_sync.version_vector",
             r#"{"legacy-vector-task":"2999-01-01T00:00:00.000Z:000001:legacy"}"#,

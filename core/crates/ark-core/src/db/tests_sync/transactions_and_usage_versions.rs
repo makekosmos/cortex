@@ -197,9 +197,12 @@
             false,
         )
         .unwrap();
-        let vector: VersionVector =
-            serde_json::from_str(&get_sync_kv(&conn, VERSION_VECTOR_KEY).unwrap().unwrap())
-                .unwrap();
+        let vector: VersionVector = serde_json::from_str(
+            &ark_store::sync_kv::get_sync_kv(&conn, VERSION_VECTOR_KEY)
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
         assert_eq!(vector.get("@usage:peer-device"), Some(&"0".to_string()));
 
         record_usage_sequence(
@@ -212,9 +215,12 @@
             false,
         )
         .unwrap();
-        let vector: VersionVector =
-            serde_json::from_str(&get_sync_kv(&conn, VERSION_VECTOR_KEY).unwrap().unwrap())
-                .unwrap();
+        let vector: VersionVector = serde_json::from_str(
+            &ark_store::sync_kv::get_sync_kv(&conn, VERSION_VECTOR_KEY)
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
         assert_eq!(vector.get("@usage:peer-device"), Some(&"2".to_string()));
     }
 
@@ -226,9 +232,12 @@
         let second =
             bump_sync_version_vector(&conn, "usage_day", "day-b", "local-device", false).unwrap();
 
-        let vector: VersionVector =
-            serde_json::from_str(&get_sync_kv(&conn, VERSION_VECTOR_KEY).unwrap().unwrap())
-                .unwrap();
+        let vector: VersionVector = serde_json::from_str(
+            &ark_store::sync_kv::get_sync_kv(&conn, VERSION_VECTOR_KEY)
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
         assert_eq!(vector.get("@usage:local-device"), Some(&"2".to_string()));
         assert!(!vector.contains_key("day-a"));
         assert!(!vector.contains_key("day-b"));
@@ -278,9 +287,12 @@
             .unwrap(),
             1
         );
-        let vector: VersionVector =
-            serde_json::from_str(&get_sync_kv(&conn, VERSION_VECTOR_KEY).unwrap().unwrap())
-                .unwrap();
+        let vector: VersionVector = serde_json::from_str(
+            &ark_store::sync_kv::get_sync_kv(&conn, VERSION_VECTOR_KEY)
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
         assert_eq!(
             vector.get("@usage:legacy:old-peer").map(String::as_str),
             Some("1")

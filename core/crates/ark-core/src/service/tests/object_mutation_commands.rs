@@ -34,7 +34,16 @@ async fn book_cover_command_rolls_back_facade_writes_when_revision_recording_fai
             &object(
                 "book",
                 "com.kosmos.book",
-                json!({"author":null,"isbn":null,"pageCount":null,"language":null,"publisher":null,"publishedDate":null,"sourceUrl":null,"extensions":{}}),
+                json!({
+                    "author": null,
+                    "isbn": null,
+                    "pageCount": null,
+                    "language": null,
+                    "publisher": null,
+                    "publishedDate": null,
+                    "sourceUrl": null,
+                    "extensions": {},
+                }),
             ),
         )?;
         db::upsert_object(
@@ -42,13 +51,24 @@ async fn book_cover_command_rolls_back_facade_writes_when_revision_recording_fai
             &object(
                 "image",
                 "com.kosmos.image",
-                json!({"fileName":null,"mimeType":null,"sizeBytes":null,"width":null,"height":null,"resolution":null,"altText":"","extensions":{}}),
+                json!({
+                    "fileName": null,
+                    "mimeType": null,
+                    "sizeBytes": null,
+                    "width": null,
+                    "height": null,
+                    "resolution": null,
+                    "altText": "",
+                    "extensions": {},
+                }),
             ),
         )?;
         connection
             .execute_batch(
                 "CREATE TRIGGER fail_book_sync_version BEFORE INSERT ON object_sync_versions
-                 WHEN NEW.object_id = 'book' BEGIN SELECT RAISE(ABORT, 'injected revision failure'); END;",
+                 WHEN NEW.object_id = 'book' BEGIN
+                   SELECT RAISE(ABORT, 'injected revision failure');
+                 END;",
             )
             .map_err(|error| error.to_string())
     })
@@ -95,7 +115,7 @@ async fn book_cover_command_rolls_back_facade_writes_when_revision_recording_fai
             "failed command must roll back object versions"
         );
         assert_eq!(
-            db::get_sync_kv(connection, "lan_sync.version_vector")?,
+            ark_store::sync_kv::get_sync_kv(connection, "lan_sync.version_vector")?,
             None
         );
         Ok(())

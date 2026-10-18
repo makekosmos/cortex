@@ -94,7 +94,7 @@ fn bump_local_delete(conn: &Connection, id: &str) {
 }
 
 fn read_version_vector(conn: &Connection) -> VersionVector {
-    let raw = db::get_sync_kv(conn, "lan_sync.version_vector")
+    let raw = ark_store::sync_kv::get_sync_kv(conn, "lan_sync.version_vector")
         .expect("get_sync_kv")
         .unwrap_or_else(|| "{}".to_string());
     serde_json::from_str(&raw).expect("version_vector parses")

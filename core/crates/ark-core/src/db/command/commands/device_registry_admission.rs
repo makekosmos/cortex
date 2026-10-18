@@ -34,9 +34,11 @@ impl DbQuery for RegistryPeerAdmissionQuery {
         context.require_sync_peer_matches(&self.peer_device_id)?;
         let peer_admitted =
             registry_device_is_admitted(connection, &self.peer_device_id)?.unwrap_or(false);
-        let local_device_id =
-            crate::db::get_sync_kv(connection, crate::db::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY)
-                .map_err(DbError::Storage)?;
+        let local_device_id = ark_store::sync_kv::get_sync_kv(
+            connection,
+            crate::db::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY,
+        )
+        .map_err(DbError::Storage)?;
         let local_admitted = local_device_id
             .as_deref()
             .map(|device_id| registry_device_is_admitted(connection, device_id))

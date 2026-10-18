@@ -226,9 +226,12 @@
     #[test]
     fn test_sync_kv() {
         let conn = setup_db();
-        assert_eq!(get_sync_kv(&conn, "foo").unwrap(), None);
-        set_sync_kv(&conn, "foo", "bar").unwrap();
-        assert_eq!(get_sync_kv(&conn, "foo").unwrap(), Some("bar".to_string()));
+        assert_eq!(ark_store::sync_kv::get_sync_kv(&conn, "foo").unwrap(), None);
+        ark_store::sync_kv::set_sync_kv(&conn, "foo", "bar").unwrap();
+        assert_eq!(
+            ark_store::sync_kv::get_sync_kv(&conn, "foo").unwrap(),
+            Some("bar".to_string())
+        );
     }
 
     #[test]
@@ -242,7 +245,7 @@
             &make_usage_event("event-clear", "app-clear", Some("session-clear")),
         )
         .unwrap();
-        set_sync_kv(&conn, "k", "v").unwrap();
+        ark_store::sync_kv::set_sync_kv(&conn, "k", "v").unwrap();
         clear_all(&conn).unwrap();
         let data = load_all(&conn).unwrap();
         assert_eq!(data.todos.len(), 0);
@@ -259,7 +262,7 @@
             .object_types
             .iter()
             .any(|item| item.id == "com.kosmos.game"));
-        assert_eq!(get_sync_kv(&conn, "k").unwrap(), None);
+        assert_eq!(ark_store::sync_kv::get_sync_kv(&conn, "k").unwrap(), None);
     }
 
     #[test]

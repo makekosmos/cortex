@@ -157,12 +157,13 @@ impl DbCommand for AuthenticatedCoreTaskWrite {
         if inbox_state == crate::db::InboxState::Applied {
             return Ok(RemoteCoreTaskOutcome::Duplicate);
         }
-        let removed: Vec<String> = crate::db::get_sync_kv(transaction, "sync.removed_peers")
-            .map_err(DbError::from_application_error)?
-            .map(|raw| serde_json::from_str(&raw).map_err(|error| error.to_string()))
-            .transpose()
-            .map_err(DbError::from_application_error)?
-            .unwrap_or_default();
+        let removed: Vec<String> =
+            ark_store::sync_kv::get_sync_kv(transaction, "sync.removed_peers")
+                .map_err(DbError::from_application_error)?
+                .map(|raw| serde_json::from_str(&raw).map_err(|error| error.to_string()))
+                .transpose()
+                .map_err(DbError::from_application_error)?
+                .unwrap_or_default();
         if removed.iter().any(|removed_id| removed_id == peer_id) {
             return Err(DbError::Permission("sync_peer_removed".into()));
         }

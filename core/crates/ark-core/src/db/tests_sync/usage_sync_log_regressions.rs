@@ -193,7 +193,7 @@
             tombstone_hlc.is_some(),
             "delete_trashed must record a sync tombstone per deleted todo"
         );
-        let vector = get_sync_kv(&conn, "lan_sync.version_vector").unwrap();
+        let vector = ark_store::sync_kv::get_sync_kv(&conn, "lan_sync.version_vector").unwrap();
         assert!(
             vector
                 .as_deref()

@@ -289,8 +289,9 @@ fn persist_transport_pin(
     device_id: &str,
     transport_public_key: &str,
 ) -> Result<(), DbError> {
-    let raw = crate::db::get_sync_kv(transaction, crate::db::constants::PEER_TRANSPORT_KEYS_KEY)
-        .map_err(|error| DbError::Storage(error.to_string()))?;
+    let raw =
+        ark_store::sync_kv::get_sync_kv(transaction, crate::db::constants::PEER_TRANSPORT_KEYS_KEY)
+            .map_err(|error| DbError::Storage(error.to_string()))?;
     let mut keys: HashMap<String, String> = raw
         .map(|raw| serde_json::from_str(&raw))
         .transpose()

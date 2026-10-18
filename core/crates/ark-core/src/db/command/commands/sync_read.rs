@@ -1,7 +1,7 @@
 use super::super::{sealed, CommandClass, CommandContext, DbError, DbQuery};
 use crate::db::{
-    committed_feed_snapshot, get_sync_kv, read_committed_feed_delivery_page,
-    read_committed_feed_page, CommittedFeedEntry, FeedSnapshot, SqliteStorageBackend,
+    committed_feed_snapshot, read_committed_feed_delivery_page, read_committed_feed_page,
+    CommittedFeedEntry, FeedSnapshot, SqliteStorageBackend,
 };
 use crate::types::{SyncEntity, VersionVector};
 use ark_application::sync_storage::CommittedFeedDeliveryPage;
@@ -363,7 +363,7 @@ impl DbQuery for GetSyncKeyValueQuery {
         connection: &Connection,
     ) -> Result<Self::Output, DbError> {
         context.require_system_sync()?;
-        get_sync_kv(connection, &self.key).map_err(DbError::Storage)
+        ark_store::sync_kv::get_sync_kv(connection, &self.key).map_err(DbError::Storage)
     }
 }
 

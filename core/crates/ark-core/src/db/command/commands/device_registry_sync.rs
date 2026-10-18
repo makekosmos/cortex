@@ -48,7 +48,7 @@ impl DbQuery for LoadDeviceRegistryQuery {
     ) -> Result<Self::Output, DbError> {
         context.require_engine()?;
         let local_device_id =
-            crate::db::get_sync_kv(connection, DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY)
+            ark_store::sync_kv::get_sync_kv(connection, DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY)
                 .map_err(DbError::Storage)?
                 .ok_or_else(|| DbError::Invalid("device_registry_local_identity_missing".into()))?;
         let mut statement = connection
@@ -232,7 +232,7 @@ impl DbCommand for ApplyRegistryEventsCommand {
             .map_err(storage_error)?
             .unwrap_or(false);
         let local_device_id =
-            crate::db::get_sync_kv(transaction, DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY)
+            ark_store::sync_kv::get_sync_kv(transaction, DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY)
                 .map_err(DbError::Storage)?;
         let local_device_is_admitted = local_device_id
             .as_deref()

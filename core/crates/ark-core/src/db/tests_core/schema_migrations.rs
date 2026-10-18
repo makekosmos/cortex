@@ -97,7 +97,7 @@ fn test_init_schema_migrates_existing_db_without_destroying_data() {
 
     let todo = make_todo("legacy-todo", "Keep me");
     upsert_todo(&conn, &todo).unwrap();
-    set_sync_kv(&conn, "legacy-key", "legacy-value").unwrap();
+    ark_store::sync_kv::set_sync_kv(&conn, "legacy-key", "legacy-value").unwrap();
 
     init_schema(&conn).unwrap();
 
@@ -106,7 +106,7 @@ fn test_init_schema_migrates_existing_db_without_destroying_data() {
     assert_eq!(data.todos[0].id, "legacy-todo");
     assert_eq!(data.todos[0].title, "Keep me");
     assert_eq!(
-        get_sync_kv(&conn, "legacy-key").unwrap(),
+        ark_store::sync_kv::get_sync_kv(&conn, "legacy-key").unwrap(),
         Some("legacy-value".to_string())
     );
 

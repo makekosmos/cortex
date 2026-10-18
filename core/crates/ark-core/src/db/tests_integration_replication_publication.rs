@@ -114,11 +114,11 @@ fn rotated_recipient_rejects_stale_key_publication_without_vector_change() {
     envelope.grant_epoch = rotated_node.grant_epoch;
     envelope.refresh_fencing_token = lease.fencing_token;
     let stale_key_id = envelope.key_id.clone();
-    let vector_before = get_sync_kv(&conn, VERSION_VECTOR_KEY).unwrap();
+    let vector_before = ark_store::sync_kv::get_sync_kv(&conn, VERSION_VECTOR_KEY).unwrap();
 
     assert!(publish_integration_credential_envelope(&conn, &envelope, "node-a", 15).is_err());
     assert_eq!(
-        get_sync_kv(&conn, VERSION_VECTOR_KEY).unwrap(),
+        ark_store::sync_kv::get_sync_kv(&conn, VERSION_VECTOR_KEY).unwrap(),
         vector_before
     );
     assert!(load_integration_credential_envelope(

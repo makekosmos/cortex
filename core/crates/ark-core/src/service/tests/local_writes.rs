@@ -139,7 +139,7 @@ async fn local_object_and_usage_writes_record_sync_state() {
         .map(|db| db.shared_connection_for_test())
         .unwrap();
     let guard = shared.lock().unwrap();
-    let raw = db::get_sync_kv(&guard, "lan_sync.version_vector")
+    let raw = ark_store::sync_kv::get_sync_kv(&guard, "lan_sync.version_vector")
         .unwrap()
         .expect("version vector should be stored");
     let vector: VersionVector = serde_json::from_str(&raw).unwrap();
@@ -305,7 +305,7 @@ async fn local_object_type_and_link_writes_record_sync_state() {
         .map(|db| db.shared_connection_for_test())
         .unwrap();
     let guard = shared.lock().unwrap();
-    let raw = db::get_sync_kv(&guard, "lan_sync.version_vector")
+    let raw = ark_store::sync_kv::get_sync_kv(&guard, "lan_sync.version_vector")
         .unwrap()
         .expect("version vector should be stored");
     let vector: VersionVector = serde_json::from_str(&raw).unwrap();

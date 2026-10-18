@@ -174,7 +174,7 @@ async fn legacy_entity_writes_bump_version_vector() {
         .unwrap();
     {
         let guard = shared.lock().unwrap();
-        let raw = db::get_sync_kv(&guard, "lan_sync.version_vector")
+        let raw = ark_store::sync_kv::get_sync_kv(&guard, "lan_sync.version_vector")
             .unwrap()
             .expect("version vector should be stored");
         let vector: VersionVector = serde_json::from_str(&raw).unwrap();

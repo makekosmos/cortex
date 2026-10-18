@@ -28,7 +28,7 @@ pub(in crate::db) fn record_usage_sequence(
     )
     .map_err(|e| e.to_string())?;
 
-    let raw = get_sync_kv(conn, VERSION_VECTOR_KEY)?;
+    let raw = ark_store::sync_kv::get_sync_kv(conn, VERSION_VECTOR_KEY)?;
     let mut vector: VersionVector = raw
         .as_deref()
         .filter(|value| !value.trim().is_empty())
@@ -63,7 +63,7 @@ pub(in crate::db) fn record_usage_sequence(
         Some(device_id),
         Some(seq),
     )?;
-    set_sync_kv(
+    ark_store::sync_kv::set_sync_kv(
         conn,
         VERSION_VECTOR_KEY,
         &serde_json::to_string(&vector).map_err(|e| e.to_string())?,
@@ -144,7 +144,7 @@ pub(in crate::db) fn finish_usage_entity_sync(
 }
 
 pub fn get_object_revision(conn: &Connection, entity_id: &str) -> Result<Option<String>, String> {
-    let vector_revision = get_sync_kv(conn, VERSION_VECTOR_KEY)?
+    let vector_revision = ark_store::sync_kv::get_sync_kv(conn, VERSION_VECTOR_KEY)?
         .filter(|value| !value.trim().is_empty())
         .map(|value| {
             serde_json::from_str::<VersionVector>(&value).map_err(|error| error.to_string())
@@ -209,7 +209,7 @@ pub fn bump_sync_version_vector(
         return Ok(hlc);
     }
 
-    let raw = get_sync_kv(conn, VERSION_VECTOR_KEY)?;
+    let raw = ark_store::sync_kv::get_sync_kv(conn, VERSION_VECTOR_KEY)?;
     let mut vector: VersionVector = raw
         .as_deref()
         .filter(|value| !value.trim().is_empty())
@@ -245,7 +245,7 @@ pub fn bump_sync_version_vector(
     };
     let hlc = next.to_string();
     vector.insert(entity_id.to_string(), hlc.clone());
-    set_sync_kv(
+    ark_store::sync_kv::set_sync_kv(
         conn,
         VERSION_VECTOR_KEY,
         &serde_json::to_string(&vector).map_err(|e| e.to_string())?,
@@ -267,7 +267,7 @@ pub fn record_remote_sync_revision(
     entity_id: &str,
     incoming_hlc: &str,
 ) -> Result<(), String> {
-    let raw = get_sync_kv(conn, VERSION_VECTOR_KEY)?;
+    let raw = ark_store::sync_kv::get_sync_kv(conn, VERSION_VECTOR_KEY)?;
     let mut vector: VersionVector = raw
         .as_deref()
         .filter(|value| !value.trim().is_empty())
@@ -279,7 +279,7 @@ pub fn record_remote_sync_revision(
         .is_none_or(|current| HLC::is_newer(incoming_hlc, current))
     {
         vector.insert(entity_id.to_owned(), incoming_hlc.to_owned());
-        set_sync_kv(
+        ark_store::sync_kv::set_sync_kv(
             conn,
             VERSION_VECTOR_KEY,
             &serde_json::to_string(&vector).map_err(|error| error.to_string())?,

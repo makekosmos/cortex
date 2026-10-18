@@ -1,7 +1,7 @@
 use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError};
 use super::inbound_policy::require_sync_policy_identity;
 use crate::canonical_types::pending::ReplayNotice;
-use crate::db::{ensure_usage_sequence_migrated, set_sync_kv, SqliteStorageBackend};
+use crate::db::{ensure_usage_sequence_migrated, SqliteStorageBackend};
 use crate::types::SyncEntity;
 use ark_application::sync_storage::{OutboundAck, OutboundProgress, PolicyIdentity};
 use rusqlite::Transaction;
@@ -440,7 +440,8 @@ impl DbCommand for SetSyncKeyValueCommand {
             self.local_device_id.as_deref(),
             self.policy_identity.as_ref(),
         )?;
-        set_sync_kv(transaction, &self.key, &self.value).map_err(DbError::Storage)
+        ark_store::sync_kv::set_sync_kv(transaction, &self.key, &self.value)
+            .map_err(DbError::Storage)
     }
 }
 
@@ -473,6 +474,7 @@ impl DbCommand for SetLocalSyncKeyValueCommand {
         transaction: &Transaction<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_engine()?;
-        set_sync_kv(transaction, &self.key, &self.value).map_err(DbError::Storage)
+        ark_store::sync_kv::set_sync_kv(transaction, &self.key, &self.value)
+            .map_err(DbError::Storage)
     }
 }

@@ -382,7 +382,8 @@ mod tests {
     async fn relay_payload_sender_cannot_authorize_object_writes() {
         let conn = Connection::open_in_memory().unwrap();
         init_schema(&conn).unwrap();
-        crate::db::set_sync_kv(&conn, "sync.removed_peers", r#"["device-blocked"]"#).unwrap();
+        ark_store::sync_kv::set_sync_kv(&conn, "sync.removed_peers", r#"["device-blocked"]"#)
+            .unwrap();
         let shared = Arc::new(StdMutex::new(conn));
         let backend = Arc::new(SqliteStorageBackend::for_test(shared.clone()));
         let storage = backend.clone() as Arc<dyn SyncRuntimeStorage>;

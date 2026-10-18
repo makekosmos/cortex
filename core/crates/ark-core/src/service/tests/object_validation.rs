@@ -170,7 +170,7 @@ async fn failed_upsert_object_persists_nothing() {
     );
 
     // Version-vector не должен содержать запись для этого id
-    let vv_raw = db::get_sync_kv(&guard, "lan_sync.version_vector").unwrap();
+    let vv_raw = ark_store::sync_kv::get_sync_kv(&guard, "lan_sync.version_vector").unwrap();
     if let Some(raw) = vv_raw {
         let vector: std::collections::HashMap<String, serde_json::Value> =
             serde_json::from_str(&raw).unwrap_or_default();
