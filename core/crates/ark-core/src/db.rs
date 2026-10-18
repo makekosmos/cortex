@@ -148,6 +148,11 @@ pub use integration_replication_publication::{
 pub use integration_replication_records::{
     upsert_authorized_node, upsert_integration_configuration,
 };
+// Preserve the public database query surface for downstream Rust consumers;
+// Core production paths use the Store adapters directly.
+pub use ark_store::integration_replication::{
+    load_authorized_node, load_integration_configuration, load_integration_refresh_lease,
+};
 
 #[cfg(test)]
 mod tests {

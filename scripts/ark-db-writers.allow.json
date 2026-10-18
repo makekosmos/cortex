@@ -157,22 +157,22 @@
       "count": 5
     },
     {
-      "path": "core/crates/ark-core/src/db/load/part1.rs",
+      "path": "core/crates/ark-core/src/db/load/all_data.rs",
       "category": "SQLite mutation API",
       "count": 4
     },
     {
-      "path": "core/crates/ark-core/src/db/objects/part1.rs",
+      "path": "core/crates/ark-core/src/db/objects/types.rs",
       "category": "SQLite mutation API",
       "count": 10
     },
     {
-      "path": "core/crates/ark-core/src/db/objects/part2a.rs",
+      "path": "core/crates/ark-core/src/db/objects/records.rs",
       "category": "SQLite mutation API",
       "count": 3
     },
     {
-      "path": "core/crates/ark-core/src/db/objects/part4.rs",
+      "path": "core/crates/ark-core/src/db/objects/links.rs",
       "category": "SQLite mutation API",
       "count": 2
     },
@@ -202,17 +202,17 @@
       "count": 2
     },
     {
-      "path": "core/crates/ark-core/src/db/sync/part1.rs",
+      "path": "core/crates/ark-core/src/db/sync/tombstones_and_usage_sequence.rs",
       "category": "SQLite mutation API",
       "count": 6
     },
     {
-      "path": "core/crates/ark-core/src/db/sync/part2.rs",
+      "path": "core/crates/ark-core/src/db/sync/usage_progress_and_revisions.rs",
       "category": "SQLite mutation API",
       "count": 4
     },
     {
-      "path": "core/crates/ark-core/src/db/usage/part1a.rs",
+      "path": "core/crates/ark-core/src/db/usage/records.rs",
       "category": "SQLite mutation API",
       "count": 8
     },

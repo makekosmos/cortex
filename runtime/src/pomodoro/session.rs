@@ -1,4 +1,4 @@
-include!("session/part01.rs");
-include!("session/part02.rs");
-include!("session/part03.rs");
-include!("session/part04.rs");
+include!("session/state.rs");
+include!("session/lifecycle.rs");
+include!("session/completion.rs");
+include!("session/tests.rs");

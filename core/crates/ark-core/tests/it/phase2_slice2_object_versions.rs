@@ -1,4 +1,4 @@
 #![allow(clippy::unwrap_used)]
-include!("phase2_slice2_object_versions/part01.rs");
-include!("phase2_slice2_object_versions/part02.rs");
-include!("phase2_slice2_object_versions/part03.rs");
+include!("phase2_slice2_object_versions/state_and_pending.rs");
+include!("phase2_slice2_object_versions/load_and_clear.rs");
+include!("phase2_slice2_object_versions/load_all_json.rs");

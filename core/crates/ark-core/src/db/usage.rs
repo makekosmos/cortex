@@ -5,10 +5,10 @@ use std::collections::HashMap;
 
 use crate::types::*;
 
-include!("usage/part1a.rs");
-include!("usage/part1b.rs");
-include!("usage/part2a.rs");
-include!("usage/part2b.rs");
-include!("usage/part2c.rs");
-include!("usage/part3a.rs");
-include!("usage/part3b.rs");
+include!("usage/records.rs");
+include!("usage/spans_and_title_totals.rs");
+include!("usage/analytics.rs");
+include!("usage/process_queries.rs");
+include!("usage/process_projection.rs");
+include!("usage/game_playtime_queries.rs");
+include!("usage/game_playtime_summary.rs");

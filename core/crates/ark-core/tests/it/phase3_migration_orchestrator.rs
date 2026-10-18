@@ -1,3 +1,3 @@
 #![allow(clippy::unwrap_used)]
-include!("phase3_migration_orchestrator/part01.rs");
-include!("phase3_migration_orchestrator/part02.rs");
+include!("phase3_migration_orchestrator/execution.rs");
+include!("phase3_migration_orchestrator/recovery.rs");

@@ -4,6 +4,6 @@ mod tests {
     use crate::pomodoro::clock::MockClock;
     use std::sync::Arc;
 
-    include!("tests/part01.rs");
-    include!("tests/part02.rs");
+    include!("tests/transitions.rs");
+    include!("tests/restore.rs");
 }

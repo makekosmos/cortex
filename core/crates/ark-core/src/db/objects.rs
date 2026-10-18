@@ -8,9 +8,9 @@ use serde_json::{json, Value};
 
 use crate::types::*;
 
-include!("objects/part1.rs");
-include!("objects/part2a.rs");
-include!("objects/part2b.rs");
-include!("objects/part3a.rs");
-include!("objects/part3b.rs");
-include!("objects/part4.rs");
+include!("objects/types.rs");
+include!("objects/records.rs");
+include!("objects/queries.rs");
+include!("objects/search.rs");
+include!("objects/search_text.rs");
+include!("objects/links.rs");

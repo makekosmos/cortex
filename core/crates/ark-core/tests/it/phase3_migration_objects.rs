@@ -1,3 +1,3 @@
 #![allow(clippy::unwrap_used)]
-include!("phase3_migration_objects/part01.rs");
-include!("phase3_migration_objects/part02.rs");
+include!("phase3_migration_objects/object_projection.rs");
+include!("phase3_migration_objects/relations.rs");
