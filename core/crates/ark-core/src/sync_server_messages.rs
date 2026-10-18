@@ -18,26 +18,21 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
         on_change,
         ..
     } = ctx;
-    if ark_sync::protocol::requires_registry_admission(&msg)
-        && current_ready_peer(storage.as_ref(), peers, peer_id)
-            .await
-            .is_none()
-    {
+    let ready_peer = if ark_sync::protocol::requires_registry_admission(&msg) {
+        let Some(ready_peer) = current_ready_peer(storage.as_ref(), peers, peer_id).await else {
+            return;
+        };
+        Some(ready_peer)
+    } else {
+        None
+    };
+    let Some(msg) = hello::route_session_message(ctx, peer_id, msg, ready_peer.as_ref()).await
+    else {
         return;
-    }
+    };
     match msg {
-        message @ LanSyncMessage::Hello { .. } => {
-            hello::handle_hello(ctx, peer_id, message).await;
-        }
-
-        LanSyncMessage::SyncPolicy {
-            revision,
-            digest,
-            active,
-            rules,
-        } => {
-            let Some(ready_peer) = current_ready_peer(storage.as_ref(), peers, peer_id).await
-            else {
+        ark_sync::server_session::DirectServerMessage::SyncPolicy(update) => {
+            let Some(ready_peer) = ready_peer.as_ref() else {
                 return;
             };
             let (tx, protocol) = {
@@ -51,18 +46,6 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                 admission::reject_peer(ctx, peer_id, &tx).await;
                 return;
             };
-            let update = ark_sync::client_session::SyncPolicyUpdate {
-                revision,
-                digest,
-                active,
-                rules,
-            };
-            if let Err(error) = admission::begin_policy_persistence(ctx, peer_id, &ready_peer).await
-            {
-                eprintln!("{TAG} peer sync policy rejected before persistence: {error}");
-                admission::reject_peer(ctx, peer_id, &tx).await;
-                return;
-            }
             if let Err(error) = ark_sync::client_session::accept_sync_policy(
                 storage.as_ref(),
                 &ready_peer.device_id,
@@ -79,8 +62,7 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                 admission::reject_peer(ctx, peer_id, &tx).await;
                 return;
             }
-            if let Err(error) = admission::start_sync_after_policy(ctx, peer_id, &ready_peer).await
-            {
+            if let Err(error) = admission::start_sync_after_policy(ctx, peer_id, ready_peer).await {
                 eprintln!(
                     "{TAG} policy-gated sync start failed for {}: {error}",
                     ready_peer.device_id
@@ -89,10 +71,7 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
             }
         }
 
-        LanSyncMessage::VersionVector {
-            vector: remote_vector,
-            ..
-        } => {
+        ark_sync::server_session::DirectServerMessage::VersionVector(remote_vector) => {
             let (tx, peer_device_id, peer_sync_complete, policy_bound) = {
                 let peers_guard = peers.lock().await;
                 match peers_guard.get(&peer_id) {
@@ -164,14 +143,15 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
             }
         }
 
-        LanSyncMessage::SyncChanges {
-            batch_id,
-            entities,
-            is_last,
-            policy_identity,
-            usage_complete_through,
-            ..
-        } => {
+        ark_sync::server_session::DirectServerMessage::SyncChanges(
+            ark_sync::server_session::DirectServerSyncChanges {
+                batch_id,
+                entities,
+                is_last,
+                policy_identity,
+                usage_complete_through,
+            },
+        ) => {
             let (tx, peer_device_id, protocol) = {
                 let peers_guard = peers.lock().await;
                 match peers_guard.get(&peer_id) {
@@ -261,30 +241,11 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
             }
         }
 
-        message @ (LanSyncMessage::RegistryAdmissionStart { .. }
-        | LanSyncMessage::RegistryAdmissionProof { .. }
-        | LanSyncMessage::RegistryAdmissionConfirm { .. }
-        | LanSyncMessage::RegistrySyncStart { .. }
-        | LanSyncMessage::RegistryEventsPage { .. }
-        | LanSyncMessage::RegistrySyncReady { .. }
-        | LanSyncMessage::RegistryEventUpdate { .. }) => {
+        ark_sync::server_session::DirectServerMessage::RegistryAdmission(message) => {
             admission::handle_registry_admission(ctx, peer_id, message).await;
         }
 
-        message @ (LanSyncMessage::SyncAck { .. }
-        | LanSyncMessage::SignedIntegrationFrame { .. }
-        | LanSyncMessage::SignedIntegrationAck { .. }
-        | LanSyncMessage::LiveChange { .. }
-        | LanSyncMessage::LiveAck { .. }
-        | LanSyncMessage::LiveReceiptAck { .. }
-        | LanSyncMessage::TaskMergeBatch { .. }
-        | LanSyncMessage::TaskMergeBatchAck { .. }
-        | LanSyncMessage::ProtocolRejected { .. }
-        | LanSyncMessage::PeerList { .. }
-        | LanSyncMessage::Ping { .. }
-        | LanSyncMessage::Pong { .. }
-        | LanSyncMessage::PairingRejected { .. }
-        | LanSyncMessage::PairingAccepted { .. }) => {
+        ark_sync::server_session::DirectServerMessage::Live(message) => {
             handle_live_message(ctx, peer_id, message).await;
         }
     }

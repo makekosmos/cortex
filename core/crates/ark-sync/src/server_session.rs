@@ -15,10 +15,11 @@ use crate::{
     registry_admission::AdmissionUpdate,
 };
 
-mod direct_hello;
-pub use direct_hello::{
-    DirectServerHelloCloseReason, DirectServerHelloEffect, DirectServerHelloInput,
-    DirectServerHelloTransition, DirectServerSession, DirectServerSyncStartPolicy,
+mod direct;
+pub use direct::{
+    classify_server_message, DirectServerMessage, DirectServerSession,
+    DirectServerSessionCloseReason, DirectServerSessionEffect, DirectServerSessionInput,
+    DirectServerSessionTransition, DirectServerSyncChanges, DirectServerSyncStartPolicy,
 };
 
 #[derive(Clone)]
