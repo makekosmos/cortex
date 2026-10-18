@@ -39,6 +39,7 @@ async fn send_signed_integration_frame_requires_addressed_authenticated_peer() {
             ),
             negotiated_protocol: None,
             registry_admission: None,
+            server_hello: None,
             in_flight_feed_position: None,
             in_flight_feed_policy_identity: None,
             tx: PeerMessageSender::test(tx),

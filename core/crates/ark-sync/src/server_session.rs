@@ -15,6 +15,13 @@ use crate::{
     registry_admission::AdmissionUpdate,
 };
 
+mod direct_hello;
+pub use direct_hello::{
+    DirectServerHelloCloseReason, DirectServerHelloEffect, DirectServerHelloInput,
+    DirectServerHelloSession, DirectServerHelloTransition,
+};
+
+#[derive(Clone)]
 pub struct ResponderHelloRequest {
     pub device_id: String,
     pub device_name: String,

@@ -209,6 +209,7 @@ impl SyncServer {
                                     outbound_snapshot: OutboundSnapshotProgress::not_sent(),
                                     negotiated_protocol: None,
                                     registry_admission: None,
+                                    server_hello: None,
                                     in_flight_feed_position: None,
                                     in_flight_feed_policy_identity: None,
                                     tx: tx.clone(),

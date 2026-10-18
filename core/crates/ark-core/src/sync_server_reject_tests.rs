@@ -95,6 +95,7 @@ pub(super) mod reject_tests {
                     ark_sync::outbound_snapshot::OutboundSnapshotProgress::acknowledged(),
                 negotiated_protocol: None,
                 registry_admission: None,
+                server_hello: None,
                 in_flight_feed_position: None,
                 in_flight_feed_policy_identity: None,
                 tx: PeerMessageSender::test(tx),

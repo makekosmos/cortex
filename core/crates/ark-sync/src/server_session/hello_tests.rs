@@ -119,3 +119,91 @@ fn client_hello(space_id: &str, offer: &ProtocolOffer) -> LanSyncMessage {
         negotiation_hmac: None,
     }
 }
+
+#[test]
+fn direct_server_hello_waits_for_block_check_and_accepts_only_once() {
+    let offer = ProtocolOffer::current_with_registry_history(true);
+    let mut session = DirectServerHelloSession::new(responder_request(None));
+
+    let first = session.transition(DirectServerHelloInput::Message(Box::new(client_hello(
+        "space-a", &offer,
+    ))));
+    assert!(matches!(
+        &first.effect,
+        DirectServerHelloEffect::CheckRemovedPeer { device_id }
+            if device_id == "client-device"
+    ));
+
+    let repeated = session.transition(DirectServerHelloInput::Message(Box::new(client_hello(
+        "space-a", &offer,
+    ))));
+    assert!(matches!(
+        &repeated.effect,
+        DirectServerHelloEffect::Close(DirectServerHelloCloseReason::RepeatedHello)
+    ));
+}
+
+#[test]
+fn direct_server_hello_accepts_after_clear_block_check_and_fails_closed() {
+    let offer = ProtocolOffer::current_with_registry_history(true);
+    let mut allowed = DirectServerHelloSession::new(responder_request(None));
+    allowed.transition(DirectServerHelloInput::Message(Box::new(client_hello(
+        "space-a", &offer,
+    ))));
+    let accepted = allowed.transition(DirectServerHelloInput::RemovedPeerResult(Ok(false)));
+    assert!(matches!(
+        &accepted.effect,
+        DirectServerHelloEffect::Accepted(accepted)
+            if accepted.peer_device_id == "client-device"
+    ));
+
+    for result in [Ok(true), Err("storage unavailable".to_owned())] {
+        let mut blocked = DirectServerHelloSession::new(responder_request(None));
+        blocked.transition(DirectServerHelloInput::Message(Box::new(client_hello(
+            "space-a", &offer,
+        ))));
+        let transition = blocked.transition(DirectServerHelloInput::RemovedPeerResult(result));
+        assert!(matches!(
+            &transition.effect,
+            DirectServerHelloEffect::Close(
+                DirectServerHelloCloseReason::RemovedPeer
+                    | DirectServerHelloCloseReason::RemovedPeerLookupFailed
+            )
+        ));
+    }
+}
+
+#[test]
+fn direct_server_hello_rejects_self_and_protocol_mismatches() {
+    let offer = ProtocolOffer::current_with_registry_history(true);
+    let mut self_hello = client_hello("space-a", &offer);
+    let LanSyncMessage::Hello { device_id, .. } = &mut self_hello else {
+        panic!("test helper builds a Hello message");
+    };
+    *device_id = "server-device".to_owned();
+    let mut session = DirectServerHelloSession::new(responder_request(None));
+    let self_result = session.transition(DirectServerHelloInput::Message(Box::new(self_hello)));
+    assert!(matches!(
+        &self_result.effect,
+        DirectServerHelloEffect::Close(DirectServerHelloCloseReason::SelfConnection)
+    ));
+
+    let mut wrong_space = DirectServerHelloSession::new(responder_request(None));
+    let mismatch = wrong_space.transition(DirectServerHelloInput::Message(Box::new(client_hello(
+        "other-space",
+        &offer,
+    ))));
+    assert!(matches!(
+        &mismatch.effect,
+        DirectServerHelloEffect::Rejected(ClientHelloRejection::DifferentSpace)
+    ));
+
+    let mut invalid_auth = DirectServerHelloSession::new(responder_request(Some("secret")));
+    let invalid = invalid_auth.transition(DirectServerHelloInput::Message(Box::new(client_hello(
+        "space-a", &offer,
+    ))));
+    assert!(matches!(
+        &invalid.effect,
+        DirectServerHelloEffect::Rejected(ClientHelloRejection::InvalidAuthentication)
+    ));
+}

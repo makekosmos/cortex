@@ -12,6 +12,7 @@
   - [x] Run bulk snapshot production outside the receive loop and give ACK/admission messages a bounded priority queue so bulk backpressure does not suspend protocol reads.
   - [x] Verify authenticated peer identity is used for registry-policy admission, including a discovered `seed-*` identity; verify backpressure and teardown with focused tests and targeted clippy.
   - [x] Replace the server's unbounded WebSocket message queues with typed bounded `SessionIo`; keep outbound admission and signed-frame authorization at the socket write boundary.
+  - [x] Move direct-server Hello ordering, self-connect validation, and pending blocked-peer transition into a per-connection `ark-sync` session; Core retains the block-list read, stale-peer check, registry admission, and socket effects.
   - [ ] Move the client connected-message loop behind typed session input and effects.
   - [ ] Move the server connected-message loop behind typed session input and effects.
 - [ ] Scrap: re-evaluate if implementation repeatedly needs Core policy or concrete transport inside `ark-sync`.
