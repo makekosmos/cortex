@@ -1,5 +1,5 @@
 use super::{
-    load_integration_configuration, load_integration_node_grant, load_integration_refresh_lease,
+    load_integration_configuration, load_integration_node_grant,
     load_latest_integration_credential_envelope,
 };
 use rusqlite::Connection;
@@ -37,7 +37,8 @@ pub fn integration_verification_status(
     } else {
         None
     };
-    let refresh_lease = load_integration_refresh_lease(conn, integration_id)?;
+    let refresh_lease =
+        ark_store::integration_replication::load_integration_refresh_lease(conn, integration_id)?;
     let next_generation = envelope
         .as_ref()
         .and_then(|envelope| envelope.credential_generation.checked_add(1));

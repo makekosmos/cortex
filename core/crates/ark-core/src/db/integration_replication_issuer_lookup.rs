@@ -1,7 +1,6 @@
 use super::{
     load_integration_configuration, load_integration_credential_envelope,
-    load_integration_node_grant, load_integration_refresh_lease,
-    load_latest_integration_credential_envelope,
+    load_integration_node_grant, load_latest_integration_credential_envelope,
 };
 use crate::integration_replication::{
     encryption_key_id, GrantStatus, IntegrationContractError, NodeStatus,
@@ -150,13 +149,16 @@ pub fn check_integration_credential_fence(
         }
         .to_string());
     }
-    let lease =
-        load_integration_refresh_lease(conn, expected.integration_id)?.ok_or_else(|| {
-            IntegrationContractError::Mismatch {
-                field: "refresh_lease",
-            }
-            .to_string()
-        })?;
+    let lease = ark_store::integration_replication::load_integration_refresh_lease(
+        conn,
+        expected.integration_id,
+    )?
+    .ok_or_else(|| {
+        IntegrationContractError::Mismatch {
+            field: "refresh_lease",
+        }
+        .to_string()
+    })?;
     if lease.holder_node_id != expected.issuer_node_id
         || lease.credential_generation != expected.credential_generation
         || lease.fencing_token != expected.refresh_fencing_token

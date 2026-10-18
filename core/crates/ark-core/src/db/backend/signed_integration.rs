@@ -65,8 +65,11 @@ impl SignedIntegrationFrameStore for SqliteSignedIntegrationFrameSession<'_, '_>
                 .map(IntegrationReplicationEntity::IntegrationNodeGrant)
             }
             IntegrationReplicationEntity::IntegrationRefreshLease(value) => {
-                crate::db::load_integration_refresh_lease(self.transaction, &value.integration_id)?
-                    .map(IntegrationReplicationEntity::IntegrationRefreshLease)
+                ark_store::integration_replication::load_integration_refresh_lease(
+                    self.transaction,
+                    &value.integration_id,
+                )?
+                .map(IntegrationReplicationEntity::IntegrationRefreshLease)
             }
             IntegrationReplicationEntity::IntegrationCredentialEnvelope(value) => {
                 crate::db::load_integration_credential_envelope(

@@ -1,5 +1,5 @@
 use super::integration_replication_common::{
-    lease_entity_id, lease_epoch, persist_with_vector, sqlite_i64, storage, u64_value,
+    lease_entity_id, lease_epoch, persist_with_vector, sqlite_i64, storage,
 };
 use super::load_integration_node_grant;
 use crate::integration_replication::{GrantStatus, IntegrationContractError, NodeStatus};
@@ -98,41 +98,4 @@ pub(in crate::db) fn upsert_integration_refresh_lease_record(
             Ok(())
         },
     )
-}
-
-pub fn load_integration_refresh_lease(
-    conn: &Connection,
-    integration_id: &str,
-) -> Result<Option<ReplicatedRefreshLease>, String> {
-    let row = conn
-        .query_row(
-            "SELECT credential_generation, holder_node_id, fencing_token,
-                    issued_at_ms, expires_at_ms FROM integration_refresh_leases
-             WHERE integration_id = ?1",
-            params![integration_id],
-            |row| {
-                Ok((
-                    row.get::<_, i64>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, i64>(2)?,
-                    row.get::<_, i64>(3)?,
-                    row.get::<_, i64>(4)?,
-                ))
-            },
-        )
-        .optional()
-        .map_err(storage)?;
-    let Some((generation, holder, fence, issued, expires)) = row else {
-        return Ok(None);
-    };
-    let lease = ReplicatedRefreshLease {
-        integration_id: integration_id.to_string(),
-        credential_generation: u64_value(generation, "credential_generation")?,
-        holder_node_id: holder,
-        fencing_token: u64_value(fence, "fencing_token")?,
-        issued_at_ms: u64_value(issued, "issued_at_ms")?,
-        expires_at_ms: u64_value(expires, "expires_at_ms")?,
-    };
-    lease.validate().map_err(|e| e.to_string())?;
-    Ok(Some(lease))
 }

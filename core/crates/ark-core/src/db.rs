@@ -140,7 +140,6 @@ pub use integration_replication_issuer_lookup::{
     check_integration_credential_fence, load_issuer_encryption_key,
     load_issuer_encryption_key_for_publish, CredentialFenceExpectation,
 };
-pub use integration_replication_lease::load_integration_refresh_lease;
 pub(in crate::db) use integration_replication_lease::upsert_integration_refresh_lease_record;
 pub use integration_replication_publication::{
     publish_integration_credential_envelope, try_acquire_integration_refresh_lease,

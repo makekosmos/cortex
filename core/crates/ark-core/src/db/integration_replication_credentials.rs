@@ -1,7 +1,7 @@
 use super::integration_replication_common::{
     envelope_version_is_newer, json, parse, persist_with_vector, sqlite_i64, storage, u64_value,
 };
-use super::{load_integration_node_grant, load_integration_refresh_lease};
+use super::load_integration_node_grant;
 use crate::integration_replication::{envelope_entity_id, IntegrationContractError, NodeStatus};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::Value;
@@ -95,13 +95,16 @@ pub(in crate::db) fn upsert_integration_credential_envelope_record(
                 }
                 .to_string());
             }
-            let lease = load_integration_refresh_lease(conn, &envelope.integration_id)?
-                .ok_or_else(|| {
-                    IntegrationContractError::Mismatch {
-                        field: "refresh_lease",
-                    }
-                    .to_string()
-                })?;
+            let lease = ark_store::integration_replication::load_integration_refresh_lease(
+                conn,
+                &envelope.integration_id,
+            )?
+            .ok_or_else(|| {
+                IntegrationContractError::Mismatch {
+                    field: "refresh_lease",
+                }
+                .to_string()
+            })?;
             if lease.is_expired(now_ms) {
                 return Err(IntegrationContractError::ExpiredLease.to_string());
             }

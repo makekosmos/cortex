@@ -53,7 +53,7 @@ fn publication_requires_the_current_refresh_fence() {
     )
     .is_err());
     assert_eq!(
-        load_integration_refresh_lease(&conn, "integration-a")
+        ark_store::integration_replication::load_integration_refresh_lease(&conn, "integration-a")
             .unwrap()
             .unwrap(),
         lease

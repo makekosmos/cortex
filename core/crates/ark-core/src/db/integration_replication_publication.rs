@@ -1,7 +1,6 @@
 use super::integration_replication_common::{storage, u64_value};
 use super::{
-    load_integration_refresh_lease, upsert_integration_credential_envelope_record,
-    upsert_integration_refresh_lease_record,
+    upsert_integration_credential_envelope_record, upsert_integration_refresh_lease_record,
 };
 use crate::integration_replication::{IntegrationContractError, IntegrationCredentialEnvelope};
 use rusqlite::Connection;
@@ -70,7 +69,8 @@ fn try_acquire_integration_refresh_lease_inner(
         }
         .to_string());
     }
-    let current = load_integration_refresh_lease(conn, integration_id)?;
+    let current =
+        ark_store::integration_replication::load_integration_refresh_lease(conn, integration_id)?;
     let actual_fence = current.as_ref().map_or(0, |lease| lease.fencing_token);
     if actual_fence != *expected_fencing_token {
         return Err(IntegrationContractError::Mismatch {

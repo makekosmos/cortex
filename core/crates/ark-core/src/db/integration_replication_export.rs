@@ -1,7 +1,7 @@
 use super::integration_replication_common::{storage, u64_value};
 use super::{
     load_integration_configuration, load_integration_credential_envelope,
-    load_integration_node_grant, load_integration_refresh_lease, VERSION_VECTOR_KEY,
+    load_integration_node_grant, VERSION_VECTOR_KEY,
 };
 use crate::types::VersionVector;
 use rusqlite::{params, Connection};
@@ -34,7 +34,9 @@ pub fn export_integration_replication(
         )?);
     }
 
-    if let Some(lease) = load_integration_refresh_lease(conn, integration_id)? {
+    if let Some(lease) =
+        ark_store::integration_replication::load_integration_refresh_lease(conn, integration_id)?
+    {
         if lease_holder_is_current(conn, &lease)? {
             changes.push(export_change(
                 conn,
