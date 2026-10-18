@@ -219,6 +219,9 @@ fn policy_bound_sync_starts_once_only_after_session_admission() {
 
     assert!(!session.start_sync_after_policy_persisted());
     assert!(session.mark_ready(DirectServerSyncStartPolicy::AfterPolicyPersistence));
+    assert!(!session.start_sync_after_policy_persisted());
+    assert!(session.begin_policy_persistence());
+    assert!(!session.begin_policy_persistence());
     assert!(session.start_sync_after_policy_persisted());
     assert!(!session.start_sync_after_policy_persisted());
 
@@ -228,5 +231,6 @@ fn policy_bound_sync_starts_once_only_after_session_admission() {
     ))));
     legacy_session.transition(DirectServerHelloInput::RemovedPeerResult(Ok(false)));
     assert!(legacy_session.mark_ready(DirectServerSyncStartPolicy::Immediate));
+    assert!(!legacy_session.begin_policy_persistence());
     assert!(!legacy_session.start_sync_after_policy_persisted());
 }

@@ -57,6 +57,12 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                 active,
                 rules,
             };
+            if let Err(error) = admission::begin_policy_persistence(ctx, peer_id, &ready_peer).await
+            {
+                eprintln!("{TAG} peer sync policy rejected before persistence: {error}");
+                admission::reject_peer(ctx, peer_id, &tx).await;
+                return;
+            }
             if let Err(error) = ark_sync::client_session::accept_sync_policy(
                 storage.as_ref(),
                 &ready_peer.device_id,

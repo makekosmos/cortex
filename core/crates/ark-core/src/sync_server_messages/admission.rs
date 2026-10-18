@@ -287,6 +287,28 @@ pub(super) async fn start_sync_after_policy(
     Ok(())
 }
 
+pub(super) async fn begin_policy_persistence(
+    ctx: &MessageContext,
+    peer_id: usize,
+    ready_peer: &ReadyPeer,
+) -> Result<(), String> {
+    let mut peers = ctx.peers.lock().await;
+    let peer = peers
+        .get_mut(&peer_id)
+        .ok_or_else(|| "sync policy session disappeared".to_owned())?;
+    if peer.ready_peer.as_ref() != Some(ready_peer) {
+        return Err("sync policy session changed before policy persistence".into());
+    }
+    let session = peer
+        .server_session
+        .as_mut()
+        .ok_or_else(|| "sync policy session state is missing".to_owned())?;
+    if !session.begin_policy_persistence() {
+        return Err("sync policy arrived outside its permitted session phase".into());
+    }
+    Ok(())
+}
+
 async fn broadcast_registry_events(
     ctx: &MessageContext,
     source_peer_id: usize,

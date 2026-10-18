@@ -19,6 +19,7 @@ enum DirectServerHelloPhase {
     CheckingRemovedPeer(Box<AcceptedClientHello>),
     AwaitingRegistryAdmission,
     AwaitingPolicy,
+    PersistingPolicy,
     Ready,
     Closed,
 }
@@ -74,10 +75,18 @@ impl DirectServerSession {
     }
 
     pub fn start_sync_after_policy_persisted(&mut self) -> bool {
-        if !matches!(self.phase, DirectServerHelloPhase::AwaitingPolicy) {
+        if !matches!(self.phase, DirectServerHelloPhase::PersistingPolicy) {
             return false;
         }
         self.phase = DirectServerHelloPhase::Ready;
+        true
+    }
+
+    pub fn begin_policy_persistence(&mut self) -> bool {
+        if !matches!(self.phase, DirectServerHelloPhase::AwaitingPolicy) {
+            return false;
+        }
+        self.phase = DirectServerHelloPhase::PersistingPolicy;
         true
     }
 
@@ -138,6 +147,10 @@ impl DirectServerSession {
                 DirectServerHelloEffect::Close(DirectServerHelloCloseReason::UnexpectedInput)
             }
             (phase @ DirectServerHelloPhase::AwaitingPolicy, _) => {
+                self.phase = phase;
+                DirectServerHelloEffect::Close(DirectServerHelloCloseReason::UnexpectedInput)
+            }
+            (phase @ DirectServerHelloPhase::PersistingPolicy, _) => {
                 self.phase = phase;
                 DirectServerHelloEffect::Close(DirectServerHelloCloseReason::UnexpectedInput)
             }
