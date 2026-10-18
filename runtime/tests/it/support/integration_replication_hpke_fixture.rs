@@ -229,62 +229,9 @@ pub async fn start_hosts(setup: &support::IntegrationReplicationSetup) -> (ArkHo
         .unwrap();
     assert!(connect.ok, "pairing connect failed: {:?}", connect.error);
 
-    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(45);
-    loop {
-        let snapshot = origin_host
-            .request("get_sync_snapshot", json!({}))
-            .await
-            .unwrap();
-        assert!(snapshot.ok, "sync snapshot failed: {:?}", snapshot.error);
-        let pending = snapshot
-            .data
-            .get("incoming_pairing_requests")
-            .and_then(serde_json::Value::as_array)
-            .is_some_and(|requests| {
-                requests.iter().any(|request| {
-                    request.get("device_id") == Some(&json!(setup.recipient.node_id))
-                })
-            });
-        if pending {
-            break;
-        }
-        assert!(
-            tokio::time::Instant::now() < deadline,
-            "origin did not receive recipient pairing request: {}",
-            snapshot.data
-        );
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-    }
-    let accepted = origin_host
-        .request(
-            "accept_pairing",
-            json!({"device_id": setup.recipient.node_id}),
-        )
-        .await
-        .unwrap();
-    assert!(
-        accepted.ok,
-        "pairing acceptance failed: {:?}",
-        accepted.error
-    );
-
-    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(45);
-    loop {
-        let snapshot = recipient_host
-            .request("get_sync_snapshot", json!({}))
-            .await
-            .unwrap();
-        assert!(snapshot.ok, "sync snapshot failed: {:?}", snapshot.error);
-        if snapshot.data["outgoing_pairing"]["status"] == "connected" {
-            break;
-        }
-        assert!(
-            tokio::time::Instant::now() < deadline,
-            "recipient pairing did not complete: {}",
-            snapshot.data
-        );
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-    }
+    // The refreshed integration-replication key already binds the recipient,
+    // so the origin admits its Hello without a consent request. Wait for the
+    // admitted link, which is the state the signed send needs.
     offline::wait_for_peer(&origin_host, &setup.recipient.node_id).await;
     offline::wait_for_peer(&recipient_host, &setup.origin.node_id).await;
     (origin_host, recipient_host)
