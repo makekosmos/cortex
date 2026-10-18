@@ -267,6 +267,7 @@ mod tests {
         server.peers.lock().await.insert(
             7,
             PeerState {
+                session: test_server_session_handle(),
                 device_id: "peer".into(),
                 device_name: "Peer".into(),
                 addresses: Vec::new(),

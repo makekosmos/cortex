@@ -11,6 +11,7 @@ async fn stale_snapshot_ack_does_not_complete_or_clear_pending_snapshot() {
     let stale = PolicyIdentity::new(1, "b".repeat(64), true).unwrap();
     let (tx, _rx) = mpsc::unbounded_channel();
     let peer = PeerState {
+        session: test_server_session_handle(),
         device_id: "peer-a".to_owned(),
         device_name: "Peer A".to_owned(),
         addresses: Vec::new(),

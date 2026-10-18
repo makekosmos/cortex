@@ -16,6 +16,7 @@ pub(super) async fn handle_registry_admission(
             return;
         };
         let Some(admission) = peer.registry_admission.take() else {
+            peer.session.close_after_flush();
             peer.tx.close_after_flush();
             return;
         };
@@ -162,6 +163,7 @@ pub(super) async fn handle_registry_admission(
                     stale.device_name
                 );
                 stale.ready_peer = None;
+                stale.session.close_after_flush();
                 stale.tx.close_after_flush();
             }
             peers.remove(&stale_id);
@@ -354,6 +356,7 @@ async fn revoke_disabled_sessions(
                 peer.ready_peer = None;
                 peer.outbound_snapshot.reset();
                 peer.in_flight_feed = None;
+                peer.session.close_after_flush();
                 peer.tx.close_after_flush();
             }
             peers.remove(peer_id);
@@ -370,6 +373,7 @@ async fn revoke_disabled_sessions(
 pub(super) async fn reject_peer(ctx: &MessageContext, peer_id: usize, tx: &PeerMessageSender) {
     if let Some(mut peer) = ctx.peers.lock().await.remove(&peer_id) {
         peer.ready_peer = None;
+        peer.session.close_after_flush();
     }
     tx.close_after_flush();
 }

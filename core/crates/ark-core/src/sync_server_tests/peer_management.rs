@@ -155,6 +155,7 @@
         server.peers.lock().await.insert(
             1,
             PeerState {
+                session: test_server_session_handle(),
                 device_id: "blocked".to_string(),
                 device_name: "Blocked One".to_string(),
                 addresses: vec!["192.168.1.20:21531".to_string()],
@@ -172,6 +173,7 @@
         server.peers.lock().await.insert(
             2,
             PeerState {
+                session: test_server_session_handle(),
                 device_id: "blocked".to_string(),
                 device_name: "Blocked Two".to_string(),
                 addresses: vec!["192.168.1.21:21531".to_string()],
@@ -189,6 +191,7 @@
         server.peers.lock().await.insert(
             3,
             PeerState {
+                session: test_server_session_handle(),
                 device_id: "keep".to_string(),
                 device_name: "Keep".to_string(),
                 addresses: vec!["192.168.1.22:21531".to_string()],
@@ -232,6 +235,7 @@
         server.peers.lock().await.insert(
             1,
             PeerState {
+                session: test_server_session_handle(),
                 device_id: "blocked".to_string(),
                 device_name: "Blocked".to_string(),
                 addresses: vec![],
@@ -265,6 +269,7 @@
         // between old + new sessions before eviction settles).
         let (tx, _rx) = mpsc::unbounded_channel::<Message>();
         let state = |connection_id: usize, device_id: &str| PeerState {
+            session: test_server_session_handle(),
             device_id: device_id.to_string(),
             device_name: "DupDevice".to_string(),
             addresses: vec![],

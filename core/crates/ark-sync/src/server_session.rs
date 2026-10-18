@@ -29,7 +29,8 @@ pub use handle::{
     ServerSessionCreateError, ServerSessionHandle, ServerSessionIntent, ServerSessionIntentError,
 };
 pub use runner::{
-    run_connected_server_session, DirectServerSessionEnd, DirectServerSessionHandler,
+    run_connected_server_session, run_connected_server_session_controlled, DirectServerSessionEnd,
+    DirectServerSessionHandler,
 };
 
 #[derive(Clone)]

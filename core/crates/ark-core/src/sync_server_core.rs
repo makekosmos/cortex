@@ -48,6 +48,7 @@ impl SyncServer {
                 event: event.clone(),
             };
             if peer.tx.try_send(update).is_err() {
+                peer.session.revoke();
                 peer.tx.close();
                 continue;
             }
@@ -55,6 +56,7 @@ impl SyncServer {
                 peer.ready_peer = None;
                 peer.outbound_snapshot.reset();
                 peer.in_flight_feed = None;
+                peer.session.revoke();
                 peer.tx.close();
                 revoked.push(*peer_id);
             }
@@ -222,6 +224,7 @@ impl SyncServer {
             if let Some(peer) = peers.get_mut(peer_id) {
                 if peer.ready_peer.is_some() {
                     peer.ready_peer = None;
+                    peer.session.revoke();
                     peer.tx.close();
                     closed += 1;
                 }

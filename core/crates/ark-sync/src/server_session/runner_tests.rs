@@ -99,6 +99,39 @@ async fn connected_server_session_fails_closed_when_control_queue_is_full() {
     session_io.finish().await.unwrap();
 }
 
+#[tokio::test]
+async fn connected_server_session_observes_revoke_when_intent_mailbox_is_full() {
+    use crate::server_session::{ServerSessionHandle, ServerSessionIntent};
+    use std::num::NonZeroUsize;
+
+    let (handle, mut actor, _lease, mut activation) =
+        ServerSessionHandle::channel(NonZeroUsize::new(1).unwrap()).unwrap();
+    activation.activate().unwrap();
+    handle
+        .try_send(ServerSessionIntent::WakeCommittedFeed)
+        .unwrap();
+
+    let (close_seen_tx, close_seen_rx) = oneshot::channel();
+    let mut session_io = SessionIo::start_transport(1, |mut driver| {
+        tokio::spawn(async move {
+            let _ = driver.close_after_flush.recv().await;
+            let _ = close_seen_tx.send(());
+            let _ = driver.close_result.send(Some(Ok(())));
+            driver.worker_completion.complete();
+        })
+    })
+    .unwrap();
+    handle.close_after_flush();
+
+    let mut handler = RecordingHandler(Arc::new(Mutex::new(Vec::new())));
+    assert_eq!(
+        run_connected_server_session_controlled(&mut session_io, &mut actor, &mut handler).await,
+        DirectServerSessionEnd::Closed
+    );
+    close_seen_rx.await.unwrap();
+    session_io.finish().await.unwrap();
+}
+
 struct RecordingHandler(Arc<Mutex<Vec<String>>>);
 
 #[async_trait::async_trait]

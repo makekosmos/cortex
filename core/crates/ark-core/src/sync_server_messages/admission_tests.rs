@@ -7,6 +7,7 @@ async fn registry_disable_closes_ready_session_and_removes_discovery_record() {
     let storage = Arc::new(MemBackend::new()) as Arc<dyn SyncRuntimeStorage>;
     let (tx, mut rx) = mpsc::unbounded_channel();
     let peer = PeerState {
+        session: test_server_session_handle(),
         device_id: "disabled-device".to_owned(),
         device_name: "Old laptop".to_owned(),
         addresses: Vec::new(),

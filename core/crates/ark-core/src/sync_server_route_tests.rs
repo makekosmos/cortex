@@ -28,6 +28,7 @@ async fn send_signed_integration_frame_requires_addressed_authenticated_peer() {
     server.peers.lock().await.insert(
         1,
         PeerState {
+            session: test_server_session_handle(),
             device_id: "peer".to_string(),
             device_name: "Peer".to_string(),
             addresses: vec![],

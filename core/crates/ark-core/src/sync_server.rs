@@ -54,6 +54,7 @@ pub type OnRegistryEventsCallback =
 // ---------------------------------------------------------------------------
 
 struct PeerState {
+    session: ark_sync::server_session::ServerSessionHandle,
     device_id: String,
     device_name: String,
     addresses: Vec<String>,
@@ -67,6 +68,17 @@ struct PeerState {
     registry_admission: Option<ark_sync::server_session::DirectServerAdmission>,
     in_flight_feed: Option<ark_sync::committed_feed_delivery::FeedFlight>,
     tx: PeerMessageSender,
+}
+
+#[cfg(test)]
+pub(crate) fn test_server_session_handle() -> ark_sync::server_session::ServerSessionHandle {
+    let (handle, _actor, _lease, mut activation) =
+        ark_sync::server_session::ServerSessionHandle::channel(
+            std::num::NonZeroUsize::new(1).expect("one is nonzero"),
+        )
+        .expect("session identity is available");
+    activation.activate().expect("test session activates once");
+    handle
 }
 
 #[derive(Clone)]
@@ -147,6 +159,7 @@ impl ReadyPeer {
 
     fn matches(&self, connection_id: usize, peer: &PeerState) -> bool {
         self.connection_id == connection_id
+            && peer.session.control() == ark_sync::server_session::ServerSessionControl::Active
             && self.device_id == peer.device_id
             && peer
                 .registry_admission
@@ -187,6 +200,7 @@ async fn current_ready_peer(
                 peer.ready_peer = None;
                 peer.outbound_snapshot.reset();
                 peer.in_flight_feed = None;
+                peer.session.revoke();
                 peer.tx.close();
             }
         }
@@ -364,6 +378,7 @@ async fn send_msg(tx: &PeerMessageSender, msg: &LanSyncMessage) {
 /// waits on forever.
 async fn reject_hello(peers: &Mutex<HashMap<usize, PeerState>>, peer_id: usize) {
     if let Some(peer) = peers.lock().await.remove(&peer_id) {
+        peer.session.close_after_flush();
         peer.tx.close_after_flush();
     }
 }

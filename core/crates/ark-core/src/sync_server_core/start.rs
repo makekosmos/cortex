@@ -1,6 +1,7 @@
 use super::super::{current_ready_peer, peer_message_allowed};
 use super::{signed_integration_write_is_authorized, *};
 use ark_sync::outbound_snapshot::OutboundSnapshotProgress;
+use ark_sync::server_session::run_connected_server_session_controlled;
 use tokio::sync::oneshot;
 
 struct ServerPeerOutboundGuard {
@@ -204,8 +205,22 @@ impl SyncServer {
                                     track_task(&transport_tasks, transport_task);
                                 }
                                 let tx = PeerMessageSender::session(session_io.sender());
+                                let (session, mut session_actor, _lease, mut activation) =
+                                    match ark_sync::server_session::ServerSessionHandle::channel(
+                                        std::num::NonZeroUsize::new(64)
+                                            .expect("session intent capacity is nonzero"),
+                                    ) {
+                                        Ok(session) => session,
+                                        Err(error) => {
+                                            eprintln!(
+                                            "{TAG} session lease allocation failed: {error:?}"
+                                            );
+                                            continue;
+                                        }
+                                    };
 
                                 let peer_state = PeerState {
+                                    session: session.clone(),
                                     device_id: String::new(),
                                     device_name: String::new(),
                                     addresses: Vec::new(),
@@ -218,7 +233,17 @@ impl SyncServer {
                                     in_flight_feed: None,
                                     tx: tx.clone(),
                                 };
-                                peers.lock().await.insert(peer_id, peer_state);
+                                {
+                                    let mut peers = peers.lock().await;
+                                    peers.insert(peer_id, peer_state);
+                                    if let Err(error) = activation.activate() {
+                                        peers.remove(&peer_id);
+                                        eprintln!(
+                                            "{TAG} could not activate peer session: {error:?}"
+                                        );
+                                        continue;
+                                    }
+                                }
 
                                 // Reader task
                                 let ctx = MessageContext {
@@ -240,19 +265,19 @@ impl SyncServer {
                                 let on_peer_disconnect_reader = on_peer_disconnect.clone();
 
                                 track_task(&conn_tasks, tokio::spawn(async move {
-                                    let mut handler =
-                                        sync_server_messages::ConnectedSessionHandler {
-                                        ctx: &ctx,
-                                        peer_id,
-                                        session: None,
-                                    };
+                                    let result = run_connected_server_session_controlled(
+                                        &mut session_io,
+                                        &mut session_actor,
+                                        &mut sync_server_messages::ConnectedSessionHandler {
+                                            ctx: &ctx,
+                                            peer_id,
+                                            session: None,
+                                        },
+                                    )
+                                    .await;
                                     if let ark_sync::server_session::DirectServerSessionEnd::Failed(
                                         error,
-                                    ) = ark_sync::server_session::run_connected_server_session(
-                                        &mut session_io,
-                                        &mut handler,
-                                    )
-                                    .await
+                                    ) = result
                                     {
                                         eprintln!("{TAG} peer session transport failed: {error}");
                                     }

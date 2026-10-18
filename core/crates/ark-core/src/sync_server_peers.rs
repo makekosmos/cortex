@@ -50,6 +50,7 @@ impl SyncServer {
         {
             let mut peers = self.peers.lock().await;
             for peer in peers.values() {
+                peer.session.revoke();
                 peer.tx.close();
             }
             peers.clear();

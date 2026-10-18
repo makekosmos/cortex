@@ -84,6 +84,7 @@ pub(super) mod reject_tests {
         server.peers.lock().await.insert(
             7,
             PeerState {
+                session: test_server_session_handle(),
                 device_id: "gossip".to_string(),
                 device_name: "Gossip".to_string(),
                 addresses: vec![],
