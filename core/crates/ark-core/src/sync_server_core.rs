@@ -56,9 +56,8 @@ impl SyncServer {
             }
             if revokes_target && peer.device_id == target {
                 peer.ready_peer = None;
-                peer.sync_complete = false;
+                peer.outbound_snapshot.reset();
                 peer.in_flight_feed_position = None;
-                peer.pending_initial_snapshot = None;
                 let _ = peer.tx.send(Message::Close(None));
                 revoked.push(*peer_id);
             }

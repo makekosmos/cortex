@@ -93,7 +93,7 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                     Some(peer) if peer.ready_peer.is_some() => (
                         peer.tx.clone(),
                         peer.device_id.clone(),
-                        peer.sync_complete,
+                        peer.outbound_snapshot.has_been_acknowledged(),
                         peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
                             protocol.capabilities.contains(
                                 &ark_sync::protocol::ProtocolCapability::PolicyBoundDeliveryV1,
@@ -136,7 +136,7 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                                 if peer.ready_peer.is_none() {
                                     return false;
                                 }
-                                peer.pending_initial_snapshot = Some(ack);
+                                peer.outbound_snapshot.record_sent(ack);
                                 true
                             })
                         };

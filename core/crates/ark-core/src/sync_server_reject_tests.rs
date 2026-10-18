@@ -91,12 +91,12 @@ pub(super) mod reject_tests {
                 app_version: None,
                 ready_peer: ReadyPeer::new(7, "gossip".into(), "test-session".into()),
                 sync_started: false,
-                sync_complete: true,
+                outbound_snapshot:
+                    ark_sync::outbound_snapshot::OutboundSnapshotProgress::acknowledged(),
                 negotiated_protocol: None,
                 registry_admission: None,
                 in_flight_feed_position: None,
                 in_flight_feed_policy_identity: None,
-                pending_initial_snapshot: None,
                 tx,
             },
         );

@@ -332,9 +332,8 @@ async fn revoke_disabled_sessions(
         for peer_id in &revoked_ids {
             if let Some(peer) = peers.get_mut(peer_id) {
                 peer.ready_peer = None;
-                peer.sync_complete = false;
+                peer.outbound_snapshot.reset();
                 peer.in_flight_feed_position = None;
-                peer.pending_initial_snapshot = None;
                 let _ = peer.tx.send(Message::Close(None));
             }
             peers.remove(peer_id);

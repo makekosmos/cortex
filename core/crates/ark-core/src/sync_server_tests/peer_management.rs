@@ -162,12 +162,12 @@
                 app_version: None,
                 ready_peer: ReadyPeer::new(1, "blocked".into(), "test-session".into()),
                 sync_started: false,
-                sync_complete: true,
+                outbound_snapshot:
+                    ark_sync::outbound_snapshot::OutboundSnapshotProgress::acknowledged(),
                 negotiated_protocol: None,
                 registry_admission: None,
                 in_flight_feed_position: None,
                 in_flight_feed_policy_identity: None,
-                pending_initial_snapshot: None,
                 tx: tx1,
             },
         );
@@ -181,12 +181,12 @@
                 app_version: None,
                 ready_peer: ReadyPeer::new(2, "blocked".into(), "test-session".into()),
                 sync_started: false,
-                sync_complete: true,
+                outbound_snapshot:
+                    ark_sync::outbound_snapshot::OutboundSnapshotProgress::acknowledged(),
                 negotiated_protocol: None,
                 registry_admission: None,
                 in_flight_feed_position: None,
                 in_flight_feed_policy_identity: None,
-                pending_initial_snapshot: None,
                 tx: tx2,
             },
         );
@@ -200,12 +200,12 @@
                 app_version: None,
                 ready_peer: ReadyPeer::new(3, "keep".into(), "test-session".into()),
                 sync_started: false,
-                sync_complete: true,
+                outbound_snapshot:
+                    ark_sync::outbound_snapshot::OutboundSnapshotProgress::acknowledged(),
                 negotiated_protocol: None,
                 registry_admission: None,
                 in_flight_feed_position: None,
                 in_flight_feed_policy_identity: None,
-                pending_initial_snapshot: None,
                 tx: tx3,
             },
         );
@@ -245,12 +245,12 @@
                 app_version: None,
                 ready_peer: ReadyPeer::new(1, "blocked".into(), "test-session".into()),
                 sync_started: false,
-                sync_complete: true,
+                outbound_snapshot:
+                    ark_sync::outbound_snapshot::OutboundSnapshotProgress::acknowledged(),
                 negotiated_protocol: None,
                 registry_admission: None,
                 in_flight_feed_position: None,
                 in_flight_feed_policy_identity: None,
-                pending_initial_snapshot: None,
                 tx,
             },
         );
@@ -284,12 +284,12 @@
                 format!("test-session-{connection_id}"),
             ),
             sync_started: false,
-            sync_complete: true,
+            outbound_snapshot: ark_sync::outbound_snapshot::OutboundSnapshotProgress::acknowledged(
+            ),
             negotiated_protocol: None,
             registry_admission: None,
             in_flight_feed_position: None,
             in_flight_feed_policy_identity: None,
-            pending_initial_snapshot: None,
             tx: tx.clone(),
         };
         server.peers.lock().await.insert(1, state(1, "dup"));

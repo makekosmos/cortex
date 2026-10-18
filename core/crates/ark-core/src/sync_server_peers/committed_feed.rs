@@ -14,7 +14,7 @@ pub(crate) async fn pump_committed_feed(
         };
         (
             peer.device_id.clone(),
-            peer.ready_peer.is_some() && peer.sync_complete,
+            peer.ready_peer.is_some() && peer.outbound_snapshot.has_been_acknowledged(),
             peer.in_flight_feed_position,
             peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
                 protocol
@@ -196,7 +196,7 @@ pub(crate) async fn pump_committed_feed(
                 return Ok(());
             };
             if peer.ready_peer.is_none()
-                || !peer.sync_complete
+                || !peer.outbound_snapshot.has_been_acknowledged()
                 || peer.in_flight_feed_position.is_some()
             {
                 return Ok(());

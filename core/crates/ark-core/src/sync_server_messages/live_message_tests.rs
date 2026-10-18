@@ -18,15 +18,17 @@ async fn stale_snapshot_ack_does_not_complete_or_clear_pending_snapshot() {
         app_version: None,
         ready_peer: ReadyPeer::new(7, "peer-a".into(), "session-a".into()),
         sync_started: false,
-        sync_complete: false,
+        outbound_snapshot:
+            ark_sync::outbound_snapshot::OutboundSnapshotProgress::awaiting_first_ack(
+                ark_sync::outbound_snapshot::PendingSnapshotAck {
+                    batch_id: "batch-2".to_owned(),
+                    policy_identity: Some(expected.clone()),
+                },
+            ),
         negotiated_protocol: None,
         registry_admission: None,
         in_flight_feed_position: None,
         in_flight_feed_policy_identity: None,
-        pending_initial_snapshot: Some(ark_sync::outbound_snapshot::PendingSnapshotAck {
-            batch_id: "batch-2".to_owned(),
-            policy_identity: Some(expected.clone()),
-        }),
         tx,
     };
     let mut peers = HashMap::new();
@@ -60,15 +62,17 @@ async fn stale_snapshot_ack_does_not_complete_or_clear_pending_snapshot() {
 
     let peers = ctx.peers.lock().await;
     let peer = peers.get(&7).unwrap();
-    assert!(!peer.sync_complete);
+    assert!(!peer.outbound_snapshot.has_been_acknowledged());
     assert_eq!(
-        peer.pending_initial_snapshot
+        peer.outbound_snapshot
+            .pending_ack()
             .as_ref()
             .map(|pending| pending.batch_id.as_str()),
         Some("batch-2")
     );
     assert_eq!(
-        peer.pending_initial_snapshot
+        peer.outbound_snapshot
+            .pending_ack()
             .as_ref()
             .and_then(|pending| pending.policy_identity.as_ref()),
         Some(&expected)

@@ -15,7 +15,9 @@ impl SyncServer {
             let peers = self.peers.lock().await;
             peers
                 .iter()
-                .filter(|(_, peer)| peer.ready_peer.is_some() && peer.sync_complete)
+                .filter(|(_, peer)| {
+                    peer.ready_peer.is_some() && peer.outbound_snapshot.has_been_acknowledged()
+                })
                 .map(|(peer_id, _)| *peer_id)
                 .collect::<Vec<_>>()
         };
@@ -90,7 +92,7 @@ impl SyncServer {
                         continue;
                     }
                 }
-                if !peer.sync_complete {
+                if !peer.outbound_snapshot.has_been_acknowledged() {
                     continue;
                 }
                 ids.push(*peer_id);

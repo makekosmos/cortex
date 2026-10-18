@@ -35,12 +35,12 @@ async fn send_signed_integration_frame_requires_addressed_authenticated_peer() {
             app_version: None,
             ready_peer: ReadyPeer::new(1, "peer".into(), "test-session".into()),
             sync_started: false,
-            sync_complete: true,
+            outbound_snapshot: ark_sync::outbound_snapshot::OutboundSnapshotProgress::acknowledged(
+            ),
             negotiated_protocol: None,
             registry_admission: None,
             in_flight_feed_position: None,
             in_flight_feed_policy_identity: None,
-            pending_initial_snapshot: None,
             tx,
         },
     );

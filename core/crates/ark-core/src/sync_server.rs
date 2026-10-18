@@ -63,12 +63,11 @@ struct PeerState {
     app_version: Option<String>,
     ready_peer: Option<ReadyPeer>,
     sync_started: bool,
-    sync_complete: bool,
+    outbound_snapshot: ark_sync::outbound_snapshot::OutboundSnapshotProgress,
     negotiated_protocol: Option<ark_sync::protocol::NegotiatedProtocol>,
     registry_admission: Option<ark_sync::server_session::DirectServerAdmission>,
     in_flight_feed_position: Option<i64>,
     in_flight_feed_policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
-    pending_initial_snapshot: Option<ark_sync::outbound_snapshot::PendingSnapshotAck>,
     tx: mpsc::UnboundedSender<Message>,
 }
 
@@ -128,9 +127,8 @@ async fn current_ready_peer(
         {
             if let Some(peer) = peers.get_mut(&connection_id) {
                 peer.ready_peer = None;
-                peer.sync_complete = false;
+                peer.outbound_snapshot.reset();
                 peer.in_flight_feed_position = None;
-                peer.pending_initial_snapshot = None;
                 let _ = peer.tx.send(Message::Close(None));
             }
         }
@@ -324,7 +322,7 @@ async fn broadcast_to_others(
             .iter()
             .filter(|(_, peer)| {
                 peer.ready_peer.is_some()
-                    && peer.sync_complete
+                    && peer.outbound_snapshot.has_been_acknowledged()
                     && exclude_device_id != Some(peer.device_id.as_str())
             })
             .map(|(peer_id, _)| *peer_id)

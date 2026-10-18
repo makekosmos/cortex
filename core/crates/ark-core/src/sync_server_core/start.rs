@@ -1,5 +1,6 @@
 use super::super::{current_ready_peer, peer_message_allowed};
 use super::*;
+use ark_sync::outbound_snapshot::OutboundSnapshotProgress;
 
 impl SyncServer {
     /// Start the WS server on an explicit bind address for embedders and tests.
@@ -66,7 +67,10 @@ impl SyncServer {
                             }
                             peers_guard
                                 .iter()
-                                .filter(|(_, peer)| peer.ready_peer.is_some() && peer.sync_complete)
+                                .filter(|(_, peer)| {
+                                    peer.ready_peer.is_some()
+                                        && peer.outbound_snapshot.has_been_acknowledged()
+                                })
                                 .map(|(peer_id, _)| *peer_id)
                                 .collect::<Vec<_>>()
                         };
@@ -193,12 +197,11 @@ impl SyncServer {
                                     app_version: None,
                                     ready_peer: None,
                                     sync_started: false,
-                                    sync_complete: false,
+                                    outbound_snapshot: OutboundSnapshotProgress::not_sent(),
                                     negotiated_protocol: None,
                                     registry_admission: None,
                                     in_flight_feed_position: None,
                                     in_flight_feed_policy_identity: None,
-                    pending_initial_snapshot: None,
                                     tx: tx.clone(),
                                 };
                                 peers.lock().await.insert(peer_id, peer_state);

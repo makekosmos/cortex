@@ -19,6 +19,82 @@ pub struct PendingSnapshotAck {
     pub policy_identity: Option<PolicyIdentity>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub enum OutboundSnapshotProgress {
+    #[default]
+    NotSent,
+    AwaitingFirstAck(PendingSnapshotAck),
+    Acknowledged {
+        pending: Option<PendingSnapshotAck>,
+    },
+}
+
+impl OutboundSnapshotProgress {
+    pub fn not_sent() -> Self {
+        Self::NotSent
+    }
+
+    pub fn acknowledged() -> Self {
+        Self::Acknowledged { pending: None }
+    }
+
+    pub fn acknowledged_awaiting_ack(pending: PendingSnapshotAck) -> Self {
+        Self::Acknowledged {
+            pending: Some(pending),
+        }
+    }
+
+    pub fn awaiting_first_ack(pending: PendingSnapshotAck) -> Self {
+        Self::AwaitingFirstAck(pending)
+    }
+
+    pub fn has_been_sent(&self) -> bool {
+        !matches!(self, Self::NotSent)
+    }
+
+    pub fn has_been_acknowledged(&self) -> bool {
+        matches!(self, Self::Acknowledged { .. })
+    }
+
+    pub fn pending_ack(&self) -> Option<&PendingSnapshotAck> {
+        match self {
+            Self::NotSent => None,
+            Self::AwaitingFirstAck(pending) => Some(pending),
+            Self::Acknowledged { pending } => pending.as_ref(),
+        }
+    }
+
+    pub fn record_sent(&mut self, pending: PendingSnapshotAck) {
+        *self = match self {
+            Self::NotSent => Self::AwaitingFirstAck(pending),
+            Self::AwaitingFirstAck(_) => Self::AwaitingFirstAck(pending),
+            Self::Acknowledged { .. } => Self::Acknowledged {
+                pending: Some(pending),
+            },
+        };
+    }
+
+    pub fn record_acknowledged(&mut self, expected: &PendingSnapshotAck) -> bool {
+        match self {
+            Self::AwaitingFirstAck(pending) if pending == expected => {
+                *self = Self::acknowledged();
+                true
+            }
+            Self::Acknowledged {
+                pending: Some(pending),
+            } if pending == expected => {
+                *self = Self::Acknowledged { pending: None };
+                true
+            }
+            _ => false,
+        }
+    }
+
+    pub fn reset(&mut self) {
+        *self = Self::NotSent;
+    }
+}
+
 pub enum SnapshotEmission {
     Page(Vec<LanSyncMessage>),
     Terminal {
@@ -248,4 +324,53 @@ where
         }
     }
     Ok(true)
+}
+
+#[cfg(test)]
+mod progress_tests {
+    use super::{OutboundSnapshotProgress, PendingSnapshotAck};
+
+    fn pending(batch_id: &str) -> PendingSnapshotAck {
+        PendingSnapshotAck {
+            batch_id: batch_id.to_owned(),
+            policy_identity: None,
+        }
+    }
+
+    #[test]
+    fn first_ack_completes_initial_snapshot_and_wrong_ack_is_ignored() {
+        let expected = pending("snapshot-1");
+        let mut progress = OutboundSnapshotProgress::not_sent();
+
+        assert!(!progress.has_been_sent());
+        assert!(!progress.has_been_acknowledged());
+        progress.record_sent(expected.clone());
+        assert!(progress.has_been_sent());
+        assert!(!progress.record_acknowledged(&pending("stale")));
+        assert_eq!(progress.pending_ack(), Some(&expected));
+        assert!(progress.record_acknowledged(&expected));
+        assert!(progress.has_been_acknowledged());
+        assert_eq!(progress.pending_ack(), None);
+    }
+
+    #[test]
+    fn later_snapshot_ack_preserves_initial_completion_until_it_is_acked() {
+        let first = pending("snapshot-1");
+        let later = pending("snapshot-2");
+        let mut progress = OutboundSnapshotProgress::awaiting_first_ack(first.clone());
+        assert!(progress.record_acknowledged(&first));
+
+        progress.record_sent(later.clone());
+        assert!(progress.has_been_acknowledged());
+        assert_eq!(progress.pending_ack(), Some(&later));
+        assert!(progress.record_acknowledged(&later));
+        assert!(progress.has_been_acknowledged());
+        assert_eq!(progress.pending_ack(), None);
+
+        progress.record_sent(pending("snapshot-3"));
+        progress.reset();
+        assert!(!progress.has_been_sent());
+        assert!(!progress.has_been_acknowledged());
+        assert_eq!(progress.pending_ack(), None);
+    }
 }

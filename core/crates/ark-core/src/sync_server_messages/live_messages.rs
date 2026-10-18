@@ -11,8 +11,8 @@ pub(super) async fn handle_live_message(ctx: &MessageContext, peer_id: usize, ms
             let pending = {
                 let peers_guard = peers.lock().await;
                 peers_guard.get(&peer_id).and_then(|peer| {
-                    peer.pending_initial_snapshot
-                        .as_ref()
+                    peer.outbound_snapshot
+                        .pending_ack()
                         .filter(|pending| pending.batch_id == batch_id)
                         .map(|pending| (peer.device_id.clone(), pending.clone()))
                 })
@@ -29,12 +29,7 @@ pub(super) async fn handle_live_message(ctx: &MessageContext, peer_id: usize, ms
                 match completion {
                     Ok(true) => {
                         let completed = peers.lock().await.get_mut(&peer_id).is_some_and(|peer| {
-                            if peer.pending_initial_snapshot.as_ref() != Some(&pending) {
-                                return false;
-                            }
-                            peer.pending_initial_snapshot = None;
-                            peer.sync_complete = true;
-                            true
+                            peer.outbound_snapshot.record_acknowledged(&pending)
                         });
                         if !completed {
                             return;
@@ -123,7 +118,7 @@ pub(super) async fn handle_live_message(ctx: &MessageContext, peer_id: usize, ms
                 (
                     peer.tx.clone(),
                     peer.device_id.clone(),
-                    peer.sync_complete
+                    peer.outbound_snapshot.has_been_acknowledged()
                         && peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
                             protocol.capabilities.contains(
                                 &ark_sync::protocol::ProtocolCapability::TaskMergeBootstrapV2,
