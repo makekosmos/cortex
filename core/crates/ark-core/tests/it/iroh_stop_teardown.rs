@@ -44,8 +44,8 @@ fn open_conn(dir: &crate::support::TestTempDir) -> Arc<StdMutex<Connection>> {
     conn
 }
 
-/// A live connection between two transports; both sides' tasks hold the
-/// storage. `stop()` must leave the test's own clone as the only reference.
+/// A live connection makes each transport retain its authorizer. `stop()` must
+/// leave the test's own database clone as the only reference.
 #[tokio::test(flavor = "current_thread")]
 async fn stop_joins_connection_tasks_and_releases_authorizer() {
     let dir_a = crate::support::temp_dir();
