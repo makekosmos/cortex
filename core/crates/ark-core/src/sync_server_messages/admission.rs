@@ -353,7 +353,7 @@ async fn revoke_disabled_sessions(
             if let Some(peer) = peers.get_mut(peer_id) {
                 peer.ready_peer = None;
                 peer.outbound_snapshot.reset();
-                peer.in_flight_feed_position = None;
+                peer.in_flight_feed = None;
                 peer.tx.close_after_flush();
             }
             peers.remove(peer_id);

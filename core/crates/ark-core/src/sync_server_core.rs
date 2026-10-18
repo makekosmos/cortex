@@ -54,7 +54,7 @@ impl SyncServer {
             if revokes_target && peer.device_id == target {
                 peer.ready_peer = None;
                 peer.outbound_snapshot.reset();
-                peer.in_flight_feed_position = None;
+                peer.in_flight_feed = None;
                 peer.tx.close();
                 revoked.push(*peer_id);
             }

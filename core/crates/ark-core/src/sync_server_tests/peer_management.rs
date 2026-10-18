@@ -165,8 +165,7 @@
                     ark_sync::outbound_snapshot::OutboundSnapshotProgress::acknowledged(),
                 negotiated_protocol: None,
                 registry_admission: None,
-                in_flight_feed_position: None,
-                in_flight_feed_policy_identity: None,
+                in_flight_feed: None,
                 tx: PeerMessageSender::test(tx1),
             },
         );
@@ -183,8 +182,7 @@
                     ark_sync::outbound_snapshot::OutboundSnapshotProgress::acknowledged(),
                 negotiated_protocol: None,
                 registry_admission: None,
-                in_flight_feed_position: None,
-                in_flight_feed_policy_identity: None,
+                in_flight_feed: None,
                 tx: PeerMessageSender::test(tx2),
             },
         );
@@ -201,8 +199,7 @@
                     ark_sync::outbound_snapshot::OutboundSnapshotProgress::acknowledged(),
                 negotiated_protocol: None,
                 registry_admission: None,
-                in_flight_feed_position: None,
-                in_flight_feed_policy_identity: None,
+                in_flight_feed: None,
                 tx: PeerMessageSender::test(tx3),
             },
         );
@@ -245,8 +242,7 @@
                     ark_sync::outbound_snapshot::OutboundSnapshotProgress::acknowledged(),
                 negotiated_protocol: None,
                 registry_admission: None,
-                in_flight_feed_position: None,
-                in_flight_feed_policy_identity: None,
+                in_flight_feed: None,
                 tx: PeerMessageSender::test(tx),
             },
         );
@@ -283,8 +279,7 @@
             ),
             negotiated_protocol: None,
             registry_admission: None,
-            in_flight_feed_position: None,
-            in_flight_feed_policy_identity: None,
+            in_flight_feed: None,
             tx: PeerMessageSender::test(tx.clone()),
         };
         server.peers.lock().await.insert(1, state(1, "dup"));

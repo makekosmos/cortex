@@ -277,8 +277,7 @@ mod tests {
                     ark_sync::outbound_snapshot::OutboundSnapshotProgress::acknowledged(),
                 negotiated_protocol: None,
                 registry_admission: None,
-                in_flight_feed_position: None,
-                in_flight_feed_policy_identity: None,
+                in_flight_feed: None,
                 tx: PeerMessageSender::test(tx),
             },
         );

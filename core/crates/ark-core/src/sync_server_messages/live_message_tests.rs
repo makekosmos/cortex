@@ -26,8 +26,7 @@ async fn stale_snapshot_ack_does_not_complete_or_clear_pending_snapshot() {
             ),
         negotiated_protocol: None,
         registry_admission: None,
-        in_flight_feed_position: None,
-        in_flight_feed_policy_identity: None,
+        in_flight_feed: None,
         tx: PeerMessageSender::test(tx),
     };
     let mut peers = HashMap::new();

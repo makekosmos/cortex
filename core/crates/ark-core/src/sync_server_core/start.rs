@@ -211,8 +211,7 @@ impl SyncServer {
                                     outbound_snapshot: OutboundSnapshotProgress::not_sent(),
                                     negotiated_protocol: None,
                                     registry_admission: None,
-                                    in_flight_feed_position: None,
-                                    in_flight_feed_policy_identity: None,
+                                    in_flight_feed: None,
                                     tx: tx.clone(),
                                 };
                                 peers.lock().await.insert(peer_id, peer_state);

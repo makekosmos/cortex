@@ -65,8 +65,7 @@ struct PeerState {
     outbound_snapshot: ark_sync::outbound_snapshot::OutboundSnapshotProgress,
     negotiated_protocol: Option<ark_sync::protocol::NegotiatedProtocol>,
     registry_admission: Option<ark_sync::server_session::DirectServerAdmission>,
-    in_flight_feed_position: Option<i64>,
-    in_flight_feed_policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
+    in_flight_feed: Option<ark_sync::committed_feed_delivery::FeedFlight>,
     tx: PeerMessageSender,
 }
 
@@ -187,7 +186,7 @@ async fn current_ready_peer(
             if let Some(peer) = peers.get_mut(&connection_id) {
                 peer.ready_peer = None;
                 peer.outbound_snapshot.reset();
-                peer.in_flight_feed_position = None;
+                peer.in_flight_feed = None;
                 peer.tx.close();
             }
         }

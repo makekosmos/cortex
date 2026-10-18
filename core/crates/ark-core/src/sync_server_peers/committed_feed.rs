@@ -15,7 +15,7 @@ pub(crate) async fn pump_committed_feed(
         (
             peer.device_id.clone(),
             peer.ready_peer.is_some() && peer.outbound_snapshot.has_been_acknowledged(),
-            peer.in_flight_feed_position,
+            peer.in_flight_feed.clone(),
             peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
                 protocol
                     .capabilities
@@ -197,12 +197,14 @@ pub(crate) async fn pump_committed_feed(
             };
             if peer.ready_peer.is_none()
                 || !peer.outbound_snapshot.has_been_acknowledged()
-                || peer.in_flight_feed_position.is_some()
+                || peer.in_flight_feed.is_some()
             {
                 return Ok(());
             }
-            peer.in_flight_feed_position = Some(position);
-            peer.in_flight_feed_policy_identity = policy_identity.clone();
+            peer.in_flight_feed = Some(ark_sync::committed_feed_delivery::FeedFlight {
+                position,
+                policy_identity: policy_identity.clone(),
+            });
             peer.tx.clone()
         };
         if policy_bound
@@ -212,8 +214,7 @@ pub(crate) async fn pump_committed_feed(
                 != policy_identity
         {
             if let Some(peer) = peers.lock().await.get_mut(&peer_id) {
-                peer.in_flight_feed_position = None;
-                peer.in_flight_feed_policy_identity = None;
+                peer.in_flight_feed = None;
             }
             return Ok(());
         }
@@ -226,8 +227,7 @@ pub(crate) async fn pump_committed_feed(
         if tx.send(message).await.is_err() {
             tx.close();
             if let Some(peer) = peers.lock().await.get_mut(&peer_id) {
-                peer.in_flight_feed_position = None;
-                peer.in_flight_feed_policy_identity = None;
+                peer.in_flight_feed = None;
             }
         }
         return Ok(());
@@ -299,6 +299,7 @@ async fn handle_feed_ack(
         let Some(peer) = peers.get(&peer_id) else {
             return Ok(());
         };
+        let flight = peer.in_flight_feed.clone();
         (
             peer.device_id.clone(),
             peer.negotiated_protocol.as_ref().is_some_and(|protocol| {
@@ -306,13 +307,8 @@ async fn handle_feed_ack(
                     .capabilities
                     .contains(&ark_sync::protocol::ProtocolCapability::DurableReceiptAckV1)
             }),
-            peer.in_flight_feed_position.map(|position| {
-                ark_sync::committed_feed_delivery::FeedFlight {
-                    position,
-                    policy_identity: peer.in_flight_feed_policy_identity.clone(),
-                }
-            }),
-            peer.in_flight_feed_policy_identity.clone(),
+            flight.clone(),
+            flight.and_then(|flight| flight.policy_identity),
         )
     };
     if expected_identity != policy_identity {
@@ -340,8 +336,7 @@ async fn handle_feed_ack(
     };
     if current_flight {
         if let Some(peer) = peers.lock().await.get_mut(&peer_id) {
-            peer.in_flight_feed_position = None;
-            peer.in_flight_feed_policy_identity = None;
+            peer.in_flight_feed = None;
         }
         pump_committed_feed(storage, peers, peer_id).await?;
     }
