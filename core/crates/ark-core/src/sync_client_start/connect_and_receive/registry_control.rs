@@ -2,10 +2,10 @@
         match direct_ws_control::handle(
             &sync_msg,
             &tx,
-            authenticated,
+            client_session.is_ready(),
             &on_peer_list,
             &device_id,
-            &peer_device_id_actual,
+            client_session.peer_device_id(),
         )
         .await
         {
@@ -51,8 +51,9 @@
                     break;
                 }
             };
-            if became_ready {
-                authenticated = true;
+            if became_ready && !client_session.mark_ready() {
+                eprintln!("{TAG} registry admission completed outside the client session phase");
+                break;
             }
             continue;
         }

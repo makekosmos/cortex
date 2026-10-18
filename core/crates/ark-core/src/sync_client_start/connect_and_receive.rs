@@ -46,8 +46,8 @@
                     continue;
                 }
 
-                let mut authenticated = false;
-                let mut peer_device_id_actual = String::new();
+                let mut client_session = ark_sync::client_session::DirectClientSession::new();
+                use ark_sync::client_session::DirectClientSessionRejection as SessionRejection;
                 let mut pending_registry_admission: Option<
                     registry_admission::PendingRegistryAdmission,
                 > = None;
@@ -83,7 +83,7 @@
                                     snapshot_ack::was_sent(&authenticated_tx).await;
                                 snapshot_drive = Some(snapshot_drive::spawn(
                                     storage.clone(),
-                                    peer_device_id_actual.clone(),
+                                    client_session.peer_device_id().to_owned(),
                                     remote_vector,
                                     snapshot_already_sent,
                                     policy_bound,
@@ -117,7 +117,7 @@
                                 include!("connect_and_receive/registry_control.rs");
                                 match sync_msg {
                                     hello @ LanSyncMessage::Hello { .. } => {
-                                        if authenticated {
+                                        if client_session.is_ready() {
                                             eprintln!(
                                                 "{TAG} Rejecting repeated hello on an \
                                                     authenticated connection"
@@ -150,31 +150,37 @@
                                             app_version: server_app_version,
                                             protocol: negotiated_protocol,
                                         } = accepted;
+                                        match client_session
+                                            .accept_server_hello(&server_device_id, &device_id)
+                                        {
+                                            Ok(()) => {}
+                                            Err(SessionRejection::SelfConnection) => {
+                                                eprintln!(
+                                                    "{TAG} Rejecting self-connect to \
+                                                         {server_device_name} ({server_device_id})"
+                                                );
+                                                let remaining = {
+                                                    let mut p = peer.write().await;
+                                                    p.addresses.retain(|a| a != &winning_addr);
+                                                    p.last_address = None;
+                                                    p.addresses.len()
+                                                };
+                                                if remaining == 0 {
+                                                    stopped.store(
+                                                        true,
+                                                        std::sync::atomic::Ordering::Relaxed,
+                                                    );
+                                                }
+                                                break;
+                                            }
+                                            Err(SessionRejection::RepeatedHello) => {
+                                                eprintln!("{TAG} rejected Hello: repeated session");
+                                                break;
+                                            }
+                                        }
                                         tx.set_authenticated_peer_id(server_device_id.clone())
                                             .await;
-                                        if !server_device_id.is_empty()
-                                            && server_device_id == device_id
-                                        {
-                                            eprintln!(
-                                                "{TAG} Rejecting self-connect to \
-                                                     {server_device_name} ({server_device_id})"
-                                            );
-                                            let remaining = {
-                                                let mut p = peer.write().await;
-                                                p.addresses.retain(|a| a != &winning_addr);
-                                                p.last_address = None;
-                                                p.addresses.len()
-                                            };
-                                            if remaining == 0 {
-                                                stopped.store(
-                                                    true,
-                                                    std::sync::atomic::Ordering::Relaxed,
-                                                );
-                                            }
-                                            break;
-                                        }
 
-                                        peer_device_id_actual = server_device_id.clone();
                                         let pending_peer = PeerRecord {
                                             device_id: server_device_id.clone(),
                                             device_name: server_device_name,
@@ -223,7 +229,7 @@
                                         if let Err(error) = sync_policy::accept_and_start(
                                             &storage,
                                             &authenticated_tx,
-                                            authenticated,
+                                            client_session.is_ready(),
                                             revision,
                                             &digest,
                                             active,
@@ -240,7 +246,7 @@
                                         vector: remote_vector,
                                         ..
                                     } => {
-                                        if !authenticated {
+                                        if !client_session.is_ready() {
                                             continue;
                                         }
                                         if snapshot_drive.is_some() {
@@ -254,7 +260,7 @@
                                             snapshot_ack::was_sent(&authenticated_tx).await;
                                         snapshot_drive = Some(snapshot_drive::spawn(
                                             storage.clone(),
-                                            peer_device_id_actual.clone(),
+                                            client_session.peer_device_id().to_owned(),
                                             remote_vector,
                                             snapshot_already_sent,
                                             policy_bound,
@@ -267,11 +273,11 @@
                                         batch_id, entities, is_last, policy_identity,
                                         usage_complete_through, ..
                                     } => {
-                                        if !authenticated { continue; }
+                                        if !client_session.is_ready() { continue; }
                                         let context = sync_changes::Context {
                                             storage: &storage,
                                             tx: &tx,
-                                            peer_device_id: &peer_device_id_actual,
+                                            peer_device_id: client_session.peer_device_id(),
                                             local_device_id: &device_id,
                                             authenticated_tx: &authenticated_tx,
                                             on_change: &on_change,
@@ -289,7 +295,7 @@
                                     LanSyncMessage::SyncAck { batch_id, policy_identity, .. } => {
                                         if !snapshot_ack::handle(
                                             &storage,
-                                            &peer_device_id_actual,
+                                            client_session.peer_device_id(),
                                             &batch_id,
                                             policy_identity,
                                             &authenticated_tx,
@@ -304,9 +310,9 @@
 
                                     LanSyncMessage::SignedIntegrationFrame { frame } => {
                                         live_messages::handle_signed_integration_message(
-                                            authenticated,
+                                            client_session.is_ready(),
                                             &storage,
-                                            &peer_device_id_actual,
+                                            client_session.peer_device_id(),
                                             &device_id,
                                             &space_id,
                                             &tx,
@@ -323,14 +329,14 @@
                                         policy_identity,
                                         ..
                                     } => {
-                                        if !authenticated {
+                                        if !client_session.is_ready() {
                                             continue;
                                         }
                                         if let Err(error) = live_messages::handle_live_change(
                                             &storage,
                                             &authenticated_tx,
                                             &device_id,
-                                            &peer_device_id_actual,
+                                            client_session.peer_device_id(),
                                             &tx,
                                             &on_change,
                                             change_id,
@@ -350,7 +356,7 @@
                                     } => {
                                         if !live_messages::handle_feed_ack_message(
                                             &storage,
-                                            &peer_device_id_actual,
+                                            client_session.peer_device_id(),
                                             &tx,
                                             &feed_in_flight,
                                             &authenticated_tx,
@@ -369,7 +375,7 @@
                                     } => {
                                         if !live_messages::handle_feed_ack_message(
                                             &storage,
-                                            &peer_device_id_actual,
+                                            client_session.peer_device_id(),
                                             &tx,
                                             &feed_in_flight,
                                             &authenticated_tx,
@@ -385,7 +391,7 @@
                                     LanSyncMessage::TaskMergeBatch { batch } => {
                                         if let Err(error) = live_messages::handle_task_merge_batch(
                                             &storage,
-                                            &peer_device_id_actual,
+                                            client_session.peer_device_id(),
                                             &device_id,
                                             &tx,
                                             &authenticated_tx,
@@ -432,10 +438,10 @@
                 }
                 *authenticated_tx.lock().await = None;
 
-                if authenticated {
+                if client_session.is_ready() {
                     eprintln!("{TAG} Disconnected from peer");
                     if let Some(handler) = on_disconnected.lock().await.as_ref() {
-                        handler(peer_device_id_actual);
+                        handler(client_session.peer_device_id().to_owned());
                     }
                 }
             }

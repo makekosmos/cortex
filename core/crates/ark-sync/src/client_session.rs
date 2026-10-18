@@ -13,7 +13,9 @@ use crate::{
     registry_admission::AdmissionUpdate,
 };
 
+mod direct;
 mod hello;
+pub use direct::{DirectClientSession, DirectClientSessionRejection};
 pub use hello::{
     accept_server_hello, AcceptedServerHello, ServerHelloRejection, ServerHelloValidationRequest,
 };
