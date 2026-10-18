@@ -2,6 +2,50 @@ use ark_domain::integration_replication::IntegrationConfiguration;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::Value;
 
+pub fn upsert_integration_configuration_record(
+    connection: &Connection,
+    configuration: &IntegrationConfiguration,
+) -> Result<(), String> {
+    let scopes =
+        serde_json::to_string(&configuration.public_scopes).map_err(|error| error.to_string())?;
+    let settings =
+        serde_json::to_string(&configuration.public_settings).map_err(|error| error.to_string())?;
+    let sync_cursor = configuration
+        .sync_cursor
+        .map(|value| sqlite_i64(value, "sync_cursor"))
+        .transpose()?;
+    let revision = sqlite_i64(configuration.revision, "revision")?;
+    connection
+        .execute(
+            "INSERT INTO integration_configurations
+             (integration_id, provider, account_subject, public_scopes_json,
+              public_settings_json, enabled, sync_cursor, revision, hlc)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+             ON CONFLICT(integration_id) DO UPDATE SET
+                provider = excluded.provider,
+                account_subject = excluded.account_subject,
+                public_scopes_json = excluded.public_scopes_json,
+                public_settings_json = excluded.public_settings_json,
+                enabled = excluded.enabled,
+                sync_cursor = excluded.sync_cursor,
+                revision = excluded.revision,
+                hlc = excluded.hlc",
+            params![
+                configuration.integration_id,
+                configuration.provider,
+                configuration.account_subject,
+                scopes,
+                settings,
+                configuration.enabled as i64,
+                sync_cursor,
+                revision,
+                configuration.hlc,
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
 fn parse_sync_cursor(cursor: Option<rusqlite::types::Value>) -> Result<Option<u64>, String> {
     cursor
         .map(|value| match value {
@@ -128,6 +172,34 @@ mod tests {
                 .expect("numeric configuration exists")
                 .sync_cursor,
             Some(42)
+        );
+    }
+
+    #[test]
+    fn configuration_write_roundtrips_public_fields_and_cursor() {
+        let connection = Connection::open_in_memory().expect("fixture database opens");
+        connection
+            .execute_batch(crate::schema::CREATE_TABLES)
+            .expect("integration configuration schema applies");
+        let configuration = IntegrationConfiguration {
+            integration_id: "app".to_owned(),
+            provider: "provider".to_owned(),
+            account_subject: "account".to_owned(),
+            public_scopes: vec!["read".to_owned()],
+            public_settings: serde_json::json!({"region": "local"}),
+            enabled: true,
+            sync_cursor: Some(42),
+            revision: 3,
+            hlc: "2026-10-18T00:00:00.000Z:000003:device".to_owned(),
+        };
+
+        upsert_integration_configuration_record(&connection, &configuration)
+            .expect("configuration persistence succeeds");
+
+        assert_eq!(
+            load_integration_configuration(&connection, "app")
+                .expect("configuration query succeeds"),
+            Some(configuration)
         );
     }
 }

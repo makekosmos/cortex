@@ -4,7 +4,7 @@ mod grants;
 mod leases;
 mod nodes;
 
-pub use configurations::load_integration_configuration;
+pub use configurations::{load_integration_configuration, upsert_integration_configuration_record};
 pub use credentials::{
     load_integration_credential_envelope_record, load_latest_integration_credential_envelope_record,
 };

@@ -1,5 +1,5 @@
 use super::integration_replication_common::{
-    json, persist_with_vector, require_newer_hlc, sqlite_i64, storage,
+    persist_with_vector, require_newer_hlc, sqlite_i64, storage,
 };
 use rusqlite::{params, Connection, OptionalExtension};
 
@@ -16,13 +16,6 @@ pub fn upsert_integration_configuration(
     device_id: &str,
 ) -> Result<(), String> {
     configuration.validate().map_err(|e| e.to_string())?;
-    let scopes = json(&configuration.public_scopes)?;
-    let settings = json(&configuration.public_settings)?;
-    let sync_cursor = configuration
-        .sync_cursor
-        .map(|value| sqlite_i64(value, "sync_cursor"))
-        .transpose()?;
-    let revision = sqlite_i64(configuration.revision, "revision")?;
     persist_with_vector(
         conn,
         "integration_configuration",
@@ -55,34 +48,10 @@ pub fn upsert_integration_configuration(
                 }
                 require_newer_hlc(&configuration.hlc, &hlc)?;
             }
-            conn.execute(
-                "INSERT INTO integration_configurations
-                 (integration_id, provider, account_subject, public_scopes_json,
-                  public_settings_json, enabled, sync_cursor, revision, hlc)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
-                 ON CONFLICT(integration_id) DO UPDATE SET
-                    provider = excluded.provider,
-                    account_subject = excluded.account_subject,
-                    public_scopes_json = excluded.public_scopes_json,
-                    public_settings_json = excluded.public_settings_json,
-                    enabled = excluded.enabled,
-                    sync_cursor = excluded.sync_cursor,
-                    revision = excluded.revision,
-                    hlc = excluded.hlc",
-                params![
-                    configuration.integration_id,
-                    configuration.provider,
-                    configuration.account_subject,
-                    scopes,
-                    settings,
-                    configuration.enabled as i64,
-                    sync_cursor,
-                    revision,
-                    configuration.hlc,
-                ],
+            ark_store::integration_replication::upsert_integration_configuration_record(
+                conn,
+                configuration,
             )
-            .map_err(storage)?;
-            Ok(())
         },
     )
 }

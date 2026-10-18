@@ -18,6 +18,7 @@ The dependency graph matches the documented ownership, `ark-store` can be exerci
   - [x] Move integration-configuration loading and opaque-cursor scrub into `ark-store::integration_replication`; update the writer census and remove the Core facade.
   - [x] Move credential-envelope row loading and decoding into `ark-store::integration_replication`; keep recipient/grant authorization in Core.
   - [x] Move integration-grant row loading and upsert SQL into `ark-store::integration_replication`; keep epoch, revocation, node-key, and HLC policy in Core.
+  - [x] Move integration-configuration upsert SQL into `ark-store::integration_replication`; keep identity and HLC policy in Core.
 - [ ] Move the single writer executor into `ark-store`.
   - [x] Move ownership of the production SQLite connection, immediate transaction, commit, and maintenance execution into `ark-store::writer`; keep source fairness and Engine/sync admission in Core.
   - [x] Move the full snapshot and restore lifecycle into `ark-store` and keep `ark-core::db` request-facing re-exports stable.
@@ -37,6 +38,7 @@ The dependency graph matches the documented ownership, `ark-store` can be exerci
 - Integration-configuration query move passed the Store cursor-scrub test, the Core legacy-cursor regression test, all 140 Core DB tests, targeted clippy, format, and writer census (78 path/category counts).
 - Credential-envelope row loading and decoding now lives in `ark-store`; Core retains recipient/grant authorization. The Store envelope query test, all 140 Core DB tests, targeted clippy, format, and writer census (78 path/category counts) passed.
 - Integration-grant read/write SQL now lives in Store; Core retains node authorization, epoch monotonicity, revocation, key binding, HLC, and version-vector policy. Store round-trip/overflow and Core policy tests, targeted clippy, format, and the 78-count writer census passed.
+- Integration-configuration upsert SQL now lives in Store; Core retains provider/account identity and HLC policy. Store write round-trip, Core legacy-cursor regression and focused DB tests, targeted clippy, format, and writer census (78 path/category counts) passed.
 - Client Hello ownership move passed its serialized-handshake test, all 5 `ark-core` sync-client tests, targeted clippy, format, and desktop/mobile graph checks. The final Stage 2 full gate remains pending.
 - WebSocket listener move passed its loopback handshake/frame test, all 21 Core sync-server tests in a serial run, targeted clippy, and format. One parallel run saw a connection reset in the existing ephemeral-port test; its isolated rerun and serial suite passed. Final Stage 2 full gate remains pending.
 - SQLite compatibility migration move passed the full affected gate: workspace clippy, 1,912 Rust tests (5 skipped), and Manager checks. Nextest run `c2acda2e-df38-4fc4-bf6c-b7e97d4c2e5a`; full output: `/tmp/arkrp/ark-stage2-schema-compat-final.log`. Writer census passed with 77 path/category counts.
