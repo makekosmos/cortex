@@ -349,7 +349,7 @@ async fn authenticated_legacy_todo_update_is_durable_and_relayable() {
     );
 
     let source_storage: Arc<dyn crate::replication_storage::SyncRuntimeStorage> = source.clone();
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let (tx, mut rx) = crate::sync_client::ClientMessageSender::test_channel();
     let flight: crate::sync_client::ClientFeedInFlight = Arc::new(tokio::sync::Mutex::new(None));
     crate::sync_client::pump_client_committed_feed(
         &source_storage,

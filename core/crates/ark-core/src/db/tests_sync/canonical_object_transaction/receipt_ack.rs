@@ -33,7 +33,7 @@ async fn negotiated_receipt_ack_advances_delivery_without_claiming_application()
         .unwrap();
 
     let storage: Arc<dyn crate::replication_storage::SyncRuntimeStorage> = backend.clone();
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let (tx, mut rx) = crate::sync_client::ClientMessageSender::test_channel();
     let flight: crate::sync_client::ClientFeedInFlight = Arc::new(tokio::sync::Mutex::new(None));
     crate::sync_client::pump_client_committed_feed(
         &storage,

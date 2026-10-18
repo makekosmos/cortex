@@ -11,13 +11,12 @@ mod live_messages;
 mod registry_admission;
 #[path = "sync_client_start/connect_and_receive/snapshot_ack.rs"]
 mod snapshot_ack;
+#[path = "sync_client_start/connect_and_receive/snapshot_drive.rs"]
+mod snapshot_drive;
 #[path = "sync_client_start/connect_and_receive/sync_changes.rs"]
 mod sync_changes;
 #[path = "sync_client_start/connect_and_receive/sync_policy.rs"]
 mod sync_policy;
-#[path = "sync_client_start/writer.rs"]
-mod writer;
-
 impl SyncClient {
     /// Start connecting to the peer. Spawns a background task.
     pub fn start(&self) {
@@ -39,7 +38,6 @@ impl SyncClient {
         let on_disconnected = self.on_disconnected.clone();
         let on_peer_list = self.on_peer_list.clone();
         let on_registry_events = self.on_registry_events.clone();
-        let writer_tasks = self.tasks.clone();
         let task = tokio::spawn(include!("sync_client_start/connection_loop.rs"));
         track_task(&self.tasks, task);
     }

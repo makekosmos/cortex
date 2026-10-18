@@ -14,7 +14,13 @@
                 reconnect_delay = RECONNECT_BASE_MS;
                 *feed_in_flight.lock().await = None; // Replay the durable cursor after reconnect.
 
-                let (mut ws_sink, mut ws_stream_rx) = ws_stream.split();
+                let mut session_io = match ark_net::websocket::session_io(ws_stream) {
+                    Ok(session_io) => session_io,
+                    Err(error) => {
+                        eprintln!("{TAG} could not start peer session transport: {error:?}");
+                        continue;
+                    }
+                };
 
                 let client_hello = ark_sync::client_session::build_client_hello(
                     ark_sync::client_session::ClientHelloRequest {
@@ -28,25 +34,17 @@
                         app_version: ark_net::host::app_version(),
                     },
                 );
-                if ws_sink
-                    .send(Message::Text(client_hello.message.clone().into()))
-                    .await
-                    .is_err()
-                {
-                    continue;
-                }
-
-                let (tx, rx) = mpsc::unbounded_channel::<Message>();
-
-                let writer_context = writer::Context::new(
+                let tx = ClientMessageSender::new(
+                    session_io.sender(),
                     storage.clone(),
                     peer.clone(),
                     space_id.clone(),
                     device_id.clone(),
                 );
-                let writer = writer::spawn(ws_sink, rx, writer_context);
-                let writer_abort = writer.abort_handle();
-                track_task(&writer_tasks, writer);
+                if tx.send(client_hello.message).await.is_err() {
+                    let _ = session_io.finish().await;
+                    continue;
+                }
 
                 let mut authenticated = false;
                 let mut peer_device_id_actual = String::new();
@@ -55,9 +53,45 @@
                 > = None;
                 let mut feed_recovery = tokio::time::interval(Duration::from_secs(1));
                 feed_recovery.tick().await;
+                let mut snapshot_drive = None;
+                let mut pending_remote_vector = None;
 
-                'messages: loop {
+                loop {
                     tokio::select! {
+                        result = async {
+                            match snapshot_drive.as_mut() {
+                                Some(task) => task.await,
+                                None => std::future::pending().await,
+                            }
+                        } => {
+                            snapshot_drive = None;
+                            match result {
+                                Ok(Ok(())) => {}
+                                Ok(Err(error)) => {
+                                    eprintln!("{TAG} outbound snapshot failed: {error}");
+                                    break;
+                                }
+                                Err(error) => {
+                                    eprintln!("{TAG} outbound snapshot task failed: {error}");
+                                    break;
+                                }
+                            }
+                            if let Some(remote_vector) = pending_remote_vector.take() {
+                                let policy_bound =
+                                    sync_policy::is_policy_bound(&authenticated_tx).await;
+                                let snapshot_already_sent =
+                                    snapshot_ack::was_sent(&authenticated_tx).await;
+                                snapshot_drive = Some(snapshot_drive::spawn(
+                                    storage.clone(),
+                                    peer_device_id_actual.clone(),
+                                    remote_vector,
+                                    snapshot_already_sent,
+                                    policy_bound,
+                                    tx.clone(),
+                                    authenticated_tx.clone(),
+                                ));
+                            }
+                        }
                         _ = feed_recovery.tick() => {
                             if let Err(error) = feed_recovery::pump(
                                 &storage, &authenticated_tx, &feed_in_flight,
@@ -65,11 +99,21 @@
                                 eprintln!("{TAG} periodic committed feed drain failed: {error}");
                             }
                         }
-                        maybe_msg = ws_stream_rx.next() => {
-                            let Some(Ok(msg)) = maybe_msg else { break; };
-                            match msg {
-                        Message::Text(text) => {
-                            if let Some(sync_msg) = deserialize_message(&text) {
+                        maybe_event = session_io.receive() => {
+                            let sync_msg = match maybe_event {
+                                Some(ark_sync::session_io::SessionIoEvent::Message(message)) => {
+                                    *message
+                                }
+                                Some(ark_sync::session_io::SessionIoEvent::MalformedMessage) => {
+                                    eprintln!("{TAG} ignoring malformed peer sync message");
+                                    continue;
+                                }
+                                Some(ark_sync::session_io::SessionIoEvent::Failed(error)) => {
+                                    eprintln!("{TAG} peer session transport failed: {error}");
+                                    break;
+                                }
+                                Some(ark_sync::session_io::SessionIoEvent::Closed) | None => break,
+                            };
                                 include!("connect_and_receive/registry_control.rs");
                                 match sync_msg {
                                     hello @ LanSyncMessage::Hello { .. } => {
@@ -106,6 +150,8 @@
                                             app_version: server_app_version,
                                             protocol: negotiated_protocol,
                                         } = accepted;
+                                        tx.set_authenticated_peer_id(server_device_id.clone())
+                                            .await;
                                         if !server_device_id.is_empty()
                                             && server_device_id == device_id
                                         {
@@ -160,7 +206,12 @@
                                                 }
                                             };
                                         pending_registry_admission = Some(admission);
-                                        send_msg(&tx, &start);
+                                        if let Err(error) = send_msg(&tx, start).await {
+                                            eprintln!(
+                                                "{TAG} registry admission send failed: {error}"
+                                            );
+                                            break;
+                                        }
                                     }
 
                                     LanSyncMessage::SyncPolicy {
@@ -192,65 +243,24 @@
                                         if !authenticated {
                                             continue;
                                         }
+                                        if snapshot_drive.is_some() {
+                                            pending_remote_vector = Some(remote_vector);
+                                            continue;
+                                        }
 
                                         let policy_bound =
                                             sync_policy::is_policy_bound(&authenticated_tx).await;
                                         let snapshot_already_sent =
                                             snapshot_ack::was_sent(&authenticated_tx).await;
-                                        let mut snapshot = match
-                                            ark_sync::outbound_snapshot::OutboundSnapshot::begin(
-                                                storage.as_ref(),
-                                                peer_device_id_actual.clone(),
-                                                remote_vector,
-                                                snapshot_already_sent,
-                                                policy_bound,
-                                            )
-                                            .await
-                                        {
-                                            Ok(snapshot) => snapshot,
-                                            Err(error) => {
-                                                eprintln!(
-                                                    "{TAG} outbound snapshot setup failed: {error}"
-                                                );
-                                                break;
-                                            }
-                                        };
-                                        use ark_sync::outbound_snapshot::SnapshotEmission;
-                                        let pending_ack = match snapshot
-                                            .drive(storage.as_ref(), |emission| {
-                                                let tx = tx.clone();
-                                                async move {
-                                                    match emission {
-                                                        SnapshotEmission::Page(messages) => {
-                                                            for message in messages {
-                                                                send_msg(&tx, &message);
-                                                            }
-                                                        }
-                                                        SnapshotEmission::Terminal {
-                                                            message, ..
-                                                        } => {
-                                                            send_msg(&tx, &message);
-                                                        }
-                                                    }
-                                                    Ok(())
-                                                }
-                                            })
-                                            .await
-                                        {
-                                            Ok(ack) => ack,
-                                            Err(error) => {
-                                                eprintln!(
-                                                    "{TAG} outbound snapshot failed: {error}"
-                                                );
-                                                break 'messages;
-                                            }
-                                        };
-
-                                        if let Some(session) =
-                                            authenticated_tx.lock().await.as_mut()
-                                        {
-                                            session.outbound_snapshot.record_sent(pending_ack);
-                                        }
+                                        snapshot_drive = Some(snapshot_drive::spawn(
+                                            storage.clone(),
+                                            peer_device_id_actual.clone(),
+                                            remote_vector,
+                                            snapshot_already_sent,
+                                            policy_bound,
+                                            tx.clone(),
+                                            authenticated_tx.clone(),
+                                        ));
                                     }
 
                                     LanSyncMessage::SyncChanges {
@@ -409,16 +419,17 @@
                                     }
 
                                 }
-                            }
-                        }
-                        Message::Close(_) => break,
-                        _ => {}
-                            }
                         }
                     }
                 }
 
-                writer_abort.abort();
+                if let Some(task) = snapshot_drive.take() {
+                    task.abort();
+                    let _ = task.await;
+                }
+                if let Err(error) = session_io.finish().await {
+                    eprintln!("{TAG} peer session transport shutdown failed: {error:?}");
+                }
                 *authenticated_tx.lock().await = None;
 
                 if authenticated {

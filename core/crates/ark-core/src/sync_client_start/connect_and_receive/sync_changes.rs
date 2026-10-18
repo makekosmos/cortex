@@ -2,7 +2,7 @@ use super::*;
 
 pub(super) struct Context<'a> {
     pub storage: &'a Arc<dyn SyncRuntimeStorage>,
-    pub tx: &'a mpsc::UnboundedSender<Message>,
+    pub tx: &'a ClientMessageSender,
     pub peer_device_id: &'a str,
     pub local_device_id: &'a str,
     pub authenticated_tx: &'a AuthenticatedTx,
@@ -102,12 +102,13 @@ pub(super) async fn apply(
     }
     send_msg(
         tx,
-        &LanSyncMessage::SyncAck {
+        LanSyncMessage::SyncAck {
             batch_id,
             accepted,
             policy_identity,
         },
-    );
+    )
+    .await?;
     if is_last {
         eprintln!("{TAG} Received all sync batches from server");
     }

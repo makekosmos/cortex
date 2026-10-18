@@ -25,7 +25,7 @@ async fn committed_feed_replays_same_id_after_lost_ack_and_rejects_digest_reuse(
         .unwrap();
 
     let storage: Arc<dyn crate::replication_storage::SyncRuntimeStorage> = backend.clone();
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let (tx, mut rx) = crate::sync_client::ClientMessageSender::test_channel();
     let flight: crate::sync_client::ClientFeedInFlight = Arc::new(tokio::sync::Mutex::new(None));
     crate::sync_client::pump_client_committed_feed(
         &storage,
@@ -115,7 +115,7 @@ async fn legacy_feed_pump_omits_policy_identity_and_legacy_ack_advances_progress
         .unwrap();
 
     let storage: Arc<dyn crate::replication_storage::SyncRuntimeStorage> = backend.clone();
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let (tx, mut rx) = crate::sync_client::ClientMessageSender::test_channel();
     let flight: crate::sync_client::ClientFeedInFlight = Arc::new(tokio::sync::Mutex::new(None));
     crate::sync_client::pump_client_committed_feed(
         &storage,
@@ -128,20 +128,15 @@ async fn legacy_feed_pump_omits_policy_identity_and_legacy_ack_advances_progress
     .await
     .unwrap();
     let change_id = match rx.try_recv().unwrap() {
-        tokio_tungstenite::tungstenite::Message::Text(text) => {
-            match ark_sync::protocol::deserialize_message(&text).unwrap() {
-                ark_sync::protocol::LanSyncMessage::LiveChange {
-                    change_id,
-                    policy_identity,
-                    ..
-                } => {
-                    assert!(policy_identity.is_none());
-                    change_id
-                }
-                message => panic!("unexpected feed message: {message:?}"),
-            }
+        ark_sync::protocol::LanSyncMessage::LiveChange {
+            change_id,
+            policy_identity,
+            ..
+        } => {
+            assert!(policy_identity.is_none());
+            change_id
         }
-        message => panic!("unexpected frame: {message:?}"),
+        message => panic!("unexpected feed message: {message:?}"),
     };
     let position = change_id
         .strip_prefix("ark-feed-v1:")

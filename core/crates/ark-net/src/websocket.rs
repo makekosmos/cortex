@@ -54,6 +54,7 @@ where
     let SessionIoDriver {
         incoming,
         outgoing,
+        control_outgoing,
         shutdown,
         stop,
     } = driver;
@@ -63,6 +64,7 @@ where
     tasks.spawn(write_session_frames(
         sink,
         outgoing,
+        control_outgoing,
         control_rx,
         incoming.clone(),
         shutdown.clone(),
@@ -100,27 +102,37 @@ enum WebSocketControl {
 async fn write_session_frames<S>(
     mut sink: futures_util::stream::SplitSink<WebSocketStream<S>, Message>,
     mut outgoing: mpsc::Receiver<ark_sync::protocol::LanSyncMessage>,
+    mut control_outgoing: mpsc::Receiver<ark_sync::protocol::LanSyncMessage>,
     mut control: mpsc::Receiver<WebSocketControl>,
     incoming: mpsc::Sender<SessionIoEvent>,
     mut shutdown: watch::Receiver<bool>,
 ) where
     S: AsyncRead + AsyncWrite + Unpin,
 {
+    let mut outgoing_open = true;
+    let mut control_outgoing_open = true;
     loop {
         tokio::select! {
+            biased;
             _ = shutdown.changed() => break,
-            outgoing_message = outgoing.recv() => {
-                let Some(message) = outgoing_message else { break; };
-                let text = match serde_json::to_string(&message) {
-                    Ok(text) => text,
-                    Err(error) => {
-                        let _ = incoming.try_send(SessionIoEvent::Failed(error.to_string()));
-                        return;
+            outgoing_message = control_outgoing.recv(), if control_outgoing_open => {
+                match outgoing_message {
+                    Some(message) => {
+                        if !write_sync_frame(&mut sink, message, &incoming).await {
+                            return;
+                        }
                     }
-                };
-                if let Err(error) = sink.send(Message::Text(text.into())).await {
-                    let _ = incoming.try_send(SessionIoEvent::Failed(error.to_string()));
-                    return;
+                    None => control_outgoing_open = false,
+                }
+            }
+            outgoing_message = outgoing.recv(), if outgoing_open => {
+                match outgoing_message {
+                    Some(message) => {
+                        if !write_sync_frame(&mut sink, message, &incoming).await {
+                            return;
+                        }
+                    }
+                    None => outgoing_open = false,
                 }
             }
             control_message = control.recv() => {
@@ -131,8 +143,33 @@ async fn write_session_frames<S>(
                 }
             }
         }
+        if !outgoing_open && !control_outgoing_open {
+            break;
+        }
     }
     let _ = tokio::time::timeout(Duration::from_secs(2), sink.close()).await;
+}
+
+async fn write_sync_frame<S>(
+    sink: &mut futures_util::stream::SplitSink<WebSocketStream<S>, Message>,
+    message: ark_sync::protocol::LanSyncMessage,
+    incoming: &mpsc::Sender<SessionIoEvent>,
+) -> bool
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
+    let text = match serde_json::to_string(&message) {
+        Ok(text) => text,
+        Err(error) => {
+            let _ = incoming.try_send(SessionIoEvent::Failed(error.to_string()));
+            return false;
+        }
+    };
+    if let Err(error) = sink.send(Message::Text(text.into())).await {
+        let _ = incoming.try_send(SessionIoEvent::Failed(error.to_string()));
+        return false;
+    }
+    true
 }
 
 async fn read_session_frames<S>(

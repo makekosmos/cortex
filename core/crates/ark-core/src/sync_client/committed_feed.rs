@@ -1,18 +1,15 @@
 use std::sync::Arc;
 
-use tokio::sync::mpsc;
-use tokio_tungstenite::tungstenite::Message;
-
 use crate::replication_storage::SyncRuntimeStorage;
 use ark_sync::committed_feed_delivery::{FeedAck, FeedAckOutcome, FeedFlight};
-use ark_sync::protocol::{serialize_message, LanSyncMessage};
+use ark_sync::protocol::LanSyncMessage;
 
-use crate::sync_client::ClientFeedInFlight;
+use crate::sync_client::{ClientFeedInFlight, ClientMessageSender};
 
 pub(crate) async fn pump_client_committed_feed(
     storage: &Arc<dyn SyncRuntimeStorage>,
     peer_device_id: &str,
-    tx: &mpsc::UnboundedSender<Message>,
+    tx: &ClientMessageSender,
     in_flight: &ClientFeedInFlight,
     receipt_ack: bool,
     policy_bound: bool,
@@ -195,10 +192,7 @@ pub(crate) async fn pump_client_committed_feed(
             return Ok(());
         }
         *in_flight = Some((position, policy_identity.clone()));
-        if tx
-            .send(Message::Text(serialize_message(&message).into()))
-            .is_err()
-        {
+        if tx.send(message).await.is_err() {
             *in_flight = None;
         }
         return Ok(());
@@ -230,7 +224,7 @@ pub(crate) async fn acknowledge_client_feed(
     storage: &Arc<dyn SyncRuntimeStorage>,
     peer_device_id: &str,
     change_id: &str,
-    tx: &mpsc::UnboundedSender<Message>,
+    tx: &ClientMessageSender,
     flight: &ClientFeedInFlight,
     ack: ark_application::sync_storage::OutboundAck,
     receipt_ack: bool,

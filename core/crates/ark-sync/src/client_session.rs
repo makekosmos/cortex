@@ -7,8 +7,8 @@ use ark_domain::types::VersionVector;
 use crate::{
     protocol::{
         compute_hello_auth_hmac, compute_negotiation_offer_hmac, generate_auth_nonce,
-        serialize_message, LanSyncMessage, NegotiatedProtocol, ProtocolCapability, ProtocolOffer,
-        SyncPolicyRuleWire, PROTOCOL_VERSION,
+        LanSyncMessage, NegotiatedProtocol, ProtocolCapability, ProtocolOffer, SyncPolicyRuleWire,
+        PROTOCOL_VERSION,
     },
     registry_admission::AdmissionUpdate,
 };
@@ -19,7 +19,7 @@ pub use hello::{
 };
 
 pub struct ClientHello {
-    pub message: String,
+    pub message: LanSyncMessage,
     pub offer: ProtocolOffer,
     pub auth_nonce: Option<String>,
 }
@@ -79,7 +79,7 @@ pub fn build_client_hello(request: ClientHelloRequest<'_>) -> ClientHello {
         negotiation_hmac,
     };
     ClientHello {
-        message: serialize_message(&hello),
+        message: hello,
         offer,
         auth_nonce,
     }
@@ -309,7 +309,7 @@ mod hello_tests {
             platform: Some("linux".to_owned()),
             app_version: Some("1.2.3".to_owned()),
         });
-        let Some(LanSyncMessage::Hello {
+        let LanSyncMessage::Hello {
             protocol_version,
             device_id,
             device_name,
@@ -323,9 +323,9 @@ mod hello_tests {
             supported_capabilities: Some(capabilities),
             negotiated_capabilities,
             negotiation_hmac: Some(negotiation_hmac),
-        }) = crate::protocol::deserialize_message(&hello.message)
+        } = hello.message
         else {
-            panic!("builder must serialize a complete Hello");
+            panic!("builder must return a complete Hello");
         };
 
         assert_eq!(protocol_version, PROTOCOL_VERSION);

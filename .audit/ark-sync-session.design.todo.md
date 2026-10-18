@@ -8,6 +8,9 @@
   - [x] Move outbound snapshot page sequencing into `ark-sync`; Core handles typed page and terminal-send effects.
   - [x] Move server-Hello authentication, space, and protocol-selection validation into `ark-sync`.
   - [x] Add bounded typed `SessionIo` in `ark-sync` and a supervised WebSocket adapter in `ark-net`; keep reader and writer workers independent under one joined owner.
+  - [x] Wire the Core client loop to typed bounded session input/output and remove the Core-owned unbounded WebSocket writer task; keep Core protocol and admission handling in place for the next extraction.
+  - [x] Run bulk snapshot production outside the receive loop and give ACK/admission messages a bounded priority queue so bulk backpressure does not suspend protocol reads.
+  - [x] Verify authenticated peer identity is used for registry-policy admission, including a discovered `seed-*` identity; verify backpressure and teardown with focused tests and targeted clippy.
   - [ ] Move the client connected-message loop behind typed session input and effects.
   - [ ] Move the server connected-message loop behind typed session input and effects.
 - [ ] Scrap: re-evaluate if implementation repeatedly needs Core policy or concrete transport inside `ark-sync`.

@@ -1,15 +1,16 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use futures_util::{SinkExt, StreamExt};
-use tokio::sync::{mpsc, Mutex, RwLock};
-use tokio_tungstenite::tungstenite::Message;
+#[cfg(test)]
+use tokio::sync::mpsc;
+use tokio::sync::{Mutex, RwLock};
 
 use crate::hlc::HLC;
 use crate::integration_replication::SignedSyncEnvelope;
 use crate::replication_storage::SyncRuntimeStorage;
 use crate::task_set::{abort_and_join, join_all, track_task};
 use ark_sync::protocol::*;
+use ark_sync::session_io::SessionIoSender;
 
 #[path = "sync_client/committed_feed.rs"]
 mod committed_feed;
@@ -41,7 +42,7 @@ pub type ClientOnRegistryEventsCallback =
 pub(crate) struct AuthenticatedPeerSession {
     pub(crate) peer_id: String,
     pub(crate) registry_session_id: String,
-    pub(crate) tx: mpsc::UnboundedSender<Message>,
+    pub(crate) tx: ClientMessageSender,
     pub(crate) sync_started: bool,
     pub(crate) outbound_snapshot: ark_sync::outbound_snapshot::OutboundSnapshotProgress,
     pub(crate) protocol: ark_sync::protocol::NegotiatedProtocol,
@@ -50,6 +51,133 @@ pub(crate) struct AuthenticatedPeerSession {
 type AuthenticatedTx = Arc<Mutex<Option<AuthenticatedPeerSession>>>;
 pub(crate) type ClientFeedInFlight =
     Arc<Mutex<Option<(i64, Option<ark_application::sync_storage::PolicyIdentity>)>>>;
+
+#[derive(Clone)]
+pub(crate) struct ClientMessageSender {
+    transport: ClientMessageTransport,
+    authenticated_peer_id: Arc<RwLock<Option<String>>>,
+}
+
+#[derive(Clone)]
+enum ClientMessageTransport {
+    Session {
+        sender: SessionIoSender,
+        storage: Arc<dyn SyncRuntimeStorage>,
+        peer: Arc<RwLock<PeerRecord>>,
+        space_id: String,
+        device_id: String,
+    },
+    #[cfg(test)]
+    Test(mpsc::Sender<LanSyncMessage>),
+}
+
+impl ClientMessageSender {
+    pub(crate) fn new(
+        transport: SessionIoSender,
+        storage: Arc<dyn SyncRuntimeStorage>,
+        peer: Arc<RwLock<PeerRecord>>,
+        space_id: String,
+        device_id: String,
+    ) -> Self {
+        Self {
+            transport: ClientMessageTransport::Session {
+                sender: transport,
+                storage,
+                peer,
+                space_id,
+                device_id,
+            },
+            authenticated_peer_id: Arc::new(RwLock::new(None)),
+        }
+    }
+
+    pub(crate) async fn set_authenticated_peer_id(&self, peer_id: String) {
+        *self.authenticated_peer_id.write().await = Some(peer_id);
+    }
+
+    pub(crate) async fn send(&self, message: LanSyncMessage) -> Result<(), String> {
+        self.send_with_queue_mode(message, false).await
+    }
+
+    pub(crate) async fn send_snapshot_batch(&self, message: LanSyncMessage) -> Result<(), String> {
+        self.send_with_queue_mode(message, true).await
+    }
+
+    async fn send_with_queue_mode(
+        &self,
+        message: LanSyncMessage,
+        wait_for_bulk_capacity: bool,
+    ) -> Result<(), String> {
+        match &self.transport {
+            ClientMessageTransport::Session {
+                sender,
+                storage,
+                peer,
+                space_id,
+                device_id,
+            } => {
+                if ark_sync::protocol::requires_registry_admission(&message) {
+                    let authenticated_peer_id = self.authenticated_peer_id.read().await.clone();
+                    let peer_device_id = match authenticated_peer_id {
+                        Some(peer_device_id) => peer_device_id,
+                        None => peer.read().await.device_id.clone(),
+                    };
+                    if !matches!(
+                        storage.sync_session_is_admitted(&peer_device_id).await,
+                        Ok(true)
+                    ) {
+                        return Ok(());
+                    }
+                }
+                if let LanSyncMessage::SignedIntegrationFrame { frame } = &message {
+                    if storage
+                        .validate_outbound_signed_integration_frame(frame, space_id, device_id)
+                        .await
+                        .is_err()
+                    {
+                        return Ok(());
+                    }
+                }
+                let result = if wait_for_bulk_capacity {
+                    sender.send_bulk_wait(message).await
+                } else {
+                    sender.send(message).await
+                };
+                result.map_err(|error| match error {
+                    ark_sync::session_io::SessionIoError::OutboundFull => {
+                        "LAN peer outbound queue is full".to_owned()
+                    }
+                    _ => "LAN peer connection is closed".to_owned(),
+                })
+            }
+            #[cfg(test)]
+            ClientMessageTransport::Test(sender) => sender
+                .send(message)
+                .await
+                .map_err(|_| "test sync message receiver is closed".to_owned()),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_channel() -> (Self, mpsc::Receiver<LanSyncMessage>) {
+        let (sender, receiver) = mpsc::channel(64);
+        (
+            Self {
+                transport: ClientMessageTransport::Test(sender),
+                authenticated_peer_id: Arc::new(RwLock::new(None)),
+            },
+            receiver,
+        )
+    }
+
+    pub(crate) fn close(&self) {
+        match &self.transport {
+            ClientMessageTransport::Session { sender, .. } => sender.close(),
+            #[cfg(test)]
+            ClientMessageTransport::Test(_) => {}
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // SyncClient
@@ -72,9 +200,9 @@ pub struct SyncClient {
     on_disconnected: Arc<Mutex<Option<ClientOnDisconnectedCallback>>>,
     on_peer_list: Arc<Mutex<Option<ClientOnPeerListCallback>>>,
     on_registry_events: Arc<Mutex<Option<ClientOnRegistryEventsCallback>>>,
-    /// The connection loop from `start` and each connection's writer. They
-    /// hold `storage` (the shared ark.db connection); `stop_and_join` aborts
-    /// and joins them so none outlives teardown (KOS-270, KOS-369).
+    /// The connection loop from `start`. It owns each transport session and
+    /// `stop_and_join` aborts and joins it so none outlives teardown
+    /// (KOS-270, KOS-369).
     tasks: Arc<std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>>,
     /// Short callback tasks spawned on this client's behalf (see
     /// `callback_registry`). `stop_and_join` waits for them.
@@ -161,13 +289,17 @@ impl SyncClient {
         let Some(session) = guard.as_mut() else {
             return;
         };
-        send_msg(
+        if let Err(error) = send_msg(
             &session.tx,
-            &LanSyncMessage::RegistryEventUpdate {
+            LanSyncMessage::RegistryEventUpdate {
                 session_id: session.registry_session_id.clone(),
                 event: event.clone(),
             },
-        );
+        )
+        .await
+        {
+            eprintln!("{TAG} registry event send failed: {error}");
+        }
         if matches!(
             event.operation(),
             ark_domain::device_registry::RegistryOperation::Disable
@@ -176,7 +308,7 @@ impl SyncClient {
             self.stopped
                 .store(true, std::sync::atomic::Ordering::Relaxed);
             let session = guard.take().expect("authenticated session was present");
-            let _ = session.tx.send(Message::Close(None));
+            session.tx.close();
         }
     }
 
@@ -202,10 +334,8 @@ impl SyncClient {
             .await?;
         session
             .tx
-            .send(Message::Text(
-                serialize_message(&LanSyncMessage::SignedIntegrationFrame { frame }).into(),
-            ))
-            .map_err(|_| "LAN peer connection is closed".into())
+            .send(LanSyncMessage::SignedIntegrationFrame { frame })
+            .await
     }
 
     pub async fn set_on_change(&self, handler: ClientOnChangeCallback) {
@@ -249,7 +379,7 @@ impl SyncClient {
         self.stopped
             .store(true, std::sync::atomic::Ordering::Relaxed);
         if let Some(session) = self.authenticated_tx.lock().await.take() {
-            let _ = session.tx.send(Message::Close(None));
+            session.tx.close();
         }
     }
 
@@ -298,7 +428,6 @@ async fn load_version_vector(
     storage.load_version_vector().await
 }
 
-fn send_msg(tx: &mpsc::UnboundedSender<Message>, msg: &LanSyncMessage) {
-    let json = serialize_message(msg);
-    let _ = tx.send(Message::Text(json.into()));
+pub(crate) async fn send_msg(tx: &ClientMessageSender, msg: LanSyncMessage) -> Result<(), String> {
+    tx.send(msg).await
 }

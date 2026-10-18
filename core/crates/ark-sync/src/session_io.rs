@@ -16,6 +16,7 @@ pub enum SessionIoEvent {
 pub enum SessionIoError {
     InvalidCapacity,
     OutboundClosed,
+    OutboundFull,
     TransportTask(String),
 }
 
@@ -29,6 +30,7 @@ pub struct SessionIo {
 pub struct SessionIoDriver {
     pub incoming: mpsc::Sender<SessionIoEvent>,
     pub outgoing: mpsc::Receiver<LanSyncMessage>,
+    pub control_outgoing: mpsc::Receiver<LanSyncMessage>,
     pub shutdown: watch::Receiver<bool>,
     pub stop: watch::Sender<bool>,
 }
@@ -36,6 +38,8 @@ pub struct SessionIoDriver {
 #[derive(Clone)]
 pub struct SessionIoSender {
     outgoing: mpsc::Sender<LanSyncMessage>,
+    control_outgoing: mpsc::Sender<LanSyncMessage>,
+    shutdown: watch::Sender<bool>,
 }
 
 impl SessionIo {
@@ -48,17 +52,23 @@ impl SessionIo {
             .get();
         let (incoming_tx, incoming) = mpsc::channel(capacity);
         let (outgoing, outgoing_rx) = mpsc::channel(capacity);
+        let (control_outgoing, control_outgoing_rx) = mpsc::channel(capacity);
         let (shutdown, shutdown_rx) = watch::channel(false);
         let worker = start_worker(SessionIoDriver {
             incoming: incoming_tx,
             outgoing: outgoing_rx,
+            control_outgoing: control_outgoing_rx,
             shutdown: shutdown_rx,
             stop: shutdown.clone(),
         });
 
         Ok(Self {
             incoming,
-            outgoing: SessionIoSender { outgoing },
+            outgoing: SessionIoSender {
+                outgoing,
+                control_outgoing,
+                shutdown: shutdown.clone(),
+            },
             shutdown: Some(shutdown),
             worker: Some(worker),
         })
@@ -91,11 +101,44 @@ impl SessionIo {
 
 impl SessionIoSender {
     pub async fn send(&self, message: LanSyncMessage) -> Result<(), SessionIoError> {
+        if is_bulk_message(&message) {
+            return self
+                .outgoing
+                .try_send(message)
+                .map_err(|error| match error {
+                    mpsc::error::TrySendError::Full(_) => SessionIoError::OutboundFull,
+                    mpsc::error::TrySendError::Closed(_) => SessionIoError::OutboundClosed,
+                });
+        }
+        self.control_outgoing
+            .send(message)
+            .await
+            .map_err(|_| SessionIoError::OutboundClosed)
+    }
+
+    pub async fn send_bulk_wait(&self, message: LanSyncMessage) -> Result<(), SessionIoError> {
+        if !is_bulk_message(&message) {
+            return self.send(message).await;
+        }
         self.outgoing
             .send(message)
             .await
             .map_err(|_| SessionIoError::OutboundClosed)
     }
+
+    pub fn close(&self) {
+        let _ = self.shutdown.send(true);
+    }
+}
+
+fn is_bulk_message(message: &LanSyncMessage) -> bool {
+    matches!(
+        message,
+        LanSyncMessage::SyncChanges { .. }
+            | LanSyncMessage::LiveChange { .. }
+            | LanSyncMessage::TaskMergeBatch { .. }
+            | LanSyncMessage::SignedIntegrationFrame { .. }
+    )
 }
 
 impl Drop for SessionIo {
@@ -136,8 +179,8 @@ mod tests {
             tokio::spawn(async move {
                 let _ = ready_tx.send(());
                 let _ = release_rx.await;
-                let _ = driver.outgoing.recv().await;
-                let _ = driver.outgoing.recv().await;
+                let _ = driver.control_outgoing.recv().await;
+                let _ = driver.control_outgoing.recv().await;
             })
         })
         .unwrap();
@@ -152,6 +195,60 @@ mod tests {
 
         let _ = release_tx.send(());
         blocked_send.await.unwrap().unwrap();
+        session.finish().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn control_messages_keep_a_reserved_queue_when_bulk_queue_is_full() {
+        let (release_tx, release_rx) = oneshot::channel();
+        let session = SessionIo::start_transport(1, move |mut driver| {
+            tokio::spawn(async move {
+                let _ = release_rx.await;
+                let control = driver.control_outgoing.recv().await;
+                let bulk = driver.outgoing.recv().await;
+                assert!(matches!(control, Some(LanSyncMessage::SyncAck { .. })));
+                assert!(matches!(bulk, Some(LanSyncMessage::SyncChanges { .. })));
+            })
+        })
+        .unwrap();
+
+        session
+            .sender()
+            .send(LanSyncMessage::SyncChanges {
+                policy_identity: None,
+                batch_id: "batch-1".into(),
+                entities: Vec::new(),
+                is_last: false,
+                origin_device_id: None,
+                usage_complete_through: None,
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            session
+                .sender()
+                .send(LanSyncMessage::SyncChanges {
+                    policy_identity: None,
+                    batch_id: "batch-2".into(),
+                    entities: Vec::new(),
+                    is_last: false,
+                    origin_device_id: None,
+                    usage_complete_through: None,
+                })
+                .await,
+            Err(SessionIoError::OutboundFull)
+        );
+        session
+            .sender()
+            .send(LanSyncMessage::SyncAck {
+                batch_id: "batch-0".into(),
+                accepted: 1,
+                policy_identity: None,
+            })
+            .await
+            .unwrap();
+
+        let _ = release_tx.send(());
         session.finish().await.unwrap();
     }
 }

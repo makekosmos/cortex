@@ -8,7 +8,7 @@ pub(super) struct PendingRegistryAdmission {
 pub(super) struct Context<'a> {
     pub(super) local_device_id: &'a str,
     pub(super) storage: &'a Arc<dyn SyncRuntimeStorage>,
-    pub(super) tx: &'a mpsc::UnboundedSender<Message>,
+    pub(super) tx: &'a ClientMessageSender,
     pub(super) authenticated_tx: &'a crate::sync_client::AuthenticatedTx,
     pub(super) peer: &'a Arc<RwLock<PeerRecord>>,
     pub(super) on_registry_events: &'a Arc<Mutex<Option<ClientOnRegistryEventsCallback>>>,
@@ -59,7 +59,7 @@ impl PendingRegistryAdmission {
             }
         }
         for outgoing in progress.outgoing {
-            send_msg(tx, &outgoing);
+            send_msg(tx, outgoing).await?;
         }
         let ready = match progress.status {
             ark_sync::client_session::AdmissionStatus::Pending => return Ok(false),
@@ -74,7 +74,7 @@ impl PendingRegistryAdmission {
             .sync_policy_message(storage.as_ref(), local_device_id, &ready)
             .await?
         {
-            send_msg(tx, &policy_message);
+            send_msg(tx, policy_message).await?;
         }
         let policy_bound_delivery = ready
             .protocol()
@@ -109,11 +109,12 @@ impl PendingRegistryAdmission {
             }
             send_msg(
                 tx,
-                &LanSyncMessage::VersionVector {
+                LanSyncMessage::VersionVector {
                     vector,
                     origin_device_id: None,
                 },
-            );
+            )
+            .await?;
         }
         Ok(true)
     }

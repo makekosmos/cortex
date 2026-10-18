@@ -401,15 +401,10 @@ include!("canonical_object_transaction/pending_receipt.rs");
 include!("canonical_object_transaction/receipt_ack.rs");
 
 fn pop_feed_live_change_id(
-    rx: &mut tokio::sync::mpsc::UnboundedReceiver<tokio_tungstenite::tungstenite::Message>,
+    rx: &mut tokio::sync::mpsc::Receiver<ark_sync::protocol::LanSyncMessage>,
 ) -> String {
     match rx.try_recv().unwrap() {
-        tokio_tungstenite::tungstenite::Message::Text(text) => {
-            match ark_sync::protocol::deserialize_message(&text).unwrap() {
-                ark_sync::protocol::LanSyncMessage::LiveChange { change_id, .. } => change_id,
-                message => panic!("unexpected message: {message:?}"),
-            }
-        }
-        message => panic!("unexpected frame: {message:?}"),
+        ark_sync::protocol::LanSyncMessage::LiveChange { change_id, .. } => change_id,
+        message => panic!("unexpected message: {message:?}"),
     }
 }

@@ -106,10 +106,11 @@ pub(super) async fn start_sync_after_policy(
     let vector = ark_sync::client_session::begin_initial_sync(storage.as_ref(), &peer_id).await?;
     send_msg(
         &tx,
-        &LanSyncMessage::VersionVector {
+        LanSyncMessage::VersionVector {
             vector,
             origin_device_id: None,
         },
-    );
+    )
+    .await?;
     Ok(())
 }

@@ -8,7 +8,7 @@ pub(super) enum DirectWsControl {
 
 pub(super) async fn handle(
     message: &LanSyncMessage,
-    tx: &mpsc::UnboundedSender<Message>,
+    tx: &ClientMessageSender,
     authenticated: bool,
     on_peer_list: &Arc<Mutex<Option<ClientOnPeerListCallback>>>,
     local_device_id: &str,
@@ -16,7 +16,7 @@ pub(super) async fn handle(
 ) -> DirectWsControl {
     match message {
         LanSyncMessage::Ping { ts } => {
-            send_msg(tx, &LanSyncMessage::Pong { ts: *ts });
+            let _ = send_msg(tx, LanSyncMessage::Pong { ts: *ts }).await;
             DirectWsControl::Handled
         }
         LanSyncMessage::Pong { .. }

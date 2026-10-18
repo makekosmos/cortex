@@ -4,7 +4,7 @@ pub(super) async fn handle_task_merge_batch(
     storage: &Arc<dyn SyncRuntimeStorage>,
     peer_device_id: &str,
     local_device_id: &str,
-    tx: &mpsc::UnboundedSender<Message>,
+    tx: &ClientMessageSender,
     authenticated_tx: &AuthenticatedTx,
     batch: ark_application::sync_storage::TaskMergeBatch,
 ) -> Result<(), String> {
@@ -33,12 +33,13 @@ pub(super) async fn handle_task_merge_batch(
         .await?;
     send_msg(
         tx,
-        &LanSyncMessage::TaskMergeBatchAck {
+        LanSyncMessage::TaskMergeBatchAck {
             batch_id: ack.batch_id,
             through_position: ack.through_position,
             policy_identity: expected_identity,
         },
-    );
+    )
+    .await?;
     Ok(())
 }
 
@@ -46,7 +47,7 @@ pub(super) async fn handle_task_merge_batch(
 pub(super) async fn handle_feed_ack_message(
     storage: &Arc<dyn SyncRuntimeStorage>,
     peer_device_id: &str,
-    tx: &mpsc::UnboundedSender<Message>,
+    tx: &ClientMessageSender,
     feed_in_flight: &ClientFeedInFlight,
     authenticated_tx: &AuthenticatedTx,
     change_id: &str,
@@ -97,7 +98,7 @@ pub(super) async fn handle_signed_integration_frame(
     peer_device_id: &str,
     local_device_id: &str,
     space_id: &str,
-    tx: &mpsc::UnboundedSender<Message>,
+    tx: &ClientMessageSender,
     frame: SignedSyncEnvelope,
 ) {
     let accepted = if frame.space_id != space_id
@@ -111,13 +112,17 @@ pub(super) async fn handle_signed_integration_frame(
             .await
             .is_ok()
     };
-    send_msg(
+    if let Err(error) = send_msg(
         tx,
-        &LanSyncMessage::SignedIntegrationAck {
+        LanSyncMessage::SignedIntegrationAck {
             message_id: frame.message_id,
             accepted,
         },
-    );
+    )
+    .await
+    {
+        eprintln!("{TAG} signed integration ACK send failed: {error}");
+    }
 }
 
 pub(super) async fn handle_signed_integration_message(
@@ -126,7 +131,7 @@ pub(super) async fn handle_signed_integration_message(
     peer_device_id: &str,
     local_device_id: &str,
     space_id: &str,
-    tx: &mpsc::UnboundedSender<Message>,
+    tx: &ClientMessageSender,
     frame: SignedSyncEnvelope,
 ) {
     if authenticated {
@@ -148,7 +153,7 @@ pub(super) async fn handle_live_change(
     authenticated_tx: &AuthenticatedTx,
     local_device_id: &str,
     peer_device_id: &str,
-    tx: &mpsc::UnboundedSender<Message>,
+    tx: &ClientMessageSender,
     on_change: &Arc<Mutex<Option<ClientOnChangeCallback>>>,
     change_id: String,
     entity: SyncEntity,
@@ -179,11 +184,12 @@ pub(super) async fn handle_live_change(
     if prepared.receipt_recorded {
         send_msg(
             tx,
-            &LanSyncMessage::LiveReceiptAck {
+            LanSyncMessage::LiveReceiptAck {
                 policy_identity: policy_identity.clone(),
                 change_id: change_id.clone(),
             },
-        );
+        )
+        .await?;
     }
 
     let result = ark_sync::inbound_live_change::apply_live_change(
@@ -209,11 +215,12 @@ pub(super) async fn handle_live_change(
     }
     send_msg(
         tx,
-        &LanSyncMessage::LiveAck {
+        LanSyncMessage::LiveAck {
             change_id,
             policy_identity,
         },
-    );
+    )
+    .await?;
     Ok(())
 }
 
@@ -221,7 +228,7 @@ pub(super) async fn handle_live_change(
 pub(super) async fn handle_feed_ack(
     storage: &Arc<dyn SyncRuntimeStorage>,
     peer_device_id: &str,
-    tx: &mpsc::UnboundedSender<Message>,
+    tx: &ClientMessageSender,
     feed_in_flight: &ClientFeedInFlight,
     change_id: &str,
     ack: ark_application::sync_storage::OutboundAck,
@@ -246,7 +253,7 @@ pub(super) async fn handle_feed_ack(
 pub(super) async fn handle_applied_ack(
     storage: &Arc<dyn SyncRuntimeStorage>,
     peer_device_id: &str,
-    tx: &mpsc::UnboundedSender<Message>,
+    tx: &ClientMessageSender,
     feed_in_flight: &ClientFeedInFlight,
     authenticated_tx: &AuthenticatedTx,
     change_id: &str,
@@ -289,7 +296,7 @@ pub(super) async fn handle_applied_ack(
 pub(super) async fn handle_receipt_ack(
     storage: &Arc<dyn SyncRuntimeStorage>,
     peer_device_id: &str,
-    tx: &mpsc::UnboundedSender<Message>,
+    tx: &ClientMessageSender,
     feed_in_flight: &ClientFeedInFlight,
     authenticated_tx: &AuthenticatedTx,
     change_id: &str,

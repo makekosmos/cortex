@@ -17,7 +17,7 @@ pub(super) async fn handle(
     batch_id: &str,
     policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
     authenticated_tx: &Arc<Mutex<Option<AuthenticatedPeerSession>>>,
-    tx: &mpsc::UnboundedSender<Message>,
+    tx: &ClientMessageSender,
     feed_in_flight: &ClientFeedInFlight,
 ) -> bool {
     match apply(
@@ -46,7 +46,7 @@ async fn apply(
     batch_id: &str,
     policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
     authenticated_tx: &Arc<Mutex<Option<AuthenticatedPeerSession>>>,
-    tx: &mpsc::UnboundedSender<Message>,
+    tx: &ClientMessageSender,
     feed_in_flight: &ClientFeedInFlight,
 ) -> Result<(), String> {
     let pending = authenticated_tx
