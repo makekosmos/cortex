@@ -3,7 +3,6 @@ use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::{mpsc, Mutex, RwLock};
-use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::hlc::HLC;
@@ -21,7 +20,6 @@ mod sync_client_start;
 use crate::types::*;
 
 const TAG: &str = "[SyncClient]";
-const CONNECT_TIMEOUT_MS: u64 = 5_000;
 const RECONNECT_BASE_MS: u64 = 2_000;
 const RECONNECT_MAX_MS: u64 = 30_000;
 
@@ -303,53 +301,4 @@ async fn load_version_vector(
 fn send_msg(tx: &mpsc::UnboundedSender<Message>, msg: &LanSyncMessage) {
     let json = serialize_message(msg);
     let _ = tx.send(Message::Text(json.into()));
-}
-
-/// Race connections to all addresses; return the first successful WebSocket + winning address.
-async fn race_connect(
-    addresses: &[String],
-) -> Option<(
-    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
-    String,
-)> {
-    use tokio::sync::oneshot;
-
-    if addresses.is_empty() {
-        return None;
-    }
-
-    let (result_tx, result_rx) = oneshot::channel();
-    let result_tx = Arc::new(Mutex::new(Some(result_tx)));
-    let mut handles = Vec::new();
-
-    for addr in addresses {
-        let url = format!("ws://{addr}");
-        let addr_clone = addr.clone();
-        let result_tx = result_tx.clone();
-
-        let handle = tokio::spawn(async move {
-            let connect_future = connect_async(&url);
-            if let Ok(Ok((ws_stream, _))) =
-                tokio::time::timeout(Duration::from_millis(CONNECT_TIMEOUT_MS), connect_future)
-                    .await
-            {
-                let mut guard = result_tx.lock().await;
-                if let Some(tx) = guard.take() {
-                    let _ = tx.send((ws_stream, addr_clone));
-                }
-            }
-        });
-        handles.push(handle);
-    }
-
-    match result_rx.await {
-        Ok(result) => {
-            // Cancel other candidates
-            for handle in handles {
-                handle.abort();
-            }
-            Some(result)
-        }
-        Err(_) => None,
-    }
 }
