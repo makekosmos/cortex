@@ -41,7 +41,7 @@ async fn send_signed_integration_frame_requires_addressed_authenticated_peer() {
             registry_admission: None,
             in_flight_feed_position: None,
             in_flight_feed_policy_identity: None,
-            tx,
+            tx: PeerMessageSender::test(tx),
         },
     );
 

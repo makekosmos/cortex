@@ -15,7 +15,7 @@ pub(super) async fn handle_registry_admission(
             return;
         };
         let Some(admission) = peer.registry_admission.take() else {
-            let _ = peer.tx.send(Message::Close(None));
+            peer.tx.close_after_flush();
             return;
         };
         (admission, peer.tx.clone(), peer.device_id.clone())
@@ -54,7 +54,7 @@ pub(super) async fn handle_registry_admission(
         return;
     }
     for outgoing in progress.outgoing {
-        send_msg(&tx, &outgoing);
+        send_msg(&tx, &outgoing).await;
     }
     let ready_admission = match progress.status {
         ark_sync::server_session::AdmissionStatus::Ready(ready) => Some(ready),
@@ -126,18 +126,17 @@ pub(super) async fn handle_registry_admission(
     }
 
     let local_device_id = ctx.device_id.read().await.clone();
-    match admission_ref
+    let local_policy = match admission_ref
         .local_sync_policy_message(ctx.storage.as_ref(), &local_device_id)
         .await
     {
-        Ok(Some(policy)) => send_msg(&tx, &policy),
-        Ok(None) => {}
+        Ok(policy) => policy,
         Err(error) => {
             eprintln!("{TAG} local sync policy load failed: {error}");
             reject_peer(ctx, peer_id, &tx).await;
             return;
         }
-    }
+    };
 
     let activated = {
         let mut peers = ctx.peers.lock().await;
@@ -157,7 +156,7 @@ pub(super) async fn handle_registry_admission(
                     stale.device_name
                 );
                 stale.ready_peer = None;
-                let _ = stale.tx.send(Message::Close(None));
+                stale.tx.close_after_flush();
             }
             peers.remove(&stale_id);
         }
@@ -174,6 +173,9 @@ pub(super) async fn handle_registry_admission(
     if !activated {
         reject_peer(ctx, peer_id, &tx).await;
         return;
+    }
+    if let Some(policy) = local_policy {
+        send_msg(&tx, &policy).await;
     }
 
     let peer_addresses = {
@@ -225,12 +227,13 @@ pub(super) async fn handle_registry_admission(
                 vector,
                 origin_device_id: None,
             },
-        );
+        )
+        .await;
     }
     let known = ctx.known_peer_records.lock().await.clone();
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_millis(100)).await;
-        send_msg(&tx, &LanSyncMessage::PeerList { peers: known });
+        send_msg(&tx, &LanSyncMessage::PeerList { peers: known }).await;
     });
     eprintln!("{TAG} Direct registry admission ready for {device_id}");
 }
@@ -265,7 +268,8 @@ pub(super) async fn start_sync_after_policy(
             vector,
             origin_device_id: None,
         },
-    );
+    )
+    .await;
     Ok(())
 }
 
@@ -277,26 +281,32 @@ async fn broadcast_registry_events(
     if events.is_empty() {
         return;
     }
-    let peers = ctx.peers.lock().await;
-    for (peer_id, peer) in peers.iter() {
-        if *peer_id == source_peer_id || peer.ready_peer.is_none() {
-            continue;
-        }
-        let Some(session_id) = peer
-            .registry_admission
-            .as_ref()
-            .and_then(|admission| admission.session_id())
-        else {
-            continue;
-        };
+    let targets = {
+        let peers = ctx.peers.lock().await;
+        peers
+            .iter()
+            .filter_map(|(peer_id, peer)| {
+                if *peer_id == source_peer_id || peer.ready_peer.is_none() {
+                    return None;
+                }
+                let session_id = peer
+                    .registry_admission
+                    .as_ref()
+                    .and_then(|admission| admission.session_id())?;
+                Some((peer.tx.clone(), session_id.to_owned()))
+            })
+            .collect::<Vec<_>>()
+    };
+    for (tx, session_id) in targets {
         for event in events {
             send_msg(
-                &peer.tx,
+                &tx,
                 &LanSyncMessage::RegistryEventUpdate {
-                    session_id: session_id.to_owned(),
+                    session_id: session_id.clone(),
                     event: event.clone(),
                 },
-            );
+            )
+            .await;
         }
     }
 }
@@ -334,7 +344,7 @@ async fn revoke_disabled_sessions(
                 peer.ready_peer = None;
                 peer.outbound_snapshot.reset();
                 peer.in_flight_feed_position = None;
-                let _ = peer.tx.send(Message::Close(None));
+                peer.tx.close_after_flush();
             }
             peers.remove(peer_id);
         }
@@ -347,13 +357,9 @@ async fn revoke_disabled_sessions(
     local_device_disabled
 }
 
-pub(super) async fn reject_peer(
-    ctx: &MessageContext,
-    peer_id: usize,
-    tx: &mpsc::UnboundedSender<Message>,
-) {
+pub(super) async fn reject_peer(ctx: &MessageContext, peer_id: usize, tx: &PeerMessageSender) {
     if let Some(mut peer) = ctx.peers.lock().await.remove(&peer_id) {
         peer.ready_peer = None;
     }
-    let _ = tx.send(Message::Close(None));
+    tx.close_after_flush();
 }

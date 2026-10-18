@@ -128,7 +128,7 @@ pub(super) async fn handle_hello(ctx: &MessageContext, peer_id: usize, msg: LanS
         }
     };
 
-    send_msg(&tx, &reply);
+    send_msg(&tx, &reply).await;
 }
 
 async fn send_protocol_rejection(
@@ -156,7 +156,8 @@ async fn send_protocol_rejection(
                     Vec::new()
                 },
             },
-        );
+        )
+        .await;
     }
     reject_hello(peers, peer_id).await;
 }

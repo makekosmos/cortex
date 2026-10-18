@@ -2,9 +2,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use futures_util::{SinkExt, StreamExt};
 use tokio::sync::{mpsc, Mutex, RwLock};
 use tokio::time::interval;
+#[cfg(test)]
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::hlc::HLC;
@@ -68,7 +68,67 @@ struct PeerState {
     registry_admission: Option<ark_sync::server_session::DirectServerAdmission>,
     in_flight_feed_position: Option<i64>,
     in_flight_feed_policy_identity: Option<ark_application::sync_storage::PolicyIdentity>,
-    tx: mpsc::UnboundedSender<Message>,
+    tx: PeerMessageSender,
+}
+
+#[derive(Clone)]
+enum PeerMessageSender {
+    Session(ark_sync::session_io::SessionIoSender),
+    #[cfg(test)]
+    Test(mpsc::UnboundedSender<Message>),
+}
+
+impl PeerMessageSender {
+    fn session(session: ark_sync::session_io::SessionIoSender) -> Self {
+        Self::Session(session)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test(sender: mpsc::UnboundedSender<Message>) -> Self {
+        Self::Test(sender)
+    }
+
+    fn try_send(&self, message: LanSyncMessage) -> Result<(), ()> {
+        match self {
+            Self::Session(session) => session.try_send(message).map_err(|_| ()),
+            #[cfg(test)]
+            Self::Test(test) => {
+                let text = serialize_message(&message);
+                test.send(Message::Text(text.into())).map_err(|_| ())
+            }
+        }
+    }
+
+    async fn send(&self, message: LanSyncMessage) -> Result<(), ()> {
+        match self {
+            Self::Session(session) => session.send_bulk_wait(message).await.map_err(|_| ()),
+            #[cfg(test)]
+            Self::Test(test) => {
+                let text = serialize_message(&message);
+                test.send(Message::Text(text.into())).map_err(|_| ())
+            }
+        }
+    }
+
+    fn close(&self) {
+        match self {
+            Self::Session(session) => session.close(),
+            #[cfg(test)]
+            Self::Test(test) => {
+                let _ = test.send(Message::Close(None));
+            }
+        }
+    }
+
+    fn close_after_flush(&self) {
+        match self {
+            Self::Session(session) => session.close_after_flush(),
+            #[cfg(test)]
+            Self::Test(test) => {
+                let _ = test.send(Message::Close(None));
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -129,7 +189,7 @@ async fn current_ready_peer(
                 peer.ready_peer = None;
                 peer.outbound_snapshot.reset();
                 peer.in_flight_feed_position = None;
-                let _ = peer.tx.send(Message::Close(None));
+                peer.tx.close();
             }
         }
         return None;
@@ -293,9 +353,10 @@ fn peer_message_allowed(
         || !ark_sync::protocol::requires_registry_admission(message)
 }
 
-fn send_msg(tx: &mpsc::UnboundedSender<Message>, msg: &LanSyncMessage) {
-    let json = serialize_message(msg);
-    let _ = tx.send(Message::Text(json.into()));
+async fn send_msg(tx: &PeerMessageSender, msg: &LanSyncMessage) {
+    if tx.send(msg.clone()).await.is_err() {
+        tx.close();
+    }
 }
 
 /// Drops a rejected hello's session and closes its socket. A bare return would
@@ -303,7 +364,7 @@ fn send_msg(tx: &mpsc::UnboundedSender<Message>, msg: &LanSyncMessage) {
 /// waits on forever.
 async fn reject_hello(peers: &Mutex<HashMap<usize, PeerState>>, peer_id: usize) {
     if let Some(peer) = peers.lock().await.remove(&peer_id) {
-        let _ = peer.tx.send(Message::Close(None));
+        peer.tx.close_after_flush();
     }
 }
 

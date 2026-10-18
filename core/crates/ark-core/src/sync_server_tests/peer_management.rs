@@ -168,7 +168,7 @@
                 registry_admission: None,
                 in_flight_feed_position: None,
                 in_flight_feed_policy_identity: None,
-                tx: tx1,
+                tx: PeerMessageSender::test(tx1),
             },
         );
         server.peers.lock().await.insert(
@@ -187,7 +187,7 @@
                 registry_admission: None,
                 in_flight_feed_position: None,
                 in_flight_feed_policy_identity: None,
-                tx: tx2,
+                tx: PeerMessageSender::test(tx2),
             },
         );
         server.peers.lock().await.insert(
@@ -206,7 +206,7 @@
                 registry_admission: None,
                 in_flight_feed_position: None,
                 in_flight_feed_policy_identity: None,
-                tx: tx3,
+                tx: PeerMessageSender::test(tx3),
             },
         );
 
@@ -251,7 +251,7 @@
                 registry_admission: None,
                 in_flight_feed_position: None,
                 in_flight_feed_policy_identity: None,
-                tx,
+                tx: PeerMessageSender::test(tx),
             },
         );
 
@@ -290,7 +290,7 @@
             registry_admission: None,
             in_flight_feed_position: None,
             in_flight_feed_policy_identity: None,
-            tx: tx.clone(),
+            tx: PeerMessageSender::test(tx.clone()),
         };
         server.peers.lock().await.insert(1, state(1, "dup"));
         server.peers.lock().await.insert(2, state(2, "dup"));

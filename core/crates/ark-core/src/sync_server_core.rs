@@ -47,18 +47,15 @@ impl SyncServer {
                 session_id: session_id.to_owned(),
                 event: event.clone(),
             };
-            if peer
-                .tx
-                .send(Message::Text(serialize_message(&update).into()))
-                .is_err()
-            {
+            if peer.tx.try_send(update).is_err() {
+                peer.tx.close();
                 continue;
             }
             if revokes_target && peer.device_id == target {
                 peer.ready_peer = None;
                 peer.outbound_snapshot.reset();
                 peer.in_flight_feed_position = None;
-                let _ = peer.tx.send(Message::Close(None));
+                peer.tx.close();
                 revoked.push(*peer_id);
             }
         }
@@ -100,17 +97,18 @@ impl SyncServer {
                 &expected_origin_node_id,
             )
             .await?;
-        let peers = self.peers.lock().await;
-        let Some(peer) = peers
-            .values()
-            .find(|peer| peer.ready_peer.is_some() && peer.device_id == recipient_device_id)
-        else {
-            return Err("target LAN peer is not authenticated".into());
+        let tx = {
+            let peers = self.peers.lock().await;
+            let Some(peer) = peers
+                .values()
+                .find(|peer| peer.ready_peer.is_some() && peer.device_id == recipient_device_id)
+            else {
+                return Err("target LAN peer is not authenticated".into());
+            };
+            peer.tx.clone()
         };
-        peer.tx
-            .send(Message::Text(
-                serialize_message(&LanSyncMessage::SignedIntegrationFrame { frame }).into(),
-            ))
+        tx.send(LanSyncMessage::SignedIntegrationFrame { frame })
+            .await
             .map_err(|_| "LAN peer connection is closed".into())
     }
     pub fn new(storage: Arc<dyn SyncRuntimeStorage>) -> Self {
@@ -223,7 +221,7 @@ impl SyncServer {
             if let Some(peer) = peers.get_mut(peer_id) {
                 if peer.ready_peer.is_some() {
                     peer.ready_peer = None;
-                    let _ = peer.tx.send(Message::Close(None));
+                    peer.tx.close();
                     closed += 1;
                 }
             }

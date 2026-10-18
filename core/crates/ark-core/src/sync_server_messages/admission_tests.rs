@@ -25,7 +25,7 @@ async fn registry_disable_closes_ready_session_and_removes_discovery_record() {
         registry_admission: None,
         in_flight_feed_position: Some(42),
         in_flight_feed_policy_identity: None,
-        tx,
+        tx: PeerMessageSender::test(tx),
     };
     let mut peers = HashMap::new();
     peers.insert(7, peer);

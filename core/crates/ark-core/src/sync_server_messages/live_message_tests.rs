@@ -29,7 +29,7 @@ async fn stale_snapshot_ack_does_not_complete_or_clear_pending_snapshot() {
         registry_admission: None,
         in_flight_feed_position: None,
         in_flight_feed_policy_identity: None,
-        tx,
+        tx: PeerMessageSender::test(tx),
     };
     let mut peers = HashMap::new();
     peers.insert(7, peer);

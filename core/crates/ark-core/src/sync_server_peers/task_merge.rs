@@ -40,10 +40,8 @@ pub(crate) async fn pump_task_merge_batch(
     });
     if still_ready {
         let message = LanSyncMessage::TaskMergeBatch { batch };
-        if tx
-            .send(Message::Text(serialize_message(&message).into()))
-            .is_err()
-        {
+        if tx.send(message).await.is_err() {
+            tx.close();
             return Err("task_merge_batch_send_failed".into());
         }
     }

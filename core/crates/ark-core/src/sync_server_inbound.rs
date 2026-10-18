@@ -47,7 +47,8 @@ pub(super) async fn handle_signed_integration_frame(
                 message_id: frame.message_id,
                 accepted: true,
             },
-        );
+        )
+        .await;
     }
 }
 
@@ -115,7 +116,8 @@ pub(super) async fn handle_live_change(
                 policy_identity: policy_identity.clone(),
                 change_id: change_id.clone(),
             },
-        );
+        )
+        .await;
     }
 
     let result = match ark_sync::inbound_live_change::apply_live_change(
@@ -153,7 +155,8 @@ pub(super) async fn handle_live_change(
                     change_id,
                     policy_identity: policy_identity.clone(),
                 },
-            );
+            )
+            .await;
         }
         ark_sync::inbound_live_change::LiveChangeDisposition::Stale => {
             send_msg(
@@ -162,7 +165,8 @@ pub(super) async fn handle_live_change(
                     change_id,
                     policy_identity: policy_identity.clone(),
                 },
-            );
+            )
+            .await;
         }
         ark_sync::inbound_live_change::LiveChangeDisposition::Pending => {}
     }
@@ -276,7 +280,7 @@ mod tests {
                 registry_admission: None,
                 in_flight_feed_position: None,
                 in_flight_feed_policy_identity: None,
-                tx,
+                tx: PeerMessageSender::test(tx),
             },
         );
         let ctx = MessageContext {

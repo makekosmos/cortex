@@ -97,7 +97,7 @@ pub(super) mod reject_tests {
                 registry_admission: None,
                 in_flight_feed_position: None,
                 in_flight_feed_policy_identity: None,
-                tx,
+                tx: PeerMessageSender::test(tx),
             },
         );
 

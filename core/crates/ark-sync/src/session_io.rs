@@ -5,6 +5,11 @@ use tokio::task::JoinHandle;
 
 use crate::protocol::LanSyncMessage;
 
+#[async_trait::async_trait]
+pub trait SessionOutboundGuard: Send + Sync {
+    async fn allow(&self, message: &LanSyncMessage) -> bool;
+}
+
 pub enum SessionIoEvent {
     Message(Box<LanSyncMessage>),
     MalformedMessage,
@@ -20,6 +25,71 @@ pub enum SessionIoError {
     TransportTask(String),
 }
 
+#[derive(Clone)]
+pub struct SessionIoPendingSends {
+    state: std::sync::Arc<std::sync::Mutex<OutboundState>>,
+    changed: std::sync::Arc<tokio::sync::Notify>,
+}
+
+#[derive(Default)]
+struct OutboundState {
+    closing: bool,
+    pending: usize,
+}
+
+struct PendingSend(SessionIoPendingSends);
+
+impl SessionIoPendingSends {
+    fn new() -> Self {
+        Self {
+            state: std::sync::Arc::new(std::sync::Mutex::new(OutboundState::default())),
+            changed: std::sync::Arc::new(tokio::sync::Notify::new()),
+        }
+    }
+
+    fn begin(&self) -> Result<PendingSend, SessionIoError> {
+        let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
+        if state.closing {
+            return Err(SessionIoError::OutboundClosed);
+        }
+        state.pending += 1;
+        Ok(PendingSend(self.clone()))
+    }
+
+    fn close(&self) {
+        self.state
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .closing = true;
+        self.changed.notify_one();
+    }
+
+    pub fn has_pending(&self) -> bool {
+        self.state
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .pending
+            > 0
+    }
+
+    pub async fn changed(&self) {
+        self.changed.notified().await;
+    }
+}
+
+impl Drop for PendingSend {
+    fn drop(&mut self) {
+        let mut state = self
+            .0
+            .state
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        state.pending -= 1;
+        drop(state);
+        self.0.changed.notify_one();
+    }
+}
+
 pub struct SessionIo {
     pub(crate) incoming: mpsc::Receiver<SessionIoEvent>,
     outgoing: SessionIoSender,
@@ -31,6 +101,9 @@ pub struct SessionIoDriver {
     pub incoming: mpsc::Sender<SessionIoEvent>,
     pub outgoing: mpsc::Receiver<LanSyncMessage>,
     pub control_outgoing: mpsc::Receiver<LanSyncMessage>,
+    pub outbound_guard: Option<std::sync::Arc<dyn SessionOutboundGuard>>,
+    pub close_after_flush: mpsc::Receiver<()>,
+    pub pending_sends: SessionIoPendingSends,
     pub shutdown: watch::Receiver<bool>,
     pub stop: watch::Sender<bool>,
 }
@@ -40,11 +113,21 @@ pub struct SessionIoSender {
     outgoing: mpsc::Sender<LanSyncMessage>,
     control_outgoing: mpsc::Sender<LanSyncMessage>,
     shutdown: watch::Sender<bool>,
+    close_after_flush: mpsc::Sender<()>,
+    pending_sends: SessionIoPendingSends,
 }
 
 impl SessionIo {
     pub fn start_transport(
         capacity: usize,
+        start_worker: impl FnOnce(SessionIoDriver) -> JoinHandle<()>,
+    ) -> Result<Self, SessionIoError> {
+        Self::start_transport_with_guard(capacity, None, start_worker)
+    }
+
+    pub fn start_transport_with_guard(
+        capacity: usize,
+        outbound_guard: Option<std::sync::Arc<dyn SessionOutboundGuard>>,
         start_worker: impl FnOnce(SessionIoDriver) -> JoinHandle<()>,
     ) -> Result<Self, SessionIoError> {
         let capacity = NonZeroUsize::new(capacity)
@@ -54,10 +137,15 @@ impl SessionIo {
         let (outgoing, outgoing_rx) = mpsc::channel(capacity);
         let (control_outgoing, control_outgoing_rx) = mpsc::channel(capacity);
         let (shutdown, shutdown_rx) = watch::channel(false);
+        let (close_after_flush, close_after_flush_rx) = mpsc::channel(1);
+        let pending_sends = SessionIoPendingSends::new();
         let worker = start_worker(SessionIoDriver {
             incoming: incoming_tx,
             outgoing: outgoing_rx,
             control_outgoing: control_outgoing_rx,
+            outbound_guard,
+            close_after_flush: close_after_flush_rx,
+            pending_sends: pending_sends.clone(),
             shutdown: shutdown_rx,
             stop: shutdown.clone(),
         });
@@ -68,6 +156,8 @@ impl SessionIo {
                 outgoing,
                 control_outgoing,
                 shutdown: shutdown.clone(),
+                close_after_flush,
+                pending_sends,
             },
             shutdown: Some(shutdown),
             worker: Some(worker),
@@ -87,6 +177,7 @@ impl SessionIo {
     }
 
     pub async fn finish(mut self) -> Result<(), SessionIoError> {
+        self.outgoing.pending_sends.close();
         if let Some(shutdown) = self.shutdown.take() {
             let _ = shutdown.send(true);
         }
@@ -100,7 +191,21 @@ impl SessionIo {
 }
 
 impl SessionIoSender {
+    pub fn try_send(&self, message: LanSyncMessage) -> Result<(), SessionIoError> {
+        let _pending = self.pending_sends.begin()?;
+        let sender = if is_bulk_message(&message) {
+            &self.outgoing
+        } else {
+            &self.control_outgoing
+        };
+        sender.try_send(message).map_err(|error| match error {
+            mpsc::error::TrySendError::Full(_) => SessionIoError::OutboundFull,
+            mpsc::error::TrySendError::Closed(_) => SessionIoError::OutboundClosed,
+        })
+    }
+
     pub async fn send(&self, message: LanSyncMessage) -> Result<(), SessionIoError> {
+        let _pending = self.pending_sends.begin()?;
         if is_bulk_message(&message) {
             return self
                 .outgoing
@@ -120,6 +225,7 @@ impl SessionIoSender {
         if !is_bulk_message(&message) {
             return self.send(message).await;
         }
+        let _pending = self.pending_sends.begin()?;
         self.outgoing
             .send(message)
             .await
@@ -127,7 +233,13 @@ impl SessionIoSender {
     }
 
     pub fn close(&self) {
+        self.pending_sends.close();
         let _ = self.shutdown.send(true);
+    }
+
+    pub fn close_after_flush(&self) {
+        self.pending_sends.close();
+        let _ = self.close_after_flush.try_send(());
     }
 }
 
@@ -143,6 +255,7 @@ fn is_bulk_message(message: &LanSyncMessage) -> bool {
 
 impl Drop for SessionIo {
     fn drop(&mut self) {
+        self.outgoing.pending_sends.close();
         if let Some(shutdown) = self.shutdown.take() {
             let _ = shutdown.send(true);
         }
@@ -194,6 +307,61 @@ mod tests {
         assert!(!blocked_send.is_finished());
 
         let _ = release_tx.send(());
+        blocked_send.await.unwrap().unwrap();
+        session.finish().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn bulk_sender_waits_for_capacity_without_dropping_the_frame() {
+        let (started_tx, started_rx) = oneshot::channel();
+        let (release_tx, release_rx) = oneshot::channel();
+        let session = SessionIo::start_transport(1, move |mut driver| {
+            tokio::spawn(async move {
+                let _ = started_tx.send(());
+                let _ = release_rx.await;
+                let first = driver.outgoing.recv().await;
+                let second = driver.outgoing.recv().await;
+                assert!(matches!(
+                    first,
+                    Some(LanSyncMessage::SyncChanges { batch_id, .. }) if batch_id == "first"
+                ));
+                assert!(matches!(
+                    second,
+                    Some(LanSyncMessage::SyncChanges { batch_id, .. }) if batch_id == "second"
+                ));
+            })
+        })
+        .unwrap();
+        started_rx.await.unwrap();
+
+        let sender = session.sender();
+        sender
+            .send(LanSyncMessage::SyncChanges {
+                policy_identity: None,
+                batch_id: "first".into(),
+                entities: Vec::new(),
+                is_last: false,
+                origin_device_id: None,
+                usage_complete_through: None,
+            })
+            .await
+            .unwrap();
+        let blocked_send = tokio::spawn(async move {
+            sender
+                .send_bulk_wait(LanSyncMessage::SyncChanges {
+                    policy_identity: None,
+                    batch_id: "second".into(),
+                    entities: Vec::new(),
+                    is_last: false,
+                    origin_device_id: None,
+                    usage_complete_through: None,
+                })
+                .await
+        });
+        tokio::task::yield_now().await;
+        assert!(!blocked_send.is_finished());
+
+        release_tx.send(()).unwrap();
         blocked_send.await.unwrap().unwrap();
         session.finish().await.unwrap();
     }

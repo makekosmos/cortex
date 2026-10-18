@@ -1,7 +1,7 @@
 use std::time::Duration;
 use std::{io, net::SocketAddr};
 
-use ark_sync::session_io::{SessionIo, SessionIoDriver, SessionIoEvent};
+use ark_sync::session_io::{SessionIo, SessionIoDriver, SessionIoEvent, SessionOutboundGuard};
 use futures_util::{SinkExt, StreamExt};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::{TcpListener, TcpStream};
@@ -42,7 +42,17 @@ pub fn session_io<S>(
 where
     S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 {
-    SessionIo::start_transport(SESSION_QUEUE_CAPACITY, move |driver| {
+    session_io_with_guard(websocket, None)
+}
+
+pub fn session_io_with_guard<S>(
+    websocket: WebSocketStream<S>,
+    outbound_guard: Option<std::sync::Arc<dyn SessionOutboundGuard>>,
+) -> Result<SessionIo, ark_sync::session_io::SessionIoError>
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
+    SessionIo::start_transport_with_guard(SESSION_QUEUE_CAPACITY, outbound_guard, move |driver| {
         tokio::spawn(run_session_transport(websocket, driver))
     })
 }
@@ -55,20 +65,26 @@ where
         incoming,
         outgoing,
         control_outgoing,
+        close_after_flush,
+        pending_sends,
+        outbound_guard,
         shutdown,
         stop,
     } = driver;
     let (sink, stream) = websocket.split();
     let (control_tx, control_rx) = mpsc::channel(8);
     let mut tasks = JoinSet::new();
-    tasks.spawn(write_session_frames(
+    tasks.spawn(write_session_frames(SessionWriter {
         sink,
         outgoing,
         control_outgoing,
-        control_rx,
-        incoming.clone(),
-        shutdown.clone(),
-    ));
+        outbound_guard,
+        control: control_rx,
+        close_after_flush,
+        pending_sends,
+        incoming: incoming.clone(),
+        shutdown: shutdown.clone(),
+    }));
     tasks.spawn(read_session_frames(
         stream,
         incoming.clone(),
@@ -99,26 +115,66 @@ enum WebSocketControl {
     Pong(tokio_tungstenite::tungstenite::Bytes),
 }
 
-async fn write_session_frames<S>(
-    mut sink: futures_util::stream::SplitSink<WebSocketStream<S>, Message>,
-    mut outgoing: mpsc::Receiver<ark_sync::protocol::LanSyncMessage>,
-    mut control_outgoing: mpsc::Receiver<ark_sync::protocol::LanSyncMessage>,
-    mut control: mpsc::Receiver<WebSocketControl>,
+struct SessionWriter<S> {
+    sink: futures_util::stream::SplitSink<WebSocketStream<S>, Message>,
+    outgoing: mpsc::Receiver<ark_sync::protocol::LanSyncMessage>,
+    control_outgoing: mpsc::Receiver<ark_sync::protocol::LanSyncMessage>,
+    outbound_guard: Option<std::sync::Arc<dyn SessionOutboundGuard>>,
+    control: mpsc::Receiver<WebSocketControl>,
+    close_after_flush: mpsc::Receiver<()>,
+    pending_sends: ark_sync::session_io::SessionIoPendingSends,
     incoming: mpsc::Sender<SessionIoEvent>,
-    mut shutdown: watch::Receiver<bool>,
-) where
+    shutdown: watch::Receiver<bool>,
+}
+
+async fn write_session_frames<S>(writer: SessionWriter<S>)
+where
     S: AsyncRead + AsyncWrite + Unpin,
 {
+    let SessionWriter {
+        mut sink,
+        mut outgoing,
+        mut control_outgoing,
+        outbound_guard,
+        mut control,
+        mut close_after_flush,
+        pending_sends,
+        incoming,
+        mut shutdown,
+    } = writer;
     let mut outgoing_open = true;
     let mut control_outgoing_open = true;
+    let mut close_channel_open = true;
+    let mut close_requested = false;
     loop {
+        if close_requested
+            && outgoing.is_empty()
+            && control_outgoing.is_empty()
+            && !pending_sends.has_pending()
+        {
+            break;
+        }
         tokio::select! {
             biased;
             _ = shutdown.changed() => break,
+            close = close_after_flush.recv(), if close_channel_open && !close_requested => {
+                match close {
+                    Some(()) => close_requested = true,
+                    None => close_channel_open = false,
+                }
+            }
+            _ = pending_sends.changed(), if close_requested => {}
             outgoing_message = control_outgoing.recv(), if control_outgoing_open => {
                 match outgoing_message {
                     Some(message) => {
-                        if !write_sync_frame(&mut sink, message, &incoming).await {
+                        if !write_sync_frame(
+                            &mut sink,
+                            message,
+                            &incoming,
+                            outbound_guard.as_deref(),
+                        )
+                        .await
+                        {
                             return;
                         }
                     }
@@ -128,7 +184,14 @@ async fn write_session_frames<S>(
             outgoing_message = outgoing.recv(), if outgoing_open => {
                 match outgoing_message {
                     Some(message) => {
-                        if !write_sync_frame(&mut sink, message, &incoming).await {
+                        if !write_sync_frame(
+                            &mut sink,
+                            message,
+                            &incoming,
+                            outbound_guard.as_deref(),
+                        )
+                        .await
+                        {
                             return;
                         }
                     }
@@ -154,10 +217,16 @@ async fn write_sync_frame<S>(
     sink: &mut futures_util::stream::SplitSink<WebSocketStream<S>, Message>,
     message: ark_sync::protocol::LanSyncMessage,
     incoming: &mpsc::Sender<SessionIoEvent>,
+    outbound_guard: Option<&dyn SessionOutboundGuard>,
 ) -> bool
 where
     S: AsyncRead + AsyncWrite + Unpin,
 {
+    if let Some(guard) = outbound_guard {
+        if !guard.allow(&message).await {
+            return true;
+        }
+    }
     let text = match serde_json::to_string(&message) {
         Ok(text) => text,
         Err(error) => {
@@ -282,121 +351,5 @@ pub async fn race_connect(addresses: &[String]) -> Option<(ClientWebSocket, Stri
 }
 
 #[cfg(test)]
-mod listener_tests {
-    use super::*;
-    use futures_util::{SinkExt, StreamExt};
-    use tokio_tungstenite::tungstenite::Message;
-
-    #[tokio::test]
-    async fn listener_accepts_a_websocket_and_receives_a_text_frame() {
-        let listener = Listener::bind("127.0.0.1:0").await.expect("listener binds");
-        let address = listener
-            .listener
-            .local_addr()
-            .expect("listener address is available");
-        let client = tokio::spawn(async move {
-            let (mut socket, _) = connect_async(format!("ws://{address}"))
-                .await
-                .expect("client handshake succeeds");
-            socket
-                .send(Message::Text("hello".into()))
-                .await
-                .expect("client sends text");
-        });
-        let (mut socket, peer_address) = listener.accept().await.expect("server accepts client");
-        assert!(peer_address.ip().is_loopback());
-        assert!(matches!(
-            socket.next().await,
-            Some(Ok(Message::Text(text))) if text == "hello"
-        ));
-        client.await.expect("client task completes");
-    }
-
-    #[tokio::test]
-    async fn session_io_translates_frames_and_joins_after_close() {
-        let listener = Listener::bind("127.0.0.1:0").await.expect("listener binds");
-        let address = listener
-            .listener
-            .local_addr()
-            .expect("listener address is available");
-        let client = tokio::spawn(async move {
-            let (mut socket, _) = connect_async(format!("ws://{address}"))
-                .await
-                .expect("client connects");
-            socket
-                .send(Message::Text(
-                    serde_json::to_string(&ark_sync::protocol::LanSyncMessage::Ping { ts: 42 })
-                        .expect("ping serializes")
-                        .into(),
-                ))
-                .await
-                .expect("client sends ping");
-            let Some(Ok(Message::Text(text))) = socket.next().await else {
-                panic!("client receives server protocol message");
-            };
-            assert!(matches!(
-                serde_json::from_str::<ark_sync::protocol::LanSyncMessage>(&text)
-                    .expect("server message deserializes"),
-                ark_sync::protocol::LanSyncMessage::Pong { ts: 42 }
-            ));
-            socket
-                .send(Message::Text("malformed".into()))
-                .await
-                .expect("client sends malformed protocol message");
-            socket.close(None).await.expect("client closes websocket");
-        });
-
-        let (websocket, _) = listener.accept().await.expect("server accepts client");
-        let mut session = session_io(websocket).expect("session transport starts");
-        assert!(matches!(
-            session.receive().await,
-            Some(SessionIoEvent::Message(message))
-                if matches!(*message, ark_sync::protocol::LanSyncMessage::Ping { ts: 42 })
-        ));
-        session
-            .send(ark_sync::protocol::LanSyncMessage::Pong { ts: 42 })
-            .await
-            .expect("session sends protocol message");
-        assert!(matches!(
-            session.receive().await,
-            Some(SessionIoEvent::MalformedMessage)
-        ));
-        assert!(matches!(
-            session.receive().await,
-            Some(SessionIoEvent::Closed)
-        ));
-        client.await.expect("client completes");
-        session.finish().await.expect("transport worker joins");
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::race_connect;
-    use tokio::net::TcpListener;
-    use tokio_tungstenite::accept_async;
-
-    #[tokio::test]
-    async fn connects_to_the_first_available_websocket_address() {
-        let listener = TcpListener::bind("127.0.0.1:0")
-            .await
-            .expect("test listener binds");
-        let address = listener
-            .local_addr()
-            .expect("test listener address loads")
-            .to_string();
-        let server = tokio::spawn(async move {
-            let (stream, _) = listener.accept().await.expect("client connects");
-            accept_async(stream)
-                .await
-                .expect("websocket handshake succeeds")
-        });
-
-        let connected = race_connect(&["127.0.0.1:0".into(), address.clone()])
-            .await
-            .expect("available websocket address connects");
-        assert_eq!(connected.1, address);
-        drop(connected);
-        drop(server.await.expect("websocket server finishes"));
-    }
-}
+#[path = "websocket_tests.rs"]
+mod tests;

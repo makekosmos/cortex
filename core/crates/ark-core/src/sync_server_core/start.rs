@@ -1,6 +1,77 @@
 use super::super::{current_ready_peer, peer_message_allowed};
-use super::*;
+use super::{signed_integration_write_is_authorized, *};
 use ark_sync::outbound_snapshot::OutboundSnapshotProgress;
+use ark_sync::session_io::SessionIoEvent;
+
+struct ServerPeerOutboundGuard {
+    storage: Arc<dyn SyncRuntimeStorage>,
+    peers: Arc<Mutex<HashMap<usize, PeerState>>>,
+    peer_id: usize,
+    space_id: Arc<RwLock<String>>,
+    device_id: Arc<RwLock<String>>,
+}
+
+#[async_trait::async_trait]
+impl ark_sync::session_io::SessionOutboundGuard for ServerPeerOutboundGuard {
+    async fn allow(&self, message: &LanSyncMessage) -> bool {
+        let ready_peer = if ark_sync::protocol::requires_registry_admission(message) {
+            current_ready_peer(self.storage.as_ref(), &self.peers, self.peer_id).await
+        } else {
+            None
+        };
+        if !peer_message_allowed(ready_peer.as_ref(), self.peer_id, message) {
+            return false;
+        }
+
+        let LanSyncMessage::SignedIntegrationFrame { frame } = message else {
+            return true;
+        };
+        let peer_is_current = self
+            .peers
+            .lock()
+            .await
+            .get(&self.peer_id)
+            .is_some_and(|peer| {
+                peer.ready_peer.as_ref() == ready_peer.as_ref()
+                    && peer.device_id == frame.recipient_node_id
+            });
+        let expected_space_id = self.space_id.read().await.clone();
+        let expected_device_id = self.device_id.read().await.clone();
+        if !peer_is_current
+            || !signed_integration_write_is_authorized(
+                &self.storage,
+                frame,
+                &expected_space_id,
+                &expected_device_id,
+            )
+            .await
+        {
+            return false;
+        }
+        current_ready_peer(self.storage.as_ref(), &self.peers, self.peer_id)
+            .await
+            .as_ref()
+            == ready_peer.as_ref()
+    }
+}
+
+impl ServerPeerOutboundGuard {
+    fn new(
+        storage: Arc<dyn SyncRuntimeStorage>,
+        peers: Arc<Mutex<HashMap<usize, PeerState>>>,
+        peer_id: usize,
+        space_id: Arc<RwLock<String>>,
+        device_id: Arc<RwLock<String>>,
+    ) -> Self {
+        Self {
+            storage,
+            peers,
+            peer_id,
+            space_id,
+            device_id,
+        }
+    }
+}
 
 impl SyncServer {
     /// Start the WS server on an explicit bind address for embedders and tests.
@@ -62,7 +133,11 @@ impl SyncServer {
                             let peers_guard = peers.lock().await;
                             for peer in peers_guard.values() {
                             if peer.ready_peer.is_some() {
-                                let _ = peer.tx.send(Message::Ping(vec![].into()));
+                                let ts = std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap_or_default()
+                                    .as_millis() as u64;
+                                let _ = peer.tx.try_send(LanSyncMessage::Ping { ts });
                             }
                             }
                             peers_guard
@@ -101,93 +176,27 @@ impl SyncServer {
                                 let ordering = std::sync::atomic::Ordering::Relaxed;
                                 let peer_id = next_peer_id.fetch_add(1, ordering);
 
-                                let (mut ws_sink, mut ws_stream_rx) = ws_stream.split();
-                                let (tx, mut rx) = mpsc::unbounded_channel::<Message>();
-
-                                // Writer task. Re-check signed integration authority at the
-                                // actual socket write boundary so a revoke racing after enqueue
-                                // cannot still put an unauthorized frame on the wire.
-                                let storage_writer = storage.clone();
-                                let peers_writer = peers.clone();
-                                let space_id_writer = space_id.clone();
-                                let device_id_writer = device_id.clone();
-                                track_task(&conn_tasks, tokio::spawn(async move {
-                                    while let Some(msg) = rx.recv().await {
-                                        if let Message::Text(text) = &msg {
-                                            if let Some(sync_message) = deserialize_message(text) {
-                                                let carries_user_data =
-                                                    ark_sync::protocol::requires_registry_admission(
-                                                        &sync_message,
-                                                    );
-                                                let ready_peer = if carries_user_data {
-                                                    current_ready_peer(
-                                                        storage_writer.as_ref(),
-                                                        &peers_writer,
-                                                        peer_id,
-                                                    )
-                                                    .await
-                                                } else {
-                                                    None
-                                                };
-                                                if !peer_message_allowed(
-                                                    ready_peer.as_ref(),
-                                                    peer_id,
-                                                    &sync_message,
-                                                ) {
-                                                    continue;
-                                                }
-                                                let LanSyncMessage::SignedIntegrationFrame {
-                                                    frame,
-                                                } = sync_message
-                                                else {
-                                                    if ws_sink.send(msg).await.is_err() {
-                                                        break;
-                                                    }
-                                                    continue;
-                                                };
-                                                let peer_is_current = peers_writer
-                                                    .lock()
-                                                    .await
-                                                    .get(&peer_id)
-                                                    .is_some_and(|peer| {
-                                                        peer.ready_peer.as_ref()
-                                                            == ready_peer.as_ref()
-                                                            && peer.device_id
-                                                                == frame.recipient_node_id
-                                                    });
-                                                let expected_space_id =
-                                                    space_id_writer.read().await.clone();
-                                                let expected_device_id =
-                                                    device_id_writer.read().await.clone();
-                                                if !peer_is_current
-                                                    || !signed_integration_write_is_authorized(
-                                                        &storage_writer,
-                                                        &frame,
-                                                        &expected_space_id,
-                                                        &expected_device_id,
-                                                    )
-                                                    .await
-                                                {
-                                                    continue;
-                                                }
-                                                if current_ready_peer(
-                                                    storage_writer.as_ref(),
-                                                    &peers_writer,
-                                                    peer_id,
-                                                )
-                                                .await
-                                                .as_ref()
-                                                    != ready_peer.as_ref()
-                                                {
-                                                    continue;
-                                                }
-                                            }
-                                        }
-                                        if ws_sink.send(msg).await.is_err() {
-                                            break;
-                                        }
+                                let outbound_guard = Arc::new(ServerPeerOutboundGuard::new(
+                                    storage.clone(),
+                                    peers.clone(),
+                                    peer_id,
+                                    space_id.clone(),
+                                    device_id.clone(),
+                                ));
+                                let mut session_io =
+                                    match ark_net::websocket::session_io_with_guard(
+                                        ws_stream,
+                                        Some(outbound_guard),
+                                    ) {
+                                    Ok(session_io) => session_io,
+                                    Err(error) => {
+                                        eprintln!(
+                                            "{TAG} could not start peer transport: {error:?}"
+                                        );
+                                        continue;
                                     }
-                                }));
+                                };
+                                let tx = PeerMessageSender::session(session_io.sender());
 
                                 let peer_state = PeerState {
                                     device_id: String::new(),
@@ -226,19 +235,28 @@ impl SyncServer {
                                 let on_peer_disconnect_reader = on_peer_disconnect.clone();
 
                                 track_task(&conn_tasks, tokio::spawn(async move {
-                                    while let Some(Ok(msg)) = ws_stream_rx.next().await {
-                                        match msg {
-                                            Message::Text(text) => {
-                                                if let Some(sync_msg) = deserialize_message(&text) {
-                                                    sync_server_messages::handle_message(
-                                                        &ctx, peer_id, sync_msg,
-                                                    )
-                                                    .await;
-                                                }
+                                    while let Some(event) = session_io.receive().await {
+                                        match event {
+                                            SessionIoEvent::Message(message) => {
+                                                sync_server_messages::handle_message(
+                                                    &ctx, peer_id, *message,
+                                                )
+                                                .await;
                                             }
-                                            Message::Close(_) => break,
-                                            _ => {}
+                                            SessionIoEvent::MalformedMessage => {
+                                                eprintln!(
+                                                    "{TAG} ignoring malformed peer sync message"
+                                                );
+                                            }
+                                            SessionIoEvent::Closed | SessionIoEvent::Failed(_) => {
+                                                break;
+                                            }
                                         }
+                                    }
+                                    if let Err(error) = session_io.finish().await {
+                                        eprintln!(
+                                            "{TAG} peer transport shutdown failed: {error:?}"
+                                        );
                                     }
 
                                     // Peer disconnected

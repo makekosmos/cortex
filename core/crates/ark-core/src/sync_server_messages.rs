@@ -127,7 +127,7 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                         match emission {
                             ark_sync::outbound_snapshot::SnapshotEmission::Page(messages) => {
                                 for message in messages {
-                                    send_msg(&tx, &message);
+                                    send_msg(&tx, &message).await;
                                 }
                             }
                             ark_sync::outbound_snapshot::SnapshotEmission::Terminal {
@@ -145,7 +145,7 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                                     })
                                 };
                                 if ticket_stored {
-                                    send_msg(&tx, &message);
+                                    send_msg(&tx, &message).await;
                                 }
                             }
                         }
@@ -247,7 +247,8 @@ pub(super) async fn handle_message(ctx: &MessageContext, peer_id: usize, msg: La
                     accepted: snapshot.accepted_count(),
                     policy_identity,
                 },
-            );
+            )
+            .await;
 
             if is_last {
                 eprintln!("{TAG} Received all sync batches from peer {peer_id}");

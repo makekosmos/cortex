@@ -50,7 +50,7 @@ impl SyncServer {
         {
             let mut peers = self.peers.lock().await;
             for peer in peers.values() {
-                let _ = peer.tx.send(Message::Close(None));
+                peer.tx.close();
             }
             peers.clear();
         }

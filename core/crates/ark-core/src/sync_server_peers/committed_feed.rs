@@ -223,10 +223,8 @@ pub(crate) async fn pump_committed_feed(
             entity,
             origin_device_id: None,
         };
-        if tx
-            .send(Message::Text(serialize_message(&message).into()))
-            .is_err()
-        {
+        if tx.send(message).await.is_err() {
+            tx.close();
             if let Some(peer) = peers.lock().await.get_mut(&peer_id) {
                 peer.in_flight_feed_position = None;
                 peer.in_flight_feed_policy_identity = None;

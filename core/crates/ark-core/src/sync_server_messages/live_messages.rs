@@ -140,7 +140,7 @@ pub(super) async fn handle_live_message(ctx: &MessageContext, peer_id: usize, ms
                         through_position: ack.through_position,
                         policy_identity: batch.identity,
                     };
-                    send_msg(&tx, &message);
+                    send_msg(&tx, &message).await;
                     let peer_ids = peers.lock().await.keys().copied().collect::<Vec<_>>();
                     for peer_id in peer_ids {
                         if let Err(error) =
@@ -183,7 +183,7 @@ pub(super) async fn handle_live_message(ctx: &MessageContext, peer_id: usize, ms
                 peers_guard.get(&peer_id).map(|p| p.tx.clone())
             };
             if let Some(tx) = tx {
-                send_msg(&tx, &LanSyncMessage::Pong { ts });
+                send_msg(&tx, &LanSyncMessage::Pong { ts }).await;
             }
         }
 
