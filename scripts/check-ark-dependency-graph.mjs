@@ -48,7 +48,13 @@ export function validateDependencyGraph(metadata) {
 }
 
 export function validateArkNetSourceBoundary(sources) {
-  const forbidden = ["SyncRuntimeStorage", "ark_store", "rusqlite"];
+  const forbidden = [
+    "SyncRuntimeStorage",
+    "IntegrationReplicationBackend",
+    "StorageBackedOutboundIntegrationFrameAuthorizer",
+    "ark_store",
+    "rusqlite",
+  ];
   return sources.flatMap(({ path: sourcePath, source }) =>
     forbidden
       .filter((dependency) => new RegExp(`\\b${dependency}\\b`).test(source))

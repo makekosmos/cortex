@@ -55,11 +55,14 @@ test("rejects storage contracts and SQLite imports from ark-net source", () => {
     validateArkNetSourceBoundary([
       {
         path: "iroh.rs",
-        source: "use ark_sync::SyncRuntimeStorage; use rusqlite::Connection;",
+        source:
+          "use ark_sync::SyncRuntimeStorage; use ark_application::IntegrationReplicationBackend; use ark_sync::StorageBackedOutboundIntegrationFrameAuthorizer; use rusqlite::Connection;",
       },
     ]),
     [
       "ark-net iroh.rs: forbidden storage dependency SyncRuntimeStorage",
+      "ark-net iroh.rs: forbidden storage dependency IntegrationReplicationBackend",
+      "ark-net iroh.rs: forbidden storage dependency StorageBackedOutboundIntegrationFrameAuthorizer",
       "ark-net iroh.rs: forbidden storage dependency rusqlite",
     ],
   );
