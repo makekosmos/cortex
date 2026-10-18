@@ -1,5 +1,26 @@
 use super::super::*;
 
+#[derive(Debug)]
+pub(super) enum PendingRegistryAdmissionError {
+    SessionRevoked,
+    Operation(String),
+}
+
+impl std::fmt::Display for PendingRegistryAdmissionError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SessionRevoked => formatter.write_str("registry admission session was revoked"),
+            Self::Operation(error) => formatter.write_str(error),
+        }
+    }
+}
+
+impl From<String> for PendingRegistryAdmissionError {
+    fn from(error: String) -> Self {
+        Self::Operation(error)
+    }
+}
+
 pub(super) struct PendingRegistryAdmission {
     admission: ark_sync::client_session::DirectClientAdmission,
     peer_record: PeerRecord,
@@ -42,7 +63,7 @@ impl PendingRegistryAdmission {
         &mut self,
         message: LanSyncMessage,
         context: Context<'_>,
-    ) -> Result<bool, String> {
+    ) -> Result<bool, PendingRegistryAdmissionError> {
         let Context {
             local_device_id,
             storage,
@@ -64,7 +85,7 @@ impl PendingRegistryAdmission {
         let ready = match progress.status {
             ark_sync::client_session::AdmissionStatus::Pending => return Ok(false),
             ark_sync::client_session::AdmissionStatus::CloseSession => {
-                return Err("registry_admission_session_revoked".into());
+                return Err(PendingRegistryAdmissionError::SessionRevoked);
             }
             ark_sync::client_session::AdmissionStatus::Ready(ready) => ready,
         };

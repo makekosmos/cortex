@@ -15,7 +15,10 @@ use crate::{
 
 mod direct;
 mod hello;
-pub use direct::{DirectClientSession, DirectClientSessionRejection};
+pub use direct::{
+    DirectClientMessage, DirectClientSession, DirectClientSessionEffect, DirectClientSessionInput,
+    DirectClientSessionRejection,
+};
 pub use hello::{
     accept_server_hello, AcceptedServerHello, ServerHelloRejection, ServerHelloValidationRequest,
 };

@@ -99,31 +99,32 @@
                                 eprintln!("{TAG} periodic committed feed drain failed: {error}");
                             }
                         }
-                        maybe_event = session_io.receive() => {
-                            let sync_msg = match maybe_event {
-                                Some(ark_sync::session_io::SessionIoEvent::Message(message)) => {
-                                    *message
-                                }
-                                Some(ark_sync::session_io::SessionIoEvent::MalformedMessage) => {
+                        session_input = client_session.receive(&mut session_io) => {
+                            use ark_sync::client_session::DirectClientSessionInput as SessionInput;
+                            let message = match session_input {
+                                SessionInput::Message(message) => *message,
+                                SessionInput::Ignore => continue,
+                                SessionInput::Malformed => {
                                     eprintln!("{TAG} ignoring malformed peer sync message");
                                     continue;
                                 }
-                                Some(ark_sync::session_io::SessionIoEvent::Failed(error)) => {
+                                SessionInput::Failed(error) => {
                                     eprintln!("{TAG} peer session transport failed: {error}");
                                     break;
                                 }
-                                Some(ark_sync::session_io::SessionIoEvent::Closed) | None => break,
+                                SessionInput::Closed => break,
+                                SessionInput::Rejected(reason) => {
+                                    eprintln!(
+                                        "{TAG} closing invalid client session message: {reason:?}"
+                                    );
+                                    break;
+                                }
                             };
-                                include!("connect_and_receive/registry_control.rs");
-                                match sync_msg {
-                                    hello @ LanSyncMessage::Hello { .. } => {
-                                        if client_session.is_ready() {
-                                            eprintln!(
-                                                "{TAG} Rejecting repeated hello on an \
-                                                    authenticated connection"
-                                            );
-                                            break;
-                                        }
+                            use ark_sync::client_session::{
+                                DirectClientMessage as ClientMessage,
+                            };
+                            match message {
+                                    ClientMessage::Hello(hello) => {
                                         let accepted = match
                                             ark_sync::client_session::accept_server_hello(
                                             hello,
@@ -177,6 +178,10 @@
                                                 eprintln!("{TAG} rejected Hello: repeated session");
                                                 break;
                                             }
+                                            Err(SessionRejection::RegistryControlBeforeHello) => {
+                                                eprintln!("{TAG} invalid Hello session phase");
+                                                break;
+                                            }
                                         }
                                         tx.set_authenticated_peer_id(server_device_id.clone())
                                             .await;
@@ -220,12 +225,13 @@
                                         }
                                     }
 
-                                    LanSyncMessage::SyncPolicy {
-                                        revision,
-                                        digest,
-                                        active,
-                                        rules,
-                                    } => {
+                                    ClientMessage::SyncPolicy(update) => {
+                                        let ark_sync::client_session::SyncPolicyUpdate {
+                                            revision,
+                                            digest,
+                                            active,
+                                            rules,
+                                        } = update;
                                         if let Err(error) = sync_policy::accept_and_start(
                                             &storage,
                                             &authenticated_tx,
@@ -242,13 +248,7 @@
                                         }
                                     }
 
-                                    LanSyncMessage::VersionVector {
-                                        vector: remote_vector,
-                                        ..
-                                    } => {
-                                        if !client_session.is_ready() {
-                                            continue;
-                                        }
+                                    ClientMessage::VersionVector(remote_vector) => {
                                         if snapshot_drive.is_some() {
                                             pending_remote_vector = Some(remote_vector);
                                             continue;
@@ -269,11 +269,13 @@
                                         ));
                                     }
 
-                                    LanSyncMessage::SyncChanges {
-                                        batch_id, entities, is_last, policy_identity,
-                                        usage_complete_through, ..
+                                    ClientMessage::SyncChanges {
+                                        batch_id,
+                                        entities,
+                                        is_last,
+                                        policy_identity,
+                                        usage_complete_through,
                                     } => {
-                                        if !client_session.is_ready() { continue; }
                                         let context = sync_changes::Context {
                                             storage: &storage,
                                             tx: &tx,
@@ -292,7 +294,7 @@
                                         }
                                     }
 
-                                    LanSyncMessage::SyncAck { batch_id, policy_identity, .. } => {
+                                    ClientMessage::SyncAck { batch_id, policy_identity } => {
                                         if !snapshot_ack::handle(
                                             &storage,
                                             client_session.peer_device_id(),
@@ -308,7 +310,7 @@
                                         }
                                     }
 
-                                    LanSyncMessage::SignedIntegrationFrame { frame } => {
+                                    ClientMessage::SignedIntegrationFrame(frame) => {
                                         live_messages::handle_signed_integration_message(
                                             client_session.is_ready(),
                                             &storage,
@@ -321,17 +323,13 @@
                                         .await;
                                     }
 
-                                    LanSyncMessage::SignedIntegrationAck { .. } => {}
+                                    ClientMessage::SignedIntegrationAck => {}
 
-                                    LanSyncMessage::LiveChange {
+                                    ClientMessage::LiveChange {
                                         change_id,
                                         entity,
                                         policy_identity,
-                                        ..
                                     } => {
-                                        if !client_session.is_ready() {
-                                            continue;
-                                        }
                                         if let Err(error) = live_messages::handle_live_change(
                                             &storage,
                                             &authenticated_tx,
@@ -350,10 +348,7 @@
                                         }
                                     }
 
-                                    LanSyncMessage::LiveAck {
-                                        change_id,
-                                        policy_identity,
-                                    } => {
+                                    ClientMessage::LiveAck { change_id, policy_identity } => {
                                         if !live_messages::handle_feed_ack_message(
                                             &storage,
                                             client_session.peer_device_id(),
@@ -369,7 +364,7 @@
                                         }
                                     }
 
-                                    LanSyncMessage::LiveReceiptAck {
+                                    ClientMessage::LiveReceiptAck {
                                         change_id,
                                         policy_identity,
                                     } => {
@@ -388,7 +383,7 @@
                                         }
                                     }
 
-                                    LanSyncMessage::TaskMergeBatch { batch } => {
+                                    ClientMessage::TaskMergeBatch(batch) => {
                                         if let Err(error) = live_messages::handle_task_merge_batch(
                                             &storage,
                                             client_session.peer_device_id(),
@@ -403,28 +398,41 @@
                                         }
                                     }
 
-                                    LanSyncMessage::TaskMergeBatchAck { .. } => {}
+                                    ClientMessage::TaskMergeBatchAck => {}
 
-                                    LanSyncMessage::Ping { .. }
-                                    | LanSyncMessage::Pong { .. }
-                                    | LanSyncMessage::PairingRejected { .. }
-                                    | LanSyncMessage::PairingAccepted { .. }
-                                    | LanSyncMessage::RegistryAdmissionStart { .. }
-                                    | LanSyncMessage::RegistryAdmissionProof { .. }
-                                    | LanSyncMessage::RegistryAdmissionConfirm { .. }
-                                    | LanSyncMessage::RegistrySyncStart { .. }
-                                    | LanSyncMessage::RegistryEventsPage { .. }
-                                    | LanSyncMessage::RegistrySyncReady { .. }
-                                    | LanSyncMessage::RegistryEventUpdate { .. }
-                                    | LanSyncMessage::ProtocolRejected { .. }
-                                    | LanSyncMessage::PeerList { .. } => {
-                                        eprintln!(
-                                            "{TAG} unsupported direct WebSocket control frame"
-                                        );
-                                        break;
+                                    ClientMessage::Ping { ts } => {
+                                        let _ = send_msg(&tx, LanSyncMessage::Pong { ts }).await;
                                     }
-
-                                }
+                                    ClientMessage::Pong
+                                    | ClientMessage::PairingRejected
+                                    | ClientMessage::PairingAccepted => {}
+                                    ClientMessage::PeerList(peers) => {
+                                        if client_session.is_ready() {
+                                            if let Some(handler) =
+                                                on_peer_list.lock().await.as_ref()
+                                            {
+                                                handler(peers);
+                                            }
+                                        }
+                                    }
+                                    ClientMessage::ProtocolRejected {
+                                        origin_device_id,
+                                        target_device_id,
+                                        reason,
+                                    } => {
+                                        let authenticated_peer_id = client_session.peer_device_id();
+                                        if target_device_id == device_id
+                                            && (authenticated_peer_id.is_empty()
+                                                || origin_device_id == authenticated_peer_id)
+                                        {
+                                            eprintln!("{TAG} Peer rejected protocol: {reason}");
+                                            break;
+                                        }
+                                    }
+                                    ClientMessage::RegistryControl(sync_msg) => {
+                                        include!("connect_and_receive/registry_control.rs");
+                                    }
+                            }
                         }
                     }
                 }
