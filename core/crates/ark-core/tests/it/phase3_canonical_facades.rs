@@ -110,7 +110,9 @@ fn set_book_cover_links_existing_image_and_removes_only_link() {
     assert!(!second.changed);
     let removed = set_book_cover(&conn, "book-1", None, None, "", "device").unwrap();
     assert!(removed.changed);
-    assert!(db::list_object_links(&conn).unwrap().is_empty());
+    assert!(ark_store::objects::list_object_links(&conn)
+        .unwrap()
+        .is_empty());
     let props: String = conn
         .query_row(
             "SELECT props_json FROM objects WHERE id='book-1'",
@@ -119,7 +121,9 @@ fn set_book_cover_links_existing_image_and_removes_only_link() {
         )
         .unwrap();
     assert!(!props.contains("cover_image"));
-    assert!(db::get_object(&conn, "image-1").unwrap().is_some());
+    assert!(ark_store::objects::get_object(&conn, "image-1")
+        .unwrap()
+        .is_some());
 }
 #[test]
 fn set_book_cover_rejects_source_without_mutation() {

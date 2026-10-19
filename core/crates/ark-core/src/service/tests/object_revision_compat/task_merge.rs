@@ -256,9 +256,11 @@ async fn hard_delete_is_causal_and_a_later_upsert_restores_the_projection() {
     .await
     .unwrap();
     assert!(
-        with_conn(&state, |connection| db::get_object(connection, id))
-            .unwrap()
-            .is_none()
+        with_conn(&state, |connection| ark_store::objects::get_object(
+            connection, id
+        ))
+        .unwrap()
+        .is_none()
     );
 
     let deletion_set = get_db_handle(&state)
@@ -292,9 +294,11 @@ async fn hard_delete_is_causal_and_a_later_upsert_restores_the_projection() {
     )
     .await
     .unwrap();
-    let restored = with_conn(&state, |connection| db::get_object(connection, id))
-        .unwrap()
-        .unwrap();
+    let restored = with_conn(&state, |connection| {
+        ark_store::objects::get_object(connection, id)
+    })
+    .unwrap()
+    .unwrap();
     assert_eq!(restored.title, "restored");
     let existence_set = get_db_handle(&state)
         .unwrap()
@@ -443,7 +447,9 @@ async fn authenticated_full_snapshot_is_rejected_for_operation_enabled_task() {
     );
     with_conn(&state, |conn| {
         assert_eq!(
-            db::get_object(conn, &object.id)?.unwrap().title,
+            ark_store::objects::get_object(conn, &object.id)?
+                .unwrap()
+                .title,
             "left edit"
         );
         let receipts: i64 = conn

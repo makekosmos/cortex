@@ -71,7 +71,7 @@ pub(super) fn write_snapshot(state: &Arc<ServiceState>, db_path: &str, id: &str)
 
 fn live_object_ids(state: &Arc<ServiceState>) -> Vec<String> {
     with_conn(state, |conn| {
-        let objects = db::list_objects(conn)?;
+        let objects = ark_store::objects::list_objects(conn)?;
         Ok(objects.into_iter().map(|o| o.id).collect::<Vec<_>>())
     })
     .unwrap()

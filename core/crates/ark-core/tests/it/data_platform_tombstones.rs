@@ -21,7 +21,7 @@ async fn deleted_object_tombstone_keeps_type_through_collection_filter_and_apply
             [],
         )
         .unwrap();
-    let type_id = db::get_object(&source_conn, "deleted-note")
+    let type_id = ark_store::objects::get_object(&source_conn, "deleted-note")
         .unwrap()
         .unwrap()
         .type_id;
@@ -68,5 +68,7 @@ async fn deleted_object_tombstone_keeps_type_through_collection_filter_and_apply
     let destination = SqliteStorageBackend::for_test(destination_db.clone());
     destination.apply_entity(&tombstone).await.unwrap();
     let guard = destination_db.lock().unwrap();
-    assert!(db::get_object(&guard, "deleted-note").unwrap().is_none());
+    assert!(ark_store::objects::get_object(&guard, "deleted-note")
+        .unwrap()
+        .is_none());
 }

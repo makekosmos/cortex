@@ -1,6 +1,5 @@
 use super::*;
 use crate::application::task_mutation::TaskMutationSession;
-use crate::db;
 use crate::hlc::HLC;
 use crate::types::ObjectLink;
 use crate::types::SyncEntity;
@@ -25,7 +24,7 @@ pub fn set_book_cover(
     if source_ref.is_some() {
         return Err(AssetSourceError::new("source_requires_existing_image"));
     }
-    let book = db::get_object(conn, book_id)
+    let book = ark_store::objects::get_object(conn, book_id)
         .map_err(|_| AssetSourceError::new("storage"))?
         .ok_or_else(|| AssetSourceError::new("missing_book"))?;
     if book.type_id != BOOK {
@@ -34,7 +33,7 @@ pub fn set_book_cover(
     validate_object(&book)?;
     let mut image = None;
     let image_id = if let Some(id) = existing_image_id {
-        let object = db::get_object(conn, id)
+        let object = ark_store::objects::get_object(conn, id)
             .map_err(|_| AssetSourceError::new("storage"))?
             .ok_or_else(|| AssetSourceError::new("missing_image"))?;
         if object.type_id != IMAGE {
@@ -49,7 +48,7 @@ pub fn set_book_cover(
     } else {
         None
     };
-    let existing: Vec<ObjectLink> = db::list_object_links(conn)
+    let existing: Vec<ObjectLink> = ark_store::objects::list_object_links(conn)
         .map_err(|_| AssetSourceError::new("storage"))?
         .into_iter()
         .filter(|l| l.source_object_id == book_id && l.link_type == COVER)
@@ -79,7 +78,8 @@ pub fn set_book_cover(
         };
 
         for link in existing {
-            db::delete_object_link(conn, &link.id).map_err(|_| AssetSourceError::new("storage"))?;
+            ark_store::objects::delete_object_link(conn, &link.id)
+                .map_err(|_| AssetSourceError::new("storage"))?;
             mutation.deleted_link_ids.push(link.id);
         }
         if let (Some(id), Some(link_id)) = (image_id, desired) {
@@ -90,7 +90,8 @@ pub fn set_book_cover(
                 link_type: COVER.into(),
                 created_at: now(device_id),
             };
-            db::upsert_object_link(conn, &link).map_err(|_| AssetSourceError::new("storage"))?;
+            ark_store::objects::upsert_object_link(conn, &link)
+                .map_err(|_| AssetSourceError::new("storage"))?;
             mutation.links.push(link);
         }
         Ok::<_, AssetSourceError>(mutation)
@@ -122,7 +123,7 @@ pub fn write_legacy_records(
     };
     use std::collections::BTreeMap;
     let mut existing_object_ids = BTreeMap::new();
-    for object in db::list_objects(conn)? {
+    for object in ark_store::objects::list_objects(conn)? {
         existing_object_ids.insert(
             object.id,
             CanonicalIdentity::new(object.type_id, object.type_version),
@@ -143,7 +144,7 @@ pub fn write_legacy_records(
     }
     let context = MappingContext {
         existing_object_ids,
-        existing_links: db::list_object_links(conn)?,
+        existing_links: ark_store::objects::list_object_links(conn)?,
     };
     let mapped = records
         .iter()
@@ -208,7 +209,7 @@ pub fn write_legacy_records(
         });
         for link in item.links {
             let link_id = link.id.clone();
-            db::upsert_object_link(conn, &link)?;
+            ark_store::objects::upsert_object_link(conn, &link)?;
             let hlc = ark_store::sync_versions::bump_sync_version_vector(
                 conn,
                 "object_link",
@@ -253,7 +254,8 @@ pub fn delete_legacy_object(
         )?;
         return Ok(commit.entity);
     }
-    let mut object = db::get_object(conn, id)?.ok_or_else(|| "MISSING_OBJECT".to_string())?;
+    let mut object =
+        ark_store::objects::get_object(conn, id)?.ok_or_else(|| "MISSING_OBJECT".to_string())?;
     if object.type_id != expected_type_id {
         return Err("WRONG_TARGET".into());
     }

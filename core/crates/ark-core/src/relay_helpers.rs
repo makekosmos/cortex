@@ -436,7 +436,7 @@ mod tests {
         }
         let conn = shared.lock().unwrap();
         for candidate in &cases {
-            assert!(crate::db::get_object(&conn, &candidate.id)
+            assert!(ark_store::objects::get_object(&conn, &candidate.id)
                 .unwrap()
                 .is_none());
         }

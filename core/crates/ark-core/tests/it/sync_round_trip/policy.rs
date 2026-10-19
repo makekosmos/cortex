@@ -93,14 +93,14 @@ fn book_entity(title: &str, counter: u64) -> SyncEntity {
 }
 
 fn stored_book_title(conn: &Connection) -> String {
-    db::get_object(conn, "book-1")
+    ark_store::objects::get_object(conn, "book-1")
         .unwrap()
         .expect("book row should exist")
         .title
 }
 
 fn stored_book_title_if_present(conn: &Connection) -> Option<String> {
-    db::get_object(conn, "book-1")
+    ark_store::objects::get_object(conn, "book-1")
         .unwrap()
         .map(|book| book.title)
 }

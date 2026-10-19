@@ -240,7 +240,9 @@ fn phase3_pending_replay_rejects_corrupted_tuple_atomically() {
         .unwrap(),
         1
     );
-    assert!(ark_core::db::get_object(&conn, "o1").unwrap().is_none());
+    assert!(ark_store::objects::get_object(&conn, "o1")
+        .unwrap()
+        .is_none());
 }
 
 #[test]

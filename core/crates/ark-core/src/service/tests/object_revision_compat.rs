@@ -126,17 +126,21 @@ async fn pre_version_table_revisions_reject_stale_remote_resurrection() {
         .unwrap();
 
     assert_eq!(
-        with_conn(&state, |conn| db::get_object(conn, &vector_object.id))
-            .unwrap()
-            .unwrap()
-            .title,
+        with_conn(&state, |conn| ark_store::objects::get_object(
+            conn,
+            &vector_object.id
+        ))
+        .unwrap()
+        .unwrap()
+        .title,
         "vector wins"
     );
-    assert!(
-        with_conn(&state, |conn| db::get_object(conn, &tombstone_object.id))
-            .unwrap()
-            .is_none()
-    );
+    assert!(with_conn(&state, |conn| ark_store::objects::get_object(
+        conn,
+        &tombstone_object.id
+    ))
+    .unwrap()
+    .is_none());
 }
 
 #[tokio::test]
@@ -202,10 +206,13 @@ async fn max_remote_hlc_counter_rolls_back_local_write() {
         "hlc_counter_overflow"
     );
     assert_eq!(
-        with_conn(&state, |conn| db::get_object(conn, "max-counter-task"))
-            .unwrap()
-            .unwrap()
-            .title,
+        with_conn(&state, |conn| ark_store::objects::get_object(
+            conn,
+            "max-counter-task"
+        ))
+        .unwrap()
+        .unwrap()
+        .title,
         "original"
     );
 }
@@ -248,7 +255,9 @@ async fn authenticated_task_snapshot_preserves_receipt_stale_and_inbox_replay() 
     );
 
     let (stored_title, receipt_count, operation_count) = with_conn(&state, |conn| {
-        let title = db::get_object(conn, &object.id)?.unwrap().title;
+        let title = ark_store::objects::get_object(conn, &object.id)?
+            .unwrap()
+            .title;
         let receipts = conn
             .query_row(
                 "SELECT COUNT(*) FROM entity_write_receipts WHERE entity_id = ?1",
@@ -336,7 +345,7 @@ async fn authenticated_legacy_todo_mapping_and_absent_task_tombstone_use_task_se
         ark_application::sync_storage::InboundApplyOutcome::Applied
     );
     let (legacy_object, link_count, receipt_count) = with_conn(&state, |conn| {
-        let object = db::get_object(conn, &legacy.id)?.unwrap();
+        let object = ark_store::objects::get_object(conn, &legacy.id)?.unwrap();
         let links = conn
             .query_row(
                 "SELECT COUNT(*) FROM object_links

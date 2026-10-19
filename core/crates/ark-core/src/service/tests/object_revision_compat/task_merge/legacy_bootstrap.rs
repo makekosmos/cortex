@@ -113,9 +113,11 @@ async fn deleting_legacy_task_uses_the_same_bootstrap_conflict_set_it_persists()
     .unwrap();
 
     assert!(
-        with_conn(&state, |connection| db::get_object(connection, id))
-            .unwrap()
-            .is_none()
+        with_conn(&state, |connection| ark_store::objects::get_object(
+            connection, id
+        ))
+        .unwrap()
+        .is_none()
     );
     let bootstrap_count = with_conn(&state, |connection| {
         connection

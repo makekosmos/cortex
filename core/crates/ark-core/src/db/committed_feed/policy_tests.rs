@@ -112,7 +112,7 @@ fn narrowing_preserves_local_copy_and_widening_replays_latest_state() {
     );
     record_outbound_scan_identity(&source, "receiver-device", &excluded, 2).unwrap();
 
-    let retained = crate::db::get_object(&receiver, "book-1")
+    let retained = ark_store::objects::get_object(&receiver, "book-1")
         .unwrap()
         .expect("narrowing never deletes an existing local row");
     assert_eq!(retained.title, "Original title");
@@ -164,7 +164,7 @@ fn narrowing_preserves_local_copy_and_widening_replays_latest_state() {
         rows[0].entity.data.get("title"),
         Some(&serde_json::json!("Updated while excluded"))
     );
-    let retained = crate::db::get_object(&receiver, "book-1")
+    let retained = ark_store::objects::get_object(&receiver, "book-1")
         .unwrap()
         .expect("replay planning does not remove the existing local row");
     assert_eq!(retained.title, "Original title");

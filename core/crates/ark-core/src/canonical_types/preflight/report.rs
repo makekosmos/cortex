@@ -45,7 +45,7 @@ fn context(conn: &Connection) -> Result<MappingContext, String> {
     }
     Ok(MappingContext {
         existing_object_ids: ids,
-        existing_links: crate::db::list_object_links(conn)?,
+        existing_links: ark_store::objects::list_object_links(conn)?,
     })
 }
 

@@ -61,7 +61,7 @@ impl DbCommand for LocalCoreTaskWrite {
         )
         .map_err(DbError::from_application_error)?;
         let receipt = required_receipt(result)?;
-        let object = crate::db::get_object(transaction, &id)
+        let object = ark_store::objects::get_object(transaction, &id)
             .map_err(|error| DbError::Storage(error.to_string()))?
             .ok_or_else(|| DbError::Storage("object_write_missing_after_commit".into()))?;
         Ok(CoreTaskWriteCommit { object, receipt })

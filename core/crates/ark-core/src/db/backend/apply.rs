@@ -5,12 +5,12 @@ use serde_json::{json, Value};
 
 use super::SqliteStorageBackend;
 use crate::db::{
-    delete_object_link, delete_object_type, delete_project, delete_todo, insert_pending_object,
-    upsert_object_link, upsert_object_type,
+    delete_object_type, delete_project, delete_todo, insert_pending_object, upsert_object_type,
 };
 use crate::types::{
     ArkObject, ObjectLink, ObjectType, SyncEntity, TrackedApp, UsageDay, UsageEvent, UsageSession,
 };
+use ark_store::objects::{delete_object_link, upsert_object_link};
 
 // ---------------------------------------------------------------------------
 // Delete helpers (for StorageBackend)

@@ -211,10 +211,10 @@ async fn bootstrap_and_followup_operation_materialize_atomically_and_replay() {
 
     handle
         .with_connection(|connection| {
-            let object = crate::db::get_object(connection, "task-1")?.unwrap();
+            let object = ark_store::objects::get_object(connection, "task-1")?.unwrap();
             assert_eq!(object.title, "edited after bootstrap");
             assert_eq!(
-                crate::db::list_object_links(connection)?
+                ark_store::objects::list_object_links(connection)?
                     .into_iter()
                     .filter(|link| link.source_object_id == "task-1")
                     .map(|link| link.id)
@@ -287,7 +287,7 @@ async fn operation_before_bootstrap_stays_unpublished_until_bootstrap_arrives() 
     .unwrap();
     handle
         .with_connection(|connection| {
-            assert!(crate::db::get_object(connection, "task-1")?.is_none());
+            assert!(ark_store::objects::get_object(connection, "task-1")?.is_none());
             let journal_rows: i64 = connection
                 .query_row("SELECT COUNT(*) FROM task_merge_journal", [], |row| {
                     row.get(0)
@@ -322,7 +322,9 @@ async fn operation_before_bootstrap_stays_unpublished_until_bootstrap_arrives() 
     handle
         .with_connection(|connection| {
             assert_eq!(
-                crate::db::get_object(connection, "task-1")?.unwrap().title,
+                ark_store::objects::get_object(connection, "task-1")?
+                    .unwrap()
+                    .title,
                 "edited after bootstrap"
             );
             let page = ark_store::task_merge::read_journal_page(connection, 0, 2, 10)

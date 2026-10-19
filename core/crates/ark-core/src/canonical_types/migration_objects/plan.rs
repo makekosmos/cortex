@@ -135,7 +135,7 @@ fn context(conn: &Connection, records: &[SourceRecord]) -> Result<MappingContext
     }
     Ok(MappingContext {
         existing_object_ids: ids,
-        existing_links: crate::db::list_object_links(conn)
+        existing_links: ark_store::objects::list_object_links(conn)
             .map_err(|e| ObjectPlanError::Storage(e.to_string()))?,
     })
 }

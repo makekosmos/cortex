@@ -20,6 +20,7 @@
 
 use ark_core::db;
 use ark_core::types::{ArkObject, ObjectType, VersionVector};
+use ark_store::objects;
 use ark_store::objects::upsert_object_compat as upsert_object;
 use proptest::collection::vec;
 use proptest::prelude::*;
@@ -153,10 +154,10 @@ proptest! {
                 }
             }
             // List после каждой op — должен работать без panic'а.
-            let _ = db::list_objects(&conn).expect("list must succeed mid-sequence");
+            let _ = objects::list_objects(&conn).expect("list must succeed mid-sequence");
         }
         // Final list — успех = ok, без panic'а уже было проверено.
-        let final_list = db::list_objects(&conn).expect("final list");
+        let final_list = objects::list_objects(&conn).expect("final list");
         // Sanity: все returned objects имеют не-empty id и matching type_id.
         for obj in &final_list {
             prop_assert!(!obj.id.is_empty(), "object id must be non-empty");

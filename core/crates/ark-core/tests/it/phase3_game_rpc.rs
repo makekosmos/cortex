@@ -146,7 +146,9 @@ fn wrong_link_target_rolls_back_object_and_local_state() {
         target_object_id: "note".into(),
     }];
     assert!(upsert_game(&conn, value, "fallback").is_err());
-    assert!(db::get_object(&conn, "g").unwrap().is_none());
+    assert!(ark_store::objects::get_object(&conn, "g")
+        .unwrap()
+        .is_none());
     assert_eq!(
         conn.query_row::<i64, _, _>("SELECT COUNT(*) FROM object_local_state", [], |r| r.get(0))
             .unwrap(),

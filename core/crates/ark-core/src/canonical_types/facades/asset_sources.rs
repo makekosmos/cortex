@@ -1,6 +1,5 @@
 use crate::canonical_types::definitions::canonical_type_registrations;
 use crate::canonical_types::validation::validate_canonical;
-use crate::db;
 use crate::hlc::HLC;
 use crate::types::{ArkObject, ObjectLink};
 use rusqlite::{params, Connection, OptionalExtension};
@@ -87,8 +86,8 @@ pub fn asset_sources(
     }
     let mut out = Vec::new();
     for id in object_ids {
-        let Some(object) =
-            db::get_object(conn, id).map_err(|_| AssetSourceError::new("storage"))?
+        let Some(object) = ark_store::objects::get_object(conn, id)
+            .map_err(|_| AssetSourceError::new("storage"))?
         else {
             continue;
         };

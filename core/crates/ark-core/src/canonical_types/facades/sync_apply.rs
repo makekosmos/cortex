@@ -1,4 +1,3 @@
-use crate::db;
 use crate::hlc::HLC;
 use crate::types::SyncEntity;
 use crate::types::{ArkObjectWrite, ObjectLink};
@@ -107,7 +106,7 @@ pub fn apply_legacy_compat_entity(
     }
     ark_store::objects::upsert_object_compat(conn, &mapped.object)?;
     for link in mapped.links {
-        db::upsert_object_link(conn, &link)?;
+        ark_store::objects::upsert_object_link(conn, &link)?;
     }
     conn.execute(
         concat!(
@@ -132,7 +131,7 @@ pub fn apply_canonical_object_entity(
         .and_then(Value::as_str)
         .map(str::to_owned)
         .map(Some)
-        .unwrap_or(db::get_object(conn, &entity.id)?.map(|object| object.type_id));
+        .unwrap_or(ark_store::objects::get_object(conn, &entity.id)?.map(|object| object.type_id));
     let task_session = crate::db::SqliteTaskMutationSession::new(conn);
     if entity.deleted == Some(true) && type_id.as_deref() == Some("core.task") {
         return super::task_sync_apply::apply_remote_task_delete(conn, entity);
@@ -249,7 +248,7 @@ pub fn apply_canonical_object_entity(
                 let links: Vec<ObjectLink> =
                     serde_json::from_value(raw_links.clone()).map_err(|e| e.to_string())?;
                 for link in links {
-                    db::upsert_object_link(conn, &link)?;
+                    ark_store::objects::upsert_object_link(conn, &link)?;
                 }
             }
             conn.execute(

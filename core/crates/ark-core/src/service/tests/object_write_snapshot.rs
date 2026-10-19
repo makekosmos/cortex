@@ -265,7 +265,8 @@ async fn local_object_revision_blocks_older_remote_upsert_and_delete() {
 
     let backend = SqliteStorageBackend::with_db_handle(get_db_handle(&state).unwrap());
     let local = with_conn(&state, |conn| {
-        db::get_object(conn, "remote-guarded-object")?.ok_or("object missing".to_string())
+        ark_store::objects::get_object(conn, "remote-guarded-object")?
+            .ok_or("object missing".to_string())
     })
     .unwrap();
     let before_update = snapshot(&state, "remote-guarded-object").await;
@@ -279,10 +280,13 @@ async fn local_object_revision_blocks_older_remote_upsert_and_delete() {
         .await
         .unwrap();
     assert_eq!(
-        with_conn(&state, |conn| db::get_object(conn, "remote-guarded-object"))
-            .unwrap()
-            .unwrap()
-            .title,
+        with_conn(&state, |conn| ark_store::objects::get_object(
+            conn,
+            "remote-guarded-object"
+        ))
+        .unwrap()
+        .unwrap()
+        .title,
         "local"
     );
     guarded_upsert(
@@ -295,7 +299,8 @@ async fn local_object_revision_blocks_older_remote_upsert_and_delete() {
 
     let before_delete = snapshot(&state, "remote-guarded-object").await;
     let local = with_conn(&state, |conn| {
-        db::get_object(conn, "remote-guarded-object")?.ok_or("object missing".to_string())
+        ark_store::objects::get_object(conn, "remote-guarded-object")?
+            .ok_or("object missing".to_string())
     })
     .unwrap();
     backend
@@ -347,7 +352,8 @@ async fn newer_remote_upsert_and_delete_invalidate_guarded_writes() {
 
     let backend = SqliteStorageBackend::with_db_handle(get_db_handle(&state).unwrap());
     let local = with_conn(&state, |conn| {
-        db::get_object(conn, "remote-race-object")?.ok_or("object missing".to_string())
+        ark_store::objects::get_object(conn, "remote-race-object")?
+            .ok_or("object missing".to_string())
     })
     .unwrap();
     let before_remote_update = snapshot(&state, "remote-race-object").await;
@@ -372,7 +378,8 @@ async fn newer_remote_upsert_and_delete_invalidate_guarded_writes() {
     );
 
     let remote = with_conn(&state, |conn| {
-        db::get_object(conn, "remote-race-object")?.ok_or("object missing".to_string())
+        ark_store::objects::get_object(conn, "remote-race-object")?
+            .ok_or("object missing".to_string())
     })
     .unwrap();
     let before_remote_delete = snapshot(&state, "remote-race-object").await;

@@ -1,12 +1,12 @@
 use super::*;
-use crate::db;
 use crate::types::ArkObject;
+use ark_store::objects;
 use rusqlite::{params, params_from_iter, Connection, OptionalExtension};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
 fn links_for(conn: &Connection, id: &str) -> Result<Vec<GameLink>, String> {
-    Ok(db::list_object_links(conn)?
+    Ok(objects::list_object_links(conn)?
         .into_iter()
         .filter(|link| link.source_object_id == id)
         .map(|link| GameLink {
@@ -201,7 +201,7 @@ fn local_for(conn: &Connection, id: &str, device_id: &str) -> Result<GameLocalSt
 }
 
 pub fn list_games(conn: &Connection, device_id: &str) -> Result<Vec<GameRecord>, String> {
-    db::list_objects_by_type(conn, GAME_TYPE_ID).and_then(|objects| {
+    objects::list_objects_by_type(conn, GAME_TYPE_ID).and_then(|objects| {
         objects
             .into_iter()
             .map(|o| project_game(conn, o, device_id))
@@ -210,7 +210,7 @@ pub fn list_games(conn: &Connection, device_id: &str) -> Result<Vec<GameRecord>,
 }
 
 pub fn get_game(conn: &Connection, id: &str, device_id: &str) -> Result<GameRecord, String> {
-    let object = db::get_object(conn, id)?.ok_or_else(|| "game_not_found".to_string())?;
+    let object = objects::get_object(conn, id)?.ok_or_else(|| "game_not_found".to_string())?;
     project_game(conn, object, device_id)
 }
 
@@ -225,7 +225,7 @@ pub fn upsert_game(
     let result = (|| {
         validate_game_command(conn, &command)?;
         validate_game_links(conn, &command.id, &command.links)?;
-        if let Some(existing) = db::get_object(conn, &command.id)? {
+        if let Some(existing) = objects::get_object(conn, &command.id)? {
             let current = project_game(conn, existing, &effective_device)?;
             let same = current.title == command.title
                 && current.play_status == command.play_status
@@ -297,13 +297,13 @@ pub fn upsert_game(
         }
         let desired: std::collections::HashSet<String> =
             command.links.iter().map(|l| l.id.clone()).collect();
-        for existing in db::list_object_links(conn)?.into_iter().filter(|l| {
+        for existing in objects::list_object_links(conn)?.into_iter().filter(|l| {
             l.source_object_id == command.id
                 && ["cover-image", "background-image", "note", "task", "tag"]
                     .contains(&l.link_type.as_str())
         }) {
             if !desired.contains(&existing.id) {
-                db::delete_object_link(conn, &existing.id)?;
+                objects::delete_object_link(conn, &existing.id)?;
             }
         }
         for link in &command.links {
@@ -451,7 +451,7 @@ mod tests {
         // Post-update session on the NEW id: 10 min focused.
         ark_store::usage::upsert_usage_session(&conn, &session("s2", "app-v2", 600_000, 0))
             .unwrap();
-        crate::db::upsert_object_link(
+        objects::upsert_object_link(
             &conn,
             &ObjectLink {
                 id: "l1".into(),

@@ -315,7 +315,7 @@ async fn canonical_upsert_object_rpc_persists_registered_identity() {
     .await
     .unwrap();
     let object = with_conn(&state, |conn| {
-        db::get_object(conn, "canonical-task-ingress")
+        ark_store::objects::get_object(conn, "canonical-task-ingress")
     })
     .unwrap()
     .unwrap();

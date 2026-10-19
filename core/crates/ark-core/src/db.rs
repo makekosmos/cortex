@@ -68,12 +68,7 @@ pub(in crate::db) use integration_replication_publication::{
 pub use legacy::{
     batch_upsert_todos, delete_project, delete_todo, upsert_project, upsert_tag, upsert_todo,
 };
-pub use objects::{
-    delete_object_link, delete_object_type, get_object, get_objects_by_ids, list_object_links,
-    list_object_summaries, list_object_summaries_by_type, list_objects, list_objects_by_type,
-    list_running_time_entries, search_objects, upsert_object_link, upsert_object_type,
-    SearchResult,
-};
+pub use objects::{delete_object_type, upsert_object_type};
 pub use open::{backup_to_file, backup_to_file_chunked, init_schema};
 pub use open::{count_pending_for_type, insert_pending_object};
 
@@ -132,6 +127,11 @@ mod tests {
     use crate::type_registry;
     use crate::types::*;
     use ark_application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
+    use ark_store::objects::{
+        delete_object_link, get_object, get_objects_by_ids, list_object_links,
+        list_object_summaries, list_object_summaries_by_type, list_objects, list_objects_by_type,
+        list_running_time_entries, search_objects, upsert_object_link,
+    };
     use ark_store::open::open_db;
     use ark_store::schema::*;
     use ark_store::snapshot::{

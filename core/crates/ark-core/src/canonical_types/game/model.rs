@@ -1,4 +1,3 @@
-use crate::db;
 use crate::types::{ArkObject, ArkObjectWrite};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
@@ -155,7 +154,7 @@ pub(crate) fn validate_game_links(
             .iter()
             .find(|(kind, _, _)| *kind == link.link_type)
             .ok_or_else(|| format!("invalid_link_type:{}", link.link_type))?;
-        let target = db::get_object(conn, &link.target_object_id)?
+        let target = ark_store::objects::get_object(conn, &link.target_object_id)?
             .ok_or_else(|| "link_target_not_found".to_string())?;
         if target.type_id != *target_type || target.deleted_at.is_some() {
             return Err("link_target_wrong_type".into());
