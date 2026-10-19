@@ -195,7 +195,7 @@
             object.id
         );
 
-        delete_object(&conn, &object.id).unwrap();
+        ark_store::objects::delete_object(&conn, &object.id).unwrap();
         assert!(
             search_objects(&conn, "beta").unwrap().is_empty(),
             "deleted objects should be removed from the FTS index"

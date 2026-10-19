@@ -103,7 +103,7 @@ async fn pre_version_table_revisions_reject_stale_remote_resurrection() {
             ark_store::object_write::prepare_object(conn, task("legacy-tombstone-task", "deleted"))
                 .map_err(|error| error.to_string())?;
         db::upsert_object(conn, &tombstone_object)?;
-        db::delete_object(conn, &tombstone_object.id)?;
+        ark_store::objects::delete_object(conn, &tombstone_object.id)?;
         ark_store::sync_tombstones::record(
             conn,
             "object",

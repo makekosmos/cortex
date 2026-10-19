@@ -13,7 +13,3 @@ pub fn upsert_object(conn: &Connection, object: &ArkObject) -> Result<(), String
     }
     ark_store::objects::upsert_object(conn, object)
 }
-
-pub fn delete_object(conn: &Connection, id: &str) -> Result<(), String> {
-    ark_store::objects::delete_object(conn, id)
-}

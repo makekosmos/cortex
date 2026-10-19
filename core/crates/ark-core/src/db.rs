@@ -71,11 +71,11 @@ pub use legacy::{
 };
 pub use load::{clear_all, delete_trashed, load_all};
 pub use objects::{
-    delete_object, delete_object_link, delete_object_type, get_object, get_object_type,
-    get_objects_by_ids, is_object_definition_known, is_object_type_known, list_object_links,
-    list_object_summaries, list_object_summaries_by_type, list_object_types, list_objects,
-    list_objects_by_type, list_running_time_entries, search_objects, upsert_object,
-    upsert_object_link, upsert_object_type, SearchResult,
+    delete_object_link, delete_object_type, get_object, get_object_type, get_objects_by_ids,
+    is_object_definition_known, is_object_type_known, list_object_links, list_object_summaries,
+    list_object_summaries_by_type, list_object_types, list_objects, list_objects_by_type,
+    list_running_time_entries, search_objects, upsert_object, upsert_object_link,
+    upsert_object_type, SearchResult,
 };
 pub use open::{
     backup_to_file, backup_to_file_chunked, init_schema, init_schema_prerequisites_for_phase3,

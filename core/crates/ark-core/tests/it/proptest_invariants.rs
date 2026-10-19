@@ -141,11 +141,12 @@ proptest! {
                 }
                 Op::Delete { id } => {
                     // delete_object возвращает Ok даже для несуществующего id.
-                    db::delete_object(&conn, id).expect("delete should not panic");
+                    ark_store::objects::delete_object(&conn, id).expect("delete should not panic");
                     bump_local_delete(&conn, id);
                 }
                 Op::DeleteNonExistent { id } => {
-                    db::delete_object(&conn, id).expect("delete non-existent should not panic");
+                    ark_store::objects::delete_object(&conn, id)
+                        .expect("delete non-existent should not panic");
                     bump_local_delete(&conn, id);
                 }
             }
@@ -180,7 +181,7 @@ proptest! {
                     bump_local_upsert(&conn, id);
                 }
                 Op::Delete { id } | Op::DeleteNonExistent { id } => {
-                    db::delete_object(&conn, id).unwrap();
+                    ark_store::objects::delete_object(&conn, id).unwrap();
                     bump_local_delete(&conn, id);
                 }
             }
@@ -215,7 +216,7 @@ proptest! {
             );
 
             // Delete.
-            db::delete_object(&conn, &id).unwrap();
+            ark_store::objects::delete_object(&conn, &id).unwrap();
             bump_local_delete(&conn, &id);
             prop_assert_eq!(
                 count_tombstones(&conn, &id),

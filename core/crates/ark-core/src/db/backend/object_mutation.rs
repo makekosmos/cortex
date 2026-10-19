@@ -39,7 +39,7 @@ impl ObjectMutationSession for SqliteObjectMutationSession<'_, '_> {
     }
 
     fn delete_object(&self, id: &str) -> Result<(), String> {
-        db::delete_object(self.transaction, id)
+        ark_store::objects::delete_object(self.transaction, id)
     }
 
     fn record_upsert(

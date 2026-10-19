@@ -149,7 +149,7 @@ pub fn apply_canonical_object_entity(
     let result =
         (|| -> Result<Option<ark_application::sync_storage::InboundApplyOutcome>, String> {
             if entity.deleted == Some(true) {
-                db::delete_object(conn, &entity.id)?;
+                ark_store::objects::delete_object(conn, &entity.id)?;
                 conn.execute(
                     concat!(
                     "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,1) ON ",

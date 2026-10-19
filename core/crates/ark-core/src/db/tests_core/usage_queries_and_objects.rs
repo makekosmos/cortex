@@ -148,7 +148,7 @@
         assert_eq!(data.object_links[0].source_object_id, "obj-1");
 
         delete_object_link(&conn, "link-1").unwrap();
-        delete_object(&conn, "obj-2").unwrap();
+        ark_store::objects::delete_object(&conn, "obj-2").unwrap();
         delete_object_type(&conn, "crud_fixture_book_type").unwrap();
         let data = load_all(&conn).unwrap();
         assert_eq!(data.object_links.len(), 0);

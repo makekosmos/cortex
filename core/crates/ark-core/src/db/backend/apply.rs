@@ -5,8 +5,8 @@ use serde_json::{json, Value};
 
 use super::SqliteStorageBackend;
 use crate::db::{
-    delete_object, delete_object_link, delete_object_type, delete_project, delete_todo,
-    insert_pending_object, is_object_definition_known, upsert_object_link, upsert_object_type,
+    delete_object_link, delete_object_type, delete_project, delete_todo, insert_pending_object,
+    is_object_definition_known, upsert_object_link, upsert_object_type,
 };
 use crate::types::{
     ArkObject, ObjectLink, ObjectType, SyncEntity, TrackedApp, UsageDay, UsageEvent, UsageSession,
@@ -171,7 +171,7 @@ impl SqliteStorageBackend {
                 "usage_event" => ark_store::usage::delete_usage_event(conn, &entity.id),
                 "usage_day" => ark_store::usage::delete_usage_day(conn, &entity.id),
                 "object_type" => delete_object_type(conn, &entity.id),
-                "object" => delete_object(conn, &entity.id),
+                "object" => ark_store::objects::delete_object(conn, &entity.id),
                 "object_link" => delete_object_link(conn, &entity.id),
                 _ => Err(format!("unknown sync entity type '{}'", entity.entity_type)),
             }?;
