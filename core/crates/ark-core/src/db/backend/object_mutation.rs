@@ -4,7 +4,7 @@ use crate::canonical_types::game::{GameMutationResult, GameUpsertCommand};
 use crate::db;
 use crate::types::ArkObject;
 use ark_domain::object_write::ObjectWriteSnapshot;
-use rusqlite::{OptionalExtension, Transaction};
+use rusqlite::Transaction;
 
 pub(crate) struct SqliteObjectMutationSession<'tx, 'connection> {
     transaction: &'tx Transaction<'connection>,
@@ -18,19 +18,11 @@ impl<'tx, 'connection> SqliteObjectMutationSession<'tx, 'connection> {
 
 impl ObjectMutationSession for SqliteObjectMutationSession<'_, '_> {
     fn object_snapshot(&self, id: &str) -> Result<ObjectWriteSnapshot, String> {
-        let identity = self
-            .transaction
-            .query_row(
-                "SELECT type_id, type_version FROM objects WHERE id = ?1",
-                [id],
-                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
-            )
-            .optional()
-            .map_err(|error| error.to_string())?;
+        let identity = ark_store::objects::object_type_identity(self.transaction, id)?;
         Ok(ObjectWriteSnapshot {
             exists: identity.is_some(),
-            type_id: identity.as_ref().map(|value| value.0.clone()),
-            type_version: identity.map(|value| value.1),
+            type_id: identity.as_ref().map(|value| value.type_id.clone()),
+            type_version: identity.map(|value| value.type_version),
             revision: ark_store::sync_versions::object_revision(self.transaction, id)?,
         })
     }
