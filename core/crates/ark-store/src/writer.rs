@@ -88,6 +88,19 @@ impl SqliteWriter {
             crate::book_cover::apply_local_book_cover(connection, write)
         })
     }
+
+    pub fn apply_canonical_game_upsert(
+        &mut self,
+        command: ark_application::canonical_game::GameUpsertCommand,
+        fallback_device_id: &str,
+    ) -> Result<
+        ark_application::canonical_game::GameMutationResult,
+        TransactionFailure<crate::canonical_game::CanonicalGameOperationError>,
+    > {
+        self.with_connection_mut(|connection| {
+            crate::canonical_game::apply_upsert(connection, command, fallback_device_id)
+        })
+    }
 }
 
 #[cfg(test)]

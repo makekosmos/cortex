@@ -92,6 +92,45 @@ pub(in crate::db::command) struct LocalBookCoverTask {
     pub reply: oneshot::Sender<Result<bool, DbError>>,
 }
 
+pub(in crate::db::command) struct CanonicalGameUpsertTask {
+    pub command: ark_application::canonical_game::GameUpsertCommand,
+    pub fallback_device_id: String,
+    pub reply:
+        oneshot::Sender<Result<ark_application::canonical_game::GameMutationResult, DbError>>,
+}
+
+impl WriterTask for CanonicalGameUpsertTask {
+    fn run(
+        self: Box<Self>,
+        writer: &mut SqliteWriter,
+        on_error: &mut dyn FnMut(&DbError),
+    ) -> (Result<(), DbError>, Publish) {
+        let Self {
+            command,
+            fallback_device_id,
+            reply,
+        } = *self;
+        let result = writer
+            .apply_canonical_game_upsert(command, &fallback_device_id)
+            .map_err(|failure| match failure {
+                TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+                TransactionFailure::Operation(error) => {
+                    DbError::from_application_error(error.to_string())
+                }
+                TransactionFailure::Commit(error) => DbError::CommitFailed(error.to_string()),
+            });
+        settle(result, reply, on_error)
+    }
+
+    fn cancel_before_start(self: Box<Self>) {
+        let _ = self.reply.send(Err(DbError::CancelledBeforeStart));
+    }
+
+    fn receiver_closed(&self) -> bool {
+        self.reply.is_closed()
+    }
+}
+
 impl WriterTask for LocalBookCoverTask {
     fn run(
         self: Box<Self>,

@@ -21,7 +21,6 @@ pub(crate) use ark_store::sync_kv::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY;
 #[cfg(test)]
 pub(crate) use ark_store::VERSION_VECTOR_KEY;
 pub(crate) use backend::SqliteLegacyMutationSession;
-pub(crate) use backend::SqliteObjectMutationSession;
 pub(crate) use backend::SqliteSignedIntegrationFrameSession;
 pub use backend::SqliteStorageBackend;
 pub(crate) use backend::SqliteTypeMutationSession;
@@ -32,17 +31,16 @@ pub(crate) use command::{
     AppendTaskMergeOperationCommand, ApplyAuthenticatedSyncEntityCommand,
     ApplyRegistryEventsCommand, ApplySignedIntegrationFrameCommand, ApplySyncEntityCommand,
     ApplyTaskMergeBatchCommand, AuthenticatedCoreTaskWrite, AuthorizedTransportKeyQuery,
-    CanonicalGameUpsertCommand, ClearAllCommand, CommandClass, CommandContext,
-    CommittedFeedDeliveryPageQuery, CommittedFeedPageQuery, CommittedFeedProgress,
-    CommittedFeedProgressCommand, CommittedFeedProgressOperation, CommittedFeedSnapshotQuery,
-    CompactUsageSyncLogCommand, DbError, DbHandle, DbOwner, DeleteObjectLinkCommand,
-    DeleteObjectTypeCommand, DeleteTrashedCommand, EnrollPairedDeviceCommand,
-    EnsureUsageSequenceMigratedCommand, GetSyncKeyValueQuery, IdentityErrorStyle,
-    IntegrationReadQuery, LegacyDeleteCommand, LegacyGraphWriteCommand,
-    LoadAcceptedPeerSyncPolicyQuery, LoadActiveLocalSyncProfileQuery, LoadDeviceRegistryQuery,
-    LoadEntitiesQuery, LoadOrGenerateIrohSecretKeyCommand, LoadPolicyBoundEntitiesPageQuery,
-    LoadRegistryEventsQuery, LoadSyncProfileForSyncQuery, LocalCoreTaskWrite,
-    LocalUsageWriteCommand, ObjectReadQuery, PersistIntegrationGrantCommand,
+    ClearAllCommand, CommandClass, CommandContext, CommittedFeedDeliveryPageQuery,
+    CommittedFeedPageQuery, CommittedFeedProgress, CommittedFeedProgressCommand,
+    CommittedFeedProgressOperation, CommittedFeedSnapshotQuery, CompactUsageSyncLogCommand,
+    DbError, DbHandle, DbOwner, DeleteObjectLinkCommand, DeleteObjectTypeCommand,
+    DeleteTrashedCommand, EnrollPairedDeviceCommand, EnsureUsageSequenceMigratedCommand,
+    GetSyncKeyValueQuery, IdentityErrorStyle, IntegrationReadQuery, LegacyDeleteCommand,
+    LegacyGraphWriteCommand, LoadAcceptedPeerSyncPolicyQuery, LoadActiveLocalSyncProfileQuery,
+    LoadDeviceRegistryQuery, LoadEntitiesQuery, LoadOrGenerateIrohSecretKeyCommand,
+    LoadPolicyBoundEntitiesPageQuery, LoadRegistryEventsQuery, LoadSyncProfileForSyncQuery,
+    LocalCoreTaskWrite, LocalUsageWriteCommand, ObjectReadQuery, PersistIntegrationGrantCommand,
     PersistNodeAuthorizationCommand, PolicyBoundFeedDeliveryPageQuery,
     PrepareTaskMergeBatchCommand, PublishIntegrationCredentialEnvelopeCommand,
     ReceiveInboxReceiptCommand, RegisterPackageTypesCommand, RegistryDeviceEnabledQuery,

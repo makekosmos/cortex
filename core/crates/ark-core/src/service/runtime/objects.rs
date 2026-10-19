@@ -133,10 +133,7 @@ pub(super) async fn canonical_game_upsert(
 ) -> Result<Value, String> {
     let device = local_write_device_id(device_id);
     let record = get_db_handle(state)?
-        .submit(
-            db::CommandContext::engine(),
-            db::CanonicalGameUpsertCommand::new(game, device),
-        )
+        .submit_canonical_game_upsert(db::CommandContext::engine(), game, device)
         .await
         .map_err(|error| error.to_string())?;
     if record.changed {

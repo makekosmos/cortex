@@ -5,7 +5,7 @@
 - [x] Ground: trace the four object-mutation commands, Core application session, Store persistence helpers, and accepted SQLite ownership design.
 - [x] Sketch: produce two structurally distinct API and module designs with concrete call sites.
 - [x] Agree: compare both designs against ownership, atomicity, compatibility, and final Core SQLite removal; proceed without a human checkpoint.
-- [ ] Implement: migrate the selected production path and delete obsolete callers and adapters in the same unit.
+- [x] Implement: migrate the selected production path and delete obsolete callers and adapters in the same unit.
 - [x] Extract pure canonical object-write validation to `ark-domain`; keep Core's database-backed type lookup as a temporary boundary adapter until the Store command cutover.
 - [x] Verify the extraction with `cargo check -p ark-domain -p ark-core --all-targets` and the canonical task-write plus Agenda contract tests (5/5).
 - [x] Move persisted type resolution and the canonical ingress entry point to `ark-store`; migrate Core adapters and tests, then delete the Core ingress module.
@@ -17,7 +17,12 @@
 - [x] Move local object upsert into a Store-owned immediate transaction; preserve typed conflicts and operation receipt replay.
 - [x] Move book-cover inputs and pure planning to Application, then apply links, revisions, vectors, and tombstones in one Store-owned immediate transaction.
 - [x] Verify cover no-op, replacement, removal, invalid source, wrong target, and rollback behavior through Application, Store, Core RPC, and facade integration tests.
-- [ ] Scrap: if implementation requires repeated Core/Store ownership workarounds, re-ground and replace the sketch instead of patching around it.
+- [x] Move canonical game DTOs and pure validation/planning to Application; keep the Core facade paths as re-exports.
+- [x] Move game SQL projection and persistence to Store; replace the nested savepoint with one Store-owned immediate transaction.
+- [x] Route game upsert through Core actor admission and settlement; delete `ObjectMutationSession` and its Core SQLite adapter.
+- [x] Verify planner wire shape and outcomes, game upsert/no-op/link state, late rollback, executable usage projection, and the live RPC event route.
+- [x] Closeout: all 90 Store tests pass; affected-crate check, focused Application/Core tests, source-size gate, format, diff check, and strict Application/Store plus Core-library Clippy pass. The combined all-target Core Clippy remains blocked by an unrelated `unreachable!` lint in `relay_sync/registry_fanout/sqlite_policy_tests.rs`.
+- [x] Scrap: not triggered; the accepted closed-Store-operation design fit without repeated ownership workarounds.
 
 ## Arena
 
@@ -38,6 +43,8 @@
 
 ## Implementation reconciliation
 
-Local object deletion, local object upsert, and book-cover changes now enter through Core actor tasks and open their immediate transaction in `ark-store`. Core retains admission, cancellation, settlement, Engine error mapping, and post-commit events. Application owns object-write and book-cover inputs, outcomes, and pure conflict or cover planning. The Core session adapter remains only for canonical-game upsert, so the object-mutation cutover is still open.
+Local object deletion, local object upsert, book-cover changes, and canonical game upsert now enter through Core actor tasks and open their immediate transactions in `ark-store`. Core retains admission, cancellation, settlement, Engine error mapping, and post-commit events. Application owns their input/output values and pure conflict or game/cover planning. The Core transaction session and SQLite adapter are deleted.
 
 The Store book-cover operation reads the book, selected image, and existing cover links inside the transaction. It applies link changes, object and link revisions, object-sync-version rows, and tombstones before commit. Verification passed: 2 Application book-cover tests, 5 canonical-facade integration tests, the Core RPC rollback test, all 90 Store tests, and the affected-crate check.
+
+The Store game operation reads its current projection and link targets inside the transaction, applies the Application plan, and writes object, local state, quarantine, links, and object sync version atomically. It preserves the existing game-link revision behavior and error text. Verification passed: four Application planner tests, eleven `phase3_game_rpc` tests, all 90 Store tests, affected-crate check, source-size gate, format, diff check, and strict Application/Store plus Core-library Clippy. The thermonuclear maintainability review replaced the seven-value game projection tuple with `GameProperties`; its report is `/tmp/cortex-thermo-ark-exocortex/game-cutover-review/00_summary.md`.

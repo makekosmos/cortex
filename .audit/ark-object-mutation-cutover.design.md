@@ -57,14 +57,18 @@ The staged `ObjectMutationSession` design keeps more policy in Application, but 
 
 ## Implementation reconciliation
 
-The first implementation unit moved pure canonical object-write validation and the retired task-type identifier into `ark-domain`. The second moved persisted type resolution and the canonical ingress entry point to `ark-store`, migrated callers, and deleted the Core ingress module. The upsert/delete input and commit types now belong to `ark-application`, while Core re-exports the old internal paths until the actor command migration lands. The unsupported `core.task` check and expected-snapshot conflict decision for local upsert now run through a pure Application function with focused tests. The broader command cutover remains open because Core still owns SQL sequencing and the transaction. Candidate files and the cross-judge verdict are `/tmp/ark-object-mutation-candidate-a.md`, `/tmp/ark-object-mutation-candidate-b.md`, and `/tmp/ark-object-mutation-judge.md`.
+The first implementation unit moved pure canonical object-write validation and the retired task-type identifier into `ark-domain`. The second moved persisted type resolution and the canonical ingress entry point to `ark-store`, migrated callers, and deleted the Core ingress module. Object upsert/delete inputs and commit types belong to `ark-application`; local book-cover inputs and planning do as well. Core keeps actor admission and settlement and posts user-visible events after the Store result commits.
+
+The object-mutation cutover now covers local object deletion, local object upsert, book-cover replacement, and canonical game upsert. Application owns the game RPC value types, canonical validation, link-validation decisions, no-op comparison, and a complete write plan. Store reads the current game and link targets, invokes that plan, and persists the object, local state, quarantine, links, and sync version under one `IMMEDIATE` transaction. The Core game facade re-exports the stable DTO paths and delegates reads to Store; the old Core SQL projection/upsert implementation and `ObjectMutationSession` adapter have been deleted. The writer actor preserves command admission, cancellation, settlement, and the `arrancador.changed` event contract.
+
+The game cutover verification covers DTO wire names, planning, device selection, no-op results, typed invalid outcomes, projection, local/quarantine state, link replacement, sync-state stability, late-failure rollback, executable-version usage aggregation, and the live RPC event path. Candidate files and the earlier cross-judge verdict are `/tmp/ark-object-mutation-candidate-a.md`, `/tmp/ark-object-mutation-candidate-b.md`, and `/tmp/ark-object-mutation-judge.md`.
 
 ## Open questions and risks
 
 - The task-delete path must preserve its current operation journal, conflict guards, revision, and tombstone behavior when Store owns the command boundary.
-- Game upsert and book-cover replacement have separate transactional side effects. Store tests must inject late failures and prove that every related row rolls back.
+- Game upsert and book-cover replacement have separate transactional side effects. The game integration test injects failure after object, local, quarantine, and link writes and verifies rollback; the book-cover RPC rollback test remains its evidence.
 - The actor queue serializes one writer today. The dedicated task must use the same slot-release and shutdown behavior rather than creating another queue.
 
 ## Next implementation step
 
-Move the object-mutation command input/result types to `ark-application`, add Store-owned transaction-local facts and the closed object-mutation plan, then migrate actor call sites. Store must resolve persisted type identities and call the Domain validation function without a Core adapter.
+Continue with the broader remaining Store/Sync/Net ownership map in the completion plan. The object-mutation command boundary no longer has a Core transaction adapter.

@@ -87,7 +87,7 @@ fn cover_planner_preserves_unsupported_source_errors() {
     let mut write = write(None);
     write.source_ref = Some("file:///cover.png".into());
     assert_eq!(
-        plan_local_book_cover(write, facts(None, vec![])).unwrap_err(),
+        plan_local_book_cover(write, facts(None, vec![])).expect_err("invalid cover is rejected"),
         BookCoverError {
             code: "source_requires_existing_image",
             pointer: None,

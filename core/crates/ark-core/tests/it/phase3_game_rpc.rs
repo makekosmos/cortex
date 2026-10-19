@@ -1,9 +1,10 @@
 #![allow(clippy::unwrap_used)]
 use ark_core::canonical_types::game::{
-    get_game, list_games, upsert_game, GameLink, GameLocalState, GameQuarantine, GameUpsertCommand,
+    get_game, list_games, GameLink, GameLocalState, GameQuarantine, GameUpsertCommand,
 };
 use ark_core::db;
-use ark_core::types::ArkObject;
+use ark_core::types::{ArkObject, ObjectLink, TrackedApp, UsageSession};
+use ark_store::canonical_game::apply_upsert;
 use rusqlite::Connection;
 use serde_json::json;
 
@@ -40,6 +41,42 @@ fn command(id: &str, device: &str) -> GameUpsertCommand {
     }
 }
 
+fn tracked_app(id: &str, path: &str) -> TrackedApp {
+    TrackedApp {
+        id: id.into(),
+        platform: "windows".into(),
+        exe_path: path.into(),
+        normalized_exe_path: path.into(),
+        process_name: "game.exe".into(),
+        display_name: None,
+        publisher: None,
+        icon_ref: None,
+        first_seen_at: "2026-01-01T00:00:00.000Z".into(),
+        last_seen_at: "2026-01-01T00:00:00.000Z".into(),
+    }
+}
+
+fn usage_session(id: &str, app_id: &str, foreground_ms: i64, idle_ms: i64) -> UsageSession {
+    UsageSession {
+        id: id.into(),
+        tracked_app_id: app_id.into(),
+        device_id: "d".into(),
+        device_name: "D".into(),
+        platform: "windows".into(),
+        started_at: "2026-01-01T00:00:00.000Z".into(),
+        ended_at: Some("2026-01-01T01:00:00.000Z".into()),
+        runtime_ms: 3_600_000,
+        foreground_ms,
+        idle_ms,
+        window_title: None,
+        process_name: "game.exe".into(),
+        exe_path: String::new(),
+        pid_start: None,
+        pid_end: None,
+        meta_json: json!({}),
+    }
+}
+
 fn target(id: &str, type_id: &str) -> ArkObject {
     ArkObject {
         id: id.into(),
@@ -56,8 +93,8 @@ fn target(id: &str, type_id: &str) -> ArkObject {
 
 #[test]
 fn upsert_get_list_projection_contains_canonical_local_and_quarantine() {
-    let conn = setup();
-    let record = upsert_game(&conn, command("g", "a"), "fallback")
+    let mut conn = setup();
+    let record = apply_upsert(&mut conn, command("g", "a"), "fallback")
         .unwrap()
         .record;
     assert_eq!(record.id, "g");
@@ -70,11 +107,11 @@ fn upsert_get_list_projection_contains_canonical_local_and_quarantine() {
 
 #[test]
 fn device_context_isolation_uses_exact_device_key() {
-    let conn = setup();
-    upsert_game(&conn, command("g", "a"), "fallback").unwrap();
+    let mut conn = setup();
+    apply_upsert(&mut conn, command("g", "a"), "fallback").unwrap();
     let mut other = command("g", "b");
     other.local.source = Some("gog".into());
-    upsert_game(&conn, other, "fallback").unwrap();
+    apply_upsert(&mut conn, other, "fallback").unwrap();
     assert_eq!(
         get_game(&conn, "g", "a").unwrap().local.source.as_deref(),
         Some("steam")
@@ -96,8 +133,8 @@ fn device_context_isolation_uses_exact_device_key() {
 
 #[test]
 fn quarantine_selection_is_exact_contract_not_arbitrary_row() {
-    let conn = setup();
-    upsert_game(&conn, command("g", "a"), "fallback").unwrap();
+    let mut conn = setup();
+    apply_upsert(&mut conn, command("g", "a"), "fallback").unwrap();
     conn.execute(
         concat!(
             "INSERT INTO object_migration_quarantine(object_id,contract_version,",
@@ -115,10 +152,10 @@ fn quarantine_selection_is_exact_contract_not_arbitrary_row() {
 
 #[test]
 fn invalid_game_rejects_without_object_hlc_or_vector_mutation() {
-    let conn = setup();
+    let mut conn = setup();
     let mut invalid = command("bad", "a");
     invalid.user_rating = Some(f64::NAN);
-    assert!(upsert_game(&conn, invalid, "fallback").is_err());
+    assert!(apply_upsert(&mut conn, invalid, "fallback").is_err());
     assert_eq!(
         conn.query_row::<i64, _, _>("SELECT COUNT(*) FROM objects", [], |r| r.get(0))
             .unwrap(),
@@ -137,7 +174,7 @@ fn invalid_game_rejects_without_object_hlc_or_vector_mutation() {
 
 #[test]
 fn wrong_link_target_rolls_back_object_and_local_state() {
-    let conn = setup();
+    let mut conn = setup();
     ark_store::objects::upsert_object_compat(&conn, &target("note", "com.kosmos.task")).unwrap();
     let mut value = command("g", "a");
     value.links = vec![GameLink {
@@ -145,7 +182,7 @@ fn wrong_link_target_rolls_back_object_and_local_state() {
         link_type: "note".into(),
         target_object_id: "note".into(),
     }];
-    assert!(upsert_game(&conn, value, "fallback").is_err());
+    assert!(apply_upsert(&mut conn, value, "fallback").is_err());
     assert!(ark_store::objects::get_object(&conn, "g")
         .unwrap()
         .is_none());
@@ -157,8 +194,134 @@ fn wrong_link_target_rolls_back_object_and_local_state() {
 }
 
 #[test]
+fn late_sync_version_failure_rolls_back_game_local_quarantine_and_links() {
+    let mut conn = setup();
+    ark_store::objects::upsert_object_compat(&conn, &target("note", "com.kosmos.note")).unwrap();
+    conn.execute_batch(
+        "CREATE TRIGGER reject_game_sync_version
+         BEFORE INSERT ON object_sync_versions
+         BEGIN SELECT RAISE(ABORT, 'injected game sync failure'); END;",
+    )
+    .unwrap();
+    let mut game = command("g", "a");
+    game.links = vec![GameLink {
+        id: "game-note".into(),
+        link_type: "note".into(),
+        target_object_id: "note".into(),
+    }];
+
+    assert!(apply_upsert(&mut conn, game, "fallback").is_err());
+    assert!(ark_store::objects::get_object(&conn, "g")
+        .unwrap()
+        .is_none());
+    let local_rows: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM object_local_state WHERE object_id='g'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let quarantine_rows: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM object_migration_quarantine WHERE object_id='g'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let link_rows: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM object_links WHERE source_object_id='g'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(local_rows, 0);
+    assert_eq!(quarantine_rows, 0);
+    assert_eq!(link_rows, 0);
+    let vectors: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sync_kv WHERE key='lan_sync.version_vector'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(vectors, 0);
+}
+
+#[test]
+fn usage_projection_merges_game_executable_version_splits() {
+    let mut conn = setup();
+    apply_upsert(&mut conn, command("game-1", "a"), "fallback").unwrap();
+    for (id, path) in [
+        ("app-v1", "c:\\games\\demo\\app-1.0.1\\game.exe"),
+        ("app-v2", "c:\\games\\demo\\app-1.0.2\\game.exe"),
+    ] {
+        ark_store::usage::upsert_tracked_app(&conn, &tracked_app(id, path)).unwrap();
+        ark_store::objects::upsert_object_compat(&conn, &target(id, "com.kosmos.image")).unwrap();
+    }
+    ark_store::usage::upsert_usage_session(
+        &conn,
+        &usage_session("s1", "app-v1", 1_800_000, 600_000),
+    )
+    .unwrap();
+    ark_store::usage::upsert_usage_session(&conn, &usage_session("s2", "app-v2", 600_000, 0))
+        .unwrap();
+    ark_store::objects::upsert_object_link(
+        &conn,
+        &ObjectLink {
+            id: "game-app".into(),
+            source_object_id: "game-1".into(),
+            target_object_id: "app-v2".into(),
+            link_type: "game".into(),
+            created_at: "2026-01-01T00:00:00.000Z".into(),
+        },
+    )
+    .unwrap();
+
+    let usage = get_game(&conn, "game-1", "a").unwrap().usage;
+    assert_eq!(usage.seconds, 2_400);
+    assert_eq!(usage.session_count, 2);
+    assert!(usage.last_played_at.is_some());
+}
+
+#[tokio::test]
+async fn game_upsert_rpc_uses_actor_and_publishes_only_changed_events() {
+    use std::time::Duration;
+
+    let directory = tempfile::tempdir().unwrap();
+    let db_path = directory.path().join("game-rpc.db");
+    let service = ark_core::service::ArkService::open(db_path.to_string_lossy())
+        .await
+        .unwrap();
+    let mut events = service.subscribe();
+    let params = json!({
+        "game": command("rpc-game", "device-a"),
+        "deviceId": "fallback-device"
+    });
+
+    let created = service
+        .call("canonical.game.upsert", params.clone())
+        .await
+        .unwrap();
+    assert_eq!(created["changed"], true);
+    let event = tokio::time::timeout(Duration::from_secs(1), events.recv())
+        .await
+        .expect("change event arrives")
+        .expect("event receiver remains open");
+    assert_eq!(event, json!({"event":"arrancador.changed"}));
+
+    let unchanged = service.call("canonical.game.upsert", params).await.unwrap();
+    assert_eq!(unchanged["changed"], false);
+    assert!(
+        tokio::time::timeout(Duration::from_millis(50), events.recv())
+            .await
+            .is_err()
+    );
+}
+
+#[test]
 fn replace_removes_stale_owned_links() {
-    let conn = setup();
+    let mut conn = setup();
     ark_store::objects::upsert_object_compat(&conn, &target("n1", "com.kosmos.note")).unwrap();
     ark_store::objects::upsert_object_compat(&conn, &target("n2", "com.kosmos.note")).unwrap();
     let mut first = command("g", "a");
@@ -167,14 +330,14 @@ fn replace_removes_stale_owned_links() {
         link_type: "note".into(),
         target_object_id: "n1".into(),
     }];
-    upsert_game(&conn, first, "fallback").unwrap();
+    apply_upsert(&mut conn, first, "fallback").unwrap();
     let mut second = command("g", "a");
     second.links = vec![GameLink {
         id: "l2".into(),
         link_type: "note".into(),
         target_object_id: "n2".into(),
     }];
-    let record = upsert_game(&conn, second, "fallback").unwrap().record;
+    let record = apply_upsert(&mut conn, second, "fallback").unwrap().record;
     assert_eq!(
         record
             .links
@@ -193,8 +356,8 @@ fn replace_removes_stale_owned_links() {
 
 #[test]
 fn stored_local_json_has_no_device_ambiguity() {
-    let conn = setup();
-    upsert_game(&conn, command("g", "device-a"), "fallback").unwrap();
+    let mut conn = setup();
+    apply_upsert(&mut conn, command("g", "device-a"), "fallback").unwrap();
     let raw: String = conn
         .query_row(
             "SELECT data_json FROM object_local_state WHERE object_id='g' AND device_id='device-a'",
@@ -208,8 +371,8 @@ fn stored_local_json_has_no_device_ambiguity() {
 
 #[test]
 fn identical_mutation_is_noop_without_sync_state_changes() {
-    let conn = setup();
-    let first = upsert_game(&conn, command("g", "a"), "fallback").unwrap();
+    let mut conn = setup();
+    let first = apply_upsert(&mut conn, command("g", "a"), "fallback").unwrap();
     let before_vector: String = conn
         .query_row(
             "SELECT value FROM sync_kv WHERE key='lan_sync.version_vector'",
@@ -224,7 +387,7 @@ fn identical_mutation_is_noop_without_sync_state_changes() {
             |r| r.get(0),
         )
         .unwrap();
-    let second = upsert_game(&conn, command("g", "a"), "fallback").unwrap();
+    let second = apply_upsert(&mut conn, command("g", "a"), "fallback").unwrap();
     assert!(first.changed);
     assert!(!second.changed);
     assert_eq!(second.record, first.record);

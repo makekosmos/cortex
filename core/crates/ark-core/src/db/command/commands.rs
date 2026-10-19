@@ -10,7 +10,6 @@ mod integration_admin;
 mod integration_read;
 mod integration_replication;
 mod legacy_mutation;
-mod object_mutation;
 mod object_read;
 mod sync_mutation;
 mod sync_policy;
@@ -51,7 +50,6 @@ pub(crate) use integration_replication::{
 pub(crate) use legacy_mutation::{
     LegacyDeleteCommand, LegacyGraphWriteCommand, TrackedAppDeleteCommand, TrackedAppUpsertCommand,
 };
-pub(crate) use object_mutation::CanonicalGameUpsertCommand;
 pub(crate) use object_read::ObjectReadQuery;
 pub(crate) use sync_mutation::{
     ApplyAuthenticatedSyncEntityCommand, ApplySyncEntityCommand, CommittedFeedProgress,
