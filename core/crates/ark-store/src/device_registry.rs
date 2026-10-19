@@ -2,7 +2,8 @@ use ark_domain::device_registry::{
     state::DeviceRegistry, DeviceId, DeviceRecord, DisplayName, RegistryEvent, RegistryHead,
     SigningPublicKey,
 };
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension, Transaction};
+use sha2::Digest;
 
 pub const MAX_REGISTRY_EVENTS_PAGE_SIZE: usize = 64;
 
@@ -59,6 +60,114 @@ pub fn is_device_admitted(
         )
         .optional()
         .map_err(|error| error.to_string())
+}
+
+pub fn event_json_for_actor_sequence(
+    connection: &Connection,
+    actor_device_id: &str,
+    actor_sequence: u64,
+) -> Result<Option<String>, String> {
+    connection
+        .query_row(
+            "SELECT event_json FROM device_registry_events
+             WHERE actor_device_id = ?1 AND actor_sequence = ?2",
+            params![actor_device_id, actor_sequence],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())
+}
+
+pub fn persist_event_and_projection(
+    transaction: &Transaction<'_>,
+    event: &RegistryEvent,
+    event_hash: &str,
+    event_json: &str,
+    device: &DeviceRecord,
+) -> Result<(), String> {
+    let registry_position: i64 = transaction
+        .query_row(
+            "SELECT COALESCE(MAX(registry_position), 0) + 1 FROM device_registry_events",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|error| error.to_string())?;
+    let actor_sequence =
+        i64::try_from(event.actor_sequence()).map_err(|error| error.to_string())?;
+    transaction
+        .execute(
+            "INSERT INTO device_registry_events (
+                registry_position, actor_device_id, actor_sequence, event_id,
+                target_device_id, previous_event_hash, event_hash, event_json
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                registry_position,
+                event.actor_device_id().as_str(),
+                actor_sequence,
+                event.event_id(),
+                event.target_device_id().as_str(),
+                event.previous_event_hash(),
+                event_hash,
+                event_json,
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+    persist_projection(transaction, device)
+}
+
+pub fn registry_digest(connection: &Connection) -> Result<String, String> {
+    let mut statement = connection
+        .prepare(
+            "SELECT actor_device_id, actor_sequence, event_hash
+             FROM device_registry_events ORDER BY actor_device_id, actor_sequence",
+        )
+        .map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, u64>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+    let bytes = serde_json::to_vec(&rows).map_err(|error| error.to_string())?;
+    let digest = sha2::Sha256::digest(bytes);
+    Ok(digest.iter().map(|byte| format!("{byte:02x}")).collect())
+}
+
+fn persist_projection(transaction: &Transaction<'_>, device: &DeviceRecord) -> Result<(), String> {
+    transaction
+        .execute(
+            "INSERT INTO device_registry_projection (
+                device_id, signing_public_key, key_epoch, admission_epoch, display_name,
+                disabled_event_id, display_name_hlc, updated_hlc, updated_event_id
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+             ON CONFLICT(device_id) DO UPDATE SET
+                signing_public_key = excluded.signing_public_key,
+                key_epoch = excluded.key_epoch,
+                admission_epoch = excluded.admission_epoch,
+                display_name = excluded.display_name,
+                disabled_event_id = excluded.disabled_event_id,
+                display_name_hlc = excluded.display_name_hlc,
+                updated_hlc = excluded.updated_hlc,
+                updated_event_id = excluded.updated_event_id",
+            params![
+                device.device_id.as_str(),
+                device.signing_public_key.as_bytes().as_slice(),
+                device.key_epoch,
+                device.admission_epoch,
+                device.display_name.as_ref().map(DisplayName::as_str),
+                device.disabled_event_id,
+                device.display_name_hlc,
+                device.updated_hlc,
+                device.updated_event_id,
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(())
 }
 
 pub fn load_registry(connection: &Connection) -> Result<DeviceRegistry, String> {
