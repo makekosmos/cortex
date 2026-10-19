@@ -1,5 +1,4 @@
 use super::super::{sealed, CommandClass, CommandContext, DbError, DbQuery};
-use rusqlite::OptionalExtension;
 
 fn serialize<T: serde::Serialize>(value: Result<T, String>) -> Result<serde_json::Value, DbError> {
     let value = value.map_err(DbError::Storage)?;
@@ -71,35 +70,9 @@ impl DbQuery for ObjectReadQuery {
                 serialize(ark_store::objects::search_objects(connection, &query))
             }
             Self::Get(id) => serialize(ark_store::objects::get_object(connection, &id)),
-            Self::WriteSnapshot(id) => {
-                let identity = connection
-                    .query_row(
-                        "SELECT type_id, type_version FROM objects WHERE id = ?1",
-                        [&id],
-                        |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
-                    )
-                    .optional()
-                    .map_err(|error| DbError::Storage(error.to_string()))?;
-                let object_revision = ark_store::sync_versions::object_revision(connection, &id)
-                    .map_err(DbError::Storage)?;
-                let task_revision = ark_store::task_merge::task_snapshot_token(connection, &id)
-                    .map_err(|error| DbError::Storage(error.to_string()))?;
-                let snapshot = ark_domain::object_write::ObjectWriteSnapshot {
-                    exists: identity.is_some(),
-                    type_id: identity.as_ref().map(|value| value.0.clone()),
-                    type_version: identity.as_ref().map(|value| value.1.clone()),
-                    revision: if identity
-                        .as_ref()
-                        .is_some_and(|(type_id, _)| type_id == "core.task")
-                        || task_revision.is_some()
-                    {
-                        task_revision.or(object_revision)
-                    } else {
-                        object_revision
-                    },
-                };
-                serde_json::to_value(snapshot).map_err(|error| DbError::Storage(error.to_string()))
-            }
+            Self::WriteSnapshot(id) => serialize(
+                ark_store::object_write::read_object_write_snapshot(connection, &id),
+            ),
             Self::CanonicalGames(device_id) => serialize(crate::canonical_types::game::list_games(
                 connection, &device_id,
             )),

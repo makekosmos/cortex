@@ -71,7 +71,7 @@ pub fn apply_local_object_upsert(
     let current_snapshot = write
         .expected_snapshot
         .as_ref()
-        .map(|_| object_snapshot(transaction, &write.object.id))
+        .map(|_| read_object_write_snapshot(transaction, &write.object.id))
         .transpose()?;
     validate_local_object_upsert(&write, current_snapshot.as_ref())
         .map_err(|error| error.to_string())?;
@@ -110,7 +110,7 @@ pub fn apply_local_object_upsert(
     Ok(outcome)
 }
 
-fn object_snapshot(
+pub fn read_object_write_snapshot(
     connection: &Connection,
     object_id: &str,
 ) -> Result<ObjectWriteSnapshot, String> {
@@ -180,31 +180,7 @@ impl ObjectWriteSession for SqliteObjectWriteSession<'_> {
     }
 
     fn object_snapshot(&self, id: &str) -> Result<ObjectWriteSnapshot, String> {
-        let identity = crate::objects::object_type_identity(self.connection, id)?;
-        let object_revision = crate::sync_versions::object_revision(self.connection, id)?;
-        let task_revision = crate::task_merge::task_snapshot_token(self.connection, id)
-            .map_err(|error| error.to_string())?;
-        Ok(match identity {
-            Some(identity) => {
-                let is_task = identity.type_id == "core.task";
-                ObjectWriteSnapshot {
-                    exists: true,
-                    type_id: Some(identity.type_id),
-                    type_version: Some(identity.type_version),
-                    revision: if is_task {
-                        task_revision.or(object_revision)
-                    } else {
-                        object_revision
-                    },
-                }
-            }
-            None => ObjectWriteSnapshot {
-                exists: false,
-                type_id: None,
-                type_version: None,
-                revision: task_revision.or(object_revision),
-            },
-        })
+        read_object_write_snapshot(self.connection, id)
     }
 
     fn current_revision(&self, id: &str) -> Result<Option<String>, String> {
