@@ -27,8 +27,9 @@
 
 - [x] Compare two read-only architecture candidates and an independent cross-judge against the accepted Core scheduler and Store transaction ownership decisions. Candidate B is the base; Candidate A's Application-owned scheduler conflicts with the accepted boundary.
 - [x] Record the selected target, compatibility contract, verification predicate, and cutover order in `.audit/ark-storage-cutover.design.md`.
-- [ ] Build the production-only command, query, maintenance, bootstrap, and transaction census before freezing the Store capability API.
-- [x] Add and verify the Core SQLite ownership gate against the current violating source and a clean fixture. Its fixtures pass 3/3; the current Core source fails with 1,542 findings, including one Cargo dependency, 509 SQLite type or import matches, 446 SQLite-operation matches, 494 SQL literals, and 92 lifecycle matches. The scan includes tests and is not the production-only command census.
+- [x] Generate a source-aware inventory of 45 write commands, 24 read queries, one maintenance command, and SQLite references by source scope. The artifact is `.audit/ark-core-storage-census-2026-10-19.md`.
+- [ ] Map each typed operation to its application policy, Store capability, nested savepoints, and post-commit effects before freezing the Store API. The command inventory and actor transaction/bootstrap contracts are recorded in the census and `.audit/ark-storage-cutover.design.md`.
+- [x] Add and verify the Core SQLite ownership gate against the current violating source and a clean fixture. Its fixtures pass 4/4; the source-aware scan reports 630 production findings, 635 test-file findings, 11 inline-test findings, and 2 debug-only findings.
 - [ ] Re-estimate the remaining implementation effort from the completed census.
 
 ## Current evidence (2026-10-19 continuation)

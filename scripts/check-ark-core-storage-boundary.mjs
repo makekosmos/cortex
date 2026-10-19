@@ -4,12 +4,18 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { collectRustFiles, maskRustTrivia, rustStringLiterals } from "./rust-source-scan.mjs";
+import {
+  collectRustFiles,
+  debugOnlyFunctionRanges,
+  inlineTestRanges,
+  maskRustTrivia,
+  rustStringLiterals,
+} from "./rust-source-scan.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CORE = path.join(ROOT, "core", "crates", "ark-core");
 const CODE_PATTERNS = [
-  ["SQLite type or import", /\b(?:rusqlite|Connection|Transaction|Statement|Row)\b/],
+  ["SQLite type or import", /\b(?:rusqlite|Transaction|Statement|Row)\b/],
   [
     "SQLite operation",
     /\b(?:conn|connection|transaction|tx)\s*\.\s*(?:execute|execute_batch|execute_cached|query_row|query_map|prepare|prepare_cached|unchecked_transaction|transaction_with_behavior)\s*\(/,
@@ -28,25 +34,38 @@ function lineAt(source, offset) {
   return line;
 }
 
+function isTestFile(relativePath) {
+  return /(?:^|\/)tests?(?:_[^/]+)?(?:\.rs|\/)|(?:^|\/)[^/]+_tests?\.rs$/.test(relativePath);
+}
+
 function sourceViolations(source, relativePath) {
   const masked = maskRustTrivia(source);
   const violations = [];
   const found = new Set();
+  const testRanges = inlineTestRanges(source, masked);
+  const debugRanges = debugOnlyFunctionRanges(source, masked);
   for (const [category, pattern] of CODE_PATTERNS) {
     for (const match of masked.matchAll(new RegExp(pattern.source, "g")))
-      addViolation(lineAt(source, match.index), category);
+      addViolation(lineAt(source, match.index), category, match.index);
   }
   for (const literal of rustStringLiterals(source)) {
     if (SQL_LITERAL.test(literal.content))
-      addViolation(lineAt(source, literal.start), "SQL literal");
+      addViolation(lineAt(source, literal.start), "SQL literal", literal.start);
   }
   return violations;
 
-  function addViolation(line, category) {
-    const key = `${line}\0${category}`;
+  function addViolation(line, category, offset) {
+    const scope = isTestFile(relativePath)
+      ? "test_file"
+      : testRanges.some(({ start, end }) => start <= offset && offset < end)
+        ? "inline_test"
+        : debugRanges.some(({ start, end }) => start <= offset && offset < end)
+          ? "debug_only"
+          : "production";
+    const key = `${line}\0${category}\0${scope}`;
     if (found.has(key)) return;
     found.add(key);
-    violations.push({ path: relativePath, line, category });
+    violations.push({ path: relativePath, line, category, scope });
   }
 }
 
@@ -63,6 +82,7 @@ export async function collectStorageViolations({
       path: path.relative(root, manifestPath).split(path.sep).join("/"),
       line: lineAt(manifest, dependency.index),
       category: "rusqlite dependency",
+      scope: "production",
     });
 
   for (const file of (await collectRustFiles(sourceRoot)).sort()) {
@@ -84,7 +104,9 @@ export async function runCheck(args = process.argv.slice(2)) {
   if (violations.length) {
     process.stderr.write(`ark-core storage boundary has ${violations.length} violations:\n`);
     for (const violation of violations)
-      process.stderr.write(`- ${violation.path}:${violation.line} [${violation.category}]\n`);
+      process.stderr.write(
+        `- ${violation.path}:${violation.line} [${violation.scope}, ${violation.category}]\n`,
+      );
     return 1;
   }
   process.stdout.write(

@@ -51,14 +51,32 @@ test("the boundary checker rejects rusqlite in dev dependencies", async (t) => {
       path: "core/crates/ark-core/Cargo.toml",
       line: 2,
       category: "rusqlite dependency",
+      scope: "production",
     },
   ]);
+});
+
+test("the baseline inventory distinguishes inline tests from production code", async (t) => {
+  const paths = await fixture(t, {
+    manifest: '[dependencies]\nserde = "1"\n',
+    source: [
+      "pub fn ready() {}",
+      "#[cfg(test)] mod tests {",
+      '  const QUERY: &str = "SELECT id FROM objects";',
+      "}",
+    ].join("\n"),
+  });
+  const violations = await collectStorageViolations(paths);
+  assert.deepEqual(
+    violations.map(({ category, line, scope }) => ({ category, line, scope })),
+    [{ category: "SQL literal", line: 3, scope: "inline_test" }],
+  );
 });
 
 test("a clean Core source tree passes the ownership gate", async (t) => {
   const paths = await fixture(t, {
     manifest: '[dependencies]\nark-store = { path = "../ark-store" }\n',
-    source: "pub fn storage_is_owned_by_store() { executor.execute(); }\n",
+    source: "pub fn network_connection(value: Connection) { value.close(); executor.execute(); }\n",
   });
   assert.deepEqual(await collectStorageViolations(paths), []);
 });
