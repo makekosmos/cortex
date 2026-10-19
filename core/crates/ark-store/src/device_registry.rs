@@ -14,6 +14,61 @@ pub struct DeviceRegistryEntry {
     pub enabled: bool,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DeviceRegistryIdentity {
+    pub signing_public_key: Vec<u8>,
+    pub disabled_event_id: Option<String>,
+    pub key_epoch: u64,
+    pub admission_epoch: u64,
+    pub updated_event_id: Option<String>,
+}
+
+pub fn load_identity(
+    connection: &Connection,
+    device_id: &str,
+) -> Result<Option<DeviceRegistryIdentity>, String> {
+    connection
+        .query_row(
+            "SELECT signing_public_key, disabled_event_id, key_epoch, admission_epoch,
+                    updated_event_id
+             FROM device_registry_projection WHERE device_id = ?1",
+            [device_id],
+            |row| {
+                Ok(DeviceRegistryIdentity {
+                    signing_public_key: row.get(0)?,
+                    disabled_event_id: row.get(1)?,
+                    key_epoch: row.get(2)?,
+                    admission_epoch: row.get(3)?,
+                    updated_event_id: row.get(4)?,
+                })
+            },
+        )
+        .optional()
+        .map_err(|error| error.to_string())
+}
+
+pub fn load_actor_head(
+    connection: &Connection,
+    actor_device_id: &str,
+) -> Result<Option<(u64, String)>, String> {
+    connection
+        .query_row(
+            "SELECT actor_sequence, event_hash FROM device_registry_events
+             WHERE actor_device_id = ?1 ORDER BY actor_sequence DESC LIMIT 1",
+            [actor_device_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()
+        .map_err(|error| error.to_string())
+}
+
+pub fn upsert_device_projection(
+    transaction: &Transaction<'_>,
+    device: &DeviceRecord,
+) -> Result<(), String> {
+    persist_projection(transaction, device)
+}
+
 pub fn load_entries(connection: &Connection) -> Result<Vec<DeviceRegistryEntry>, String> {
     let mut statement = connection
         .prepare(

@@ -3,7 +3,7 @@ use ark_domain::device_registry::{
     DeviceId, DeviceRecord, RegistryCommand, RegistryEvent, RegistryEventDraft, RegistryOperation,
     SigningPublicKey,
 };
-use rusqlite::{params, Transaction};
+use rusqlite::Transaction;
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
@@ -55,17 +55,7 @@ fn append_local_registry_event(
     let local_key =
         SigningPublicKey::from_bytes(*secret.public().as_bytes()).map_err(registry_error)?;
     if registry.device(&actor_id).is_none() {
-        transaction
-            .execute(
-                "INSERT INTO device_registry_projection (
-                    device_id, signing_public_key, key_epoch, admission_epoch,
-                    display_name, disabled_event_id, display_name_hlc, updated_hlc,
-                    updated_event_id
-                 ) VALUES (?1, ?2, 1, 1, NULL, NULL, NULL, NULL, NULL)",
-                params![actor_id.as_str(), local_key.as_bytes().as_slice()],
-            )
-            .map_err(storage_error)?;
-        registry.add_trust_anchor(DeviceRecord {
+        let record = DeviceRecord {
             device_id: actor_id.clone(),
             signing_public_key: local_key.clone(),
             key_epoch: 1,
@@ -75,7 +65,10 @@ fn append_local_registry_event(
             display_name_hlc: None,
             updated_hlc: None,
             updated_event_id: None,
-        });
+        };
+        ark_store::device_registry::upsert_device_projection(transaction, &record)
+            .map_err(DbError::Storage)?;
+        registry.add_trust_anchor(record);
     }
     let actor = registry
         .device(&actor_id)
@@ -149,8 +142,4 @@ fn append_local_registry_event(
 
 fn registry_error(error: ark_domain::device_registry::RegistryEventError) -> DbError {
     DbError::Invalid(error.to_string())
-}
-
-fn storage_error(error: rusqlite::Error) -> DbError {
-    DbError::from_sqlite(error)
 }
