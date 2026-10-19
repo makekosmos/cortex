@@ -2,6 +2,7 @@ pub mod committed_feed;
 pub mod data_platform;
 pub mod data_volume;
 pub mod integration_replication;
+pub mod legacy_entities;
 pub mod object_types;
 pub mod object_write_receipts;
 pub mod objects;

@@ -1,4 +1,8 @@
-pub(in crate::db) fn load_all_todos(conn: &Connection) -> Result<Vec<TodoItem>, String> {
+use ark_domain::types::{Project, Tag, TodoItem};
+use rusqlite::Connection;
+use serde_json::{json, Value};
+
+pub fn load_all_todos(conn: &Connection) -> Result<Vec<TodoItem>, String> {
     let mut stmt = conn
         .prepare(
             "SELECT id, title, notes, priority, scheduled_date, deadline, reminder_date,
@@ -54,7 +58,7 @@ pub(in crate::db) fn load_all_todos(conn: &Connection) -> Result<Vec<TodoItem>, 
         .map_err(|e| e.to_string())
 }
 
-pub(in crate::db) fn load_all_projects(conn: &Connection) -> Result<Vec<Project>, String> {
+pub fn load_all_projects(conn: &Connection) -> Result<Vec<Project>, String> {
     let mut stmt = conn
         .prepare(
             "SELECT id, title, notes, status, scheduled_date, deadline,
@@ -84,7 +88,7 @@ pub(in crate::db) fn load_all_projects(conn: &Connection) -> Result<Vec<Project>
         .map_err(|e| e.to_string())
 }
 
-pub(in crate::db) fn load_all_tags(conn: &Connection) -> Result<Vec<Tag>, String> {
+pub fn load_all_tags(conn: &Connection) -> Result<Vec<Tag>, String> {
     let mut stmt = conn
         .prepare("SELECT id, title, color, created_at FROM tags")
         .map_err(|e| e.to_string())?;

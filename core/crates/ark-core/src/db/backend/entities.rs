@@ -2,10 +2,7 @@ use rusqlite::{params, params_from_iter, Connection, OptionalExtension};
 use serde_json::Value;
 
 use super::SqliteStorageBackend;
-use crate::db::{
-    list_object_links, list_object_types, list_objects, load_all_projects, load_all_tags,
-    load_all_todos,
-};
+use crate::db::{list_object_links, list_object_types, list_objects};
 use crate::hlc::HLC;
 use crate::types::{SyncEntity, VersionVector};
 
@@ -263,9 +260,12 @@ impl SqliteStorageBackend {
             };
         }
         if offset < fixed_count {
-            add_entities!(load_all_todos(conn), "todo");
-            add_entities!(load_all_projects(conn), "project");
-            add_entities!(load_all_tags(conn), "tag");
+            add_entities!(ark_store::legacy_entities::load_all_todos(conn), "todo");
+            add_entities!(
+                ark_store::legacy_entities::load_all_projects(conn),
+                "project"
+            );
+            add_entities!(ark_store::legacy_entities::load_all_tags(conn), "tag");
             add_entities!(ark_store::usage::load_all_tracked_apps(conn), "tracked_app");
             add_entities!(list_object_types(conn), "object_type");
             let objects = list_objects(conn).map(|objects| {

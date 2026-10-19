@@ -102,9 +102,9 @@ pub fn delete_trashed(conn: &Connection, device_id: &str) -> Result<usize, Strin
 // ---------------------------------------------------------------------------
 
 pub fn load_all(conn: &Connection) -> Result<LoadAllData, String> {
-    let mut todos = load_all_todos(conn)?;
-    let mut projects = load_all_projects(conn)?;
-    let mut tags = load_all_tags(conn)?;
+    let mut todos = ark_store::legacy_entities::load_all_todos(conn)?;
+    let mut projects = ark_store::legacy_entities::load_all_projects(conn)?;
+    let mut tags = ark_store::legacy_entities::load_all_tags(conn)?;
     let mut tracked_apps = ark_store::usage::load_all_tracked_apps(conn)?;
     let mut usage_sessions = ark_store::usage_history::load_all_usage_sessions(conn)?;
     let mut usage_events = ark_store::usage_history::load_all_usage_events(conn)?;
