@@ -61,6 +61,8 @@ The selected boundary is a typed `TaskMergeLocalMutationPlan` built from a Store
 
 The state read includes the existing object and sorted source links, bootstrap presence, object identity, task snapshot token, and the legacy object-revision fallback. The plan remains task-merge-specific; it is not a generic batch API. Hard delete must continue to remove source links and produce the existing tombstone entity, soft delete must retain the projection, concurrent existence alternatives must remain unresolved absent an explicit digest, and causal dependencies must keep the projection pending. Failure injection must prove all related tables roll back together.
 
+The first projection extraction is now in `ark-store::task_merge::materialize_task_if_ready`. Store loads the task history, computes the domain projection, repairs a missing projection from its bootstrap, and writes object, link, revision, and tombstone state. Core calls this operation after bootstrap and append persistence. Local task mutation still needs to build and apply one complete plan through Store.
+
 Candidate sketches and the independent score are recorded in the active task transcript; this decision supersedes the earlier open instruction to choose the complete local task materialization seam during implementation.
 
 ## Migration sequence

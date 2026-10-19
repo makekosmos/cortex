@@ -20,7 +20,7 @@
 - [x] Prove valid and incomplete histories, malformed persisted identity, replay, restart, and rollback behavior.
 - [x] Move operation replay/collision checks and atomic operation/guard/journal persistence into `ark-store` using a checked prepared-operation value; keep Core conflict-digest admission and materialization orchestration in the existing transaction.
 - [x] Prove guarded replay, operation-id collision, remote pre-bootstrap publication policy, and rollback when journal insertion fails.
-- [x] Move bootstrap replay checks, payload loading, baseline-operation persistence, and journal publication into Store; keep existing projection validation and materialization in Core.
+- [x] Move bootstrap replay checks, payload loading, baseline-operation persistence, and journal publication into Store; keep projection identity validation and canonical admission in Core.
 - [x] Prove bootstrap idempotency, payload collision, pending-operation publication, and rollback when journal insertion fails.
 - [x] Move outbound progress row decoding, watermark reads, and conditional progress writes into Store; keep policy checks and batch construction in Core.
 - [x] Prove progress state decoding, policy-stamp updates, conditional flight claims, ACK persistence, and existing stable-batch/policy-widening behavior.
@@ -28,6 +28,7 @@
 - [ ] Continue moving the remaining task-merge persistence modules as separate transaction-preserving units.
   - [x] Move inbound progress decoding, replay receipt reads, policy-stamp writes, and batch receipt writes into Store.
   - [x] Load local task projection, sorted source links, bootstrap state, task snapshot token, and legacy revision through one typed Store query.
+  - [x] Move task projection materialization and its object/link/revision/tombstone writes into Store.
   - [ ] Replace the remaining Core local task mutation and projection SQL with the planned atomic Store apply operation.
 
 ## Evidence
@@ -42,4 +43,5 @@
 - Commit `5b7c7b32` moves inbound progress persistence to Store; the focused task-merge suite passed 46/46, Clippy passed, and writer census passed with 81 counts.
 - The typed local-mutation state and task snapshot token now live in Store. The Core snapshot-token facade and its SQL implementation are removed. Focused task-merge tests passed 48/48, including new Store state and no-bootstrap token tests; Clippy, source-size, and the 81-count writer census passed.
 - Object revision lookup now lives in `ark-store::sync_versions` and all production Core callers use it. Store tests cover the highest of the version-vector, object-version, and tombstone revisions; existing stale-write and legacy-HLC behavior remains green.
+- Task projection computation, projection repair, hard-delete cleanup, sync-version update, and tombstone writes now live in `ark-store::task_merge::materialize_task_if_ready`. The Store/Core task-merge suite passes 49/49; Clippy passes and the writer census matches 82 counts.
 - Keep local task materialization and inbound batch persistence open. Store ownership is still incomplete.

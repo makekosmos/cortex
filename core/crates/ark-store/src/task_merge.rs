@@ -13,6 +13,7 @@ mod history;
 mod inbound;
 mod local_mutation;
 mod progress;
+mod projection;
 
 pub use append::{
     check_operation, persist_operation, PreparedTaskMergeOperation, TaskMergeOperationCheck,
@@ -35,6 +36,7 @@ pub use progress::{
     load_outbound_progress, task_merge_watermark, update_outbound_policy_identity,
     TaskMergeAcknowledgedBatch, TaskMergeInFlightBatch, TaskMergeOutboundProgress,
 };
+pub use projection::{materialize_task_if_ready, TaskMergeProjectionOutcome};
 
 const MAX_TASK_MERGE_PAGE_SIZE: usize = 100;
 

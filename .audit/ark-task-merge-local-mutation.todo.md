@@ -15,6 +15,7 @@
 ## Implement and verify
 
 - [x] Store loads the typed local task state, including sorted links, bootstrap state, snapshot token, and legacy revision fallback.
+- [x] Store materializes task history and owns projection repair, links, object revision, and tombstone persistence.
 - [ ] Replace the remaining Core storage calls with the final plan/apply operation.
 - [ ] Store applies local bootstrap, task operations, journal, projection, links, version-vector/feed, object revision, and tombstone changes in the existing transaction.
 - [ ] Core uses the returned materialized object and revision values to preserve current `SyncEntity` output.

@@ -1,5 +1,8 @@
 use super::{bootstrap, connection};
-use crate::task_merge::load_local_mutation_state;
+use crate::task_merge::{
+    check_bootstrap, load_local_mutation_state, materialize_task_if_ready, persist_bootstrap,
+    TaskMergeBootstrapCheck, TaskMergeProjectionOutcome,
+};
 use rusqlite::params;
 
 #[test]
@@ -58,5 +61,37 @@ fn task_snapshot_token_is_absent_until_bootstrap_exists() {
         crate::task_merge::task_snapshot_token(&connection, "task-1")
             .expect("unbootstrapped tasks have no merge token"),
         None
+    );
+}
+
+#[test]
+fn store_materializes_bootstrap_projection_and_links() {
+    let connection = connection();
+    let bootstrap = bootstrap();
+    let prepared = match check_bootstrap(&connection, &bootstrap).expect("bootstrap check succeeds")
+    {
+        TaskMergeBootstrapCheck::New(prepared) => prepared,
+        TaskMergeBootstrapCheck::Replay => panic!("fixture bootstrap is new"),
+    };
+    persist_bootstrap(&connection, prepared).expect("bootstrap persists");
+
+    let outcome = materialize_task_if_ready(&connection, &bootstrap.object.id)
+        .expect("Store materializes a complete task history");
+
+    assert_eq!(
+        outcome,
+        TaskMergeProjectionOutcome::Materialized {
+            object: Some(Box::new(bootstrap.object.clone())),
+            hard_deleted: false,
+        }
+    );
+    assert_eq!(
+        crate::objects::get_object(&connection, &bootstrap.object.id)
+            .expect("materialized object reads"),
+        Some(bootstrap.object)
+    );
+    assert_eq!(
+        crate::objects::list_object_links(&connection).expect("materialized links read"),
+        bootstrap.links
     );
 }

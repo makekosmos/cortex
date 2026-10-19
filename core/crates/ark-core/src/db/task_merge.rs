@@ -10,7 +10,7 @@ mod inbound;
 mod mutation;
 #[path = "task_merge/progress.rs"]
 mod progress;
-use bootstrap::{append_bootstrap, append_local_bootstrap, materialize_if_ready};
+use bootstrap::{append_bootstrap, append_local_bootstrap};
 pub(crate) use inbound::apply_inbound_batch;
 pub(crate) use mutation::{commit_local_task_delete, commit_local_task_upsert};
 pub(crate) use progress::{acknowledge_outbound_batch, prepare_outbound_batch};
@@ -172,7 +172,7 @@ fn append_operation_inner(
 
     ark_store::task_merge::persist_operation(transaction, prepared)?;
 
-    materialize_if_ready(transaction, &operation.object_id)?;
+    ark_store::task_merge::materialize_task_if_ready(transaction, &operation.object_id)?;
 
     let (conflict_set, dependencies_pending) =
         read_conflict_set(transaction, &operation.object_id, operation.unit)?;
