@@ -1,5 +1,8 @@
 use super::super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError};
-use crate::application::object_mutation::{LocalObjectDelete, ObjectDeleteCommit};
+use crate::application::object_mutation::{
+    apply_object_delete, LocalObjectDelete, ObjectDeleteCommit,
+};
+use crate::db::SqliteObjectMutationSession;
 use rusqlite::Transaction;
 use serde::Serialize;
 
@@ -51,8 +54,7 @@ impl DbCommand for LocalObjectDeleteCommand {
                 id: commit.id,
             });
         }
-        let session = ark_store::object_delete::SqliteObjectDeleteSession::new(transaction);
-        ark_application::object_mutation::apply_object_delete(&session, self.write)
-            .map_err(|error| DbError::from_application_error(error.to_string()))
+        let session = SqliteObjectMutationSession::new(transaction);
+        apply_object_delete(&session, self.write).map_err(DbError::from_application_error)
     }
 }
