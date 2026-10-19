@@ -334,7 +334,30 @@ async fn publish_session_event(
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 
-pub async fn race_connect(addresses: &[String]) -> Option<(ClientWebSocket, String)> {
+pub struct DirectClientConnector;
+
+#[async_trait::async_trait]
+impl ark_sync::client_session::DirectClientConnector for DirectClientConnector {
+    async fn connect(
+        &self,
+        addresses: &[String],
+    ) -> Result<
+        Option<ark_sync::client_session::ConnectedClientTransport>,
+        ark_sync::session_io::SessionIoError,
+    > {
+        let Some((websocket, selected_address)) = race_connect(addresses).await else {
+            return Ok(None);
+        };
+        session_io(websocket).map(|io| {
+            Some(ark_sync::client_session::ConnectedClientTransport {
+                io,
+                selected_address,
+            })
+        })
+    }
+}
+
+async fn race_connect(addresses: &[String]) -> Option<(ClientWebSocket, String)> {
     if addresses.is_empty() {
         return None;
     }

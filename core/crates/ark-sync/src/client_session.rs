@@ -13,6 +13,20 @@ use crate::{
     registry_admission::AdmissionUpdate,
 };
 
+pub struct ConnectedClientTransport {
+    pub io: crate::session_io::SessionIo,
+    pub selected_address: String,
+}
+
+#[async_trait::async_trait]
+pub trait DirectClientConnector: Send + Sync {
+    /// The future must own all dial attempts so dropping it cancels them.
+    async fn connect(
+        &self,
+        addresses: &[String],
+    ) -> Result<Option<ConnectedClientTransport>, crate::session_io::SessionIoError>;
+}
+
 mod direct;
 mod hello;
 pub use direct::{
