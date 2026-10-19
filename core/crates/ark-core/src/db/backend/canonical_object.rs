@@ -209,38 +209,15 @@ impl crate::application::task_mutation::TaskMutationSession for SqliteObjectWrit
     }
 
     fn legacy_task_revision(&self, id: &str) -> Result<Option<String>, String> {
-        self.conn
-            .query_row(
-                "SELECT hlc FROM object_sync_versions WHERE object_id = ?1",
-                [id],
-                |row| row.get(0),
-            )
-            .optional()
-            .map_err(|error| error.to_string())
+        ark_store::sync_versions::stored_object_revision(self.conn, id)
     }
 
     fn record_legacy_task_revision(&self, id: &str, source_hlc: &str) -> Result<(), String> {
-        self.conn
-            .execute(
-                "INSERT INTO object_sync_versions(object_id, hlc, deleted) VALUES (?1, ?2, 0)
-                 ON CONFLICT(object_id) DO UPDATE SET hlc = excluded.hlc, deleted = 0
-                 WHERE excluded.hlc > object_sync_versions.hlc",
-                params![id, source_hlc],
-            )
-            .map_err(|error| error.to_string())?;
-        db::delete_sync_tombstone(self.conn, id)
+        ark_store::sync_versions::record_remote_object_revision(self.conn, id, source_hlc, false)
     }
 
     fn record_canonical_task_revision(&self, id: &str, source_hlc: &str) -> Result<(), String> {
-        self.conn
-            .execute(
-                "INSERT INTO object_sync_versions(object_id, hlc, deleted) VALUES (?1, ?2, 0)
-                 ON CONFLICT(object_id) DO UPDATE SET hlc = excluded.hlc, deleted = 0
-                 WHERE excluded.hlc > object_sync_versions.hlc",
-                params![id, source_hlc],
-            )
-            .map_err(|error| error.to_string())?;
-        db::delete_sync_tombstone(self.conn, id)
+        ark_store::sync_versions::record_remote_object_revision(self.conn, id, source_hlc, false)
     }
 
     fn hard_delete_remote_task(&self, entity: &crate::types::SyncEntity) -> Result<(), String> {

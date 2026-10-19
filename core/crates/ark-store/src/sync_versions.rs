@@ -152,14 +152,7 @@ pub fn object_revision(connection: &Connection, entity_id: &str) -> Result<Optio
         })
         .transpose()?
         .and_then(|vector| vector.get(entity_id).cloned());
-    let object_revision = connection
-        .query_row(
-            "SELECT hlc FROM object_sync_versions WHERE object_id = ?1",
-            [entity_id],
-            |row| row.get::<_, String>(0),
-        )
-        .optional()
-        .map_err(|error| error.to_string())?;
+    let object_revision = stored_object_revision(connection, entity_id)?;
     let tombstone_revision = connection
         .query_row(
             "SELECT hlc FROM sync_tombstones WHERE id = ?1 AND entity_type = 'object'",
@@ -172,6 +165,20 @@ pub fn object_revision(connection: &Connection, entity_id: &str) -> Result<Optio
         .into_iter()
         .flatten()
         .max_by(|left, right| HLC::compare(&HLC::from_string(left), &HLC::from_string(right))))
+}
+
+pub fn stored_object_revision(
+    connection: &Connection,
+    entity_id: &str,
+) -> Result<Option<String>, String> {
+    connection
+        .query_row(
+            "SELECT hlc FROM object_sync_versions WHERE object_id = ?1",
+            [entity_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())
 }
 
 #[cfg(test)]
