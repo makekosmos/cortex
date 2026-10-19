@@ -14,6 +14,7 @@ pub mod sync_tombstones;
 pub mod sync_versions;
 pub mod task_merge;
 pub mod type_registry;
+pub mod usage;
 pub mod usage_sync_log;
 pub mod writer;
 

@@ -6,10 +6,8 @@ use serde_json::{json, Value};
 use super::SqliteStorageBackend;
 use crate::db::{
     delete_object, delete_object_link, delete_object_type, delete_project, delete_todo,
-    delete_tracked_app, delete_usage_day, delete_usage_event, delete_usage_session,
     finish_usage_entity_sync, insert_pending_object, is_object_definition_known,
     is_sequenced_usage_entity, record_usage_sequence, upsert_object_link, upsert_object_type,
-    upsert_tracked_app, upsert_usage_day, upsert_usage_event, upsert_usage_session,
     usage_entity_is_newer, usage_origin_for_entity,
 };
 use crate::types::{
@@ -169,10 +167,10 @@ impl SqliteStorageBackend {
                 "todo" => delete_todo(conn, &entity.id),
                 "project" => delete_project(conn, &entity.id),
                 "tag" => delete_tag(conn, &entity.id),
-                "tracked_app" => delete_tracked_app(conn, &entity.id),
-                "usage_session" => delete_usage_session(conn, &entity.id),
-                "usage_event" => delete_usage_event(conn, &entity.id),
-                "usage_day" => delete_usage_day(conn, &entity.id),
+                "tracked_app" => ark_store::usage::delete_tracked_app(conn, &entity.id),
+                "usage_session" => ark_store::usage::delete_usage_session(conn, &entity.id),
+                "usage_event" => ark_store::usage::delete_usage_event(conn, &entity.id),
+                "usage_day" => ark_store::usage::delete_usage_day(conn, &entity.id),
                 "object_type" => delete_object_type(conn, &entity.id),
                 "object" => delete_object(conn, &entity.id),
                 "object_link" => delete_object_link(conn, &entity.id),
@@ -205,16 +203,16 @@ impl SqliteStorageBackend {
             "area" | "heading" => Err("LegacyPlanningReadOnly".into()),
             "tracked_app" => serde_json::from_value::<TrackedApp>(value)
                 .map_err(|e| e.to_string())
-                .and_then(|tracked_app| upsert_tracked_app(conn, &tracked_app)),
+                .and_then(|tracked_app| ark_store::usage::upsert_tracked_app(conn, &tracked_app)),
             "usage_session" => serde_json::from_value::<UsageSession>(value)
                 .map_err(|e| e.to_string())
-                .and_then(|session| upsert_usage_session(conn, &session)),
+                .and_then(|session| ark_store::usage::upsert_usage_session(conn, &session)),
             "usage_event" => serde_json::from_value::<UsageEvent>(value)
                 .map_err(|e| e.to_string())
-                .and_then(|event| upsert_usage_event(conn, &event)),
+                .and_then(|event| ark_store::usage::upsert_usage_event(conn, &event)),
             "usage_day" => serde_json::from_value::<UsageDay>(value)
                 .map_err(|e| e.to_string())
-                .and_then(|day| upsert_usage_day(conn, &day)),
+                .and_then(|day| ark_store::usage::upsert_usage_day(conn, &day)),
             "object_type" => serde_json::from_value::<ObjectType>(value)
                 .map_err(|e| e.to_string())
                 .and_then(|object_type| {

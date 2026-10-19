@@ -6,25 +6,25 @@
         main_app.exe_path = r"C:\Games\Chronicle\Chronicle.exe".to_string();
         main_app.normalized_exe_path = r"c:\games\chronicle\chronicle.exe".to_string();
         main_app.process_name = "chronicle.exe".to_string();
-        upsert_tracked_app(&conn, &main_app).unwrap();
+        ark_store::usage::upsert_tracked_app(&conn, &main_app).unwrap();
 
         let mut alt_app = make_tracked_app("tracked-alt");
         alt_app.exe_path = r"C:\Games\Chronicle\Chronicle_DX12.exe".to_string();
         alt_app.normalized_exe_path = r"c:\games\chronicle\chronicle_dx12.exe".to_string();
         alt_app.process_name = "chronicle_dx12.exe".to_string();
-        upsert_tracked_app(&conn, &alt_app).unwrap();
+        ark_store::usage::upsert_tracked_app(&conn, &alt_app).unwrap();
 
         let mut helper_app = make_tracked_app("tracked-helper");
         helper_app.exe_path = "".to_string();
         helper_app.normalized_exe_path = "".to_string();
         helper_app.process_name = "Chronicle Helper.exe".to_string();
-        upsert_tracked_app(&conn, &helper_app).unwrap();
+        ark_store::usage::upsert_tracked_app(&conn, &helper_app).unwrap();
 
         let mut other_app = make_tracked_app("tracked-other");
         other_app.exe_path = r"C:\Other\Other.exe".to_string();
         other_app.normalized_exe_path = r"c:\other\other.exe".to_string();
         other_app.process_name = "other.exe".to_string();
-        upsert_tracked_app(&conn, &other_app).unwrap();
+        ark_store::usage::upsert_tracked_app(&conn, &other_app).unwrap();
 
         let sessions = [
             (
@@ -58,7 +58,7 @@
             session.ended_at = Some(started_at.replace(":00.000Z", ":30.000Z"));
             session.runtime_ms = foreground_ms;
             session.foreground_ms = foreground_ms;
-            upsert_usage_session(&conn, &session).unwrap();
+            ark_store::usage::upsert_usage_session(&conn, &session).unwrap();
         }
 
         let bindings = vec![

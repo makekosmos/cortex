@@ -71,9 +71,9 @@
         let session = make_usage_session("session-1", &tracked_app.id);
         let event = make_usage_event("event-1", &tracked_app.id, Some(&session.id));
 
-        upsert_tracked_app(&conn, &tracked_app).unwrap();
-        upsert_usage_session(&conn, &session).unwrap();
-        upsert_usage_event(&conn, &event).unwrap();
+        ark_store::usage::upsert_tracked_app(&conn, &tracked_app).unwrap();
+        ark_store::usage::upsert_usage_session(&conn, &session).unwrap();
+        ark_store::usage::upsert_usage_event(&conn, &event).unwrap();
 
         let data = load_all(&conn).unwrap();
         assert_eq!(data.tracked_apps.len(), 1);
@@ -83,9 +83,9 @@
         assert_eq!(data.usage_sessions[0].tracked_app_id, "app-1");
         assert_eq!(data.usage_events[0].kind, "foreground");
 
-        delete_usage_event(&conn, "event-1").unwrap();
-        delete_usage_session(&conn, "session-1").unwrap();
-        delete_tracked_app(&conn, "app-1").unwrap();
+        ark_store::usage::delete_usage_event(&conn, "event-1").unwrap();
+        ark_store::usage::delete_usage_session(&conn, "session-1").unwrap();
+        ark_store::usage::delete_tracked_app(&conn, "app-1").unwrap();
         let data = load_all(&conn).unwrap();
         assert_eq!(data.tracked_apps.len(), 0);
         assert_eq!(data.usage_sessions.len(), 0);
@@ -97,7 +97,7 @@
         let conn = setup_db();
         let mut tracked_app = make_tracked_app("app-analytics");
         tracked_app.display_name = None;
-        upsert_tracked_app(&conn, &tracked_app).unwrap();
+        ark_store::usage::upsert_tracked_app(&conn, &tracked_app).unwrap();
 
         let today = Utc::now().date_naive();
         let today_start = format!("{}T10:00:00.000Z", today.format("%Y-%m-%d"));
@@ -108,11 +108,11 @@
         session.runtime_ms = 1_500;
         session.foreground_ms = 1_200;
         session.idle_ms = 300;
-        upsert_usage_session(&conn, &session).unwrap();
+        ark_store::usage::upsert_usage_session(&conn, &session).unwrap();
 
         let mut event = make_usage_event("event-analytics", &tracked_app.id, Some(&session.id));
         event.occurred_at = today_start;
-        upsert_usage_event(&conn, &event).unwrap();
+        ark_store::usage::upsert_usage_event(&conn, &event).unwrap();
 
         let snapshot = load_usage_analytics(&conn, 3, 5, 5, Some("c:\\windows")).unwrap();
 
@@ -150,13 +150,13 @@
         app.exe_path = r"C:/Games/Nebula/nebula.exe".to_string();
         app.normalized_exe_path = r"c:\games\nebula\nebula.exe".to_string();
         app.process_name = "Nebula.exe".to_string();
-        upsert_tracked_app(&conn, &app).unwrap();
+        ark_store::usage::upsert_tracked_app(&conn, &app).unwrap();
         let mut session = make_usage_session("session-process", &app.id);
         session.started_at = "2026-04-26T10:00:00.000Z".to_string();
         session.ended_at = Some("2026-04-26T11:00:00.000Z".to_string());
         session.runtime_ms = 3_600_000;
         session.foreground_ms = 3_600_000;
-        upsert_usage_session(&conn, &session).unwrap();
+        ark_store::usage::upsert_usage_session(&conn, &session).unwrap();
 
         let recent = list_recent_usage_processes(&conn, 10).unwrap();
         assert_eq!(recent.len(), 1);

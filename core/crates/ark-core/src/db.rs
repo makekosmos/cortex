@@ -97,12 +97,9 @@ pub use sync::{bump_sync_version_vector, ensure_usage_sequence_migrated};
 pub(in crate::db) use sync::{
     finish_usage_entity_sync, record_usage_sequence, usage_entity_is_newer, usage_origin_for_entity,
 };
-pub(in crate::db) use usage::load_usage_day;
 pub use usage::{
-    canonical_app_key, delete_tracked_app, delete_usage_day, delete_usage_event,
-    delete_usage_session, get_usage_title_total, is_system_path, list_recent_usage_processes,
+    canonical_app_key, get_usage_title_total, is_system_path, list_recent_usage_processes,
     load_usage_analytics, load_usage_game_playtime_summary, search_usage_processes,
-    upsert_tracked_app, upsert_usage_day, upsert_usage_event, upsert_usage_session,
     upsert_usage_span,
 };
 mod integration_replication_admission;

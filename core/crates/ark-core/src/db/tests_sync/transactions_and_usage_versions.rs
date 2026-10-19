@@ -64,7 +64,7 @@
         write.ended_at_unix += 30;
         upsert_usage_span(&conn, &write).unwrap();
 
-        let day = load_usage_day(&conn, "usage-day:device-compact:2026-01-01")
+        let day = ark_store::usage::load_usage_day(&conn, "usage-day:device-compact:2026-01-01")
             .unwrap()
             .unwrap();
         assert_eq!(day.payload_json["a"], json!(["browser"]));

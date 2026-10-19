@@ -19,19 +19,19 @@ impl UsageWriteSession for SqliteUsageWriteSession<'_, '_> {
     }
 
     fn upsert_session(&self, session: &UsageSession) -> Result<(), String> {
-        db::upsert_usage_session(self.transaction, session)
+        ark_store::usage::upsert_usage_session(self.transaction, session)
     }
 
     fn delete_session(&self, id: &str) -> Result<(), String> {
-        db::delete_usage_session(self.transaction, id)
+        ark_store::usage::delete_usage_session(self.transaction, id)
     }
 
     fn upsert_event(&self, event: &UsageEvent) -> Result<(), String> {
-        db::upsert_usage_event(self.transaction, event)
+        ark_store::usage::upsert_usage_event(self.transaction, event)
     }
 
     fn delete_event(&self, id: &str) -> Result<(), String> {
-        db::delete_usage_event(self.transaction, id)
+        ark_store::usage::delete_usage_event(self.transaction, id)
     }
 
     fn upsert_span(&self, span: &UsageSpanWrite) -> Result<Vec<UsageDay>, String> {

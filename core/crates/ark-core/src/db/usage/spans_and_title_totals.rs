@@ -7,7 +7,7 @@ fn upsert_usage_day_fragment(
     fragment_end: i64,
 ) -> Result<UsageDay, String> {
     let id = format!("usage-day:{}:{day}", write.device_id);
-    let mut usage_day = load_usage_day(conn, &id)?.unwrap_or_else(|| UsageDay {
+    let mut usage_day = ark_store::usage::load_usage_day(conn, &id)?.unwrap_or_else(|| UsageDay {
         id,
         device_id: write.device_id.clone(),
         day: day.to_string(),
@@ -46,7 +46,7 @@ fn upsert_usage_day_fragment(
         "s": merge_usage_spans(spans),
     });
     usage_day.updated_at.clone_from(&write.updated_at);
-    upsert_usage_day(conn, &usage_day)?;
+    ark_store::usage::upsert_usage_day(conn, &usage_day)?;
     Ok(usage_day)
 }
 

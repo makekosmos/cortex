@@ -2,6 +2,10 @@
 // Usage tracking CRUD
 // ---------------------------------------------------------------------------
 
+use ark_domain::types::{TrackedApp, UsageDay, UsageEvent, UsageSession};
+use rusqlite::{params, Connection, OptionalExtension};
+use serde_json::json;
+
 pub fn upsert_tracked_app(conn: &Connection, tracked_app: &TrackedApp) -> Result<(), String> {
     conn.execute(
         "INSERT INTO tracked_apps
@@ -171,10 +175,7 @@ pub fn delete_usage_day(conn: &Connection, id: &str) -> Result<(), String> {
     Ok(())
 }
 
-pub(in crate::db) fn load_usage_day(
-    conn: &Connection,
-    id: &str,
-) -> Result<Option<UsageDay>, String> {
+pub fn load_usage_day(conn: &Connection, id: &str) -> Result<Option<UsageDay>, String> {
     conn.query_row(
         "SELECT id, device_id, day, payload_json, updated_at
          FROM usage_days WHERE id = ?1",
@@ -193,59 +194,4 @@ pub(in crate::db) fn load_usage_day(
     )
     .optional()
     .map_err(|e| e.to_string())
-}
-
-fn payload_strings(payload: &Value, key: &str) -> Vec<String> {
-    payload
-        .get(key)
-        .and_then(Value::as_array)
-        .map(|items| {
-            items
-                .iter()
-                .filter_map(Value::as_str)
-                .map(str::to_string)
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-fn payload_spans(payload: &Value) -> Vec<Vec<i64>> {
-    payload
-        .get("s")
-        .and_then(Value::as_array)
-        .map(|items| {
-            items
-                .iter()
-                .filter_map(Value::as_array)
-                .filter_map(|span| span.iter().map(Value::as_i64).collect::<Option<Vec<_>>>())
-                .filter(|span| span.len() == 5 && span[1] > 0)
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-fn dictionary_index(values: &mut Vec<String>, value: &str) -> i64 {
-    if let Some(index) = values.iter().position(|item| item == value) {
-        index as i64
-    } else {
-        values.push(value.to_string());
-        (values.len() - 1) as i64
-    }
-}
-
-fn merge_usage_spans(mut spans: Vec<Vec<i64>>) -> Vec<Vec<i64>> {
-    spans.sort_by_key(|span| span[0]);
-    let mut merged: Vec<Vec<i64>> = Vec::with_capacity(spans.len());
-    for span in spans {
-        if let Some(previous) = merged.last_mut() {
-            let previous_end = previous[0].saturating_add(previous[1]);
-            if previous[2..] == span[2..] && span[0] <= previous_end {
-                let span_end = span[0].saturating_add(span[1]);
-                previous[1] = previous[1].max(span_end.saturating_sub(previous[0]));
-                continue;
-            }
-        }
-        merged.push(span);
-    }
-    merged
 }

@@ -435,13 +435,14 @@ mod tests {
             ("app-v1", "c:\\games\\demo\\app-1.0.1\\game.exe"),
             ("app-v2", "c:\\games\\demo\\app-1.0.2\\game.exe"),
         ] {
-            crate::db::upsert_tracked_app(&conn, &tracked_app(id, path)).unwrap();
+            ark_store::usage::upsert_tracked_app(&conn, &tracked_app(id, path)).unwrap();
         }
         // Pre-update session on the OLD id: 30 min focused, 10 min idle.
-        crate::db::upsert_usage_session(&conn, &session("s1", "app-v1", 1_800_000, 600_000))
+        ark_store::usage::upsert_usage_session(&conn, &session("s1", "app-v1", 1_800_000, 600_000))
             .unwrap();
         // Post-update session on the NEW id: 10 min focused.
-        crate::db::upsert_usage_session(&conn, &session("s2", "app-v2", 600_000, 0)).unwrap();
+        ark_store::usage::upsert_usage_session(&conn, &session("s2", "app-v2", 600_000, 0))
+            .unwrap();
         crate::db::upsert_object_link(
             &conn,
             &ObjectLink {

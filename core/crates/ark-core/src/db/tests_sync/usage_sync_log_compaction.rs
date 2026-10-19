@@ -157,8 +157,8 @@
         let conn = setup_db();
         // Realistic fixture: several apps, active + idle spans, a session and
         // a span crossing the UTC day boundary.
-        upsert_tracked_app(&conn, &make_tracked_app("app-browser")).unwrap();
-        upsert_tracked_app(&conn, &make_tracked_app("app-editor")).unwrap();
+        ark_store::usage::upsert_tracked_app(&conn, &make_tracked_app("app-browser")).unwrap();
+        ark_store::usage::upsert_tracked_app(&conn, &make_tracked_app("app-editor")).unwrap();
 
         let mut sessions = Vec::new();
         for (id, app, started, ended, fg, idle) in [
@@ -193,10 +193,10 @@
             session.foreground_ms = fg;
             session.idle_ms = idle;
             session.runtime_ms = fg + idle;
-            upsert_usage_session(&conn, &session).unwrap();
+            ark_store::usage::upsert_usage_session(&conn, &session).unwrap();
             sessions.push(session);
         }
-        upsert_usage_event(
+        ark_store::usage::upsert_usage_event(
             &conn,
             &make_usage_event("ev-1", "app-browser", Some("sa-1")),
         )

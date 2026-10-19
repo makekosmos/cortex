@@ -152,7 +152,7 @@ fn project_feed_entity(
                         std::mem::take(map)
                     })
                 }),
-            "usage_day" => crate::db::load_usage_day(conn, &entry.entity_id)?
+            "usage_day" => ark_store::usage::load_usage_day(conn, &entry.entity_id)?
                 .map(|item| serde_json::to_value(item).map_err(|error| error.to_string()))
                 .transpose()?
                 .and_then(|mut value| {

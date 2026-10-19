@@ -193,9 +193,9 @@
         explorer.exe_path = "C:\\Windows\\explorer.exe".to_string();
         explorer.process_name = "explorer.exe".to_string();
 
-        upsert_tracked_app(&conn, &old_app).unwrap();
-        upsert_tracked_app(&conn, &new_app).unwrap();
-        upsert_tracked_app(&conn, &explorer).unwrap();
+        ark_store::usage::upsert_tracked_app(&conn, &old_app).unwrap();
+        ark_store::usage::upsert_tracked_app(&conn, &new_app).unwrap();
+        ark_store::usage::upsert_tracked_app(&conn, &explorer).unwrap();
 
         let mut s_old = make_usage_session("s-old", "app-old");
         s_old.foreground_ms = 600_000;
@@ -205,9 +205,9 @@
         let mut s_exp = make_usage_session("s-exp", "app-explorer");
         s_exp.foreground_ms = 1_000;
 
-        upsert_usage_session(&conn, &s_old).unwrap();
-        upsert_usage_session(&conn, &s_new).unwrap();
-        upsert_usage_session(&conn, &s_exp).unwrap();
+        ark_store::usage::upsert_usage_session(&conn, &s_old).unwrap();
+        ark_store::usage::upsert_usage_session(&conn, &s_new).unwrap();
+        ark_store::usage::upsert_usage_session(&conn, &s_exp).unwrap();
 
         let snapshot = load_usage_analytics(&conn, 21, 10, 24, Some("c:\\windows")).unwrap();
         assert_eq!(snapshot.top_apps.len(), 2);
@@ -227,12 +227,12 @@
         // visible wall-clock time and inflated the headline.
         let conn = setup_db();
         let app = make_tracked_app("app-1");
-        upsert_tracked_app(&conn, &app).unwrap();
+        ark_store::usage::upsert_tracked_app(&conn, &app).unwrap();
         let mut session = make_usage_session("s-1", "app-1");
         session.runtime_ms = 10_000; // visible
         session.foreground_ms = 4_000; // active
         session.idle_ms = 1_000;
-        upsert_usage_session(&conn, &session).unwrap();
+        ark_store::usage::upsert_usage_session(&conn, &session).unwrap();
 
         let snapshot = load_usage_analytics(&conn, 21, 10, 24, None).unwrap();
         assert_eq!(snapshot.summary.total_foreground_ms, 4_000);
@@ -253,12 +253,13 @@
         let mut new_app = make_tracked_app("cand-new");
         new_app.exe_path = "C:\\Games\\Nebula\\app-1.0.2\\nebula.exe".to_string();
         new_app.normalized_exe_path = "c:\\games\\nebula\\app-1.0.2\\nebula.exe".to_string();
-        upsert_tracked_app(&conn, &old_app).unwrap();
-        upsert_tracked_app(&conn, &new_app).unwrap();
-        upsert_usage_session(&conn, &make_usage_session("s-old", "cand-old")).unwrap();
+        ark_store::usage::upsert_tracked_app(&conn, &old_app).unwrap();
+        ark_store::usage::upsert_tracked_app(&conn, &new_app).unwrap();
+        ark_store::usage::upsert_usage_session(&conn, &make_usage_session("s-old", "cand-old"))
+            .unwrap();
         let mut s_new = make_usage_session("s-new", "cand-new");
         s_new.ended_at = Some("2026-02-01T00:10:00.000Z".to_string());
-        upsert_usage_session(&conn, &s_new).unwrap();
+        ark_store::usage::upsert_usage_session(&conn, &s_new).unwrap();
 
         let recent = list_recent_usage_processes(&conn, 10).unwrap();
         assert_eq!(recent.len(), 1);

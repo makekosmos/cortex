@@ -47,7 +47,7 @@ impl LegacyMutationSession for SqliteLegacyMutationSession<'_, '_> {
         tracked_app: &TrackedApp,
         device_id: &str,
     ) -> Result<SyncEntity, String> {
-        db::upsert_tracked_app(self.transaction, tracked_app)?;
+        ark_store::usage::upsert_tracked_app(self.transaction, tracked_app)?;
         let hlc = db::bump_sync_version_vector(
             self.transaction,
             "tracked_app",
@@ -74,7 +74,7 @@ impl LegacyMutationSession for SqliteLegacyMutationSession<'_, '_> {
     }
 
     fn delete_tracked_app(&self, id: &str, device_id: &str) -> Result<SyncEntity, String> {
-        db::delete_tracked_app(self.transaction, id)?;
+        ark_store::usage::delete_tracked_app(self.transaction, id)?;
         let hlc =
             db::bump_sync_version_vector(self.transaction, "tracked_app", id, device_id, true)?;
         ark_store::sync_tombstones::record(self.transaction, "tracked_app", id, None, &hlc)?;

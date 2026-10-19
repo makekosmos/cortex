@@ -238,9 +238,13 @@
     fn test_clear_all() {
         let conn = setup_db();
         upsert_todo(&conn, &make_todo("t1", "X")).unwrap();
-        upsert_tracked_app(&conn, &make_tracked_app("app-clear")).unwrap();
-        upsert_usage_session(&conn, &make_usage_session("session-clear", "app-clear")).unwrap();
-        upsert_usage_event(
+        ark_store::usage::upsert_tracked_app(&conn, &make_tracked_app("app-clear")).unwrap();
+        ark_store::usage::upsert_usage_session(
+            &conn,
+            &make_usage_session("session-clear", "app-clear"),
+        )
+        .unwrap();
+        ark_store::usage::upsert_usage_event(
             &conn,
             &make_usage_event("event-clear", "app-clear", Some("session-clear")),
         )

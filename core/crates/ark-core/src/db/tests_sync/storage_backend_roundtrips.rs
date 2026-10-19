@@ -223,9 +223,9 @@
     #[tokio::test]
     async fn storage_backend_pages_large_usage_history() {
         let conn = setup_db();
-        upsert_tracked_app(&conn, &make_tracked_app("app-paged")).unwrap();
+        ark_store::usage::upsert_tracked_app(&conn, &make_tracked_app("app-paged")).unwrap();
         for index in 0..250 {
-            upsert_usage_event(
+            ark_store::usage::upsert_usage_event(
                 &conn,
                 &make_usage_event(&format!("event-paged-{index:03}"), "app-paged", None),
             )

@@ -97,9 +97,10 @@
     /// s-3 keeps seq 6 (its only ref — never dropped as unsynced).
     fn compacted_usage_server() -> Connection {
         let conn = setup_db();
-        upsert_tracked_app(&conn, &make_tracked_app("app-1")).unwrap();
+        ark_store::usage::upsert_tracked_app(&conn, &make_tracked_app("app-1")).unwrap();
         for id in ["s-1", "s-2", "s-3"] {
-            upsert_usage_session(&conn, &make_usage_session(id, "app-1")).unwrap();
+            ark_store::usage::upsert_usage_session(&conn, &make_usage_session(id, "app-1"))
+                .unwrap();
         }
         // No ensure_usage_sequence_migrated here: it would backfill fresh-hlc
         // refs at seqs 1..N and swallow these churn seqs via INSERT OR IGNORE.
@@ -177,8 +178,9 @@
         // Compaction shape (`Some`): the own device is bounded by the log
         // head even if the vector cursor is gone.
         let conn2 = setup_db();
-        upsert_tracked_app(&conn2, &make_tracked_app("app-1")).unwrap();
-        upsert_usage_session(&conn2, &make_usage_session("s-1", "app-1")).unwrap();
+        ark_store::usage::upsert_tracked_app(&conn2, &make_tracked_app("app-1")).unwrap();
+        ark_store::usage::upsert_usage_session(&conn2, &make_usage_session("s-1", "app-1"))
+            .unwrap();
         for seq in 1..=3 {
             record_usage_sequence(
                 &conn2,
@@ -227,7 +229,7 @@
     fn fresh_device_converges_past_compacted_holes() {
         let server = compacted_usage_server();
         let client = setup_db();
-        upsert_tracked_app(&client, &make_tracked_app("app-1")).unwrap();
+        ark_store::usage::upsert_tracked_app(&client, &make_tracked_app("app-1")).unwrap();
 
         let applied = pull_usage(&server, "dev-a", &client, true);
         assert_eq!(applied, 3, "only the surviving refs are served");
@@ -243,7 +245,7 @@
     fn complete_through_does_not_jump_mid_page() {
         let server = compacted_usage_server();
         let client = setup_db();
-        upsert_tracked_app(&client, &make_tracked_app("app-1")).unwrap();
+        ark_store::usage::upsert_tracked_app(&client, &make_tracked_app("app-1")).unwrap();
 
         let remote = stored_vector(&client);
         // Apply exactly one small page, then stop — as a mid-pull batch
@@ -273,12 +275,13 @@
         // complete-through for both.
         let server_a = compacted_usage_server();
         let relay_b = setup_db();
-        upsert_tracked_app(&relay_b, &make_tracked_app("app-1")).unwrap();
+        ark_store::usage::upsert_tracked_app(&relay_b, &make_tracked_app("app-1")).unwrap();
         pull_usage(&server_a, "dev-a", &relay_b, true);
         assert_eq!(usage_cursor(&relay_b, "dev-a"), 6);
 
         // B's own device churn: two refs for s-b1, the older one compacts.
-        upsert_usage_session(&relay_b, &make_usage_session("s-b1", "app-1")).unwrap();
+        ark_store::usage::upsert_usage_session(&relay_b, &make_usage_session("s-b1", "app-1"))
+            .unwrap();
         record_usage_sequence(
             &relay_b,
             "usage_session",
@@ -306,7 +309,7 @@
         );
 
         let client_c = setup_db();
-        upsert_tracked_app(&client_c, &make_tracked_app("app-1")).unwrap();
+        ark_store::usage::upsert_tracked_app(&client_c, &make_tracked_app("app-1")).unwrap();
         pull_usage(&relay_b, "dev-b", &client_c, true);
         assert_eq!(count_usage_entities(&client_c), 4);
         assert_eq!(usage_cursor(&client_c, "dev-a"), 6);
@@ -321,7 +324,7 @@
         // (today's behaviour), the cursor just cannot pass the holes.
         let server = compacted_usage_server();
         let client = setup_db();
-        upsert_tracked_app(&client, &make_tracked_app("app-1")).unwrap();
+        ark_store::usage::upsert_tracked_app(&client, &make_tracked_app("app-1")).unwrap();
 
         let applied = pull_usage(&server, "dev-a", &client, false);
         assert_eq!(applied, 3);
@@ -342,8 +345,8 @@
         // sync_kv (clear_all, corruption) can freeze `@usage:<own>` while
         // own seqs keep advancing past it, pinning every own ref forever.
         let conn = setup_db();
-        upsert_tracked_app(&conn, &make_tracked_app("app-1")).unwrap();
-        upsert_usage_session(&conn, &make_usage_session("s-1", "app-1")).unwrap();
+        ark_store::usage::upsert_tracked_app(&conn, &make_tracked_app("app-1")).unwrap();
+        ark_store::usage::upsert_usage_session(&conn, &make_usage_session("s-1", "app-1")).unwrap();
         let hlc = |seq: u64| format!("2026-08-01T00:00:{seq:02}.000Z:{seq:06}:dev");
         for seq in 1..=3 {
             record_usage_sequence(&conn, "usage_session", "s-1", "dev", seq, &hlc(seq), false)
@@ -367,8 +370,8 @@
         // frozen — used by the wire claim path and by maintenance when the
         // tracker has never written.
         let conn = setup_db();
-        upsert_tracked_app(&conn, &make_tracked_app("app-1")).unwrap();
-        upsert_usage_session(&conn, &make_usage_session("s-1", "app-1")).unwrap();
+        ark_store::usage::upsert_tracked_app(&conn, &make_tracked_app("app-1")).unwrap();
+        ark_store::usage::upsert_usage_session(&conn, &make_usage_session("s-1", "app-1")).unwrap();
         let hlc = |seq: u64| format!("2026-08-01T00:00:{seq:02}.000Z:{seq:06}:dev");
         for seq in 1..=3 {
             record_usage_sequence(&conn, "usage_session", "s-1", "dev", seq, &hlc(seq), false)
@@ -393,7 +396,7 @@
         // it never received.
         let server = compacted_usage_server(); // surviving refs {4,5,6}, head 6
         let client = setup_db();
-        upsert_tracked_app(&client, &make_tracked_app("app-1")).unwrap();
+        ark_store::usage::upsert_tracked_app(&client, &make_tracked_app("app-1")).unwrap();
 
         let through = usage_log_complete_through(&server, None).unwrap();
         assert_eq!(through["dev-a"], 6);
@@ -413,7 +416,11 @@
             if !appended {
                 appended = true;
                 // The snapshot claim excludes this mid-stream append at seq 7.
-                upsert_usage_session(&server, &make_usage_session("s-4", "app-1")).unwrap();
+                ark_store::usage::upsert_usage_session(
+                    &server,
+                    &make_usage_session("s-4", "app-1"),
+                )
+                .unwrap();
                 record_usage_sequence(
                     &server,
                     "usage_session",
