@@ -1,157 +1,27 @@
-// Generic object model CRUD
-// ---------------------------------------------------------------------------
-
 pub fn upsert_object_type(
     conn: &Connection,
     object_type: &ObjectType,
 ) -> Result<Vec<crate::canonical_types::pending::ReplayNotice>, String> {
-    // A canonical ID cannot reuse an existing alias name. Check this before
-    // mutating object_types so the legacy write remains fail-closed and atomic.
-    let has_aliases: bool = conn
-        .query_row(
-            concat!(
-                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND ",
-                "name='object_type_aliases')"
-            ),
-            [],
-            |row| row.get::<_, i64>(0),
-        )
-        .map_err(|e| e.to_string())?
-        != 0;
-    if has_aliases
-        && conn
-            .query_row(
-                "SELECT 1 FROM object_type_aliases WHERE alias=?1 LIMIT 1",
-                params![object_type.id],
-                |_| Ok(()),
-            )
-            .optional()
-            .map_err(|e| e.to_string())?
-            .is_some()
-    {
+    if ark_store::object_types::legacy_alias_conflicts(conn, &object_type.id)? {
         return Err("alias collides with canonical type".into());
     }
-
-    // Canonical definitions are installed and owned by the type registry at
-    // open. An inbound legacy-shaped `object_type` entity for a canonical id
-    // (synced from a peer that exports its object_types rows, or written via
-    // the RPC op) carries no authority over the canonical row: applying it
-    // rewrote `current_version` to `0.0.0+legacy.*`, which the phase3
-    // registry preflight rejects and which bricked the DB at next open
-    // (KOS-370).
-    if crate::canonical_types::definitions::canonical_type_registrations()
-        .map(|registrations| {
-            registrations
-                .iter()
-                .any(|registration| registration.type_id == object_type.id)
-        })
-        .unwrap_or(false)
-    {
+    if is_canonical_type(&object_type.id) {
         return Ok(Vec::new());
     }
 
-    conn.execute(
-        "INSERT INTO object_types
-            (id, name, schema_json, ui_schema_json, created_at, updated_at, system_locked)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-         ON CONFLICT(id) DO UPDATE SET
-            name = excluded.name,
-            schema_json = excluded.schema_json,
-            ui_schema_json = excluded.ui_schema_json,
-            created_at = excluded.created_at,
-            updated_at = excluded.updated_at,
-            system_locked = excluded.system_locked",
-        params![
-            object_type.id,
-            object_type.name,
-            object_type.schema_json,
-            object_type.ui_schema_json,
-            object_type.created_at,
-            object_type.updated_at,
-            object_type.system_locked as i64,
-        ],
-    )
-    .map_err(|e| e.to_string())?;
-    let has_versions: bool = conn
-        .query_row(
-            concat!(
-                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND ",
-                "name='object_type_versions')"
-            ),
-            [],
-            |row| row.get::<_, i64>(0),
-        )
-        .map_err(|e| e.to_string())?
-        != 0;
-    if has_versions {
-        type_registry::ensure_legacy_type_version(
-            conn,
-            &object_type.id,
-            &object_type.schema_json,
-            &object_type.ui_schema_json,
-            &object_type.created_at,
-        )?;
-        let (compat_version, full_hash) = type_registry::legacy_compatibility_version(
-            &object_type.schema_json,
-            &object_type.ui_schema_json,
-        )?;
-        let existing_hash = conn
-            .query_row(
-                "SELECT schema_hash FROM object_type_versions WHERE type_id=?1 AND version=?2",
-                params![object_type.id, compat_version],
-                |row| row.get::<_, String>(0),
-            )
-            .optional()
-            .map_err(|e| e.to_string())?;
-        if let Some(existing_hash) = existing_hash {
-            if existing_hash != full_hash {
-                return Err("legacy compatibility version hash conflict".into());
-            }
-        } else {
-            conn.execute(
-                concat!(
-                    "INSERT INTO object_type_versions(type_id,version,schema_json,ui_schema_json,",
-                    "content_contract_json,relations_json,sync_policy_json,schema_hash,",
-                    "created_at) VALUES (?1,?2,?3,?4,'{}','[]','{}',?5,?6)"
-                ),
-                params![
-                    object_type.id,
-                    compat_version,
-                    object_type.schema_json,
-                    object_type.ui_schema_json,
-                    full_hash,
-                    object_type.created_at
-                ],
-            )
-            .map_err(|e| e.to_string())?;
-        }
-        conn.execute(
-            "UPDATE object_types SET current_version=?1,status='active' WHERE id=?2",
-            params![compat_version, object_type.id],
-        )
-        .map_err(|e| e.to_string())?;
-    }
-    let has_current_version: bool = conn
-        .query_row(
-            concat!(
-                "SELECT EXISTS(SELECT 1 FROM pragma_table_info('object_types') WHERE ",
-                "name='current_version')"
-            ),
-            [],
-            |row| row.get::<_, i64>(0),
-        )
-        .map_err(|e| e.to_string())?
-        != 0;
-    let current_version = if has_current_version {
-        conn.query_row(
-            "SELECT current_version FROM object_types WHERE id=?1",
-            params![object_type.id],
-            |row| row.get(0),
-        )
-        .map_err(|e| e.to_string())?
-    } else {
-        "0.0.0-legacy".to_string()
-    };
+    let (version, schema_hash) = type_registry::legacy_compatibility_version(
+        &object_type.schema_json,
+        &object_type.ui_schema_json,
+    )?;
+    let current_version = ark_store::object_types::upsert_legacy_type(
+        conn,
+        object_type,
+        &ark_store::object_types::LegacyCompatibilityVersion {
+            version,
+            schema_hash,
+        },
+    )?;
+
     let mut replay_notices = replay_pending_for_type(conn, &object_type.id, &current_version)?;
     if current_version != type_registry::LEGACY_VERSION {
         replay_notices.extend(replay_pending_for_type(
@@ -164,40 +34,14 @@ pub fn upsert_object_type(
 }
 
 pub fn delete_object_type(conn: &Connection, id: &str) -> Result<(), String> {
-    // Same authority rule as upsert: a canonical row is registry-owned, and
-    // deprecating it would fail the phase3 preflight at next open (KOS-370).
-    if crate::canonical_types::definitions::canonical_type_registrations()
-        .map(|registrations| {
-            registrations
-                .iter()
-                .any(|registration| registration.type_id == id)
-        })
-        .unwrap_or(false)
-    {
+    if is_canonical_type(id) {
         return Ok(());
     }
-    conn.execute(
-        "UPDATE object_types SET status='deprecated' WHERE id = ?1",
-        params![id],
-    )
-    .map_err(|e| e.to_string())?;
-    Ok(())
+    ark_store::object_types::deprecate_legacy_type(conn, id)
 }
 
-// ---------------------------------------------------------------------------
-// Phase 2: schema drift hold-and-replay (sync_pending_objects)
-// ---------------------------------------------------------------------------
-
-/// РџСЂРѕРІРµСЂРёС‚СЊ, СЃСѓС‰РµСЃС‚РІСѓРµС‚ Р»Рё `object_type` СЃ СѓРєР°Р·Р°РЅРЅС‹Рј id.
 pub fn is_object_type_known(conn: &Connection, type_id: &str) -> Result<bool, String> {
-    conn.query_row(
-        "SELECT 1 FROM object_types WHERE id = ?1",
-        params![type_id],
-        |_| Ok(true),
-    )
-    .optional()
-    .map(|opt| opt.unwrap_or(false))
-    .map_err(|e| e.to_string())
+    ark_store::object_types::is_type_known(conn, type_id)
 }
 
 pub fn is_object_definition_known(
@@ -205,65 +49,23 @@ pub fn is_object_definition_known(
     type_id: &str,
     type_version: &str,
 ) -> Result<bool, String> {
-    let Ok((canonical_type_id, canonical_version)) =
-        crate::type_registry::resolve_object_type_identity(conn, type_id, Some(type_version))
-    else {
-        return Ok(false);
-    };
-    conn.query_row(
-        "SELECT 1 FROM object_type_versions WHERE type_id=?1 AND version=?2",
-        params![canonical_type_id, canonical_version],
-        |_| Ok(true),
-    )
-    .optional()
-    .map(|opt| opt.unwrap_or(false))
-    .map_err(|e| e.to_string())
+    ark_store::object_types::is_definition_known(conn, type_id, type_version)
 }
 
 pub fn list_object_types(conn: &Connection) -> Result<Vec<ObjectType>, String> {
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, name, schema_json, ui_schema_json, created_at, updated_at, system_locked
-             FROM object_types
-             WHERE status != 'deprecated'
-             ORDER BY system_locked DESC, name ASC",
-        )
-        .map_err(|e| e.to_string())?;
-    let rows = stmt
-        .query_map([], |row| {
-            Ok(ObjectType {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                schema_json: row.get(2)?,
-                ui_schema_json: row.get(3)?,
-                created_at: row.get(4)?,
-                updated_at: row.get(5)?,
-                system_locked: row.get::<_, i64>(6)? != 0,
-            })
-        })
-        .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())
+    ark_store::object_types::list(conn)
 }
 
 pub fn get_object_type(conn: &Connection, id: &str) -> Result<Option<ObjectType>, String> {
-    conn.query_row(
-        "SELECT id, name, schema_json, ui_schema_json, created_at, updated_at, system_locked
-         FROM object_types
-         WHERE id = ?1 AND status != 'deprecated'",
-        params![id],
-        |row| {
-            Ok(ObjectType {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                schema_json: row.get(2)?,
-                ui_schema_json: row.get(3)?,
-                created_at: row.get(4)?,
-                updated_at: row.get(5)?,
-                system_locked: row.get::<_, i64>(6)? != 0,
-            })
-        },
-    )
-    .optional()
-    .map_err(|e| e.to_string())
+    ark_store::object_types::get(conn, id)
+}
+
+fn is_canonical_type(type_id: &str) -> bool {
+    crate::canonical_types::definitions::canonical_type_registrations()
+        .map(|registrations| {
+            registrations
+                .iter()
+                .any(|registration| registration.type_id == type_id)
+        })
+        .unwrap_or(false)
 }

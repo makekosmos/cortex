@@ -7,7 +7,7 @@ pub use ark_store::objects::{
     list_objects_by_type, list_running_time_entries, object_search_fts_exists,
     rebuild_object_search_fts, search_objects, upsert_object_link, SearchResult,
 };
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::Connection;
 
 pub(in crate::db) fn rollback_savepoint(conn: &Connection, name: &str) {
     let _ = conn.execute_batch(&format!(
