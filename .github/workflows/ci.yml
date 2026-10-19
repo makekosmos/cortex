@@ -176,6 +176,7 @@ jobs:
         run: node runtime/scripts/test-lib.mjs --workspace
 
       - name: Measure production SQLite commit durability
+        shell: bash
         run: |
           set -o pipefail
           cargo run --locked --release -p ark-store --example sqlite_commit_durability \
