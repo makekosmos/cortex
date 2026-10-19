@@ -1,5 +1,4 @@
 use super::super::{sealed, CommandClass, CommandContext, DbError, DbQuery};
-use super::sync_read::LoadEntitiesQuery;
 use crate::types::VersionVector;
 use ark_application::sync_storage::SyncReadClass;
 use rusqlite::Connection;
@@ -7,7 +6,12 @@ use serde::Serialize;
 
 #[derive(Debug, Clone)]
 pub(crate) struct LoadPolicyBoundEntitiesPageQuery {
-    query: LoadEntitiesQuery,
+    vector: VersionVector,
+    device_id: String,
+    peer_device_id: String,
+    class: CommandClass,
+    offset: usize,
+    limit: usize,
     expected_identity: ark_application::sync_storage::PolicyIdentity,
 }
 
@@ -22,14 +26,12 @@ impl LoadPolicyBoundEntitiesPageQuery {
         expected_identity: ark_application::sync_storage::PolicyIdentity,
     ) -> Self {
         Self {
-            query: LoadEntitiesQuery::page_for_peer(
-                vector,
-                device_id,
-                peer_device_id,
-                class,
-                offset,
-                limit,
-            ),
+            vector,
+            device_id,
+            peer_device_id,
+            class: class.into(),
+            offset,
+            limit,
             expected_identity,
         }
     }
@@ -41,11 +43,16 @@ impl DbQuery for LoadPolicyBoundEntitiesPageQuery {
     type Output = ark_application::sync_storage::PolicyBoundSnapshotPage;
 
     fn class(&self) -> CommandClass {
-        self.query.class()
+        self.class
     }
 
     fn weight(&self) -> usize {
-        self.query.weight()
+        serde_json::to_vec(&self.vector).map_or(usize::MAX, |bytes| {
+            bytes.len()
+                + self.device_id.len()
+                + self.peer_device_id.len()
+                + std::mem::size_of::<(usize, usize)>()
+        }) + self.expected_identity.digest.len()
     }
 
     fn read(
@@ -53,44 +60,24 @@ impl DbQuery for LoadPolicyBoundEntitiesPageQuery {
         context: &CommandContext,
         connection: &Connection,
     ) -> Result<Self::Output, DbError> {
-        connection
-            .execute_batch("SAVEPOINT sync_policy_snapshot_page")
-            .map_err(|error| DbError::Storage(error.to_string()))?;
-        let result = self.query.read_with_policy_identity(context, connection);
-        match result {
-            Ok((Some(identity), entities)) if identity == self.expected_identity => {
-                connection
-                    .execute_batch("RELEASE sync_policy_snapshot_page")
-                    .map_err(|error| DbError::Storage(error.to_string()))?;
-                Ok(ark_application::sync_storage::PolicyBoundSnapshotPage { identity, entities })
+        context.require_sync_peer_matches(&self.peer_device_id)?;
+        ark_store::sync_entities::read_policy_bound_page(
+            connection,
+            &self.peer_device_id,
+            &self.expected_identity,
+            &self.vector,
+            &self.device_id,
+            self.offset,
+            self.limit,
+        )
+        .map_err(|error| match error {
+            ark_application::sync_storage::PolicyBoundReadError::StalePolicy => {
+                DbError::StaleSyncPolicy
             }
-            Ok((Some(_), _)) => {
-                connection
-                    .execute_batch(
-                        "ROLLBACK TO sync_policy_snapshot_page; RELEASE sync_policy_snapshot_page",
-                    )
-                    .map_err(|error| DbError::Storage(error.to_string()))?;
-                Err(DbError::StaleSyncPolicy)
+            ark_application::sync_storage::PolicyBoundReadError::Storage(error) => {
+                DbError::Storage(error)
             }
-            Ok((None, _)) => {
-                connection
-                    .execute_batch(
-                        "ROLLBACK TO sync_policy_snapshot_page; RELEASE sync_policy_snapshot_page",
-                    )
-                    .map_err(|error| DbError::Storage(error.to_string()))?;
-                Err(DbError::Storage(
-                    "policy_bound_snapshot_identity_missing".into(),
-                ))
-            }
-            Err(error) => {
-                connection
-                    .execute_batch(
-                        "ROLLBACK TO sync_policy_snapshot_page; RELEASE sync_policy_snapshot_page",
-                    )
-                    .map_err(|rollback| DbError::Storage(rollback.to_string()))?;
-                Err(error)
-            }
-        }
+        })
     }
 }
 

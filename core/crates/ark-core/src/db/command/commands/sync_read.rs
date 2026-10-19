@@ -18,10 +18,6 @@ pub(crate) struct LoadEntitiesQuery {
 }
 
 impl LoadEntitiesQuery {
-    pub(super) fn class(&self) -> CommandClass {
-        self.class
-    }
-
     pub(crate) fn all(
         vector: VersionVector,
         device_id: String,
