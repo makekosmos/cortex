@@ -1,11 +1,12 @@
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SearchResult {
-    pub file: String,
-    pub line: usize,
-    pub text: String,
-    pub entry_id: String,
-}
+use super::search_text::{
+    build_snippet, extract_plain_text_from_value, line_matches_query, truncate_snippet,
+};
+use super::{
+    list_objects, object_search_fts_exists, parse_json_or_default, search_text, Connection,
+};
+use ark_application::object_read::SearchResult;
+use ark_domain::types::ArkObject;
+use rusqlite::params;
 
 pub fn search_objects(conn: &Connection, query: &str) -> Result<Vec<SearchResult>, String> {
     if query.trim().is_empty() {
@@ -13,7 +14,7 @@ pub fn search_objects(conn: &Connection, query: &str) -> Result<Vec<SearchResult
     }
 
     let normalized_query = query.trim().to_lowercase();
-    let query_terms = tokenize_search_text(query);
+    let query_terms = search_text::tokenize_search_text(query);
     if let Some(fts_query) = build_fts_match_query(&query_terms) {
         if let Ok(results) =
             search_objects_with_fts(conn, &fts_query, &normalized_query, &query_terms)

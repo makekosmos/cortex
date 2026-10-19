@@ -71,7 +71,7 @@ fn upsert_object_inner(conn: &Connection, object: &ArkObject) -> Result<(), Stri
             ],
         )
         .map_err(|e| e.to_string())?;
-        index_object_for_search(conn, object)
+        ark_store::objects::index_object_for_search(conn, object)
     })();
 
     if let Err(error) = result {
@@ -90,7 +90,7 @@ pub fn delete_object(conn: &Connection, id: &str) -> Result<(), String> {
     let result = (|| -> Result<(), String> {
         conn.execute("DELETE FROM objects WHERE id = ?1", params![id])
             .map_err(|e| e.to_string())?;
-        remove_object_from_search(conn, id)
+        ark_store::objects::remove_object_from_search(conn, id)
     })();
 
     if let Err(error) = result {

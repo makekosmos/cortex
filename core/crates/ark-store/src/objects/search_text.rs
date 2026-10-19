@@ -1,4 +1,8 @@
-fn line_matches_query(line: &str, normalized_query: &str, query_terms: &[String]) -> bool {
+pub(super) fn line_matches_query(
+    line: &str,
+    normalized_query: &str,
+    query_terms: &[String],
+) -> bool {
     if line.is_empty() {
         return false;
     }
@@ -16,7 +20,7 @@ fn line_matches_query(line: &str, normalized_query: &str, query_terms: &[String]
     })
 }
 
-fn build_snippet(line: &str, normalized_query: &str, query_terms: &[String]) -> String {
+pub(super) fn build_snippet(line: &str, normalized_query: &str, query_terms: &[String]) -> String {
     let line_lower = line.to_lowercase();
     let direct_match = line_lower.find(normalized_query);
     let term_match = query_terms.iter().find_map(|term| line_lower.find(term));
@@ -45,7 +49,7 @@ fn build_snippet(line: &str, normalized_query: &str, query_terms: &[String]) -> 
     }
 }
 
-fn truncate_snippet(line: &str, max_chars: usize) -> String {
+pub(super) fn truncate_snippet(line: &str, max_chars: usize) -> String {
     if line.chars().count() <= max_chars {
         return line.to_string();
     }
@@ -70,7 +74,7 @@ fn char_boundary_after(value: &str, index: usize) -> usize {
     safe_index.min(value.len())
 }
 
-fn tokenize_search_text(value: &str) -> Vec<String> {
+pub(super) fn tokenize_search_text(value: &str) -> Vec<String> {
     value
         .split(|ch: char| !ch.is_alphanumeric())
         .filter(|part| !part.is_empty())
@@ -78,7 +82,7 @@ fn tokenize_search_text(value: &str) -> Vec<String> {
         .collect()
 }
 
-fn extract_plain_text_from_value(value: &Value) -> String {
+pub(super) fn extract_plain_text_from_value(value: &Value) -> String {
     let mut output = String::new();
     collect_plain_text(value, &mut output);
     output.trim().to_string()
@@ -136,3 +140,4 @@ fn collect_plain_text(node: &Value, output: &mut String) {
         output.push('\n');
     }
 }
+use serde_json::Value;

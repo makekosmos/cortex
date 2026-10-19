@@ -2,6 +2,12 @@ use ark_domain::types::{ArkObject, ArkObjectSummary};
 use rusqlite::{params, params_from_iter, Connection, OptionalExtension, Row};
 use serde_json::{json, Value};
 
+mod search;
+mod search_text;
+
+pub use ark_application::object_read::SearchResult;
+pub use search::search_objects;
+
 fn parse_json_or_default(raw: String) -> Value {
     serde_json::from_str(&raw).unwrap_or_else(|_| json!({}))
 }
@@ -171,6 +177,71 @@ pub fn get_object(conn: &Connection, id: &str) -> Result<Option<ArkObject>, Stri
     .map_err(|error| error.to_string())
 }
 
+pub fn ensure_object_search_fts(conn: &Connection) -> Result<(), String> {
+    conn.execute_batch(crate::schema::CREATE_OBJECT_SEARCH_FTS)
+        .map_err(|error| error.to_string())
+}
+
+pub fn object_search_fts_exists(conn: &Connection) -> Result<bool, String> {
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM sqlite_master \
+         WHERE type='table' AND name='object_search_fts')",
+        [],
+        |row| row.get::<_, i64>(0),
+    )
+    .map(|value| value != 0)
+    .map_err(|error| error.to_string())
+}
+
+pub fn rebuild_object_search_fts(conn: &Connection) -> Result<(), String> {
+    if !object_search_fts_exists(conn)? {
+        return Ok(());
+    }
+    conn.execute("DELETE FROM object_search_fts", [])
+        .map_err(|error| error.to_string())?;
+    for object in list_objects(conn)? {
+        index_object_for_search(conn, &object)?;
+    }
+    Ok(())
+}
+
+pub fn index_object_for_search(conn: &Connection, object: &ArkObject) -> Result<(), String> {
+    if !object_search_fts_exists(conn)? {
+        return Ok(());
+    }
+    conn.execute(
+        "DELETE FROM object_search_fts WHERE object_id = ?1",
+        params![object.id],
+    )
+    .map_err(|error| error.to_string())?;
+    if object.deleted_at.is_some() {
+        return Ok(());
+    }
+    conn.execute(
+        "INSERT INTO object_search_fts (object_id, title, body, props) VALUES (?1, ?2, ?3, ?4)",
+        params![
+            object.id,
+            object.title,
+            search_text::extract_plain_text_from_value(&object.content_json),
+            search_text::extract_plain_text_from_value(&object.props_json),
+        ],
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+pub fn remove_object_from_search(conn: &Connection, id: &str) -> Result<(), String> {
+    if !object_search_fts_exists(conn)? {
+        return Ok(());
+    }
+    conn.execute(
+        "DELETE FROM object_search_fts WHERE object_id = ?1",
+        params![id],
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -253,6 +324,26 @@ mod tests {
             .is_empty());
         assert!(list_running_time_entries(&connection, Some("manual"))
             .expect("source-filtered running time query succeeds")
+            .is_empty());
+    }
+
+    #[test]
+    fn object_search_supports_fallback_fts_and_index_removal() {
+        let connection = database();
+        let fallback = search_objects(&connection, "First").expect("fallback search succeeds");
+        assert_eq!(fallback[0].entry_id, "first");
+
+        ensure_object_search_fts(&connection).expect("FTS schema creates");
+        let first = get_object(&connection, "first")
+            .expect("object lookup succeeds")
+            .expect("object exists");
+        index_object_for_search(&connection, &first).expect("object indexes");
+        let indexed = search_objects(&connection, "First").expect("FTS search succeeds");
+        assert_eq!(indexed[0].entry_id, "first");
+
+        remove_object_from_search(&connection, "first").expect("index entry removes");
+        assert!(search_objects(&connection, "First")
+            .expect("search with no indexed match succeeds")
             .is_empty());
     }
 }

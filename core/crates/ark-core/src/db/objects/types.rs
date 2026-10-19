@@ -5,10 +5,6 @@ fn serialize_json(value: &Value) -> Result<String, String> {
     serde_json::to_string(value).map_err(|e| e.to_string())
 }
 
-fn parse_json_or_default(raw: String) -> Value {
-    serde_json::from_str(&raw).unwrap_or_else(|_| json!({}))
-}
-
 pub fn upsert_object_type(
     conn: &Connection,
     object_type: &ObjectType,
@@ -274,79 +270,6 @@ pub fn get_object_type(conn: &Connection, id: &str) -> Result<Option<ObjectType>
     )
     .optional()
     .map_err(|e| e.to_string())
-}
-
-pub(in crate::db) fn ensure_object_search_fts(conn: &Connection) -> Result<(), String> {
-    conn.execute_batch(CREATE_OBJECT_SEARCH_FTS)
-        .map_err(|e| e.to_string())
-}
-
-pub(in crate::db) fn object_search_fts_exists(conn: &Connection) -> Result<bool, String> {
-    conn.query_row(
-        "SELECT EXISTS(
-             SELECT 1 FROM sqlite_master
-             WHERE type = 'table' AND name = 'object_search_fts'
-         )",
-        [],
-        |row| row.get::<_, i64>(0),
-    )
-    .map(|value| value != 0)
-    .map_err(|e| e.to_string())
-}
-
-pub(in crate::db) fn rebuild_object_search_fts(conn: &Connection) -> Result<(), String> {
-    if !object_search_fts_exists(conn)? {
-        return Ok(());
-    }
-
-    conn.execute("DELETE FROM object_search_fts", [])
-        .map_err(|e| e.to_string())?;
-    for object in list_objects(conn)? {
-        index_object_for_search(conn, &object)?;
-    }
-    Ok(())
-}
-
-fn index_object_for_search(conn: &Connection, object: &ArkObject) -> Result<(), String> {
-    if !object_search_fts_exists(conn)? {
-        return Ok(());
-    }
-
-    conn.execute(
-        "DELETE FROM object_search_fts WHERE object_id = ?1",
-        params![object.id],
-    )
-    .map_err(|e| e.to_string())?;
-
-    if object.deleted_at.is_some() {
-        return Ok(());
-    }
-
-    conn.execute(
-        "INSERT INTO object_search_fts (object_id, title, body, props)
-         VALUES (?1, ?2, ?3, ?4)",
-        params![
-            object.id,
-            object.title,
-            extract_plain_text_from_value(&object.content_json),
-            extract_plain_text_from_value(&object.props_json),
-        ],
-    )
-    .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-fn remove_object_from_search(conn: &Connection, id: &str) -> Result<(), String> {
-    if !object_search_fts_exists(conn)? {
-        return Ok(());
-    }
-
-    conn.execute(
-        "DELETE FROM object_search_fts WHERE object_id = ?1",
-        params![id],
-    )
-    .map_err(|e| e.to_string())?;
-    Ok(())
 }
 
 pub(in crate::db) fn rollback_savepoint(conn: &Connection, name: &str) {
