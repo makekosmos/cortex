@@ -8,6 +8,96 @@ mod search_text;
 pub use ark_application::object_read::SearchResult;
 pub use search::search_objects;
 
+pub fn object_type_registry_exists(conn: &Connection) -> Result<bool, String> {
+    conn.query_row(
+        concat!(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND ",
+            "name='object_type_versions')"
+        ),
+        [],
+        |row| row.get::<_, i64>(0),
+    )
+    .map(|exists| exists != 0)
+    .map_err(|error| error.to_string())
+}
+
+/// Persist an already-canonical object projection and keep its search index in
+/// the caller's transaction.
+pub fn upsert_object(conn: &Connection, object: &ArkObject) -> Result<(), String> {
+    let has_type_version: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM pragma_table_info('objects') WHERE name='type_version')",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(|error| error.to_string())?
+        != 0;
+    if !has_type_version {
+        conn.execute_batch(
+            "ALTER TABLE objects ADD COLUMN type_version TEXT NOT NULL DEFAULT '0.0.0-legacy'",
+        )
+        .map_err(|error| error.to_string())?;
+    }
+    conn.execute_batch("SAVEPOINT ark_upsert_object")
+        .map_err(|error| error.to_string())?;
+    let result = (|| {
+        conn.execute(
+            "INSERT INTO objects
+                (id, type_id, type_version, title, content_json, props_json, created_at, \
+                updated_at, deleted_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+             ON CONFLICT(id) DO UPDATE SET
+                type_id = excluded.type_id,
+                type_version = excluded.type_version,
+                title = excluded.title,
+                content_json = excluded.content_json,
+                props_json = excluded.props_json,
+                created_at = excluded.created_at,
+                updated_at = excluded.updated_at,
+                deleted_at = excluded.deleted_at",
+            params![
+                object.id,
+                object.type_id,
+                object.type_version,
+                object.title,
+                serde_json::to_string(&object.content_json).map_err(|error| error.to_string())?,
+                serde_json::to_string(&object.props_json).map_err(|error| error.to_string())?,
+                object.created_at,
+                object.updated_at,
+                object.deleted_at,
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+        index_object_for_search(conn, object)
+    })();
+    finish_savepoint(conn, "ark_upsert_object", result)
+}
+
+pub fn delete_object(conn: &Connection, id: &str) -> Result<(), String> {
+    conn.execute_batch("SAVEPOINT ark_delete_object")
+        .map_err(|error| error.to_string())?;
+    let result = (|| {
+        conn.execute("DELETE FROM objects WHERE id = ?1", params![id])
+            .map_err(|error| error.to_string())?;
+        remove_object_from_search(conn, id)
+    })();
+    finish_savepoint(conn, "ark_delete_object", result)
+}
+
+fn finish_savepoint(
+    conn: &Connection,
+    savepoint: &str,
+    result: Result<(), String>,
+) -> Result<(), String> {
+    if let Err(error) = result {
+        let _ = conn.execute_batch(&format!("ROLLBACK TO SAVEPOINT {savepoint}"));
+        let _ = conn.execute_batch(&format!("RELEASE SAVEPOINT {savepoint}"));
+        return Err(error);
+    }
+    conn.execute_batch(&format!("RELEASE SAVEPOINT {savepoint}"))
+        .map_err(|error| error.to_string())
+}
+
 fn parse_json_or_default(raw: String) -> Value {
     serde_json::from_str(&raw).unwrap_or_else(|_| json!({}))
 }
@@ -345,5 +435,37 @@ mod tests {
         assert!(search_objects(&connection, "First")
             .expect("search with no indexed match succeeds")
             .is_empty());
+    }
+
+    #[test]
+    fn object_upsert_and_delete_keep_the_fts_projection_atomic() {
+        let connection = database();
+        ensure_object_search_fts(&connection).expect("FTS schema creates");
+        let object = ArkObject {
+            id: "written".into(),
+            type_id: "note".into(),
+            type_version: "1.0.0".into(),
+            title: "Written title".into(),
+            content_json: json!({"text": "searchable body"}),
+            props_json: json!({}),
+            created_at: "2026-01-04".into(),
+            updated_at: "2026-01-04".into(),
+            deleted_at: None,
+        };
+
+        upsert_object(&connection, &object).expect("object persists");
+        assert_eq!(
+            search_objects(&connection, "searchable").expect("new object is searchable")[0]
+                .entry_id,
+            "written"
+        );
+
+        delete_object(&connection, &object.id).expect("object deletes");
+        assert!(search_objects(&connection, "searchable")
+            .expect("deleted object leaves the index")
+            .is_empty());
+        assert!(get_object(&connection, &object.id)
+            .expect("object lookup succeeds")
+            .is_none());
     }
 }

@@ -1,10 +1,6 @@
 // Generic object model CRUD
 // ---------------------------------------------------------------------------
 
-fn serialize_json(value: &Value) -> Result<String, String> {
-    serde_json::to_string(value).map_err(|e| e.to_string())
-}
-
 pub fn upsert_object_type(
     conn: &Connection,
     object_type: &ObjectType,
@@ -270,10 +266,4 @@ pub fn get_object_type(conn: &Connection, id: &str) -> Result<Option<ObjectType>
     )
     .optional()
     .map_err(|e| e.to_string())
-}
-
-pub(in crate::db) fn rollback_savepoint(conn: &Connection, name: &str) {
-    let _ = conn.execute_batch(&format!(
-        "ROLLBACK TO SAVEPOINT {name}; RELEASE SAVEPOINT {name};"
-    ));
 }

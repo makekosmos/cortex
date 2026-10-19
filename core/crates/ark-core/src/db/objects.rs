@@ -6,7 +6,12 @@ pub use ark_store::objects::{
     object_search_fts_exists, rebuild_object_search_fts, search_objects, SearchResult,
 };
 use rusqlite::{params, Connection, OptionalExtension};
-use serde_json::Value;
+
+pub(in crate::db) fn rollback_savepoint(conn: &Connection, name: &str) {
+    let _ = conn.execute_batch(&format!(
+        "ROLLBACK TO SAVEPOINT {name}; RELEASE SAVEPOINT {name};"
+    ));
+}
 
 use crate::types::*;
 
