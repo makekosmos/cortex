@@ -226,6 +226,7 @@ mod listener_tests {
 #[cfg(test)]
 mod race_connect_tests {
     use super::race_connect;
+    use std::time::Duration;
     use tokio::net::TcpListener;
     use tokio_tungstenite::accept_async;
 
@@ -251,5 +252,17 @@ mod race_connect_tests {
         assert_eq!(connected.1, address);
         drop(connected);
         drop(server.await.expect("websocket server finishes"));
+    }
+
+    #[tokio::test]
+    async fn returns_none_when_every_websocket_address_fails() {
+        let result = tokio::time::timeout(
+            Duration::from_secs(1),
+            race_connect(&["127.0.0.1:0".into()]),
+        )
+        .await
+        .expect("finished connection attempts must not leave the caller waiting");
+
+        assert!(result.is_none());
     }
 }

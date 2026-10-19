@@ -2,10 +2,10 @@ use std::time::Duration;
 use std::{io, net::SocketAddr};
 
 use ark_sync::session_io::{SessionIo, SessionIoDriver, SessionIoEvent, SessionOutboundGuard};
-use futures_util::{SinkExt, StreamExt};
+use futures_util::{stream::FuturesUnordered, SinkExt, StreamExt};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{mpsc, oneshot, watch, Mutex};
+use tokio::sync::{mpsc, watch};
 use tokio_tungstenite::{
     accept_async, connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream,
 };
@@ -339,36 +339,25 @@ pub async fn race_connect(addresses: &[String]) -> Option<(ClientWebSocket, Stri
         return None;
     }
 
-    let (result_tx, result_rx) = oneshot::channel();
-    let result_tx = std::sync::Arc::new(Mutex::new(Some(result_tx)));
-    let mut handles = Vec::new();
-
-    for address in addresses {
+    let mut attempts = FuturesUnordered::new();
+    for address in addresses.iter().cloned() {
         let url = format!("ws://{address}");
-        let address = address.clone();
-        let result_tx = result_tx.clone();
-
-        handles.push(tokio::spawn(async move {
-            if let Ok(Ok((stream, _))) =
-                tokio::time::timeout(CONNECT_TIMEOUT, connect_async(&url)).await
-            {
-                let mut sender = result_tx.lock().await;
-                if let Some(sender) = sender.take() {
-                    let _ = sender.send((stream, address));
-                }
-            }
-        }));
+        attempts.push(async move {
+            tokio::time::timeout(CONNECT_TIMEOUT, connect_async(&url))
+                .await
+                .ok()
+                .and_then(Result::ok)
+                .map(|(stream, _)| (stream, address))
+        });
     }
 
-    match result_rx.await {
-        Ok(result) => {
-            for handle in handles {
-                handle.abort();
-            }
-            Some(result)
+    while let Some(result) = attempts.next().await {
+        if result.is_some() {
+            return result;
         }
-        Err(_) => None,
     }
+
+    None
 }
 
 #[cfg(test)]
