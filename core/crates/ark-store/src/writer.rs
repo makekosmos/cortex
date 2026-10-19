@@ -60,6 +60,25 @@ impl SqliteWriter {
             )
         })
     }
+
+    pub fn apply_local_object_upsert(
+        &mut self,
+        write: ark_application::object_mutation::LocalObjectUpsert,
+        principal: &str,
+        operation_id: Option<&str>,
+    ) -> Result<
+        ark_application::object_mutation::ObjectUpsertOutcome,
+        TransactionFailure<ark_application::object_mutation::ObjectUpsertError>,
+    > {
+        self.with_connection_mut(|connection| {
+            crate::object_write::apply_local_object_upsert(
+                connection,
+                write,
+                principal,
+                operation_id,
+            )
+        })
+    }
 }
 
 #[cfg(test)]

@@ -175,19 +175,22 @@ fn spawn_test_local_object_upsert(
 {
     tokio::task::spawn_blocking(move || {
         let _admission = _admission;
-        let connection = connection.lock().unwrap_or_else(|error| error.into_inner());
-        let transaction = Transaction::new_unchecked(&connection, TransactionBehavior::Immediate)
-            .map_err(DbError::from_sqlite)?;
+        let mut connection = connection.lock().unwrap_or_else(|error| error.into_inner());
         let outcome = ark_store::object_write::apply_local_object_upsert(
-            &transaction,
+            &mut connection,
             write,
             &principal,
             operation_id.as_deref(),
         )
-        .map_err(DbError::from_application_error)?;
-        transaction
-            .commit()
-            .map_err(|error| DbError::CommitFailed(error.to_string()))?;
+        .map_err(|failure| match failure {
+            ark_store::writer::TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+            ark_store::writer::TransactionFailure::Operation(error) => {
+                DbError::from_application_error(error.to_string())
+            }
+            ark_store::writer::TransactionFailure::Commit(error) => {
+                DbError::CommitFailed(error.to_string())
+            }
+        })?;
         Ok(outcome)
     })
 }

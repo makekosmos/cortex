@@ -4,7 +4,7 @@ use ark_domain::canonical_type::{
 };
 use ark_domain::object_write::ObjectWriteSnapshot;
 use ark_domain::types::{ArkObject, ArkObjectWrite, ObjectLink};
-use rusqlite::{Connection, Transaction};
+use rusqlite::{Connection, Transaction, TransactionBehavior};
 use serde::Serialize;
 
 /// Resolve the persisted type identity and validate an object write before
@@ -33,34 +33,56 @@ pub fn prepare_object(
     prepare_resolved_object(input, &canonical_type_id, &resolved_version, registration)
 }
 
-/// Execute one local object upsert and its receipt inside the caller's single
-/// transaction. The writer owns transaction mechanics; the command adapter
-/// calls this operation inside the writer's immediate transaction.
+/// Execute one local object upsert and its receipt in one Store-owned transaction.
 pub fn apply_local_object_upsert(
+    connection: &mut Connection,
+    write: ark_application::object_mutation::LocalObjectUpsert,
+    principal: &str,
+    operation_id: Option<&str>,
+) -> Result<
+    ark_application::object_mutation::ObjectUpsertOutcome,
+    crate::writer::TransactionFailure<ark_application::object_mutation::ObjectUpsertError>,
+> {
+    let transaction = connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(crate::writer::TransactionFailure::Begin)?;
+    let outcome = apply_local_object_upsert_in(&transaction, write, principal, operation_id)
+        .map_err(crate::writer::TransactionFailure::Operation)?;
+    transaction
+        .commit()
+        .map_err(crate::writer::TransactionFailure::Commit)?;
+    Ok(outcome)
+}
+
+fn apply_local_object_upsert_in(
     transaction: &Transaction<'_>,
     write: ark_application::object_mutation::LocalObjectUpsert,
     principal: &str,
     operation_id: Option<&str>,
-) -> Result<ark_application::object_mutation::ObjectUpsertOutcome, String> {
+) -> Result<
+    ark_application::object_mutation::ObjectUpsertOutcome,
+    ark_application::object_mutation::ObjectUpsertError,
+> {
     use ark_application::object_mutation::{
         build_local_object_upsert_commit, validate_local_object_upsert,
-        validate_local_object_upsert_type, ObjectUpsertOutcome,
+        validate_local_object_upsert_type, ObjectUpsertError, ObjectUpsertOutcome,
     };
 
     const COMMAND_TYPE: &str = "object.upsert.v1";
     let payload_sha256 = operation_id
         .map(|_| operation_payload_hash(COMMAND_TYPE, &write))
-        .transpose()?;
+        .transpose()
+        .map_err(ObjectUpsertError::Storage)?;
 
     if let (Some(operation_id), Some(payload_sha256)) = (operation_id, payload_sha256.as_deref()) {
         if let Some(receipt) = crate::operation_receipt::load(transaction, principal, operation_id)
-            .map_err(|error| error.to_string())?
+            .map_err(|error| ObjectUpsertError::Storage(error.to_string()))?
         {
             if receipt.command_type != COMMAND_TYPE || receipt.payload_sha256 != payload_sha256 {
-                return Err("operationId was already used with a different command payload".into());
+                return Err(ObjectUpsertError::OperationIdConflict);
             }
-            let value =
-                serde_json::from_str(&receipt.result_json).map_err(|error| error.to_string())?;
+            let value = serde_json::from_str(&receipt.result_json)
+                .map_err(|error| ObjectUpsertError::Storage(error.to_string()))?;
             return Ok(ObjectUpsertOutcome {
                 value,
                 replayed: true,
@@ -68,33 +90,36 @@ pub fn apply_local_object_upsert(
         }
     }
 
-    validate_local_object_upsert_type(&write).map_err(|error| error.to_string())?;
+    validate_local_object_upsert_type(&write).map_err(ObjectUpsertError::Conflict)?;
     let current_snapshot = write
         .expected_snapshot
         .as_ref()
         .map(|_| read_object_write_snapshot(transaction, &write.object.id))
-        .transpose()?;
+        .transpose()
+        .map_err(ObjectUpsertError::Storage)?;
     validate_local_object_upsert(&write, current_snapshot.as_ref())
-        .map_err(|error| error.to_string())?;
+        .map_err(ObjectUpsertError::Conflict)?;
 
-    let object = prepare_object(transaction, write.object).map_err(|error| error.to_string())?;
-    crate::objects::upsert_object(transaction, &object)?;
+    let object = prepare_object(transaction, write.object)
+        .map_err(|error| ObjectUpsertError::Storage(error.to_string()))?;
+    crate::objects::upsert_object(transaction, &object).map_err(ObjectUpsertError::Storage)?;
     let hlc = crate::sync_versions::bump_sync_version_vector(
         transaction,
         "object",
         &object.id,
         &write.device_id,
         false,
-    )?;
-    crate::sync_tombstones::delete(transaction, &object.id)?;
+    )
+    .map_err(ObjectUpsertError::Storage)?;
+    crate::sync_tombstones::delete(transaction, &object.id).map_err(ObjectUpsertError::Storage)?;
     let outcome = ObjectUpsertOutcome {
         value: build_local_object_upsert_commit(object, hlc),
         replayed: false,
     };
 
     if let (Some(operation_id), Some(payload_sha256)) = (operation_id, payload_sha256) {
-        let result_json =
-            serde_json::to_string(&outcome.value).map_err(|error| error.to_string())?;
+        let result_json = serde_json::to_string(&outcome.value)
+            .map_err(|error| ObjectUpsertError::Storage(error.to_string()))?;
         crate::operation_receipt::insert(
             transaction,
             principal,
@@ -105,7 +130,7 @@ pub fn apply_local_object_upsert(
                 result_json,
             },
         )
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| ObjectUpsertError::Storage(error.to_string()))?;
     }
 
     Ok(outcome)
