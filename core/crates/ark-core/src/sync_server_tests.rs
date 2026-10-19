@@ -390,12 +390,61 @@ pub(crate) mod tests {
 
     #[async_trait::async_trait]
     impl AuthenticatedEntityBackend for MemBackend {
+        async fn receive_authenticated_entity_with_id(
+            &self,
+            _: &SyncEntity,
+            _: &str,
+            _: &str,
+        ) -> Result<bool, String> {
+            Ok(false)
+        }
+
+        async fn receive_authenticated_entity_with_policy(
+            &self,
+            _: &SyncEntity,
+            _: &str,
+            _: &str,
+            _: &str,
+            policy: Option<ark_application::sync_storage::PolicyIdentity>,
+        ) -> Result<bool, String> {
+            if policy.is_some() {
+                return Err("policy_bound_receipt_unsupported".into());
+            }
+            Ok(false)
+        }
+
         async fn apply_authenticated_entity(
             &self,
             entity: &SyncEntity,
             _authenticated_peer_id: &str,
         ) -> Result<(), String> {
             self.apply_entity(entity).await
+        }
+
+        async fn apply_authenticated_entity_with_id(
+            &self,
+            entity: &SyncEntity,
+            peer: &str,
+            _: &str,
+        ) -> Result<ark_application::sync_storage::InboundApplyOutcome, String> {
+            let _ = peer;
+            self.apply_entity(entity).await?;
+            Ok(ark_application::sync_storage::InboundApplyOutcome::Applied)
+        }
+
+        async fn apply_authenticated_entity_with_policy(
+            &self,
+            entity: &SyncEntity,
+            peer: &str,
+            message_id: &str,
+            _: &str,
+            policy: Option<ark_application::sync_storage::PolicyIdentity>,
+        ) -> Result<ark_application::sync_storage::InboundApplyOutcome, String> {
+            if policy.is_some() {
+                return Err("policy_bound_apply_unsupported".into());
+            }
+            self.apply_authenticated_entity_with_id(entity, peer, message_id)
+                .await
         }
     }
 

@@ -3,7 +3,56 @@ use ark_core::AuthenticatedEntityBackend as RootAuthenticatedEntityBackend;
 
 struct Backend;
 
-impl RootAuthenticatedEntityBackend for Backend {}
+#[async_trait::async_trait]
+impl RootAuthenticatedEntityBackend for Backend {
+    async fn receive_authenticated_entity_with_id(
+        &self,
+        _: &ark_core::types::SyncEntity,
+        _: &str,
+        _: &str,
+    ) -> Result<bool, String> {
+        Ok(false)
+    }
+
+    async fn receive_authenticated_entity_with_policy(
+        &self,
+        _: &ark_core::types::SyncEntity,
+        _: &str,
+        _: &str,
+        _: &str,
+        _: Option<ark_application::sync_storage::PolicyIdentity>,
+    ) -> Result<bool, String> {
+        Ok(false)
+    }
+
+    async fn apply_authenticated_entity(
+        &self,
+        _: &ark_core::types::SyncEntity,
+        _: &str,
+    ) -> Result<(), String> {
+        Err("unused compatibility test backend".into())
+    }
+
+    async fn apply_authenticated_entity_with_id(
+        &self,
+        _: &ark_core::types::SyncEntity,
+        _: &str,
+        _: &str,
+    ) -> Result<ark_application::sync_storage::InboundApplyOutcome, String> {
+        Err("unused compatibility test backend".into())
+    }
+
+    async fn apply_authenticated_entity_with_policy(
+        &self,
+        _: &ark_core::types::SyncEntity,
+        _: &str,
+        _: &str,
+        _: &str,
+        _: Option<ark_application::sync_storage::PolicyIdentity>,
+    ) -> Result<ark_application::sync_storage::InboundApplyOutcome, String> {
+        Err("unused compatibility test backend".into())
+    }
+}
 
 fn accepts_previous_module_path<T: ModuleAuthenticatedEntityBackend>() {}
 

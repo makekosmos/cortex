@@ -32,6 +32,22 @@ impl FakeStorage {
 
 #[async_trait::async_trait]
 impl AuthenticatedEntityBackend for FakeStorage {
+    async fn receive_authenticated_entity_with_id(
+        &self,
+        entity: &SyncEntity,
+        authenticated_peer_id: &str,
+        message_id: &str,
+    ) -> Result<bool, String> {
+        self.receive_authenticated_entity_with_policy(
+            entity,
+            authenticated_peer_id,
+            message_id,
+            "",
+            None,
+        )
+        .await
+    }
+
     async fn receive_authenticated_entity_with_policy(
         &self,
         _entity: &SyncEntity,
@@ -42,6 +58,32 @@ impl AuthenticatedEntityBackend for FakeStorage {
     ) -> Result<bool, String> {
         self.trace.lock().unwrap().push("receipt");
         Ok(true)
+    }
+
+    async fn apply_authenticated_entity(
+        &self,
+        entity: &SyncEntity,
+        authenticated_peer_id: &str,
+    ) -> Result<(), String> {
+        self.apply_authenticated_entity_with_policy(entity, authenticated_peer_id, "", "", None)
+            .await
+            .map(|_| ())
+    }
+
+    async fn apply_authenticated_entity_with_id(
+        &self,
+        entity: &SyncEntity,
+        authenticated_peer_id: &str,
+        message_id: &str,
+    ) -> Result<InboundApplyOutcome, String> {
+        self.apply_authenticated_entity_with_policy(
+            entity,
+            authenticated_peer_id,
+            message_id,
+            "",
+            None,
+        )
+        .await
     }
 
     async fn apply_authenticated_entity_with_policy(

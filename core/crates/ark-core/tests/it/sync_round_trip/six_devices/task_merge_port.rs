@@ -5,6 +5,36 @@ use ark_core::types::SyncEntity;
 
 #[async_trait::async_trait]
 impl AuthenticatedEntityBackend for BackfillBarrier {
+    async fn receive_authenticated_entity_with_id(
+        &self,
+        entity: &SyncEntity,
+        peer: &str,
+        message_id: &str,
+    ) -> Result<bool, String> {
+        self.inner
+            .receive_authenticated_entity_with_id(entity, peer, message_id)
+            .await
+    }
+
+    async fn receive_authenticated_entity_with_policy(
+        &self,
+        entity: &SyncEntity,
+        peer: &str,
+        message_id: &str,
+        local_device_id: &str,
+        policy: Option<ark_application::sync_storage::PolicyIdentity>,
+    ) -> Result<bool, String> {
+        self.inner
+            .receive_authenticated_entity_with_policy(
+                entity,
+                peer,
+                message_id,
+                local_device_id,
+                policy,
+            )
+            .await
+    }
+
     async fn apply_authenticated_entity(
         &self,
         entity: &SyncEntity,
@@ -12,6 +42,36 @@ impl AuthenticatedEntityBackend for BackfillBarrier {
     ) -> Result<(), String> {
         self.inner
             .apply_authenticated_entity(entity, authenticated_peer_id)
+            .await
+    }
+
+    async fn apply_authenticated_entity_with_id(
+        &self,
+        entity: &SyncEntity,
+        peer: &str,
+        message_id: &str,
+    ) -> Result<ark_application::sync_storage::InboundApplyOutcome, String> {
+        self.inner
+            .apply_authenticated_entity_with_id(entity, peer, message_id)
+            .await
+    }
+
+    async fn apply_authenticated_entity_with_policy(
+        &self,
+        entity: &SyncEntity,
+        peer: &str,
+        message_id: &str,
+        local_device_id: &str,
+        policy: Option<ark_application::sync_storage::PolicyIdentity>,
+    ) -> Result<ark_application::sync_storage::InboundApplyOutcome, String> {
+        self.inner
+            .apply_authenticated_entity_with_policy(
+                entity,
+                peer,
+                message_id,
+                local_device_id,
+                policy,
+            )
             .await
     }
 }

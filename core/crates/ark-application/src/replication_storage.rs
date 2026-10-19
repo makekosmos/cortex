@@ -69,61 +69,41 @@ pub trait AuthenticatedEntityBackend: Send + Sync {
     /// `true` only when this backend provides that durable boundary.
     async fn receive_authenticated_entity_with_id(
         &self,
-        _entity: &SyncEntity,
-        _authenticated_peer_id: &str,
-        _message_id: &str,
-    ) -> Result<bool, String> {
-        Ok(false)
-    }
+        entity: &SyncEntity,
+        authenticated_peer_id: &str,
+        message_id: &str,
+    ) -> Result<bool, String>;
 
     async fn receive_authenticated_entity_with_policy(
         &self,
         entity: &SyncEntity,
         authenticated_peer_id: &str,
         message_id: &str,
-        _local_device_id: &str,
+        local_device_id: &str,
         policy_identity: Option<crate::sync_storage::PolicyIdentity>,
-    ) -> Result<bool, String> {
-        if policy_identity.is_some() {
-            return Err("policy_bound_receipt_unsupported".into());
-        }
-        self.receive_authenticated_entity_with_id(entity, authenticated_peer_id, message_id)
-            .await
-    }
+    ) -> Result<bool, String>;
 
     async fn apply_authenticated_entity(
         &self,
-        _entity: &SyncEntity,
-        _authenticated_peer_id: &str,
-    ) -> Result<(), String> {
-        Err("authenticated_apply_unsupported".into())
-    }
+        entity: &SyncEntity,
+        authenticated_peer_id: &str,
+    ) -> Result<(), String>;
 
     async fn apply_authenticated_entity_with_id(
         &self,
         entity: &SyncEntity,
         authenticated_peer_id: &str,
-        _message_id: &str,
-    ) -> Result<crate::sync_storage::InboundApplyOutcome, String> {
-        self.apply_authenticated_entity(entity, authenticated_peer_id)
-            .await
-            .map(|()| crate::sync_storage::InboundApplyOutcome::Applied)
-    }
+        message_id: &str,
+    ) -> Result<crate::sync_storage::InboundApplyOutcome, String>;
 
     async fn apply_authenticated_entity_with_policy(
         &self,
         entity: &SyncEntity,
         authenticated_peer_id: &str,
         message_id: &str,
-        _local_device_id: &str,
+        local_device_id: &str,
         policy_identity: Option<crate::sync_storage::PolicyIdentity>,
-    ) -> Result<crate::sync_storage::InboundApplyOutcome, String> {
-        if policy_identity.is_some() {
-            return Err("policy_bound_apply_unsupported".into());
-        }
-        self.apply_authenticated_entity_with_id(entity, authenticated_peer_id, message_id)
-            .await
-    }
+    ) -> Result<crate::sync_storage::InboundApplyOutcome, String>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

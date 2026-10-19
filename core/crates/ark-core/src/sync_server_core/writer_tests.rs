@@ -306,7 +306,61 @@ impl ark_application::sync_storage::CommittedFeedPort for RevocableBackend {
 }
 
 #[async_trait::async_trait]
-impl AuthenticatedEntityBackend for RevocableBackend {}
+impl AuthenticatedEntityBackend for RevocableBackend {
+    async fn receive_authenticated_entity_with_id(
+        &self,
+        _: &SyncEntity,
+        _: &str,
+        _: &str,
+    ) -> Result<bool, String> {
+        Ok(false)
+    }
+
+    async fn receive_authenticated_entity_with_policy(
+        &self,
+        entity: &SyncEntity,
+        peer: &str,
+        message_id: &str,
+        _: &str,
+        policy: Option<ark_application::sync_storage::PolicyIdentity>,
+    ) -> Result<bool, String> {
+        if policy.is_some() {
+            return Err("policy_bound_receipt_unsupported".into());
+        }
+        self.receive_authenticated_entity_with_id(entity, peer, message_id)
+            .await
+    }
+
+    async fn apply_authenticated_entity(&self, _: &SyncEntity, _: &str) -> Result<(), String> {
+        Err("authenticated_apply_unsupported".into())
+    }
+
+    async fn apply_authenticated_entity_with_id(
+        &self,
+        entity: &SyncEntity,
+        peer: &str,
+        _: &str,
+    ) -> Result<ark_application::sync_storage::InboundApplyOutcome, String> {
+        self.apply_authenticated_entity(entity, peer)
+            .await
+            .map(|()| ark_application::sync_storage::InboundApplyOutcome::Applied)
+    }
+
+    async fn apply_authenticated_entity_with_policy(
+        &self,
+        entity: &SyncEntity,
+        peer: &str,
+        message_id: &str,
+        _: &str,
+        policy: Option<ark_application::sync_storage::PolicyIdentity>,
+    ) -> Result<ark_application::sync_storage::InboundApplyOutcome, String> {
+        if policy.is_some() {
+            return Err("policy_bound_apply_unsupported".into());
+        }
+        self.apply_authenticated_entity_with_id(entity, peer, message_id)
+            .await
+    }
+}
 
 #[async_trait::async_trait]
 impl PeerIdentityBackend for RevocableBackend {
