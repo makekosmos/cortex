@@ -4,7 +4,6 @@ use crate::canonical_types::migration;
 pub use crate::canonical_types::pending::{
     count_pending_for_type, insert_pending_object, replay_pending_for_type,
 };
-use crate::type_registry;
 use ark_store::schema::CREATE_TABLES;
 
 use super::objects::{ensure_object_search_fts, rebuild_object_search_fts};
@@ -60,7 +59,7 @@ pub fn init_schema_prerequisites_for_phase3(conn: &Connection) -> Result<(), Str
     conn.execute_batch("SAVEPOINT ark_phase2_init")
         .map_err(|e| e.to_string())?;
     let phase2_result = (|| {
-        type_registry::migrate_phase2(conn)?;
+        ark_store::type_registry::migrate_schema(conn)?;
         ark_store::data_platform::ensure_schema(conn)?;
         let object_search_fts_enabled = ensure_object_search_fts(conn).is_ok();
         if object_search_fts_enabled {

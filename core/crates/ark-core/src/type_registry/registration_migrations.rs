@@ -2,7 +2,7 @@ use ark_domain::canonical_type::registry::{
     canonicalize_type_version, validate_type_id, validate_version,
 };
 use ark_store::type_registry::{insert_type_record, type_name};
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::Connection;
 
 use super::{
     get_type, insert_type_version, register_alias, resolve_alias, set_base_type,
@@ -125,68 +125,6 @@ pub fn register_type(
                 "ark_registry_registration"
             ));
             Err(error)
-        }
-    }
-}
-
-pub fn migrate_phase2(conn: &Connection) -> Result<(), String> {
-    conn.execute_batch("SAVEPOINT ark_phase2_registry")
-        .map_err(|e| e.to_string())?;
-    let result = (|| {
-        ark_store::type_registry::migrate_schema(conn)?;
-        conn.execute_batch(concat!(
-            "CREATE TABLE IF NOT EXISTS sync_pending_objects (id TEXT PRIMARY KEY, ",
-            "payload TEXT NOT NULL, awaited_type_id TEXT NOT NULL, received_at TEXT NOT ",
-            "NULL); CREATE INDEX IF NOT EXISTS idx_sync_pending_awaited_type ON ",
-            "sync_pending_objects(awaited_type_id);"
-        ))
-        .map_err(|e| e.to_string())?;
-        for (table, column, definition) in [
-            (
-                "objects",
-                "type_version",
-                "TEXT NOT NULL DEFAULT '0.0.0-legacy'",
-            ),
-            (
-                "sync_pending_objects",
-                "awaited_type_version",
-                "TEXT NOT NULL DEFAULT '0.0.0-legacy'",
-            ),
-        ] {
-            let exists = conn
-                .query_row(
-                    &format!("SELECT 1 FROM pragma_table_info('{table}') WHERE name=?1"),
-                    params![column],
-                    |_| Ok(()),
-                )
-                .optional()
-                .map_err(|e| e.to_string())?
-                .is_some();
-            if !exists {
-                conn.execute_batch(&format!(
-                    "ALTER TABLE {table} ADD COLUMN {column} {definition}"
-                ))
-                .map_err(|e| e.to_string())?;
-            }
-        }
-        conn.execute_batch(concat!(
-            "CREATE INDEX IF NOT EXISTS idx_objects_type_version ON objects(type_id,",
-            "type_version); CREATE INDEX IF NOT EXISTS ",
-            "idx_sync_pending_awaited_type_version ON sync_pending_objects(",
-            "awaited_type_id,awaited_type_version);"
-        ))
-        .map_err(|e| e.to_string())?;
-        Ok::<(), String>(())
-    })();
-    match result {
-        Ok(()) => conn
-            .execute_batch("RELEASE SAVEPOINT ark_phase2_registry")
-            .map_err(|e| e.to_string()),
-        Err(e) => {
-            let _ = conn.execute_batch(
-                "ROLLBACK TO SAVEPOINT ark_phase2_registry; RELEASE SAVEPOINT ark_phase2_registry",
-            );
-            Err(e)
         }
     }
 }
