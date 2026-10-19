@@ -1,6 +1,6 @@
 # ARK Core storage census
 
-Generated from the current Core source. The scanner found 70 typed operations and 1278 SQLite ownership references. It scans all Rust sources and labels standalone tests, inline tests, debug-only code, and production separately. It does not infer policy ownership or discover indirect SQL hidden behind helper calls.
+Generated from the current Core source. The scanner found 70 typed operations and 1271 SQLite ownership references. It scans all Rust sources and labels standalone tests, inline tests, debug-only code, and production separately. It does not infer policy ownership or discover indirect SQL hidden behind helper calls.
 
 ## Transaction contracts
 
@@ -15,7 +15,7 @@ Generated from the current Core source. The scanner found 70 typed operations an
 | Kind | Operation | Source |
 | --- | --- | --- |
 | `DbCommand` | `LocalCoreTaskWrite` | [core/crates/ark-core/src/db/command/commands/core_task.rs:32](../core/crates/ark-core/src/db/command/commands/core_task.rs:32) |
-| `DbCommand` | `AuthenticatedCoreTaskWrite` | [core/crates/ark-core/src/db/command/commands/core_task.rs:129](../core/crates/ark-core/src/db/command/commands/core_task.rs:129) |
+| `DbCommand` | `AuthenticatedCoreTaskWrite` | [core/crates/ark-core/src/db/command/commands/core_task.rs:131](../core/crates/ark-core/src/db/command/commands/core_task.rs:131) |
 | `DbCommand` | `AppendLocalRegistryEventCommand` | [core/crates/ark-core/src/db/command/commands/device_registry_command.rs:26](../core/crates/ark-core/src/db/command/commands/device_registry_command.rs:26) |
 | `DbCommand` | `SignRegistryHandshakeCommand` | [core/crates/ark-core/src/db/command/commands/device_registry_handshake.rs:25](../core/crates/ark-core/src/db/command/commands/device_registry_handshake.rs:25) |
 | `DbCommand` | `ApplyRegistryEventsCommand` | [core/crates/ark-core/src/db/command/commands/device_registry_sync.rs:150](../core/crates/ark-core/src/db/command/commands/device_registry_sync.rs:150) |
@@ -51,12 +51,12 @@ Generated from the current Core source. The scanner found 70 typed operations an
 | `DbCommand` | `PrepareTaskMergeBatchCommand` | [core/crates/ark-core/src/db/command/commands/task_merge.rs:74](../core/crates/ark-core/src/db/command/commands/task_merge.rs:74) |
 | `DbCommand` | `AcknowledgeTaskMergeBatchCommand` | [core/crates/ark-core/src/db/command/commands/task_merge.rs:125](../core/crates/ark-core/src/db/command/commands/task_merge.rs:125) |
 | `DbCommand` | `ApplyTaskMergeBatchCommand` | [core/crates/ark-core/src/db/command/commands/task_merge.rs:177](../core/crates/ark-core/src/db/command/commands/task_merge.rs:177) |
-| `DbCommand` | `RegisterPackageTypesCommand` | [core/crates/ark-core/src/db/command/commands/type_mutation.rs:26](../core/crates/ark-core/src/db/command/commands/type_mutation.rs:26) |
-| `DbCommand` | `UpsertObjectTypeCommand` | [core/crates/ark-core/src/db/command/commands/type_mutation.rs:64](../core/crates/ark-core/src/db/command/commands/type_mutation.rs:64) |
-| `DbCommand` | `DeleteObjectTypeCommand` | [core/crates/ark-core/src/db/command/commands/type_mutation.rs:99](../core/crates/ark-core/src/db/command/commands/type_mutation.rs:99) |
-| `DbCommand` | `UpsertObjectLinkCommand` | [core/crates/ark-core/src/db/command/commands/type_mutation.rs:137](../core/crates/ark-core/src/db/command/commands/type_mutation.rs:137) |
-| `DbCommand` | `DeleteObjectLinkCommand` | [core/crates/ark-core/src/db/command/commands/type_mutation.rs:172](../core/crates/ark-core/src/db/command/commands/type_mutation.rs:172) |
-| `DbCommand` | `ReplaceObjectLinkCommand` | [core/crates/ark-core/src/db/command/commands/type_mutation.rs:210](../core/crates/ark-core/src/db/command/commands/type_mutation.rs:210) |
+| `DbCommand` | `RegisterPackageTypesCommand` | [core/crates/ark-core/src/db/command/commands/type_mutation.rs:27](../core/crates/ark-core/src/db/command/commands/type_mutation.rs:27) |
+| `DbCommand` | `UpsertObjectTypeCommand` | [core/crates/ark-core/src/db/command/commands/type_mutation.rs:65](../core/crates/ark-core/src/db/command/commands/type_mutation.rs:65) |
+| `DbCommand` | `DeleteObjectTypeCommand` | [core/crates/ark-core/src/db/command/commands/type_mutation.rs:100](../core/crates/ark-core/src/db/command/commands/type_mutation.rs:100) |
+| `DbCommand` | `UpsertObjectLinkCommand` | [core/crates/ark-core/src/db/command/commands/type_mutation.rs:138](../core/crates/ark-core/src/db/command/commands/type_mutation.rs:138) |
+| `DbCommand` | `DeleteObjectLinkCommand` | [core/crates/ark-core/src/db/command/commands/type_mutation.rs:173](../core/crates/ark-core/src/db/command/commands/type_mutation.rs:173) |
+| `DbCommand` | `ReplaceObjectLinkCommand` | [core/crates/ark-core/src/db/command/commands/type_mutation.rs:211](../core/crates/ark-core/src/db/command/commands/type_mutation.rs:211) |
 | `DbCommand` | `LocalUsageWriteCommand` | [core/crates/ark-core/src/db/command/commands/usage.rs:21](../core/crates/ark-core/src/db/command/commands/usage.rs:21) |
 | `DbCommand` | `OperationReceiptCommand` | [core/crates/ark-core/src/db/command/operation_receipt.rs:40](../core/crates/ark-core/src/db/command/operation_receipt.rs:40) |
 | `DbMaintenanceCommand` | `RestoreSnapshotCommand` | [core/crates/ark-core/src/db/command/commands/system_mutation.rs:145](../core/crates/ark-core/src/db/command/commands/system_mutation.rs:145) |
@@ -95,10 +95,10 @@ Generated from the current Core source. The scanner found 70 typed operations an
 | inline_test | SQLite operation | 2 |
 | inline_test | SQLite type or import | 4 |
 | production | rusqlite dependency | 1 |
-| production | SQL literal | 218 |
+| production | SQL literal | 216 |
 | production | SQLite lifecycle | 12 |
-| production | SQLite operation | 208 |
-| production | SQLite type or import | 191 |
+| production | SQLite operation | 206 |
+| production | SQLite type or import | 188 |
 | test_file | SQL literal | 275 |
 | test_file | SQLite lifecycle | 76 |
 | test_file | SQLite operation | 236 |
