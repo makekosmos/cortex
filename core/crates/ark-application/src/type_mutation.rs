@@ -22,6 +22,16 @@ pub trait TypeMutationSession {
     fn register_type(&self, registration: &TypeRegistration) -> Result<Vec<ReplayNotice>, String>;
     fn upsert_object_type(&self, object_type: &ObjectType) -> Result<Vec<ReplayNotice>, String>;
     fn delete_object_type(&self, id: &str) -> Result<(), String>;
+    fn record_local_revision(
+        &self,
+        kind: TypeEntityKind,
+        id: &str,
+        device_id: Option<&str>,
+        deleted: bool,
+    ) -> Result<String, String>;
+}
+
+pub trait ObjectLinkMutationSession {
     fn upsert_object_link(&self, object_link: &ObjectLink) -> Result<(), String>;
     fn delete_object_link(&self, id: &str) -> Result<(), String>;
     fn other_object_link_ids(
@@ -32,7 +42,6 @@ pub trait TypeMutationSession {
     ) -> Result<Vec<String>, String>;
     fn record_local_revision(
         &self,
-        kind: TypeEntityKind,
         id: &str,
         device_id: Option<&str>,
         deleted: bool,
@@ -107,17 +116,12 @@ pub fn delete_object_type(
 }
 
 pub fn upsert_object_link(
-    session: &dyn TypeMutationSession,
+    session: &dyn ObjectLinkMutationSession,
     object_link: ObjectLink,
     device_id: Option<&str>,
 ) -> Result<TypeMutationCommit, String> {
     session.upsert_object_link(&object_link)?;
-    let hlc = session.record_local_revision(
-        TypeEntityKind::ObjectLink,
-        &object_link.id,
-        device_id,
-        false,
-    )?;
+    let hlc = session.record_local_revision(&object_link.id, device_id, false)?;
     let entity = sync_entity(
         TypeEntityKind::ObjectLink,
         &object_link.id,
@@ -132,12 +136,12 @@ pub fn upsert_object_link(
 }
 
 pub fn delete_object_link(
-    session: &dyn TypeMutationSession,
+    session: &dyn ObjectLinkMutationSession,
     id: String,
     device_id: Option<&str>,
 ) -> Result<TypeMutationCommit, String> {
     session.delete_object_link(&id)?;
-    let hlc = session.record_local_revision(TypeEntityKind::ObjectLink, &id, device_id, true)?;
+    let hlc = session.record_local_revision(&id, device_id, true)?;
     Ok(TypeMutationCommit {
         entities: vec![sync_entity(
             TypeEntityKind::ObjectLink,
@@ -151,7 +155,7 @@ pub fn delete_object_link(
 }
 
 pub fn replace_object_link(
-    session: &dyn TypeMutationSession,
+    session: &dyn ObjectLinkMutationSession,
     object_link: ObjectLink,
     device_id: Option<&str>,
 ) -> Result<ReplaceObjectLinkCommit, String> {
@@ -162,8 +166,7 @@ pub fn replace_object_link(
         &object_link.id,
     )? {
         session.delete_object_link(&id)?;
-        let hlc =
-            session.record_local_revision(TypeEntityKind::ObjectLink, &id, device_id, true)?;
+        let hlc = session.record_local_revision(&id, device_id, true)?;
         entities.push(sync_entity(
             TypeEntityKind::ObjectLink,
             &id,
@@ -173,12 +176,7 @@ pub fn replace_object_link(
         ));
     }
     session.upsert_object_link(&object_link)?;
-    let hlc = session.record_local_revision(
-        TypeEntityKind::ObjectLink,
-        &object_link.id,
-        device_id,
-        false,
-    )?;
+    let hlc = session.record_local_revision(&object_link.id, device_id, false)?;
     entities.push(sync_entity(
         TypeEntityKind::ObjectLink,
         &object_link.id,

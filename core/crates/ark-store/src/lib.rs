@@ -4,6 +4,7 @@ pub mod data_volume;
 pub mod device_registry;
 pub mod integration_replication;
 pub mod legacy_entities;
+pub mod object_link_mutation;
 pub mod object_types;
 pub mod object_write_receipts;
 pub mod objects;

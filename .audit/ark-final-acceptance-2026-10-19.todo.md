@@ -28,6 +28,7 @@
 - [x] Compare two read-only architecture candidates and an independent cross-judge against the accepted Core scheduler and Store transaction ownership decisions. Candidate B is the base; Candidate A's Application-owned scheduler conflicts with the accepted boundary.
 - [x] Record the selected target, compatibility contract, verification predicate, and cutover order in `.audit/ark-storage-cutover.design.md`.
 - [x] Generate a source-aware inventory of 45 write commands, 24 read queries, one maintenance command, and SQLite references by source scope. The artifact is `.audit/ark-core-storage-census-2026-10-19.md`.
+- [x] Move object-link mutation storage and revision/tombstone recording into the Store-owned adapter; split its application port from type-registry mutation. The Core command still passes the current transaction, so this is an extraction increment rather than completion of the opaque transaction boundary.
 - [ ] Map each typed operation to its application policy, Store capability, nested savepoints, and post-commit effects before freezing the Store API. The command inventory and actor transaction/bootstrap contracts are recorded in the census and `.audit/ark-storage-cutover.design.md`.
 - [x] Add and verify the Core SQLite ownership gate against the current violating source and a clean fixture. Its fixtures pass 4/4; the source-aware scan reports 630 production findings, 635 test-file findings, 11 inline-test findings, and 2 debug-only findings.
 - [ ] Re-estimate the remaining implementation effort from the completed census.
@@ -39,6 +40,7 @@
 - `cargo nextest run -p ark-sync`: 102/102 passed after confirming the current direct-client loop and protocol progress live in ArkSync.
 - `cargo nextest run -p ark-core production_actor --test-threads 1`: 21/21 passed, including SQLite FULL, commit failure, restore failure, recovery-required, panic, reopen, and bounded shutdown.
 - `cargo nextest run -p ark-core stale_restore --test-threads 1`: 2/2 passed with two existing Iroh peers, including preservation of pending local data and origin sequence followed by resync.
+- Object-link mutation now uses `ark_store::SqliteObjectLinkMutationSession`; four `replace_object_link` service tests passed, and Clippy for Application, Store, and Core passed. Those tests exposed and verified the removal of a duplicate object revision write that made each local object upsert report `stale_revision` after the Store revision writer had already persisted it.
 - Commit `3920db87` documents the configured SQLite durability and the limits of its evidence in `docs/ark-core.md`.
 - Commit `7680d34f` moved pending-object and type-version schema migration into `ark-store`, removed the Core migration facade, and retained the enclosing initialization savepoint. Store migration/schema tests (31/31), Core init migration test (1/1), type-registry tests (14/14), and `clippy -p ark-store -p ark-core --all-targets -D warnings` passed.
 - Storage extraction remains incomplete: `ark-core` still uses rusqlite in object backends, sync/task merge, usage, replication policy, and canonical-type migration paths; the facade/dependency checklist remains open.

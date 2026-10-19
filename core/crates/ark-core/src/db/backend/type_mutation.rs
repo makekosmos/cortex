@@ -2,7 +2,7 @@ use crate::application::type_mutation::{TypeEntityKind, TypeMutationSession};
 use crate::canonical_types::pending::ReplayNotice;
 use crate::db;
 use crate::type_registry::TypeRegistration;
-use crate::types::{ObjectLink, ObjectType};
+use crate::types::ObjectType;
 use rusqlite::Transaction;
 
 pub(crate) struct SqliteTypeMutationSession<'tx, 'connection> {
@@ -26,23 +26,6 @@ impl TypeMutationSession for SqliteTypeMutationSession<'_, '_> {
 
     fn delete_object_type(&self, id: &str) -> Result<(), String> {
         db::delete_object_type(self.transaction, id)
-    }
-
-    fn upsert_object_link(&self, object_link: &ObjectLink) -> Result<(), String> {
-        db::upsert_object_link(self.transaction, object_link)
-    }
-
-    fn delete_object_link(&self, id: &str) -> Result<(), String> {
-        db::delete_object_link(self.transaction, id)
-    }
-
-    fn other_object_link_ids(
-        &self,
-        source_object_id: &str,
-        link_type: &str,
-        except_id: &str,
-    ) -> Result<Vec<String>, String> {
-        db::list_other_object_link_ids(self.transaction, source_object_id, link_type, except_id)
     }
 
     fn record_local_revision(

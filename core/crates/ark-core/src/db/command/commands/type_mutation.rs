@@ -7,6 +7,7 @@ use crate::canonical_types::pending::ReplayNotice;
 use crate::db::SqliteTypeMutationSession;
 use crate::type_registry::TypeRegistration;
 use crate::types::{ObjectLink, ObjectType};
+use ark_store::object_link_mutation::SqliteObjectLinkMutationSession;
 use rusqlite::Transaction;
 use serde::Serialize;
 
@@ -149,7 +150,7 @@ impl DbCommand for UpsertObjectLinkCommand {
         transaction: &Transaction<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_engine()?;
-        let session = SqliteTypeMutationSession::new(transaction);
+        let session = SqliteObjectLinkMutationSession::new(transaction);
         upsert_object_link(&session, self.object_link, self.device_id.as_deref())
             .map_err(DbError::from_application_error)
     }
@@ -184,7 +185,7 @@ impl DbCommand for DeleteObjectLinkCommand {
         transaction: &Transaction<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_engine()?;
-        let session = SqliteTypeMutationSession::new(transaction);
+        let session = SqliteObjectLinkMutationSession::new(transaction);
         delete_object_link(&session, self.id, self.device_id.as_deref())
             .map_err(DbError::from_application_error)
     }
@@ -222,7 +223,7 @@ impl DbCommand for ReplaceObjectLinkCommand {
         transaction: &Transaction<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_engine()?;
-        let session = SqliteTypeMutationSession::new(transaction);
+        let session = SqliteObjectLinkMutationSession::new(transaction);
         replace_object_link(&session, self.object_link, self.device_id.as_deref())
             .map_err(DbError::from_application_error)
     }

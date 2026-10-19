@@ -71,7 +71,6 @@ pub use legacy::{
     batch_upsert_todos, delete_project, delete_todo, upsert_project, upsert_tag, upsert_todo,
 };
 pub use load::{clear_all, delete_trashed, load_all};
-pub(in crate::db) use objects::list_other_object_link_ids;
 pub use objects::{
     delete_object, delete_object_link, delete_object_type, get_object, get_object_type,
     get_objects_by_ids, is_object_definition_known, is_object_type_known, list_object_links,

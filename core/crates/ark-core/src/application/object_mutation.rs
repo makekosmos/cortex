@@ -160,9 +160,6 @@ pub fn apply_object_upsert(
     let object = session.prepare_object(write.object)?;
     session.persist_object(&object)?;
     let hlc = session.record_upsert(ObjectRevisionKind::Object, &object.id, &write.device_id)?;
-    if session.write_object_sync_version(&object.id, &hlc, false)? != 1 {
-        return Err("object_conflict:stale_revision".into());
-    }
     let entity = object_sync_entity(&object.id, &object, hlc, None);
     Ok(ObjectUpsertCommit {
         entity,
