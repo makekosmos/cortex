@@ -1,9 +1,148 @@
-use rusqlite::{params_from_iter, Connection, OptionalExtension};
+use ark_domain::hlc::HLC;
+use ark_domain::types::{SyncEntity, VersionVector};
+use rusqlite::{params, params_from_iter, Connection, OptionalExtension};
 use std::collections::HashMap;
 
-use ark_domain::types::VersionVector;
-
 use crate::VERSION_VECTOR_KEY;
+
+pub fn record_usage_sequence(
+    conn: &Connection,
+    entity_type: &str,
+    entity_id: &str,
+    device_id: &str,
+    seq: u64,
+    hlc: &str,
+    deleted: bool,
+) -> Result<(), String> {
+    conn.execute(
+        "INSERT OR IGNORE INTO usage_sync_log
+            (device_id, seq, entity_type, entity_id, hlc, deleted)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![
+            device_id,
+            seq as i64,
+            entity_type,
+            entity_id,
+            hlc,
+            deleted as i64
+        ],
+    )
+    .map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT INTO usage_sync_heads(device_id, max_seq) VALUES (?1, ?2)
+         ON CONFLICT(device_id) DO UPDATE SET max_seq = MAX(max_seq, excluded.max_seq)",
+        params![device_id, seq as i64],
+    )
+    .map_err(|e| e.to_string())?;
+
+    let raw = crate::sync_kv::get_sync_kv(conn, VERSION_VECTOR_KEY)?;
+    let mut vector: VersionVector = raw
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .and_then(|value| serde_json::from_str(value).ok())
+        .unwrap_or_default();
+    let cursor_key = format!("@usage:{device_id}");
+    let mut contiguous = vector
+        .get(&cursor_key)
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(0);
+    while conn
+        .query_row(
+            "SELECT EXISTS(
+                SELECT 1 FROM usage_sync_log WHERE device_id = ?1 AND seq = ?2
+             )",
+            params![device_id, contiguous.saturating_add(1) as i64],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(|e| e.to_string())?
+        != 0
+    {
+        contiguous = contiguous.saturating_add(1);
+    }
+    vector.insert(cursor_key, contiguous.to_string());
+    vector.remove(entity_id);
+    crate::committed_feed::append_committed_change(
+        conn,
+        entity_type,
+        entity_id,
+        hlc,
+        deleted,
+        Some(device_id),
+        Some(seq),
+    )?;
+    crate::sync_kv::set_sync_kv(
+        conn,
+        VERSION_VECTOR_KEY,
+        &serde_json::to_string(&vector).map_err(|e| e.to_string())?,
+    )
+}
+
+pub fn usage_origin_for_entity(
+    conn: &Connection,
+    entity: &SyncEntity,
+) -> Result<(String, u64), String> {
+    if let (Some(device_id), Some(seq)) = (&entity.origin_device_id, entity.origin_seq) {
+        return Ok((device_id.clone(), seq));
+    }
+    if let Some(existing) = conn
+        .query_row(
+            "SELECT device_id, seq FROM usage_sync_log
+             WHERE entity_type = ?1 AND entity_id = ?2 AND hlc = ?3
+             LIMIT 1",
+            params![entity.entity_type, entity.id, entity.hlc],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?
+    {
+        return Ok((existing.0, existing.1.max(0) as u64));
+    }
+    let parsed = HLC::from_string(&entity.hlc);
+    let source_device_id = if parsed.device_id.is_empty() {
+        "legacy-usage".to_string()
+    } else {
+        parsed.device_id
+    };
+    let device_id = format!("legacy:{source_device_id}");
+    let seq = next_usage_sequence(conn, &device_id)?;
+    Ok((device_id, seq))
+}
+
+pub fn usage_entity_is_newer(conn: &Connection, entity: &SyncEntity) -> Result<bool, String> {
+    let local = conn
+        .query_row(
+            "SELECT hlc FROM usage_sync_versions
+             WHERE entity_type = ?1 AND entity_id = ?2",
+            params![entity.entity_type, entity.id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    Ok(local
+        .as_deref()
+        .is_none_or(|hlc| HLC::is_newer(&entity.hlc, hlc)))
+}
+
+pub fn finish_usage_entity_sync(conn: &Connection, entity: &SyncEntity) -> Result<(), String> {
+    conn.execute(
+        "INSERT INTO usage_sync_versions(entity_type, entity_id, hlc)
+         VALUES (?1, ?2, ?3)
+         ON CONFLICT(entity_type, entity_id) DO UPDATE SET hlc = excluded.hlc
+         WHERE excluded.hlc > usage_sync_versions.hlc",
+        params![entity.entity_type, entity.id, entity.hlc],
+    )
+    .map_err(|e| e.to_string())?;
+    let (device_id, seq) = usage_origin_for_entity(conn, entity)?;
+    record_usage_sequence(
+        conn,
+        &entity.entity_type,
+        &entity.id,
+        &device_id,
+        seq,
+        &entity.hlc,
+        entity.deleted == Some(true),
+    )
+}
 
 // ---------------------------------------------------------------------------
 // usage_sync_log compaction (KOS-302)
@@ -174,6 +313,19 @@ pub fn usage_log_complete_through(
         through.insert(device_id, claim);
     }
     Ok(through)
+}
+
+pub fn next_usage_sequence(connection: &Connection, device_id: &str) -> Result<u64, String> {
+    connection
+        .query_row(
+            "INSERT INTO usage_sync_heads(device_id, max_seq) VALUES (?1, 1)
+             ON CONFLICT(device_id) DO UPDATE SET max_seq = max_seq + 1
+             RETURNING max_seq",
+            params![device_id],
+            |row| row.get::<_, i64>(0),
+        )
+        .map(|value| value.max(0) as u64)
+        .map_err(|error| error.to_string())
 }
 
 #[cfg(test)]

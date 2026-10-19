@@ -110,14 +110,99 @@ fn ensure_usage_sequence_migrated_inner(conn: &Connection, device_id: &str) -> R
     ark_store::sync_kv::set_sync_kv(conn, USAGE_SEQUENCE_MIGRATION_KEY, "1")
 }
 
-fn next_usage_sequence(conn: &Connection, device_id: &str) -> Result<u64, String> {
-    conn.query_row(
-        "INSERT INTO usage_sync_heads(device_id, max_seq) VALUES (?1, 1)
-         ON CONFLICT(device_id) DO UPDATE SET max_seq = max_seq + 1
-         RETURNING max_seq",
-        params![device_id],
-        |row| row.get::<_, i64>(0),
-    )
-    .map(|value| value.max(0) as u64)
-    .map_err(|e| e.to_string())
+pub fn bump_sync_version_vector(
+    conn: &Connection,
+    entity_type: &str,
+    entity_id: &str,
+    device_id: &str,
+    deleted: bool,
+) -> Result<String, String> {
+    if is_sequenced_usage_entity(entity_type) {
+        ensure_usage_sequence_migrated(conn, device_id)?;
+        let seq = ark_store::usage_sync_log::next_usage_sequence(conn, device_id)?;
+        let hlc = HLC::new(
+            Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string(),
+            seq,
+            device_id.to_string(),
+        )
+        .to_string();
+        conn.execute(
+            "INSERT INTO usage_sync_versions(entity_type, entity_id, hlc)
+             VALUES (?1, ?2, ?3)
+             ON CONFLICT(entity_type, entity_id) DO UPDATE SET hlc = excluded.hlc",
+            params![entity_type, entity_id, hlc],
+        )
+        .map_err(|e| e.to_string())?;
+        ark_store::usage_sync_log::record_usage_sequence(
+            conn,
+            entity_type,
+            entity_id,
+            device_id,
+            seq,
+            &hlc,
+            deleted,
+        )?;
+        ark_store::committed_feed::append_committed_change(
+            conn,
+            entity_type,
+            entity_id,
+            &hlc,
+            deleted,
+            Some(device_id),
+            Some(seq),
+        )?;
+        return Ok(hlc);
+    }
+
+    let raw = ark_store::sync_kv::get_sync_kv(conn, VERSION_VECTOR_KEY)?;
+    let mut vector: VersionVector = raw
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| serde_json::from_str(value).map_err(|e| e.to_string()))
+        .transpose()?
+        .unwrap_or_default();
+
+    let mut previous = vector.get(entity_id).cloned();
+    if entity_type == "object" {
+        if let Some(candidate) = ark_store::sync_versions::object_revision(conn, entity_id)? {
+            previous = Some(candidate);
+        }
+    }
+
+    let now = HLC::now(device_id);
+    let next = match previous {
+        Some(existing) => {
+            let previous = HLC::from_string(&existing);
+            if HLC::compare(&now, &previous).is_gt() {
+                now
+            } else {
+                if previous.counter == u64::MAX {
+                    return Err("hlc_counter_overflow".to_string());
+                }
+                HLC::new(
+                    previous.wall_time,
+                    previous.counter + 1,
+                    device_id.to_string(),
+                )
+            }
+        }
+        None => now,
+    };
+    let hlc = next.to_string();
+    vector.insert(entity_id.to_string(), hlc.clone());
+    ark_store::sync_kv::set_sync_kv(
+        conn,
+        VERSION_VECTOR_KEY,
+        &serde_json::to_string(&vector).map_err(|e| e.to_string())?,
+    )?;
+    ark_store::committed_feed::append_committed_change(
+        conn,
+        entity_type,
+        entity_id,
+        &hlc,
+        deleted,
+        Some(device_id),
+        None,
+    )?;
+    Ok(hlc)
 }

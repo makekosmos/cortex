@@ -187,7 +187,7 @@
     fn usage_sequence_cursor_waits_for_missing_entries() {
         let conn = setup_db();
 
-        record_usage_sequence(
+        ark_store::usage_sync_log::record_usage_sequence(
             &conn,
             "usage_day",
             "day-2",
@@ -205,7 +205,7 @@
         .unwrap();
         assert_eq!(vector.get("@usage:peer-device"), Some(&"0".to_string()));
 
-        record_usage_sequence(
+        ark_store::usage_sync_log::record_usage_sequence(
             &conn,
             "usage_day",
             "day-1",

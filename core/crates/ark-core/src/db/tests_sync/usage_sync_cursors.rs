@@ -113,8 +113,16 @@
             (5, "s-2"),
             (6, "s-3"),
         ] {
-            record_usage_sequence(&conn, "usage_session", id, "dev-a", seq, &hlc(seq), false)
-                .unwrap();
+            ark_store::usage_sync_log::record_usage_sequence(
+                &conn,
+                "usage_session",
+                id,
+                "dev-a",
+                seq,
+                &hlc(seq),
+                false,
+            )
+            .unwrap();
         }
         let deleted =
             compact_usage_sync_log(&conn, Some("dev-a"), "2026-09-01T00:00:00.000Z", 1_000)
@@ -182,7 +190,7 @@
         ark_store::usage::upsert_usage_session(&conn2, &make_usage_session("s-1", "app-1"))
             .unwrap();
         for seq in 1..=3 {
-            record_usage_sequence(
+            ark_store::usage_sync_log::record_usage_sequence(
                 &conn2,
                 "usage_session",
                 "s-1",
@@ -282,7 +290,7 @@
         // B's own device churn: two refs for s-b1, the older one compacts.
         ark_store::usage::upsert_usage_session(&relay_b, &make_usage_session("s-b1", "app-1"))
             .unwrap();
-        record_usage_sequence(
+        ark_store::usage_sync_log::record_usage_sequence(
             &relay_b,
             "usage_session",
             "s-b1",
@@ -292,7 +300,7 @@
             false,
         )
         .unwrap();
-        record_usage_sequence(
+        ark_store::usage_sync_log::record_usage_sequence(
             &relay_b,
             "usage_session",
             "s-b1",
@@ -349,8 +357,16 @@
         ark_store::usage::upsert_usage_session(&conn, &make_usage_session("s-1", "app-1")).unwrap();
         let hlc = |seq: u64| format!("2026-08-01T00:00:{seq:02}.000Z:{seq:06}:dev");
         for seq in 1..=3 {
-            record_usage_sequence(&conn, "usage_session", "s-1", "dev", seq, &hlc(seq), false)
-                .unwrap();
+            ark_store::usage_sync_log::record_usage_sequence(
+                &conn,
+                "usage_session",
+                "s-1",
+                "dev",
+                seq,
+                &hlc(seq),
+                false,
+            )
+            .unwrap();
         }
         // Freeze the own cursor: the vector forgets it, the head stays 3.
         let mut vector = stored_vector(&conn);
@@ -374,8 +390,16 @@
         ark_store::usage::upsert_usage_session(&conn, &make_usage_session("s-1", "app-1")).unwrap();
         let hlc = |seq: u64| format!("2026-08-01T00:00:{seq:02}.000Z:{seq:06}:dev");
         for seq in 1..=3 {
-            record_usage_sequence(&conn, "usage_session", "s-1", "dev", seq, &hlc(seq), false)
-                .unwrap();
+            ark_store::usage_sync_log::record_usage_sequence(
+                &conn,
+                "usage_session",
+                "s-1",
+                "dev",
+                seq,
+                &hlc(seq),
+                false,
+            )
+            .unwrap();
         }
         let mut vector = stored_vector(&conn);
         vector.remove("@usage:dev");
@@ -421,7 +445,7 @@
                     &make_usage_session("s-4", "app-1"),
                 )
                 .unwrap();
-                record_usage_sequence(
+                ark_store::usage_sync_log::record_usage_sequence(
                     &server,
                     "usage_session",
                     "s-4",

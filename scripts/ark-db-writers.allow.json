@@ -129,7 +129,7 @@
     {
       "path": "core/crates/ark-store/src/usage_sync_log.rs",
       "category": "SQLite mutation API",
-      "count": 1
+      "count": 4
     },
     {
       "path": "core/crates/ark-store/src/sync_kv.rs",
@@ -184,12 +184,7 @@
     {
       "path": "core/crates/ark-core/src/db/sync/tombstones_and_usage_sequence.rs",
       "category": "SQLite mutation API",
-      "count": 4
-    },
-    {
-      "path": "core/crates/ark-core/src/db/sync/usage_progress_and_revisions.rs",
-      "category": "SQLite mutation API",
-      "count": 4
+      "count": 5
     },
     {
       "path": "core/crates/ark-core/src/integration_replication/api.rs",

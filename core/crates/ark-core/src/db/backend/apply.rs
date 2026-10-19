@@ -6,9 +6,8 @@ use serde_json::{json, Value};
 use super::SqliteStorageBackend;
 use crate::db::{
     delete_object, delete_object_link, delete_object_type, delete_project, delete_todo,
-    finish_usage_entity_sync, insert_pending_object, is_object_definition_known,
-    is_sequenced_usage_entity, record_usage_sequence, upsert_object_link, upsert_object_type,
-    usage_entity_is_newer, usage_origin_for_entity,
+    insert_pending_object, is_object_definition_known, is_sequenced_usage_entity,
+    upsert_object_link, upsert_object_type,
 };
 use crate::types::{
     ArkObject, ObjectLink, ObjectType, SyncEntity, TrackedApp, UsageDay, UsageEvent, UsageSession,
@@ -123,9 +122,10 @@ impl SqliteStorageBackend {
         String,
     > {
         let sequenced_usage = is_sequenced_usage_entity(&entity.entity_type);
-        if sequenced_usage && !usage_entity_is_newer(conn, entity)? {
-            let (device_id, seq) = usage_origin_for_entity(conn, entity)?;
-            record_usage_sequence(
+        if sequenced_usage && !ark_store::usage_sync_log::usage_entity_is_newer(conn, entity)? {
+            let (device_id, seq) =
+                ark_store::usage_sync_log::usage_origin_for_entity(conn, entity)?;
+            ark_store::usage_sync_log::record_usage_sequence(
                 conn,
                 &entity.entity_type,
                 &entity.id,
@@ -178,7 +178,7 @@ impl SqliteStorageBackend {
             }?;
             ark_store::sync_tombstones::upsert(conn, entity)?;
             if sequenced_usage {
-                finish_usage_entity_sync(conn, entity)?;
+                ark_store::usage_sync_log::finish_usage_entity_sync(conn, entity)?;
             }
             return Ok((
                 ark_application::sync_storage::InboundApplyOutcome::Applied,
@@ -258,7 +258,7 @@ impl SqliteStorageBackend {
         result?;
         ark_store::sync_tombstones::delete(conn, &entity.id)?;
         if sequenced_usage {
-            finish_usage_entity_sync(conn, entity)?;
+            ark_store::usage_sync_log::finish_usage_entity_sync(conn, entity)?;
         }
         Ok((outcome, replay_notices))
     }

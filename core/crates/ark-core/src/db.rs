@@ -91,9 +91,6 @@ pub use open::{
 };
 pub use open::{count_pending_for_type, insert_pending_object};
 pub use sync::{bump_sync_version_vector, ensure_usage_sequence_migrated};
-pub(in crate::db) use sync::{
-    finish_usage_entity_sync, record_usage_sequence, usage_entity_is_newer, usage_origin_for_entity,
-};
 pub use usage::{
     canonical_app_key, get_usage_title_total, is_system_path, list_recent_usage_processes,
     load_usage_analytics, load_usage_game_playtime_summary, search_usage_processes,

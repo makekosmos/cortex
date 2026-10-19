@@ -41,17 +41,71 @@
             |day: u8, counter: u64| format!("2026-08-{day:02}T12:00:00.000Z:{counter:06}:tracker");
         // Three writes to the same session — the first two refs are
         // superseded by the third.
-        record_usage_sequence(&conn, "usage_session", "s-1", "dev", 1, &old(1, 1), false).unwrap();
-        record_usage_sequence(&conn, "usage_session", "s-1", "dev", 2, &old(2, 2), false).unwrap();
-        record_usage_sequence(&conn, "usage_session", "s-1", "dev", 3, &old(3, 3), false).unwrap();
+        ark_store::usage_sync_log::record_usage_sequence(
+            &conn,
+            "usage_session",
+            "s-1",
+            "dev",
+            1,
+            &old(1, 1),
+            false,
+        )
+        .unwrap();
+        ark_store::usage_sync_log::record_usage_sequence(
+            &conn,
+            "usage_session",
+            "s-1",
+            "dev",
+            2,
+            &old(2, 2),
+            false,
+        )
+        .unwrap();
+        ark_store::usage_sync_log::record_usage_sequence(
+            &conn,
+            "usage_session",
+            "s-1",
+            "dev",
+            3,
+            &old(3, 3),
+            false,
+        )
+        .unwrap();
         // Single ref — unsynced for any peer that never pulled: must stay.
-        record_usage_sequence(&conn, "usage_day", "d-1", "dev", 4, &old(4, 4), false).unwrap();
+        ark_store::usage_sync_log::record_usage_sequence(
+            &conn,
+            "usage_day",
+            "d-1",
+            "dev",
+            4,
+            &old(4, 4),
+            false,
+        )
+        .unwrap();
         // Superseded, but the newer ref is itself old enough → s-2 drops to
         // its newest ref.
-        record_usage_sequence(&conn, "usage_session", "s-2", "dev", 5, &old(5, 5), false).unwrap();
-        record_usage_sequence(&conn, "usage_session", "s-2", "dev", 6, &old(6, 6), false).unwrap();
+        ark_store::usage_sync_log::record_usage_sequence(
+            &conn,
+            "usage_session",
+            "s-2",
+            "dev",
+            5,
+            &old(5, 5),
+            false,
+        )
+        .unwrap();
+        ark_store::usage_sync_log::record_usage_sequence(
+            &conn,
+            "usage_session",
+            "s-2",
+            "dev",
+            6,
+            &old(6, 6),
+            false,
+        )
+        .unwrap();
         // Superseded but too fresh — inside the retention horizon.
-        record_usage_sequence(
+        ark_store::usage_sync_log::record_usage_sequence(
             &conn,
             "usage_session",
             "s-3",
@@ -61,7 +115,7 @@
             false,
         )
         .unwrap();
-        record_usage_sequence(
+        ark_store::usage_sync_log::record_usage_sequence(
             &conn,
             "usage_session",
             "s-3",
@@ -73,7 +127,16 @@
         .unwrap();
         // Tombstone ref for a deleted entity: never superseded, must stay so
         // peers learn the deletion.
-        record_usage_sequence(&conn, "usage_session", "s-del", "dev", 9, &old(9, 9), true).unwrap();
+        ark_store::usage_sync_log::record_usage_sequence(
+            &conn,
+            "usage_session",
+            "s-del",
+            "dev",
+            9,
+            &old(9, 9),
+            true,
+        )
+        .unwrap();
 
         let deleted =
             compact_usage_sync_log(&conn, Some("dev"), "2026-09-01T00:00:00.000Z", 1_000).unwrap();
@@ -131,7 +194,7 @@
         let conn = setup_db();
         for index in 0..5 {
             let seq = index + 1;
-            record_usage_sequence(
+            ark_store::usage_sync_log::record_usage_sequence(
                 &conn,
                 "usage_session",
                 "s-batch",
@@ -250,7 +313,7 @@
         for (kind, id) in &entity_ids {
             for round in 0..3 {
                 seq += 1;
-                record_usage_sequence(
+                ark_store::usage_sync_log::record_usage_sequence(
                     &conn,
                     kind,
                     id,

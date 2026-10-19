@@ -1,5 +1,5 @@
 use chrono::Utc;
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection};
 
 use crate::hlc::HLC;
 use crate::types::*;
@@ -9,4 +9,3 @@ use super::open::{
 };
 
 include!("sync/tombstones_and_usage_sequence.rs");
-include!("sync/usage_progress_and_revisions.rs");
