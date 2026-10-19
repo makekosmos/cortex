@@ -58,7 +58,7 @@ async fn apply(
     let Some(pending) = pending else {
         return Ok(());
     };
-    if !ark_sync::outbound_snapshot::acknowledge_snapshot(
+    if !crate::outbound_snapshot::acknowledge_snapshot(
         storage.as_ref(),
         peer_device_id,
         &pending,
@@ -82,11 +82,11 @@ async fn apply(
     let receipt_ack = session
         .protocol
         .capabilities
-        .contains(&ark_sync::protocol::ProtocolCapability::DurableReceiptAckV1);
+        .contains(&crate::protocol::ProtocolCapability::DurableReceiptAckV1);
     let policy_bound = session
         .protocol
         .capabilities
-        .contains(&ark_sync::protocol::ProtocolCapability::PolicyBoundDeliveryV1);
+        .contains(&crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1);
     drop(session_guard);
     super::pump_client_committed_feed(
         storage,

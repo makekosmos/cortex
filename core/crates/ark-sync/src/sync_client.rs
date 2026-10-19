@@ -1,32 +1,36 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-#[cfg(test)]
-use tokio::sync::mpsc;
 use tokio::sync::{Mutex, RwLock};
 
-use crate::hlc::HLC;
-use crate::integration_replication::SignedSyncEnvelope;
-use crate::replication_storage::SyncRuntimeStorage;
+use crate::client_session::DirectClientConnector;
+use crate::protocol::*;
 use crate::task_set::{abort_and_join, join_all, track_task};
-use ark_sync::protocol::*;
-use ark_sync::{client_session::DirectClientConnector, session_io::SessionIoSender};
+use ark_application::sync_storage::SyncRuntimeStorage;
+use ark_domain::hlc::HLC;
+use ark_domain::integration_replication::SignedSyncEnvelope;
+
+#[path = "sync_client/config.rs"]
+mod config;
+#[path = "sync_client/message_sender.rs"]
+mod message_sender;
+pub use config::DirectClientConfig;
+use config::{load_version_vector, send_msg};
+#[doc(hidden)]
+pub use message_sender::{ClientFeedInFlight, ClientMessageSender};
 
 #[path = "sync_client/committed_feed.rs"]
 mod committed_feed;
-pub(crate) use committed_feed::{acknowledge_client_feed, pump_client_committed_feed};
+#[doc(hidden)]
+pub use committed_feed::{acknowledge_client_feed, pump_client_committed_feed};
 
 #[path = "sync_client_start.rs"]
 mod sync_client_start;
-use crate::types::*;
+use ark_domain::types::*;
 
-const TAG: &str = "[SyncClient]";
+const TAG: &str = "[DirectClient]";
 const RECONNECT_BASE_MS: u64 = 2_000;
 const RECONNECT_MAX_MS: u64 = 30_000;
-
-// ---------------------------------------------------------------------------
-// Callbacks
-// ---------------------------------------------------------------------------
 
 pub type ClientOnChangeCallback = Arc<dyn Fn(SyncEntity) + Send + Sync>;
 pub type ClientOnConnectedCallback = Arc<dyn Fn(PeerRecord) + Send + Sync>;
@@ -35,155 +39,18 @@ pub type ClientOnPeerListCallback = Arc<dyn Fn(Vec<PeerRecord>) + Send + Sync>;
 pub type ClientOnRegistryEventsCallback =
     Arc<dyn Fn(Vec<ark_domain::device_registry::RegistryEvent>) + Send + Sync>;
 
-// Authenticated peer channel: (peer device_id, outbound sender) behind the
-// shared mutex so the connection-scoped negotiated session becomes visible
-// only after the complete handshake succeeds.
 #[derive(Clone)]
 pub(crate) struct AuthenticatedPeerSession {
     pub(crate) peer_id: String,
     pub(crate) registry_session_id: String,
     pub(crate) tx: ClientMessageSender,
     pub(crate) sync_started: bool,
-    pub(crate) outbound_snapshot: ark_sync::outbound_snapshot::OutboundSnapshotProgress,
-    pub(crate) protocol: ark_sync::protocol::NegotiatedProtocol,
+    pub(crate) outbound_snapshot: crate::outbound_snapshot::OutboundSnapshotProgress,
+    pub(crate) protocol: crate::protocol::NegotiatedProtocol,
 }
 
 type AuthenticatedTx = Arc<Mutex<Option<AuthenticatedPeerSession>>>;
-pub(crate) type ClientFeedInFlight =
-    Arc<Mutex<Option<(i64, Option<ark_application::sync_storage::PolicyIdentity>)>>>;
-
-#[derive(Clone)]
-pub(crate) struct ClientMessageSender {
-    transport: ClientMessageTransport,
-    authenticated_peer_id: Arc<RwLock<Option<String>>>,
-}
-
-#[derive(Clone)]
-enum ClientMessageTransport {
-    Session {
-        sender: SessionIoSender,
-        storage: Arc<dyn SyncRuntimeStorage>,
-        peer: Arc<RwLock<PeerRecord>>,
-        space_id: String,
-        device_id: String,
-    },
-    #[cfg(test)]
-    Test(mpsc::Sender<LanSyncMessage>),
-}
-
-impl ClientMessageSender {
-    pub(crate) fn new(
-        transport: SessionIoSender,
-        storage: Arc<dyn SyncRuntimeStorage>,
-        peer: Arc<RwLock<PeerRecord>>,
-        space_id: String,
-        device_id: String,
-    ) -> Self {
-        Self {
-            transport: ClientMessageTransport::Session {
-                sender: transport,
-                storage,
-                peer,
-                space_id,
-                device_id,
-            },
-            authenticated_peer_id: Arc::new(RwLock::new(None)),
-        }
-    }
-
-    pub(crate) async fn set_authenticated_peer_id(&self, peer_id: String) {
-        *self.authenticated_peer_id.write().await = Some(peer_id);
-    }
-
-    pub(crate) async fn send(&self, message: LanSyncMessage) -> Result<(), String> {
-        self.send_with_queue_mode(message, false).await
-    }
-
-    pub(crate) async fn send_snapshot_batch(&self, message: LanSyncMessage) -> Result<(), String> {
-        self.send_with_queue_mode(message, true).await
-    }
-
-    async fn send_with_queue_mode(
-        &self,
-        message: LanSyncMessage,
-        wait_for_bulk_capacity: bool,
-    ) -> Result<(), String> {
-        match &self.transport {
-            ClientMessageTransport::Session {
-                sender,
-                storage,
-                peer,
-                space_id,
-                device_id,
-            } => {
-                if ark_sync::protocol::requires_registry_admission(&message) {
-                    let authenticated_peer_id = self.authenticated_peer_id.read().await.clone();
-                    let peer_device_id = match authenticated_peer_id {
-                        Some(peer_device_id) => peer_device_id,
-                        None => peer.read().await.device_id.clone(),
-                    };
-                    if !matches!(
-                        storage.sync_session_is_admitted(&peer_device_id).await,
-                        Ok(true)
-                    ) {
-                        return Ok(());
-                    }
-                }
-                if let LanSyncMessage::SignedIntegrationFrame { frame } = &message {
-                    if storage
-                        .validate_outbound_signed_integration_frame(frame, space_id, device_id)
-                        .await
-                        .is_err()
-                    {
-                        return Ok(());
-                    }
-                }
-                let result = if wait_for_bulk_capacity {
-                    sender.send_bulk_wait(message).await
-                } else {
-                    sender.send(message).await
-                };
-                result.map_err(|error| match error {
-                    ark_sync::session_io::SessionIoError::OutboundFull => {
-                        "LAN peer outbound queue is full".to_owned()
-                    }
-                    _ => "LAN peer connection is closed".to_owned(),
-                })
-            }
-            #[cfg(test)]
-            ClientMessageTransport::Test(sender) => sender
-                .send(message)
-                .await
-                .map_err(|_| "test sync message receiver is closed".to_owned()),
-        }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_channel() -> (Self, mpsc::Receiver<LanSyncMessage>) {
-        let (sender, receiver) = mpsc::channel(64);
-        (
-            Self {
-                transport: ClientMessageTransport::Test(sender),
-                authenticated_peer_id: Arc::new(RwLock::new(None)),
-            },
-            receiver,
-        )
-    }
-
-    pub(crate) fn close(&self) {
-        match &self.transport {
-            ClientMessageTransport::Session { sender, .. } => sender.close(),
-            #[cfg(test)]
-            ClientMessageTransport::Test(_) => {}
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// SyncClient
-// ---------------------------------------------------------------------------
-
-pub struct SyncClient {
+pub struct DirectClient {
     storage: Arc<dyn SyncRuntimeStorage>,
     connector: Arc<dyn DirectClientConnector>,
     peer: Arc<RwLock<PeerRecord>>,
@@ -191,6 +58,8 @@ pub struct SyncClient {
     device_name: String,
     space_id: String,
     own_addresses: Vec<String>,
+    platform: Option<String>,
+    app_version: Option<String>,
     auth_secret: Option<String>,
     task_merge_bootstrap_v2: bool,
     stopped: Arc<std::sync::atomic::AtomicBool>,
@@ -205,31 +74,38 @@ pub struct SyncClient {
     /// `stop_and_join` aborts and joins it so none outlives teardown
     /// (KOS-270, KOS-369).
     tasks: Arc<std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>>,
-    /// Short callback tasks spawned on this client's behalf (see
-    /// `callback_registry`). `stop_and_join` waits for them.
     callbacks: Arc<std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>>,
 }
 
-impl SyncClient {
+impl DirectClient {
     pub fn new(
         storage: Arc<dyn SyncRuntimeStorage>,
-        peer: PeerRecord,
-        device_id: String,
-        device_name: String,
-        space_id: String,
-        own_addresses: Vec<String>,
-        auth_secret: Option<String>,
+        config: DirectClientConfig,
+        connector: Arc<dyn DirectClientConnector>,
     ) -> Self {
+        let DirectClientConfig {
+            peer,
+            device_id,
+            device_name,
+            space_id,
+            own_addresses,
+            auth_secret,
+            task_merge_bootstrap_v2,
+            platform,
+            app_version,
+        } = config;
         Self {
             storage,
-            connector: Arc::new(ark_net::websocket::DirectClientConnector),
+            connector,
             peer: Arc::new(RwLock::new(peer)),
             device_id,
             device_name,
             space_id,
             own_addresses,
+            platform,
+            app_version,
             auth_secret: normalize_auth_secret(auth_secret),
-            task_merge_bootstrap_v2: true,
+            task_merge_bootstrap_v2,
             stopped: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             authenticated_tx: Arc::new(Mutex::new(None)),
             feed_in_flight: Arc::new(Mutex::new(None)),
@@ -241,12 +117,6 @@ impl SyncClient {
             tasks: Arc::new(std::sync::Mutex::new(Vec::new())),
             callbacks: Arc::new(std::sync::Mutex::new(Vec::new())),
         }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn with_task_merge_bootstrap_v2(mut self) -> Self {
-        self.task_merge_bootstrap_v2 = true;
-        self
     }
 
     /// Wake the durable feed sender after a local commit. The entity itself is
@@ -262,11 +132,11 @@ impl SyncClient {
             let receipt_ack = session
                 .protocol
                 .capabilities
-                .contains(&ark_sync::protocol::ProtocolCapability::DurableReceiptAckV1);
+                .contains(&crate::protocol::ProtocolCapability::DurableReceiptAckV1);
             let policy_bound = session
                 .protocol
                 .capabilities
-                .contains(&ark_sync::protocol::ProtocolCapability::PolicyBoundDeliveryV1);
+                .contains(&crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1);
             drop(guard);
             if let Err(error) = pump_client_committed_feed(
                 &self.storage,
@@ -392,16 +262,12 @@ impl SyncClient {
     pub async fn stop_and_join(&self) {
         self.disconnect().await;
         abort_and_join(&self.tasks).await;
-        // Callback work is short and finite: wait for it instead of aborting,
-        // so a db write it has started is not left running past the join.
         join_all(&self.callbacks).await;
     }
 
-    /// The task list for callbacks that spawn work on this client's behalf.
-    pub(crate) fn callback_registry(
-        &self,
-    ) -> Arc<std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>> {
-        self.callbacks.clone()
+    #[doc(hidden)]
+    pub fn callback_task_registry(&self) -> ClientCallbackTaskRegistry {
+        ClientCallbackTaskRegistry(self.callbacks.clone())
     }
 
     /// Replace the current peer record (typically used when the beacon
@@ -420,16 +286,13 @@ impl SyncClient {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+#[derive(Clone)]
+#[doc(hidden)]
+pub struct ClientCallbackTaskRegistry(Arc<std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>>);
 
-async fn load_version_vector(
-    storage: &Arc<dyn SyncRuntimeStorage>,
-) -> Result<VersionVector, String> {
-    storage.load_version_vector().await
-}
-
-pub(crate) async fn send_msg(tx: &ClientMessageSender, msg: LanSyncMessage) -> Result<(), String> {
-    tx.send(msg).await
+impl ClientCallbackTaskRegistry {
+    #[doc(hidden)]
+    pub fn track(&self, task: tokio::task::JoinHandle<()>) {
+        track_task(&self.0, task);
+    }
 }

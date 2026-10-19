@@ -349,18 +349,11 @@ async fn authenticated_legacy_todo_update_is_durable_and_relayable() {
     );
 
     let source_storage: Arc<dyn crate::replication_storage::SyncRuntimeStorage> = source.clone();
-    let (tx, mut rx) = crate::sync_client::ClientMessageSender::test_channel();
-    let flight: crate::sync_client::ClientFeedInFlight = Arc::new(tokio::sync::Mutex::new(None));
-    crate::sync_client::pump_client_committed_feed(
-        &source_storage,
-        "relay-peer",
-        &tx,
-        &flight,
-        false,
-        false,
-    )
-    .await
-    .unwrap();
+    let (tx, mut rx) = ark_sync::ClientMessageSender::test_channel();
+    let flight: ark_sync::ClientFeedInFlight = Arc::new(tokio::sync::Mutex::new(None));
+    ark_sync::pump_client_committed_feed(&source_storage, "relay-peer", &tx, &flight, false, false)
+        .await
+        .unwrap();
     assert!(
         rx.try_recv().is_err(),
         "feed must wait for the initial snapshot ACK"
@@ -369,16 +362,9 @@ async fn authenticated_legacy_todo_update_is_durable_and_relayable() {
         .complete_outbound_snapshot("relay-peer", generation)
         .await
         .unwrap();
-    crate::sync_client::pump_client_committed_feed(
-        &source_storage,
-        "relay-peer",
-        &tx,
-        &flight,
-        false,
-        false,
-    )
-    .await
-    .unwrap();
+    ark_sync::pump_client_committed_feed(&source_storage, "relay-peer", &tx, &flight, false, false)
+        .await
+        .unwrap();
     let change_id = pop_feed_live_change_id(&mut rx);
     assert!(
         change_id

@@ -3,7 +3,7 @@
 // End-to-end sync integration test (AC20 / AC18 / AC19).
 //
 // Spins up two `SyncServer` instances in-process on loopback, dials one from
-// the other via `SyncClient`, and walks through a full protocol exchange:
+// the other via `DirectClient`, and walks through a full protocol exchange:
 // `hello` → `version_vector` → `sync_changes` + ACK → `live_change` +
 // `live_ack`. Also exercises the self-connect rejection path.
 //
@@ -14,8 +14,8 @@ use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
 
 use ark_core::db::{init_schema, SqliteStorageBackend};
+use ark_core::direct_client::{new_direct_client, DirectClient};
 use ark_core::replication_storage::PeerIdentityBackend;
-use ark_core::sync_client::SyncClient;
 use ark_core::sync_server::{SyncRuntimeStorage, SyncServer};
 use ark_core::types::{
     PeerRecord, SyncEntity, TrackedApp, UsageEvent, UsageSession, VersionVector,

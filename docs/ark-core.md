@@ -52,16 +52,14 @@ remaining boundaries, not claims that Core is already a storage-free facade.
 - `ark-store` owns SQLite opening, the writer actor, snapshots, compatibility
   migrations, and extracted query and persistence adapters. Canonical type
   migration coordination and selected SQL-backed runtime paths remain in Core.
-- `ark-sync` owns direct server session admission, readiness, inbound message
-  classification, snapshot/feed/task-merge/live protocol coordination, ACK
-  validation, and session progress. Core supplies the application host for
-  storage, callbacks, peer-map projection, and service lifecycle. Direct client
-  orchestration is not yet fully transferred.
+- `ark-sync` owns direct client and server session admission, readiness,
+  protocol message handling, snapshot/feed/task-merge/live coordination, ACK
+  validation, retry state, and session progress. Core supplies storage,
+  Engine callbacks, peer-map projection, and service lifecycle.
 - `ark-net` owns concrete WebSocket, relay, Iroh, and discovery transports.
 - `ark-core` exposes `ArkService`, adapts the Engine JSON contract, and
   composes these crates. It still owns request handlers, migration
-  coordination, selected SQL-backed runtime paths, and direct client
-  orchestration.
+  coordination, and selected SQL-backed runtime paths.
 
 ## Tests
 

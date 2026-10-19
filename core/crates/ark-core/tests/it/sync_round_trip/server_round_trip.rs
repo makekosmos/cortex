@@ -101,7 +101,7 @@ async fn round_trip_sync_between_two_servers() {
         .expect("server B start");
 
     // ---------------------------------------------------------------------
-    // SyncClient on side B dialing server A
+    // DirectClient on side B dialing server A
     // ---------------------------------------------------------------------
     let peer = PeerRecord {
         device_id: "device-a".to_string(),
@@ -112,7 +112,7 @@ async fn round_trip_sync_between_two_servers() {
         platform: None,
         app_version: None,
     };
-    let client = Arc::new(SyncClient::new(
+    let client = Arc::new(new_direct_client(
         storage_b.clone() as Arc<dyn SyncRuntimeStorage>,
         peer,
         "device-b".to_string(),
@@ -191,10 +191,10 @@ async fn self_connect_is_rejected() {
         platform: None,
         app_version: None,
     };
-    // The SyncClient will connect and send a hello with device_id = "device-self"
+    // The DirectClient will connect and send a hello with device_id = "device-self"
     // — same as the server. The server must reject the connection and NOT
     // emit a peer_connected event.
-    let client = Arc::new(SyncClient::new(
+    let client = Arc::new(new_direct_client(
         storage.clone() as Arc<dyn SyncRuntimeStorage>,
         peer,
         "device-self".to_string(),

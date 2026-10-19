@@ -25,7 +25,7 @@ pub(crate) async fn handle_disconnect_peer(
         }
     }
 
-    let clients: Vec<(String, Arc<SyncClient>)> = runtime
+    let clients: Vec<(String, Arc<DirectClient>)> = runtime
         .clients
         .lock()
         .await

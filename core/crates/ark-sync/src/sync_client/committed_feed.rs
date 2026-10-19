@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
-use crate::replication_storage::SyncRuntimeStorage;
-use ark_sync::committed_feed_delivery::{FeedAck, FeedAckOutcome, FeedFlight};
-use ark_sync::protocol::LanSyncMessage;
+use crate::committed_feed_delivery::{FeedAck, FeedAckOutcome, FeedFlight};
+use crate::protocol::LanSyncMessage;
+use ark_application::sync_storage::SyncRuntimeStorage;
 
 use crate::sync_client::{ClientFeedInFlight, ClientMessageSender};
 
-pub(crate) async fn pump_client_committed_feed(
+#[doc(hidden)]
+pub async fn pump_client_committed_feed(
     storage: &Arc<dyn SyncRuntimeStorage>,
     peer_device_id: &str,
     tx: &ClientMessageSender,
@@ -67,7 +68,7 @@ pub(crate) async fn pump_client_committed_feed(
                     identity,
                     after_position,
                     snapshot.high_watermark,
-                    crate::db::MAX_FEED_PAGE_SIZE,
+                    crate::committed_feed_delivery::MAX_FEED_PAGE_SIZE,
                 )
                 .await?
                 .page
@@ -77,7 +78,7 @@ pub(crate) async fn pump_client_committed_feed(
                 .committed_feed_delivery_page(
                     after_position,
                     snapshot.high_watermark,
-                    crate::db::MAX_FEED_PAGE_SIZE,
+                    crate::committed_feed_delivery::MAX_FEED_PAGE_SIZE,
                 )
                 .await?
         }
@@ -220,7 +221,8 @@ pub(crate) async fn pump_client_committed_feed(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) async fn acknowledge_client_feed(
+#[doc(hidden)]
+pub async fn acknowledge_client_feed(
     storage: &Arc<dyn SyncRuntimeStorage>,
     peer_device_id: &str,
     change_id: &str,
@@ -236,7 +238,7 @@ pub(crate) async fn acknowledge_client_feed(
         position: *position,
         policy_identity: identity.clone(),
     });
-    let outcome = ark_sync::committed_feed_delivery::acknowledge(
+    let outcome = crate::committed_feed_delivery::acknowledge(
         storage.as_ref(),
         peer_device_id,
         FeedAck {

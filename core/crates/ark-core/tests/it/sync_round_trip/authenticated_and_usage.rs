@@ -45,7 +45,7 @@ async fn hmac_authenticated_sync_succeeds_with_matching_secret() {
         platform: None,
         app_version: None,
     };
-    let client = Arc::new(SyncClient::new(
+    let client = Arc::new(new_direct_client(
         storage_b.clone() as Arc<dyn SyncRuntimeStorage>,
         peer,
         "device-b".to_string(),
@@ -123,7 +123,7 @@ async fn hmac_authenticated_sync_rejects_wrong_secret() {
         platform: None,
         app_version: None,
     };
-    let client = Arc::new(SyncClient::new(
+    let client = Arc::new(new_direct_client(
         storage_b.clone() as Arc<dyn SyncRuntimeStorage>,
         peer,
         "device-b".to_string(),
@@ -226,7 +226,7 @@ async fn usage_entities_sync_between_two_servers() {
         platform: None,
         app_version: None,
     };
-    let client = Arc::new(SyncClient::new(
+    let client = Arc::new(new_direct_client(
         storage_b.clone() as Arc<dyn SyncRuntimeStorage>,
         peer,
         "device-b".to_string(),

@@ -11,7 +11,7 @@ pub(super) async fn is_policy_bound(
             session
                 .protocol
                 .capabilities
-                .contains(&ark_sync::protocol::ProtocolCapability::PolicyBoundDeliveryV1)
+                .contains(&crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1)
         })
 }
 
@@ -23,7 +23,7 @@ pub(super) async fn validate_snapshot_identity(
 ) -> Result<(), String> {
     let expected = if policy_bound {
         let profile = storage.load_local_sync_profile(local_device_id).await?;
-        Some(ark_sync::protocol::sync_policy_identity(profile.as_ref()))
+        Some(crate::protocol::sync_policy_identity(profile.as_ref()))
     } else {
         None
     };
@@ -41,7 +41,7 @@ pub(super) async fn accept(
     revision: i64,
     digest: &str,
     active: bool,
-    rules: Vec<ark_sync::protocol::SyncPolicyRuleWire>,
+    rules: Vec<crate::protocol::SyncPolicyRuleWire>,
 ) -> Result<(), String> {
     if !authenticated {
         return Err("sync policy arrived before authentication".into());
@@ -51,12 +51,12 @@ pub(super) async fn accept(
         .await
         .clone()
         .ok_or_else(|| "sync policy has no authenticated peer session".to_owned())?;
-    ark_sync::client_session::accept_sync_policy(
+    crate::client_session::accept_sync_policy(
         storage.as_ref(),
         &session.peer_id,
         &session.protocol,
         authenticated,
-        ark_sync::client_session::SyncPolicyUpdate {
+        crate::client_session::SyncPolicyUpdate {
             revision,
             digest: digest.to_owned(),
             active,
@@ -73,7 +73,7 @@ pub(super) async fn accept_and_start(
     revision: i64,
     digest: &str,
     active: bool,
-    rules: Vec<ark_sync::protocol::SyncPolicyRuleWire>,
+    rules: Vec<crate::protocol::SyncPolicyRuleWire>,
 ) -> Result<(), String> {
     accept(
         storage,
@@ -103,7 +103,7 @@ pub(super) async fn start_sync_after_policy(
         session.sync_started = true;
         (session.peer_id.clone(), session.tx.clone())
     };
-    let vector = ark_sync::client_session::begin_initial_sync(storage.as_ref(), &peer_id).await?;
+    let vector = crate::client_session::begin_initial_sync(storage.as_ref(), &peer_id).await?;
     send_msg(
         &tx,
         LanSyncMessage::VersionVector {

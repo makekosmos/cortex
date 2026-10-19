@@ -299,7 +299,7 @@ impl SyncServer {
             .any(|p| p.is_ready() && p.session.projection().device_id.as_deref() == Some(device_id))
     }
 
-    /// Record an externally-connected peer (e.g. a `SyncClient` we just dialled
+    /// Record an externally-connected peer (e.g. a `DirectClient` we just dialled
     /// out to) so `get_known_peers` reflects the merged set. Mirrors the
     /// TS `registerExternalPeer` helper. `last_seen`/`last_address` are
     /// overwritten here; `platform`/`app_version` pass through from the

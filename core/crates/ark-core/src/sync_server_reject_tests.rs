@@ -24,14 +24,16 @@ pub(super) mod reject_tests {
     #[tokio::test]
     async fn client_stop_and_join_releases_storage() {
         let storage = Arc::new(MemBackend::new()) as Arc<dyn SyncRuntimeStorage>;
-        let client = crate::sync_client::SyncClient::new(
+        let client = crate::direct_client::create_direct_client(
             storage.clone(),
-            peer_rec("peer-dead", &["127.0.0.1:1"]),
-            "me".to_string(),
-            "me-name".to_string(),
-            "space".to_string(),
-            Vec::new(),
-            None,
+            crate::direct_client::DirectClientConfig::new(
+                peer_rec("peer-dead", &["127.0.0.1:1"]),
+                "me".to_string(),
+                "me-name".to_string(),
+                "space".to_string(),
+                Vec::new(),
+                None,
+            ),
         );
         client.start();
         // The address refuses at once; the task then sleeps in its backoff.

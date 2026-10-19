@@ -1,5 +1,5 @@
 use super::super::*;
-use ark_sync::outbound_snapshot::SnapshotEmission;
+use crate::outbound_snapshot::SnapshotEmission;
 use tokio::task::JoinHandle;
 
 pub(super) fn spawn(
@@ -12,7 +12,7 @@ pub(super) fn spawn(
     authenticated_tx: AuthenticatedTx,
 ) -> JoinHandle<Result<(), String>> {
     tokio::spawn(async move {
-        let mut snapshot = ark_sync::outbound_snapshot::OutboundSnapshot::begin(
+        let mut snapshot = crate::outbound_snapshot::OutboundSnapshot::begin(
             storage.as_ref(),
             peer_device_id,
             remote_vector,

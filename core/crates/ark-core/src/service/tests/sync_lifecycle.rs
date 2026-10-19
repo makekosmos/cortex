@@ -30,17 +30,19 @@ async fn disconnect_peer_stops_matching_outbound_client_and_emits_events() {
         platform: None,
         app_version: None,
     };
-    let client = Arc::new(SyncClient::new(
+    let client = Arc::new(crate::direct_client::create_direct_client(
         backend.clone() as Arc<dyn crate::sync_server::SyncRuntimeStorage>,
-        peer,
-        "device-local".to_string(),
-        "Local Device".to_string(),
-        "space-a".to_string(),
-        vec![],
-        None,
+        crate::direct_client::DirectClientConfig::new(
+            peer,
+            "device-local".to_string(),
+            "Local Device".to_string(),
+            "space-a".to_string(),
+            vec![],
+            None,
+        ),
     ));
 
-    let clients: Arc<TokioMutex<HashMap<String, Arc<SyncClient>>>> = Arc::new(TokioMutex::new(
+    let clients: Arc<TokioMutex<HashMap<String, Arc<DirectClient>>>> = Arc::new(TokioMutex::new(
         HashMap::from([("peer-123".to_string(), client.clone())]),
     ));
     let runtime = SyncRuntime {

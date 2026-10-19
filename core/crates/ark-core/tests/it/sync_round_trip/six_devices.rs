@@ -10,7 +10,7 @@ use ark_core::types::{PeerRecord, SyncEntity, VersionVector};
 use ark_core::SqliteStorageBackend;
 use tokio::sync::{watch, Notify};
 
-use super::{make_storage_with_identity, pick_port, SyncClient, SyncServer};
+use super::{make_storage_with_identity, new_direct_client, pick_port, SyncServer};
 
 #[path = "six_devices/task_merge_port.rs"]
 mod task_merge_port;
@@ -125,7 +125,7 @@ async fn six_devices_converge_during_initial_import_and_local_edit() {
     for (index, (device_id, storage, _)) in fixtures.iter().enumerate().skip(1) {
         let storage = storage.clone();
         storage.set_selective_sync_profile(Some(profile()));
-        let client = Arc::new(SyncClient::new(
+        let client = Arc::new(new_direct_client(
             storage.clone() as Arc<dyn SyncRuntimeStorage>,
             peer.clone(),
             device_id.clone(),

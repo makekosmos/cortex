@@ -23,13 +23,11 @@ pub(crate) use self::pairing::{
     handle_decline_pairing, handle_show_pairing_code,
 };
 
-/// Everything a spawned SyncClient needs: the shared server-side handles
-/// plus this node's identity material.
 #[derive(Clone)]
 struct ClientEnv {
     server: Arc<SyncServer>,
     storage: Arc<SqliteStorageBackend>,
-    clients: Arc<TokioMutex<HashMap<String, Arc<SyncClient>>>>,
+    clients: Arc<TokioMutex<HashMap<String, Arc<DirectClient>>>>,
     device_id: String,
     device_name: String,
     space_id: String,
@@ -54,14 +52,20 @@ async fn spawn_sync_client(env: &ClientEnv, peer: PeerRecord) {
         return;
     }
 
-    let client = Arc::new(SyncClient::new(
+    let client = Arc::new(crate::direct_client::create_direct_client(
         storage.clone() as Arc<dyn SyncRuntimeStorage>,
-        peer.clone(),
-        device_id.clone(),
-        device_name.clone(),
-        space_id.clone(),
-        own_addresses.clone(),
-        auth_secret.clone(),
+        crate::direct_client::DirectClientConfig::new(
+            peer.clone(),
+            device_id.clone(),
+            device_name.clone(),
+            space_id.clone(),
+            own_addresses.clone(),
+            auth_secret.clone(),
+        )
+        .with_platform(
+            Some(ark_net::host::local_platform()),
+            ark_net::host::app_version(),
+        ),
     ));
 
     client
@@ -73,8 +77,7 @@ async fn spawn_sync_client(env: &ClientEnv, peer: PeerRecord) {
         }))
         .await;
 
-    // Callback tasks hold `server`; `stop_and_join` waits for them.
-    let registry = client.callback_registry();
+    let registry = client.callback_task_registry();
     let server_for_registry = Arc::downgrade(server);
     let clients_for_registry = Arc::downgrade(clients);
     let relay_for_registry = relay.as_ref().map(Arc::downgrade);
@@ -84,34 +87,29 @@ async fn spawn_sync_client(env: &ClientEnv, peer: PeerRecord) {
             let server = server_for_registry.clone();
             let clients = clients_for_registry.clone();
             let relay = relay_for_registry.clone();
-            crate::task_set::track_task(
-                &registry_tasks,
-                tokio::spawn(async move {
-                    if let Some(server) = server.upgrade() {
-                        for event in &events {
-                            server.broadcast_registry_event(event.clone()).await;
+            registry_tasks.track(tokio::spawn(async move {
+                if let Some(server) = server.upgrade() {
+                    for event in &events {
+                        server.broadcast_registry_event(event.clone()).await;
+                    }
+                }
+                let Some(clients) = clients.upgrade() else {
+                    return;
+                };
+                let peers = clients.lock().await.values().cloned().collect::<Vec<_>>();
+                for client in peers {
+                    for event in &events {
+                        client.broadcast_registry_event(event.clone()).await;
+                    }
+                }
+                if let Some(relay) = relay.and_then(|relay| relay.upgrade()) {
+                    for event in &events {
+                        if let Err(error) = relay.publish_registry_event(event.clone()).await {
+                            eprintln!("sync failed to fan out registry event over Iroh: {error}");
                         }
                     }
-                    let Some(clients) = clients.upgrade() else {
-                        return;
-                    };
-                    let peers = clients.lock().await.values().cloned().collect::<Vec<_>>();
-                    for client in peers {
-                        for event in &events {
-                            client.broadcast_registry_event(event.clone()).await;
-                        }
-                    }
-                    if let Some(relay) = relay.and_then(|relay| relay.upgrade()) {
-                        for event in &events {
-                            if let Err(error) = relay.publish_registry_event(event.clone()).await {
-                                eprintln!(
-                                    "sync failed to fan out registry event over Iroh: {error}"
-                                );
-                            }
-                        }
-                    }
-                }),
-            );
+                }
+            }));
         }))
         .await;
 
@@ -123,20 +121,17 @@ async fn spawn_sync_client(env: &ClientEnv, peer: PeerRecord) {
             let server = server_for_connect.clone();
             let addrs = peer_addrs.clone();
             let record = connected.clone();
-            crate::task_set::track_task(
-                &registry_for_connect,
-                tokio::spawn(async move {
-                    if let Err(error) = server
-                        .register_external_peer(PeerRecord {
-                            addresses: addrs,
-                            ..record
-                        })
-                        .await
-                    {
-                        eprintln!("sync failed to register connected peer: {error}");
-                    }
-                }),
-            );
+            registry_for_connect.track(tokio::spawn(async move {
+                if let Err(error) = server
+                    .register_external_peer(PeerRecord {
+                        addresses: addrs,
+                        ..record
+                    })
+                    .await
+                {
+                    eprintln!("sync failed to register connected peer: {error}");
+                }
+            }));
             emit_event(json!({
                 "event": "peer_connected",
                 "device_id": connected.device_id,
@@ -151,17 +146,14 @@ async fn spawn_sync_client(env: &ClientEnv, peer: PeerRecord) {
         .set_on_disconnected(Arc::new(move |peer_device_id| {
             let server = server_for_disconnect.clone();
             let peer_device_id_clone = peer_device_id.clone();
-            crate::task_set::track_task(
-                &registry_for_disconnect,
-                tokio::spawn(async move {
-                    let remaining = server.connected_peer_count().await;
-                    emit_event(json!({
-                        "event": "peer_disconnected",
-                        "device_id": peer_device_id_clone,
-                        "remaining": remaining,
-                    }));
-                }),
-            );
+            registry_for_disconnect.track(tokio::spawn(async move {
+                let remaining = server.connected_peer_count().await;
+                emit_event(json!({
+                    "event": "peer_disconnected",
+                    "device_id": peer_device_id_clone,
+                    "remaining": remaining,
+                }));
+            }));
         }))
         .await;
 
@@ -201,7 +193,7 @@ pub(super) async fn handle_stop_sync(state: &Arc<ServiceState>) {
         if let Some(relay) = runtime.relay.as_ref() {
             relay.stop().await;
         }
-        let clients: Vec<Arc<SyncClient>> = {
+        let clients: Vec<Arc<DirectClient>> = {
             let clients = runtime.clients.lock().await;
             clients.values().cloned().collect()
         };

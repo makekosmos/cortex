@@ -171,24 +171,25 @@ async fn authenticated_direct_sync_delivers_task_merge_batches_over_the_wire() {
         )
         .await
         .unwrap();
-    let client = SyncClient::new(
+    let client = create_direct_client(
         receiver.storage.clone() as Arc<dyn crate::sync_server::SyncRuntimeStorage>,
-        crate::types::PeerRecord {
-            device_id: "merge-sender".into(),
-            device_name: "Sender".into(),
-            addresses: vec![address.to_string()],
-            last_seen: String::new(),
-            last_address: None,
-            platform: None,
-            app_version: None,
-        },
-        "merge-receiver".into(),
-        "Receiver".into(),
-        "task-merge-space".into(),
-        Vec::new(),
-        Some(secret.into()),
-    )
-    .with_task_merge_bootstrap_v2();
+        DirectClientConfig::new(
+            crate::types::PeerRecord {
+                device_id: "merge-sender".into(),
+                device_name: "Sender".into(),
+                addresses: vec![address.to_string()],
+                last_seen: String::new(),
+                last_address: None,
+                platform: None,
+                app_version: None,
+            },
+            "merge-receiver".into(),
+            "Receiver".into(),
+            "task-merge-space".into(),
+            Vec::new(),
+            Some(secret.into()),
+        ),
+    );
     client.start();
 
     tokio::time::timeout(Duration::from_secs(8), async {

@@ -60,7 +60,7 @@ pub(super) async fn wire_relay_sync_events(relay_sync: &Arc<RelaySync>) {
 pub(super) async fn wire_relay_registry_fanout(
     relay_sync: &Arc<RelaySync>,
     server: &Arc<SyncServer>,
-    clients: &Arc<TokioMutex<HashMap<String, Arc<SyncClient>>>>,
+    clients: &Arc<TokioMutex<HashMap<String, Arc<DirectClient>>>>,
 ) {
     let server = Arc::downgrade(server);
     let clients = Arc::downgrade(clients);
@@ -90,7 +90,7 @@ pub(super) async fn wire_relay_registry_fanout(
 
 pub(super) async fn wire_server_registry_fanout(
     server: &Arc<SyncServer>,
-    clients: &Arc<TokioMutex<HashMap<String, Arc<SyncClient>>>>,
+    clients: &Arc<TokioMutex<HashMap<String, Arc<DirectClient>>>>,
     relay_sync: Option<&Arc<RelaySync>>,
 ) {
     let clients = Arc::downgrade(clients);

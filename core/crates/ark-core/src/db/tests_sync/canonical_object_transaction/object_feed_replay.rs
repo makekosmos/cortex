@@ -25,32 +25,18 @@ async fn committed_feed_replays_same_id_after_lost_ack_and_rejects_digest_reuse(
         .unwrap();
 
     let storage: Arc<dyn crate::replication_storage::SyncRuntimeStorage> = backend.clone();
-    let (tx, mut rx) = crate::sync_client::ClientMessageSender::test_channel();
-    let flight: crate::sync_client::ClientFeedInFlight = Arc::new(tokio::sync::Mutex::new(None));
-    crate::sync_client::pump_client_committed_feed(
-        &storage,
-        "server-peer",
-        &tx,
-        &flight,
-        false,
-        false,
-    )
-    .await
-    .unwrap();
+    let (tx, mut rx) = ark_sync::ClientMessageSender::test_channel();
+    let flight: ark_sync::ClientFeedInFlight = Arc::new(tokio::sync::Mutex::new(None));
+    ark_sync::pump_client_committed_feed(&storage, "server-peer", &tx, &flight, false, false)
+        .await
+        .unwrap();
     let first_id = pop_feed_live_change_id(&mut rx);
 
     // Simulate disconnect after delivery but before the applied ACK arrives.
     *flight.lock().await = None;
-    crate::sync_client::pump_client_committed_feed(
-        &storage,
-        "server-peer",
-        &tx,
-        &flight,
-        false,
-        false,
-    )
-    .await
-    .unwrap();
+    ark_sync::pump_client_committed_feed(&storage, "server-peer", &tx, &flight, false, false)
+        .await
+        .unwrap();
     let replay_id = pop_feed_live_change_id(&mut rx);
     assert_eq!(first_id, replay_id, "lost ACK must replay the same ID");
 
@@ -58,7 +44,7 @@ async fn committed_feed_replays_same_id_after_lost_ack_and_rejects_digest_reuse(
         .apply_authenticated_entity_with_id(&entity, "server-peer", &replay_id)
         .await
         .unwrap();
-    crate::sync_client::acknowledge_client_feed(
+    ark_sync::acknowledge_client_feed(
         &storage,
         "server-peer",
         &replay_id,
@@ -115,18 +101,11 @@ async fn legacy_feed_pump_omits_policy_identity_and_legacy_ack_advances_progress
         .unwrap();
 
     let storage: Arc<dyn crate::replication_storage::SyncRuntimeStorage> = backend.clone();
-    let (tx, mut rx) = crate::sync_client::ClientMessageSender::test_channel();
-    let flight: crate::sync_client::ClientFeedInFlight = Arc::new(tokio::sync::Mutex::new(None));
-    crate::sync_client::pump_client_committed_feed(
-        &storage,
-        "legacy-peer",
-        &tx,
-        &flight,
-        false,
-        false,
-    )
-    .await
-    .unwrap();
+    let (tx, mut rx) = ark_sync::ClientMessageSender::test_channel();
+    let flight: ark_sync::ClientFeedInFlight = Arc::new(tokio::sync::Mutex::new(None));
+    ark_sync::pump_client_committed_feed(&storage, "legacy-peer", &tx, &flight, false, false)
+        .await
+        .unwrap();
     let change_id = match rx.try_recv().unwrap() {
         ark_sync::protocol::LanSyncMessage::LiveChange {
             change_id,
@@ -143,7 +122,7 @@ async fn legacy_feed_pump_omits_policy_identity_and_legacy_ack_advances_progress
         .unwrap()
         .parse::<i64>()
         .unwrap();
-    crate::sync_client::acknowledge_client_feed(
+    ark_sync::acknowledge_client_feed(
         &storage,
         "legacy-peer",
         &change_id,

@@ -18,13 +18,13 @@ pub(super) async fn handle_task_merge_batch(
                 && session
                     .protocol
                     .capabilities
-                    .contains(&ark_sync::protocol::ProtocolCapability::TaskMergeBootstrapV2)
+                    .contains(&crate::protocol::ProtocolCapability::TaskMergeBootstrapV2)
         });
     if !supported {
         return Ok(());
     }
     let local_profile = storage.load_local_sync_profile(local_device_id).await?;
-    let expected_identity = ark_sync::protocol::sync_policy_identity(local_profile.as_ref());
+    let expected_identity = crate::protocol::sync_policy_identity(local_profile.as_ref());
     if batch.identity != expected_identity {
         return Ok(());
     }
@@ -168,9 +168,9 @@ pub(super) async fn handle_live_change(
         )
     };
     let notification_entity = entity.clone();
-    let prepared = ark_sync::inbound_live_change::prepare_live_change(
+    let prepared = crate::inbound_live_change::prepare_live_change(
         storage.as_ref(),
-        ark_sync::inbound_live_change::IncomingLiveChange {
+        crate::inbound_live_change::IncomingLiveChange {
             protocol: protocol.as_ref(),
             local_profile: local_profile.as_ref(),
             local_device_id,
@@ -192,26 +192,26 @@ pub(super) async fn handle_live_change(
         .await?;
     }
 
-    let result = ark_sync::inbound_live_change::apply_live_change(
+    let result = crate::inbound_live_change::apply_live_change(
         storage.as_ref(),
         prepared,
         if policy_identity.is_some() {
-            ark_sync::inbound_live_change::VersionVectorWriteMode::MergeConcurrent
+            crate::inbound_live_change::VersionVectorWriteMode::MergeConcurrent
         } else {
-            ark_sync::inbound_live_change::VersionVectorWriteMode::Replace
+            crate::inbound_live_change::VersionVectorWriteMode::Replace
         },
     )
     .await?;
     match result.disposition {
-        ark_sync::inbound_live_change::LiveChangeDisposition::Applied { notify_local } => {
+        crate::inbound_live_change::LiveChangeDisposition::Applied { notify_local } => {
             if notify_local {
                 if let Some(handler) = on_change.lock().await.as_ref() {
                     handler(notification_entity);
                 }
             }
         }
-        ark_sync::inbound_live_change::LiveChangeDisposition::Stale => {}
-        ark_sync::inbound_live_change::LiveChangeDisposition::Pending => return Ok(()),
+        crate::inbound_live_change::LiveChangeDisposition::Stale => {}
+        crate::inbound_live_change::LiveChangeDisposition::Pending => return Ok(()),
     }
     send_msg(
         tx,
@@ -267,7 +267,7 @@ pub(super) async fn handle_applied_ack(
             session
                 .protocol
                 .capabilities
-                .contains(&ark_sync::protocol::ProtocolCapability::DurableReceiptAckV1)
+                .contains(&crate::protocol::ProtocolCapability::DurableReceiptAckV1)
         });
     let policy_bound = authenticated_tx
         .lock()
@@ -277,7 +277,7 @@ pub(super) async fn handle_applied_ack(
             session
                 .protocol
                 .capabilities
-                .contains(&ark_sync::protocol::ProtocolCapability::PolicyBoundDeliveryV1)
+                .contains(&crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1)
         });
     handle_feed_ack(
         storage,
@@ -310,7 +310,7 @@ pub(super) async fn handle_receipt_ack(
             session
                 .protocol
                 .capabilities
-                .contains(&ark_sync::protocol::ProtocolCapability::PolicyBoundDeliveryV1)
+                .contains(&crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1)
         });
     handle_feed_ack(
         storage,

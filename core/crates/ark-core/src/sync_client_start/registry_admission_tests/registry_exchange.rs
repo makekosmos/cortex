@@ -55,22 +55,24 @@ async fn direct_client_and_server_exchange_registry_before_sync_readiness() {
     let (connected_tx, connected_rx) = tokio::sync::oneshot::channel();
     let connected_tx = Arc::new(Mutex::new(Some(connected_tx)));
     let callback_tx = connected_tx.clone();
-    let client = SyncClient::new(
+    let client = create_direct_client(
         client_storage.clone() as Arc<dyn crate::sync_server::SyncRuntimeStorage>,
-        PeerRecord {
-            device_id: "seed-server-device".into(),
-            device_name: "Server".into(),
-            addresses: vec![address.to_string()],
-            last_seen: String::new(),
-            last_address: None,
-            platform: None,
-            app_version: None,
-        },
-        "client-device".into(),
-        "Client".into(),
-        "space-test".into(),
-        Vec::new(),
-        None,
+        DirectClientConfig::new(
+            PeerRecord {
+                device_id: "seed-server-device".into(),
+                device_name: "Server".into(),
+                addresses: vec![address.to_string()],
+                last_seen: String::new(),
+                last_address: None,
+                platform: None,
+                app_version: None,
+            },
+            "client-device".into(),
+            "Client".into(),
+            "space-test".into(),
+            Vec::new(),
+            None,
+        ),
     );
     client
         .set_on_connected(Arc::new(move |peer| {
@@ -110,22 +112,24 @@ async fn direct_client_and_server_exchange_registry_before_sync_readiness() {
     .await
     .expect("client policy must arrive after authenticating its seed peer record");
 
-    let observer = SyncClient::new(
+    let observer = create_direct_client(
         observer_storage.clone() as Arc<dyn crate::sync_server::SyncRuntimeStorage>,
-        PeerRecord {
-            device_id: "server-device".into(),
-            device_name: "Server".into(),
-            addresses: vec![address.to_string()],
-            last_seen: String::new(),
-            last_address: None,
-            platform: None,
-            app_version: None,
-        },
-        "observer-device".into(),
-        "Observer".into(),
-        "space-test".into(),
-        Vec::new(),
-        None,
+        DirectClientConfig::new(
+            PeerRecord {
+                device_id: "server-device".into(),
+                device_name: "Server".into(),
+                addresses: vec![address.to_string()],
+                last_seen: String::new(),
+                last_address: None,
+                platform: None,
+                app_version: None,
+            },
+            "observer-device".into(),
+            "Observer".into(),
+            "space-test".into(),
+            Vec::new(),
+            None,
+        ),
     );
     observer.start();
     tokio::time::timeout(Duration::from_secs(5), async {
@@ -271,22 +275,24 @@ async fn direct_client_and_server_exchange_registry_before_sync_readiness() {
         .await
         .expect("seed user data that a mistakenly admitted peer could receive");
     let connected_callbacks = Arc::new(AtomicUsize::new(0));
-    let reconnecting_client = SyncClient::new(
+    let reconnecting_client = create_direct_client(
         client_storage.clone() as Arc<dyn crate::sync_server::SyncRuntimeStorage>,
-        PeerRecord {
-            device_id: "server-device".into(),
-            device_name: "Server".into(),
-            addresses: vec![address.to_string()],
-            last_seen: String::new(),
-            last_address: None,
-            platform: None,
-            app_version: None,
-        },
-        "client-device".into(),
-        "Client".into(),
-        "space-test".into(),
-        Vec::new(),
-        None,
+        DirectClientConfig::new(
+            PeerRecord {
+                device_id: "server-device".into(),
+                device_name: "Server".into(),
+                addresses: vec![address.to_string()],
+                last_seen: String::new(),
+                last_address: None,
+                platform: None,
+                app_version: None,
+            },
+            "client-device".into(),
+            "Client".into(),
+            "space-test".into(),
+            Vec::new(),
+            None,
+        ),
     );
     let callback_count = connected_callbacks.clone();
     reconnecting_client

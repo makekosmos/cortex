@@ -1,51 +1,12 @@
 use super::*;
-use ark_application::sync_storage::OutboundAck;
-
-#[path = "sync_client_start/connect_and_receive/feed_recovery.rs"]
-mod feed_recovery;
-#[path = "sync_client_start/connect_and_receive/live_messages.rs"]
-mod live_messages;
-#[path = "sync_client_start/connect_and_receive/registry_admission.rs"]
-mod registry_admission;
-#[path = "sync_client_start/connect_and_receive/snapshot_ack.rs"]
-mod snapshot_ack;
-#[path = "sync_client_start/connect_and_receive/snapshot_drive.rs"]
-mod snapshot_drive;
-#[path = "sync_client_start/connect_and_receive/sync_changes.rs"]
-mod sync_changes;
-#[path = "sync_client_start/connect_and_receive/sync_policy.rs"]
-mod sync_policy;
-impl SyncClient {
-    /// Start connecting to the peer. Spawns a background task.
-    pub fn start(&self) {
-        self.stopped
-            .store(false, std::sync::atomic::Ordering::Relaxed);
-        let storage = self.storage.clone();
-        let peer = self.peer.clone();
-        let device_id = self.device_id.clone();
-        let device_name = self.device_name.clone();
-        let space_id = self.space_id.clone();
-        let own_addresses = self.own_addresses.clone();
-        let auth_secret = self.auth_secret.clone();
-        let task_merge_bootstrap_v2 = self.task_merge_bootstrap_v2;
-        let connector = self.connector.clone();
-        let stopped = self.stopped.clone();
-        let authenticated_tx = self.authenticated_tx.clone();
-        let feed_in_flight = self.feed_in_flight.clone();
-        let on_change = self.on_change.clone();
-        let on_connected = self.on_connected.clone();
-        let on_disconnected = self.on_disconnected.clone();
-        let on_peer_list = self.on_peer_list.clone();
-        let on_registry_events = self.on_registry_events.clone();
-        let task = tokio::spawn(include!("sync_client_start/connection_loop.rs"));
-        track_task(&self.tasks, task);
-    }
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ark_domain::types::*;
+    use ark_sync::protocol::*;
     use futures_util::{SinkExt, StreamExt};
+    use std::time::Duration;
     use tokio::net::TcpListener;
     use tokio_tungstenite::{accept_async, tungstenite::Message};
 
@@ -98,22 +59,24 @@ mod tests {
         });
 
         let storage = Arc::new(crate::sync_server::sync_server_tests::tests::MemBackend::new());
-        let client = SyncClient::new(
+        let client = create_direct_client(
             storage as Arc<dyn SyncRuntimeStorage>,
-            PeerRecord {
-                device_id: "server-peer".into(),
-                device_name: "Server Peer".into(),
-                addresses: vec![address.to_string()],
-                last_seen: String::new(),
-                last_address: None,
-                platform: None,
-                app_version: None,
-            },
-            "client-device".into(),
-            "Client Device".into(),
-            "space-test".into(),
-            vec![],
-            None,
+            DirectClientConfig::new(
+                PeerRecord {
+                    device_id: "server-peer".into(),
+                    device_name: "Server Peer".into(),
+                    addresses: vec![address.to_string()],
+                    last_seen: String::new(),
+                    last_address: None,
+                    platform: None,
+                    app_version: None,
+                },
+                "client-device".into(),
+                "Client Device".into(),
+                "space-test".into(),
+                vec![],
+                None,
+            ),
         );
         client.start();
         assert!(
@@ -202,22 +165,24 @@ mod tests {
         });
 
         let storage = Arc::new(crate::sync_server::sync_server_tests::tests::MemBackend::new());
-        let client = SyncClient::new(
+        let client = create_direct_client(
             storage as Arc<dyn SyncRuntimeStorage>,
-            PeerRecord {
-                device_id: "server-peer".into(),
-                device_name: "Server".into(),
-                addresses: vec![address.to_string()],
-                last_seen: String::new(),
-                last_address: None,
-                platform: None,
-                app_version: None,
-            },
-            "client-device".into(),
-            "Client".into(),
-            "space-test".into(),
-            vec![],
-            Some("shared-secret".into()),
+            DirectClientConfig::new(
+                PeerRecord {
+                    device_id: "server-peer".into(),
+                    device_name: "Server".into(),
+                    addresses: vec![address.to_string()],
+                    last_seen: String::new(),
+                    last_address: None,
+                    platform: None,
+                    app_version: None,
+                },
+                "client-device".into(),
+                "Client".into(),
+                "space-test".into(),
+                vec![],
+                Some("shared-secret".into()),
+            ),
         );
         client
             .set_on_connected(Arc::new(move |_| {

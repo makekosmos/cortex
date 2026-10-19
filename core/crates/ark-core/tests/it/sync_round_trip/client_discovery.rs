@@ -1,12 +1,3 @@
-// SyncClient identity/lifecycle edge cases.
-//
-// - A bootstrap ("seed-*") client must adopt the peer's real device_id once
-//   the Hello exchange authenticates — otherwise DisconnectPeer can't reach it
-//   and peer listings report phantom `seed-*` entries forever.
-// - A stale/poisoned address that loops back to our own SyncServer (e.g. the
-//   peer's old DHCP lease now assigned to us) must be pruned from the record,
-//   not dialled forever.
-
 async fn free_loopback_port() -> u16 {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
@@ -40,7 +31,7 @@ async fn seed_client_adopts_authenticated_peer_identity() {
         .await
         .unwrap();
 
-    let client = SyncClient::new(
+    let client = new_direct_client(
         client_storage as Arc<dyn SyncRuntimeStorage>,
         PeerRecord {
             device_id: "seed-bootstrap".into(),
@@ -98,7 +89,7 @@ async fn self_address_is_pruned_but_other_addresses_keep_retrying() {
 
     let self_addr = format!("127.0.0.1:{self_port}");
     let dead_addr = "127.0.0.1:1".to_string(); // closed port — connect refused
-    let client = SyncClient::new(
+    let client = new_direct_client(
         make_storage("device-me") as Arc<dyn SyncRuntimeStorage>,
         PeerRecord {
             device_id: "peer-1".into(),
@@ -159,7 +150,7 @@ async fn self_only_record_still_stops_the_client() {
         .unwrap();
 
     let self_addr = format!("127.0.0.1:{self_port}");
-    let client = SyncClient::new(
+    let client = new_direct_client(
         make_storage("device-me") as Arc<dyn SyncRuntimeStorage>,
         PeerRecord {
             device_id: "peer-self".into(),

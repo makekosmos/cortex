@@ -33,18 +33,11 @@ async fn negotiated_receipt_ack_advances_delivery_without_claiming_application()
         .unwrap();
 
     let storage: Arc<dyn crate::replication_storage::SyncRuntimeStorage> = backend.clone();
-    let (tx, mut rx) = crate::sync_client::ClientMessageSender::test_channel();
-    let flight: crate::sync_client::ClientFeedInFlight = Arc::new(tokio::sync::Mutex::new(None));
-    crate::sync_client::pump_client_committed_feed(
-        &storage,
-        "receipt-peer",
-        &tx,
-        &flight,
-        true,
-        false,
-    )
-    .await
-    .unwrap();
+    let (tx, mut rx) = ark_sync::ClientMessageSender::test_channel();
+    let flight: ark_sync::ClientFeedInFlight = Arc::new(tokio::sync::Mutex::new(None));
+    ark_sync::pump_client_committed_feed(&storage, "receipt-peer", &tx, &flight, true, false)
+        .await
+        .unwrap();
     let first_id = pop_feed_live_change_id(&mut rx);
     let first_position = first_id
         .strip_prefix("ark-feed-v1:")
@@ -52,7 +45,7 @@ async fn negotiated_receipt_ack_advances_delivery_without_claiming_application()
         .parse::<i64>()
         .unwrap();
 
-    crate::sync_client::acknowledge_client_feed(
+    ark_sync::acknowledge_client_feed(
         &storage,
         "receipt-peer",
         &first_id,
@@ -74,7 +67,7 @@ async fn negotiated_receipt_ack_advances_delivery_without_claiming_application()
     let second_id = pop_feed_live_change_id(&mut rx);
     assert_ne!(first_id, second_id);
 
-    crate::sync_client::acknowledge_client_feed(
+    ark_sync::acknowledge_client_feed(
         &storage,
         "receipt-peer",
         &second_id,

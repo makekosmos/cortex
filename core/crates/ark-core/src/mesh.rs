@@ -1,4 +1,4 @@
-//! Mesh coordinator — manages both LAN (SyncServer + SyncClient + Beacon) and
+//! Mesh coordinator — manages both LAN (SyncServer + DirectClient + Beacon) and
 //! optional Relay transport simultaneously, deduplicating incoming changes so
 //! a change arriving on both transports is processed only once.
 //!

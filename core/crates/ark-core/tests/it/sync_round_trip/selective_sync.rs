@@ -217,7 +217,7 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
         platform: None,
         app_version: None,
     };
-    let client = Arc::new(SyncClient::new(
+    let client = Arc::new(new_direct_client(
         storage_b.clone() as Arc<dyn SyncRuntimeStorage>,
         peer.clone(),
         "device-b".into(),
@@ -273,7 +273,7 @@ async fn selective_profile_two_db_round_trip_reconnect_and_narrowing_are_non_des
         ))
         .await
         .unwrap();
-    let reconnect = Arc::new(SyncClient::new(
+    let reconnect = Arc::new(new_direct_client(
         storage_b.clone() as Arc<dyn SyncRuntimeStorage>,
         peer,
         "device-b".into(),

@@ -142,7 +142,7 @@ pub(crate) async fn handle_start_sync(
         bind,
         app_version,
     };
-    let clients: Arc<TokioMutex<HashMap<String, Arc<SyncClient>>>> =
+    let clients: Arc<TokioMutex<HashMap<String, Arc<DirectClient>>>> =
         Arc::new(TokioMutex::new(HashMap::new()));
     let relay = if transport_choice == TransportChoice::Relay {
         let relay_url = relay_url.clone().expect("Relay choice implies relay_url");
@@ -294,7 +294,7 @@ pub(crate) async fn handle_start_sync(
     }
     wire_server_registry_fanout(&server, &clients, relay.as_ref()).await;
 
-    // Start SyncClient connections for every known peer.
+    // Start DirectClient connections for every known peer.
     let client_env = ClientEnv {
         server: server.clone(),
         storage: storage.clone(),

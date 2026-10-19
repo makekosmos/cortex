@@ -1,7 +1,7 @@
     {
         match result {
             Ok(Some(transport)) => {
-                let ark_sync::client_session::ConnectedClientTransport {
+                let crate::client_session::ConnectedClientTransport {
                     io: mut session_io,
                     selected_address: winning_addr,
                 } = transport;
@@ -16,18 +16,18 @@
                 }
 
                 reconnect_delay = RECONNECT_BASE_MS;
-                *feed_in_flight.lock().await = None; // Replay the durable cursor after reconnect.
+                *feed_in_flight.lock().await = None;
 
-                let client_hello = ark_sync::client_session::build_client_hello(
-                    ark_sync::client_session::ClientHelloRequest {
+                let client_hello = crate::client_session::build_client_hello(
+                    crate::client_session::ClientHelloRequest {
                         device_id: &device_id,
                         device_name: &device_name,
                         space_id: &space_id,
                         addresses: &own_addresses,
                         auth_secret: auth_secret.as_deref(),
                         task_merge_bootstrap_v2,
-                        platform: Some(ark_net::host::local_platform()),
-                        app_version: ark_net::host::app_version(),
+                        platform: platform.clone(),
+                        app_version: app_version.clone(),
                     },
                 );
                 let tx = ClientMessageSender::new(
@@ -42,8 +42,8 @@
                     continue;
                 }
 
-                let mut client_session = ark_sync::client_session::DirectClientSession::new();
-                use ark_sync::client_session::DirectClientSessionRejection as SessionRejection;
+                let mut client_session = crate::client_session::DirectClientSession::new();
+                use crate::client_session::DirectClientSessionRejection as SessionRejection;
                 let mut pending_registry_admission: Option<
                     registry_admission::PendingRegistryAdmission,
                 > = None;
@@ -96,7 +96,7 @@
                             }
                         }
                         session_input = client_session.receive(&mut session_io) => {
-                            use ark_sync::client_session::DirectClientSessionInput as SessionInput;
+                            use crate::client_session::DirectClientSessionInput as SessionInput;
                             let message = match session_input {
                                 SessionInput::Message(message) => *message,
                                 SessionInput::Ignore => continue,
@@ -116,15 +116,15 @@
                                     break;
                                 }
                             };
-                            use ark_sync::client_session::{
+                            use crate::client_session::{
                                 DirectClientMessage as ClientMessage,
                             };
                             match message {
                                     ClientMessage::Hello(hello) => {
                                         let accepted = match
-                                            ark_sync::client_session::accept_server_hello(
+                                            crate::client_session::accept_server_hello(
                                             hello,
-                                            ark_sync::client_session::ServerHelloValidationRequest {
+                                            crate::client_session::ServerHelloValidationRequest {
                                                 local_device_id: &device_id,
                                                 local_space_id: &space_id,
                                                 auth_secret: auth_secret.as_deref(),
@@ -140,7 +140,7 @@
                                                 break;
                                             }
                                         };
-                                        let ark_sync::client_session::AcceptedServerHello {
+                                        let crate::client_session::AcceptedServerHello {
                                             device_id: server_device_id,
                                             device_name: server_device_name,
                                             platform: server_platform,
@@ -222,7 +222,7 @@
                                     }
 
                                     ClientMessage::SyncPolicy(update) => {
-                                        let ark_sync::client_session::SyncPolicyUpdate {
+                                        let crate::client_session::SyncPolicyUpdate {
                                             revision,
                                             digest,
                                             active,

@@ -40,7 +40,7 @@ fn default_discovery_enabled() -> bool {
 pub(crate) struct SyncRuntime {
     pub(crate) server: Arc<SyncServer>,
     pub(crate) storage: Arc<SqliteStorageBackend>,
-    pub(crate) clients: Arc<TokioMutex<HashMap<String, Arc<SyncClient>>>>,
+    pub(crate) clients: Arc<TokioMutex<HashMap<String, Arc<DirectClient>>>>,
     pub(crate) relay: Option<Arc<RelaySync>>,
     pub(crate) transport_choice: Option<TransportChoice>,
     pub(crate) start_params: SyncStartParams,

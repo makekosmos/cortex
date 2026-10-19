@@ -1,4 +1,4 @@
-use super::{pair_storages, pick_port, SyncClient, SyncServer};
+use super::{new_direct_client, pair_storages, pick_port, DirectClient, SyncServer};
 use ark_application::sync_policy::SyncProfileRule;
 use ark_application::sync_storage::{
     PeerProgressPort, SyncEntityMutationPort, SyncEntityReadPort, SyncReadClass,
@@ -110,8 +110,8 @@ fn client_for(
     port: u16,
     auth_secret: &str,
     device_id: &str,
-) -> Arc<SyncClient> {
-    Arc::new(SyncClient::new(
+) -> Arc<DirectClient> {
+    Arc::new(new_direct_client(
         storage.clone() as Arc<dyn SyncRuntimeStorage>,
         PeerRecord {
             device_id: "device-a".into(),

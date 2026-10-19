@@ -40,6 +40,7 @@ use serde_json::{json, Value};
 use tokio::sync::{mpsc, oneshot, watch, Mutex as TokioMutex};
 
 use crate::db::{self, DbHandle, SqliteStorageBackend};
+use crate::direct_client::DirectClient;
 use crate::events::emit_event;
 use crate::hlc::HLC;
 use crate::integration_replication::{
@@ -47,7 +48,6 @@ use crate::integration_replication::{
 };
 use crate::relay_sync::{RelaySync, RelaySyncConfig};
 use crate::replication_storage::SyncRuntimeStorage;
-use crate::sync_client::SyncClient;
 use crate::sync_server::{PeerEntry, SyncServer};
 use crate::types::*;
 use ark_net::beacon::{BeaconPeer, BroadcastDiscovery, BroadcastDiscoveryOptions};

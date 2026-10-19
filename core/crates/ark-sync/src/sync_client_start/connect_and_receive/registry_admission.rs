@@ -22,7 +22,7 @@ impl From<String> for PendingRegistryAdmissionError {
 }
 
 pub(super) struct PendingRegistryAdmission {
-    admission: ark_sync::client_session::DirectClientAdmission,
+    admission: crate::client_session::DirectClientAdmission,
     peer_record: PeerRecord,
 }
 
@@ -44,7 +44,7 @@ impl PendingRegistryAdmission {
         protocol: NegotiatedProtocol,
         peer_record: PeerRecord,
     ) -> Result<(Self, LanSyncMessage), String> {
-        let (admission, start) = ark_sync::client_session::DirectClientAdmission::begin(
+        let (admission, start) = crate::client_session::DirectClientAdmission::begin(
             local_device_id,
             peer_device_id,
             space_id,
@@ -83,11 +83,11 @@ impl PendingRegistryAdmission {
             send_msg(tx, outgoing).await?;
         }
         let ready = match progress.status {
-            ark_sync::client_session::AdmissionStatus::Pending => return Ok(false),
-            ark_sync::client_session::AdmissionStatus::CloseSession => {
+            crate::client_session::AdmissionStatus::Pending => return Ok(false),
+            crate::client_session::AdmissionStatus::CloseSession => {
                 return Err(PendingRegistryAdmissionError::SessionRevoked);
             }
-            ark_sync::client_session::AdmissionStatus::Ready(ready) => ready,
+            crate::client_session::AdmissionStatus::Ready(ready) => ready,
         };
 
         if let Some(policy_message) = self
@@ -100,13 +100,13 @@ impl PendingRegistryAdmission {
         let policy_bound_delivery = ready
             .protocol()
             .capabilities
-            .contains(&ark_sync::protocol::ProtocolCapability::PolicyBoundDeliveryV1);
+            .contains(&crate::protocol::ProtocolCapability::PolicyBoundDeliveryV1);
         *authenticated_tx.lock().await = Some(crate::sync_client::AuthenticatedPeerSession {
             peer_id: ready.peer_device_id().to_owned(),
             registry_session_id: ready.registry_session_id().to_owned(),
             tx: tx.clone(),
             sync_started: !policy_bound_delivery,
-            outbound_snapshot: ark_sync::outbound_snapshot::OutboundSnapshotProgress::not_sent(),
+            outbound_snapshot: crate::outbound_snapshot::OutboundSnapshotProgress::not_sent(),
             protocol: ready.protocol().clone(),
         });
 
