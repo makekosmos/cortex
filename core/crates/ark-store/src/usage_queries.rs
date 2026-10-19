@@ -66,3 +66,5 @@ fn merge_usage_spans(mut spans: Vec<Vec<i64>>) -> Vec<Vec<i64>> {
     }
     merged
 }
+
+include!("usage_queries/linked_app_usage.rs");

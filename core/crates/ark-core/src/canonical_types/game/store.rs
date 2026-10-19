@@ -1,7 +1,7 @@
 use super::*;
 use crate::types::ArkObject;
 use ark_store::objects;
-use rusqlite::{params, params_from_iter, Connection, OptionalExtension};
+use rusqlite::{params, Connection};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
@@ -17,96 +17,13 @@ fn links_for(conn: &Connection, id: &str) -> Result<Vec<GameLink>, String> {
 }
 
 fn usage_for(conn: &Connection, id: &str) -> Result<GameUsage, String> {
-    // The link pins ONE tracked_app id — the id used to hash the full exe
-    // path, so an update across a version dir split the app's sessions under
-    // a second id and playtime silently halved (KOS-287). Expand the link to
-    // every tracked_app row sharing the canonical exe identity before summing.
-    let linked_ids: Vec<String> = {
-        let mut stmt = conn
-            .prepare(
-                "SELECT target_object_id FROM object_links
-                 WHERE source_object_id=?1 AND link_type IN ('game','game-usage')",
-            )
-            .map_err(|e| e.to_string())?;
-        let rows = stmt
-            .query_map(params![id], |r| r.get(0))
-            .map_err(|e| e.to_string())?;
-        rows.collect::<Result<Vec<_>, _>>()
-            .map_err(|e| e.to_string())?
-    };
-    let wanted_ids = usage_session_app_ids(conn, &linked_ids)?;
-    if wanted_ids.is_empty() {
-        return Ok(GameUsage {
-            seconds: 0,
-            session_count: 0,
-            last_played_at: None,
-        });
-    }
-    let placeholders = wanted_ids
-        .iter()
-        .enumerate()
-        .map(|(i, _)| format!("?{}", i + 1))
-        .collect::<Vec<_>>()
-        .join(", ");
-    // Active play time: foreground && !idle. julianday(ended-started)
-    // wall-clock counted idle and never-closed sessions (KOS-287).
-    let sql = format!(
-        "SELECT COALESCE(SUM(s.foreground_ms) / 1000, 0), COUNT(s.id),
-                MAX(COALESCE(s.ended_at, s.started_at))
-         FROM usage_sessions s WHERE s.tracked_app_id IN ({placeholders})"
-    );
-    let row: Option<(i64, i64, Option<String>)> = conn
-        .query_row(&sql, params_from_iter(wanted_ids.iter()), |r| {
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?))
-        })
-        .optional()
-        .map_err(|e| e.to_string())?;
-    let (seconds, count, last) = row.unwrap_or((0, 0, None));
+    let summary =
+        ark_store::usage_queries::summarize_linked_app_usage(conn, id, &["game", "game-usage"])?;
     Ok(GameUsage {
-        seconds: seconds.max(0),
-        session_count: count.max(0) as u64,
-        last_played_at: last,
+        seconds: summary.seconds.max(0),
+        session_count: summary.session_count.max(0) as u64,
+        last_played_at: summary.last_played_at,
     })
-}
-
-/// linked tracked_app ids → every tracked_app row sharing the canonical exe
-/// identity (version dirs, path case, update moves). Linked ids missing from
-/// tracked_apps are kept verbatim — behavior unchanged for dangling links.
-fn usage_session_app_ids(conn: &Connection, linked_ids: &[String]) -> Result<Vec<String>, String> {
-    if linked_ids.is_empty() {
-        return Ok(Vec::new());
-    }
-    let mut stmt = conn
-        .prepare("SELECT id, normalized_exe_path, process_name FROM tracked_apps")
-        .map_err(|e| e.to_string())?;
-    let rows = stmt
-        .query_map([], |r| {
-            Ok((
-                r.get::<_, String>(0)?,
-                r.get::<_, String>(1)?,
-                r.get::<_, String>(2)?,
-            ))
-        })
-        .map_err(|e| e.to_string())?;
-    let mut key_by_id = std::collections::HashMap::new();
-    for row in rows {
-        let (app_id, path, process_name) = row.map_err(|e| e.to_string())?;
-        key_by_id.insert(
-            app_id,
-            ark_store::usage_queries::canonical_app_key(&path, &process_name),
-        );
-    }
-    let wanted_keys: std::collections::HashSet<&str> = linked_ids
-        .iter()
-        .filter_map(|linked| key_by_id.get(linked.as_str()).map(String::as_str))
-        .collect();
-    let mut ids: Vec<String> = linked_ids.to_vec();
-    for (app_id, key) in &key_by_id {
-        if wanted_keys.contains(key.as_str()) && !linked_ids.contains(app_id) {
-            ids.push(app_id.clone());
-        }
-    }
-    Ok(ids)
 }
 
 fn quarantine_for(conn: &Connection, id: &str) -> Result<GameQuarantine, String> {
