@@ -5,12 +5,12 @@ use serde_json::{json, Value};
 
 use super::SqliteStorageBackend;
 use crate::db::{
-    delete_object, delete_object_link, delete_object_type, delete_project, delete_sync_tombstone,
-    delete_todo, delete_tracked_app, delete_usage_day, delete_usage_event, delete_usage_session,
+    delete_object, delete_object_link, delete_object_type, delete_project, delete_todo,
+    delete_tracked_app, delete_usage_day, delete_usage_event, delete_usage_session,
     finish_usage_entity_sync, insert_pending_object, is_object_definition_known,
     is_sequenced_usage_entity, record_usage_sequence, upsert_object_link, upsert_object_type,
-    upsert_sync_tombstone, upsert_tracked_app, upsert_usage_day, upsert_usage_event,
-    upsert_usage_session, usage_entity_is_newer, usage_origin_for_entity,
+    upsert_tracked_app, upsert_usage_day, upsert_usage_event, upsert_usage_session,
+    usage_entity_is_newer, usage_origin_for_entity,
 };
 use crate::types::{
     ArkObject, ObjectLink, ObjectType, SyncEntity, TrackedApp, UsageDay, UsageEvent, UsageSession,
@@ -178,7 +178,7 @@ impl SqliteStorageBackend {
                 "object_link" => delete_object_link(conn, &entity.id),
                 _ => Err(format!("unknown sync entity type '{}'", entity.entity_type)),
             }?;
-            upsert_sync_tombstone(conn, entity)?;
+            ark_store::sync_tombstones::upsert(conn, entity)?;
             if sequenced_usage {
                 finish_usage_entity_sync(conn, entity)?;
             }
@@ -258,7 +258,7 @@ impl SqliteStorageBackend {
             _ => Err(format!("unknown sync entity type '{}'", entity.entity_type)),
         };
         result?;
-        delete_sync_tombstone(conn, &entity.id)?;
+        ark_store::sync_tombstones::delete(conn, &entity.id)?;
         if sequenced_usage {
             finish_usage_entity_sync(conn, entity)?;
         }

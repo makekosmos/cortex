@@ -118,7 +118,7 @@ pub fn apply_legacy_compat_entity(
         params![entity.id, entity.hlc],
     )
     .map_err(|e| e.to_string())?;
-    db::delete_sync_tombstone(conn, &entity.id)?;
+    ark_store::sync_tombstones::delete(conn, &entity.id)?;
     Ok(ark_application::sync_storage::InboundApplyOutcome::Applied)
 }
 
@@ -159,7 +159,7 @@ pub fn apply_canonical_object_entity(
                     params![entity.id, entity.hlc],
                 )
                 .map_err(|e| e.to_string())?;
-                db::upsert_sync_tombstone(conn, entity)?;
+                ark_store::sync_tombstones::upsert(conn, entity)?;
                 return Ok(None);
             }
             let mut data = entity.data.clone();
@@ -262,7 +262,7 @@ pub fn apply_canonical_object_entity(
                 params![object.id, entity.hlc],
             )
             .map_err(|e| e.to_string())?;
-            db::delete_sync_tombstone(conn, &entity.id)?;
+            ark_store::sync_tombstones::delete(conn, &entity.id)?;
             Ok(None)
         })();
     match result {

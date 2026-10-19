@@ -4,8 +4,7 @@ use serde_json::Value;
 use super::SqliteStorageBackend;
 use crate::db::{
     list_object_links, list_object_types, list_objects, load_all_projects, load_all_tags,
-    load_all_todos, load_all_tracked_apps, load_sync_tombstones, load_usage_day, load_usage_event,
-    load_usage_session,
+    load_all_todos, load_all_tracked_apps, load_usage_day, load_usage_event, load_usage_session,
 };
 use crate::hlc::HLC;
 use crate::types::{SyncEntity, VersionVector};
@@ -275,7 +274,7 @@ impl SqliteStorageBackend {
             });
             add_entities!(objects, "object");
             add_entities!(list_object_links(conn), "object_link");
-            if let Ok(tombstones) = load_sync_tombstones(conn) {
+            if let Ok(tombstones) = ark_store::sync_tombstones::load_all(conn) {
                 fixed.extend(tombstones.into_iter().filter(|entity| {
                     entity.entity_type != "object" || !task_merge_object_ids.contains(&entity.id)
                 }));

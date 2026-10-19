@@ -106,10 +106,11 @@ async fn pre_version_table_revisions_reject_stale_remote_resurrection() {
         .map_err(|error| error.to_string())?;
         db::upsert_object(conn, &tombstone_object)?;
         db::delete_object(conn, &tombstone_object.id)?;
-        db::record_sync_tombstone(
+        ark_store::sync_tombstones::record(
             conn,
             "object",
             &tombstone_object.id,
+            None,
             "2999-01-01T00:00:00.000Z:000002:legacy",
         )?;
         Ok((vector_object, tombstone_object))

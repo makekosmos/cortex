@@ -60,7 +60,7 @@ impl ObjectMutationSession for SqliteObjectMutationSession<'_, '_> {
     ) -> Result<String, String> {
         let hlc =
             db::bump_sync_version_vector(self.transaction, kind.as_str(), id, device_id, false)?;
-        db::delete_sync_tombstone(self.transaction, id)?;
+        ark_store::sync_tombstones::delete(self.transaction, id)?;
         Ok(hlc)
     }
 
@@ -73,7 +73,7 @@ impl ObjectMutationSession for SqliteObjectMutationSession<'_, '_> {
     ) -> Result<String, String> {
         let hlc =
             db::bump_sync_version_vector(self.transaction, kind.as_str(), id, device_id, true)?;
-        db::record_sync_tombstone_with_type(self.transaction, kind.as_str(), id, type_id, &hlc)?;
+        ark_store::sync_tombstones::record(self.transaction, kind.as_str(), id, type_id, &hlc)?;
         Ok(hlc)
     }
 

@@ -26,7 +26,7 @@ async fn deleted_object_tombstone_keeps_type_through_collection_filter_and_apply
         .unwrap()
         .type_id;
     db::delete_object(&source_conn, "deleted-note").unwrap();
-    db::record_sync_tombstone_with_type(
+    ark_store::sync_tombstones::record(
         &source_conn,
         "object",
         "deleted-note",

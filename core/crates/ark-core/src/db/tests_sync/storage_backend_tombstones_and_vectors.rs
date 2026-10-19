@@ -109,15 +109,16 @@
     #[test]
     fn local_sync_tombstone_is_persisted_and_can_be_cleared() {
         let conn = setup_db();
-        record_sync_tombstone(
+        ark_store::sync_tombstones::record(
             &conn,
             "object",
             "obj-deleted",
+            None,
             "2026-01-02T00:00:00.000Z:000001:device-local",
         )
         .unwrap();
 
-        let tombstones = load_sync_tombstones(&conn).unwrap();
+        let tombstones = ark_store::sync_tombstones::load_all(&conn).unwrap();
         assert!(
             tombstones.iter().any(|entity| {
                 entity.entity_type == "object"
@@ -127,8 +128,8 @@
             "local delete should leave a durable tombstone",
         );
 
-        delete_sync_tombstone(&conn, "obj-deleted").unwrap();
-        let tombstones = load_sync_tombstones(&conn).unwrap();
+        ark_store::sync_tombstones::delete(&conn, "obj-deleted").unwrap();
+        let tombstones = ark_store::sync_tombstones::load_all(&conn).unwrap();
         assert!(
             tombstones.iter().all(|entity| entity.id != "obj-deleted"),
             "local live upsert should be able to clear prior tombstone",

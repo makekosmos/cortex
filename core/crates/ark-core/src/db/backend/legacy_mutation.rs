@@ -55,7 +55,7 @@ impl LegacyMutationSession for SqliteLegacyMutationSession<'_, '_> {
             device_id,
             false,
         )?;
-        db::delete_sync_tombstone(self.transaction, &tracked_app.id)?;
+        ark_store::sync_tombstones::delete(self.transaction, &tracked_app.id)?;
         let mut data = serde_json::to_value(tracked_app)
             .map_err(|error| error.to_string())?
             .as_object()
@@ -77,7 +77,7 @@ impl LegacyMutationSession for SqliteLegacyMutationSession<'_, '_> {
         db::delete_tracked_app(self.transaction, id)?;
         let hlc =
             db::bump_sync_version_vector(self.transaction, "tracked_app", id, device_id, true)?;
-        db::record_sync_tombstone(self.transaction, "tracked_app", id, &hlc)?;
+        ark_store::sync_tombstones::record(self.transaction, "tracked_app", id, None, &hlc)?;
         Ok(SyncEntity {
             entity_type: "tracked_app".into(),
             id: id.into(),

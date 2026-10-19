@@ -79,7 +79,7 @@ pub fn delete_trashed(conn: &Connection, device_id: &str) -> Result<usize, Strin
             .map_err(|e| e.to_string())?;
         for id in &ids {
             let hlc = bump_sync_version_vector(conn, "todo", id, device_id, true)?;
-            record_sync_tombstone(conn, "todo", id, &hlc)?;
+            ark_store::sync_tombstones::record(conn, "todo", id, None, &hlc)?;
         }
         Ok(deleted)
     })();

@@ -93,14 +93,9 @@ pub use open::{
     is_sequenced_usage_entity,
 };
 pub use open::{count_pending_for_type, insert_pending_object};
-pub(crate) use sync::upsert_sync_tombstone;
-pub use sync::{
-    bump_sync_version_vector, delete_sync_tombstone, ensure_usage_sequence_migrated,
-    record_sync_tombstone, record_sync_tombstone_with_type,
-};
+pub use sync::{bump_sync_version_vector, ensure_usage_sequence_migrated};
 pub(in crate::db) use sync::{
-    finish_usage_entity_sync, load_sync_tombstones, record_usage_sequence, usage_entity_is_newer,
-    usage_origin_for_entity,
+    finish_usage_entity_sync, record_usage_sequence, usage_entity_is_newer, usage_origin_for_entity,
 };
 pub(in crate::db) use usage::load_usage_day;
 pub use usage::{

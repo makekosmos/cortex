@@ -171,7 +171,7 @@ impl crate::application::task_mutation::TaskMutationSession for SqliteObjectWrit
                 params![entity.id, entity.hlc],
             )
             .map_err(|error| error.to_string())?;
-        db::upsert_sync_tombstone(self.conn, entity)
+        ark_store::sync_tombstones::upsert(self.conn, entity)
     }
 
     fn commit_local_task_upsert(

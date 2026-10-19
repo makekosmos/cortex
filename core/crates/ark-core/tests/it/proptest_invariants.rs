@@ -84,13 +84,13 @@ fn make_obj(id: &str, title: &str) -> ArkObject {
 
 fn bump_local_upsert(conn: &Connection, id: &str) {
     let _ = db::bump_sync_version_vector(conn, "object", id, TEST_DEVICE_ID, false);
-    let _ = db::delete_sync_tombstone(conn, id);
+    let _ = ark_store::sync_tombstones::delete(conn, id);
 }
 
 fn bump_local_delete(conn: &Connection, id: &str) {
     let hlc = db::bump_sync_version_vector(conn, "object", id, TEST_DEVICE_ID, true)
         .expect("bump should succeed");
-    let _ = db::record_sync_tombstone(conn, "object", id, &hlc);
+    let _ = ark_store::sync_tombstones::record(conn, "object", id, None, &hlc);
 }
 
 fn read_version_vector(conn: &Connection) -> VersionVector {

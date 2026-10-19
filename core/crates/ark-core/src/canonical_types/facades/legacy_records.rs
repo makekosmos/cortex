@@ -259,7 +259,7 @@ pub fn delete_legacy_object(
         params![id, hlc],
     )
     .map_err(|e| e.to_string())?;
-    db::record_sync_tombstone_with_type(conn, "object", id, Some(&object.type_id), &hlc)?;
+    ark_store::sync_tombstones::record(conn, "object", id, Some(&object.type_id), &hlc)?;
     Ok(SyncEntity {
         entity_type: "object".into(),
         id: id.into(),
