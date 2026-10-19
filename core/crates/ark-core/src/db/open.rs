@@ -4,9 +4,6 @@ use crate::canonical_types::migration;
 pub use crate::canonical_types::pending::{
     count_pending_for_type, insert_pending_object, replay_pending_for_type,
 };
-use ark_store::schema::CREATE_TABLES;
-
-use super::objects::{ensure_object_search_fts, rebuild_object_search_fts};
 
 pub(in crate::db) fn phase3_migration_completed(conn: &Connection) -> Result<bool, String> {
     let table_exists: bool = conn
@@ -33,45 +30,8 @@ pub(in crate::db) fn phase3_migration_completed(conn: &Connection) -> Result<boo
     .map_err(|e| e.to_string())
 }
 
-/// Initializes the schema and all Phase 2 prerequisites, but does not run Phase 3.
-#[doc(hidden)]
-pub fn init_schema_prerequisites_for_phase3(conn: &Connection) -> Result<(), String> {
-    ark_store::open::check_integrity(conn)?;
-    // Prevent repeated replacement of the large sync version-vector value
-    // from leaving permanent freelist growth. Existing databases adopt this
-    // mode after the explicit maintenance VACUUM.
-    conn.pragma_update(None, "auto_vacuum", "FULL")
-        .map_err(|e| e.to_string())?;
-    conn.execute_batch(CREATE_TABLES)
-        .map_err(|e| e.to_string())?;
-    ark_store::schema::migrations::ensure_database_compatibility(conn)?;
-    conn.execute_batch("SAVEPOINT ark_phase2_init")
-        .map_err(|e| e.to_string())?;
-    let phase2_result = (|| {
-        ark_store::type_registry::migrate_schema(conn)?;
-        ark_store::data_platform::ensure_schema(conn)?;
-        let object_search_fts_enabled = ensure_object_search_fts(conn).is_ok();
-        if object_search_fts_enabled {
-            rebuild_object_search_fts(conn)?;
-        }
-        Ok::<bool, String>(object_search_fts_enabled)
-    })();
-    match phase2_result {
-        Ok(_) => conn
-            .execute_batch("RELEASE SAVEPOINT ark_phase2_init")
-            .map_err(|e| e.to_string())?,
-        Err(error) => {
-            let _ = conn.execute_batch(
-                "ROLLBACK TO SAVEPOINT ark_phase2_init; RELEASE SAVEPOINT ark_phase2_init",
-            );
-            return Err(error);
-        }
-    }
-    Ok(())
-}
-
 pub fn init_schema(conn: &Connection) -> Result<(), String> {
-    init_schema_prerequisites_for_phase3(conn)?;
+    ark_store::open::init_schema_prerequisites_for_phase3(conn)?;
     crate::canonical_types::migration_objects::ensure_object_state_schema(conn).map_err(
         |error| format!("canonical runtime schema during init_schema failed: {error:?}"),
     )?;

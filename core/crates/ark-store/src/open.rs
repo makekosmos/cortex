@@ -23,6 +23,41 @@ pub fn check_integrity(connection: &Connection) -> Result<(), String> {
     Ok(())
 }
 
+/// Initializes the shared database schema and Store-owned prerequisites for
+/// canonical migrations. Canonical policy migrations remain in `ark-core`.
+pub fn init_schema_prerequisites_for_phase3(connection: &Connection) -> Result<(), String> {
+    check_integrity(connection)?;
+    connection
+        .pragma_update(None, "auto_vacuum", "FULL")
+        .map_err(|error| error.to_string())?;
+    connection
+        .execute_batch(crate::schema::CREATE_TABLES)
+        .map_err(|error| error.to_string())?;
+    crate::schema::migrations::ensure_database_compatibility(connection)?;
+    connection
+        .execute_batch("SAVEPOINT ark_phase2_init")
+        .map_err(|error| error.to_string())?;
+    let result = (|| {
+        crate::type_registry::migrate_schema(connection)?;
+        crate::data_platform::ensure_schema(connection)?;
+        if crate::objects::ensure_object_search_fts(connection).is_ok() {
+            crate::objects::rebuild_object_search_fts(connection)?;
+        }
+        Ok::<(), String>(())
+    })();
+    match result {
+        Ok(()) => connection
+            .execute_batch("RELEASE ark_phase2_init")
+            .map_err(|error| error.to_string()),
+        Err(error) => {
+            let _ = connection.execute_batch(
+                "ROLLBACK TO SAVEPOINT ark_phase2_init; RELEASE SAVEPOINT ark_phase2_init",
+            );
+            Err(error)
+        }
+    }
+}
+
 pub fn backup_to_file_chunked_unpublished(
     source_path: &str,
     destination_path: &str,
@@ -45,7 +80,7 @@ pub fn backup_to_file_chunked_unpublished(
 
 #[cfg(test)]
 mod tests {
-    use super::{check_integrity, open_db};
+    use super::{check_integrity, init_schema_prerequisites_for_phase3, open_db};
     use rusqlite::Connection;
 
     #[test]
@@ -80,5 +115,29 @@ mod tests {
     fn integrity_check_accepts_a_valid_database() {
         let connection = Connection::open_in_memory().expect("database opens");
         check_integrity(&connection).expect("fresh database passes integrity check");
+    }
+
+    #[test]
+    fn phase_two_schema_bootstrap_is_idempotent() {
+        let connection = Connection::open_in_memory().expect("database opens");
+
+        init_schema_prerequisites_for_phase3(&connection).expect("initial schema bootstraps");
+        init_schema_prerequisites_for_phase3(&connection).expect("schema reopens idempotently");
+
+        for table in [
+            "object_types",
+            "object_type_versions",
+            "sync_profiles",
+            "accepted_peer_sync_policies",
+        ] {
+            let exists: bool = connection
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1)",
+                    [table],
+                    |row| row.get(0),
+                )
+                .expect("schema table lookup succeeds");
+            assert!(exists, "Store bootstrap creates {table}");
+        }
     }
 }

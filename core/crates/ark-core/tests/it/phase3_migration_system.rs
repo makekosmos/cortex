@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used)]
 use ark_core::canonical_types::migration::{migrate_phase3, retire_legacy_planning_tables};
-use ark_core::db::{backup_to_file, init_schema, init_schema_prerequisites_for_phase3};
+use ark_core::db::{backup_to_file, init_schema};
 use ark_store::open::open_db;
 use rusqlite::{params, Connection};
 use serde_json::json;
@@ -41,7 +41,7 @@ fn phase9_retires_planning_tables_after_lossless_canonical_migration() {
     let dir = crate::support::temp_dir();
     let path = dir.path().join("planning-retirement.sqlite");
     let conn = open_db(path.to_str().unwrap()).unwrap();
-    init_schema_prerequisites_for_phase3(&conn).unwrap();
+    ark_store::open::init_schema_prerequisites_for_phase3(&conn).unwrap();
     conn.execute_batch(LEGACY_AREAS_HEADINGS_SCHEMA).unwrap();
     conn.execute_batch(
         "INSERT INTO projects(id,title,notes,status,sort_order,color_tag,area_id,created_at)
@@ -127,7 +127,7 @@ fn phase9_retires_planning_tables_after_lossless_canonical_migration() {
 #[test]
 fn phase9_retirement_refuses_archive_or_semantic_mismatch_and_rolls_back_drop_batch() {
     let conn = Connection::open_in_memory().unwrap();
-    init_schema_prerequisites_for_phase3(&conn).unwrap();
+    ark_store::open::init_schema_prerequisites_for_phase3(&conn).unwrap();
     conn.execute_batch(LEGACY_AREAS_HEADINGS_SCHEMA).unwrap();
     conn.execute_batch(
         "INSERT INTO projects(id,title,status,area_id,created_at) VALUES('project-1','Project',
@@ -207,7 +207,7 @@ fn init_schema_tolerates_blocked_phase3_plan_and_keeps_legacy_tables() {
     // legacy tables stay readable via the compatibility view, and retirement
     // stays armed for the next successful migration.
     let conn = Connection::open_in_memory().unwrap();
-    init_schema_prerequisites_for_phase3(&conn).unwrap();
+    ark_store::open::init_schema_prerequisites_for_phase3(&conn).unwrap();
     phase3_legacy_fixtures::seed_historical_legacy_authorities(&conn);
     conn.execute_batch(LEGACY_AREAS_HEADINGS_SCHEMA).unwrap();
     conn.execute_batch(

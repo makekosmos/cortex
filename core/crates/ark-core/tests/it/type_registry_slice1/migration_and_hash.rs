@@ -1,4 +1,4 @@
-use ark_core::db::{init_schema, init_schema_prerequisites_for_phase3};
+use ark_core::db::init_schema;
 use ark_core::type_registry::{
     canonical_schema_hash, insert_type_version, list_type_versions, register_alias, register_type,
     resolve_alias, set_base_type, set_current_version, set_status, AliasRecord, TypeRegistration,
@@ -159,7 +159,7 @@ fn builtin_startup_does_not_rewrite_existing_definition_or_timestamp() {
         [],
     )
     .unwrap();
-    init_schema_prerequisites_for_phase3(&conn).unwrap();
+    ark_store::open::init_schema_prerequisites_for_phase3(&conn).unwrap();
     assert_eq!(
         conn.query_row(
             "SELECT name FROM object_types WHERE id='com.kosmos.note'",

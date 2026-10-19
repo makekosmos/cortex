@@ -1,13 +1,12 @@
 use ark_core::canonical_types::migration::{
     migrate_phase3, migrate_phase3_with_options, plan_phase3, MigrationOptions,
 };
-use ark_core::db::init_schema_prerequisites_for_phase3;
 use rusqlite::{params, Connection};
 use serde_json::json;
 
 fn db() -> Connection {
     let conn = Connection::open_in_memory().unwrap();
-    init_schema_prerequisites_for_phase3(&conn).unwrap();
+    ark_store::open::init_schema_prerequisites_for_phase3(&conn).unwrap();
     conn
 }
 

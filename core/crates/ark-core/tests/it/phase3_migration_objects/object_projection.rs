@@ -1,11 +1,10 @@
 use ark_core::canonical_types::migration_objects::{apply_plan, plan_objects};
-use ark_core::db::init_schema_prerequisites_for_phase3;
 use rusqlite::{params, Connection};
 use serde_json::json;
 
 fn db() -> Connection {
     let conn = Connection::open_in_memory().expect("sqlite");
-    init_schema_prerequisites_for_phase3(&conn).expect("schema");
+    ark_store::open::init_schema_prerequisites_for_phase3(&conn).expect("schema");
     for id in [
         "com.kosmos.note",
         "com.kosmos.task",

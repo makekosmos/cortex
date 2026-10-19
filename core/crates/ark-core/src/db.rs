@@ -74,9 +74,7 @@ pub use objects::{
     list_running_time_entries, search_objects, upsert_object_link, upsert_object_type,
     SearchResult,
 };
-pub use open::{
-    backup_to_file, backup_to_file_chunked, init_schema, init_schema_prerequisites_for_phase3,
-};
+pub use open::{backup_to_file, backup_to_file_chunked, init_schema};
 pub use open::{count_pending_for_type, insert_pending_object};
 
 mod integration_replication_admission;

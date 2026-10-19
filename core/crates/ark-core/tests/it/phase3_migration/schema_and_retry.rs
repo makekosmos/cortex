@@ -184,7 +184,7 @@ fn phase3_migration_creates_additive_state_and_promotes_registry_atomically() {
 #[test]
 fn phase3_clear_all_removes_ephemeral_state_but_preserves_locked_registry_and_archive() {
     let conn = Connection::open_in_memory().unwrap();
-    init_schema_prerequisites_for_phase3(&conn).unwrap();
+    ark_store::open::init_schema_prerequisites_for_phase3(&conn).unwrap();
     phase3_legacy_fixtures::seed_historical_legacy_authorities(&conn);
     ark_core::canonical_types::migration::migrate_phase3(&conn).unwrap();
     conn.execute(

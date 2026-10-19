@@ -1,6 +1,5 @@
 #![allow(clippy::unwrap_used)]
 use ark_core::canonical_types::preflight::{inventory_sources, preflight_phase3, SourceKind};
-use ark_core::db::init_schema_prerequisites_for_phase3;
 use rusqlite::{params, Connection};
 
 use crate::phase3_legacy_fixtures;
@@ -8,7 +7,7 @@ use crate::phase3_legacy_fixtures;
 #[test]
 fn preflight_inventories_native_rows_and_is_read_only() {
     let conn = Connection::open_in_memory().unwrap();
-    init_schema_prerequisites_for_phase3(&conn).unwrap();
+    ark_store::open::init_schema_prerequisites_for_phase3(&conn).unwrap();
     conn.execute_batch(
         "CREATE TABLE areas (id TEXT PRIMARY KEY, title TEXT NOT NULL, sort_order INTEGER NOT NULL
          DEFAULT 0, created_at TEXT NOT NULL);
@@ -90,7 +89,7 @@ fn preflight_inventories_native_rows_and_is_read_only() {
 #[test]
 fn preflight_preserves_malformed_json_bytes_and_blocks_without_schema_mutation() {
     let conn = Connection::open_in_memory().unwrap();
-    init_schema_prerequisites_for_phase3(&conn).unwrap();
+    ark_store::open::init_schema_prerequisites_for_phase3(&conn).unwrap();
     phase3_legacy_fixtures::seed_historical_legacy_authorities(&conn);
     let raw = b"{";
     conn.execute(
@@ -137,7 +136,7 @@ fn preflight_preserves_malformed_json_bytes_and_blocks_without_schema_mutation()
 fn inventory_hash_and_order_are_insertion_independent_for_generic_sources() {
     fn db(rows: &[(&str, &str)]) -> Connection {
         let conn = Connection::open_in_memory().unwrap();
-        init_schema_prerequisites_for_phase3(&conn).unwrap();
+        ark_store::open::init_schema_prerequisites_for_phase3(&conn).unwrap();
         phase3_legacy_fixtures::seed_historical_legacy_authorities(&conn);
         for (id, props) in rows {
             conn.execute(

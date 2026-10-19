@@ -1,5 +1,5 @@
 use ark_core::canonical_types::pending::{insert_pending_object, replay_pending_for_type};
-use ark_core::db::{init_schema, init_schema_prerequisites_for_phase3};
+use ark_core::db::init_schema;
 use ark_core::types::SyncEntity;
 use rusqlite::{params, Connection};
 use serde_json::json;

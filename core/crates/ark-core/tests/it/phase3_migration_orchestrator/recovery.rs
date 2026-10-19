@@ -233,7 +233,7 @@ fn durable_resume_reopens_committed_partial_ledger_without_duplicates() {
     let path = dir.path().join("phase3-resume.sqlite");
     {
         let conn = Connection::open(&path).unwrap();
-        init_schema_prerequisites_for_phase3(&conn).unwrap();
+        ark_store::open::init_schema_prerequisites_for_phase3(&conn).unwrap();
         legacy(&conn, "n", "note_obj", json!({"description":"x"}));
         conn.execute(
             concat!(
