@@ -40,7 +40,7 @@ pub(crate) use command::{
     LegacyGraphWriteCommand, LoadAcceptedPeerSyncPolicyQuery, LoadActiveLocalSyncProfileQuery,
     LoadDeviceRegistryQuery, LoadEntitiesQuery, LoadOrGenerateIrohSecretKeyCommand,
     LoadPolicyBoundEntitiesPageQuery, LoadRegistryEventsQuery, LoadSyncProfileForSyncQuery,
-    LocalCoreTaskWrite, LocalUsageWriteCommand, ObjectReadQuery, PersistIntegrationGrantCommand,
+    LocalCoreTaskWrite, ObjectReadQuery, PersistIntegrationGrantCommand,
     PersistNodeAuthorizationCommand, PolicyBoundFeedDeliveryPageQuery,
     PrepareTaskMergeBatchCommand, PublishIntegrationCredentialEnvelopeCommand,
     ReceiveInboxReceiptCommand, RegisterPackageTypesCommand, RegistryDeviceEnabledQuery,

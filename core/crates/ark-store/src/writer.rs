@@ -101,6 +101,17 @@ impl SqliteWriter {
             crate::canonical_game::apply_upsert(connection, command, fallback_device_id)
         })
     }
+
+    pub fn apply_local_usage_write(
+        &mut self,
+        device_id: &str,
+        write: ark_application::usage::LocalUsageWrite,
+    ) -> Result<Vec<ark_application::usage::UsageMutation>, TransactionFailure<String>> {
+        self.immediate(|transaction| {
+            let session = crate::usage_mutation::SqliteUsageWriteSession::new(transaction);
+            ark_application::usage::apply_local_usage_write(&session, device_id, write)
+        })
+    }
 }
 
 #[cfg(test)]

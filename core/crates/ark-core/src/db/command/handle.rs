@@ -4,6 +4,7 @@ use rusqlite::{OpenFlags, TransactionBehavior};
 use std::time::Instant;
 
 mod object_mutation;
+mod usage;
 
 #[derive(Clone)]
 pub(crate) struct DbHandle {

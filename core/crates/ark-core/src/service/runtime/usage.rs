@@ -6,10 +6,7 @@ async fn submit_local_usage_write(
     write: crate::application::usage::LocalUsageWrite,
 ) -> Result<Vec<SyncEntity>, String> {
     let mutations = get_db_handle(state)?
-        .submit(
-            db::CommandContext::engine(),
-            db::LocalUsageWriteCommand::new(device_id, write),
-        )
+        .submit_local_usage_write(db::CommandContext::engine(), device_id, write)
         .await
         .map_err(|error| error.to_string())?;
     Ok(mutations
