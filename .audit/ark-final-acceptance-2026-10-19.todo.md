@@ -29,6 +29,7 @@
 - [x] Record the selected target, compatibility contract, verification predicate, and cutover order in `.audit/ark-storage-cutover.design.md`.
 - [x] Generate a source-aware inventory of 45 write commands, 24 read queries, one maintenance command, and SQLite references by source scope. The artifact is `.audit/ark-core-storage-census-2026-10-19.md`.
 - [x] Move object-link mutation storage and revision/tombstone recording into the Store-owned adapter; split its application port from type-registry mutation. The Core command still passes the current transaction, so this is an extraction increment rather than completion of the opaque transaction boundary.
+- [x] Move the usage-write SQLite adapter from Core to Store and migrate the local usage command in the same change. The actor still owns scheduling and the current transaction type remains to be replaced by the opaque Store boundary.
 - [ ] Map each typed operation to its application policy, Store capability, nested savepoints, and post-commit effects before freezing the Store API. The command inventory and actor transaction/bootstrap contracts are recorded in the census and `.audit/ark-storage-cutover.design.md`.
 - [x] Add and verify the Core SQLite ownership gate against the current violating source and a clean fixture. Its fixtures pass 4/4; the source-aware scan reports 630 production findings, 635 test-file findings, 11 inline-test findings, and 2 debug-only findings.
 - [ ] Re-estimate the remaining implementation effort from the completed census.

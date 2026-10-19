@@ -27,7 +27,6 @@ pub(crate) use backend::SqliteObjectMutationSession;
 pub(crate) use backend::SqliteObjectWriteSession;
 pub(crate) use backend::SqliteSignedIntegrationFrameSession;
 pub(crate) use backend::SqliteTypeMutationSession;
-pub(crate) use backend::SqliteUsageWriteSession;
 pub use backend::{delete_tag, SqliteStorageBackend};
 pub use command::CommandSource;
 pub(crate) use command::{

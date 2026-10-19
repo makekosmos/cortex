@@ -1,6 +1,6 @@
 use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError};
 use crate::application::usage::{apply_local_usage_write, LocalUsageWrite, UsageMutation};
-use crate::db::SqliteUsageWriteSession;
+use ark_store::usage_mutation::SqliteUsageWriteSession;
 use rusqlite::Transaction;
 use serde::Serialize;
 

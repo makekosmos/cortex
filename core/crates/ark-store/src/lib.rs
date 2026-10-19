@@ -20,6 +20,7 @@ pub mod task_merge;
 pub mod type_registry;
 pub mod usage;
 pub mod usage_history;
+pub mod usage_mutation;
 pub mod usage_queries;
 pub mod usage_sync_log;
 pub mod writer;
