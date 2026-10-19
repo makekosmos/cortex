@@ -77,7 +77,7 @@
       "count": 2
     },
     {
-      "path": "core/crates/ark-core/src/canonical_types/pending/queue.rs",
+      "path": "core/crates/ark-store/src/pending_objects.rs",
       "category": "SQLite mutation API",
       "count": 2
     },

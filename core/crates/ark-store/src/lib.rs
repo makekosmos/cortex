@@ -9,6 +9,7 @@ pub mod object_write_receipts;
 pub mod objects;
 pub mod open;
 pub mod operation_receipt;
+pub mod pending_objects;
 pub mod schema;
 pub mod snapshot;
 pub mod sync_kv;
