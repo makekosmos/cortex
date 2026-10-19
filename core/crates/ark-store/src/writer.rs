@@ -1,5 +1,7 @@
 use rusqlite::{Connection, Transaction, TransactionBehavior};
 
+use ark_application::object_mutation::{LocalObjectUpsert, ObjectUpsertOutcome};
+
 /// The single SQLite connection used by ARK's production writer.
 ///
 /// The caller owns scheduling and must ensure only one writer task runs at a
@@ -36,6 +38,22 @@ impl SqliteWriter {
         let output = operation(&transaction).map_err(TransactionFailure::Operation)?;
         transaction.commit().map_err(TransactionFailure::Commit)?;
         Ok(output)
+    }
+
+    pub fn execute_local_object_upsert(
+        &mut self,
+        write: LocalObjectUpsert,
+        principal: String,
+        operation_id: Option<String>,
+    ) -> Result<ObjectUpsertOutcome, TransactionFailure<String>> {
+        self.immediate(|transaction| {
+            crate::object_write::apply_local_object_upsert(
+                transaction,
+                write,
+                &principal,
+                operation_id.as_deref(),
+            )
+        })
     }
 
     pub fn with_connection_mut<T>(&mut self, operation: impl FnOnce(&mut Connection) -> T) -> T {

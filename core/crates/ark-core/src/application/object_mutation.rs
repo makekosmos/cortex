@@ -126,6 +126,8 @@ pub fn apply_object_upsert(
     session: &dyn ObjectMutationSession,
     write: LocalObjectUpsert,
 ) -> Result<ObjectUpsertCommit, String> {
+    ark_application::object_mutation::validate_local_object_upsert_type(&write)
+        .map_err(|error| error.to_string())?;
     let current_snapshot = write
         .expected_snapshot
         .as_ref()
@@ -139,12 +141,7 @@ pub fn apply_object_upsert(
     let object = session.prepare_object(write.object)?;
     session.persist_object(&object)?;
     let hlc = session.record_upsert(ObjectRevisionKind::Object, &object.id, &write.device_id)?;
-    let entity = object_sync_entity(&object.id, &object, hlc, None);
-    Ok(ObjectUpsertCommit {
-        entity,
-        id: object.id,
-        type_id: object.type_id,
-    })
+    Ok(ark_application::object_mutation::build_local_object_upsert_commit(object, hlc))
 }
 
 pub fn apply_object_delete(
@@ -174,20 +171,6 @@ pub fn apply_object_delete(
         entity: make_sync_entity("object", &write.id, data, hlc, Some(true)),
         id: write.id,
     })
-}
-
-fn object_sync_entity(
-    id: &str,
-    object: &ArkObject,
-    hlc: String,
-    deleted: Option<bool>,
-) -> SyncEntity {
-    let data = serde_json::to_value(object)
-        .unwrap_or_else(|_| json!({}))
-        .as_object()
-        .cloned()
-        .unwrap_or_default();
-    make_sync_entity("object", id, Value::Object(data), hlc, deleted)
 }
 
 fn make_sync_entity(

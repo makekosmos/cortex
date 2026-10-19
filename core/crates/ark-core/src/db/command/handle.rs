@@ -1,5 +1,7 @@
 use super::*;
-use executor::actor::{ActorOwner, ActorShared, TypedCommand, TypedMaintenance, WriterTask};
+use executor::actor::{
+    ActorOwner, ActorShared, LocalObjectUpsertTask, TypedCommand, TypedMaintenance, WriterTask,
+};
 use rusqlite::{OpenFlags, TransactionBehavior};
 use std::time::Instant;
 
@@ -115,6 +117,79 @@ impl DbHandle {
                 spawn_test_submit(Arc::clone(connection), context, command, _admission)
                     .await
                     .map_err(|error| DbError::Storage(error.to_string()))?
+            }
+        }
+    }
+
+    pub(crate) async fn submit_local_object_upsert(
+        &self,
+        context: CommandContext,
+        write: ark_application::object_mutation::LocalObjectUpsert,
+        operation_id: Option<String>,
+    ) -> Result<
+        super::operation_receipt::OperationResult<
+            ark_application::object_mutation::ObjectUpsertCommit,
+        >,
+        DbError,
+    > {
+        if context.class != CommandClass::Interactive {
+            return Err(DbError::Invalid("database command class mismatch".into()));
+        }
+        context.require_engine()?;
+        if operation_id
+            .as_deref()
+            .is_some_and(|id| id.trim().is_empty() || id.len() > 256)
+        {
+            return Err(DbError::Invalid(
+                "operationId must contain 1 to 256 bytes".into(),
+            ));
+        }
+        #[derive(serde::Serialize)]
+        struct UpsertCommand<'a> {
+            write: &'a ark_application::object_mutation::LocalObjectUpsert,
+        }
+        #[derive(serde::Serialize)]
+        struct ReceiptCommand<'a> {
+            operation_id: &'a Option<String>,
+            command_type: &'static str,
+            command: UpsertCommand<'a>,
+        }
+        let weight = serde_json::to_vec(&ReceiptCommand {
+            operation_id: &operation_id,
+            command_type: "object.upsert.v1",
+            command: UpsertCommand { write: &write },
+        })
+        .map_or(usize::MAX, |bytes| bytes.len());
+        if weight == 0 || weight > super::MAX_COMMAND_BYTES {
+            return Err(DbError::TooLarge);
+        }
+
+        match &self.backend {
+            HandleBackend::Actor(actor) => {
+                let (reply, response) = tokio::sync::oneshot::channel();
+                let task: Box<dyn WriterTask> = Box::new(LocalObjectUpsertTask {
+                    write,
+                    principal: context.operation_principal(),
+                    operation_id,
+                    reply,
+                });
+                actor.admit(context.class, &context.source, weight, task)?;
+                let outcome = response.await.unwrap_or(Err(DbError::OutcomeUnknown))?;
+                Ok(super::operation_receipt::OperationResult {
+                    value: outcome.value,
+                    replayed: outcome.replayed,
+                })
+            }
+            #[cfg(debug_assertions)]
+            HandleBackend::Test(_) => {
+                let command = super::commands::LocalObjectUpsertCommand::new(write);
+                self.submit_with_optional_operation_id(
+                    context,
+                    operation_id,
+                    "object.upsert.v1",
+                    command,
+                )
+                .await
             }
         }
     }

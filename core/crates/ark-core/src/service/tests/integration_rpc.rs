@@ -254,6 +254,83 @@ async fn oversized_request_is_rejected_before_queue_and_service_keeps_serving() 
         .expect("service shuts down before the temporary database is removed");
 }
 
+#[tokio::test]
+async fn production_writer_object_upsert_replays_receipt_without_new_revision() {
+    let dir = crate::test_support::temp_dir();
+    let db_path = dir.path().join("ark.db");
+    let service = ArkService::open(db_path.to_str().unwrap())
+        .await
+        .expect("service opens");
+    let request = |title: &str| {
+        json!({
+            "operationId": "object-upsert-production-replay",
+            "deviceId": "ignored-for-principal",
+            "object": {
+                "id": "production-upsert-note",
+                "typeId": "com.kosmos.note",
+                "typeVersion": "1.0.0",
+                "title": title,
+                "contentJson": {"type":"doc","content":[]},
+                "propsJson": {"description":null,"extensions":{}},
+                "createdAt": "2026-10-19T00:00:00.000Z",
+                "updatedAt": "2026-10-19T00:00:00.000Z",
+                "deletedAt": null
+            }
+        })
+    };
+
+    assert_eq!(
+        service
+            .call("upsert_object", request("Note"))
+            .await
+            .expect("first upsert commits"),
+        json!(true)
+    );
+    let first_revision = {
+        let connection = rusqlite::Connection::open(&db_path).expect("database opens");
+        connection
+            .query_row(
+                "SELECT hlc FROM object_sync_versions WHERE object_id='production-upsert-note'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .expect("revision exists")
+    };
+    assert_eq!(
+        service
+            .call("upsert_object", request("Note"))
+            .await
+            .expect("retry replays"),
+        json!(true)
+    );
+    let conflict = service
+        .call("upsert_object", request("Different payload"))
+        .await
+        .expect_err("operation id reuse with another payload is rejected");
+    assert!(conflict.to_string().contains("different command payload"));
+
+    let connection = rusqlite::Connection::open(&db_path).expect("database opens");
+    let (receipts, revision, title): (i64, String, String) = connection
+        .query_row(
+            "SELECT (SELECT COUNT(*) FROM ark_operation_receipts
+                     WHERE principal='engine' AND operation_id='object-upsert-production-replay'),
+                    object_sync_versions.hlc, objects.title
+             FROM object_sync_versions JOIN objects ON objects.id=object_sync_versions.object_id
+             WHERE object_sync_versions.object_id='production-upsert-note'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .expect("receipt, revision, and object read");
+    assert_eq!(receipts, 1);
+    assert_eq!(revision, first_revision);
+    assert_eq!(title, "Note");
+
+    service
+        .shutdown(Instant::now() + Duration::from_secs(2))
+        .await
+        .expect("service shuts down");
+}
+
 #[test]
 fn integration_issuer_key_lookup_for_publish_uses_the_exact_wire_shape() {
     let request: Request = serde_json::from_value(json!({

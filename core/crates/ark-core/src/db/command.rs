@@ -26,8 +26,8 @@ pub(crate) use commands::{
     LoadAcceptedPeerSyncPolicyQuery, LoadActiveLocalSyncProfileQuery, LoadDeviceRegistryQuery,
     LoadEntitiesQuery, LoadOrGenerateIrohSecretKeyCommand, LoadPolicyBoundEntitiesPageQuery,
     LoadRegistryEventsQuery, LoadSyncProfileForSyncQuery, LocalBookCoverCommand,
-    LocalCoreTaskWrite, LocalObjectDeleteCommand, LocalObjectUpsertCommand, LocalUsageWriteCommand,
-    ObjectReadQuery, PersistIntegrationGrantCommand, PersistNodeAuthorizationCommand,
+    LocalCoreTaskWrite, LocalObjectDeleteCommand, LocalUsageWriteCommand, ObjectReadQuery,
+    PersistIntegrationGrantCommand, PersistNodeAuthorizationCommand,
     PolicyBoundFeedDeliveryPageQuery, PrepareTaskMergeBatchCommand,
     PublishIntegrationCredentialEnvelopeCommand, ReceiveInboxReceiptCommand,
     RegisterPackageTypesCommand, RegistryDeviceEnabledQuery, RegistryPeerAdmissionQuery,
@@ -286,6 +286,8 @@ impl DbError {
             || message == "authenticated sync principal required"
         {
             Self::Permission(message)
+        } else if message == "operationId was already used with a different command payload" {
+            Self::Conflict(message)
         } else if message.starts_with("object_write_slice_unsupported")
             || message.starts_with("object_write_slice_requires")
             || message.starts_with("unknown_type_or_version")

@@ -227,19 +227,15 @@ pub(super) async fn upsert_object(
             replayed,
         )
     } else {
-        let command = db::LocalObjectUpsertCommand::new(
-            crate::application::object_mutation::LocalObjectUpsert {
-                object,
-                expected_snapshot,
-                device_id: local_write_device_id(device_id),
-            },
-        );
         let result = get_db_handle(state)?
-            .submit_with_optional_operation_id(
+            .submit_local_object_upsert(
                 db::CommandContext::engine(),
+                ark_application::object_mutation::LocalObjectUpsert {
+                    object,
+                    expected_snapshot,
+                    device_id: local_write_device_id(device_id),
+                },
                 operation_id,
-                "object.upsert.v1",
-                command,
             )
             .await
             .map_err(|error| error.to_string())?;

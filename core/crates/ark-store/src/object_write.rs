@@ -4,7 +4,8 @@ use ark_domain::canonical_type::{
 };
 use ark_domain::object_write::ObjectWriteSnapshot;
 use ark_domain::types::{ArkObject, ArkObjectWrite, ObjectLink};
-use rusqlite::Connection;
+use rusqlite::{Connection, Transaction};
+use serde::Serialize;
 
 /// Resolve the persisted type identity and validate an object write before
 /// callers perform any persistence or synchronization mutation.
@@ -30,6 +31,129 @@ pub fn prepare_object(
     });
 
     prepare_resolved_object(input, &canonical_type_id, &resolved_version, registration)
+}
+
+/// Execute one local object upsert and its receipt inside the caller's single
+/// transaction. Production callers use `SqliteWriter::execute_local_object_upsert`.
+pub fn apply_local_object_upsert(
+    transaction: &Transaction<'_>,
+    write: ark_application::object_mutation::LocalObjectUpsert,
+    principal: &str,
+    operation_id: Option<&str>,
+) -> Result<ark_application::object_mutation::ObjectUpsertOutcome, String> {
+    use ark_application::object_mutation::{
+        build_local_object_upsert_commit, validate_local_object_upsert,
+        validate_local_object_upsert_type, ObjectUpsertOutcome,
+    };
+
+    const COMMAND_TYPE: &str = "object.upsert.v1";
+    let payload_sha256 = operation_id
+        .map(|_| operation_payload_hash(COMMAND_TYPE, &write))
+        .transpose()?;
+
+    if let (Some(operation_id), Some(payload_sha256)) = (operation_id, payload_sha256.as_deref()) {
+        if let Some(receipt) = crate::operation_receipt::load(transaction, principal, operation_id)
+            .map_err(|error| error.to_string())?
+        {
+            if receipt.command_type != COMMAND_TYPE || receipt.payload_sha256 != payload_sha256 {
+                return Err("operationId was already used with a different command payload".into());
+            }
+            let value =
+                serde_json::from_str(&receipt.result_json).map_err(|error| error.to_string())?;
+            return Ok(ObjectUpsertOutcome {
+                value,
+                replayed: true,
+            });
+        }
+    }
+
+    validate_local_object_upsert_type(&write).map_err(|error| error.to_string())?;
+    let current_snapshot = write
+        .expected_snapshot
+        .as_ref()
+        .map(|_| object_snapshot(transaction, &write.object.id))
+        .transpose()?;
+    validate_local_object_upsert(&write, current_snapshot.as_ref())
+        .map_err(|error| error.to_string())?;
+
+    let object = prepare_object(transaction, write.object).map_err(|error| error.to_string())?;
+    crate::objects::upsert_object(transaction, &object)?;
+    let hlc = crate::sync_versions::bump_sync_version_vector(
+        transaction,
+        "object",
+        &object.id,
+        &write.device_id,
+        false,
+    )?;
+    crate::sync_tombstones::delete(transaction, &object.id)?;
+    let outcome = ObjectUpsertOutcome {
+        value: build_local_object_upsert_commit(object, hlc),
+        replayed: false,
+    };
+
+    if let (Some(operation_id), Some(payload_sha256)) = (operation_id, payload_sha256) {
+        let result_json =
+            serde_json::to_string(&outcome.value).map_err(|error| error.to_string())?;
+        crate::operation_receipt::insert(
+            transaction,
+            principal,
+            operation_id,
+            &crate::operation_receipt::OperationReceipt {
+                command_type: COMMAND_TYPE.to_owned(),
+                payload_sha256,
+                result_json,
+            },
+        )
+        .map_err(|error| error.to_string())?;
+    }
+
+    Ok(outcome)
+}
+
+fn object_snapshot(
+    connection: &Connection,
+    object_id: &str,
+) -> Result<ObjectWriteSnapshot, String> {
+    let identity = crate::objects::object_type_identity(connection, object_id)?;
+    let object_revision = crate::sync_versions::object_revision(connection, object_id)?;
+    let task_revision = crate::task_merge::task_snapshot_token(connection, object_id)
+        .map_err(|error| error.to_string())?;
+    Ok(match identity {
+        Some(identity) => {
+            let is_task = identity.type_id == "core.task";
+            ObjectWriteSnapshot {
+                exists: true,
+                type_id: Some(identity.type_id),
+                type_version: Some(identity.type_version),
+                revision: if is_task {
+                    task_revision.or(object_revision)
+                } else {
+                    object_revision
+                },
+            }
+        }
+        None => ObjectWriteSnapshot {
+            exists: false,
+            type_id: None,
+            type_version: None,
+            revision: task_revision.or(object_revision),
+        },
+    })
+}
+
+fn operation_payload_hash(command_type: &str, command: &impl Serialize) -> Result<String, String> {
+    use sha2::{Digest, Sha256};
+
+    #[derive(Serialize)]
+    struct Command<'a, T> {
+        write: &'a T,
+    }
+
+    let command = Command { write: command };
+    let payload = serde_json::to_value(("ark-operation-v1", command_type, command))
+        .map_err(|error| error.to_string())?;
+    let canonical_payload = serde_json::to_vec(&payload).map_err(|error| error.to_string())?;
+    Ok(format!("{:x}", Sha256::digest(canonical_payload)))
 }
 
 pub struct SqliteObjectWriteSession<'connection> {

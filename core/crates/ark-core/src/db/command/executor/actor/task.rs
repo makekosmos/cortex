@@ -70,6 +70,45 @@ impl<C: DbCommand> WriterTask for TypedCommand<C> {
     }
 }
 
+pub(in crate::db::command) struct LocalObjectUpsertTask {
+    pub write: ark_application::object_mutation::LocalObjectUpsert,
+    pub principal: String,
+    pub operation_id: Option<String>,
+    pub reply:
+        oneshot::Sender<Result<ark_application::object_mutation::ObjectUpsertOutcome, DbError>>,
+}
+
+impl WriterTask for LocalObjectUpsertTask {
+    fn run(
+        self: Box<Self>,
+        writer: &mut SqliteWriter,
+        on_error: &mut dyn FnMut(&DbError),
+    ) -> (Result<(), DbError>, Publish) {
+        let Self {
+            write,
+            principal,
+            operation_id,
+            reply,
+        } = *self;
+        let result = writer
+            .execute_local_object_upsert(write, principal, operation_id)
+            .map_err(|failure| match failure {
+                TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+                TransactionFailure::Operation(error) => DbError::from_application_error(error),
+                TransactionFailure::Commit(error) => DbError::CommitFailed(error.to_string()),
+            });
+        settle(result, reply, on_error)
+    }
+
+    fn cancel_before_start(self: Box<Self>) {
+        let _ = self.reply.send(Err(DbError::CancelledBeforeStart));
+    }
+
+    fn receiver_closed(&self) -> bool {
+        self.reply.is_closed()
+    }
+}
+
 pub(in crate::db::command) struct TypedMaintenance<C: DbMaintenanceCommand> {
     pub command: C,
     pub reply: oneshot::Sender<Result<C::Output, DbError>>,

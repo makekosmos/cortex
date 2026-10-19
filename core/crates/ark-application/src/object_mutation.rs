@@ -1,5 +1,6 @@
 use ark_domain::object_write::ObjectWriteSnapshot;
-use ark_domain::types::{ArkObjectWrite, SyncEntity};
+use ark_domain::types::{ArkObject, ArkObjectWrite, SyncEntity};
+use serde_json::json;
 use std::fmt;
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -21,6 +22,12 @@ pub struct ObjectUpsertCommit {
     pub entity: SyncEntity,
     pub id: String,
     pub type_id: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ObjectUpsertOutcome {
+    pub value: ObjectUpsertCommit,
+    pub replayed: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -46,19 +53,51 @@ impl fmt::Display for ObjectMutationError {
 
 impl std::error::Error for ObjectMutationError {}
 
+pub fn build_local_object_upsert_commit(object: ArkObject, hlc: String) -> ObjectUpsertCommit {
+    let id = object.id.clone();
+    let type_id = object.type_id.clone();
+    let mut data = serde_json::to_value(&object)
+        .unwrap_or_else(|_| json!({}))
+        .as_object()
+        .cloned()
+        .unwrap_or_default();
+    data.remove("id");
+
+    ObjectUpsertCommit {
+        entity: SyncEntity {
+            entity_type: "object".to_owned(),
+            id: id.clone(),
+            data,
+            hlc,
+            deleted: None,
+            origin_device_id: None,
+            origin_seq: None,
+        },
+        id,
+        type_id,
+    }
+}
+
 pub fn validate_local_object_upsert(
     write: &LocalObjectUpsert,
     current_snapshot: Option<&ObjectWriteSnapshot>,
 ) -> Result<(), ObjectMutationError> {
-    if write.object.type_id == "core.task" {
-        return Err(ObjectMutationError::UnsupportedType);
-    }
+    validate_local_object_upsert_type(write)?;
     if write
         .expected_snapshot
         .as_ref()
         .is_some_and(|expected| Some(expected) != current_snapshot)
     {
         return Err(ObjectMutationError::StaleSnapshot);
+    }
+    Ok(())
+}
+
+pub fn validate_local_object_upsert_type(
+    write: &LocalObjectUpsert,
+) -> Result<(), ObjectMutationError> {
+    if write.object.type_id == "core.task" {
+        return Err(ObjectMutationError::UnsupportedType);
     }
     Ok(())
 }
