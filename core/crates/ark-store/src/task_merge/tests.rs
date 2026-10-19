@@ -1,6 +1,6 @@
 use super::{
-    canonical_bootstrap, canonical_operation, read_journal_page, verify_bootstrap_payload,
-    TaskMergeStoreError,
+    canonical_bootstrap, canonical_operation, read_conflict_set, read_journal_page,
+    verify_bootstrap_payload, TaskMergeStoreError,
 };
 use ark_application::sync_storage::TaskMergeJournalRecord;
 use ark_domain::task_merge::{
@@ -95,18 +95,13 @@ fn bootstrap() -> TaskMergeBootstrap {
 
 fn insert_operation(connection: &Connection, hash: &str) {
     let (operation, json, _) = canonical_operation(operation()).expect("operation canonicalizes");
+    let unit = serde_json::to_string(&operation.unit).expect("unit serializes");
     connection
         .execute(
             "INSERT INTO task_merge_operations(
                     operation_id, object_id, unit, operation_json, payload_sha256
                  ) VALUES (?1, ?2, ?3, ?4, ?5)",
-            rusqlite::params![
-                operation.id.as_str(),
-                operation.object_id,
-                "title",
-                json,
-                hash
-            ],
+            rusqlite::params![operation.id.as_str(), operation.object_id, unit, json, hash],
         )
         .expect("operation inserts");
     connection
@@ -178,6 +173,69 @@ fn journal_page_rejects_mismatched_operation_payload() {
         read_journal_page(&connection, 0, 1, 10).expect_err("payload hash mismatch is rejected");
     assert!(matches!(error, TaskMergeStoreError::Invalid(ref error)
             if error == "task_merge_journal_payload_mismatch"));
+}
+
+#[test]
+fn conflict_read_decodes_persisted_operations_and_reports_missing_parents() {
+    let connection = connection();
+    let mut operation = operation();
+    operation
+        .parents
+        .push(OperationId::parse("ffffffffffffffffffffffffffffffff").expect("valid parent id"));
+    let (operation, json, hash) = canonical_operation(operation).expect("operation canonicalizes");
+    let unit = serde_json::to_string(&operation.unit).expect("unit serializes");
+    connection
+        .execute(
+            "INSERT INTO task_merge_operations(
+                operation_id, object_id, unit, operation_json, payload_sha256
+             ) VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![operation.id.as_str(), operation.object_id, unit, json, hash],
+        )
+        .expect("operation inserts");
+
+    let read = read_conflict_set(&connection, "task-1", TaskMergeUnit::Title)
+        .expect("persisted conflict read succeeds");
+    assert!(read.conflict_set.is_none());
+    assert!(read.dependencies_pending);
+}
+
+#[test]
+fn conflict_read_returns_the_current_conflict_set_for_a_valid_history() {
+    let connection = connection();
+    let (_, _, hash) = canonical_operation(operation()).expect("operation canonicalizes");
+    insert_operation(&connection, &hash);
+
+    let read = read_conflict_set(&connection, "task-1", TaskMergeUnit::Title)
+        .expect("persisted conflict read succeeds");
+    assert!(read.conflict_set.is_some());
+    assert!(!read.dependencies_pending);
+}
+
+#[test]
+fn conflict_read_rejects_a_row_whose_id_differs_from_its_payload() {
+    let connection = connection();
+    let (operation, json, hash) =
+        canonical_operation(operation()).expect("operation canonicalizes");
+    let unit = serde_json::to_string(&operation.unit).expect("unit serializes");
+    connection
+        .execute(
+            "INSERT INTO task_merge_operations(
+                operation_id, object_id, unit, operation_json, payload_sha256
+             ) VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![
+                "ffffffffffffffffffffffffffffffff",
+                operation.object_id,
+                unit,
+                json,
+                hash
+            ],
+        )
+        .expect("mismatched operation row inserts");
+
+    let error = read_conflict_set(&connection, "task-1", TaskMergeUnit::Title)
+        .expect_err("stored identity mismatch is rejected");
+    assert!(matches!(error, TaskMergeStoreError::Invalid(ref error)
+        if error == "task_merge_operation_identity_mismatch"));
 }
 
 #[test]
