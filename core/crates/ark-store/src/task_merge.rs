@@ -8,11 +8,16 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
 mod append;
+mod bootstrap;
 mod history;
 
 pub use append::{
     check_operation, persist_operation, PreparedTaskMergeOperation, TaskMergeOperationCheck,
     TaskMergeOperationOrigin,
+};
+pub use bootstrap::{
+    check_bootstrap, has_bootstrap, load_bootstrap, persist_bootstrap, PreparedTaskMergeBootstrap,
+    TaskMergeBootstrapCheck,
 };
 pub use history::{read_conflict_set, task_causal_dependencies_pending};
 

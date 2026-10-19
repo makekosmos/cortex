@@ -1,7 +1,6 @@
 use super::{read_conflict_set, TaskMergeError};
 use ark_domain::task_merge::{materialize_task, TaskMergeBootstrap, TaskMergeUnit};
-use rusqlite::{Connection, OptionalExtension};
-use std::collections::BTreeSet;
+use rusqlite::Connection;
 
 pub(super) fn append_bootstrap(
     transaction: &Connection,
@@ -22,35 +21,15 @@ fn append_bootstrap_with_revision(
     bootstrap: TaskMergeBootstrap,
     record_revision: bool,
 ) -> Result<bool, TaskMergeError> {
-    let (bootstrap, bootstrap_json, payload_sha256) =
-        ark_store::task_merge::canonical_bootstrap(bootstrap)?;
-    if let Some(stored_hash) = transaction
-        .query_row(
-            "SELECT payload_sha256 FROM task_merge_bootstraps WHERE bootstrap_id = ?1",
-            [bootstrap.id.as_str()],
-            |row| row.get::<_, String>(0),
-        )
-        .optional()
-        .map_err(storage_error)?
-    {
-        if stored_hash != payload_sha256 {
-            return Err(TaskMergeError::OperationIdCollision);
+    let object_id = bootstrap.object.id.clone();
+    let prepared = match ark_store::task_merge::check_bootstrap(transaction, &bootstrap)? {
+        ark_store::task_merge::TaskMergeBootstrapCheck::Replay => {
+            materialize_if_ready(transaction, &object_id)?;
+            return Ok(true);
         }
-        materialize_if_ready(transaction, &bootstrap.object.id)?;
-        return Ok(true);
-    }
-
-    let existing_bootstrap = transaction
-        .query_row(
-            "SELECT bootstrap_id FROM task_merge_bootstraps WHERE object_id = ?1",
-            [&bootstrap.object.id],
-            |row| row.get::<_, String>(0),
-        )
-        .optional()
-        .map_err(storage_error)?;
-    if existing_bootstrap.is_some() {
-        return Err(TaskMergeError::OperationIdCollision);
-    }
+        ark_store::task_merge::TaskMergeBootstrapCheck::New(prepared) => prepared,
+    };
+    let bootstrap = prepared.bootstrap().clone();
 
     let existing_object =
         crate::db::get_object(transaction, &bootstrap.object.id).map_err(storage_error)?;
@@ -70,36 +49,7 @@ fn append_bootstrap_with_revision(
         }
     }
 
-    let baseline = bootstrap
-        .baseline_operations()
-        .map_err(|error| TaskMergeError::Invalid(error.to_string()))?;
-    transaction
-        .execute(
-            "INSERT INTO task_merge_bootstraps(
-                bootstrap_id, object_id, bootstrap_json, payload_sha256
-             ) VALUES (?1, ?2, ?3, ?4)",
-            rusqlite::params![
-                bootstrap.id.as_str(),
-                bootstrap.object.id,
-                bootstrap_json,
-                payload_sha256,
-            ],
-        )
-        .map_err(storage_error)?;
-
-    for operation in baseline {
-        insert_baseline_operation(transaction, operation)?;
-    }
-
-    transaction
-        .execute(
-            "INSERT INTO task_merge_journal(record_kind, record_id)
-             VALUES ('bootstrap', ?1)",
-            [bootstrap.id.as_str()],
-        )
-        .map_err(storage_error)?;
-    journal_prebootstrap_operations(transaction, &bootstrap)?;
-
+    ark_store::task_merge::persist_bootstrap(transaction, prepared)?;
     crate::db::upsert_object(transaction, &bootstrap.object).map_err(storage_error)?;
     transaction
         .execute(
@@ -142,71 +92,22 @@ fn append_bootstrap_with_revision(
     Ok(false)
 }
 
-fn journal_prebootstrap_operations(
-    transaction: &Connection,
-    bootstrap: &TaskMergeBootstrap,
-) -> Result<(), TaskMergeError> {
-    let baseline_ids = bootstrap
-        .baseline_ids
-        .iter()
-        .map(|(_, id)| id.as_str())
-        .collect::<BTreeSet<_>>();
-    let mut statement = transaction
-        .prepare(
-            "SELECT operation_id FROM task_merge_operations
-             WHERE object_id = ?1 ORDER BY rowid",
-        )
-        .map_err(storage_error)?;
-    let operation_ids = statement
-        .query_map([&bootstrap.object.id], |row| row.get::<_, String>(0))
-        .map_err(storage_error)?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(storage_error)?;
-    drop(statement);
-
-    for operation_id in operation_ids {
-        if baseline_ids.contains(operation_id.as_str()) {
-            continue;
-        }
-        let already_journaled = transaction
-            .query_row(
-                "SELECT EXISTS(SELECT 1 FROM task_merge_journal
-                 WHERE record_kind = 'operation' AND record_id = ?1)",
-                [&operation_id],
-                |row| row.get::<_, bool>(0),
-            )
-            .map_err(storage_error)?;
-        if !already_journaled {
-            transaction
-                .execute(
-                    "INSERT INTO task_merge_journal(record_kind, record_id)
-                     VALUES ('operation', ?1)",
-                    [&operation_id],
-                )
-                .map_err(storage_error)?;
-        }
-    }
-    Ok(())
-}
-
 pub(super) fn materialize_if_ready(
     transaction: &Connection,
     object_id: &str,
 ) -> Result<bool, TaskMergeError> {
-    let has_bootstrap = transaction
-        .query_row(
-            "SELECT EXISTS(SELECT 1 FROM task_merge_bootstraps WHERE object_id = ?1)",
-            [object_id],
-            |row| row.get::<_, bool>(0),
-        )
-        .map_err(storage_error)?;
+    let has_bootstrap = ark_store::task_merge::has_bootstrap(transaction, object_id)
+        .map_err(TaskMergeError::from)?;
     if !has_bootstrap {
         return Ok(false);
     }
     let current_object = crate::db::get_object(transaction, object_id).map_err(storage_error)?;
     let projection_missing = current_object.is_none();
     let bootstrap = if projection_missing {
-        Some(load_bootstrap(transaction, object_id)?)
+        Some(ark_store::task_merge::load_bootstrap(
+            transaction,
+            object_id,
+        )?)
     } else {
         None
     };
@@ -299,64 +200,6 @@ pub(super) fn materialize_if_ready(
         }
     }
     Ok(true)
-}
-
-fn load_bootstrap(
-    connection: &Connection,
-    object_id: &str,
-) -> Result<TaskMergeBootstrap, TaskMergeError> {
-    let (json, digest) = connection
-        .query_row(
-            "SELECT bootstrap_json, payload_sha256 FROM task_merge_bootstraps
-             WHERE object_id = ?1",
-            [object_id],
-            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
-        )
-        .map_err(storage_error)?;
-    let bootstrap =
-        serde_json::from_str(&json).map_err(|error| TaskMergeError::Invalid(error.to_string()))?;
-    ark_store::task_merge::verify_bootstrap_payload(bootstrap, &json, &digest).map_err(Into::into)
-}
-
-fn insert_baseline_operation(
-    transaction: &Connection,
-    operation: ark_domain::task_merge::TaskMergeOperation,
-) -> Result<(), TaskMergeError> {
-    let (operation, operation_json, payload_sha256) =
-        ark_store::task_merge::canonical_operation(operation)?;
-    if let Some(stored_hash) = transaction
-        .query_row(
-            "SELECT payload_sha256 FROM task_merge_operations WHERE operation_id = ?1",
-            [operation.id.as_str()],
-            |row| row.get::<_, String>(0),
-        )
-        .optional()
-        .map_err(storage_error)?
-    {
-        return if stored_hash == payload_sha256 {
-            Ok(())
-        } else {
-            Err(TaskMergeError::OperationIdCollision)
-        };
-    }
-
-    let unit = serde_json::to_string(&operation.unit)
-        .map_err(|error| TaskMergeError::Invalid(error.to_string()))?;
-    transaction
-        .execute(
-            "INSERT INTO task_merge_operations(
-                operation_id, object_id, unit, operation_json, payload_sha256
-             ) VALUES (?1, ?2, ?3, ?4, ?5)",
-            rusqlite::params![
-                operation.id.as_str(),
-                operation.object_id,
-                unit,
-                operation_json,
-                payload_sha256,
-            ],
-        )
-        .map_err(storage_error)?;
-    Ok(())
 }
 
 fn storage_error(error: impl std::fmt::Display) -> TaskMergeError {

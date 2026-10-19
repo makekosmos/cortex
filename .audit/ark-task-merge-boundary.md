@@ -47,6 +47,8 @@ pub fn append_local_operation(
 
 Signatures are refined per operation. Do not expose SQLite rows, tuples, SQL strings, generic callbacks, or one-query-per-method ports. Policy checks remain outside these operations but inside the same actor transaction. Store operations must not open or commit nested transactions.
 
+Bootstrap persistence uses `check_bootstrap` followed by `persist_bootstrap`. The check returns either an idempotent replay or a prepared bootstrap. Core checks any existing object projection before it consumes the prepared value. Store writes the bootstrap, baseline operations, and journal entries together. `load_bootstrap` verifies the stored payload before Core uses it to rebuild a missing projection.
+
 ## Migration sequence
 
 1. Move bounded journal page reading and its payload verification into Store; add Store-owned schema tests for valid pages, invalid cursors/limits, future watermarks, missing/mismatched payloads. Keep Core command/service tests for observable behavior.
