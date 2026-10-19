@@ -87,17 +87,12 @@ impl ObjectWriteSession for SqliteObjectWriteSession<'_> {
             .map(str::trim)
             .filter(|id| !id.is_empty())
             .unwrap_or("ark-core-rpc-local");
-        let hlc = db::bump_sync_version_vector(self.conn, "object", id, device_id, false)?;
-        self.conn
-            .execute(
-                "INSERT INTO object_sync_versions(object_id, hlc, deleted) VALUES (?1, ?2, 0)
-                 ON CONFLICT(object_id) DO UPDATE SET hlc = excluded.hlc, deleted = 0
-                 WHERE excluded.hlc > object_sync_versions.hlc",
-                params![id, hlc],
-            )
-            .map_err(|error| error.to_string())?;
-        db::delete_sync_tombstone(self.conn, id)?;
-        Ok(hlc)
+        ark_store::sync_versions::bump_local_revision(
+            self.conn,
+            ark_store::sync_versions::LocalRevisionTarget::Object,
+            id,
+            device_id,
+        )
     }
 
     fn record_remote_revision(&self, id: &str, source_hlc: &str) -> Result<(), String> {
@@ -197,7 +192,12 @@ impl crate::application::task_mutation::TaskMutationSession for SqliteObjectWrit
     }
 
     fn record_task_link_upsert(&self, id: &str, device_id: &str) -> Result<String, String> {
-        db::bump_sync_version_vector(self.conn, "object_link", id, device_id, false)
+        ark_store::sync_versions::bump_local_revision(
+            self.conn,
+            ark_store::sync_versions::LocalRevisionTarget::ObjectLink,
+            id,
+            device_id,
+        )
     }
 
     fn task_snapshot(&self, id: &str) -> Result<ObjectWriteSnapshot, String> {
