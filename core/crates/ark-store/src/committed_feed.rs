@@ -1,6 +1,13 @@
 use rusqlite::{params, Connection, OptionalExtension};
 use sha2::{Digest, Sha256};
 
+mod progress;
+
+pub use progress::{
+    acknowledge_outbound, begin_outbound_policy, complete_outbound_snapshot,
+    load_outbound_progress, record_outbound_scan,
+};
+
 const MAX_PENDING_INBOX_ROWS: i64 = 10_000;
 const MAX_PENDING_INBOX_BYTES: i64 = 32 * 1024 * 1024;
 
@@ -213,6 +220,21 @@ pub fn watermark(connection: &Connection) -> Result<i64, String> {
     Ok(persisted.max(retained).max(sequence.unwrap_or_default()))
 }
 
+pub fn committed_feed_snapshot(
+    conn: &Connection,
+) -> Result<ark_application::sync_storage::FeedSnapshot, String> {
+    let low: Option<i64> = conn
+        .query_row("SELECT MIN(position) FROM ark_committed_feed", [], |row| {
+            row.get(0)
+        })
+        .map_err(|error| error.to_string())?;
+    let high = watermark(conn)?;
+    Ok(ark_application::sync_storage::FeedSnapshot {
+        retained_through: low.map_or(high, |position| position.saturating_sub(1)),
+        high_watermark: high,
+    })
+}
+
 pub fn bootstrap_committed_feed_heads(conn: &Connection) -> Result<(), String> {
     conn.execute_batch("SAVEPOINT ark_feed_heads_bootstrap")
         .map_err(|error| error.to_string())?;
@@ -271,8 +293,9 @@ pub fn bootstrap_committed_feed_heads(conn: &Connection) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        bootstrap_committed_feed_heads, receive_inbox_payload, set_inbox_state, watermark,
-        InboxState,
+        acknowledge_outbound, append_committed_change, begin_outbound_policy,
+        bootstrap_committed_feed_heads, complete_outbound_snapshot, load_outbound_progress,
+        receive_inbox_payload, record_outbound_scan, set_inbox_state, watermark, InboxState,
     };
     use rusqlite::Connection;
 
@@ -395,5 +418,49 @@ mod tests {
             )
             .expect("applied receipt remains durable");
         assert_eq!((payload.as_str(), payload_bytes), ("", 0));
+    }
+
+    #[test]
+    fn outbound_progress_persists_distinct_receipt_and_applied_cursors() {
+        let conn = Connection::open_in_memory().expect("database opens");
+        conn.execute_batch(crate::schema::CREATE_TABLES)
+            .expect("store schema initializes");
+        append_committed_change(&conn, "object", "a", "r1", false, None, None)
+            .expect("feed row persists");
+
+        let started = begin_outbound_policy(&conn, "peer-a", 4).expect("progress starts");
+        assert_eq!(started.initial_snapshot.through(), 1);
+        assert!(!started.initial_snapshot.is_complete());
+        let complete =
+            complete_outbound_snapshot(&conn, "peer-a", 4).expect("initial snapshot completes");
+        assert!(complete.initial_snapshot.is_complete());
+        assert_eq!(complete.applied_through, 1);
+        append_committed_change(&conn, "object", "b", "r2", false, None, None)
+            .expect("live feed row persists");
+        let scanned = record_outbound_scan(&conn, "peer-a", 4, 2).expect("scan advances");
+        assert_eq!(scanned.scanned_through, 2);
+        let received = acknowledge_outbound(
+            &conn,
+            "peer-a",
+            4,
+            2,
+            ark_application::sync_storage::OutboundAck::DurableReceipt,
+        )
+        .expect("durable receipt advances");
+        assert_eq!(received.receipt_through, 2);
+        assert_eq!(received.applied_through, 1);
+        let applied = acknowledge_outbound(
+            &conn,
+            "peer-a",
+            4,
+            2,
+            ark_application::sync_storage::OutboundAck::Applied,
+        )
+        .expect("application acknowledgement advances");
+        assert_eq!(applied.applied_through, 2);
+        assert_eq!(
+            load_outbound_progress(&conn, "peer-a").expect("progress reloads"),
+            applied
+        );
     }
 }

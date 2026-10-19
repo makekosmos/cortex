@@ -1,14 +1,5 @@
 pub fn committed_feed_snapshot(conn: &Connection) -> Result<FeedSnapshot, String> {
-    let low: Option<i64> = conn
-        .query_row("SELECT MIN(position) FROM ark_committed_feed", [], |row| {
-            row.get(0)
-        })
-        .map_err(|error| error.to_string())?;
-    let high = ark_store::committed_feed::watermark(conn)?;
-    Ok(FeedSnapshot {
-        retained_through: low.map_or(high, |position| position.saturating_sub(1)),
-        high_watermark: high,
-    })
+    ark_store::committed_feed::committed_feed_snapshot(conn)
 }
 
 pub fn read_committed_feed_page(

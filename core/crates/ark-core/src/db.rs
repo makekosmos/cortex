@@ -57,12 +57,11 @@ pub(crate) use command::{
     ValidateOutboundSignedFrameQuery, VerifyRegistryHandshakeQuery,
 };
 pub use committed_feed::{
-    acknowledge_outbound, acknowledge_outbound_identity, begin_outbound_policy,
-    begin_outbound_policy_identity, committed_feed_snapshot, complete_outbound_snapshot,
-    complete_outbound_snapshot_identity, load_outbound_progress, read_committed_feed_delivery_page,
+    acknowledge_outbound_identity, begin_outbound_policy_identity, committed_feed_snapshot,
+    complete_outbound_snapshot_identity, read_committed_feed_delivery_page,
     read_committed_feed_delivery_page_for_peer, read_committed_feed_page, receive_inbox_payload,
-    record_outbound_scan, record_outbound_scan_identity, set_inbox_state, InboxState,
-    MAX_FEED_PAGE_SIZE, MAX_INBOX_PAYLOAD_BYTES,
+    record_outbound_scan_identity, set_inbox_state, InboxState, MAX_FEED_PAGE_SIZE,
+    MAX_INBOX_PAYLOAD_BYTES,
 };
 pub(in crate::db) use integration_replication_publication::{
     publish_integration_credential_envelope_in_transaction,

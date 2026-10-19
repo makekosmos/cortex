@@ -12,11 +12,6 @@
       "count": 2
     },
     {
-      "path": "core/crates/ark-core/src/db/committed_feed/progress.rs",
-      "category": "SQLite mutation API",
-      "count": 7
-    },
-    {
       "path": "core/crates/ark-core/src/canonical_types/core_task_rewrite.rs",
       "category": "connection lifecycle",
       "count": 1
@@ -305,6 +300,11 @@
       "path": "core/crates/ark-store/src/committed_feed.rs",
       "category": "SQLite mutation API",
       "count": 8
+    },
+    {
+      "path": "core/crates/ark-store/src/committed_feed/progress.rs",
+      "category": "SQLite mutation API",
+      "count": 7
     },
     {
       "path": "core/crates/ark-store/src/schema/migrations.rs",

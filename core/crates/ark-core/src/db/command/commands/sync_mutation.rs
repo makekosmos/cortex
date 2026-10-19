@@ -105,12 +105,16 @@ impl DbCommand for CommittedFeedProgressCommand {
             Op::BeginOutboundPolicy {
                 peer_device_id,
                 policy_generation,
-            } => crate::db::begin_outbound_policy(transaction, &peer_device_id, policy_generation)
-                .map(CommittedFeedProgress::Outbound),
+            } => ark_store::committed_feed::begin_outbound_policy(
+                transaction,
+                &peer_device_id,
+                policy_generation,
+            )
+            .map(CommittedFeedProgress::Outbound),
             Op::CompleteOutboundSnapshot {
                 peer_device_id,
                 policy_generation,
-            } => crate::db::complete_outbound_snapshot(
+            } => ark_store::committed_feed::complete_outbound_snapshot(
                 transaction,
                 &peer_device_id,
                 policy_generation,
@@ -120,7 +124,7 @@ impl DbCommand for CommittedFeedProgressCommand {
                 peer_device_id,
                 policy_generation,
                 scanned_through,
-            } => crate::db::record_outbound_scan(
+            } => ark_store::committed_feed::record_outbound_scan(
                 transaction,
                 &peer_device_id,
                 policy_generation,
@@ -132,7 +136,7 @@ impl DbCommand for CommittedFeedProgressCommand {
                 policy_generation,
                 position,
                 ack,
-            } => crate::db::acknowledge_outbound(
+            } => ark_store::committed_feed::acknowledge_outbound(
                 transaction,
                 &peer_device_id,
                 policy_generation,

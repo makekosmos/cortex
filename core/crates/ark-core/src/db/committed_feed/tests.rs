@@ -1,7 +1,10 @@
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ark_store::committed_feed::append_committed_change;
+    use ark_store::committed_feed::{
+        acknowledge_outbound, append_committed_change, begin_outbound_policy,
+        complete_outbound_snapshot, record_outbound_scan,
+    };
     use rusqlite::Connection;
 
     fn db() -> Connection {
