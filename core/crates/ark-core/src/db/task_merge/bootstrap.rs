@@ -6,21 +6,6 @@ pub(super) fn append_bootstrap(
     transaction: &Connection,
     bootstrap: TaskMergeBootstrap,
 ) -> Result<bool, TaskMergeError> {
-    append_bootstrap_with_revision(transaction, bootstrap, true)
-}
-
-pub(super) fn append_local_bootstrap(
-    transaction: &Connection,
-    bootstrap: TaskMergeBootstrap,
-) -> Result<bool, TaskMergeError> {
-    append_bootstrap_with_revision(transaction, bootstrap, false)
-}
-
-fn append_bootstrap_with_revision(
-    transaction: &Connection,
-    bootstrap: TaskMergeBootstrap,
-    record_revision: bool,
-) -> Result<bool, TaskMergeError> {
     let object_id = bootstrap.object.id.clone();
     let prepared = match ark_store::task_merge::check_bootstrap(transaction, &bootstrap)? {
         ark_store::task_merge::TaskMergeBootstrapCheck::Replay => {
@@ -61,31 +46,29 @@ fn append_bootstrap_with_revision(
         crate::db::upsert_object_link(transaction, link).map_err(storage_error)?;
     }
 
-    if record_revision {
-        crate::db::record_remote_sync_revision(
-            transaction,
-            &bootstrap.object.id,
-            &bootstrap.source_hlc,
+    crate::db::record_remote_sync_revision(
+        transaction,
+        &bootstrap.object.id,
+        &bootstrap.source_hlc,
+    )
+    .map_err(storage_error)?;
+    transaction
+        .execute(
+            "INSERT INTO object_sync_versions(object_id, hlc, deleted)
+             VALUES (?1, ?2, ?3)
+             ON CONFLICT(object_id) DO UPDATE SET hlc = excluded.hlc,
+                 deleted = excluded.deleted
+             WHERE excluded.hlc > object_sync_versions.hlc",
+            rusqlite::params![
+                bootstrap.object.id,
+                bootstrap.source_hlc,
+                bootstrap.object.deleted_at.is_some(),
+            ],
         )
         .map_err(storage_error)?;
-        transaction
-            .execute(
-                "INSERT INTO object_sync_versions(object_id, hlc, deleted)
-                 VALUES (?1, ?2, ?3)
-                 ON CONFLICT(object_id) DO UPDATE SET hlc = excluded.hlc,
-                     deleted = excluded.deleted
-                 WHERE excluded.hlc > object_sync_versions.hlc",
-                rusqlite::params![
-                    bootstrap.object.id,
-                    bootstrap.source_hlc,
-                    bootstrap.object.deleted_at.is_some(),
-                ],
-            )
+    if bootstrap.object.deleted_at.is_none() {
+        crate::db::delete_sync_tombstone(transaction, &bootstrap.object.id)
             .map_err(storage_error)?;
-        if bootstrap.object.deleted_at.is_none() {
-            crate::db::delete_sync_tombstone(transaction, &bootstrap.object.id)
-                .map_err(storage_error)?;
-        }
     }
 
     ark_store::task_merge::materialize_task_if_ready(transaction, &bootstrap.object.id)?;

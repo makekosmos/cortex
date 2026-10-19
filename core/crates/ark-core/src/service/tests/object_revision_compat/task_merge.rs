@@ -1,5 +1,8 @@
 use super::*;
 
+#[path = "task_merge/legacy_bootstrap.rs"]
+mod legacy_bootstrap;
+
 async fn object_snapshot(
     state: &Arc<ServiceState>,
     id: &str,

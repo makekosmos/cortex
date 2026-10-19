@@ -1,4 +1,3 @@
-use super::{append_local_bootstrap, append_operation_inner};
 use crate::types::{ArkObject, ObjectLink, SyncEntity};
 use ark_domain::object_write::ObjectWriteSnapshot;
 use ark_domain::task_merge::{
@@ -90,60 +89,65 @@ fn commit_local_task_upsert_with_existence(
             return Err("object_conflict:stale_snapshot".into());
         }
     }
-    let previous_links = state.source_links;
+    let previous_links = state.source_links.clone();
 
-    let local_revision = if previous.is_none() && !has_bootstrap {
-        Some(ark_store::sync_versions::bump_local_revision(
-            connection,
-            ark_store::sync_versions::LocalRevisionTarget::Object,
-            &object.id,
-            normalized_device_id(device_id),
-        )?)
-    } else {
-        None
-    };
-    let bootstrap_clock = match (&previous, &local_revision) {
-        (_, Some(revision)) => revision.clone(),
-        (Some(_), None) => state
-            .legacy_revision
-            .clone()
-            .unwrap_or_else(|| crate::hlc::HLC::now(device_id).to_string()),
-        (None, None) => crate::hlc::HLC::now(device_id).to_string(),
-    };
-    if !has_bootstrap {
+    let bootstrap = if !has_bootstrap {
         let baseline = previous.clone().unwrap_or_else(|| object.clone());
         let baseline_links = if previous.is_some() {
             previous_links.clone()
         } else {
             links.to_vec()
         };
+        let source_hlc = previous
+            .as_ref()
+            .map(|_| {
+                state.legacy_revision.clone().unwrap_or_else(|| {
+                    crate::hlc::HLC::now(normalized_device_id(device_id)).to_string()
+                })
+            })
+            .unwrap_or_else(|| crate::hlc::HLC::now(normalized_device_id(device_id)).to_string());
         let bootstrap = TaskMergeBootstrap {
             id: next_operation_id(),
             object: baseline,
             links: baseline_links,
-            source_hlc: bootstrap_clock,
+            source_hlc,
             baseline_ids: TaskMergeUnit::ALL
                 .into_iter()
                 .map(|unit| (unit, next_operation_id()))
                 .collect(),
         };
-        append_local_bootstrap(connection, bootstrap).map_err(|error| error.to_string())?;
-    }
-
-    let revision = if let Some(revision) = local_revision {
-        revision
+        Some(ark_store::task_merge::TaskMergeLocalBootstrapPlan { bootstrap })
     } else {
-        ark_store::sync_versions::bump_local_revision(
-            connection,
-            ark_store::sync_versions::LocalRevisionTarget::Object,
-            &object.id,
-            normalized_device_id(device_id),
-        )?
+        None
     };
 
     let mut visible_heads = BTreeSet::new();
     let mut unit_heads = Vec::with_capacity(TaskMergeUnit::ALL.len());
-    for (unit, set) in state.unit_conflicts {
+    let unit_conflicts = if has_bootstrap {
+        state.unit_conflicts.clone()
+    } else {
+        let Some(bootstrap) = bootstrap.as_ref() else {
+            return Err("task_merge_bootstrap_missing_from_local_plan".into());
+        };
+        let bootstrap = bootstrap.bootstrap.clone();
+        let baseline = bootstrap
+            .baseline_operations()
+            .map_err(|error| error.to_string())?;
+        TaskMergeUnit::ALL
+            .into_iter()
+            .map(|unit| {
+                let history = baseline
+                    .iter()
+                    .filter(|operation| operation.unit == unit)
+                    .cloned()
+                    .collect::<Vec<_>>();
+                ark_domain::task_merge::conflict_set(&history)
+                    .map(|set| (unit, set))
+                    .map_err(|error| error.to_string())
+            })
+            .collect::<Result<Vec<_>, _>>()?
+    };
+    for (unit, set) in unit_conflicts {
         let winner = set
             .variants
             .iter()
@@ -158,6 +162,7 @@ fn commit_local_task_upsert_with_existence(
         unit_heads.push((unit, set, visible_head));
     }
 
+    let mut operations = Vec::new();
     for (unit, set, visible_head) in unit_heads {
         let next_value = if unit == TaskMergeUnit::ObjectExistence {
             existence_override
@@ -194,35 +199,42 @@ fn commit_local_task_upsert_with_existence(
             unit,
             parents,
             observed_heads: visible_heads.iter().cloned().collect(),
-            hlc: Some(revision.clone()),
+            hlc: None,
             value: next_value,
         };
         let operation_id = operation.id.clone();
-        let expected_conflict_digest = resolves_explicit_existence.then_some(set.digest.as_str());
-        append_operation_inner(
-            connection,
+        let expected_conflict_digest = resolves_explicit_existence.then_some(set.digest.clone());
+        operations.push(ark_store::task_merge::TaskMergeLocalOperation {
             operation,
             expected_conflict_digest,
-            ark_store::task_merge::TaskMergeOperationOrigin::Local,
-        )
-        .map_err(|error| error.to_string())?;
+        });
         visible_heads.insert(operation_id);
     }
 
-    let materialized = crate::db::get_object(connection, &object.id)?;
-    if let Some(materialized) = &materialized {
+    let result = ark_store::task_merge::apply_local_mutation(
+        connection,
+        ark_store::task_merge::TaskMergeLocalMutationPlan {
+            expected_state: state,
+            object: object.clone(),
+            source_links: links.to_vec(),
+            bootstrap,
+            operations,
+            device_id: device_id.to_owned(),
+        },
+    )
+    .map_err(|error| error.to_string())?;
+    if let Some(materialized) = &result.object {
         validate_materialized_task(materialized)?;
     }
 
-    let is_hard_deleted = existence_override.is_some_and(|value| {
-        matches!(
-            value,
-            ark_domain::task_merge::TaskMergeValue::ObjectHardDeleted { .. }
-        )
-    });
-    let entity = if let Some(materialized) = materialized {
-        sync_entity("object", &materialized.id, &materialized, &revision)?
-    } else if is_hard_deleted {
+    let entity = if let Some(materialized) = result.object.as_ref() {
+        sync_entity(
+            "object",
+            &materialized.id,
+            materialized,
+            &result.object_revision,
+        )?
+    } else if result.hard_deleted {
         SyncEntity {
             entity_type: "object".into(),
             id: object.id.clone(),
@@ -230,9 +242,9 @@ fn commit_local_task_upsert_with_existence(
                 .as_object()
                 .cloned()
                 .unwrap_or_default(),
-            hlc: revision.clone(),
+            hlc: result.object_revision.clone(),
             deleted: Some(true),
-            origin_device_id: Some(crate::hlc::HLC::from_string(&revision).device_id),
+            origin_device_id: Some(crate::hlc::HLC::from_string(&result.object_revision).device_id),
             origin_seq: None,
         }
     } else {
@@ -240,16 +252,19 @@ fn commit_local_task_upsert_with_existence(
     };
 
     let mut entities = vec![entity];
-    if !is_hard_deleted {
+    if !result.hard_deleted {
         for link in links {
-            crate::db::upsert_object_link(connection, link)?;
-            let link_revision = ark_store::sync_versions::bump_local_revision(
-                connection,
-                ark_store::sync_versions::LocalRevisionTarget::ObjectLink,
+            let link_revision = result
+                .link_revisions
+                .iter()
+                .find(|value| value.link_id == link.id)
+                .ok_or_else(|| "task_merge_link_revision_missing".to_string())?;
+            entities.push(sync_entity(
+                "object_link",
                 &link.id,
-                device_id,
-            )?;
-            entities.push(sync_entity("object_link", &link.id, link, &link_revision)?);
+                link,
+                &link_revision.revision,
+            )?);
         }
     }
     Ok(entities)
