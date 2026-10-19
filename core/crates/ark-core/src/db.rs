@@ -13,6 +13,7 @@ pub use ark_application::sync_storage::{
     CommittedFeedDeliveryPage, CommittedFeedEntry, FeedSnapshot, InitialSnapshot, OutboundAck,
     OutboundProgress,
 };
+pub use ark_store::committed_feed::MAX_FEED_PAGE_SIZE;
 pub(crate) use ark_store::snapshot::recover_interrupted_restore;
 pub use ark_store::snapshot::restore_snapshot;
 pub use ark_store::snapshot::{
@@ -57,11 +58,9 @@ pub(crate) use command::{
     ValidateOutboundSignedFrameQuery, VerifyRegistryHandshakeQuery,
 };
 pub use committed_feed::{
-    acknowledge_outbound_identity, begin_outbound_policy_identity, committed_feed_snapshot,
-    complete_outbound_snapshot_identity, read_committed_feed_delivery_page,
-    read_committed_feed_delivery_page_for_peer, read_committed_feed_page, receive_inbox_payload,
-    record_outbound_scan_identity, set_inbox_state, InboxState, MAX_FEED_PAGE_SIZE,
-    MAX_INBOX_PAYLOAD_BYTES,
+    acknowledge_outbound_identity, begin_outbound_policy_identity,
+    complete_outbound_snapshot_identity, receive_inbox_payload, record_outbound_scan_identity,
+    set_inbox_state, InboxState, MAX_FEED_DELIVERY_BYTES, MAX_INBOX_PAYLOAD_BYTES,
 };
 pub(in crate::db) use integration_replication_publication::{
     publish_integration_credential_envelope_in_transaction,

@@ -1,3 +1,8 @@
+use ark_application::sync_storage::{
+    CommittedFeedDelivery, CommittedFeedDeliveryPage, CommittedFeedEntry, PolicyBoundFeedPage,
+};
+use rusqlite::{params, Connection, OptionalExtension};
+
 /// Coalesce changes per entity at a pinned watermark and project the current
 /// entity payload inside the same SQLite read snapshot. This is a state feed,
 /// not an event history: only the latest row per locator is returned.
@@ -25,7 +30,7 @@ fn json_data_by_locator(
 fn project_feed_entity(
     conn: &Connection,
     entry: &CommittedFeedEntry,
-) -> Result<Option<crate::types::SyncEntity>, String> {
+) -> Result<Option<ark_domain::types::SyncEntity>, String> {
     use serde_json::{Map, Value};
 
     if entry.entity_type == "object"
@@ -53,7 +58,7 @@ fn project_feed_entity(
         .unwrap_or_default()
     } else {
         let data = match entry.entity_type.as_str() {
-            "object" => crate::db::get_object(conn, &entry.entity_id)?
+            "object" => crate::objects::get_object(conn, &entry.entity_id)?
                 .map(|item| serde_json::to_value(item).map_err(|error| error.to_string()))
                 .transpose()?
                 .and_then(|mut value| {
@@ -134,18 +139,7 @@ fn project_feed_entity(
                  ) FROM object_links WHERE id = ?1",
                 &entry.entity_id,
             )?,
-            "usage_session" => {
-                ark_store::usage_history::load_usage_session(conn, &entry.entity_id)?
-                    .map(|item| serde_json::to_value(item).map_err(|error| error.to_string()))
-                    .transpose()?
-                    .and_then(|mut value| {
-                        value.as_object_mut().map(|map| {
-                            map.remove("id");
-                            std::mem::take(map)
-                        })
-                    })
-            }
-            "usage_event" => ark_store::usage_history::load_usage_event(conn, &entry.entity_id)?
+            "usage_session" => crate::usage_history::load_usage_session(conn, &entry.entity_id)?
                 .map(|item| serde_json::to_value(item).map_err(|error| error.to_string()))
                 .transpose()?
                 .and_then(|mut value| {
@@ -154,7 +148,16 @@ fn project_feed_entity(
                         std::mem::take(map)
                     })
                 }),
-            "usage_day" => ark_store::usage::load_usage_day(conn, &entry.entity_id)?
+            "usage_event" => crate::usage_history::load_usage_event(conn, &entry.entity_id)?
+                .map(|item| serde_json::to_value(item).map_err(|error| error.to_string()))
+                .transpose()?
+                .and_then(|mut value| {
+                    value.as_object_mut().map(|map| {
+                        map.remove("id");
+                        std::mem::take(map)
+                    })
+                }),
+            "usage_day" => crate::usage::load_usage_day(conn, &entry.entity_id)?
                 .map(|item| serde_json::to_value(item).map_err(|error| error.to_string()))
                 .transpose()?
                 .and_then(|mut value| {
@@ -176,7 +179,7 @@ fn project_feed_entity(
         data
     };
 
-    Ok(Some(crate::types::SyncEntity {
+    Ok(Some(ark_domain::types::SyncEntity {
         entity_type: entry.entity_type.clone(),
         id: entry.entity_id.clone(),
         data,
@@ -192,8 +195,16 @@ pub fn read_committed_feed_delivery_page(
     after_position: i64,
     high_watermark: i64,
     limit: usize,
+    max_delivery_bytes: usize,
 ) -> Result<CommittedFeedDeliveryPage, String> {
-    read_committed_feed_delivery_page_with_hook(conn, after_position, high_watermark, limit, || {})
+    read_committed_feed_delivery_page_with_hook(
+        conn,
+        after_position,
+        high_watermark,
+        limit,
+        max_delivery_bytes,
+        || {},
+    )
 }
 
 pub fn read_committed_feed_delivery_page_for_peer(
@@ -203,12 +214,12 @@ pub fn read_committed_feed_delivery_page_for_peer(
     after_position: i64,
     high_watermark: i64,
     limit: usize,
-) -> Result<ark_application::sync_storage::PolicyBoundFeedPage, String> {
+    max_delivery_bytes: usize,
+) -> Result<PolicyBoundFeedPage, String> {
     conn.execute_batch("SAVEPOINT committed_feed_policy_snapshot")
         .map_err(|error| error.to_string())?;
     let result = (|| -> Result<_, String> {
-        let policy =
-            ark_store::data_platform::load_accepted_peer_sync_policy(conn, peer_device_id)?;
+        let policy = crate::data_platform::load_accepted_peer_sync_policy(conn, peer_device_id)?;
         let identity = policy.as_ref().map_or_else(
             ark_application::sync_policy::default_sync_policy_identity,
             |policy| policy.identity(),
@@ -225,10 +236,11 @@ pub fn read_committed_feed_delivery_page_for_peer(
             after_position,
             high_watermark,
             limit,
+            max_delivery_bytes,
             || {},
             profile.as_ref(),
         )?;
-        Ok(ark_application::sync_storage::PolicyBoundFeedPage { identity, page })
+        Ok(PolicyBoundFeedPage { identity, page })
     })();
     match result {
         Ok(page) => conn
@@ -250,6 +262,7 @@ fn read_committed_feed_delivery_page_with_hook(
     after_position: i64,
     high_watermark: i64,
     limit: usize,
+    max_delivery_bytes: usize,
     after_selection: impl FnOnce(),
 ) -> Result<CommittedFeedDeliveryPage, String> {
     read_committed_feed_delivery_page_with_profile(
@@ -257,6 +270,7 @@ fn read_committed_feed_delivery_page_with_hook(
         after_position,
         high_watermark,
         limit,
+        max_delivery_bytes,
         after_selection,
         None,
     )
@@ -267,19 +281,20 @@ fn read_committed_feed_delivery_page_with_profile(
     after_position: i64,
     high_watermark: i64,
     limit: usize,
+    max_delivery_bytes: usize,
     after_selection: impl FnOnce(),
     profile: Option<&ark_domain::selective_sync::SelectiveSyncProfile>,
 ) -> Result<CommittedFeedDeliveryPage, String> {
     if after_position < 0 || high_watermark < after_position {
         return Err("invalid_committed_feed_cursor".into());
     }
-    if limit == 0 || limit > MAX_FEED_PAGE_SIZE {
+    if limit == 0 || limit > super::MAX_FEED_PAGE_SIZE {
         return Err("committed_feed_page_limit_exceeded".into());
     }
     conn.execute_batch("SAVEPOINT committed_feed_delivery_snapshot")
         .map_err(|error| error.to_string())?;
     let result = (|| -> Result<CommittedFeedDeliveryPage, String> {
-        let snapshot = committed_feed_snapshot(conn)?;
+        let snapshot = super::committed_feed_snapshot(conn)?;
         if after_position < snapshot.retained_through {
             return Err("feed_gap_resync_required".into());
         }
@@ -345,18 +360,18 @@ fn read_committed_feed_delivery_page_with_profile(
             let entity_bytes = serde_json::to_vec(&entity)
                 .map_err(|error| format!("committed_feed_projection_serialize:{error}"))?
                 .len();
-            if entity_bytes > MAX_FEED_DELIVERY_BYTES {
+            if entity_bytes > max_delivery_bytes {
                 if deliveries.is_empty() {
                     return Ok(CommittedFeedDeliveryPage::TooLarge {
                         position: entry.position,
                         entity_id: entry.entity_id,
                         serialized_bytes: entity_bytes,
-                        max_bytes: MAX_FEED_DELIVERY_BYTES,
+                        max_bytes: max_delivery_bytes,
                     });
                 }
                 break;
             }
-            if serialized_bytes.saturating_add(entity_bytes) > MAX_FEED_DELIVERY_BYTES {
+            if serialized_bytes.saturating_add(entity_bytes) > max_delivery_bytes {
                 break;
             }
             serialized_bytes += entity_bytes;
@@ -382,5 +397,76 @@ fn read_committed_feed_delivery_page_with_profile(
             );
             Err(error)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::read_committed_feed_delivery_page_with_hook;
+    use crate::committed_feed::append_committed_change;
+    use ark_application::sync_storage::CommittedFeedDeliveryPage;
+    use ark_domain::types::ArkObject;
+
+    #[test]
+    fn projection_keeps_selected_locator_and_payload_in_one_read_snapshot() {
+        let directory = tempfile::tempdir().expect("temporary directory opens");
+        let path = directory.path().join("feed-snapshot.db");
+        let path = path.to_str().expect("temporary path is UTF-8");
+        let reader = crate::open::open_db(path).expect("reader opens");
+        reader
+            .execute_batch(crate::schema::CREATE_TABLES)
+            .expect("schema initializes");
+        reader
+            .execute(
+                "INSERT INTO object_types(
+                     id, name, schema_json, ui_schema_json, created_at, updated_at
+                 )
+                 VALUES ('note_obj', 'Note', '{}', '{}', '2026-10-16T00:00:00.000Z',
+                         '2026-10-16T00:00:00.000Z')",
+                [],
+            )
+            .expect("object type persists");
+        let writer = crate::open::open_db(path).expect("writer opens");
+        writer
+            .execute_batch(crate::schema::CREATE_TABLES)
+            .expect("writer schema initializes");
+        let initial = ArkObject {
+            id: "snapshot-object".into(),
+            type_id: "note_obj".into(),
+            type_version: "0.0.0-legacy".into(),
+            title: "Selected payload".into(),
+            content_json: serde_json::json!({"type":"doc","content":[]}),
+            props_json: serde_json::json!({}),
+            created_at: "2026-10-16T00:00:00.000Z".into(),
+            updated_at: "2026-10-16T00:00:00.000Z".into(),
+            deleted_at: None,
+        };
+        crate::objects::upsert_object(&reader, &initial).expect("initial object persists");
+        append_committed_change(&reader, "object", &initial.id, "r1", false, None, None)
+            .expect("initial feed entry persists");
+
+        let page = read_committed_feed_delivery_page_with_hook(&reader, 0, 1, 8, 1_000_000, || {
+            let mut updated = initial.clone();
+            updated.title = "Newer concurrent payload".into();
+            updated.updated_at = "2026-10-16T00:00:01.000Z".into();
+            crate::objects::upsert_object(&writer, &updated)
+                .expect("concurrent object update persists");
+            append_committed_change(&writer, "object", &updated.id, "r2", false, None, None)
+                .expect("concurrent feed entry persists");
+        })
+        .expect("delivery page reads");
+
+        let deliveries = match page {
+            CommittedFeedDeliveryPage::Deliveries(deliveries) => deliveries,
+            CommittedFeedDeliveryPage::SkipTo { .. } => panic!("feed page only skipped entries"),
+            CommittedFeedDeliveryPage::TooLarge { .. } => panic!("small test payload is bounded"),
+        };
+        assert_eq!(deliveries.len(), 1);
+        assert_eq!(deliveries[0].entry.position, 1);
+        assert_eq!(deliveries[0].entry.revision, "r1");
+        assert_eq!(
+            deliveries[0].entity.data.get("title"),
+            Some(&serde_json::json!("Selected payload"))
+        );
     }
 }

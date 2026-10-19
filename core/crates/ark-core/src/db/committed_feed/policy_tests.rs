@@ -1,5 +1,9 @@
 use super::*;
-use ark_store::committed_feed::append_committed_change;
+use ark_application::sync_storage::CommittedFeedDeliveryPage;
+use ark_store::committed_feed::{
+    append_committed_change, read_committed_feed_delivery_page,
+    read_committed_feed_delivery_page_for_peer,
+};
 
 #[test]
 fn operation_mode_task_snapshots_are_skipped_with_cursor_advance() {
@@ -17,7 +21,8 @@ fn operation_mode_task_snapshots_are_skipped_with_cursor_advance() {
     .unwrap();
 
     assert_eq!(
-        read_committed_feed_delivery_page(&conn, 0, 1, 8).unwrap(),
+        read_committed_feed_delivery_page(&conn, 0, 1, 8, crate::db::MAX_FEED_DELIVERY_BYTES,)
+            .unwrap(),
         CommittedFeedDeliveryPage::SkipTo {
             through_position: 1
         }
@@ -89,9 +94,16 @@ fn narrowing_preserves_local_copy_and_widening_replays_latest_state() {
     changed.updated_at = "2026-10-16T00:00:01.000Z".into();
     crate::db::upsert_object(&source, &changed).unwrap();
     append_committed_change(&source, "object", &changed.id, "r2", false, None, None).unwrap();
-    let narrowed =
-        read_committed_feed_delivery_page_for_peer(&source, "receiver-device", &excluded, 1, 2, 8)
-            .unwrap();
+    let narrowed = read_committed_feed_delivery_page_for_peer(
+        &source,
+        "receiver-device",
+        &excluded,
+        1,
+        2,
+        8,
+        crate::db::MAX_FEED_DELIVERY_BYTES,
+    )
+    .unwrap();
     assert_eq!(
         narrowed.page,
         CommittedFeedDeliveryPage::SkipTo {
@@ -129,9 +141,16 @@ fn narrowing_preserves_local_copy_and_widening_replays_latest_state() {
         "widening rescans prior feed positions"
     );
 
-    let replay =
-        read_committed_feed_delivery_page_for_peer(&source, "receiver-device", &included, 0, 2, 8)
-            .unwrap();
+    let replay = read_committed_feed_delivery_page_for_peer(
+        &source,
+        "receiver-device",
+        &included,
+        0,
+        2,
+        8,
+        crate::db::MAX_FEED_DELIVERY_BYTES,
+    )
+    .unwrap();
     let CommittedFeedDeliveryPage::Deliveries(rows) = replay.page else {
         panic!("current state should fit into one feed page");
     };

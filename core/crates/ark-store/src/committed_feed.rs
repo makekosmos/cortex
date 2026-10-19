@@ -1,7 +1,14 @@
 use rusqlite::{params, Connection, OptionalExtension};
 use sha2::{Digest, Sha256};
 
+mod delivery;
+mod log;
 mod progress;
+
+pub use delivery::{read_committed_feed_delivery_page, read_committed_feed_delivery_page_for_peer};
+pub use log::{committed_feed_snapshot, read_committed_feed_page};
+
+pub const MAX_FEED_PAGE_SIZE: usize = 128;
 
 pub use progress::{
     acknowledge_outbound, begin_outbound_policy, complete_outbound_snapshot,
@@ -218,21 +225,6 @@ pub fn watermark(connection: &Connection) -> Result<i64, String> {
         .optional()
         .map_err(|error| error.to_string())?;
     Ok(persisted.max(retained).max(sequence.unwrap_or_default()))
-}
-
-pub fn committed_feed_snapshot(
-    conn: &Connection,
-) -> Result<ark_application::sync_storage::FeedSnapshot, String> {
-    let low: Option<i64> = conn
-        .query_row("SELECT MIN(position) FROM ark_committed_feed", [], |row| {
-            row.get(0)
-        })
-        .map_err(|error| error.to_string())?;
-    let high = watermark(conn)?;
-    Ok(ark_application::sync_storage::FeedSnapshot {
-        retained_through: low.map_or(high, |position| position.saturating_sub(1)),
-        high_watermark: high,
-    })
 }
 
 pub fn bootstrap_committed_feed_heads(conn: &Connection) -> Result<(), String> {

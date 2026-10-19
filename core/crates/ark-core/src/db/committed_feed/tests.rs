@@ -1,9 +1,11 @@
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ark_application::sync_storage::CommittedFeedDeliveryPage;
     use ark_store::committed_feed::{
         acknowledge_outbound, append_committed_change, begin_outbound_policy,
-        complete_outbound_snapshot, record_outbound_scan,
+        committed_feed_snapshot, complete_outbound_snapshot,
+        read_committed_feed_delivery_page_for_peer, read_committed_feed_page, record_outbound_scan,
     };
     use rusqlite::Connection;
 
@@ -96,52 +98,6 @@ mod tests {
         let next = append_committed_change(&conn, "object", "c", "r3", false, None, None).unwrap();
         assert_eq!(next, 3);
         assert_eq!(committed_feed_snapshot(&conn).unwrap().high_watermark, 3);
-    }
-
-    #[test]
-    fn delivery_projection_keeps_selected_locator_and_payload_in_one_read_snapshot() {
-        let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("feed-snapshot.db");
-        let reader = ark_store::open::open_db(path.to_str().unwrap()).unwrap();
-        crate::db::init_schema(&reader).unwrap();
-        let writer = ark_store::open::open_db(path.to_str().unwrap()).unwrap();
-        crate::db::init_schema(&writer).unwrap();
-        let initial = crate::types::ArkObject {
-            id: "snapshot-object".into(),
-            type_id: "note_obj".into(),
-            type_version: "0.0.0-legacy".into(),
-            title: "Selected payload".into(),
-            content_json: serde_json::json!({"type":"doc","content":[]}),
-            props_json: serde_json::json!({}),
-            created_at: "2026-10-16T00:00:00.000Z".into(),
-            updated_at: "2026-10-16T00:00:00.000Z".into(),
-            deleted_at: None,
-        };
-        crate::db::upsert_object(&reader, &initial).unwrap();
-        append_committed_change(&reader, "object", &initial.id, "r1", false, None, None).unwrap();
-
-        let page = read_committed_feed_delivery_page_with_hook(&reader, 0, 1, 8, || {
-            let mut updated = initial.clone();
-            updated.title = "Newer concurrent payload".into();
-            updated.updated_at = "2026-10-16T00:00:01.000Z".into();
-            crate::db::upsert_object(&writer, &updated).unwrap();
-            append_committed_change(&writer, "object", &updated.id, "r2", false, None, None)
-                .unwrap();
-        })
-        .unwrap();
-
-        let deliveries = match page {
-            CommittedFeedDeliveryPage::Deliveries(deliveries) => deliveries,
-            CommittedFeedDeliveryPage::SkipTo { .. } => panic!("feed page only skipped entries"),
-            CommittedFeedDeliveryPage::TooLarge { .. } => panic!("small test payload is bounded"),
-        };
-        assert_eq!(deliveries.len(), 1);
-        assert_eq!(deliveries[0].entry.position, 1);
-        assert_eq!(deliveries[0].entry.revision, "r1");
-        assert_eq!(
-            deliveries[0].entity.data.get("title"),
-            Some(&serde_json::json!("Selected payload"))
-        );
     }
 
     #[test]
@@ -419,6 +375,7 @@ mod tests {
             0,
             high_watermark,
             16,
+            crate::db::MAX_FEED_DELIVERY_BYTES,
         )
         .unwrap();
         assert_eq!(pinned.identity, first);

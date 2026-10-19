@@ -1,11 +1,8 @@
 use super::super::{sealed, CommandClass, CommandContext, DbError, DbQuery};
-use crate::db::{
-    committed_feed_snapshot, read_committed_feed_delivery_page, read_committed_feed_page,
-    CommittedFeedEntry, FeedSnapshot, SqliteStorageBackend,
-};
+use crate::db::SqliteStorageBackend;
 use crate::types::{SyncEntity, VersionVector};
-use ark_application::sync_storage::CommittedFeedDeliveryPage;
 use ark_application::sync_storage::SyncReadClass;
+use ark_application::sync_storage::{CommittedFeedDeliveryPage, CommittedFeedEntry, FeedSnapshot};
 use ark_domain::selective_sync::SelectiveSyncProfile;
 use rusqlite::Connection;
 use serde::Serialize;
@@ -237,7 +234,7 @@ impl DbQuery for CommittedFeedSnapshotQuery {
         connection: &Connection,
     ) -> Result<Self::Output, DbError> {
         context.require_sync_peer_or_system()?;
-        committed_feed_snapshot(connection).map_err(DbError::Storage)
+        ark_store::committed_feed::committed_feed_snapshot(connection).map_err(DbError::Storage)
     }
 }
 
@@ -277,7 +274,7 @@ impl DbQuery for CommittedFeedPageQuery {
         connection: &Connection,
     ) -> Result<Self::Output, DbError> {
         context.require_sync_peer_or_system()?;
-        read_committed_feed_page(
+        ark_store::committed_feed::read_committed_feed_page(
             connection,
             self.after_position,
             self.high_watermark,
@@ -323,11 +320,12 @@ impl DbQuery for CommittedFeedDeliveryPageQuery {
         connection: &Connection,
     ) -> Result<Self::Output, DbError> {
         context.require_sync_peer_or_system()?;
-        read_committed_feed_delivery_page(
+        ark_store::committed_feed::read_committed_feed_delivery_page(
             connection,
             self.after_position,
             self.high_watermark,
             self.limit,
+            crate::db::MAX_FEED_DELIVERY_BYTES,
         )
         .map_err(DbError::Storage)
     }

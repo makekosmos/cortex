@@ -142,13 +142,14 @@ impl DbQuery for PolicyBoundFeedDeliveryPageQuery {
         connection: &Connection,
     ) -> Result<Self::Output, DbError> {
         context.require_sync_peer_matches(&self.peer_device_id)?;
-        crate::db::read_committed_feed_delivery_page_for_peer(
+        ark_store::committed_feed::read_committed_feed_delivery_page_for_peer(
             connection,
             &self.peer_device_id,
             &self.expected_identity,
             self.after_position,
             self.high_watermark,
             self.limit,
+            crate::db::MAX_FEED_DELIVERY_BYTES,
         )
         .map_err(DbError::Storage)
     }
