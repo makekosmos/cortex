@@ -1,8 +1,8 @@
 # Sync
 
-ARK replicates user data peer-to-peer; the implementation lives in
-`core/crates/ark-core/src/` (`sync_server*.rs`, `sync_client*.rs`, `iroh_*`,
-`relay_*`, `beacon_*`) and the persistence rules in
+ARK replicates user data peer-to-peer; session policy lives in
+`core/crates/ark-sync/src/`, concrete transport and transport identity in
+`core/crates/ark-net/src/`, and persistence rules in
 `core/crates/ark-store/src/{sync_versions.rs,usage_sync_log.rs}`.
 
 ## Transports
@@ -13,6 +13,10 @@ ARK replicates user data peer-to-peer; the implementation lives in
   also present.
 - **relay** — WebSocket relay fallback (`relay_url`).
 - **beacon** — LAN broadcast discovery for peer finding (`beacon_*` modules).
+
+Iroh key generation and validation belong to `ark-net`. Core supplies the
+storage adapter, and Store's insert-if-absent KV operation preserves one
+identity across concurrent callers and restarts.
 
 Wire messages are `snake_case` JSON. Do not weaken self-peer rejection or
 routable-address filtering (`sync_server_peers.rs`, `net.rs`).

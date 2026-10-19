@@ -22,9 +22,24 @@ pub fn set_sync_kv(conn: &Connection, key: &str, value: &str) -> Result<(), Stri
     Ok(())
 }
 
+/// Insert a value only when the key is absent and return the persisted value.
+/// This keeps generated identities stable when multiple callers race.
+pub fn get_or_insert_sync_kv(
+    conn: &Connection,
+    key: &str,
+    candidate: &str,
+) -> Result<String, String> {
+    conn.execute(
+        "INSERT INTO sync_kv (key, value) VALUES (?1, ?2) ON CONFLICT(key) DO NOTHING",
+        params![key, candidate],
+    )
+    .map_err(|error| error.to_string())?;
+    get_sync_kv(conn, key)?.ok_or_else(|| "sync key-value insert was not persisted".to_string())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{get_sync_kv, set_sync_kv};
+    use super::{get_or_insert_sync_kv, get_sync_kv, set_sync_kv};
     use rusqlite::Connection;
 
     #[test]
@@ -46,6 +61,23 @@ mod tests {
                 .expect("persisted value reads")
                 .as_deref(),
             Some("second")
+        );
+    }
+
+    #[test]
+    fn get_or_insert_preserves_the_first_persisted_value() {
+        let connection = Connection::open_in_memory().expect("database opens");
+        connection
+            .execute_batch("CREATE TABLE sync_kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+            .expect("key-value schema initializes");
+
+        assert_eq!(
+            get_or_insert_sync_kv(&connection, "identity", "first").expect("candidate persists"),
+            "first"
+        );
+        assert_eq!(
+            get_or_insert_sync_kv(&connection, "identity", "second").expect("existing value wins"),
+            "first"
         );
     }
 }
