@@ -8,6 +8,41 @@ pub enum LocalRevisionTarget {
     ObjectLink,
 }
 
+pub fn record_remote_object_revision(
+    connection: &Connection,
+    entity_id: &str,
+    incoming_hlc: &str,
+) -> Result<(), String> {
+    let raw = crate::sync_kv::get_sync_kv(connection, crate::VERSION_VECTOR_KEY)?;
+    let mut vector: VersionVector = raw
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| serde_json::from_str(value).map_err(|error| error.to_string()))
+        .transpose()?
+        .unwrap_or_default();
+    if vector
+        .get(entity_id)
+        .is_none_or(|current| HLC::is_newer(incoming_hlc, current))
+    {
+        vector.insert(entity_id.to_owned(), incoming_hlc.to_owned());
+        crate::sync_kv::set_sync_kv(
+            connection,
+            crate::VERSION_VECTOR_KEY,
+            &serde_json::to_string(&vector).map_err(|error| error.to_string())?,
+        )?;
+        crate::committed_feed::append_committed_change(
+            connection,
+            "object",
+            entity_id,
+            incoming_hlc,
+            false,
+            Some(&HLC::from_string(incoming_hlc).device_id),
+            None,
+        )?;
+    }
+    Ok(())
+}
+
 impl LocalRevisionTarget {
     fn entity_type(self) -> &'static str {
         match self {

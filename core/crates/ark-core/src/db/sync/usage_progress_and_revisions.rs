@@ -237,32 +237,5 @@ pub fn record_remote_sync_revision(
     entity_id: &str,
     incoming_hlc: &str,
 ) -> Result<(), String> {
-    let raw = ark_store::sync_kv::get_sync_kv(conn, VERSION_VECTOR_KEY)?;
-    let mut vector: VersionVector = raw
-        .as_deref()
-        .filter(|value| !value.trim().is_empty())
-        .map(|value| serde_json::from_str(value).map_err(|error| error.to_string()))
-        .transpose()?
-        .unwrap_or_default();
-    if vector
-        .get(entity_id)
-        .is_none_or(|current| HLC::is_newer(incoming_hlc, current))
-    {
-        vector.insert(entity_id.to_owned(), incoming_hlc.to_owned());
-        ark_store::sync_kv::set_sync_kv(
-            conn,
-            VERSION_VECTOR_KEY,
-            &serde_json::to_string(&vector).map_err(|error| error.to_string())?,
-        )?;
-        ark_store::committed_feed::append_committed_change(
-            conn,
-            "object",
-            entity_id,
-            incoming_hlc,
-            false,
-            Some(&HLC::from_string(incoming_hlc).device_id),
-            None,
-        )?;
-    }
-    Ok(())
+    ark_store::sync_versions::record_remote_object_revision(conn, entity_id, incoming_hlc)
 }

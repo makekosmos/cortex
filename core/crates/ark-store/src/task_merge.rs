@@ -21,8 +21,8 @@ pub use append::{
     TaskMergeOperationOrigin,
 };
 pub use bootstrap::{
-    check_bootstrap, has_bootstrap, load_bootstrap, persist_bootstrap, PreparedTaskMergeBootstrap,
-    TaskMergeBootstrapCheck,
+    apply_inbound_bootstrap, check_bootstrap, has_bootstrap, load_bootstrap, persist_bootstrap,
+    PreparedTaskMergeBootstrap, TaskMergeBootstrapCheck,
 };
 pub use history::{read_conflict_set, task_causal_dependencies_pending};
 pub use inbound::{

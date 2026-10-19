@@ -90,6 +90,26 @@ fn connection() -> Connection {
                     entity_type TEXT NOT NULL,
                     hlc TEXT NOT NULL,
                     PRIMARY KEY (id, entity_type)
+                );
+                CREATE TABLE ark_committed_feed (
+                    position INTEGER PRIMARY KEY AUTOINCREMENT,
+                    entity_type TEXT NOT NULL,
+                    entity_id TEXT NOT NULL,
+                    revision TEXT NOT NULL,
+                    deleted INTEGER NOT NULL DEFAULT 0,
+                    origin_device_id TEXT,
+                    origin_sequence INTEGER,
+                    UNIQUE(entity_type, entity_id, revision)
+                );
+                CREATE TABLE ark_committed_feed_heads (
+                    entity_type TEXT NOT NULL,
+                    entity_id TEXT NOT NULL,
+                    position INTEGER NOT NULL,
+                    PRIMARY KEY(entity_type, entity_id)
+                );
+                CREATE TABLE ark_committed_feed_meta (
+                    meta_key TEXT PRIMARY KEY,
+                    meta_value TEXT NOT NULL
                 );",
         )
         .expect("task merge fixture schema creates");

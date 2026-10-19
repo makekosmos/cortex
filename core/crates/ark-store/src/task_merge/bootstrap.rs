@@ -107,6 +107,83 @@ pub fn persist_bootstrap(
     Ok(())
 }
 
+pub fn apply_inbound_bootstrap(
+    transaction: &Connection,
+    bootstrap: &TaskMergeBootstrap,
+) -> Result<bool, TaskMergeStoreError> {
+    let object_id = bootstrap.object.id.clone();
+    let prepared = match check_bootstrap(transaction, bootstrap)? {
+        TaskMergeBootstrapCheck::Replay => {
+            super::materialize_task_if_ready(transaction, &object_id)?;
+            return Ok(true);
+        }
+        TaskMergeBootstrapCheck::New(prepared) => prepared,
+    };
+    let bootstrap = prepared.bootstrap().clone();
+
+    if let Some(existing_object) =
+        crate::objects::get_object(transaction, &bootstrap.object.id).map_err(storage_error)?
+    {
+        let mut existing_links = crate::objects::list_object_links(transaction)
+            .map_err(storage_error)?
+            .into_iter()
+            .filter(|link| link.source_object_id == bootstrap.object.id)
+            .collect::<Vec<_>>();
+        existing_links.sort_by(|left, right| left.id.cmp(&right.id));
+        let mut incoming_links = bootstrap.links.clone();
+        incoming_links.sort_by(|left, right| left.id.cmp(&right.id));
+        if existing_object != bootstrap.object || existing_links != incoming_links {
+            return Err(TaskMergeStoreError::Invalid(
+                "task_merge_bootstrap_existing_object_mismatch".into(),
+            ));
+        }
+    }
+
+    persist_bootstrap(transaction, prepared)?;
+    crate::objects::upsert_object(transaction, &bootstrap.object).map_err(storage_error)?;
+    transaction
+        .execute(
+            "DELETE FROM object_links WHERE source_object_id = ?1",
+            [&bootstrap.object.id],
+        )
+        .map_err(storage_error)?;
+    for link in &bootstrap.links {
+        crate::objects::upsert_object_link(transaction, link).map_err(storage_error)?;
+    }
+
+    crate::sync_versions::record_remote_object_revision(
+        transaction,
+        &bootstrap.object.id,
+        &bootstrap.source_hlc,
+    )
+    .map_err(storage_error)?;
+    transaction
+        .execute(
+            "INSERT INTO object_sync_versions(object_id, hlc, deleted)
+             VALUES (?1, ?2, ?3)
+             ON CONFLICT(object_id) DO UPDATE SET hlc = excluded.hlc,
+                 deleted = excluded.deleted
+             WHERE excluded.hlc > object_sync_versions.hlc",
+            rusqlite::params![
+                bootstrap.object.id,
+                bootstrap.source_hlc,
+                bootstrap.object.deleted_at.is_some(),
+            ],
+        )
+        .map_err(storage_error)?;
+    if bootstrap.object.deleted_at.is_none() {
+        transaction
+            .execute(
+                "DELETE FROM sync_tombstones WHERE id = ?1",
+                [&bootstrap.object.id],
+            )
+            .map_err(storage_error)?;
+    }
+
+    super::materialize_task_if_ready(transaction, &bootstrap.object.id)?;
+    Ok(false)
+}
+
 pub fn load_bootstrap(
     connection: &Connection,
     object_id: &str,
