@@ -155,30 +155,9 @@ pub fn apply_inbound_bootstrap(
         transaction,
         &bootstrap.object.id,
         &bootstrap.source_hlc,
+        bootstrap.object.deleted_at.is_some(),
     )
     .map_err(storage_error)?;
-    transaction
-        .execute(
-            "INSERT INTO object_sync_versions(object_id, hlc, deleted)
-             VALUES (?1, ?2, ?3)
-             ON CONFLICT(object_id) DO UPDATE SET hlc = excluded.hlc,
-                 deleted = excluded.deleted
-             WHERE excluded.hlc > object_sync_versions.hlc",
-            rusqlite::params![
-                bootstrap.object.id,
-                bootstrap.source_hlc,
-                bootstrap.object.deleted_at.is_some(),
-            ],
-        )
-        .map_err(storage_error)?;
-    if bootstrap.object.deleted_at.is_none() {
-        transaction
-            .execute(
-                "DELETE FROM sync_tombstones WHERE id = ?1",
-                [&bootstrap.object.id],
-            )
-            .map_err(storage_error)?;
-    }
 
     super::materialize_task_if_ready(transaction, &bootstrap.object.id)?;
     Ok(false)

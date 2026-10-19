@@ -96,7 +96,7 @@ pub use open::{count_pending_for_type, insert_pending_object};
 pub(crate) use sync::upsert_sync_tombstone;
 pub use sync::{
     bump_sync_version_vector, delete_sync_tombstone, ensure_usage_sequence_migrated,
-    record_remote_sync_revision, record_sync_tombstone, record_sync_tombstone_with_type,
+    record_sync_tombstone, record_sync_tombstone_with_type,
 };
 pub(in crate::db) use sync::{
     finish_usage_entity_sync, load_sync_tombstones, record_usage_sequence, usage_entity_is_newer,

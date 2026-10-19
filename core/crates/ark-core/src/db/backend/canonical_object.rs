@@ -101,16 +101,7 @@ impl ObjectWriteSession for SqliteObjectWriteSession<'_> {
     }
 
     fn record_remote_revision(&self, id: &str, source_hlc: &str) -> Result<(), String> {
-        self.conn
-            .execute(
-                "INSERT INTO object_sync_versions(object_id, hlc, deleted) VALUES (?1, ?2, 0)
-                 ON CONFLICT(object_id) DO UPDATE SET hlc = excluded.hlc, deleted = 0
-                 WHERE excluded.hlc > object_sync_versions.hlc",
-                params![id, source_hlc],
-            )
-            .map_err(|error| error.to_string())?;
-        db::record_remote_sync_revision(self.conn, id, source_hlc)?;
-        db::delete_sync_tombstone(self.conn, id)
+        ark_store::sync_versions::record_remote_object_revision(self.conn, id, source_hlc, false)
     }
 
     fn load_receipt(

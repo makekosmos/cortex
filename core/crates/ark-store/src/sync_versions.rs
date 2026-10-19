@@ -12,7 +12,19 @@ pub fn record_remote_object_revision(
     connection: &Connection,
     entity_id: &str,
     incoming_hlc: &str,
+    deleted: bool,
 ) -> Result<(), String> {
+    connection
+        .execute(
+            "INSERT INTO object_sync_versions(object_id, hlc, deleted)
+             VALUES (?1, ?2, ?3)
+             ON CONFLICT(object_id) DO UPDATE SET hlc = excluded.hlc,
+                 deleted = excluded.deleted
+             WHERE excluded.hlc > object_sync_versions.hlc",
+            rusqlite::params![entity_id, incoming_hlc, deleted],
+        )
+        .map_err(|error| error.to_string())?;
+
     let raw = crate::sync_kv::get_sync_kv(connection, crate::VERSION_VECTOR_KEY)?;
     let mut vector: VersionVector = raw
         .as_deref()
@@ -39,6 +51,11 @@ pub fn record_remote_object_revision(
             Some(&HLC::from_string(incoming_hlc).device_id),
             None,
         )?;
+    }
+    if !deleted {
+        connection
+            .execute("DELETE FROM sync_tombstones WHERE id = ?1", [entity_id])
+            .map_err(|error| error.to_string())?;
     }
     Ok(())
 }
@@ -159,7 +176,9 @@ pub fn object_revision(connection: &Connection, entity_id: &str) -> Result<Optio
 
 #[cfg(test)]
 mod tests {
-    use super::{bump_local_revision, object_revision, LocalRevisionTarget};
+    use super::{
+        bump_local_revision, object_revision, record_remote_object_revision, LocalRevisionTarget,
+    };
     use crate::sync_kv::set_sync_kv;
     use rusqlite::Connection;
 
@@ -286,6 +305,62 @@ mod tests {
             )
             .expect("committed feed row count reads");
         assert_eq!(feed_rows, 1);
+    }
+
+    #[test]
+    fn remote_object_revision_updates_vector_feed_and_clears_tombstone() {
+        let connection = local_revision_connection();
+        connection
+            .execute(
+                "INSERT INTO sync_tombstones(id, entity_type, hlc, deleted_at)
+                 VALUES ('task', 'object', '2026-10-01T00:00:00.000Z:000001:old',
+                     '2026-10-01T00:00:00.000Z:000001:old')",
+                [],
+            )
+            .expect("old tombstone persists");
+
+        record_remote_object_revision(
+            &connection,
+            "task",
+            "2026-10-02T00:00:00.000Z:000001:remote",
+            false,
+        )
+        .expect("remote revision persists");
+
+        let object_revision: String = connection
+            .query_row(
+                "SELECT hlc FROM object_sync_versions WHERE object_id = 'task'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("object revision reads");
+        assert_eq!(object_revision, "2026-10-02T00:00:00.000Z:000001:remote");
+        let raw_vector = crate::sync_kv::get_sync_kv(&connection, crate::VERSION_VECTOR_KEY)
+            .expect("version vector reads")
+            .expect("version vector exists");
+        let vector: ark_domain::types::VersionVector =
+            serde_json::from_str(&raw_vector).expect("vector decodes");
+        assert_eq!(
+            vector.get("task").map(String::as_str),
+            Some("2026-10-02T00:00:00.000Z:000001:remote")
+        );
+        let feed_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM ark_committed_feed
+                 WHERE entity_type = 'object' AND entity_id = 'task'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("feed count reads");
+        assert_eq!(feed_count, 1);
+        let tombstone_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM sync_tombstones WHERE id = 'task'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("tombstone count reads");
+        assert_eq!(tombstone_count, 0);
     }
 
     #[test]

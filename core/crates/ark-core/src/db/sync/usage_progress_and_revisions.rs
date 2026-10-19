@@ -231,11 +231,3 @@ pub fn bump_sync_version_vector(
     )?;
     Ok(hlc)
 }
-
-pub fn record_remote_sync_revision(
-    conn: &Connection,
-    entity_id: &str,
-    incoming_hlc: &str,
-) -> Result<(), String> {
-    ark_store::sync_versions::record_remote_object_revision(conn, entity_id, incoming_hlc)
-}
