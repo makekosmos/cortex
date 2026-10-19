@@ -1,6 +1,6 @@
 use super::{append_remote_operation, TaskMergeError};
 use ark_application::sync_storage::{PolicyIdentity, TaskMergeBatch, TaskMergeBatchAck};
-use rusqlite::{OptionalExtension, Transaction};
+use rusqlite::Transaction;
 use sha2::{Digest, Sha256};
 
 const MAX_BATCH_ENTRIES: usize = 100;
@@ -14,32 +14,26 @@ pub(crate) fn apply_inbound_batch(
 ) -> Result<TaskMergeBatchAck, TaskMergeError> {
     validate_batch(identity, batch)?;
     let payload_digest = payload_digest(batch)?;
-    let progress = load_progress(transaction, peer_device_id)?;
+    let progress = ark_store::task_merge::load_inbound_progress(transaction, peer_device_id)?;
 
     if let Some(progress) = progress {
-        if progress.last_batch_id.as_deref() == Some(&batch.batch_id) {
-            if progress.last_batch_after != Some(batch.after_position)
-                || progress.last_batch_through != Some(batch.through_position)
-                || progress.last_batch_digest.as_deref() != Some(payload_digest.as_str())
+        if let Some(last_batch) = progress
+            .last_batch
+            .filter(|last_batch| last_batch.batch_id == batch.batch_id)
+        {
+            if last_batch.after != batch.after_position
+                || last_batch.through != batch.through_position
+                || last_batch.payload_digest != payload_digest
             {
                 return Err(TaskMergeError::Invalid(
                     "task_merge_inbound_batch_replay_mismatch".into(),
                 ));
             }
-            transaction
-                .execute(
-                    "UPDATE task_merge_inbound_progress
-                     SET policy_revision = ?2, policy_digest = ?3, policy_active = ?4,
-                         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-                     WHERE peer_device_id = ?1",
-                    rusqlite::params![
-                        peer_device_id,
-                        identity.revision,
-                        identity.digest,
-                        identity.active
-                    ],
-                )
-                .map_err(storage_error)?;
+            ark_store::task_merge::update_inbound_policy_identity(
+                transaction,
+                peer_device_id,
+                identity,
+            )?;
             return Ok(TaskMergeBatchAck {
                 batch_id: batch.batch_id.clone(),
                 through_position: progress.received_through,
@@ -75,36 +69,17 @@ pub(crate) fn apply_inbound_batch(
         }
     }
 
-    transaction
-        .execute(
-            "INSERT INTO task_merge_inbound_progress(
-                peer_device_id, policy_revision, policy_digest, policy_active,
-                received_through, last_batch_id, last_batch_after, last_batch_through,
-                last_batch_digest
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
-             ON CONFLICT(peer_device_id) DO UPDATE SET
-                policy_revision = excluded.policy_revision,
-                policy_digest = excluded.policy_digest,
-                policy_active = excluded.policy_active,
-                received_through = excluded.received_through,
-                last_batch_id = excluded.last_batch_id,
-                last_batch_after = excluded.last_batch_after,
-                last_batch_through = excluded.last_batch_through,
-                last_batch_digest = excluded.last_batch_digest,
-                updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
-            rusqlite::params![
-                peer_device_id,
-                identity.revision,
-                identity.digest,
-                identity.active,
-                batch.through_position,
-                batch.batch_id,
-                batch.after_position,
-                batch.through_position,
-                payload_digest,
-            ],
-        )
-        .map_err(storage_error)?;
+    ark_store::task_merge::record_inbound_batch(
+        transaction,
+        peer_device_id,
+        identity,
+        &ark_store::task_merge::TaskMergeInboundBatchReceipt {
+            batch_id: batch.batch_id.clone(),
+            after: batch.after_position,
+            through: batch.through_position,
+            payload_digest,
+        },
+    )?;
     Ok(TaskMergeBatchAck {
         batch_id: batch.batch_id.clone(),
         through_position: batch.through_position,
@@ -154,41 +129,4 @@ fn payload_digest(batch: &TaskMergeBatch) -> Result<String, TaskMergeError> {
         serde_json::to_vec(&(batch.after_position, batch.through_position, &batch.entries))
             .map_err(|error| TaskMergeError::Invalid(error.to_string()))?;
     Ok(format!("{:x}", Sha256::digest(payload)))
-}
-
-#[derive(Debug)]
-struct InboundProgress {
-    received_through: i64,
-    last_batch_id: Option<String>,
-    last_batch_after: Option<i64>,
-    last_batch_through: Option<i64>,
-    last_batch_digest: Option<String>,
-}
-
-fn load_progress(
-    transaction: &Transaction<'_>,
-    peer_device_id: &str,
-) -> Result<Option<InboundProgress>, TaskMergeError> {
-    transaction
-        .query_row(
-            "SELECT received_through, last_batch_id, last_batch_after,
-                    last_batch_through, last_batch_digest
-             FROM task_merge_inbound_progress WHERE peer_device_id = ?1",
-            [peer_device_id],
-            |row| {
-                Ok(InboundProgress {
-                    received_through: row.get(0)?,
-                    last_batch_id: row.get(1)?,
-                    last_batch_after: row.get(2)?,
-                    last_batch_through: row.get(3)?,
-                    last_batch_digest: row.get(4)?,
-                })
-            },
-        )
-        .optional()
-        .map_err(storage_error)
-}
-
-fn storage_error(error: rusqlite::Error) -> TaskMergeError {
-    TaskMergeError::Storage(error.to_string())
 }

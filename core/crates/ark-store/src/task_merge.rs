@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 mod append;
 mod bootstrap;
 mod history;
+mod inbound;
 mod progress;
 
 pub use append::{
@@ -21,6 +22,10 @@ pub use bootstrap::{
     TaskMergeBootstrapCheck,
 };
 pub use history::{read_conflict_set, task_causal_dependencies_pending};
+pub use inbound::{
+    load_inbound_progress, record_inbound_batch, update_inbound_policy_identity,
+    TaskMergeInboundBatchReceipt, TaskMergeInboundProgress,
+};
 pub use progress::{
     acknowledge_outbound_batch, claim_outbound_batch, create_outbound_progress,
     load_outbound_progress, task_merge_watermark, update_outbound_policy_identity,

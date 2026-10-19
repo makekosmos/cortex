@@ -272,11 +272,6 @@
       "count": 4
     },
     {
-      "path": "core/crates/ark-core/src/db/task_merge/inbound.rs",
-      "category": "SQLite mutation API",
-      "count": 2
-    },
-    {
       "path": "core/crates/ark-core/src/db/task_merge/mutation.rs",
       "category": "SQLite mutation API",
       "count": 1
@@ -405,6 +400,11 @@
       "path": "core/crates/ark-store/src/task_merge/progress.rs",
       "category": "SQLite mutation API",
       "count": 4
+    },
+    {
+      "path": "core/crates/ark-store/src/task_merge/inbound.rs",
+      "category": "SQLite mutation API",
+      "count": 2
     }
   ]
 }

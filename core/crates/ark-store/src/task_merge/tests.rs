@@ -48,6 +48,18 @@ fn connection() -> Connection {
                     last_acknowledged_batch_id TEXT,
                     last_acknowledged_through INTEGER,
                     updated_at TEXT NOT NULL DEFAULT ''
+                );
+                CREATE TABLE task_merge_inbound_progress (
+                    peer_device_id TEXT PRIMARY KEY,
+                    policy_revision INTEGER NOT NULL,
+                    policy_digest TEXT NOT NULL,
+                    policy_active INTEGER NOT NULL,
+                    received_through INTEGER NOT NULL DEFAULT 0,
+                    last_batch_id TEXT,
+                    last_batch_after INTEGER,
+                    last_batch_through INTEGER,
+                    last_batch_digest TEXT,
+                    updated_at TEXT NOT NULL DEFAULT ''
                 );",
         )
         .expect("task merge fixture schema creates");
@@ -381,5 +393,7 @@ fn append_persistence_rolls_back_operation_when_journal_insert_fails() {
 
 #[path = "tests_bootstrap.rs"]
 mod bootstrap_tests;
+#[path = "tests_inbound.rs"]
+mod inbound_tests;
 #[path = "tests_progress.rs"]
 mod progress_tests;
