@@ -45,6 +45,23 @@ pub use projection::{materialize_task_if_ready, TaskMergeProjectionOutcome};
 
 const MAX_TASK_MERGE_PAGE_SIZE: usize = 100;
 
+pub fn ensure_legacy_task_write_allowed(
+    connection: &Connection,
+    object_id: &str,
+) -> Result<(), String> {
+    let operation_enabled: bool = connection
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM task_merge_operations WHERE object_id = ?1)",
+            [object_id],
+            |row| row.get(0),
+        )
+        .map_err(|error| error.to_string())?;
+    if operation_enabled {
+        return Err("task_merge_operation_mode_requires_upgrade".into());
+    }
+    Ok(())
+}
+
 #[derive(Debug)]
 pub enum TaskMergeStoreError {
     Invalid(String),

@@ -165,7 +165,7 @@ pub fn write_legacy_records(
     for item in mapped {
         let id = item.object.id.clone();
         if item.object.type_id == "core.task" {
-            let session = crate::db::SqliteObjectWriteSession::new(conn);
+            let session = crate::db::SqliteTaskMutationSession::new(conn);
             let expected_snapshot = session.task_snapshot(&item.object.id)?;
             entities.extend(crate::application::task_mutation::apply_task_upsert(
                 &session,
@@ -241,7 +241,7 @@ pub fn delete_legacy_object(
     device_id: Option<String>,
 ) -> Result<SyncEntity, String> {
     if expected_type_id == "core.task" {
-        let session = crate::db::SqliteObjectWriteSession::new(conn);
+        let session = crate::db::SqliteTaskMutationSession::new(conn);
         let commit = crate::application::task_mutation::apply_task_delete(
             &session,
             crate::application::task_mutation::LocalTaskDelete {

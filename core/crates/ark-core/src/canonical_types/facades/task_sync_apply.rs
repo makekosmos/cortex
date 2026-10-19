@@ -7,7 +7,7 @@ pub fn apply_remote_task_delete(
 ) -> Result<ark_application::sync_storage::InboundApplyOutcome, String> {
     conn.execute_batch("SAVEPOINT canonical_sync_task_delete")
         .map_err(|error| error.to_string())?;
-    let session = crate::db::SqliteObjectWriteSession::new(conn);
+    let session = crate::db::SqliteTaskMutationSession::new(conn);
     let result = crate::application::task_mutation::apply_inbound_task_mutation(
         &session,
         crate::application::task_mutation::InboundTaskMutation::RemoteHardDelete { entity },

@@ -38,7 +38,7 @@ impl DbCommand for LocalObjectDeleteCommand {
             .map_err(|error| DbError::Storage(error.to_string()))?
             .is_some_and(|object| object.type_id == "core.task")
         {
-            let session = crate::db::SqliteObjectWriteSession::new(transaction);
+            let session = crate::db::SqliteTaskMutationSession::new(transaction);
             let commit = crate::application::task_mutation::apply_task_delete(
                 &session,
                 crate::application::task_mutation::LocalTaskDelete {

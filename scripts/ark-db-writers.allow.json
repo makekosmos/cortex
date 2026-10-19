@@ -92,11 +92,6 @@
       "count": 1
     },
     {
-      "path": "core/crates/ark-core/src/db/backend/canonical_object.rs",
-      "category": "SQLite mutation API",
-      "count": 1
-    },
-    {
       "path": "core/crates/ark-core/src/db/command/executor/actor/task.rs",
       "category": "SQLite mutation API",
       "count": 2
@@ -359,7 +354,7 @@
     {
       "path": "core/crates/ark-store/src/sync_versions.rs",
       "category": "SQLite mutation API",
-      "count": 2
+      "count": 3
     },
     {
       "path": "core/crates/ark-store/src/sync_versions/local_revision.rs",

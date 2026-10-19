@@ -1,11 +1,12 @@
-use crate::object_write::ObjectWriteSession;
 use ark_domain::hlc::HLC;
 use ark_domain::object_write::ObjectWriteSnapshot;
 use ark_domain::types::{ArkObject, ObjectLink, SyncEntity};
 use serde::Serialize;
 use serde_json::json;
 
-pub trait TaskMutationSession: ObjectWriteSession {
+pub trait TaskMutationSession {
+    fn current_revision(&self, id: &str) -> Result<Option<String>, String>;
+    fn record_remote_revision(&self, id: &str, source_hlc: &str) -> Result<(), String>;
     fn ensure_legacy_task_write_allowed(&self, id: &str) -> Result<(), String>;
     fn persist_task(&self, object: &ArkObject, links: &[ObjectLink]) -> Result<(), String>;
     fn record_task_upsert(&self, id: &str, device_id: &str) -> Result<String, String>;

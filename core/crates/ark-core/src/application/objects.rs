@@ -22,7 +22,7 @@ enum Input {
 }
 
 fn apply_core_task_write(
-    session: &dyn ObjectWriteSession,
+    object_session: &dyn ObjectWriteSession,
     local_task_session: Option<&dyn crate::application::task_mutation::TaskMutationSession>,
     origin: ObjectWriteOrigin,
     input: Input,
@@ -66,18 +66,18 @@ fn apply_core_task_write(
         };
 
     if let Some(expected) = expected_snapshot.as_ref() {
-        let current = session.object_snapshot(&write.id)?;
+        let current = object_session.object_snapshot(&write.id)?;
         if current != *expected {
             return Err("object_conflict:stale_snapshot".into());
         }
     }
     if let Some(peer_id) = peer_id.as_deref() {
-        if session.is_peer_removed(peer_id)? {
+        if object_session.is_peer_removed(peer_id)? {
             return Err("sync_peer_removed".into());
         }
     }
 
-    let (resolved_type_id, resolved_version) = session
+    let (resolved_type_id, resolved_version) = object_session
         .resolve_type_identity(&write.type_id, write.type_version.as_deref())
         .map_err(|_| {
             crate::canonical_types::ingress::CanonicalIngressError::invalid(
@@ -118,7 +118,9 @@ fn apply_core_task_write(
     let representation_kind = "full";
 
     if let Some(source_hlc) = source_hlc.as_deref() {
-        if let Some(receipt) = session.load_receipt(&object.id, representation_kind, source_hlc)? {
+        if let Some(receipt) =
+            object_session.load_receipt(&object.id, representation_kind, source_hlc)?
+        {
             if receipt.payload_sha256 != payload_sha256 {
                 return Err("object_revision_payload_mismatch".into());
             }
@@ -127,12 +129,12 @@ fn apply_core_task_write(
                 duplicate: true,
             });
         }
-        let current = session.current_revision(&object.id)?;
+        let current = object_session.current_revision(&object.id)?;
         if current
             .as_deref()
             .is_some_and(|current| HLC::compare_str(source_hlc, current) != Ordering::Greater)
         {
-            let receipt = session.insert_receipt(NewObjectReceipt {
+            let receipt = object_session.insert_receipt(NewObjectReceipt {
                 entity_id: object.id.clone(),
                 representation_kind: representation_kind.to_owned(),
                 source_hlc: source_hlc.to_owned(),
@@ -159,7 +161,7 @@ fn apply_core_task_write(
                 source_hlc,
             },
         )?;
-        let receipt = session.insert_receipt(NewObjectReceipt {
+        let receipt = object_session.insert_receipt(NewObjectReceipt {
             entity_id: object.id.clone(),
             representation_kind: representation_kind.to_owned(),
             source_hlc: source_hlc.to_owned(),
@@ -193,7 +195,7 @@ fn apply_core_task_write(
         .ok_or_else(|| "task_upsert_missing_entity".to_string())?
         .hlc;
     let source_origin_device_id = HLC::from_string(&source_hlc).device_id;
-    let receipt = session.insert_receipt(NewObjectReceipt {
+    let receipt = object_session.insert_receipt(NewObjectReceipt {
         entity_id: object.id.clone(),
         representation_kind: representation_kind.to_owned(),
         source_hlc: source_hlc.clone(),
@@ -212,14 +214,15 @@ fn apply_core_task_write(
 }
 
 pub(crate) fn apply_local_core_task_write(
-    session: &dyn crate::application::task_mutation::TaskMutationSession,
+    object_session: &dyn ObjectWriteSession,
+    task_session: &dyn crate::application::task_mutation::TaskMutationSession,
     object: ArkObjectWrite,
     expected_snapshot: Option<ObjectWriteSnapshot>,
     device_id: Option<String>,
 ) -> Result<ObjectWriteResult, String> {
     apply_core_task_write(
-        session,
-        Some(session),
+        object_session,
+        Some(task_session),
         ObjectWriteOrigin::Local {
             device_id,
             expected_snapshot,
@@ -232,7 +235,8 @@ pub(crate) fn apply_local_core_task_write(
 }
 
 pub(crate) fn apply_remote_core_task_write(
-    session: &dyn crate::application::task_mutation::TaskMutationSession,
+    object_session: &dyn ObjectWriteSession,
+    task_session: &dyn crate::application::task_mutation::TaskMutationSession,
     remote: RemoteObjectWrite,
     authenticated_peer_id: Option<String>,
 ) -> Result<ObjectWriteResult, String> {
@@ -241,5 +245,10 @@ pub(crate) fn apply_remote_core_task_write(
     } else {
         ObjectWriteOrigin::TrustedRemote
     };
-    apply_core_task_write(session, Some(session), origin, Input::Remote(remote))
+    apply_core_task_write(
+        object_session,
+        Some(task_session),
+        origin,
+        Input::Remote(remote),
+    )
 }

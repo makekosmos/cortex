@@ -50,9 +50,11 @@ impl DbCommand for LocalCoreTaskWrite {
             ));
         }
         let id = self.object.id.clone();
-        let session = super::super::super::SqliteObjectWriteSession::new(transaction);
+        let object_session = ark_store::object_write::SqliteObjectWriteSession::new(transaction);
+        let task_session = super::super::super::SqliteTaskMutationSession::new(transaction);
         let result = crate::application::objects::apply_local_core_task_write(
-            &session,
+            &object_session,
+            &task_session,
             self.object,
             self.expected_snapshot,
             self.device_id,
@@ -168,12 +170,13 @@ impl DbCommand for AuthenticatedCoreTaskWrite {
             return Err(DbError::Permission("sync_peer_removed".into()));
         }
 
-        let session = super::super::super::SqliteObjectWriteSession::new(transaction);
-        if session
+        let object_session = ark_store::object_write::SqliteObjectWriteSession::new(transaction);
+        let task_session = super::super::super::SqliteTaskMutationSession::new(transaction);
+        if object_session
             .load_receipt(&self.id, "full", &self.source_hlc)
             .map_err(DbError::from_application_error)?
             .is_none()
-            && session
+            && object_session
                 .current_revision(&self.id)
                 .map_err(DbError::from_application_error)?
                 .as_deref()
@@ -197,7 +200,8 @@ impl DbCommand for AuthenticatedCoreTaskWrite {
         let inbox_message_id = self.inbox_message_id.clone();
         let remote = decode_remote(self)?;
         let result = crate::application::objects::apply_remote_core_task_write(
-            &session,
+            &object_session,
+            &task_session,
             remote,
             Some(peer_id.to_owned()),
         )

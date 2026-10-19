@@ -60,6 +60,22 @@ pub fn record_remote_object_revision(
     Ok(())
 }
 
+pub fn record_remote_object_deletion(
+    connection: &Connection,
+    entity: &ark_domain::types::SyncEntity,
+) -> Result<(), String> {
+    connection
+        .execute(
+            "INSERT INTO object_sync_versions(object_id, hlc, deleted)
+             VALUES (?1, ?2, 1)
+             ON CONFLICT(object_id) DO UPDATE SET hlc = excluded.hlc, deleted = 1
+             WHERE excluded.hlc > object_sync_versions.hlc",
+            rusqlite::params![entity.id, entity.hlc],
+        )
+        .map_err(|error| error.to_string())?;
+    crate::sync_tombstones::upsert(connection, entity)
+}
+
 impl LocalRevisionTarget {
     fn entity_type(self) -> &'static str {
         match self {
