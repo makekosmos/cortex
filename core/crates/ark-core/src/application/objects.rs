@@ -1,5 +1,4 @@
 use crate::canonical_types::definitions::canonical_type_registrations;
-use crate::canonical_types::ingress::prepare_resolved_object;
 use crate::hlc::HLC;
 use crate::types::{ArkObjectWrite, ObjectLink};
 use ark_domain::object_write::{ObjectWriteSnapshot, RemoteObjectWrite};
@@ -101,7 +100,7 @@ fn apply_core_task_write(
     if resolved_type_id != CORE_TASK_ID || resolved_version != CORE_TASK_VERSION {
         return Err("object_write_slice_unsupported_type".into());
     }
-    let object = prepare_resolved_object(
+    let object = ark_domain::canonical_type::prepare_resolved_object(
         write,
         &resolved_type_id,
         &resolved_version,

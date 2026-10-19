@@ -16,7 +16,7 @@ use super::validation::validate_canonical;
 use crate::db::backup_to_file;
 use ark_domain::canonical_type::TypeRegistration;
 
-pub const LEGACY_TASK_TYPE: &str = "com.kosmos.task";
+pub const LEGACY_TASK_TYPE: &str = ark_domain::canonical_type::LEGACY_TASK_TYPE;
 pub const LEGACY_TASK_VERSION: &str = "1.1.0";
 pub const CORE_TASK_TYPE: &str = "core.task";
 pub const CORE_TASK_VERSION: &str = "0.1.0";
