@@ -24,7 +24,6 @@ pub fn upsert_object(conn: &Connection, object: &ArkObject) -> Result<(), String
     }
     upsert_object_inner(conn, object)
 }
-
 fn upsert_object_inner(conn: &Connection, object: &ArkObject) -> Result<(), String> {
     let has_type_version: bool = conn
         .query_row(
@@ -102,62 +101,4 @@ pub fn delete_object(conn: &Connection, id: &str) -> Result<(), String> {
     conn.execute_batch("RELEASE SAVEPOINT ark_delete_object")
         .map_err(|e| e.to_string())?;
     Ok(())
-}
-
-fn map_ark_object_row(row: &Row<'_>) -> rusqlite::Result<ArkObject> {
-    Ok(ArkObject {
-        id: row.get(0)?,
-        type_id: row.get(1)?,
-        type_version: row.get(2)?,
-        title: row.get(3)?,
-        content_json: parse_json_or_default(row.get(4)?),
-        props_json: parse_json_or_default(row.get(5)?),
-        created_at: row.get(6)?,
-        updated_at: row.get(7)?,
-        deleted_at: row.get(8)?,
-    })
-}
-
-fn map_ark_object_summary_row(row: &Row<'_>) -> rusqlite::Result<ArkObjectSummary> {
-    Ok(ArkObjectSummary {
-        id: row.get(0)?,
-        type_id: row.get(1)?,
-        type_version: row.get(2)?,
-        title: row.get(3)?,
-        props_json: parse_json_or_default(row.get(4)?),
-        created_at: row.get(5)?,
-        updated_at: row.get(6)?,
-        deleted_at: row.get(7)?,
-    })
-}
-
-pub fn list_objects(conn: &Connection) -> Result<Vec<ArkObject>, String> {
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, type_id, type_version, title, content_json, props_json, created_at,
-             updated_at, deleted_at
-             FROM objects
-             ORDER BY updated_at DESC, created_at DESC",
-        )
-        .map_err(|e| e.to_string())?;
-    let rows = stmt
-        .query_map([], map_ark_object_row)
-        .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())
-}
-
-pub fn list_object_summaries(conn: &Connection) -> Result<Vec<ArkObjectSummary>, String> {
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, type_id, type_version, title, props_json, created_at, updated_at, deleted_at
-             FROM objects
-             ORDER BY updated_at DESC, created_at DESC",
-        )
-        .map_err(|e| e.to_string())?;
-    let rows = stmt
-        .query_map([], map_ark_object_summary_row)
-        .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())
 }

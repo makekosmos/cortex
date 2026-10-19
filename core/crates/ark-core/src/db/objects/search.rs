@@ -1,3 +1,30 @@
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchResult {
+    pub file: String,
+    pub line: usize,
+    pub text: String,
+    pub entry_id: String,
+}
+
+pub fn search_objects(conn: &Connection, query: &str) -> Result<Vec<SearchResult>, String> {
+    if query.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let normalized_query = query.trim().to_lowercase();
+    let query_terms = tokenize_search_text(query);
+    if let Some(fts_query) = build_fts_match_query(&query_terms) {
+        if let Ok(results) =
+            search_objects_with_fts(conn, &fts_query, &normalized_query, &query_terms)
+        {
+            return Ok(results);
+        }
+    }
+
+    search_objects_fallback(conn, &normalized_query, &query_terms)
+}
+
 fn search_objects_with_fts(
     conn: &Connection,
     fts_query: &str,
