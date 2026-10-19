@@ -5,6 +5,10 @@ use ark_domain::object_write::ObjectWriteSnapshot;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
 
+pub use ark_application::object_mutation::{
+    LocalObjectDelete, LocalObjectUpsert, ObjectDeleteCommit, ObjectUpsertCommit,
+};
+
 #[derive(Debug, Clone, Copy)]
 pub enum ObjectRevisionKind {
     Object,
@@ -61,39 +65,12 @@ pub trait ObjectMutationSession {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct LocalObjectUpsert {
-    pub object: ArkObjectWrite,
-    pub expected_snapshot: Option<ObjectWriteSnapshot>,
-    pub device_id: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct LocalObjectDelete {
-    pub id: String,
-    pub expected_snapshot: Option<ObjectWriteSnapshot>,
-    pub device_id: String,
-}
-
-#[derive(Debug, Clone, Serialize)]
 pub struct LocalBookCoverWrite {
     pub book_id: String,
     pub source_ref: Option<String>,
     pub existing_image_id: Option<String>,
     pub alt_text: String,
     pub device_id: String,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct ObjectUpsertCommit {
-    pub entity: SyncEntity,
-    pub id: String,
-    pub type_id: String,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct ObjectDeleteCommit {
-    pub entity: SyncEntity,
-    pub id: String,
 }
 
 pub fn apply_game_upsert(

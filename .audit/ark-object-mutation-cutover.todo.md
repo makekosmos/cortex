@@ -10,6 +10,8 @@
 - [x] Verify the extraction with `cargo check -p ark-domain -p ark-core --all-targets` and the canonical task-write plus Agenda contract tests (5/5).
 - [x] Move persisted type resolution and the canonical ingress entry point to `ark-store`; migrate Core adapters and tests, then delete the Core ingress module.
 - [x] Verify the Store-owned ingress with `cargo check -p ark-domain -p ark-store -p ark-core --all-targets` and the canonical task, object-revision, and Agenda contract tests (16/16).
+- [x] Move object upsert/delete request and commit types to `ark-application`; preserve Core's existing internal paths as re-exports during command migration.
+- [x] Verify the contract move with `cargo check -p ark-application -p ark-core --all-targets` and the canonical task, object-revision, and Agenda contract tests (16/16).
 - [ ] Scrap: if implementation requires repeated Core/Store ownership workarounds, re-ground and replace the sketch instead of patching around it.
 
 ## Arena
