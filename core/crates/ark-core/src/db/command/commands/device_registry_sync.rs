@@ -46,23 +46,15 @@ impl DbQuery for LoadDeviceRegistryQuery {
             ark_store::sync_kv::get_sync_kv(connection, DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY)
                 .map_err(DbError::Storage)?
                 .ok_or_else(|| DbError::Invalid("device_registry_local_identity_missing".into()))?;
-        let mut statement = connection
-            .prepare(
-                "SELECT device_id, display_name, disabled_event_id IS NULL
-                 FROM device_registry_projection ORDER BY device_id",
-            )
-            .map_err(storage_error)?;
-        let mut devices = statement
-            .query_map([], |row| {
-                Ok(DeviceRegistryEntryView {
-                    device_id: row.get(0)?,
-                    display_name: row.get(1)?,
-                    enabled: row.get(2)?,
-                })
+        let mut devices = ark_store::device_registry::load_entries(connection)
+            .map_err(DbError::Storage)?
+            .into_iter()
+            .map(|entry| DeviceRegistryEntryView {
+                device_id: entry.device_id,
+                display_name: entry.display_name,
+                enabled: entry.enabled,
             })
-            .map_err(storage_error)?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(storage_error)?;
+            .collect::<Vec<_>>();
         if !devices
             .iter()
             .any(|device| device.device_id == local_device_id)
@@ -192,16 +184,10 @@ impl DbCommand for ApplyRegistryEventsCommand {
             })
             .map(|event| event.target_device_id().as_str().to_owned())
             .collect();
-        let sender_is_admitted = transaction
-            .query_row(
-                "SELECT disabled_event_id IS NULL FROM device_registry_projection
-                 WHERE device_id = ?1",
-                [&self.sender_device_id],
-                |row| row.get::<_, bool>(0),
-            )
-            .optional()
-            .map_err(storage_error)?
-            .unwrap_or(false);
+        let sender_is_admitted =
+            ark_store::device_registry::is_device_admitted(transaction, &self.sender_device_id)
+                .map_err(DbError::Storage)?
+                .unwrap_or(false);
         let local_device_id =
             ark_store::sync_kv::get_sync_kv(transaction, DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY)
                 .map_err(DbError::Storage)?;
@@ -230,15 +216,8 @@ pub(super) fn require_registry_peer_admitted(
     transaction: &Transaction<'_>,
     device_id: &str,
 ) -> Result<(), DbError> {
-    let admitted = transaction
-        .query_row(
-            "SELECT disabled_event_id IS NULL FROM device_registry_projection
-             WHERE device_id = ?1",
-            [device_id],
-            |row| row.get::<_, bool>(0),
-        )
-        .optional()
-        .map_err(storage_error)?
+    let admitted = ark_store::device_registry::is_device_admitted(transaction, device_id)
+        .map_err(DbError::Storage)?
         .unwrap_or(false);
     if admitted {
         Ok(())

@@ -2,9 +2,64 @@ use ark_domain::device_registry::{
     state::DeviceRegistry, DeviceId, DeviceRecord, DisplayName, RegistryEvent, RegistryHead,
     SigningPublicKey,
 };
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 
 pub const MAX_REGISTRY_EVENTS_PAGE_SIZE: usize = 64;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DeviceRegistryEntry {
+    pub device_id: String,
+    pub display_name: Option<String>,
+    pub enabled: bool,
+}
+
+pub fn load_entries(connection: &Connection) -> Result<Vec<DeviceRegistryEntry>, String> {
+    let mut statement = connection
+        .prepare(
+            "SELECT device_id, display_name, disabled_event_id IS NULL
+             FROM device_registry_projection ORDER BY device_id",
+        )
+        .map_err(|error| error.to_string())?;
+    let entries = statement
+        .query_map([], |row| {
+            Ok(DeviceRegistryEntry {
+                device_id: row.get(0)?,
+                display_name: row.get(1)?,
+                enabled: row.get(2)?,
+            })
+        })
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+    Ok(entries)
+}
+
+pub fn is_device_known(connection: &Connection, device_id: &str) -> Result<bool, String> {
+    connection
+        .query_row(
+            "SELECT 1 FROM device_registry_projection WHERE device_id = ?1",
+            [device_id],
+            |_| Ok(()),
+        )
+        .optional()
+        .map(|known| known.is_some())
+        .map_err(|error| error.to_string())
+}
+
+pub fn is_device_admitted(
+    connection: &Connection,
+    device_id: &str,
+) -> Result<Option<bool>, String> {
+    connection
+        .query_row(
+            "SELECT disabled_event_id IS NULL FROM device_registry_projection
+             WHERE device_id = ?1",
+            [device_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())
+}
 
 pub fn load_registry(connection: &Connection) -> Result<DeviceRegistry, String> {
     let mut registry = DeviceRegistry::default();
