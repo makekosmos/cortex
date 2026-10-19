@@ -97,6 +97,21 @@ test("writer census covers the extracted ark-store SQLite owner", async (t) => {
   );
 });
 
+test("writer census classifies standalone tests.rs modules as test code", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ark-writer-census-tests-module-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const storeRoot = path.join(root, "core", "crates", "ark-store", "src");
+  const testModule = path.join(storeRoot, "task_merge", "tests.rs");
+  await mkdir(path.dirname(testModule), { recursive: true });
+  await writeFile(testModule, 'fn write(conn: &Connection) { conn.execute("INSERT", []); }\n');
+
+  const findings = await collectWriterFindings(storeRoot, root);
+  assert.deepEqual(
+    findings.map(({ scope }) => scope),
+    ["test_file"],
+  );
+});
+
 test("allowlist detects both new writer findings and stale counts", () => {
   const finding = {
     path: "core/crates/ark-core/src/service/writer.rs",

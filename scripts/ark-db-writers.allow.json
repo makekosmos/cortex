@@ -162,21 +162,6 @@
       "count": 4
     },
     {
-      "path": "core/crates/ark-core/src/db/objects/types.rs",
-      "category": "SQLite mutation API",
-      "count": 10
-    },
-    {
-      "path": "core/crates/ark-core/src/db/objects/records.rs",
-      "category": "SQLite mutation API",
-      "count": 3
-    },
-    {
-      "path": "core/crates/ark-core/src/db/objects/links.rs",
-      "category": "SQLite mutation API",
-      "count": 2
-    },
-    {
       "path": "core/crates/ark-core/src/db/open.rs",
       "category": "connection lifecycle",
       "count": 4
@@ -244,7 +229,7 @@
     {
       "path": "core/crates/ark-core/src/type_registry/registration_migrations.rs",
       "category": "SQLite mutation API",
-      "count": 4
+      "count": 1
     },
     {
       "path": "core/crates/ark-core/src/db/command/executor/actor/runtime.rs",
@@ -349,7 +334,7 @@
     {
       "path": "core/crates/ark-store/src/type_registry/migrations.rs",
       "category": "SQLite mutation API",
-      "count": 5
+      "count": 6
     },
     {
       "path": "core/crates/ark-store/src/type_registry/updates.rs",
@@ -395,6 +380,26 @@
       "path": "core/crates/ark-store/src/integration_replication/credentials.rs",
       "category": "SQLite mutation API",
       "count": 1
+    },
+    {
+      "path": "core/crates/ark-core/src/db/objects.rs",
+      "category": "SQLite mutation API",
+      "count": 1
+    },
+    {
+      "path": "core/crates/ark-store/src/object_types.rs",
+      "category": "SQLite mutation API",
+      "count": 4
+    },
+    {
+      "path": "core/crates/ark-store/src/objects.rs",
+      "category": "SQLite mutation API",
+      "count": 11
+    },
+    {
+      "path": "core/crates/ark-store/src/objects/links.rs",
+      "category": "SQLite mutation API",
+      "count": 2
     }
   ]
 }
