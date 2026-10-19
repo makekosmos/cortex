@@ -1,10 +1,8 @@
-use crate::application::objects::{
-    NewObjectReceipt, ObjectWriteSession, ReceiptOutcome, StoredObjectReceipt,
-};
+use crate::application::objects::{NewObjectReceipt, ObjectWriteSession, StoredObjectReceipt};
 use crate::db;
 use crate::types::{ArkObject, ObjectLink};
 use ark_domain::object_write::ObjectWriteSnapshot;
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection};
 
 pub(crate) struct SqliteObjectWriteSession<'a> {
     conn: &'a Connection,
@@ -26,25 +24,17 @@ impl ObjectWriteSession for SqliteObjectWriteSession<'_> {
     }
 
     fn object_snapshot(&self, id: &str) -> Result<ObjectWriteSnapshot, String> {
-        let identity = self
-            .conn
-            .query_row(
-                "SELECT type_id, type_version FROM objects WHERE id = ?1",
-                [id],
-                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
-            )
-            .optional()
-            .map_err(|error| error.to_string())?;
+        let identity = ark_store::objects::object_type_identity(self.conn, id)?;
         let object_revision = ark_store::sync_versions::object_revision(self.conn, id)?;
         let task_revision = ark_store::task_merge::task_snapshot_token(self.conn, id)
             .map_err(|error| error.to_string())?;
         Ok(match identity {
-            Some((type_id, type_version)) => {
-                let is_task = type_id == "core.task";
+            Some(identity) => {
+                let is_task = identity.type_id == "core.task";
                 ObjectWriteSnapshot {
                     exists: true,
-                    type_id: Some(type_id),
-                    type_version: Some(type_version),
+                    type_id: Some(identity.type_id),
+                    type_version: Some(identity.type_version),
                     revision: if is_task {
                         task_revision.or(object_revision)
                     } else {
@@ -75,9 +65,9 @@ impl ObjectWriteSession for SqliteObjectWriteSession<'_> {
     }
 
     fn persist_object(&self, object: &ArkObject, links: &[ObjectLink]) -> Result<(), String> {
-        db::upsert_object(self.conn, object)?;
+        ark_store::objects::upsert_object(self.conn, object)?;
         for link in links {
-            db::upsert_object_link(self.conn, link)?;
+            ark_store::objects::upsert_object_link(self.conn, link)?;
         }
         Ok(())
     }
@@ -105,65 +95,16 @@ impl ObjectWriteSession for SqliteObjectWriteSession<'_> {
         representation_kind: &str,
         source_hlc: &str,
     ) -> Result<Option<StoredObjectReceipt>, String> {
-        self.conn
-            .query_row(
-                "SELECT change_seq, payload_sha256, payload_json, outcome, resulting_hlc
-                 FROM entity_write_receipts
-                 WHERE entity_kind = 'object' AND entity_id = ?1
-                   AND representation_kind = ?2 AND source_hlc = ?3",
-                params![entity_id, representation_kind, source_hlc],
-                |row| {
-                    let outcome: String = row.get(3)?;
-                    Ok(StoredObjectReceipt {
-                        change_seq: row.get(0)?,
-                        payload_sha256: row.get(1)?,
-                        payload_json: row.get(2)?,
-                        outcome: match outcome.as_str() {
-                            "applied" => ReceiptOutcome::Applied,
-                            "stale" => ReceiptOutcome::Stale,
-                            _ => return Err(rusqlite::Error::InvalidQuery),
-                        },
-                        resulting_hlc: row.get(4)?,
-                    })
-                },
-            )
-            .optional()
-            .map_err(|error| error.to_string())
+        ark_store::object_write_receipts::load_receipt(
+            self.conn,
+            entity_id,
+            representation_kind,
+            source_hlc,
+        )
     }
 
     fn insert_receipt(&self, receipt: NewObjectReceipt) -> Result<StoredObjectReceipt, String> {
-        let outcome_text = match receipt.outcome {
-            ReceiptOutcome::Applied => "applied",
-            ReceiptOutcome::Stale => "stale",
-        };
-        self.conn
-            .execute(
-                "INSERT INTO entity_write_receipts(
-                    entity_kind, entity_id, representation_kind, source_hlc,
-                    source_origin_device_id, type_id, payload_sha256, payload_json,
-                    outcome, resulting_hlc, authenticated_peer_id, committed_at
-                 ) VALUES ('object', ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10,
-                           strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))",
-                params![
-                    receipt.entity_id,
-                    receipt.representation_kind,
-                    receipt.source_hlc,
-                    receipt.source_origin_device_id,
-                    receipt.type_id,
-                    receipt.payload_sha256,
-                    receipt.payload_json,
-                    outcome_text,
-                    receipt.resulting_hlc,
-                    receipt.authenticated_peer_id,
-                ],
-            )
-            .map_err(|error| error.to_string())?;
-        self.load_receipt(
-            &receipt.entity_id,
-            &receipt.representation_kind,
-            &receipt.source_hlc,
-        )?
-        .ok_or_else(|| "object_write_receipt_missing_after_insert".into())
+        ark_store::object_write_receipts::insert_receipt(self.conn, receipt)
     }
 }
 

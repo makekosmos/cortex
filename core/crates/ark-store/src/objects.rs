@@ -2,11 +2,13 @@ use ark_domain::types::{ArkObject, ArkObjectSummary};
 use rusqlite::{params, params_from_iter, Connection, OptionalExtension, Row};
 use serde_json::{json, Value};
 
+mod identity;
 mod links;
 mod search;
 mod search_text;
 
 pub use ark_application::object_read::SearchResult;
+pub use identity::{object_type_identity, ObjectTypeIdentity};
 pub use links::list_other_object_link_ids;
 pub use links::{delete_object_link, list_object_links, upsert_object_link};
 pub use search::search_objects;

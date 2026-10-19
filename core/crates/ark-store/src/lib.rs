@@ -3,6 +3,7 @@ pub mod data_platform;
 pub mod data_volume;
 pub mod integration_replication;
 pub mod object_types;
+pub mod object_write_receipts;
 pub mod objects;
 pub mod open;
 pub mod operation_receipt;
