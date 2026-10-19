@@ -53,6 +53,8 @@ At commit `1803465c`, `cargo tree -p ark-core -e normal --depth 1` shows a direc
 
 The cross-judge requires a complete operation and transaction census before the API contract is frozen. The current checkout has 119 `rusqlite::` source matches across 92 files when paths named as tests are excluded; this search still includes inline test modules and is only a navigation count, not a production count. A source-aware inventory is the next implementation unit.
 
+The fixture-tested gate in `scripts/check-ark-core-storage-boundary.mjs` currently fails the checkout with 1,542 findings. It scans tests along with production files so the final Core source tree can contain no SQLite fixtures or SQL. This count is a regression baseline, not a count of distinct production database operations.
+
 ## Applied pstack decisions
 
 The **Model the Domain** principle keeps transaction-scoped operations grouped by persisted behavior instead of introducing one repository for every table. The **Sequence Work into Verifiable Units** principle requires each caller migration to finish with its behavior check and deletion of the old SQL path. **Migrate Callers Then Delete Legacy APIs** means no Core SQL facade stays as a compatibility fallback after its consumers move. **Prove It Works** makes the final source and Cargo graph gates necessary but insufficient without the Engine, wire, transaction, and recovery behavior checks.

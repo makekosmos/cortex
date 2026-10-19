@@ -38,6 +38,64 @@ function charLiteralEnd(source, quoteStart) {
   return source[index] === "'" ? index + 1 : null;
 }
 
+export function rustStringLiterals(source) {
+  const literals = [];
+  for (let index = 0; index < source.length;) {
+    const current = source[index];
+    if (current === "/" && source[index + 1] === "/") {
+      const end = source.indexOf("\n", index + 2);
+      index = end < 0 ? source.length : end;
+    } else if (current === "/" && source[index + 1] === "*") {
+      let depth = 1;
+      index += 2;
+      while (index < source.length && depth > 0) {
+        if (source[index] === "/" && source[index + 1] === "*") {
+          depth++;
+          index += 2;
+        } else if (source[index] === "*" && source[index + 1] === "/") {
+          depth--;
+          index += 2;
+        } else index++;
+      }
+      if (depth !== 0) throw new Error("unterminated block comment");
+    } else {
+      const rawPrefix = /[brc]/.test(current)
+        ? source.slice(index).match(/^(?:br|cr|r)(#{0,255})"/)
+        : null;
+      if (rawPrefix) {
+        const start = index;
+        const contentStart = index + rawPrefix[0].length;
+        const end = rawStringEnd(source, index);
+        literals.push({
+          start,
+          end,
+          content: source.slice(contentStart, end - rawPrefix[1].length - 1),
+        });
+        index = end;
+      } else if ((current === "b" || current === "c") && source[index + 1] === '"') {
+        const start = index;
+        const contentStart = index + 2;
+        const end = quotedStringEnd(source, index + 1);
+        literals.push({ start, end, content: source.slice(contentStart, end - 1) });
+        index = end;
+      } else if (current === '"') {
+        const start = index;
+        const contentStart = index + 1;
+        const end = quotedStringEnd(source, index);
+        literals.push({ start, end, content: source.slice(contentStart, end - 1) });
+        index = end;
+      } else if (current === "b" && source[index + 1] === "'") {
+        const end = charLiteralEnd(source, index + 1);
+        index = end ?? index + 1;
+      } else if (current === "'") {
+        const end = charLiteralEnd(source, index);
+        index = end ?? index + 1;
+      } else index++;
+    }
+  }
+  return literals;
+}
+
 // Preserve offsets while hiding Rust comments and literals from source scans.
 export function maskRustTrivia(source) {
   let masked = "";
