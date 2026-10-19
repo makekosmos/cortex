@@ -1,6 +1,4 @@
-use ark_core::canonical_types::pending::{
-    insert_pending_object, migrate_phase2_to_v3, replay_pending_for_type,
-};
+use ark_core::canonical_types::pending::{insert_pending_object, replay_pending_for_type};
 use ark_core::db::{init_schema, init_schema_prerequisites_for_phase3};
 use ark_core::types::SyncEntity;
 use rusqlite::{params, Connection};
@@ -67,7 +65,7 @@ fn phase3_pending_migrates_phase2_key_losslessly_and_preserves_five_columns() {
     )
     .unwrap();
 
-    migrate_phase2_to_v3(&conn).unwrap();
+    ark_store::pending_objects::migrate_phase2_to_v3(&conn).unwrap();
 
     let row: (String, String, String, String, String) = conn
         .query_row(
@@ -104,7 +102,7 @@ fn phase3_pending_migrates_phase2_key_losslessly_and_preserves_five_columns() {
 #[test]
 fn phase3_pending_allows_distinct_awaited_pairs_for_same_object() {
     let conn = phase2_pending_db();
-    migrate_phase2_to_v3(&conn).unwrap();
+    ark_store::pending_objects::migrate_phase2_to_v3(&conn).unwrap();
     insert_pending_object(
         &conn,
         &entity_for_type("o1", "type-a", "1.0.0", "2026-01-01T00:00:00Z:1", "a"),
@@ -131,7 +129,7 @@ fn phase3_pending_allows_distinct_awaited_pairs_for_same_object() {
 #[test]
 fn phase3_pending_replaces_only_exact_tuple_when_hlc_is_newer() {
     let conn = phase2_pending_db();
-    migrate_phase2_to_v3(&conn).unwrap();
+    ark_store::pending_objects::migrate_phase2_to_v3(&conn).unwrap();
     insert_pending_object(
         &conn,
         &entity_for_type("o1", "type-a", "1.0.0", "2026-01-01T00:00:00Z:1", "old"),
@@ -172,7 +170,7 @@ fn phase3_pending_replaces_only_exact_tuple_when_hlc_is_newer() {
 #[test]
 fn phase3_pending_insert_rejects_tuple_mismatch_without_mutation() {
     let conn = phase2_pending_db();
-    migrate_phase2_to_v3(&conn).unwrap();
+    ark_store::pending_objects::migrate_phase2_to_v3(&conn).unwrap();
     let mismatched = entity_for_type(
         "o1",
         "payload-type",
@@ -195,7 +193,7 @@ fn phase3_pending_insert_rejects_tuple_mismatch_without_mutation() {
 fn phase3_pending_replay_rejects_corrupted_tuple_atomically() {
     let conn = Connection::open_in_memory().unwrap();
     init_schema(&conn).unwrap();
-    migrate_phase2_to_v3(&conn).unwrap();
+    ark_store::pending_objects::migrate_phase2_to_v3(&conn).unwrap();
     let typ = ark_core::types::ObjectType {
         id: "future".into(),
         name: "Future".into(),
@@ -249,7 +247,7 @@ fn phase3_pending_replay_rejects_corrupted_tuple_atomically() {
 fn phase3_pending_replay_and_delete_are_exact_tuple_isolated() {
     let conn = Connection::open_in_memory().unwrap();
     init_schema(&conn).unwrap();
-    migrate_phase2_to_v3(&conn).unwrap();
+    ark_store::pending_objects::migrate_phase2_to_v3(&conn).unwrap();
     let typ = ark_core::types::ObjectType {
         id: "future".into(),
         name: "Future".into(),
@@ -311,7 +309,7 @@ fn phase3_pending_rejects_inconsistent_payload_without_mutation() {
         [],
     )
     .unwrap();
-    assert!(migrate_phase2_to_v3(&conn).is_err());
+    assert!(ark_store::pending_objects::migrate_phase2_to_v3(&conn).is_err());
     let pk: i64 = conn
         .query_row(
             "SELECT pk FROM pragma_table_info('sync_pending_objects') WHERE name='id'",

@@ -2,7 +2,7 @@
 
 fn phase3_pending_exact_v3_retry_is_noop() {
     let conn = phase2_pending_db();
-    migrate_phase2_to_v3(&conn).unwrap();
+    ark_store::pending_objects::migrate_phase2_to_v3(&conn).unwrap();
     let before: String = conn
         .query_row(
             "SELECT sql FROM sqlite_master WHERE name='sync_pending_objects'",
@@ -10,7 +10,7 @@ fn phase3_pending_exact_v3_retry_is_noop() {
             |r| r.get(0),
         )
         .unwrap();
-    migrate_phase2_to_v3(&conn).unwrap();
+    ark_store::pending_objects::migrate_phase2_to_v3(&conn).unwrap();
     let after: String = conn
         .query_row(
             "SELECT sql FROM sqlite_master WHERE name='sync_pending_objects'",
@@ -30,11 +30,11 @@ fn phase3_pending_exact_v3_retry_rejects_missing_index_and_malformed_row() {
         params!["o1", payload, "future", "1.0.0", "received"],
     )
     .unwrap();
-    migrate_phase2_to_v3(&conn).unwrap();
+    ark_store::pending_objects::migrate_phase2_to_v3(&conn).unwrap();
 
     conn.execute_batch("DROP INDEX idx_sync_pending_awaited_type_version")
         .unwrap();
-    assert!(migrate_phase2_to_v3(&conn).is_err());
+    assert!(ark_store::pending_objects::migrate_phase2_to_v3(&conn).is_err());
     assert_eq!(
         conn.query_row("SELECT COUNT(*) FROM sync_pending_objects", [], |r| r
             .get::<_, i64>(0))
@@ -52,7 +52,7 @@ fn phase3_pending_exact_v3_retry_rejects_missing_index_and_malformed_row() {
         [],
     )
     .unwrap();
-    assert!(migrate_phase2_to_v3(&conn).is_err());
+    assert!(ark_store::pending_objects::migrate_phase2_to_v3(&conn).is_err());
 }
 
 #[test]
@@ -118,7 +118,7 @@ fn phase3_pending_rebuild_failures_restore_phase2_table_and_rows() {
         }
 
         assert!(
-            migrate_phase2_to_v3(&conn).is_err(),
+            ark_store::pending_objects::migrate_phase2_to_v3(&conn).is_err(),
             "failure stage {failure}"
         );
         assert_phase2_preserved(&conn, &payload);

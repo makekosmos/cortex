@@ -1,4 +1,3 @@
-use super::*;
 use crate::hlc::HLC;
 use crate::types::SyncEntity;
 use chrono::Utc;
@@ -18,13 +17,20 @@ pub fn insert_pending_object(
         .get("typeVersion")
         .and_then(Value::as_str)
         .unwrap_or("0.0.0-legacy");
-    let is_v3 = exact_shape(&table_columns(conn)?, true);
+    let schema = ark_store::pending_objects::schema(conn)?;
+    let is_v3 = schema == ark_store::pending_objects::PendingObjectSchema::Versioned;
     if is_v3 {
-        validate_entity_tuple(entity, &entity.id, awaited_type_id, awaited_type_version)?;
+        ark_store::pending_objects::validate_entity_tuple(
+            entity,
+            &entity.id,
+            awaited_type_id,
+            awaited_type_version,
+        )?;
     }
     let payload = serde_json::to_string(entity).map_err(|e| e.to_string())?;
     let existing = ark_store::pending_objects::load_payload(
         conn,
+        schema,
         &entity.id,
         awaited_type_id,
         awaited_type_version,
@@ -37,6 +43,7 @@ pub fn insert_pending_object(
     }
     ark_store::pending_objects::upsert(
         conn,
+        schema,
         &ark_store::pending_objects::PendingObjectRow {
             id: entity.id.clone(),
             payload,
@@ -56,7 +63,8 @@ pub fn replay_pending_for_type(
     if !exists {
         return Ok(Vec::new());
     }
-    let is_v3 = exact_shape(&table_columns(conn)?, true);
+    let schema = ark_store::pending_objects::schema(conn)?;
+    let is_v3 = schema == ark_store::pending_objects::PendingObjectSchema::Versioned;
     let pending = ark_store::pending_objects::load_for_type(conn, type_id, type_version)?;
     conn.execute_batch("SAVEPOINT ark_replay_pending")
         .map_err(|e| e.to_string())?;
@@ -65,7 +73,7 @@ pub fn replay_pending_for_type(
             let entity: SyncEntity =
                 serde_json::from_str(&row.payload).map_err(|e| e.to_string())?;
             if is_v3 {
-                validate_entity_tuple(
+                ark_store::pending_objects::validate_entity_tuple(
                     &entity,
                     &row.id,
                     &row.awaited_type_id,

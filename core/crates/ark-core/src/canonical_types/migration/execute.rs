@@ -1,4 +1,4 @@
-use super::super::{migration_objects, migration_registry, pending, preflight};
+use super::super::{migration_objects, migration_registry, preflight};
 use super::*;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::Value;
@@ -229,7 +229,8 @@ pub fn migrate_phase3_with_options(
             report.unchanged = unchanged;
             return Ok(report);
         }
-        pending::migrate_phase2_to_v3(conn).map_err(|e| MigrationError::Pending(e.to_string()))?;
+        ark_store::pending_objects::migrate_phase2_to_v3(conn)
+            .map_err(|e| MigrationError::Pending(e.to_string()))?;
         migration_registry::prepare_registry_for_objects(conn)
             .map_err(|e| MigrationError::Registry(e.to_string()))?;
         ensure_source_archive(conn, &objects.items)?;

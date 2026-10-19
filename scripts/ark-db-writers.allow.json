@@ -82,7 +82,7 @@
       "count": 2
     },
     {
-      "path": "core/crates/ark-core/src/canonical_types/pending/schema_v3.rs",
+      "path": "core/crates/ark-store/src/pending_objects/migrations.rs",
       "category": "SQLite mutation API",
       "count": 3
     },

@@ -1,5 +1,23 @@
 use rusqlite::{params, Connection, OptionalExtension};
 
+mod migrations;
+
+pub use migrations::{is_v3_schema, migrate_phase2_to_v3, validate_entity_tuple};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PendingObjectSchema {
+    Legacy,
+    Versioned,
+}
+
+pub fn schema(connection: &Connection) -> Result<PendingObjectSchema, String> {
+    if is_v3_schema(connection)? {
+        Ok(PendingObjectSchema::Versioned)
+    } else {
+        Ok(PendingObjectSchema::Legacy)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PendingObjectRow {
     pub id: String,
@@ -9,30 +27,14 @@ pub struct PendingObjectRow {
     pub received_at: String,
 }
 
-pub fn has_versioned_primary_key(connection: &Connection) -> Result<bool, String> {
-    let mut statement = connection
-        .prepare("PRAGMA table_info(sync_pending_objects)")
-        .map_err(|error| error.to_string())?;
-    let columns = statement
-        .query_map([], |row| {
-            Ok((row.get::<_, String>(1)?, row.get::<_, i64>(5)?))
-        })
-        .map_err(|error| error.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| error.to_string())?;
-    Ok(columns
-        .iter()
-        .any(|(name, primary_key_order)| name == "awaited_type_version" && *primary_key_order > 0))
-}
-
 pub fn load_payload(
     connection: &Connection,
+    schema: PendingObjectSchema,
     id: &str,
     awaited_type_id: &str,
     awaited_type_version: &str,
 ) -> Result<Option<String>, String> {
-    let versioned_key = has_versioned_primary_key(connection)?;
-    let result = if versioned_key {
+    let result = if schema == PendingObjectSchema::Versioned {
         connection.query_row(
             "SELECT payload FROM sync_pending_objects WHERE id=?1 AND awaited_type_id=?2
              AND awaited_type_version=?3",
@@ -49,9 +51,12 @@ pub fn load_payload(
     result.optional().map_err(|error| error.to_string())
 }
 
-pub fn upsert(connection: &Connection, row: &PendingObjectRow) -> Result<(), String> {
-    let versioned_key = has_versioned_primary_key(connection)?;
-    let sql = if versioned_key {
+pub fn upsert(
+    connection: &Connection,
+    schema: PendingObjectSchema,
+    row: &PendingObjectRow,
+) -> Result<(), String> {
+    let sql = if schema == PendingObjectSchema::Versioned {
         "INSERT INTO sync_pending_objects
          (id,payload,awaited_type_id,awaited_type_version,received_at)
          VALUES (?1,?2,?3,?4,?5)
@@ -148,7 +153,9 @@ pub fn count_for_type(connection: &Connection, type_id: &str) -> Result<i64, Str
 
 #[cfg(test)]
 mod tests {
-    use super::{count_for_type, delete, load_for_type, load_payload, upsert, PendingObjectRow};
+    use super::{
+        count_for_type, delete, load_for_type, load_payload, schema, upsert, PendingObjectRow,
+    };
     use rusqlite::Connection;
 
     #[test]
@@ -179,11 +186,12 @@ mod tests {
             ..first.clone()
         };
 
-        upsert(&connection, &first).expect("insert first awaited version");
-        upsert(&connection, &second).expect("insert second awaited version");
+        let schema = schema(&connection).expect("read pending schema");
+        upsert(&connection, schema, &first).expect("insert first awaited version");
+        upsert(&connection, schema, &second).expect("insert second awaited version");
 
         assert_eq!(
-            load_payload(&connection, "object-1", "book", "1.0.0").expect("load first"),
+            load_payload(&connection, schema, "object-1", "book", "1.0.0").expect("load first"),
             Some("payload-v1".into())
         );
         assert_eq!(

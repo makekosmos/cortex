@@ -1,4 +1,4 @@
-use crate::types::SyncEntity;
+use ark_domain::types::SyncEntity;
 use rusqlite::{params, Connection};
 use serde_json::Value;
 
@@ -15,7 +15,7 @@ fn error(message: impl Into<String>) -> String {
     message.into()
 }
 
-pub(crate) fn table_columns(conn: &Connection) -> Result<Vec<(String, String, i64, i64)>, String> {
+fn table_columns(conn: &Connection) -> Result<Vec<(String, String, i64, i64)>, String> {
     let mut stmt = conn
         .prepare("PRAGMA table_info(sync_pending_objects)")
         .map_err(|e| e.to_string())?;
@@ -29,7 +29,7 @@ pub(crate) fn table_columns(conn: &Connection) -> Result<Vec<(String, String, i6
     result
 }
 
-pub(crate) fn exact_shape(columns: &[(String, String, i64, i64)], v3: bool) -> bool {
+fn exact_shape(columns: &[(String, String, i64, i64)], v3: bool) -> bool {
     let names = if v3 {
         vec![
             "id",
@@ -92,7 +92,7 @@ pub(crate) fn exact_shape(columns: &[(String, String, i64, i64)], v3: bool) -> b
         })
 }
 
-pub(crate) fn validate_entity_tuple(
+pub fn validate_entity_tuple(
     entity: &SyncEntity,
     id: &str,
     awaited_type_id: &str,
@@ -203,14 +203,6 @@ pub fn migrate_phase2_to_v3(conn: &Connection) -> Result<(), String> {
             [],
         )
         .map_err(|e| e.to_string())?;
-        let copied = conn.query_row(
-            concat!(
-                "SELECT id,payload,awaited_type_id,awaited_type_version,received_at FROM ",
-                "sync_pending_objects_v3 ORDER BY id,awaited_type_id,awaited_type_version"
-            ),
-            [],
-            |_| Ok(()),
-        );
         let mut stmt = conn
             .prepare(concat!(
                 "SELECT id,payload,awaited_type_id,awaited_type_version,received_at FROM ",
@@ -231,7 +223,6 @@ pub fn migrate_phase2_to_v3(conn: &Connection) -> Result<(), String> {
             .collect::<Result<_, _>>()
             .map_err(|e| e.to_string())?;
         drop(stmt);
-        let _ = copied;
         if copied_rows != snapshot {
             return Err(error("pending migration snapshot mismatch"));
         }
@@ -259,5 +250,102 @@ pub fn migrate_phase2_to_v3(conn: &Connection) -> Result<(), String> {
             );
             Err(e)
         }
+    }
+}
+
+pub fn is_v3_schema(connection: &Connection) -> Result<bool, String> {
+    Ok(exact_shape(&table_columns(connection)?, true))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_v3_schema, migrate_phase2_to_v3};
+    use ark_domain::types::SyncEntity;
+    use rusqlite::Connection;
+    use serde_json::{json, Map};
+
+    fn legacy_pending_database() -> Connection {
+        let connection = Connection::open_in_memory().expect("open in-memory database");
+        connection
+            .execute_batch(
+                "CREATE TABLE sync_pending_objects (
+                    id TEXT PRIMARY KEY,
+                    payload TEXT NOT NULL,
+                    awaited_type_id TEXT NOT NULL,
+                    awaited_type_version TEXT NOT NULL,
+                    received_at TEXT NOT NULL
+                );
+                CREATE INDEX idx_sync_pending_awaited_type
+                    ON sync_pending_objects(awaited_type_id);
+                CREATE INDEX idx_sync_pending_awaited_type_version
+                    ON sync_pending_objects(awaited_type_id, awaited_type_version);",
+            )
+            .expect("create legacy pending schema");
+        connection
+    }
+
+    fn entity(id: &str, type_id: &str, version: &str) -> SyncEntity {
+        SyncEntity {
+            entity_type: "object".into(),
+            id: id.into(),
+            data: Map::from_iter([
+                ("id".into(), json!(id)),
+                ("typeId".into(), json!(type_id)),
+                ("typeVersion".into(), json!(version)),
+            ]),
+            hlc: "2026-10-19T00:00:00Z:1@device".into(),
+            deleted: None,
+            origin_device_id: None,
+            origin_seq: None,
+        }
+    }
+
+    #[test]
+    fn migration_preserves_rows_and_is_idempotent() {
+        let connection = legacy_pending_database();
+        let payload = serde_json::to_string(&entity("object-1", "book", "1.0.0"))
+            .expect("serialize pending entity");
+        connection
+            .execute(
+                "INSERT INTO sync_pending_objects VALUES (?1,?2,?3,?4,?5)",
+                rusqlite::params!["object-1", payload, "book", "1.0.0", "received"],
+            )
+            .expect("insert legacy pending row");
+
+        migrate_phase2_to_v3(&connection).expect("migrate legacy schema");
+        migrate_phase2_to_v3(&connection).expect("retry completed migration");
+
+        assert!(is_v3_schema(&connection).expect("inspect migrated schema"));
+        let persisted: String = connection
+            .query_row(
+                "SELECT payload FROM sync_pending_objects WHERE id='object-1'
+                 AND awaited_type_id='book' AND awaited_type_version='1.0.0'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("read migrated row");
+        assert_eq!(persisted, payload);
+    }
+
+    #[test]
+    fn migration_rejects_inconsistent_payload_before_rewriting_schema() {
+        let connection = legacy_pending_database();
+        let payload = serde_json::to_string(&entity("object-1", "other", "1.0.0"))
+            .expect("serialize mismatched entity");
+        connection
+            .execute(
+                "INSERT INTO sync_pending_objects VALUES (?1,?2,?3,?4,?5)",
+                rusqlite::params!["object-1", payload, "book", "1.0.0", "received"],
+            )
+            .expect("insert inconsistent legacy row");
+
+        assert!(migrate_phase2_to_v3(&connection).is_err());
+        assert!(!is_v3_schema(&connection).expect("inspect original schema"));
+        let row_count: i64 = connection
+            .query_row("SELECT COUNT(*) FROM sync_pending_objects", [], |row| {
+                row.get(0)
+            })
+            .expect("count original rows");
+        assert_eq!(row_count, 1);
     }
 }
