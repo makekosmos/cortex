@@ -4,7 +4,7 @@ use crate::canonical_types::game::{GameMutationResult, GameUpsertCommand};
 use crate::db;
 use crate::types::ArkObject;
 use ark_domain::object_write::ObjectWriteSnapshot;
-use rusqlite::{params, OptionalExtension, Transaction};
+use rusqlite::{OptionalExtension, Transaction};
 
 pub(crate) struct SqliteObjectMutationSession<'tx, 'connection> {
     transaction: &'tx Transaction<'connection>,
@@ -88,14 +88,7 @@ impl ObjectMutationSession for SqliteObjectMutationSession<'_, '_> {
         hlc: &str,
         deleted: bool,
     ) -> Result<usize, String> {
-        self.transaction
-            .execute(
-                "INSERT INTO object_sync_versions(object_id, hlc, deleted) VALUES (?1, ?2, ?3)
-                 ON CONFLICT(object_id) DO UPDATE SET hlc = excluded.hlc, deleted = excluded.deleted
-                 WHERE excluded.hlc > object_sync_versions.hlc",
-                params![id, hlc, deleted],
-            )
-            .map_err(|error| error.to_string())
+        ark_store::sync_versions::write_object_sync_version(self.transaction, id, hlc, deleted)
     }
 
     fn upsert_game(

@@ -76,6 +76,22 @@ pub fn record_remote_object_deletion(
     crate::sync_tombstones::upsert(connection, entity)
 }
 
+pub fn write_object_sync_version(
+    connection: &Connection,
+    object_id: &str,
+    hlc: &str,
+    deleted: bool,
+) -> Result<usize, String> {
+    connection
+        .execute(
+            "INSERT INTO object_sync_versions(object_id, hlc, deleted) VALUES (?1, ?2, ?3)
+             ON CONFLICT(object_id) DO UPDATE SET hlc = excluded.hlc, deleted = excluded.deleted
+             WHERE excluded.hlc > object_sync_versions.hlc",
+            rusqlite::params![object_id, hlc, deleted],
+        )
+        .map_err(|error| error.to_string())
+}
+
 impl LocalRevisionTarget {
     fn entity_type(self) -> &'static str {
         match self {
@@ -139,7 +155,7 @@ pub fn stored_object_revision(
 mod tests {
     use super::{
         bump_local_revision, bump_sync_version_vector, object_revision,
-        record_remote_object_revision, LocalRevisionTarget,
+        record_remote_object_revision, write_object_sync_version, LocalRevisionTarget,
     };
     use crate::sync_kv::set_sync_kv;
     use ark_domain::types::VersionVector;
@@ -198,6 +214,49 @@ mod tests {
         assert_eq!(
             object_revision(&connection, "task").expect("revision loads"),
             None
+        );
+    }
+
+    #[test]
+    fn object_sync_version_write_only_replaces_an_older_revision() {
+        let connection = connection();
+        connection
+            .execute(
+                "INSERT INTO object_sync_versions(object_id, hlc, deleted) VALUES (?1, ?2, 0)",
+                ["item", "2026-10-18T00:00:00.000Z:000001:device-a"],
+            )
+            .expect("initial revision persists");
+
+        assert_eq!(
+            write_object_sync_version(
+                &connection,
+                "item",
+                "2026-10-17T00:00:00.000Z:000001:device-b",
+                true,
+            )
+            .expect("stale revision is ignored"),
+            0
+        );
+        assert_eq!(
+            write_object_sync_version(
+                &connection,
+                "item",
+                "2026-10-19T00:00:00.000Z:000001:device-b",
+                true,
+            )
+            .expect("new revision persists"),
+            1
+        );
+        let stored: (String, bool) = connection
+            .query_row(
+                "SELECT hlc, deleted FROM object_sync_versions WHERE object_id = 'item'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("stored revision loads");
+        assert_eq!(
+            stored,
+            ("2026-10-19T00:00:00.000Z:000001:device-b".to_owned(), true)
         );
     }
 
