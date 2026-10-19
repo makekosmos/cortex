@@ -221,6 +221,7 @@ version = "0.1.0"
 dependencies = [
  "ark-application",
  "ark-domain",
+ "chrono",
  "rand 0.8.7",
  "rusqlite",
  "semver",

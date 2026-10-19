@@ -8,7 +8,6 @@ mod objects;
 mod open;
 mod sync;
 mod task_merge;
-mod usage;
 
 pub use ark_application::sync_storage::{
     CommittedFeedDeliveryPage, CommittedFeedEntry, FeedSnapshot, InitialSnapshot, OutboundAck,
@@ -90,11 +89,7 @@ pub use open::{
 };
 pub use open::{count_pending_for_type, insert_pending_object};
 pub use sync::{bump_sync_version_vector, ensure_usage_sequence_migrated};
-pub use usage::{
-    canonical_app_key, get_usage_title_total, is_system_path, list_recent_usage_processes,
-    load_usage_analytics, load_usage_game_playtime_summary, search_usage_processes,
-    upsert_usage_span,
-};
+
 mod integration_replication_admission;
 mod integration_replication_apply;
 mod integration_replication_common;
@@ -145,7 +140,6 @@ mod tests {
 
     use super::objects::object_search_fts_exists;
     use super::open::replay_pending_for_type;
-    use super::usage::merge_top_apps;
     use super::*;
     use crate::hlc::HLC;
     use crate::integration_replication::*;
@@ -158,6 +152,7 @@ mod tests {
         default_rollback_restore_for_test, restore_snapshot_with_hooks,
         validate_snapshot_id_for_test,
     };
+    use ark_store::usage_queries::merge_top_apps;
     use ark_store::usage_sync_log::{compact_usage_sync_log, usage_log_complete_through};
     use rusqlite::{params, Connection, OptionalExtension};
     use serde_json::{json, Value};

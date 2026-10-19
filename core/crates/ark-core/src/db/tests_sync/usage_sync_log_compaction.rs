@@ -264,7 +264,7 @@
             &make_usage_event("ev-1", "app-browser", Some("sa-1")),
         )
         .unwrap();
-        upsert_usage_span(
+        ark_store::usage_queries::upsert_usage_span(
             &conn,
             &UsageSpanWrite {
                 device_id: "dev".to_string(),
@@ -277,7 +277,7 @@
             },
         )
         .unwrap();
-        upsert_usage_span(
+        ark_store::usage_queries::upsert_usage_span(
             &conn,
             &UsageSpanWrite {
                 device_id: "dev".to_string(),
@@ -328,8 +328,9 @@
         let refs_before = usage_log_refs(&conn).len();
         assert!(refs_before > entity_ids.len(), "fixture must have churn");
 
-        let analytics_before = load_usage_analytics(&conn, 21, 8, 24, None).unwrap();
-        let title_before = get_usage_title_total(&conn, "news").unwrap();
+        let analytics_before =
+            ark_store::usage_queries::load_usage_analytics(&conn, 21, 8, 24, None).unwrap();
+        let title_before = ark_store::usage_queries::get_usage_title_total(&conn, "news").unwrap();
         let served_before = served_usage_ids(&conn, "dev");
 
         // Full compaction loop, tiny batches like the Engine runs them.
@@ -337,14 +338,18 @@
         {
         }
 
-        let mut analytics_after = load_usage_analytics(&conn, 21, 8, 24, None).unwrap();
+        let mut analytics_after =
+            ark_store::usage_queries::load_usage_analytics(&conn, 21, 8, 24, None).unwrap();
         analytics_after.generated_at = analytics_before.generated_at.clone();
         assert_eq!(
             serde_json::to_value(&analytics_before).unwrap(),
             serde_json::to_value(&analytics_after).unwrap(),
             "KOS-287 aggregates must not move under log compaction"
         );
-        assert_eq!(get_usage_title_total(&conn, "news").unwrap(), title_before);
+        assert_eq!(
+            ark_store::usage_queries::get_usage_title_total(&conn, "news").unwrap(),
+            title_before
+        );
         assert_eq!(served_usage_ids(&conn, "dev"), served_before);
 
         // Every entity keeps its newest ref — nothing a peer could still

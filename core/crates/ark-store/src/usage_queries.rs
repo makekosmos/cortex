@@ -3,14 +3,14 @@ use rusqlite::{params, params_from_iter, Connection, Row};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
-use crate::types::*;
+use ark_domain::types::*;
 
-include!("usage/spans_and_title_totals.rs");
-include!("usage/analytics.rs");
-include!("usage/process_queries.rs");
-include!("usage/process_projection.rs");
-include!("usage/game_playtime_queries.rs");
-include!("usage/game_playtime_summary.rs");
+include!("usage_queries/spans_and_title_totals.rs");
+include!("usage_queries/analytics.rs");
+include!("usage_queries/process_queries.rs");
+include!("usage_queries/process_projection.rs");
+include!("usage_queries/game_playtime_queries.rs");
+include!("usage_queries/game_playtime_summary.rs");
 
 fn payload_strings(payload: &Value, key: &str) -> Vec<String> {
     payload

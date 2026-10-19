@@ -60,9 +60,9 @@
             flags: 0,
             updated_at: "2026-01-01T00:00:30.000Z".to_string(),
         };
-        upsert_usage_span(&conn, &write).unwrap();
+        ark_store::usage_queries::upsert_usage_span(&conn, &write).unwrap();
         write.ended_at_unix += 30;
-        upsert_usage_span(&conn, &write).unwrap();
+        ark_store::usage_queries::upsert_usage_span(&conn, &write).unwrap();
 
         let day = ark_store::usage::load_usage_day(&conn, "usage-day:device-compact:2026-01-01")
             .unwrap()
@@ -71,7 +71,7 @@
         assert_eq!(day.payload_json["t"], json!(["Facebook"]));
         assert_eq!(day.payload_json["s"], json!([[0, 60, 0, 0, 0]]));
         assert_eq!(
-            get_usage_title_total(&conn, "face").unwrap(),
+            ark_store::usage_queries::get_usage_title_total(&conn, "face").unwrap(),
             UsageTitleTotal {
                 active_seconds: 60,
                 idle_seconds: 0,
@@ -91,7 +91,7 @@
             flags: 1,
             updated_at: "2026-01-02T00:00:10.000Z".to_string(),
         };
-        let days = upsert_usage_span(&source, &write).unwrap();
+        let days = ark_store::usage_queries::upsert_usage_span(&source, &write).unwrap();
         assert_eq!(days.len(), 2);
         ensure_usage_sequence_migrated(&source, "source-device").unwrap();
 

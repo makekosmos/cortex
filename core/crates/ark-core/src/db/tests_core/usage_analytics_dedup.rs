@@ -25,21 +25,21 @@
     #[test]
     fn canonical_key_strips_version_dirs_and_case() {
         assert_eq!(
-            canonical_app_key(
+            ark_store::usage_queries::canonical_app_key(
                 "c:\\users\\k\\appdata\\local\\discord\\app-1.0.9164\\discord.exe",
                 "discord.exe"
             ),
             "c:\\users\\k\\appdata\\local\\discord\\discord.exe"
         );
         assert_eq!(
-            canonical_app_key(
+            ark_store::usage_queries::canonical_app_key(
                 "C:/Users/K/AppData/Local/Discord/app-1.0.9200/Discord.EXE",
                 "x"
             ),
             "c:\\users\\k\\appdata\\local\\discord\\discord.exe"
         );
         assert_eq!(
-            canonical_app_key(
+            ark_store::usage_queries::canonical_app_key(
                 "c:\\browsers\\chrome\\120.0.6099.71\\chrome.exe",
                 "chrome.exe"
             ),
@@ -47,10 +47,13 @@
         );
         // Plain numeric dirs and non-version segments are preserved.
         assert_eq!(
-            canonical_app_key("c:\\games\\2024\\game.exe", "game.exe"),
+            ark_store::usage_queries::canonical_app_key("c:\\games\\2024\\game.exe", "game.exe"),
             "c:\\games\\2024\\game.exe"
         );
-        assert_eq!(canonical_app_key("", "App.EXE"), "proc:app.exe");
+        assert_eq!(
+            ark_store::usage_queries::canonical_app_key("", "App.EXE"),
+            "proc:app.exe"
+        );
     }
 
     #[test]
@@ -162,12 +165,18 @@
 
     #[test]
     fn system_path_matches_windows_dir_only() {
-        assert!(is_system_path(
+        assert!(ark_store::usage_queries::is_system_path(
             "c:\\windows\\systemapps\\shell\\sihost.exe",
             "C:\\Windows"
         ));
-        assert!(!is_system_path("c:\\apps\\explorer.exe", "c:\\windows"));
-        assert!(!is_system_path("c:\\windowsx\\evil.exe", "c:\\windows"));
+        assert!(!ark_store::usage_queries::is_system_path(
+            "c:\\apps\\explorer.exe",
+            "c:\\windows"
+        ));
+        assert!(!ark_store::usage_queries::is_system_path(
+            "c:\\windowsx\\evil.exe",
+            "c:\\windows"
+        ));
     }
 
     #[test]
@@ -209,7 +218,9 @@
         ark_store::usage::upsert_usage_session(&conn, &s_new).unwrap();
         ark_store::usage::upsert_usage_session(&conn, &s_exp).unwrap();
 
-        let snapshot = load_usage_analytics(&conn, 21, 10, 24, Some("c:\\windows")).unwrap();
+        let snapshot =
+            ark_store::usage_queries::load_usage_analytics(&conn, 21, 10, 24, Some("c:\\windows"))
+                .unwrap();
         assert_eq!(snapshot.top_apps.len(), 2);
         let discord = &snapshot.top_apps[0];
         assert_eq!(discord.display_name, "Discord");
@@ -234,7 +245,8 @@
         session.idle_ms = 1_000;
         ark_store::usage::upsert_usage_session(&conn, &session).unwrap();
 
-        let snapshot = load_usage_analytics(&conn, 21, 10, 24, None).unwrap();
+        let snapshot =
+            ark_store::usage_queries::load_usage_analytics(&conn, 21, 10, 24, None).unwrap();
         assert_eq!(snapshot.summary.total_foreground_ms, 4_000);
         assert_eq!(snapshot.summary.total_idle_ms, 1_000);
         // totalRuntimeMs stays on the wire as raw visible-time data (SDK
@@ -261,7 +273,7 @@
         s_new.ended_at = Some("2026-02-01T00:10:00.000Z".to_string());
         ark_store::usage::upsert_usage_session(&conn, &s_new).unwrap();
 
-        let recent = list_recent_usage_processes(&conn, 10).unwrap();
+        let recent = ark_store::usage_queries::list_recent_usage_processes(&conn, 10).unwrap();
         assert_eq!(recent.len(), 1);
         assert_eq!(recent[0].tracked_app_id, "cand-new");
     }

@@ -93,7 +93,10 @@ fn usage_session_app_ids(conn: &Connection, linked_ids: &[String]) -> Result<Vec
     let mut key_by_id = std::collections::HashMap::new();
     for row in rows {
         let (app_id, path, process_name) = row.map_err(|e| e.to_string())?;
-        key_by_id.insert(app_id, db::canonical_app_key(&path, &process_name));
+        key_by_id.insert(
+            app_id,
+            ark_store::usage_queries::canonical_app_key(&path, &process_name),
+        );
     }
     let wanted_keys: std::collections::HashSet<&str> = linked_ids
         .iter()

@@ -82,7 +82,7 @@
             },
         ];
 
-        let summary = load_usage_game_playtime_summary(
+        let summary = ark_store::usage_queries::load_usage_game_playtime_summary(
             &conn,
             &bindings,
             Some("2026-04-20"),

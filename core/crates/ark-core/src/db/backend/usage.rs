@@ -35,7 +35,7 @@ impl UsageWriteSession for SqliteUsageWriteSession<'_, '_> {
     }
 
     fn upsert_span(&self, span: &UsageSpanWrite) -> Result<Vec<UsageDay>, String> {
-        db::upsert_usage_span(self.transaction, span)
+        ark_store::usage_queries::upsert_usage_span(self.transaction, span)
     }
 
     fn record_revision(

@@ -114,7 +114,9 @@
         event.occurred_at = today_start;
         ark_store::usage::upsert_usage_event(&conn, &event).unwrap();
 
-        let snapshot = load_usage_analytics(&conn, 3, 5, 5, Some("c:\\windows")).unwrap();
+        let snapshot =
+            ark_store::usage_queries::load_usage_analytics(&conn, 3, 5, 5, Some("c:\\windows"))
+                .unwrap();
 
         assert_eq!(snapshot.summary.tracked_app_count, 1);
         assert_eq!(snapshot.summary.session_count, 1);
@@ -158,7 +160,7 @@
         session.foreground_ms = 3_600_000;
         ark_store::usage::upsert_usage_session(&conn, &session).unwrap();
 
-        let recent = list_recent_usage_processes(&conn, 10).unwrap();
+        let recent = ark_store::usage_queries::list_recent_usage_processes(&conn, 10).unwrap();
         assert_eq!(recent.len(), 1);
         assert_eq!(recent[0].tracked_app_id, "app-process");
         assert_eq!(recent[0].binding_match_type, "exe_path");
@@ -168,10 +170,13 @@
         );
         assert_eq!(recent[0].session_count, 1);
 
-        let search_results = search_usage_processes(&conn, "nebula", 10).unwrap();
+        let search_results =
+            ark_store::usage_queries::search_usage_processes(&conn, "nebula", 10).unwrap();
         assert_eq!(search_results.len(), 1);
         assert_eq!(search_results[0].display_name, "Nebula Game");
-        assert!(search_usage_processes(&conn, "missing", 10)
-            .unwrap()
-            .is_empty());
+        assert!(
+            ark_store::usage_queries::search_usage_processes(&conn, "missing", 10)
+                .unwrap()
+                .is_empty()
+        );
     }
