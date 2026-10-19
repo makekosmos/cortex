@@ -120,49 +120,25 @@ impl DbQuery for LoadRegistryEventsQuery {
         connection: &Connection,
     ) -> Result<Self::Output, DbError> {
         context.require_sync_peer_or_system()?;
-        if self.after_position < 0 || self.limit == 0 || self.limit > 64 {
+        if self.after_position < 0
+            || self.limit == 0
+            || self.limit > ark_store::device_registry::MAX_REGISTRY_EVENTS_PAGE_SIZE
+        {
             return Err(DbError::Invalid("device_registry_page_bounds".into()));
         }
-        let high_watermark = match self.high_watermark {
-            Some(high_watermark) if high_watermark >= self.after_position => high_watermark,
-            Some(_) => return Err(DbError::Invalid("device_registry_page_cursor".into())),
-            None => connection
-                .query_row(
-                    "SELECT COALESCE(MAX(registry_position), 0) FROM device_registry_events",
-                    [],
-                    |row| row.get(0),
-                )
-                .map_err(storage_error)?,
-        };
-        let event_count = connection
-            .query_row(
-                "SELECT COUNT(*) FROM device_registry_events WHERE registry_position <= ?1",
-                [high_watermark],
-                |row| row.get::<_, i64>(0),
-            )
-            .map_err(storage_error)?;
-        let event_count = usize::try_from(event_count)
-            .map_err(|_| DbError::Storage("negative_device_registry_event_count".into()))?;
-        let mut statement = connection
-            .prepare(
-                "SELECT event_json FROM device_registry_events
-                 WHERE registry_position > ?1 AND registry_position <= ?2
-                 ORDER BY registry_position LIMIT ?3",
-            )
-            .map_err(storage_error)?;
-        let events = statement
-            .query_map(
-                params![self.after_position, high_watermark, self.limit as i64],
-                |row| row.get::<_, String>(0),
-            )
-            .map_err(storage_error)?
-            .map(|result| {
-                let raw = result.map_err(storage_error)?;
-                serde_json::from_str(&raw)
-                    .map_err(|error| DbError::Storage(format!("invalid registry event: {error}")))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok((high_watermark, event_count, events))
+        if self
+            .high_watermark
+            .is_some_and(|high_watermark| high_watermark < self.after_position)
+        {
+            return Err(DbError::Invalid("device_registry_page_cursor".into()));
+        }
+        ark_store::device_registry::load_events_page(
+            connection,
+            self.after_position,
+            self.high_watermark,
+            self.limit,
+        )
+        .map_err(DbError::Storage)
     }
 }
 
