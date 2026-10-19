@@ -17,10 +17,14 @@ impl RelaySync {
                     .capabilities
                     .contains(&ark_sync::protocol::ProtocolCapability::SelectiveSyncPolicyV1)
             });
-        self.registry
+        let registry = self
+            .registry
+            .as_ref()
+            .ok_or_else(|| "registry admission requires a peer-session transport".to_owned())?;
+        registry
             .begin_peer(peer_device_id, transport_public_key, policy_negotiated)
             .await;
-        self.registry
+        registry
             .start_exchange(peer_device_id, transport_public_key)
             .await
     }
@@ -106,8 +110,11 @@ impl RelaySync {
                 | ark_sync::relay_registry::RegistryFrame::EventUpdate { .. }
         );
         let connected = self.connected_transport_peers().await;
-        let outcome = self
+        let registry = self
             .registry
+            .as_ref()
+            .ok_or_else(|| "registry admission requires a peer-session transport".to_owned())?;
+        let outcome = registry
             .handle_registry_frame(peer_device_id, endpoint, frame, &connected)
             .await?;
         self.finish_registry_outcome(outcome, true, Some(endpoint), check_admission)
@@ -179,7 +186,9 @@ impl RelaySync {
         for peer_id in peer_ids {
             self.peers.lock().await.remove(peer_id);
             self.transport_keys.lock().await.remove(peer_id);
-            self.registry.disconnect_peer(peer_id).await;
+            if let Some(registry) = &self.registry {
+                registry.disconnect_peer(peer_id).await;
+            }
         }
     }
 
@@ -200,13 +209,16 @@ impl RelaySync {
         endpoint: &str,
         message: LanSyncMessage,
     ) -> Result<(), String> {
-        match self
+        let peer_control = self
             .transport
-            .send_to_transport_peer(endpoint, message)
+            .peer_control()
+            .ok_or_else(|| "peer-session control requires Iroh transport".to_owned())?;
+        match peer_control
+            .send_control_to_endpoint(endpoint, message)
             .await?
         {
-            crate::sync_transport::AddressedSendOutcome::Sent => Ok(()),
-            crate::sync_transport::AddressedSendOutcome::PeerOffline => {
+            ark_sync::relay_registry::PeerControlSendOutcome::Sent => Ok(()),
+            ark_sync::relay_registry::PeerControlSendOutcome::PeerOffline => {
                 Err("transport peer is offline".into())
             }
         }

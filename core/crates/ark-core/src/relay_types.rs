@@ -9,7 +9,7 @@ use crate::replication_storage::SyncRuntimeStorage;
 use crate::sync_server::{
     OnChangeCallback, OnPeerConnectCallback, OnPeerDisconnectCallback, PeerEntry,
 };
-use crate::sync_transport::{SyncTransport, TransportEvent};
+use crate::sync_transport::{SyncTransport, SyncTransportHandle, TransportEvent};
 use crate::types::{PeerRecord, SyncEntity, VersionVector};
 use ark_net::relay::{RelayConfig, RelayTransport};
 use ark_sync::protocol::*;
@@ -79,8 +79,8 @@ pub type OnRegistryEventsCallback =
 
 pub struct RelaySync {
     storage: Arc<dyn SyncRuntimeStorage>,
-    transport: Arc<dyn SyncTransport>,
-    registry: ark_sync::relay_registry::RelayRegistryCoordinator<dyn SyncRuntimeStorage>,
+    transport: SyncTransportHandle,
+    registry: Option<ark_sync::relay_registry::RelayRegistryCoordinator<dyn SyncRuntimeStorage>>,
     config: RelaySyncConfig,
     auth_secret: Option<String>,
     peers: Arc<Mutex<HashMap<String, RelayPeerState>>>,

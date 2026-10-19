@@ -19,6 +19,7 @@
 //!
 //! См. также: `.agent/tasks/2026-06-16-iroh-transport/spec.md`.
 
+use ark_core::sync_transport::IrohSessionTransport;
 use std::time::Duration;
 
 use tokio::sync::mpsc;

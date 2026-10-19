@@ -144,7 +144,7 @@ async fn setup_sync_with_capturing_transport(
     ));
     backend.set_device_id("test-device").unwrap();
 
-    let relay = RelaySync::with_transport(
+    let relay = RelaySync::with_iroh_transport(
         backend.clone() as Arc<dyn SyncRuntimeStorage>,
         RelaySyncConfig {
             relay_url: String::new(),
@@ -154,8 +154,9 @@ async fn setup_sync_with_capturing_transport(
             device_name: "Test Device".to_string(),
             auth_secret: None,
         },
-        transport as Arc<dyn crate::sync_transport::SyncTransport>,
-    );
+        transport,
+    )
+    .expect("capturing Iroh session is configured before startup");
     relay.start().await.unwrap();
 
     let server = Arc::new(crate::sync_server::SyncServer::new(
@@ -167,7 +168,7 @@ async fn setup_sync_with_capturing_transport(
         storage: backend,
         clients: Arc::new(TokioMutex::new(std::collections::HashMap::new())),
         relay: Some(relay),
-        transport_choice: Some(TransportChoice::Relay),
+        transport_choice: Some(TransportChoice::Iroh),
         start_params: SyncStartParams {
             space_id: "test-space".to_string(),
             device_id: "test-device".to_string(),
@@ -177,7 +178,7 @@ async fn setup_sync_with_capturing_transport(
             relay_url: None,
             relay_api_key: None,
             auth_secret: None,
-            use_iroh: false,
+            use_iroh: true,
             iroh_peer_ticket: None,
             iroh_relay_url: None,
             pairing_connect: false,

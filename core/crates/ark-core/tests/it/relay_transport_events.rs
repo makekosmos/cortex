@@ -17,29 +17,18 @@ use ark_core::db::{init_schema, SqliteStorageBackend};
 use ark_core::relay_sync::{RelaySync, RelaySyncConfig};
 use ark_core::replication_storage::PeerIdentityBackend;
 use ark_core::sync_server::SyncRuntimeStorage;
-use ark_core::sync_transport::{SyncTransport, TransportEvent};
+use ark_core::sync_transport::{IrohSessionTransport, SyncTransport, TransportEvent};
 use ark_sync::protocol::{LanSyncMessage, PROTOCOL_VERSION};
+use ark_sync::relay_registry::{PeerControlSendOutcome, PeerSessionControl};
 
 struct StubTransport {
     event_tx: StdMutex<Option<mpsc::UnboundedSender<TransportEvent>>>,
 }
 
-// These tests cover transport lifecycle events only; the stub intentionally
-// does not complete the registry-control exchange.
+// These tests start from an already-paired Hello before injecting lifecycle
+// events, so the stub supplies the complete peer-session contract.
 #[async_trait::async_trait]
 impl SyncTransport for StubTransport {
-    fn supports_registry_admission(&self) -> bool {
-        true
-    }
-
-    fn bind_peer_for_control(
-        &self,
-        _device_id: &str,
-        _transport_public_key: &str,
-    ) -> Result<(), String> {
-        Ok(())
-    }
-
     async fn start(&self, event_tx: mpsc::UnboundedSender<TransportEvent>) -> Result<(), String> {
         *self.event_tx.lock().unwrap() = Some(event_tx);
         Ok(())
@@ -48,15 +37,77 @@ impl SyncTransport for StubTransport {
         Ok(())
     }
 
+    async fn stop(&self) {}
+}
+
+#[async_trait::async_trait]
+impl IrohSessionTransport for StubTransport {
+    async fn send_to(&self, _: &str, _: LanSyncMessage) -> Result<(), String> {
+        Ok(())
+    }
+    fn set_outbound_authorizer(
+        &self,
+        _: Arc<dyn ark_core::sync_transport::OutboundIntegrationFrameAuthorizer>,
+    ) -> Result<(), String> {
+        Ok(())
+    }
+    fn bind_peer_for_control(&self, _: &str, _: &str) -> Result<(), String> {
+        Ok(())
+    }
+    fn mark_peer_data_ready(&self, _: &str, _: &str) -> Result<(), String> {
+        Ok(())
+    }
+    fn unbind_peer(&self, _: &str) -> Result<(), String> {
+        Ok(())
+    }
     async fn send_to_transport_peer(
         &self,
-        _transport_public_key: &str,
-        _msg: LanSyncMessage,
+        _: &str,
+        _: LanSyncMessage,
     ) -> Result<ark_core::sync_transport::AddressedSendOutcome, String> {
         Ok(ark_core::sync_transport::AddressedSendOutcome::Sent)
     }
+    fn disconnect_peer(
+        &self,
+        _: &str,
+    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_sync::transport::PeerDisconnectOutcome::PeerClosed)
+    }
+    fn disconnect_transport_peer(
+        &self,
+        _: &str,
+    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_sync::transport::PeerDisconnectOutcome::PeerClosed)
+    }
+}
 
-    async fn stop(&self) {}
+#[async_trait::async_trait]
+impl PeerSessionControl for StubTransport {
+    async fn send_control_to_endpoint(
+        &self,
+        _: &str,
+        _: LanSyncMessage,
+    ) -> Result<PeerControlSendOutcome, String> {
+        Ok(PeerControlSendOutcome::Sent)
+    }
+    fn mark_peer_data_ready(&self, _: &str, _: &str) -> Result<(), String> {
+        Ok(())
+    }
+    fn unbind_peer(&self, _: &str) -> Result<(), String> {
+        Ok(())
+    }
+    fn disconnect_peer(
+        &self,
+        _: &str,
+    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_sync::transport::PeerDisconnectOutcome::PeerClosed)
+    }
+    fn disconnect_transport_endpoint(
+        &self,
+        _: &str,
+    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_sync::transport::PeerDisconnectOutcome::PeerClosed)
+    }
 }
 
 async fn relay_with_stub() -> (
@@ -79,7 +130,7 @@ async fn relay_with_stub() -> (
     let transport = Arc::new(StubTransport {
         event_tx: StdMutex::new(None),
     });
-    let relay = RelaySync::with_transport(
+    let relay = RelaySync::with_iroh_transport(
         backend as Arc<dyn SyncRuntimeStorage>,
         RelaySyncConfig {
             relay_url: String::new(),
@@ -90,7 +141,8 @@ async fn relay_with_stub() -> (
             auth_secret: None,
         },
         transport.clone(),
-    );
+    )
+    .unwrap();
     relay.start().await.unwrap();
 
     let tx = transport

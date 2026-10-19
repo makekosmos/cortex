@@ -13,7 +13,10 @@ impl RelaySync {
         let Some(endpoint) = transport_public_key else {
             return false;
         };
-        self.registry.is_ready(peer_device_id, endpoint).await
+        match &self.registry {
+            Some(registry) => registry.is_ready(peer_device_id, endpoint).await,
+            None => false,
+        }
     }
 
     pub(super) async fn registry_ready_for_connected_peer(&self, peer_device_id: &str) -> bool {
@@ -39,6 +42,9 @@ impl RelaySync {
         &self,
         event: ark_domain::device_registry::RegistryEvent,
     ) -> Result<(), String> {
+        let Some(registry) = &self.registry else {
+            return Ok(());
+        };
         let disabled = matches!(
             event.operation(),
             ark_domain::device_registry::RegistryOperation::Disable
@@ -47,8 +53,7 @@ impl RelaySync {
         .into_iter()
         .collect::<Vec<_>>();
         let connected = self.connected_transport_peers().await;
-        let outcome = self
-            .registry
+        let outcome = registry
             .publish_delta(&[event], &disabled, None, &connected)
             .await;
         self.finish_registry_outcome(outcome, false, None, false)

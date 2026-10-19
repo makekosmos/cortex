@@ -220,7 +220,7 @@ pub(crate) async fn handle_start_sync(
         // RelaySyncConfig.relay_url is unused by `with_transport` (only
         // `RelaySync::new` reads it to build a `RelayTransport`) — pass an
         // empty string rather than widening the struct for one unused field.
-        let relay_sync = RelaySync::with_transport(
+        let relay_sync = RelaySync::with_iroh_transport(
             storage.clone() as Arc<dyn SyncRuntimeStorage>,
             RelaySyncConfig {
                 relay_url: String::new(),
@@ -230,8 +230,8 @@ pub(crate) async fn handle_start_sync(
                 device_name: device_name.clone(),
                 auth_secret: auth_secret.clone(),
             },
-            iroh_transport.clone() as Arc<dyn crate::sync_transport::SyncTransport>,
-        );
+            iroh_transport.clone(),
+        )?;
         wire_relay_sync_events(&relay_sync).await;
         // Only a `connect_with_pairing_code` start is a pairing intent
         // (`pairing_connect`); boot restores replay the stored ticket for an

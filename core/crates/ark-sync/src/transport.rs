@@ -45,6 +45,13 @@ pub enum AddressedSendOutcome {
     PeerOffline,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PeerDisconnectOutcome {
+    PeerClosed,
+    AlreadyOffline,
+    SharedRelayUnaffected,
+}
+
 /// Narrow capability used by an addressed transport immediately before it
 /// writes a signed integration frame. The implementation owns the policy and
 /// persistence access; transports only provide the live recipient key.
@@ -95,17 +102,11 @@ impl OutboundIntegrationFrameAuthorizer for StorageBackedOutboundIntegrationFram
     }
 }
 
-/// Object-safe transport abstraction consumed by `RelaySync`.
+/// Shared lifecycle and broadcast surface implemented by every sync transport.
 ///
 /// Uses `async_trait` to keep the transport usable behind `Arc<dyn SyncTransport>`.
 #[async_trait::async_trait]
 pub trait SyncTransport: Send + Sync {
-    /// True only when the transport enforces pre-admission control and can
-    /// exchange signed registry history before carrying user data.
-    fn supports_registry_admission(&self) -> bool {
-        false
-    }
-
     /// Start the transport. Returns immediately; background tasks drive the
     /// connection and forward events through `event_tx`.
     async fn start(&self, event_tx: mpsc::UnboundedSender<TransportEvent>) -> Result<(), String>;
@@ -113,62 +114,61 @@ pub trait SyncTransport: Send + Sync {
     /// Enqueue a message for sending.
     fn send(&self, msg: LanSyncMessage) -> Result<(), String>;
 
-    async fn send_to(&self, _device_id: &str, _msg: LanSyncMessage) -> Result<(), String> {
-        Err("addressed transport is not supported".into())
-    }
+    /// Stop the transport and join its background tasks. Must not return
+    /// while a spawned task is still running: tasks hold transport callbacks
+    /// until teardown completes.
+    async fn stop(&self);
+}
+
+/// Capability contract for a transport that supports Iroh-style peer sessions.
+/// Implementing this trait declares that all of its required per-peer
+/// operations are available; callers should use the trait bound or a typed
+/// transport variant instead of probing for capability at runtime. Relay
+/// intentionally does not implement this contract because its shared
+/// WebSocket cannot admit, address, or disconnect a single remote peer.
+///
+/// This remains object-safe so orchestration can use
+/// `Arc<dyn IrohSessionTransport>` when it has selected an Iroh session.
+#[async_trait::async_trait]
+pub trait IrohSessionTransport: SyncTransport {
+    async fn send_to(&self, device_id: &str, msg: LanSyncMessage) -> Result<(), String>;
 
     fn set_outbound_authorizer(
         &self,
-        _authorizer: Arc<dyn OutboundIntegrationFrameAuthorizer>,
-    ) -> Result<(), String> {
-        Err("outbound authorization is not supported".into())
-    }
+        authorizer: Arc<dyn OutboundIntegrationFrameAuthorizer>,
+    ) -> Result<(), String>;
 
     /// Bind the verified endpoint for control traffic. Implementations must
     /// keep user-data frames blocked until `mark_peer_data_ready` succeeds.
     fn bind_peer_for_control(
         &self,
-        _device_id: &str,
-        _transport_public_key: &str,
-    ) -> Result<(), String> {
-        Err("authenticated transport binding is not supported".into())
-    }
+        device_id: &str,
+        transport_public_key: &str,
+    ) -> Result<(), String>;
 
     /// Promote a verified transport binding after durable peer enrollment.
     /// Data frames remain blocked until this succeeds.
     fn mark_peer_data_ready(
         &self,
-        _device_id: &str,
-        _transport_public_key: &str,
-    ) -> Result<(), String> {
-        Err("transport data admission is not supported".into())
-    }
+        device_id: &str,
+        transport_public_key: &str,
+    ) -> Result<(), String>;
 
     /// Drop a binding made during a handshake or failed admission.
-    fn unbind_peer(&self, _device_id: &str) -> Result<(), String> {
-        Err("authenticated transport binding is not supported".into())
-    }
+    fn unbind_peer(&self, device_id: &str) -> Result<(), String>;
 
     /// Addressed send to a connection identified by its transport key —
     /// before data admission, for pairing and registry control messages.
     async fn send_to_transport_peer(
         &self,
-        _transport_public_key: &str,
-        _msg: LanSyncMessage,
-    ) -> Result<AddressedSendOutcome, String> {
-        Err("transport-key addressed send is not supported".into())
-    }
+        transport_public_key: &str,
+        msg: LanSyncMessage,
+    ) -> Result<AddressedSendOutcome, String>;
 
-    fn disconnect_peer(&self, _device_id: &str) -> Result<(), String> {
-        Err("addressed peer disconnect is not supported".into())
-    }
+    fn disconnect_peer(&self, device_id: &str) -> Result<PeerDisconnectOutcome, String>;
 
-    fn disconnect_transport_peer(&self, _transport_public_key: &str) -> Result<(), String> {
-        Err("transport peer disconnect is not supported".into())
-    }
-
-    /// Stop the transport and join its background tasks. Must not return
-    /// while a spawned task is still running: tasks hold transport callbacks
-    /// until teardown completes.
-    async fn stop(&self);
+    fn disconnect_transport_peer(
+        &self,
+        transport_public_key: &str,
+    ) -> Result<PeerDisconnectOutcome, String>;
 }

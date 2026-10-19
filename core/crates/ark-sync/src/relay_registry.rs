@@ -8,8 +8,36 @@ use ark_application::registry_admission::RegistryAdmissionStorage;
 use ark_domain::device_registry::RegistryEvent;
 use tokio::sync::Mutex;
 
-use crate::{protocol::LanSyncMessage, transport::SyncTransport};
+use crate::protocol::LanSyncMessage;
 use state::{Admission, RelayRegistryPeer};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PeerControlSendOutcome {
+    Sent,
+    PeerOffline,
+}
+
+/// Transport-neutral operations needed to establish and revoke an admitted
+/// peer session. Implementations own endpoint/key interpretation and wire I/O.
+#[async_trait::async_trait]
+pub trait PeerSessionControl: Send + Sync {
+    async fn send_control_to_endpoint(
+        &self,
+        endpoint: &str,
+        message: LanSyncMessage,
+    ) -> Result<PeerControlSendOutcome, String>;
+
+    fn mark_peer_data_ready(&self, peer: &str, endpoint: &str) -> Result<(), String>;
+    fn unbind_peer(&self, peer: &str) -> Result<(), String>;
+    fn disconnect_peer(
+        &self,
+        peer: &str,
+    ) -> Result<crate::transport::PeerDisconnectOutcome, String>;
+    fn disconnect_transport_endpoint(
+        &self,
+        endpoint: &str,
+    ) -> Result<crate::transport::PeerDisconnectOutcome, String>;
+}
 
 #[derive(Debug, Clone)]
 pub enum RegistryFrame {
@@ -48,7 +76,7 @@ pub struct RegistryOutcome {
 pub struct RelayRegistryCoordinator<S: RegistryAdmissionStorage + ?Sized> {
     pub(super) local_device_id: String,
     pub(super) storage: Arc<S>,
-    pub(super) transport: Arc<dyn SyncTransport>,
+    pub(super) transport: Arc<dyn PeerSessionControl>,
     pub(in crate::relay_registry) peers: Mutex<HashMap<String, RelayRegistryPeer>>,
 }
 
@@ -56,7 +84,7 @@ impl<S: RegistryAdmissionStorage + ?Sized + 'static> RelayRegistryCoordinator<S>
     pub fn new(
         local_device_id: String,
         storage: Arc<S>,
-        transport: Arc<dyn SyncTransport>,
+        transport: Arc<dyn PeerSessionControl>,
     ) -> Self {
         Self {
             local_device_id,
@@ -118,18 +146,16 @@ impl<S: RegistryAdmissionStorage + ?Sized + 'static> RelayRegistryCoordinator<S>
         &self,
         endpoint: &str,
         message: LanSyncMessage,
-    ) -> Result<crate::transport::AddressedSendOutcome, String> {
+    ) -> Result<PeerControlSendOutcome, String> {
         self.transport
-            .send_to_transport_peer(endpoint, message)
+            .send_control_to_endpoint(endpoint, message)
             .await
     }
 
     pub(super) async fn send(&self, endpoint: &str, message: LanSyncMessage) -> Result<(), String> {
         match self.send_outcome(endpoint, message).await? {
-            crate::transport::AddressedSendOutcome::Sent => Ok(()),
-            crate::transport::AddressedSendOutcome::PeerOffline => {
-                Err("transport peer is offline".into())
-            }
+            PeerControlSendOutcome::Sent => Ok(()),
+            PeerControlSendOutcome::PeerOffline => Err("transport peer is offline".into()),
         }
     }
 }

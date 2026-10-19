@@ -115,8 +115,8 @@ impl<S: RegistryAdmissionStorage + ?Sized + 'static> RelayRegistryCoordinator<S>
                         )
                         .await
                     {
-                        Ok(crate::transport::AddressedSendOutcome::Sent)
-                        | Ok(crate::transport::AddressedSendOutcome::PeerOffline) => {}
+                        Ok(super::PeerControlSendOutcome::Sent)
+                        | Ok(super::PeerControlSendOutcome::PeerOffline) => {}
                         Err(error) => outcome.set_error(format!(
                             "failed to fan out registry event to {id}: {error}"
                         )),
@@ -158,8 +158,8 @@ impl<S: RegistryAdmissionStorage + ?Sized + 'static> RelayRegistryCoordinator<S>
                         )
                         .await
                     {
-                        Ok(crate::transport::AddressedSendOutcome::Sent)
-                        | Ok(crate::transport::AddressedSendOutcome::PeerOffline) => {}
+                        Ok(super::PeerControlSendOutcome::Sent)
+                        | Ok(super::PeerControlSendOutcome::PeerOffline) => {}
                         Err(error) => {
                             outcome.set_error(format!(
                                 "failed to send disable event to {id}: {error}"
@@ -171,7 +171,7 @@ impl<S: RegistryAdmissionStorage + ?Sized + 'static> RelayRegistryCoordinator<S>
             if !self.is_revocation_current(&id, &endpoint).await {
                 continue;
             }
-            if let Err(error) = self.transport.disconnect_transport_peer(&endpoint) {
+            if let Err(error) = self.transport.disconnect_transport_endpoint(&endpoint) {
                 outcome.set_error(format!("failed to close revoked peer {id}: {error}"));
             }
             self.remove_revoked_peer(&id, &endpoint).await;
@@ -223,7 +223,7 @@ impl<S: RegistryAdmissionStorage + ?Sized + 'static> RelayRegistryCoordinator<S>
             ));
         }
         if self.is_revocation_current(peer, endpoint).await {
-            if let Err(error) = self.transport.disconnect_transport_peer(endpoint) {
+            if let Err(error) = self.transport.disconnect_transport_endpoint(endpoint) {
                 outcome.set_error(format!("failed to close revoked peer {peer}: {error}"));
             }
             self.remove_revoked_peer(peer, endpoint).await;

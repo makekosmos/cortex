@@ -34,11 +34,12 @@ async fn disabled_offline_device_reopens_sqlite_and_catches_up_before_data_admis
     let transport_a = Arc::new(crate::iroh_transport::IrohTransport::new(iroh_config(
         "device-A", key_a, None,
     )));
-    let relay_a = RelaySync::with_transport(
+    let relay_a = RelaySync::with_iroh_transport(
         peer_a.storage.clone() as Arc<dyn SyncRuntimeStorage>,
         relay_config("device-A"),
         transport_a.clone(),
-    );
+    )
+    .expect("Iroh RelaySync construction");
     relay_a.start().await.expect("start A transport");
 
     let transport_b = Arc::new(crate::iroh_transport::IrohTransport::new(iroh_config(
@@ -46,11 +47,12 @@ async fn disabled_offline_device_reopens_sqlite_and_catches_up_before_data_admis
         key_b,
         transport_a.endpoint_addr(),
     )));
-    let relay_b = RelaySync::with_transport(
+    let relay_b = RelaySync::with_iroh_transport(
         peer_b.storage.clone() as Arc<dyn SyncRuntimeStorage>,
         relay_config("device-B"),
         transport_b.clone(),
-    );
+    )
+    .expect("Iroh RelaySync construction");
     relay_b.start().await.expect("start B transport");
     wait_until("initial registry admission", || async {
         transport_a.registry().is_data_ready_endpoint(&endpoint_b)
@@ -103,11 +105,12 @@ async fn disabled_offline_device_reopens_sqlite_and_catches_up_before_data_admis
         peer_b.secret.clone(),
         transport_a.endpoint_addr(),
     )));
-    let relay_b = RelaySync::with_transport(
+    let relay_b = RelaySync::with_iroh_transport(
         peer_b.storage.clone() as Arc<dyn SyncRuntimeStorage>,
         relay_config("device-B"),
         transport_b.clone(),
-    );
+    )
+    .expect("Iroh RelaySync construction");
     let tombstone_seen = Arc::new(AtomicBool::new(false));
     let tombstone_seen_callback = tombstone_seen.clone();
     let ready_when_tombstone_seen = Arc::new(AtomicBool::new(true));

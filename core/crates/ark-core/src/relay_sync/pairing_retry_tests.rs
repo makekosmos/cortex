@@ -1,7 +1,8 @@
 use super::*;
 use crate::db::{init_schema, SqliteStorageBackend};
 use crate::replication_storage::{PeerIdentityBackend, SyncRuntimeStorage};
-use crate::sync_transport::{SyncTransport, TransportEvent};
+use crate::sync_transport::{IrohSessionTransport, SyncTransport, TransportEvent};
+use ark_sync::relay_registry::{PeerControlSendOutcome, PeerSessionControl};
 use rusqlite::Connection;
 use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -17,10 +18,6 @@ struct FailOncePairingAcceptedTransport {
 
 #[async_trait::async_trait]
 impl SyncTransport for FailOncePairingAcceptedTransport {
-    fn supports_registry_admission(&self) -> bool {
-        true
-    }
-
     async fn start(
         &self,
         _: tokio::sync::mpsc::UnboundedSender<TransportEvent>,
@@ -29,6 +26,22 @@ impl SyncTransport for FailOncePairingAcceptedTransport {
     }
 
     fn send(&self, _: LanSyncMessage) -> Result<(), String> {
+        Ok(())
+    }
+
+    async fn stop(&self) {}
+}
+
+#[async_trait::async_trait]
+impl IrohSessionTransport for FailOncePairingAcceptedTransport {
+    async fn send_to(&self, _: &str, _: LanSyncMessage) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn set_outbound_authorizer(
+        &self,
+        _: Arc<dyn ark_sync::transport::OutboundIntegrationFrameAuthorizer>,
+    ) -> Result<(), String> {
         Ok(())
     }
 
@@ -62,8 +75,53 @@ impl SyncTransport for FailOncePairingAcceptedTransport {
         }
         Ok(crate::sync_transport::AddressedSendOutcome::Sent)
     }
+    fn disconnect_peer(
+        &self,
+        _: &str,
+    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_sync::transport::PeerDisconnectOutcome::PeerClosed)
+    }
+    fn disconnect_transport_peer(
+        &self,
+        _: &str,
+    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_sync::transport::PeerDisconnectOutcome::PeerClosed)
+    }
+}
 
-    async fn stop(&self) {}
+#[async_trait::async_trait]
+impl PeerSessionControl for FailOncePairingAcceptedTransport {
+    async fn send_control_to_endpoint(
+        &self,
+        endpoint: &str,
+        message: LanSyncMessage,
+    ) -> Result<PeerControlSendOutcome, String> {
+        let outcome = IrohSessionTransport::send_to_transport_peer(self, endpoint, message).await?;
+        Ok(match outcome {
+            crate::sync_transport::AddressedSendOutcome::Sent => PeerControlSendOutcome::Sent,
+            crate::sync_transport::AddressedSendOutcome::PeerOffline => {
+                PeerControlSendOutcome::PeerOffline
+            }
+        })
+    }
+    fn mark_peer_data_ready(&self, peer: &str, endpoint: &str) -> Result<(), String> {
+        IrohSessionTransport::mark_peer_data_ready(self, peer, endpoint)
+    }
+    fn unbind_peer(&self, peer: &str) -> Result<(), String> {
+        IrohSessionTransport::unbind_peer(self, peer)
+    }
+    fn disconnect_peer(
+        &self,
+        peer: &str,
+    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
+        IrohSessionTransport::disconnect_peer(self, peer)
+    }
+    fn disconnect_transport_endpoint(
+        &self,
+        endpoint: &str,
+    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
+        IrohSessionTransport::disconnect_transport_peer(self, endpoint)
+    }
 }
 
 fn hello(device_id: &str) -> LanSyncMessage {
@@ -98,7 +156,7 @@ async fn persisted_pairing_retries_acceptance_after_send_failure_without_duplica
         data_ready: AtomicBool::new(false),
         registry_ready_digest: Mutex::new(None),
     });
-    let relay = RelaySync::with_transport(
+    let relay = RelaySync::with_iroh_transport(
         storage.clone() as Arc<dyn SyncRuntimeStorage>,
         RelaySyncConfig {
             relay_url: String::new(),
@@ -109,7 +167,8 @@ async fn persisted_pairing_retries_acceptance_after_send_failure_without_duplica
             auth_secret: None,
         },
         transport.clone(),
-    );
+    )
+    .unwrap();
 
     relay
         .handle_event(TransportEvent::MessageReceivedFromTransport {
@@ -213,7 +272,7 @@ async fn registry_ready_replay_is_idempotent_but_conflicting_digest_is_rejected(
         data_ready: AtomicBool::new(false),
         registry_ready_digest: Mutex::new(None),
     });
-    let relay = RelaySync::with_transport(
+    let relay = RelaySync::with_iroh_transport(
         storage.clone() as Arc<dyn SyncRuntimeStorage>,
         RelaySyncConfig {
             relay_url: String::new(),
@@ -224,7 +283,8 @@ async fn registry_ready_replay_is_idempotent_but_conflicting_digest_is_rejected(
             auth_secret: None,
         },
         transport.clone(),
-    );
+    )
+    .unwrap();
     let endpoint = "verified-endpoint";
     let session_id = "registry-session";
     let digest = "a".repeat(64);
@@ -233,7 +293,12 @@ async fn registry_ready_replay_is_idempotent_but_conflicting_digest_is_rejected(
         .lock()
         .await
         .insert("a-peer".into(), endpoint.into());
-    relay.registry.begin_peer("a-peer", endpoint, false).await;
+    relay
+        .registry
+        .as_ref()
+        .unwrap()
+        .begin_peer("a-peer", endpoint, false)
+        .await;
     relay
         .handle_registry_sync_start("a-peer", endpoint, session_id.into())
         .await
@@ -276,7 +341,7 @@ async fn applied_registry_events_are_not_lost_when_core_reports_a_later_error() 
         data_ready: AtomicBool::new(false),
         registry_ready_digest: Mutex::new(None),
     });
-    let relay = RelaySync::with_transport(
+    let relay = RelaySync::with_iroh_transport(
         storage as Arc<dyn SyncRuntimeStorage>,
         RelaySyncConfig {
             relay_url: String::new(),
@@ -287,7 +352,8 @@ async fn applied_registry_events_are_not_lost_when_core_reports_a_later_error() 
             auth_secret: None,
         },
         transport,
-    );
+    )
+    .unwrap();
     let event = RegistryEvent::sign(
         RegistryEventDraft {
             actor_device_id: DeviceId::parse("local-device").unwrap(),

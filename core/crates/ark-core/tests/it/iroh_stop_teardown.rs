@@ -9,6 +9,7 @@
 //! no background task has had a chance to release its authorizer clone, so
 //! `Arc::strong_count` on the shared connection stays above one.
 
+use ark_core::sync_transport::IrohSessionTransport;
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
 

@@ -1,9 +1,5 @@
 #[async_trait::async_trait]
 impl SyncTransport for IrohTransport {
-    fn supports_registry_admission(&self) -> bool {
-        true
-    }
-
     /// Запускает транспорт: байндит `Endpoint`, поднимает accept-loop для
     /// входящих соединений и (если `config.peer_addr/peer_ticket`) dial-loop
     /// с экспоненциальным backoff.
@@ -248,6 +244,46 @@ impl SyncTransport for IrohTransport {
         Ok(())
     }
 
+    /// Останавливает транспорт: сигналит фоновым задачам, закрывает
+    /// `Endpoint` (это будит `accept()` и рвёт чтение в reader-тасках), затем
+    /// abort+join всего зарегистрированного.
+    async fn stop(&self) {
+        let _ = self.stop_tx.send(true);
+        // Закрываем endpoint явно — это разбудит accept_endpoint.accept().
+        let endpoint = self
+            .endpoint
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        if let Some(ep) = endpoint {
+            ep.close().await;
+        }
+        // Drain in a loop: a task aborted before its first poll never runs,
+        // but an aborted accept iteration could have spawned a connection
+        // task between our drain and its own abort — sweep until empty.
+        loop {
+            let tasks: Vec<tokio::task::JoinHandle<()>> = self
+                .tasks
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .drain(..)
+                .collect();
+            if tasks.is_empty() {
+                break;
+            }
+            for task in &tasks {
+                task.abort();
+            }
+            for task in tasks {
+                let _ = task.await;
+            }
+        }
+        *self.outbound_authorizer.write().await = None;
+    }
+}
+
+#[async_trait::async_trait]
+impl ark_sync::transport::IrohSessionTransport for IrohTransport {
     async fn send_to(&self, device_id: &str, msg: LanSyncMessage) -> Result<(), String> {
         let target = self
             .registry
@@ -381,15 +417,20 @@ impl SyncTransport for IrohTransport {
         Ok(())
     }
 
-    fn disconnect_peer(&self, device_id: &str) -> Result<(), String> {
-        let endpoint = self
-            .registry
-            .endpoint_id_for(device_id)
-            .ok_or_else(|| format!("iroh peer {device_id} has no bound endpoint"))?;
+    fn disconnect_peer(
+        &self,
+        device_id: &str,
+    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
+        let Some(endpoint) = self.registry.endpoint_id_for(device_id) else {
+            return Ok(ark_sync::transport::PeerDisconnectOutcome::AlreadyOffline);
+        };
         self.disconnect_transport_peer(&endpoint.to_string())
     }
 
-    fn disconnect_transport_peer(&self, transport_public_key: &str) -> Result<(), String> {
+    fn disconnect_transport_peer(
+        &self,
+        transport_public_key: &str,
+    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
         let endpoint_id: EndpointId = transport_public_key
             .parse()
             .map_err(|_| "iroh transport key is not an endpoint id".to_string())?;
@@ -409,49 +450,12 @@ impl SyncTransport for IrohTransport {
             Some(conn) => {
                 conn.close(0u32.into(), b"peer removed");
                 self.registry.remove_endpoint(&endpoint_id);
-                Ok(())
+                Ok(ark_sync::transport::PeerDisconnectOutcome::PeerClosed)
             }
             None => {
                 self.registry.remove_endpoint(&endpoint_id);
-                Ok(())
+                Ok(ark_sync::transport::PeerDisconnectOutcome::AlreadyOffline)
             }
         }
-    }
-
-    /// Останавливает транспорт: сигналит фоновым задачам, закрывает
-    /// `Endpoint` (это будит `accept()` и рвёт чтение в reader-тасках), затем
-    /// abort+join всего зарегистрированного.
-    async fn stop(&self) {
-        let _ = self.stop_tx.send(true);
-        // Закрываем endpoint явно — это разбудит accept_endpoint.accept().
-        let endpoint = self
-            .endpoint
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .take();
-        if let Some(ep) = endpoint {
-            ep.close().await;
-        }
-        // Drain in a loop: a task aborted before its first poll never runs,
-        // but an aborted accept iteration could have spawned a connection
-        // task between our drain and its own abort — sweep until empty.
-        loop {
-            let tasks: Vec<tokio::task::JoinHandle<()>> = self
-                .tasks
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .drain(..)
-                .collect();
-            if tasks.is_empty() {
-                break;
-            }
-            for task in &tasks {
-                task.abort();
-            }
-            for task in tasks {
-                let _ = task.await;
-            }
-        }
-        *self.outbound_authorizer.write().await = None;
     }
 }

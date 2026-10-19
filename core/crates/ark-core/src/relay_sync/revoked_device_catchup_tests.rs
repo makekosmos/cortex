@@ -98,7 +98,7 @@ async fn offline_revoked_iroh_peer_receives_tombstone_without_becoming_data_read
         key_a.clone(),
         None,
     )));
-    let relay_a = RelaySync::with_transport(
+    let relay_a = RelaySync::with_iroh_transport(
         storage_a.clone() as Arc<dyn SyncRuntimeStorage>,
         RelaySyncConfig {
             relay_url: String::new(),
@@ -109,7 +109,8 @@ async fn offline_revoked_iroh_peer_receives_tombstone_without_becoming_data_read
             auth_secret: None,
         },
         transport_a.clone(),
-    );
+    )
+    .expect("Iroh RelaySync construction");
     relay_a.start().await.unwrap();
 
     let transport_b = Arc::new(crate::iroh_transport::IrohTransport::new(iroh_config(
@@ -117,7 +118,7 @@ async fn offline_revoked_iroh_peer_receives_tombstone_without_becoming_data_read
         key_b.clone(),
         transport_a.endpoint_addr(),
     )));
-    let relay_b = RelaySync::with_transport(
+    let relay_b = RelaySync::with_iroh_transport(
         storage_b.clone() as Arc<dyn SyncRuntimeStorage>,
         RelaySyncConfig {
             relay_url: String::new(),
@@ -128,7 +129,8 @@ async fn offline_revoked_iroh_peer_receives_tombstone_without_becoming_data_read
             auth_secret: None,
         },
         transport_b.clone(),
-    );
+    )
+    .expect("Iroh RelaySync construction");
     relay_b.start().await.unwrap();
 
     tokio::time::timeout(Duration::from_secs(10), async {

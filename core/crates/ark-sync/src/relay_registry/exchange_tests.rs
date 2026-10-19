@@ -12,8 +12,9 @@ use ed25519_dalek::SigningKey;
 
 use crate::{
     protocol::LanSyncMessage,
-    relay_registry::{RegistryFrame, RelayRegistryCoordinator},
-    transport::{AddressedSendOutcome, SyncTransport, TransportEvent},
+    relay_registry::{
+        PeerControlSendOutcome, PeerSessionControl, RegistryFrame, RelayRegistryCoordinator,
+    },
 };
 
 #[derive(Default)]
@@ -130,18 +131,7 @@ struct FakeTransport {
 }
 
 #[async_trait::async_trait]
-impl SyncTransport for FakeTransport {
-    async fn start(
-        &self,
-        _: tokio::sync::mpsc::UnboundedSender<TransportEvent>,
-    ) -> Result<(), String> {
-        Ok(())
-    }
-
-    fn send(&self, _: LanSyncMessage) -> Result<(), String> {
-        Ok(())
-    }
-
+impl PeerSessionControl for FakeTransport {
     fn mark_peer_data_ready(&self, peer: &str, endpoint: &str) -> Result<(), String> {
         self.ready
             .lock()
@@ -156,11 +146,11 @@ impl SyncTransport for FakeTransport {
         Ok(())
     }
 
-    async fn send_to_transport_peer(
+    async fn send_control_to_endpoint(
         &self,
         endpoint: &str,
         message: LanSyncMessage,
-    ) -> Result<AddressedSendOutcome, String> {
+    ) -> Result<PeerControlSendOutcome, String> {
         if self.fail_sends.load(Ordering::SeqCst) {
             return Err("injected send failure".into());
         }
@@ -169,19 +159,31 @@ impl SyncTransport for FakeTransport {
             .lock()
             .unwrap()
             .push((endpoint.to_owned(), message));
-        Ok(AddressedSendOutcome::Sent)
+        Ok(PeerControlSendOutcome::Sent)
     }
 
-    fn disconnect_transport_peer(&self, endpoint: &str) -> Result<(), String> {
+    fn disconnect_peer(
+        &self,
+        peer: &str,
+    ) -> Result<crate::transport::PeerDisconnectOutcome, String> {
+        self.trace
+            .lock()
+            .unwrap()
+            .push(format!("disconnect-peer:{peer}"));
+        Ok(crate::transport::PeerDisconnectOutcome::PeerClosed)
+    }
+
+    fn disconnect_transport_endpoint(
+        &self,
+        endpoint: &str,
+    ) -> Result<crate::transport::PeerDisconnectOutcome, String> {
         self.disconnected.lock().unwrap().push(endpoint.to_owned());
         self.trace
             .lock()
             .unwrap()
             .push(format!("disconnect:{endpoint}"));
-        Ok(())
+        Ok(crate::transport::PeerDisconnectOutcome::PeerClosed)
     }
-
-    async fn stop(&self) {}
 }
 
 type Coordinator = RelayRegistryCoordinator<FakeStorage>;

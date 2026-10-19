@@ -52,7 +52,7 @@ mod tests {
     type Room = HashMap<String, mpsc::UnboundedSender<Message>>;
     type Rooms = Arc<StdMutex<HashMap<String, Room>>>;
 
-    struct TrackingTransport(AtomicBool);
+    struct TrackingTransport;
 
     #[async_trait::async_trait]
     impl SyncTransport for TrackingTransport {
@@ -64,11 +64,6 @@ mod tests {
             Ok(())
         }
 
-        fn disconnect_peer(&self, _: &str) -> Result<(), String> {
-            self.0.store(true, Ordering::Relaxed);
-            Ok(())
-        }
-
         async fn stop(&self) {}
     }
 
@@ -77,7 +72,7 @@ mod tests {
         let backend = Arc::new(MemBackend::new());
         backend.fail_peer_transport_keys_read("injected database read failure");
         let storage = backend as Arc<dyn SyncRuntimeStorage>;
-        let transport = Arc::new(TrackingTransport(AtomicBool::new(false)));
+        let transport = Arc::new(TrackingTransport);
         let relay = RelaySync::with_transport(
             storage,
             RelaySyncConfig {
@@ -113,7 +108,6 @@ mod tests {
             .await
             .expect_err("persistence failure must reach the caller");
         assert!(error.contains("injected database read failure"));
-        assert!(transport.0.load(Ordering::Relaxed));
         assert!(!relay.peers.lock().await.contains_key("peer"));
         assert!(disconnect_notified.load(Ordering::Relaxed));
     }

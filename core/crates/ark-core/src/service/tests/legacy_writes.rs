@@ -342,10 +342,6 @@ pub(super) struct CapturingTransport {
 
 #[async_trait::async_trait]
 impl crate::sync_transport::SyncTransport for CapturingTransport {
-    fn supports_registry_admission(&self) -> bool {
-        true
-    }
-
     async fn start(
         &self,
         _event_tx: tokio::sync::mpsc::UnboundedSender<crate::sync_transport::TransportEvent>,
@@ -365,4 +361,80 @@ impl crate::sync_transport::SyncTransport for CapturingTransport {
     }
 
     async fn stop(&self) {}
+}
+
+#[async_trait::async_trait]
+impl crate::sync_transport::IrohSessionTransport for CapturingTransport {
+    async fn send_to(
+        &self,
+        _: &str,
+        message: ark_sync::protocol::LanSyncMessage,
+    ) -> Result<(), String> {
+        crate::sync_transport::SyncTransport::send(self, message)
+    }
+    fn set_outbound_authorizer(
+        &self,
+        _: Arc<dyn ark_sync::transport::OutboundIntegrationFrameAuthorizer>,
+    ) -> Result<(), String> {
+        Ok(())
+    }
+    fn bind_peer_for_control(&self, _: &str, _: &str) -> Result<(), String> {
+        Ok(())
+    }
+    fn mark_peer_data_ready(&self, _: &str, _: &str) -> Result<(), String> {
+        Ok(())
+    }
+    fn unbind_peer(&self, _: &str) -> Result<(), String> {
+        Ok(())
+    }
+    async fn send_to_transport_peer(
+        &self,
+        _: &str,
+        message: ark_sync::protocol::LanSyncMessage,
+    ) -> Result<crate::sync_transport::AddressedSendOutcome, String> {
+        crate::sync_transport::SyncTransport::send(self, message)?;
+        Ok(crate::sync_transport::AddressedSendOutcome::Sent)
+    }
+    fn disconnect_peer(
+        &self,
+        _: &str,
+    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_sync::transport::PeerDisconnectOutcome::PeerClosed)
+    }
+    fn disconnect_transport_peer(
+        &self,
+        _: &str,
+    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_sync::transport::PeerDisconnectOutcome::PeerClosed)
+    }
+}
+
+#[async_trait::async_trait]
+impl ark_sync::relay_registry::PeerSessionControl for CapturingTransport {
+    async fn send_control_to_endpoint(
+        &self,
+        _: &str,
+        message: ark_sync::protocol::LanSyncMessage,
+    ) -> Result<ark_sync::relay_registry::PeerControlSendOutcome, String> {
+        crate::sync_transport::SyncTransport::send(self, message)?;
+        Ok(ark_sync::relay_registry::PeerControlSendOutcome::Sent)
+    }
+    fn mark_peer_data_ready(&self, _: &str, _: &str) -> Result<(), String> {
+        Ok(())
+    }
+    fn unbind_peer(&self, _: &str) -> Result<(), String> {
+        Ok(())
+    }
+    fn disconnect_peer(
+        &self,
+        _: &str,
+    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_sync::transport::PeerDisconnectOutcome::PeerClosed)
+    }
+    fn disconnect_transport_endpoint(
+        &self,
+        _: &str,
+    ) -> Result<ark_sync::transport::PeerDisconnectOutcome, String> {
+        Ok(ark_sync::transport::PeerDisconnectOutcome::PeerClosed)
+    }
 }

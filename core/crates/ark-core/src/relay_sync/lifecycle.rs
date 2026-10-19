@@ -24,20 +24,53 @@ impl RelaySync {
         config: RelaySyncConfig,
         transport: Arc<dyn SyncTransport>,
     ) -> Arc<Self> {
-        let auth_secret = normalize_auth_secret(config.auth_secret.clone());
-        let _ = transport.set_outbound_authorizer(Arc::new(
+        Self::with_transport_handle(
+            storage,
+            config,
+            crate::sync_transport::SyncTransportHandle::relay(transport),
+        )
+    }
+
+    pub fn with_iroh_transport<T>(
+        storage: Arc<dyn SyncRuntimeStorage>,
+        config: RelaySyncConfig,
+        transport: Arc<T>,
+    ) -> Result<Arc<Self>, String>
+    where
+        T: ark_sync::transport::IrohSessionTransport
+            + ark_sync::relay_registry::PeerSessionControl
+            + 'static,
+    {
+        transport.set_outbound_authorizer(Arc::new(
             ark_sync::transport::StorageBackedOutboundIntegrationFrameAuthorizer::new(
                 storage.clone()
                     as Arc<dyn ark_application::replication_storage::IntegrationReplicationBackend>,
                 config.space_id.clone(),
                 config.device_id.clone(),
             ),
-        ));
-        let registry = ark_sync::relay_registry::RelayRegistryCoordinator::new(
-            config.device_id.clone(),
-            storage.clone(),
-            transport.clone(),
+        ))?;
+        let session: Arc<dyn ark_sync::transport::IrohSessionTransport> = transport.clone();
+        let peer_control: Arc<dyn ark_sync::relay_registry::PeerSessionControl> = transport;
+        let handle = crate::sync_transport::SyncTransportHandle::iroh_with_peer_control(
+            session,
+            peer_control,
         );
+        Ok(Self::with_transport_handle(storage, config, handle))
+    }
+
+    fn with_transport_handle(
+        storage: Arc<dyn SyncRuntimeStorage>,
+        config: RelaySyncConfig,
+        transport: crate::sync_transport::SyncTransportHandle,
+    ) -> Arc<Self> {
+        let auth_secret = normalize_auth_secret(config.auth_secret.clone());
+        let registry = transport.peer_control().map(|peer_control| {
+            ark_sync::relay_registry::RelayRegistryCoordinator::new(
+                config.device_id.clone(),
+                storage.clone(),
+                peer_control.clone(),
+            )
+        });
 
         Arc::new(Self {
             storage,

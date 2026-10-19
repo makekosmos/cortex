@@ -2,7 +2,7 @@ use crate::integration_replication::SignedSyncEnvelope;
 
 impl RelaySync {
     fn send_user_data_message(&self, message: LanSyncMessage) -> Result<(), String> {
-        if !self.transport.supports_registry_admission() {
+        if self.transport.session().is_none() {
             return Err("transport does not support per-device registry admission".into());
         }
         self.transport.send(message)
@@ -61,6 +61,8 @@ impl RelaySync {
             .await?;
         let recipient = frame.recipient_node_id.clone();
         self.transport
+            .session()
+            .ok_or_else(|| "addressed transport is not supported".to_owned())?
             .send_to(&recipient, LanSyncMessage::SignedIntegrationFrame { frame })
             .await
     }
@@ -86,16 +88,17 @@ impl RelaySync {
                 )
                 .await
                 .is_ok();
-        let _ = self
-            .transport
-            .send_to(
-                &from_device_id,
-                LanSyncMessage::SignedIntegrationAck {
-                    message_id: frame.message_id,
-                    accepted,
-                },
-            )
-            .await;
+        if let Some(session) = self.transport.session() {
+            let _ = session
+                .send_to(
+                    &from_device_id,
+                    LanSyncMessage::SignedIntegrationAck {
+                        message_id: frame.message_id,
+                        accepted,
+                    },
+                )
+                .await;
+        }
     }
 
     fn make_hello(&self) -> LanSyncMessage {
@@ -112,7 +115,7 @@ impl RelaySync {
             }
             None => (None, None),
         };
-        let offer = if self.transport.supports_registry_admission() {
+        let offer = if self.transport.session().is_some() {
             ProtocolOffer::current_with_registry_history(true).with_task_merge_bootstrap_v2()
         } else {
             ProtocolOffer::current(self.auth_secret.is_some())
@@ -277,7 +280,10 @@ impl RelaySync {
                     })
             });
         if still_supported {
-            self.transport
+            let Some(session) = self.transport.session() else {
+                return Ok(());
+            };
+            session
                 .send_to(peer_device_id, LanSyncMessage::TaskMergeBatch { batch })
                 .await?;
         }
@@ -325,6 +331,8 @@ impl RelaySync {
             .apply_task_merge_batch(from_device_id, &self.config.device_id, &identity, &batch)
             .await?;
         self.transport
+            .session()
+            .ok_or_else(|| "addressed transport is not supported".to_owned())?
             .send_to(
                 from_device_id,
                 LanSyncMessage::TaskMergeBatchAck {

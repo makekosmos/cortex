@@ -35,7 +35,9 @@ impl RelaySync {
         if let Some(outgoing) = self.outgoing_pairing.lock().await.as_mut() {
             outgoing.declined = true;
         }
-        self.registry.disconnect_peer(responder_device_id).await;
+        if let Some(registry) = &self.registry {
+            registry.disconnect_peer(responder_device_id).await;
+        }
         self.peers.lock().await.remove(responder_device_id);
         self.pending_responder_hellos.lock().await.remove(endpoint);
         self.transport_keys.lock().await.remove(responder_device_id);
@@ -60,7 +62,9 @@ impl RelaySync {
             eprintln!("[RelaySync] failed to remove rejected peer: {error}");
             return;
         }
-        let _ = self.transport.disconnect_transport_peer(endpoint);
+        if let Some(session) = self.transport.session() {
+            let _ = session.disconnect_transport_peer(endpoint);
+        }
         if let Some(handler) = self.on_peer_disconnect.lock().await.as_ref() {
             handler(
                 responder_device_id.to_string(),
@@ -124,8 +128,11 @@ impl RelaySync {
         msg: LanSyncMessage,
         send_pairing_accepted: bool,
     ) -> Result<(), String> {
-        self.transport
-            .bind_peer_for_control(&from_device_id, &transport_public_key)?;
+        let session = self
+            .transport
+            .session()
+            .ok_or_else(|| "Iroh peer session is required for pairing admission".to_owned())?;
+        session.bind_peer_for_control(&from_device_id, &transport_public_key)?;
         self.transport_keys
             .lock()
             .await
@@ -162,8 +169,7 @@ impl RelaySync {
                 }
             }
             if send_pairing_accepted {
-                let send_result = self
-                    .transport
+                let send_result = session
                     .send_to_transport_peer(
                         &transport_public_key,
                         LanSyncMessage::PairingAccepted {
@@ -229,11 +235,15 @@ impl RelaySync {
     }
 
     async fn rollback_transport_admission(&self, device_id: &str, endpoint: &str) {
-        self.registry.disconnect_peer(device_id).await;
+        if let Some(registry) = &self.registry {
+            registry.disconnect_peer(device_id).await;
+        }
         self.peers.lock().await.remove(device_id);
         self.transport_keys.lock().await.remove(device_id);
-        let _ = self.transport.unbind_peer(device_id);
-        let _ = self.transport.disconnect_transport_peer(endpoint);
+        if let Some(session) = self.transport.session() {
+            let _ = session.unbind_peer(device_id);
+            let _ = session.disconnect_transport_peer(endpoint);
+        }
         if let Err(error) = crate::sync_server::remove_peer_record(&self.storage, device_id).await {
             eprintln!("[RelaySync] failed to roll back peer record: {error}");
         }
@@ -320,6 +330,10 @@ impl RelaySync {
     /// «Отклонить»: answer `PairingRejected` over the wire, close the
     /// connection, and persist nothing.
     pub async fn decline_pairing(&self, device_id: &str) -> Result<(), String> {
+        let session = self
+            .transport
+            .session()
+            .ok_or_else(|| "Iroh peer session is required to decline pairing".to_owned())?;
         let request = self
             .pending_pairing
             .lock()
@@ -330,8 +344,7 @@ impl RelaySync {
             .lock()
             .await
             .insert(device_id.to_string(), Instant::now());
-        let _ = self
-            .transport
+        let _ = session
             .send_to_transport_peer(
                 &request.transport_public_key,
                 LanSyncMessage::PairingRejected {
@@ -342,7 +355,7 @@ impl RelaySync {
         // `conn.close` aborts unacknowledged stream data — give the
         // rejection frame a beat to flush before severing, or an old peer
         // that can't parse it still gets its connection dropped.
-        let transport = self.transport.clone();
+        let transport = session;
         let endpoint = request.transport_public_key.clone();
         self.tasks.lock().await.push(tokio::spawn(async move {
             tokio::time::sleep(Duration::from_millis(300)).await;
@@ -361,7 +374,9 @@ impl RelaySync {
             return;
         };
         if !outgoing.accepted {
-            let _ = self.transport.disconnect_transport_peer(&outgoing.endpoint);
+            if let Some(session) = self.transport.session() {
+                let _ = session.disconnect_transport_peer(&outgoing.endpoint);
+            }
         }
         self.notify_pairing_changed().await;
     }

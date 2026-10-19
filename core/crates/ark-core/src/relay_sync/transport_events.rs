@@ -197,7 +197,9 @@ impl RelaySync {
                 // Transports fall back to our own id when a remote's id can't
                 // be resolved (iroh registry miss) — never evict that.
                 if device_id != self.config.device_id {
-                    self.registry.disconnect_peer(&device_id).await;
+                    if let Some(registry) = &self.registry {
+                        registry.disconnect_peer(&device_id).await;
+                    }
                     self.peers.lock().await.remove(&device_id);
                     self.transport_keys.lock().await.remove(&device_id);
                     // An initiator that hung up (cancel, Engine stop) takes
@@ -238,7 +240,9 @@ impl RelaySync {
                     evicted
                 };
                 for device_id in &evicted {
-                    self.registry.disconnect_peer(device_id).await;
+                    if let Some(registry) = &self.registry {
+                        registry.disconnect_peer(device_id).await;
+                    }
                 }
                 self.transport_keys.lock().await.clear();
                 if !self.pending_pairing.lock().await.is_empty() {

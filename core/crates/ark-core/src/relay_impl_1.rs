@@ -72,7 +72,7 @@ impl RelaySync {
                     }
                 }
 
-                let local_offer = if self.transport.supports_registry_admission() {
+                let local_offer = if self.transport.session().is_some() {
                     ProtocolOffer::current_with_registry_history(true)
                         .with_task_merge_bootstrap_v2()
                 } else {
@@ -222,7 +222,7 @@ impl RelaySync {
                     .await
                 {
                     eprintln!("{TAG} registry exchange start failed: {error}");
-                    let _ = self.transport.disconnect_transport_peer(endpoint);
+                    self.disconnect_iroh_transport_endpoint(endpoint);
                 }
             }
             LanSyncMessage::RegistryEventsPage {
@@ -247,7 +247,7 @@ impl RelaySync {
                     .await
                 {
                     eprintln!("{TAG} registry event page rejected: {error}");
-                    let _ = self.transport.disconnect_transport_peer(endpoint);
+                    self.disconnect_iroh_transport_endpoint(endpoint);
                 }
             }
             LanSyncMessage::RegistrySyncReady { session_id, digest } => {
@@ -260,7 +260,7 @@ impl RelaySync {
                     .await
                 {
                     eprintln!("{TAG} registry proof rejected: {error}");
-                    let _ = self.transport.disconnect_transport_peer(endpoint);
+                    self.disconnect_iroh_transport_endpoint(endpoint);
                 }
             }
             LanSyncMessage::RegistryEventUpdate { session_id, event } => {
@@ -273,7 +273,7 @@ impl RelaySync {
                     .await
                 {
                     eprintln!("{TAG} registry event update rejected: {error}");
-                    let _ = self.transport.disconnect_transport_peer(endpoint);
+                    self.disconnect_iroh_transport_endpoint(endpoint);
                 }
             }
 
@@ -287,7 +287,7 @@ impl RelaySync {
                     return;
                 };
                 if !self.transport_key_matches(&from_device_id, endpoint).await {
-                    let _ = self.transport.disconnect_transport_peer(endpoint);
+                    self.disconnect_iroh_transport_endpoint(endpoint);
                     return;
                 }
                 let negotiated = self
@@ -304,14 +304,14 @@ impl RelaySync {
                             })
                     });
                 if !negotiated {
-                    let _ = self.transport.disconnect_transport_peer(endpoint);
+                    self.disconnect_iroh_transport_endpoint(endpoint);
                     return;
                 }
                 let rules = match ark_sync::protocol::parse_sync_policy_rules(rules) {
                     Ok(rules) => rules,
                     Err(error) => {
                         eprintln!("{TAG} invalid sync policy from {from_device_id}: {error}");
-                        let _ = self.transport.disconnect_transport_peer(endpoint);
+                        self.disconnect_iroh_transport_endpoint(endpoint);
                         return;
                     }
                 };
@@ -321,7 +321,7 @@ impl RelaySync {
                     .await
                 {
                     eprintln!("{TAG} failed to accept sync policy from {from_device_id}: {error}");
-                    let _ = self.transport.disconnect_transport_peer(endpoint);
+                    self.disconnect_iroh_transport_endpoint(endpoint);
                 }
             }
 
@@ -405,7 +405,7 @@ impl RelaySync {
                 // Iroh can close just the addressed peer. The WebSocket relay
                 // is shared by every peer, so never close that socket here.
                 if transport_public_key.is_some() {
-                    let _ = self.transport.disconnect_peer(&origin_device_id);
+                    self.disconnect_iroh_peer(&origin_device_id);
                 }
             }
 
@@ -458,43 +458,5 @@ impl RelaySync {
             .get(device_id)
             .map(|peer| peer.authenticated)
             .unwrap_or(false)
-    }
-
-    /// Evict a peer before fallible persistence so failed writes cannot keep it live.
-    pub async fn disconnect_peer(&self, device_id: &str) -> Result<(), String> {
-        self.registry.disconnect_peer(device_id).await;
-        self.transport_keys.lock().await.remove(device_id);
-        if self
-            .pending_pairing
-            .lock()
-            .await
-            .remove(device_id)
-            .is_some()
-        {
-            self.notify_pairing_changed().await;
-        }
-        let was_connected = self.peers.lock().await.remove(device_id).is_some();
-        let transport_result = self
-            .transport
-            .disconnect_peer(device_id)
-            .map_err(|error| format!("failed to disconnect transport peer: {error}"));
-        let persistence_result = async {
-            let mut keys = crate::sync_server::load_peer_transport_keys(&self.storage).await?;
-            if keys.remove(device_id).is_some() {
-                crate::sync_server::save_peer_transport_keys(&self.storage, &keys).await?;
-            }
-            Ok::<(), String>(())
-        }
-        .await;
-        if was_connected {
-            if let Some(handler) = self.on_peer_disconnect.lock().await.as_ref() {
-                handler(device_id.to_string(), self.peers.lock().await.len());
-            }
-        }
-        match (transport_result, persistence_result) {
-            (Ok(()), Ok(())) => Ok(()),
-            (Err(error), Ok(())) | (Ok(()), Err(error)) => Err(error),
-            (Err(first), Err(second)) => Err(format!("{first}; {second}")),
-        }
     }
 }

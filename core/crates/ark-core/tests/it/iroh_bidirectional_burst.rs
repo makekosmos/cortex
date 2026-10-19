@@ -20,6 +20,7 @@
 //! Run with:
 //!   cargo test --test iroh_bidirectional_burst
 
+use ark_core::sync_transport::IrohSessionTransport;
 use std::collections::HashSet;
 use std::time::Duration;
 

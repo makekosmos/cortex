@@ -1,5 +1,6 @@
 #![allow(clippy::unwrap_used)]
 
+use ark_core::sync_transport::IrohSessionTransport;
 use std::time::Duration;
 
 use ark_core::iroh_transport::{IrohConfig, IrohTransport};

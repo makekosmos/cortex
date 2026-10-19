@@ -231,10 +231,11 @@ pub(super) fn start_policy_relay(
     let transport = Arc::new(crate::iroh_transport::IrohTransport::new(
         policy_iroh_config(device_id, peer.secret.clone(), peer_addr),
     ));
-    let relay = RelaySync::with_transport(
+    let relay = RelaySync::with_iroh_transport(
         peer.storage.clone() as Arc<dyn SyncRuntimeStorage>,
         policy_relay_config(device_id),
         transport.clone(),
-    );
+    )
+    .expect("Iroh RelaySync construction");
     (transport, relay)
 }

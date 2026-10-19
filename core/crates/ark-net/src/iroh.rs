@@ -88,6 +88,7 @@ include!("iroh_transport_impl.rs");
 include!("iroh_connections.rs");
 include!("iroh_relay_watch.rs");
 include!("iroh_sync_impl.rs");
+include!("iroh_peer_session_control.rs");
 include!("iroh_message_helpers.rs");
 include!("iroh_write_frame.rs");
 include!("iroh_read_frame.rs");
