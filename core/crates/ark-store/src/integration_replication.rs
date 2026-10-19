@@ -10,6 +10,9 @@ pub use credentials::{
     load_latest_integration_credential_envelope_record, load_max_integration_credential_generation,
     upsert_integration_credential_envelope_record,
 };
-pub use grants::{load_integration_node_grant, upsert_integration_node_grant_record};
+pub use grants::{
+    load_integration_node_grant, node_grants_match_current_authorization,
+    upsert_integration_node_grant_record,
+};
 pub use leases::{load_integration_refresh_lease, upsert_integration_refresh_lease_record};
 pub use nodes::{load_authorized_node, upsert_authorized_node_record};

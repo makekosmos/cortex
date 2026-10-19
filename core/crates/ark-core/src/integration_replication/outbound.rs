@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use rusqlite::{params, Connection};
+use rusqlite::Connection;
 
 use super::{IntegrationReplicationEntity, NodeStatus, SignedSyncEnvelope, VerifiedSyncEnvelope};
 
@@ -92,19 +92,12 @@ pub fn node_may_receive_integration_frames(
     if node.status != NodeStatus::Active {
         return Ok(false);
     }
-    let epoch = i64::try_from(node.grant_epoch)
-        .map_err(|_| "node grant epoch exceeds SQLite INTEGER range".to_string())?;
-    let (total, invalid): (i64, i64) = conn
-        .query_row(
-            "SELECT COUNT(*), COALESCE(SUM(CASE
-                WHEN status = 'active' AND grant_epoch = ?2 AND node_encryption_key = ?3
-                THEN 0 ELSE 1 END), 0)
-             FROM integration_node_grants WHERE node_id = ?1",
-            params![node_id, epoch, node.encryption_public_key],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .map_err(|error| error.to_string())?;
-    Ok(total > 0 && invalid == 0)
+    ark_store::integration_replication::node_grants_match_current_authorization(
+        conn,
+        node_id,
+        node.grant_epoch,
+        &node.encryption_public_key,
+    )
 }
 
 fn integration_ids(frame: &VerifiedSyncEnvelope) -> BTreeSet<&str> {

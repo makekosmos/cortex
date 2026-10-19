@@ -97,6 +97,29 @@ pub fn load_integration_node_grant(
     Ok(Some(record))
 }
 
+/// Returns whether a node has at least one grant and every persisted grant is
+/// active and bound to the node's current key and grant epoch.
+pub fn node_grants_match_current_authorization(
+    connection: &Connection,
+    node_id: &str,
+    grant_epoch: u64,
+    encryption_key: &str,
+) -> Result<bool, String> {
+    let grant_epoch = i64::try_from(grant_epoch)
+        .map_err(|_| "grant_epoch exceeds SQLite INTEGER range".to_owned())?;
+    let (total, invalid): (i64, i64) = connection
+        .query_row(
+            "SELECT COUNT(*), COALESCE(SUM(CASE
+                WHEN status = 'active' AND grant_epoch = ?2 AND node_encryption_key = ?3
+                THEN 0 ELSE 1 END), 0)
+             FROM integration_node_grants WHERE node_id = ?1",
+            params![node_id, grant_epoch, encryption_key],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(total > 0 && invalid == 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -175,6 +198,54 @@ mod tests {
             upsert_integration_node_grant_record(&connection, &overflow)
                 .expect_err("SQLite integer overflow is rejected"),
             "grant_epoch exceeds SQLite INTEGER range"
+        );
+    }
+
+    #[test]
+    fn node_grant_authorization_requires_nonempty_current_active_grants() {
+        let connection = Connection::open_in_memory().expect("fixture database opens");
+        connection
+            .execute_batch(crate::schema::CREATE_TABLES)
+            .expect("grant schema applies");
+
+        assert!(
+            !node_grants_match_current_authorization(&connection, "device", 2, "key")
+                .expect("empty grant set is checked")
+        );
+        connection
+            .execute(
+                "INSERT INTO integration_node_grants
+                 (integration_id, node_id, node_encryption_key, grant_epoch, status,
+                  authorized_at, revoked_at, revision, hlc)
+                 VALUES ('app', 'device', 'key', 2, 'active', 'now', NULL, 1, 'hlc')",
+                [],
+            )
+            .expect("current grant inserts");
+        assert!(
+            node_grants_match_current_authorization(&connection, "device", 2, "key")
+                .expect("current grant set is checked")
+        );
+
+        connection
+            .execute(
+                "INSERT INTO integration_node_grants
+                 (integration_id, node_id, node_encryption_key, grant_epoch, status,
+                  authorized_at, revoked_at, revision, hlc)
+                 VALUES ('other-app', 'device', 'key', 2, 'revoked', 'then', 'now', 2, 'hlc2')",
+                [],
+            )
+            .expect("revoked grant inserts");
+        assert!(
+            !node_grants_match_current_authorization(&connection, "device", 2, "key")
+                .expect("revoked grant invalidates node-level authorization")
+        );
+        assert!(
+            !node_grants_match_current_authorization(&connection, "device", 3, "key")
+                .expect("stale epoch invalidates node-level authorization")
+        );
+        assert!(
+            !node_grants_match_current_authorization(&connection, "device", 2, "new-key")
+                .expect("stale key invalidates node-level authorization")
         );
     }
 }
