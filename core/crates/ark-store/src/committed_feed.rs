@@ -1,4 +1,118 @@
-use rusqlite::{Connection, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension};
+use sha2::{Digest, Sha256};
+
+const MAX_PENDING_INBOX_ROWS: i64 = 10_000;
+const MAX_PENDING_INBOX_BYTES: i64 = 32 * 1024 * 1024;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InboxState {
+    Received,
+    Pending,
+    Applied,
+    Rejected,
+}
+
+impl InboxState {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Received => "received",
+            Self::Pending => "pending",
+            Self::Applied => "applied",
+            Self::Rejected => "rejected",
+        }
+    }
+
+    fn parse(value: &str) -> Result<Self, String> {
+        match value {
+            "received" => Ok(Self::Received),
+            "pending" => Ok(Self::Pending),
+            "applied" => Ok(Self::Applied),
+            "rejected" => Ok(Self::Rejected),
+            _ => Err(format!("invalid durable inbox state: {value}")),
+        }
+    }
+}
+
+/// Persist an entity receipt before application in the caller's transaction.
+/// A retry with the same identity but different contents is rejected.
+pub fn receive_inbox_payload(
+    conn: &Connection,
+    peer_device_id: &str,
+    message_id: &str,
+    payload_json: &str,
+) -> Result<InboxState, String> {
+    let payload_bytes = payload_json.len();
+    let digest = format!("{:x}", Sha256::digest(payload_json.as_bytes()));
+    if let Some((stored_digest, state)) = conn
+        .query_row(
+            "SELECT payload_sha256, state FROM ark_sync_inbox
+             WHERE peer_device_id = ?1 AND message_id = ?2",
+            params![peer_device_id, message_id],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?
+    {
+        if stored_digest != digest {
+            return Err("sync_inbox_identity_digest_mismatch".into());
+        }
+        return InboxState::parse(&state);
+    }
+    let (row_count, payload_total): (i64, i64) = conn
+        .query_row(
+            "SELECT COUNT(*), COALESCE(SUM(payload_bytes), 0) FROM ark_sync_inbox
+             WHERE state IN ('received', 'pending')",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|error| error.to_string())?;
+    if row_count >= MAX_PENDING_INBOX_ROWS
+        || payload_total.saturating_add(payload_bytes as i64) > MAX_PENDING_INBOX_BYTES
+    {
+        return Err("sync_inbox_capacity_exceeded".into());
+    }
+    conn.execute(
+        "INSERT INTO ark_sync_inbox(
+            peer_device_id, message_id, payload_sha256, payload_bytes, payload_json, state
+         ) VALUES (?1, ?2, ?3, ?4, ?5, 'received')",
+        params![
+            peer_device_id,
+            message_id,
+            digest,
+            payload_bytes as i64,
+            payload_json
+        ],
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(InboxState::Received)
+}
+
+pub fn set_inbox_state(
+    conn: &Connection,
+    peer_device_id: &str,
+    message_id: &str,
+    state: InboxState,
+) -> Result<(), String> {
+    let changed = conn
+        .execute(
+            concat!(
+                "UPDATE ark_sync_inbox SET state = ?3, ",
+                "applied_at = CASE WHEN ?3 = 'applied' ",
+                "THEN strftime('%Y-%m-%dT%H:%M:%fZ', 'now') ELSE applied_at END, ",
+                "payload_json = CASE WHEN ?3 IN ('applied', 'rejected') ",
+                "THEN '' ELSE payload_json END, ",
+                "payload_bytes = CASE WHEN ?3 IN ('applied', 'rejected') ",
+                "THEN 0 ELSE payload_bytes END ",
+                "WHERE peer_device_id = ?1 AND message_id = ?2"
+            ),
+            params![peer_device_id, message_id, state.as_str()],
+        )
+        .map_err(|error| error.to_string())?;
+    if changed != 1 {
+        return Err("sync_inbox_receipt_not_found".into());
+    }
+    Ok(())
+}
 
 pub fn append_committed_change(
     connection: &Connection,
@@ -156,7 +270,10 @@ pub fn bootstrap_committed_feed_heads(conn: &Connection) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{bootstrap_committed_feed_heads, watermark};
+    use super::{
+        bootstrap_committed_feed_heads, receive_inbox_payload, set_inbox_state, watermark,
+        InboxState,
+    };
     use rusqlite::Connection;
 
     #[test]
@@ -238,5 +355,45 @@ mod tests {
 
         let connection = Connection::open(&path).expect("database reopens");
         assert_eq!(watermark(&connection).expect("watermark loads"), 2);
+    }
+
+    #[test]
+    fn inbox_receipt_is_idempotent_and_releases_payload_after_apply() {
+        let conn = Connection::open_in_memory().expect("database opens");
+        conn.execute_batch(crate::schema::CREATE_TABLES)
+            .expect("store schema initializes");
+
+        assert_eq!(
+            receive_inbox_payload(&conn, "peer-a", "object:a:r1", "{\"x\":1}")
+                .expect("inbox receipt persists"),
+            InboxState::Received
+        );
+        assert_eq!(
+            receive_inbox_payload(&conn, "peer-a", "object:a:r1", "{\"x\":1}")
+                .expect("identical retry reads receipt"),
+            InboxState::Received
+        );
+        assert_eq!(
+            receive_inbox_payload(&conn, "peer-a", "object:a:r1", "{\"x\":2}")
+                .expect_err("changed contents cannot reuse identity"),
+            "sync_inbox_identity_digest_mismatch"
+        );
+
+        set_inbox_state(&conn, "peer-a", "object:a:r1", InboxState::Applied)
+            .expect("receipt advances after application");
+        assert_eq!(
+            receive_inbox_payload(&conn, "peer-a", "object:a:r1", "{\"x\":1}")
+                .expect("applied receipt survives retry"),
+            InboxState::Applied
+        );
+        let (payload, payload_bytes): (String, i64) = conn
+            .query_row(
+                "SELECT payload_json, payload_bytes FROM ark_sync_inbox
+                 WHERE peer_device_id = 'peer-a' AND message_id = 'object:a:r1'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("applied receipt remains durable");
+        assert_eq!((payload.as_str(), payload_bytes), ("", 0));
     }
 }

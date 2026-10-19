@@ -273,24 +273,3 @@ pub fn acknowledge_outbound(
     .map_err(|error| error.to_string())?;
     load_outbound_progress(conn, peer_device_id)
 }
-
-impl InboxState {
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::Received => "received",
-            Self::Pending => "pending",
-            Self::Applied => "applied",
-            Self::Rejected => "rejected",
-        }
-    }
-
-    fn parse(value: &str) -> Result<Self, String> {
-        match value {
-            "received" => Ok(Self::Received),
-            "pending" => Ok(Self::Pending),
-            "applied" => Ok(Self::Applied),
-            "rejected" => Ok(Self::Rejected),
-            _ => Err(format!("invalid durable inbox state: {value}")),
-        }
-    }
-}
