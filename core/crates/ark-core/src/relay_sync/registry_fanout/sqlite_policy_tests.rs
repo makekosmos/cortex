@@ -306,10 +306,11 @@ async fn write_note(peer: &ActorPeer, id: &str, title: &str) {
         updated_at: "2026-10-17T00:00:00.000Z".into(),
         deleted_at: None,
     };
-    let mut data = serde_json::to_value(object).expect("serialize note fixture");
-    let serde_json::Value::Object(ref mut data) = data else {
-        unreachable!("ArkObject serializes as an object")
-    };
+    let mut data = serde_json::to_value(object)
+        .expect("serialize note fixture")
+        .as_object()
+        .cloned()
+        .expect("ArkObject serializes as an object");
     data.remove("id");
     peer.storage
         .apply_entity(&SyncEntity {
