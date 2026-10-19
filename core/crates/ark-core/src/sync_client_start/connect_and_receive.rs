@@ -1,6 +1,10 @@
     {
         match result {
-            Some((ws_stream, winning_addr)) => {
+            Ok(Some(transport)) => {
+                let ark_sync::client_session::ConnectedClientTransport {
+                    io: mut session_io,
+                    selected_address: winning_addr,
+                } = transport;
                 eprintln!(
                     "{TAG} Connected to {} via {winning_addr}",
                     peer_record.device_name
@@ -13,14 +17,6 @@
 
                 reconnect_delay = RECONNECT_BASE_MS;
                 *feed_in_flight.lock().await = None; // Replay the durable cursor after reconnect.
-
-                let mut session_io = match ark_net::websocket::session_io(ws_stream) {
-                    Ok(session_io) => session_io,
-                    Err(error) => {
-                        eprintln!("{TAG} could not start peer session transport: {error:?}");
-                        continue;
-                    }
-                };
 
                 let client_hello = ark_sync::client_session::build_client_hello(
                     ark_sync::client_session::ClientHelloRequest {
@@ -453,8 +449,11 @@
                     }
                 }
             }
-            None => {
+            Ok(None) => {
                 eprintln!("{TAG} All addresses failed for {}", peer_record.device_name);
+            }
+            Err(error) => {
+                eprintln!("{TAG} could not start peer session transport: {error:?}");
             }
         }
 

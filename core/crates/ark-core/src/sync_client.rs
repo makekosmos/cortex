@@ -10,7 +10,7 @@ use crate::integration_replication::SignedSyncEnvelope;
 use crate::replication_storage::SyncRuntimeStorage;
 use crate::task_set::{abort_and_join, join_all, track_task};
 use ark_sync::protocol::*;
-use ark_sync::session_io::SessionIoSender;
+use ark_sync::{client_session::DirectClientConnector, session_io::SessionIoSender};
 
 #[path = "sync_client/committed_feed.rs"]
 mod committed_feed;
@@ -185,6 +185,7 @@ impl ClientMessageSender {
 
 pub struct SyncClient {
     storage: Arc<dyn SyncRuntimeStorage>,
+    connector: Arc<dyn DirectClientConnector>,
     peer: Arc<RwLock<PeerRecord>>,
     device_id: String,
     device_name: String,
@@ -221,6 +222,7 @@ impl SyncClient {
     ) -> Self {
         Self {
             storage,
+            connector: Arc::new(ark_net::websocket::DirectClientConnector),
             peer: Arc::new(RwLock::new(peer)),
             device_id,
             device_name,

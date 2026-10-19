@@ -37,8 +37,7 @@
                 continue;
             }
 
-            // Race connections to all addresses
-            let result = ark_net::websocket::race_connect(&addresses).await;
+            let result = connector.connect(&addresses).await;
 
             include!("connect_and_receive.rs");
 
