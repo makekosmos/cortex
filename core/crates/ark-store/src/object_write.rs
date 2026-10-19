@@ -139,3 +139,51 @@ impl ObjectWriteSession for SqliteObjectWriteSession<'_> {
         crate::object_write_receipts::insert_receipt(self.connection, receipt)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::prepare_object;
+    use ark_domain::types::ArkObjectWrite;
+    use rusqlite::Connection;
+    use serde_json::json;
+
+    #[test]
+    fn prepare_object_resolves_legacy_alias_without_core() {
+        let connection = Connection::open_in_memory().expect("database opens");
+        connection
+            .execute_batch(concat!(
+                "CREATE TABLE object_types(id TEXT PRIMARY KEY, ",
+                "current_version TEXT NOT NULL); ",
+                "CREATE TABLE object_type_aliases(alias TEXT PRIMARY KEY, ",
+                "canonical_type_id TEXT NOT NULL); ",
+                "CREATE TABLE object_type_versions(type_id TEXT NOT NULL, ",
+                "version TEXT NOT NULL); ",
+                "INSERT INTO object_types(id, current_version) VALUES ",
+                "('note.canonical', '1.2.0'); ",
+                "INSERT INTO object_type_aliases(alias, canonical_type_id) ",
+                "VALUES ('note.legacy', 'note.canonical'); ",
+                "INSERT INTO object_type_versions(type_id, version) VALUES ",
+                "('note.canonical', '1.2.0');"
+            ))
+            .expect("type registry fixture is created");
+
+        let object = prepare_object(
+            &connection,
+            ArkObjectWrite {
+                id: "note-1".into(),
+                type_id: "note.legacy".into(),
+                type_version: Some("0.0.0-legacy".into()),
+                title: "A note".into(),
+                content_json: json!({}),
+                props_json: json!({}),
+                created_at: "2026-10-19T00:00:00Z".into(),
+                updated_at: "2026-10-19T00:00:00Z".into(),
+                deleted_at: None,
+            },
+        )
+        .expect("the Store resolves and prepares the legacy write");
+
+        assert_eq!(object.type_id, "note.canonical");
+        assert_eq!(object.type_version, "1.2.0");
+    }
+}
