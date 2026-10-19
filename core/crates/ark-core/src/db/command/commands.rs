@@ -51,7 +51,7 @@ pub(crate) use integration_replication::{
 pub(crate) use legacy_mutation::{
     LegacyDeleteCommand, LegacyGraphWriteCommand, TrackedAppDeleteCommand, TrackedAppUpsertCommand,
 };
-pub(crate) use object_mutation::{CanonicalGameUpsertCommand, LocalBookCoverCommand};
+pub(crate) use object_mutation::CanonicalGameUpsertCommand;
 pub(crate) use object_read::ObjectReadQuery;
 pub(crate) use sync_mutation::{
     ApplyAuthenticatedSyncEntityCommand, ApplySyncEntityCommand, CommittedFeedProgress,

@@ -167,17 +167,15 @@ pub(super) async fn canonical_set_book_cover(
     let book_id_for_event = book_id.clone();
     let device_id = local_write_device_id(device_id);
     let changed = get_db_handle(state)?
-        .submit(
+        .submit_local_book_cover(
             db::CommandContext::engine(),
-            db::LocalBookCoverCommand::new(
-                crate::application::object_mutation::LocalBookCoverWrite {
-                    book_id: book_id.clone(),
-                    source_ref,
-                    existing_image_id,
-                    alt_text,
-                    device_id,
-                },
-            ),
+            ark_application::book_cover::LocalBookCoverWrite {
+                book_id: book_id.clone(),
+                source_ref,
+                existing_image_id,
+                alt_text,
+                device_id,
+            },
         )
         .await
         .map_err(|error| error.to_string())?;

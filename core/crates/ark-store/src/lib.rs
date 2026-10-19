@@ -1,3 +1,4 @@
+pub mod book_cover;
 pub mod canonical_migrations;
 pub mod committed_feed;
 pub mod data_platform;

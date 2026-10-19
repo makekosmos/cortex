@@ -13,6 +13,10 @@
 - [x] Move object upsert/delete request and commit types to `ark-application`; preserve Core's existing internal paths as re-exports during command migration.
 - [x] Verify the contract move with `cargo check -p ark-application -p ark-core --all-targets` and the canonical task, object-revision, and Agenda contract tests (16/16).
 - [x] Move local upsert type and stale-snapshot decisions into a pure Application function; verify both outcomes with focused Application tests and existing Core regressions.
+- [x] Move local object deletion into a Store-owned immediate transaction; preserve task-delete routing and operation receipt replay.
+- [x] Move local object upsert into a Store-owned immediate transaction; preserve typed conflicts and operation receipt replay.
+- [x] Move book-cover inputs and pure planning to Application, then apply links, revisions, vectors, and tombstones in one Store-owned immediate transaction.
+- [x] Verify cover no-op, replacement, removal, invalid source, wrong target, and rollback behavior through Application, Store, Core RPC, and facade integration tests.
 - [ ] Scrap: if implementation requires repeated Core/Store ownership workarounds, re-ground and replace the sketch instead of patching around it.
 
 ## Arena
@@ -31,3 +35,9 @@
 - Keeps canonical validation, sync policy, and conflict decisions outside Store while giving Store complete persistence operations.
 - Uses types and crate dependencies that compile without an `ark-core` dependency cycle.
 - Preserves Engine request/response and sync wire behavior with user-visible regression tests.
+
+## Implementation reconciliation
+
+Local object deletion, local object upsert, and book-cover changes now enter through Core actor tasks and open their immediate transaction in `ark-store`. Core retains admission, cancellation, settlement, Engine error mapping, and post-commit events. Application owns object-write and book-cover inputs, outcomes, and pure conflict or cover planning. The Core session adapter remains only for canonical-game upsert, so the object-mutation cutover is still open.
+
+The Store book-cover operation reads the book, selected image, and existing cover links inside the transaction. It applies link changes, object and link revisions, object-sync-version rows, and tombstones before commit. Verification passed: 2 Application book-cover tests, 5 canonical-facade integration tests, the Core RPC rollback test, all 90 Store tests, and the affected-crate check.

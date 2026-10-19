@@ -18,6 +18,7 @@
 - [x] Close sync-port capability and typed-outcome findings. Accepted design: `.audit/ark-transport-capabilities.design.md`; implementation is in commit `0976f016`, with 757/757 ark-core/ark-net/ark-sync tests passing and the pre-commit gate passing.
 - [x] Move the legacy task rewrite lifecycle out of Core. `ark-domain` owns pure task mapping; `ark-store` owns loading, backup and the single update/version transaction; actor startup calls the Store operation. Focused migration, actor cutover and migration-to-restore tests pass; all 90 `ark-store` tests pass.
 - [x] Move the task mutation SQLite adapter and local causal commit algorithm into Store. Core keeps command admission and actor scheduling, and passes the existing immediate transaction through the Application session contract. The Core adapter and duplicate local commit implementation were deleted.
+- [x] Move local object delete, local object upsert, and book-cover persistence to Store-owned immediate transactions. Core keeps actor admission and settlement; Application owns the book-cover plan. Focused Application, Core RPC, facade, and Store tests pass.
 - [ ] Document supported restore behavior; keep physical power-loss limits explicit.
 - [ ] Finish remaining Core/Store/Sync/Net ownership boundaries while preserving one SQLite transaction and stable Engine/wire contracts.
 - [ ] Reconcile and update architecture/build/recovery documentation from actual final behavior.

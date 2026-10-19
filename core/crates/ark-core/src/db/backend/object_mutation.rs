@@ -1,5 +1,4 @@
 use crate::application::object_mutation::{ObjectMutationSession, ObjectRevisionKind};
-use crate::canonical_types::facades::BookCoverMutation;
 use crate::canonical_types::game::{GameMutationResult, GameUpsertCommand};
 use crate::types::ArkObject;
 use rusqlite::Transaction;
@@ -69,24 +68,5 @@ impl ObjectMutationSession for SqliteObjectMutationSession<'_, '_> {
         fallback_device_id: &str,
     ) -> Result<GameMutationResult, String> {
         crate::canonical_types::game::upsert_game(self.transaction, command, fallback_device_id)
-    }
-
-    fn set_book_cover(
-        &self,
-        book_id: &str,
-        source_ref: Option<&str>,
-        existing_image_id: Option<&str>,
-        alt_text: &str,
-        device_id: &str,
-    ) -> Result<BookCoverMutation, String> {
-        crate::canonical_types::facades::set_book_cover(
-            self.transaction,
-            book_id,
-            source_ref,
-            existing_image_id,
-            alt_text,
-            device_id,
-        )
-        .map_err(|error| error.to_string())
     }
 }

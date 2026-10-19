@@ -1,19 +1,15 @@
 use crate::canonical_types::definitions::canonical_type_registrations;
 use crate::canonical_types::validation::validate_canonical;
-use crate::hlc::HLC;
-use crate::types::{ArkObject, ObjectLink};
+use crate::types::ArkObject;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 
 // Engine-owned typed canonical read/write facades.
 
 pub(crate) const IMAGE: &str = "com.kosmos.image";
-pub(crate) const BOOK: &str = "com.kosmos.book";
 pub(crate) const VERSION: &str = "1.0.0";
-pub(crate) const COVER: &str = "cover-image";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AssetSourceError {
@@ -187,29 +183,4 @@ pub fn asset_sources(
         (&a.object_id, &a.token, &a.source_kind).cmp(&(&b.object_id, &b.token, &b.source_kind))
     });
     Ok(out)
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct BookCoverMutation {
-    pub changed: bool,
-    pub book: Option<ArkObject>,
-    pub image: Option<ArkObject>,
-    pub links: Vec<ObjectLink>,
-    pub deleted_link_ids: Vec<String>,
-}
-
-fn digest_id(prefix: &str, bytes: &[u8]) -> String {
-    let mut h = Sha256::new();
-    h.update(bytes);
-    format!("{prefix}{:x}", h.finalize())
-}
-pub(crate) fn canonical_link_id(book_id: &str, image_id: &str) -> String {
-    digest_id(
-        "lnk*",
-        format!("kosmos-link-v1\0{book_id}\0{COVER}\0{image_id}").as_bytes(),
-    )
-}
-
-pub(crate) fn now(device: &str) -> String {
-    HLC::now(device).wall_time
 }

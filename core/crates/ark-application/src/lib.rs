@@ -1,3 +1,4 @@
+pub mod book_cover;
 pub mod data_volume;
 pub mod external_ref;
 pub mod load_all_data;

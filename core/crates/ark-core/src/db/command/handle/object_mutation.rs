@@ -1,7 +1,48 @@
-use super::super::executor::actor::{LocalObjectDeleteTask, LocalObjectUpsertTask, WriterTask};
+use super::super::executor::actor::{
+    LocalBookCoverTask, LocalObjectDeleteTask, LocalObjectUpsertTask, WriterTask,
+};
 use super::*;
 
 impl DbHandle {
+    pub(crate) async fn submit_local_book_cover(
+        &self,
+        context: CommandContext,
+        write: ark_application::book_cover::LocalBookCoverWrite,
+    ) -> Result<bool, DbError> {
+        if context.class != CommandClass::Interactive {
+            return Err(DbError::Invalid("database command class mismatch".into()));
+        }
+        context.require_engine()?;
+        #[derive(serde::Serialize)]
+        struct BookCoverCommand<'a> {
+            write: &'a ark_application::book_cover::LocalBookCoverWrite,
+        }
+        let weight = serde_json::to_vec(&BookCoverCommand { write: &write })
+            .map_or(usize::MAX, |bytes| bytes.len());
+        if weight == 0 || weight > super::super::MAX_COMMAND_BYTES {
+            return Err(DbError::TooLarge);
+        }
+
+        match &self.backend {
+            HandleBackend::Actor(actor) => {
+                let (reply, response) = tokio::sync::oneshot::channel();
+                let task: Box<dyn WriterTask> = Box::new(LocalBookCoverTask { write, reply });
+                actor.admit(context.class, &context.source, weight, task)?;
+                response.await.unwrap_or(Err(DbError::OutcomeUnknown))
+            }
+            #[cfg(debug_assertions)]
+            HandleBackend::Test(connection) => {
+                let admission = self
+                    .admission
+                    .try_acquire(context.class, &context.source, weight)
+                    .map_err(map_admission_error)?;
+                spawn_test_local_book_cover(Arc::clone(connection), write, admission)
+                    .await
+                    .map_err(|error| DbError::Storage(error.to_string()))?
+            }
+        }
+    }
+
     pub(crate) async fn submit_local_object_upsert(
         &self,
         context: CommandContext,
@@ -162,6 +203,29 @@ impl DbHandle {
             }
         }
     }
+}
+
+#[cfg(debug_assertions)]
+fn spawn_test_local_book_cover(
+    connection: Arc<Mutex<Connection>>,
+    write: ark_application::book_cover::LocalBookCoverWrite,
+    _admission: executor::AdmissionPermit,
+) -> tokio::task::JoinHandle<Result<bool, DbError>> {
+    tokio::task::spawn_blocking(move || {
+        let _admission = _admission;
+        let mut connection = connection.lock().unwrap_or_else(|error| error.into_inner());
+        ark_store::book_cover::apply_local_book_cover(&mut connection, write).map_err(|failure| {
+            match failure {
+                ark_store::writer::TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+                ark_store::writer::TransactionFailure::Operation(error) => {
+                    DbError::from_application_error(error.to_string())
+                }
+                ark_store::writer::TransactionFailure::Commit(error) => {
+                    DbError::CommitFailed(error.to_string())
+                }
+            }
+        })
+    })
 }
 
 #[cfg(debug_assertions)]

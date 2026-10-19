@@ -87,6 +87,39 @@ pub(in crate::db::command) struct LocalObjectDeleteTask {
     >,
 }
 
+pub(in crate::db::command) struct LocalBookCoverTask {
+    pub write: ark_application::book_cover::LocalBookCoverWrite,
+    pub reply: oneshot::Sender<Result<bool, DbError>>,
+}
+
+impl WriterTask for LocalBookCoverTask {
+    fn run(
+        self: Box<Self>,
+        writer: &mut SqliteWriter,
+        on_error: &mut dyn FnMut(&DbError),
+    ) -> (Result<(), DbError>, Publish) {
+        let Self { write, reply } = *self;
+        let result = writer
+            .apply_local_book_cover(write)
+            .map_err(|failure| match failure {
+                TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+                TransactionFailure::Operation(error) => {
+                    DbError::from_application_error(error.to_string())
+                }
+                TransactionFailure::Commit(error) => DbError::CommitFailed(error.to_string()),
+            });
+        settle(result, reply, on_error)
+    }
+
+    fn cancel_before_start(self: Box<Self>) {
+        let _ = self.reply.send(Err(DbError::CancelledBeforeStart));
+    }
+
+    fn receiver_closed(&self) -> bool {
+        self.reply.is_closed()
+    }
+}
+
 impl WriterTask for LocalObjectDeleteTask {
     fn run(
         self: Box<Self>,

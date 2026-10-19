@@ -79,6 +79,15 @@ impl SqliteWriter {
             )
         })
     }
+
+    pub fn apply_local_book_cover(
+        &mut self,
+        write: ark_application::book_cover::LocalBookCoverWrite,
+    ) -> Result<bool, TransactionFailure<crate::book_cover::BookCoverOperationError>> {
+        self.with_connection_mut(|connection| {
+            crate::book_cover::apply_local_book_cover(connection, write)
+        })
+    }
 }
 
 #[cfg(test)]

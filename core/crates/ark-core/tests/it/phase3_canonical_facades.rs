@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used)]
-use ark_core::canonical_types::facades::{asset_sources, set_book_cover, AssetSourceError};
+use ark_core::canonical_types::facades::{asset_sources, AssetSourceError};
 use ark_core::db;
 use ark_core::types::ArkObject;
 use rusqlite::Connection;
@@ -52,6 +52,26 @@ fn book(id: &str) -> ArkObject {
         deleted_at: None,
     }
 }
+fn set_book_cover(
+    conn: &mut Connection,
+    book_id: &str,
+    source_ref: Option<&str>,
+    existing_image_id: Option<&str>,
+) -> Result<
+    bool,
+    ark_store::writer::TransactionFailure<ark_store::book_cover::BookCoverOperationError>,
+> {
+    ark_store::book_cover::apply_local_book_cover(
+        conn,
+        ark_application::book_cover::LocalBookCoverWrite {
+            book_id: book_id.into(),
+            source_ref: source_ref.map(str::to_owned),
+            existing_image_id: existing_image_id.map(str::to_owned),
+            alt_text: String::new(),
+            device_id: "device".into(),
+        },
+    )
+}
 #[test]
 fn asset_sources_prefers_local_and_orders_rich_text_without_legacy_props() {
     let conn = setup();
@@ -99,17 +119,47 @@ fn asset_sources_rejects_bound_and_wrong_inputs() {
 }
 #[test]
 fn set_book_cover_links_existing_image_and_removes_only_link() {
-    let conn = setup();
+    let mut conn = setup();
     ark_store::objects::upsert_object_compat(&conn, &book("book-1")).unwrap();
     ark_store::objects::upsert_object_compat(&conn, &image("image-1")).unwrap();
-    let first = set_book_cover(&conn, "book-1", None, Some("image-1"), "", "device").unwrap();
-    assert!(first.changed);
-    assert_eq!(first.links.len(), 1);
-    assert!(first.image.is_some());
-    let second = set_book_cover(&conn, "book-1", None, Some("image-1"), "", "device").unwrap();
-    assert!(!second.changed);
-    let removed = set_book_cover(&conn, "book-1", None, None, "", "device").unwrap();
-    assert!(removed.changed);
+    ark_store::sync_tombstones::record(
+        &conn,
+        "object",
+        "book-1",
+        Some("com.kosmos.book"),
+        "2020-01-01T00:00:00.000Z:000000:device",
+    )
+    .unwrap();
+    ark_store::sync_tombstones::record(
+        &conn,
+        "object",
+        "image-1",
+        Some("com.kosmos.image"),
+        "2020-01-01T00:00:00.000Z:000000:device",
+    )
+    .unwrap();
+    assert!(set_book_cover(&mut conn, "book-1", None, Some("image-1")).unwrap());
+    let link_id = ark_store::objects::list_object_links(&conn).unwrap()[0]
+        .id
+        .clone();
+    assert_eq!(
+        ark_store::objects::list_object_links(&conn).unwrap().len(),
+        1
+    );
+    assert_eq!(
+        ark_store::sync_tombstones::load_all(&conn)
+            .unwrap()
+            .iter()
+            .filter(|entity| entity.id == "book-1" || entity.id == "image-1")
+            .count(),
+        0
+    );
+    assert!(!set_book_cover(&mut conn, "book-1", None, Some("image-1")).unwrap());
+    assert!(set_book_cover(&mut conn, "book-1", None, None).unwrap());
+    assert!(ark_store::sync_tombstones::load_all(&conn)
+        .unwrap()
+        .iter()
+        .any(|entity| entity.id == link_id));
     assert!(ark_store::objects::list_object_links(&conn)
         .unwrap()
         .is_empty());
@@ -127,21 +177,24 @@ fn set_book_cover_links_existing_image_and_removes_only_link() {
 }
 #[test]
 fn set_book_cover_rejects_source_without_mutation() {
-    let conn = setup();
+    let mut conn = setup();
     ark_store::objects::upsert_object_compat(&conn, &book("book-1")).unwrap();
     let before: i64 = conn
         .query_row("SELECT COUNT(*) FROM object_links", [], |r| r.get(0))
         .unwrap();
     let err = set_book_cover(
-        &conn,
+        &mut conn,
         "book-1",
         Some("https://example.invalid/cover"),
         None,
-        "",
-        "d",
     )
     .unwrap_err();
-    assert_eq!(err.code, "source_requires_existing_image");
+    assert!(matches!(
+        err,
+        ark_store::writer::TransactionFailure::Operation(
+            ark_store::book_cover::BookCoverOperationError::Invalid(ref error)
+        ) if error.code == "source_requires_existing_image"
+    ));
     let after: i64 = conn
         .query_row("SELECT COUNT(*) FROM object_links", [], |r| r.get(0))
         .unwrap();
@@ -149,11 +202,16 @@ fn set_book_cover_rejects_source_without_mutation() {
 }
 #[test]
 fn set_book_cover_requires_typed_image_target() {
-    let conn = setup();
+    let mut conn = setup();
     ark_store::objects::upsert_object_compat(&conn, &book("book-1")).unwrap();
     ark_store::objects::upsert_object_compat(&conn, &book("not-image")).unwrap();
-    let err = set_book_cover(&conn, "book-1", None, Some("not-image"), "", "d").unwrap_err();
-    assert_eq!(err.code, "wrong_image_type");
+    let err = set_book_cover(&mut conn, "book-1", None, Some("not-image")).unwrap_err();
+    assert!(matches!(
+        err,
+        ark_store::writer::TransactionFailure::Operation(
+            ark_store::book_cover::BookCoverOperationError::Invalid(ref error)
+        ) if error.code == "wrong_image_type"
+    ));
     assert_eq!(
         conn.query_row::<i64, _, _>("SELECT COUNT(*) FROM object_links", [], |r| r.get(0))
             .unwrap(),
