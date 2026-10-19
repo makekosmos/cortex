@@ -12,7 +12,7 @@ function lines(count) {
   return Array.from({ length: count }, (_, index) => `// line ${index + 1}`).join("\n");
 }
 
-async function runFixture(files, partBaseline) {
+async function runFixture(files) {
   const root = await mkdtemp(path.join(os.tmpdir(), "cortex-source-size-"));
   try {
     for (const [relative, content] of Object.entries(files)) {
@@ -20,13 +20,7 @@ async function runFixture(files, partBaseline) {
       await mkdir(path.dirname(target), { recursive: true });
       await writeFile(target, content, "utf8");
     }
-    const args = [checker, "--root", root];
-    if (partBaseline !== undefined) {
-      const baseline = path.join(root, "part-baseline.json");
-      await writeFile(baseline, JSON.stringify(partBaseline), "utf8");
-      args.push("--part-baseline", baseline);
-    }
-    return spawnSync(process.execPath, args, {
+    return spawnSync(process.execPath, [checker, "--root", root], {
       encoding: "utf8",
       windowsHide: true,
     });
@@ -61,8 +55,9 @@ test("rejects a new source file above 500 lines", async () => {
   assert.match(result.stderr, /new-module\.mjs: 501 lines \(max 500\)/);
 });
 
-test("rejects new part-numbered source names with a semantic-module fix", async () => {
+test("rejects part-numbered paths even when a legacy baseline lists them", async () => {
   const result = await runFixture({
+    "scripts/source-part-baseline.json": JSON.stringify(["src/part01.rs"]),
     "src/part01.rs": lines(20),
     "src/tests_part02.rs": lines(20),
     "src/part3a.rs": lines(20),
@@ -71,10 +66,11 @@ test("rejects new part-numbered source names with a semantic-module fix", async 
     "src/part3.test.rs": lines(20),
     "src/part_01.rs": lines(20),
     "src/part-01.rs": lines(20),
+    "src/part4/helpers.rs": lines(20),
     "src/counterpart1.rs": lines(20),
   });
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /part-numbered source check failed \(8 file\(s\)\)/);
+  assert.match(result.stderr, /part-numbered source check failed \(9 file\(s\)\)/);
   assert.match(result.stderr, /move it into a semantic module/);
   assert.match(result.stderr, /src\/tests_part02\.rs/);
   assert.match(result.stderr, /src\/part3a\.rs/);
@@ -83,26 +79,17 @@ test("rejects new part-numbered source names with a semantic-module fix", async 
   assert.match(result.stderr, /src\/part3\.test\.rs/);
   assert.match(result.stderr, /src\/part_01\.rs/);
   assert.match(result.stderr, /src\/part-01\.rs/);
+  assert.match(result.stderr, /src\/part4\/helpers\.rs/);
   assert.doesNotMatch(result.stderr, /counterpart1\.rs/);
 });
 
-test("uses an empty baseline for standalone roots when no baseline file exists", async () => {
-  const accepted = await runFixture({ "src/semantic.rs": lines(20) });
-  assert.equal(accepted.status, 0, accepted.stderr);
-
-  const rejected = await runFixture({ "src/part01.rs": lines(20) });
-  assert.equal(rejected.status, 1);
-  assert.match(rejected.stderr, /part-numbered source check failed \(1 file\(s\)\)/);
-  assert.doesNotMatch(rejected.stderr, /stale part-numbered baseline entry/);
-});
-
-test("allows an existing part-numbered path only while it remains in the baseline", async () => {
-  const allowed = await runFixture({ "src/part01.rs": lines(20) }, ["src/part01.rs"]);
-  assert.equal(allowed.status, 0, allowed.stderr);
-
-  const deleted = await runFixture({}, ["src/part01.rs"]);
-  assert.equal(deleted.status, 1);
-  assert.match(deleted.stderr, /stale part-numbered baseline entry/);
+test("accepts normal semantic source paths", async () => {
+  const result = await runFixture({
+    "src/objects/write.rs": lines(20),
+    "src/objects/query.rs": lines(20),
+    "src/tests_objects.rs": lines(20),
+  });
+  assert.equal(result.status, 0, result.stderr);
 });
 
 test("retired Godfile paths cannot reuse an old exemption", async () => {

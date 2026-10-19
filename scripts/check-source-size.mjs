@@ -13,7 +13,6 @@ const ROOT =
 const WARN_LIMIT = 300;
 const FAIL_LIMIT = 500;
 const SOURCE_EXTENSIONS = new Set([".cjs", ".js", ".jsx", ".mjs", ".rs", ".ts", ".tsx", ".vue"]);
-const PART_BASELINE_PATH = path.join(ROOT, "scripts", "source-part-baseline.json");
 const GRANDFATHERED = new Set([
   // Files above FAIL_LIMIT that predate it. Additions here require an
   // intentional review; drop an entry once its file is back under the limit.
@@ -82,7 +81,7 @@ async function collect(dir, files = []) {
 }
 
 function partNumberedName(relative) {
-  return /(?:^|[._-])part[_-]?\d/i.test(path.basename(relative));
+  return relative.split("/").some((segment) => /(?:^|[._-])part[_-]?\d/i.test(segment));
 }
 
 function lineCount(text) {
@@ -93,32 +92,14 @@ function lineCount(text) {
 const violations = [];
 const warnings = [];
 const debt = [];
-const baselineIndex = process.argv.indexOf("--part-baseline");
-const baselinePath =
-  baselineIndex === -1 ? PART_BASELINE_PATH : path.resolve(process.argv[baselineIndex + 1]);
-let partBaselineContent;
-try {
-  partBaselineContent = await readFile(baselinePath, "utf8");
-} catch (error) {
-  if (baselineIndex === -1 && rootIndex !== -1 && error.code === "ENOENT") {
-    partBaselineContent = "[]";
-  } else {
-    throw error;
-  }
-}
-const partBaseline = new Set(JSON.parse(partBaselineContent));
-const presentPartPaths = new Set();
 const partViolations = [];
 for (const file of await collect(ROOT)) {
   const lines = lineCount(await readFile(file, "utf8"));
   const relative = path.relative(ROOT, file).replaceAll("\\", "/");
   if (partNumberedName(relative)) {
-    presentPartPaths.add(relative);
-    if (!partBaseline.has(relative)) {
-      partViolations.push(
-        `${relative}: mechanical part-numbered source filename; move it into a semantic module (for example, db/load.rs or db/load/records.rs)`,
-      );
-    }
+    partViolations.push(
+      `${relative}: mechanical part-numbered source filename; move it into a semantic module (for example, db/load.rs or db/load/records.rs)`,
+    );
   }
   if (lines > FAIL_LIMIT) {
     if (GRANDFATHERED.has(relative)) debt.push(`${relative}: ${lines} lines`);
@@ -126,16 +107,6 @@ for (const file of await collect(ROOT)) {
   } else if (lines > WARN_LIMIT) {
     warnings.push(`${relative}: ${lines} lines (aim for ${WARN_LIMIT})`);
   }
-}
-
-const stalePartPaths = [...partBaseline].filter((relative) => !presentPartPaths.has(relative));
-if (stalePartPaths.length) {
-  partViolations.push(
-    ...stalePartPaths.map(
-      (relative) =>
-        `${relative}: stale part-numbered baseline entry; remove it when the file is deleted or renamed`,
-    ),
-  );
 }
 
 if (violations.length || partViolations.length) {
