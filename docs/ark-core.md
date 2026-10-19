@@ -45,6 +45,35 @@ remaining boundaries, not claims that Core is already a storage-free facade.
   object rewrite needs an explicit approval per issue, a transaction and a
   `ark.db` backup taken before it runs (see `core/crates/ark-core/AGENTS.md`).
 
+## Durability and recovery
+
+`ark-store::open_db` configures SQLite WAL mode with `synchronous=FULL`, foreign
+keys enabled, and a 5-second busy timeout on every open. This is the configured
+SQLite durability contract; the project has not measured sudden power loss on
+every supported filesystem or device, so a successful commit is not a claim
+about hardware that lies about flush completion.
+
+Backups use SQLite's online backup API and are published only after the
+snapshot is validated. Restore stages and validates the source, compares its
+schema and committed-feed watermark with the live database, preserves the
+current device identity, and writes a durable recovery capsule and intent before
+applying. A snapshot older than committed sync history is refused before the
+live database changes. That refusal is the current recovery boundary: there is
+no recovery-epoch/resnapshot protocol yet. After apply, integrity and schema
+checks must pass; failures attempt rollback from the capsule. If rollback or
+journal completion cannot be proven, the database actor fails closed and
+startup recovery must complete before the service accepts requests again.
+
+The current SQLite failure evidence is in
+`core/crates/ark-core/src/db/command/tests/production_actor/failures.rs` and
+`.../lifecycle.rs`: `SQLITE_FULL`, commit failure, restore failure, and
+recovery-required restore all fail closed; panic rolls back and requires
+reopen. `core/crates/ark-core/src/service/tests/pairing_iroh/recovery_tests/`
+proves a stale restore is refused when an existing peer has observed a change,
+pending local usage and origin sequence remain intact, and later changes
+resynchronize after reconnect. These tests exercise SQLite failure paths and
+peer behavior; they do not simulate physical power loss.
+
 ## Crate ownership
 
 - `ark-domain` contains shared domain values and protocol-independent types.
