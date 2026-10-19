@@ -26,10 +26,11 @@ longer exists (`runtime/src/ark_host.rs` is the host wrapper).
 
 ## Data model and storage
 
-`ark-store` owns the SQLite writer connection, snapshots, and the schema and
-storage adapters already moved out of Core. Canonical type migration
-coordination and some SQL-backed runtime paths still live in `ark-core`; the
-SQLite boundary remains an active extraction.
+`ark-store` owns SQLite opening, the single writer connection, transaction
+execution, snapshots and restore, compatibility migrations, and the extracted
+query and persistence adapters. Canonical type migration coordination and
+some SQL-backed runtime paths still live in `ark-core`; those are explicit
+remaining boundaries, not claims that Core is already a storage-free facade.
 
 - Typed objects: `object_types` + `objects` (+ `object_links`), registered
   through `type_registry` / `TypeRegistration`.
@@ -48,13 +49,19 @@ SQLite boundary remains an active extraction.
 
 - `ark-domain` contains shared domain values and protocol-independent types.
 - `ark-application` defines capabilities used by runtime, sync, and storage.
-- `ark-store` owns SQLite opening, the writer actor, snapshots, and extracted
-  query and persistence adapters. Some SQL and migration work remains in Core.
-- `ark-sync` owns extracted sync policy and session decisions. Core still runs
-  parts of the direct client/server loops and applies their effects.
+- `ark-store` owns SQLite opening, the writer actor, snapshots, compatibility
+  migrations, and extracted query and persistence adapters. Canonical type
+  migration coordination and selected SQL-backed runtime paths remain in Core.
+- `ark-sync` owns direct server session admission, readiness, inbound message
+  classification, snapshot/feed/task-merge/live protocol coordination, ACK
+  validation, and session progress. Core supplies the application host for
+  storage, callbacks, peer-map projection, and service lifecycle. Direct client
+  orchestration is not yet fully transferred.
 - `ark-net` owns concrete WebSocket, relay, Iroh, and discovery transports.
-- `ark-core` exposes `ArkService` and composes these crates. It still owns
-  request handlers, migration coordination, and portions of sync orchestration.
+- `ark-core` exposes `ArkService`, adapts the Engine JSON contract, and
+  composes these crates. It still owns request handlers, migration
+  coordination, selected SQL-backed runtime paths, and direct client
+  orchestration.
 
 ## Tests
 

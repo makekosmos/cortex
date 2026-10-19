@@ -12,16 +12,17 @@ pub fn ensure_database_compatibility(conn: &Connection) -> Result<(), String> {
     Ok(())
 }
 
-fn ensure_task_merge_delivery_journal(conn: &Connection) -> Result<(), String> {
-    let columns = conn
-        .prepare("PRAGMA table_info(task_merge_journal)")
-        .map_err(|error| error.to_string())?
-        .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|error| error.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| error.to_string())?;
+fn has_column(conn: &Connection, table: &str, column: &str) -> Result<bool, String> {
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM pragma_table_info(?1) WHERE name = ?2)",
+        rusqlite::params![table, column],
+        |row| row.get(0),
+    )
+    .map_err(|error| error.to_string())
+}
 
-    if columns.iter().any(|column| column == "operation_id") {
+fn ensure_task_merge_delivery_journal(conn: &Connection) -> Result<(), String> {
+    if has_column(conn, "task_merge_journal", "operation_id")? {
         conn.execute_batch("SAVEPOINT ark_task_merge_delivery_journal")
             .map_err(|error| error.to_string())?;
         let migration = conn.execute_batch(
@@ -55,16 +56,7 @@ fn ensure_task_merge_delivery_journal(conn: &Connection) -> Result<(), String> {
 }
 
 fn ensure_device_registry_position(conn: &Connection) -> Result<(), String> {
-    let has_position = conn
-        .prepare("PRAGMA table_info(device_registry_events)")
-        .map_err(|error| error.to_string())?
-        .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|error| error.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| error.to_string())?
-        .iter()
-        .any(|name| name == "registry_position");
-    if !has_position {
+    if !has_column(conn, "device_registry_events", "registry_position")? {
         conn.execute_batch(
             "ALTER TABLE device_registry_events
              ADD COLUMN registry_position INTEGER NOT NULL DEFAULT 0",
@@ -93,16 +85,7 @@ fn ensure_device_registry_position(conn: &Connection) -> Result<(), String> {
 }
 
 fn ensure_device_registry_updated_hlc(conn: &Connection) -> Result<(), String> {
-    let has_updated_hlc = conn
-        .prepare("PRAGMA table_info(device_registry_projection)")
-        .map_err(|error| error.to_string())?
-        .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|error| error.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| error.to_string())?
-        .iter()
-        .any(|name| name == "updated_hlc");
-    if !has_updated_hlc {
+    if !has_column(conn, "device_registry_projection", "updated_hlc")? {
         conn.execute_batch("ALTER TABLE device_registry_projection ADD COLUMN updated_hlc TEXT")
             .map_err(|error| error.to_string())?;
     }
@@ -110,15 +93,7 @@ fn ensure_device_registry_updated_hlc(conn: &Connection) -> Result<(), String> {
 }
 
 fn ensure_authorized_node_transport_key(conn: &Connection) -> Result<(), String> {
-    let exists: bool = conn
-        .query_row(
-            "SELECT EXISTS(SELECT 1 FROM pragma_table_info('authorized_nodes')
-             WHERE name = 'transport_public_key')",
-            [],
-            |row| row.get(0),
-        )
-        .map_err(|error| error.to_string())?;
-    if !exists {
+    if !has_column(conn, "authorized_nodes", "transport_public_key")? {
         conn.execute(
             "ALTER TABLE authorized_nodes ADD COLUMN transport_public_key TEXT",
             [],
@@ -129,16 +104,11 @@ fn ensure_authorized_node_transport_key(conn: &Connection) -> Result<(), String>
 }
 
 fn ensure_integration_credential_fence_column(conn: &Connection) -> Result<(), String> {
-    let has_column = conn
-        .prepare("PRAGMA table_info(integration_credential_envelopes)")
-        .map_err(|e| e.to_string())?
-        .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?
-        .iter()
-        .any(|name| name == "refresh_fencing_token");
-    if !has_column {
+    if !has_column(
+        conn,
+        "integration_credential_envelopes",
+        "refresh_fencing_token",
+    )? {
         conn.execute_batch(
             "ALTER TABLE integration_credential_envelopes
              ADD COLUMN refresh_fencing_token INTEGER NOT NULL DEFAULT 0",
@@ -149,17 +119,7 @@ fn ensure_integration_credential_fence_column(conn: &Connection) -> Result<(), S
 }
 
 fn ensure_usage_runtime_ms(conn: &Connection) -> Result<(), String> {
-    let has_runtime_ms = conn
-        .prepare("PRAGMA table_info(usage_sessions)")
-        .map_err(|e| e.to_string())?
-        .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?
-        .iter()
-        .any(|name| name == "runtime_ms");
-
-    if !has_runtime_ms {
+    if !has_column(conn, "usage_sessions", "runtime_ms")? {
         conn.execute_batch(
             "ALTER TABLE usage_sessions ADD COLUMN runtime_ms INTEGER NOT NULL DEFAULT 0;",
         )
@@ -177,16 +137,7 @@ fn ensure_usage_runtime_ms(conn: &Connection) -> Result<(), String> {
 }
 
 fn ensure_sync_tombstone_type_id(conn: &Connection) -> Result<(), String> {
-    let has_type_id = conn
-        .prepare("PRAGMA table_info(sync_tombstones)")
-        .map_err(|e| e.to_string())?
-        .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?
-        .iter()
-        .any(|name| name == "type_id");
-    if !has_type_id {
+    if !has_column(conn, "sync_tombstones", "type_id")? {
         conn.execute_batch("ALTER TABLE sync_tombstones ADD COLUMN type_id TEXT;")
             .map_err(|e| e.to_string())?;
     }

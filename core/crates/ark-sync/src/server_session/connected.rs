@@ -18,10 +18,10 @@ mod snapshot;
 mod task_merge;
 
 use super::{
-    AdmissionStatus, DirectServerAdmission, DirectServerMessage, DirectServerSession,
-    DirectServerSessionEffect, DirectServerSessionInput, DirectServerSyncStartPolicy,
-    ResponderHelloRequest, ServerConnectionLease, ServerPeerProjection, ServerPeerReadiness,
-    ServerSessionActor,
+    AdmissionStatus, AdmittedServerPeer, DirectServerAdmission, DirectServerMessage,
+    DirectServerSession, DirectServerSessionEffect, DirectServerSessionInput,
+    DirectServerSyncStartPolicy, ResponderHelloRequest, ServerConnectionLease,
+    ServerPeerProjection, ServerPeerReadiness, ServerSessionActor,
 };
 use crate::protocol::LanSyncMessage;
 
@@ -277,6 +277,18 @@ impl ConnectedServerSession {
             self.admission = Some(admission);
             return true;
         };
+        self.activate_ready_peer(actor, sender, admission, ready, device_id)
+            .await
+    }
+
+    async fn activate_ready_peer(
+        &mut self,
+        actor: &mut ServerSessionActor,
+        sender: &crate::session_io::SessionIoSender,
+        admission: DirectServerAdmission,
+        ready: AdmittedServerPeer,
+        device_id: String,
+    ) -> bool {
         if admission
             .begin_legacy_baseline(self.storage.as_ref())
             .await
