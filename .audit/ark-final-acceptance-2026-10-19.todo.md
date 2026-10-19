@@ -1,6 +1,6 @@
 # ARK final acceptance run (2026-10-19)
 
-- [ ] Read the Principles section of pstack:poteto-mode.
+- [x] Read the Principles section of pstack:poteto-mode.
 - [ ] Phase A — Frame: define falsifiable completion predicate, scope, quantified effort, and blockers from current worktree, GitHub, and Linear.
 - [ ] Phase B — Design the workflow: create the baseline verification harness, identify separable work, and record the reviewed phase sequence.
 - [ ] Phase C — Run the loop: reproduce Stage 1 Windows failure; fix and verify; finish remaining boundaries; close structural review findings; verify recovery behavior; complete each logical commit.
@@ -22,6 +22,14 @@
 - [ ] Update architecture/build/recovery docs to match measured guarantees.
 - [ ] Run full local checks and final desktop/mobile CI on the exact final SHA.
 - [ ] Update KOS-412, KOS-424, KOS-425, KOS-428 and related Linear records only with verified evidence.
+
+## Storage cutover design
+
+- [x] Compare two read-only architecture candidates and an independent cross-judge against the accepted Core scheduler and Store transaction ownership decisions. Candidate B is the base; Candidate A's Application-owned scheduler conflicts with the accepted boundary.
+- [x] Record the selected target, compatibility contract, verification predicate, and cutover order in `.audit/ark-storage-cutover.design.md`.
+- [ ] Build the production-only command, query, maintenance, bootstrap, and transaction census before freezing the Store capability API.
+- [ ] Add and verify the Core SQLite ownership gate against the current violating source and a clean fixture.
+- [ ] Re-estimate the remaining implementation effort from the completed census.
 
 ## Current evidence (2026-10-19 continuation)
 
