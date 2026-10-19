@@ -229,7 +229,8 @@
         let tmp = crate::test_support::temp_dir();
         let dest = tmp.path().join("ark.db.backup");
         let dest_str = dest.to_str().unwrap();
-        backup_to_file(&conn, dest_str).expect("backup РґРѕР»Р¶РµРЅ РїСЂРѕР№С‚Рё");
+        ark_store::snapshot::backup_connection_to_file(&conn, dest_str)
+            .expect("backup РґРѕР»Р¶РµРЅ РїСЂРѕР№С‚Рё");
 
         assert!(
             dest.exists(),

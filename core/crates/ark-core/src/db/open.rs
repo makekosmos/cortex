@@ -67,15 +67,6 @@ pub fn init_schema(conn: &Connection) -> Result<(), String> {
     Ok(())
 }
 
-/// Online backup ARK DB в указанный destination path. Source connection
-/// может оставаться live (SQLite Online Backup API safe для concurrent
-/// readers/writer). Вызывается из db_backup scheduler в mundus-engine
-/// через `Request::DbBackup`.
-pub fn backup_to_file(conn: &Connection, dest_path: &str) -> Result<(), String> {
-    conn.backup(rusqlite::DatabaseName::Main, dest_path, None)
-        .map_err(|e| format!("backup_to_file failed: {e}"))
-}
-
 /// Online backup через ОТДЕЛЬНЫЙ read-коннекшн к `src_db_path` — НЕ держит
 /// глобальный DB mutex, поэтому обычные ARK ops продолжают работать во время
 /// копирования. Копирование идёт chunk'ами по `pages_per_step` страниц с паузой

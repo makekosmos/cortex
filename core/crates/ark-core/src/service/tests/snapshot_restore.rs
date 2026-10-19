@@ -64,7 +64,7 @@ pub(super) fn write_snapshot(state: &Arc<ServiceState>, db_path: &str, id: &str)
     std::fs::create_dir_all(&dir).unwrap();
     let dest = dir.join(id);
     with_conn(state, |conn| {
-        db::backup_to_file(conn, dest.to_str().unwrap())
+        ark_store::snapshot::backup_connection_to_file(conn, dest.to_str().unwrap())
     })
     .unwrap();
 }

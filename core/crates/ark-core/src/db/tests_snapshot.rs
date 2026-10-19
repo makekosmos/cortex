@@ -27,7 +27,7 @@ fn seed_object(conn: &Connection, id: &str, title: &str) {
 fn make_snapshot(conn: &Connection, db_path: &str, name: &str) {
     let dir = backups_dir(db_path);
     fs::create_dir_all(&dir).unwrap();
-    backup_to_file(conn, dir.join(name).to_str().unwrap()).unwrap();
+    ark_store::snapshot::backup_connection_to_file(conn, dir.join(name).to_str().unwrap()).unwrap();
 }
 
 #[test]

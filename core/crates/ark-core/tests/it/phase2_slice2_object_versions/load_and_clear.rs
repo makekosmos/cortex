@@ -69,7 +69,7 @@ fn load_all_clear_and_raw_backup_preserve_phase2_registry_contract() {
     );
     assert_eq!(exported.objects[0].type_version, "0.0.0-legacy");
     let path = std::env::temp_dir().join(format!("ark-phase2-backup-{}.db", std::process::id()));
-    backup_to_file(&conn, path.to_str().unwrap()).unwrap();
+    ark_store::snapshot::backup_connection_to_file(&conn, path.to_str().unwrap()).unwrap();
     let reopened = rusqlite::Connection::open(&path).unwrap();
     assert_eq!(
         reopened

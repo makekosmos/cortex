@@ -43,6 +43,17 @@ pub use restore::restore_snapshot;
 pub use restore::restore_snapshot_with_hooks;
 pub use restore_journal::recover_interrupted_restore;
 
+#[cfg(feature = "test-support")]
+#[doc(hidden)]
+pub fn backup_connection_to_file(
+    connection: &Connection,
+    destination_path: &str,
+) -> Result<(), String> {
+    connection
+        .backup(rusqlite::DatabaseName::Main, destination_path, None)
+        .map_err(|error| format!("backup_to_file failed: {error}"))
+}
+
 pub(super) fn sync_file(path: &Path) -> io::Result<()> {
     fs::OpenOptions::new()
         .read(true)

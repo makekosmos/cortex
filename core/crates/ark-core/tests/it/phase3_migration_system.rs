@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used)]
 use ark_core::canonical_types::migration::{migrate_phase3, retire_legacy_planning_tables};
-use ark_core::db::{backup_to_file, init_schema};
+use ark_core::db::init_schema;
 use ark_store::open::open_db;
 use rusqlite::{params, Connection};
 use serde_json::json;
@@ -421,7 +421,7 @@ fn raw_backup_preserves_nonempty_internal_blobs_and_schema() {
             |r| Ok((r.get(0)?, r.get(1)?)),
         )
         .unwrap();
-    backup_to_file(&conn, dest.to_str().unwrap()).unwrap();
+    ark_store::snapshot::backup_connection_to_file(&conn, dest.to_str().unwrap()).unwrap();
     let reopened = open_db(dest.to_str().unwrap()).unwrap();
     let backup_item: (Vec<u8>, String) = reopened
         .query_row(

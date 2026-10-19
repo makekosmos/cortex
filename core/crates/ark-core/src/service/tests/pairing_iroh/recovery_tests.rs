@@ -5,7 +5,7 @@ fn write_backup(state: &Arc<ServiceState>, db_path: &str, backup_id: &str) {
     std::fs::create_dir_all(&directory).unwrap();
     let destination = directory.join(backup_id);
     with_conn(state, |connection| {
-        db::backup_to_file(connection, destination.to_str().unwrap())
+        ark_store::snapshot::backup_connection_to_file(connection, destination.to_str().unwrap())
     })
     .unwrap();
 }

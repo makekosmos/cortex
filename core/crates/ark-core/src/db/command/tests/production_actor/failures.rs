@@ -407,7 +407,7 @@ async fn production_actor_restore_failure_fails_closed_after_sqlite_rollback() {
                  INSERT INTO restore_failure_probe(value) VALUES ('pre-restore');",
             )
             .unwrap();
-        crate::db::backup_to_file(
+        ark_store::snapshot::backup_connection_to_file(
             connection,
             snapshot_path.to_str().expect("snapshot path must be UTF-8"),
         )
