@@ -1,7 +1,92 @@
-use ark_domain::device_registry::RegistryEvent;
+use ark_domain::device_registry::{
+    state::DeviceRegistry, DeviceId, DeviceRecord, DisplayName, RegistryEvent, RegistryHead,
+    SigningPublicKey,
+};
 use rusqlite::{params, Connection};
 
 pub const MAX_REGISTRY_EVENTS_PAGE_SIZE: usize = 64;
+
+pub fn load_registry(connection: &Connection) -> Result<DeviceRegistry, String> {
+    let mut registry = DeviceRegistry::default();
+    let mut statement = connection
+        .prepare(
+            "SELECT device_id, signing_public_key, key_epoch, admission_epoch,
+                    display_name, disabled_event_id, display_name_hlc, updated_hlc,
+                    updated_event_id
+             FROM device_registry_projection ORDER BY device_id",
+        )
+        .map_err(|error| error.to_string())?;
+    let devices = statement
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, Vec<u8>>(1)?,
+                row.get::<_, u64>(2)?,
+                row.get::<_, u64>(3)?,
+                row.get::<_, Option<String>>(4)?,
+                row.get::<_, Option<String>>(5)?,
+                row.get::<_, Option<String>>(6)?,
+                row.get::<_, Option<String>>(7)?,
+                row.get::<_, Option<String>>(8)?,
+            ))
+        })
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+    drop(statement);
+    for (id, key, key_epoch, admission_epoch, name, disabled, name_hlc, updated_hlc, event_id) in
+        devices
+    {
+        let key: [u8; 32] = key
+            .try_into()
+            .map_err(|_| "invalid_device_registry_key_length".to_string())?;
+        registry.add_trust_anchor(DeviceRecord {
+            device_id: DeviceId::parse(id).map_err(|error| error.to_string())?,
+            signing_public_key: SigningPublicKey::from_bytes(key)
+                .map_err(|error| error.to_string())?,
+            key_epoch,
+            admission_epoch,
+            display_name: name
+                .map(DisplayName::parse)
+                .transpose()
+                .map_err(|error| error.to_string())?,
+            disabled_event_id: disabled,
+            display_name_hlc: name_hlc,
+            updated_hlc,
+            updated_event_id: event_id,
+        });
+    }
+
+    let mut statement = connection
+        .prepare(
+            "SELECT actor_device_id, actor_sequence, event_hash
+             FROM device_registry_events AS event
+             WHERE actor_sequence = (
+                 SELECT MAX(actor_sequence) FROM device_registry_events
+                 WHERE actor_device_id = event.actor_device_id
+             ) ORDER BY actor_device_id",
+        )
+        .map_err(|error| error.to_string())?;
+    let heads = statement
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, u64>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+    for (actor, sequence, event_hash) in heads {
+        registry.set_head(RegistryHead {
+            actor_device_id: DeviceId::parse(actor).map_err(|error| error.to_string())?,
+            actor_sequence: sequence,
+            event_hash,
+        });
+    }
+    Ok(registry)
+}
 
 pub fn load_events_page(
     connection: &Connection,

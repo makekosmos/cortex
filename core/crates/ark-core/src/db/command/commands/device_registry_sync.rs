@@ -1,8 +1,5 @@
 use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError, DbQuery};
-use ark_domain::device_registry::{
-    state::DeviceRegistry, DeviceId, DeviceRecord, DisplayName, RegistryEvent, RegistryHead,
-    SigningPublicKey,
-};
+use ark_domain::device_registry::{DeviceRecord, DisplayName, RegistryEvent};
 use ark_store::sync_kv::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY;
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use serde::Serialize;
@@ -254,7 +251,8 @@ pub(super) fn apply_events(
     transaction: &Transaction<'_>,
     events: &[RegistryEvent],
 ) -> Result<Vec<RegistryEvent>, DbError> {
-    let mut registry = load_registry(transaction)?;
+    let mut registry =
+        ark_store::device_registry::load_registry(transaction).map_err(DbError::Storage)?;
     let mut applied_events = Vec::new();
     for event in events {
         let event_json =
@@ -317,87 +315,6 @@ pub(super) fn apply_events(
     Ok(applied_events)
 }
 
-pub(super) fn load_registry(transaction: &Connection) -> Result<DeviceRegistry, DbError> {
-    let mut registry = DeviceRegistry::default();
-    let mut statement = transaction
-        .prepare(
-            "SELECT device_id, signing_public_key, key_epoch, admission_epoch,
-                    display_name, disabled_event_id, display_name_hlc, updated_hlc,
-                    updated_event_id
-             FROM device_registry_projection ORDER BY device_id",
-        )
-        .map_err(storage_error)?;
-    let devices = statement
-        .query_map([], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, Vec<u8>>(1)?,
-                row.get::<_, u64>(2)?,
-                row.get::<_, u64>(3)?,
-                row.get::<_, Option<String>>(4)?,
-                row.get::<_, Option<String>>(5)?,
-                row.get::<_, Option<String>>(6)?,
-                row.get::<_, Option<String>>(7)?,
-                row.get::<_, Option<String>>(8)?,
-            ))
-        })
-        .map_err(storage_error)?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(storage_error)?;
-    drop(statement);
-    for (id, key, key_epoch, admission_epoch, name, disabled, name_hlc, updated_hlc, event_id) in
-        devices
-    {
-        let key: [u8; 32] = key
-            .try_into()
-            .map_err(|_| DbError::Storage("invalid_device_registry_key_length".into()))?;
-        registry.add_trust_anchor(DeviceRecord {
-            device_id: DeviceId::parse(id).map_err(registry_error)?,
-            signing_public_key: SigningPublicKey::from_bytes(key).map_err(registry_error)?,
-            key_epoch,
-            admission_epoch,
-            display_name: name
-                .map(DisplayName::parse)
-                .transpose()
-                .map_err(registry_error)?,
-            disabled_event_id: disabled,
-            display_name_hlc: name_hlc,
-            updated_hlc,
-            updated_event_id: event_id,
-        });
-    }
-
-    let mut statement = transaction
-        .prepare(
-            "SELECT actor_device_id, actor_sequence, event_hash
-             FROM device_registry_events AS event
-             WHERE actor_sequence = (
-                 SELECT MAX(actor_sequence) FROM device_registry_events
-                 WHERE actor_device_id = event.actor_device_id
-             ) ORDER BY actor_device_id",
-        )
-        .map_err(storage_error)?;
-    let heads = statement
-        .query_map([], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, u64>(1)?,
-                row.get::<_, String>(2)?,
-            ))
-        })
-        .map_err(storage_error)?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(storage_error)?;
-    for (actor, sequence, event_hash) in heads {
-        registry.set_head(RegistryHead {
-            actor_device_id: DeviceId::parse(actor).map_err(registry_error)?,
-            actor_sequence: sequence,
-            event_hash,
-        });
-    }
-    Ok(registry)
-}
-
 fn persist_projection(transaction: &Transaction<'_>, device: &DeviceRecord) -> Result<(), DbError> {
     transaction
         .execute(
@@ -451,10 +368,6 @@ fn registry_digest(transaction: &Transaction<'_>) -> Result<String, DbError> {
     let bytes = serde_json::to_vec(&rows).map_err(|error| DbError::Storage(error.to_string()))?;
     let digest = sha2::Sha256::digest(bytes);
     Ok(digest.iter().map(|byte| format!("{byte:02x}")).collect())
-}
-
-fn registry_error(error: ark_domain::device_registry::RegistryEventError) -> DbError {
-    DbError::Invalid(error.to_string())
 }
 
 fn storage_error(error: rusqlite::Error) -> DbError {

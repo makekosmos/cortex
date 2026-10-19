@@ -38,7 +38,8 @@ impl DbCommand for SignRegistryHandshakeCommand {
         context.require_engine()?;
         let signer = DeviceId::parse(self.signer_device_id)
             .map_err(|error| DbError::Invalid(error.to_string()))?;
-        let registry = super::device_registry_sync::load_registry(transaction)?;
+        let registry =
+            ark_store::device_registry::load_registry(transaction).map_err(DbError::Storage)?;
         let device = known_registry_device(&registry, &signer)?;
         let secret = crate::iroh_transport::load_or_generate_secret_key(transaction)
             .map_err(DbError::Storage)?;
@@ -99,7 +100,8 @@ impl DbQuery for VerifyRegistryHandshakeQuery {
         context.require_sync_peer_or_system()?;
         let signer = DeviceId::parse(self.expected_signer)
             .map_err(|error| DbError::Invalid(error.to_string()))?;
-        let registry = super::device_registry_sync::load_registry(connection)?;
+        let registry =
+            ark_store::device_registry::load_registry(connection).map_err(DbError::Storage)?;
         let device = known_registry_device(&registry, &signer)?;
         let verifying_key = device
             .signing_public_key

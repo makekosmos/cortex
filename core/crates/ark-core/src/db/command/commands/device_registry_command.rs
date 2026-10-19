@@ -48,7 +48,8 @@ fn append_local_registry_event(
     command: RegistryCommand,
 ) -> Result<Option<RegistryEvent>, DbError> {
     let actor_id = DeviceId::parse(actor_device_id).map_err(registry_error)?;
-    let mut registry = super::device_registry_sync::load_registry(transaction)?;
+    let mut registry =
+        ark_store::device_registry::load_registry(transaction).map_err(DbError::Storage)?;
     let secret = crate::iroh_transport::load_or_generate_secret_key(transaction)
         .map_err(DbError::Storage)?;
     let local_key =
