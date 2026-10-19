@@ -6,7 +6,6 @@ mod legacy;
 mod load;
 mod objects;
 mod open;
-mod sync;
 mod task_merge;
 
 pub use ark_application::sync_storage::{
@@ -21,6 +20,8 @@ pub use ark_store::snapshot::{
     SnapshotEntry, SnapshotValidation,
 };
 pub(crate) use ark_store::sync_kv::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY;
+#[cfg(test)]
+pub(crate) use ark_store::VERSION_VECTOR_KEY;
 pub(crate) use backend::SqliteLegacyMutationSession;
 pub(crate) use backend::SqliteObjectMutationSession;
 pub(crate) use backend::SqliteObjectWriteSession;
@@ -78,15 +79,10 @@ pub use objects::{
     list_objects_by_type, list_running_time_entries, search_objects, upsert_object,
     upsert_object_link, upsert_object_type, SearchResult,
 };
-#[cfg(test)]
-pub(in crate::db) use open::USAGE_SEQUENCE_MIGRATION_KEY;
-pub(crate) use open::VERSION_VECTOR_KEY;
 pub use open::{
     backup_to_file, backup_to_file_chunked, init_schema, init_schema_prerequisites_for_phase3,
-    is_sequenced_usage_entity,
 };
 pub use open::{count_pending_for_type, insert_pending_object};
-pub use sync::{bump_sync_version_vector, ensure_usage_sequence_migrated};
 
 mod integration_replication_admission;
 mod integration_replication_apply;

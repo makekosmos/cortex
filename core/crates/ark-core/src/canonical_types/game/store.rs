@@ -323,8 +323,13 @@ pub fn upsert_game(
             )
             .map_err(|e| e.to_string())?;
         }
-        let hlc =
-            db::bump_sync_version_vector(conn, "object", &command.id, &effective_device, false)?;
+        let hlc = ark_store::sync_versions::bump_sync_version_vector(
+            conn,
+            "object",
+            &command.id,
+            &effective_device,
+            false,
+        )?;
         conn.execute(
             concat!(
                 "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,0) ON ",

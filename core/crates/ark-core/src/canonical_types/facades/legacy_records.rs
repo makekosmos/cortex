@@ -177,7 +177,13 @@ pub fn write_legacy_records(
             continue;
         }
         db::upsert_object(conn, &item.object)?;
-        let hlc = db::bump_sync_version_vector(conn, "object", &id, write_device, false)?;
+        let hlc = ark_store::sync_versions::bump_sync_version_vector(
+            conn,
+            "object",
+            &id,
+            write_device,
+            false,
+        )?;
         conn.execute(
             concat!(
                 "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,0) ON ",
@@ -203,8 +209,13 @@ pub fn write_legacy_records(
         for link in item.links {
             let link_id = link.id.clone();
             db::upsert_object_link(conn, &link)?;
-            let hlc =
-                db::bump_sync_version_vector(conn, "object_link", &link_id, write_device, false)?;
+            let hlc = ark_store::sync_versions::bump_sync_version_vector(
+                conn,
+                "object_link",
+                &link_id,
+                write_device,
+                false,
+            )?;
             entities.push(SyncEntity {
                 entity_type: "object_link".into(),
                 id: link_id,
@@ -249,7 +260,8 @@ pub fn delete_legacy_object(
     let write_device = device_id.as_deref().unwrap_or("ark-core");
     object.deleted_at = Some(HLC::now(write_device).wall_time);
     db::upsert_object(conn, &object)?;
-    let hlc = db::bump_sync_version_vector(conn, "object", id, write_device, true)?;
+    let hlc =
+        ark_store::sync_versions::bump_sync_version_vector(conn, "object", id, write_device, true)?;
     conn.execute(
         concat!(
             "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,1) ON ",

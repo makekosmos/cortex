@@ -1,4 +1,3 @@
-use super::bump_sync_version_vector;
 use crate::hlc::HLC;
 use rusqlite::Connection;
 
@@ -66,7 +65,13 @@ pub(super) fn persist_with_vector(
     with_savepoint(conn, || {
         write()?;
         let vector_id = format!("{entity_type}:{entity_id}");
-        bump_sync_version_vector(conn, entity_type, &vector_id, device_id, false)?;
+        ark_store::sync_versions::bump_sync_version_vector(
+            conn,
+            entity_type,
+            &vector_id,
+            device_id,
+            false,
+        )?;
         Ok(())
     })
 }

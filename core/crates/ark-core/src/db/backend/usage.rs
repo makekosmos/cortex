@@ -1,5 +1,4 @@
 use crate::application::usage::UsageWriteSession;
-use crate::db;
 use crate::types::{UsageDay, UsageEvent, UsageSession, UsageSpanWrite};
 use rusqlite::Transaction;
 
@@ -15,7 +14,7 @@ impl<'tx, 'connection> SqliteUsageWriteSession<'tx, 'connection> {
 
 impl UsageWriteSession for SqliteUsageWriteSession<'_, '_> {
     fn ensure_sequence_migrated(&self, device_id: &str) -> Result<(), String> {
-        db::ensure_usage_sequence_migrated(self.transaction, device_id)
+        ark_store::usage_sync_log::ensure_usage_sequence_migrated(self.transaction, device_id)
     }
 
     fn upsert_session(&self, session: &UsageSession) -> Result<(), String> {
@@ -45,8 +44,13 @@ impl UsageWriteSession for SqliteUsageWriteSession<'_, '_> {
         device_id: &str,
         deleted: bool,
     ) -> Result<String, String> {
-        let hlc =
-            db::bump_sync_version_vector(self.transaction, entity_type, id, device_id, deleted)?;
+        let hlc = ark_store::sync_versions::bump_sync_version_vector(
+            self.transaction,
+            entity_type,
+            id,
+            device_id,
+            deleted,
+        )?;
         if deleted {
             ark_store::sync_tombstones::record(self.transaction, entity_type, id, None, &hlc)?;
         } else {

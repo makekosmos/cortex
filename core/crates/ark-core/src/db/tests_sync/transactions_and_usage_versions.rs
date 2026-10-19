@@ -93,7 +93,8 @@
         };
         let days = ark_store::usage_queries::upsert_usage_span(&source, &write).unwrap();
         assert_eq!(days.len(), 2);
-        ensure_usage_sequence_migrated(&source, "source-device").unwrap();
+        ark_store::usage_sync_log::ensure_usage_sequence_migrated(&source, "source-device")
+            .unwrap();
 
         let entities = SqliteStorageBackend::collect_entities_blocking(
             &source,
@@ -227,10 +228,22 @@
     #[test]
     fn local_usage_versions_use_one_device_cursor() {
         let conn = setup_db();
-        let first =
-            bump_sync_version_vector(&conn, "usage_day", "day-a", "local-device", false).unwrap();
-        let second =
-            bump_sync_version_vector(&conn, "usage_day", "day-b", "local-device", false).unwrap();
+        let first = ark_store::sync_versions::bump_sync_version_vector(
+            &conn,
+            "usage_day",
+            "day-a",
+            "local-device",
+            false,
+        )
+        .unwrap();
+        let second = ark_store::sync_versions::bump_sync_version_vector(
+            &conn,
+            "usage_day",
+            "day-b",
+            "local-device",
+            false,
+        )
+        .unwrap();
 
         let vector: VersionVector = serde_json::from_str(
             &ark_store::sync_kv::get_sync_kv(&conn, VERSION_VECTOR_KEY)

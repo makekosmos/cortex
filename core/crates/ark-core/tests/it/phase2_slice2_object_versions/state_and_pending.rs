@@ -190,7 +190,7 @@ fn legacy_upsert_rejects_alias_canonical_collision_atomically() {
         },
     )
     .unwrap();
-    ark_core::db::bump_sync_version_vector(
+    ark_store::sync_versions::bump_sync_version_vector(
         &conn,
         "object",
         "object-a",

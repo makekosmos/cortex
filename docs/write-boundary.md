@@ -21,7 +21,7 @@ own subsystems — goes through the op surface.
 - No direct `conn.execute(INSERT/UPDATE/DELETE)` against syncable tables
   (`objects`, `object_types`, `object_links`, `tracked_apps`,
   `usage_sessions`, `usage_events`, `usage_days`, `sync_kv`) without the
-  matching `bump_sync_version_vector` / `record_usage_sequence` call —
+  matching `ark_store::sync_versions::bump_sync_version_vector` call —
   silent writes are lost by sync and corrupt version vectors.
 - No destructive migrations (`DROP TABLE`, incompatible `ALTER COLUMN`).
 - No `Mutex::lock().unwrap()` in production paths — recover poison via

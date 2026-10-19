@@ -13,7 +13,7 @@ use serde_json::{json, Map, Value};
 
 use super::definitions::canonical_type_registrations;
 use super::validation::validate_canonical;
-use crate::db::{backup_to_file, bump_sync_version_vector};
+use crate::db::backup_to_file;
 use ark_domain::canonical_type::TypeRegistration;
 
 pub const LEGACY_TASK_TYPE: &str = "com.kosmos.task";
@@ -125,7 +125,9 @@ pub fn rewrite_legacy_tasks(
         if changed != 1 {
             return Err(format!("task {} changed during rewrite", row.id));
         }
-        bump_sync_version_vector(&tx, "object", &row.id, device_id, false)?;
+        ark_store::sync_versions::bump_sync_version_vector(
+            &tx, "object", &row.id, device_id, false,
+        )?;
         report.rewritten += 1;
         if row.deleted_at.is_some() {
             report.trashed += 1;

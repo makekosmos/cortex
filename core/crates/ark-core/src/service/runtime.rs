@@ -142,7 +142,8 @@ fn make_sync_entity(
         }
         _ => serde_json::Map::new(),
     };
-    let origin = db::is_sequenced_usage_entity(entity_type).then(|| HLC::from_string(&hlc));
+    let origin =
+        ark_domain::types::is_sequenced_usage_entity(entity_type).then(|| HLC::from_string(&hlc));
     SyncEntity {
         entity_type: entity_type.to_string(),
         id: id.to_string(),

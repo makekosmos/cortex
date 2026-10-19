@@ -6,8 +6,7 @@ use serde_json::{json, Value};
 use super::SqliteStorageBackend;
 use crate::db::{
     delete_object, delete_object_link, delete_object_type, delete_project, delete_todo,
-    insert_pending_object, is_object_definition_known, is_sequenced_usage_entity,
-    upsert_object_link, upsert_object_type,
+    insert_pending_object, is_object_definition_known, upsert_object_link, upsert_object_type,
 };
 use crate::types::{
     ArkObject, ObjectLink, ObjectType, SyncEntity, TrackedApp, UsageDay, UsageEvent, UsageSession,
@@ -121,7 +120,7 @@ impl SqliteStorageBackend {
         ),
         String,
     > {
-        let sequenced_usage = is_sequenced_usage_entity(&entity.entity_type);
+        let sequenced_usage = ark_domain::types::is_sequenced_usage_entity(&entity.entity_type);
         if sequenced_usage && !ark_store::usage_sync_log::usage_entity_is_newer(conn, entity)? {
             let (device_id, seq) =
                 ark_store::usage_sync_log::usage_origin_for_entity(conn, entity)?;

@@ -240,9 +240,12 @@ async fn usage_sequence_migration_runs_as_an_interactive_database_command() {
         .unwrap();
 
     let migration_complete = handle.with_connection(|connection| {
-        ark_store::sync_kv::get_sync_kv(connection, crate::db::USAGE_SEQUENCE_MIGRATION_KEY)
-            .unwrap()
-            .as_deref()
+        ark_store::sync_kv::get_sync_kv(
+            connection,
+            ark_store::usage_sync_log::USAGE_SEQUENCE_MIGRATION_KEY,
+        )
+        .unwrap()
+        .as_deref()
             == Some("1")
     });
     assert!(migration_complete);

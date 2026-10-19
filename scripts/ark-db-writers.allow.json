@@ -117,6 +117,11 @@
       "count": 4
     },
     {
+      "path": "core/crates/ark-store/src/usage_sync_log/migration.rs",
+      "category": "SQLite mutation API",
+      "count": 4
+    },
+    {
       "path": "core/crates/ark-store/src/sync_kv.rs",
       "category": "SQLite mutation API",
       "count": 1
@@ -165,11 +170,6 @@
       "path": "core/crates/ark-store/src/snapshot/restore_journal.rs",
       "category": "connection lifecycle",
       "count": 2
-    },
-    {
-      "path": "core/crates/ark-core/src/db/sync/tombstones_and_usage_sequence.rs",
-      "category": "SQLite mutation API",
-      "count": 5
     },
     {
       "path": "core/crates/ark-core/src/integration_replication/api.rs",
@@ -359,7 +359,12 @@
     {
       "path": "core/crates/ark-store/src/sync_versions.rs",
       "category": "SQLite mutation API",
-      "count": 4
+      "count": 2
+    },
+    {
+      "path": "core/crates/ark-store/src/sync_versions/local_revision.rs",
+      "category": "SQLite mutation API",
+      "count": 3
     },
     {
       "path": "core/crates/ark-store/src/task_merge/append.rs",

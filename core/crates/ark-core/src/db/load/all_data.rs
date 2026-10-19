@@ -78,7 +78,9 @@ pub fn delete_trashed(conn: &Connection, device_id: &str) -> Result<usize, Strin
             .execute("DELETE FROM todos WHERE is_trashed = 1", [])
             .map_err(|e| e.to_string())?;
         for id in &ids {
-            let hlc = bump_sync_version_vector(conn, "todo", id, device_id, true)?;
+            let hlc = ark_store::sync_versions::bump_sync_version_vector(
+                conn, "todo", id, device_id, true,
+            )?;
             ark_store::sync_tombstones::record(conn, "todo", id, None, &hlc)?;
         }
         Ok(deleted)

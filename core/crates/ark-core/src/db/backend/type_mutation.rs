@@ -60,8 +60,13 @@ impl TypeMutationSession for SqliteTypeMutationSession<'_, '_> {
             TypeEntityKind::ObjectType => "object_type",
             TypeEntityKind::ObjectLink => "object_link",
         };
-        let hlc =
-            db::bump_sync_version_vector(self.transaction, entity_type, id, device_id, deleted)?;
+        let hlc = ark_store::sync_versions::bump_sync_version_vector(
+            self.transaction,
+            entity_type,
+            id,
+            device_id,
+            deleted,
+        )?;
         if deleted {
             ark_store::sync_tombstones::record(self.transaction, entity_type, id, None, &hlc)?;
         } else {

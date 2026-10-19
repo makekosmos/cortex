@@ -91,7 +91,7 @@ impl SignedIntegrationFrameStore for SqliteSignedIntegrationFrameSession<'_, '_>
     }
 
     fn load_version_vector(&self) -> Result<VersionVector, String> {
-        ark_store::sync_kv::get_sync_kv(self.transaction, crate::db::VERSION_VECTOR_KEY)?
+        ark_store::sync_kv::get_sync_kv(self.transaction, ark_store::VERSION_VECTOR_KEY)?
             .filter(|value| !value.trim().is_empty())
             .map(|value| serde_json::from_str(&value).map_err(|error| error.to_string()))
             .transpose()
@@ -135,7 +135,7 @@ impl SignedIntegrationFrameStore for SqliteSignedIntegrationFrameSession<'_, '_>
 
     fn persist_version_vector(&self, vector: &VersionVector) -> Result<(), String> {
         let encoded = serde_json::to_string(vector).map_err(|error| error.to_string())?;
-        ark_store::sync_kv::set_sync_kv(self.transaction, crate::db::VERSION_VECTOR_KEY, &encoded)
+        ark_store::sync_kv::set_sync_kv(self.transaction, ark_store::VERSION_VECTOR_KEY, &encoded)
             .map_err(|error| error.to_string())
     }
 }

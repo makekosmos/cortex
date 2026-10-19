@@ -258,13 +258,13 @@ impl SyncEntityMutationPort for SqliteStorageBackend {
 #[async_trait::async_trait]
 impl PeerProgressPort for SqliteStorageBackend {
     async fn load_version_vector(&self) -> Result<VersionVector, String> {
-        Ok(load_progress_value(self, crate::db::VERSION_VECTOR_KEY)
+        Ok(load_progress_value(self, ark_store::VERSION_VECTOR_KEY)
             .await?
             .unwrap_or_default())
     }
 
     async fn store_version_vector(&self, vector: &VersionVector) -> Result<(), String> {
-        store_progress_value(self, crate::db::VERSION_VECTOR_KEY, vector).await
+        store_progress_value(self, ark_store::VERSION_VECTOR_KEY, vector).await
     }
 
     async fn store_version_vector_with_policy(
@@ -278,7 +278,7 @@ impl PeerProgressPort for SqliteStorageBackend {
             .submit(
                 CommandContext::sync_system(CommandClass::SyncLive),
                 crate::db::SetSyncKeyValueCommand::with_policy_identity(
-                    crate::db::VERSION_VECTOR_KEY.to_owned(),
+                    ark_store::VERSION_VECTOR_KEY.to_owned(),
                     raw,
                     local_device_id.to_owned(),
                     policy_identity.clone(),

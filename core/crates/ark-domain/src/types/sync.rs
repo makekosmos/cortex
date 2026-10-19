@@ -30,6 +30,12 @@ pub struct SyncEntity {
 
 pub type VersionVector = std::collections::HashMap<String, String>;
 
+/// Usage entities use a per-device contiguous sequence cursor instead of
+/// individual entity IDs in the ordinary version vector.
+pub fn is_sequenced_usage_entity(entity_type: &str) -> bool {
+    matches!(entity_type, "usage_session" | "usage_event" | "usage_day")
+}
+
 // ---------------------------------------------------------------------------
 // Peer record (snake_case JSON for protocol compatibility)
 // ---------------------------------------------------------------------------

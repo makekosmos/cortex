@@ -231,7 +231,7 @@
             )
             .unwrap();
         }
-        ensure_usage_sequence_migrated(&conn, "device-paged").unwrap();
+        ark_store::usage_sync_log::ensure_usage_sequence_migrated(&conn, "device-paged").unwrap();
         let backend = SqliteStorageBackend::for_test(Arc::new(Mutex::new(conn)));
         backend.set_device_id("device-paged").unwrap();
         let vector = VersionVector::new();

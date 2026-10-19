@@ -35,9 +35,10 @@ the repo-root docs; the retired `makekosmos/docs` repo is no longer the source.
   rewrite of stored objects is allowed only when it is approved for a specific
   issue, runs once in a transaction, and takes a backup of `ark.db` first
   (KOS-397: `com.kosmos.task` 1.1.0 → `core.task` 0.1.0, approved 2026-10-13).
-- Every writer to syncable data must update sync state through
-  `ark_core::db::bump_sync_version_vector` (usage entities go through
-  `record_usage_sequence`; see `src/db/sync/`).
+- Every writer to syncable data must update revision/feed state through
+  `ark_store::sync_versions::bump_sync_version_vector` in the same caller-owned
+  transaction. Usage sequence migration and backfill live in
+  `ark_store::usage_sync_log`; entity classification lives in `ark-domain`.
 - Sync wire messages stay `snake_case`; do not weaken self-peer or
   routable-address filtering (`src/sync_server_peers.rs`, `src/net.rs`).
 - The Engine-facing request surface (`{"op","params"}` →

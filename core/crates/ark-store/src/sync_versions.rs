@@ -69,6 +69,9 @@ impl LocalRevisionTarget {
     }
 }
 
+mod local_revision;
+pub use local_revision::bump_sync_version_vector;
+
 pub fn bump_local_revision(
     connection: &Connection,
     target: LocalRevisionTarget,
@@ -76,72 +79,7 @@ pub fn bump_local_revision(
     device_id: &str,
 ) -> Result<String, String> {
     let entity_type = target.entity_type();
-    let raw = crate::sync_kv::get_sync_kv(connection, crate::VERSION_VECTOR_KEY)?;
-    let mut vector: VersionVector = raw
-        .as_deref()
-        .filter(|value| !value.trim().is_empty())
-        .map(|value| serde_json::from_str(value).map_err(|error| error.to_string()))
-        .transpose()?
-        .unwrap_or_default();
-
-    let mut previous = vector.get(entity_id).cloned();
-    if target == LocalRevisionTarget::Object {
-        if let Some(candidate) = object_revision(connection, entity_id)? {
-            previous = Some(candidate);
-        }
-    }
-
-    let now = HLC::now(device_id);
-    let next = match previous {
-        Some(existing) => {
-            let previous = HLC::from_string(&existing);
-            if HLC::compare(&now, &previous).is_gt() {
-                now
-            } else {
-                if previous.counter == u64::MAX {
-                    return Err("hlc_counter_overflow".to_string());
-                }
-                HLC::new(
-                    previous.wall_time,
-                    previous.counter + 1,
-                    device_id.to_string(),
-                )
-            }
-        }
-        None => now,
-    };
-    let revision = next.to_string();
-    vector.insert(entity_id.to_string(), revision.clone());
-    crate::sync_kv::set_sync_kv(
-        connection,
-        crate::VERSION_VECTOR_KEY,
-        &serde_json::to_string(&vector).map_err(|error| error.to_string())?,
-    )?;
-    crate::committed_feed::append_committed_change(
-        connection,
-        entity_type,
-        entity_id,
-        &revision,
-        false,
-        Some(device_id),
-        None,
-    )?;
-
-    if target == LocalRevisionTarget::Object {
-        connection
-            .execute(
-                "INSERT INTO object_sync_versions(object_id, hlc, deleted) VALUES (?1, ?2, 0)
-                 ON CONFLICT(object_id) DO UPDATE SET hlc = excluded.hlc, deleted = 0
-                 WHERE excluded.hlc > object_sync_versions.hlc",
-                rusqlite::params![entity_id, revision],
-            )
-            .map_err(|error| error.to_string())?;
-        connection
-            .execute("DELETE FROM sync_tombstones WHERE id = ?1", [entity_id])
-            .map_err(|error| error.to_string())?;
-    }
-
-    Ok(revision)
+    bump_sync_version_vector(connection, entity_type, entity_id, device_id, false)
 }
 
 pub fn object_revision(connection: &Connection, entity_id: &str) -> Result<Option<String>, String> {
@@ -184,9 +122,11 @@ pub fn stored_object_revision(
 #[cfg(test)]
 mod tests {
     use super::{
-        bump_local_revision, object_revision, record_remote_object_revision, LocalRevisionTarget,
+        bump_local_revision, bump_sync_version_vector, object_revision,
+        record_remote_object_revision, LocalRevisionTarget,
     };
     use crate::sync_kv::set_sync_kv;
+    use ark_domain::types::VersionVector;
     use rusqlite::Connection;
 
     fn connection() -> Connection {
@@ -405,5 +345,60 @@ mod tests {
             feed_entity,
             ("object_link".into(), "link-1".into(), revision)
         );
+    }
+
+    #[test]
+    fn usage_revision_updates_sequence_version_cursor_and_feed_together() {
+        let connection = local_revision_connection();
+
+        let revision =
+            bump_sync_version_vector(&connection, "usage_day", "day-1", "device-a", false)
+                .expect("usage revision persists");
+
+        let sequence: (i64, String, String, String, i64) = connection
+            .query_row(
+                "SELECT seq, entity_type, entity_id, hlc, deleted
+                 FROM usage_sync_log WHERE device_id = 'device-a'",
+                [],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                    ))
+                },
+            )
+            .expect("usage sequence reads");
+        assert_eq!(
+            sequence,
+            (1, "usage_day".into(), "day-1".into(), revision.clone(), 0)
+        );
+
+        let usage_version: String = connection
+            .query_row(
+                "SELECT hlc FROM usage_sync_versions
+                 WHERE entity_type = 'usage_day' AND entity_id = 'day-1'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("usage revision reads");
+        assert_eq!(usage_version, revision);
+        let raw_vector = crate::sync_kv::get_sync_kv(&connection, crate::VERSION_VECTOR_KEY)
+            .expect("version vector reads")
+            .expect("version vector exists");
+        let vector: VersionVector = serde_json::from_str(&raw_vector).expect("vector parses");
+        assert_eq!(vector.get("@usage:device-a").map(String::as_str), Some("1"));
+        assert!(!vector.contains_key("day-1"));
+        let feed_rows: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM ark_committed_feed
+                 WHERE entity_type = 'usage_day' AND entity_id = 'day-1'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("usage feed row count reads");
+        assert_eq!(feed_rows, 1);
     }
 }

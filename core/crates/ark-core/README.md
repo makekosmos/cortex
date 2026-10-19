@@ -105,7 +105,7 @@ Runtime query endpoints include:
 
 ## Sync State
 
-Local writes through `ArkService` update `lan_sync.version_vector` and durable delete tombstones. `ark_core::db::bump_sync_version_vector` is the shared Rust helper for direct Rust writers such as `services/usage-tracker`.
+Local writes through `ArkService` update `lan_sync.version_vector` and durable delete tombstones. `ark_store::sync_versions::bump_sync_version_vector` is the shared persistence helper for direct Rust writers such as `services/usage-tracker`; callers keep the version update inside their existing transaction.
 
 Delete propagation depends on durable tombstones in `sync_tombstones`. Apply errors are surfaced as `Result` values instead of being silently ignored.
 

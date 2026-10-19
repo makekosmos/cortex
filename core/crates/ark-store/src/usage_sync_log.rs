@@ -1,9 +1,11 @@
+use crate::VERSION_VECTOR_KEY;
 use ark_domain::hlc::HLC;
 use ark_domain::types::{SyncEntity, VersionVector};
 use rusqlite::{params, params_from_iter, Connection, OptionalExtension};
 use std::collections::HashMap;
 
-use crate::VERSION_VECTOR_KEY;
+mod migration;
+pub use migration::{ensure_usage_sequence_migrated, USAGE_SEQUENCE_MIGRATION_KEY};
 
 pub fn record_usage_sequence(
     conn: &Connection,
@@ -330,7 +332,11 @@ pub fn next_usage_sequence(connection: &Connection, device_id: &str) -> Result<u
 
 #[cfg(test)]
 mod tests {
-    use super::usage_log_complete_through;
+    use super::{
+        ensure_usage_sequence_migrated, usage_log_complete_through, USAGE_SEQUENCE_MIGRATION_KEY,
+    };
+    use crate::{schema::CREATE_TABLES, sync_kv};
+    use ark_domain::types::VersionVector;
     use rusqlite::Connection;
 
     #[test]
@@ -352,5 +358,133 @@ mod tests {
             usage_log_complete_through(&connection, None).expect("complete-through bounds load");
 
         assert_eq!(bounds.get("remote"), Some(&7));
+    }
+
+    fn migration_connection() -> Connection {
+        let connection = Connection::open_in_memory().expect("database opens");
+        connection
+            .execute_batch(CREATE_TABLES)
+            .expect("application schema creates");
+        connection
+    }
+
+    #[test]
+    fn sequence_backfill_is_ordered_atomic_and_idempotent() {
+        let connection = migration_connection();
+        connection
+            .execute_batch(
+                "INSERT INTO usage_sessions
+                    (id, tracked_app_id, device_id, device_name, platform, started_at,
+                     process_name, exe_path)
+                 VALUES ('session-z', 'app', 'device', 'Device', 'test', 'now', 'p', 'p'),
+                        ('session-a', 'app', 'device', 'Device', 'test', 'now', 'p', 'p');
+                 INSERT INTO usage_events
+                    (id, tracked_app_id, device_id, device_name, platform, occurred_at,
+                     kind, process_name, exe_path)
+                 VALUES ('event-a', 'app', 'device', 'Device', 'test', 'now', 'focus', 'p', 'p');",
+            )
+            .expect("legacy usage rows create");
+        sync_kv::set_sync_kv(
+            &connection,
+            crate::VERSION_VECTOR_KEY,
+            r#"{"session-a":"legacy","event-a":"legacy","keep":"revision"}"#,
+        )
+        .expect("legacy vector persists");
+
+        ensure_usage_sequence_migrated(&connection, "source-device")
+            .expect("usage sequence backfills");
+
+        let refs = connection
+            .prepare(
+                "SELECT seq, entity_type, entity_id, hlc FROM usage_sync_log
+                 WHERE device_id = 'source-device' ORDER BY seq",
+            )
+            .expect("backfill rows query prepares")
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                ))
+            })
+            .expect("backfill rows read")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("backfill rows collect");
+        assert_eq!(
+            refs.iter()
+                .map(|(seq, entity_type, id, _)| (*seq, entity_type.as_str(), id.as_str()))
+                .collect::<Vec<_>>(),
+            [
+                (1, "usage_event", "event-a"),
+                (2, "usage_session", "session-a"),
+                (3, "usage_session", "session-z"),
+            ]
+        );
+        assert!(refs
+            .iter()
+            .all(|(_, _, _, hlc)| hlc.ends_with("source-device")));
+        let vector: VersionVector = serde_json::from_str(
+            &sync_kv::get_sync_kv(&connection, crate::VERSION_VECTOR_KEY)
+                .expect("vector reads")
+                .expect("vector exists"),
+        )
+        .expect("vector parses");
+        assert_eq!(
+            vector.get("@usage:source-device").map(String::as_str),
+            Some("3")
+        );
+        assert_eq!(vector.get("keep").map(String::as_str), Some("revision"));
+        assert!(!vector.contains_key("event-a"));
+        assert!(!vector.contains_key("session-a"));
+
+        ensure_usage_sequence_migrated(&connection, "source-device")
+            .expect("repeated migration succeeds");
+        let row_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM usage_sync_log WHERE device_id = 'source-device'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("backfill count reads");
+        assert_eq!(row_count, 3);
+        assert_eq!(
+            sync_kv::get_sync_kv(&connection, USAGE_SEQUENCE_MIGRATION_KEY)
+                .expect("migration marker reads")
+                .as_deref(),
+            Some("1")
+        );
+    }
+
+    #[test]
+    fn sequence_backfill_failure_rolls_back_rows_and_marker() {
+        let connection = migration_connection();
+        connection
+            .execute(
+                "INSERT INTO usage_days(device_id, day, updated_at)\
+                 VALUES ('device', 'day', 'now')",
+                [],
+            )
+            .expect("legacy usage day creates");
+        connection
+            .execute_batch(
+                "CREATE TRIGGER reject_usage_backfill
+                 BEFORE INSERT ON usage_sync_log
+                 BEGIN SELECT RAISE(ABORT, 'injected backfill failure'); END;",
+            )
+            .expect("failure trigger creates");
+
+        assert!(ensure_usage_sequence_migrated(&connection, "source-device").is_err());
+        let versions: i64 = connection
+            .query_row("SELECT COUNT(*) FROM usage_sync_versions", [], |row| {
+                row.get(0)
+            })
+            .expect("usage versions count reads");
+        assert_eq!(versions, 0);
+        assert_eq!(
+            sync_kv::get_sync_kv(&connection, USAGE_SEQUENCE_MIGRATION_KEY)
+                .expect("migration marker reads"),
+            None
+        );
     }
 }

@@ -78,7 +78,7 @@
             for entity in entities {
                 // Fixed (non-usage) entities like the tracked_app ride in
                 // the same stream — count only journal-served usage refs.
-                let is_usage = is_sequenced_usage_entity(&entity.entity_type);
+                let is_usage = ark_domain::types::is_sequenced_usage_entity(&entity.entity_type);
                 SqliteStorageBackend::apply_entity_blocking(client, &entity).unwrap();
                 applied += usize::from(is_usage);
             }

@@ -1,5 +1,4 @@
 use crate::application::legacy_mutation::{LegacyMutationSession, LegacyObjectKind};
-use crate::db;
 use crate::types::{SyncEntity, TrackedApp};
 use rusqlite::Transaction;
 use serde_json::{Map, Value};
@@ -48,7 +47,7 @@ impl LegacyMutationSession for SqliteLegacyMutationSession<'_, '_> {
         device_id: &str,
     ) -> Result<SyncEntity, String> {
         ark_store::usage::upsert_tracked_app(self.transaction, tracked_app)?;
-        let hlc = db::bump_sync_version_vector(
+        let hlc = ark_store::sync_versions::bump_sync_version_vector(
             self.transaction,
             "tracked_app",
             &tracked_app.id,
@@ -75,8 +74,13 @@ impl LegacyMutationSession for SqliteLegacyMutationSession<'_, '_> {
 
     fn delete_tracked_app(&self, id: &str, device_id: &str) -> Result<SyncEntity, String> {
         ark_store::usage::delete_tracked_app(self.transaction, id)?;
-        let hlc =
-            db::bump_sync_version_vector(self.transaction, "tracked_app", id, device_id, true)?;
+        let hlc = ark_store::sync_versions::bump_sync_version_vector(
+            self.transaction,
+            "tracked_app",
+            id,
+            device_id,
+            true,
+        )?;
         ark_store::sync_tombstones::record(self.transaction, "tracked_app", id, None, &hlc)?;
         Ok(SyncEntity {
             entity_type: "tracked_app".into(),

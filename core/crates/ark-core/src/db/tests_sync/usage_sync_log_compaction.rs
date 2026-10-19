@@ -26,7 +26,7 @@
             SqliteStorageBackend::collect_entities_blocking(conn, &VersionVector::new(), device_id)
                 .unwrap()
                 .into_iter()
-                .filter(|entity| is_sequenced_usage_entity(&entity.entity_type))
+                .filter(|entity| ark_domain::types::is_sequenced_usage_entity(&entity.entity_type))
                 .map(|entity| entity.id)
                 .collect();
         ids.sort();
@@ -293,7 +293,7 @@
 
         // Heartbeat churn: several seq refs per entity (stale hlcs) plus the
         // current refs the writers produce.
-        ensure_usage_sequence_migrated(&conn, "dev").unwrap();
+        ark_store::usage_sync_log::ensure_usage_sequence_migrated(&conn, "dev").unwrap();
         let entity_ids: Vec<(&str, &str)> = sessions
             .iter()
             .map(|session| ("usage_session", session.id.as_str()))

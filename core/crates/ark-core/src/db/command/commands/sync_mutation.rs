@@ -1,7 +1,7 @@
 use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError};
 use super::inbound_policy::require_sync_policy_identity;
 use crate::canonical_types::pending::ReplayNotice;
-use crate::db::{ensure_usage_sequence_migrated, SqliteStorageBackend};
+use crate::db::SqliteStorageBackend;
 use crate::types::SyncEntity;
 use ark_application::sync_storage::{OutboundAck, OutboundProgress, PolicyIdentity};
 use rusqlite::Transaction;
@@ -242,7 +242,8 @@ impl DbCommand for EnsureUsageSequenceMigratedCommand {
         transaction: &Transaction<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_engine()?;
-        ensure_usage_sequence_migrated(transaction, &self.device_id).map_err(DbError::Storage)
+        ark_store::usage_sync_log::ensure_usage_sequence_migrated(transaction, &self.device_id)
+            .map_err(DbError::Storage)
     }
 }
 

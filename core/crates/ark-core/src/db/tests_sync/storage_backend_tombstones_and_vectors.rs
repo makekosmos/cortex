@@ -92,10 +92,22 @@
     #[test]
     fn local_sync_version_bump_persists_hlc_for_entity() {
         let conn = setup_db();
-        let first =
-            bump_sync_version_vector(&conn, "object", "obj-local", "device-local", false).unwrap();
-        let second =
-            bump_sync_version_vector(&conn, "object", "obj-local", "device-local", false).unwrap();
+        let first = ark_store::sync_versions::bump_sync_version_vector(
+            &conn,
+            "object",
+            "obj-local",
+            "device-local",
+            false,
+        )
+        .unwrap();
+        let second = ark_store::sync_versions::bump_sync_version_vector(
+            &conn,
+            "object",
+            "obj-local",
+            "device-local",
+            false,
+        )
+        .unwrap();
 
         assert!(HLC::is_newer(&second, &first) || second > first);
         let raw = ark_store::sync_kv::get_sync_kv(&conn, VERSION_VECTOR_KEY)
