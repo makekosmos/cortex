@@ -1,5 +1,4 @@
 use super::super::{sealed, CommandClass, CommandContext, DbError, DbQuery};
-use crate::db::SqliteStorageBackend;
 use crate::types::{SyncEntity, VersionVector};
 use ark_application::sync_storage::SyncReadClass;
 use ark_application::sync_storage::{CommittedFeedDeliveryPage, CommittedFeedEntry, FeedSnapshot};
@@ -137,23 +136,20 @@ impl LoadEntitiesQuery {
             profile = policy.and_then(|policy| policy.active.then(|| policy.selective_profile()));
         }
         let entities = match page {
-            None => {
-                SqliteStorageBackend::collect_entities_blocking(connection, &vector, &device_id)
-                    .map_err(DbError::Storage)?
-            }
+            None => ark_store::sync_entities::collect_entities(connection, &vector, &device_id)
+                .map_err(DbError::Storage)?,
             Some((offset, limit)) => {
                 if let Some(profile) = &profile {
-                    let all = SqliteStorageBackend::collect_entities_blocking(
-                        connection, &vector, &device_id,
-                    )
-                    .map_err(DbError::Storage)?;
+                    let all =
+                        ark_store::sync_entities::collect_entities(connection, &vector, &device_id)
+                            .map_err(DbError::Storage)?;
                     ark_domain::selective_sync::filter_entities_for_profile(profile, &all)
                         .into_iter()
                         .skip(offset)
                         .take(limit)
                         .collect()
                 } else {
-                    SqliteStorageBackend::collect_entities_page_blocking(
+                    ark_store::sync_entities::collect_entities_page(
                         connection, &vector, &device_id, offset, limit,
                     )
                     .map_err(DbError::Storage)?

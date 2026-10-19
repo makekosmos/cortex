@@ -96,7 +96,7 @@
         ark_store::usage_sync_log::ensure_usage_sequence_migrated(&source, "source-device")
             .unwrap();
 
-        let entities = SqliteStorageBackend::collect_entities_blocking(
+        let entities = ark_store::sync_entities::collect_entities(
             &source,
             &VersionVector::new(),
             "source-device",
@@ -150,7 +150,7 @@
         assert!(!exported.contains("LOCAL_A"));
         assert!(!exported.contains("LOCAL_B"));
 
-        let entity = SqliteStorageBackend::collect_entities_blocking(
+        let entity = ark_store::sync_entities::collect_entities(
             &source,
             &VersionVector::new(),
             "source-device",

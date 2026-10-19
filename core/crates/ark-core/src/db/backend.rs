@@ -4,7 +4,6 @@ use super::DbHandle;
 
 mod adapter;
 mod apply;
-mod entities;
 mod legacy_mutation;
 mod object_mutation;
 mod signed_integration;

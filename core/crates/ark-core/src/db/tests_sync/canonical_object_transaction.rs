@@ -107,8 +107,7 @@ fn initial_sync_snapshot_omits_tasks_owned_by_the_merge_journal() {
     let vector = crate::types::VersionVector::default();
 
     let before =
-        SqliteStorageBackend::collect_entities_page_blocking(&conn, &vector, "device", 0, 16)
-            .unwrap();
+        ark_store::sync_entities::collect_entities_page(&conn, &vector, "device", 0, 16).unwrap();
     assert!(before.iter().any(|entity| entity.id == task.id));
     assert!(before.iter().any(|entity| entity.id == note.id));
 
@@ -127,8 +126,7 @@ fn initial_sync_snapshot_omits_tasks_owned_by_the_merge_journal() {
     .unwrap();
 
     let after =
-        SqliteStorageBackend::collect_entities_page_blocking(&conn, &vector, "device", 0, 16)
-            .unwrap();
+        ark_store::sync_entities::collect_entities_page(&conn, &vector, "device", 0, 16).unwrap();
     assert!(after.iter().all(|entity| entity.id != task.id));
     assert!(after.iter().any(|entity| entity.id == note.id));
 }
@@ -139,7 +137,7 @@ fn initial_sync_snapshot_fails_when_merge_mode_cannot_be_checked() {
     conn.execute_batch("DROP TABLE task_merge_bootstraps")
         .unwrap();
 
-    let error = SqliteStorageBackend::collect_entities_page_blocking(
+    let error = ark_store::sync_entities::collect_entities_page(
         &conn,
         &crate::types::VersionVector::default(),
         "device",

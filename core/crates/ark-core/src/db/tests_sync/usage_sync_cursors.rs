@@ -16,7 +16,7 @@
         offset: usize,
         limit: usize,
     ) -> Vec<SyncEntity> {
-        SqliteStorageBackend::collect_entities_page_blocking(conn, vector, device_id, offset, limit)
+        ark_store::sync_entities::collect_entities_page(conn, vector, device_id, offset, limit)
             .unwrap()
     }
 
