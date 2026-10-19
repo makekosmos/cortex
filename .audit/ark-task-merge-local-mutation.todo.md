@@ -1,0 +1,36 @@
+# ARK task-merge local mutation boundary
+
+## Frame
+
+- [x] Read the current upsert, delete, bootstrap, materialization, snapshot, revision, and writer paths.
+- [x] Define the acceptance rubric: no Core SQLite in this path; one caller-owned transaction; authorization/canonical rules remain Core-owned; coupled projection and sync writes cannot be omitted; API remains closed and understandable.
+- [x] Compare two distinct Store boundary shapes and obtain an independent score.
+
+## Design
+
+- [x] Select a Core-prepared task-specific mutation plan applied by one Store semantic operation; retain a typed Store-loaded snapshot from the alternative.
+- [ ] Write concrete public/internal type signatures and data invariants before implementation.
+- [ ] Verify the plan does not move canonical admission, requested-snapshot policy, or explicit conflict policy into Store.
+
+## Implement and verify
+
+- [ ] Store loads the typed local task state, including sorted links, bootstrap state, snapshot token, and legacy revision fallback.
+- [ ] Store applies local bootstrap, task operations, journal, projection, links, version-vector/feed, object revision, and tombstone changes in the existing transaction.
+- [ ] Core uses the returned materialized object and revision values to preserve current `SyncEntity` output.
+- [ ] Test stale snapshots, bootstrap-only identity, pending causal dependencies, concurrent alternatives, explicit resolution digest, soft/hard delete, link revisions, and full rollback on injected persistence failure.
+- [ ] Remove superseded Core SQL and keep every touched source below the hard size limit.
+- [ ] Run focused Store/Core tests, Clippy, format, source-size, writer census, and graph checks.
+- [ ] Thermo-nuclear code-quality review; resolve confirmed blockers.
+- [ ] Update the ownership evidence and commit only this unit.
+
+## Decision rubric and result
+
+| Criterion | Typed state plus Store persistence calls | Core plan plus one Store apply |
+| --- | ---: | ---: |
+| Removes SQL ownership from Core | 4/5 | 5/5 |
+| Preserves transaction and atomic invariant | 4/5 | 5/5 |
+| Keeps policy/auth in the right layer | 5/5 | 5/5 |
+| API size and migration risk | 4/5 | 3/5 |
+| Total | 17/20 | 18/20 |
+
+Selected the second shape. The smaller A API is grafted as a typed state read with task snapshot token, sorted links, bootstrap presence, and legacy revision fallback. Store receives no generic callbacks or raw SQLite values from Core.

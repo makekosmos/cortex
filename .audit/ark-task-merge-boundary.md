@@ -51,6 +51,18 @@ Bootstrap persistence uses `check_bootstrap` followed by `persist_bootstrap`. Th
 
 Store also owns outbound progress row decoding, the journal watermark query, and conditional insert, policy-stamp, batch-claim, and acknowledgement writes. It returns a typed progress state with optional in-flight and last-acknowledged batches. Core still validates the current sync policy, fits entries to the wire budget, and decides whether a replayed or new acknowledgement is valid.
 
+## Local task materialization decision
+
+The remaining local upsert/delete path must not be moved wholesale from Core into Store: canonical-type validation, expected-snapshot admission, source identity, and explicit conflict-resolution policy stay in Core. It also must not be decomposed into a sequence of Core-issued CRUD calls, because callers could omit one of the coupled object, link, revision, tombstone, bootstrap, operation, or journal writes.
+
+Two candidates were compared against storage ownership, same-transaction atomicity, policy ownership, and API/migration size. Candidate A exposes a typed current-state read and several Store persistence operations (17/20). Candidate B has Core build a closed domain-specific mutation plan and hands it to one Store apply operation (18/20). An independent GPT-6-Luna judge selected B, with the typed snapshot from A as a graft. This honors the requested Luna worker budget; the orchestrator made the final selection.
+
+The selected boundary is a typed `TaskMergeLocalMutationPlan` built from a Store-loaded snapshot inside the current immediate transaction. Store applies the plan through the caller's transaction, rechecks snapshot/conflict guards, persists bootstrap and operation/journal rows, materializes with the pure `ark-domain` task-merge projection, and writes the projection, source links, object revision, version-vector/feed effects, and tombstone state as one semantic operation. Store returns the materialized object and assigned revisions; Core performs canonical validation and builds the existing `SyncEntity` result. No rusqlite rows, SQL strings, callbacks, or transaction ownership cross into Core's plan.
+
+The state read includes the existing object and sorted source links, bootstrap presence, object identity, task snapshot token, and the legacy object-revision fallback. The plan remains task-merge-specific; it is not a generic batch API. Hard delete must continue to remove source links and produce the existing tombstone entity, soft delete must retain the projection, concurrent existence alternatives must remain unresolved absent an explicit digest, and causal dependencies must keep the projection pending. Failure injection must prove all related tables roll back together.
+
+Candidate sketches and the independent score are recorded in the active task transcript; this decision supersedes the earlier open instruction to choose the complete local task materialization seam during implementation.
+
 ## Migration sequence
 
 1. Move bounded journal page reading and its payload verification into Store; add Store-owned schema tests for valid pages, invalid cursors/limits, future watermarks, missing/mismatched payloads. Keep Core command/service tests for observable behavior.
