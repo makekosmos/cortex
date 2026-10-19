@@ -18,7 +18,7 @@ fn load_all_json_is_additive_deterministic_and_hides_deprecated_legacy_types() {
         .unwrap();
     }
     ark_core::db::delete_object_type(&conn, "z-type").unwrap();
-    let value = serde_json::to_value(load_all(&conn).unwrap()).unwrap();
+    let value = serde_json::to_value(ark_store::load_all::load_all(&conn).unwrap()).unwrap();
     let keys = value
         .as_object()
         .unwrap()

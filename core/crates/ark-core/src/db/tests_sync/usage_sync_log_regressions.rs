@@ -158,7 +158,7 @@
                 Ok(1),
                 "applied usage entity should have a sync-log ref"
             );
-            clear_all(&guard).unwrap();
+            ark_store::load_all::clear_all(&guard).unwrap();
             for table in ["usage_sync_log", "usage_sync_versions"] {
                 let count: i64 = guard
                     .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
@@ -179,7 +179,7 @@
         todo.is_trashed = true;
         upsert_todo(&conn, &todo).unwrap();
 
-        let deleted = delete_trashed(&conn, "device-under-test").unwrap();
+        let deleted = ark_store::load_all::delete_trashed(&conn, "device-under-test").unwrap();
         assert_eq!(deleted, 1);
         let tombstone_hlc: Option<String> = conn
             .query_row(

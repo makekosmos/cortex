@@ -131,7 +131,7 @@ fn test_object_model_crud() {
     let link = make_object_link("link-1", "obj-1", "obj-2");
     upsert_object_link(&conn, &link).unwrap();
 
-    let data = load_all(&conn).unwrap();
+    let data = ark_store::load_all::load_all(&conn).unwrap();
     assert!(data
         .object_types
         .iter()
@@ -151,7 +151,7 @@ fn test_object_model_crud() {
     delete_object_link(&conn, "link-1").unwrap();
     ark_store::objects::delete_object(&conn, "obj-2").unwrap();
     delete_object_type(&conn, "crud_fixture_book_type").unwrap();
-    let data = load_all(&conn).unwrap();
+    let data = ark_store::load_all::load_all(&conn).unwrap();
     assert_eq!(data.object_links.len(), 0);
     assert_eq!(data.objects.len(), 1);
     assert!(!data

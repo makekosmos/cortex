@@ -201,7 +201,7 @@ fn phase3_clear_all_removes_ephemeral_state_but_preserves_locked_registry_and_ar
         [],
     )
     .unwrap();
-    ark_core::db::clear_all(&conn).unwrap();
+    ark_store::load_all::clear_all(&conn).unwrap();
     assert_eq!(
         conn.query_row("SELECT COUNT(*) FROM object_sync_versions", [], |r| r
             .get::<_, i64>(0))

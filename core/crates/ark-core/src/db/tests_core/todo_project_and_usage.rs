@@ -5,12 +5,12 @@
         let todo = make_todo("t1", "Buy milk");
         upsert_todo(&conn, &todo).unwrap();
 
-        let data = load_all(&conn).unwrap();
+        let data = ark_store::load_all::load_all(&conn).unwrap();
         assert_eq!(data.todos.len(), 1);
         assert_eq!(data.todos[0].title, "Buy milk");
 
         delete_todo(&conn, "t1").unwrap();
-        let data = load_all(&conn).unwrap();
+        let data = ark_store::load_all::load_all(&conn).unwrap();
         assert_eq!(data.todos.len(), 0);
     }
 
@@ -20,7 +20,7 @@
         let todos = vec![make_todo("t1", "A"), make_todo("t2", "B")];
         batch_upsert_todos(&conn, &todos).unwrap();
 
-        let data = load_all(&conn).unwrap();
+        let data = ark_store::load_all::load_all(&conn).unwrap();
         assert_eq!(data.todos.len(), 2);
     }
 
@@ -40,12 +40,12 @@
             created_at: "2026-01-01T00:00:00.000Z".to_string(),
         };
         upsert_project(&conn, &project).unwrap();
-        let data = load_all(&conn).unwrap();
+        let data = ark_store::load_all::load_all(&conn).unwrap();
         assert_eq!(data.projects.len(), 1);
         assert_eq!(data.projects[0].title, "My Project");
 
         delete_project(&conn, "p1").unwrap();
-        let data = load_all(&conn).unwrap();
+        let data = ark_store::load_all::load_all(&conn).unwrap();
         assert_eq!(data.projects.len(), 0);
     }
 
@@ -59,7 +59,7 @@
             created_at: "2026-01-01T00:00:00.000Z".to_string(),
         };
         upsert_tag(&conn, &tag).unwrap();
-        let data = load_all(&conn).unwrap();
+        let data = ark_store::load_all::load_all(&conn).unwrap();
         assert_eq!(data.tags.len(), 1);
         assert_eq!(data.tags[0].color, Some("red".to_string()));
     }
@@ -75,7 +75,7 @@
         ark_store::usage::upsert_usage_session(&conn, &session).unwrap();
         ark_store::usage::upsert_usage_event(&conn, &event).unwrap();
 
-        let data = load_all(&conn).unwrap();
+        let data = ark_store::load_all::load_all(&conn).unwrap();
         assert_eq!(data.tracked_apps.len(), 1);
         assert_eq!(data.usage_sessions.len(), 1);
         assert_eq!(data.usage_events.len(), 1);
@@ -86,7 +86,7 @@
         ark_store::usage::delete_usage_event(&conn, "event-1").unwrap();
         ark_store::usage::delete_usage_session(&conn, "session-1").unwrap();
         ark_store::usage::delete_tracked_app(&conn, "app-1").unwrap();
-        let data = load_all(&conn).unwrap();
+        let data = ark_store::load_all::load_all(&conn).unwrap();
         assert_eq!(data.tracked_apps.len(), 0);
         assert_eq!(data.usage_sessions.len(), 0);
         assert_eq!(data.usage_events.len(), 0);

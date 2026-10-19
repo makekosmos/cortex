@@ -101,7 +101,7 @@ fn test_init_schema_migrates_existing_db_without_destroying_data() {
 
     init_schema(&conn).unwrap();
 
-    let data = load_all(&conn).unwrap();
+    let data = ark_store::load_all::load_all(&conn).unwrap();
     assert_eq!(data.todos.len(), 1);
     assert_eq!(data.todos[0].id, "legacy-todo");
     assert_eq!(data.todos[0].title, "Keep me");
@@ -224,6 +224,6 @@ fn test_init_schema_adds_usage_runtime_ms_to_existing_sessions() {
         )
         .unwrap();
     assert_eq!(runtime_ms, 2_700_000);
-    let data = load_all(&conn).unwrap();
+    let data = ark_store::load_all::load_all(&conn).unwrap();
     assert_eq!(data.usage_sessions[0].runtime_ms, 2_700_000);
 }

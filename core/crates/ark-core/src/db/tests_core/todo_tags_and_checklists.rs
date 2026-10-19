@@ -10,7 +10,7 @@
         };
         upsert_todo(&conn, &todo).unwrap();
 
-        let data = load_all(&conn).unwrap();
+        let data = ark_store::load_all::load_all(&conn).unwrap();
         assert_eq!(data.todos[0].tag_ids, vec!["tag1", "tag2"]);
         assert!(data.todos[0].checklist_items.is_array());
         assert!(data.todos[0].recurrence_rule.is_some());

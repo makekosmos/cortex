@@ -54,7 +54,7 @@ async fn clear_all_removes_object_write_receipts_before_replay() {
             )
             .unwrap();
         assert_eq!(count, 1);
-        clear_all(&conn).unwrap();
+        ark_store::load_all::clear_all(&conn).unwrap();
         assert!(get_object(&conn, &entity.id).unwrap().is_none());
         let count: i64 = conn
             .query_row(

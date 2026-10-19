@@ -3,7 +3,6 @@ mod command;
 mod committed_feed;
 pub(crate) mod constants;
 mod legacy;
-mod load;
 mod objects;
 mod open;
 mod task_merge;
@@ -69,7 +68,6 @@ pub(in crate::db) use integration_replication_publication::{
 pub use legacy::{
     batch_upsert_todos, delete_project, delete_todo, upsert_project, upsert_tag, upsert_todo,
 };
-pub use load::{clear_all, delete_trashed, load_all};
 pub use objects::{
     delete_object_link, delete_object_type, get_object, get_object_type, get_objects_by_ids,
     is_object_definition_known, is_object_type_known, list_object_links, list_object_summaries,
@@ -130,7 +128,6 @@ mod tests {
     use std::path::Path;
     use std::sync::{Arc, Mutex};
 
-    use super::objects::object_search_fts_exists;
     use super::open::replay_pending_for_type;
     use super::*;
     use crate::hlc::HLC;

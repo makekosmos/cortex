@@ -46,7 +46,7 @@ fn load_all_clear_and_raw_backup_preserve_phase2_registry_contract() {
         },
     )
     .unwrap();
-    let exported = load_all(&conn).unwrap();
+    let exported = ark_store::load_all::load_all(&conn).unwrap();
     assert!(exported
         .object_type_summaries
         .iter()
@@ -103,7 +103,7 @@ fn load_all_clear_and_raw_backup_preserve_phase2_registry_contract() {
     );
     drop(reopened);
     std::fs::remove_file(&path).expect("backup db must be released after close");
-    clear_all(&conn).unwrap();
+    ark_store::load_all::clear_all(&conn).unwrap();
     assert_eq!(
         conn.query_row("SELECT COUNT(*) FROM objects", [], |r| r.get::<_, i64>(0))
             .unwrap(),

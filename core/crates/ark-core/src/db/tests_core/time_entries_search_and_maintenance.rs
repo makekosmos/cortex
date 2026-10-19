@@ -158,7 +158,7 @@
         ark_store::objects::upsert_object_compat(&conn, &object).unwrap();
 
         assert!(
-            !object_search_fts_exists(&conn).unwrap(),
+            !ark_store::objects::object_search_fts_exists(&conn).unwrap(),
             "legacy DB setup should not have the FTS table yet"
         );
 
@@ -250,8 +250,8 @@
         )
         .unwrap();
         ark_store::sync_kv::set_sync_kv(&conn, "k", "v").unwrap();
-        clear_all(&conn).unwrap();
-        let data = load_all(&conn).unwrap();
+        ark_store::load_all::clear_all(&conn).unwrap();
+        let data = ark_store::load_all::load_all(&conn).unwrap();
         assert_eq!(data.todos.len(), 0);
         assert_eq!(data.tracked_apps.len(), 0);
         assert_eq!(data.usage_sessions.len(), 0);
@@ -280,9 +280,9 @@
         todo.is_trashed = true;
         upsert_todo(&conn, &todo).unwrap();
 
-        let count = delete_trashed(&conn, "device-under-test").unwrap();
+        let count = ark_store::load_all::delete_trashed(&conn, "device-under-test").unwrap();
         assert_eq!(count, 1);
-        let data = load_all(&conn).unwrap();
+        let data = ark_store::load_all::load_all(&conn).unwrap();
         assert_eq!(data.todos.len(), 1);
         assert_eq!(data.todos[0].id, "t1");
     }

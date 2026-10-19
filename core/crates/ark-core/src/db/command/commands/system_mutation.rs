@@ -22,7 +22,7 @@ impl DbCommand for ClearAllCommand {
         transaction: &Transaction<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_engine()?;
-        crate::db::clear_all(transaction).map_err(DbError::Storage)
+        ark_store::load_all::clear_all(transaction).map_err(DbError::Storage)
     }
 }
 
@@ -53,7 +53,7 @@ impl DbCommand for DeleteTrashedCommand {
         transaction: &Transaction<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_engine()?;
-        crate::db::delete_trashed(transaction, &self.device_id).map_err(DbError::Storage)
+        ark_store::load_all::delete_trashed(transaction, &self.device_id).map_err(DbError::Storage)
     }
 }
 

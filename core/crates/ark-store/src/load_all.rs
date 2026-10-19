@@ -2,8 +2,13 @@
 // Bulk operations
 // ---------------------------------------------------------------------------
 
+use ark_application::load_all_data::LoadAllData;
+use ark_domain::canonical_type::definitions::is_canonical_version;
+use ark_domain::types::{Area, ArkObject, Heading};
+use rusqlite::Connection;
+
 pub fn clear_all(conn: &Connection) -> Result<(), String> {
-    if object_search_fts_exists(conn).unwrap_or(false) {
+    if crate::objects::object_search_fts_exists(conn).unwrap_or(false) {
         conn.execute("DELETE FROM object_search_fts", [])
             .map_err(|e| e.to_string())?;
     }
@@ -78,10 +83,9 @@ pub fn delete_trashed(conn: &Connection, device_id: &str) -> Result<usize, Strin
             .execute("DELETE FROM todos WHERE is_trashed = 1", [])
             .map_err(|e| e.to_string())?;
         for id in &ids {
-            let hlc = ark_store::sync_versions::bump_sync_version_vector(
-                conn, "todo", id, device_id, true,
-            )?;
-            ark_store::sync_tombstones::record(conn, "todo", id, None, &hlc)?;
+            let hlc =
+                crate::sync_versions::bump_sync_version_vector(conn, "todo", id, device_id, true)?;
+            crate::sync_tombstones::record(conn, "todo", id, None, &hlc)?;
         }
         Ok(deleted)
     })();
@@ -104,19 +108,19 @@ pub fn delete_trashed(conn: &Connection, device_id: &str) -> Result<usize, Strin
 // ---------------------------------------------------------------------------
 
 pub fn load_all(conn: &Connection) -> Result<LoadAllData, String> {
-    let mut todos = ark_store::legacy_entities::load_all_todos(conn)?;
-    let mut projects = ark_store::legacy_entities::load_all_projects(conn)?;
-    let mut tags = ark_store::legacy_entities::load_all_tags(conn)?;
-    let mut tracked_apps = ark_store::usage::load_all_tracked_apps(conn)?;
-    let mut usage_sessions = ark_store::usage_history::load_all_usage_sessions(conn)?;
-    let mut usage_events = ark_store::usage_history::load_all_usage_events(conn)?;
-    let mut objects = list_objects(conn)?;
+    let mut todos = crate::legacy_entities::load_all_todos(conn)?;
+    let mut projects = crate::legacy_entities::load_all_projects(conn)?;
+    let mut tags = crate::legacy_entities::load_all_tags(conn)?;
+    let mut tracked_apps = crate::usage::load_all_tracked_apps(conn)?;
+    let mut usage_sessions = crate::usage_history::load_all_usage_sessions(conn)?;
+    let mut usage_events = crate::usage_history::load_all_usage_events(conn)?;
+    let mut objects = crate::objects::list_objects(conn)?;
     let (mut areas, mut headings) = compatibility_planning_views(&objects);
-    let mut object_types = list_object_types(conn)?;
-    let mut object_type_summaries = type_registry::list_type_summaries(conn)?;
-    let mut object_type_versions = type_registry::list_all_type_versions(conn)?;
-    let mut object_type_aliases = type_registry::list_aliases(conn)?;
-    let mut object_links = list_object_links(conn)?;
+    let mut object_types = crate::object_types::list(conn)?;
+    let mut object_type_summaries = crate::type_registry::list_type_summaries(conn)?;
+    let mut object_type_versions = crate::type_registry::list_all_type_versions(conn)?;
+    let mut object_type_aliases = crate::type_registry::list_aliases(conn)?;
+    let mut object_links = crate::objects::list_object_links(conn)?;
 
     // The export contract is deterministic even when SQLite's query planner or
     // insertion order changes.  Keep the legacy collections and the additive
@@ -163,10 +167,7 @@ fn compatibility_planning_views(objects: &[ArkObject]) -> (Vec<Area>, Vec<Headin
     let mut headings = Vec::new();
     for object in objects {
         if object.type_id != "com.kosmos.project"
-            || !crate::canonical_types::definitions::is_canonical_version(
-                &object.type_id,
-                &object.type_version,
-            )
+            || !is_canonical_version(&object.type_id, &object.type_version)
         {
             continue;
         }
@@ -213,4 +214,25 @@ fn compatibility_planning_views(objects: &[ArkObject]) -> (Vec<Area>, Vec<Headin
         }
     }
     (areas, headings)
+}
+
+fn phase3_migration_completed(conn: &Connection) -> Result<bool, String> {
+    let table_exists: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND \
+             name='canonical_migration_runs')",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|error| error.to_string())?;
+    if !table_exists {
+        return Ok(false);
+    }
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM canonical_migration_runs WHERE \
+         contract_version='phase3-canonical-v1' AND status='completed')",
+        [],
+        |row| row.get(0),
+    )
+    .map_err(|error| error.to_string())
 }

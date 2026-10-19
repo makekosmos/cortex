@@ -44,18 +44,17 @@ impl DbQuery for ObjectReadQuery {
     ) -> Result<Self::Output, DbError> {
         context.require_engine()?;
         match self {
-            Self::LoadAll => serialize(crate::db::load_all(connection)),
-            Self::List => serialize(crate::db::list_objects(connection)),
-            Self::ListSummaries => serialize(crate::db::list_object_summaries(connection)),
-            Self::ListByType(type_id) => {
-                serialize(crate::db::list_objects_by_type(connection, &type_id))
-            }
-            Self::ListRunningTime(source) => serialize(crate::db::list_running_time_entries(
-                connection,
-                source.as_deref(),
+            Self::LoadAll => serialize(ark_store::load_all::load_all(connection)),
+            Self::List => serialize(ark_store::objects::list_objects(connection)),
+            Self::ListSummaries => serialize(ark_store::objects::list_object_summaries(connection)),
+            Self::ListByType(type_id) => serialize(ark_store::objects::list_objects_by_type(
+                connection, &type_id,
             )),
+            Self::ListRunningTime(source) => serialize(
+                ark_store::objects::list_running_time_entries(connection, source.as_deref()),
+            ),
             Self::ListSummariesByType(type_id) => serialize(
-                crate::db::list_object_summaries_by_type(connection, &type_id),
+                ark_store::objects::list_object_summaries_by_type(connection, &type_id),
             ),
             Self::EstimateDataVolume(scopes) => {
                 let session = ark_store::data_volume::SqliteDataVolumeReadSession::new(connection);
@@ -65,9 +64,13 @@ impl DbQuery for ObjectReadQuery {
                     ),
                 )
             }
-            Self::GetByIds(ids) => serialize(crate::db::get_objects_by_ids(connection, &ids)),
-            Self::Search(query) => serialize(crate::db::search_objects(connection, &query)),
-            Self::Get(id) => serialize(crate::db::get_object(connection, &id)),
+            Self::GetByIds(ids) => {
+                serialize(ark_store::objects::get_objects_by_ids(connection, &ids))
+            }
+            Self::Search(query) => {
+                serialize(ark_store::objects::search_objects(connection, &query))
+            }
+            Self::Get(id) => serialize(ark_store::objects::get_object(connection, &id)),
             Self::WriteSnapshot(id) => {
                 let identity = connection
                     .query_row(

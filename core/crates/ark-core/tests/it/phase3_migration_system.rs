@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used)]
 use ark_core::canonical_types::migration::{migrate_phase3, retire_legacy_planning_tables};
-use ark_core::db::{backup_to_file, init_schema, init_schema_prerequisites_for_phase3, load_all};
+use ark_core::db::{backup_to_file, init_schema, init_schema_prerequisites_for_phase3};
 use ark_store::open::open_db;
 use rusqlite::{params, Connection};
 use serde_json::json;
@@ -63,7 +63,7 @@ fn phase9_retires_planning_tables_after_lossless_canonical_migration() {
     assert_eq!((areas, headings), (1, 1));
     assert!(!table_exists(&conn, "areas"));
     assert!(!table_exists(&conn, "headings"));
-    let data = load_all(&conn).unwrap();
+    let data = ark_store::load_all::load_all(&conn).unwrap();
     assert_eq!(
         data.areas.iter().map(|x| x.id.as_str()).collect::<Vec<_>>(),
         ["area-1"]
@@ -107,8 +107,20 @@ fn phase9_retires_planning_tables_after_lossless_canonical_migration() {
     init_schema(&reopened).unwrap();
     assert!(!table_exists(&reopened, "areas"));
     assert!(!table_exists(&reopened, "headings"));
-    assert_eq!(load_all(&reopened).unwrap().areas.len(), 1);
-    assert_eq!(load_all(&reopened).unwrap().headings.len(), 1);
+    assert_eq!(
+        ark_store::load_all::load_all(&reopened)
+            .unwrap()
+            .areas
+            .len(),
+        1
+    );
+    assert_eq!(
+        ark_store::load_all::load_all(&reopened)
+            .unwrap()
+            .headings
+            .len(),
+        1
+    );
     assert_eq!(retire_legacy_planning_tables(&reopened).unwrap(), (0, 0));
 }
 
@@ -347,7 +359,7 @@ fn internal_markers_are_not_exposed_by_load_all() {
         [],
     )
     .unwrap();
-    let exported = serde_json::to_string(&load_all(&conn).unwrap()).unwrap();
+    let exported = serde_json::to_string(&ark_store::load_all::load_all(&conn).unwrap()).unwrap();
     assert!(exported.contains("Public object"));
     for marker in [
         "LOCAL_INTERNAL_MARKER",

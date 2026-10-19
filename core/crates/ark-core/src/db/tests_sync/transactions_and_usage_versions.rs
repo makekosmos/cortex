@@ -17,7 +17,7 @@
         ));
         conn.execute_batch("COMMIT").unwrap();
         // РџСЂРѕРІРµСЂСЏРµРј, С‡С‚Рѕ todo РґРµР№СЃС‚РІРёС‚РµР»СЊРЅРѕ Р·Р°РїРёСЃР°РЅС‹.
-        let data = load_all(&conn).unwrap();
+        let data = ark_store::load_all::load_all(&conn).unwrap();
         assert_eq!(
             data.todos.len(),
             2,
@@ -145,7 +145,8 @@
                 .unwrap(),
             2
         );
-        let exported = serde_json::to_string(&load_all(&source).unwrap()).unwrap();
+        let exported =
+            serde_json::to_string(&ark_store::load_all::load_all(&source).unwrap()).unwrap();
         assert!(exported.contains("SHARED_MARKER"));
         assert!(!exported.contains("LOCAL_A"));
         assert!(!exported.contains("LOCAL_B"));

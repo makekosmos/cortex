@@ -1,5 +1,5 @@
 use super::count;
-use ark_core::db::{clear_all, init_schema};
+use ark_core::db::init_schema;
 use rusqlite::{params, Connection};
 
 #[test]
@@ -36,7 +36,7 @@ fn clear_all_removes_ephemeral_rows_but_keeps_locked_registry_and_archive() {
     .unwrap();
     let locked_before = count(&conn, "object_types");
     let archive_before = count(&conn, "legacy_type_definition_archive");
-    clear_all(&conn).unwrap();
+    ark_store::load_all::clear_all(&conn).unwrap();
     for table in [
         "objects",
         "object_links",
