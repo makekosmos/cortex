@@ -215,17 +215,20 @@ pub fn read_committed_feed_delivery_page_for_peer(
     high_watermark: i64,
     limit: usize,
     max_delivery_bytes: usize,
-) -> Result<PolicyBoundFeedPage, String> {
+) -> Result<PolicyBoundFeedPage, ark_application::sync_storage::PolicyBoundFeedReadError> {
     conn.execute_batch("SAVEPOINT committed_feed_policy_snapshot")
-        .map_err(|error| error.to_string())?;
-    let result = (|| -> Result<_, String> {
-        let policy = crate::data_platform::load_accepted_peer_sync_policy(conn, peer_device_id)?;
+        .map_err(|error| {
+            ark_application::sync_storage::PolicyBoundFeedReadError::Storage(error.to_string())
+        })?;
+    let result = (|| -> Result<_, ark_application::sync_storage::PolicyBoundFeedReadError> {
+        let policy = crate::data_platform::load_accepted_peer_sync_policy(conn, peer_device_id)
+            .map_err(ark_application::sync_storage::PolicyBoundFeedReadError::Storage)?;
         let identity = policy.as_ref().map_or_else(
             ark_application::sync_policy::default_sync_policy_identity,
             |policy| policy.identity(),
         );
         if &identity != expected_identity {
-            return Err("outbound_feed_policy_changed".into());
+            return Err(ark_application::sync_storage::PolicyBoundFeedReadError::StalePolicy);
         }
         let profile = policy
             .as_ref()
@@ -239,14 +242,17 @@ pub fn read_committed_feed_delivery_page_for_peer(
             max_delivery_bytes,
             || {},
             profile.as_ref(),
-        )?;
+        )
+        .map_err(ark_application::sync_storage::PolicyBoundFeedReadError::Storage)?;
         Ok(PolicyBoundFeedPage { identity, page })
     })();
     match result {
         Ok(page) => conn
             .execute_batch("RELEASE committed_feed_policy_snapshot")
             .map(|()| page)
-            .map_err(|error| error.to_string()),
+            .map_err(|error| {
+                ark_application::sync_storage::PolicyBoundFeedReadError::Storage(error.to_string())
+            }),
         Err(error) => {
             let _ = conn.execute_batch(
                 "ROLLBACK TO committed_feed_policy_snapshot;
@@ -401,72 +407,4 @@ fn read_committed_feed_delivery_page_with_profile(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::read_committed_feed_delivery_page_with_hook;
-    use crate::committed_feed::append_committed_change;
-    use ark_application::sync_storage::CommittedFeedDeliveryPage;
-    use ark_domain::types::ArkObject;
-
-    #[test]
-    fn projection_keeps_selected_locator_and_payload_in_one_read_snapshot() {
-        let directory = tempfile::tempdir().expect("temporary directory opens");
-        let path = directory.path().join("feed-snapshot.db");
-        let path = path.to_str().expect("temporary path is UTF-8");
-        let reader = crate::open::open_db(path).expect("reader opens");
-        reader
-            .execute_batch(crate::schema::CREATE_TABLES)
-            .expect("schema initializes");
-        reader
-            .execute(
-                "INSERT INTO object_types(
-                     id, name, schema_json, ui_schema_json, created_at, updated_at
-                 )
-                 VALUES ('note_obj', 'Note', '{}', '{}', '2026-10-16T00:00:00.000Z',
-                         '2026-10-16T00:00:00.000Z')",
-                [],
-            )
-            .expect("object type persists");
-        let writer = crate::open::open_db(path).expect("writer opens");
-        writer
-            .execute_batch(crate::schema::CREATE_TABLES)
-            .expect("writer schema initializes");
-        let initial = ArkObject {
-            id: "snapshot-object".into(),
-            type_id: "note_obj".into(),
-            type_version: "0.0.0-legacy".into(),
-            title: "Selected payload".into(),
-            content_json: serde_json::json!({"type":"doc","content":[]}),
-            props_json: serde_json::json!({}),
-            created_at: "2026-10-16T00:00:00.000Z".into(),
-            updated_at: "2026-10-16T00:00:00.000Z".into(),
-            deleted_at: None,
-        };
-        crate::objects::upsert_object(&reader, &initial).expect("initial object persists");
-        append_committed_change(&reader, "object", &initial.id, "r1", false, None, None)
-            .expect("initial feed entry persists");
-
-        let page = read_committed_feed_delivery_page_with_hook(&reader, 0, 1, 8, 1_000_000, || {
-            let mut updated = initial.clone();
-            updated.title = "Newer concurrent payload".into();
-            updated.updated_at = "2026-10-16T00:00:01.000Z".into();
-            crate::objects::upsert_object(&writer, &updated)
-                .expect("concurrent object update persists");
-            append_committed_change(&writer, "object", &updated.id, "r2", false, None, None)
-                .expect("concurrent feed entry persists");
-        })
-        .expect("delivery page reads");
-
-        let deliveries = match page {
-            CommittedFeedDeliveryPage::Deliveries(deliveries) => deliveries,
-            CommittedFeedDeliveryPage::SkipTo { .. } => panic!("feed page only skipped entries"),
-            CommittedFeedDeliveryPage::TooLarge { .. } => panic!("small test payload is bounded"),
-        };
-        assert_eq!(deliveries.len(), 1);
-        assert_eq!(deliveries[0].entry.position, 1);
-        assert_eq!(deliveries[0].entry.revision, "r1");
-        assert_eq!(
-            deliveries[0].entity.data.get("title"),
-            Some(&serde_json::json!("Selected payload"))
-        );
-    }
-}
+mod tests;

@@ -224,7 +224,10 @@ impl ark_application::sync_storage::CommittedFeedPort for RevocableBackend {
         _: i64,
         _: i64,
         _: usize,
-    ) -> Result<ark_application::sync_storage::PolicyBoundFeedPage, String> {
+    ) -> Result<
+        ark_application::sync_storage::PolicyBoundFeedPage,
+        ark_application::sync_storage::PolicyBoundFeedReadError,
+    > {
         Err("test_feed_unsupported".into())
     }
 

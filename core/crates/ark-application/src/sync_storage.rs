@@ -169,12 +169,12 @@ pub struct PolicyBoundSnapshotPage {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum PolicyBoundSnapshotReadError {
+pub enum PolicyBoundReadError {
     StalePolicy,
     Storage(String),
 }
 
-impl std::fmt::Display for PolicyBoundSnapshotReadError {
+impl std::fmt::Display for PolicyBoundReadError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::StalePolicy => formatter.write_str("stale_or_unnegotiated_sync_policy"),
@@ -183,7 +183,22 @@ impl std::fmt::Display for PolicyBoundSnapshotReadError {
     }
 }
 
-impl std::error::Error for PolicyBoundSnapshotReadError {}
+impl std::error::Error for PolicyBoundReadError {}
+
+impl From<String> for PolicyBoundReadError {
+    fn from(error: String) -> Self {
+        Self::Storage(error)
+    }
+}
+
+impl From<&str> for PolicyBoundReadError {
+    fn from(error: &str) -> Self {
+        Self::Storage(error.to_owned())
+    }
+}
+
+pub type PolicyBoundSnapshotReadError = PolicyBoundReadError;
+pub type PolicyBoundFeedReadError = PolicyBoundReadError;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct OutboundProgress {
@@ -383,7 +398,7 @@ pub trait CommittedFeedPort: Send + Sync {
         after_position: i64,
         high_watermark: i64,
         limit: usize,
-    ) -> Result<PolicyBoundFeedPage, String>;
+    ) -> Result<PolicyBoundFeedPage, PolicyBoundFeedReadError>;
 
     async fn begin_outbound_policy(
         &self,

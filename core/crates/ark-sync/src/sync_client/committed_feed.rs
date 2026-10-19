@@ -62,7 +62,7 @@ pub async fn pump_client_committed_feed(
     };
     let page = match &policy_identity {
         Some(identity) => {
-            storage
+            let page = storage
                 .committed_feed_delivery_page_for_peer(
                     peer_device_id,
                     identity,
@@ -70,8 +70,16 @@ pub async fn pump_client_committed_feed(
                     snapshot.high_watermark,
                     crate::committed_feed_delivery::MAX_FEED_PAGE_SIZE,
                 )
-                .await?
-                .page
+                .await;
+            match page {
+                Ok(page) => page.page,
+                Err(ark_application::sync_storage::PolicyBoundFeedReadError::StalePolicy) => {
+                    return Ok(())
+                }
+                Err(ark_application::sync_storage::PolicyBoundFeedReadError::Storage(error)) => {
+                    return Err(error)
+                }
+            }
         }
         None => {
             storage

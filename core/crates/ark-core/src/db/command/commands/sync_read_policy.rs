@@ -151,6 +151,13 @@ impl DbQuery for PolicyBoundFeedDeliveryPageQuery {
             self.limit,
             crate::db::MAX_FEED_DELIVERY_BYTES,
         )
-        .map_err(DbError::Storage)
+        .map_err(|error| match error {
+            ark_application::sync_storage::PolicyBoundFeedReadError::StalePolicy => {
+                DbError::StaleSyncPolicy
+            }
+            ark_application::sync_storage::PolicyBoundFeedReadError::Storage(error) => {
+                DbError::Storage(error)
+            }
+        })
     }
 }

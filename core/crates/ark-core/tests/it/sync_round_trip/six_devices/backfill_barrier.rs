@@ -182,7 +182,10 @@ impl ark_application::sync_storage::CommittedFeedPort for BackfillBarrier {
         after_position: i64,
         high_watermark: i64,
         limit: usize,
-    ) -> Result<ark_application::sync_storage::PolicyBoundFeedPage, String> {
+    ) -> Result<
+        ark_application::sync_storage::PolicyBoundFeedPage,
+        ark_application::sync_storage::PolicyBoundFeedReadError,
+    > {
         self.inner
             .committed_feed_delivery_page_for_peer(
                 peer,

@@ -87,7 +87,10 @@ impl ark_application::sync_storage::CommittedFeedPort for SqliteStorageBackend {
         after_position: i64,
         high_watermark: i64,
         limit: usize,
-    ) -> Result<ark_application::sync_storage::PolicyBoundFeedPage, String> {
+    ) -> Result<
+        ark_application::sync_storage::PolicyBoundFeedPage,
+        ark_application::sync_storage::PolicyBoundFeedReadError,
+    > {
         self.db
             .query(
                 CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
@@ -100,7 +103,14 @@ impl ark_application::sync_storage::CommittedFeedPort for SqliteStorageBackend {
                 ),
             )
             .await
-            .map_err(|error| error.to_string())
+            .map_err(|error| match error {
+                crate::db::DbError::StaleSyncPolicy => {
+                    ark_application::sync_storage::PolicyBoundFeedReadError::StalePolicy
+                }
+                error => ark_application::sync_storage::PolicyBoundFeedReadError::Storage(
+                    error.to_string(),
+                ),
+            })
     }
 
     async fn begin_outbound_policy(

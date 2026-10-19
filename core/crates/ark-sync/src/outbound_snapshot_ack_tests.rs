@@ -51,7 +51,10 @@ impl CommittedFeedPort for Storage {
         _: i64,
         _: i64,
         _: usize,
-    ) -> Result<ark_application::sync_storage::PolicyBoundFeedPage, String> {
+    ) -> Result<
+        ark_application::sync_storage::PolicyBoundFeedPage,
+        ark_application::sync_storage::PolicyBoundFeedReadError,
+    > {
         Err("unexpected policy-bound feed read".into())
     }
 

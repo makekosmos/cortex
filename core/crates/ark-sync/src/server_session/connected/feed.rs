@@ -80,7 +80,7 @@ impl ConnectedServerSession {
             progress.applied_through
         };
         let page = match &policy_identity {
-            Some(identity) => self
+            Some(identity) => match self
                 .storage
                 .committed_feed_delivery_page_for_peer(
                     &device_id,
@@ -90,7 +90,15 @@ impl ConnectedServerSession {
                     MAX_FEED_PAGE_SIZE,
                 )
                 .await
-                .map(|page| page.page),
+            {
+                Ok(page) => Ok(page.page),
+                Err(ark_application::sync_storage::PolicyBoundFeedReadError::StalePolicy) => {
+                    return true
+                }
+                Err(ark_application::sync_storage::PolicyBoundFeedReadError::Storage(error)) => {
+                    Err(error)
+                }
+            },
             None => {
                 self.storage
                     .committed_feed_delivery_page(
@@ -136,7 +144,8 @@ impl ConnectedServerSession {
                 max_bytes,
             } => {
                 eprintln!(
-                    "committed feed entity too large: {position}:{entity_id}:{serialized_bytes}:{max_bytes}"
+                    "committed feed entity too large: {position}:{entity_id}:\
+                     {serialized_bytes}:{max_bytes}"
                 );
                 true
             }
