@@ -18,6 +18,8 @@
 - [x] Prove journal pagination, payload verification, task-merge replay, restart, idempotency, dependency handling, and transaction rollback behavior.
 - [x] Move conflict-history reads, persisted operation identity validation, and causal-dependency checks into `ark-store`; Core retains transaction coordination and error adaptation.
 - [x] Prove valid and incomplete histories, malformed persisted identity, replay, restart, and rollback behavior.
+- [x] Move operation replay/collision checks and atomic operation/guard/journal persistence into `ark-store` using a checked prepared-operation value; keep Core conflict-digest admission and materialization orchestration in the existing transaction.
+- [x] Prove guarded replay, operation-id collision, remote pre-bootstrap publication policy, and rollback when journal insertion fails.
 - [x] Update the ownership census, run targeted gates, review the diff, and commit each completed unit.
 - [ ] Continue moving the remaining task-merge persistence modules as separate transaction-preserving units.
 
@@ -26,5 +28,6 @@
 - Boundary choice and transaction invariants: `.audit/ark-task-merge-boundary.md`.
 - Commit `302d3d85` moves journal paging and payload decoding to Store; 34 task-merge tests, Ark Store/Core Clippy, formatting, and diff checks passed.
 - Commit `2facb68a` fixes the writer census to classify standalone `tests.rs` files correctly and refreshes counts for already-moved object/type-registry writers; all 8 census tests and all 80 path/category counts pass.
-- The current conflict-history slice passes 37 focused task-merge tests, `cargo clippy -p ark-store -p ark-core --all-targets -- -D warnings`, standalone `cargo check --locked -p ark-store`, source-size, writer census, and desktop/mobile dependency-graph checks. The current code slice is pending commit.
+- Commit `ad25f034` moves conflict-history reads and causal-dependency checks into Store; 37 focused task-merge tests, Clippy, standalone Store check, source-size, writer census, and desktop/mobile graph checks passed.
+- The operation append slice passes 40 focused task-merge tests, Clippy, formatting/diff checks, source-size, and writer census (8 tests; 80 path/category counts). It keeps replay-before-admission ordering and consumes a prepared value only after Core's conflict-digest policy passes; this slice is pending commit.
 - Keep local task materialization, bootstrap, inbound/outbound batch persistence, and operation append boundaries open; the completed slices do not satisfy the full Store ownership predicate.

@@ -1,5 +1,5 @@
 use ark_domain::task_merge::{TaskConflictSet, TaskMergeOperation, TaskMergeUnit};
-use rusqlite::{Connection, OptionalExtension, Transaction};
+use rusqlite::{Connection, Transaction};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
@@ -72,14 +72,11 @@ impl From<ark_store::task_merge::TaskMergeStoreError> for TaskMergeError {
         match error {
             ark_store::task_merge::TaskMergeStoreError::Invalid(error) => Self::Invalid(error),
             ark_store::task_merge::TaskMergeStoreError::Storage(error) => Self::Storage(error),
+            ark_store::task_merge::TaskMergeStoreError::OperationIdCollision => {
+                Self::OperationIdCollision
+            }
         }
     }
-}
-
-#[derive(Clone, Copy)]
-enum DeliveryTiming {
-    Immediate,
-    AfterBootstrap,
 }
 
 pub(crate) fn require_delivery_policy(
@@ -144,9 +141,7 @@ pub(crate) fn append_operation(
         transaction,
         operation,
         expected_conflict_digest,
-        true,
-        false,
-        DeliveryTiming::Immediate,
+        ark_store::task_merge::TaskMergeOperationOrigin::Local,
     )
 }
 
@@ -159,9 +154,7 @@ pub(crate) fn append_remote_operation(
         transaction,
         operation,
         expected_conflict_digest,
-        false,
-        true,
-        DeliveryTiming::AfterBootstrap,
+        ark_store::task_merge::TaskMergeOperationOrigin::Remote,
     )
 }
 
@@ -169,46 +162,24 @@ fn append_operation_inner(
     transaction: &Connection,
     operation: TaskMergeOperation,
     expected_conflict_digest: Option<&str>,
-    check_resolution_precondition: bool,
-    check_replayed_guard: bool,
-    delivery_timing: DeliveryTiming,
+    origin: ark_store::task_merge::TaskMergeOperationOrigin,
 ) -> Result<TaskMergeAppendResult, TaskMergeError> {
-    let (operation, operation_json, payload_sha256) =
-        ark_store::task_merge::canonical_operation(operation)?;
-    if let Some((stored_hash,)) = transaction
-        .query_row(
-            "SELECT payload_sha256 FROM task_merge_operations WHERE operation_id = ?1",
-            [operation.id.as_str()],
-            |row| Ok((row.get::<_, String>(0)?,)),
-        )
-        .optional()
-        .map_err(|error| TaskMergeError::Storage(error.to_string()))?
-    {
-        if stored_hash != payload_sha256 {
-            return Err(TaskMergeError::OperationIdCollision);
+    let prepared = match ark_store::task_merge::check_operation(
+        transaction,
+        &operation,
+        expected_conflict_digest,
+        origin,
+    )? {
+        ark_store::task_merge::TaskMergeOperationCheck::Replay(read) => {
+            return Ok(TaskMergeAppendResult {
+                conflict_set: read.conflict_set,
+                dependencies_pending: read.dependencies_pending,
+                replayed: true,
+            });
         }
-        if check_replayed_guard {
-            let stored_guard = transaction
-                .query_row(
-                    "SELECT expected_conflict_digest
-                     FROM task_merge_resolution_guards WHERE operation_id = ?1",
-                    [operation.id.as_str()],
-                    |row| row.get::<_, String>(0),
-                )
-                .optional()
-                .map_err(|error| TaskMergeError::Storage(error.to_string()))?;
-            if stored_guard.as_deref() != expected_conflict_digest {
-                return Err(TaskMergeError::OperationIdCollision);
-            }
-        }
-        let (conflict_set, dependencies_pending) =
-            read_conflict_set(transaction, &operation.object_id, operation.unit)?;
-        return Ok(TaskMergeAppendResult {
-            conflict_set,
-            dependencies_pending,
-            replayed: true,
-        });
-    }
+        ark_store::task_merge::TaskMergeOperationCheck::New(prepared) => prepared,
+    };
+    let operation = prepared.operation().clone();
 
     let (current, dependencies_pending) =
         read_conflict_set(transaction, &operation.object_id, operation.unit)?;
@@ -219,10 +190,13 @@ fn append_operation_inner(
                 .iter()
                 .all(|variant| operation.parents.contains(&variant.id))
     });
-    if check_resolution_precondition && resolves_conflict && expected_conflict_digest.is_none() {
+    if origin == ark_store::task_merge::TaskMergeOperationOrigin::Local
+        && resolves_conflict
+        && expected_conflict_digest.is_none()
+    {
         return Err(TaskMergeError::ConflictDigestRequired);
     }
-    if check_resolution_precondition {
+    if origin == ark_store::task_merge::TaskMergeOperationOrigin::Local {
         if let Some(expected) = expected_conflict_digest {
             if dependencies_pending
                 || current.as_ref().map(|set| set.digest.as_str()) != Some(expected)
@@ -232,48 +206,7 @@ fn append_operation_inner(
         }
     }
 
-    let unit = serde_json::to_string(&operation.unit)
-        .map_err(|error| TaskMergeError::Invalid(error.to_string()))?;
-    transaction
-        .execute(
-            "INSERT INTO task_merge_operations(
-                operation_id, object_id, unit, operation_json, payload_sha256
-             ) VALUES (?1, ?2, ?3, ?4, ?5)",
-            rusqlite::params![
-                operation.id.as_str(),
-                operation.object_id,
-                unit,
-                operation_json,
-                payload_sha256,
-            ],
-        )
-        .map_err(|error| TaskMergeError::Storage(error.to_string()))?;
-    if let Some(expected_digest) = expected_conflict_digest {
-        transaction
-            .execute(
-                "INSERT INTO task_merge_resolution_guards(
-                    operation_id, expected_conflict_digest
-                 ) VALUES (?1, ?2)",
-                rusqlite::params![operation.id.as_str(), expected_digest],
-            )
-            .map_err(|error| TaskMergeError::Storage(error.to_string()))?;
-    }
-    let has_bootstrap = transaction
-        .query_row(
-            "SELECT EXISTS(SELECT 1 FROM task_merge_bootstraps WHERE object_id = ?1)",
-            [&operation.object_id],
-            |row| row.get::<_, bool>(0),
-        )
-        .map_err(|error| TaskMergeError::Storage(error.to_string()))?;
-    if has_bootstrap || matches!(delivery_timing, DeliveryTiming::Immediate) {
-        transaction
-            .execute(
-                "INSERT INTO task_merge_journal(record_kind, record_id)
-                 VALUES ('operation', ?1)",
-                [operation.id.as_str()],
-            )
-            .map_err(|error| TaskMergeError::Storage(error.to_string()))?;
-    }
+    ark_store::task_merge::persist_operation(transaction, prepared)?;
 
     materialize_if_ready(transaction, &operation.object_id)?;
 

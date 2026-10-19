@@ -1,6 +1,7 @@
 use super::{
-    canonical_bootstrap, canonical_operation, read_conflict_set, read_journal_page,
-    verify_bootstrap_payload, TaskMergeStoreError,
+    canonical_bootstrap, canonical_operation, check_operation, persist_operation,
+    read_conflict_set, read_journal_page, verify_bootstrap_payload, TaskMergeOperationCheck,
+    TaskMergeOperationOrigin, TaskMergeStoreError,
 };
 use ark_application::sync_storage::TaskMergeJournalRecord;
 use ark_domain::task_merge::{
@@ -236,6 +237,128 @@ fn conflict_read_rejects_a_row_whose_id_differs_from_its_payload() {
         .expect_err("stored identity mismatch is rejected");
     assert!(matches!(error, TaskMergeStoreError::Invalid(ref error)
         if error == "task_merge_operation_identity_mismatch"));
+}
+
+#[test]
+fn append_persistence_is_idempotent_and_rejects_operation_id_collisions() {
+    let connection = connection();
+    let operation = operation();
+    let (canonical, _, hash) = canonical_operation(operation.clone()).expect("canonicalizes");
+    insert_operation(&connection, &hash);
+
+    assert!(matches!(
+        check_operation(
+            &connection,
+            &canonical,
+            None,
+            TaskMergeOperationOrigin::Local
+        )
+        .expect("matching replay reads"),
+        TaskMergeOperationCheck::Replay(_)
+    ));
+
+    let mut conflicting = operation;
+    conflicting.value = TaskMergeValue::Field(json!("different payload"));
+    let error = check_operation(
+        &connection,
+        &conflicting,
+        None,
+        TaskMergeOperationOrigin::Local,
+    )
+    .expect_err("same operation id with another payload collides");
+    assert!(matches!(error, TaskMergeStoreError::OperationIdCollision));
+}
+
+#[test]
+fn append_persistence_keeps_resolution_guard_and_publication_policy() {
+    let connection = connection();
+    let operation = operation();
+    let prepared = match check_operation(
+        &connection,
+        &operation,
+        Some("expected-conflict"),
+        TaskMergeOperationOrigin::Remote,
+    )
+    .expect("new remote operation checks")
+    {
+        TaskMergeOperationCheck::New(prepared) => prepared,
+        TaskMergeOperationCheck::Replay(_) => panic!("operation unexpectedly replays"),
+    };
+    persist_operation(&connection, prepared).expect("remote operation persists");
+
+    assert!(matches!(
+        check_operation(
+            &connection,
+            &operation,
+            Some("expected-conflict"),
+            TaskMergeOperationOrigin::Remote,
+        )
+        .expect("matching guarded replay reads"),
+        TaskMergeOperationCheck::Replay(_)
+    ));
+    assert!(matches!(
+        check_operation(
+            &connection,
+            &operation,
+            None,
+            TaskMergeOperationOrigin::Remote,
+        ),
+        Err(TaskMergeStoreError::OperationIdCollision)
+    ));
+
+    let journal_count: i64 = connection
+        .query_row("SELECT COUNT(*) FROM task_merge_journal", [], |row| {
+            row.get(0)
+        })
+        .expect("journal count reads");
+    assert_eq!(
+        journal_count, 0,
+        "remote pre-bootstrap entries stay unpublished"
+    );
+}
+
+#[test]
+fn append_persistence_rolls_back_operation_when_journal_insert_fails() {
+    let mut connection = connection();
+    connection
+        .execute_batch(
+            "CREATE TRIGGER reject_task_merge_journal BEFORE INSERT ON task_merge_journal
+             BEGIN SELECT RAISE(ABORT, 'injected journal failure'); END;",
+        )
+        .expect("failure trigger creates");
+    let transaction = connection
+        .transaction()
+        .expect("actor-style transaction begins");
+    let prepared = match check_operation(
+        &transaction,
+        &operation(),
+        Some("guard"),
+        TaskMergeOperationOrigin::Local,
+    )
+    .expect("new local operation checks")
+    {
+        TaskMergeOperationCheck::New(prepared) => prepared,
+        TaskMergeOperationCheck::Replay(_) => panic!("operation unexpectedly replays"),
+    };
+    let error = persist_operation(&transaction, prepared)
+        .expect_err("journal insertion failure is returned");
+    assert!(matches!(error, TaskMergeStoreError::Storage(_)));
+    drop(transaction);
+
+    let operation_count: i64 = connection
+        .query_row("SELECT COUNT(*) FROM task_merge_operations", [], |row| {
+            row.get(0)
+        })
+        .expect("operation count reads after rollback");
+    let guard_count: i64 = connection
+        .query_row(
+            "SELECT COUNT(*) FROM task_merge_resolution_guards",
+            [],
+            |row| row.get(0),
+        )
+        .expect("guard count reads after rollback");
+    assert_eq!(operation_count, 0);
+    assert_eq!(guard_count, 0);
 }
 
 #[test]

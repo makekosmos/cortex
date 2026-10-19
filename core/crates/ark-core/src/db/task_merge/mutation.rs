@@ -232,9 +232,7 @@ fn commit_local_task_upsert_with_existence(
             connection,
             operation,
             expected_conflict_digest,
-            true,
-            false,
-            super::DeliveryTiming::Immediate,
+            ark_store::task_merge::TaskMergeOperationOrigin::Local,
         )
         .map_err(|error| error.to_string())?;
         visible_heads.insert(operation_id);
