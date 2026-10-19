@@ -6,9 +6,8 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
 fn links_for(conn: &Connection, id: &str) -> Result<Vec<GameLink>, String> {
-    Ok(objects::list_object_links(conn)?
+    Ok(objects::list_object_links_for_source(conn, id)?
         .into_iter()
-        .filter(|link| link.source_object_id == id)
         .map(|link| GameLink {
             id: link.id,
             link_type: link.link_type,
@@ -111,17 +110,7 @@ fn usage_session_app_ids(conn: &Connection, linked_ids: &[String]) -> Result<Vec
 }
 
 fn quarantine_for(conn: &Connection, id: &str) -> Result<GameQuarantine, String> {
-    let raw: Option<String> = conn
-        .query_row(
-            concat!(
-                "SELECT fields_json FROM object_migration_quarantine WHERE object_id=?1 AND ",
-                "contract_version=?2"
-            ),
-            params![id, GAME_QUARANTINE_CONTRACT],
-            |r| r.get(0),
-        )
-        .optional()
-        .map_err(|e| e.to_string())?;
+    let raw = objects::get_migration_quarantine_fields_json(conn, id, GAME_QUARANTINE_CONTRACT)?;
     let value = raw
         .map(|s| serde_json::from_str::<Value>(&s).map_err(|e| e.to_string()))
         .transpose()?
@@ -186,14 +175,7 @@ pub fn project_game(
 }
 
 fn local_for(conn: &Connection, id: &str, device_id: &str) -> Result<GameLocalState, String> {
-    let raw: Option<String> = conn
-        .query_row(
-            "SELECT data_json FROM object_local_state WHERE object_id=?1 AND device_id=?2",
-            params![id, device_id],
-            |r| r.get(0),
-        )
-        .optional()
-        .map_err(|e| e.to_string())?;
+    let raw = objects::get_object_local_state_json(conn, id, device_id)?;
     Ok(raw
         .map(|s| serde_json::from_str(&s).map_err(|e| e.to_string()))
         .transpose()?

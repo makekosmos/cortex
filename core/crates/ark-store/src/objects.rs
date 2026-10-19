@@ -7,13 +7,17 @@ mod identity;
 mod links;
 mod search;
 mod search_text;
+mod state;
 
 pub use ark_application::object_read::SearchResult;
 pub use compatibility::upsert_object_compat;
 pub use identity::{object_type_identity, ObjectTypeIdentity};
 pub use links::list_other_object_link_ids;
-pub use links::{delete_object_link, list_object_links, upsert_object_link};
+pub use links::{
+    delete_object_link, list_object_links, list_object_links_for_source, upsert_object_link,
+};
 pub use search::search_objects;
+pub use state::{get_migration_quarantine_fields_json, get_object_local_state_json};
 
 pub fn object_type_registry_exists(conn: &Connection) -> Result<bool, String> {
     conn.query_row(

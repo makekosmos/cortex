@@ -74,6 +74,31 @@ pub fn list_object_links(conn: &Connection) -> Result<Vec<ObjectLink>, String> {
         .map_err(|error| error.to_string())
 }
 
+pub fn list_object_links_for_source(
+    conn: &Connection,
+    source_id: &str,
+) -> Result<Vec<ObjectLink>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, source_object_id, target_object_id, link_type, created_at
+             FROM object_links WHERE source_object_id = ?1 ORDER BY created_at ASC",
+        )
+        .map_err(|error| error.to_string())?;
+    let rows = stmt
+        .query_map(params![source_id], |row| {
+            Ok(ObjectLink {
+                id: row.get(0)?,
+                source_object_id: row.get(1)?,
+                target_object_id: row.get(2)?,
+                link_type: row.get(3)?,
+                created_at: row.get(4)?,
+            })
+        })
+        .map_err(|error| error.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -107,8 +132,15 @@ mod tests {
 
         assert_eq!(
             list_object_links(&connection).expect("links load"),
-            [updated]
+            [updated.clone()]
         );
+        assert_eq!(
+            list_object_links_for_source(&connection, "first").expect("source links load"),
+            [updated.clone()]
+        );
+        assert!(list_object_links_for_source(&connection, "missing")
+            .expect("missing source links load")
+            .is_empty());
         assert!(
             list_other_object_link_ids(&connection, "first", "related", "first-link")
                 .expect("other IDs load")
