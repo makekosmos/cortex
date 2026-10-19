@@ -103,34 +103,3 @@ pub(in crate::db) fn load_all_tags(conn: &Connection) -> Result<Vec<Tag>, String
     rows.collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())
 }
-
-pub(in crate::db) fn load_all_tracked_apps(conn: &Connection) -> Result<Vec<TrackedApp>, String> {
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, platform, exe_path, normalized_exe_path, process_name,
-                    display_name, publisher, icon_ref, first_seen_at, last_seen_at
-             FROM tracked_apps
-             ORDER BY last_seen_at DESC, id ASC",
-        )
-        .map_err(|e| e.to_string())?;
-
-    let rows = stmt
-        .query_map([], |row| {
-            Ok(TrackedApp {
-                id: row.get(0)?,
-                platform: row.get(1)?,
-                exe_path: row.get(2)?,
-                normalized_exe_path: row.get(3)?,
-                process_name: row.get(4)?,
-                display_name: row.get(5)?,
-                publisher: row.get(6)?,
-                icon_ref: row.get(7)?,
-                first_seen_at: row.get(8)?,
-                last_seen_at: row.get(9)?,
-            })
-        })
-        .map_err(|e| e.to_string())?;
-
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())
-}

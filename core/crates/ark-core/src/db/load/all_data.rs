@@ -105,7 +105,7 @@ pub fn load_all(conn: &Connection) -> Result<LoadAllData, String> {
     let mut todos = load_all_todos(conn)?;
     let mut projects = load_all_projects(conn)?;
     let mut tags = load_all_tags(conn)?;
-    let mut tracked_apps = load_all_tracked_apps(conn)?;
+    let mut tracked_apps = ark_store::usage::load_all_tracked_apps(conn)?;
     let mut usage_sessions = ark_store::usage_history::load_all_usage_sessions(conn)?;
     let mut usage_events = ark_store::usage_history::load_all_usage_events(conn)?;
     let mut objects = list_objects(conn)?;
