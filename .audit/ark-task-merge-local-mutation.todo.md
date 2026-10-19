@@ -37,3 +37,5 @@
 Selected the second shape. The smaller A API is grafted as a typed state read with task snapshot token, sorted links, bootstrap presence, and legacy revision fallback. Store receives no generic callbacks or raw SQLite values from Core.
 
 The first implementation unit extracted the typed state read and task snapshot token. Focused Store/Core task-merge checks passed 48/48, Clippy passed, the writer census matched all 81 path/category counts, and the source-size gate passed with the existing grandfathered baseline.
+
+The revision fallback now calls `ark-store::sync_versions::object_revision`; the Core implementation and re-export are deleted. Existing revision and stale-write behavior passed in 57 focused Store/Core tests. The legacy local-HLC regression moved into its own test module to keep its parent below the 500-line gate.

@@ -137,7 +137,7 @@ pub fn apply_canonical_object_entity(
     if entity.deleted == Some(true) && type_id.as_deref() == Some("core.task") {
         return super::task_sync_apply::apply_remote_task_delete(conn, entity);
     }
-    let current = db::get_object_revision(conn, &entity.id)?;
+    let current = ark_store::sync_versions::object_revision(conn, &entity.id)?;
     if current
         .as_deref()
         .is_some_and(|hlc| HLC::compare_str(&entity.hlc, hlc) != std::cmp::Ordering::Greater)

@@ -28,7 +28,7 @@ pub use inbound::{
     TaskMergeInboundBatchReceipt, TaskMergeInboundProgress,
 };
 pub use local_mutation::{
-    load_local_mutation_state, object_revision, task_snapshot_token, TaskMergeLocalMutationState,
+    load_local_mutation_state, task_snapshot_token, TaskMergeLocalMutationState,
 };
 pub use progress::{
     acknowledge_outbound_batch, claim_outbound_batch, create_outbound_progress,

@@ -1,8 +1,8 @@
 use super::{has_bootstrap, read_conflict_set, storage_error, TaskMergeStoreError};
 use ark_domain::object_write::ObjectWriteSnapshot;
 use ark_domain::task_merge::TaskMergeUnit;
-use ark_domain::types::{ArkObject, ObjectLink, VersionVector};
-use rusqlite::{Connection, OptionalExtension};
+use ark_domain::types::{ArkObject, ObjectLink};
+use rusqlite::Connection;
 use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -32,7 +32,8 @@ pub fn load_local_mutation_state(
     } else {
         None
     };
-    let legacy_revision = object_revision(transaction, object_id)?;
+    let legacy_revision =
+        crate::sync_versions::object_revision(transaction, object_id).map_err(storage_error)?;
     let snapshot = ObjectWriteSnapshot {
         exists: object.is_some(),
         type_id: object.as_ref().map(|value| value.type_id.clone()),
@@ -75,44 +76,4 @@ pub fn task_snapshot_token(
     digest.update(b"ark-task-snapshot-v1\0");
     digest.update(encoded);
     Ok(Some(format!("task-merge:sha256:{:x}", digest.finalize())))
-}
-
-pub fn object_revision(
-    transaction: &Connection,
-    object_id: &str,
-) -> Result<Option<String>, TaskMergeStoreError> {
-    let vector_revision = crate::sync_kv::get_sync_kv(transaction, crate::VERSION_VECTOR_KEY)
-        .map_err(storage_error)?
-        .filter(|value| !value.trim().is_empty())
-        .map(|value| {
-            serde_json::from_str::<VersionVector>(&value)
-                .map_err(|error| TaskMergeStoreError::Invalid(error.to_string()))
-        })
-        .transpose()?
-        .and_then(|vector| vector.get(object_id).cloned());
-    let object_revision = transaction
-        .query_row(
-            "SELECT hlc FROM object_sync_versions WHERE object_id = ?1",
-            [object_id],
-            |row| row.get::<_, String>(0),
-        )
-        .optional()
-        .map_err(storage_error)?;
-    let tombstone_revision = transaction
-        .query_row(
-            "SELECT hlc FROM sync_tombstones WHERE id = ?1 AND entity_type = 'object'",
-            [object_id],
-            |row| row.get::<_, String>(0),
-        )
-        .optional()
-        .map_err(storage_error)?;
-    Ok([vector_revision, object_revision, tombstone_revision]
-        .into_iter()
-        .flatten()
-        .max_by(|left, right| {
-            ark_domain::hlc::HLC::compare(
-                &ark_domain::hlc::HLC::from_string(left),
-                &ark_domain::hlc::HLC::from_string(right),
-            )
-        }))
 }

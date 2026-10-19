@@ -31,7 +31,7 @@ impl ObjectMutationSession for SqliteObjectMutationSession<'_, '_> {
             exists: identity.is_some(),
             type_id: identity.as_ref().map(|value| value.0.clone()),
             type_version: identity.map(|value| value.1),
-            revision: db::get_object_revision(self.transaction, id)?,
+            revision: ark_store::sync_versions::object_revision(self.transaction, id)?,
         })
     }
 

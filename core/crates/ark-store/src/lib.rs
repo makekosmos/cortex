@@ -9,6 +9,7 @@ pub mod operation_receipt;
 pub mod schema;
 pub mod snapshot;
 pub mod sync_kv;
+pub mod sync_versions;
 pub mod task_merge;
 pub mod type_registry;
 pub mod usage_sync_log;

@@ -35,7 +35,7 @@ impl ObjectWriteSession for SqliteObjectWriteSession<'_> {
             )
             .optional()
             .map_err(|error| error.to_string())?;
-        let object_revision = db::get_object_revision(self.conn, id)?;
+        let object_revision = ark_store::sync_versions::object_revision(self.conn, id)?;
         let task_revision = ark_store::task_merge::task_snapshot_token(self.conn, id)
             .map_err(|error| error.to_string())?;
         Ok(match identity {
@@ -62,7 +62,7 @@ impl ObjectWriteSession for SqliteObjectWriteSession<'_> {
     }
 
     fn current_revision(&self, id: &str) -> Result<Option<String>, String> {
-        db::get_object_revision(self.conn, id)
+        ark_store::sync_versions::object_revision(self.conn, id)
     }
 
     fn is_peer_removed(&self, peer_id: &str) -> Result<bool, String> {
