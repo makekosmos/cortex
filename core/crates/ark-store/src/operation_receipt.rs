@@ -1,4 +1,14 @@
 use rusqlite::{params, OptionalExtension, Transaction};
+use serde::Serialize;
+
+pub fn payload_hash(command_type: &str, command: &impl Serialize) -> Result<String, String> {
+    use sha2::{Digest, Sha256};
+
+    let payload = serde_json::to_value(("ark-operation-v1", command_type, command))
+        .map_err(|error| error.to_string())?;
+    let canonical_payload = serde_json::to_vec(&payload).map_err(|error| error.to_string())?;
+    Ok(format!("{:x}", Sha256::digest(canonical_payload)))
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OperationReceipt {

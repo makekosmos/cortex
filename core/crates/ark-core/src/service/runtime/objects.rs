@@ -260,18 +260,15 @@ pub(super) async fn delete_object(
     device_id: Option<String>,
 ) -> Result<Value, String> {
     let object_id = id.clone();
-    let command =
-        db::LocalObjectDeleteCommand::new(crate::application::object_mutation::LocalObjectDelete {
-            id,
-            expected_snapshot,
-            device_id: local_write_device_id(device_id),
-        });
     let result = get_db_handle(state)?
-        .submit_with_optional_operation_id(
+        .submit_local_object_delete(
             db::CommandContext::engine(),
+            crate::application::object_mutation::LocalObjectDelete {
+                id,
+                expected_snapshot,
+                device_id: local_write_device_id(device_id),
+            },
             operation_id,
-            "object.delete.v1",
-            command,
         )
         .await
         .map_err(|error| error.to_string())?;

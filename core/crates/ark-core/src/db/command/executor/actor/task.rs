@@ -78,6 +78,48 @@ pub(in crate::db::command) struct LocalObjectUpsertTask {
         oneshot::Sender<Result<ark_application::object_mutation::ObjectUpsertOutcome, DbError>>,
 }
 
+pub(in crate::db::command) struct LocalObjectDeleteTask {
+    pub write: ark_application::object_mutation::LocalObjectDelete,
+    pub principal: String,
+    pub operation_id: Option<String>,
+    pub reply: oneshot::Sender<
+        Result<(ark_application::object_mutation::ObjectDeleteCommit, bool), DbError>,
+    >,
+}
+
+impl WriterTask for LocalObjectDeleteTask {
+    fn run(
+        self: Box<Self>,
+        writer: &mut SqliteWriter,
+        on_error: &mut dyn FnMut(&DbError),
+    ) -> (Result<(), DbError>, Publish) {
+        let Self {
+            write,
+            principal,
+            operation_id,
+            reply,
+        } = *self;
+        let result = writer
+            .apply_local_object_delete(write, &principal, operation_id.as_deref())
+            .map_err(|failure| match failure {
+                TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+                TransactionFailure::Operation(error) => {
+                    DbError::from_application_error(error.to_string())
+                }
+                TransactionFailure::Commit(error) => DbError::CommitFailed(error.to_string()),
+            });
+        settle(result, reply, on_error)
+    }
+
+    fn cancel_before_start(self: Box<Self>) {
+        let _ = self.reply.send(Err(DbError::CancelledBeforeStart));
+    }
+
+    fn receiver_closed(&self) -> bool {
+        self.reply.is_closed()
+    }
+}
+
 impl WriterTask for LocalObjectUpsertTask {
     fn run(
         self: Box<Self>,

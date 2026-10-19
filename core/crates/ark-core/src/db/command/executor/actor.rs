@@ -11,7 +11,8 @@ mod task;
 use maintenance::has_maintenance_barrier;
 use runtime::{actor_loop, panic_message};
 pub(in crate::db::command) use task::{
-    LocalObjectUpsertTask, Publish, TypedCommand, TypedMaintenance, WriterTask,
+    LocalObjectDeleteTask, LocalObjectUpsertTask, Publish, TypedCommand, TypedMaintenance,
+    WriterTask,
 };
 
 struct Slot {

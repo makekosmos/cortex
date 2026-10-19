@@ -41,6 +41,25 @@ impl SqliteWriter {
     pub fn with_connection_mut<T>(&mut self, operation: impl FnOnce(&mut Connection) -> T) -> T {
         operation(&mut self.connection)
     }
+
+    pub fn apply_local_object_delete(
+        &mut self,
+        write: ark_application::object_mutation::LocalObjectDelete,
+        principal: &str,
+        operation_id: Option<&str>,
+    ) -> Result<
+        (ark_application::object_mutation::ObjectDeleteCommit, bool),
+        TransactionFailure<ark_application::object_mutation::ObjectDeleteError>,
+    > {
+        self.with_connection_mut(|connection| {
+            crate::object_mutation::apply_local_object_delete(
+                connection,
+                write,
+                principal,
+                operation_id,
+            )
+        })
+    }
 }
 
 #[cfg(test)]

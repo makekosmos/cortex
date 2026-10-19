@@ -255,7 +255,7 @@ async fn oversized_request_is_rejected_before_queue_and_service_keeps_serving() 
 }
 
 #[tokio::test]
-async fn production_writer_object_upsert_replays_receipt_without_new_revision() {
+async fn production_writer_object_mutations_replay_receipts_without_new_revisions() {
     let dir = crate::test_support::temp_dir();
     let db_path = dir.path().join("ark.db");
     let service = ArkService::open(db_path.to_str().unwrap())
@@ -285,6 +285,31 @@ async fn production_writer_object_upsert_replays_receipt_without_new_revision() 
             .await
             .expect("first upsert commits"),
         json!(true)
+    );
+    let mut stale_snapshot = {
+        let connection = rusqlite::Connection::open(&db_path).expect("database opens");
+        ark_store::object_write::read_object_write_snapshot(&connection, "production-upsert-note")
+            .expect("object snapshot reads")
+    };
+    stale_snapshot.revision = Some("stale-revision".into());
+    let stale_delete = service
+        .call(
+            "delete_object",
+            json!({
+                "id": "production-upsert-note",
+                "expectedSnapshot": stale_snapshot,
+                "device_id": "stale-delete-device"
+            }),
+        )
+        .await
+        .expect_err("stale snapshot is rejected");
+    assert!(stale_delete.to_string().contains("stale_snapshot"));
+    assert_eq!(
+        service
+            .call("get_object", json!({ "id": "production-upsert-note" }))
+            .await
+            .expect("stale delete leaves the object readable")["title"],
+        "Note"
     );
     let first_revision = {
         let connection = rusqlite::Connection::open(&db_path).expect("database opens");
@@ -324,6 +349,53 @@ async fn production_writer_object_upsert_replays_receipt_without_new_revision() 
     assert_eq!(receipts, 1);
     assert_eq!(revision, first_revision);
     assert_eq!(title, "Note");
+
+    let delete = |device_id: &str| {
+        json!({
+            "id": "production-upsert-note",
+            "operationId": "object-delete-production-replay",
+            "device_id": device_id,
+        })
+    };
+    service
+        .call("delete_object", delete("delete-device"))
+        .await
+        .expect("first delete commits");
+    let deleted_revision = {
+        let connection = rusqlite::Connection::open(&db_path).expect("database opens");
+        connection
+            .query_row(
+                "SELECT hlc FROM object_sync_versions WHERE object_id='production-upsert-note'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .expect("delete revision exists")
+    };
+    service
+        .call("delete_object", delete("delete-device"))
+        .await
+        .expect("retry replays the delete receipt");
+    let conflict = service
+        .call("delete_object", delete("another-device"))
+        .await
+        .expect_err("operation id reuse with another payload is rejected");
+    assert!(conflict.to_string().contains("different command payload"));
+
+    let connection = rusqlite::Connection::open(&db_path).expect("database opens");
+    let (delete_receipts, final_revision, tombstone): (i64, String, Option<String>) = connection
+        .query_row(
+            "SELECT (SELECT COUNT(*) FROM ark_operation_receipts
+                     WHERE principal='engine' AND operation_id='object-delete-production-replay'),
+                    object_sync_versions.hlc,
+                    (SELECT id FROM sync_tombstones WHERE id='production-upsert-note')
+             FROM object_sync_versions WHERE object_id='production-upsert-note'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .expect("delete receipt, revision, and tombstone read");
+    assert_eq!(delete_receipts, 1);
+    assert_eq!(final_revision, deleted_revision);
+    assert_eq!(tombstone.as_deref(), Some("production-upsert-note"));
 
     service
         .shutdown(Instant::now() + Duration::from_secs(2))

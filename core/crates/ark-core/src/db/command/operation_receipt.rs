@@ -1,7 +1,6 @@
 use super::{sealed, CommandClass, CommandContext, DbCommand, DbError, DbHandle};
 use rusqlite::Transaction;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct OperationResult<T> {
@@ -55,11 +54,9 @@ where
         context: &CommandContext,
         transaction: &Transaction<'_>,
     ) -> Result<Self::Output, DbError> {
-        let payload = serde_json::to_value(("ark-operation-v1", self.command_type, &self.command))
-            .map_err(|error| DbError::Storage(error.to_string()))?;
-        let canonical_payload =
-            serde_json::to_vec(&payload).map_err(|error| DbError::Storage(error.to_string()))?;
-        let payload_hash = format!("{:x}", Sha256::digest(canonical_payload));
+        let payload_hash =
+            ark_store::operation_receipt::payload_hash(self.command_type, &self.command)
+                .map_err(DbError::from_application_error)?;
         let principal = context.operation_principal();
 
         let stored =
