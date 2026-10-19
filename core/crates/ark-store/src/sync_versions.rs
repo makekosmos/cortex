@@ -92,6 +92,22 @@ pub fn write_object_sync_version(
         .map_err(|error| error.to_string())
 }
 
+pub fn set_object_sync_version_state(
+    connection: &Connection,
+    object_id: &str,
+    hlc: &str,
+    deleted: bool,
+) -> Result<(), String> {
+    connection
+        .execute(
+            "INSERT INTO object_sync_versions(object_id, hlc, deleted) VALUES (?1, ?2, ?3)
+             ON CONFLICT(object_id) DO UPDATE SET hlc = excluded.hlc, deleted = excluded.deleted",
+            rusqlite::params![object_id, hlc, deleted],
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
 impl LocalRevisionTarget {
     fn entity_type(self) -> &'static str {
         match self {

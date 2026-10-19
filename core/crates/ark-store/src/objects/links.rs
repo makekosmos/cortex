@@ -23,6 +23,29 @@ pub fn upsert_object_link(conn: &Connection, link: &ObjectLink) -> Result<(), St
     Ok(())
 }
 
+pub fn upsert_object_link_preserving_created_at(
+    conn: &Connection,
+    link: &ObjectLink,
+) -> Result<(), String> {
+    conn.execute(
+        "INSERT INTO object_links
+            (id, source_object_id, target_object_id, link_type, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5)
+         ON CONFLICT(id) DO UPDATE SET
+            target_object_id = excluded.target_object_id,
+            link_type = excluded.link_type",
+        params![
+            link.id,
+            link.source_object_id,
+            link.target_object_id,
+            link.link_type,
+            link.created_at,
+        ],
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
 pub fn delete_object_link(conn: &Connection, id: &str) -> Result<(), String> {
     conn.execute("DELETE FROM object_links WHERE id = ?1", params![id])
         .map_err(|error| error.to_string())?;
@@ -129,14 +152,22 @@ mod tests {
         updated.target_object_id = "third".into();
         updated.created_at = "2026-01-05".into();
         upsert_object_link(&connection, &updated).expect("link updates in place");
+        let mut retargeted = updated.clone();
+        retargeted.source_object_id = "other-source".into();
+        retargeted.created_at = "2026-02-01".into();
+        retargeted.target_object_id = "fourth".into();
+        upsert_object_link_preserving_created_at(&connection, &retargeted)
+            .expect("game-style link update persists");
+        let mut expected = updated.clone();
+        expected.target_object_id = "fourth".into();
 
         assert_eq!(
             list_object_links(&connection).expect("links load"),
-            [updated.clone()]
+            [expected.clone()]
         );
         assert_eq!(
             list_object_links_for_source(&connection, "first").expect("source links load"),
-            [updated.clone()]
+            [expected.clone()]
         );
         assert!(list_object_links_for_source(&connection, "missing")
             .expect("missing source links load")

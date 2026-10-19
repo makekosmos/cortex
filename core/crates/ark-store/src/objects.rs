@@ -15,9 +15,13 @@ pub use identity::{object_type_identity, ObjectTypeIdentity};
 pub use links::list_other_object_link_ids;
 pub use links::{
     delete_object_link, list_object_links, list_object_links_for_source, upsert_object_link,
+    upsert_object_link_preserving_created_at,
 };
 pub use search::search_objects;
-pub use state::{get_migration_quarantine_fields_json, get_object_local_state_json};
+pub use state::{
+    delete_migration_quarantine, get_migration_quarantine_fields_json, get_object_local_state_json,
+    upsert_migration_quarantine, upsert_object_local_state_json,
+};
 
 pub fn object_type_registry_exists(conn: &Connection) -> Result<bool, String> {
     conn.query_row(

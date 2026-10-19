@@ -1,7 +1,7 @@
 use super::*;
 use crate::types::ArkObject;
 use ark_store::objects;
-use rusqlite::{params, Connection};
+use rusqlite::Connection;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
@@ -150,77 +150,54 @@ pub fn upsert_game(
         let prepared = ark_store::object_write::prepare_object(conn, object_write(&command))
             .map_err(|e| e.to_string())?;
         ark_store::objects::upsert_object_compat(conn, &prepared)?;
-        conn.execute(
-            concat!(
-                "INSERT INTO object_local_state(object_id,device_id,data_json,updated_at) ",
-                "VALUES(?1,?2,?3,?4) ON CONFLICT(object_id,device_id) DO UPDATE SET ",
-                "data_json=excluded.data_json,updated_at=excluded.updated_at"
-            ),
-            params![
-                command.id,
-                effective_device,
-                serde_json::to_string(&command.local).map_err(|e| e.to_string())?,
-                command.updated_at
-            ],
-        )
-        .map_err(|e| e.to_string())?;
-        conn.execute(
-            "DELETE FROM object_migration_quarantine WHERE object_id=?1 AND contract_version=?2",
-            params![command.id, GAME_QUARANTINE_CONTRACT],
-        )
-        .map_err(|e| e.to_string())?;
+        objects::upsert_object_local_state_json(
+            conn,
+            &command.id,
+            &effective_device,
+            &serde_json::to_string(&command.local).map_err(|e| e.to_string())?,
+            &command.updated_at,
+        )?;
+        objects::delete_migration_quarantine(conn, &command.id, GAME_QUARANTINE_CONTRACT)?;
         if !command.quarantine.provider_refs.is_empty() || !command.quarantine.fields.is_empty() {
             let fields = serde_json::to_string(&json!(
                 {"providerRefs": command.quarantine.provider_refs,
                 "fields": command.quarantine.fields}))
             .map_err(|e| e.to_string())?;
             let source_hash = format!("{:x}", Sha256::digest(fields.as_bytes()));
-            conn.execute(
-                concat!(
-                    "INSERT INTO object_migration_quarantine(object_id,contract_version,",
-                    "source_type_id,fields_json,source_hash,updated_at) VALUES(?1,?2,?3,?4,?5,",
-                    "?6) ON CONFLICT(object_id,contract_version) DO UPDATE SET ",
-                    "fields_json=excluded.fields_json,source_hash=excluded.source_hash,",
-                    "updated_at=excluded.updated_at"
-                ),
-                params![
-                    command.id,
-                    GAME_QUARANTINE_CONTRACT,
-                    GAME_TYPE_ID,
-                    fields,
-                    source_hash,
-                    command.updated_at
-                ],
-            )
-            .map_err(|e| e.to_string())?;
+            objects::upsert_migration_quarantine(
+                conn,
+                &command.id,
+                GAME_QUARANTINE_CONTRACT,
+                GAME_TYPE_ID,
+                &fields,
+                &source_hash,
+                &command.updated_at,
+            )?;
         }
         let desired: std::collections::HashSet<String> =
             command.links.iter().map(|l| l.id.clone()).collect();
-        for existing in objects::list_object_links(conn)?.into_iter().filter(|l| {
-            l.source_object_id == command.id
-                && ["cover-image", "background-image", "note", "task", "tag"]
-                    .contains(&l.link_type.as_str())
-        }) {
+        for existing in objects::list_object_links_for_source(conn, &command.id)?
+            .into_iter()
+            .filter(|link| {
+                ["cover-image", "background-image", "note", "task", "tag"]
+                    .contains(&link.link_type.as_str())
+            })
+        {
             if !desired.contains(&existing.id) {
                 objects::delete_object_link(conn, &existing.id)?;
             }
         }
         for link in &command.links {
-            conn.execute(
-                concat!(
-                    "INSERT INTO object_links(id,source_object_id,target_object_id,link_type,",
-                    "created_at) VALUES(?1,?2,?3,?4,?5) ON CONFLICT(id) DO UPDATE SET ",
-                    "target_object_id=excluded.target_object_id,link_type=excluded.link_type"
-                ),
-                params![
-                    link.id,
-                    command.id,
-                    link.target_object_id,
-                    link.link_type,
-                    command.created_at
-                ],
-            )
-            .map_err(|e| e.to_string())?;
+            objects::upsert_object_link_preserving_created_at(
+                conn,
+                &crate::types::ObjectLink {
+                    id: link.id.clone(),
+                    source_object_id: command.id.clone(),
+                    target_object_id: link.target_object_id.clone(),
+                    link_type: link.link_type.clone(),
+                    created_at: command.created_at.clone(),
+                },
+            )?;
         }
         let hlc = ark_store::sync_versions::bump_sync_version_vector(
             conn,
@@ -229,14 +206,7 @@ pub fn upsert_game(
             &effective_device,
             false,
         )?;
-        conn.execute(
-            concat!(
-                "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,0) ON ",
-                "CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=0"
-            ),
-            params![command.id, hlc],
-        )
-        .map_err(|e| e.to_string())?;
+        ark_store::sync_versions::set_object_sync_version_state(conn, &command.id, &hlc, false)?;
         Ok(GameMutationResult {
             record: get_game(conn, &command.id, &effective_device)?,
             changed: true,
