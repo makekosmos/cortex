@@ -3,6 +3,7 @@ use crate::task_merge::{
     check_bootstrap, load_local_mutation_state, materialize_task_if_ready, persist_bootstrap,
     TaskMergeBootstrapCheck, TaskMergeProjectionOutcome,
 };
+use ark_domain::task_merge::TaskMergeUnit;
 use rusqlite::params;
 
 #[test]
@@ -74,6 +75,15 @@ fn store_materializes_bootstrap_projection_and_links() {
         TaskMergeBootstrapCheck::Replay => panic!("fixture bootstrap is new"),
     };
     persist_bootstrap(&connection, prepared).expect("bootstrap persists");
+
+    let state = load_local_mutation_state(&connection, &bootstrap.object.id)
+        .expect("Store loads the causal snapshot for local mutation planning");
+    assert_eq!(state.unit_conflicts.len(), TaskMergeUnit::ALL.len());
+    assert!(state
+        .unit_conflicts
+        .iter()
+        .all(|(_, conflict)| { conflict.variants.len() == 1 }));
+    assert!(state.snapshot.revision.is_some());
 
     let outcome = materialize_task_if_ready(&connection, &bootstrap.object.id)
         .expect("Store materializes a complete task history");

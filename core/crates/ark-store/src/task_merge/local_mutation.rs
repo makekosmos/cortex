@@ -1,6 +1,6 @@
 use super::{has_bootstrap, read_conflict_set, storage_error, TaskMergeStoreError};
 use ark_domain::object_write::ObjectWriteSnapshot;
-use ark_domain::task_merge::TaskMergeUnit;
+use ark_domain::task_merge::{TaskConflictSet, TaskMergeUnit};
 use ark_domain::types::{ArkObject, ObjectLink};
 use rusqlite::Connection;
 use sha2::{Digest, Sha256};
@@ -12,6 +12,7 @@ pub struct TaskMergeLocalMutationState {
     pub has_bootstrap: bool,
     pub snapshot: ObjectWriteSnapshot,
     pub legacy_revision: Option<String>,
+    pub unit_conflicts: Vec<(TaskMergeUnit, TaskConflictSet)>,
 }
 
 pub fn load_local_mutation_state(
@@ -27,11 +28,12 @@ pub fn load_local_mutation_state(
     source_links.sort_by(|left, right| left.id.cmp(&right.id));
 
     let has_bootstrap = has_bootstrap(transaction, object_id)?;
-    let task_revision = if has_bootstrap {
-        task_snapshot_token(transaction, object_id)?
+    let unit_conflicts = if has_bootstrap {
+        load_unit_conflicts(transaction, object_id)?
     } else {
-        None
+        Vec::new()
     };
+    let task_revision = task_snapshot_token_from_conflicts(has_bootstrap, &unit_conflicts)?;
     let legacy_revision =
         crate::sync_versions::object_revision(transaction, object_id).map_err(storage_error)?;
     let snapshot = ObjectWriteSnapshot {
@@ -47,6 +49,7 @@ pub fn load_local_mutation_state(
         has_bootstrap,
         snapshot,
         legacy_revision,
+        unit_conflicts,
     })
 }
 
@@ -57,7 +60,15 @@ pub fn task_snapshot_token(
     if !has_bootstrap(transaction, object_id)? {
         return Ok(None);
     }
-    let mut heads = Vec::with_capacity(TaskMergeUnit::ALL.len());
+    let unit_conflicts = load_unit_conflicts(transaction, object_id)?;
+    task_snapshot_token_from_conflicts(true, &unit_conflicts)
+}
+
+fn load_unit_conflicts(
+    transaction: &Connection,
+    object_id: &str,
+) -> Result<Vec<(TaskMergeUnit, TaskConflictSet)>, TaskMergeStoreError> {
+    let mut conflicts = Vec::with_capacity(TaskMergeUnit::ALL.len());
     for unit in TaskMergeUnit::ALL {
         let read = read_conflict_set(transaction, object_id, unit)?;
         if read.dependencies_pending {
@@ -68,7 +79,26 @@ pub fn task_snapshot_token(
         let set = read.conflict_set.ok_or_else(|| {
             TaskMergeStoreError::Invalid("task_merge_bootstrap_incomplete".into())
         })?;
-        heads.push((unit, set.digest));
+        conflicts.push((unit, set));
+    }
+    Ok(conflicts)
+}
+
+fn task_snapshot_token_from_conflicts(
+    has_bootstrap: bool,
+    unit_conflicts: &[(TaskMergeUnit, TaskConflictSet)],
+) -> Result<Option<String>, TaskMergeStoreError> {
+    if !has_bootstrap {
+        return Ok(None);
+    }
+    let heads = unit_conflicts
+        .iter()
+        .map(|(unit, set)| (*unit, set.digest.clone()))
+        .collect::<Vec<_>>();
+    if heads.len() != TaskMergeUnit::ALL.len() {
+        return Err(TaskMergeStoreError::Invalid(
+            "task_merge_bootstrap_incomplete".into(),
+        ));
     }
     let encoded = serde_json::to_vec(&heads)
         .map_err(|error| TaskMergeStoreError::Invalid(error.to_string()))?;

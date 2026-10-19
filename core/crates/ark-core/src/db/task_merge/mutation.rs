@@ -1,4 +1,4 @@
-use super::{append_local_bootstrap, append_operation_inner, read_conflict_set};
+use super::{append_local_bootstrap, append_operation_inner};
 use crate::types::{ArkObject, ObjectLink, SyncEntity};
 use ark_domain::object_write::ObjectWriteSnapshot;
 use ark_domain::task_merge::{
@@ -133,13 +133,7 @@ fn commit_local_task_upsert_with_existence(
 
     let mut visible_heads = BTreeSet::new();
     let mut unit_heads = Vec::with_capacity(TaskMergeUnit::ALL.len());
-    for unit in TaskMergeUnit::ALL {
-        let (set, dependencies_pending) =
-            read_conflict_set(connection, &object.id, unit).map_err(|error| error.to_string())?;
-        if dependencies_pending {
-            return Err("task_merge_dependencies_pending".into());
-        }
-        let set = set.ok_or_else(|| "task_merge_bootstrap_incomplete".to_string())?;
+    for (unit, set) in state.unit_conflicts {
         let winner = set
             .variants
             .iter()

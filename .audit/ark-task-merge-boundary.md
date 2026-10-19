@@ -63,6 +63,42 @@ The state read includes the existing object and sorted source links, bootstrap p
 
 The first projection extraction is now in `ark-store::task_merge::materialize_task_if_ready`. Store loads the task history, computes the domain projection, repairs a missing projection from its bootstrap, and writes object, link, revision, and tombstone state. Core calls this operation after bootstrap and append persistence. Local task mutation still needs to build and apply one complete plan through Store.
 
+## Local mutation plan contract
+
+The Store boundary uses one closed plan and one typed result. Core builds the plan after canonical type checks and request-snapshot admission inside the existing immediate transaction. The transaction itself never crosses the API.
+
+```rust
+pub struct TaskMergeLocalMutationPlan {
+    pub object: ArkObject,
+    pub source_links: Vec<ObjectLink>,
+    pub expected_snapshot: ObjectWriteSnapshot,
+    pub bootstrap: Option<TaskMergeLocalBootstrapPlan>,
+    pub operations: Vec<TaskMergeLocalOperation>,
+    pub deleted_at: Option<String>,
+    pub hard_deleted: bool,
+}
+
+pub struct TaskMergeLocalBootstrapPlan {
+    pub bootstrap: TaskMergeBootstrap,
+    // None means the Store assigns the same local revision as the first write.
+    pub source_hlc: Option<String>,
+}
+
+pub struct TaskMergeLocalOperation {
+    pub operation: TaskMergeOperation, // Core chose parents and visible values.
+    pub expected_conflict_digest: Option<String>, // present only for explicit resolution.
+}
+
+pub struct TaskMergeLocalMutationResult {
+    pub object: Option<ArkObject>,
+    pub object_revision: String,
+    pub link_revisions: Vec<(String, String)>,
+    pub hard_deleted: bool,
+}
+```
+
+Store re-reads and compares the object snapshot and each guarded conflict digest before writes. It assigns the local HLC, stamps operations and bootstrap metadata, and persists bootstrap, operation journal, projection, links, version vector, committed feed, object revision and tombstone changes atomically. Core validates the returned projection against canonical definitions and serializes the existing `SyncEntity` wire shape. Core retains full-task-to-unit value selection, deterministic visible-head selection, existence conflict behavior, admission, and explicit-resolution choices; Store enforces persistence guards but does not choose conflict policy. Delete is represented in the plan so soft delete keeps the projection and hard delete removes links and emits the existing tombstone result.
+
 Candidate sketches and the independent score are recorded in the active task transcript; this decision supersedes the earlier open instruction to choose the complete local task materialization seam during implementation.
 
 ## Migration sequence
