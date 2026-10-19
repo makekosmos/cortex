@@ -181,15 +181,25 @@ impl DbHandle {
                 })
             }
             #[cfg(debug_assertions)]
-            HandleBackend::Test(_) => {
-                let command = super::commands::LocalObjectUpsertCommand::new(write);
-                self.submit_with_optional_operation_id(
-                    context,
+            HandleBackend::Test(connection) => {
+                let admission = self
+                    .admission
+                    .try_acquire(context.class, &context.source, weight)
+                    .map_err(map_admission_error)?;
+                let principal = context.operation_principal();
+                let outcome = spawn_test_local_object_upsert(
+                    Arc::clone(connection),
+                    write,
+                    principal,
                     operation_id,
-                    "object.upsert.v1",
-                    command,
+                    admission,
                 )
                 .await
+                .map_err(|error| DbError::Storage(error.to_string()))??;
+                Ok(super::operation_receipt::OperationResult {
+                    value: outcome.value,
+                    replayed: outcome.replayed,
+                })
             }
         }
     }
@@ -372,6 +382,34 @@ fn spawn_test_submit<C: DbCommand>(
             .commit()
             .map_err(|error| DbError::Storage(error.to_string()))?;
         Ok(output)
+    })
+}
+
+#[cfg(debug_assertions)]
+fn spawn_test_local_object_upsert(
+    connection: Arc<Mutex<Connection>>,
+    write: ark_application::object_mutation::LocalObjectUpsert,
+    principal: String,
+    operation_id: Option<String>,
+    _admission: executor::AdmissionPermit,
+) -> tokio::task::JoinHandle<Result<ark_application::object_mutation::ObjectUpsertOutcome, DbError>>
+{
+    tokio::task::spawn_blocking(move || {
+        let _admission = _admission;
+        let connection = connection.lock().unwrap_or_else(|error| error.into_inner());
+        let transaction = Transaction::new_unchecked(&connection, TransactionBehavior::Immediate)
+            .map_err(DbError::from_sqlite)?;
+        let outcome = ark_store::object_write::apply_local_object_upsert(
+            &transaction,
+            write,
+            &principal,
+            operation_id.as_deref(),
+        )
+        .map_err(DbError::from_application_error)?;
+        transaction
+            .commit()
+            .map_err(|error| DbError::CommitFailed(error.to_string()))?;
+        Ok(outcome)
     })
 }
 

@@ -1,6 +1,6 @@
 use crate::canonical_types::facades::BookCoverMutation;
 use crate::canonical_types::game::{GameMutationResult, GameUpsertCommand};
-use crate::types::{ArkObject, ArkObjectWrite, SyncEntity};
+use crate::types::{ArkObject, SyncEntity};
 use ark_domain::object_write::ObjectWriteSnapshot;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
@@ -26,7 +26,6 @@ impl ObjectRevisionKind {
 
 pub trait ObjectMutationSession {
     fn object_snapshot(&self, id: &str) -> Result<ObjectWriteSnapshot, String>;
-    fn prepare_object(&self, write: ArkObjectWrite) -> Result<ArkObject, String>;
     fn persist_object(&self, object: &ArkObject) -> Result<(), String>;
     fn object_type_id(&self, id: &str) -> Result<Option<String>, String>;
     fn delete_object(&self, id: &str) -> Result<(), String>;
@@ -120,28 +119,6 @@ fn record_book_cover_revisions(
         session.record_upsert(ObjectRevisionKind::Object, &image.id, &write.device_id)?;
     }
     Ok(())
-}
-
-pub fn apply_object_upsert(
-    session: &dyn ObjectMutationSession,
-    write: LocalObjectUpsert,
-) -> Result<ObjectUpsertCommit, String> {
-    ark_application::object_mutation::validate_local_object_upsert_type(&write)
-        .map_err(|error| error.to_string())?;
-    let current_snapshot = write
-        .expected_snapshot
-        .as_ref()
-        .map(|_| session.object_snapshot(&write.object.id))
-        .transpose()?;
-    ark_application::object_mutation::validate_local_object_upsert(
-        &write,
-        current_snapshot.as_ref(),
-    )
-    .map_err(|error| error.to_string())?;
-    let object = session.prepare_object(write.object)?;
-    session.persist_object(&object)?;
-    let hlc = session.record_upsert(ObjectRevisionKind::Object, &object.id, &write.device_id)?;
-    Ok(ark_application::object_mutation::build_local_object_upsert_commit(object, hlc))
 }
 
 pub fn apply_object_delete(

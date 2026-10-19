@@ -53,7 +53,6 @@ pub(crate) use legacy_mutation::{
 };
 pub(crate) use object_mutation::{
     CanonicalGameUpsertCommand, LocalBookCoverCommand, LocalObjectDeleteCommand,
-    LocalObjectUpsertCommand,
 };
 pub(crate) use object_read::ObjectReadQuery;
 pub(crate) use sync_mutation::{
