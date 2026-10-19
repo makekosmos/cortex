@@ -175,6 +175,18 @@ jobs:
       - name: Engine tests
         run: node runtime/scripts/test-lib.mjs --workspace
 
+      - name: Measure production SQLite commit durability
+        run: |
+          set -o pipefail
+          cargo run --locked --release -p ark-store --example sqlite_commit_durability \
+            | tee sqlite-commit-durability.log
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ark-sqlite-durability-${{ matrix.ark_target }}
+          path: sqlite-commit-durability.log
+          if-no-files-found: error
+
       # manager-gpui is a standalone Cargo workspace — the root sweep does
       # not cover it, so it gets the same clippy/test/build the local
       # `pnpm run check:manager-gpui` runs. Plain `cargo test`, not nextest:

@@ -3,7 +3,9 @@ use ark_domain::types::{SyncEntity, VersionVector};
 use rusqlite::{params, params_from_iter, Connection, OptionalExtension};
 use serde_json::Value;
 
+mod apply;
 mod policy_bound;
+pub use apply::{apply_inbound_object_snapshot, InboundObjectRevision};
 pub use policy_bound::read_policy_bound_page;
 
 fn load_usage_sequence_page(

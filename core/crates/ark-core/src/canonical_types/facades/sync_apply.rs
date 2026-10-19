@@ -104,21 +104,13 @@ pub fn apply_legacy_compat_entity(
             }
         });
     }
-    ark_store::objects::upsert_object_compat(conn, &mapped.object)?;
-    for link in mapped.links {
-        ark_store::objects::upsert_object_link(conn, &link)?;
-    }
-    conn.execute(
-        concat!(
-            "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,0) ON ",
-            "CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=0 WHERE ",
-            "excluded.hlc > object_sync_versions.hlc"
-        ),
-        params![entity.id, entity.hlc],
+    ark_store::sync_entities::apply_inbound_object_snapshot(
+        conn,
+        &mapped.object,
+        &mapped.links,
+        &entity.hlc,
+        ark_store::sync_entities::InboundObjectRevision::LegacyCompatibility,
     )
-    .map_err(|e| e.to_string())?;
-    ark_store::sync_tombstones::delete(conn, &entity.id)?;
-    Ok(ark_application::sync_storage::InboundApplyOutcome::Applied)
 }
 
 pub fn apply_canonical_object_entity(
@@ -243,25 +235,24 @@ pub fn apply_canonical_object_entity(
                     }
                 }));
             }
-            ark_store::objects::upsert_object_compat(conn, &object)?;
-            if let Some(raw_links) = data.get("links") {
-                let links: Vec<ObjectLink> =
-                    serde_json::from_value(raw_links.clone()).map_err(|e| e.to_string())?;
-                for link in links {
-                    ark_store::objects::upsert_object_link(conn, &link)?;
-                }
-            }
-            conn.execute(
-                concat!(
-                    "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,0) ON ",
-                    "CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=0 WHERE ",
-                    "excluded.hlc > object_sync_versions.hlc"
-                ),
-                params![object.id, entity.hlc],
+            let links: Vec<_> = data
+                .get("links")
+                .cloned()
+                .map(serde_json::from_value)
+                .transpose()
+                .map_err(|e| e.to_string())?
+                .unwrap_or_default();
+            let outcome = ark_store::sync_entities::apply_inbound_object_snapshot(
+                conn,
+                &object,
+                &links,
+                &entity.hlc,
+                ark_store::sync_entities::InboundObjectRevision::Canonical,
+            )?;
+            Ok(
+                (outcome != ark_application::sync_storage::InboundApplyOutcome::Applied)
+                    .then_some(outcome),
             )
-            .map_err(|e| e.to_string())?;
-            ark_store::sync_tombstones::delete(conn, &entity.id)?;
-            Ok(None)
         })();
     match result {
         Ok(outcome) => conn
