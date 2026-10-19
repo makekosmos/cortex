@@ -40,26 +40,6 @@ pub fn delete_object_type(conn: &Connection, id: &str) -> Result<(), String> {
     ark_store::object_types::deprecate_legacy_type(conn, id)
 }
 
-pub fn is_object_type_known(conn: &Connection, type_id: &str) -> Result<bool, String> {
-    ark_store::object_types::is_type_known(conn, type_id)
-}
-
-pub fn is_object_definition_known(
-    conn: &Connection,
-    type_id: &str,
-    type_version: &str,
-) -> Result<bool, String> {
-    ark_store::object_types::is_definition_known(conn, type_id, type_version)
-}
-
-pub fn list_object_types(conn: &Connection) -> Result<Vec<ObjectType>, String> {
-    ark_store::object_types::list(conn)
-}
-
-pub fn get_object_type(conn: &Connection, id: &str) -> Result<Option<ObjectType>, String> {
-    ark_store::object_types::get(conn, id)
-}
-
 fn is_canonical_type(type_id: &str) -> bool {
     crate::canonical_types::definitions::canonical_type_registrations()
         .map(|registrations| {

@@ -171,7 +171,7 @@ fn legacy_object_type_reads_hide_deprecated_but_registry_keeps_definition() {
     };
     upsert_object_type(&conn, &object_type).unwrap();
     assert_eq!(
-        ark_core::db::list_object_types(&conn)
+        ark_store::object_types::list(&conn)
             .unwrap()
             .iter()
             .filter(|x| x.id == object_type.id)
@@ -179,7 +179,7 @@ fn legacy_object_type_reads_hide_deprecated_but_registry_keeps_definition() {
         1
     );
     ark_core::db::delete_object_type(&conn, &object_type.id).unwrap();
-    assert!(!ark_core::db::list_object_types(&conn)
+    assert!(!ark_store::object_types::list(&conn)
         .unwrap()
         .iter()
         .any(|x| x.id == object_type.id));
@@ -189,7 +189,7 @@ fn legacy_object_type_reads_hide_deprecated_but_registry_keeps_definition() {
         .any(|x| x.type_id == object_type.id && x.status == "deprecated"));
     upsert_object_type(&conn, &object_type).unwrap();
     assert_eq!(
-        ark_core::db::list_object_types(&conn)
+        ark_store::object_types::list(&conn)
             .unwrap()
             .iter()
             .filter(|x| x.id == object_type.id)
@@ -204,7 +204,7 @@ fn legacy_object_type_reads_hide_deprecated_but_registry_keeps_definition() {
         )
         .unwrap();
     assert!(version.starts_with("0.0.0+legacy."));
-    let listed = ark_core::db::list_object_types(&conn).unwrap();
+    let listed = ark_store::object_types::list(&conn).unwrap();
     let listed_json = serde_json::to_value(&listed[0]).unwrap();
     assert_eq!(
         listed_json
@@ -227,12 +227,12 @@ fn legacy_object_type_reads_hide_deprecated_but_registry_keeps_definition() {
         .collect::<Vec<_>>()
     );
     assert_eq!(
-        serde_json::to_value(ark_core::db::get_object_type(&conn, &object_type.id).unwrap())
+        serde_json::to_value(ark_store::object_types::get(&conn, &object_type.id).unwrap())
             .unwrap(),
         serde_json::to_value(Some(object_type.clone())).unwrap()
     );
     ark_core::db::delete_object_type(&conn, &object_type.id).unwrap();
-    assert!(ark_core::db::get_object_type(&conn, &object_type.id)
+    assert!(ark_store::object_types::get(&conn, &object_type.id)
         .unwrap()
         .is_none());
     assert!(ark_core::type_registry::list_type_summaries(&conn)

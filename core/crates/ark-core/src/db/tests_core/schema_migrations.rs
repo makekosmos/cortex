@@ -139,7 +139,7 @@ fn test_init_schema_migrates_existing_db_without_destroying_data() {
         )
         .unwrap();
     assert_eq!(tombstone_table_count, 1);
-    let object_types = list_object_types(&conn).unwrap();
+    let object_types = ark_store::object_types::list(&conn).unwrap();
     assert!(object_types.iter().any(|item| item.id == "com.kosmos.note"));
     assert!(object_types.iter().any(|item| item.id == "com.kosmos.task"));
     let migrated: (String, String) = conn

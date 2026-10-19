@@ -219,7 +219,10 @@ fn upsert_object_type_preserves_existing_objects_and_links() {
     assert_eq!(links.len(), 1);
     assert_eq!(links[0].id, "link-custom");
     assert_eq!(
-        get_object_type(&conn, "custom_note").unwrap().unwrap().name,
+        ark_store::object_types::get(&conn, "custom_note")
+            .unwrap()
+            .unwrap()
+            .name,
         "Custom Note Updated"
     );
 }

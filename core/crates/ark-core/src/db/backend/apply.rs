@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 use super::SqliteStorageBackend;
 use crate::db::{
     delete_object_link, delete_object_type, delete_project, delete_todo, insert_pending_object,
-    is_object_definition_known, upsert_object_link, upsert_object_type,
+    upsert_object_link, upsert_object_type,
 };
 use crate::types::{
     ArkObject, ObjectLink, ObjectType, SyncEntity, TrackedApp, UsageDay, UsageEvent, UsageSession,
@@ -230,7 +230,11 @@ impl SqliteStorageBackend {
                     .or_insert_with(|| Value::String("0.0.0-legacy".to_string()));
                 let object = serde_json::from_value::<ArkObject>(Value::Object(object_data))
                     .map_err(|e| e.to_string())?;
-                if !is_object_definition_known(conn, &object.type_id, &object.type_version)? {
+                if !ark_store::object_types::is_definition_known(
+                    conn,
+                    &object.type_id,
+                    &object.type_version,
+                )? {
                     insert_pending_object(conn, entity, &object.type_id)?;
                     crate::events::emit_event(json!({
                         "event": "sync_error",

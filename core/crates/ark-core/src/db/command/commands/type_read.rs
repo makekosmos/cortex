@@ -58,9 +58,9 @@ impl DbQuery for TypeReadQuery {
             Self::ResolveAlias(alias) => {
                 serialize(crate::type_registry::resolve_alias(connection, &alias))
             }
-            Self::ListObjectTypes => serialize(crate::db::list_object_types(connection)),
-            Self::GetObjectType(id) => serialize(crate::db::get_object_type(connection, &id)),
-            Self::ListObjectLinks => serialize(crate::db::list_object_links(connection)),
+            Self::ListObjectTypes => serialize(ark_store::object_types::list(connection)),
+            Self::GetObjectType(id) => serialize(ark_store::object_types::get(connection, &id)),
+            Self::ListObjectLinks => serialize(ark_store::objects::list_object_links(connection)),
         }
     }
 }

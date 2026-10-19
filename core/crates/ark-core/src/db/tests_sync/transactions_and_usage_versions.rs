@@ -41,7 +41,7 @@
         ));
         conn.execute_batch("COMMIT").unwrap();
         // РџСЂРѕРІРµСЂСЏРµРј, С‡С‚Рѕ С‚РёРї Р·Р°РїРёСЃР°РЅ.
-        let types = list_object_types(&conn).unwrap();
+        let types = ark_store::object_types::list(&conn).unwrap();
         assert!(
             types.iter().any(|t| t.id == "ot-nested"),
             "object_type РґРѕР»Р¶РµРЅ Р±С‹С‚СЊ Р·Р°РїРёСЃР°РЅ"

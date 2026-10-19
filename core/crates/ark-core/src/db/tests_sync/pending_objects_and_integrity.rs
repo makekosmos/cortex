@@ -43,7 +43,7 @@
     #[test]
     fn phase2_is_object_type_known_false_when_missing() {
         let conn = setup_db();
-        assert!(!is_object_type_known(&conn, "nonexistent").unwrap());
+        assert!(!ark_store::object_types::is_type_known(&conn, "nonexistent").unwrap());
     }
 
     #[test]
@@ -51,7 +51,7 @@
         let conn = setup_db();
         let object_type = phase2_make_object_type("type_x", "Type X");
         upsert_object_type(&conn, &object_type).unwrap();
-        assert!(is_object_type_known(&conn, "type_x").unwrap());
+        assert!(ark_store::object_types::is_type_known(&conn, "type_x").unwrap());
     }
 
     #[test]
