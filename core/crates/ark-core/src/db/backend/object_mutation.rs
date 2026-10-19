@@ -1,7 +1,6 @@
 use crate::application::object_mutation::{ObjectMutationSession, ObjectRevisionKind};
 use crate::canonical_types::facades::BookCoverMutation;
 use crate::canonical_types::game::{GameMutationResult, GameUpsertCommand};
-use crate::db;
 use crate::types::ArkObject;
 use ark_domain::object_write::ObjectWriteSnapshot;
 use rusqlite::Transaction;
@@ -28,7 +27,7 @@ impl ObjectMutationSession for SqliteObjectMutationSession<'_, '_> {
     }
 
     fn persist_object(&self, object: &ArkObject) -> Result<(), String> {
-        db::upsert_object(self.transaction, object)
+        ark_store::objects::upsert_object_compat(self.transaction, object)
     }
 
     fn object_type_id(&self, id: &str) -> Result<Option<String>, String> {

@@ -17,4 +17,3 @@ pub(in crate::db) fn rollback_savepoint(conn: &Connection, name: &str) {
 use crate::types::*;
 
 include!("objects/types.rs");
-include!("objects/records.rs");

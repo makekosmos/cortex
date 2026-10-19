@@ -29,7 +29,7 @@ async fn book_cover_command_rolls_back_facade_writes_when_revision_recording_fai
     .unwrap();
 
     with_write_tx(&state, |connection| {
-        db::upsert_object(
+        ark_store::objects::upsert_object_compat(
             connection,
             &object(
                 "book",
@@ -46,7 +46,7 @@ async fn book_cover_command_rolls_back_facade_writes_when_revision_recording_fai
                 }),
             ),
         )?;
-        db::upsert_object(
+        ark_store::objects::upsert_object_compat(
             connection,
             &object(
                 "image",

@@ -138,7 +138,7 @@ fn invalid_game_rejects_without_object_hlc_or_vector_mutation() {
 #[test]
 fn wrong_link_target_rolls_back_object_and_local_state() {
     let conn = setup();
-    db::upsert_object(&conn, &target("note", "com.kosmos.task")).unwrap();
+    ark_store::objects::upsert_object_compat(&conn, &target("note", "com.kosmos.task")).unwrap();
     let mut value = command("g", "a");
     value.links = vec![GameLink {
         id: "l".into(),
@@ -157,8 +157,8 @@ fn wrong_link_target_rolls_back_object_and_local_state() {
 #[test]
 fn replace_removes_stale_owned_links() {
     let conn = setup();
-    db::upsert_object(&conn, &target("n1", "com.kosmos.note")).unwrap();
-    db::upsert_object(&conn, &target("n2", "com.kosmos.note")).unwrap();
+    ark_store::objects::upsert_object_compat(&conn, &target("n1", "com.kosmos.note")).unwrap();
+    ark_store::objects::upsert_object_compat(&conn, &target("n2", "com.kosmos.note")).unwrap();
     let mut first = command("g", "a");
     first.links = vec![GameLink {
         id: "l1".into(),

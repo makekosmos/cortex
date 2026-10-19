@@ -92,7 +92,7 @@ async fn pre_version_table_revisions_reject_stale_remote_resurrection() {
             task("legacy-vector-task", "vector wins"),
         )
         .map_err(|error| error.to_string())?;
-        db::upsert_object(conn, &vector_object)?;
+        ark_store::objects::upsert_object_compat(conn, &vector_object)?;
         ark_store::sync_kv::set_sync_kv(
             conn,
             "lan_sync.version_vector",
@@ -102,7 +102,7 @@ async fn pre_version_table_revisions_reject_stale_remote_resurrection() {
         let tombstone_object =
             ark_store::object_write::prepare_object(conn, task("legacy-tombstone-task", "deleted"))
                 .map_err(|error| error.to_string())?;
-        db::upsert_object(conn, &tombstone_object)?;
+        ark_store::objects::upsert_object_compat(conn, &tombstone_object)?;
         ark_store::objects::delete_object(conn, &tombstone_object.id)?;
         ark_store::sync_tombstones::record(
             conn,
@@ -309,7 +309,7 @@ async fn authenticated_legacy_todo_mapping_and_absent_task_tombstone_use_task_se
         };
         let project = ark_store::object_write::prepare_object(conn, project)
             .map_err(|error| error.to_string())?;
-        db::upsert_object(conn, &project)
+        ark_store::objects::upsert_object_compat(conn, &project)
     })
     .unwrap();
 

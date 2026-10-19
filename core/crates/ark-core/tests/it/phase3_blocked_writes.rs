@@ -70,7 +70,7 @@ fn blocked_migration_still_installs_new_write_contracts_without_rewriting_legacy
         let write =
             serde_json::from_str(include_str!("../fixtures/agenda/task-inbox.json")).unwrap();
         let object = ark_store::object_write::prepare_object(&conn, write).unwrap();
-        ark_core::db::upsert_object(&conn, &object).unwrap();
+        ark_store::objects::upsert_object_compat(&conn, &object).unwrap();
         let legacy: (String, String) = conn
             .query_row(
                 "SELECT type_id,props_json FROM objects WHERE id='dangling-note'",

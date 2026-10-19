@@ -65,7 +65,7 @@ fn bootstrap() -> ark_domain::task_merge::TaskMergeBootstrap {
 async fn seed_project_link_target(handle: &DbHandle) {
     handle
         .with_connection(|connection| {
-            crate::db::upsert_object(
+            ark_store::objects::upsert_object_compat(
                 connection,
                 &crate::types::ArkObject {
                     id: "project-1".into(),

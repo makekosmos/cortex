@@ -176,7 +176,7 @@ pub fn write_legacy_records(
             )?);
             continue;
         }
-        db::upsert_object(conn, &item.object)?;
+        ark_store::objects::upsert_object_compat(conn, &item.object)?;
         let hlc = ark_store::sync_versions::bump_sync_version_vector(
             conn,
             "object",
@@ -259,7 +259,7 @@ pub fn delete_legacy_object(
     }
     let write_device = device_id.as_deref().unwrap_or("ark-core");
     object.deleted_at = Some(HLC::now(write_device).wall_time);
-    db::upsert_object(conn, &object)?;
+    ark_store::objects::upsert_object_compat(conn, &object)?;
     let hlc =
         ark_store::sync_versions::bump_sync_version_vector(conn, "object", id, write_device, true)?;
     conn.execute(

@@ -1,7 +1,7 @@
 use ark_core::db::{
     backup_to_file, clear_all, get_object, get_objects_by_ids, init_schema, insert_pending_object,
     list_object_summaries, list_object_summaries_by_type, list_objects, list_objects_by_type,
-    list_running_time_entries, load_all, upsert_object, upsert_object_link, upsert_object_type,
+    list_running_time_entries, load_all, upsert_object_link, upsert_object_type,
 };
 use ark_core::type_registry::{register_alias, AliasRecord};
 use ark_core::types::{ArkObject, ObjectType, SyncEntity};
@@ -163,7 +163,7 @@ fn legacy_upsert_rejects_alias_canonical_collision_atomically() {
         )
         .unwrap();
     for id in ["object-a", "object-b"] {
-        upsert_object(
+        ark_store::objects::upsert_object_compat(
             &conn,
             &ArkObject {
                 id: id.into(),
@@ -233,7 +233,7 @@ fn persisted_object_and_summary_carry_exact_type_version() {
     )
     .unwrap();
 
-    upsert_object(
+    ark_store::objects::upsert_object_compat(
         &conn,
         &ArkObject {
             id: "object-1".into(),

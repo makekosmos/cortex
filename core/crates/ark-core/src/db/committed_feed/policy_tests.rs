@@ -61,8 +61,8 @@ fn narrowing_preserves_local_copy_and_widening_replays_latest_state() {
         updated_at: "2026-10-16T00:00:00.000Z".into(),
         deleted_at: None,
     };
-    crate::db::upsert_object(&source, &original).unwrap();
-    crate::db::upsert_object(&receiver, &original).unwrap();
+    ark_store::objects::upsert_object_compat(&source, &original).unwrap();
+    ark_store::objects::upsert_object_compat(&receiver, &original).unwrap();
     append_committed_change(&source, "object", &original.id, "r1", false, None, None).unwrap();
 
     let rule = |mode| ark_application::sync_policy::SyncProfileRule {
@@ -92,7 +92,7 @@ fn narrowing_preserves_local_copy_and_widening_replays_latest_state() {
     changed.title = "Updated while excluded".into();
     changed.content_json = serde_json::json!({"text":"new version"});
     changed.updated_at = "2026-10-16T00:00:01.000Z".into();
-    crate::db::upsert_object(&source, &changed).unwrap();
+    ark_store::objects::upsert_object_compat(&source, &changed).unwrap();
     append_committed_change(&source, "object", &changed.id, "r2", false, None, None).unwrap();
     let narrowed = read_committed_feed_delivery_page_for_peer(
         &source,

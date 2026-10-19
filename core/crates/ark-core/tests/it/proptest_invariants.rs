@@ -20,6 +20,7 @@
 
 use ark_core::db;
 use ark_core::types::{ArkObject, ObjectType, VersionVector};
+use ark_store::objects::upsert_object_compat as upsert_object;
 use proptest::collection::vec;
 use proptest::prelude::*;
 use rusqlite::Connection;
@@ -136,7 +137,8 @@ proptest! {
             match op {
                 Op::Upsert { id, title } => {
                     let obj = make_obj(id, title);
-                    db::upsert_object(&conn, &obj).expect("upsert should not panic");
+                    upsert_object(&conn, &obj)
+                        .expect("upsert should not panic");
                     bump_local_upsert(&conn, id);
                 }
                 Op::Delete { id } => {
@@ -177,7 +179,7 @@ proptest! {
             // Apply op.
             match op {
                 Op::Upsert { id, title } => {
-                    db::upsert_object(&conn, &make_obj(id, title)).unwrap();
+                    upsert_object(&conn, &make_obj(id, title)).unwrap();
                     bump_local_upsert(&conn, id);
                 }
                 Op::Delete { id } | Op::DeleteNonExistent { id } => {
@@ -207,7 +209,11 @@ proptest! {
         let id = format!("id-{id_idx}");
         for cycle in 0..cycles {
             // Insert.
-            db::upsert_object(&conn, &make_obj(&id, &format!("cycle-{cycle}"))).unwrap();
+            upsert_object(
+                &conn,
+                &make_obj(&id, &format!("cycle-{cycle}")),
+            )
+            .unwrap();
             bump_local_upsert(&conn, &id);
             prop_assert_eq!(
                 count_tombstones(&conn, &id),

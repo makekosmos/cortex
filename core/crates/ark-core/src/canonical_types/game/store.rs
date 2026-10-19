@@ -250,7 +250,7 @@ pub fn upsert_game(
         }
         let prepared = ark_store::object_write::prepare_object(conn, object_write(&command))
             .map_err(|e| e.to_string())?;
-        db::upsert_object(conn, &prepared)?;
+        ark_store::objects::upsert_object_compat(conn, &prepared)?;
         conn.execute(
             concat!(
                 "INSERT INTO object_local_state(object_id,device_id,data_json,updated_at) ",
@@ -423,7 +423,7 @@ mod tests {
         )
         .unwrap();
         for object_id in ["game-1", "app-v2"] {
-            crate::db::upsert_object(
+            ark_store::objects::upsert_object_compat(
                 &conn,
                 &crate::types::ArkObject {
                     id: object_id.into(),

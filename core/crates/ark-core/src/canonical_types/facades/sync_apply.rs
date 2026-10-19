@@ -105,7 +105,7 @@ pub fn apply_legacy_compat_entity(
             }
         });
     }
-    db::upsert_object(conn, &mapped.object)?;
+    ark_store::objects::upsert_object_compat(conn, &mapped.object)?;
     for link in mapped.links {
         db::upsert_object_link(conn, &link)?;
     }
@@ -244,7 +244,7 @@ pub fn apply_canonical_object_entity(
                     }
                 }));
             }
-            db::upsert_object(conn, &object)?;
+            ark_store::objects::upsert_object_compat(conn, &object)?;
             if let Some(raw_links) = data.get("links") {
                 let links: Vec<ObjectLink> =
                     serde_json::from_value(raw_links.clone()).map_err(|e| e.to_string())?;

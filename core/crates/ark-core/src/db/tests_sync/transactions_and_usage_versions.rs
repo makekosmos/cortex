@@ -125,7 +125,7 @@
         let source = setup_db();
         let mut object = make_object("ac8-object", "note_obj", "AC8 object");
         object.props_json = json!({"description": "SHARED_MARKER", "extensions": {}});
-        upsert_object(&source, &object).unwrap();
+        ark_store::objects::upsert_object_compat(&source, &object).unwrap();
         source
             .execute(
                 "INSERT INTO object_local_state(object_id,device_id,data_json,updated_at) VALUES

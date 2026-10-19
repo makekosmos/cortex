@@ -180,7 +180,7 @@
                     &format!("Title {i}"),
                 );
                 obj.props_json = json!({ "n": i, "padding": "x".repeat(200) });
-                upsert_object(&conn, &obj).unwrap();
+                ark_store::objects::upsert_object_compat(&conn, &obj).unwrap();
             }
         }
         // РџРѕСЂС‚РёРј data pages (offset 8192+, РїРѕСЃР»Рµ header page Рё schema page) вЂ”
@@ -224,7 +224,7 @@
         upsert_object_type(&conn, &object_type).unwrap();
         let mut object = make_object("obj-backup", "backup_fixture_type", "Backup test");
         object.props_json = json!({"tag": "test"});
-        upsert_object(&conn, &object).unwrap();
+        ark_store::objects::upsert_object_compat(&conn, &object).unwrap();
 
         let tmp = crate::test_support::temp_dir();
         let dest = tmp.path().join("ark.db.backup");
@@ -262,7 +262,7 @@
                 &make_object_type("backup_chunk_fixture_type", "Note"),
             )
             .unwrap();
-            upsert_object(
+            ark_store::objects::upsert_object_compat(
                 &conn,
                 &make_object("obj-chunked", "backup_chunk_fixture_type", "Chunked backup"),
             )

@@ -55,7 +55,7 @@ fn book(id: &str) -> ArkObject {
 #[test]
 fn asset_sources_prefers_local_and_orders_rich_text_without_legacy_props() {
     let conn = setup();
-    db::upsert_object(&conn, &image("img-local")).unwrap();
+    ark_store::objects::upsert_object_compat(&conn, &image("img-local")).unwrap();
     conn.execute(
         concat!(
             "INSERT INTO object_local_state(object_id,device_id,data_json,updated_at) ",
@@ -68,7 +68,7 @@ fn asset_sources_prefers_local_and_orders_rich_text_without_legacy_props() {
     let mut note = book("note-like");
     note.type_id = "com.kosmos.note".into();
     note.props_json = json!({"description":null,"extensions":{}});
-    db::upsert_object(&conn, &note).unwrap();
+    ark_store::objects::upsert_object_compat(&conn, &note).unwrap();
     conn.execute(
         concat!(
             "INSERT INTO object_local_state(object_id,device_id,data_json,updated_at) ",
@@ -100,8 +100,8 @@ fn asset_sources_rejects_bound_and_wrong_inputs() {
 #[test]
 fn set_book_cover_links_existing_image_and_removes_only_link() {
     let conn = setup();
-    db::upsert_object(&conn, &book("book-1")).unwrap();
-    db::upsert_object(&conn, &image("image-1")).unwrap();
+    ark_store::objects::upsert_object_compat(&conn, &book("book-1")).unwrap();
+    ark_store::objects::upsert_object_compat(&conn, &image("image-1")).unwrap();
     let first = set_book_cover(&conn, "book-1", None, Some("image-1"), "", "device").unwrap();
     assert!(first.changed);
     assert_eq!(first.links.len(), 1);
@@ -124,7 +124,7 @@ fn set_book_cover_links_existing_image_and_removes_only_link() {
 #[test]
 fn set_book_cover_rejects_source_without_mutation() {
     let conn = setup();
-    db::upsert_object(&conn, &book("book-1")).unwrap();
+    ark_store::objects::upsert_object_compat(&conn, &book("book-1")).unwrap();
     let before: i64 = conn
         .query_row("SELECT COUNT(*) FROM object_links", [], |r| r.get(0))
         .unwrap();
@@ -146,8 +146,8 @@ fn set_book_cover_rejects_source_without_mutation() {
 #[test]
 fn set_book_cover_requires_typed_image_target() {
     let conn = setup();
-    db::upsert_object(&conn, &book("book-1")).unwrap();
-    db::upsert_object(&conn, &book("not-image")).unwrap();
+    ark_store::objects::upsert_object_compat(&conn, &book("book-1")).unwrap();
+    ark_store::objects::upsert_object_compat(&conn, &book("not-image")).unwrap();
     let err = set_book_cover(&conn, "book-1", None, Some("not-image"), "", "d").unwrap_err();
     assert_eq!(err.code, "wrong_image_type");
     assert_eq!(

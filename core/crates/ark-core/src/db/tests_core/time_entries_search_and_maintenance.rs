@@ -11,14 +11,14 @@
         older.props_json = json!({ "kind": "note" });
         older.created_at = "2026-01-01T00:00:00.000Z".to_string();
         older.updated_at = "2026-01-01T00:00:00.000Z".to_string();
-        upsert_object(&conn, &older).unwrap();
+        ark_store::objects::upsert_object_compat(&conn, &older).unwrap();
 
         let mut newer = make_object("obj-2", "summary_fixture_book_type", "Clean Code");
         newer.content_json = json!({ "text": "another body" });
         newer.props_json = json!({ "kind": "book" });
         newer.created_at = "2026-01-02T00:00:00.000Z".to_string();
         newer.updated_at = "2026-01-02T00:00:00.000Z".to_string();
-        upsert_object(&conn, &newer).unwrap();
+        ark_store::objects::upsert_object_compat(&conn, &newer).unwrap();
 
         let summaries = list_object_summaries(&conn).unwrap();
         assert_eq!(summaries.len(), 2);
@@ -68,12 +68,12 @@
     #[test]
     fn list_running_time_entries_returns_only_running() {
         let conn = setup_db();
-        upsert_object(
+        ark_store::objects::upsert_object_compat(
             &conn,
             &make_time_entry("te-running", "2026-05-20T10:00:00.000Z", None, "manual"),
         )
         .unwrap();
-        upsert_object(
+        ark_store::objects::upsert_object_compat(
             &conn,
             &make_time_entry(
                 "te-done",
@@ -92,17 +92,17 @@
     #[test]
     fn list_running_time_entries_filter_by_source() {
         let conn = setup_db();
-        upsert_object(
+        ark_store::objects::upsert_object_compat(
             &conn,
             &make_time_entry("te-manual", "2026-05-20T10:00:00.000Z", None, "manual"),
         )
         .unwrap();
-        upsert_object(
+        ark_store::objects::upsert_object_compat(
             &conn,
             &make_time_entry("te-pomo", "2026-05-20T11:00:00.000Z", None, "pomodoro"),
         )
         .unwrap();
-        upsert_object(
+        ark_store::objects::upsert_object_compat(
             &conn,
             &make_time_entry(
                 "te-break",
@@ -138,7 +138,7 @@
         let conn = setup_db();
         let mut deleted = make_time_entry("te-del", "2026-05-20T10:00:00.000Z", None, "manual");
         deleted.deleted_at = Some("2026-05-20T10:30:00.000Z".to_string());
-        upsert_object(&conn, &deleted).unwrap();
+        ark_store::objects::upsert_object_compat(&conn, &deleted).unwrap();
 
         let result = list_running_time_entries(&conn, None).unwrap();
         assert!(result.is_empty());
@@ -155,7 +155,7 @@
         object.props_json = json!({
             "description": "preexisting nebula archive"
         });
-        upsert_object(&conn, &object).unwrap();
+        ark_store::objects::upsert_object_compat(&conn, &object).unwrap();
 
         assert!(
             !object_search_fts_exists(&conn).unwrap(),
@@ -177,7 +177,7 @@
 
         let mut object = make_object("obj-search-update", "search_obj", "Search Target");
         object.props_json = json!({ "description": "alpha marker" });
-        upsert_object(&conn, &object).unwrap();
+        ark_store::objects::upsert_object_compat(&conn, &object).unwrap();
         assert_eq!(
             search_objects(&conn, "alpha").unwrap()[0].entry_id,
             object.id
@@ -185,7 +185,7 @@
 
         object.props_json = json!({ "description": "beta marker" });
         object.updated_at = "2026-01-02T00:00:00.000Z".to_string();
-        upsert_object(&conn, &object).unwrap();
+        ark_store::objects::upsert_object_compat(&conn, &object).unwrap();
         assert!(
             search_objects(&conn, "alpha").unwrap().is_empty(),
             "old FTS text should be removed on object update"
@@ -211,7 +211,7 @@
         object.props_json = json!({
             "description": "boss-fight co-op notes"
         });
-        upsert_object(&conn, &object).unwrap();
+        ark_store::objects::upsert_object_compat(&conn, &object).unwrap();
 
         let punctuation_results = search_objects(&conn, "boss-fight??").unwrap();
         assert_eq!(punctuation_results.len(), 1);
@@ -291,9 +291,9 @@
     fn by_type_queries_match_objects_stored_under_legacy_alias() {
         let conn = setup_db();
         // Rows written before the type registry existed keep `task_obj` in
-        // objects.type_id, which never was a row in object_types — the FK was
-        // added later. Seeding it directly (upsert_object() would canonicalise
-        // the id on write) requires FK checks off on this connection.
+        // objects.type_id, which never was a row in object_types. Seeding the
+        // row directly avoids the compatibility writer canonicalising the ID,
+        // so this connection disables FK checks for the fixture.
         conn.execute_batch("PRAGMA foreign_keys = OFF").unwrap();
         for (id, deleted) in [
             ("legacy-task-1", None),

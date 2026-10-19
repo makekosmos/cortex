@@ -17,7 +17,7 @@ async fn editing_legacy_task_builds_mutation_from_the_new_bootstrap_baseline() {
     with_write_tx(&state, |connection| {
         let object = ark_store::object_write::prepare_object(connection, task(id, "before"))
             .map_err(|error| error.to_string())?;
-        db::upsert_object(connection, &object)?;
+        ark_store::objects::upsert_object_compat(connection, &object)?;
         connection
             .execute(
                 "INSERT INTO object_sync_versions(object_id, hlc, deleted)
@@ -87,7 +87,7 @@ async fn deleting_legacy_task_uses_the_same_bootstrap_conflict_set_it_persists()
     with_write_tx(&state, |connection| {
         let object = ark_store::object_write::prepare_object(connection, task(id, "before"))
             .map_err(|error| error.to_string())?;
-        db::upsert_object(connection, &object)?;
+        ark_store::objects::upsert_object_compat(connection, &object)?;
         connection
             .execute(
                 "INSERT INTO object_sync_versions(object_id, hlc, deleted)
@@ -149,7 +149,7 @@ async fn failed_local_task_journal_write_rolls_back_the_complete_mutation() {
             task("rollback-task-mutation", "before"),
         )
         .map_err(|error| error.to_string())?;
-        db::upsert_object(connection, &object)?;
+        ark_store::objects::upsert_object_compat(connection, &object)?;
         connection
             .execute(
                 "INSERT INTO object_sync_versions(object_id, hlc, deleted)

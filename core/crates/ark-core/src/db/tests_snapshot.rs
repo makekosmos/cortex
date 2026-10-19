@@ -16,7 +16,8 @@ fn setup_file_db() -> (crate::test_support::TestTempDir, String, Connection) {
 
 fn seed_object(conn: &Connection, id: &str, title: &str) {
     upsert_object_type(conn, &make_object_type("snapshot_type", "Note")).unwrap();
-    upsert_object(conn, &make_object(id, "snapshot_type", title)).unwrap();
+    ark_store::objects::upsert_object_compat(conn, &make_object(id, "snapshot_type", title))
+        .unwrap();
 }
 
 /// Пишет snapshot текущей live DB в `<db_dir>/backups/<name>`.
@@ -371,7 +372,11 @@ fn restore_replaces_live_content_and_stays_valid() {
     // Расходимся: удаляем snapshot-объект, добавляем новый.
     conn.execute("DELETE FROM objects WHERE id = 'obj-a'", [])
         .unwrap();
-    upsert_object(&conn, &make_object("obj-b", "snapshot_type", "after")).unwrap();
+    ark_store::objects::upsert_object_compat(
+        &conn,
+        &make_object("obj-b", "snapshot_type", "after"),
+    )
+    .unwrap();
 
     let report = restore_snapshot(&mut conn, &db_path, "ark.db.backup-1").unwrap();
     assert!(report.restored);
