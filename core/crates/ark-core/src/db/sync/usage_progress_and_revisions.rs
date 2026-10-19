@@ -54,7 +54,7 @@ pub(in crate::db) fn record_usage_sequence(
     }
     vector.insert(cursor_key, contiguous.to_string());
     vector.remove(entity_id);
-    super::committed_feed::append_committed_change(
+    ark_store::committed_feed::append_committed_change(
         conn,
         entity_type,
         entity_id,
@@ -167,7 +167,7 @@ pub fn bump_sync_version_vector(
         )
         .map_err(|e| e.to_string())?;
         record_usage_sequence(conn, entity_type, entity_id, device_id, seq, &hlc, deleted)?;
-        super::committed_feed::append_committed_change(
+        ark_store::committed_feed::append_committed_change(
             conn,
             entity_type,
             entity_id,
@@ -220,7 +220,7 @@ pub fn bump_sync_version_vector(
         VERSION_VECTOR_KEY,
         &serde_json::to_string(&vector).map_err(|e| e.to_string())?,
     )?;
-    super::committed_feed::append_committed_change(
+    ark_store::committed_feed::append_committed_change(
         conn,
         entity_type,
         entity_id,
@@ -254,7 +254,7 @@ pub fn record_remote_sync_revision(
             VERSION_VECTOR_KEY,
             &serde_json::to_string(&vector).map_err(|error| error.to_string())?,
         )?;
-        super::committed_feed::append_committed_change(
+        ark_store::committed_feed::append_committed_change(
             conn,
             "object",
             entity_id,

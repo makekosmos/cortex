@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ark_store::committed_feed::append_committed_change;
     use rusqlite::Connection;
 
     fn db() -> Connection {

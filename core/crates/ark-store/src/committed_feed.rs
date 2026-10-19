@@ -1,5 +1,63 @@
 use rusqlite::{Connection, OptionalExtension};
 
+pub fn append_committed_change(
+    connection: &Connection,
+    entity_type: &str,
+    entity_id: &str,
+    revision: &str,
+    deleted: bool,
+    origin_device_id: Option<&str>,
+    origin_sequence: Option<u64>,
+) -> Result<i64, String> {
+    let origin_sequence = origin_sequence
+        .map(i64::try_from)
+        .transpose()
+        .map_err(|_| "feed_origin_sequence_overflow".to_string())?;
+    connection
+        .execute(
+            "INSERT OR IGNORE INTO ark_committed_feed(
+                entity_type, entity_id, revision, deleted, origin_device_id, origin_sequence
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params![
+                entity_type,
+                entity_id,
+                revision,
+                deleted as i64,
+                origin_device_id,
+                origin_sequence
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+    let position: i64 = connection
+        .query_row(
+            "SELECT position FROM ark_committed_feed
+             WHERE entity_type = ?1 AND entity_id = ?2 AND revision = ?3",
+            rusqlite::params![entity_type, entity_id, revision],
+            |row| row.get(0),
+        )
+        .map_err(|error| error.to_string())?;
+    connection
+        .execute(
+            "INSERT INTO ark_committed_feed_heads(entity_type, entity_id, position)
+             VALUES (?1, ?2, ?3)
+             ON CONFLICT(entity_type, entity_id) DO UPDATE SET
+                 position = MAX(ark_committed_feed_heads.position, excluded.position)",
+            rusqlite::params![entity_type, entity_id, position],
+        )
+        .map_err(|error| error.to_string())?;
+    connection
+        .execute(
+            "INSERT INTO ark_committed_feed_meta(meta_key, meta_value)
+             VALUES ('watermark-v1', ?1)
+             ON CONFLICT(meta_key) DO UPDATE SET
+                 meta_value = MAX(CAST(ark_committed_feed_meta.meta_value AS INTEGER),
+                                  CAST(excluded.meta_value AS INTEGER))",
+            [position.to_string()],
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(position)
+}
+
 pub fn watermark(connection: &Connection) -> Result<i64, String> {
     let persisted: Option<String> = connection
         .query_row(

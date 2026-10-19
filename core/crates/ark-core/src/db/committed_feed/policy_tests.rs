@@ -1,4 +1,5 @@
 use super::*;
+use ark_store::committed_feed::append_committed_change;
 
 #[test]
 fn operation_mode_task_snapshots_are_skipped_with_cursor_advance() {

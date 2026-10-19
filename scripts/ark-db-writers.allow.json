@@ -17,11 +17,6 @@
       "count": 2
     },
     {
-      "path": "core/crates/ark-core/src/db/committed_feed/log.rs",
-      "category": "SQLite mutation API",
-      "count": 3
-    },
-    {
       "path": "core/crates/ark-core/src/db/committed_feed/progress.rs",
       "category": "SQLite mutation API",
       "count": 7
@@ -334,7 +329,7 @@
     {
       "path": "core/crates/ark-store/src/committed_feed.rs",
       "category": "SQLite mutation API",
-      "count": 3
+      "count": 6
     },
     {
       "path": "core/crates/ark-store/src/schema/migrations.rs",

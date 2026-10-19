@@ -101,7 +101,7 @@ impl SqliteStorageBackend {
         let (outcome, notices) = Self::apply_entity_mutation_inner(conn, entity)?;
 
         if outcome == ark_application::sync_storage::InboundApplyOutcome::Applied {
-            crate::db::append_committed_change(
+            ark_store::committed_feed::append_committed_change(
                 conn,
                 canonical_type,
                 &entity.id,
