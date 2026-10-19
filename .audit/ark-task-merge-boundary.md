@@ -49,6 +49,8 @@ Signatures are refined per operation. Do not expose SQLite rows, tuples, SQL str
 
 Bootstrap persistence uses `check_bootstrap` followed by `persist_bootstrap`. The check returns either an idempotent replay or a prepared bootstrap. Core checks any existing object projection before it consumes the prepared value. Store writes the bootstrap, baseline operations, and journal entries together. `load_bootstrap` verifies the stored payload before Core uses it to rebuild a missing projection.
 
+Store also owns outbound progress row decoding, the journal watermark query, and conditional insert, policy-stamp, batch-claim, and acknowledgement writes. It returns a typed progress state with optional in-flight and last-acknowledged batches. Core still validates the current sync policy, fits entries to the wire budget, and decides whether a replayed or new acknowledgement is valid.
+
 ## Migration sequence
 
 1. Move bounded journal page reading and its payload verification into Store; add Store-owned schema tests for valid pages, invalid cursors/limits, future watermarks, missing/mismatched payloads. Keep Core command/service tests for observable behavior.

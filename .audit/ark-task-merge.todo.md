@@ -22,6 +22,8 @@
 - [x] Prove guarded replay, operation-id collision, remote pre-bootstrap publication policy, and rollback when journal insertion fails.
 - [x] Move bootstrap replay checks, payload loading, baseline-operation persistence, and journal publication into Store; keep existing projection validation and materialization in Core.
 - [x] Prove bootstrap idempotency, payload collision, pending-operation publication, and rollback when journal insertion fails.
+- [x] Move outbound progress row decoding, watermark reads, and conditional progress writes into Store; keep policy checks and batch construction in Core.
+- [x] Prove progress state decoding, policy-stamp updates, conditional flight claims, ACK persistence, and existing stable-batch/policy-widening behavior.
 - [x] Update the ownership census, run targeted gates, review the diff, and commit each completed unit.
 - [ ] Continue moving the remaining task-merge persistence modules as separate transaction-preserving units.
 
@@ -31,6 +33,7 @@
 - Commit `302d3d85` moves journal paging and payload decoding to Store; 34 task-merge tests, Ark Store/Core Clippy, formatting, and diff checks passed.
 - Commit `2facb68a` fixes the writer census to classify standalone `tests.rs` files correctly and refreshes counts for already-moved object/type-registry writers; all 8 census tests and all 80 path/category counts pass.
 - Commit `ad25f034` moves conflict-history reads and causal-dependency checks into Store; 37 focused task-merge tests, Clippy, standalone Store check, source-size, writer census, and desktop/mobile graph checks passed.
-- The operation append slice passes 40 focused task-merge tests, Clippy, formatting/diff checks, source-size, and writer census (8 tests; 80 path/category counts). It keeps replay-before-admission ordering and consumes a prepared value only after Core's conflict-digest policy passes; this slice is pending commit.
-- The bootstrap persistence slice passes 43 focused task-merge tests, Clippy, formatting, source-size, and writer census (8 tests; 81 path/category counts). Store owns bootstrap and baseline SQL; Core validates existing object projections before consuming a prepared bootstrap and retains projection materialization. This slice is pending commit.
-- Keep local task materialization, bootstrap, inbound/outbound batch persistence, and operation append boundaries open; the completed slices do not satisfy the full Store ownership predicate.
+- Commit `9fefa870` moves operation replay/collision checks and operation/guard/journal writes into Store; 40 focused task-merge tests, Clippy, formatting, source-size, and writer census passed.
+- Commit `d1fc8504` moves bootstrap replay checks, baseline operation persistence, and journal publication into Store; 43 focused task-merge tests, Clippy, formatting, source-size, and writer census passed.
+- The outbound progress persistence slice passes 44 focused task-merge tests, Clippy, formatting/diff checks, source-size, and writer census (8 tests; 81 path/category counts). Core journal regressions prove stable replay, ACK behavior, peer isolation, and selective-policy narrowing/widening; Store-local tests cover typed progress decoding and conditional writes.
+- Keep local task materialization and inbound batch persistence open. Store ownership is still incomplete.

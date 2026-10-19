@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 mod append;
 mod bootstrap;
 mod history;
+mod progress;
 
 pub use append::{
     check_operation, persist_operation, PreparedTaskMergeOperation, TaskMergeOperationCheck,
@@ -20,6 +21,11 @@ pub use bootstrap::{
     TaskMergeBootstrapCheck,
 };
 pub use history::{read_conflict_set, task_causal_dependencies_pending};
+pub use progress::{
+    acknowledge_outbound_batch, claim_outbound_batch, create_outbound_progress,
+    load_outbound_progress, task_merge_watermark, update_outbound_policy_identity,
+    TaskMergeAcknowledgedBatch, TaskMergeInFlightBatch, TaskMergeOutboundProgress,
+};
 
 const MAX_TASK_MERGE_PAGE_SIZE: usize = 100;
 
