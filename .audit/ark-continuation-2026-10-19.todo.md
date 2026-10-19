@@ -24,3 +24,11 @@
 - [ ] Run the full local gate and exact-final-SHA desktop/mobile/OS matrix; resolve all failures.
 - [ ] Independent final review; fix confirmed findings and reverify.
 - [ ] Update KOS-412, KOS-424, KOS-425, KOS-428 only after their acceptance evidence is complete.
+
+## Current signed-integration cutover
+
+- [x] Ground — inspect Core's signed-frame application, SQLite adapter, Store persistence helpers, and local ownership rules.
+- [x] Sketch — use a dedicated `ObjectDeleteSession` capability in Application, implemented by Store; keep Core's typed-command admission and existing transaction. The existing broad `ObjectMutationSession` remains for game and book-cover writes.
+- [x] Agree — chose deletion as a whole behavior because its snapshot guard, object removal, tombstone and revision must share one transaction. A read-only Luna census separately confirmed larger game upsert is a different incomplete boundary; it remains open.
+- [x] Implement — moved object-delete behavior into `ark-application`, added the SQLite session in `ark-store`, migrated the Core command, and removed the delete-only surface from the Core adapter.
+- [x] Verify — `cargo check -p ark-application`, `cargo check -p ark-store`, `cargo check -p ark-core --all-targets`, Engine-path `local_object_and_usage_writes_record_sync_state` (1 passed), Store suite (90 passed), source-size gate, `git diff --check`, and pre-commit gate passed. Boundary scanner remains intentionally red with 1,174 findings; this unit removed two Core findings. The change is committed.

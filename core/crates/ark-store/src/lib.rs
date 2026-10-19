@@ -6,6 +6,7 @@ pub mod device_registry;
 pub mod integration_replication;
 pub mod legacy_entities;
 pub mod load_all;
+pub mod object_delete;
 pub mod object_link_mutation;
 pub mod object_types;
 pub mod object_write;
