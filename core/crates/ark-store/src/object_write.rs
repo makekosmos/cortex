@@ -34,7 +34,8 @@ pub fn prepare_object(
 }
 
 /// Execute one local object upsert and its receipt inside the caller's single
-/// transaction. Production callers use `SqliteWriter::execute_local_object_upsert`.
+/// transaction. The writer owns transaction mechanics; the command adapter
+/// calls this operation inside the writer's immediate transaction.
 pub fn apply_local_object_upsert(
     transaction: &Transaction<'_>,
     write: ark_application::object_mutation::LocalObjectUpsert,

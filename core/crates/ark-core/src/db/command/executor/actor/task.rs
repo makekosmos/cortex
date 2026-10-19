@@ -91,7 +91,14 @@ impl WriterTask for LocalObjectUpsertTask {
             reply,
         } = *self;
         let result = writer
-            .execute_local_object_upsert(write, principal, operation_id)
+            .immediate(|transaction| {
+                ark_store::object_write::apply_local_object_upsert(
+                    transaction,
+                    write,
+                    &principal,
+                    operation_id.as_deref(),
+                )
+            })
             .map_err(|failure| match failure {
                 TransactionFailure::Begin(error) => DbError::from_sqlite(error),
                 TransactionFailure::Operation(error) => DbError::from_application_error(error),
