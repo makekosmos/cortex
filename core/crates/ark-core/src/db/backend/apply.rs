@@ -1,12 +1,10 @@
 #[cfg(test)]
 use rusqlite::TransactionBehavior;
-use rusqlite::{params, Connection, Transaction};
+use rusqlite::{Connection, Transaction};
 use serde_json::{json, Value};
 
 use super::SqliteStorageBackend;
-use crate::db::{
-    delete_object_type, delete_project, delete_todo, insert_pending_object, upsert_object_type,
-};
+use crate::db::{delete_object_type, insert_pending_object, upsert_object_type};
 use crate::types::{
     ArkObject, ObjectLink, ObjectType, SyncEntity, TrackedApp, UsageDay, UsageEvent, UsageSession,
 };
@@ -15,12 +13,6 @@ use ark_store::objects::{delete_object_link, upsert_object_link};
 // ---------------------------------------------------------------------------
 // Delete helpers (for StorageBackend)
 // ---------------------------------------------------------------------------
-
-pub fn delete_tag(conn: &Connection, id: &str) -> Result<(), String> {
-    conn.execute("DELETE FROM tags WHERE id = ?1", params![id])
-        .map_err(|e| e.to_string())?;
-    Ok(())
-}
 
 impl SqliteStorageBackend {
     #[cfg(test)]
@@ -163,9 +155,9 @@ impl SqliteStorageBackend {
 
         if entity.deleted == Some(true) {
             match entity.entity_type.as_str() {
-                "todo" => delete_todo(conn, &entity.id),
-                "project" => delete_project(conn, &entity.id),
-                "tag" => delete_tag(conn, &entity.id),
+                "todo" => ark_store::legacy_entities::delete_todo(conn, &entity.id),
+                "project" => ark_store::legacy_entities::delete_project(conn, &entity.id),
+                "tag" => ark_store::legacy_entities::delete_tag(conn, &entity.id),
                 "tracked_app" => ark_store::usage::delete_tracked_app(conn, &entity.id),
                 "usage_session" => ark_store::usage::delete_usage_session(conn, &entity.id),
                 "usage_event" => ark_store::usage::delete_usage_event(conn, &entity.id),

@@ -2,7 +2,6 @@ mod backend;
 mod command;
 mod committed_feed;
 pub(crate) mod constants;
-mod legacy;
 mod objects;
 mod open;
 mod task_merge;
@@ -24,9 +23,9 @@ pub(crate) use ark_store::VERSION_VECTOR_KEY;
 pub(crate) use backend::SqliteLegacyMutationSession;
 pub(crate) use backend::SqliteObjectMutationSession;
 pub(crate) use backend::SqliteSignedIntegrationFrameSession;
+pub use backend::SqliteStorageBackend;
 pub(crate) use backend::SqliteTaskMutationSession;
 pub(crate) use backend::SqliteTypeMutationSession;
-pub use backend::{delete_tag, SqliteStorageBackend};
 pub use command::CommandSource;
 pub(crate) use command::{
     AcceptPeerSyncPolicyCommand, AcknowledgeTaskMergeBatchCommand,
@@ -64,9 +63,6 @@ pub use committed_feed::{
 pub(in crate::db) use integration_replication_publication::{
     publish_integration_credential_envelope_in_transaction,
     try_acquire_integration_refresh_lease_in_transaction,
-};
-pub use legacy::{
-    batch_upsert_todos, delete_project, delete_todo, upsert_project, upsert_tag, upsert_todo,
 };
 pub use objects::{delete_object_type, upsert_object_type};
 pub use open::{backup_to_file, backup_to_file_chunked, init_schema};
@@ -127,6 +123,9 @@ mod tests {
     use crate::type_registry;
     use crate::types::*;
     use ark_application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
+    use ark_store::legacy_entities::{
+        batch_upsert_todos, delete_project, delete_todo, upsert_project, upsert_tag, upsert_todo,
+    };
     use ark_store::objects::{
         delete_object_link, get_object, get_objects_by_ids, list_object_links,
         list_object_summaries, list_object_summaries_by_type, list_objects, list_objects_by_type,

@@ -1,3 +1,10 @@
+mod mutations;
+
+pub use mutations::{
+    batch_upsert_todos, delete_project, delete_tag, delete_todo, upsert_project, upsert_tag,
+    upsert_todo,
+};
+
 use ark_domain::types::{Project, Tag, TodoItem};
 use rusqlite::Connection;
 use serde_json::{json, Value};

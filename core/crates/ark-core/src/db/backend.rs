@@ -10,7 +10,6 @@ mod signed_integration;
 mod task_mutation;
 mod type_mutation;
 
-pub use apply::delete_tag;
 pub(crate) use legacy_mutation::SqliteLegacyMutationSession;
 pub(crate) use object_mutation::SqliteObjectMutationSession;
 pub(crate) use signed_integration::SqliteSignedIntegrationFrameSession;
