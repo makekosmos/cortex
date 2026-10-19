@@ -1,5 +1,6 @@
-use super::core_task_rewrite::{rewrite_legacy_tasks, CoreTaskRewriteReport};
 use crate::db::init_schema;
+use ark_store::canonical_migrations::{rewrite_legacy_tasks, CoreTaskRewriteReport};
+use ark_store::writer::SqliteWriter;
 use rusqlite::{params, Connection};
 use serde_json::{json, Value};
 
@@ -7,10 +8,26 @@ const CREATED: &str = "2026-10-04T22:01:08.744412+00:00";
 const DONE_AT: &str = "2026-10-11T14:53:27.055486Z";
 const CANCELLED_AT: &str = "2026-10-12T09:00:00.000000Z";
 
-fn fresh_db() -> Result<Connection, String> {
+fn fresh_db() -> Result<SqliteWriter, String> {
     let conn = Connection::open_in_memory().map_err(|e| e.to_string())?;
     init_schema(&conn)?;
-    Ok(conn)
+    Ok(SqliteWriter::from_connection(conn))
+}
+
+fn insert_legacy_with_writer(
+    writer: &mut SqliteWriter,
+    id: &str,
+    props: &Value,
+    trashed: bool,
+) -> Result<(), String> {
+    writer.with_connection_mut(|connection| insert_legacy(connection, id, props, trashed))
+}
+
+fn stored_props_with_writer(
+    writer: &mut SqliteWriter,
+    id: &str,
+) -> Result<(String, String, Value), String> {
+    writer.with_connection_mut(|connection| stored_props(connection, id))
 }
 
 fn backup_path(dir: &crate::test_support::TestTempDir) -> String {
@@ -68,7 +85,10 @@ pub(super) fn insert_legacy(
         r#"{"content":[{"content":[{"text":"","type":"text"}],"type":"paragraph"}],"type":"doc"}"#;
     let deleted_at = trashed.then_some(CREATED);
     conn.execute(
-        "INSERT INTO objects (id, type_id, type_version, title, content_json, props_json, created_at, updated_at, deleted_at)
+        "INSERT INTO objects (
+            id, type_id, type_version, title, content_json, props_json, created_at, updated_at,
+            deleted_at
+         )
          VALUES (?1, 'com.kosmos.task', '1.1.0', ?1, ?2, ?3, ?4, ?4, ?5)",
         params![id, content, props.to_string(), CREATED, deleted_at],
     )
@@ -94,9 +114,9 @@ fn stored_props(conn: &Connection, id: &str) -> Result<(String, String, Value), 
 
 #[test]
 fn rewrite_does_nothing_without_legacy_tasks() -> Result<(), String> {
-    let conn = fresh_db()?;
+    let mut conn = fresh_db()?;
     let dir = crate::test_support::temp_dir();
-    let report = rewrite_legacy_tasks(&conn, &backup_path(&dir), "device-a")?;
+    let report = rewrite_legacy_tasks(&mut conn, &backup_path(&dir), "device-a")?;
     assert_eq!(report, CoreTaskRewriteReport::default());
     assert!(!std::path::Path::new(&backup_path(&dir)).exists());
     Ok(())
@@ -104,46 +124,46 @@ fn rewrite_does_nothing_without_legacy_tasks() -> Result<(), String> {
 
 #[test]
 fn rewrite_maps_every_legacy_state_and_keeps_trash_and_extensions() -> Result<(), String> {
-    let conn = fresh_db()?;
-    insert_legacy(
-        &conn,
+    let mut conn = fresh_db()?;
+    insert_legacy_with_writer(
+        &mut conn,
         "inbox",
         &legacy_props("inbox", false, false, false, false, false, None),
         false,
     )?;
-    insert_legacy(
-        &conn,
+    insert_legacy_with_writer(
+        &mut conn,
         "today-evening",
         &legacy_props("todo", true, false, true, false, false, None),
         false,
     )?;
-    insert_legacy(
-        &conn,
+    insert_legacy_with_writer(
+        &mut conn,
         "someday",
         &legacy_props("todo", false, true, false, false, false, None),
         false,
     )?;
-    insert_legacy(
-        &conn,
+    insert_legacy_with_writer(
+        &mut conn,
         "anytime",
         &legacy_props("todo", false, false, false, false, false, None),
         false,
     )?;
-    insert_legacy(
-        &conn,
+    insert_legacy_with_writer(
+        &mut conn,
         "done-today",
         &legacy_props("done", true, false, false, true, false, None),
         false,
     )?;
-    insert_legacy(
-        &conn,
+    insert_legacy_with_writer(
+        &mut conn,
         "cancelled",
         &legacy_props("todo", false, false, false, false, true, None),
         false,
     )?;
     let mut trashed = legacy_props("todo", true, false, false, false, false, None);
     trashed["extensions"]["is_trashed"] = json!(true);
-    insert_legacy(&conn, "trashed", &trashed, true)?;
+    insert_legacy_with_writer(&mut conn, "trashed", &trashed, true)?;
     let mut priced = legacy_props(
         "todo",
         false,
@@ -155,10 +175,10 @@ fn rewrite_maps_every_legacy_state_and_keeps_trash_and_extensions() -> Result<()
     );
     priced["extensions"]["price"] = json!(150);
     priced["extensions"]["fuel_cost"] = json!(12.5);
-    insert_legacy(&conn, "scheduled", &priced, false)?;
+    insert_legacy_with_writer(&mut conn, "scheduled", &priced, false)?;
 
     let dir = crate::test_support::temp_dir();
-    let report = rewrite_legacy_tasks(&conn, &backup_path(&dir), "device-a")?;
+    let report = rewrite_legacy_tasks(&mut conn, &backup_path(&dir), "device-a")?;
     assert_eq!(
         report,
         CoreTaskRewriteReport {
@@ -168,7 +188,7 @@ fn rewrite_maps_every_legacy_state_and_keeps_trash_and_extensions() -> Result<()
         }
     );
 
-    let (type_id, version, props) = stored_props(&conn, "inbox")?;
+    let (type_id, version, props) = stored_props_with_writer(&mut conn, "inbox")?;
     assert_eq!((type_id.as_str(), version.as_str()), ("core.task", "0.1.0"));
     assert_eq!(props["state"], json!({"kind": "open", "at": null}));
     assert_eq!(
@@ -184,77 +204,88 @@ fn rewrite_maps_every_legacy_state_and_keeps_trash_and_extensions() -> Result<()
     assert!(props["extensions"].get("status").is_none());
 
     assert_eq!(
-        stored_props(&conn, "today-evening")?.2["planning"],
+        stored_props_with_writer(&mut conn, "today-evening")?.2["planning"],
         json!({"kind": "today", "period": "evening", "date": null})
     );
     assert_eq!(
-        stored_props(&conn, "someday")?.2["planning"]["kind"],
+        stored_props_with_writer(&mut conn, "someday")?.2["planning"]["kind"],
         json!("someday")
     );
     assert_eq!(
-        stored_props(&conn, "anytime")?.2["planning"]["kind"],
+        stored_props_with_writer(&mut conn, "anytime")?.2["planning"]["kind"],
         json!("anytime")
     );
     assert_eq!(
-        stored_props(&conn, "done-today")?.2["state"],
+        stored_props_with_writer(&mut conn, "done-today")?.2["state"],
         json!({"kind": "done", "at": DONE_AT})
     );
     assert_eq!(
-        stored_props(&conn, "done-today")?.2["planning"]["kind"],
+        stored_props_with_writer(&mut conn, "done-today")?.2["planning"]["kind"],
         json!("today")
     );
     assert_eq!(
-        stored_props(&conn, "cancelled")?.2["state"],
+        stored_props_with_writer(&mut conn, "cancelled")?.2["state"],
         json!({"kind": "canceled", "at": CANCELLED_AT})
     );
     assert_eq!(
-        stored_props(&conn, "scheduled")?.2["planning"],
+        stored_props_with_writer(&mut conn, "scheduled")?.2["planning"],
         json!({"kind": "date", "period": "any", "date": "2026-10-20"})
     );
     assert_eq!(
-        stored_props(&conn, "scheduled")?.2["extensions"]["price"],
+        stored_props_with_writer(&mut conn, "scheduled")?.2["extensions"]["price"],
         json!(150)
     );
-    assert!(stored_props(&conn, "scheduled")?.2["extensions"]
-        .get("fuel_cost")
-        .is_none());
+    assert!(
+        stored_props_with_writer(&mut conn, "scheduled")?.2["extensions"]
+            .get("fuel_cost")
+            .is_none()
+    );
     assert!(props["extensions"].get("fuel_cost").is_none());
 
-    let deleted_at: Option<String> = conn
-        .query_row(
-            "SELECT deleted_at FROM objects WHERE id = 'trashed'",
-            [],
-            |r| r.get(0),
-        )
-        .map_err(|e| e.to_string())?;
+    let deleted_at: Option<String> = conn.with_connection_mut(|connection| {
+        connection
+            .query_row(
+                "SELECT deleted_at FROM objects WHERE id = 'trashed'",
+                [],
+                |r| r.get(0),
+            )
+            .map_err(|e| e.to_string())
+    })?;
     assert_eq!(deleted_at.as_deref(), Some(CREATED));
-    let legacy_left: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM objects WHERE type_id = 'com.kosmos.task'",
-            [],
-            |r| r.get(0),
-        )
-        .map_err(|e| e.to_string())?;
+    let legacy_left: i64 = conn.with_connection_mut(|connection| {
+        connection
+            .query_row(
+                "SELECT COUNT(*) FROM objects WHERE type_id = 'com.kosmos.task'",
+                [],
+                |r| r.get(0),
+            )
+            .map_err(|e| e.to_string())
+    })?;
     assert_eq!(legacy_left, 0);
     Ok(())
 }
 
 #[test]
 fn rewrite_writes_a_backup_of_the_legacy_rows_before_changing_them() -> Result<(), String> {
-    let conn = fresh_db()?;
-    insert_legacy(
-        &conn,
+    let mut conn = fresh_db()?;
+    insert_legacy_with_writer(
+        &mut conn,
         "inbox",
         &legacy_props("inbox", false, false, false, false, false, None),
         false,
     )?;
     let dir = crate::test_support::temp_dir();
     let path = backup_path(&dir);
-    rewrite_legacy_tasks(&conn, &path, "device-a")?;
+    rewrite_legacy_tasks(&mut conn, &path, "device-a")?;
 
     let backup = Connection::open(&path).map_err(|e| e.to_string())?;
     let legacy: i64 = backup
-        .query_row("SELECT COUNT(*) FROM objects WHERE type_id = 'com.kosmos.task' AND type_version = '1.1.0'", [], |r| r.get(0))
+        .query_row(
+            "SELECT COUNT(*) FROM objects
+             WHERE type_id = 'com.kosmos.task' AND type_version = '1.1.0'",
+            [],
+            |r| r.get(0),
+        )
         .map_err(|e| e.to_string())?;
     assert_eq!(legacy, 1);
     Ok(())
@@ -262,13 +293,13 @@ fn rewrite_writes_a_backup_of_the_legacy_rows_before_changing_them() -> Result<(
 
 #[test]
 fn rewrite_drops_fuel_cost_but_the_backup_keeps_it() -> Result<(), String> {
-    let conn = fresh_db()?;
+    let mut conn = fresh_db()?;
     let mut fueled = legacy_props("todo", false, false, false, false, false, None);
     fueled["extensions"]["fuel_cost"] = json!(12.5);
-    insert_legacy(&conn, "fueled", &fueled, false)?;
+    insert_legacy_with_writer(&mut conn, "fueled", &fueled, false)?;
     let dir = crate::test_support::temp_dir();
     let path = backup_path(&dir);
-    let report = rewrite_legacy_tasks(&conn, &path, "device-a")?;
+    let report = rewrite_legacy_tasks(&mut conn, &path, "device-a")?;
     assert_eq!(report.rewritten, 1);
 
     let backup = Connection::open(&path).map_err(|e| e.to_string())?;
@@ -281,28 +312,30 @@ fn rewrite_drops_fuel_cost_but_the_backup_keeps_it() -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     let backup_props: Value = serde_json::from_str(&backup_json).map_err(|e| e.to_string())?;
     assert_eq!(backup_props["extensions"]["fuel_cost"], json!(12.5));
-    assert!(stored_props(&conn, "fueled")?.2["extensions"]
-        .get("fuel_cost")
-        .is_none());
+    assert!(
+        stored_props_with_writer(&mut conn, "fueled")?.2["extensions"]
+            .get("fuel_cost")
+            .is_none()
+    );
     Ok(())
 }
 
 #[test]
 fn rewrite_stops_before_backup_or_write_on_data_it_cannot_carry() -> Result<(), String> {
-    let conn = fresh_db()?;
-    insert_legacy(
-        &conn,
+    let mut conn = fresh_db()?;
+    insert_legacy_with_writer(
+        &mut conn,
         "fine",
         &legacy_props("todo", false, false, false, false, false, None),
         false,
     )?;
     let mut linked = legacy_props("todo", false, false, false, false, false, None);
     linked["extensions"]["project_id"] = json!("project-1");
-    insert_legacy(&conn, "linked", &linked, false)?;
+    insert_legacy_with_writer(&mut conn, "linked", &linked, false)?;
     let dir = crate::test_support::temp_dir();
     let path = backup_path(&dir);
 
-    let error = rewrite_legacy_tasks(&conn, &path, "device-a")
+    let error = rewrite_legacy_tasks(&mut conn, &path, "device-a")
         .err()
         .unwrap_or_default();
     assert!(
@@ -310,16 +343,16 @@ fn rewrite_stops_before_backup_or_write_on_data_it_cannot_carry() -> Result<(), 
         "{error}"
     );
     assert!(!std::path::Path::new(&path).exists());
-    let (type_id, _, _) = stored_props(&conn, "fine")?;
+    let (type_id, _, _) = stored_props_with_writer(&mut conn, "fine")?;
     assert_eq!(type_id, "com.kosmos.task");
     Ok(())
 }
 
 #[test]
 fn rewrite_refuses_to_overwrite_an_existing_backup() -> Result<(), String> {
-    let conn = fresh_db()?;
-    insert_legacy(
-        &conn,
+    let mut conn = fresh_db()?;
+    insert_legacy_with_writer(
+        &mut conn,
         "inbox",
         &legacy_props("inbox", false, false, false, false, false, None),
         false,
@@ -328,43 +361,43 @@ fn rewrite_refuses_to_overwrite_an_existing_backup() -> Result<(), String> {
     let path = backup_path(&dir);
     std::fs::write(&path, b"existing").map_err(|e| e.to_string())?;
 
-    assert!(rewrite_legacy_tasks(&conn, &path, "device-a").is_err());
+    assert!(rewrite_legacy_tasks(&mut conn, &path, "device-a").is_err());
     assert_eq!(
         std::fs::read(&path).map_err(|e| e.to_string())?,
         b"existing"
     );
-    let (type_id, _, _) = stored_props(&conn, "inbox")?;
+    let (type_id, _, _) = stored_props_with_writer(&mut conn, "inbox")?;
     assert_eq!(type_id, "com.kosmos.task");
     Ok(())
 }
 
 #[test]
 fn rewrite_refuses_scheduled_date_together_with_today() -> Result<(), String> {
-    let conn = fresh_db()?;
-    insert_legacy(
-        &conn,
+    let mut conn = fresh_db()?;
+    insert_legacy_with_writer(
+        &mut conn,
         "both",
         &legacy_props("todo", true, false, false, false, false, Some("2026-10-20")),
         false,
     )?;
     let dir = crate::test_support::temp_dir();
-    assert!(rewrite_legacy_tasks(&conn, &backup_path(&dir), "device-a").is_err());
+    assert!(rewrite_legacy_tasks(&mut conn, &backup_path(&dir), "device-a").is_err());
     Ok(())
 }
 
 #[test]
 fn second_rewrite_is_a_noop() -> Result<(), String> {
-    let conn = fresh_db()?;
-    insert_legacy(
-        &conn,
+    let mut conn = fresh_db()?;
+    insert_legacy_with_writer(
+        &mut conn,
         "inbox",
         &legacy_props("inbox", false, false, false, false, false, None),
         false,
     )?;
     let dir = crate::test_support::temp_dir();
-    rewrite_legacy_tasks(&conn, &backup_path(&dir), "device-a")?;
+    rewrite_legacy_tasks(&mut conn, &backup_path(&dir), "device-a")?;
     let again = rewrite_legacy_tasks(
-        &conn,
+        &mut conn,
         &dir.path().join("second.db").display().to_string(),
         "device-a",
     )?;

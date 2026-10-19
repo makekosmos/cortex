@@ -1,3 +1,4 @@
+pub mod canonical_migrations;
 pub mod committed_feed;
 pub mod data_platform;
 pub mod data_volume;

@@ -22,24 +22,25 @@ pub(super) fn actor_loop(
         })?;
         let connection = ark_store::open::open_db(&shared.path).map_err(DbError::Storage)?;
         crate::db::init_schema(&connection).map_err(DbError::Storage)?;
+        let mut writer = SqliteWriter::from_connection(connection);
         let backup_path = format!("{}.pre-core-task.bak", shared.path);
-        crate::canonical_types::core_task_rewrite::rewrite_legacy_tasks(
-            &connection,
+        ark_store::canonical_migrations::rewrite_legacy_tasks(
+            &mut writer,
             &backup_path,
             &bootstrap_device_id,
         )
         .map_err(DbError::Storage)?;
-        Ok(connection)
+        Ok(writer)
     })();
     let mut writer = match connection {
-        Ok(connection) => {
+        Ok(writer) => {
             shared
                 .ledger
                 .lock()
                 .unwrap_or_else(|error| error.into_inner())
                 .lifecycle = Lifecycle::Ready;
             let _ = ready.send(Ok(()));
-            SqliteWriter::from_connection(connection)
+            writer
         }
         Err(error) => {
             let _ = ready.send(Err(error));

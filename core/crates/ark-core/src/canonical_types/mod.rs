@@ -1,5 +1,4 @@
 pub mod compatibility;
-pub mod core_task_rewrite;
 pub mod definitions;
 pub mod facades;
 pub mod game;

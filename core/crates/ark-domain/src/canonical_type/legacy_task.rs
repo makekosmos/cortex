@@ -1,22 +1,13 @@
-//! KOS-397: одноразовая перезапись `com.kosmos.task` 1.1.0 → `core.task` 0.1.0.
-//!
-//! Правило из `core/crates/ark-core/AGENTS.md`: перезапись объектов разрешена
-//! только по согласованию для конкретной задачи, в одной транзакции и после
-//! бэкапа `ark.db`. Дополнительно действует «не терять молча»: каждая строка
-//! сначала переводится в `core.task` и проверяется контрактом. Если встретилось
-//! поле, которое контракт не переносит, перезапись останавливается целиком, до
-//! бэкапа и до первой записи.
+//! Pure compatibility mapping for the one-time legacy task migration.
 
 use chrono::NaiveDate;
-use rusqlite::{params, Connection};
 use serde_json::{json, Map, Value};
 
 use super::definitions::canonical_type_registrations;
 use super::validation::validate_canonical;
-use crate::db::backup_to_file;
-use ark_domain::canonical_type::TypeRegistration;
+use super::TypeRegistration;
 
-pub const LEGACY_TASK_TYPE: &str = ark_domain::canonical_type::LEGACY_TASK_TYPE;
+pub const LEGACY_TASK_TYPE: &str = crate::canonical_type::LEGACY_TASK_TYPE;
 pub const LEGACY_TASK_VERSION: &str = "1.1.0";
 pub const CORE_TASK_TYPE: &str = "core.task";
 pub const CORE_TASK_VERSION: &str = "0.1.0";
@@ -63,107 +54,27 @@ const UNSUPPORTED_EXTENSION_KEYS: [&str; 7] = [
 /// из продукта. Это не «неподдерживаемые» поля, их значение не останавливает
 /// перезапись. Исходные значения остаются в бэкапе `<db>.pre-core-task.bak`.
 const REMOVED_EXTENSION_KEYS: [&str; 1] = ["fuel_cost"];
-
-#[derive(Debug, Default, PartialEq, Eq)]
-pub struct CoreTaskRewriteReport {
-    pub rewritten: usize,
-    pub live: usize,
-    pub trashed: usize,
+#[derive(Debug, Clone)]
+pub struct LegacyTask {
+    pub id: String,
+    pub type_version: String,
+    pub content_json: String,
+    pub props_json: String,
+    pub deleted_at: Option<String>,
 }
 
-struct LegacyRow {
-    id: String,
-    type_version: String,
-    content_json: String,
-    props_json: String,
-    deleted_at: Option<String>,
-}
-
-/// Переводит все живые и удалённые `com.kosmos.task` в `core.task` одной
-/// транзакцией. Если старых задач нет, ничего не делает. `backup_path` не
-/// должен существовать: бэкап пишется до первой записи, и если он не удался,
-/// база не меняется.
-pub fn rewrite_legacy_tasks(
-    conn: &Connection,
-    backup_path: &str,
-    device_id: &str,
-) -> Result<CoreTaskRewriteReport, String> {
-    let rows = load_legacy_rows(conn)?;
-    if rows.is_empty() {
-        return Ok(CoreTaskRewriteReport::default());
-    }
+/// Convert a stored legacy task to validated `core.task` properties.
+pub fn map_legacy_task(row: &LegacyTask) -> Result<Value, String> {
     let registration = canonical_type_registrations()?
         .into_iter()
         .find(|r| r.type_id == CORE_TASK_TYPE && r.version == CORE_TASK_VERSION)
         .ok_or_else(|| format!("{CORE_TASK_TYPE} {CORE_TASK_VERSION} is not registered"))?;
-    let mapped = rows
-        .iter()
-        .map(|row| map_row(row, &registration).map(|props| (row, props)))
-        .collect::<Result<Vec<_>, String>>()?;
-    if std::path::Path::new(backup_path).exists() {
-        return Err(format!("backup target already exists: {backup_path}"));
-    }
-    backup_to_file(conn, backup_path)?;
-
-    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
-    let mut report = CoreTaskRewriteReport::default();
-    for (row, props) in &mapped {
-        let changed = tx
-            .execute(
-                "UPDATE objects SET type_id = ?1, type_version = ?2, props_json = ?3
-                 WHERE id = ?4 AND type_id = ?5 AND type_version = ?6",
-                params![
-                    CORE_TASK_TYPE,
-                    CORE_TASK_VERSION,
-                    props.to_string(),
-                    row.id,
-                    LEGACY_TASK_TYPE,
-                    LEGACY_TASK_VERSION,
-                ],
-            )
-            .map_err(|e| e.to_string())?;
-        if changed != 1 {
-            return Err(format!("task {} changed during rewrite", row.id));
-        }
-        ark_store::sync_versions::bump_sync_version_vector(
-            &tx, "object", &row.id, device_id, false,
-        )?;
-        report.rewritten += 1;
-        if row.deleted_at.is_some() {
-            report.trashed += 1;
-        } else {
-            report.live += 1;
-        }
-    }
-    tx.commit().map_err(|e| e.to_string())?;
-    Ok(report)
-}
-
-fn load_legacy_rows(conn: &Connection) -> Result<Vec<LegacyRow>, String> {
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, type_version, content_json, props_json, deleted_at
-             FROM objects WHERE type_id = ?1 ORDER BY id",
-        )
-        .map_err(|e| e.to_string())?;
-    let rows = stmt
-        .query_map(params![LEGACY_TASK_TYPE], |r| {
-            Ok(LegacyRow {
-                id: r.get(0)?,
-                type_version: r.get(1)?,
-                content_json: r.get(2)?,
-                props_json: r.get(3)?,
-                deleted_at: r.get(4)?,
-            })
-        })
-        .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())
+    map_row(row, &registration)
 }
 
 /// Одна задача 1.1.0 → props `core.task` 0.1.0. Ошибка называет id задачи и
 /// причину, но не заголовок и не текст.
-fn map_row(row: &LegacyRow, registration: &TypeRegistration) -> Result<Value, String> {
+fn map_row(row: &LegacyTask, registration: &TypeRegistration) -> Result<Value, String> {
     let bad = |why: &str| format!("{LEGACY_TASK_TYPE} {}: {why}", row.id);
     if row.type_version != LEGACY_TASK_VERSION {
         return Err(bad("unexpected type version"));
