@@ -189,6 +189,10 @@ impl ark_application::sync_storage::CommittedFeedPort for RevocableBackend {
         0
     }
 
+    async fn selective_sync_policy_generation_for_peer(&self, _: &str) -> Result<i64, String> {
+        Err("test_feed_unsupported".into())
+    }
+
     async fn committed_feed_snapshot(
         &self,
     ) -> Result<ark_application::sync_storage::FeedSnapshot, String> {
@@ -213,6 +217,17 @@ impl ark_application::sync_storage::CommittedFeedPort for RevocableBackend {
         Err("test_feed_unsupported".into())
     }
 
+    async fn committed_feed_delivery_page_for_peer(
+        &self,
+        _: &str,
+        _: &ark_application::sync_storage::PolicyIdentity,
+        _: i64,
+        _: i64,
+        _: usize,
+    ) -> Result<ark_application::sync_storage::PolicyBoundFeedPage, String> {
+        Err("test_feed_unsupported".into())
+    }
+
     async fn begin_outbound_policy(
         &self,
         _: &str,
@@ -224,6 +239,13 @@ impl ark_application::sync_storage::CommittedFeedPort for RevocableBackend {
             },
             ..Default::default()
         })
+    }
+    async fn begin_outbound_policy_identity(
+        &self,
+        _: &str,
+        _: &ark_application::sync_storage::PolicyIdentity,
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        Err("test_feed_unsupported".into())
     }
     async fn complete_outbound_snapshot(
         &self,
@@ -237,10 +259,25 @@ impl ark_application::sync_storage::CommittedFeedPort for RevocableBackend {
             ..Default::default()
         })
     }
+    async fn complete_outbound_snapshot_identity(
+        &self,
+        _: &str,
+        _: &ark_application::sync_storage::PolicyIdentity,
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        Err("test_feed_unsupported".into())
+    }
     async fn record_outbound_scan(
         &self,
         _: &str,
         _: i64,
+        _: i64,
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        Err("test_feed_unsupported".into())
+    }
+    async fn record_outbound_scan_identity(
+        &self,
+        _: &str,
+        _: &ark_application::sync_storage::PolicyIdentity,
         _: i64,
     ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
         Err("test_feed_unsupported".into())
@@ -254,6 +291,15 @@ impl ark_application::sync_storage::CommittedFeedPort for RevocableBackend {
     ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
         Err("test_feed_unsupported".into())
     }
+    async fn acknowledge_outbound_identity(
+        &self,
+        _: &str,
+        _: &ark_application::sync_storage::PolicyIdentity,
+        _: i64,
+        _: ark_application::sync_storage::OutboundAck,
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        Err("test_feed_unsupported".into())
+    }
 }
 
 #[async_trait::async_trait]
@@ -261,6 +307,39 @@ impl AuthenticatedEntityBackend for RevocableBackend {}
 
 #[async_trait::async_trait]
 impl PeerIdentityBackend for RevocableBackend {
+    async fn load_local_sync_profile(
+        &self,
+        _: &str,
+    ) -> Result<Option<ark_application::sync_policy::SyncProfile>, String> {
+        Ok(None)
+    }
+
+    async fn accept_peer_sync_policy(
+        &self,
+        _: &str,
+        _: i64,
+        _: &str,
+        _: bool,
+        _: &[ark_application::sync_policy::SyncProfileRule],
+    ) -> Result<ark_application::sync_policy::AcceptedPeerSyncPolicy, String> {
+        Err("test_sync_policy_unsupported".into())
+    }
+
+    async fn load_accepted_peer_sync_policy(
+        &self,
+        _: &str,
+    ) -> Result<Option<ark_application::sync_policy::AcceptedPeerSyncPolicy>, String> {
+        Ok(None)
+    }
+
+    async fn sync_session_is_admitted(&self, _: &str) -> Result<bool, String> {
+        Err("test_admission_unsupported".into())
+    }
+
+    async fn registry_device_is_enabled(&self, _: &str) -> Result<Option<bool>, String> {
+        Err("test_registry_unsupported".into())
+    }
+
     async fn authorized_transport_public_key(&self, _: &str) -> Result<Option<String>, String> {
         Ok(None)
     }
@@ -279,6 +358,40 @@ impl PeerIdentityBackend for RevocableBackend {
 
     async fn enroll_paired_device(&self, _: &str, _: &str, _: &str) -> Result<(), String> {
         Ok(())
+    }
+
+    async fn load_device_registry_events_page(
+        &self,
+        _: i64,
+        _: Option<i64>,
+        _: usize,
+    ) -> Result<(i64, usize, Vec<ark_domain::device_registry::RegistryEvent>), String> {
+        Err("test_registry_unsupported".into())
+    }
+
+    async fn apply_device_registry_events(
+        &self,
+        _: &str,
+        _: &[ark_domain::device_registry::RegistryEvent],
+    ) -> Result<ark_application::replication_storage::RegistryPageApply, String> {
+        Err("test_registry_unsupported".into())
+    }
+
+    async fn sign_registry_handshake(
+        &self,
+        _: &str,
+        _: &ark_domain::device_registry::RegistryHandshakeTranscript,
+    ) -> Result<ark_domain::device_registry::RegistryHandshakeProof, String> {
+        Err("test_registry_unsupported".into())
+    }
+
+    async fn verify_registry_handshake(
+        &self,
+        _: &str,
+        _: &ark_domain::device_registry::RegistryHandshakeTranscript,
+        _: &ark_domain::device_registry::RegistryHandshakeProof,
+    ) -> Result<(), String> {
+        Err("test_registry_unsupported".into())
     }
 }
 

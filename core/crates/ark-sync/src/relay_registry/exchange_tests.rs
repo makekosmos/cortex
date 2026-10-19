@@ -23,6 +23,39 @@ struct FakeStorage {
 
 #[async_trait::async_trait]
 impl PeerIdentityBackend for FakeStorage {
+    async fn load_local_sync_profile(
+        &self,
+        _: &str,
+    ) -> Result<Option<ark_application::sync_policy::SyncProfile>, String> {
+        Ok(None)
+    }
+
+    async fn accept_peer_sync_policy(
+        &self,
+        _: &str,
+        _: i64,
+        _: &str,
+        _: bool,
+        _: &[ark_application::sync_policy::SyncProfileRule],
+    ) -> Result<ark_application::sync_policy::AcceptedPeerSyncPolicy, String> {
+        Err("test_sync_policy_unsupported".into())
+    }
+
+    async fn load_accepted_peer_sync_policy(
+        &self,
+        _: &str,
+    ) -> Result<Option<ark_application::sync_policy::AcceptedPeerSyncPolicy>, String> {
+        Ok(None)
+    }
+
+    async fn sync_session_is_admitted(&self, _: &str) -> Result<bool, String> {
+        Err("test_session_admission_unsupported".into())
+    }
+
+    async fn registry_device_is_enabled(&self, _: &str) -> Result<Option<bool>, String> {
+        Err("test_device_registry_unsupported".into())
+    }
+
     async fn authorized_transport_public_key(&self, _: &str) -> Result<Option<String>, String> {
         Ok(None)
     }
@@ -38,6 +71,10 @@ impl PeerIdentityBackend for FakeStorage {
         _: &std::collections::HashMap<String, String>,
     ) -> Result<(), String> {
         Ok(())
+    }
+
+    async fn enroll_paired_device(&self, _: &str, _: &str, _: &str) -> Result<(), String> {
+        Err("test_device_enrollment_unsupported".into())
     }
 
     async fn load_device_registry_events_page(
@@ -62,6 +99,23 @@ impl PeerIdentityBackend for FakeStorage {
             disabled_device_ids: Vec::new(),
             applied_events: events.to_vec(),
         })
+    }
+
+    async fn sign_registry_handshake(
+        &self,
+        _: &str,
+        _: &ark_domain::device_registry::RegistryHandshakeTranscript,
+    ) -> Result<ark_domain::device_registry::RegistryHandshakeProof, String> {
+        Err("test_registry_handshake_unsupported".into())
+    }
+
+    async fn verify_registry_handshake(
+        &self,
+        _: &str,
+        _: &ark_domain::device_registry::RegistryHandshakeTranscript,
+        _: &ark_domain::device_registry::RegistryHandshakeProof,
+    ) -> Result<(), String> {
+        Err("test_registry_handshake_unsupported".into())
     }
 }
 

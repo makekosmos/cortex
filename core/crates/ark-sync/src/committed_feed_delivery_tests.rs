@@ -69,6 +69,10 @@ impl CommittedFeedPort for FakeFeedStore {
         self.progress.lock().unwrap().policy_generation
     }
 
+    async fn selective_sync_policy_generation_for_peer(&self, _: &str) -> Result<i64, String> {
+        Err("unused".into())
+    }
+
     async fn committed_feed_snapshot(&self) -> Result<FeedSnapshot, String> {
         Err("unused".into())
     }
@@ -88,6 +92,17 @@ impl CommittedFeedPort for FakeFeedStore {
         _high_watermark: i64,
         _limit: usize,
     ) -> Result<CommittedFeedDeliveryPage, String> {
+        Err("unused".into())
+    }
+
+    async fn committed_feed_delivery_page_for_peer(
+        &self,
+        _: &str,
+        _: &PolicyIdentity,
+        _: i64,
+        _: i64,
+        _: usize,
+    ) -> Result<ark_application::sync_storage::PolicyBoundFeedPage, String> {
         Err("unused".into())
     }
 
@@ -118,11 +133,28 @@ impl CommittedFeedPort for FakeFeedStore {
         Err("unused".into())
     }
 
+    async fn complete_outbound_snapshot_identity(
+        &self,
+        _: &str,
+        _: &PolicyIdentity,
+    ) -> Result<OutboundProgress, String> {
+        Err("unused".into())
+    }
+
     async fn record_outbound_scan(
         &self,
         _peer_device_id: &str,
         _policy_generation: i64,
         _scanned_through: i64,
+    ) -> Result<OutboundProgress, String> {
+        Err("unused".into())
+    }
+
+    async fn record_outbound_scan_identity(
+        &self,
+        _: &str,
+        _: &PolicyIdentity,
+        _: i64,
     ) -> Result<OutboundProgress, String> {
         Err("unused".into())
     }

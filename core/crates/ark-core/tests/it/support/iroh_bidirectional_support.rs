@@ -123,6 +123,12 @@ impl ark_application::sync_storage::CommittedFeedPort for TestStorage {
         self.inner.selective_sync_policy_generation()
     }
 
+    async fn selective_sync_policy_generation_for_peer(&self, peer: &str) -> Result<i64, String> {
+        self.inner
+            .selective_sync_policy_generation_for_peer(peer)
+            .await
+    }
+
     async fn committed_feed_snapshot(
         &self,
     ) -> Result<ark_application::sync_storage::FeedSnapshot, String> {
@@ -151,6 +157,25 @@ impl ark_application::sync_storage::CommittedFeedPort for TestStorage {
             .await
     }
 
+    async fn committed_feed_delivery_page_for_peer(
+        &self,
+        peer: &str,
+        identity: &ark_application::sync_storage::PolicyIdentity,
+        after_position: i64,
+        high_watermark: i64,
+        limit: usize,
+    ) -> Result<ark_application::sync_storage::PolicyBoundFeedPage, String> {
+        self.inner
+            .committed_feed_delivery_page_for_peer(
+                peer,
+                identity,
+                after_position,
+                high_watermark,
+                limit,
+            )
+            .await
+    }
+
     async fn begin_outbound_policy(
         &self,
         peer: &str,
@@ -167,6 +192,24 @@ impl ark_application::sync_storage::CommittedFeedPort for TestStorage {
             .complete_outbound_snapshot(peer, generation)
             .await
     }
+    async fn begin_outbound_policy_identity(
+        &self,
+        peer: &str,
+        identity: &ark_application::sync_storage::PolicyIdentity,
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        self.inner
+            .begin_outbound_policy_identity(peer, identity)
+            .await
+    }
+    async fn complete_outbound_snapshot_identity(
+        &self,
+        peer: &str,
+        identity: &ark_application::sync_storage::PolicyIdentity,
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        self.inner
+            .complete_outbound_snapshot_identity(peer, identity)
+            .await
+    }
     async fn record_outbound_scan(
         &self,
         peer: &str,
@@ -175,6 +218,16 @@ impl ark_application::sync_storage::CommittedFeedPort for TestStorage {
     ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
         self.inner
             .record_outbound_scan(peer, generation, through)
+            .await
+    }
+    async fn record_outbound_scan_identity(
+        &self,
+        peer: &str,
+        identity: &ark_application::sync_storage::PolicyIdentity,
+        through: i64,
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        self.inner
+            .record_outbound_scan_identity(peer, identity, through)
             .await
     }
     async fn acknowledge_outbound(
@@ -186,6 +239,17 @@ impl ark_application::sync_storage::CommittedFeedPort for TestStorage {
     ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
         self.inner
             .acknowledge_outbound(peer, generation, position, ack)
+            .await
+    }
+    async fn acknowledge_outbound_identity(
+        &self,
+        peer: &str,
+        identity: &ark_application::sync_storage::PolicyIdentity,
+        position: i64,
+        ack: ark_application::sync_storage::OutboundAck,
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        self.inner
+            .acknowledge_outbound_identity(peer, identity, position, ack)
             .await
     }
 }
@@ -390,78 +454,12 @@ fn set_recipient_transport_key(
         .unwrap();
 }
 
-/// Generous hang guard for event drains — the awaited message is the real
-/// condition; the cap only bounds a wedged transport under load (KOS-308).
-const EVENT_GUARD: Duration = Duration::from_secs(60);
+#[path = "iroh_bidirectional_support/event_helpers.rs"]
+mod event_helpers;
+pub(super) use event_helpers::{find_message, EVENT_GUARD};
 
-/// Вспомогательная функция: дренирует события из `rx` до тех пор, пока не
-/// найдёт `MessageReceived` с нужным условием, либо не истечёт таймаут.
-/// Пропускает `Connected`/`Disconnected` и `MessageReceived` других типов.
-async fn find_message<F>(
-    rx: &mut mpsc::UnboundedReceiver<TransportEvent>,
-    timeout: Duration,
-    predicate: F,
-) -> Option<(String, LanSyncMessage)>
-where
-    F: Fn(&str, &LanSyncMessage) -> bool,
-{
-    let deadline = tokio::time::Instant::now() + timeout;
-    loop {
-        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
-        if remaining.is_zero() {
-            return None;
-        }
-        match tokio::time::timeout(remaining, rx.recv()).await {
-            Ok(Some(
-                TransportEvent::MessageReceived {
-                    from_device_id,
-                    msg,
-                }
-                | TransportEvent::MessageReceivedFromTransport {
-                    from_device_id,
-                    msg,
-                    ..
-                },
-            )) => {
-                if predicate(&from_device_id, &msg) {
-                    return Some((from_device_id, msg));
-                }
-            }
-            Ok(Some(_)) => {}
-            Ok(None) => return None, // канал закрыт
-            Err(_) => return None,   // таймаут
-        }
-    }
-}
+#[path = "iroh_bidirectional_support/peer_identity_backend.rs"]
+mod peer_identity_backend;
 
-#[async_trait::async_trait]
-impl PeerIdentityBackend for TestStorage {
-    async fn load_peer_transport_keys(
-        &self,
-    ) -> Result<std::collections::HashMap<String, String>, String> {
-        self.inner.load_peer_transport_keys().await
-    }
-    async fn store_peer_transport_keys(
-        &self,
-        keys: &std::collections::HashMap<String, String>,
-    ) -> Result<(), String> {
-        self.inner.store_peer_transport_keys(keys).await
-    }
-    async fn authorized_transport_public_key(
-        &self,
-        device_id: &str,
-    ) -> Result<Option<String>, String> {
-        self.inner.authorized_transport_public_key(device_id).await
-    }
-}
-
-#[async_trait::async_trait]
-impl AuthenticatedEntityBackend for TestStorage {
-    async fn apply_authenticated_entity(
-        &self,
-        _entity: &SyncEntity,
-        _authenticated_peer_id: &str,
-    ) -> Result<(), String> {
-        Ok(())
-    }
-}
+#[path = "iroh_bidirectional_support/authenticated_entity_backend.rs"]
+mod authenticated_entity_backend;

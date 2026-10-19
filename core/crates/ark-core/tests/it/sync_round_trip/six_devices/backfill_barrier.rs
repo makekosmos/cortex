@@ -141,6 +141,12 @@ impl ark_application::sync_storage::CommittedFeedPort for BackfillBarrier {
         self.inner.selective_sync_policy_generation()
     }
 
+    async fn selective_sync_policy_generation_for_peer(&self, peer: &str) -> Result<i64, String> {
+        self.inner
+            .selective_sync_policy_generation_for_peer(peer)
+            .await
+    }
+
     async fn committed_feed_snapshot(
         &self,
     ) -> Result<ark_application::sync_storage::FeedSnapshot, String> {
@@ -169,6 +175,25 @@ impl ark_application::sync_storage::CommittedFeedPort for BackfillBarrier {
             .await
     }
 
+    async fn committed_feed_delivery_page_for_peer(
+        &self,
+        peer: &str,
+        identity: &ark_application::sync_storage::PolicyIdentity,
+        after_position: i64,
+        high_watermark: i64,
+        limit: usize,
+    ) -> Result<ark_application::sync_storage::PolicyBoundFeedPage, String> {
+        self.inner
+            .committed_feed_delivery_page_for_peer(
+                peer,
+                identity,
+                after_position,
+                high_watermark,
+                limit,
+            )
+            .await
+    }
+
     async fn begin_outbound_policy(
         &self,
         peer: &str,
@@ -185,6 +210,24 @@ impl ark_application::sync_storage::CommittedFeedPort for BackfillBarrier {
             .complete_outbound_snapshot(peer, generation)
             .await
     }
+    async fn begin_outbound_policy_identity(
+        &self,
+        peer: &str,
+        identity: &ark_application::sync_storage::PolicyIdentity,
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        self.inner
+            .begin_outbound_policy_identity(peer, identity)
+            .await
+    }
+    async fn complete_outbound_snapshot_identity(
+        &self,
+        peer: &str,
+        identity: &ark_application::sync_storage::PolicyIdentity,
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        self.inner
+            .complete_outbound_snapshot_identity(peer, identity)
+            .await
+    }
     async fn record_outbound_scan(
         &self,
         peer: &str,
@@ -193,6 +236,16 @@ impl ark_application::sync_storage::CommittedFeedPort for BackfillBarrier {
     ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
         self.inner
             .record_outbound_scan(peer, generation, through)
+            .await
+    }
+    async fn record_outbound_scan_identity(
+        &self,
+        peer: &str,
+        identity: &ark_application::sync_storage::PolicyIdentity,
+        through: i64,
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        self.inner
+            .record_outbound_scan_identity(peer, identity, through)
             .await
     }
     async fn acknowledge_outbound(
@@ -204,6 +257,17 @@ impl ark_application::sync_storage::CommittedFeedPort for BackfillBarrier {
     ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
         self.inner
             .acknowledge_outbound(peer, generation, position, ack)
+            .await
+    }
+    async fn acknowledge_outbound_identity(
+        &self,
+        peer: &str,
+        identity: &ark_application::sync_storage::PolicyIdentity,
+        position: i64,
+        ack: ark_application::sync_storage::OutboundAck,
+    ) -> Result<ark_application::sync_storage::OutboundProgress, String> {
+        self.inner
+            .acknowledge_outbound_identity(peer, identity, position, ack)
             .await
     }
 }
@@ -236,6 +300,35 @@ impl IntegrationReplicationBackend for BackfillBarrier {
 
 #[async_trait::async_trait]
 impl PeerIdentityBackend for BackfillBarrier {
+    async fn load_local_sync_profile(
+        &self,
+        local_device_id: &str,
+    ) -> Result<Option<ark_application::sync_policy::SyncProfile>, String> {
+        self.inner.load_local_sync_profile(local_device_id).await
+    }
+
+    async fn accept_peer_sync_policy(
+        &self,
+        peer_device_id: &str,
+        revision: i64,
+        digest: &str,
+        active: bool,
+        rules: &[ark_application::sync_policy::SyncProfileRule],
+    ) -> Result<ark_application::sync_policy::AcceptedPeerSyncPolicy, String> {
+        self.inner
+            .accept_peer_sync_policy(peer_device_id, revision, digest, active, rules)
+            .await
+    }
+
+    async fn load_accepted_peer_sync_policy(
+        &self,
+        peer_device_id: &str,
+    ) -> Result<Option<ark_application::sync_policy::AcceptedPeerSyncPolicy>, String> {
+        self.inner
+            .load_accepted_peer_sync_policy(peer_device_id)
+            .await
+    }
+
     async fn sync_session_is_admitted(&self, peer_device_id: &str) -> Result<bool, String> {
         self.inner.sync_session_is_admitted(peer_device_id).await
     }
@@ -245,6 +338,13 @@ impl PeerIdentityBackend for BackfillBarrier {
         device_id: &str,
     ) -> Result<Option<String>, String> {
         self.inner.authorized_transport_public_key(device_id).await
+    }
+
+    async fn registry_device_is_enabled(
+        &self,
+        peer_device_id: &str,
+    ) -> Result<Option<bool>, String> {
+        self.inner.registry_device_is_enabled(peer_device_id).await
     }
 
     async fn load_peer_transport_keys(

@@ -357,18 +357,16 @@ pub trait CommittedFeedPort: Send + Sync {
 
     async fn selective_sync_policy_generation_for_peer(
         &self,
-        _peer_device_id: &str,
-    ) -> Result<i64, String> {
-        Ok(self.selective_sync_policy_generation())
-    }
+        peer_device_id: &str,
+    ) -> Result<i64, String>;
 
     async fn committed_feed_snapshot(&self) -> Result<FeedSnapshot, String>;
 
     async fn committed_feed_page(
         &self,
-        _after_position: i64,
-        _high_watermark: i64,
-        _limit: usize,
+        after_position: i64,
+        high_watermark: i64,
+        limit: usize,
     ) -> Result<Vec<CommittedFeedEntry>, String>;
 
     async fn committed_feed_delivery_page(
@@ -385,16 +383,7 @@ pub trait CommittedFeedPort: Send + Sync {
         after_position: i64,
         high_watermark: i64,
         limit: usize,
-    ) -> Result<PolicyBoundFeedPage, String> {
-        let _ = (
-            peer_device_id,
-            expected_identity,
-            after_position,
-            high_watermark,
-            limit,
-        );
-        Err("policy_bound_feed_page_unsupported".into())
-    }
+    ) -> Result<PolicyBoundFeedPage, String>;
 
     async fn begin_outbound_policy(
         &self,
@@ -406,10 +395,7 @@ pub trait CommittedFeedPort: Send + Sync {
         &self,
         peer_device_id: &str,
         identity: &PolicyIdentity,
-    ) -> Result<OutboundProgress, String> {
-        let _ = (peer_device_id, identity);
-        Err("policy_bound_progress_unsupported".into())
-    }
+    ) -> Result<OutboundProgress, String>;
 
     async fn complete_outbound_snapshot(
         &self,
@@ -421,10 +407,7 @@ pub trait CommittedFeedPort: Send + Sync {
         &self,
         peer_device_id: &str,
         identity: &PolicyIdentity,
-    ) -> Result<OutboundProgress, String> {
-        let _ = (peer_device_id, identity);
-        Err("policy_bound_progress_unsupported".into())
-    }
+    ) -> Result<OutboundProgress, String>;
 
     async fn record_outbound_scan(
         &self,
@@ -438,10 +421,7 @@ pub trait CommittedFeedPort: Send + Sync {
         peer_device_id: &str,
         identity: &PolicyIdentity,
         scanned_through: i64,
-    ) -> Result<OutboundProgress, String> {
-        let _ = (peer_device_id, identity, scanned_through);
-        Err("policy_bound_progress_unsupported".into())
-    }
+    ) -> Result<OutboundProgress, String>;
 
     async fn acknowledge_outbound(
         &self,
@@ -457,8 +437,5 @@ pub trait CommittedFeedPort: Send + Sync {
         identity: &PolicyIdentity,
         position: i64,
         ack: OutboundAck,
-    ) -> Result<OutboundProgress, String> {
-        let _ = (peer_device_id, identity, position, ack);
-        Err("policy_bound_progress_unsupported".into())
-    }
+    ) -> Result<OutboundProgress, String>;
 }

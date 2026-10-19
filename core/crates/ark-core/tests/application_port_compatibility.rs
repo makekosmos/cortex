@@ -16,6 +16,76 @@ struct PeerBackend;
 
 #[async_trait::async_trait]
 impl ark_core::PeerIdentityBackend for PeerBackend {
+    async fn load_local_sync_profile(
+        &self,
+        _local_device_id: &str,
+    ) -> Result<Option<ark_application::sync_policy::SyncProfile>, String> {
+        Ok(None)
+    }
+    async fn accept_peer_sync_policy(
+        &self,
+        _peer_device_id: &str,
+        _revision: i64,
+        _digest: &str,
+        _active: bool,
+        _rules: &[ark_application::sync_policy::SyncProfileRule],
+    ) -> Result<ark_application::sync_policy::AcceptedPeerSyncPolicy, String> {
+        Err("unused compatibility test backend".into())
+    }
+    async fn load_accepted_peer_sync_policy(
+        &self,
+        _peer_device_id: &str,
+    ) -> Result<Option<ark_application::sync_policy::AcceptedPeerSyncPolicy>, String> {
+        Ok(None)
+    }
+    async fn sync_session_is_admitted(&self, _peer_device_id: &str) -> Result<bool, String> {
+        Ok(false)
+    }
+    async fn registry_device_is_enabled(
+        &self,
+        _peer_device_id: &str,
+    ) -> Result<Option<bool>, String> {
+        Ok(None)
+    }
+    async fn enroll_paired_device(
+        &self,
+        _local_device_id: &str,
+        _target_device_id: &str,
+        _transport_public_key: &str,
+    ) -> Result<(), String> {
+        Err("unused compatibility test backend".into())
+    }
+    async fn load_device_registry_events_page(
+        &self,
+        _after_position: i64,
+        _high_watermark: Option<i64>,
+        _limit: usize,
+    ) -> Result<(i64, usize, Vec<ark_domain::device_registry::RegistryEvent>), String> {
+        Err("unused compatibility test backend".into())
+    }
+    async fn apply_device_registry_events(
+        &self,
+        _sender_device_id: &str,
+        _events: &[ark_domain::device_registry::RegistryEvent],
+    ) -> Result<ark_core::replication_storage::RegistryPageApply, String> {
+        Err("unused compatibility test backend".into())
+    }
+    async fn sign_registry_handshake(
+        &self,
+        _local_device_id: &str,
+        _transcript: &ark_domain::device_registry::RegistryHandshakeTranscript,
+    ) -> Result<ark_domain::device_registry::RegistryHandshakeProof, String> {
+        Err("unused compatibility test backend".into())
+    }
+    async fn verify_registry_handshake(
+        &self,
+        _peer_device_id: &str,
+        _transcript: &ark_domain::device_registry::RegistryHandshakeTranscript,
+        _proof: &ark_domain::device_registry::RegistryHandshakeProof,
+    ) -> Result<(), String> {
+        Err("unused compatibility test backend".into())
+    }
+
     async fn authorized_transport_public_key(
         &self,
         _device_id: &str,

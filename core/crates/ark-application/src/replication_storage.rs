@@ -140,39 +140,29 @@ pub struct RegistryPageApply {
 pub trait PeerIdentityBackend: Send + Sync {
     async fn load_local_sync_profile(
         &self,
-        _local_device_id: &str,
-    ) -> Result<Option<crate::sync_policy::SyncProfile>, String> {
-        Ok(None)
-    }
+        local_device_id: &str,
+    ) -> Result<Option<crate::sync_policy::SyncProfile>, String>;
 
     async fn accept_peer_sync_policy(
         &self,
-        _peer_device_id: &str,
-        _revision: i64,
-        _digest: &str,
-        _active: bool,
-        _rules: &[crate::sync_policy::SyncProfileRule],
-    ) -> Result<crate::sync_policy::AcceptedPeerSyncPolicy, String> {
-        Err("peer sync policy persistence is unsupported by this storage backend".into())
-    }
+        peer_device_id: &str,
+        revision: i64,
+        digest: &str,
+        active: bool,
+        rules: &[crate::sync_policy::SyncProfileRule],
+    ) -> Result<crate::sync_policy::AcceptedPeerSyncPolicy, String>;
 
     async fn load_accepted_peer_sync_policy(
         &self,
-        _peer_device_id: &str,
-    ) -> Result<Option<crate::sync_policy::AcceptedPeerSyncPolicy>, String> {
-        Ok(None)
-    }
+        peer_device_id: &str,
+    ) -> Result<Option<crate::sync_policy::AcceptedPeerSyncPolicy>, String>;
 
-    async fn sync_session_is_admitted(&self, _peer_device_id: &str) -> Result<bool, String> {
-        Err("sync session admission lookup is unsupported by this storage backend".into())
-    }
+    async fn sync_session_is_admitted(&self, peer_device_id: &str) -> Result<bool, String>;
 
     async fn registry_device_is_enabled(
         &self,
-        _peer_device_id: &str,
-    ) -> Result<Option<bool>, String> {
-        Err("device registry lookup is unsupported by this storage backend".into())
-    }
+        peer_device_id: &str,
+    ) -> Result<Option<bool>, String>;
 
     async fn authorized_transport_public_key(
         &self,
@@ -190,44 +180,31 @@ pub trait PeerIdentityBackend: Send + Sync {
         local_device_id: &str,
         target_device_id: &str,
         transport_public_key: &str,
-    ) -> Result<(), String> {
-        let _ = (local_device_id, target_device_id, transport_public_key);
-        Err("signed device registry enrollment is unsupported by this storage backend".into())
-    }
+    ) -> Result<(), String>;
 
     async fn load_device_registry_events_page(
         &self,
         after_position: i64,
         high_watermark: Option<i64>,
         limit: usize,
-    ) -> Result<(i64, usize, Vec<ark_domain::device_registry::RegistryEvent>), String> {
-        let _ = (after_position, high_watermark, limit);
-        Err("signed device registry history is unsupported by this storage backend".into())
-    }
+    ) -> Result<(i64, usize, Vec<ark_domain::device_registry::RegistryEvent>), String>;
 
     async fn apply_device_registry_events(
         &self,
         sender_device_id: &str,
         events: &[ark_domain::device_registry::RegistryEvent],
-    ) -> Result<RegistryPageApply, String> {
-        let _ = (sender_device_id, events);
-        Err("signed device registry history is unsupported by this storage backend".into())
-    }
+    ) -> Result<RegistryPageApply, String>;
 
     async fn sign_registry_handshake(
         &self,
-        _local_device_id: &str,
-        _transcript: &ark_domain::device_registry::RegistryHandshakeTranscript,
-    ) -> Result<ark_domain::device_registry::RegistryHandshakeProof, String> {
-        Err("registry handshake signing is unsupported by this storage backend".into())
-    }
+        local_device_id: &str,
+        transcript: &ark_domain::device_registry::RegistryHandshakeTranscript,
+    ) -> Result<ark_domain::device_registry::RegistryHandshakeProof, String>;
 
     async fn verify_registry_handshake(
         &self,
-        _peer_device_id: &str,
-        _transcript: &ark_domain::device_registry::RegistryHandshakeTranscript,
-        _proof: &ark_domain::device_registry::RegistryHandshakeProof,
-    ) -> Result<(), String> {
-        Err("registry handshake verification is unsupported by this storage backend".into())
-    }
+        peer_device_id: &str,
+        transcript: &ark_domain::device_registry::RegistryHandshakeTranscript,
+        proof: &ark_domain::device_registry::RegistryHandshakeProof,
+    ) -> Result<(), String>;
 }
