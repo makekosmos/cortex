@@ -1,7 +1,6 @@
-use super::{canonical_operation, read_conflict_set, TaskMergeError};
+use super::{read_conflict_set, TaskMergeError};
 use ark_domain::task_merge::{materialize_task, TaskMergeBootstrap, TaskMergeUnit};
 use rusqlite::{Connection, OptionalExtension};
-use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 
 pub(super) fn append_bootstrap(
@@ -23,7 +22,8 @@ fn append_bootstrap_with_revision(
     bootstrap: TaskMergeBootstrap,
     record_revision: bool,
 ) -> Result<bool, TaskMergeError> {
-    let (bootstrap, bootstrap_json, payload_sha256) = canonical_bootstrap(bootstrap)?;
+    let (bootstrap, bootstrap_json, payload_sha256) =
+        ark_store::task_merge::canonical_bootstrap(bootstrap)?;
     if let Some(stored_hash) = transaction
         .query_row(
             "SELECT payload_sha256 FROM task_merge_bootstraps WHERE bootstrap_id = ?1",
@@ -315,14 +315,15 @@ fn load_bootstrap(
         .map_err(storage_error)?;
     let bootstrap =
         serde_json::from_str(&json).map_err(|error| TaskMergeError::Invalid(error.to_string()))?;
-    verify_bootstrap_payload(bootstrap, &json, &digest)
+    ark_store::task_merge::verify_bootstrap_payload(bootstrap, &json, &digest).map_err(Into::into)
 }
 
 fn insert_baseline_operation(
     transaction: &Connection,
     operation: ark_domain::task_merge::TaskMergeOperation,
 ) -> Result<(), TaskMergeError> {
-    let (operation, operation_json, payload_sha256) = canonical_operation(operation)?;
+    let (operation, operation_json, payload_sha256) =
+        ark_store::task_merge::canonical_operation(operation)?;
     if let Some(stored_hash) = transaction
         .query_row(
             "SELECT payload_sha256 FROM task_merge_operations WHERE operation_id = ?1",
@@ -356,36 +357,6 @@ fn insert_baseline_operation(
         )
         .map_err(storage_error)?;
     Ok(())
-}
-
-pub(super) fn canonical_bootstrap(
-    bootstrap: TaskMergeBootstrap,
-) -> Result<(TaskMergeBootstrap, String, String), TaskMergeError> {
-    bootstrap
-        .baseline_operations()
-        .map_err(|error| TaskMergeError::Invalid(error.to_string()))?;
-    let value = super::canonical_value(
-        &serde_json::to_value(&bootstrap)
-            .map_err(|error| TaskMergeError::Invalid(error.to_string()))?,
-    );
-    let json = serde_json::to_string(&value)
-        .map_err(|error| TaskMergeError::Invalid(error.to_string()))?;
-    let digest = format!("{:x}", Sha256::digest(json.as_bytes()));
-    Ok((bootstrap, json, digest))
-}
-
-pub(super) fn verify_bootstrap_payload(
-    bootstrap: TaskMergeBootstrap,
-    expected_json: &str,
-    expected_digest: &str,
-) -> Result<TaskMergeBootstrap, TaskMergeError> {
-    let (bootstrap, json, digest) = canonical_bootstrap(bootstrap)?;
-    if json != expected_json || digest != expected_digest {
-        return Err(TaskMergeError::Invalid(
-            "task_merge_bootstrap_payload_mismatch".into(),
-        ));
-    }
-    Ok(bootstrap)
 }
 
 fn storage_error(error: impl std::fmt::Display) -> TaskMergeError {

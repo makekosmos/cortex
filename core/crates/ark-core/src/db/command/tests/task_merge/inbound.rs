@@ -231,7 +231,7 @@ async fn bootstrap_and_followup_operation_materialize_atomically_and_replay() {
                 )
                 .map_err(|error| error.to_string())?;
             assert_eq!((bootstraps, operations, journal), (1, 11, 2));
-            let page = crate::db::task_merge::read_journal_page(connection, 0, 2, 10)
+            let page = ark_store::task_merge::read_journal_page(connection, 0, 2, 10)
                 .map_err(|error| error.to_string())?;
             assert!(matches!(
                 page.entries[0].record,
@@ -325,7 +325,7 @@ async fn operation_before_bootstrap_stays_unpublished_until_bootstrap_arrives() 
                 crate::db::get_object(connection, "task-1")?.unwrap().title,
                 "edited after bootstrap"
             );
-            let page = crate::db::task_merge::read_journal_page(connection, 0, 2, 10)
+            let page = ark_store::task_merge::read_journal_page(connection, 0, 2, 10)
                 .map_err(|error| error.to_string())?;
             assert!(matches!(
                 page.entries[0].record,

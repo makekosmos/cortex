@@ -1,4 +1,4 @@
-use super::{read_journal_page, require_delivery_policy, TaskMergeError};
+use super::{require_delivery_policy, TaskMergeError};
 use ark_application::sync_storage::{PolicyIdentity, TaskMergeBatch};
 use rusqlite::{OptionalExtension, Transaction};
 
@@ -88,7 +88,12 @@ pub(crate) fn prepare_outbound_batch(
     if acknowledged_through == watermark {
         return Ok(None);
     }
-    let page = read_journal_page(transaction, acknowledged_through, watermark, limit)?;
+    let page = ark_store::task_merge::read_journal_page(
+        transaction,
+        acknowledged_through,
+        watermark,
+        limit,
+    )?;
     if page.entries.is_empty() {
         return Ok(None);
     }
@@ -134,7 +139,12 @@ fn load_in_flight_batch(
         after.ok_or_else(|| TaskMergeError::Storage("task_merge_progress_corrupt".into()))?;
     let through =
         through.ok_or_else(|| TaskMergeError::Storage("task_merge_progress_corrupt".into()))?;
-    let page = read_journal_page(transaction, after, through, MAX_TASK_MERGE_PAGE_SIZE)?;
+    let page = ark_store::task_merge::read_journal_page(
+        transaction,
+        after,
+        through,
+        MAX_TASK_MERGE_PAGE_SIZE,
+    )?;
     if page.entries.last().map(|entry| entry.position) != Some(through) {
         return Err(TaskMergeError::Storage(
             "task_merge_in_flight_batch_missing_entries".into(),

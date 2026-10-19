@@ -1,7 +1,6 @@
 use ark_domain::task_merge::{conflict_set, TaskConflictSet, TaskMergeOperation, TaskMergeUnit};
 use rusqlite::{Connection, OptionalExtension, Transaction};
 use serde::Serialize;
-use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -9,17 +8,12 @@ use std::collections::{BTreeMap, BTreeSet};
 mod bootstrap;
 #[path = "task_merge/inbound.rs"]
 mod inbound;
-#[path = "task_merge/journal.rs"]
-mod journal;
 #[path = "task_merge/mutation.rs"]
 mod mutation;
 #[path = "task_merge/progress.rs"]
 mod progress;
-use bootstrap::{
-    append_bootstrap, append_local_bootstrap, materialize_if_ready, verify_bootstrap_payload,
-};
+use bootstrap::{append_bootstrap, append_local_bootstrap, materialize_if_ready};
 pub(crate) use inbound::apply_inbound_batch;
-pub(crate) use journal::read_journal_page;
 pub(crate) use mutation::{commit_local_task_delete, commit_local_task_upsert};
 pub(crate) use progress::{acknowledge_outbound_batch, prepare_outbound_batch};
 
@@ -72,6 +66,15 @@ pub(crate) enum TaskMergeError {
     Invalid(String),
     #[error("{0}")]
     Storage(String),
+}
+
+impl From<ark_store::task_merge::TaskMergeStoreError> for TaskMergeError {
+    fn from(error: ark_store::task_merge::TaskMergeStoreError) -> Self {
+        match error {
+            ark_store::task_merge::TaskMergeStoreError::Invalid(error) => Self::Invalid(error),
+            ark_store::task_merge::TaskMergeStoreError::Storage(error) => Self::Storage(error),
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -171,7 +174,8 @@ fn append_operation_inner(
     check_replayed_guard: bool,
     delivery_timing: DeliveryTiming,
 ) -> Result<TaskMergeAppendResult, TaskMergeError> {
-    let (operation, operation_json, payload_sha256) = canonical_operation(operation)?;
+    let (operation, operation_json, payload_sha256) =
+        ark_store::task_merge::canonical_operation(operation)?;
     if let Some((stored_hash,)) = transaction
         .query_row(
             "SELECT payload_sha256 FROM task_merge_operations WHERE operation_id = ?1",
@@ -454,35 +458,4 @@ fn conflict_set_for_stored(
     }
     let set = conflict_set(&applied).map_err(|error| TaskMergeError::Invalid(error.to_string()))?;
     Ok((Some(set), !pending.is_empty()))
-}
-
-fn canonical_operation(
-    mut operation: TaskMergeOperation,
-) -> Result<(TaskMergeOperation, String, String), TaskMergeError> {
-    ark_domain::task_merge::validate_operation(&operation)
-        .map_err(|error| TaskMergeError::Invalid(error.to_string()))?;
-    operation.parents.sort();
-    operation.observed_heads.sort();
-    let value = canonical_value(
-        &serde_json::to_value(&operation)
-            .map_err(|error| TaskMergeError::Invalid(error.to_string()))?,
-    );
-    let json = serde_json::to_string(&value)
-        .map_err(|error| TaskMergeError::Invalid(error.to_string()))?;
-    let hash = format!("{:x}", Sha256::digest(json.as_bytes()));
-    Ok((operation, json, hash))
-}
-
-fn canonical_value(value: &Value) -> Value {
-    match value {
-        Value::Object(object) => {
-            let sorted = object
-                .iter()
-                .map(|(key, value)| (key.clone(), canonical_value(value)))
-                .collect::<BTreeMap<_, _>>();
-            Value::Object(sorted.into_iter().collect::<Map<_, _>>())
-        }
-        Value::Array(values) => Value::Array(values.iter().map(canonical_value).collect()),
-        other => other.clone(),
-    }
 }
