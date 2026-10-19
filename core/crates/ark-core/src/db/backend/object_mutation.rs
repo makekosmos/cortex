@@ -32,7 +32,10 @@ impl ObjectMutationSession for SqliteObjectMutationSession<'_, '_> {
     }
 
     fn object_type_id(&self, id: &str) -> Result<Option<String>, String> {
-        Ok(db::get_object(self.transaction, id)?.map(|object| object.type_id))
+        Ok(
+            ark_store::objects::object_type_identity(self.transaction, id)?
+                .map(|identity| identity.type_id),
+        )
     }
 
     fn delete_object(&self, id: &str) -> Result<(), String> {
