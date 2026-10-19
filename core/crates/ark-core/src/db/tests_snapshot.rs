@@ -3,6 +3,9 @@
 
 use std::io::Write;
 
+#[path = "tests_snapshot/legacy_startup_restore.rs"]
+mod legacy_startup_restore;
+
 /// File-backed DB в tempdir (restore работает с `db_path`, in-memory
 /// не подходит). Возвращает (TempDir, db_path, conn).
 fn setup_file_db() -> (crate::test_support::TestTempDir, String, Connection) {
