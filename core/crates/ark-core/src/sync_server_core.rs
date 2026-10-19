@@ -56,9 +56,7 @@ impl SyncServer {
                 peer.tx.close();
                 continue;
             }
-            if revokes_target && peer.device_id == target {
-                peer.outbound_snapshot.reset();
-                peer.in_flight_feed = None;
+            if revokes_target && peer.session.projection().device_id.as_deref() == Some(target) {
                 peer.session.revoke();
                 peer.tx.close();
                 revoked.push(*peer_id);
@@ -104,10 +102,10 @@ impl SyncServer {
             .await?;
         let session = {
             let peers = self.peers.lock().await;
-            let Some(peer) = peers
-                .values()
-                .find(|peer| peer.is_ready() && peer.device_id == recipient_device_id)
-            else {
+            let Some(peer) = peers.values().find(|peer| {
+                peer.is_ready()
+                    && peer.session.projection().device_id.as_deref() == Some(recipient_device_id)
+            }) else {
                 return Err("target LAN peer is not authenticated".into());
             };
             peer.session.clone()
@@ -214,7 +212,7 @@ impl SyncServer {
         let peer_ids: Vec<usize> = peers
             .iter()
             .filter_map(|(peer_id, peer)| {
-                if peer.device_id == device_id {
+                if peer.session.projection().device_id.as_deref() == Some(device_id) {
                     Some(*peer_id)
                 } else {
                     None
@@ -263,27 +261,29 @@ impl SyncServer {
             if !peer.is_ready() {
                 continue;
             }
-            if peer.device_id.is_empty() {
+            let projection = peer.session.projection();
+            let Some(device_id) = projection.device_id else {
                 continue;
-            }
-            match seen.get(&peer.device_id) {
+            };
+            let device_name = projection.device_name.unwrap_or_default();
+            match seen.get(&device_id) {
                 Some(&index) => {
                     let entry = &mut entries[index];
-                    entry.device_name.clone_from(&peer.device_name);
-                    if peer.platform.is_some() {
-                        entry.platform.clone_from(&peer.platform);
+                    entry.device_name.clone_from(&device_name);
+                    if projection.platform.is_some() {
+                        entry.platform.clone_from(&projection.platform);
                     }
-                    if peer.app_version.is_some() {
-                        entry.app_version.clone_from(&peer.app_version);
+                    if projection.app_version.is_some() {
+                        entry.app_version.clone_from(&projection.app_version);
                     }
                 }
                 None => {
-                    seen.insert(peer.device_id.clone(), entries.len());
+                    seen.insert(device_id.clone(), entries.len());
                     entries.push(PeerEntry {
-                        device_id: peer.device_id.clone(),
-                        device_name: peer.device_name.clone(),
-                        platform: peer.platform.clone(),
-                        app_version: peer.app_version.clone(),
+                        device_id,
+                        device_name,
+                        platform: projection.platform,
+                        app_version: projection.app_version,
                     });
                 }
             }
@@ -296,7 +296,7 @@ impl SyncServer {
         let peers = self.peers.lock().await;
         peers
             .values()
-            .any(|p| p.is_ready() && p.device_id == device_id)
+            .any(|p| p.is_ready() && p.session.projection().device_id.as_deref() == Some(device_id))
     }
 
     /// Record an externally-connected peer (e.g. a `SyncClient` we just dialled

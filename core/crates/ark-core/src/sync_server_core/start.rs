@@ -2,7 +2,6 @@ use super::super::current_ready_peer;
 use super::server_session_cleanup::finish_rejected_session;
 use super::server_session_host::ServerSessionHostAdapter;
 use super::{signed_integration_write_is_authorized, *};
-use ark_sync::outbound_snapshot::OutboundSnapshotProgress;
 use ark_sync::server_session::run_connected_server_session_controlled;
 use ark_sync::server_session::{ConnectedServerSession, ConnectedServerSessionHost};
 use tokio::sync::oneshot;
@@ -39,7 +38,8 @@ impl ark_sync::session_io::SessionOutboundGuard for ServerPeerOutboundGuard {
                 ready_peer
                     .as_ref()
                     .is_some_and(|ready| ready.matches(self.peer_id, peer))
-                    && peer.device_id == frame.recipient_node_id
+                    && peer.session.projection().device_id.as_deref()
+                        == Some(frame.recipient_node_id.as_str())
             });
         let expected_space_id = self.space_id.read().await.clone();
         let expected_device_id = self.device_id.read().await.clone();
@@ -137,6 +137,8 @@ impl SyncServer {
                 own_addresses: own_addresses.clone(),
                 on_peer_connect: on_peer_connect.clone(),
                 on_registry_events: on_registry_events.clone(),
+                on_change: on_change.clone(),
+                on_new_peer_discovered: on_new_peer_discovered.clone(),
             });
         let (accept_ready_tx, accept_ready_rx) = oneshot::channel();
 
@@ -149,7 +151,7 @@ impl SyncServer {
             loop {
                 tokio::select! {
                     _ = ticker.tick() => {
-                        let peer_ids = {
+                        let sessions = {
                             let peers_guard = peers.lock().await;
                             for peer in peers_guard.values() {
                             if peer.is_ready() {
@@ -161,33 +163,18 @@ impl SyncServer {
                             }
                             }
                             peers_guard
-                                .iter()
-                                .filter(|(_, peer)| {
-                                    peer.is_ready()
-                                        && peer.outbound_snapshot.has_been_acknowledged()
-                                })
-                                .map(|(peer_id, _)| *peer_id)
+                                .values()
+                                .filter(|peer| peer.is_ready())
+                                .map(|peer| peer.session.clone())
                                 .collect::<Vec<_>>()
                         };
-                        for peer_id in peer_ids {
-                            if let Err(error) = sync_server_peers::pump_committed_feed(
-                                &storage,
-                                &peers,
-                                peer_id,
-                            )
-                            .await
-                            {
-                                eprintln!("{TAG} periodic committed feed drain failed: {error}");
-                            }
-                            if let Err(error) = sync_server_peers::pump_task_merge_batch(
-                                &storage,
-                                &peers,
-                                peer_id,
-                            )
-                            .await
-                            {
-                                eprintln!("{TAG} periodic task merge drain failed: {error}");
-                            }
+                        for session in sessions {
+                            let _ = session.try_send(
+                                ark_sync::server_session::ServerSessionIntent::WakeCommittedFeed,
+                            );
+                            let _ = session.try_send(
+                                ark_sync::server_session::ServerSessionIntent::WakeTaskMerge,
+                            );
                         }
                     }
                     result = listener.accept() => {
@@ -262,14 +249,6 @@ impl SyncServer {
 
                                 let peer_state = PeerState {
                                     session: session.clone(),
-                                    device_id: String::new(),
-                                    device_name: String::new(),
-                                    addresses: Vec::new(),
-                                    platform: None,
-                                    app_version: None,
-                                    outbound_snapshot: OutboundSnapshotProgress::not_sent(),
-                                    negotiated_protocol: None,
-                                    in_flight_feed: None,
                                     tx: tx.clone(),
                                 };
                                 let activated = {
@@ -298,16 +277,6 @@ impl SyncServer {
                                 }
 
                                 // Reader task
-                                let ctx = SyncDataPorts {
-                                    peers: peers.clone(),
-                                    storage: storage.clone(),
-                                    space_id: space_id.clone(),
-                                    device_id: device_id.clone(),
-                                    own_addresses: own_addresses.clone(),
-                                    known_peer_records: known_peer_records.clone(),
-                                    on_change: on_change.clone(),
-                                    on_new_peer_discovered: on_new_peer_discovered.clone(),
-                                };
                                 let peers_reader = peers.clone();
                                 let on_peer_disconnect_reader = on_peer_disconnect.clone();
 
@@ -315,10 +284,6 @@ impl SyncServer {
                                     let result = run_connected_server_session_controlled(
                                         &mut session_io,
                                         &mut session_actor,
-                                        &mut sync_server_messages::ConnectedSessionHandler {
-                                            ctx: &ctx,
-                                            peer_id,
-                                        },
                                     )
                                     .await;
                                     if let ark_sync::server_session::DirectServerSessionEnd::Failed(
@@ -337,9 +302,14 @@ impl SyncServer {
                                     let mut peers_guard = peers_reader.lock().await;
                                     if let Some(peer) = peers_guard.remove(&peer_id) {
                                         if peer.is_ready() {
+                                            let projection = peer.session.projection();
+                                            let device_id =
+                                                projection.device_id.unwrap_or_default();
+                                            let device_name =
+                                                projection.device_name.unwrap_or_default();
                                             eprintln!(
                                                 "{TAG} Peer disconnected: {} ({})",
-                                                peer.device_name, peer.device_id
+                                                device_name, device_id
                                             );
                                             let remaining = peers_guard
                                                 .values()
@@ -349,7 +319,7 @@ impl SyncServer {
                                             let disconnect_reader =
                                                 on_peer_disconnect_reader.lock().await;
                                             if let Some(handler) = disconnect_reader.as_ref() {
-                                                handler(peer.device_id, remaining);
+                                                handler(device_id, remaining);
                                             }
                                         }
                                     }

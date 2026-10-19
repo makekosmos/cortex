@@ -334,3 +334,20 @@ fn server_session_routes_messages_by_admission_and_policy_phase() {
             if matches!(message.as_ref(), DirectServerMessage::SyncPolicy(_))
     ));
 }
+
+#[test]
+fn pairing_consent_is_classified_as_transport_control() {
+    for message in [
+        LanSyncMessage::PairingAccepted {
+            device_id: "peer".into(),
+        },
+        LanSyncMessage::PairingRejected {
+            device_id: "peer".into(),
+        },
+    ] {
+        assert!(matches!(
+            super::direct::classify_server_message(message),
+            DirectServerMessage::TransportControl(_)
+        ));
+    }
+}

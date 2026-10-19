@@ -20,10 +20,6 @@ pub use ark_application::sync_storage::SyncReadClass;
 
 #[path = "sync_server_core.rs"]
 mod sync_server_core;
-#[path = "sync_server_inbound.rs"]
-mod sync_server_inbound;
-#[path = "sync_server_messages.rs"]
-mod sync_server_messages;
 #[path = "sync_server_peers.rs"]
 mod sync_server_peers;
 #[cfg(test)]
@@ -55,16 +51,6 @@ pub type OnRegistryEventsCallback =
 
 struct PeerState {
     session: ark_sync::server_session::ServerSessionHandle,
-    device_id: String,
-    device_name: String,
-    addresses: Vec<String>,
-    /// OS / product version the peer advertised in its Hello; `None` for
-    /// peers built before those fields existed.
-    platform: Option<String>,
-    app_version: Option<String>,
-    outbound_snapshot: ark_sync::outbound_snapshot::OutboundSnapshotProgress,
-    negotiated_protocol: Option<ark_sync::protocol::NegotiatedProtocol>,
-    in_flight_feed: Option<ark_sync::committed_feed_delivery::FeedFlight>,
     tx: PeerMessageSender,
 }
 
@@ -118,17 +104,6 @@ impl PeerMessageSender {
     fn try_send(&self, message: LanSyncMessage) -> Result<(), ()> {
         match self {
             Self::Session(session) => session.try_send(message).map_err(|_| ()),
-            #[cfg(test)]
-            Self::Test(test) => {
-                let text = serialize_message(&message);
-                test.send(Message::Text(text.into())).map_err(|_| ())
-            }
-        }
-    }
-
-    async fn send(&self, message: LanSyncMessage) -> Result<(), ()> {
-        match self {
-            Self::Session(session) => session.send_bulk_wait(message).await.map_err(|_| ()),
             #[cfg(test)]
             Self::Test(test) => {
                 let text = serialize_message(&message);
@@ -221,8 +196,6 @@ async fn current_ready_peer(
                     == Some(ready.registry_session_id.as_str())
         }) {
             if let Some(peer) = peers.get_mut(&connection_id) {
-                peer.outbound_snapshot.reset();
-                peer.in_flight_feed = None;
                 peer.session.revoke();
                 peer.tx.close();
             }
@@ -353,62 +326,11 @@ pub(crate) async fn save_peer_transport_keys(
     storage.store_peer_transport_keys(keys).await
 }
 
-/// Application ports needed by already-authenticated sync data messages.
-#[derive(Clone)]
-struct SyncDataPorts {
-    peers: Arc<Mutex<HashMap<usize, PeerState>>>,
-    storage: Arc<dyn SyncRuntimeStorage>,
-    space_id: Arc<RwLock<String>>,
-    device_id: Arc<RwLock<String>>,
-    own_addresses: Arc<RwLock<Vec<String>>>,
-    known_peer_records: Arc<Mutex<Vec<PeerRecord>>>,
-    on_change: Arc<Mutex<Option<OnChangeCallback>>>,
-    on_new_peer_discovered: Arc<Mutex<Option<OnNewPeerDiscoveredCallback>>>,
-}
-
 async fn save_removed_peer_ids(
     storage: &Arc<dyn SyncRuntimeStorage>,
     peer_ids: &[String],
 ) -> Result<(), String> {
     storage.store_removed_peer_ids(peer_ids).await
-}
-
-async fn send_msg(tx: &PeerMessageSender, msg: &LanSyncMessage) {
-    if tx.send(msg.clone()).await.is_err() {
-        tx.close();
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Message handler
-// ---------------------------------------------------------------------------
-
-async fn broadcast_to_others(
-    storage: &Arc<dyn SyncRuntimeStorage>,
-    peers: &Arc<Mutex<HashMap<usize, PeerState>>>,
-    exclude_device_id: Option<&str>,
-) {
-    let peer_ids = {
-        let peers_guard = peers.lock().await;
-        peers_guard
-            .iter()
-            .filter(|(_, peer)| {
-                peer.is_ready()
-                    && peer.outbound_snapshot.has_been_acknowledged()
-                    && exclude_device_id != Some(peer.device_id.as_str())
-            })
-            .map(|(peer_id, _)| *peer_id)
-            .collect::<Vec<_>>()
-    };
-    for peer_id in peer_ids {
-        if let Err(error) = sync_server_peers::pump_committed_feed(storage, peers, peer_id).await {
-            eprintln!("{TAG} committed feed wake failed: {error}");
-        }
-        if let Err(error) = sync_server_peers::pump_task_merge_batch(storage, peers, peer_id).await
-        {
-            eprintln!("{TAG} task merge wake failed: {error}");
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------

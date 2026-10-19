@@ -11,6 +11,8 @@ pub(super) struct ServerSessionHostAdapter {
     pub(super) own_addresses: Arc<RwLock<Vec<String>>>,
     pub(super) on_peer_connect: Arc<Mutex<Option<OnPeerConnectCallback>>>,
     pub(super) on_registry_events: Arc<Mutex<Option<OnRegistryEventsCallback>>>,
+    pub(super) on_change: Arc<Mutex<Option<OnChangeCallback>>>,
+    pub(super) on_new_peer_discovered: Arc<Mutex<Option<OnNewPeerDiscoveredCallback>>>,
 }
 
 #[async_trait::async_trait]
@@ -58,7 +60,13 @@ impl ConnectedServerSessionHost for ServerSessionHostAdapter {
         let revoked = peers
             .iter()
             .filter_map(|(id, peer)| {
-                let is_disabled = local_disabled || disabled.contains(peer.device_id.as_str());
+                let is_disabled = local_disabled
+                    || peer
+                        .session
+                        .projection()
+                        .device_id
+                        .as_deref()
+                        .is_some_and(|id| disabled.contains(id));
                 let keep_pending = preserve_pending == Some(peer.session.lease())
                     && !peer.is_ready()
                     && !local_disabled;
@@ -88,8 +96,10 @@ impl ConnectedServerSessionHost for ServerSessionHostAdapter {
         let replaced = peers
             .iter()
             .filter_map(|(id, peer)| {
-                (peer.session.lease() != current && peer.is_ready() && peer.device_id == device_id)
-                    .then_some(*id)
+                (peer.session.lease() != current
+                    && peer.is_ready()
+                    && peer.session.projection().device_id.as_deref() == Some(device_id))
+                .then_some(*id)
             })
             .collect::<Vec<_>>();
         for id in replaced {
@@ -108,27 +118,17 @@ impl ConnectedServerSessionHost for ServerSessionHostAdapter {
         &self,
         lease: ServerConnectionLease,
         projection: ark_sync::server_session::ServerPeerProjection,
-        protocol: ark_sync::protocol::NegotiatedProtocol,
     ) {
         let Some(device_id) = projection.device_id.clone() else {
             return;
         };
-        let Some(device_name) = projection.device_name.clone() else {
+        if projection.device_name.is_none() {
             return;
-        };
-        let mut peers = self.peers.lock().await;
-        let Some((_, peer)) = peers
-            .iter_mut()
-            .find(|(_, peer)| peer.session.matches_lease(lease))
-        else {
+        }
+        let peers = self.peers.lock().await;
+        if !peers.values().any(|peer| peer.session.matches_lease(lease)) {
             return;
-        };
-        peer.device_id = device_id.clone();
-        peer.device_name = device_name;
-        peer.addresses = projection.addresses.clone();
-        peer.platform = projection.platform.clone();
-        peer.app_version = projection.app_version.clone();
-        peer.negotiated_protocol = Some(protocol);
+        }
         drop(peers);
 
         let local_device_id = self.device_id.read().await.clone();
@@ -176,6 +176,74 @@ impl ConnectedServerSessionHost for ServerSessionHostAdapter {
     async fn peer_list(&self) -> Vec<PeerRecord> {
         self.known_peer_records.lock().await.clone()
     }
+
+    async fn entity_applied(&self, source_device_id: &str, entity: SyncEntity) {
+        if let Some(handler) = self.on_change.lock().await.as_ref() {
+            handler(entity);
+        }
+        let peers = self.peers.lock().await;
+        for peer in peers.values() {
+            if !peer.is_ready()
+                || peer.session.projection().device_id.as_deref() == Some(source_device_id)
+            {
+                continue;
+            }
+            if wake_is_closed(&peer.session, ServerSessionIntent::WakeCommittedFeed)
+                || wake_is_closed(&peer.session, ServerSessionIntent::WakeTaskMerge)
+            {
+                peer.session.revoke();
+                peer.tx.close();
+            }
+        }
+    }
+
+    async fn discovered_peers(&self, incoming: Vec<PeerRecord>) {
+        let local_device_id = self.device_id.read().await.clone();
+        let mut known = self.known_peer_records.lock().await;
+        let before_count = known.len();
+        *known = merge_peer_records(&known, &incoming);
+        if let Err(error) = save_known_peers(&self.storage, &known).await {
+            eprintln!("{TAG} failed to persist known peers: {error}");
+            return;
+        }
+        if let Some(handler) = self.on_new_peer_discovered.lock().await.as_ref() {
+            for peer in &*known {
+                if peer.device_id != local_device_id {
+                    handler(peer.clone());
+                }
+            }
+        }
+        if known.len() > before_count {
+            eprintln!(
+                "{TAG} Peer list updated: {before_count} -> {} known peers",
+                known.len()
+            );
+        }
+    }
+
+    async fn malformed_message(&self) {
+        eprintln!("{TAG} ignoring malformed peer sync message");
+    }
+
+    async fn task_merge_batch_applied(&self) {
+        let peers = self.peers.lock().await;
+        for peer in peers.values().filter(|peer| peer.is_ready()) {
+            if wake_is_closed(&peer.session, ServerSessionIntent::WakeTaskMerge) {
+                peer.session.revoke();
+                peer.tx.close();
+            }
+        }
+    }
+}
+
+fn wake_is_closed(
+    session: &ark_sync::server_session::ServerSessionHandle,
+    intent: ServerSessionIntent,
+) -> bool {
+    matches!(
+        session.try_send(intent),
+        Err(ark_sync::server_session::ServerSessionIntentError::Closed)
+    )
 }
 
 #[cfg(test)]
@@ -190,14 +258,6 @@ mod tests {
         let (tx, mut rx) = mpsc::unbounded_channel();
         let peer = PeerState {
             session: session.clone(),
-            device_id: "disabled-device".to_owned(),
-            device_name: "Old laptop".to_owned(),
-            addresses: Vec::new(),
-            platform: None,
-            app_version: None,
-            outbound_snapshot: ark_sync::outbound_snapshot::OutboundSnapshotProgress::not_sent(),
-            negotiated_protocol: None,
-            in_flight_feed: None,
             tx: PeerMessageSender::test(tx),
         };
         let peers = Arc::new(Mutex::new(HashMap::from([(7, peer)])));
@@ -218,6 +278,8 @@ mod tests {
             own_addresses: Arc::new(RwLock::new(Vec::new())),
             on_peer_connect: Arc::new(Mutex::new(None)),
             on_registry_events: Arc::new(Mutex::new(None)),
+            on_change: Arc::new(Mutex::new(None)),
+            on_new_peer_discovered: Arc::new(Mutex::new(None)),
         };
 
         assert!(
@@ -232,5 +294,40 @@ mod tests {
             ark_sync::server_session::ServerSessionControl::CloseAfterFlush
         );
         assert!(matches!(rx.recv().await, Some(Message::Close(_))));
+    }
+
+    #[tokio::test]
+    async fn full_wake_mailbox_defers_task_merge_without_closing_session() {
+        let storage = Arc::new(MemBackend::new()) as Arc<dyn SyncRuntimeStorage>;
+        let (session, actor) = crate::sync_server::test_server_session_with_actor("ready-device");
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let peer = PeerState {
+            session: session.clone(),
+            tx: PeerMessageSender::test(tx),
+        };
+        let host = ServerSessionHostAdapter {
+            peers: Arc::new(Mutex::new(HashMap::from([(7, peer)]))),
+            known_peer_records: Arc::new(Mutex::new(Vec::new())),
+            storage,
+            device_id: Arc::new(RwLock::new("local-device".to_owned())),
+            own_addresses: Arc::new(RwLock::new(Vec::new())),
+            on_peer_connect: Arc::new(Mutex::new(None)),
+            on_registry_events: Arc::new(Mutex::new(None)),
+            on_change: Arc::new(Mutex::new(None)),
+            on_new_peer_discovered: Arc::new(Mutex::new(None)),
+        };
+        session
+            .try_send(ServerSessionIntent::WakeCommittedFeed)
+            .unwrap();
+
+        host.task_merge_batch_applied().await;
+
+        assert_eq!(
+            session.control(),
+            ark_sync::server_session::ServerSessionControl::Active
+        );
+        assert!(rx.try_recv().is_err());
+        drop(actor);
+        session.revoke();
     }
 }

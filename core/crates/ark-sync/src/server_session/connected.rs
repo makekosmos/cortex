@@ -2,9 +2,20 @@ use std::sync::Arc;
 
 use ark_application::sync_storage::SyncRuntimeStorage;
 use ark_domain::device_registry::RegistryEvent;
+use ark_domain::types::{PeerRecord, SyncEntity};
 
+#[path = "connected/feed.rs"]
+mod feed;
 #[path = "connected/hello.rs"]
 mod hello;
+#[path = "connected/inbound.rs"]
+mod inbound;
+#[path = "connected/messages.rs"]
+mod messages;
+#[path = "connected/snapshot.rs"]
+mod snapshot;
+#[path = "connected/task_merge.rs"]
+mod task_merge;
 
 use super::{
     AdmissionStatus, DirectServerAdmission, DirectServerMessage, DirectServerSession,
@@ -39,14 +50,21 @@ pub trait ConnectedServerSessionHost: Send + Sync {
         &self,
         lease: ServerConnectionLease,
         projection: ServerPeerProjection,
-        protocol: crate::protocol::NegotiatedProtocol,
     );
 
     async fn notify_peer_connected(&self, device_id: String);
 
     async fn registry_events_applied(&self, events: Vec<RegistryEvent>);
 
-    async fn peer_list(&self) -> Vec<ark_domain::types::PeerRecord>;
+    async fn peer_list(&self) -> Vec<PeerRecord>;
+
+    async fn entity_applied(&self, source_device_id: &str, entity: SyncEntity);
+
+    async fn discovered_peers(&self, peers: Vec<PeerRecord>);
+
+    async fn malformed_message(&self);
+
+    async fn task_merge_batch_applied(&self);
 }
 
 pub struct ConnectedServerSession {
@@ -57,6 +75,8 @@ pub struct ConnectedServerSession {
     pub(crate) admission: Option<DirectServerAdmission>,
     pub(crate) peer: ServerPeerProjection,
     pub(crate) protocol: Option<crate::protocol::NegotiatedProtocol>,
+    pub(crate) snapshot_progress: crate::outbound_snapshot::OutboundSnapshotProgress,
+    pub(crate) feed_flight: Option<crate::committed_feed_delivery::FeedFlight>,
 }
 
 impl ConnectedServerSession {
@@ -73,6 +93,8 @@ impl ConnectedServerSession {
             admission: None,
             peer: ServerPeerProjection::default(),
             protocol: None,
+            snapshot_progress: crate::outbound_snapshot::OutboundSnapshotProgress::not_sent(),
+            feed_flight: None,
         }
     }
 
@@ -99,6 +121,17 @@ impl ConnectedServerSession {
             | DirectServerSessionEffect::Accepted(_)
             | DirectServerSessionEffect::Rejected(_) => None,
         }
+    }
+
+    pub(super) fn supports(&self, capability: crate::protocol::ProtocolCapability) -> bool {
+        self.protocol
+            .as_ref()
+            .is_some_and(|protocol| protocol.capabilities.contains(&capability))
+    }
+
+    pub(super) fn snapshot_ready(&self) -> bool {
+        self.peer.readiness == ServerPeerReadiness::Ready
+            && self.snapshot_progress.has_been_acknowledged()
     }
 
     pub(crate) async fn handle_sync_policy(
@@ -287,10 +320,6 @@ impl ConnectedServerSession {
             sender.close_after_flush();
             return false;
         }
-        let Some(protocol) = self.protocol.clone() else {
-            sender.close_after_flush();
-            return false;
-        };
         if !self
             .host
             .evict_replaced_sessions(&device_id, actor.lease())
@@ -304,7 +333,7 @@ impl ConnectedServerSession {
         self.peer.readiness = ServerPeerReadiness::Ready;
         let projection = self.peer.clone();
         self.host
-            .prepare_peer_connected(actor.lease(), projection.clone(), protocol)
+            .prepare_peer_connected(actor.lease(), projection.clone())
             .await;
         if actor.is_revoked() {
             return false;

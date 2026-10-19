@@ -84,6 +84,7 @@ pub struct ServerSessionActor {
     projection: watch::Sender<ServerPeerProjection>,
     lifecycle: Arc<AtomicU8>,
     pub(super) connected: Option<super::ConnectedServerSession>,
+    pub(super) host: Option<Arc<dyn super::ConnectedServerSessionHost>>,
     pending_peer_list: Option<super::connected::PendingPeerList>,
 }
 
@@ -132,6 +133,7 @@ impl ServerSessionHandle {
                 projection: projection_tx,
                 lifecycle: lifecycle.clone(),
                 connected: None,
+                host: None,
                 pending_peer_list: None,
             },
             lease,
@@ -251,7 +253,12 @@ pub enum ServerSessionActivationError {
 
 impl ServerSessionActor {
     pub fn configure_connected(&mut self, session: super::ConnectedServerSession) {
+        self.configure_host(session.host.clone());
         self.connected = Some(session);
+    }
+
+    pub(super) fn configure_host(&mut self, host: Arc<dyn super::ConnectedServerSessionHost>) {
+        self.host = Some(host);
     }
 
     pub fn lease(&self) -> ServerConnectionLease {

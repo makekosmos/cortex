@@ -156,15 +156,6 @@
             1,
             PeerState {
                 session: test_server_session_handle("blocked"),
-                device_id: "blocked".to_string(),
-                device_name: "Blocked One".to_string(),
-                addresses: vec!["192.168.1.20:21531".to_string()],
-                platform: None,
-                app_version: None,
-                outbound_snapshot:
-                    ark_sync::outbound_snapshot::OutboundSnapshotProgress::acknowledged(),
-                negotiated_protocol: None,
-                in_flight_feed: None,
                 tx: PeerMessageSender::test(tx1),
             },
         );
@@ -172,15 +163,6 @@
             2,
             PeerState {
                 session: test_server_session_handle("blocked"),
-                device_id: "blocked".to_string(),
-                device_name: "Blocked Two".to_string(),
-                addresses: vec!["192.168.1.21:21531".to_string()],
-                platform: None,
-                app_version: None,
-                outbound_snapshot:
-                    ark_sync::outbound_snapshot::OutboundSnapshotProgress::acknowledged(),
-                negotiated_protocol: None,
-                in_flight_feed: None,
                 tx: PeerMessageSender::test(tx2),
             },
         );
@@ -188,15 +170,6 @@
             3,
             PeerState {
                 session: test_server_session_handle("keep"),
-                device_id: "keep".to_string(),
-                device_name: "Keep".to_string(),
-                addresses: vec!["192.168.1.22:21531".to_string()],
-                platform: None,
-                app_version: None,
-                outbound_snapshot:
-                    ark_sync::outbound_snapshot::OutboundSnapshotProgress::acknowledged(),
-                negotiated_protocol: None,
-                in_flight_feed: None,
                 tx: PeerMessageSender::test(tx3),
             },
         );
@@ -212,7 +185,7 @@
             server.get_connected_peer_entries().await,
             vec![crate::sync_server::PeerEntry {
                 device_id: "keep".to_string(),
-                device_name: "Keep".to_string(),
+                device_name: "keep".to_string(),
                 platform: None,
                 app_version: None,
             }]
@@ -230,15 +203,6 @@
             1,
             PeerState {
                 session: test_server_session_handle("blocked"),
-                device_id: "blocked".to_string(),
-                device_name: "Blocked".to_string(),
-                addresses: vec![],
-                platform: None,
-                app_version: None,
-                outbound_snapshot:
-                    ark_sync::outbound_snapshot::OutboundSnapshotProgress::acknowledged(),
-                negotiated_protocol: None,
-                in_flight_feed: None,
                 tx: PeerMessageSender::test(tx),
             },
         );
@@ -262,15 +226,6 @@
         let (tx, _rx) = mpsc::unbounded_channel::<Message>();
         let state = |_connection_id: usize, device_id: &str| PeerState {
             session: test_server_session_handle(device_id),
-            device_id: device_id.to_string(),
-            device_name: "DupDevice".to_string(),
-            addresses: vec![],
-            platform: None,
-            app_version: None,
-            outbound_snapshot: ark_sync::outbound_snapshot::OutboundSnapshotProgress::acknowledged(
-            ),
-            negotiated_protocol: None,
-            in_flight_feed: None,
             tx: PeerMessageSender::test(tx.clone()),
         };
         server.peers.lock().await.insert(1, state(1, "dup"));
@@ -283,4 +238,5 @@
             "duplicate device_id sessions should collapse to one entry",
         );
         assert_eq!(entries[0].device_id, "dup");
+        assert_eq!(entries[0].device_name, "dup");
     }

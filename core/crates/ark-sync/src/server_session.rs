@@ -22,20 +22,17 @@ mod runner;
 pub use connected::{ConnectedServerSession, ConnectedServerSessionHost};
 #[cfg(test)]
 use direct::DirectServerSessionCloseReason;
-use direct::{
-    classify_server_message, DirectServerSession, DirectServerSessionEffect,
-    DirectServerSessionInput, DirectServerSyncStartPolicy,
-};
 pub use direct::{DirectServerMessage, DirectServerSyncChanges};
+use direct::{
+    DirectServerSession, DirectServerSessionEffect, DirectServerSessionInput,
+    DirectServerSyncStartPolicy,
+};
 pub use handle::{
     ServerConnectionLease, ServerPeerProjection, ServerPeerReadiness, ServerSessionActivation,
     ServerSessionActivationError, ServerSessionActor, ServerSessionControl,
     ServerSessionCreateError, ServerSessionHandle, ServerSessionIntent, ServerSessionIntentError,
 };
-pub use runner::{
-    run_connected_server_session, run_connected_server_session_controlled, DirectServerSessionEnd,
-    DirectServerSessionHandler,
-};
+pub use runner::{run_connected_server_session_controlled, DirectServerSessionEnd};
 
 #[derive(Clone)]
 pub struct ResponderHelloRequest {

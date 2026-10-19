@@ -8,6 +8,7 @@ pub enum DirectServerMessage {
     VersionVector(ark_domain::types::VersionVector),
     SyncChanges(DirectServerSyncChanges),
     RegistryAdmission(LanSyncMessage),
+    TransportControl(LanSyncMessage),
     Live(LanSyncMessage),
 }
 
@@ -56,6 +57,8 @@ pub fn classify_server_message(message: LanSyncMessage) -> DirectServerMessage {
         | LanSyncMessage::RegistryEventUpdate { .. }) => {
             DirectServerMessage::RegistryAdmission(message)
         }
+        message @ (LanSyncMessage::PairingAccepted { .. }
+        | LanSyncMessage::PairingRejected { .. }) => DirectServerMessage::TransportControl(message),
         message => DirectServerMessage::Live(message),
     }
 }

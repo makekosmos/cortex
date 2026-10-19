@@ -13,15 +13,6 @@ async fn send_signed_integration_frame_requires_addressed_authenticated_peer() {
         1,
         PeerState {
             session,
-            device_id: "peer".to_string(),
-            device_name: "Peer".to_string(),
-            addresses: vec![],
-            platform: None,
-            app_version: None,
-            outbound_snapshot: ark_sync::outbound_snapshot::OutboundSnapshotProgress::acknowledged(
-            ),
-            negotiated_protocol: None,
-            in_flight_feed: None,
             tx: PeerMessageSender::test(tx),
         },
     );

@@ -1,30 +1,17 @@
 use super::*;
 
-#[path = "sync_server_peers/committed_feed.rs"]
-mod committed_feed;
-pub(super) use committed_feed::{
-    handle_committed_feed_ack, handle_committed_feed_receipt_ack, pump_committed_feed,
-};
-#[path = "sync_server_peers/task_merge.rs"]
-mod task_merge;
-pub(super) use task_merge::{handle_task_merge_batch_ack, pump_task_merge_batch};
-
 impl SyncServer {
     pub async fn broadcast_task_merge_batches(&self) {
-        let peer_ids = {
+        let sessions = {
             let peers = self.peers.lock().await;
             peers
-                .iter()
-                .filter(|(_, peer)| {
-                    peer.is_ready() && peer.outbound_snapshot.has_been_acknowledged()
-                })
-                .map(|(peer_id, _)| *peer_id)
+                .values()
+                .filter(|peer| peer.is_ready())
+                .map(|peer| peer.session.clone())
                 .collect::<Vec<_>>()
         };
-        for peer_id in peer_ids {
-            if let Err(error) = pump_task_merge_batch(&self.storage, &self.peers, peer_id).await {
-                eprintln!("{TAG} task merge broadcast failed: {error}");
-            }
+        for session in sessions {
+            let _ = session.try_send(ark_sync::server_session::ServerSessionIntent::WakeTaskMerge);
         }
     }
 
@@ -76,29 +63,25 @@ impl SyncServer {
 
     /// Broadcast a live change to all authenticated peers.
     pub async fn broadcast_live_change(&self, exclude_device_id: Option<&str>) {
-        let peer_ids = {
+        let sessions = {
             let peers = self.peers.lock().await;
-            let mut ids = Vec::new();
-            for (peer_id, peer) in peers.iter() {
+            let mut sessions = Vec::new();
+            for peer in peers.values() {
                 if !peer.is_ready() {
                     continue;
                 }
                 if let Some(exclude) = exclude_device_id {
-                    if peer.device_id == exclude {
+                    if peer.session.projection().device_id.as_deref() == Some(exclude) {
                         continue;
                     }
                 }
-                if !peer.outbound_snapshot.has_been_acknowledged() {
-                    continue;
-                }
-                ids.push(*peer_id);
+                sessions.push(peer.session.clone());
             }
-            ids
+            sessions
         };
-        for peer_id in peer_ids {
-            if let Err(error) = pump_committed_feed(&self.storage, &self.peers, peer_id).await {
-                eprintln!("{TAG} committed feed wake failed: {error}");
-            }
+        for session in sessions {
+            let _ =
+                session.try_send(ark_sync::server_session::ServerSessionIntent::WakeCommittedFeed);
         }
     }
 

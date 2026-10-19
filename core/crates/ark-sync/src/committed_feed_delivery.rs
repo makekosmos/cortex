@@ -2,6 +2,7 @@ use ark_application::sync_policy::PolicyIdentity;
 use ark_application::sync_storage::{CommittedFeedPort, OutboundAck};
 
 const FEED_CHANGE_PREFIX: &str = "ark-feed-v1:";
+pub const MAX_FEED_PAGE_SIZE: usize = 128;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FeedFlight {

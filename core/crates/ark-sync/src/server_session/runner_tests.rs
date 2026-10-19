@@ -1,110 +1,79 @@
-#![allow(clippy::unwrap_used)]
-
 use super::*;
-use crate::session_io::SessionIoError;
-use std::sync::{Arc, Mutex};
+use std::{num::NonZeroUsize, time::Duration};
 use tokio::sync::oneshot;
 
 #[tokio::test]
-async fn connected_server_session_routes_messages_and_reports_transport_end() {
-    let received = Arc::new(Mutex::new(Vec::new()));
-    let mut handler = RecordingHandler(Arc::clone(&received));
-    let (pong_tx, pong_rx) = oneshot::channel();
-    let mut session_io = SessionIo::start_transport(4, |mut driver| {
-        tokio::spawn(async move {
-            for event in [
-                SessionIoEvent::MalformedMessage,
-                SessionIoEvent::Message(Box::new(LanSyncMessage::Ping { ts: 7 })),
-                SessionIoEvent::Closed,
-            ] {
-                if driver.incoming.send(event).await.is_err() {
-                    return;
-                }
-            }
-            let pong = driver.control_outgoing.recv().await;
-            let _ = pong_tx.send(pong);
-        })
-    })
-    .unwrap();
+async fn transport_failure_is_reported_by_runner() {
+    use crate::server_session::ServerSessionHandle;
 
-    let end = run_connected_server_session(&mut session_io, &mut handler).await;
-    assert_eq!(end, DirectServerSessionEnd::Closed);
-    session_io.finish().await.unwrap();
-    assert_eq!(*received.lock().unwrap(), ["malformed"]);
-    assert!(matches!(
-        pong_rx.await.unwrap(),
-        Some(LanSyncMessage::Pong { ts: 7 })
-    ));
-}
-
-#[tokio::test]
-async fn connected_server_session_reports_transport_failure() {
-    let mut handler = RecordingHandler(Arc::new(Mutex::new(Vec::new())));
+    let (handle, mut actor, _, mut activation) =
+        ServerSessionHandle::channel(NonZeroUsize::new(1).unwrap()).unwrap();
+    activation.activate().unwrap();
     let mut session_io = SessionIo::start_transport(1, |driver| {
         tokio::spawn(async move {
             let _ = driver
                 .incoming
                 .send(SessionIoEvent::Failed("read failed".to_owned()))
                 .await;
+            driver.worker_completion.complete();
         })
     })
     .unwrap();
 
     assert_eq!(
-        run_connected_server_session(&mut session_io, &mut handler).await,
+        run_connected_server_session_controlled(&mut session_io, &mut actor).await,
         DirectServerSessionEnd::Failed("read failed".to_owned())
     );
     session_io.finish().await.unwrap();
+    handle.revoke();
 }
 
 #[tokio::test]
-async fn connected_server_session_fails_closed_when_control_queue_is_full() {
-    let mut handler = RecordingHandler(Arc::new(Mutex::new(Vec::new())));
-    let (started_tx, started_rx) = oneshot::channel();
-    let mut session_io = SessionIo::start_transport(1, |mut driver| {
+async fn full_control_queue_fails_closed_on_ping() {
+    use crate::server_session::ServerSessionHandle;
+
+    let (handle, mut actor, _, mut activation) =
+        ServerSessionHandle::channel(NonZeroUsize::new(1).unwrap()).unwrap();
+    activation.activate().unwrap();
+    let (send_ping_tx, send_ping_rx) = oneshot::channel();
+    let (finish_tx, finish_rx) = oneshot::channel();
+    let mut session_io = SessionIo::start_transport(1, |driver| {
+        let _control_outgoing = driver.control_outgoing;
         tokio::spawn(async move {
-            let _control_outgoing = driver.control_outgoing;
+            let _control_outgoing = _control_outgoing;
+            let _ = send_ping_rx.await;
             let _ = driver
                 .incoming
                 .send(SessionIoEvent::Message(Box::new(LanSyncMessage::Ping {
-                    ts: 7,
+                    ts: 42,
                 })))
                 .await;
-            let _ = started_tx.send(());
-            while !*driver.shutdown.borrow_and_update() {
-                if driver.shutdown.changed().await.is_err() {
-                    break;
-                }
-            }
+            let _ = finish_rx.await;
+            driver.worker_completion.complete();
         })
     })
     .unwrap();
-    started_rx.await.unwrap();
     session_io
         .sender()
-        .try_send(LanSyncMessage::Pong { ts: 0 })
+        .try_send(LanSyncMessage::Pong { ts: 1 })
         .unwrap();
+    send_ping_tx.send(()).unwrap();
 
+    let result = run_connected_server_session_controlled(&mut session_io, &mut actor).await;
+    finish_tx.send(()).unwrap();
     assert_eq!(
-        tokio::time::timeout(
-            std::time::Duration::from_millis(50),
-            run_connected_server_session(&mut session_io, &mut handler),
-        )
-        .await,
-        Ok(DirectServerSessionEnd::Failed(format!(
-            "{:?}",
-            SessionIoError::OutboundFull
-        )))
+        result,
+        DirectServerSessionEnd::Failed("OutboundFull".to_owned())
     );
     session_io.finish().await.unwrap();
+    handle.revoke();
 }
 
 #[tokio::test]
-async fn connected_server_session_observes_revoke_when_intent_mailbox_is_full() {
+async fn revoke_wakes_runner_when_intent_mailbox_is_full() {
     use crate::server_session::{ServerSessionHandle, ServerSessionIntent};
-    use std::num::NonZeroUsize;
 
-    let (handle, mut actor, _lease, mut activation) =
+    let (handle, mut actor, _, mut activation) =
         ServerSessionHandle::channel(NonZeroUsize::new(1).unwrap()).unwrap();
     activation.activate().unwrap();
     handle
@@ -123,9 +92,8 @@ async fn connected_server_session_observes_revoke_when_intent_mailbox_is_full() 
     .unwrap();
     handle.close_after_flush();
 
-    let mut handler = RecordingHandler(Arc::new(Mutex::new(Vec::new())));
     assert_eq!(
-        run_connected_server_session_controlled(&mut session_io, &mut actor, &mut handler).await,
+        run_connected_server_session_controlled(&mut session_io, &mut actor).await,
         DirectServerSessionEnd::Closed
     );
     close_seen_rx.await.unwrap();
@@ -135,8 +103,6 @@ async fn connected_server_session_observes_revoke_when_intent_mailbox_is_full() 
 #[tokio::test]
 async fn delayed_peer_list_waits_until_due_and_sends_once() {
     use crate::server_session::ServerSessionHandle;
-    use std::num::NonZeroUsize;
-    use std::time::Duration;
 
     let (handle, mut actor, _, mut activation) =
         ServerSessionHandle::channel(NonZeroUsize::new(1).unwrap()).unwrap();
@@ -162,15 +128,11 @@ async fn delayed_peer_list_waits_until_due_and_sends_once() {
     })
     .unwrap();
 
-    let mut handler = RecordingHandler(Arc::new(Mutex::new(Vec::new())));
     let run = tokio::spawn(async move {
-        let end =
-            run_connected_server_session_controlled(&mut session_io, &mut actor, &mut handler)
-                .await;
+        let end = run_connected_server_session_controlled(&mut session_io, &mut actor).await;
         session_io.finish().await.unwrap();
         end
     });
-
     assert!(
         tokio::time::timeout(Duration::from_millis(15), &mut peer_list_rx)
             .await
@@ -178,28 +140,123 @@ async fn delayed_peer_list_waits_until_due_and_sends_once() {
     );
     let (first, second) = peer_list_rx.await.unwrap();
     assert!(matches!(first, Some(LanSyncMessage::PeerList { .. })));
-    assert!(second.is_none(), "peer list must be sent exactly once");
+    assert!(second.is_none());
     assert_eq!(run.await.unwrap(), DirectServerSessionEnd::Closed);
-    drop(handle);
+    handle.revoke();
 }
 
 #[tokio::test]
-async fn full_peer_list_queue_retries_without_blocking_inbound_receive() {
+async fn full_peer_list_queue_does_not_block_inbound_close() {
     use crate::server_session::ServerSessionHandle;
-    use std::num::NonZeroUsize;
-    use std::time::Duration;
 
     let (handle, mut actor, _, mut activation) =
         ServerSessionHandle::channel(NonZeroUsize::new(1).unwrap()).unwrap();
     activation.activate().unwrap();
     actor.schedule_peer_list_at(tokio::time::Instant::now(), vec![test_peer_record()]);
-    let (malformed_tx, malformed_rx) = oneshot::channel();
-    let (release_tx, release_rx) = oneshot::channel();
+    let mut session_io = SessionIo::start_transport(1, |driver| {
+        tokio::spawn(async move {
+            let _control_outgoing = driver.control_outgoing;
+            let _bulk_outgoing = driver.outgoing;
+            tokio::time::sleep(Duration::from_millis(10)).await;
+            let _ = driver.incoming.send(SessionIoEvent::Closed).await;
+            driver.worker_completion.complete();
+        })
+    })
+    .unwrap();
+    session_io
+        .sender()
+        .try_send(LanSyncMessage::Pong { ts: 1 })
+        .unwrap();
+
+    let end = tokio::time::timeout(
+        Duration::from_millis(100),
+        run_connected_server_session_controlled(&mut session_io, &mut actor),
+    )
+    .await
+    .expect("inbound close must be selected while peer-list retry is pending");
+    assert_eq!(end, DirectServerSessionEnd::Closed);
+    session_io.finish().await.unwrap();
+    handle.revoke();
+}
+
+#[tokio::test]
+async fn full_peer_list_queue_services_malformed_input_then_retries_once() {
+    use crate::server_session::{ConnectedServerSessionHost, ServerSessionHandle};
+    use ark_domain::{device_registry::RegistryEvent, types::SyncEntity};
+    use std::sync::Arc;
+
+    struct MalformedNotifier(tokio::sync::mpsc::UnboundedSender<()>);
+
+    #[async_trait::async_trait]
+    impl ConnectedServerSessionHost for MalformedNotifier {
+        async fn broadcast_registry_events(
+            &self,
+            _: crate::server_session::ServerConnectionLease,
+            _: Vec<RegistryEvent>,
+        ) {
+        }
+
+        async fn revoke_disabled_sessions(
+            &self,
+            _: Vec<String>,
+            _: Option<crate::server_session::ServerConnectionLease>,
+            _: bool,
+        ) -> bool {
+            false
+        }
+
+        async fn evict_replaced_sessions(
+            &self,
+            _: &str,
+            _: crate::server_session::ServerConnectionLease,
+        ) -> bool {
+            false
+        }
+
+        async fn prepare_peer_connected(
+            &self,
+            _: crate::server_session::ServerConnectionLease,
+            _: crate::server_session::ServerPeerProjection,
+        ) {
+        }
+
+        async fn notify_peer_connected(&self, _: String) {}
+
+        async fn registry_events_applied(&self, _: Vec<RegistryEvent>) {}
+
+        async fn peer_list(&self) -> Vec<ark_domain::types::PeerRecord> {
+            Vec::new()
+        }
+
+        async fn entity_applied(&self, _: &str, _: SyncEntity) {}
+
+        async fn discovered_peers(&self, _: Vec<ark_domain::types::PeerRecord>) {}
+
+        async fn malformed_message(&self) {
+            let _ = self.0.send(());
+        }
+
+        async fn task_merge_batch_applied(&self) {}
+    }
+
+    let (handle, mut actor, _, mut activation) =
+        ServerSessionHandle::channel(NonZeroUsize::new(1).unwrap()).unwrap();
+    activation.activate().unwrap();
+    let (malformed_tx, mut malformed_rx) = tokio::sync::mpsc::unbounded_channel();
+    actor.configure_host(Arc::new(MalformedNotifier(malformed_tx)));
+    actor.schedule_peer_list_at(tokio::time::Instant::now(), vec![test_peer_record()]);
+
+    let (transport_ready_tx, transport_ready_rx) = oneshot::channel();
+    let (start_transport_tx, start_transport_rx) = oneshot::channel();
+    let (release_queue_tx, release_queue_rx) = oneshot::channel();
     let (frames_tx, frames_rx) = oneshot::channel();
     let mut session_io = SessionIo::start_transport(1, |mut driver| {
         tokio::spawn(async move {
+            let _bulk_outgoing = driver.outgoing;
+            let _ = transport_ready_tx.send(());
+            let _ = start_transport_rx.await;
             let _ = driver.incoming.send(SessionIoEvent::MalformedMessage).await;
-            let _ = release_rx.await;
+            let _ = release_queue_rx.await;
             let first = driver.control_outgoing.recv().await;
             let second = driver.control_outgoing.recv().await;
             let duplicate =
@@ -213,31 +270,91 @@ async fn full_peer_list_queue_retries_without_blocking_inbound_receive() {
         })
     })
     .unwrap();
+    transport_ready_rx.await.unwrap();
     session_io
         .sender()
         .try_send(LanSyncMessage::Pong { ts: 1 })
         .unwrap();
+    start_transport_tx.send(()).unwrap();
 
     let run = tokio::spawn(async move {
-        let mut handler = MalformedSignal(Some(malformed_tx));
-        let end =
-            run_connected_server_session_controlled(&mut session_io, &mut actor, &mut handler)
-                .await;
+        let end = run_connected_server_session_controlled(&mut session_io, &mut actor).await;
         session_io.finish().await.unwrap();
         end
     });
-
-    tokio::time::timeout(Duration::from_millis(100), malformed_rx)
+    tokio::time::timeout(Duration::from_millis(50), malformed_rx.recv())
         .await
-        .expect("inbound work should be selected while peer-list retry is pending")
+        .expect("malformed input must be handled while peer-list retry is pending")
         .unwrap();
-    release_tx.send(()).unwrap();
-    let (first, second, duplicate) = frames_rx.await.unwrap();
-    assert!(matches!(first, Some(LanSyncMessage::Pong { ts: 1 })));
-    assert!(matches!(second, Some(LanSyncMessage::PeerList { .. })));
+    release_queue_tx.send(()).unwrap();
+    let (initial, peer_list, duplicate) = frames_rx.await.unwrap();
+    assert!(matches!(initial, Some(LanSyncMessage::Pong { ts: 1 })));
+    assert!(matches!(peer_list, Some(LanSyncMessage::PeerList { .. })));
     assert!(duplicate.is_none(), "peer list must be sent exactly once");
     assert_eq!(run.await.unwrap(), DirectServerSessionEnd::Closed);
     handle.revoke();
+}
+
+#[tokio::test]
+async fn signed_frame_waits_for_bulk_capacity_without_being_dropped() {
+    use crate::server_session::{ServerSessionHandle, ServerSessionIntent};
+
+    let (handle, mut actor, _, mut activation) =
+        ServerSessionHandle::channel(NonZeroUsize::new(1).unwrap()).unwrap();
+    activation.activate().unwrap();
+    let first_frame = signed_frame("first");
+    let second_frame = signed_frame("second");
+    let (first_seen_tx, first_seen_rx) = oneshot::channel();
+    let (release_tx, release_rx) = oneshot::channel();
+    let (frames_tx, frames_rx) = oneshot::channel();
+    let mut session_io = SessionIo::start_transport(1, |mut driver| {
+        tokio::spawn(async move {
+            let first = driver.outgoing.recv().await;
+            let _ = first_seen_tx.send(first);
+            let _ = release_rx.await;
+            let second = driver.outgoing.recv().await;
+            let _ = frames_tx.send(second);
+            let _ = driver.incoming.send(SessionIoEvent::Closed).await;
+            driver.worker_completion.complete();
+        })
+    })
+    .unwrap();
+    session_io
+        .sender()
+        .try_send(LanSyncMessage::SignedIntegrationFrame { frame: first_frame })
+        .unwrap();
+    handle
+        .try_send(ServerSessionIntent::SendSignedFrame(second_frame))
+        .unwrap();
+
+    let run = tokio::spawn(async move {
+        let end = run_connected_server_session_controlled(&mut session_io, &mut actor).await;
+        session_io.finish().await.unwrap();
+        end
+    });
+    assert!(matches!(
+        first_seen_rx.await.unwrap(),
+        Some(LanSyncMessage::SignedIntegrationFrame { frame }) if frame.message_id == "first"
+    ));
+    release_tx.send(()).unwrap();
+    assert!(matches!(
+        frames_rx.await.unwrap(),
+        Some(LanSyncMessage::SignedIntegrationFrame { frame }) if frame.message_id == "second"
+    ));
+    assert_eq!(run.await.unwrap(), DirectServerSessionEnd::Closed);
+    handle.revoke();
+}
+
+fn signed_frame(message_id: &str) -> ark_domain::integration_replication::SignedSyncEnvelope {
+    ark_domain::integration_replication::SignedSyncEnvelope::new(
+        "space",
+        "origin",
+        "recipient",
+        1,
+        message_id,
+        Vec::new(),
+        "signature",
+    )
 }
 
 fn test_peer_record() -> ark_domain::types::PeerRecord {
@@ -249,31 +366,5 @@ fn test_peer_record() -> ark_domain::types::PeerRecord {
         last_address: None,
         platform: None,
         app_version: None,
-    }
-}
-
-struct MalformedSignal(Option<oneshot::Sender<()>>);
-
-#[async_trait::async_trait]
-impl DirectServerSessionHandler for MalformedSignal {
-    async fn on_message(&mut self, _message: super::super::DirectServerMessage) {}
-
-    async fn on_malformed_message(&mut self) {
-        if let Some(signal) = self.0.take() {
-            let _ = signal.send(());
-        }
-    }
-}
-
-struct RecordingHandler(Arc<Mutex<Vec<String>>>);
-
-#[async_trait::async_trait]
-impl DirectServerSessionHandler for RecordingHandler {
-    async fn on_message(&mut self, _: super::super::DirectServerMessage) {
-        self.0.lock().unwrap().push("message".to_owned());
-    }
-
-    async fn on_malformed_message(&mut self) {
-        self.0.lock().unwrap().push("malformed".to_owned());
     }
 }

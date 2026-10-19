@@ -9,46 +9,9 @@ pub enum DirectServerSessionEnd {
     Failed(String),
 }
 
-#[async_trait::async_trait]
-pub trait DirectServerSessionHandler: Send + Sync {
-    async fn on_message(&mut self, message: super::DirectServerMessage);
-    async fn on_malformed_message(&mut self);
-    async fn on_wake_committed_feed(&mut self) {}
-    async fn on_wake_task_merge(&mut self) {}
-}
-
-pub async fn run_connected_server_session(
-    session_io: &mut SessionIo,
-    handler: &mut dyn DirectServerSessionHandler,
-) -> DirectServerSessionEnd {
-    loop {
-        match session_io.receive().await {
-            Some(SessionIoEvent::Message(message)) => match *message {
-                LanSyncMessage::Ping { ts } => {
-                    if let Err(error) = session_io.sender().try_send(LanSyncMessage::Pong { ts }) {
-                        return DirectServerSessionEnd::Failed(format!("{error:?}"));
-                    }
-                }
-                LanSyncMessage::Pong { .. } => {}
-                message => {
-                    handler
-                        .on_message(super::classify_server_message(message))
-                        .await
-                }
-            },
-            Some(SessionIoEvent::MalformedMessage) => handler.on_malformed_message().await,
-            Some(SessionIoEvent::Closed) | None => return DirectServerSessionEnd::Closed,
-            Some(SessionIoEvent::Failed(error)) => {
-                return DirectServerSessionEnd::Failed(error);
-            }
-        }
-    }
-}
-
 pub async fn run_connected_server_session_controlled(
     session_io: &mut SessionIo,
     actor: &mut super::ServerSessionActor,
-    handler: &mut dyn DirectServerSessionHandler,
 ) -> DirectServerSessionEnd {
     loop {
         if actor.is_revoked() {
@@ -88,7 +51,7 @@ pub async fn run_connected_server_session_controlled(
                     }
                     if session_io
                         .sender()
-                        .send(LanSyncMessage::SignedIntegrationFrame { frame })
+                        .send_bulk_wait(LanSyncMessage::SignedIntegrationFrame { frame })
                         .await
                         .is_err()
                         || actor.is_revoked()
@@ -97,10 +60,32 @@ pub async fn run_connected_server_session_controlled(
                     }
                 }
                 Some(super::ServerSessionIntent::WakeCommittedFeed) => {
-                    handler.on_wake_committed_feed().await;
+                    let Some(mut connected) = actor.connected.take() else {
+                        return DirectServerSessionEnd::Failed(
+                            "server session actor is not configured".to_owned(),
+                        );
+                    };
+                    let keep_running = connected
+                        .pump_committed_feed(actor, &session_io.sender())
+                        .await;
+                    actor.connected = Some(connected);
+                    if !keep_running {
+                        return DirectServerSessionEnd::Closed;
+                    }
                 }
                 Some(super::ServerSessionIntent::WakeTaskMerge) => {
-                    handler.on_wake_task_merge().await;
+                    let Some(mut connected) = actor.connected.take() else {
+                        return DirectServerSessionEnd::Failed(
+                            "server session actor is not configured".to_owned(),
+                        );
+                    };
+                    let keep_running = connected
+                        .pump_task_merge(actor, &session_io.sender())
+                        .await;
+                    actor.connected = Some(connected);
+                    if !keep_running {
+                        return DirectServerSessionEnd::Closed;
+                    }
                 }
                 None => return DirectServerSessionEnd::Closed,
             },
@@ -146,11 +131,7 @@ pub async fn run_connected_server_session_controlled(
                                 super::DirectServerMessage::SyncPolicy(update) => {
                                     connected.handle_sync_policy(actor, update, &sender).await
                                 }
-                                message => {
-                                    actor.connected = Some(connected);
-                                    handler.on_message(message).await;
-                                    continue;
-                                }
+                                message => connected.handle_message(actor, message, &sender).await,
                             }
                         } else {
                             true
@@ -161,7 +142,14 @@ pub async fn run_connected_server_session_controlled(
                         }
                     }
                 },
-                Some(SessionIoEvent::MalformedMessage) => handler.on_malformed_message().await,
+                Some(SessionIoEvent::MalformedMessage) => {
+                    let Some(host) = actor.host.as_ref() else {
+                        return DirectServerSessionEnd::Failed(
+                            "server session host is not configured".to_owned(),
+                        );
+                    };
+                    host.malformed_message().await;
+                }
                 Some(SessionIoEvent::Closed) | None => return DirectServerSessionEnd::Closed,
                 Some(SessionIoEvent::Failed(error)) => return DirectServerSessionEnd::Failed(error),
                 }

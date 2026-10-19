@@ -379,6 +379,7 @@ mod progress_tests {
         assert!(progress.record_acknowledged(&expected));
         assert!(progress.has_been_acknowledged());
         assert_eq!(progress.pending_ack(), None);
+        assert!(!progress.record_acknowledged(&expected));
     }
 
     #[test]
@@ -402,3 +403,7 @@ mod progress_tests {
         assert_eq!(progress.pending_ack(), None);
     }
 }
+
+#[cfg(test)]
+#[path = "outbound_snapshot_ack_tests.rs"]
+mod ack_tests;
