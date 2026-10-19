@@ -24,7 +24,6 @@ pub(crate) use backend::SqliteLegacyMutationSession;
 pub(crate) use backend::SqliteObjectMutationSession;
 pub(crate) use backend::SqliteSignedIntegrationFrameSession;
 pub use backend::SqliteStorageBackend;
-pub(crate) use backend::SqliteTaskMutationSession;
 pub(crate) use backend::SqliteTypeMutationSession;
 pub use command::CommandSource;
 pub(crate) use command::{

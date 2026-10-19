@@ -1,8 +1,8 @@
-use crate::types::{ArkObject, ObjectLink, SyncEntity};
 use ark_domain::object_write::ObjectWriteSnapshot;
 use ark_domain::task_merge::{
     value_for_unit, OperationId, TaskMergeBootstrap, TaskMergeOperation, TaskMergeUnit,
 };
+use ark_domain::types::{ArkObject, ObjectLink, SyncEntity};
 use rusqlite::Connection;
 use std::collections::BTreeSet;
 
@@ -32,11 +32,11 @@ pub(crate) fn commit_local_task_delete(
     expected_snapshot: Option<&ObjectWriteSnapshot>,
     hard_delete: bool,
 ) -> Result<String, String> {
-    let state = ark_store::task_merge::load_local_mutation_state(connection, object_id)
+    let state = super::load_local_mutation_state(connection, object_id)
         .map_err(|error| error.to_string())?;
     let mut object = state.object.ok_or_else(|| "MISSING_OBJECT".to_string())?;
     let normalized_device_id = normalized_device_id(device_id);
-    let deleted_at = crate::hlc::HLC::now(normalized_device_id).wall_time;
+    let deleted_at = ark_domain::hlc::HLC::now(normalized_device_id).wall_time;
     object.deleted_at = Some(deleted_at.clone());
     let current_snapshot = if expected_snapshot.is_none() {
         Some(state.snapshot.clone())
@@ -77,7 +77,7 @@ fn commit_local_task_upsert_with_existence(
         return Err("object_write_slice_unsupported_type".into());
     }
 
-    let state = ark_store::task_merge::load_local_mutation_state(connection, &object.id)
+    let state = super::load_local_mutation_state(connection, &object.id)
         .map_err(|error| error.to_string())?;
     let previous = state.object.clone();
     let has_bootstrap = state.has_bootstrap;
@@ -102,10 +102,12 @@ fn commit_local_task_upsert_with_existence(
             .as_ref()
             .map(|_| {
                 state.legacy_revision.clone().unwrap_or_else(|| {
-                    crate::hlc::HLC::now(normalized_device_id(device_id)).to_string()
+                    ark_domain::hlc::HLC::now(normalized_device_id(device_id)).to_string()
                 })
             })
-            .unwrap_or_else(|| crate::hlc::HLC::now(normalized_device_id(device_id)).to_string());
+            .unwrap_or_else(|| {
+                ark_domain::hlc::HLC::now(normalized_device_id(device_id)).to_string()
+            });
         let bootstrap = TaskMergeBootstrap {
             id: next_operation_id(),
             object: baseline,
@@ -116,7 +118,7 @@ fn commit_local_task_upsert_with_existence(
                 .map(|unit| (unit, next_operation_id()))
                 .collect(),
         };
-        Some(ark_store::task_merge::TaskMergeLocalBootstrapPlan { bootstrap })
+        Some(super::TaskMergeLocalBootstrapPlan { bootstrap })
     } else {
         None
     };
@@ -204,16 +206,16 @@ fn commit_local_task_upsert_with_existence(
         };
         let operation_id = operation.id.clone();
         let expected_conflict_digest = resolves_explicit_existence.then_some(set.digest.clone());
-        operations.push(ark_store::task_merge::TaskMergeLocalOperation {
+        operations.push(super::TaskMergeLocalOperation {
             operation,
             expected_conflict_digest,
         });
         visible_heads.insert(operation_id);
     }
 
-    let result = ark_store::task_merge::apply_local_mutation(
+    let result = super::apply_local_mutation(
         connection,
-        ark_store::task_merge::TaskMergeLocalMutationPlan {
+        super::TaskMergeLocalMutationPlan {
             expected_state: state,
             object: object.clone(),
             source_links: links.to_vec(),
@@ -244,7 +246,9 @@ fn commit_local_task_upsert_with_existence(
                 .unwrap_or_default(),
             hlc: result.object_revision.clone(),
             deleted: Some(true),
-            origin_device_id: Some(crate::hlc::HLC::from_string(&result.object_revision).device_id),
+            origin_device_id: Some(
+                ark_domain::hlc::HLC::from_string(&result.object_revision).device_id,
+            ),
             origin_seq: None,
         }
     } else {
@@ -283,13 +287,13 @@ fn next_operation_id() -> OperationId {
 }
 
 fn validate_materialized_task(object: &ArkObject) -> Result<(), String> {
-    let registration = crate::canonical_types::definitions::canonical_type_registrations()?
+    let registration = ark_domain::canonical_type::definitions::canonical_type_registrations()?
         .into_iter()
         .find(|registration| {
             registration.type_id == object.type_id && registration.version == object.type_version
         })
         .ok_or_else(|| "canonical_registry".to_string())?;
-    crate::canonical_types::validation::validate_canonical(
+    ark_domain::canonical_type::validation::validate_canonical(
         &registration,
         &object.props_json,
         &object.content_json,

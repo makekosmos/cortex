@@ -12,10 +12,12 @@ mod bootstrap;
 mod history;
 mod inbound;
 mod local_apply;
+mod local_commit;
 mod local_mutation;
 mod progress;
 mod projection;
 
+pub use crate::task_mutation::SqliteTaskMutationSession;
 pub use append::{
     check_operation, persist_operation, PreparedTaskMergeOperation, TaskMergeOperationCheck,
     TaskMergeOperationOrigin,
@@ -33,6 +35,7 @@ pub use local_apply::{
     apply_local_mutation, TaskMergeLocalBootstrapPlan, TaskMergeLocalLinkRevision,
     TaskMergeLocalMutationPlan, TaskMergeLocalMutationResult, TaskMergeLocalOperation,
 };
+pub(crate) use local_commit::{commit_local_task_delete, commit_local_task_upsert};
 pub use local_mutation::{
     load_local_mutation_state, task_snapshot_token, TaskMergeLocalMutationState,
 };

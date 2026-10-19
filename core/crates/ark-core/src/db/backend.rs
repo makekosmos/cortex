@@ -7,13 +7,11 @@ mod apply;
 mod legacy_mutation;
 mod object_mutation;
 mod signed_integration;
-mod task_mutation;
 mod type_mutation;
 
 pub(crate) use legacy_mutation::SqliteLegacyMutationSession;
 pub(crate) use object_mutation::SqliteObjectMutationSession;
 pub(crate) use signed_integration::SqliteSignedIntegrationFrameSession;
-pub(crate) use task_mutation::SqliteTaskMutationSession;
 pub(crate) use type_mutation::SqliteTypeMutationSession;
 
 pub struct SqliteStorageBackend {

@@ -85,7 +85,7 @@ pub fn apply_legacy_compat_entity(
     )
     .map_err(|e| format!("invalid type at {}", e.pointer()))?;
     if mapped.object.type_id == "core.task" {
-        let session = crate::db::SqliteTaskMutationSession::new(conn);
+        let session = ark_store::task_merge::SqliteTaskMutationSession::new(conn);
         let outcome = crate::application::task_mutation::apply_inbound_task_mutation(
             &session,
             crate::application::task_mutation::InboundTaskMutation::LegacyTodoSnapshot {
@@ -124,7 +124,7 @@ pub fn apply_canonical_object_entity(
         .map(str::to_owned)
         .map(Some)
         .unwrap_or(ark_store::objects::get_object(conn, &entity.id)?.map(|object| object.type_id));
-    let task_session = crate::db::SqliteTaskMutationSession::new(conn);
+    let task_session = ark_store::task_merge::SqliteTaskMutationSession::new(conn);
     if entity.deleted == Some(true) && type_id.as_deref() == Some("core.task") {
         return super::task_sync_apply::apply_remote_task_delete(conn, entity);
     }

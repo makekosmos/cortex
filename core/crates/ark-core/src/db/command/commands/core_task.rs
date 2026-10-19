@@ -51,7 +51,7 @@ impl DbCommand for LocalCoreTaskWrite {
         }
         let id = self.object.id.clone();
         let object_session = ark_store::object_write::SqliteObjectWriteSession::new(transaction);
-        let task_session = super::super::super::SqliteTaskMutationSession::new(transaction);
+        let task_session = ark_store::task_merge::SqliteTaskMutationSession::new(transaction);
         let result = crate::application::objects::apply_local_core_task_write(
             &object_session,
             &task_session,
@@ -171,7 +171,7 @@ impl DbCommand for AuthenticatedCoreTaskWrite {
         }
 
         let object_session = ark_store::object_write::SqliteObjectWriteSession::new(transaction);
-        let task_session = super::super::super::SqliteTaskMutationSession::new(transaction);
+        let task_session = ark_store::task_merge::SqliteTaskMutationSession::new(transaction);
         if object_session
             .load_receipt(&self.id, "full", &self.source_hlc)
             .map_err(DbError::from_application_error)?

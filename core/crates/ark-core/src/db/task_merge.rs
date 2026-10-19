@@ -6,13 +6,10 @@ use serde::Serialize;
 mod bootstrap;
 #[path = "task_merge/inbound.rs"]
 mod inbound;
-#[path = "task_merge/mutation.rs"]
-mod mutation;
 #[path = "task_merge/progress.rs"]
 mod progress;
 use bootstrap::append_bootstrap;
 pub(crate) use inbound::apply_inbound_batch;
-pub(crate) use mutation::{commit_local_task_delete, commit_local_task_upsert};
 pub(crate) use progress::{acknowledge_outbound_batch, prepare_outbound_batch};
 
 #[derive(Debug, thiserror::Error)]
