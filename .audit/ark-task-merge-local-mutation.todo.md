@@ -41,4 +41,6 @@ The first implementation unit extracted the typed state read and task snapshot t
 
 The typed state read now also returns all unit conflict sets from Store. Core uses those values for the same deterministic head and conflict decisions without querying SQLite. The focused task-merge suite passes 49/49 and targeted Clippy passes; the Store state test asserts all ten baseline conflict sets and the task snapshot token are present.
 
+Store now assigns local object and link revisions and writes their version-vector, committed-feed, object-version, and tombstone rows. Four Store revision tests and 49 task-merge tests pass; targeted Clippy, the 81-entry writer census, source-size gate, and desktop/mobile dependency graph checks pass.
+
 The revision fallback now calls `ark-store::sync_versions::object_revision`; the Core implementation and re-export are deleted. Existing revision and stale-write behavior passed in 57 focused Store/Core tests. The legacy local-HLC regression moved into its own test module to keep its parent below the 500-line gate.

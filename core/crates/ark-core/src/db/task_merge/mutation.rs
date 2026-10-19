@@ -93,7 +93,12 @@ fn commit_local_task_upsert_with_existence(
     let previous_links = state.source_links;
 
     let local_revision = if previous.is_none() && !has_bootstrap {
-        Some(record_local_revision(connection, &object.id, device_id)?)
+        Some(ark_store::sync_versions::bump_local_revision(
+            connection,
+            ark_store::sync_versions::LocalRevisionTarget::Object,
+            &object.id,
+            normalized_device_id(device_id),
+        )?)
     } else {
         None
     };
@@ -128,7 +133,12 @@ fn commit_local_task_upsert_with_existence(
     let revision = if let Some(revision) = local_revision {
         revision
     } else {
-        record_local_revision(connection, &object.id, device_id)?
+        ark_store::sync_versions::bump_local_revision(
+            connection,
+            ark_store::sync_versions::LocalRevisionTarget::Object,
+            &object.id,
+            normalized_device_id(device_id),
+        )?
     };
 
     let mut visible_heads = BTreeSet::new();
@@ -233,37 +243,16 @@ fn commit_local_task_upsert_with_existence(
     if !is_hard_deleted {
         for link in links {
             crate::db::upsert_object_link(connection, link)?;
-            let link_revision = crate::db::bump_sync_version_vector(
+            let link_revision = ark_store::sync_versions::bump_local_revision(
                 connection,
-                "object_link",
+                ark_store::sync_versions::LocalRevisionTarget::ObjectLink,
                 &link.id,
                 device_id,
-                false,
             )?;
             entities.push(sync_entity("object_link", &link.id, link, &link_revision)?);
         }
     }
     Ok(entities)
-}
-
-fn record_local_revision(
-    connection: &Connection,
-    object_id: &str,
-    device_id: &str,
-) -> Result<String, String> {
-    let device_id = normalized_device_id(device_id);
-    let revision =
-        crate::db::bump_sync_version_vector(connection, "object", object_id, device_id, false)?;
-    connection
-        .execute(
-            "INSERT INTO object_sync_versions(object_id, hlc, deleted) VALUES (?1, ?2, 0)
-             ON CONFLICT(object_id) DO UPDATE SET hlc = excluded.hlc, deleted = 0
-             WHERE excluded.hlc > object_sync_versions.hlc",
-            rusqlite::params![object_id, revision],
-        )
-        .map_err(|error| error.to_string())?;
-    crate::db::delete_sync_tombstone(connection, object_id)?;
-    Ok(revision)
 }
 
 fn normalized_device_id(device_id: &str) -> &str {
