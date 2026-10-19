@@ -14,7 +14,8 @@
 
 ## Implement and verify
 
-- [ ] Store loads the typed local task state, including sorted links, bootstrap state, snapshot token, and legacy revision fallback.
+- [x] Store loads the typed local task state, including sorted links, bootstrap state, snapshot token, and legacy revision fallback.
+- [ ] Replace the remaining Core storage calls with the final plan/apply operation.
 - [ ] Store applies local bootstrap, task operations, journal, projection, links, version-vector/feed, object revision, and tombstone changes in the existing transaction.
 - [ ] Core uses the returned materialized object and revision values to preserve current `SyncEntity` output.
 - [ ] Test stale snapshots, bootstrap-only identity, pending causal dependencies, concurrent alternatives, explicit resolution digest, soft/hard delete, link revisions, and full rollback on injected persistence failure.
@@ -34,3 +35,5 @@
 | Total | 17/20 | 18/20 |
 
 Selected the second shape. The smaller A API is grafted as a typed state read with task snapshot token, sorted links, bootstrap presence, and legacy revision fallback. Store receives no generic callbacks or raw SQLite values from Core.
+
+The first implementation unit extracted the typed state read and task snapshot token. Focused Store/Core task-merge checks passed 48/48, Clippy passed, the writer census matched all 81 path/category counts, and the source-size gate passed with the existing grandfathered baseline.

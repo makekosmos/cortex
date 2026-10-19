@@ -60,11 +60,44 @@ fn connection() -> Connection {
                     last_batch_through INTEGER,
                     last_batch_digest TEXT,
                     updated_at TEXT NOT NULL DEFAULT ''
+                );
+                CREATE TABLE objects (
+                    id TEXT PRIMARY KEY,
+                    type_id TEXT NOT NULL,
+                    type_version TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    content_json TEXT NOT NULL,
+                    props_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    deleted_at TEXT
+                );
+                CREATE TABLE object_links (
+                    id TEXT PRIMARY KEY,
+                    source_object_id TEXT NOT NULL,
+                    target_object_id TEXT NOT NULL,
+                    link_type TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+                CREATE TABLE sync_kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                CREATE TABLE object_sync_versions (
+                    object_id TEXT PRIMARY KEY,
+                    hlc TEXT NOT NULL,
+                    deleted INTEGER NOT NULL
+                );
+                CREATE TABLE sync_tombstones (
+                    id TEXT NOT NULL,
+                    entity_type TEXT NOT NULL,
+                    hlc TEXT NOT NULL,
+                    PRIMARY KEY (id, entity_type)
                 );",
         )
         .expect("task merge fixture schema creates");
     connection
 }
+
+#[path = "tests_local_mutation.rs"]
+mod local_mutation_tests;
 
 fn operation() -> TaskMergeOperation {
     TaskMergeOperation {

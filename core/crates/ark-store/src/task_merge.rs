@@ -11,6 +11,7 @@ mod append;
 mod bootstrap;
 mod history;
 mod inbound;
+mod local_mutation;
 mod progress;
 
 pub use append::{
@@ -25,6 +26,9 @@ pub use history::{read_conflict_set, task_causal_dependencies_pending};
 pub use inbound::{
     load_inbound_progress, record_inbound_batch, update_inbound_policy_identity,
     TaskMergeInboundBatchReceipt, TaskMergeInboundProgress,
+};
+pub use local_mutation::{
+    load_local_mutation_state, object_revision, task_snapshot_token, TaskMergeLocalMutationState,
 };
 pub use progress::{
     acknowledge_outbound_batch, claim_outbound_batch, create_outbound_progress,

@@ -36,7 +36,7 @@ impl ObjectWriteSession for SqliteObjectWriteSession<'_> {
             .optional()
             .map_err(|error| error.to_string())?;
         let object_revision = db::get_object_revision(self.conn, id)?;
-        let task_revision = db::task_merge::object_snapshot_token(self.conn, id)
+        let task_revision = ark_store::task_merge::task_snapshot_token(self.conn, id)
             .map_err(|error| error.to_string())?;
         Ok(match identity {
             Some((type_id, type_version)) => {

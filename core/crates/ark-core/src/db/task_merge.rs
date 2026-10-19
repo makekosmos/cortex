@@ -1,7 +1,6 @@
 use ark_domain::task_merge::{TaskConflictSet, TaskMergeOperation, TaskMergeUnit};
 use rusqlite::{Connection, Transaction};
 use serde::Serialize;
-use sha2::{Digest, Sha256};
 
 #[path = "task_merge/bootstrap.rs"]
 mod bootstrap;
@@ -15,41 +14,6 @@ use bootstrap::{append_bootstrap, append_local_bootstrap, materialize_if_ready};
 pub(crate) use inbound::apply_inbound_batch;
 pub(crate) use mutation::{commit_local_task_delete, commit_local_task_upsert};
 pub(crate) use progress::{acknowledge_outbound_batch, prepare_outbound_batch};
-
-pub(crate) fn object_snapshot_token(
-    connection: &Connection,
-    object_id: &str,
-) -> Result<Option<String>, TaskMergeError> {
-    let bootstrapped = connection
-        .query_row(
-            "SELECT EXISTS(SELECT 1 FROM task_merge_bootstraps WHERE object_id = ?1)",
-            [object_id],
-            |row| row.get::<_, bool>(0),
-        )
-        .map_err(|error| TaskMergeError::Storage(error.to_string()))?;
-    if !bootstrapped {
-        return Ok(None);
-    }
-
-    let mut heads = Vec::with_capacity(TaskMergeUnit::ALL.len());
-    for unit in TaskMergeUnit::ALL {
-        let (set, dependencies_pending) = read_conflict_set(connection, object_id, unit)?;
-        if dependencies_pending {
-            return Err(TaskMergeError::Invalid(
-                "task_merge_dependencies_pending".into(),
-            ));
-        }
-        let set =
-            set.ok_or_else(|| TaskMergeError::Invalid("task_merge_bootstrap_incomplete".into()))?;
-        heads.push((unit, set.digest));
-    }
-    let encoded =
-        serde_json::to_vec(&heads).map_err(|error| TaskMergeError::Invalid(error.to_string()))?;
-    let mut digest = Sha256::new();
-    digest.update(b"ark-task-snapshot-v1\0");
-    digest.update(encoded);
-    Ok(Some(format!("task-merge:sha256:{:x}", digest.finalize())))
-}
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum TaskMergeError {

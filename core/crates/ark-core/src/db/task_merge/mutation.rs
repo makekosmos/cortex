@@ -4,7 +4,7 @@ use ark_domain::object_write::ObjectWriteSnapshot;
 use ark_domain::task_merge::{
     value_for_unit, OperationId, TaskMergeBootstrap, TaskMergeOperation, TaskMergeUnit,
 };
-use rusqlite::{Connection, OptionalExtension};
+use rusqlite::Connection;
 use std::collections::BTreeSet;
 
 /// Writes a local task through the causal journal. The caller already checked
@@ -33,30 +33,19 @@ pub(crate) fn commit_local_task_delete(
     expected_snapshot: Option<&ObjectWriteSnapshot>,
     hard_delete: bool,
 ) -> Result<String, String> {
-    let mut object = crate::db::get_object(connection, object_id)?
-        .ok_or_else(|| "MISSING_OBJECT".to_string())?;
+    let state = ark_store::task_merge::load_local_mutation_state(connection, object_id)
+        .map_err(|error| error.to_string())?;
+    let mut object = state.object.ok_or_else(|| "MISSING_OBJECT".to_string())?;
     let normalized_device_id = normalized_device_id(device_id);
     let deleted_at = crate::hlc::HLC::now(normalized_device_id).wall_time;
     object.deleted_at = Some(deleted_at.clone());
     let current_snapshot = if expected_snapshot.is_none() {
-        let revision = super::object_snapshot_token(connection, object_id)
-            .map_err(|error| error.to_string())?
-            .or(crate::db::get_object_revision(connection, object_id)?);
-        Some(ObjectWriteSnapshot {
-            exists: true,
-            type_id: Some(object.type_id.clone()),
-            type_version: Some(object.type_version.clone()),
-            revision,
-        })
+        Some(state.snapshot.clone())
     } else {
         None
     };
     let expected_snapshot = expected_snapshot.or(current_snapshot.as_ref());
-    let mut links = crate::db::list_object_links(connection)?
-        .into_iter()
-        .filter(|link| link.source_object_id == object_id)
-        .collect::<Vec<_>>();
-    links.sort_by(|left, right| left.id.cmp(&right.id));
+    let links = state.source_links;
     let existence_value = Some(if hard_delete {
         ark_domain::task_merge::TaskMergeValue::ObjectHardDeleted { deleted_at }
     } else {
@@ -89,43 +78,19 @@ fn commit_local_task_upsert_with_existence(
         return Err("object_write_slice_unsupported_type".into());
     }
 
-    let previous = crate::db::get_object(connection, &object.id)?;
-    let has_bootstrap = connection
-        .query_row(
-            "SELECT EXISTS(SELECT 1 FROM task_merge_bootstraps WHERE object_id = ?1)",
-            [&object.id],
-            |row| row.get::<_, bool>(0),
-        )
+    let state = ark_store::task_merge::load_local_mutation_state(connection, &object.id)
         .map_err(|error| error.to_string())?;
+    let previous = state.object.clone();
+    let has_bootstrap = state.has_bootstrap;
     if previous.is_some() || has_bootstrap {
         let Some(expected_snapshot) = expected_snapshot else {
             return Err("object_conflict:expected_snapshot_required".into());
         };
-        let identity = connection
-            .query_row(
-                "SELECT type_id, type_version FROM objects WHERE id = ?1",
-                [&object.id],
-                |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
-            )
-            .optional()
-            .map_err(|error| error.to_string())?;
-        let current = ObjectWriteSnapshot {
-            exists: identity.is_some(),
-            type_id: identity.as_ref().map(|(type_id, _)| type_id.clone()),
-            type_version: identity.map(|(_, type_version)| type_version),
-            revision: super::object_snapshot_token(connection, &object.id)
-                .map_err(|error| error.to_string())?
-                .or(crate::db::get_object_revision(connection, &object.id)?),
-        };
-        if &current != expected_snapshot {
+        if &state.snapshot != expected_snapshot {
             return Err("object_conflict:stale_snapshot".into());
         }
     }
-    let mut previous_links = crate::db::list_object_links(connection)?
-        .into_iter()
-        .filter(|link| link.source_object_id == object.id)
-        .collect::<Vec<_>>();
-    previous_links.sort_by(|left, right| left.id.cmp(&right.id));
+    let previous_links = state.source_links;
 
     let local_revision = if previous.is_none() && !has_bootstrap {
         Some(record_local_revision(connection, &object.id, device_id)?)
@@ -134,7 +99,9 @@ fn commit_local_task_upsert_with_existence(
     };
     let bootstrap_clock = match (&previous, &local_revision) {
         (_, Some(revision)) => revision.clone(),
-        (Some(_), None) => crate::db::get_object_revision(connection, &object.id)?
+        (Some(_), None) => state
+            .legacy_revision
+            .clone()
             .unwrap_or_else(|| crate::hlc::HLC::now(device_id).to_string()),
         (None, None) => crate::hlc::HLC::now(device_id).to_string(),
     };

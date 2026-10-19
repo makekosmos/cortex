@@ -26,6 +26,9 @@
 - [x] Prove progress state decoding, policy-stamp updates, conditional flight claims, ACK persistence, and existing stable-batch/policy-widening behavior.
 - [x] Update the ownership census, run targeted gates, review the diff, and commit each completed unit.
 - [ ] Continue moving the remaining task-merge persistence modules as separate transaction-preserving units.
+  - [x] Move inbound progress decoding, replay receipt reads, policy-stamp writes, and batch receipt writes into Store.
+  - [x] Load local task projection, sorted source links, bootstrap state, task snapshot token, and legacy revision through one typed Store query.
+  - [ ] Replace the remaining Core local task mutation and projection SQL with the planned atomic Store apply operation.
 
 ## Evidence
 
@@ -36,4 +39,6 @@
 - Commit `9fefa870` moves operation replay/collision checks and operation/guard/journal writes into Store; 40 focused task-merge tests, Clippy, formatting, source-size, and writer census passed.
 - Commit `d1fc8504` moves bootstrap replay checks, baseline operation persistence, and journal publication into Store; 43 focused task-merge tests, Clippy, formatting, source-size, and writer census passed.
 - The outbound progress persistence slice passes 44 focused task-merge tests, Clippy, formatting/diff checks, source-size, and writer census (8 tests; 81 path/category counts). Core journal regressions prove stable replay, ACK behavior, peer isolation, and selective-policy narrowing/widening; Store-local tests cover typed progress decoding and conditional writes.
+- Commit `5b7c7b32` moves inbound progress persistence to Store; the focused task-merge suite passed 46/46, Clippy passed, and writer census passed with 81 counts.
+- The typed local-mutation state and task snapshot token now live in Store. The Core snapshot-token facade and its SQL implementation are removed. Focused task-merge tests passed 48/48, including new Store state and no-bootstrap token tests; Clippy, source-size, and the 81-count writer census passed.
 - Keep local task materialization and inbound batch persistence open. Store ownership is still incomplete.
