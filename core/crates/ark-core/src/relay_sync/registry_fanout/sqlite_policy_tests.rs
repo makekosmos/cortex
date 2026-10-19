@@ -1,6 +1,13 @@
 use super::sqlite_test_support::*;
+use crate::db::{
+    CommandContext, ObjectReadQuery, RegisterPackageTypesCommand, SaveLocalSyncProfileCommand,
+};
 use crate::replication_storage::PeerIdentityBackend;
-use ark_application::sync_storage::PeerProgressPort;
+use crate::types::{ArkObject, SyncEntity};
+use ark_application::sync_policy::SyncProfileRule;
+use ark_application::sync_storage::{PeerProgressPort, SyncEntityMutationPort};
+use ark_domain::hlc::HLC;
+use ark_domain::selective_sync::FilterV1;
 use ark_domain::selective_sync::SyncMode;
 use std::time::{Duration, Instant};
 
@@ -211,4 +218,277 @@ async fn actor_backed_iroh_sync_respects_task_policy_and_backfills_after_widenin
         .shutdown(Instant::now() + Duration::from_secs(5))
         .await
         .expect("shut down C actor");
+}
+
+fn note_rule(mode: SyncMode) -> SyncProfileRule {
+    SyncProfileRule {
+        resource_kind: "type".into(),
+        // `note_obj` is a legacy alias; policy identities use the canonical type ID.
+        resource_id: "com.kosmos.note".into(),
+        mode,
+        filter: FilterV1::match_all(),
+    }
+}
+
+async fn register_note_type(peer: &ActorPeer) {
+    let registrations = crate::canonical_types::definitions::canonical_type_registrations()
+        .expect("load canonical type definitions");
+    let registration = registrations
+        .into_iter()
+        .find(|registration| registration.type_id == "com.kosmos.note")
+        .expect("canonical note type is defined");
+    peer.db
+        .submit(
+            CommandContext::engine(),
+            RegisterPackageTypesCommand::new(vec![registration]),
+        )
+        .await
+        .expect("register note type before sync");
+}
+
+async fn set_note_policy(peer: &ActorPeer, mode: SyncMode, expected_revision: Option<i64>) {
+    peer.db
+        .submit(
+            CommandContext::engine(),
+            SaveLocalSyncProfileCommand::new(
+                peer.storage.device_id(),
+                "device-note-policy".into(),
+                "Device note selection".into(),
+                true,
+                expected_revision,
+                vec![note_rule(mode)],
+            ),
+        )
+        .await
+        .expect("save note sync policy");
+}
+
+async fn note_title(peer: &ActorPeer, id: &str) -> Option<String> {
+    let value = peer
+        .db
+        .query(
+            CommandContext::engine(),
+            ObjectReadQuery::Get(id.to_owned()),
+        )
+        .await
+        .expect("read note object");
+    serde_json::from_value::<Option<ArkObject>>(value)
+        .expect("decode note object")
+        .map(|note| note.title)
+}
+
+fn pending_note_count(database: &std::path::Path, id: &str) -> i64 {
+    let connection =
+        rusqlite::Connection::open_with_flags(database, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .expect("open policy test database read-only");
+    connection
+        .query_row(
+            "SELECT COUNT(*) FROM sync_pending_objects WHERE id = ?1",
+            [id],
+            |row| row.get(0),
+        )
+        .expect("read pending note count")
+}
+
+async fn write_note(peer: &ActorPeer, id: &str, title: &str) {
+    let hlc = HLC::now(&peer.storage.device_id()).to_string();
+    let object = ArkObject {
+        id: id.into(),
+        type_id: "note_obj".into(),
+        type_version: "0.0.0-legacy".into(),
+        title: title.into(),
+        content_json: serde_json::json!({
+            "type": "doc",
+            "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": title }] }]
+        }),
+        props_json: serde_json::json!({"description": title}),
+        created_at: "2026-10-17T00:00:00.000Z".into(),
+        updated_at: "2026-10-17T00:00:00.000Z".into(),
+        deleted_at: None,
+    };
+    let mut data = serde_json::to_value(object).expect("serialize note fixture");
+    let serde_json::Value::Object(ref mut data) = data else {
+        unreachable!("ArkObject serializes as an object")
+    };
+    data.remove("id");
+    peer.storage
+        .apply_entity(&SyncEntity {
+            entity_type: "object".into(),
+            id: id.into(),
+            data: data.clone(),
+            hlc,
+            deleted: None,
+            origin_device_id: Some(peer.storage.device_id()),
+            origin_seq: None,
+        })
+        .await
+        .expect("persist note through the actor-backed sync adapter");
+}
+
+async fn wait_for_accepted_note_mode(
+    peer: &ActorPeer,
+    remote: &str,
+    revision: i64,
+    mode: SyncMode,
+) {
+    wait_until("accepted note policy", || async {
+        peer.storage
+            .load_accepted_peer_sync_policy(remote)
+            .await
+            .is_ok_and(|accepted| {
+                accepted.is_some_and(|policy| {
+                    policy.revision == revision
+                        && policy.rules.iter().any(|rule| {
+                            rule.resource_kind == "type"
+                                && rule.resource_id == "com.kosmos.note"
+                                && rule.mode == mode
+                        })
+                })
+            })
+    })
+    .await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn actor_backed_iroh_note_policy_excludes_expands_and_shrinks_without_deleting() {
+    let directory = tempfile::tempdir().expect("temporary database directory");
+    let path_a = directory.path().join("note-policy-device-a.sqlite");
+    let path_b = directory.path().join("note-policy-device-b.sqlite");
+    let mut peer_a = open_peer(&path_a, "device-A").await;
+    let mut peer_b = open_peer(&path_b, "device-B").await;
+    register_note_type(&peer_a).await;
+    register_note_type(&peer_b).await;
+    set_note_policy(&peer_a, SyncMode::Full, None).await;
+    set_note_policy(&peer_b, SyncMode::None, None).await;
+    write_note(&peer_a, "note-A", "A original note").await;
+    assert_eq!(
+        note_title(&peer_a, "note-A").await.as_deref(),
+        Some("A original note")
+    );
+
+    let endpoint_a = peer_a.secret.public();
+    let endpoint_b = peer_b.secret.public();
+    peer_a
+        .storage
+        .enroll_paired_device("device-A", "device-B", &endpoint_b.to_string())
+        .await
+        .expect("enroll B on A");
+    peer_b
+        .storage
+        .enroll_paired_device("device-B", "device-A", &endpoint_a.to_string())
+        .await
+        .expect("enroll A on B");
+
+    let (transport_a, relay_a) = start_policy_relay(&peer_a, "device-A", None);
+    relay_a.start().await.expect("start device A");
+    let (transport_b, relay_b) =
+        start_policy_relay(&peer_b, "device-B", transport_a.endpoint_addr());
+    relay_b.start().await.expect("start device B");
+    wait_until("initial note registry admission", || async {
+        transport_a.registry().is_data_ready_endpoint(&endpoint_b)
+            && transport_b.registry().is_data_ready_endpoint(&endpoint_a)
+    })
+    .await;
+    wait_for_accepted_note_mode(&peer_a, "device-B", 1, SyncMode::None).await;
+    assert_eq!(pending_note_count(&path_b, "note-A"), 0);
+    assert_eq!(
+        note_title(&peer_b, "note-A").await,
+        None,
+        "excluded type must not create a remote copy"
+    );
+
+    // Widen B's receiver policy while it is offline. Its unchanged version
+    // vector forces A to backfill the existing ordinary object on reconnect.
+    set_note_policy(&peer_b, SyncMode::Full, Some(1)).await;
+    relay_b.stop().await;
+    peer_b
+        .owner
+        .shutdown(Instant::now() + Duration::from_secs(5))
+        .await
+        .expect("shut down B before widening policy");
+    drop(relay_b);
+    drop(transport_b);
+    drop(peer_b);
+    wait_until("A observes B disconnect before widening", || async {
+        !transport_a.registry().is_data_ready_endpoint(&endpoint_b)
+    })
+    .await;
+    peer_b = open_peer(&path_b, "device-B").await;
+    let (transport_b, relay_b) =
+        start_policy_relay(&peer_b, "device-B", transport_a.endpoint_addr());
+    relay_b
+        .start()
+        .await
+        .expect("reconnect B with full note policy");
+    wait_until("note policy registry admission after widening", || async {
+        transport_a.registry().is_data_ready_endpoint(&endpoint_b)
+            && transport_b.registry().is_data_ready_endpoint(&endpoint_a)
+    })
+    .await;
+    wait_for_accepted_note_mode(&peer_a, "device-B", 2, SyncMode::Full).await;
+    wait_until("B receives existing note after widening", || async {
+        note_title(&peer_b, "note-A").await.as_deref() == Some("A original note")
+    })
+    .await;
+    assert_eq!(
+        pending_note_count(&path_b, "note-A"),
+        0,
+        "expanded policy must apply the existing note rather than leave it pending"
+    );
+    assert_eq!(
+        note_title(&peer_b, "note-A").await.as_deref(),
+        Some("A original note"),
+        "expanded policy must deliver the existing note"
+    );
+
+    // Shrinking selection keeps the local object but prevents later revisions
+    // of that type from reaching B.
+    set_note_policy(&peer_b, SyncMode::None, Some(2)).await;
+    relay_b.stop().await;
+    peer_b
+        .owner
+        .shutdown(Instant::now() + Duration::from_secs(5))
+        .await
+        .expect("shut down B before shrinking policy");
+    drop(relay_b);
+    drop(transport_b);
+    drop(peer_b);
+    wait_until("A observes B disconnect before shrinking", || async {
+        !transport_a.registry().is_data_ready_endpoint(&endpoint_b)
+    })
+    .await;
+    peer_b = open_peer(&path_b, "device-B").await;
+    let (transport_b, relay_b) =
+        start_policy_relay(&peer_b, "device-B", transport_a.endpoint_addr());
+    relay_b
+        .start()
+        .await
+        .expect("reconnect B with excluded note policy");
+    wait_until("note policy registry admission after shrinking", || async {
+        transport_a.registry().is_data_ready_endpoint(&endpoint_b)
+            && transport_b.registry().is_data_ready_endpoint(&endpoint_a)
+    })
+    .await;
+    wait_for_accepted_note_mode(&peer_a, "device-B", 3, SyncMode::None).await;
+    write_note(&peer_a, "note-A", "A updated note").await;
+    tokio::time::sleep(Duration::from_millis(750)).await;
+    assert_eq!(pending_note_count(&path_b, "note-A"), 0);
+    assert_eq!(
+        note_title(&peer_b, "note-A").await.as_deref(),
+        Some("A original note"),
+        "shrinking policy must retain the local note and suppress the future revision"
+    );
+
+    relay_b.stop().await;
+    relay_a.stop().await;
+    peer_b
+        .owner
+        .shutdown(Instant::now() + Duration::from_secs(5))
+        .await
+        .expect("shut down B actor");
+    peer_a
+        .owner
+        .shutdown(Instant::now() + Duration::from_secs(5))
+        .await
+        .expect("shut down A actor");
 }
