@@ -4,7 +4,7 @@ use serde_json::Value;
 use super::SqliteStorageBackend;
 use crate::db::{
     list_object_links, list_object_types, list_objects, load_all_projects, load_all_tags,
-    load_all_todos, load_all_tracked_apps, load_usage_event, load_usage_session,
+    load_all_todos, load_all_tracked_apps,
 };
 use crate::hlc::HLC;
 use crate::types::{SyncEntity, VersionVector};
@@ -99,10 +99,10 @@ fn load_usage_sequence_page(
             Some(serde_json::Map::new())
         } else {
             match entity_type.as_str() {
-                "usage_session" => load_usage_session(conn, &entity_id)?
+                "usage_session" => ark_store::usage_history::load_usage_session(conn, &entity_id)?
                     .as_ref()
                     .map(to_data_map),
-                "usage_event" => load_usage_event(conn, &entity_id)?
+                "usage_event" => ark_store::usage_history::load_usage_event(conn, &entity_id)?
                     .as_ref()
                     .map(to_data_map),
                 "usage_day" => ark_store::usage::load_usage_day(conn, &entity_id)?

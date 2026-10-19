@@ -1,11 +1,12 @@
-fn load_all_usage_sessions(conn: &Connection) -> Result<Vec<UsageSession>, String> {
+use ark_domain::types::{UsageEvent, UsageSession};
+use rusqlite::{params, Connection, OptionalExtension};
+use serde_json::{json, Value};
+
+pub fn load_all_usage_sessions(conn: &Connection) -> Result<Vec<UsageSession>, String> {
     load_usage_sessions_page(conn, -1, 0)
 }
 
-pub(in crate::db) fn load_usage_session(
-    conn: &Connection,
-    id: &str,
-) -> Result<Option<UsageSession>, String> {
+pub fn load_usage_session(conn: &Connection, id: &str) -> Result<Option<UsageSession>, String> {
     conn.query_row(
         "SELECT id, tracked_app_id, device_id, device_name, platform, started_at,
                 ended_at, runtime_ms, foreground_ms, idle_ms, window_title, process_name,
@@ -83,14 +84,11 @@ fn load_usage_sessions_page(
         .map_err(|e| e.to_string())
 }
 
-fn load_all_usage_events(conn: &Connection) -> Result<Vec<UsageEvent>, String> {
+pub fn load_all_usage_events(conn: &Connection) -> Result<Vec<UsageEvent>, String> {
     load_usage_events_page(conn, -1, 0)
 }
 
-pub(in crate::db) fn load_usage_event(
-    conn: &Connection,
-    id: &str,
-) -> Result<Option<UsageEvent>, String> {
+pub fn load_usage_event(conn: &Connection, id: &str) -> Result<Option<UsageEvent>, String> {
     conn.query_row(
         "SELECT id, tracked_app_id, usage_session_id, device_id, device_name, platform,
                 occurred_at, kind, window_title, process_name, exe_path, pid,

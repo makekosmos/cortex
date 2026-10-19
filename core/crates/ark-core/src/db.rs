@@ -74,8 +74,7 @@ pub use legacy::{
 };
 pub use load::{clear_all, delete_trashed, load_all};
 pub(in crate::db) use load::{
-    load_all_projects, load_all_tags, load_all_todos, load_all_tracked_apps, load_usage_event,
-    load_usage_session,
+    load_all_projects, load_all_tags, load_all_todos, load_all_tracked_apps,
 };
 pub(in crate::db) use objects::list_other_object_link_ids;
 pub use objects::{

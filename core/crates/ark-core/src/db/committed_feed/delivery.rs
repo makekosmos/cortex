@@ -134,16 +134,18 @@ fn project_feed_entity(
                  ) FROM object_links WHERE id = ?1",
                 &entry.entity_id,
             )?,
-            "usage_session" => crate::db::load_usage_session(conn, &entry.entity_id)?
-                .map(|item| serde_json::to_value(item).map_err(|error| error.to_string()))
-                .transpose()?
-                .and_then(|mut value| {
-                    value.as_object_mut().map(|map| {
-                        map.remove("id");
-                        std::mem::take(map)
+            "usage_session" => {
+                ark_store::usage_history::load_usage_session(conn, &entry.entity_id)?
+                    .map(|item| serde_json::to_value(item).map_err(|error| error.to_string()))
+                    .transpose()?
+                    .and_then(|mut value| {
+                        value.as_object_mut().map(|map| {
+                            map.remove("id");
+                            std::mem::take(map)
+                        })
                     })
-                }),
-            "usage_event" => crate::db::load_usage_event(conn, &entry.entity_id)?
+            }
+            "usage_event" => ark_store::usage_history::load_usage_event(conn, &entry.entity_id)?
                 .map(|item| serde_json::to_value(item).map_err(|error| error.to_string()))
                 .transpose()?
                 .and_then(|mut value| {
