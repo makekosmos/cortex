@@ -36,7 +36,7 @@ impl ObjectMutationSession for SqliteObjectMutationSession<'_, '_> {
     }
 
     fn prepare_object(&self, write: ArkObjectWrite) -> Result<ArkObject, String> {
-        crate::canonical_types::ingress::prepare_object(self.transaction, write)
+        ark_store::object_write::prepare_object(self.transaction, write)
             .map_err(|error| error.to_string())
     }
 

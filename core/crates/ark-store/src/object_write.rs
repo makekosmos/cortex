@@ -1,7 +1,36 @@
 use ark_application::object_write::{NewObjectReceipt, ObjectWriteSession, StoredObjectReceipt};
+use ark_domain::canonical_type::{
+    prepare_resolved_object, CanonicalIngressError, LEGACY_TASK_TYPE,
+};
 use ark_domain::object_write::ObjectWriteSnapshot;
-use ark_domain::types::{ArkObject, ObjectLink};
+use ark_domain::types::{ArkObject, ArkObjectWrite, ObjectLink};
 use rusqlite::Connection;
+
+/// Resolve the persisted type identity and validate an object write before
+/// callers perform any persistence or synchronization mutation.
+pub fn prepare_object(
+    connection: &Connection,
+    input: ArkObjectWrite,
+) -> Result<ArkObject, CanonicalIngressError> {
+    let input_type_id = input.type_id.clone();
+    if input_type_id == LEGACY_TASK_TYPE {
+        return Err(CanonicalIngressError::invalid("legacy_task_type_retired"));
+    }
+    let requested_version = input.type_version.clone();
+    let (canonical_type_id, resolved_version) = crate::type_registry::resolve_object_type_identity(
+        connection,
+        &input_type_id,
+        requested_version.as_deref(),
+    )
+    .map_err(|_| CanonicalIngressError::invalid("unknown_type_or_version"))?;
+    let registrations = ark_domain::canonical_type::definitions::canonical_type_registrations()
+        .map_err(|_| CanonicalIngressError::invariant("canonical_registry"))?;
+    let registration = registrations.iter().find(|registration| {
+        registration.type_id == canonical_type_id && registration.version == resolved_version
+    });
+
+    prepare_resolved_object(input, &canonical_type_id, &resolved_version, registration)
+}
 
 pub struct SqliteObjectWriteSession<'connection> {
     connection: &'connection Connection,

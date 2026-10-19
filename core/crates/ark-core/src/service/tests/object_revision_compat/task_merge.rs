@@ -404,7 +404,7 @@ async fn authenticated_full_snapshot_is_rejected_for_operation_enabled_task() {
     assert_eq!(local_error, "object_conflict:expected_snapshot_required");
 
     let object = with_conn(&state, |conn| {
-        crate::canonical_types::ingress::prepare_object(
+        ark_store::object_write::prepare_object(
             conn,
             task("snapshot-with-merge-history", "legacy snapshot"),
         )

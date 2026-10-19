@@ -1,5 +1,4 @@
 use super::*;
-use crate::canonical_types::ingress::prepare_object;
 use crate::db;
 use crate::types::ArkObject;
 use rusqlite::{params, params_from_iter, Connection, OptionalExtension};
@@ -249,7 +248,8 @@ pub fn upsert_game(
                 });
             }
         }
-        let prepared = prepare_object(conn, object_write(&command)).map_err(|e| e.to_string())?;
+        let prepared = ark_store::object_write::prepare_object(conn, object_write(&command))
+            .map_err(|e| e.to_string())?;
         db::upsert_object(conn, &prepared)?;
         conn.execute(
             concat!(

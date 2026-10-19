@@ -79,14 +79,12 @@ fn apply_core_task_write(
     let (resolved_type_id, resolved_version) = object_session
         .resolve_type_identity(&write.type_id, write.type_version.as_deref())
         .map_err(|_| {
-            crate::canonical_types::ingress::CanonicalIngressError::invalid(
-                "unknown_type_or_version",
-            )
-            .to_string()
+            ark_domain::canonical_type::CanonicalIngressError::invalid("unknown_type_or_version")
+                .to_string()
         })?;
     let registration = canonical_type_registrations()
         .map_err(|_| {
-            crate::canonical_types::ingress::CanonicalIngressError::invariant("canonical_registry")
+            ark_domain::canonical_type::CanonicalIngressError::invariant("canonical_registry")
                 .to_string()
         })?
         .into_iter()
@@ -94,7 +92,7 @@ fn apply_core_task_write(
             registration.type_id == resolved_type_id && registration.version == resolved_version
         })
         .ok_or_else(|| {
-            crate::canonical_types::ingress::CanonicalIngressError::invariant("canonical_registry")
+            ark_domain::canonical_type::CanonicalIngressError::invariant("canonical_registry")
                 .to_string()
         })?;
     if resolved_type_id != CORE_TASK_ID || resolved_version != CORE_TASK_VERSION {

@@ -3,7 +3,6 @@ pub mod core_task_rewrite;
 pub mod definitions;
 pub mod facades;
 pub mod game;
-pub mod ingress;
 pub mod migration;
 pub mod migration_ledger;
 pub mod migration_objects;

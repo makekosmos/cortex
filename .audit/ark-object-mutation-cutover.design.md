@@ -57,7 +57,7 @@ The staged `ObjectMutationSession` design keeps more policy in Application, but 
 
 ## Implementation reconciliation
 
-The first implementation unit moved pure canonical object-write validation and the retired task-type identifier into `ark-domain`. Core's database-backed type lookup remains in the ingress adapter until Store owns type resolution and the object-mutation transaction. The broader command cutover remains open. Candidate files and the cross-judge verdict are `/tmp/ark-object-mutation-candidate-a.md`, `/tmp/ark-object-mutation-candidate-b.md`, and `/tmp/ark-object-mutation-judge.md`.
+The first implementation unit moved pure canonical object-write validation and the retired task-type identifier into `ark-domain`. The second moved persisted type resolution and the canonical ingress entry point to `ark-store`, migrated callers, and deleted the Core ingress module. The broader command cutover remains open because the Core adapter still owns other SQL, policy sequencing, and the transaction. Candidate files and the cross-judge verdict are `/tmp/ark-object-mutation-candidate-a.md`, `/tmp/ark-object-mutation-candidate-b.md`, and `/tmp/ark-object-mutation-judge.md`.
 
 ## Open questions and risks
 

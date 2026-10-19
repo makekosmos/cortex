@@ -2,7 +2,6 @@
 //! refused, and a start moves the stored rows over once.
 use super::compatibility::{map_legacy_with_context, LegacyRecord, LegacySource, MappingContext};
 use super::core_task_rewrite_tests::{insert_legacy, legacy_props};
-use crate::canonical_types::ingress::prepare_object;
 use crate::db::init_schema;
 use crate::types::ArkObjectWrite;
 use rusqlite::Connection;
@@ -125,7 +124,9 @@ fn engine_refuses_a_new_write_of_the_legacy_task_type() {
         updated_at: "2026-10-13T00:00:00.000Z".into(),
         deleted_at: None,
     };
-    let error = prepare_object(&conn, write).unwrap_err().to_string();
+    let error = ark_store::object_write::prepare_object(&conn, write)
+        .unwrap_err()
+        .to_string();
     assert!(error.contains("legacy_task_type_retired"), "{error}");
 }
 

@@ -15,9 +15,8 @@ async fn editing_legacy_task_builds_mutation_from_the_new_bootstrap_baseline() {
 
     let id = "legacy-task-bootstrap";
     with_write_tx(&state, |connection| {
-        let object =
-            crate::canonical_types::ingress::prepare_object(connection, task(id, "before"))
-                .map_err(|error| error.to_string())?;
+        let object = ark_store::object_write::prepare_object(connection, task(id, "before"))
+            .map_err(|error| error.to_string())?;
         db::upsert_object(connection, &object)?;
         connection
             .execute(
@@ -86,9 +85,8 @@ async fn deleting_legacy_task_uses_the_same_bootstrap_conflict_set_it_persists()
 
     let id = "legacy-task-delete-bootstrap";
     with_write_tx(&state, |connection| {
-        let object =
-            crate::canonical_types::ingress::prepare_object(connection, task(id, "before"))
-                .map_err(|error| error.to_string())?;
+        let object = ark_store::object_write::prepare_object(connection, task(id, "before"))
+            .map_err(|error| error.to_string())?;
         db::upsert_object(connection, &object)?;
         connection
             .execute(
@@ -146,7 +144,7 @@ async fn failed_local_task_journal_write_rolls_back_the_complete_mutation() {
     .unwrap();
 
     with_write_tx(&state, |connection| {
-        let object = crate::canonical_types::ingress::prepare_object(
+        let object = ark_store::object_write::prepare_object(
             connection,
             task("rollback-task-mutation", "before"),
         )

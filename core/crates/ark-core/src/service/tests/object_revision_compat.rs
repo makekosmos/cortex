@@ -87,7 +87,7 @@ async fn pre_version_table_revisions_reject_stale_remote_resurrection() {
     .unwrap();
 
     let (vector_object, tombstone_object) = with_write_tx(&state, |conn| {
-        let vector_object = crate::canonical_types::ingress::prepare_object(
+        let vector_object = ark_store::object_write::prepare_object(
             conn,
             task("legacy-vector-task", "vector wins"),
         )
@@ -99,11 +99,9 @@ async fn pre_version_table_revisions_reject_stale_remote_resurrection() {
             r#"{"legacy-vector-task":"2999-01-01T00:00:00.000Z:000001:legacy"}"#,
         )?;
 
-        let tombstone_object = crate::canonical_types::ingress::prepare_object(
-            conn,
-            task("legacy-tombstone-task", "deleted"),
-        )
-        .map_err(|error| error.to_string())?;
+        let tombstone_object =
+            ark_store::object_write::prepare_object(conn, task("legacy-tombstone-task", "deleted"))
+                .map_err(|error| error.to_string())?;
         db::upsert_object(conn, &tombstone_object)?;
         db::delete_object(conn, &tombstone_object.id)?;
         ark_store::sync_tombstones::record(
@@ -227,7 +225,7 @@ async fn authenticated_task_snapshot_preserves_receipt_stale_and_inbox_replay() 
     admit_inbound_peer(&state).await;
 
     let object = with_conn(&state, |conn| {
-        crate::canonical_types::ingress::prepare_object(conn, task("inbound-full-task", "remote"))
+        ark_store::object_write::prepare_object(conn, task("inbound-full-task", "remote"))
             .map_err(|error| error.to_string())
     })
     .unwrap();
@@ -309,7 +307,7 @@ async fn authenticated_legacy_todo_mapping_and_absent_task_tombstone_use_task_se
             updated_at: "2026-01-01T00:00:00.000Z".into(),
             deleted_at: None,
         };
-        let project = crate::canonical_types::ingress::prepare_object(conn, project)
+        let project = ark_store::object_write::prepare_object(conn, project)
             .map_err(|error| error.to_string())?;
         db::upsert_object(conn, &project)
     })

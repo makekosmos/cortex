@@ -207,8 +207,7 @@ pub fn apply_canonical_object_entity(
                 .iter()
                 .any(|registration| registration.type_id == input_type_id)
             {
-                crate::canonical_types::ingress::prepare_object(conn, input)
-                    .map_err(|e| e.to_string())?
+                ark_store::object_write::prepare_object(conn, input).map_err(|e| e.to_string())?
             } else {
                 // Generic Phase 2 objects have no canonical content contract.
                 // Preserve the wire version exactly; resolving a legacy wire
