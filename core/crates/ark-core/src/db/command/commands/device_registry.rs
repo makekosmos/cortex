@@ -3,9 +3,8 @@ use ark_domain::device_registry::{
     state::DeviceRegistry, DeviceId, DeviceRecord, RegistryEvent, RegistryEventDraft, RegistryHead,
     RegistryOperation, SigningPublicKey,
 };
-use rusqlite::{params, Transaction};
+use rusqlite::Transaction;
 use serde::Serialize;
-use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum DeviceEnrollmentOutcome {
@@ -218,33 +217,17 @@ fn persist_transport_pin(
     device_id: &str,
     transport_public_key: &str,
 ) -> Result<(), DbError> {
-    let raw =
-        ark_store::sync_kv::get_sync_kv(transaction, crate::db::constants::PEER_TRANSPORT_KEYS_KEY)
-            .map_err(|error| DbError::Storage(error.to_string()))?;
-    let mut keys: HashMap<String, String> = raw
-        .map(|raw| serde_json::from_str(&raw))
-        .transpose()
-        .map_err(|error| DbError::Storage(error.to_string()))?
-        .unwrap_or_default();
-    if keys
-        .get(device_id)
-        .is_some_and(|existing| existing != transport_public_key)
-    {
-        return Err(DbError::Conflict(
-            "device_registry_transport_key_conflict".into(),
-        ));
-    }
-    keys.insert(device_id.to_owned(), transport_public_key.to_owned());
-    let encoded =
-        serde_json::to_string(&keys).map_err(|error| DbError::Storage(error.to_string()))?;
-    transaction
-        .execute(
-            "INSERT INTO sync_kv(key, value) VALUES (?1, ?2)
-             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-            params![crate::db::constants::PEER_TRANSPORT_KEYS_KEY, encoded],
-        )
-        .map_err(storage_error)?;
-    Ok(())
+    ark_store::device_registry::persist_transport_key_pin(
+        transaction,
+        device_id,
+        transport_public_key,
+    )
+    .map_err(|error| match error {
+        ark_store::device_registry::TransportKeyPinError::Conflict => {
+            DbError::Conflict("device_registry_transport_key_conflict".into())
+        }
+        ark_store::device_registry::TransportKeyPinError::Storage(error) => DbError::Storage(error),
+    })
 }
 
 fn registry_error(error: ark_domain::device_registry::RegistryEventError) -> DbError {
@@ -253,8 +236,4 @@ fn registry_error(error: ark_domain::device_registry::RegistryEventError) -> DbE
 
 fn registry_apply_error(error: ark_domain::device_registry::RegistryApplyError) -> DbError {
     DbError::Conflict(error.to_string())
-}
-
-fn storage_error(error: rusqlite::Error) -> DbError {
-    DbError::from_sqlite(error)
 }

@@ -47,7 +47,7 @@
             self.kv
                 .lock()
                 .unwrap()
-                .get(crate::db::constants::PEER_TRANSPORT_KEYS_KEY)
+                .get(ark_store::device_registry::PEER_TRANSPORT_KEYS_KEY)
                 .map_or_else(
                     || Ok(HashMap::new()),
                     |raw| serde_json::from_str(raw).map_err(|error| error.to_string()),
@@ -58,7 +58,7 @@
             keys: &HashMap<String, String>,
         ) -> Result<(), String> {
             self.kv.lock().unwrap().insert(
-                crate::db::constants::PEER_TRANSPORT_KEYS_KEY.into(),
+                ark_store::device_registry::PEER_TRANSPORT_KEYS_KEY.into(),
                 serde_json::to_string(keys).unwrap(),
             );
             Ok(())

@@ -97,7 +97,7 @@ impl PeerIdentityBackend for SqliteStorageBackend {
         &self,
     ) -> Result<std::collections::HashMap<String, String>, String> {
         Ok(
-            load_progress_value(self, crate::db::constants::PEER_TRANSPORT_KEYS_KEY)
+            load_progress_value(self, ark_store::device_registry::PEER_TRANSPORT_KEYS_KEY)
                 .await?
                 .unwrap_or_default(),
         )
@@ -107,7 +107,12 @@ impl PeerIdentityBackend for SqliteStorageBackend {
         &self,
         keys: &std::collections::HashMap<String, String>,
     ) -> Result<(), String> {
-        store_progress_value(self, crate::db::constants::PEER_TRANSPORT_KEYS_KEY, keys).await
+        store_progress_value(
+            self,
+            ark_store::device_registry::PEER_TRANSPORT_KEYS_KEY,
+            keys,
+        )
+        .await
     }
 
     async fn enroll_paired_device(

@@ -6,6 +6,38 @@ use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use sha2::Digest;
 
 pub const MAX_REGISTRY_EVENTS_PAGE_SIZE: usize = 64;
+pub const PEER_TRANSPORT_KEYS_KEY: &str = "sync.peer_transport_keys";
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TransportKeyPinError {
+    Conflict,
+    Storage(String),
+}
+
+pub fn persist_transport_key_pin(
+    transaction: &Transaction<'_>,
+    device_id: &str,
+    transport_public_key: &str,
+) -> Result<(), TransportKeyPinError> {
+    let raw = crate::sync_kv::get_sync_kv(transaction, PEER_TRANSPORT_KEYS_KEY)
+        .map_err(TransportKeyPinError::Storage)?;
+    let mut keys: std::collections::HashMap<String, String> = raw
+        .map(|raw| serde_json::from_str(&raw))
+        .transpose()
+        .map_err(|error| TransportKeyPinError::Storage(error.to_string()))?
+        .unwrap_or_default();
+    if keys
+        .get(device_id)
+        .is_some_and(|existing| existing != transport_public_key)
+    {
+        return Err(TransportKeyPinError::Conflict);
+    }
+    keys.insert(device_id.to_owned(), transport_public_key.to_owned());
+    let encoded = serde_json::to_string(&keys)
+        .map_err(|error| TransportKeyPinError::Storage(error.to_string()))?;
+    crate::sync_kv::set_sync_kv(transaction, PEER_TRANSPORT_KEYS_KEY, &encoded)
+        .map_err(TransportKeyPinError::Storage)
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DeviceRegistryEntry {
@@ -378,7 +410,10 @@ pub fn load_events_page(
 
 #[cfg(test)]
 mod tests {
-    use super::{load_events_page, MAX_REGISTRY_EVENTS_PAGE_SIZE};
+    use super::{
+        load_events_page, persist_transport_key_pin, TransportKeyPinError,
+        MAX_REGISTRY_EVENTS_PAGE_SIZE, PEER_TRANSPORT_KEYS_KEY,
+    };
     use rusqlite::Connection;
 
     #[test]
@@ -392,5 +427,24 @@ mod tests {
             .expect("empty page reads");
 
         assert_eq!(page, (0, 0, Vec::new()));
+    }
+
+    #[test]
+    fn transport_key_pin_refuses_key_replacement() {
+        let mut connection = Connection::open_in_memory().expect("database opens");
+        connection
+            .execute_batch("CREATE TABLE sync_kv(key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+            .expect("sync key-value schema initializes");
+        let transaction = connection.transaction().expect("transaction opens");
+
+        persist_transport_key_pin(&transaction, "peer-a", "key-a").expect("first key pins");
+        assert_eq!(
+            persist_transport_key_pin(&transaction, "peer-a", "key-b"),
+            Err(TransportKeyPinError::Conflict)
+        );
+        let persisted = crate::sync_kv::get_sync_kv(&transaction, PEER_TRANSPORT_KEYS_KEY)
+            .expect("pinned key reads")
+            .expect("peer pin exists");
+        assert_eq!(persisted, r#"{"peer-a":"key-a"}"#);
     }
 }
