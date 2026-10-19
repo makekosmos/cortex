@@ -57,7 +57,7 @@ The staged `ObjectMutationSession` design keeps more policy in Application, but 
 
 ## Implementation reconciliation
 
-The first implementation unit moved pure canonical object-write validation and the retired task-type identifier into `ark-domain`. The second moved persisted type resolution and the canonical ingress entry point to `ark-store`, migrated callers, and deleted the Core ingress module. The upsert/delete input and commit types now belong to `ark-application`, while Core re-exports the old internal paths until the actor command migration lands. The broader command cutover remains open because Core still owns SQL sequencing and the transaction. Candidate files and the cross-judge verdict are `/tmp/ark-object-mutation-candidate-a.md`, `/tmp/ark-object-mutation-candidate-b.md`, and `/tmp/ark-object-mutation-judge.md`.
+The first implementation unit moved pure canonical object-write validation and the retired task-type identifier into `ark-domain`. The second moved persisted type resolution and the canonical ingress entry point to `ark-store`, migrated callers, and deleted the Core ingress module. The upsert/delete input and commit types now belong to `ark-application`, while Core re-exports the old internal paths until the actor command migration lands. The unsupported `core.task` check and expected-snapshot conflict decision for local upsert now run through a pure Application function with focused tests. The broader command cutover remains open because Core still owns SQL sequencing and the transaction. Candidate files and the cross-judge verdict are `/tmp/ark-object-mutation-candidate-a.md`, `/tmp/ark-object-mutation-candidate-b.md`, and `/tmp/ark-object-mutation-judge.md`.
 
 ## Open questions and risks
 

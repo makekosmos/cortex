@@ -12,6 +12,7 @@
 - [x] Verify the Store-owned ingress with `cargo check -p ark-domain -p ark-store -p ark-core --all-targets` and the canonical task, object-revision, and Agenda contract tests (16/16).
 - [x] Move object upsert/delete request and commit types to `ark-application`; preserve Core's existing internal paths as re-exports during command migration.
 - [x] Verify the contract move with `cargo check -p ark-application -p ark-core --all-targets` and the canonical task, object-revision, and Agenda contract tests (16/16).
+- [x] Move local upsert type and stale-snapshot decisions into a pure Application function; verify both outcomes with focused Application tests and existing Core regressions.
 - [ ] Scrap: if implementation requires repeated Core/Store ownership workarounds, re-ground and replace the sketch instead of patching around it.
 
 ## Arena

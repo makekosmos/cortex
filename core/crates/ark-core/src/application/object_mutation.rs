@@ -126,14 +126,16 @@ pub fn apply_object_upsert(
     session: &dyn ObjectMutationSession,
     write: LocalObjectUpsert,
 ) -> Result<ObjectUpsertCommit, String> {
-    if write.object.type_id == "core.task" {
-        return Err("object_write_slice_unsupported_type".into());
-    }
-    if let Some(expected) = &write.expected_snapshot {
-        if session.object_snapshot(&write.object.id)? != *expected {
-            return Err("object_conflict:stale_snapshot".into());
-        }
-    }
+    let current_snapshot = write
+        .expected_snapshot
+        .as_ref()
+        .map(|_| session.object_snapshot(&write.object.id))
+        .transpose()?;
+    ark_application::object_mutation::validate_local_object_upsert(
+        &write,
+        current_snapshot.as_ref(),
+    )
+    .map_err(|error| error.to_string())?;
     let object = session.prepare_object(write.object)?;
     session.persist_object(&object)?;
     let hlc = session.record_upsert(ObjectRevisionKind::Object, &object.id, &write.device_id)?;
