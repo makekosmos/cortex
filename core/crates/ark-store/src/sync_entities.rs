@@ -9,7 +9,7 @@ mod inbound;
 mod policy_bound;
 pub use apply::{apply_inbound_object_snapshot, InboundObjectRevision};
 pub use canonical_apply::{apply_canonical_object_entity, apply_remote_task_delete};
-pub use inbound::apply_inbound_entity;
+pub use inbound::{apply_inbound_entity, apply_legacy_compat_entity};
 pub use policy_bound::read_policy_bound_page;
 
 fn load_usage_sequence_page(

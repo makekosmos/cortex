@@ -161,11 +161,9 @@ impl SqliteStorageBackend {
         let mut outcome = ark_application::sync_storage::InboundApplyOutcome::Applied;
         let result = match entity.entity_type.as_str() {
             "todo" | "project" | "tag" => {
-                crate::canonical_types::facades::apply_legacy_compat_entity(conn, entity).map(
-                    |applied| {
-                        outcome = applied;
-                    },
-                )
+                ark_store::sync_entities::apply_legacy_compat_entity(conn, entity).map(|applied| {
+                    outcome = applied;
+                })
             }
             "area" | "heading" => Err("LegacyPlanningReadOnly".into()),
             "tracked_app" => serde_json::from_value::<TrackedApp>(value)

@@ -159,7 +159,7 @@ fn apply_mutation(
     Ok((outcome, notices))
 }
 
-fn apply_legacy_compat_entity(
+pub fn apply_legacy_compat_entity(
     connection: &Connection,
     entity: &SyncEntity,
 ) -> Result<InboundApplyOutcome, String> {
