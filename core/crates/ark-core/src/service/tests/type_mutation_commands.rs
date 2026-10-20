@@ -54,18 +54,16 @@ async fn package_type_registration_rolls_back_the_whole_batch() {
     .await;
     assert!(result.is_err(), "invalid package definition must fail");
 
-    let count = with_conn(&state, |connection| {
-        connection
-            .query_row(
-                "SELECT COUNT(*) FROM object_types WHERE id = 'test.package.first'",
-                [],
-                |row| row.get::<_, i64>(0),
-            )
-            .map_err(|error| error.to_string())
-    })
-    .unwrap();
-    assert_eq!(
-        count, 0,
+    assert!(
+        handle_request(
+            &state,
+            Request::GetObjectType {
+                id: "test.package.first".into(),
+            },
+        )
+        .await
+        .unwrap()
+        .is_null(),
         "earlier registrations must roll back with the batch"
     );
 }
@@ -102,24 +100,12 @@ async fn replay_notice_is_published_only_after_the_local_type_write_commits() {
         origin_device_id: None,
         origin_seq: None,
     };
-    with_conn(&state, |connection| {
-        ark_store::pending_objects::insert_pending_object(connection, &pending, TYPE_ID)
-    })
-    .unwrap();
-
-    with_conn(&state, |connection| {
-        connection
-            .execute_batch(
-                "CREATE TRIGGER fail_type_revision_insert BEFORE INSERT ON sync_kv \
-                 WHEN NEW.key = 'lan_sync.version_vector' BEGIN \
-                 SELECT RAISE(ABORT, 'injected type revision failure'); END; \
-                 CREATE TRIGGER fail_type_revision_update BEFORE UPDATE ON sync_kv \
-                 WHEN OLD.key = 'lan_sync.version_vector' BEGIN \
-                 SELECT RAISE(ABORT, 'injected type revision failure'); END;",
-            )
-            .map_err(|error| error.to_string())
-    })
-    .unwrap();
+    let type_fixture =
+        ark_store::test_support::TypeMutationFixture::open(&fixture.db_path()).unwrap();
+    type_fixture
+        .insert_pending_object(&pending, TYPE_ID)
+        .unwrap();
+    type_fixture.reject_sync_revision_writes().unwrap();
 
     let mut events = crate::events::subscribe();
     let object_type = crate::types::ObjectType {
@@ -145,36 +131,16 @@ async fn replay_notice_is_published_only_after_the_local_type_write_commits() {
         "a replay notice must not escape a rolled-back transaction"
     );
 
-    let state_after_failure = with_conn(&state, |connection| {
-        let type_count = connection
-            .query_row(
-                "SELECT COUNT(*) FROM object_types WHERE id = ?1",
-                [TYPE_ID],
-                |row| row.get::<_, i64>(0),
-            )
-            .map_err(|error| error.to_string())?;
-        let pending_count = ark_store::pending_objects::count_for_type(connection, TYPE_ID)?;
-        let object_count = connection
-            .query_row(
-                "SELECT COUNT(*) FROM objects WHERE id = ?1",
-                [ENTITY_ID],
-                |row| row.get::<_, i64>(0),
-            )
-            .map_err(|error| error.to_string())?;
-        Ok((type_count, pending_count, object_count))
-    })
-    .unwrap();
-    assert_eq!(state_after_failure, (0, 1, 0));
+    assert_eq!(
+        type_fixture.inspect(TYPE_ID, ENTITY_ID).unwrap(),
+        ark_store::test_support::TypeMutationState {
+            registered: false,
+            pending_objects: 1,
+            object_exists: false,
+        }
+    );
 
-    with_conn(&state, |connection| {
-        connection
-            .execute_batch(
-                "DROP TRIGGER fail_type_revision_insert; \
-                 DROP TRIGGER fail_type_revision_update;",
-            )
-            .map_err(|error| error.to_string())
-    })
-    .unwrap();
+    type_fixture.allow_sync_revision_writes().unwrap();
     handle_request(
         &state,
         Request::UpsertObjectType {
@@ -196,17 +162,12 @@ async fn replay_notice_is_published_only_after_the_local_type_write_commits() {
             "type_id": TYPE_ID,
         })
     );
-    let final_counts = with_conn(&state, |connection| {
-        let pending_count = ark_store::pending_objects::count_for_type(connection, TYPE_ID)?;
-        let object_count = connection
-            .query_row(
-                "SELECT COUNT(*) FROM objects WHERE id = ?1",
-                [ENTITY_ID],
-                |row| row.get::<_, i64>(0),
-            )
-            .map_err(|error| error.to_string())?;
-        Ok((pending_count, object_count))
-    })
-    .unwrap();
-    assert_eq!(final_counts, (0, 1));
+    assert_eq!(
+        type_fixture.inspect(TYPE_ID, ENTITY_ID).unwrap(),
+        ark_store::test_support::TypeMutationState {
+            registered: true,
+            pending_objects: 0,
+            object_exists: true,
+        }
+    );
 }
