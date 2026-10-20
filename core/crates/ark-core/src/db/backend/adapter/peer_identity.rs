@@ -208,7 +208,7 @@ impl PeerIdentityBackend for SqliteStorageBackend {
         device_id: &str,
     ) -> Result<Option<String>, String> {
         self.db
-            .query(
+            .query_with_store(
                 CommandContext::sync_peer(device_id.to_owned(), CommandClass::SyncLive),
                 AuthorizedTransportKeyQuery::new(device_id.to_owned()),
             )

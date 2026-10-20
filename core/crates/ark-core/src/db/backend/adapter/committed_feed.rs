@@ -38,7 +38,7 @@ impl ark_application::sync_storage::CommittedFeedPort for SqliteStorageBackend {
         &self,
     ) -> Result<ark_application::sync_storage::FeedSnapshot, String> {
         self.db
-            .query(
+            .query_with_store(
                 CommandContext::sync_system(CommandClass::SyncLive),
                 crate::db::CommittedFeedSnapshotQuery,
             )
@@ -53,7 +53,7 @@ impl ark_application::sync_storage::CommittedFeedPort for SqliteStorageBackend {
         limit: usize,
     ) -> Result<Vec<ark_application::sync_storage::CommittedFeedEntry>, String> {
         self.db
-            .query(
+            .query_with_store(
                 CommandContext::sync_system(CommandClass::SyncLive),
                 crate::db::CommittedFeedPageQuery::new(after_position, high_watermark, limit),
             )
@@ -68,7 +68,7 @@ impl ark_application::sync_storage::CommittedFeedPort for SqliteStorageBackend {
         limit: usize,
     ) -> Result<ark_application::sync_storage::CommittedFeedDeliveryPage, String> {
         self.db
-            .query(
+            .query_with_store(
                 CommandContext::sync_system(CommandClass::SyncLive),
                 crate::db::CommittedFeedDeliveryPageQuery::new(
                     after_position,

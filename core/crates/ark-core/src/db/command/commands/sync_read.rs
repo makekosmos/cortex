@@ -1,9 +1,8 @@
-use super::super::{sealed, CommandClass, CommandContext, DbError, DbQuery};
+use super::super::{sealed, CommandClass, CommandContext, DbError, StoreReadQuery};
 use crate::types::{SyncEntity, VersionVector};
 use ark_application::sync_storage::SyncReadClass;
 use ark_application::sync_storage::{CommittedFeedDeliveryPage, CommittedFeedEntry, FeedSnapshot};
 use ark_domain::selective_sync::SelectiveSyncProfile;
-use rusqlite::Connection;
 use serde::Serialize;
 use std::collections::HashMap;
 
@@ -73,7 +72,7 @@ impl LoadEntitiesQuery {
 
 impl sealed::Sealed for LoadEntitiesQuery {}
 
-impl DbQuery for LoadEntitiesQuery {
+impl StoreReadQuery for LoadEntitiesQuery {
     type Output = Vec<SyncEntity>;
 
     fn class(&self) -> CommandClass {
@@ -89,9 +88,9 @@ impl DbQuery for LoadEntitiesQuery {
     fn read(
         self,
         context: &CommandContext,
-        connection: &Connection,
+        capabilities: &ark_store::ReadCapabilities<'_>,
     ) -> Result<Self::Output, DbError> {
-        self.read_with_policy_identity(context, connection)
+        self.read_with_policy_identity(context, capabilities)
             .map(|(_, entities)| entities)
     }
 }
@@ -100,7 +99,7 @@ impl LoadEntitiesQuery {
     pub(super) fn read_with_policy_identity(
         self,
         context: &CommandContext,
-        connection: &Connection,
+        capabilities: &ark_store::ReadCapabilities<'_>,
     ) -> Result<
         (
             Option<ark_application::sync_storage::PolicyIdentity>,
@@ -120,11 +119,10 @@ impl LoadEntitiesQuery {
         let mut policy_identity = None;
         if let Some(peer_device_id) = peer_device_id {
             context.require_sync_peer_matches(&peer_device_id)?;
-            let policy = ark_store::data_platform::load_accepted_peer_sync_policy(
-                connection,
-                &peer_device_id,
-            )
-            .map_err(DbError::from_application_error)?;
+            let policy = capabilities
+                .sync()
+                .accepted_peer_policy(&peer_device_id)
+                .map_err(DbError::from_application_error)?;
             policy_identity = Some(policy.as_ref().map_or_else(
                 ark_application::sync_policy::default_sync_policy_identity,
                 |policy| policy.identity(),
@@ -132,23 +130,26 @@ impl LoadEntitiesQuery {
             profile = policy.and_then(|policy| policy.active.then(|| policy.selective_profile()));
         }
         let entities = match page {
-            None => ark_store::sync_entities::collect_entities(connection, &vector, &device_id)
+            None => capabilities
+                .sync()
+                .collect_entities(&vector, &device_id)
                 .map_err(DbError::Storage)?,
             Some((offset, limit)) => {
                 if let Some(profile) = &profile {
-                    let all =
-                        ark_store::sync_entities::collect_entities(connection, &vector, &device_id)
-                            .map_err(DbError::Storage)?;
+                    let all = capabilities
+                        .sync()
+                        .collect_entities(&vector, &device_id)
+                        .map_err(DbError::Storage)?;
                     ark_domain::selective_sync::filter_entities_for_profile(profile, &all)
                         .into_iter()
                         .skip(offset)
                         .take(limit)
                         .collect()
                 } else {
-                    ark_store::sync_entities::collect_entities_page(
-                        connection, &vector, &device_id, offset, limit,
-                    )
-                    .map_err(DbError::Storage)?
+                    capabilities
+                        .sync()
+                        .collect_entities_page(&vector, &device_id, offset, limit)
+                        .map_err(DbError::Storage)?
                 }
             }
         };
@@ -177,7 +178,7 @@ impl UsageCompleteThroughQuery {
 
 impl sealed::Sealed for UsageCompleteThroughQuery {}
 
-impl DbQuery for UsageCompleteThroughQuery {
+impl StoreReadQuery for UsageCompleteThroughQuery {
     type Output = HashMap<String, u64>;
 
     fn class(&self) -> CommandClass {
@@ -191,16 +192,13 @@ impl DbQuery for UsageCompleteThroughQuery {
     fn read(
         self,
         context: &CommandContext,
-        connection: &Connection,
+        capabilities: &ark_store::ReadCapabilities<'_>,
     ) -> Result<Self::Output, DbError> {
         if context.class != self.class {
             return Err(DbError::Invalid("sync query class mismatch".into()));
         }
         context.require_sync_peer_or_system()?;
-        Ok(
-            ark_store::usage_sync_log::usage_log_complete_through(connection, None)
-                .unwrap_or_default(),
-        )
+        Ok(capabilities.sync().usage_complete_through())
     }
 }
 
@@ -209,7 +207,7 @@ pub(crate) struct CommittedFeedSnapshotQuery;
 
 impl sealed::Sealed for CommittedFeedSnapshotQuery {}
 
-impl DbQuery for CommittedFeedSnapshotQuery {
+impl StoreReadQuery for CommittedFeedSnapshotQuery {
     type Output = FeedSnapshot;
 
     fn class(&self) -> CommandClass {
@@ -223,10 +221,13 @@ impl DbQuery for CommittedFeedSnapshotQuery {
     fn read(
         self,
         context: &CommandContext,
-        connection: &Connection,
+        capabilities: &ark_store::ReadCapabilities<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_sync_peer_or_system()?;
-        ark_store::committed_feed::committed_feed_snapshot(connection).map_err(DbError::Storage)
+        capabilities
+            .sync()
+            .committed_feed_snapshot()
+            .map_err(DbError::Storage)
     }
 }
 
@@ -249,7 +250,7 @@ impl CommittedFeedPageQuery {
 
 impl sealed::Sealed for CommittedFeedPageQuery {}
 
-impl DbQuery for CommittedFeedPageQuery {
+impl StoreReadQuery for CommittedFeedPageQuery {
     type Output = Vec<CommittedFeedEntry>;
 
     fn class(&self) -> CommandClass {
@@ -263,16 +264,13 @@ impl DbQuery for CommittedFeedPageQuery {
     fn read(
         self,
         context: &CommandContext,
-        connection: &Connection,
+        capabilities: &ark_store::ReadCapabilities<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_sync_peer_or_system()?;
-        ark_store::committed_feed::read_committed_feed_page(
-            connection,
-            self.after_position,
-            self.high_watermark,
-            self.limit,
-        )
-        .map_err(DbError::Storage)
+        capabilities
+            .sync()
+            .committed_feed_page(self.after_position, self.high_watermark, self.limit)
+            .map_err(DbError::Storage)
     }
 }
 
@@ -295,7 +293,7 @@ impl CommittedFeedDeliveryPageQuery {
 
 impl sealed::Sealed for CommittedFeedDeliveryPageQuery {}
 
-impl DbQuery for CommittedFeedDeliveryPageQuery {
+impl StoreReadQuery for CommittedFeedDeliveryPageQuery {
     type Output = CommittedFeedDeliveryPage;
 
     fn class(&self) -> CommandClass {
@@ -309,17 +307,18 @@ impl DbQuery for CommittedFeedDeliveryPageQuery {
     fn read(
         self,
         context: &CommandContext,
-        connection: &Connection,
+        capabilities: &ark_store::ReadCapabilities<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_sync_peer_or_system()?;
-        ark_store::committed_feed::read_committed_feed_delivery_page(
-            connection,
-            self.after_position,
-            self.high_watermark,
-            self.limit,
-            crate::db::MAX_FEED_DELIVERY_BYTES,
-        )
-        .map_err(DbError::Storage)
+        capabilities
+            .sync()
+            .committed_feed_delivery_page(
+                self.after_position,
+                self.high_watermark,
+                self.limit,
+                crate::db::MAX_FEED_DELIVERY_BYTES,
+            )
+            .map_err(DbError::Storage)
     }
 }
 
@@ -336,7 +335,7 @@ impl GetSyncKeyValueQuery {
 
 impl sealed::Sealed for GetSyncKeyValueQuery {}
 
-impl DbQuery for GetSyncKeyValueQuery {
+impl StoreReadQuery for GetSyncKeyValueQuery {
     type Output = Option<String>;
 
     fn class(&self) -> CommandClass {
@@ -350,10 +349,13 @@ impl DbQuery for GetSyncKeyValueQuery {
     fn read(
         self,
         context: &CommandContext,
-        connection: &Connection,
+        capabilities: &ark_store::ReadCapabilities<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_system_sync()?;
-        ark_store::sync_kv::get_sync_kv(connection, &self.key).map_err(DbError::Storage)
+        capabilities
+            .sync()
+            .sync_key_value(&self.key)
+            .map_err(DbError::Storage)
     }
 }
 
@@ -370,7 +372,7 @@ impl AuthorizedTransportKeyQuery {
 
 impl sealed::Sealed for AuthorizedTransportKeyQuery {}
 
-impl DbQuery for AuthorizedTransportKeyQuery {
+impl StoreReadQuery for AuthorizedTransportKeyQuery {
     type Output = Option<String>;
 
     fn class(&self) -> CommandClass {
@@ -384,16 +386,15 @@ impl DbQuery for AuthorizedTransportKeyQuery {
     fn read(
         self,
         context: &CommandContext,
-        connection: &Connection,
+        capabilities: &ark_store::ReadCapabilities<'_>,
     ) -> Result<Self::Output, DbError> {
         if context.authenticated_peer_id()? != self.device_id {
             return Err(DbError::Permission("sync peer principal mismatch".into()));
         }
-        Ok(
-            ark_store::integration_replication::load_authorized_node(connection, &self.device_id)
-                .map_err(DbError::Storage)?
-                .and_then(|node| node.transport_public_key),
-        )
+        capabilities
+            .sync()
+            .authorized_transport_key(&self.device_id)
+            .map_err(DbError::Storage)
     }
 }
 

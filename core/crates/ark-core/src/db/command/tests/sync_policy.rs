@@ -22,7 +22,7 @@ async fn sync_progress_write_commits_through_store_owned_actor_transaction() {
         .await
         .unwrap();
     let value = handle
-        .query(
+        .query_with_store(
             CommandContext::sync_system(CommandClass::SyncLive),
             GetSyncKeyValueQuery::new("sync.progress.test".into()),
         )

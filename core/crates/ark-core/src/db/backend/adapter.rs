@@ -32,7 +32,7 @@ async fn load_progress_value<T: DeserializeOwned>(
 ) -> Result<Option<T>, String> {
     let raw = storage
         .db
-        .query(
+        .query_with_store(
             CommandContext::sync_system(CommandClass::SyncLive),
             GetSyncKeyValueQuery::new(key.to_owned()),
         )
@@ -84,7 +84,7 @@ impl SqliteStorageBackend {
 impl SyncEntityReadPort for SqliteStorageBackend {
     async fn load_entities(&self, vector: &VersionVector) -> Result<Vec<SyncEntity>, String> {
         self.db
-            .query(
+            .query_with_store(
                 CommandContext::sync_system(CommandClass::SyncLive),
                 LoadEntitiesQuery::all(
                     vector.clone(),
@@ -105,7 +105,7 @@ impl SyncEntityReadPort for SqliteStorageBackend {
     ) -> Result<Vec<SyncEntity>, String> {
         let class = SyncReadClass::for_peer_vector(vector);
         self.db
-            .query(
+            .query_with_store(
                 CommandContext::sync_system(class.into()),
                 LoadEntitiesQuery::page(
                     vector.clone(),
@@ -129,7 +129,7 @@ impl SyncEntityReadPort for SqliteStorageBackend {
         limit: usize,
     ) -> Result<Vec<SyncEntity>, String> {
         self.db
-            .query(
+            .query_with_store(
                 CommandContext::sync_peer(peer_device_id.to_owned(), class.into()),
                 LoadEntitiesQuery::page_for_peer(
                     vector.clone(),
@@ -184,7 +184,7 @@ impl SyncEntityReadPort for SqliteStorageBackend {
         &self,
     ) -> Result<std::collections::HashMap<String, u64>, String> {
         self.db
-            .query(
+            .query_with_store(
                 CommandContext::sync_system(CommandClass::SyncLive),
                 UsageCompleteThroughQuery::new(SyncReadClass::SyncLive),
             )
@@ -198,7 +198,7 @@ impl SyncEntityReadPort for SqliteStorageBackend {
         class: SyncReadClass,
     ) -> Result<std::collections::HashMap<String, u64>, String> {
         self.db
-            .query(
+            .query_with_store(
                 CommandContext::sync_peer(peer_device_id.to_owned(), class.into()),
                 UsageCompleteThroughQuery::new(class),
             )
