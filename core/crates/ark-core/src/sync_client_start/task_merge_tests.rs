@@ -89,7 +89,7 @@ async fn authenticated_direct_sync_delivers_task_merge_batches_over_the_wire() {
     let mut receiver = open_peer(&directory.path().join("receiver.sqlite"), "merge-receiver").await;
     sender
         .db
-        .submit(
+        .enroll_paired_device(
             CommandContext::engine(),
             EnrollPairedDeviceCommand::new(
                 "merge-sender".into(),
@@ -101,7 +101,7 @@ async fn authenticated_direct_sync_delivers_task_merge_batches_over_the_wire() {
         .unwrap();
     receiver
         .db
-        .submit(
+        .enroll_paired_device(
             CommandContext::engine(),
             EnrollPairedDeviceCommand::new(
                 "merge-receiver".into(),

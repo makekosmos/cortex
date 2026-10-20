@@ -11,6 +11,7 @@ test-support = []
 [dependencies]
 ark-application = { path = "../ark-application" }
 ark-domain = { path = "../ark-domain" }
+ed25519-dalek.workspace = true
 chrono.workspace = true
 rusqlite.workspace = true
 serde.workspace = true

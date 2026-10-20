@@ -24,7 +24,7 @@ pub(crate) use ark_application::task_object_write::{
     RemoteCoreTaskOutcome, TaskWriteOperationResult,
 };
 #[cfg(test)]
-pub(crate) use device_registry::DeviceEnrollmentOutcome;
+pub(crate) use ark_store::writer::DeviceEnrollmentOutcome;
 pub(crate) use device_registry::EnrollPairedDeviceCommand;
 pub(crate) use device_registry_admission::{
     RegistryDeviceEnabledQuery, RegistryPeerAdmissionQuery,

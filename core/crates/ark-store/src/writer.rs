@@ -6,10 +6,14 @@ mod device_registry;
 mod error;
 mod integration_admin;
 mod legacy_mutation;
+mod registry_local_mutation;
 pub use device_registry::{DeviceRegistryWrites, RegistryEventApplyError};
 #[cfg(debug_assertions)]
 pub use integration_admin::apply_integration_admin_on_connection;
 pub use integration_admin::IntegrationAdminWrites;
+pub use registry_local_mutation::{
+    DeviceEnrollmentOutcome, RegistryLocalMutationError, RegistryLocalWrites,
+};
 mod iroh_identity;
 mod signed_integration_frame;
 mod sync_key_value;

@@ -22,7 +22,7 @@ async fn paired_device_enrollment_is_atomic_idempotent_and_survives_restart() {
         .unwrap();
 
     let first = handle
-        .submit(
+        .enroll_paired_device(
             CommandContext::engine(),
             EnrollPairedDeviceCommand::new(
                 "local-device".into(),
@@ -51,7 +51,7 @@ async fn paired_device_enrollment_is_atomic_idempotent_and_survives_restart() {
         .await
         .unwrap();
     let retry = handle
-        .submit(
+        .enroll_paired_device(
             CommandContext::engine(),
             EnrollPairedDeviceCommand::new(
                 "local-device".into(),
@@ -135,7 +135,7 @@ async fn paired_device_enrollment_rolls_back_event_projection_and_pin_together()
     });
 
     let result = handle
-        .submit(
+        .enroll_paired_device(
             CommandContext::engine(),
             EnrollPairedDeviceCommand::new("local-device".into(), "paired-device".into(), endpoint),
         )
@@ -185,7 +185,7 @@ async fn registry_history_is_paged_and_remote_events_apply_idempotently() {
         .await
         .unwrap();
     handle
-        .submit(
+        .enroll_paired_device(
             CommandContext::engine(),
             EnrollPairedDeviceCommand::new("local-device".into(), "paired-device".into(), endpoint),
         )
@@ -295,7 +295,7 @@ async fn disabled_peer_cannot_commit_an_inbound_entity_after_session_admission()
         .await
         .unwrap();
     handle
-        .submit(
+        .enroll_paired_device(
             CommandContext::engine(),
             EnrollPairedDeviceCommand::new("local-device".into(), "paired-device".into(), endpoint),
         )
@@ -408,7 +408,7 @@ async fn clear_all_removes_registry_before_iroh_identity_is_cleared() {
         .await
         .unwrap();
     handle
-        .submit(
+        .enroll_paired_device(
             CommandContext::engine(),
             EnrollPairedDeviceCommand::new("local-device".into(), "paired-device".into(), endpoint),
         )

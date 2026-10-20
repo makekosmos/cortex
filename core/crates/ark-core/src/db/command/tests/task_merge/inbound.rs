@@ -111,7 +111,7 @@ async fn two_sqlite_peers_converge_on_the_same_conflict_set() {
         (&right, "right-device", peer_id, left_endpoint),
     ] {
         handle
-            .submit(
+            .enroll_paired_device(
                 CommandContext::engine(),
                 EnrollPairedDeviceCommand::new(local_id.into(), remote_id.into(), endpoint),
             )
@@ -165,7 +165,7 @@ async fn bootstrap_and_followup_operation_materialize_atomically_and_replay() {
     let peer_id = "bootstrap-peer";
     let endpoint = ark_net::iroh::SecretKey::generate().public().to_string();
     handle
-        .submit(
+        .enroll_paired_device(
             CommandContext::engine(),
             EnrollPairedDeviceCommand::new("merge-test-device".into(), peer_id.into(), endpoint),
         )
@@ -257,7 +257,7 @@ async fn operation_before_bootstrap_stays_unpublished_until_bootstrap_arrives() 
     let peer_id = "pending-bootstrap-peer";
     let endpoint = ark_net::iroh::SecretKey::generate().public().to_string();
     handle
-        .submit(
+        .enroll_paired_device(
             CommandContext::engine(),
             EnrollPairedDeviceCommand::new("merge-test-device".into(), peer_id.into(), endpoint),
         )
@@ -352,7 +352,7 @@ async fn inbound_batch_atomically_applies_remote_resolution_and_replays_idempote
     let peer_id = "paired-peer";
     let endpoint = ark_net::iroh::SecretKey::generate().public().to_string();
     handle
-        .submit(
+        .enroll_paired_device(
             CommandContext::engine(),
             EnrollPairedDeviceCommand::new("merge-test-device".into(), peer_id.into(), endpoint),
         )
@@ -442,7 +442,7 @@ async fn excluded_local_task_category_rejects_incoming_batch_without_advancing_c
     let peer_id = "paired-peer";
     let endpoint = ark_net::iroh::SecretKey::generate().public().to_string();
     handle
-        .submit(
+        .enroll_paired_device(
             CommandContext::engine(),
             EnrollPairedDeviceCommand::new("merge-test-device".into(), peer_id.into(), endpoint),
         )

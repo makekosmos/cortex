@@ -18,7 +18,7 @@ async fn registry_event_batch_rolls_back_prior_events_after_sequence_conflict() 
         .await
         .unwrap();
     handle
-        .submit(
+        .enroll_paired_device(
             CommandContext::engine(),
             EnrollPairedDeviceCommand::new(
                 "local-device".into(),

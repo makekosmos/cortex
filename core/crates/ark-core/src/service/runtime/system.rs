@@ -127,7 +127,7 @@ pub(super) async fn device_registry_rename(
 ) -> Result<Value, String> {
     let local_device_id = local_registry_device_id(state).await?;
     let event = get_db_handle(state)?
-        .submit(
+        .append_local_registry_event(
             db::CommandContext::engine(),
             db::AppendLocalRegistryEventCommand::new(
                 local_device_id,
@@ -151,7 +151,7 @@ pub(super) async fn device_registry_disable(
 ) -> Result<Value, String> {
     let local_device_id = local_registry_device_id(state).await?;
     let event = get_db_handle(state)?
-        .submit(
+        .append_local_registry_event(
             db::CommandContext::engine(),
             db::AppendLocalRegistryEventCommand::new(
                 local_device_id,

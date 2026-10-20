@@ -6,7 +6,7 @@ async fn inbound_batch_rolls_back_earlier_entries_when_a_later_entry_fails() {
     let peer_id = "rollback-peer";
     let endpoint = ark_net::iroh::SecretKey::generate().public().to_string();
     handle
-        .submit(
+        .enroll_paired_device(
             CommandContext::engine(),
             EnrollPairedDeviceCommand::new("merge-test-device".into(), peer_id.into(), endpoint),
         )

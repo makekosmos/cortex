@@ -16,7 +16,7 @@ async fn production_storage_signs_and_verifies_only_active_registry_identities()
         .await
         .unwrap();
     handle
-        .submit(
+        .enroll_paired_device(
             CommandContext::engine(),
             EnrollPairedDeviceCommand::new("local-device".into(), "paired-device".into(), endpoint),
         )

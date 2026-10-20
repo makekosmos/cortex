@@ -18,6 +18,7 @@ mod local_sync_key_value_write;
 mod object_link_mutation;
 mod object_mutation;
 mod registry_events;
+mod registry_local_mutation;
 mod signed_integration_frame;
 mod sync_policy_write;
 mod sync_progress_write;

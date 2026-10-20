@@ -76,7 +76,7 @@ async fn disabled_offline_device_reopens_sqlite_and_catches_up_before_data_admis
 
     let disable = peer_a
         .db
-        .submit(
+        .append_local_registry_event(
             CommandContext::engine(),
             AppendLocalRegistryEventCommand::new(
                 "device-A".into(),

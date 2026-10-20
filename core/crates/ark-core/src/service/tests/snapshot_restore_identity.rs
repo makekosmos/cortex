@@ -61,7 +61,7 @@ async fn db_backup_restore_preserves_live_registry_chain_and_sequence() {
     )
     .await
     .expect("persist local registry identity");
-    db.submit(
+    db.enroll_paired_device(
         db::CommandContext::engine(),
         db::EnrollPairedDeviceCommand::new(
             "restore-device".into(),

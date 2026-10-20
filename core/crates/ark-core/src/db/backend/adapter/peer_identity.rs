@@ -122,7 +122,7 @@ impl PeerIdentityBackend for SqliteStorageBackend {
         transport_public_key: &str,
     ) -> Result<(), String> {
         self.db
-            .submit(
+            .enroll_paired_device(
                 CommandContext::engine(),
                 crate::db::EnrollPairedDeviceCommand::new(
                     local_device_id.to_owned(),

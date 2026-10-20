@@ -10,6 +10,8 @@ mod legacy_mutation_task;
 mod maintenance;
 #[path = "actor/task/registry_events.rs"]
 mod registry_events_task;
+#[path = "actor/task/registry_local_mutation.rs"]
+mod registry_local_mutation_task;
 mod runtime;
 mod task;
 #[path = "actor/task/task_merge_progress.rs"]
@@ -21,6 +23,13 @@ use maintenance::has_maintenance_barrier;
 #[cfg(debug_assertions)]
 pub(in crate::db::command) use registry_events_task::map_error as map_registry_event_error;
 pub(in crate::db::command) use registry_events_task::ApplyRegistryEventsTask;
+#[cfg(debug_assertions)]
+pub(in crate::db::command) use registry_local::map_failure as map_registry_local_mutation_failure;
+#[cfg(debug_assertions)]
+use registry_local_mutation_task as registry_local;
+pub(in crate::db::command) use registry_local_mutation_task::{
+    AppendLocalRegistryEventTask, EnrollPairedDeviceTask,
+};
 use runtime::{actor_loop, panic_message};
 #[cfg(debug_assertions)]
 pub(in crate::db::command) use task::map_inbox_receipt_error;

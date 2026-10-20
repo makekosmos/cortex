@@ -45,7 +45,7 @@ async fn engine_registry_operations_read_and_commit_signed_device_state() {
     )
     .await
     .expect("persist configured device identity");
-    db.submit(
+    db.enroll_paired_device(
         CommandContext::engine(),
         EnrollPairedDeviceCommand::new(
             "local-device".into(),

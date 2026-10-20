@@ -8,7 +8,7 @@ async fn admit_inbound_peer(state: &Arc<ServiceState>) {
     let handle = get_db_handle(state).unwrap();
     let endpoint = ark_net::iroh::SecretKey::generate().public().to_string();
     handle
-        .submit(
+        .enroll_paired_device(
             db::CommandContext::engine(),
             db::EnrollPairedDeviceCommand::new(
                 "ark-core-rpc-local".into(),

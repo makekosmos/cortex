@@ -1,6 +1,5 @@
 use super::super::{sealed, CommandClass, CommandContext, DbError, StoreReadQuery};
 use ark_domain::device_registry::RegistryEvent;
-use rusqlite::Transaction;
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
@@ -141,52 +140,6 @@ impl ApplyRegistryEventsCommand {
             events,
         }
     }
-}
-
-pub(super) fn apply_events(
-    transaction: &Transaction<'_>,
-    events: &[RegistryEvent],
-) -> Result<Vec<RegistryEvent>, DbError> {
-    let mut registry =
-        ark_store::device_registry::load_registry(transaction).map_err(DbError::Storage)?;
-    let mut applied_events = Vec::new();
-    for event in events {
-        let event_json =
-            serde_json::to_string(event).map_err(|error| DbError::Storage(error.to_string()))?;
-        let existing = ark_store::device_registry::event_json_for_actor_sequence(
-            transaction,
-            event.actor_device_id().as_str(),
-            event.actor_sequence(),
-        )
-        .map_err(DbError::Storage)?;
-        if let Some(existing) = existing {
-            if existing == event_json {
-                continue;
-            }
-            return Err(DbError::Conflict(
-                "device_registry_sequence_conflict".into(),
-            ));
-        }
-        let outcome = registry
-            .apply(event.clone())
-            .map_err(|error| DbError::Permission(error.to_string()))?;
-        let ark_domain::device_registry::RegistryApplyOutcome::Applied { event_hash } = outcome;
-        let target = registry
-            .device(event.target_device_id())
-            .ok_or_else(|| DbError::Storage("device_registry_target_missing_after_apply".into()))?;
-        i64::try_from(event.actor_sequence())
-            .map_err(|_| DbError::Conflict("device_registry_sequence_exhausted".into()))?;
-        ark_store::device_registry::persist_event_and_projection(
-            transaction,
-            event,
-            &event_hash,
-            &event_json,
-            target,
-        )
-        .map_err(DbError::Storage)?;
-        applied_events.push(event.clone());
-    }
-    Ok(applied_events)
 }
 
 impl ApplyRegistryEventsCommand {
