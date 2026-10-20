@@ -16,7 +16,7 @@ mod registry_enrollment;
 pub use actor_log::{ActorLogEntry, ActorLogOrder, ActorTestLog};
 pub use inbox::has_inbox_receipt;
 pub use legacy_writes::{
-    LegacyBatchRollbackState, LegacyProjectDeleteState, LegacyWriteFailureFixture,
+    LegacyBatchRollbackState, LegacyProjectDeleteState, LegacyWriteFixture, LegacyWriteSnapshot,
 };
 pub use production_actor::{ActorFailureProbeState, CompetingWriter, ProductionActorFailureProbe};
 pub use registry_enrollment::{reject_paired_device_projection, reject_remote_device_rename};

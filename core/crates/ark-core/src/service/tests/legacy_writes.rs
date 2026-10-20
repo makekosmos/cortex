@@ -169,142 +169,65 @@ async fn legacy_entity_writes_bump_version_vector() {
     .await
     .unwrap();
 
-    let shared = get_db_handle(&state)
-        .map(|db| db.shared_connection_for_test())
-        .unwrap();
-    let failure_fixture =
-        ark_store::test_support::LegacyWriteFailureFixture::open(&db_path).unwrap();
-    {
-        let guard = shared.lock().unwrap();
-        let raw = ark_store::sync_kv::get_sync_kv(&guard, "lan_sync.version_vector")
-            .unwrap()
-            .expect("version vector should be stored");
-        let vector: VersionVector = serde_json::from_str(&raw).unwrap();
-        for id in [
-            "project-legacy",
-            "tag-legacy",
-            "todo-legacy",
-            "todo-batch-1",
-            "todo-batch-2",
-            "tracked-app-legacy",
-        ] {
-            assert!(
-                vector
-                    .get(id)
-                    .is_some_and(|hlc| hlc.ends_with(":device-legacy")),
-                "{id} should have a local HLC in the version vector after legacy upsert",
-            );
-        }
-        assert!(vector
-            .get("todo-canonical-cutover")
-            .is_some_and(|hlc| hlc.ends_with(":device-canonical")));
-        let task_link_id: String = guard
-            .query_row(
-                "SELECT id FROM object_links WHERE source_object_id = 'todo-legacy' LIMIT 1",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert!(vector
-            .get(&task_link_id)
-            .is_some_and(|hlc| hlc.ends_with(":device-legacy")));
-
-        let todo_tombstone: i64 = guard
-            .query_row(
-                "SELECT COUNT(*) FROM sync_tombstones WHERE id = ?1 AND entity_type = ?2",
-                rusqlite::params!["todo-batch-1", "object"],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(todo_tombstone, 1, "DeleteTodo должен записать tombstone");
-        let tracked_app_tombstones: i64 = guard
-            .query_row(
-                "SELECT COUNT(*) FROM sync_tombstones WHERE id = ?1 AND entity_type = ?2",
-                rusqlite::params!["tracked-app-legacy", "tracked_app"],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(tracked_app_tombstones, 1, "tracked-app deletion is synced");
-        let legacy_deleted_at: Option<String> = guard
-            .query_row(
-                "SELECT deleted_at FROM objects WHERE id = 'todo-batch-1'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
+    let fixture = ark_store::test_support::LegacyWriteFixture::open(&db_path).unwrap();
+    let snapshot = fixture.inspect_successful_writes().unwrap();
+    for id in [
+        "project-legacy",
+        "tag-legacy",
+        "todo-legacy",
+        "todo-batch-1",
+        "todo-batch-2",
+        "tracked-app-legacy",
+    ] {
         assert!(
-            legacy_deleted_at.is_some(),
-            "DeleteTodo keeps a soft-deleted task row"
+            snapshot
+                .version_vector
+                .get(id)
+                .is_some_and(|hlc| hlc.ends_with(":device-legacy")),
+            "{id} should have a local HLC in the version vector after legacy upsert",
         );
-        let canonical_row_count: i64 = guard
-            .query_row(
-                "SELECT COUNT(*) FROM objects WHERE id = 'todo-canonical-cutover'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(
-            canonical_row_count, 0,
-            "canonical DeleteObject hard-deletes the task row"
-        );
-        let receipt_count: i64 = guard
-            .query_row(
-                "SELECT COUNT(*) FROM entity_write_receipts
-                 WHERE entity_kind = 'object' AND entity_id = 'todo-canonical-cutover'
-                   AND outcome = 'applied'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(
-            receipt_count, 1,
-            "canonical task upsert keeps its entity receipt"
-        );
-        let committed_feed_count: i64 = guard
-            .query_row(
-                "SELECT COUNT(*) FROM ark_committed_feed
-                 WHERE entity_type = 'object' AND entity_id IN
-                   ('todo-legacy', 'todo-batch-1', 'todo-batch-2', 'todo-canonical-cutover')",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(
-            committed_feed_count, 6,
-            "task writes and deletes stay in committed feed"
-        );
-        let merge_bootstrap_count: i64 = guard
-            .query_row("SELECT COUNT(*) FROM task_merge_bootstraps", [], |row| {
-                row.get(0)
-            })
-            .unwrap();
-        assert_eq!(
-            merge_bootstrap_count, 4,
-            "each task enters causal sync in the same transaction as its write"
-        );
-        let existence_operation_count: i64 = guard
-            .query_row(
-                "SELECT COUNT(*) FROM task_merge_operations
-                 WHERE unit = '\"objectExistence\"'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(
-            existence_operation_count, 6,
-            "each baseline records existence and both deletion modes append a causal tombstone"
-        );
-        let tracked_app_tombstone: i64 = guard
-            .query_row(
-                "SELECT COUNT(*) FROM sync_tombstones WHERE id = ?1 AND entity_type = ?2",
-                rusqlite::params!["tracked-app-legacy", "tracked_app"],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(tracked_app_tombstone, 1);
-
-        failure_fixture.install_todo_batch_failure().unwrap();
     }
+    assert!(snapshot
+        .version_vector
+        .get("todo-canonical-cutover")
+        .is_some_and(|hlc| hlc.ends_with(":device-canonical")));
+    assert!(snapshot
+        .version_vector
+        .get(&snapshot.task_link_id)
+        .is_some_and(|hlc| hlc.ends_with(":device-legacy")));
+    assert!(
+        snapshot.todo_tombstone_exists,
+        "DeleteTodo writes a tombstone"
+    );
+    assert!(
+        snapshot.tracked_app_tombstone_exists,
+        "tracked-app deletion is synced"
+    );
+    assert!(
+        snapshot.legacy_todo_deleted_at.is_some(),
+        "DeleteTodo keeps a soft-deleted task row"
+    );
+    assert!(
+        !snapshot.canonical_object_exists,
+        "canonical DeleteObject hard-deletes the task row"
+    );
+    assert_eq!(
+        snapshot.canonical_applied_receipt_count, 1,
+        "canonical task upsert keeps its entity receipt"
+    );
+    assert_eq!(
+        snapshot.committed_task_feed_count, 6,
+        "task writes and deletes stay in committed feed"
+    );
+    assert_eq!(
+        snapshot.task_merge_bootstrap_count, 4,
+        "each task enters causal sync in the same transaction as its write"
+    );
+    assert_eq!(
+        snapshot.task_existence_operation_count, 6,
+        "each baseline records existence and both deletion modes append a causal tombstone"
+    );
+    fixture.install_todo_batch_failure().unwrap();
     let failed = handle_request(
         &state,
         Request::BatchUpsertTodos {
@@ -315,7 +238,7 @@ async fn legacy_entity_writes_bump_version_vector() {
     .await;
     assert!(failed.is_err());
     for id in ["todo-fail-1", "todo-fail-2"] {
-        let state = failure_fixture.inspect_batch_todo(id).unwrap();
+        let state = fixture.inspect_batch_todo(id).unwrap();
         assert_eq!(
             state,
             ark_store::test_support::LegacyBatchRollbackState {
@@ -326,7 +249,7 @@ async fn legacy_entity_writes_bump_version_vector() {
             "failed batch must roll back every write for {id}"
         );
     }
-    failure_fixture.install_project_delete_failure().unwrap();
+    fixture.install_project_delete_failure().unwrap();
     let failed_delete = handle_request(
         &state,
         Request::DeleteProject {
@@ -337,7 +260,7 @@ async fn legacy_entity_writes_bump_version_vector() {
     .await;
     assert!(failed_delete.is_err());
     assert_eq!(
-        failure_fixture.inspect_project_delete().unwrap(),
+        fixture.inspect_project_delete().unwrap(),
         ark_store::test_support::LegacyProjectDeleteState {
             deleted_at: None,
             tombstone_exists: false,
