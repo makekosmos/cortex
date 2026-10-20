@@ -68,7 +68,7 @@ pub(super) async fn upsert_todo(
         None,
     );
     let entities = get_db_handle(state)?
-        .submit(
+        .write_legacy_graph(
             db::CommandContext::engine(),
             db::LegacyGraphWriteCommand::new(
                 crate::application::legacy_mutation::LegacyGraphWrite {
@@ -89,7 +89,7 @@ pub(super) async fn delete_todo(
     device_id: Option<String>,
 ) -> Result<Value, String> {
     let entity = get_db_handle(state)?
-        .submit(
+        .delete_legacy_object(
             db::CommandContext::engine(),
             db::LegacyDeleteCommand::new(crate::application::legacy_mutation::LegacyDelete {
                 id,
@@ -109,7 +109,7 @@ pub(super) async fn delete_project(
     device_id: Option<String>,
 ) -> Result<Value, String> {
     let entity = get_db_handle(state)?
-        .submit(
+        .delete_legacy_object(
             db::CommandContext::engine(),
             db::LegacyDeleteCommand::new(crate::application::legacy_mutation::LegacyDelete {
                 id,
@@ -152,7 +152,7 @@ pub(super) async fn batch_upsert_todos(
         })
         .collect::<Vec<_>>();
     let entities = get_db_handle(state)?
-        .submit(
+        .write_legacy_graph(
             db::CommandContext::engine(),
             db::LegacyGraphWriteCommand::new(
                 crate::application::legacy_mutation::LegacyGraphWrite { records, device_id },
@@ -183,7 +183,7 @@ pub(super) async fn upsert_project(
         None,
     );
     let entities = get_db_handle(state)?
-        .submit(
+        .write_legacy_graph(
             db::CommandContext::engine(),
             db::LegacyGraphWriteCommand::new(
                 crate::application::legacy_mutation::LegacyGraphWrite {
@@ -212,7 +212,7 @@ pub(super) async fn upsert_tag(
         None,
     );
     let entities = get_db_handle(state)?
-        .submit(
+        .write_legacy_graph(
             db::CommandContext::engine(),
             db::LegacyGraphWriteCommand::new(
                 crate::application::legacy_mutation::LegacyGraphWrite {

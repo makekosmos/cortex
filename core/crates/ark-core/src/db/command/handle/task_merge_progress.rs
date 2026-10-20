@@ -3,6 +3,7 @@ use super::super::executor::actor::{
 };
 use super::super::{AcknowledgeTaskMergeBatchCommand, PrepareTaskMergeBatchCommand};
 use super::*;
+#[cfg(debug_assertions)]
 use ark_store::writer::SqliteWriter;
 
 impl DbHandle {

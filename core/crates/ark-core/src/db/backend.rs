@@ -4,11 +4,9 @@ use super::DbHandle;
 
 mod adapter;
 mod apply;
-mod legacy_mutation;
 #[cfg(test)]
 mod signed_integration;
 
-pub(crate) use legacy_mutation::SqliteLegacyMutationSession;
 #[cfg(test)]
 pub(crate) use signed_integration::SqliteSignedIntegrationFrameSession;
 

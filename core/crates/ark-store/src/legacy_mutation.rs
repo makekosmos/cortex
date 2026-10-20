@@ -1,23 +1,21 @@
-use crate::application::task_mutation::TaskMutationSession;
-use crate::hlc::HLC;
-use crate::types::SyncEntity;
-use rusqlite::Connection;
+use ark_application::task_mutation::TaskMutationSession;
+use ark_domain::hlc::HLC;
+use ark_domain::types::SyncEntity;
+use rusqlite::Transaction;
 
-/// Canonical ingress for compatibility Todo/Project/Tag writes.  Adapters may
-/// construct the legacy wire record, but persistence, HLC and link state stay
-/// owned by this facade.
-pub fn write_legacy_records(
-    conn: &Connection,
+pub(crate) fn apply_local_legacy_graph_write_in(
+    transaction: &Transaction<'_>,
     records: &[ark_application::canonical_compatibility::LegacyRecord],
     source_kind: &str,
-    device_id: Option<String>,
+    device_id: Option<&str>,
 ) -> Result<Vec<SyncEntity>, String> {
     use ark_application::canonical_compatibility::{
         map_legacy_with_context, CanonicalIdentity, LegacySource, MappingContext,
     };
     use std::collections::BTreeMap;
+
     let mut existing_object_ids = BTreeMap::new();
-    for object in ark_store::objects::list_objects(conn)? {
+    for object in crate::objects::list_objects(transaction)? {
         existing_object_ids.insert(
             object.id,
             CanonicalIdentity::new(object.type_id, object.type_version),
@@ -30,7 +28,7 @@ pub fn write_legacy_records(
             "tag_obj" => "com.kosmos.tag",
             _ => continue,
         };
-        let version = crate::canonical_types::definitions::current_canonical_version(type_id)
+        let version = ark_domain::canonical_type::definitions::current_canonical_version(type_id)
             .ok()
             .flatten()
             .unwrap_or_default();
@@ -38,12 +36,12 @@ pub fn write_legacy_records(
     }
     let context = MappingContext {
         existing_object_ids,
-        existing_links: ark_store::objects::list_object_links(conn)?,
+        existing_links: crate::objects::list_object_links(transaction)?,
     };
     let mapped = records
         .iter()
         .map(|record| {
-            let raw = serde_json::to_vec(record).map_err(|e| e.to_string())?;
+            let raw = serde_json::to_vec(record).map_err(|error| error.to_string())?;
             map_legacy_with_context(
                 LegacySource {
                     source_kind,
@@ -52,17 +50,17 @@ pub fn write_legacy_records(
                 },
                 &context,
             )
-            .map_err(|e| format!("{}:{}:{}", e.code(), e.source_id(), e.pointer()))
+            .map_err(|error| format!("{}:{}:{}", error.code(), error.source_id(), error.pointer()))
         })
         .collect::<Result<Vec<_>, String>>()?;
-    let write_device = device_id.as_deref().unwrap_or("ark-core");
+    let write_device = device_id.unwrap_or("ark-core");
     let mut entities = Vec::new();
     for item in mapped {
         let id = item.object.id.clone();
         if item.object.type_id == "core.task" {
-            let session = ark_store::task_merge::SqliteTaskMutationSession::new(conn);
+            let session = crate::task_merge::SqliteTaskMutationSession::new(transaction);
             let expected_snapshot = session.task_snapshot(&item.object.id)?;
-            entities.extend(crate::application::task_mutation::apply_task_upsert(
+            entities.extend(ark_application::task_mutation::apply_task_upsert(
                 &session,
                 &item.object,
                 &item.links,
@@ -71,20 +69,20 @@ pub fn write_legacy_records(
             )?);
             continue;
         }
-        ark_store::objects::upsert_object_compat(conn, &item.object)?;
-        let hlc = ark_store::sync_versions::bump_sync_version_vector(
-            conn,
+        crate::objects::upsert_object_compat(transaction, &item.object)?;
+        let hlc = crate::sync_versions::bump_sync_version_vector(
+            transaction,
             "object",
             &id,
             write_device,
             false,
         )?;
-        ark_store::sync_versions::write_object_sync_version(conn, &id, &hlc, false)?;
+        crate::sync_versions::write_object_sync_version(transaction, &id, &hlc, false)?;
         entities.push(SyncEntity {
             entity_type: "object".into(),
             id: id.clone(),
             data: serde_json::to_value(&item.object)
-                .map_err(|e| e.to_string())?
+                .map_err(|error| error.to_string())?
                 .as_object()
                 .cloned()
                 .unwrap_or_default(),
@@ -95,9 +93,9 @@ pub fn write_legacy_records(
         });
         for link in item.links {
             let link_id = link.id.clone();
-            ark_store::objects::upsert_object_link(conn, &link)?;
-            let hlc = ark_store::sync_versions::bump_sync_version_vector(
-                conn,
+            crate::objects::upsert_object_link(transaction, &link)?;
+            let hlc = crate::sync_versions::bump_sync_version_vector(
+                transaction,
                 "object_link",
                 &link_id,
                 write_device,
@@ -107,7 +105,7 @@ pub fn write_legacy_records(
                 entity_type: "object_link".into(),
                 id: link_id,
                 data: serde_json::to_value(&link)
-                    .map_err(|e| e.to_string())?
+                    .map_err(|error| error.to_string())?
                     .as_object()
                     .cloned()
                     .unwrap_or_default(),
@@ -121,37 +119,42 @@ pub fn write_legacy_records(
     Ok(entities)
 }
 
-pub fn delete_legacy_object(
-    conn: &Connection,
+pub(crate) fn apply_local_legacy_delete_in(
+    transaction: &Transaction<'_>,
     id: &str,
     expected_type_id: &str,
-    device_id: Option<String>,
+    device_id: Option<&str>,
 ) -> Result<SyncEntity, String> {
     if expected_type_id == "core.task" {
-        let session = ark_store::task_merge::SqliteTaskMutationSession::new(conn);
-        let commit = crate::application::task_mutation::apply_task_delete(
+        let session = crate::task_merge::SqliteTaskMutationSession::new(transaction);
+        let commit = ark_application::task_mutation::apply_task_delete(
             &session,
-            crate::application::task_mutation::LocalTaskDelete {
+            ark_application::task_mutation::LocalTaskDelete {
                 id: id.into(),
                 expected_snapshot: None,
-                device_id: device_id.as_deref().unwrap_or("ark-core").into(),
-                mode: crate::application::task_mutation::TaskDeleteMode::Soft,
+                device_id: device_id.unwrap_or("ark-core").into(),
+                mode: ark_application::task_mutation::TaskDeleteMode::Soft,
             },
         )?;
         return Ok(commit.entity);
     }
     let mut object =
-        ark_store::objects::get_object(conn, id)?.ok_or_else(|| "MISSING_OBJECT".to_string())?;
+        crate::objects::get_object(transaction, id)?.ok_or_else(|| "MISSING_OBJECT".to_string())?;
     if object.type_id != expected_type_id {
         return Err("WRONG_TARGET".into());
     }
-    let write_device = device_id.as_deref().unwrap_or("ark-core");
+    let write_device = device_id.unwrap_or("ark-core");
     object.deleted_at = Some(HLC::now(write_device).wall_time);
-    ark_store::objects::upsert_object_compat(conn, &object)?;
-    let hlc =
-        ark_store::sync_versions::bump_sync_version_vector(conn, "object", id, write_device, true)?;
-    ark_store::sync_versions::write_object_sync_version(conn, id, &hlc, true)?;
-    ark_store::sync_tombstones::record(conn, "object", id, Some(&object.type_id), &hlc)?;
+    crate::objects::upsert_object_compat(transaction, &object)?;
+    let hlc = crate::sync_versions::bump_sync_version_vector(
+        transaction,
+        "object",
+        id,
+        write_device,
+        true,
+    )?;
+    crate::sync_versions::write_object_sync_version(transaction, id, &hlc, true)?;
+    crate::sync_tombstones::record(transaction, "object", id, Some(&object.type_id), &hlc)?;
     Ok(SyncEntity {
         entity_type: "object".into(),
         id: id.into(),

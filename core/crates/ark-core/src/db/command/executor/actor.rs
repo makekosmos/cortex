@@ -5,6 +5,8 @@ use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::time::Instant;
 use tokio::sync::oneshot;
 
+#[path = "actor/task/legacy_mutation.rs"]
+mod legacy_mutation_task;
 mod maintenance;
 #[path = "actor/task/registry_events.rs"]
 mod registry_events_task;
@@ -12,6 +14,9 @@ mod runtime;
 mod task;
 #[path = "actor/task/task_merge_progress.rs"]
 mod task_merge_progress;
+#[cfg(debug_assertions)]
+pub(in crate::db::command) use legacy_mutation_task::map_legacy_transaction_failure;
+pub(in crate::db::command) use legacy_mutation_task::{LegacyDeleteTask, LegacyGraphWriteTask};
 use maintenance::has_maintenance_barrier;
 #[cfg(debug_assertions)]
 pub(in crate::db::command) use registry_events_task::map_error as map_registry_event_error;

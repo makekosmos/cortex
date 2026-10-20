@@ -8,6 +8,7 @@ pub mod data_volume;
 pub mod device_registry;
 pub mod integration_replication;
 pub mod legacy_entities;
+mod legacy_mutation;
 pub mod load_all;
 pub mod object_link_mutation;
 pub mod object_mutation;

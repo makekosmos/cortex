@@ -333,9 +333,54 @@ async fn legacy_entity_writes_bump_version_vector() {
                     |row| row.get(0),
                 )
                 .unwrap();
+            let link_count: i64 = guard
+                .query_row(
+                    "SELECT COUNT(*) FROM object_links \
+                     WHERE source_object_id = ?1 OR target_object_id = ?1",
+                    [id],
+                    |row| row.get(0),
+                )
+                .unwrap();
             assert_eq!(object_count, 0, "failed batch must roll back object {id}");
             assert_eq!(version_count, 0, "failed batch must roll back version {id}");
+            assert_eq!(link_count, 0, "failed batch must roll back links for {id}");
         }
+        guard
+            .execute_batch(
+                "DROP TRIGGER fail_legacy_batch;
+                 CREATE TRIGGER fail_legacy_delete BEFORE INSERT ON sync_tombstones
+                 WHEN NEW.id = 'project-legacy'
+                 BEGIN SELECT RAISE(ABORT, 'injected delete failure'); END;",
+            )
+            .unwrap();
+    }
+    let failed_delete = handle_request(
+        &state,
+        Request::DeleteProject {
+            id: "project-legacy".to_string(),
+            device_id: device,
+        },
+    )
+    .await;
+    assert!(failed_delete.is_err());
+    {
+        let guard = shared.lock().unwrap();
+        let deleted_at: Option<String> = guard
+            .query_row(
+                "SELECT deleted_at FROM objects WHERE id = 'project-legacy'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let tombstone_count: i64 = guard
+            .query_row(
+                "SELECT COUNT(*) FROM sync_tombstones WHERE id = 'project-legacy'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(deleted_at, None, "failed delete must restore the object");
+        assert_eq!(tombstone_count, 0, "failed delete must leave no tombstone");
     }
 }
 
