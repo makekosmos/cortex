@@ -10,7 +10,6 @@
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
 
-use rusqlite::Connection;
 use tokio::sync::mpsc;
 
 use ark_core::db::SqliteStorageBackend;
@@ -114,12 +113,14 @@ async fn relay_with_stub() -> (
     Arc<RelaySync>,
     mpsc::UnboundedSender<TransportEvent>,
     String,
+    ark_store::test_support::TestDatabase,
 ) {
-    let conn = Connection::open_in_memory().unwrap();
-    ark_store::open::init_schema(&conn).unwrap();
-    let backend = Arc::new(SqliteStorageBackend::for_test(Arc::new(StdMutex::new(
-        conn,
-    ))));
+    let database = ark_store::test_support::TestDatabase::create().unwrap();
+    let backend = Arc::new(
+        SqliteStorageBackend::open_for_test(database.path().to_str().unwrap().to_owned(), "me")
+            .await
+            .unwrap(),
+    );
     backend.set_device_id("me").unwrap();
     let peer_endpoint = iroh::SecretKey::generate().public().to_string();
     backend
@@ -151,7 +152,7 @@ async fn relay_with_stub() -> (
         .unwrap()
         .clone()
         .expect("event_tx installed");
-    (relay, tx, peer_endpoint)
+    (relay, tx, peer_endpoint, database)
 }
 
 /// Generous hang guard for event waits — the peer list state is the real
@@ -204,7 +205,7 @@ fn send_hello(tx: &mpsc::UnboundedSender<TransportEvent>, peer_endpoint: &str) {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn transport_dropped_evicts_all_peers() {
-    let (relay, tx, peer_endpoint) = relay_with_stub().await;
+    let (relay, tx, peer_endpoint, database) = relay_with_stub().await;
     send_hello(&tx, &peer_endpoint);
     wait_for_peer(&relay).await;
     assert_eq!(
@@ -225,11 +226,14 @@ async fn transport_dropped_evicts_all_peers() {
     // Wait on the eviction itself — a fixed sleep both flakes under load and
     // can pass before the event is even processed (KOS-308).
     wait_for_no_peers(&relay).await;
+    relay.stop().await;
+    drop(relay);
+    drop(database);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn disconnect_with_own_device_id_is_ignored() {
-    let (relay, tx, peer_endpoint) = relay_with_stub().await;
+    let (relay, tx, peer_endpoint, database) = relay_with_stub().await;
     send_hello(&tx, &peer_endpoint);
     wait_for_peer(&relay).await;
 
@@ -249,4 +253,7 @@ async fn disconnect_with_own_device_id_is_ignored() {
             app_version: None,
         }]
     );
+    relay.stop().await;
+    drop(relay);
+    drop(database);
 }

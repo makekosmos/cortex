@@ -1,13 +1,14 @@
 #![allow(clippy::unwrap_used)]
 use ark_application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort, SyncReadClass};
-use rusqlite::Connection;
+use ark_store::test_support::TestDatabase;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 #[tokio::test]
 async fn accepted_peer_policies_project_snapshot_pages_per_peer() {
     use ark_core::db::SqliteStorageBackend;
-    let conn = Connection::open_in_memory().unwrap();
+    let database = TestDatabase::create().unwrap();
+    let conn = database.open_connection().unwrap();
     ark_store::open::init_schema(&conn).unwrap();
     for (id, name) in [("com.example.note", "Note"), ("com.example.game", "Game")] {
         conn.execute(
@@ -89,7 +90,15 @@ async fn accepted_peer_policies_project_snapshot_pages_per_peer() {
         &game_profile.rules,
     )
     .unwrap();
-    let backend = Arc::new(SqliteStorageBackend::for_test(Arc::new(Mutex::new(conn))));
+    drop(conn);
+    let backend = Arc::new(
+        SqliteStorageBackend::open_for_test(
+            database.path().to_string_lossy().into_owned(),
+            "test-device",
+        )
+        .await
+        .unwrap(),
+    );
     let peer_a = backend
         .load_entities_page_for_peer("peer-a", SyncReadClass::SyncLive, &HashMap::new(), 0, 100)
         .await

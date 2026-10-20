@@ -2,14 +2,16 @@
 use ark_application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
 
 use ark_core::db::SqliteStorageBackend;
-use rusqlite::Connection;
+use ark_store::test_support::TestDatabase;
+use rusqlite::{Connection, OpenFlags};
 use serde_json::json;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 #[tokio::test]
 async fn deleted_object_tombstone_keeps_type_through_collection_filter_and_apply() {
-    let source_conn = Connection::open_in_memory().unwrap();
+    let source_db = TestDatabase::create().unwrap();
+    let source_conn = source_db.open_connection().unwrap();
     ark_store::open::init_schema(&source_conn).unwrap();
     source_conn
         .execute(
@@ -34,9 +36,15 @@ async fn deleted_object_tombstone_keeps_type_through_collection_filter_and_apply
     )
     .unwrap();
 
-    let source = Arc::new(SqliteStorageBackend::for_test(Arc::new(Mutex::new(
-        source_conn,
-    ))));
+    drop(source_conn);
+    let source = Arc::new(
+        SqliteStorageBackend::open_for_test(
+            source_db.path().to_string_lossy().into_owned(),
+            "source-device",
+        )
+        .await
+        .unwrap(),
+    );
     let mut profile = ark_domain::selective_sync::SelectiveSyncProfile::default();
     profile.set_rule(
         "type",
@@ -52,7 +60,8 @@ async fn deleted_object_tombstone_keeps_type_through_collection_filter_and_apply
         .expect("typed tombstone should survive collection and profile filtering");
     assert_eq!(tombstone.data["typeId"], json!("com.kosmos.note"));
 
-    let destination_conn = Connection::open_in_memory().unwrap();
+    let destination_db = TestDatabase::create().unwrap();
+    let destination_conn = destination_db.open_connection().unwrap();
     ark_store::open::init_schema(&destination_conn).unwrap();
     destination_conn
         .execute(
@@ -63,10 +72,17 @@ async fn deleted_object_tombstone_keeps_type_through_collection_filter_and_apply
             [],
         )
         .unwrap();
-    let destination_db = Arc::new(Mutex::new(destination_conn));
-    let destination = SqliteStorageBackend::for_test(destination_db.clone());
+    drop(destination_conn);
+    let destination = SqliteStorageBackend::open_for_test(
+        destination_db.path().to_string_lossy().into_owned(),
+        "destination-device",
+    )
+    .await
+    .unwrap();
     destination.apply_entity(&tombstone).await.unwrap();
-    let guard = destination_db.lock().unwrap();
+    let guard =
+        Connection::open_with_flags(destination_db.path(), OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .unwrap();
     assert!(ark_store::objects::get_object(&guard, "deleted-note")
         .unwrap()
         .is_none());

@@ -7,13 +7,13 @@
 //!
 //! `current_thread` makes it deterministic: after a stop that never joins,
 //! no background task has had a chance to release its authorizer clone, so
-//! `Arc::strong_count` on the shared connection stays above one.
+//! `Arc::strong_count` on the storage backend stays above one.
 
+use ark_core::replication_storage::IntegrationReplicationBackend;
 use ark_core::sync_transport::IrohSessionTransport;
-use std::sync::{Arc, Mutex as StdMutex};
+use std::sync::Arc;
 use std::time::Duration;
 
-use rusqlite::Connection;
 use tokio::sync::mpsc;
 
 use ark_core::db::SqliteStorageBackend;
@@ -37,29 +37,38 @@ fn loopback_transport(device_id: &str, peer_addr: Option<iroh::EndpointAddr>) ->
     })
 }
 
-fn open_conn(dir: &crate::support::TestTempDir) -> Arc<StdMutex<Connection>> {
-    let conn = Arc::new(StdMutex::new(
-        Connection::open(dir.path().join("ark.db")).unwrap(),
-    ));
-    ark_store::open::init_schema(&conn.lock().unwrap()).unwrap();
-    conn
+async fn open_storage(
+    device_id: &str,
+) -> (
+    ark_store::test_support::TestDatabase,
+    Arc<SqliteStorageBackend>,
+) {
+    let database = ark_store::test_support::TestDatabase::create().unwrap();
+    let backend = Arc::new(
+        SqliteStorageBackend::open_for_test(
+            database.path().to_str().unwrap().to_owned(),
+            device_id,
+        )
+        .await
+        .unwrap(),
+    );
+    backend.set_device_id(device_id).unwrap();
+    (database, backend)
 }
 
-/// A live connection makes each transport retain its authorizer. `stop()` must
-/// leave the test's own database clone as the only reference.
+/// A live backend makes each transport retain its authorizer. `stop()` must
+/// leave the test's own backend clone as the only reference.
 #[tokio::test(flavor = "current_thread")]
 async fn stop_joins_connection_tasks_and_releases_authorizer() {
-    let dir_a = crate::support::temp_dir();
-    let dir_b = crate::support::temp_dir();
-    let conn_a = open_conn(&dir_a);
-    let conn_b = open_conn(&dir_b);
+    let (database_a, backend_a) = open_storage("device-a").await;
+    let (database_b, backend_b) = open_storage("device-b").await;
 
     let (b_events_tx, mut b_events_rx) = mpsc::unbounded_channel::<TransportEvent>();
     let transport_b = loopback_transport("device-b", None);
     transport_b
         .set_outbound_authorizer(Arc::new(
             ark_sync::transport::StorageBackedOutboundIntegrationFrameAuthorizer::new(
-                Arc::new(SqliteStorageBackend::for_test(conn_b.clone())),
+                Arc::clone(&backend_b) as Arc<dyn IntegrationReplicationBackend>,
                 "test-iroh-stop-teardown",
                 "device-b",
             ),
@@ -73,7 +82,7 @@ async fn stop_joins_connection_tasks_and_releases_authorizer() {
     transport_a
         .set_outbound_authorizer(Arc::new(
             ark_sync::transport::StorageBackedOutboundIntegrationFrameAuthorizer::new(
-                Arc::new(SqliteStorageBackend::for_test(conn_a.clone())),
+                Arc::clone(&backend_a) as Arc<dyn IntegrationReplicationBackend>,
                 "test-iroh-stop-teardown",
                 "device-a",
             ),
@@ -101,13 +110,18 @@ async fn stop_joins_connection_tasks_and_releases_authorizer() {
     drop(transport_b);
 
     assert_eq!(
-        Arc::strong_count(&conn_a),
+        Arc::strong_count(&backend_a),
         1,
-        "a transport task still holds device A's ark.db connection"
+        "a transport task still holds device A's storage backend"
     );
     assert_eq!(
-        Arc::strong_count(&conn_b),
+        Arc::strong_count(&backend_b),
         1,
-        "a transport task still holds device B's ark.db connection"
+        "a transport task still holds device B's storage backend"
     );
+
+    drop(backend_a);
+    drop(backend_b);
+    drop(database_a);
+    drop(database_b);
 }
