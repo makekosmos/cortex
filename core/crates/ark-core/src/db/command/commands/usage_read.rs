@@ -1,4 +1,4 @@
-use super::super::{sealed, CommandClass, CommandContext, DbError, DbQuery};
+use super::super::{sealed, CommandClass, CommandContext, DbError, StoreReadQuery};
 
 fn serialize<T: serde::Serialize>(value: Result<T, String>) -> Result<serde_json::Value, DbError> {
     let value = value.map_err(DbError::Storage)?;
@@ -28,7 +28,7 @@ pub(crate) enum UsageReadQuery {
 
 impl sealed::Sealed for UsageReadQuery {}
 
-impl DbQuery for UsageReadQuery {
+impl StoreReadQuery for UsageReadQuery {
     type Output = serde_json::Value;
 
     fn class(&self) -> CommandClass {
@@ -42,37 +42,31 @@ impl DbQuery for UsageReadQuery {
     fn read(
         self,
         context: &CommandContext,
-        connection: &rusqlite::Connection,
+        capabilities: &ark_store::ReadCapabilities<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_engine()?;
         match self {
-            Self::TitleTotal(query) => serialize(ark_store::usage_queries::get_usage_title_total(
-                connection, &query,
-            )),
+            Self::TitleTotal(query) => serialize(capabilities.usage().title_total(&query)),
             Self::Analytics {
                 range_days,
                 top_apps_limit,
                 recent_sessions_limit,
                 windows_dir,
-            } => serialize(ark_store::usage_queries::load_usage_analytics(
-                connection,
+            } => serialize(capabilities.usage().analytics(
                 range_days,
                 top_apps_limit,
                 recent_sessions_limit,
                 windows_dir.as_deref(),
             )),
-            Self::RecentProcesses(limit) => serialize(
-                ark_store::usage_queries::list_recent_usage_processes(connection, limit),
-            ),
-            Self::SearchProcesses { query, limit } => serialize(
-                ark_store::usage_queries::search_usage_processes(connection, &query, limit),
-            ),
+            Self::RecentProcesses(limit) => serialize(capabilities.usage().recent_processes(limit)),
+            Self::SearchProcesses { query, limit } => {
+                serialize(capabilities.usage().search_processes(&query, limit))
+            }
             Self::GamePlaytimeSummary {
                 bindings,
                 range_start,
                 range_end,
-            } => serialize(ark_store::usage_queries::load_usage_game_playtime_summary(
-                connection,
+            } => serialize(capabilities.usage().game_playtime_summary(
                 &bindings,
                 range_start.as_deref(),
                 range_end.as_deref(),

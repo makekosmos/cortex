@@ -38,7 +38,9 @@ pub mod usage_queries;
 pub mod usage_sync_log;
 pub mod writer;
 
-pub use read_capabilities::{CanonicalReadCapabilities, ObjectReadCapabilities, ReadCapabilities};
+pub use read_capabilities::{
+    CanonicalReadCapabilities, ObjectReadCapabilities, ReadCapabilities, UsageReadCapabilities,
+};
 
 pub const VERSION_VECTOR_KEY: &str = "lan_sync.version_vector";
 

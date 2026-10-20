@@ -201,7 +201,7 @@ pub(super) async fn get_usage_game_playtime_summary(
 
 async fn usage_read(state: &ServiceState, query: db::UsageReadQuery) -> Result<Value, String> {
     get_db_handle(state)?
-        .query(db::CommandContext::engine(), query)
+        .query_with_store(db::CommandContext::engine(), query)
         .await
         .map_err(|error| error.to_string())
 }

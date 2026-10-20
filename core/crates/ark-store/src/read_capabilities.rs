@@ -1,5 +1,6 @@
 mod canonical;
 mod objects;
+mod usage;
 
 use rusqlite::Connection;
 
@@ -12,6 +13,10 @@ pub struct ObjectReadCapabilities<'snapshot> {
 }
 
 pub struct CanonicalReadCapabilities<'snapshot> {
+    connection: &'snapshot Connection,
+}
+
+pub struct UsageReadCapabilities<'snapshot> {
     connection: &'snapshot Connection,
 }
 
@@ -28,6 +33,12 @@ impl<'snapshot> ReadCapabilities<'snapshot> {
 
     pub fn canonical(&self) -> CanonicalReadCapabilities<'_> {
         CanonicalReadCapabilities {
+            connection: self.connection,
+        }
+    }
+
+    pub fn usage(&self) -> UsageReadCapabilities<'_> {
+        UsageReadCapabilities {
             connection: self.connection,
         }
     }
