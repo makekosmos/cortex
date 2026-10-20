@@ -4,10 +4,11 @@ use super::*;
 async fn external_ref_request_keeps_wire_shape_and_rolls_back_failed_update() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
+    let db_path = fixture.db_path();
     handle_request(
         &state,
         Request::Init {
-            db_path: fixture.db_path().to_string_lossy().into_owned(),
+            db_path: db_path.to_string_lossy().into_owned(),
         },
     )
     .await
@@ -41,65 +42,24 @@ async fn external_ref_request_keeps_wire_shape_and_rolls_back_failed_update() {
     .unwrap();
     assert_eq!(handle_request(&state, request).await.unwrap(), json!(true));
 
-    with_conn(&state, |connection| {
-        let stored: (
-            String,
-            String,
-            String,
-            String,
-            String,
-            Option<String>,
-            Option<String>,
-            String,
-        ) = connection
-            .query_row(
-                "SELECT connector_id, account_id, external_type, external_id, object_id, \
-                 external_revision, content_hash, conflict_state FROM external_refs",
-                [],
-                |row| {
-                    Ok((
-                        row.get(0)?,
-                        row.get(1)?,
-                        row.get(2)?,
-                        row.get(3)?,
-                        row.get(4)?,
-                        row.get(5)?,
-                        row.get(6)?,
-                        row.get(7)?,
-                    ))
-                },
-            )
-            .map_err(|error| error.to_string())?;
-        assert_eq!(
-            stored,
-            (
-                "drive".into(),
-                "personal".into(),
-                "file".into(),
-                "file-1".into(),
-                "external-ref-object".into(),
-                Some("r1".into()),
-                Some("abc".into()),
-                "clean".into(),
-            )
-        );
-        Ok(())
-    })
-    .unwrap();
+    let stored = ark_store::test_support::ExternalRefFixture::inspect(&db_path)
+        .unwrap()
+        .expect("external reference is persisted");
+    assert_eq!(
+        stored,
+        ark_store::test_support::ExternalRefSnapshot {
+            connector_id: "drive".into(),
+            account_id: "personal".into(),
+            external_type: "file".into(),
+            external_id: "file-1".into(),
+            object_id: "external-ref-object".into(),
+            revision: Some("r1".into()),
+            content_hash: Some("abc".into()),
+            conflict_state: "clean".into(),
+        }
+    );
 
-    with_write_tx(&state, |connection| {
-        connection
-            .execute_batch(
-                "CREATE TABLE tx_parent (id INTEGER PRIMARY KEY); \
-                 CREATE TABLE tx_child ( \
-                     parent_id INTEGER REFERENCES tx_parent(id) DEFERRABLE INITIALLY DEFERRED \
-                 ); \
-                 CREATE TRIGGER reject_external_ref_commit AFTER UPDATE ON external_refs \
-                 BEGIN INSERT INTO tx_child(parent_id) VALUES (404); END;",
-            )
-            .map_err(|error| error.to_string())
-    })
-    .unwrap();
+    ark_store::test_support::ExternalRefFixture::reject_update_commit(&db_path).unwrap();
 
     let failed_update: Request = serde_json::from_value(json!({
         "operation": "external_refs.upsert",
@@ -116,17 +76,9 @@ async fn external_ref_request_keeps_wire_shape_and_rolls_back_failed_update() {
     let error = handle_request(&state, failed_update).await.unwrap_err();
     assert!(error.contains("FOREIGN KEY constraint failed"), "{error}");
 
-    with_conn(&state, |connection| {
-        assert!(connection.is_autocommit());
-        let stored: (String, Option<String>) = connection
-            .query_row(
-                "SELECT external_revision, content_hash FROM external_refs",
-                [],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .map_err(|error| error.to_string())?;
-        assert_eq!(stored, ("r1".into(), Some("abc".into())));
-        Ok(())
-    })
-    .unwrap();
+    let stored = ark_store::test_support::ExternalRefFixture::inspect(&db_path)
+        .unwrap()
+        .expect("failed update must preserve the reference");
+    assert_eq!(stored.revision.as_deref(), Some("r1"));
+    assert_eq!(stored.content_hash.as_deref(), Some("abc"));
 }

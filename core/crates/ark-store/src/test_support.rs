@@ -11,6 +11,7 @@ mod actor_log;
 mod book_cover_rollback;
 mod canonical_task_idempotency;
 mod device_registry;
+mod external_ref;
 mod inbox;
 mod legacy_writes;
 mod object_mutation_replay;
@@ -30,6 +31,7 @@ pub use canonical_task_idempotency::{
     CanonicalTaskIdempotencyFixture, CanonicalTaskIdempotencyState,
 };
 pub use device_registry::{DeviceRegistryFixture, DeviceRegistryState};
+pub use external_ref::{ExternalRefFixture, ExternalRefSnapshot};
 pub use inbox::has_inbox_receipt;
 pub use legacy_writes::{
     LegacyBatchRollbackState, LegacyProjectDeleteState, LegacyWriteFixture, LegacyWriteSnapshot,
