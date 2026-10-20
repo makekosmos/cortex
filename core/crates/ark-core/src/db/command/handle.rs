@@ -3,9 +3,12 @@ use executor::actor::{ActorOwner, ActorShared, TypedCommand, TypedMaintenance, W
 use rusqlite::{OpenFlags, TransactionBehavior};
 use std::time::Instant;
 
+mod external_ref;
 mod object_link_mutation;
 mod object_mutation;
 mod system_mutation;
+#[cfg(debug_assertions)]
+mod test_writer;
 mod usage;
 
 #[derive(Clone)]

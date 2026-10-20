@@ -4,7 +4,6 @@ mod device_registry_admission;
 mod device_registry_command;
 mod device_registry_handshake;
 mod device_registry_sync;
-mod external_ref;
 mod inbound_policy;
 mod integration_admin;
 mod integration_read;
@@ -36,7 +35,6 @@ pub(crate) use device_registry_handshake::{
 pub(crate) use device_registry_sync::{
     ApplyRegistryEventsCommand, LoadDeviceRegistryQuery, LoadRegistryEventsQuery,
 };
-pub(crate) use external_ref::UpsertExternalRefCommand;
 pub(crate) use inbound_policy::{require_sync_policy_identity, ReceiveInboxReceiptCommand};
 pub(crate) use integration_admin::{
     AcquireIntegrationRefreshLeaseCommand, PersistIntegrationGrantCommand,

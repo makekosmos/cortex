@@ -248,6 +248,26 @@ impl SqliteWriter {
             )
         })
     }
+
+    pub fn upsert_external_ref(
+        &mut self,
+        request: ark_application::external_ref::ExternalRefUpsert,
+    ) -> Result<(), TransactionFailure<String>> {
+        self.immediate(|transaction| {
+            crate::data_platform::ensure_schema(transaction)?;
+            crate::data_platform::upsert_external_ref(transaction, &request)
+        })
+    }
+
+    pub fn upsert_external_ref_on_connection(
+        connection: &mut Connection,
+        request: ark_application::external_ref::ExternalRefUpsert,
+    ) -> Result<(), TransactionFailure<String>> {
+        Self::immediate_on_connection(connection, |transaction| {
+            crate::data_platform::ensure_schema(transaction)?;
+            crate::data_platform::upsert_external_ref(transaction, &request)
+        })
+    }
 }
 
 #[cfg(test)]

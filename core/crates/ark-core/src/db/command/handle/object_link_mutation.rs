@@ -1,6 +1,8 @@
 use super::super::executor::actor::{
     DeleteObjectLinkTask, ReplaceObjectLinkTask, UpsertObjectLinkTask, WriterTask,
 };
+#[cfg(debug_assertions)]
+use super::test_writer::spawn_test_store_writer;
 use super::*;
 
 impl DbHandle {
@@ -25,7 +27,7 @@ impl DbHandle {
             #[cfg(debug_assertions)]
             HandleBackend::Test(connection) => {
                 let admission = test_admission(self, &context, weight)?;
-                spawn_test_link_mutation(Arc::clone(connection), admission, move |connection| {
+                spawn_test_store_writer(Arc::clone(connection), admission, move |connection| {
                     ark_store::writer::SqliteWriter::upsert_object_link_on_connection(
                         connection,
                         object_link,
@@ -58,7 +60,7 @@ impl DbHandle {
             #[cfg(debug_assertions)]
             HandleBackend::Test(connection) => {
                 let admission = test_admission(self, &context, weight)?;
-                spawn_test_link_mutation(Arc::clone(connection), admission, move |connection| {
+                spawn_test_store_writer(Arc::clone(connection), admission, move |connection| {
                     ark_store::writer::SqliteWriter::delete_object_link_on_connection(
                         connection, id, device_id,
                     )
@@ -89,7 +91,7 @@ impl DbHandle {
             #[cfg(debug_assertions)]
             HandleBackend::Test(connection) => {
                 let admission = test_admission(self, &context, weight)?;
-                spawn_test_link_mutation(Arc::clone(connection), admission, move |connection| {
+                spawn_test_store_writer(Arc::clone(connection), admission, move |connection| {
                     ark_store::writer::SqliteWriter::replace_object_link_on_connection(
                         connection,
                         object_link,
@@ -131,45 +133,4 @@ fn test_admission(
         .admission
         .try_acquire(context.class, &context.source, weight)
         .map_err(map_admission_error)
-}
-
-#[cfg(debug_assertions)]
-async fn spawn_test_link_mutation<T, F>(
-    connection: Arc<Mutex<Connection>>,
-    _admission: executor::AdmissionPermit,
-    operation: F,
-) -> Result<T, DbError>
-where
-    T: Send + 'static,
-    F: FnOnce(&mut Connection) -> Result<T, ark_store::writer::TransactionFailure<String>>
-        + Send
-        + 'static,
-{
-    tokio::task::spawn_blocking(move || {
-        let _admission = _admission;
-        let mut connection = connection.lock().unwrap_or_else(|error| error.into_inner());
-        operation(&mut connection).map_err(map_storage_transaction_failure)
-    })
-    .await
-    .map_err(join_error)?
-}
-
-#[cfg(debug_assertions)]
-fn map_storage_transaction_failure(
-    failure: ark_store::writer::TransactionFailure<String>,
-) -> DbError {
-    match failure {
-        ark_store::writer::TransactionFailure::Begin(error) => DbError::from_sqlite(error),
-        ark_store::writer::TransactionFailure::Operation(error) => {
-            DbError::from_application_error(error)
-        }
-        ark_store::writer::TransactionFailure::Commit(error) => {
-            DbError::CommitFailed(error.to_string())
-        }
-    }
-}
-
-#[cfg(debug_assertions)]
-fn join_error(error: tokio::task::JoinError) -> DbError {
-    DbError::Storage(error.to_string())
 }

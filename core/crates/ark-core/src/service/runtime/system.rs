@@ -196,10 +196,7 @@ pub(super) async fn external_refs_upsert(
     params: ExternalRefUpsert,
 ) -> Result<Value, String> {
     get_db_handle(state)?
-        .submit(
-            db::CommandContext::engine(),
-            db::UpsertExternalRefCommand::new(params),
-        )
+        .submit_external_ref_upsert(db::CommandContext::engine(), params)
         .await
         .map(|()| json!(true))
         .map_err(|error| error.to_string())

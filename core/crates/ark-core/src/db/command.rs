@@ -32,8 +32,8 @@ pub(crate) use commands::{
     RemoteCoreTaskOutcome, RestoreSnapshotCommand, SaveLocalSyncProfileCommand,
     SetLocalSyncKeyValueCommand, SetSyncKeyValueCommand, SignRegistryHandshakeCommand,
     SystemReadQuery, TaskConflictSetQuery, TrackedAppDeleteCommand, TrackedAppUpsertCommand,
-    TypeReadQuery, UpsertExternalRefCommand, UpsertObjectTypeCommand, UsageCompleteThroughQuery,
-    UsageReadQuery, ValidateOutboundSignedFrameQuery, VerifyRegistryHandshakeQuery,
+    TypeReadQuery, UpsertObjectTypeCommand, UsageCompleteThroughQuery, UsageReadQuery,
+    ValidateOutboundSignedFrameQuery, VerifyRegistryHandshakeQuery,
 };
 #[cfg(test)]
 pub(crate) use operation_receipt::OperationResult;
