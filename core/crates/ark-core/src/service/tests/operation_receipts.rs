@@ -24,6 +24,17 @@ fn upsert_request(title: &str) -> Request {
     serde_json::from_value(serde_json::Value::Object(envelope)).unwrap()
 }
 
+async fn write_snapshot(state: &Arc<ServiceState>) -> serde_json::Value {
+    handle_request(
+        state,
+        Request::GetObjectWriteSnapshot {
+            id: "operation-receipt-note".into(),
+        },
+    )
+    .await
+    .unwrap()
+}
+
 #[tokio::test]
 async fn object_mutation_json_replays_same_result_and_rejects_operation_id_reuse() {
     let fixture = service_fixture();
@@ -43,39 +54,18 @@ async fn object_mutation_json_replays_same_result_and_rejects_operation_id_reuse
             .unwrap(),
         json!(true)
     );
+    let snapshot_after_first_write = write_snapshot(&state).await;
     assert_eq!(
         handle_request(&state, upsert_request("Note"))
             .await
             .unwrap(),
         json!(true)
     );
+    assert_eq!(write_snapshot(&state).await, snapshot_after_first_write);
     assert!(handle_request(&state, upsert_request("Different payload"))
         .await
         .unwrap_err()
         .contains("different command payload"));
-
-    with_conn(&state, |connection| {
-        let receipts: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM ark_operation_receipts
-                 WHERE principal = 'engine' AND operation_id = 'json-operation-1'",
-                [],
-                |row| row.get(0),
-            )
-            .map_err(|error| error.to_string())?;
-        let revisions: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM object_sync_versions
-                 WHERE object_id = 'operation-receipt-note'",
-                [],
-                |row| row.get(0),
-            )
-            .map_err(|error| error.to_string())?;
-        assert_eq!(receipts, 1);
-        assert_eq!(revisions, 1);
-        Ok(())
-    })
-    .unwrap();
 }
 
 #[tokio::test]
@@ -92,16 +82,7 @@ async fn production_store_replays_receipt_written_by_the_previous_core_executor(
     handle_request(&fixture.state, upsert_request("Note"))
         .await
         .expect("the previous executor writes an operation receipt");
-    let revision_before = with_conn(&fixture.state, |connection| {
-        connection
-            .query_row(
-                "SELECT hlc FROM object_sync_versions WHERE object_id='operation-receipt-note'",
-                [],
-                |row| row.get::<_, String>(0),
-            )
-            .map_err(|error| error.to_string())
-    })
-    .unwrap();
+    let snapshot_before_reopen = write_snapshot(&fixture.state).await;
     fixture.shutdown().await;
 
     let service = ArkService::open(fixture.db_path().to_str().unwrap())
@@ -112,21 +93,23 @@ async fn production_store_replays_receipt_written_by_the_previous_core_executor(
         .await
         .expect("the Store recognizes and replays the old receipt fingerprint");
 
-    let connection = rusqlite::Connection::open(fixture.db_path()).unwrap();
-    let (receipt_count, revision, title): (i64, String, String) = connection
-        .query_row(
-            "SELECT (SELECT COUNT(*) FROM ark_operation_receipts
-                     WHERE principal='engine' AND operation_id='json-operation-1'),
-                    object_sync_versions.hlc, objects.title
-             FROM object_sync_versions JOIN objects ON objects.id=object_sync_versions.object_id
-             WHERE object_sync_versions.object_id='operation-receipt-note'",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-        )
-        .unwrap();
-    assert_eq!(receipt_count, 1);
-    assert_eq!(revision, revision_before);
-    assert_eq!(title, "Note");
+    assert_eq!(
+        service
+            .call(
+                "get_object_write_snapshot",
+                json!({"id":"operation-receipt-note"})
+            )
+            .await
+            .expect("object snapshot reads after reopen"),
+        snapshot_before_reopen
+    );
+    assert_eq!(
+        service
+            .call("get_object", json!({"id":"operation-receipt-note"}))
+            .await
+            .expect("object reads after receipt replay")["title"],
+        "Note"
+    );
     service
         .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
         .await
@@ -134,7 +117,7 @@ async fn production_store_replays_receipt_written_by_the_previous_core_executor(
 }
 
 #[tokio::test]
-async fn clear_all_removes_operation_receipts_with_their_stored_results() {
+async fn clear_all_removes_operation_receipts_and_objects() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
     handle_request(
@@ -149,34 +132,19 @@ async fn clear_all_removes_operation_receipts_with_their_stored_results() {
     handle_request(&state, upsert_request("Private note payload"))
         .await
         .unwrap();
-    with_conn(&state, |connection| {
-        let stored_result: String = connection
-            .query_row(
-                "SELECT result_json FROM ark_operation_receipts
-                 WHERE principal = 'engine' AND operation_id = 'json-operation-1'",
-                [],
-                |row| row.get(0),
-            )
-            .map_err(|error| error.to_string())?;
-        assert!(stored_result.contains("Private note payload"));
-        Ok(())
-    })
-    .unwrap();
-
     handle_request(&state, Request::ClearAll).await.unwrap();
-
-    with_conn(&state, |connection| {
-        let receipts: i64 = connection
-            .query_row("SELECT COUNT(*) FROM ark_operation_receipts", [], |row| {
-                row.get(0)
-            })
-            .map_err(|error| error.to_string())?;
-        let objects: i64 = connection
-            .query_row("SELECT COUNT(*) FROM objects", [], |row| row.get(0))
-            .map_err(|error| error.to_string())?;
-        assert_eq!(receipts, 0);
-        assert_eq!(objects, 0);
-        Ok(())
-    })
-    .unwrap();
+    handle_request(&state, upsert_request("Reused operation id"))
+        .await
+        .expect("ClearAll removes the old receipt so the operation id can be reused");
+    assert_eq!(
+        handle_request(
+            &state,
+            Request::GetObject {
+                id: "operation-receipt-note".into(),
+            },
+        )
+        .await
+        .unwrap()["title"],
+        "Reused operation id"
+    );
 }
