@@ -8,6 +8,14 @@ pub struct TaskMergeConflictRead {
     pub dependencies_pending: bool,
 }
 
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskMergeAppendResult {
+    pub conflict_set: Option<TaskConflictSet>,
+    pub dependencies_pending: bool,
+    pub replayed: bool,
+}
+
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "kind", content = "record", rename_all = "camelCase")]
 pub enum TaskMergeJournalRecord {

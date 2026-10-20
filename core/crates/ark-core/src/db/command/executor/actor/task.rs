@@ -27,6 +27,7 @@ mod type_mutation;
 pub(in crate::db::command) use type_mutation::{
     DeleteObjectTypeTask, RegisterPackageTypesTask, UpsertObjectTypeTask,
 };
+pub(in crate::db::command) mod task_merge_append;
 mod tracked_app_mutation;
 pub(in crate::db::command) use tracked_app_mutation::TrackedAppMutationTask;
 

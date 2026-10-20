@@ -94,9 +94,9 @@ pub(super) async fn task_merge_append(
     expected_conflict_digest: Option<String>,
 ) -> Result<Value, String> {
     let result = get_db_handle(state)?
-        .submit(
+        .append_task_merge_operation(
             db::CommandContext::engine(),
-            db::AppendTaskMergeOperationCommand::new(operation, expected_conflict_digest),
+            db::AppendTaskMergeOperationRequest::new(operation, expected_conflict_digest),
         )
         .await
         .map_err(|error| error.to_string())?;

@@ -26,7 +26,7 @@ pub use command::CommandSource;
 pub(crate) use command::{
     AcceptPeerSyncPolicyCommand, AcknowledgeTaskMergeBatchCommand,
     AcquireIntegrationRefreshLeaseCommand, AppendLocalRegistryEventCommand,
-    AppendTaskMergeOperationCommand, ApplyAuthenticatedSyncEntityCommand,
+    AppendTaskMergeOperationRequest, ApplyAuthenticatedSyncEntityCommand,
     ApplyRegistryEventsCommand, ApplySignedIntegrationFrameCommand, ApplySyncEntityCommand,
     ApplyTaskMergeBatchCommand, AuthenticatedCoreTaskWrite, AuthorizedTransportKeyQuery,
     CommandClass, CommandContext, CommittedFeedDeliveryPageQuery, CommittedFeedPageQuery,

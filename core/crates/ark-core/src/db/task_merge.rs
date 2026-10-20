@@ -1,6 +1,5 @@
 use ark_domain::task_merge::{TaskConflictSet, TaskMergeOperation, TaskMergeUnit};
 use rusqlite::{Connection, Transaction};
-use serde::Serialize;
 
 #[path = "task_merge/bootstrap.rs"]
 mod bootstrap;
@@ -16,10 +15,6 @@ pub(crate) use progress::{acknowledge_outbound_batch, prepare_outbound_batch};
 pub(crate) enum TaskMergeError {
     #[error("task_merge_operation_id_collision")]
     OperationIdCollision,
-    #[error("task_merge_conflict_set_changed")]
-    ConflictSetChanged,
-    #[error("task_merge_conflict_digest_required")]
-    ConflictDigestRequired,
     #[error("{0}")]
     Permission(String),
     #[error("{0}")]
@@ -78,54 +73,19 @@ pub(crate) fn require_delivery_policy(
     Ok(())
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct TaskMergeAppendResult {
-    pub conflict_set: Option<TaskConflictSet>,
-    pub dependencies_pending: bool,
-    pub replayed: bool,
-}
-
-pub(crate) fn append_operation(
-    transaction: &Transaction<'_>,
-    operation: TaskMergeOperation,
-    expected_conflict_digest: Option<&str>,
-) -> Result<TaskMergeAppendResult, TaskMergeError> {
-    append_operation_inner(
-        transaction,
-        operation,
-        expected_conflict_digest,
-        ark_store::task_merge::TaskMergeOperationOrigin::Local,
-    )
-}
-
 pub(crate) fn append_remote_operation(
     transaction: &Transaction<'_>,
     operation: TaskMergeOperation,
     expected_conflict_digest: Option<&str>,
-) -> Result<TaskMergeAppendResult, TaskMergeError> {
-    append_operation_inner(
-        transaction,
-        operation,
-        expected_conflict_digest,
-        ark_store::task_merge::TaskMergeOperationOrigin::Remote,
-    )
-}
-
-fn append_operation_inner(
-    transaction: &Connection,
-    operation: TaskMergeOperation,
-    expected_conflict_digest: Option<&str>,
-    origin: ark_store::task_merge::TaskMergeOperationOrigin,
-) -> Result<TaskMergeAppendResult, TaskMergeError> {
+) -> Result<ark_application::task_merge::TaskMergeAppendResult, TaskMergeError> {
     let prepared = match ark_store::task_merge::check_operation(
         transaction,
         &operation,
         expected_conflict_digest,
-        origin,
+        ark_store::task_merge::TaskMergeOperationOrigin::Remote,
     )? {
         ark_store::task_merge::TaskMergeOperationCheck::Replay(read) => {
-            return Ok(TaskMergeAppendResult {
+            return Ok(ark_application::task_merge::TaskMergeAppendResult {
                 conflict_set: read.conflict_set,
                 dependencies_pending: read.dependencies_pending,
                 replayed: true,
@@ -134,39 +94,11 @@ fn append_operation_inner(
         ark_store::task_merge::TaskMergeOperationCheck::New(prepared) => prepared,
     };
     let operation = prepared.operation().clone();
-
-    let (current, dependencies_pending) =
-        read_conflict_set(transaction, &operation.object_id, operation.unit)?;
-    let resolves_conflict = current.as_ref().is_some_and(|set| {
-        set.has_conflict()
-            && set
-                .variants
-                .iter()
-                .all(|variant| operation.parents.contains(&variant.id))
-    });
-    if origin == ark_store::task_merge::TaskMergeOperationOrigin::Local
-        && resolves_conflict
-        && expected_conflict_digest.is_none()
-    {
-        return Err(TaskMergeError::ConflictDigestRequired);
-    }
-    if origin == ark_store::task_merge::TaskMergeOperationOrigin::Local {
-        if let Some(expected) = expected_conflict_digest {
-            if dependencies_pending
-                || current.as_ref().map(|set| set.digest.as_str()) != Some(expected)
-            {
-                return Err(TaskMergeError::ConflictSetChanged);
-            }
-        }
-    }
-
     ark_store::task_merge::persist_operation(transaction, prepared)?;
-
     ark_store::task_merge::materialize_task_if_ready(transaction, &operation.object_id)?;
-
     let (conflict_set, dependencies_pending) =
         read_conflict_set(transaction, &operation.object_id, operation.unit)?;
-    Ok(TaskMergeAppendResult {
+    Ok(ark_application::task_merge::TaskMergeAppendResult {
         conflict_set,
         dependencies_pending: dependencies_pending
             || task_causal_dependencies_pending(transaction, &operation.object_id)?,

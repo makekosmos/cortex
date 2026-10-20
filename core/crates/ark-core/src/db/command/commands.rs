@@ -66,7 +66,7 @@ pub(crate) use sync_read_policy::{
 pub(crate) use system_mutation::{CompactUsageSyncLogCommand, RestoreSnapshotCommand};
 pub(crate) use system_read::SystemReadQuery;
 pub(crate) use task_merge::{
-    AcknowledgeTaskMergeBatchCommand, AppendTaskMergeOperationCommand, ApplyTaskMergeBatchCommand,
+    AcknowledgeTaskMergeBatchCommand, AppendTaskMergeOperationRequest, ApplyTaskMergeBatchCommand,
     PrepareTaskMergeBatchCommand, TaskConflictSetQuery,
 };
 pub(crate) use type_read::TypeReadQuery;

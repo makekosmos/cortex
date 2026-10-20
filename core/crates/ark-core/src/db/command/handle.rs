@@ -14,6 +14,7 @@ mod object_mutation;
 mod sync_policy_write;
 mod sync_progress_write;
 mod system_mutation;
+mod task_merge_append;
 #[cfg(debug_assertions)]
 mod test_writer;
 mod tracked_app_mutation;

@@ -1,6 +1,6 @@
 use super::*;
 use crate::db::{
-    AppendTaskMergeOperationCommand, ApplyTaskMergeBatchCommand, CommandContext, DbHandle, DbOwner,
+    AppendTaskMergeOperationRequest, ApplyTaskMergeBatchCommand, CommandContext, DbHandle, DbOwner,
     EnrollPairedDeviceCommand, SqliteStorageBackend, TaskConflictSetQuery,
 };
 use crate::sync_server::SyncServer;
@@ -143,9 +143,9 @@ async fn authenticated_direct_sync_delivers_task_merge_batches_over_the_wire() {
     ] {
         sender
             .db
-            .submit(
+            .append_task_merge_operation(
                 CommandContext::engine(),
-                AppendTaskMergeOperationCommand::new(operation(id, &parents, title), None),
+                AppendTaskMergeOperationRequest::new(operation(id, &parents, title), None),
             )
             .await
             .unwrap();

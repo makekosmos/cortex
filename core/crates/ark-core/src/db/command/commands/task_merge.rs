@@ -1,17 +1,17 @@
 use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError, StoreReadQuery};
-use crate::db::task_merge::{append_operation, TaskMergeAppendResult, TaskMergeError};
+use crate::db::task_merge::TaskMergeError;
 use ark_application::sync_storage::{PolicyIdentity, TaskMergeBatch, TaskMergeBatchAck};
 use ark_domain::task_merge::{TaskMergeOperation, TaskMergeUnit};
 use rusqlite::Transaction;
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
-pub(crate) struct AppendTaskMergeOperationCommand {
-    operation: TaskMergeOperation,
-    expected_conflict_digest: Option<String>,
+pub(crate) struct AppendTaskMergeOperationRequest {
+    pub(crate) operation: TaskMergeOperation,
+    pub(crate) expected_conflict_digest: Option<String>,
 }
 
-impl AppendTaskMergeOperationCommand {
+impl AppendTaskMergeOperationRequest {
     pub(crate) fn new(
         operation: TaskMergeOperation,
         expected_conflict_digest: Option<String>,
@@ -21,31 +21,9 @@ impl AppendTaskMergeOperationCommand {
             expected_conflict_digest,
         }
     }
-}
 
-impl sealed::Sealed for AppendTaskMergeOperationCommand {}
-
-impl DbCommand for AppendTaskMergeOperationCommand {
-    type Output = TaskMergeAppendResult;
-
-    const CLASS: CommandClass = CommandClass::Interactive;
-
-    fn weight(&self) -> usize {
+    pub(crate) fn weight(&self) -> usize {
         super::serialized_weight(self)
-    }
-
-    fn execute(
-        self,
-        context: &CommandContext,
-        transaction: &Transaction<'_>,
-    ) -> Result<Self::Output, DbError> {
-        context.require_engine()?;
-        append_operation(
-            transaction,
-            self.operation,
-            self.expected_conflict_digest.as_deref(),
-        )
-        .map_err(map_task_merge_error)
     }
 }
 
@@ -278,9 +256,7 @@ impl StoreReadQuery for TaskConflictSetQuery {
 
 fn map_task_merge_error(error: TaskMergeError) -> DbError {
     match error {
-        TaskMergeError::OperationIdCollision
-        | TaskMergeError::ConflictSetChanged
-        | TaskMergeError::ConflictDigestRequired => DbError::Conflict(error.to_string()),
+        TaskMergeError::OperationIdCollision => DbError::Conflict(error.to_string()),
         TaskMergeError::Invalid(error) => DbError::Invalid(error),
         TaskMergeError::Permission(error) => DbError::Permission(error),
         TaskMergeError::Storage(error) => DbError::Storage(error),

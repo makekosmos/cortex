@@ -1,6 +1,6 @@
 use super::{
     canonical_operation, check_operation, persist_operation, read_conflict_set, read_journal_page,
-    TaskMergeOperationCheck, TaskMergeOperationOrigin, TaskMergeStoreError,
+    TaskMergeAppendError, TaskMergeOperationCheck, TaskMergeOperationOrigin, TaskMergeStoreError,
 };
 use ark_application::sync_storage::TaskMergeJournalRecord;
 use ark_domain::task_merge::{
@@ -442,6 +442,37 @@ fn append_persistence_rolls_back_operation_when_journal_insert_fails() {
         .expect("guard count reads after rollback");
     assert_eq!(operation_count, 0);
     assert_eq!(guard_count, 0);
+}
+
+#[test]
+fn writer_append_rolls_back_when_the_journal_write_fails() {
+    let mut connection = connection();
+    connection
+        .execute_batch(
+            "CREATE TRIGGER reject_task_merge_journal BEFORE INSERT ON task_merge_journal
+             BEGIN SELECT RAISE(ABORT, 'injected journal failure'); END;",
+        )
+        .expect("failure trigger creates");
+
+    let failure = crate::writer::SqliteWriter::append_local_task_merge_operation_on_connection(
+        &mut connection,
+        operation(),
+        None,
+    )
+    .expect_err("writer returns the injected journal failure");
+    assert!(matches!(
+        failure,
+        crate::writer::TransactionFailure::Operation(TaskMergeAppendError::Storage(_))
+    ));
+
+    for table in ["task_merge_operations", "task_merge_journal"] {
+        let count: i64 = connection
+            .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+                row.get(0)
+            })
+            .expect("row count reads after the failed append");
+        assert_eq!(count, 0, "{table} remains unchanged after rollback");
+    }
 }
 
 #[path = "tests_bootstrap.rs"]

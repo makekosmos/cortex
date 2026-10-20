@@ -14,7 +14,7 @@ pub(crate) use commands::DeviceEnrollmentOutcome;
 pub(crate) use commands::{
     AcceptPeerSyncPolicyCommand, AcknowledgeTaskMergeBatchCommand,
     AcquireIntegrationRefreshLeaseCommand, AppendLocalRegistryEventCommand,
-    AppendTaskMergeOperationCommand, ApplyAuthenticatedSyncEntityCommand,
+    AppendTaskMergeOperationRequest, ApplyAuthenticatedSyncEntityCommand,
     ApplyRegistryEventsCommand, ApplySignedIntegrationFrameCommand, ApplySyncEntityCommand,
     ApplyTaskMergeBatchCommand, AuthenticatedCoreTaskWrite, AuthenticatedCoreTaskWriteError,
     AuthorizedTransportKeyQuery, CommittedFeedDeliveryPageQuery, CommittedFeedPageQuery,

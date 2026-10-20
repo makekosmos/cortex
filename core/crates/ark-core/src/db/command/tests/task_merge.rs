@@ -41,13 +41,56 @@ async fn append(
     handle: &DbHandle,
     operation: TaskMergeOperation,
     expected_digest: Option<String>,
-) -> Result<crate::db::task_merge::TaskMergeAppendResult, DbError> {
+) -> Result<ark_application::task_merge::TaskMergeAppendResult, DbError> {
     handle
-        .submit(
+        .append_task_merge_operation(
             CommandContext::engine(),
-            AppendTaskMergeOperationCommand::new(operation, expected_digest),
+            AppendTaskMergeOperationRequest::new(operation, expected_digest),
         )
         .await
+}
+
+#[tokio::test]
+async fn append_actor_requires_the_engine_principal() {
+    let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
+    let result = handle
+        .append_task_merge_operation(
+            CommandContext::sync_peer("peer-a".into(), CommandClass::Interactive),
+            AppendTaskMergeOperationRequest::new(operation('1', &[], "unauthorized"), None),
+        )
+        .await;
+    assert!(matches!(result, Err(DbError::Permission(_))));
+
+    let rows: i64 = handle.with_connection(|connection| {
+        connection
+            .query_row("SELECT COUNT(*) FROM task_merge_operations", [], |row| {
+                row.get(0)
+            })
+            .expect("operation count reads")
+    });
+    assert_eq!(rows, 0);
+    shutdown(&mut owner).await;
+}
+
+#[cfg(debug_assertions)]
+#[tokio::test]
+async fn append_test_backend_uses_the_store_writer_transaction() {
+    let connection = std::sync::Arc::new(std::sync::Mutex::new(
+        rusqlite::Connection::open_in_memory().expect("database opens"),
+    ));
+    let handle = DbHandle::for_test(std::sync::Arc::clone(&connection));
+    handle.with_connection(|connection| {
+        ark_store::open::init_schema(connection).expect("database schema initializes");
+    });
+
+    let result = append(&handle, operation('1', &[], "test backend"), None)
+        .await
+        .expect("test backend appends through Store");
+    assert!(!result.replayed);
+    assert_eq!(
+        result.conflict_set.unwrap().variants[0].value,
+        TaskMergeValue::Field(serde_json::Value::String("test backend".into()))
+    );
 }
 
 async fn read(handle: &DbHandle) -> ark_application::task_merge::TaskMergeConflictRead {

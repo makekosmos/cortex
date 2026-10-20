@@ -9,6 +9,7 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
 mod append;
+mod append_local;
 mod bootstrap;
 mod history;
 mod inbound;
@@ -23,6 +24,8 @@ pub use append::{
     check_operation, persist_operation, PreparedTaskMergeOperation, TaskMergeOperationCheck,
     TaskMergeOperationOrigin,
 };
+pub(crate) use append_local::append_local_operation;
+pub use append_local::TaskMergeAppendError;
 pub use bootstrap::{
     apply_inbound_bootstrap, check_bootstrap, has_bootstrap, load_bootstrap, persist_bootstrap,
     PreparedTaskMergeBootstrap, TaskMergeBootstrapCheck,

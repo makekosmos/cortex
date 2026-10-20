@@ -1,6 +1,6 @@
 # ARK typed-operation transaction map
 
-This map groups the 48 operations still found by the generated [Core storage census](ark-core-storage-census-2026-10-19.md), plus eleven extracted Store writer paths, by responsibility. The current inventory has **23 `DbCommand` writes, 24 `DbQuery` reads, and 1 `DbMaintenanceCommand`**; local and authenticated `core.task` writes, Iroh identity persistence, tracked-app mutations, local sync key-value writes, sync-progress writes, usage-sequence migration, and type-registry mutations use dedicated Store writer tasks. `OperationReceiptCommand` remains in the census as a test-only adapter. Locations point to the current production owners.
+This map groups the current generated census's 21 remaining typed operations with Store-owned writer and read paths already migrated from Core. It contains **15 Store writer tasks, 19 `DbCommand` writes, 24 `DbQuery` reads, and 1 `DbMaintenanceCommand`** across 59 operation rows. Local task merge append is now a Store writer task. Locations point to the current production owners.
 
 ## Shared execution and effects
 
@@ -89,11 +89,11 @@ These operations return results to their Core callers; no direct network or othe
 
 ### Task merge — 5 operations
 
-**Core:** applies delivery policy, removed-peer checks, and local sync-profile policy. **Persistence:** task-merge journal, progress, inbound apply, and conflict-read mechanics are in Store, reached through some Core `crate::db::task_merge` adapters. Writes use the immediate transaction; the conflict query uses the deferred snapshot.
+**Core:** schedules and authorizes local append, applies delivery policy, removed-peer checks, and local sync-profile policy. **Store:** owns the local append transaction (replay and conflict validation, journal and operation writes, projection materialization, and final conflict read), plus journal, progress, inbound apply, and conflict-read persistence. Remote append remains inside authenticated inbound batch apply. The conflict query uses the deferred snapshot.
 
 | Kind | Operation | Implementation |
 |---|---|---|
-| DbCommand | `AppendTaskMergeOperationCommand` | `core/crates/ark-core/src/db/command/commands/task_merge.rs:31` |
+| StoreWriterTask | `AppendTaskMergeOperationTask` | `core/crates/ark-core/src/db/command/executor/actor/task/task_merge_append.rs` → `ark_store::writer::SqliteWriter::append_local_task_merge_operation` |
 | DbCommand | `PrepareTaskMergeBatchCommand` | `core/crates/ark-core/src/db/command/commands/task_merge.rs:74` |
 | DbCommand | `AcknowledgeTaskMergeBatchCommand` | `core/crates/ark-core/src/db/command/commands/task_merge.rs:125` |
 | DbCommand | `ApplyTaskMergeBatchCommand` | `core/crates/ark-core/src/db/command/commands/task_merge.rs:177` |
@@ -141,10 +141,10 @@ These operations return results to their Core callers; no direct network or othe
 | Integration replication and administration | 0 | 5 | 2 | 0 | 7 |
 | Legacy mutations | 2 | 2 | 0 | 0 | 4 |
 | Sync policy, transfer, KV, usage log | 4 | 3 | 12 | 0 | 19 |
-| Task merge | 0 | 4 | 1 | 0 | 5 |
+| Task merge | 1 | 3 | 1 | 0 | 5 |
 | Type registry | 3 | 0 | 1 | 0 | 4 |
 | System, object, and usage reads | 3 | 0 | 3 | 1 | 7 |
 | Operation receipts | 0 | 1 | 0 | 0 | 1 |
-| **Total** | **14** | **20** | **24** | **1** | **59** |
+| **Total** | **15** | **19** | **24** | **1** | **59** |
 
 The census detects typed operation declarations and direct SQLite references, but does not resolve indirect helper calls or assign policy ownership. Ownership gaps above should be settled by tracing the named Core session/helper implementations and their Store calls before planning those areas as Store-only cutovers.
