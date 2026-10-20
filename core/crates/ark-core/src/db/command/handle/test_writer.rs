@@ -22,7 +22,7 @@ where
 
 fn map_transaction_failure(failure: ark_store::writer::TransactionFailure<String>) -> DbError {
     match failure {
-        ark_store::writer::TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+        ark_store::writer::TransactionFailure::Begin(error) => DbError::from_store_error(error),
         ark_store::writer::TransactionFailure::Operation(error) => {
             DbError::from_application_error(error)
         }

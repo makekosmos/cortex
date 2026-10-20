@@ -70,7 +70,7 @@ fn spawn_test_authenticated_inbound_entity(
             entity,
         )
         .map_err(|failure| match failure {
-            ark_store::writer::TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+            ark_store::writer::TransactionFailure::Begin(error) => DbError::from_store_error(error),
             ark_store::writer::TransactionFailure::Operation(error) => match error {
                 ark_store::writer::AuthenticatedInboundEntityError::Mutation(error) => {
                     DbError::from_application_error(error)

@@ -179,12 +179,7 @@ pub struct SqliteWriter {
     connection: Connection,
 }
 
-#[derive(Debug)]
-pub enum TransactionFailure<E> {
-    Begin(rusqlite::Error),
-    Operation(E),
-    Commit(rusqlite::Error),
-}
+pub type TransactionFailure<E> = StoreTransactionFailure<E>;
 
 impl SqliteWriter {
     pub fn from_connection(connection: Connection) -> Self {
@@ -269,9 +264,11 @@ impl SqliteWriter {
     ) -> Result<T, TransactionFailure<E>> {
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
-            .map_err(TransactionFailure::Begin)?;
+            .map_err(|error| TransactionFailure::Begin(store_error_from_sqlite(error)))?;
         let output = operation(&transaction).map_err(TransactionFailure::Operation)?;
-        transaction.commit().map_err(TransactionFailure::Commit)?;
+        transaction
+            .commit()
+            .map_err(|error| TransactionFailure::Commit(store_error_from_sqlite(error)))?;
         Ok(output)
     }
 

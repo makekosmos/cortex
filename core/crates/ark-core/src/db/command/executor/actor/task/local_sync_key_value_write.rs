@@ -23,7 +23,7 @@ impl WriterTask for LocalSyncKeyValueWriteTask {
             writer
                 .set_local_sync_key_value(&key, &value)
                 .map_err(|failure| match failure {
-                    TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+                    TransactionFailure::Begin(error) => DbError::from_store_error(error),
                     TransactionFailure::Operation(error) => DbError::Storage(error),
                     TransactionFailure::Commit(error) => DbError::CommitFailed(error.to_string()),
                 })

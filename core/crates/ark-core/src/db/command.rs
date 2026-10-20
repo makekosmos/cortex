@@ -271,9 +271,10 @@ pub(crate) enum DbError {
 }
 
 impl DbError {
-    pub(crate) fn from_sqlite(error: rusqlite::Error) -> Self {
-        let message = error.to_string();
-        match error {
+    #[cfg(test)]
+    pub(crate) fn from_test_sqlite_error(error: rusqlite::Error) -> Self {
+        let unhealthy = matches!(
+            &error,
             rusqlite::Error::SqliteFailure(code, _)
                 if matches!(
                     code.code,
@@ -281,11 +282,22 @@ impl DbError {
                         | rusqlite::ErrorCode::SystemIoFailure
                         | rusqlite::ErrorCode::DatabaseCorrupt
                         | rusqlite::ErrorCode::NotADatabase
-                ) =>
-            {
-                Self::StorageUnhealthy(message)
+                )
+        );
+        if unhealthy {
+            Self::StorageUnhealthy(error.to_string())
+        } else {
+            Self::Storage(error.to_string())
+        }
+    }
+
+    pub(crate) fn from_store_error(error: ark_store::writer::StoreError) -> Self {
+        use ark_store::writer::StoreErrorKind;
+        match error.kind {
+            StoreErrorKind::DiskFull | StoreErrorKind::Io | StoreErrorKind::Corrupt => {
+                Self::StorageUnhealthy(error.to_string())
             }
-            error => Self::Storage(error.to_string()),
+            StoreErrorKind::Other => Self::Storage(error.to_string()),
         }
     }
 

@@ -131,7 +131,7 @@ impl SyncPolicyWrite {
                 )
                 .map(SyncPolicyWriteOutput::LocalProfile)
                 .map_err(|failure| match failure {
-                    TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+                    TransactionFailure::Begin(error) => DbError::from_store_error(error),
                     TransactionFailure::Operation(error) => map_profile_write_error(error),
                     TransactionFailure::Commit(error) => DbError::CommitFailed(error.to_string()),
                 })
@@ -148,7 +148,7 @@ impl SyncPolicyWrite {
                 )
                 .map(SyncPolicyWriteOutput::AcceptedPeer)
                 .map_err(|failure| match failure {
-                    TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+                    TransactionFailure::Begin(error) => DbError::from_store_error(error),
                     TransactionFailure::Operation(error) => map_profile_error(error),
                     TransactionFailure::Commit(error) => DbError::CommitFailed(error.to_string()),
                 })

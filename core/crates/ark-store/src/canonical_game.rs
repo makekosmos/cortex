@@ -147,12 +147,14 @@ pub fn apply_upsert(
 ) -> Result<GameMutationResult, crate::writer::TransactionFailure<CanonicalGameOperationError>> {
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
-        .map_err(crate::writer::TransactionFailure::Begin)?;
+        .map_err(|error| {
+            crate::writer::TransactionFailure::Begin(crate::writer::store_error_from_sqlite(error))
+        })?;
     let result = upsert_game_in(&transaction, command, fallback_device_id)
         .map_err(crate::writer::TransactionFailure::Operation)?;
-    transaction
-        .commit()
-        .map_err(crate::writer::TransactionFailure::Commit)?;
+    transaction.commit().map_err(|error| {
+        crate::writer::TransactionFailure::Commit(crate::writer::store_error_from_sqlite(error))
+    })?;
     Ok(result)
 }
 

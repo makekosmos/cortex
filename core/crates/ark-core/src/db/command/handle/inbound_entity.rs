@@ -39,7 +39,7 @@ impl DbHandle {
                         SqliteWriter::apply_inbound_entity_on_connection(&mut connection, entity)
                             .map_err(|failure| match failure {
                                 ark_store::writer::TransactionFailure::Begin(error) => {
-                                    DbError::from_sqlite(error)
+                                    DbError::from_store_error(error)
                                 }
                                 ark_store::writer::TransactionFailure::Operation(error) => {
                                     DbError::from_application_error(error)

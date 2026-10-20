@@ -21,7 +21,7 @@ impl WriterTask for UsageSequenceMigrationTask {
             writer
                 .ensure_usage_sequence_migrated(&device_id)
                 .map_err(|failure| match failure {
-                    TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+                    TransactionFailure::Begin(error) => DbError::from_store_error(error),
                     TransactionFailure::Operation(error) => DbError::Storage(error),
                     TransactionFailure::Commit(error) => DbError::CommitFailed(error.to_string()),
                 })

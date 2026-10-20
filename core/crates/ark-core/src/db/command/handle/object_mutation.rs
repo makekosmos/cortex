@@ -270,7 +270,9 @@ fn spawn_test_canonical_game_upsert(
         let mut connection = connection.lock().unwrap_or_else(|error| error.into_inner());
         ark_store::canonical_game::apply_upsert(&mut connection, command, &fallback_device_id)
             .map_err(|failure| match failure {
-                ark_store::writer::TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+                ark_store::writer::TransactionFailure::Begin(error) => {
+                    DbError::from_store_error(error)
+                }
                 ark_store::writer::TransactionFailure::Operation(error) => {
                     DbError::from_application_error(error.to_string())
                 }
@@ -292,7 +294,9 @@ fn spawn_test_local_book_cover(
         let mut connection = connection.lock().unwrap_or_else(|error| error.into_inner());
         ark_store::book_cover::apply_local_book_cover(&mut connection, write).map_err(|failure| {
             match failure {
-                ark_store::writer::TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+                ark_store::writer::TransactionFailure::Begin(error) => {
+                    DbError::from_store_error(error)
+                }
                 ark_store::writer::TransactionFailure::Operation(error) => {
                     DbError::from_application_error(error.to_string())
                 }
@@ -323,7 +327,7 @@ fn spawn_test_local_object_upsert(
             operation_id.as_deref(),
         )
         .map_err(|failure| match failure {
-            ark_store::writer::TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+            ark_store::writer::TransactionFailure::Begin(error) => DbError::from_store_error(error),
             ark_store::writer::TransactionFailure::Operation(error) => {
                 DbError::from_application_error(error.to_string())
             }
@@ -355,7 +359,7 @@ fn spawn_test_local_object_delete(
             operation_id.as_deref(),
         )
         .map_err(|failure| match failure {
-            ark_store::writer::TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+            ark_store::writer::TransactionFailure::Begin(error) => DbError::from_store_error(error),
             ark_store::writer::TransactionFailure::Operation(error) => {
                 DbError::from_application_error(error.to_string())
             }

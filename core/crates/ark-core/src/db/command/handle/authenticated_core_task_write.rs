@@ -69,7 +69,7 @@ fn map_test_authenticated_core_task_failure(
     failure: ark_store::writer::TransactionFailure<AuthenticatedCoreTaskWriteError>,
 ) -> DbError {
     match failure {
-        ark_store::writer::TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+        ark_store::writer::TransactionFailure::Begin(error) => DbError::from_store_error(error),
         ark_store::writer::TransactionFailure::Operation(error) => {
             map_authenticated_core_task_error(error)
         }

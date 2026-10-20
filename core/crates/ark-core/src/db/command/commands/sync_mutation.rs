@@ -73,7 +73,7 @@ fn map_outbound_progress_test_failure(
     >,
 ) -> DbError {
     match failure {
-        ark_store::writer::TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+        ark_store::writer::TransactionFailure::Begin(error) => DbError::from_store_error(error),
         ark_store::writer::TransactionFailure::Operation(error) => {
             DbError::Storage(error.to_string())
         }

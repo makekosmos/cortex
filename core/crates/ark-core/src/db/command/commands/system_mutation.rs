@@ -55,7 +55,7 @@ impl CompactUsageSyncLogCommand {
             self.batch_limit,
         )
         .map_err(|failure| match failure {
-            ark_store::writer::TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+            ark_store::writer::TransactionFailure::Begin(error) => DbError::from_store_error(error),
             ark_store::writer::TransactionFailure::Operation(error) => DbError::Storage(error),
             ark_store::writer::TransactionFailure::Commit(error) => {
                 DbError::CommitFailed(error.to_string())

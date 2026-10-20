@@ -38,13 +38,13 @@ impl DbCommand for CommitFailure {
                 "INSERT INTO production_actor_failure_probe(payload) VALUES (zeroblob(0))",
                 [],
             )
-            .map_err(DbError::from_sqlite)?;
+            .map_err(|error| DbError::Storage(error.to_string()))?;
         transaction
             .execute(
                 "INSERT INTO production_actor_deferred_child(parent_id) VALUES (99)",
                 [],
             )
-            .map_err(DbError::from_sqlite)?;
+            .map_err(|error| DbError::Storage(error.to_string()))?;
         Ok(())
     }
 }

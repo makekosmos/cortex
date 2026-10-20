@@ -94,7 +94,7 @@ impl<C: DbCommand> WriterTask for TypedCommand<C> {
         let result = writer
             .immediate(|transaction| command.execute(&context, transaction))
             .map_err(|failure| match failure {
-                TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+                TransactionFailure::Begin(error) => DbError::from_store_error(error),
                 TransactionFailure::Operation(error) => error,
                 TransactionFailure::Commit(error) => DbError::CommitFailed(error.to_string()),
             });
@@ -276,7 +276,7 @@ impl WriterTask for DeleteTrashedTask {
 
 fn map_storage_transaction_failure<E: ToString>(failure: TransactionFailure<E>) -> DbError {
     match failure {
-        TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+        TransactionFailure::Begin(error) => DbError::from_store_error(error),
         TransactionFailure::Operation(error) => DbError::Storage(error.to_string()),
         TransactionFailure::Commit(error) => DbError::CommitFailed(error.to_string()),
     }
@@ -284,7 +284,7 @@ fn map_storage_transaction_failure<E: ToString>(failure: TransactionFailure<E>) 
 
 fn map_application_transaction_failure<E: ToString>(failure: TransactionFailure<E>) -> DbError {
     match failure {
-        TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+        TransactionFailure::Begin(error) => DbError::from_store_error(error),
         TransactionFailure::Operation(error) => DbError::from_application_error(error.to_string()),
         TransactionFailure::Commit(error) => DbError::CommitFailed(error.to_string()),
     }

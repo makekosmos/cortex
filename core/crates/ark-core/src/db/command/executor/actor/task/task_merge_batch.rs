@@ -50,7 +50,7 @@ pub(in crate::db::command) fn map_failure(
 ) -> DbError {
     use ark_store::writer::TransactionFailure;
     match failure {
-        TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+        TransactionFailure::Begin(error) => DbError::from_store_error(error),
         TransactionFailure::Operation(error) => match error {
             ark_store::task_merge::TaskMergeInboundError::Permission(error) => {
                 DbError::Permission(error)

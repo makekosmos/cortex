@@ -67,7 +67,7 @@ pub(in crate::db::command) fn map_legacy_transaction_failure(
     failure: TransactionFailure<String>,
 ) -> DbError {
     match failure {
-        TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+        TransactionFailure::Begin(error) => DbError::from_store_error(error),
         TransactionFailure::Operation(error) => DbError::from_application_error(error),
         TransactionFailure::Commit(error) => DbError::CommitFailed(error.to_string()),
     }

@@ -33,12 +33,14 @@ pub fn apply_local_book_cover(
 ) -> Result<bool, crate::writer::TransactionFailure<BookCoverOperationError>> {
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
-        .map_err(crate::writer::TransactionFailure::Begin)?;
+        .map_err(|error| {
+            crate::writer::TransactionFailure::Begin(crate::writer::store_error_from_sqlite(error))
+        })?;
     let changed = apply_local_book_cover_in(&transaction, write)
         .map_err(crate::writer::TransactionFailure::Operation)?;
-    transaction
-        .commit()
-        .map_err(crate::writer::TransactionFailure::Commit)?;
+    transaction.commit().map_err(|error| {
+        crate::writer::TransactionFailure::Commit(crate::writer::store_error_from_sqlite(error))
+    })?;
     Ok(changed)
 }
 

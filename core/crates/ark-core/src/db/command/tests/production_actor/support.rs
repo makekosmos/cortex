@@ -57,7 +57,7 @@ impl DbCommand for FailureMutation {
                 "INSERT INTO production_actor_failure_probe(payload) VALUES (zeroblob(?1))",
                 [self.payload_bytes],
             )
-            .map_err(DbError::from_sqlite)?;
+            .map_err(DbError::from_test_sqlite_error)?;
         Ok(format!("inserted:{}", self.payload_bytes))
     }
 }

@@ -69,7 +69,7 @@ where
 
         let stored =
             ark_store::operation_receipt::load(transaction, &principal, &self.operation_id)
-                .map_err(DbError::from_sqlite)?;
+                .map_err(|error| DbError::Storage(error.to_string()))?;
 
         if let Some(stored) = stored {
             if stored.command_type != self.command_type || stored.payload_sha256 != payload_hash {
@@ -98,7 +98,7 @@ where
                 result_json,
             },
         )
-        .map_err(DbError::from_sqlite)?;
+        .map_err(|error| DbError::Storage(error.to_string()))?;
         Ok(OperationResult {
             value,
             replayed: false,

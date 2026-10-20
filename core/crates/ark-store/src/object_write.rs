@@ -45,12 +45,14 @@ pub fn apply_local_object_upsert(
 > {
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
-        .map_err(crate::writer::TransactionFailure::Begin)?;
+        .map_err(|error| {
+            crate::writer::TransactionFailure::Begin(crate::writer::store_error_from_sqlite(error))
+        })?;
     let outcome = apply_local_object_upsert_in(&transaction, write, principal, operation_id)
         .map_err(crate::writer::TransactionFailure::Operation)?;
-    transaction
-        .commit()
-        .map_err(crate::writer::TransactionFailure::Commit)?;
+    transaction.commit().map_err(|error| {
+        crate::writer::TransactionFailure::Commit(crate::writer::store_error_from_sqlite(error))
+    })?;
     Ok(outcome)
 }
 

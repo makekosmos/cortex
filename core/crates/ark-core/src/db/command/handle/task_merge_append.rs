@@ -60,7 +60,7 @@ fn spawn_test_task_merge_append(
             command.expected_conflict_digest,
         )
         .map_err(|failure| match failure {
-            ark_store::writer::TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+            ark_store::writer::TransactionFailure::Begin(error) => DbError::from_store_error(error),
             ark_store::writer::TransactionFailure::Operation(error) => {
                 map_append_operation_error(error)
             }

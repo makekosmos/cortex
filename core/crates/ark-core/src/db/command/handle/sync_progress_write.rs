@@ -62,7 +62,7 @@ fn map_sync_progress_failure(
     >,
 ) -> DbError {
     match failure {
-        ark_store::writer::TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+        ark_store::writer::TransactionFailure::Begin(error) => DbError::from_store_error(error),
         ark_store::writer::TransactionFailure::Operation(error) => match error {
             ark_application::sync_storage::SyncProgressWriteError::MissingLocalDevice => {
                 DbError::Permission("sync_policy_identity_missing_local_device".into())

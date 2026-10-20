@@ -51,7 +51,7 @@ impl DbHandle {
                                 )
                                 .map_err(|failure| match failure {
                                     ark_store::writer::TransactionFailure::Begin(error) => {
-                                        DbError::from_sqlite(error)
+                                        DbError::from_store_error(error)
                                     }
                                     ark_store::writer::TransactionFailure::Operation(error) => {
                                         map_inbox_receipt_error(error)
