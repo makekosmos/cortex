@@ -16,7 +16,6 @@ mod sync_read_policy;
 mod system_mutation;
 mod system_read;
 mod task_merge;
-mod type_mutation;
 mod type_read;
 mod usage_read;
 
@@ -72,9 +71,6 @@ pub(crate) use system_read::SystemReadQuery;
 pub(crate) use task_merge::{
     AcknowledgeTaskMergeBatchCommand, AppendTaskMergeOperationCommand, ApplyTaskMergeBatchCommand,
     PrepareTaskMergeBatchCommand, TaskConflictSetQuery,
-};
-pub(crate) use type_mutation::{
-    DeleteObjectTypeCommand, RegisterPackageTypesCommand, UpsertObjectTypeCommand,
 };
 pub(crate) use type_read::TypeReadQuery;
 pub(crate) use usage_read::UsageReadQuery;

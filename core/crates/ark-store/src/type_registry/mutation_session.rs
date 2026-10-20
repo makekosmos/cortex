@@ -1,7 +1,7 @@
-use crate::application::type_mutation::{TypeEntityKind, TypeMutationSession};
-use crate::type_registry::TypeRegistration;
-use crate::types::ObjectType;
 use ark_application::sync_storage::ReplayNotice;
+use ark_application::type_mutation::{TypeEntityKind, TypeMutationSession};
+use ark_domain::canonical_type::TypeRegistration;
+use ark_domain::types::ObjectType;
 use rusqlite::Transaction;
 
 pub(crate) struct SqliteTypeMutationSession<'tx, 'connection> {
@@ -16,15 +16,15 @@ impl<'tx, 'connection> SqliteTypeMutationSession<'tx, 'connection> {
 
 impl TypeMutationSession for SqliteTypeMutationSession<'_, '_> {
     fn register_type(&self, registration: &TypeRegistration) -> Result<Vec<ReplayNotice>, String> {
-        ark_store::type_registry::register_type(self.transaction, registration)
+        crate::type_registry::register_type(self.transaction, registration)
     }
 
     fn upsert_object_type(&self, object_type: &ObjectType) -> Result<Vec<ReplayNotice>, String> {
-        ark_store::type_registry::upsert_object_type(self.transaction, object_type)
+        crate::type_registry::upsert_object_type(self.transaction, object_type)
     }
 
     fn delete_object_type(&self, id: &str) -> Result<(), String> {
-        ark_store::type_registry::delete_object_type(self.transaction, id)
+        crate::type_registry::delete_object_type(self.transaction, id)
     }
 
     fn record_local_revision(
@@ -42,7 +42,7 @@ impl TypeMutationSession for SqliteTypeMutationSession<'_, '_> {
             TypeEntityKind::ObjectType => "object_type",
             TypeEntityKind::ObjectLink => "object_link",
         };
-        let hlc = ark_store::sync_versions::bump_sync_version_vector(
+        let hlc = crate::sync_versions::bump_sync_version_vector(
             self.transaction,
             entity_type,
             id,
@@ -50,9 +50,9 @@ impl TypeMutationSession for SqliteTypeMutationSession<'_, '_> {
             deleted,
         )?;
         if deleted {
-            ark_store::sync_tombstones::record(self.transaction, entity_type, id, None, &hlc)?;
+            crate::sync_tombstones::record(self.transaction, entity_type, id, None, &hlc)?;
         } else {
-            ark_store::sync_tombstones::delete(self.transaction, id)?;
+            crate::sync_tombstones::delete(self.transaction, id)?;
         }
         Ok(hlc)
     }

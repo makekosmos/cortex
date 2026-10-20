@@ -6,11 +6,9 @@ mod adapter;
 mod apply;
 mod legacy_mutation;
 mod signed_integration;
-mod type_mutation;
 
 pub(crate) use legacy_mutation::SqliteLegacyMutationSession;
 pub(crate) use signed_integration::SqliteSignedIntegrationFrameSession;
-pub(crate) use type_mutation::SqliteTypeMutationSession;
 
 pub struct SqliteStorageBackend {
     pub(in crate::db) db: DbHandle,

@@ -2,6 +2,7 @@ mod builtins;
 mod catalog;
 mod legacy_mutations;
 mod migrations;
+pub(crate) mod mutation_session;
 mod query_ids;
 mod registration;
 mod resolution;

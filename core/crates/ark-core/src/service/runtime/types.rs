@@ -16,10 +16,7 @@ pub(super) async fn types_register_package_definitions(
     registrations: Vec<crate::type_registry::TypeRegistration>,
 ) -> Result<Value, String> {
     let replay_notices = get_db_handle(state)?
-        .submit(
-            db::CommandContext::engine(),
-            db::RegisterPackageTypesCommand::new(registrations),
-        )
+        .submit_register_package_types(db::CommandContext::engine(), registrations)
         .await
         .map_err(|error| error.to_string())?;
     emit_replay_notices(replay_notices);
@@ -65,10 +62,7 @@ pub(super) async fn upsert_object_type(
     device_id: Option<String>,
 ) -> Result<Value, String> {
     let commit = get_db_handle(state)?
-        .submit(
-            db::CommandContext::engine(),
-            db::UpsertObjectTypeCommand::new(object_type, device_id),
-        )
+        .submit_upsert_object_type(db::CommandContext::engine(), object_type, device_id)
         .await
         .map_err(|error| error.to_string())?;
     emit_replay_notices(commit.replay_notices);
@@ -82,10 +76,7 @@ pub(super) async fn delete_object_type(
     device_id: Option<String>,
 ) -> Result<Value, String> {
     let commit = get_db_handle(state)?
-        .submit(
-            db::CommandContext::engine(),
-            db::DeleteObjectTypeCommand::new(id, device_id),
-        )
+        .submit_delete_object_type(db::CommandContext::engine(), id, device_id)
         .await
         .map_err(|error| error.to_string())?;
     maybe_broadcast_local_changes(state, commit.entities).await;

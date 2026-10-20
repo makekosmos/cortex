@@ -1,12 +1,12 @@
 # ARK Core storage census
 
-Generated from the current Core source. The scanner found 54 typed operations and 866 SQLite ownership references. It scans all Rust sources and labels standalone tests, inline tests, debug-only code, and production separately. It does not infer policy ownership or discover indirect SQL hidden behind helper calls.
+Generated from the current Core source. The scanner found 51 typed operations and 861 SQLite ownership references. It scans all Rust sources and labels standalone tests, inline tests, debug-only code, and production separately. It does not infer policy ownership or discover indirect SQL hidden behind helper calls.
 
 ## Transaction contracts
 
 | Command contract | Count | Execution boundary |
 | --- | ---: | --- |
-| `DbCommand` | 29 | immediate write transaction |
+| `DbCommand` | 26 | immediate write transaction |
 | `DbQuery` | 24 | deferred read transaction |
 | `DbMaintenanceCommand` | 1 | exclusive maintenance connection |
 
@@ -39,9 +39,6 @@ Generated from the current Core source. The scanner found 54 typed operations an
 | `DbCommand` | `PrepareTaskMergeBatchCommand` | [core/crates/ark-core/src/db/command/commands/task_merge.rs:74](../core/crates/ark-core/src/db/command/commands/task_merge.rs:74) |
 | `DbCommand` | `AcknowledgeTaskMergeBatchCommand` | [core/crates/ark-core/src/db/command/commands/task_merge.rs:125](../core/crates/ark-core/src/db/command/commands/task_merge.rs:125) |
 | `DbCommand` | `ApplyTaskMergeBatchCommand` | [core/crates/ark-core/src/db/command/commands/task_merge.rs:177](../core/crates/ark-core/src/db/command/commands/task_merge.rs:177) |
-| `DbCommand` | `RegisterPackageTypesCommand` | [core/crates/ark-core/src/db/command/commands/type_mutation.rs:25](../core/crates/ark-core/src/db/command/commands/type_mutation.rs:25) |
-| `DbCommand` | `UpsertObjectTypeCommand` | [core/crates/ark-core/src/db/command/commands/type_mutation.rs:63](../core/crates/ark-core/src/db/command/commands/type_mutation.rs:63) |
-| `DbCommand` | `DeleteObjectTypeCommand` | [core/crates/ark-core/src/db/command/commands/type_mutation.rs:98](../core/crates/ark-core/src/db/command/commands/type_mutation.rs:98) |
 | `DbCommand` | `OperationReceiptCommand` | [core/crates/ark-core/src/db/command/operation_receipt.rs:47](../core/crates/ark-core/src/db/command/operation_receipt.rs:47) |
 | `DbMaintenanceCommand` | `RestoreSnapshotCommand` | [core/crates/ark-core/src/db/command/commands/system_mutation.rs:91](../core/crates/ark-core/src/db/command/commands/system_mutation.rs:91) |
 | `DbQuery` | `RegistryPeerAdmissionQuery` | [core/crates/ark-core/src/db/command/commands/device_registry_admission.rs:18](../core/crates/ark-core/src/db/command/commands/device_registry_admission.rs:18) |
@@ -82,7 +79,7 @@ Generated from the current Core source. The scanner found 54 typed operations an
 | production | SQL literal | 20 |
 | production | SQLite lifecycle | 9 |
 | production | SQLite operation | 23 |
-| production | SQLite type or import | 131 |
+| production | SQLite type or import | 126 |
 | test_file | SQL literal | 288 |
 | test_file | SQLite lifecycle | 80 |
 | test_file | SQLite operation | 247 |

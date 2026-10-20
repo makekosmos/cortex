@@ -22,7 +22,6 @@ pub(crate) use ark_store::VERSION_VECTOR_KEY;
 pub(crate) use backend::SqliteLegacyMutationSession;
 pub(crate) use backend::SqliteSignedIntegrationFrameSession;
 pub use backend::SqliteStorageBackend;
-pub(crate) use backend::SqliteTypeMutationSession;
 pub use command::CommandSource;
 pub(crate) use command::{
     AcceptPeerSyncPolicyCommand, AcknowledgeTaskMergeBatchCommand,
@@ -33,19 +32,19 @@ pub(crate) use command::{
     CommandClass, CommandContext, CommittedFeedDeliveryPageQuery, CommittedFeedPageQuery,
     CommittedFeedProgress, CommittedFeedProgressCommand, CommittedFeedProgressOperation,
     CommittedFeedSnapshotQuery, CompactUsageSyncLogCommand, DbError, DbHandle, DbOwner,
-    DeleteObjectTypeCommand, EnrollPairedDeviceCommand, GetSyncKeyValueQuery, IdentityErrorStyle,
-    IntegrationReadQuery, LegacyDeleteCommand, LegacyGraphWriteCommand,
-    LoadAcceptedPeerSyncPolicyQuery, LoadActiveLocalSyncProfileQuery, LoadDeviceRegistryQuery,
-    LoadEntitiesQuery, LoadOrGenerateIrohSecretKeyCommand, LoadPolicyBoundEntitiesPageQuery,
-    LoadRegistryEventsQuery, LoadSyncProfileForSyncQuery, LocalCoreTaskWrite, ObjectReadQuery,
+    EnrollPairedDeviceCommand, GetSyncKeyValueQuery, IdentityErrorStyle, IntegrationReadQuery,
+    LegacyDeleteCommand, LegacyGraphWriteCommand, LoadAcceptedPeerSyncPolicyQuery,
+    LoadActiveLocalSyncProfileQuery, LoadDeviceRegistryQuery, LoadEntitiesQuery,
+    LoadOrGenerateIrohSecretKeyCommand, LoadPolicyBoundEntitiesPageQuery, LoadRegistryEventsQuery,
+    LoadSyncProfileForSyncQuery, LocalCoreTaskWrite, ObjectReadQuery,
     PersistIntegrationGrantCommand, PersistNodeAuthorizationCommand,
     PolicyBoundFeedDeliveryPageQuery, PrepareTaskMergeBatchCommand,
     PublishIntegrationCredentialEnvelopeCommand, ReceiveInboxReceiptCommand,
-    RegisterPackageTypesCommand, RegistryDeviceEnabledQuery, RegistryPeerAdmissionQuery,
-    RemoteCoreTaskOutcome, RestoreSnapshotCommand, SaveLocalSyncProfileCommand,
-    SignRegistryHandshakeCommand, SystemReadQuery, TaskConflictSetQuery, TrackedAppDeleteCommand,
-    TrackedAppUpsertCommand, TypeReadQuery, UpsertObjectTypeCommand, UsageCompleteThroughQuery,
-    UsageReadQuery, ValidateOutboundSignedFrameQuery, VerifyRegistryHandshakeQuery,
+    RegistryDeviceEnabledQuery, RegistryPeerAdmissionQuery, RemoteCoreTaskOutcome,
+    RestoreSnapshotCommand, SaveLocalSyncProfileCommand, SignRegistryHandshakeCommand,
+    SystemReadQuery, TaskConflictSetQuery, TrackedAppDeleteCommand, TrackedAppUpsertCommand,
+    TypeReadQuery, UsageCompleteThroughQuery, UsageReadQuery, ValidateOutboundSignedFrameQuery,
+    VerifyRegistryHandshakeQuery,
 };
 pub use committed_feed::{
     acknowledge_outbound_identity, begin_outbound_policy_identity,

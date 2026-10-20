@@ -1,6 +1,6 @@
 # ARK typed-operation transaction map
 
-This map groups the 54 operations still found by the generated [Core storage census](ark-core-storage-census-2026-10-19.md), plus five extracted Store writer paths, by responsibility. The current inventory has **29 `DbCommand` writes, 24 `DbQuery` reads, and 1 `DbMaintenanceCommand`**; local and authenticated `core.task` writes, local sync key-value writes, sync-progress writes, and usage-sequence migration use dedicated Store writer tasks. `OperationReceiptCommand` remains in the census as a test-only adapter. Locations point to the current production owners.
+This map groups the 51 operations still found by the generated [Core storage census](ark-core-storage-census-2026-10-19.md), plus eight extracted Store writer paths, by responsibility. The current inventory has **26 `DbCommand` writes, 24 `DbQuery` reads, and 1 `DbMaintenanceCommand`**; local and authenticated `core.task` writes, local sync key-value writes, sync-progress writes, usage-sequence migration, and type-registry mutations use dedicated Store writer tasks. `OperationReceiptCommand` remains in the census as a test-only adapter. Locations point to the current production owners.
 
 ## Shared execution and effects
 
@@ -61,12 +61,14 @@ These operations return results to their Core callers; no direct network or othe
 | DbCommand | `TrackedAppUpsertCommand` | `core/crates/ark-core/src/db/command/commands/legacy_mutation/tracked_app.rs:22` |
 | DbCommand | `TrackedAppDeleteCommand` | `core/crates/ark-core/src/db/command/commands/legacy_mutation/tracked_app.rs:55` |
 
-### Sync policy, entity/feed transfer, KV, and usage log — 20 operations
+### Sync policy, entity/feed transfer, KV, and usage log — 19 operations
 
 **Core:** owns principal and class checks, peer authorization, profile/policy binding, sync visibility decisions, authenticated inbox handling, and feed-size validation. **Persistence:** Store `data_platform`, `sync_entities`, `committed_feed`, `sync_kv`, `usage_sync_log`, and authorized-node functions provide the storage operations. Writes use the immediate transaction; reads use one deferred snapshot. The authenticated apply path keeps inbox and entity changes atomic.
 
 | Kind | Operation | Implementation |
 |---|---|---|
+| StoreWriterTask | `LocalSyncKeyValueWrite` | `core/crates/ark-core/src/db/command/executor/actor/task/local_sync_key_value_write.rs` → `ark_store::writer::SqliteWriter::set_local_sync_key_value` |
+| StoreWriterTask | `SyncProgressWrite` | `core/crates/ark-core/src/db/command/executor/actor/task/sync_progress_write.rs` → `ark_store::writer::SqliteWriter::set_sync_progress` |
 | DbCommand | `CommittedFeedProgressCommand` | `core/crates/ark-core/src/db/command/commands/sync_mutation.rs:70` |
 | DbCommand | `ApplySyncEntityCommand` | `core/crates/ark-core/src/db/command/commands/sync_mutation.rs:263` |
 | DbCommand | `ApplyAuthenticatedSyncEntityCommand` | `core/crates/ark-core/src/db/command/commands/sync_mutation.rs:324` |
@@ -99,23 +101,22 @@ These operations return results to their Core callers; no direct network or othe
 
 ### Type registry — 4 operations
 
-**Core:** owns command validation, actor scheduling, and local revision policy through `SqliteTypeMutationSession`. **Persistence:** type reads and all three type mutation operations call Store APIs. Writes use the immediate transaction; reads use the deferred snapshot. Core's generic command contract still passes the raw transaction, so the storage boundary is not complete.
-
-`RegisterPackageTypesCommand`, `UpsertObjectTypeCommand`, and `DeleteObjectTypeCommand` delegate persistence to `ark_store::type_registry`. Store owns compatibility-version writes, alias-collision checks, pending replay, canonical-type no-op behavior, and deprecation. Core still owns `SqliteTypeMutationSession`, generic command execution, authorization, and local revision recording, so this cut does not complete the opaque transaction boundary or remove Core's SQLite dependency.
+**Core:** validates command context, performs actor admission/scheduling, and publishes post-commit registration notices. **Store:** owns the type-mutation session and executes each mutation in its own immediate transaction. Type reads use the deferred snapshot. This removes these three operations from Core's raw-transaction `DbCommand` surface; Core's remaining generic commands still expose the incomplete SQLite boundary.
 
 | Kind | Operation | Implementation |
 |---|---|---|
-| DbCommand | `RegisterPackageTypesCommand` | `core/crates/ark-core/src/db/command/commands/type_mutation.rs:25` |
-| DbCommand | `UpsertObjectTypeCommand` | `core/crates/ark-core/src/db/command/commands/type_mutation.rs:63` |
-| DbCommand | `DeleteObjectTypeCommand` | `core/crates/ark-core/src/db/command/commands/type_mutation.rs:98` |
+| StoreWriterTask | `RegisterPackageTypes` | `core/crates/ark-core/src/db/command/executor/actor/task/type_mutation.rs` → `ark_store::writer::SqliteWriter::register_package_types` |
+| StoreWriterTask | `UpsertObjectType` | `core/crates/ark-core/src/db/command/executor/actor/task/type_mutation.rs` → `ark_store::writer::SqliteWriter::upsert_object_type` |
+| StoreWriterTask | `DeleteObjectType` | `core/crates/ark-core/src/db/command/executor/actor/task/type_mutation.rs` → `ark_store::writer::SqliteWriter::delete_object_type` |
 | DbQuery | `TypeReadQuery` | `core/crates/ark-core/src/db/command/commands/type_read.rs:24` |
 
-### System, object, and usage reads — 6 operations
+### System, object, and usage reads — 7 operations
 
 **Core:** checks engine access and dispatches system/restore behavior. **Persistence:** object and usage reads call Store APIs, while system key-value reads call Store `sync_kv`; snapshot validation and restore remain Core DB orchestration. `SystemReadQuery`, `ObjectReadQuery`, and `UsageReadQuery` use deferred read snapshots. `LoadOrGenerateIrohSecretKeyCommand` and `CompactUsageSyncLogCommand` use immediate transactions. `RestoreSnapshotCommand` is the sole maintenance operation and uses an exclusive maintenance connection. The command-level trace does not establish additional post-commit key or restore effects.
 
 | Kind | Operation | Implementation |
 |---|---|---|
+| StoreWriterTask | `UsageSequenceMigration` | `core/crates/ark-core/src/db/command/executor/actor/task/usage_sequence_migration.rs` → `ark_store::writer::SqliteWriter::ensure_usage_sequence_migrated` |
 | DbCommand | `LoadOrGenerateIrohSecretKeyCommand` | `core/crates/ark-core/src/db/command/commands/system_mutation.rs:10` |
 | DbCommand | `CompactUsageSyncLogCommand` | `core/crates/ark-core/src/db/command/commands/system_mutation.rs:52` |
 | DbMaintenanceCommand | `RestoreSnapshotCommand` | `core/crates/ark-core/src/db/command/commands/system_mutation.rs:91` |
@@ -139,11 +140,11 @@ These operations return results to their Core callers; no direct network or othe
 | Device registry | 0 | 4 | 5 | 0 | 9 |
 | Integration replication and administration | 0 | 5 | 2 | 0 | 7 |
 | Legacy mutations | 0 | 4 | 0 | 0 | 4 |
-| Sync policy, transfer, KV, usage log | 0 | 8 | 12 | 0 | 20 |
+| Sync policy, transfer, KV, usage log | 2 | 5 | 12 | 0 | 19 |
 | Task merge | 0 | 4 | 1 | 0 | 5 |
-| Type registry | 0 | 3 | 1 | 0 | 4 |
-| System, object, and usage reads | 0 | 2 | 3 | 1 | 6 |
+| Type registry | 3 | 0 | 1 | 0 | 4 |
+| System, object, and usage reads | 1 | 2 | 3 | 1 | 7 |
 | Operation receipts | 0 | 1 | 0 | 0 | 1 |
-| **Total** | **2** | **32** | **24** | **1** | **59** |
+| **Total** | **8** | **26** | **24** | **1** | **59** |
 
 The census detects typed operation declarations and direct SQLite references, but does not resolve indirect helper calls or assign policy ownership. Ownership gaps above should be settled by tracing the named Core session/helper implementations and their Store calls before planning those areas as Store-only cutovers.

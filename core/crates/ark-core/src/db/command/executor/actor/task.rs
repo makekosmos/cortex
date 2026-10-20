@@ -15,6 +15,10 @@ mod sync_progress_write;
 pub(in crate::db::command) use sync_progress_write::SyncProgressWriteTask;
 mod usage_sequence_migration;
 pub(in crate::db::command) use usage_sequence_migration::UsageSequenceMigrationTask;
+mod type_mutation;
+pub(in crate::db::command) use type_mutation::{
+    DeleteObjectTypeTask, RegisterPackageTypesTask, UpsertObjectTypeTask,
+};
 
 /// Delivers a reply. The writer calls it only after the slot is released, so a
 /// caller that receives the reply can submit again without hitting the barrier.

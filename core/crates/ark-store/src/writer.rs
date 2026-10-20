@@ -1,52 +1,15 @@
 use rusqlite::{Connection, Transaction, TransactionBehavior};
 
 mod authenticated_task;
+mod error;
 mod sync_key_value;
 mod task_objects;
+mod type_mutation;
 mod usage_sequence_migration;
+use error::store_error_from_sqlite;
+pub use error::{StoreError, StoreErrorKind};
 use task_objects::apply_local_core_task_write_in;
 pub use task_objects::{TaskObjectWriteError, TaskObjectWrites};
-/// SQLite failure detail that can cross the Store boundary without exposing
-/// rusqlite types to callers.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct StoreError {
-    pub kind: StoreErrorKind,
-    message: String,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum StoreErrorKind {
-    DiskFull,
-    Io,
-    Corrupt,
-    Other,
-}
-
-impl StoreError {
-    fn from_sqlite(error: rusqlite::Error) -> Self {
-        let kind = match &error {
-            rusqlite::Error::SqliteFailure(code, _) => match code.code {
-                rusqlite::ErrorCode::DiskFull => StoreErrorKind::DiskFull,
-                rusqlite::ErrorCode::SystemIoFailure => StoreErrorKind::Io,
-                rusqlite::ErrorCode::DatabaseCorrupt | rusqlite::ErrorCode::NotADatabase => {
-                    StoreErrorKind::Corrupt
-                }
-                _ => StoreErrorKind::Other,
-            },
-            _ => StoreErrorKind::Other,
-        };
-        Self {
-            kind,
-            message: error.to_string(),
-        }
-    }
-}
-
-impl std::fmt::Display for StoreError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.message)
-    }
-}
 
 #[derive(Debug)]
 pub enum StoreTransactionFailure<E> {
@@ -216,10 +179,18 @@ impl SqliteWriter {
             &mut WriteCapabilities<'scope, 'connection>,
         ) -> Result<T, E>,
     ) -> Result<T, StoreTransactionFailure<E>> {
-        let transaction = self
-            .connection
+        Self::write_with_capabilities_on_connection(&mut self.connection, operation)
+    }
+
+    fn write_with_capabilities_on_connection<T, E>(
+        connection: &mut Connection,
+        operation: impl for<'scope, 'connection> FnOnce(
+            &mut WriteCapabilities<'scope, 'connection>,
+        ) -> Result<T, E>,
+    ) -> Result<T, StoreTransactionFailure<E>> {
+        let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
-            .map_err(|error| StoreTransactionFailure::Begin(StoreError::from_sqlite(error)))?;
+            .map_err(|error| StoreTransactionFailure::Begin(store_error_from_sqlite(error)))?;
         let output = {
             let mut capabilities = WriteCapabilities {
                 transaction: &transaction,
@@ -228,7 +199,7 @@ impl SqliteWriter {
         };
         transaction
             .commit()
-            .map_err(|error| StoreTransactionFailure::Commit(StoreError::from_sqlite(error)))?;
+            .map_err(|error| StoreTransactionFailure::Commit(store_error_from_sqlite(error)))?;
         Ok(output)
     }
 

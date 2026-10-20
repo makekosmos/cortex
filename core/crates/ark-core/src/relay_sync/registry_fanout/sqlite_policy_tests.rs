@@ -1,7 +1,5 @@
 use super::sqlite_test_support::*;
-use crate::db::{
-    CommandContext, ObjectReadQuery, RegisterPackageTypesCommand, SaveLocalSyncProfileCommand,
-};
+use crate::db::{CommandContext, ObjectReadQuery, SaveLocalSyncProfileCommand};
 use crate::replication_storage::PeerIdentityBackend;
 use crate::types::{ArkObject, SyncEntity};
 use ark_application::sync_policy::SyncProfileRule;
@@ -238,10 +236,7 @@ async fn register_note_type(peer: &ActorPeer) {
         .find(|registration| registration.type_id == "com.kosmos.note")
         .expect("canonical note type is defined");
     peer.db
-        .submit(
-            CommandContext::engine(),
-            RegisterPackageTypesCommand::new(vec![registration]),
-        )
+        .submit_register_package_types(CommandContext::engine(), vec![registration])
         .await
         .expect("register note type before sync");
 }
