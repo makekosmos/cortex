@@ -15,6 +15,35 @@ pub struct ObjectMutationReplayState {
 pub struct ObjectMutationReplayFixture;
 
 impl ObjectMutationReplayFixture {
+    pub fn install_write_probe(path: &Path) -> Result<(), String> {
+        let path = path
+            .to_str()
+            .ok_or_else(|| "object mutation replay path is not UTF-8".to_string())?;
+        let connection = crate::open::open_db(path)?;
+        connection
+            .execute_batch(
+                "CREATE TABLE operation_mutation_probe(writes INTEGER NOT NULL);
+                 INSERT INTO operation_mutation_probe VALUES (0);
+                 CREATE TRIGGER count_object_insert AFTER INSERT ON objects
+                 BEGIN UPDATE operation_mutation_probe SET writes = writes + 1; END;
+                 CREATE TRIGGER count_object_update AFTER UPDATE ON objects
+                 BEGIN UPDATE operation_mutation_probe SET writes = writes + 1; END;",
+            )
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn write_count(path: &Path) -> Result<i64, String> {
+        let path = path
+            .to_str()
+            .ok_or_else(|| "object mutation replay path is not UTF-8".to_string())?;
+        let connection = crate::open::open_db(path)?;
+        connection
+            .query_row("SELECT writes FROM operation_mutation_probe", [], |row| {
+                row.get(0)
+            })
+            .map_err(|error| error.to_string())
+    }
+
     pub fn inspect(
         path: &Path,
         object_id: &str,

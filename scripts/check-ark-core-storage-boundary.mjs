@@ -161,19 +161,13 @@ export async function collectStorageViolations({
     ),
   );
   const dependency = /^\s*rusqlite\b(?:\s*=|\s*\{|\s*\.)[^\n]*/m.exec(manifest);
-  if (dependency) {
-    const tables = [...manifest.slice(0, dependency.index).matchAll(/^\s*\[[^\]]+\]\s*$/gm)];
-    const table = tables.at(-1)?.[0].trim();
-    const testOnly =
-      table === "[dev-dependencies]" || /\boptional\s*=\s*true\b/.test(dependency[0]);
-    if (!testOnly)
-      violations.push({
-        path: path.relative(root, manifestPath).split(path.sep).join("/"),
-        line: lineAt(manifest, dependency.index),
-        category: "rusqlite dependency",
-        scope: "production",
-      });
-  }
+  if (dependency)
+    violations.push({
+      path: path.relative(root, manifestPath).split(path.sep).join("/"),
+      line: lineAt(manifest, dependency.index),
+      category: "rusqlite dependency",
+      scope: "production",
+    });
 
   for (const file of (await collectRustFiles(sourceRoot)).sort()) {
     const source = await readFile(file, "utf8");

@@ -35,26 +35,6 @@ async fn write_snapshot(state: &Arc<ServiceState>) -> serde_json::Value {
     .unwrap()
 }
 
-fn operation_receipt_count(path: &std::path::Path, operation_id: &str) -> i64 {
-    rusqlite::Connection::open(path)
-        .expect("database opens for receipt inspection")
-        .query_row(
-            "SELECT COUNT(*) FROM ark_operation_receipts WHERE operation_id = ?1",
-            [operation_id],
-            |row| row.get(0),
-        )
-        .expect("receipt count reads")
-}
-
-fn object_write_count(path: &std::path::Path) -> i64 {
-    rusqlite::Connection::open(path)
-        .expect("database opens for mutation inspection")
-        .query_row("SELECT writes FROM operation_mutation_probe", [], |row| {
-            row.get(0)
-        })
-        .expect("mutation count reads")
-}
-
 #[tokio::test]
 async fn object_mutation_json_replays_same_result_and_rejects_operation_id_reuse() {
     let fixture = service_fixture();
@@ -67,16 +47,7 @@ async fn object_mutation_json_replays_same_result_and_rejects_operation_id_reuse
     )
     .await
     .unwrap();
-    rusqlite::Connection::open(fixture.db_path())
-        .expect("database opens for mutation probe")
-        .execute_batch(
-            "CREATE TABLE operation_mutation_probe(writes INTEGER NOT NULL);
-             INSERT INTO operation_mutation_probe VALUES (0);
-             CREATE TRIGGER count_object_insert AFTER INSERT ON objects
-             BEGIN UPDATE operation_mutation_probe SET writes = writes + 1; END;
-             CREATE TRIGGER count_object_update AFTER UPDATE ON objects
-             BEGIN UPDATE operation_mutation_probe SET writes = writes + 1; END;",
-        )
+    ark_store::test_support::ObjectMutationReplayFixture::install_write_probe(&fixture.db_path())
         .expect("mutation counter triggers install");
 
     let (left, right) = tokio::join!(
@@ -85,13 +56,17 @@ async fn object_mutation_json_replays_same_result_and_rejects_operation_id_reuse
     );
     assert_eq!(left.unwrap(), json!(true));
     assert_eq!(right.unwrap(), json!(true));
+    let after_first_write = ark_store::test_support::ObjectMutationReplayFixture::inspect(
+        &fixture.db_path(),
+        "operation-receipt-note",
+        "json-operation-1",
+        "unused-delete-operation",
+    )
+    .expect("receipt and object state reads");
+    assert_eq!(after_first_write.upsert_receipts, 1, "one receipt commits");
     assert_eq!(
-        operation_receipt_count(&fixture.db_path(), "json-operation-1"),
-        1,
-        "concurrent duplicates commit only one receipt"
-    );
-    assert_eq!(
-        object_write_count(&fixture.db_path()),
+        ark_store::test_support::ObjectMutationReplayFixture::write_count(&fixture.db_path())
+            .expect("mutation count reads"),
         1,
         "concurrent duplicates execute the object mutation only once"
     );
@@ -113,12 +88,20 @@ async fn object_mutation_json_replays_same_result_and_rejects_operation_id_reuse
         "a conflicting payload does not mutate the object"
     );
     assert_eq!(
-        operation_receipt_count(&fixture.db_path(), "json-operation-1"),
+        ark_store::test_support::ObjectMutationReplayFixture::inspect(
+            &fixture.db_path(),
+            "operation-receipt-note",
+            "json-operation-1",
+            "unused-delete-operation",
+        )
+        .expect("receipt state reads")
+        .upsert_receipts,
         1,
         "a conflicting payload does not create another receipt"
     );
     assert_eq!(
-        object_write_count(&fixture.db_path()),
+        ark_store::test_support::ObjectMutationReplayFixture::write_count(&fixture.db_path())
+            .expect("mutation count reads"),
         1,
         "a conflicting payload does not execute another object mutation"
     );

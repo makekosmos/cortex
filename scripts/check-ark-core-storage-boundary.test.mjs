@@ -65,7 +65,7 @@ test("the boundary checker rejects connection callbacks that leak SQLite into Co
   );
 });
 
-test("the boundary checker rejects rusqlite as a required production dependency", async (t) => {
+test("the boundary checker rejects rusqlite in every Cargo dependency scope", async (t) => {
   const paths = await fixture(t, {
     manifest: "[dependencies]\nrusqlite = { workspace = true }\n",
     source: "pub fn ready() {}\n",
@@ -81,7 +81,7 @@ test("the boundary checker rejects rusqlite as a required production dependency"
   ]);
 });
 
-test("the boundary checker allows rusqlite only for opt-in test support", async (t) => {
+test("the boundary checker rejects optional and dev-only rusqlite dependencies", async (t) => {
   const optional = await fixture(t, {
     manifest: "[dependencies]\nrusqlite = { workspace = true, optional = true }\n",
     source: "pub fn ready() {}\n",
@@ -90,8 +90,12 @@ test("the boundary checker allows rusqlite only for opt-in test support", async 
     manifest: "[dev-dependencies]\nrusqlite.workspace = true\n",
     source: "pub fn ready() {}\n",
   });
-  assert.deepEqual(await collectStorageViolations(optional), []);
-  assert.deepEqual(await collectStorageViolations(devOnly), []);
+  for (const paths of [optional, devOnly]) {
+    assert.deepEqual(
+      (await collectStorageViolations(paths)).map(({ category, scope }) => ({ category, scope })),
+      [{ category: "rusqlite dependency", scope: "production" }],
+    );
+  }
 });
 
 test("the baseline inventory distinguishes inline tests from production code", async (t) => {
@@ -186,7 +190,7 @@ test("the boundary checker scopes debug-only imports and async functions", async
 
 test("the boundary checker scopes opt-in test-support SQLite code", async (t) => {
   const paths = await fixture(t, {
-    manifest: "[dependencies]\nrusqlite = { workspace = true, optional = true }\n",
+    manifest: '[dependencies]\nserde = "1"\n',
     source: [
       '#[cfg(any(test, feature = "test-support"))] use rusqlite::Connection;',
       '#[cfg(any(test, feature = "test-support"))] fn fixture(connection: &Connection) {',
@@ -237,7 +241,12 @@ test("the checked-out Core tree has no production SQLite code references", async
   );
   assert.deepEqual(
     production.map(({ path: file, category }) => ({ path: file, category })),
-    [],
+    [
+      {
+        path: "core/crates/ark-core/Cargo.toml",
+        category: "rusqlite dependency",
+      },
+    ],
     "Core production code and dependencies must not depend on SQLite",
   );
 });
