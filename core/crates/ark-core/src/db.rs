@@ -2,13 +2,14 @@ mod backend;
 mod command;
 mod committed_feed;
 pub(crate) mod constants;
-mod open;
 
 pub use ark_application::sync_storage::{
     CommittedFeedDeliveryPage, CommittedFeedEntry, FeedSnapshot, InitialSnapshot, OutboundAck,
     OutboundProgress,
 };
 pub use ark_store::committed_feed::MAX_FEED_PAGE_SIZE;
+#[cfg(test)]
+pub use ark_store::snapshot::backup_to_file_chunked_verified as backup_to_file_chunked;
 pub(crate) use ark_store::snapshot::recover_interrupted_restore;
 pub use ark_store::snapshot::restore_snapshot;
 pub use ark_store::snapshot::{
@@ -44,7 +45,6 @@ pub use committed_feed::{
     receive_inbox_payload, set_inbox_state, InboxState, MAX_FEED_DELIVERY_BYTES,
     MAX_INBOX_PAYLOAD_BYTES,
 };
-pub use open::backup_to_file_chunked;
 
 mod integration_replication_admission;
 mod integration_replication_apply;

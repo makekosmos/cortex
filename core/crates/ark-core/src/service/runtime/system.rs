@@ -236,7 +236,12 @@ pub(super) async fn db_backup(
         .spawn(move || {
             let _bg = background_priority::BackgroundThreadGuard::enter();
             let _gate = state_for_thread.backup_gate.blocking_lock();
-            let result = db::backup_to_file_chunked(&src_path, &dest_for_thread, pages, pause);
+            let result = ark_store::snapshot::backup_to_file_chunked_verified(
+                &src_path,
+                &dest_for_thread,
+                pages,
+                pause,
+            );
             let event = match &result {
                 Ok(()) => json!({
                     "event": "db_backup_result",
