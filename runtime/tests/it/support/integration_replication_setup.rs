@@ -6,8 +6,7 @@
 #![allow(dead_code, unused_imports)]
 
 use ark_core::db::{
-    init_schema, try_acquire_integration_refresh_lease, upsert_authorized_node,
-    upsert_integration_configuration, upsert_integration_node_grant,
+    upsert_authorized_node, upsert_integration_configuration, upsert_integration_node_grant,
 };
 use ark_core::integration_replication::{
     AuthorizedNode, GrantStatus, IntegrationConfiguration, IntegrationNodeGrant, NodeStatus,
@@ -79,14 +78,13 @@ pub fn new_setup_named(integration_id: &str) -> Result<IntegrationReplicationSet
         integration_id,
     )?;
     seed_recipient_baseline_named(&recipient_db, &origin, integration_id)?;
-    let conn = Connection::open(&origin_db).map_err(|error| error.to_string())?;
     let now_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|error| error.to_string())?
         .as_millis() as u64;
-    try_acquire_integration_refresh_lease(
-        &conn,
-        &ark_core::db::RefreshLeaseAcquireParams {
+    ark_store::test_support::acquire_refresh_lease(
+        &origin_db,
+        ark_store::test_support::RefreshLeaseAcquireFixture {
             integration_id: integration_id.into(),
             holder_node_id: origin.node_id.clone(),
             credential_generation: 1,
@@ -139,7 +137,7 @@ pub fn seed_database_named(
     integration_id: &str,
 ) -> Result<(), String> {
     let conn = Connection::open(path).map_err(|error| error.to_string())?;
-    init_schema(&conn)?;
+    ark_store::open::init_schema(&conn)?;
     if seed_configuration {
         let config = IntegrationConfiguration {
             integration_id: integration_id.into(),

@@ -15,6 +15,7 @@ mod data_volume;
 mod device_registry;
 mod external_ref;
 mod inbox;
+mod integration_replication;
 mod legacy_writes;
 mod object_mutation_replay;
 mod object_revision;
@@ -39,6 +40,7 @@ pub use data_volume::DataVolumeFixture;
 pub use device_registry::{DeviceRegistryFixture, DeviceRegistryState};
 pub use external_ref::{ExternalRefFixture, ExternalRefSnapshot};
 pub use inbox::has_inbox_receipt;
+pub use integration_replication::{acquire_refresh_lease, RefreshLeaseAcquireFixture};
 pub use legacy_writes::{
     LegacyBatchRollbackState, LegacyProjectDeleteState, LegacyWriteFixture, LegacyWriteSnapshot,
 };
