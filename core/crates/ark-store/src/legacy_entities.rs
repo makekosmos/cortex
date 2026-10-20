@@ -6,8 +6,9 @@ pub use mutations::{
 };
 
 use ark_domain::types::{Project, Tag, TodoItem};
+use rusqlite::types::Type;
 use rusqlite::Connection;
-use serde_json::{json, Value};
+use serde_json::Value;
 
 pub fn load_all_todos(conn: &Connection) -> Result<Vec<TodoItem>, String> {
     let mut stmt = conn
@@ -27,11 +28,40 @@ pub fn load_all_todos(conn: &Connection) -> Result<Vec<TodoItem>, String> {
             let checklist_str: String = row.get(20)?;
             let recurrence_str: Option<String> = row.get(21)?;
 
-            let tag_ids: Vec<String> = serde_json::from_str(&tag_ids_str).unwrap_or_default();
-            let checklist_items: Value = serde_json::from_str(&checklist_str).unwrap_or(json!([]));
+            let tag_ids: Vec<String> = serde_json::from_str(&tag_ids_str).map_err(|error| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    19,
+                    Type::Text,
+                    Box::new(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        format!("invalid todos.tag_ids JSON: {error}"),
+                    )),
+                )
+            })?;
+            let checklist_items: Value = serde_json::from_str(&checklist_str).map_err(|error| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    20,
+                    Type::Text,
+                    Box::new(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        format!("invalid todos.checklist_items JSON: {error}"),
+                    )),
+                )
+            })?;
             let recurrence_rule: Option<Value> = recurrence_str
                 .as_deref()
-                .and_then(|s| serde_json::from_str(s).ok());
+                .map(serde_json::from_str)
+                .transpose()
+                .map_err(|error| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        21,
+                        Type::Text,
+                        Box::new(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            format!("invalid todos.recurrence_rule JSON: {error}"),
+                        )),
+                    )
+                })?;
 
             Ok(TodoItem {
                 id: row.get(0)?,

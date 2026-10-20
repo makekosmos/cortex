@@ -228,6 +228,32 @@ mod tests {
     }
 
     #[test]
+    fn malformed_persisted_todo_json_is_reported_with_its_field() {
+        for (field, value) in [
+            ("tag_ids", "not-json"),
+            ("checklist_items", "not-json"),
+            ("recurrence_rule", "not-json"),
+        ] {
+            let connection = database();
+            connection
+                .execute(
+                    &format!(
+                        "INSERT INTO todos(id,title,{field},created_at) \
+                         VALUES('todo-1','task',?1,'2026-01-01T00:00:00.000Z')"
+                    ),
+                    [value],
+                )
+                .expect("corrupt legacy row is representable");
+
+            let error = load_all_todos(&connection).expect_err("corrupt JSON must be reported");
+            assert!(
+                error.contains(field),
+                "error should identify {field}: {error}"
+            );
+        }
+    }
+
+    #[test]
     fn batch_upsert_rolls_back_partial_writes_inside_outer_transaction() {
         let connection = database();
         connection
