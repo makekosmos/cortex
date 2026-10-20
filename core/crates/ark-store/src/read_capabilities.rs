@@ -1,5 +1,6 @@
 mod canonical;
 mod objects;
+mod type_registry;
 mod usage;
 
 use rusqlite::Connection;
@@ -17,6 +18,10 @@ pub struct CanonicalReadCapabilities<'snapshot> {
 }
 
 pub struct UsageReadCapabilities<'snapshot> {
+    connection: &'snapshot Connection,
+}
+
+pub struct TypeRegistryReadCapabilities<'snapshot> {
     connection: &'snapshot Connection,
 }
 
@@ -39,6 +44,12 @@ impl<'snapshot> ReadCapabilities<'snapshot> {
 
     pub fn usage(&self) -> UsageReadCapabilities<'_> {
         UsageReadCapabilities {
+            connection: self.connection,
+        }
+    }
+
+    pub fn type_registry(&self) -> TypeRegistryReadCapabilities<'_> {
+        TypeRegistryReadCapabilities {
             connection: self.connection,
         }
     }

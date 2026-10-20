@@ -2,7 +2,7 @@ use super::*;
 
 async fn type_read(state: &ServiceState, query: db::TypeReadQuery) -> Result<Value, String> {
     get_db_handle(state)?
-        .query(db::CommandContext::engine(), query)
+        .query_with_store(db::CommandContext::engine(), query)
         .await
         .map_err(|error| error.to_string())
 }

@@ -1,4 +1,4 @@
-use super::super::{sealed, CommandClass, CommandContext, DbError, DbQuery};
+use super::super::{sealed, CommandClass, CommandContext, DbError, StoreReadQuery};
 
 fn serialize<T: serde::Serialize>(value: Result<T, String>) -> Result<serde_json::Value, DbError> {
     let value = value.map_err(DbError::Storage)?;
@@ -21,7 +21,7 @@ pub(crate) enum TypeReadQuery {
 
 impl sealed::Sealed for TypeReadQuery {}
 
-impl DbQuery for TypeReadQuery {
+impl StoreReadQuery for TypeReadQuery {
     type Output = serde_json::Value;
 
     fn class(&self) -> CommandClass {
@@ -35,32 +35,25 @@ impl DbQuery for TypeReadQuery {
     fn read(
         self,
         context: &CommandContext,
-        connection: &rusqlite::Connection,
+        capabilities: &ark_store::ReadCapabilities<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_engine()?;
         match self {
-            Self::ListSummaries => serialize(crate::type_registry::list_type_summaries(connection)),
-            Self::Get { type_id, version } => serialize(crate::type_registry::get_type(
-                connection,
-                &type_id,
-                version.as_deref(),
-            )),
+            Self::ListSummaries => serialize(capabilities.type_registry().list_summaries()),
+            Self::Get { type_id, version } => serialize(
+                capabilities
+                    .type_registry()
+                    .get(&type_id, version.as_deref()),
+            ),
             Self::ListVersions(type_id) => {
-                let Some(canonical) = crate::type_registry::resolve_type_id(connection, &type_id)
-                    .map_err(DbError::Storage)?
-                else {
-                    return Ok(serde_json::json!([]));
-                };
-                serialize(crate::type_registry::list_type_versions(
-                    connection, &canonical,
-                ))
+                serialize(capabilities.type_registry().list_versions(&type_id))
             }
             Self::ResolveAlias(alias) => {
-                serialize(crate::type_registry::resolve_alias(connection, &alias))
+                serialize(capabilities.type_registry().resolve_alias(&alias))
             }
-            Self::ListObjectTypes => serialize(ark_store::object_types::list(connection)),
-            Self::GetObjectType(id) => serialize(ark_store::object_types::get(connection, &id)),
-            Self::ListObjectLinks => serialize(ark_store::objects::list_object_links(connection)),
+            Self::ListObjectTypes => serialize(capabilities.type_registry().list_object_types()),
+            Self::GetObjectType(id) => serialize(capabilities.type_registry().get_object_type(&id)),
+            Self::ListObjectLinks => serialize(capabilities.type_registry().list_object_links()),
         }
     }
 }
