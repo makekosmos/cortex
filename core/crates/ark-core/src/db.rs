@@ -54,14 +54,16 @@ mod integration_replication_apply;
 mod integration_replication_common;
 mod integration_replication_credentials;
 mod integration_replication_export;
-mod integration_replication_grants;
 mod integration_replication_issuer_lookup;
 #[cfg(test)]
 mod integration_replication_lease;
 mod integration_replication_publication;
-mod integration_replication_records;
 
 pub use ark_store::integration_replication::load_integration_node_grant;
+pub use ark_store::integration_replication::upsert_integration_node_grant;
+pub use ark_store::integration_replication::{
+    upsert_authorized_node, upsert_integration_configuration,
+};
 #[cfg(test)]
 pub(in crate::db) use integration_credentials::upsert_integration_credential_envelope_record;
 pub use integration_replication_admission::integration_verification_status;
@@ -75,7 +77,6 @@ pub use integration_replication_credentials::{
     load_integration_credential_envelope, load_latest_integration_credential_envelope,
 };
 pub use integration_replication_export::export_integration_replication;
-pub use integration_replication_grants::upsert_integration_node_grant;
 pub use integration_replication_issuer_lookup::{
     check_integration_credential_fence, load_issuer_encryption_key,
     load_issuer_encryption_key_for_publish, CredentialFenceExpectation,
@@ -86,9 +87,6 @@ pub use integration_replication_publication::RefreshLeaseAcquireParams;
 #[cfg(test)]
 pub use integration_replication_publication::{
     publish_integration_credential_envelope, try_acquire_integration_refresh_lease,
-};
-pub use integration_replication_records::{
-    upsert_authorized_node, upsert_integration_configuration,
 };
 // Preserve the public database query surface for downstream Rust consumers;
 // Core production paths use the Store adapters directly.

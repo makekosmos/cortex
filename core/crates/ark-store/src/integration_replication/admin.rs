@@ -126,7 +126,7 @@ impl IntegrationAdminStore for SqliteIntegrationAdminStore<'_> {
     }
 }
 
-fn persist_with_vector(
+pub(super) fn persist_with_vector(
     connection: &Connection,
     entity_type: &str,
     entity_id: &str,
@@ -136,14 +136,47 @@ fn persist_with_vector(
     if device_id.trim().is_empty() {
         return Err("device_id must not be empty".into());
     }
-    write()?;
-    let vector_id = format!("{entity_type}:{entity_id}");
-    crate::sync_versions::bump_sync_version_vector(
-        connection,
-        entity_type,
-        &vector_id,
-        device_id,
-        false,
-    )
-    .map(|_| ())
+    const SAVEPOINT: &str = "ark_integration_admin_write";
+    connection
+        .execute_batch(&format!("SAVEPOINT {SAVEPOINT}"))
+        .map_err(|error| error.to_string())?;
+    let result = (|| {
+        write()?;
+        let vector_id = format!("{entity_type}:{entity_id}");
+        crate::sync_versions::bump_sync_version_vector(
+            connection,
+            entity_type,
+            &vector_id,
+            device_id,
+            false,
+        )?;
+        Ok(())
+    })();
+    match result {
+        Ok(()) => match connection.execute_batch(&format!("RELEASE SAVEPOINT {SAVEPOINT}")) {
+            Ok(()) => Ok(()),
+            Err(error) => {
+                let rollback = connection.execute_batch(&format!(
+                    "ROLLBACK TO SAVEPOINT {SAVEPOINT}; RELEASE SAVEPOINT {SAVEPOINT}"
+                ));
+                match rollback {
+                    Ok(()) => Err(error.to_string()),
+                    Err(rollback_error) => Err(format!(
+                        "{}; savepoint rollback failed: {}",
+                        error, rollback_error
+                    )),
+                }
+            }
+        },
+        Err(error) => {
+            connection
+                .execute_batch(&format!(
+                    "ROLLBACK TO SAVEPOINT {SAVEPOINT}; RELEASE SAVEPOINT {SAVEPOINT}"
+                ))
+                .map_err(|rollback_error| {
+                    format!("{error}; savepoint rollback failed: {rollback_error}")
+                })?;
+            Err(error)
+        }
+    }
 }

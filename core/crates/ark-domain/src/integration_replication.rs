@@ -3,6 +3,7 @@
 mod contracts;
 mod entities;
 mod policy;
+mod revisions;
 mod signed_sync;
 mod signed_sync_encoding;
 #[cfg(test)]
@@ -21,6 +22,10 @@ pub use policy::{
     acquire_refresh_lease, encryption_key_id, next_credential_generation, require_newer,
     validate_envelope_recipient, validate_plaintext_free_payload, validate_public_settings,
     validate_refresh_publication,
+};
+pub use revisions::{
+    validate_authorized_node_revision, validate_configuration_revision,
+    validate_integration_grant_revision,
 };
 pub use signed_sync::{SignedSyncEnvelope, SignedSyncError, VerifiedSyncEnvelope};
 pub use signed_sync_encoding::encode_hex;
