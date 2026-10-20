@@ -135,37 +135,31 @@ async fn local_object_and_usage_writes_record_sync_state() {
     .await
     .unwrap();
 
-    let shared = get_db_handle(&state)
-        .map(|db| db.shared_connection_for_test())
-        .unwrap();
-    let guard = shared.lock().unwrap();
-    let raw = ark_store::sync_kv::get_sync_kv(&guard, "lan_sync.version_vector")
-        .unwrap()
-        .expect("version vector should be stored");
-    let vector: VersionVector = serde_json::from_str(&raw).unwrap();
+    let sync_state = ark_store::test_support::SyncPersistenceFixture::inspect(&db_path).unwrap();
     for id in ["obj-local-write", "app-local-write"] {
         assert!(
-            vector
+            sync_state
+                .version_vector
                 .get(id)
                 .is_some_and(|hlc| hlc.ends_with(":device-local")),
             "{id} should have a local HLC in the version vector",
         );
     }
     assert_eq!(
-        vector.get("@usage:device-local").map(String::as_str),
+        sync_state
+            .version_vector
+            .get("@usage:device-local")
+            .map(String::as_str),
         Some("2")
     );
-    assert!(!vector.contains_key("session-local-write"));
-    assert!(!vector.contains_key("event-local-write"));
-
-    let tombstone_count: i64 = guard
-        .query_row(
-            "SELECT COUNT(*) FROM sync_tombstones WHERE id = ?1 AND entity_type = ?2",
-            rusqlite::params!["obj-local-write", "object"],
-            |row| row.get(0),
-        )
-        .unwrap();
-    assert_eq!(tombstone_count, 1);
+    assert!(!sync_state
+        .version_vector
+        .contains_key("session-local-write"));
+    assert!(!sync_state.version_vector.contains_key("event-local-write"));
+    assert!(sync_state
+        .tombstones
+        .iter()
+        .any(|(id, entity_type)| id == "obj-local-write" && entity_type == "object"));
 }
 
 #[tokio::test]
@@ -301,38 +295,22 @@ async fn local_object_type_and_link_writes_record_sync_state() {
     .await
     .unwrap();
 
-    let shared = get_db_handle(&state)
-        .map(|db| db.shared_connection_for_test())
-        .unwrap();
-    let guard = shared.lock().unwrap();
-    let raw = ark_store::sync_kv::get_sync_kv(&guard, "lan_sync.version_vector")
-        .unwrap()
-        .expect("version vector should be stored");
-    let vector: VersionVector = serde_json::from_str(&raw).unwrap();
+    let sync_state = ark_store::test_support::SyncPersistenceFixture::inspect(&db_path).unwrap();
     for id in ["rpc-game-type", "link-local-write", "empty_type_for_delete"] {
         assert!(
-            vector
+            sync_state
+                .version_vector
                 .get(id)
                 .is_some_and(|hlc| hlc.ends_with(":device-local")),
             "{id} should have a local HLC in the version vector",
         );
     }
 
-    let link_tombstone_count: i64 = guard
-        .query_row(
-            "SELECT COUNT(*) FROM sync_tombstones WHERE id = ?1 AND entity_type = ?2",
-            rusqlite::params!["link-local-write", "object_link"],
-            |row| row.get(0),
-        )
-        .unwrap();
-    assert_eq!(link_tombstone_count, 1);
-
-    let type_tombstone_count: i64 = guard
-        .query_row(
-            "SELECT COUNT(*) FROM sync_tombstones WHERE id = ?1 AND entity_type = ?2",
-            rusqlite::params!["empty_type_for_delete", "object_type"],
-            |row| row.get(0),
-        )
-        .unwrap();
-    assert_eq!(type_tombstone_count, 1);
+    assert!(sync_state
+        .tombstones
+        .iter()
+        .any(|(id, entity_type)| id == "link-local-write" && entity_type == "object_link"));
+    assert!(sync_state.tombstones.iter().any(|(id, entity_type)| {
+        id == "empty_type_for_delete" && entity_type == "object_type"
+    }));
 }

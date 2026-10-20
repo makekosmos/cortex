@@ -113,7 +113,7 @@ async fn replace_object_link_moves_task_to_new_project_and_records_sync() {
     assert_eq!(links[0]["targetObjectId"], json!("project-b"));
 
     let sync_state =
-        ark_store::test_support::ReplaceObjectLinkFixture::inspect(&fixture.db_path()).unwrap();
+        ark_store::test_support::SyncPersistenceFixture::inspect(&fixture.db_path()).unwrap();
     assert!(
         sync_state
             .tombstones
@@ -166,7 +166,7 @@ async fn replace_object_link_rejects_missing_target_and_changes_nothing() {
     assert_eq!(links[0]["id"], json!("link-a"));
 
     let sync_state =
-        ark_store::test_support::ReplaceObjectLinkFixture::inspect(&fixture.db_path()).unwrap();
+        ark_store::test_support::SyncPersistenceFixture::inspect(&fixture.db_path()).unwrap();
     assert!(
         sync_state.tombstones.iter().all(|(id, _)| id != "link-a"),
         "rolled-back delete must leave no tombstone"
