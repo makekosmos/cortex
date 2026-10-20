@@ -1,25 +1,12 @@
 #![allow(clippy::unwrap_used)]
 
-use crate::phase3_legacy_fixtures;
-use rusqlite::Connection;
 use serde_json::json;
 
 #[tokio::test]
 async fn blocked_database_accepts_agenda_write_through_service() {
     let dir = crate::support::temp_dir();
     let path = dir.path().join("blocked.db");
-    {
-        let conn = Connection::open(&path).unwrap();
-        ark_store::open::init_schema_prerequisites(&conn).unwrap();
-        phase3_legacy_fixtures::seed_historical_legacy_authorities(&conn);
-        conn.execute_batch(
-            "INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,
-             created_at,updated_at) VALUES('dangling-note','note_obj','0.0.0-legacy','n',
-             '{}','{\"relatedNotes\":[\"missing-target\"]}',
-             '2026-01-01T00:00:00.000Z','2026-01-01T00:00:00.000Z');",
-        )
-        .unwrap();
-    }
+    ark_store::test_support::create_blocked_write_legacy_fixture(&path).unwrap();
     let service = ark_core::service::ArkService::open(path.to_str().unwrap())
         .await
         .unwrap();

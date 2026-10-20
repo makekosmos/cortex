@@ -8,6 +8,7 @@ use serde::Deserialize;
 use tempfile::TempDir;
 
 mod actor_log;
+mod blocked_write;
 mod book_cover_rollback;
 mod canonical_task_idempotency;
 mod core_task_cutover;
@@ -31,6 +32,7 @@ mod usage_event_recovery;
 mod usage_rollback;
 
 pub use actor_log::{ActorLogEntry, ActorLogOrder, ActorTestLog};
+pub use blocked_write::create_blocked_write_legacy_fixture;
 pub use book_cover_rollback::{BookCoverRollbackFixture, BookCoverRollbackState};
 pub use canonical_task_idempotency::{
     CanonicalTaskIdempotencyFixture, CanonicalTaskIdempotencyState,

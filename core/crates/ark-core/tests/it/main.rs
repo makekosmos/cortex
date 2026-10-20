@@ -25,8 +25,3 @@ mod phase3_validation;
 mod proptest_invariants;
 mod relay_round_trip;
 mod support;
-
-// Used by the remaining ArkService blocked-write integration test.
-#[allow(clippy::unwrap_used)]
-#[path = "support/phase3_legacy_fixtures.rs"]
-mod phase3_legacy_fixtures;
