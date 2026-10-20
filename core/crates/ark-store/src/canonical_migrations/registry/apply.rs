@@ -143,13 +143,29 @@ fn apply_inner(
 /// Install canonical definitions before object projection; legacy authority is archived
 /// only after object rows have been rewritten to canonical identities.
 pub fn prepare_registry_for_objects(conn: &Connection) -> Result<(), RegistryError> {
-    ensure_archive_schema(conn)?;
-    let registrations = canonical_type_registrations()
-        .map_err(|detail| RegistryError::InvariantViolation { detail })?;
-    for registration in &registrations {
-        install_definition(conn, registration)?;
+    conn.execute_batch("SAVEPOINT phase3_registry_prepare")
+        .map_err(storage)?;
+    let result = (|| {
+        ensure_archive_schema(conn)?;
+        let registrations = canonical_type_registrations()
+            .map_err(|detail| RegistryError::InvariantViolation { detail })?;
+        for registration in &registrations {
+            install_definition(conn, registration)?;
+        }
+        Ok(())
+    })();
+    match result {
+        Ok(()) => conn
+            .execute_batch("RELEASE SAVEPOINT phase3_registry_prepare")
+            .map_err(storage),
+        Err(error) => {
+            let _ = conn.execute_batch(
+                "ROLLBACK TO SAVEPOINT phase3_registry_prepare; \
+                 RELEASE SAVEPOINT phase3_registry_prepare",
+            );
+            Err(error)
+        }
     }
-    Ok(())
 }
 
 /// Idempotent post-migration step: installs canonical version rows that a
