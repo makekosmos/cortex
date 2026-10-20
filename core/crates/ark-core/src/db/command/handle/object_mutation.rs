@@ -39,7 +39,7 @@ impl DbHandle {
                 actor.admit(context.class, &context.source, weight, task)?;
                 response.await.unwrap_or(Err(DbError::OutcomeUnknown))
             }
-            #[cfg(debug_assertions)]
+            #[cfg(any(test, feature = "test-support"))]
             HandleBackend::Test(connection) => {
                 let admission = self
                     .admission
@@ -83,7 +83,7 @@ impl DbHandle {
                 actor.admit(context.class, &context.source, weight, task)?;
                 response.await.unwrap_or(Err(DbError::OutcomeUnknown))
             }
-            #[cfg(debug_assertions)]
+            #[cfg(any(test, feature = "test-support"))]
             HandleBackend::Test(connection) => {
                 let admission = self
                     .admission
@@ -155,7 +155,7 @@ impl DbHandle {
                     replayed: outcome.replayed,
                 })
             }
-            #[cfg(debug_assertions)]
+            #[cfg(any(test, feature = "test-support"))]
             HandleBackend::Test(connection) => {
                 let admission = self
                     .admission
@@ -234,7 +234,7 @@ impl DbHandle {
                 let (value, replayed) = response.await.unwrap_or(Err(DbError::OutcomeUnknown))?;
                 Ok(super::super::operation_receipt::OperationResult { value, replayed })
             }
-            #[cfg(debug_assertions)]
+            #[cfg(any(test, feature = "test-support"))]
             HandleBackend::Test(connection) => {
                 let admission = self
                     .admission
@@ -258,7 +258,7 @@ impl DbHandle {
     }
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(test, feature = "test-support"))]
 fn spawn_test_canonical_game_upsert(
     connection: Arc<Mutex<Connection>>,
     command: ark_application::canonical_game::GameUpsertCommand,
@@ -283,7 +283,7 @@ fn spawn_test_canonical_game_upsert(
     })
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(test, feature = "test-support"))]
 fn spawn_test_local_book_cover(
     connection: Arc<Mutex<Connection>>,
     write: ark_application::book_cover::LocalBookCoverWrite,
@@ -308,7 +308,7 @@ fn spawn_test_local_book_cover(
     })
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(test, feature = "test-support"))]
 fn spawn_test_local_object_upsert(
     connection: Arc<Mutex<Connection>>,
     write: ark_application::object_mutation::LocalObjectUpsert,
@@ -339,7 +339,7 @@ fn spawn_test_local_object_upsert(
     })
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(test, feature = "test-support"))]
 fn spawn_test_local_object_delete(
     connection: Arc<Mutex<Connection>>,
     write: ark_application::object_mutation::LocalObjectDelete,

@@ -3,7 +3,7 @@ use super::super::executor::actor::{
 };
 use super::super::{AcknowledgeTaskMergeBatchCommand, PrepareTaskMergeBatchCommand};
 use super::*;
-#[cfg(debug_assertions)]
+#[cfg(any(test, feature = "test-support"))]
 use ark_store::writer::SqliteWriter;
 
 impl DbHandle {
@@ -22,7 +22,7 @@ impl DbHandle {
                 actor.admit(context.class, &context.source, weight, task)?;
                 response.await.unwrap_or(Err(DbError::OutcomeUnknown))
             }
-            #[cfg(debug_assertions)]
+            #[cfg(any(test, feature = "test-support"))]
             HandleBackend::Test(connection) => {
                 let admission = self
                     .admission
@@ -62,7 +62,7 @@ impl DbHandle {
                 actor.admit(context.class, &context.source, weight, task)?;
                 response.await.unwrap_or(Err(DbError::OutcomeUnknown))
             }
-            #[cfg(debug_assertions)]
+            #[cfg(any(test, feature = "test-support"))]
             HandleBackend::Test(connection) => {
                 let admission = self
                     .admission

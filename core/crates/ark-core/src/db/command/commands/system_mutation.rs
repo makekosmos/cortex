@@ -41,7 +41,7 @@ impl CompactUsageSyncLogCommand {
             .map_err(map_usage_compaction_failure)
     }
 
-    #[cfg(debug_assertions)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(in crate::db::command) fn execute_on_connection(
         self,
         context: &CommandContext,
@@ -110,7 +110,7 @@ impl DbMaintenanceCommand for RestoreSnapshotCommand {
             .map_err(map_restore_error)
     }
 
-    #[cfg(debug_assertions)]
+    #[cfg(any(test, feature = "test-support"))]
     fn execute_on_connection(
         self,
         connection: &mut rusqlite::Connection,

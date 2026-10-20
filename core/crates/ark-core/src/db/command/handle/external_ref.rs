@@ -1,5 +1,5 @@
 use super::super::executor::actor::{ExternalRefUpsertTask, WriterTask};
-#[cfg(debug_assertions)]
+#[cfg(any(test, feature = "test-support"))]
 use super::test_writer::spawn_test_store_writer;
 use super::*;
 
@@ -24,7 +24,7 @@ impl DbHandle {
                 actor.admit(context.class, &context.source, weight, task)?;
                 response.await.unwrap_or(Err(DbError::OutcomeUnknown))
             }
-            #[cfg(debug_assertions)]
+            #[cfg(any(test, feature = "test-support"))]
             HandleBackend::Test(connection) => {
                 let admission = self
                     .admission

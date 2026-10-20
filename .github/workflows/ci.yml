@@ -157,13 +157,13 @@ jobs:
       # Mirrors `pnpm run clippy` from the local gate, plus --locked so a
       # lockfile drift cannot reach main.
       - name: Clippy (Engine workspace)
-        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+        run: cargo clippy --locked --workspace --all-targets --features ark-core/test-support -- -D warnings
 
       # Real codegen+link for every target — clippy only type-checks and
       # nextest only builds test binaries, so without this step the shipped
       # bins' link path is never exercised (KOS-307).
       - name: Build workspace
-        run: cargo build --locked --workspace --all-targets
+        run: cargo build --locked --workspace --all-targets --features ark-core/test-support
 
       # `pnpm run test:rust` locally: the script builds the fixture bins
       # (ark-markdown-bridge et al.) first — `cargo test` skips

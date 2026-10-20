@@ -184,15 +184,18 @@ export function debugOnlyFunctionRanges(source, masked = maskRustTrivia(source))
   const pairs = bracePairs(masked);
   const ranges = [];
   const functionPattern =
-    /#\s*\[\s*cfg\s*\(\s*debug_assertions\s*\)\s*\]\s*(?:(?:pub(?:\s*\([^)]*\))?|async|unsafe|extern(?:\s*"[^"]+")?)\s+)*fn\s+[A-Za-z_][A-Za-z0-9_]*(?:\s*<[^>]*>)?\s*\([^)]*\)[^{]*\{/g;
-  for (const match of masked.matchAll(functionPattern)) {
+    /#\s*\[\s*cfg\s*\(\s*(?:debug_assertions|any\s*\(\s*test\s*,\s*feature\s*=\s*"test-support"\s*\))\s*\)\s*\]\s*(?:(?:pub(?:\s*\([^)]*\))?|async|unsafe|extern(?:\s*"[^"]+")?)\s+)*fn\s+[A-Za-z_][A-Za-z0-9_]*(?:\s*<[^>]*>)?\s*\([^)]*\)[^{]*\{/g;
+  // Match attributes against source so feature names inside cfg strings stay visible;
+  // use the masked copy only for brace pairing.
+  for (const match of source.matchAll(functionPattern)) {
     const open = match.index + match[0].lastIndexOf("{");
     const close = pairs.get(open);
     if (close === undefined) throw new Error(`unclosed debug-only function at byte ${open}`);
     ranges.push({ start: match.index, end: close + 1 });
   }
-  const importPattern = /#\s*\[\s*cfg\s*\(\s*debug_assertions\s*\)\s*\]\s*use\b[^;]*;/g;
-  for (const match of masked.matchAll(importPattern))
+  const importPattern =
+    /#\s*\[\s*cfg\s*\(\s*(?:debug_assertions|any\s*\(\s*test\s*,\s*feature\s*=\s*"test-support"\s*\))\s*\)\s*\]\s*use\b[^;]*;/g;
+  for (const match of source.matchAll(importPattern))
     ranges.push({ start: match.index, end: match.index + match[0].length });
   return ranges;
 }

@@ -11,19 +11,19 @@ pub struct SqliteStorageBackend {
     pub(in crate::db) db: DbHandle,
     device_id: Arc<Mutex<String>>,
     selective_profile: Arc<Mutex<Option<ark_domain::selective_sync::SelectiveSyncProfile>>>,
-    #[cfg(debug_assertions)]
+    #[cfg(any(test, feature = "test-support"))]
     test_owner: Option<Arc<super::command::DbOwner>>,
 }
 
 impl SqliteStorageBackend {
     /// Builds the raw-connection adapter used by SQLite test fixtures.
-    #[cfg(debug_assertions)]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn for_test(conn: Arc<Mutex<rusqlite::Connection>>) -> Self {
         Self::with_db_handle(DbHandle::for_test(conn))
     }
 
     /// Opens the production writer actor for file-backed integration tests.
-    #[cfg(debug_assertions)]
+    #[cfg(any(test, feature = "test-support"))]
     pub async fn open_for_test(
         db_path: impl Into<String>,
         legacy_task_device_id: impl Into<String>,
@@ -41,7 +41,7 @@ impl SqliteStorageBackend {
             db,
             device_id: Arc::new(Mutex::new(String::new())),
             selective_profile: Arc::new(Mutex::new(None)),
-            #[cfg(debug_assertions)]
+            #[cfg(any(test, feature = "test-support"))]
             test_owner: None,
         }
     }

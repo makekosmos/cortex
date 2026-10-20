@@ -20,7 +20,7 @@ impl DbHandle {
                 actor.admit(context.class, &context.source, weight, task)?;
                 response.await.unwrap_or(Err(DbError::OutcomeUnknown))
             }
-            #[cfg(debug_assertions)]
+            #[cfg(any(test, feature = "test-support"))]
             HandleBackend::Test(connection) => {
                 let admission = test_admission(self, &context, weight)?;
                 spawn_test_type_mutation(Arc::clone(connection), admission, move |connection| {
@@ -52,7 +52,7 @@ impl DbHandle {
                 actor.admit(context.class, &context.source, weight, task)?;
                 response.await.unwrap_or(Err(DbError::OutcomeUnknown))
             }
-            #[cfg(debug_assertions)]
+            #[cfg(any(test, feature = "test-support"))]
             HandleBackend::Test(connection) => {
                 let admission = test_admission(self, &context, weight)?;
                 spawn_test_type_mutation(Arc::clone(connection), admission, move |connection| {
@@ -85,7 +85,7 @@ impl DbHandle {
                 actor.admit(context.class, &context.source, weight, task)?;
                 response.await.unwrap_or(Err(DbError::OutcomeUnknown))
             }
-            #[cfg(debug_assertions)]
+            #[cfg(any(test, feature = "test-support"))]
             HandleBackend::Test(connection) => {
                 let admission = test_admission(self, &context, weight)?;
                 spawn_test_type_mutation(Arc::clone(connection), admission, move |connection| {
@@ -117,7 +117,7 @@ pub(in crate::db::command::handle) fn validate(
     }
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(test, feature = "test-support"))]
 pub(in crate::db::command::handle) fn test_admission(
     handle: &DbHandle,
     context: &CommandContext,
@@ -129,7 +129,7 @@ pub(in crate::db::command::handle) fn test_admission(
         .map_err(map_admission_error)
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(test, feature = "test-support"))]
 pub(in crate::db::command::handle) async fn spawn_test_type_mutation<T, F>(
     connection: Arc<Mutex<rusqlite::Connection>>,
     admission: executor::AdmissionPermit,
@@ -152,7 +152,7 @@ where
     .map_err(|error| DbError::Storage(error.to_string()))?
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(test, feature = "test-support"))]
 pub(in crate::db::command::handle) fn map_store_failure(
     failure: ark_store::writer::StoreTransactionFailure<String>,
 ) -> DbError {

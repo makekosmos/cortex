@@ -1,5 +1,5 @@
 use super::type_mutation::validate;
-#[cfg(debug_assertions)]
+#[cfg(any(test, feature = "test-support"))]
 use super::type_mutation::{spawn_test_type_mutation, test_admission};
 use super::*;
 use executor::actor::TrackedAppMutationTask;
@@ -19,7 +19,7 @@ impl DbHandle {
                 actor.admit(context.class, &context.source, weight, task)?;
                 response.await.unwrap_or(Err(DbError::OutcomeUnknown))
             }
-            #[cfg(debug_assertions)]
+            #[cfg(any(test, feature = "test-support"))]
             HandleBackend::Test(connection) => {
                 let admission = test_admission(self, &context, weight)?;
                 spawn_test_type_mutation(Arc::clone(connection), admission, move |connection| {

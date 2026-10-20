@@ -1,9 +1,9 @@
-#[cfg(debug_assertions)]
+#[cfg(any(test, feature = "test-support"))]
 use rusqlite::Connection;
 #[cfg(test)]
 use rusqlite::Transaction;
 use std::sync::Arc;
-#[cfg(debug_assertions)]
+#[cfg(any(test, feature = "test-support"))]
 use std::sync::Mutex;
 
 mod commands;
@@ -12,7 +12,7 @@ mod handle;
 mod operation_receipt;
 pub(crate) use handle::{DbHandle, DbOwner};
 
-#[cfg(debug_assertions)]
+#[cfg(any(test, feature = "test-support"))]
 pub(crate) use commands::map_signed_frame_operation_error;
 #[cfg(test)]
 pub(crate) use commands::DeviceEnrollmentOutcome;
@@ -203,7 +203,7 @@ pub(crate) trait DbMaintenanceCommand: sealed::Sealed + Send + 'static {
     fn execute(self, writer: &mut ark_store::writer::SqliteWriter)
         -> Result<Self::Output, DbError>;
 
-    #[cfg(debug_assertions)]
+    #[cfg(any(test, feature = "test-support"))]
     fn execute_on_connection(self, connection: &mut Connection) -> Result<Self::Output, DbError>;
 }
 

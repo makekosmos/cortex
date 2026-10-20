@@ -1,5 +1,5 @@
 use super::*;
-#[cfg(debug_assertions)]
+#[cfg(any(test, feature = "test-support"))]
 use crate::db::command::executor::actor::map_append_operation_error;
 use crate::db::command::executor::actor::AppendTaskMergeOperationTask;
 use ark_application::task_merge::TaskMergeAppendResult;
@@ -29,7 +29,7 @@ impl DbHandle {
                 actor.admit(context.class, &context.source, weight, task)?;
                 response.await.unwrap_or(Err(DbError::OutcomeUnknown))
             }
-            #[cfg(debug_assertions)]
+            #[cfg(any(test, feature = "test-support"))]
             HandleBackend::Test(connection) => {
                 let admission = self
                     .admission
@@ -43,7 +43,7 @@ impl DbHandle {
     }
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(test, feature = "test-support"))]
 fn spawn_test_task_merge_append(
     connection: Arc<Mutex<Connection>>,
     context: CommandContext,

@@ -45,7 +45,7 @@ impl IntegrationAdminCommand {
             .map_err(map_store_failure)
     }
 
-    #[cfg(debug_assertions)]
+    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn execute_on_connection(
         self,
         context: &CommandContext,
@@ -125,7 +125,7 @@ fn map_store_failure(error: ark_store::writer::StoreTransactionFailure<String>) 
     }
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(test, feature = "test-support"))]
 fn map_transaction_failure(error: ark_store::writer::TransactionFailure<String>) -> DbError {
     match error {
         ark_store::writer::TransactionFailure::Begin(error) => DbError::from_store_error(error),

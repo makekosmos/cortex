@@ -1,9 +1,9 @@
-#[cfg(debug_assertions)]
+#[cfg(any(test, feature = "test-support"))]
 use super::super::executor::actor::map_inbox_receipt_error;
 use super::super::executor::actor::{InboxReceiptTask, WriterTask};
 use super::*;
 use ark_application::sync_storage::InboxReceiptWrite;
-#[cfg(debug_assertions)]
+#[cfg(any(test, feature = "test-support"))]
 use ark_store::writer::SqliteWriter;
 
 impl DbHandle {
@@ -30,7 +30,7 @@ impl DbHandle {
                 actor.admit(context.class, &context.source, weight, task)?;
                 response.await.unwrap_or(Err(DbError::OutcomeUnknown))
             }
-            #[cfg(debug_assertions)]
+            #[cfg(any(test, feature = "test-support"))]
             HandleBackend::Test(connection) => {
                 let admission = self
                     .admission

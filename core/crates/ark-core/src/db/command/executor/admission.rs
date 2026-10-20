@@ -1,9 +1,9 @@
 use super::super::CommandClass;
-#[cfg(debug_assertions)]
+#[cfg(any(test, feature = "test-support"))]
 use super::super::CommandSource;
-#[cfg(debug_assertions)]
+#[cfg(any(test, feature = "test-support"))]
 use std::collections::HashMap;
-#[cfg(debug_assertions)]
+#[cfg(any(test, feature = "test-support"))]
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Copy, Debug)]
@@ -37,14 +37,14 @@ impl AdmissionLimits {
 }
 
 #[derive(Clone)]
-#[cfg(debug_assertions)]
+#[cfg(any(test, feature = "test-support"))]
 pub struct AdmissionBudget {
     limits: AdmissionLimits,
     usage: Arc<Mutex<Usage>>,
 }
 
 #[derive(Default)]
-#[cfg(debug_assertions)]
+#[cfg(any(test, feature = "test-support"))]
 struct Usage {
     commands: usize,
     bytes: usize,
@@ -52,13 +52,13 @@ struct Usage {
 }
 
 #[derive(Default)]
-#[cfg(debug_assertions)]
+#[cfg(any(test, feature = "test-support"))]
 struct SourceUsage {
     commands: usize,
     bytes: usize,
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(test, feature = "test-support"))]
 pub(in crate::db::command) struct AdmissionPermit {
     usage: Arc<Mutex<Usage>>,
     source: CommandSource,
@@ -66,13 +66,13 @@ pub(in crate::db::command) struct AdmissionPermit {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg(debug_assertions)]
+#[cfg(any(test, feature = "test-support"))]
 pub enum AdmissionError {
     TooLarge,
     Saturated,
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(test, feature = "test-support"))]
 impl AdmissionBudget {
     pub fn new(limits: AdmissionLimits) -> Self {
         assert!(limits.max_commands > limits.reserved_interactive_commands);
@@ -155,7 +155,7 @@ impl AdmissionBudget {
     }
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(test, feature = "test-support"))]
 impl Drop for AdmissionPermit {
     fn drop(&mut self) {
         let mut usage = self.usage.lock().unwrap_or_else(|error| error.into_inner());
