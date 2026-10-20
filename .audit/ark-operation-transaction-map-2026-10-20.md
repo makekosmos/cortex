@@ -63,7 +63,7 @@ These operations return results to their Core callers; no direct network or othe
 
 ### Sync policy, entity/feed transfer, KV, and usage log — 19 operations
 
-**Core:** owns principal and class checks, peer authorization, profile/policy binding, sync visibility decisions, authenticated inbox handling, and feed-size validation. **Persistence:** Store `data_platform`, `sync_entities`, `committed_feed`, `sync_kv`, `usage_sync_log`, and authorized-node functions provide the storage operations. Writes use the immediate transaction; reads use one deferred snapshot. The authenticated apply path keeps inbox and entity changes atomic.
+**Core:** owns principal and class checks, peer authorization, profile/policy binding, sync visibility decisions, authenticated inbox handling, and feed-size validation. **Persistence:** Store `data_platform`, `sync_entities`, `committed_feed`, `sync_kv`, `usage_sync_log`, and authorized-node functions provide the storage operations. Writes use the immediate transaction; local profile replacement retains its nested savepoint; reads use one deferred snapshot. The authenticated apply path keeps inbox and entity changes atomic.
 
 | Kind | Operation | Implementation |
 |---|---|---|
@@ -72,8 +72,8 @@ These operations return results to their Core callers; no direct network or othe
 | DbCommand | `CommittedFeedProgressCommand` | `core/crates/ark-core/src/db/command/commands/sync_mutation.rs:70` |
 | DbCommand | `ApplySyncEntityCommand` | `core/crates/ark-core/src/db/command/commands/sync_mutation.rs:263` |
 | DbCommand | `ApplyAuthenticatedSyncEntityCommand` | `core/crates/ark-core/src/db/command/commands/sync_mutation.rs:324` |
-| DbCommand | `SaveLocalSyncProfileCommand` | `core/crates/ark-core/src/db/command/commands/sync_policy.rs:36` |
-| DbCommand | `AcceptPeerSyncPolicyCommand` | `core/crates/ark-core/src/db/command/commands/sync_policy.rs:149` |
+| StoreWriterTask | `SaveLocalSyncProfileCommand` | `core/crates/ark-core/src/db/command/handle/sync_policy_write.rs` → `core/crates/ark-core/src/db/command/executor/actor/task/sync_policy_write.rs` → `ark_store::writer::SqliteWriter::save_local_sync_profile` |
+| StoreWriterTask | `AcceptPeerSyncPolicyCommand` | `core/crates/ark-core/src/db/command/handle/sync_policy_write.rs` → `core/crates/ark-core/src/db/command/executor/actor/task/sync_policy_write.rs` → `ark_store::writer::SqliteWriter::accept_peer_sync_policy` |
 | DbQuery | `LoadActiveLocalSyncProfileQuery` | `core/crates/ark-core/src/db/command/commands/sync_policy.rs:88` |
 | DbQuery | `LoadAcceptedPeerSyncPolicyQuery` | `core/crates/ark-core/src/db/command/commands/sync_policy.rs:198` |
 | DbQuery | `LoadSyncProfileForSyncQuery` | `core/crates/ark-core/src/db/command/commands/sync_policy.rs:232` |
@@ -140,11 +140,11 @@ These operations return results to their Core callers; no direct network or othe
 | Device registry | 0 | 4 | 5 | 0 | 9 |
 | Integration replication and administration | 0 | 5 | 2 | 0 | 7 |
 | Legacy mutations | 2 | 2 | 0 | 0 | 4 |
-| Sync policy, transfer, KV, usage log | 2 | 5 | 12 | 0 | 19 |
+| Sync policy, transfer, KV, usage log | 4 | 3 | 12 | 0 | 19 |
 | Task merge | 0 | 4 | 1 | 0 | 5 |
 | Type registry | 3 | 0 | 1 | 0 | 4 |
 | System, object, and usage reads | 2 | 1 | 3 | 1 | 7 |
 | Operation receipts | 0 | 1 | 0 | 0 | 1 |
-| **Total** | **11** | **23** | **24** | **1** | **59** |
+| **Total** | **13** | **21** | **24** | **1** | **59** |
 
 The census detects typed operation declarations and direct SQLite references, but does not resolve indirect helper calls or assign policy ownership. Ownership gaps above should be settled by tracing the named Core session/helper implementations and their Store calls before planning those areas as Store-only cutovers.

@@ -15,6 +15,8 @@ mod local_sync_key_value_write;
 pub(in crate::db::command) use local_sync_key_value_write::LocalSyncKeyValueWriteTask;
 mod sync_progress_write;
 pub(in crate::db::command) use sync_progress_write::SyncProgressWriteTask;
+mod sync_policy_write;
+pub(in crate::db::command) use sync_policy_write::SyncPolicyWriteTask;
 mod usage_sequence_migration;
 pub(in crate::db::command) use usage_sequence_migration::UsageSequenceMigrationTask;
 mod type_mutation;

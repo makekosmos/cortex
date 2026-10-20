@@ -446,7 +446,7 @@ async fn excluded_local_task_category_rejects_incoming_batch_without_advancing_c
         .await
         .unwrap();
     let profile = handle
-        .submit(
+        .save_local_sync_profile(
             CommandContext::engine(),
             SaveLocalSyncProfileCommand::new(
                 "merge-test-device".into(),

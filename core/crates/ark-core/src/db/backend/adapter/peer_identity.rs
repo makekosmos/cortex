@@ -43,7 +43,7 @@ impl PeerIdentityBackend for SqliteStorageBackend {
         rules: &[ark_application::sync_policy::SyncProfileRule],
     ) -> Result<ark_application::sync_policy::AcceptedPeerSyncPolicy, String> {
         self.db
-            .submit(
+            .accept_peer_sync_policy(
                 CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
                 crate::db::AcceptPeerSyncPolicyCommand::new(
                     peer_device_id.to_owned(),

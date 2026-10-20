@@ -66,7 +66,7 @@ async fn accepted_peer_policy_is_bound_to_authenticated_actor_peer() {
     };
     let digest = profile.digest();
     let denied = handle
-        .submit(
+        .accept_peer_sync_policy(
             CommandContext::sync_peer("tablet".into(), super::super::CommandClass::SyncLive),
             AcceptPeerSyncPolicyCommand::new(
                 "phone".into(),
@@ -80,7 +80,7 @@ async fn accepted_peer_policy_is_bound_to_authenticated_actor_peer() {
     assert!(matches!(denied, Err(DbError::Permission(_))));
 
     let accepted = handle
-        .submit(
+        .accept_peer_sync_policy(
             CommandContext::sync_peer("phone".into(), super::super::CommandClass::SyncLive),
             AcceptPeerSyncPolicyCommand::new("phone".into(), 4, digest, true, rules),
         )
@@ -117,7 +117,7 @@ async fn active_sync_profiles_are_device_owned_revisioned_and_durable() {
     for index in 0..6 {
         let device_id = format!("device-{index}");
         let profile = handle
-            .submit(
+            .save_local_sync_profile(
                 CommandContext::engine(),
                 SaveLocalSyncProfileCommand::new(
                     device_id.clone(),
@@ -144,7 +144,7 @@ async fn active_sync_profiles_are_device_owned_revisioned_and_durable() {
         .unwrap();
     assert_eq!(device_three.rules[0].resource_id, "type-3");
     let failed_activation = handle
-        .submit(
+        .save_local_sync_profile(
             CommandContext::engine(),
             SaveLocalSyncProfileCommand::new(
                 "device-3".into(),
@@ -182,7 +182,7 @@ async fn active_sync_profiles_are_device_owned_revisioned_and_durable() {
     );
 
     let updated = handle
-        .submit(
+        .save_local_sync_profile(
             CommandContext::engine(),
             SaveLocalSyncProfileCommand::new(
                 "device-3".into(),
@@ -198,7 +198,7 @@ async fn active_sync_profiles_are_device_owned_revisioned_and_durable() {
     assert_eq!(updated.revision, 2);
     assert!(matches!(
         handle
-            .submit(
+            .save_local_sync_profile(
                 CommandContext::engine(),
                 SaveLocalSyncProfileCommand::new(
                     "device-3".into(),

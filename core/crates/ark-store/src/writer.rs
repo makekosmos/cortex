@@ -4,6 +4,7 @@ mod authenticated_task;
 mod error;
 mod iroh_identity;
 mod sync_key_value;
+mod sync_policy;
 mod task_objects;
 mod tracked_app_mutation;
 mod type_mutation;

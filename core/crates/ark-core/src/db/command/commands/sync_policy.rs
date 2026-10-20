@@ -1,6 +1,5 @@
-use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError, StoreReadQuery};
+use super::super::{sealed, CommandClass, CommandContext, DbError, StoreReadQuery};
 use ark_application::sync_policy::{AcceptedPeerSyncPolicy, SyncProfile, SyncProfileRule};
-use rusqlite::Transaction;
 
 pub(crate) struct SaveLocalSyncProfileCommand {
     device_id: String,
@@ -31,14 +30,8 @@ impl SaveLocalSyncProfileCommand {
     }
 }
 
-impl sealed::Sealed for SaveLocalSyncProfileCommand {}
-
-impl DbCommand for SaveLocalSyncProfileCommand {
-    type Output = SyncProfile;
-
-    const CLASS: CommandClass = CommandClass::Interactive;
-
-    fn weight(&self) -> usize {
+impl SaveLocalSyncProfileCommand {
+    pub(super) fn weight(&self) -> usize {
         self.device_id.len()
             + self.profile_id.len()
             + self.name.len()
@@ -53,23 +46,144 @@ impl DbCommand for SaveLocalSyncProfileCommand {
                 .sum::<usize>()
             + 1
     }
+}
 
-    fn execute(
+pub(crate) enum SyncPolicyWrite {
+    SaveLocal(SaveLocalSyncProfileCommand),
+    AcceptPeer(AcceptPeerSyncPolicyCommand),
+}
+
+pub(crate) enum SyncPolicyWriteOutput {
+    LocalProfile(SyncProfile),
+    AcceptedPeer(AcceptedPeerSyncPolicy),
+}
+
+impl SyncPolicyWrite {
+    pub(in crate::db::command) fn class(&self) -> CommandClass {
+        match self {
+            Self::SaveLocal(_) => CommandClass::Interactive,
+            Self::AcceptPeer(_) => CommandClass::SyncLive,
+        }
+    }
+
+    pub(in crate::db::command) fn weight(&self) -> usize {
+        match self {
+            Self::SaveLocal(command) => command.weight(),
+            Self::AcceptPeer(command) => command.weight(),
+        }
+    }
+
+    pub(in crate::db::command) fn execute(
         self,
         context: &CommandContext,
-        transaction: &Transaction<'_>,
-    ) -> Result<Self::Output, DbError> {
-        context.require_engine()?;
-        ark_store::data_platform::upsert_sync_profile(
-            transaction,
-            &self.device_id,
-            &self.profile_id,
-            &self.name,
-            self.active,
-            self.expected_revision,
-            &self.rules,
-        )
-        .map_err(map_profile_error)
+        writer: &mut ark_store::writer::SqliteWriter,
+    ) -> Result<SyncPolicyWriteOutput, DbError> {
+        match self {
+            Self::SaveLocal(command) => {
+                context.require_engine()?;
+                writer
+                    .save_local_sync_profile(
+                        &command.device_id,
+                        &command.profile_id,
+                        &command.name,
+                        command.active,
+                        command.expected_revision,
+                        &command.rules,
+                    )
+                    .map(SyncPolicyWriteOutput::LocalProfile)
+                    .map_err(|failure| map_store_profile_failure(failure, map_profile_write_error))
+            }
+            Self::AcceptPeer(command) => {
+                context.require_sync_peer_matches(&command.peer_device_id)?;
+                writer
+                    .accept_peer_sync_policy(
+                        &command.peer_device_id,
+                        command.revision,
+                        &command.digest,
+                        command.active,
+                        &command.rules,
+                    )
+                    .map(SyncPolicyWriteOutput::AcceptedPeer)
+                    .map_err(|failure| map_store_profile_failure(failure, map_profile_error))
+            }
+        }
+    }
+
+    #[cfg(debug_assertions)]
+    pub(in crate::db::command) fn execute_on_connection(
+        self,
+        context: &CommandContext,
+        connection: &mut rusqlite::Connection,
+    ) -> Result<SyncPolicyWriteOutput, DbError> {
+        use ark_store::writer::TransactionFailure;
+
+        match self {
+            Self::SaveLocal(command) => {
+                context.require_engine()?;
+                ark_store::writer::SqliteWriter::save_local_sync_profile_on_connection(
+                    connection,
+                    &command.device_id,
+                    &command.profile_id,
+                    &command.name,
+                    command.active,
+                    command.expected_revision,
+                    &command.rules,
+                )
+                .map(SyncPolicyWriteOutput::LocalProfile)
+                .map_err(|failure| match failure {
+                    TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+                    TransactionFailure::Operation(error) => map_profile_write_error(error),
+                    TransactionFailure::Commit(error) => DbError::CommitFailed(error.to_string()),
+                })
+            }
+            Self::AcceptPeer(command) => {
+                context.require_sync_peer_matches(&command.peer_device_id)?;
+                ark_store::writer::SqliteWriter::accept_peer_sync_policy_on_connection(
+                    connection,
+                    &command.peer_device_id,
+                    command.revision,
+                    &command.digest,
+                    command.active,
+                    &command.rules,
+                )
+                .map(SyncPolicyWriteOutput::AcceptedPeer)
+                .map_err(|failure| match failure {
+                    TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+                    TransactionFailure::Operation(error) => map_profile_error(error),
+                    TransactionFailure::Commit(error) => DbError::CommitFailed(error.to_string()),
+                })
+            }
+        }
+    }
+}
+
+fn map_store_profile_failure<E>(
+    failure: ark_store::writer::StoreTransactionFailure<E>,
+    map_operation: impl FnOnce(E) -> DbError,
+) -> DbError {
+    use ark_store::writer::{StoreErrorKind, StoreTransactionFailure};
+    match failure {
+        StoreTransactionFailure::Begin(error) => match error.kind {
+            StoreErrorKind::DiskFull | StoreErrorKind::Io | StoreErrorKind::Corrupt => {
+                DbError::StorageUnhealthy(error.to_string())
+            }
+            StoreErrorKind::Other => DbError::Storage(error.to_string()),
+        },
+        StoreTransactionFailure::Operation(error) => map_operation(error),
+        StoreTransactionFailure::Commit(error) => DbError::CommitFailed(error.to_string()),
+    }
+}
+
+fn map_profile_write_error(error: ark_store::data_platform::SyncProfileWriteError) -> DbError {
+    use ark_store::data_platform::SyncProfileWriteError;
+    match error {
+        SyncProfileWriteError::Operation(message) => map_profile_error(message),
+        SyncProfileWriteError::SavepointRelease(cleanup) => {
+            DbError::Storage(format!("sync profile savepoint release failed: {cleanup}"))
+        }
+        SyncProfileWriteError::SavepointCleanup { operation, cleanup } => map_profile_error(
+            format!("{operation}; sync profile savepoint rollback failed: {cleanup}"),
+        ),
     }
 }
 
@@ -146,14 +260,8 @@ impl AcceptPeerSyncPolicyCommand {
     }
 }
 
-impl sealed::Sealed for AcceptPeerSyncPolicyCommand {}
-
-impl DbCommand for AcceptPeerSyncPolicyCommand {
-    type Output = AcceptedPeerSyncPolicy;
-
-    const CLASS: CommandClass = CommandClass::SyncLive;
-
-    fn weight(&self) -> usize {
+impl AcceptPeerSyncPolicyCommand {
+    pub(super) fn weight(&self) -> usize {
         self.peer_device_id.len()
             + self.digest.len()
             + self
@@ -165,23 +273,6 @@ impl DbCommand for AcceptPeerSyncPolicyCommand {
                         + rule.filter.canonical_json().len()
                 })
                 .sum::<usize>()
-    }
-
-    fn execute(
-        self,
-        context: &CommandContext,
-        transaction: &Transaction<'_>,
-    ) -> Result<Self::Output, DbError> {
-        context.require_sync_peer_matches(&self.peer_device_id)?;
-        ark_store::data_platform::accept_peer_sync_policy(
-            transaction,
-            &self.peer_device_id,
-            self.revision,
-            &self.digest,
-            self.active,
-            &self.rules,
-        )
-        .map_err(map_profile_error)
     }
 }
 

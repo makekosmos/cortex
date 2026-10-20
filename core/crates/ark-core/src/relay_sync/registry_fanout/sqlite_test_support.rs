@@ -100,7 +100,7 @@ pub(super) async fn set_task_policy(
     expected_revision: Option<i64>,
 ) {
     peer.db
-        .submit(
+        .save_local_sync_profile(
             CommandContext::engine(),
             SaveLocalSyncProfileCommand::new(
                 peer.storage.device_id(),

@@ -1,5 +1,45 @@
 //! Additive ARK-owned state for external mappings and device-local sync policy.
 use rusqlite::{params, Connection, OptionalExtension};
+use std::fmt;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SyncProfileWriteError {
+    Operation(String),
+    SavepointRelease(String),
+    SavepointCleanup { operation: String, cleanup: String },
+}
+
+impl From<String> for SyncProfileWriteError {
+    fn from(message: String) -> Self {
+        Self::Operation(message)
+    }
+}
+
+impl From<&str> for SyncProfileWriteError {
+    fn from(message: &str) -> Self {
+        Self::Operation(message.to_owned())
+    }
+}
+
+impl fmt::Display for SyncProfileWriteError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Operation(message) => formatter.write_str(message),
+            Self::SavepointRelease(cleanup) => {
+                write!(
+                    formatter,
+                    "sync profile savepoint release failed: {cleanup}"
+                )
+            }
+            Self::SavepointCleanup { operation, cleanup } => write!(
+                formatter,
+                "{operation}; sync profile savepoint rollback failed: {cleanup}"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for SyncProfileWriteError {}
 
 pub use ark_domain::selective_sync::{
     filter_digest, filter_entities_for_profile, validate_filter_json, FilterV1,
@@ -88,7 +128,7 @@ pub fn upsert_sync_profile(
     active: bool,
     expected_revision: Option<i64>,
     rules: &[SyncProfileRule],
-) -> Result<SyncProfile, String> {
+) -> Result<SyncProfile, SyncProfileWriteError> {
     if local_device_id.is_empty() || profile_id.is_empty() || name.is_empty() {
         return Err("invalid sync profile identity".into());
     }
@@ -188,13 +228,19 @@ pub fn upsert_sync_profile(
     match result {
         Ok(profile) => {
             conn.execute_batch("RELEASE sync_profile_upsert")
-                .map_err(|e| e.to_string())?;
+                .map_err(|error| SyncProfileWriteError::SavepointRelease(error.to_string()))?;
             Ok(profile)
         }
         Err(error) => {
-            let _ =
-                conn.execute_batch("ROLLBACK TO sync_profile_upsert; RELEASE sync_profile_upsert");
-            Err(error)
+            if let Err(cleanup) =
+                conn.execute_batch("ROLLBACK TO sync_profile_upsert; RELEASE sync_profile_upsert")
+            {
+                return Err(SyncProfileWriteError::SavepointCleanup {
+                    operation: error.to_string(),
+                    cleanup: cleanup.to_string(),
+                });
+            }
+            Err(error.into())
         }
     }
 }
@@ -351,4 +397,64 @@ pub fn upsert_external_ref(conn: &Connection, r: &ExternalRefUpsert) -> Result<(
     )
     .map_err(|e| e.to_string())
     .map(|_| ())
+}
+
+#[cfg(test)]
+mod sync_profile_write_tests {
+    use super::*;
+    use ark_domain::selective_sync::{FilterV1, SyncMode};
+
+    fn rule(resource_id: &str) -> SyncProfileRule {
+        SyncProfileRule {
+            resource_kind: "type".into(),
+            resource_id: resource_id.into(),
+            mode: SyncMode::Full,
+            filter: FilterV1::match_all(),
+        }
+    }
+
+    #[test]
+    fn late_rule_write_failure_rolls_back_profile_and_active_selection() {
+        let connection = Connection::open_in_memory().expect("open in-memory SQLite database");
+        crate::open::init_schema(&connection).expect("initialize schema");
+        upsert_sync_profile(
+            &connection,
+            "device",
+            "existing",
+            "Existing",
+            true,
+            None,
+            &[rule("kept")],
+        )
+        .expect("create initial profile");
+        connection
+            .execute_batch(concat!(
+                "CREATE TRIGGER reject_sync_profile_rule BEFORE INSERT ON ",
+                "sync_profile_rules WHEN NEW.resource_id = 'rejected' ",
+                "BEGIN SELECT RAISE(ABORT, 'injected failure'); END;"
+            ))
+            .expect("install rule rejection trigger");
+
+        let error = upsert_sync_profile(
+            &connection,
+            "device",
+            "replacement",
+            "Replacement",
+            true,
+            Some(1),
+            &[rule("rejected")],
+        )
+        .expect_err("the trigger rejects the rule insert");
+        assert!(matches!(error, SyncProfileWriteError::Operation(_)));
+
+        let active = load_active_sync_profile(&connection, "device")
+            .expect("load active profile")
+            .expect("initial profile remains active");
+        assert_eq!(active.profile_id, "existing");
+        assert_eq!(active.rules, [rule("kept")]);
+        assert_eq!(
+            load_sync_profile(&connection, "device", "replacement"),
+            Err("Query returned no rows".into())
+        );
+    }
 }

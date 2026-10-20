@@ -243,7 +243,7 @@ async fn register_note_type(peer: &ActorPeer) {
 
 async fn set_note_policy(peer: &ActorPeer, mode: SyncMode, expected_revision: Option<i64>) {
     peer.db
-        .submit(
+        .save_local_sync_profile(
             CommandContext::engine(),
             SaveLocalSyncProfileCommand::new(
                 peer.storage.device_id(),

@@ -6,6 +6,15 @@ Complete every phase in `/tmp/cortex-thermo-ark-exocortex/05_remaining_plan.md`.
 
 ## Run
 
+### Sync-policy write boundary design
+
+- [x] Frame: define the output artifact, the behavior and ownership rubric, and two structurally distinct write-boundary candidates.
+- [x] Fan out: ask two GPT-6-Luna candidates for read-only designs with separate output files.
+- [x] Cross-judge: use an independent model to score both candidates against the rubric.
+- [x] Pick: choose the named Store writer task, retaining Core admission and authorization while avoiding a generic second dispatcher.
+- [x] Graft: use the closed two-operation task shape and preserve explicit operation-specific result types.
+- [x] Verify: move both writes to Store-owned immediate transactions, retain the profile savepoint, and test rollback and sync-policy behavior.
+
 - [x] Read the remaining plan and verify current branch, recent commits, worktree, and existing acceptance evidence.
 - [x] Capture the current storage-boundary baseline and distinguish production from test-only references.
 - [x] Fix the version-vector read/merge/write race with a Store transaction and retain exact replacement semantics.
@@ -33,3 +42,8 @@ The plan's earlier estimate of 15–25 active hours is stale. The current baseli
 - Device-registry snapshot and event-page reads now use a named Store capability. Core retains Engine authorization, sync-principal checks, pagination bounds, and response shaping. All 10 filtered device-registry tests and Clippy passed; the source-size check passed. The boundary scanner still reports 845 findings and 161 production findings, so remaining transaction commands in the shared module continue to dominate its count.
 - Local, accepted-peer, and sync-session profile reads now use Store sync capabilities. Core still validates the Engine or authenticated peer principal. Eight sync-policy tests, Clippy, and formatting passed. The boundary count remains 845/161 because the same Core source file still contains profile write commands and their transaction types.
 - Registry handshake verification now loads its device registry through the Store capability while Core retains signature verification and peer-principal validation. The filtered handshake test and Clippy passed. The boundary scan remains 845/161 because the same file still contains the signing command and its writer transaction.
+- Local-profile and accepted-peer policy writes now use named Store writer methods through one closed actor task. Core keeps Engine and peer-principal checks, class/weight admission, cancellation, and reply handling; Store starts the immediate transaction and keeps profile savepoint handling. Savepoint rollback failures now retain both the operation and cleanup errors. Seven filtered Core sync-policy tests, the Store late-write rollback test, the persisted-profile integration test, and Clippy for `ark-core`/`ark-store` passed. The source-size check passed. The boundary scanner now reports 845 findings, including 160 production findings; remaining families are not complete.
+
+## Latest boundary scan
+
+The source scanner reports 845 findings: 160 production, 672 test-file, 10 inline-test, and 3 debug-only. The new production write path no longer implements the raw-transaction `DbCommand`; remaining production findings keep the overall boundary gate failing.

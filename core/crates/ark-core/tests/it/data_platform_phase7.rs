@@ -376,7 +376,8 @@ fn persisted_profile_reloads_owner_revision_and_rejects_stale_or_foreign_writes(
                 Some(1),
                 &rules
             )
-            .unwrap_err(),
+            .unwrap_err()
+            .to_string(),
             "PROFILE_OWNER_DENIED"
         );
         assert_eq!(
@@ -389,7 +390,8 @@ fn persisted_profile_reloads_owner_revision_and_rejects_stale_or_foreign_writes(
                 Some(0),
                 &rules
             )
-            .unwrap_err(),
+            .unwrap_err()
+            .to_string(),
             "PROFILE_REVISION_STALE"
         );
         let updated = ark_store::data_platform::upsert_sync_profile(

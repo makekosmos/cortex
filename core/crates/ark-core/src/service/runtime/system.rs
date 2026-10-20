@@ -70,7 +70,7 @@ pub(super) async fn sync_policy_set(
         .collect::<Result<Vec<_>, String>>()?;
     let device_id = local_registry_device_id(state).await?;
     let profile = get_db_handle(state)?
-        .submit(
+        .save_local_sync_profile(
             db::CommandContext::engine(),
             db::SaveLocalSyncProfileCommand::new(
                 device_id,
