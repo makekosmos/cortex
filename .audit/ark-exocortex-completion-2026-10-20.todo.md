@@ -56,3 +56,15 @@ The source scanner reports 845 findings after inbound receipt writes moved: 154 
 ## Recovery baseline recheck
 
 The plan's `signed_hpke_replication_reaches_offline_provider_and_rejects_stale_inputs` test is not present in this checkout or its Git history. The failed historical run `39087077632` was on `codex/ark-stage1-hpke` at `f7fd1709` and its failing test was `stale_restore_preserves_pending_usage_and_origin_sequence_before_peer_resync`; that test passes locally on the current branch. This does not satisfy the final Windows CI requirement. The last successful full CI run on this branch was `39136020199` at `42f93c2c`, before the current commits.
+
+## Integration replication boundary batch
+
+- [x] Frame one shared ownership rubric and inspect the current integration command, Store, and signed-frame paths.
+- [x] Compare two structurally distinct transaction-boundary designs and get an independent judgment.
+- [x] Select a typed Store write capability executed only after the existing weighted Core actor task is admitted; do not queue closures.
+- [ ] Move integration use-case decisions into Application and SQLite row codecs, vector updates, replay reservation, savepoint, and transactions into Store.
+- [ ] Keep Core's typed actor requests, `require_engine`, authenticated-peer extraction, registry admission, wire mapping, and service orchestration.
+- [ ] Remove migrated Core SQLite operation helpers and callers in the same cutover.
+- [ ] Run the integrated integration-replication behavior suite, crate checks, lint and local gates once for this family, then commit.
+
+Synthesis evidence: `/tmp/ark-integration-candidate-actor.md`, `/tmp/ark-integration-candidate-contract.md`, and `/tmp/ark-integration-design-judge.md`. The typed contract candidate was selected because it fits the existing Store `WriteCapabilities` model and avoids callbacks in queued actor messages. The independent judge found both candidates omitted a typed scope for applying the entity batch under replay savepoint; this batch must preserve it as one scoped Store operation with typed failure. The use-case module currently lives at `ark-core/src/application/signed_integration.rs`, so moving it into `ark-application` is part of the work, not a presumed existing boundary.

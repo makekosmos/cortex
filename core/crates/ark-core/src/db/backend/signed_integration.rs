@@ -1,11 +1,11 @@
-use crate::application::signed_integration::{
-    ReplayApply, SignedIntegrationFrameSession, SignedIntegrationFrameStore,
-};
 use crate::integration_replication::{
     AuthorizedNode, IntegrationConfiguration, IntegrationNodeGrant, IntegrationReplicationChange,
     IntegrationReplicationEntity, SignedSyncError, VerifiedSyncEnvelope,
 };
 use crate::types::VersionVector;
+use ark_application::signed_integration::{
+    ReplayApply, SignedIntegrationFrameSession, SignedIntegrationFrameStore,
+};
 use rusqlite::{params, Transaction};
 
 const REPLAY_SAVEPOINT: &str = "ark_signed_sync_replay";

@@ -149,9 +149,9 @@ impl DbCommand for ApplySignedIntegrationFrameCommand {
             .try_into()
             .unwrap_or(u64::MAX);
         let mut session = crate::db::SqliteSignedIntegrationFrameSession::new(transaction);
-        crate::application::signed_integration::apply_signed_integration_frame(
+        ark_application::signed_integration::apply_signed_integration_frame(
             &mut session,
-            crate::application::signed_integration::ApplySignedIntegrationFrame {
+            ark_application::signed_integration::ApplySignedIntegrationFrame {
                 envelope: self.frame,
                 expected_space_id: self.expected_space_id,
                 expected_recipient_node_id: self.expected_recipient_node_id,

@@ -1,4 +1,6 @@
-use crate::integration_replication::{IntegrationReplicationChange, IntegrationReplicationEntity};
+use ark_domain::integration_replication::{
+    IntegrationReplicationChange, IntegrationReplicationEntity,
+};
 
 pub(super) fn require_authenticated_change_hlcs(
     change: &IntegrationReplicationChange,
@@ -24,7 +26,7 @@ pub(super) fn require_authenticated_change_hlcs(
 }
 
 fn require_authenticated_hlc(hlc: &str, origin_node_id: &str) -> Result<(), String> {
-    let parsed = crate::hlc::HLC::from_string(hlc);
+    let parsed = ark_domain::hlc::HLC::from_string(hlc);
     if parsed.wall_time.is_empty() || parsed.device_id.is_empty() || parsed.to_string() != hlc {
         return Err("integration HLC is not canonical".into());
     }

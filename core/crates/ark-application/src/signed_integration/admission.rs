@@ -1,5 +1,5 @@
 use super::{change_integration_id, SignedIntegrationFrameStore};
-use crate::integration_replication::{
+use ark_domain::integration_replication::{
     AuthorizedNode, GrantStatus, IntegrationNodeGrant, IntegrationReplicationEntity, NodeStatus,
     VerifiedSyncEnvelope,
 };

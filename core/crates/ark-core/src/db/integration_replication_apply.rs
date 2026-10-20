@@ -13,10 +13,10 @@ pub(in crate::db) fn apply_signed_integration_changes(
     authenticated_transport_public_key: Option<&str>,
     reserved_at_ms: u64,
 ) -> SignedIntegrationApplyResult {
-    use crate::application::signed_integration::{
+    use crate::db::SqliteSignedIntegrationFrameSession;
+    use ark_application::signed_integration::{
         apply_signed_integration_frame, ApplySignedIntegrationFrame,
     };
-    use crate::db::SqliteSignedIntegrationFrameSession;
     use rusqlite::{Transaction, TransactionBehavior};
 
     if !conn.is_autocommit() {

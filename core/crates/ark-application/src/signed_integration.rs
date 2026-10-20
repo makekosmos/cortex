@@ -1,23 +1,23 @@
 mod admission;
 mod hlc;
 
-use crate::integration_replication::{
+use ark_domain::integration_replication::{
     AuthorizedNode, IntegrationConfiguration, IntegrationNodeGrant, IntegrationReplicationChange,
     IntegrationReplicationEntity, NodeStatus, SignedSyncEnvelope, SignedSyncError,
     VerifiedSyncEnvelope,
 };
-use crate::types::VersionVector;
+use ark_domain::types::VersionVector;
 use std::collections::HashSet;
 
-pub(crate) struct ApplySignedIntegrationFrame {
-    pub(crate) envelope: SignedSyncEnvelope,
-    pub(crate) expected_space_id: String,
-    pub(crate) expected_recipient_node_id: String,
-    pub(crate) authenticated_transport_public_key: Option<String>,
-    pub(crate) reserved_at_ms: u64,
+pub struct ApplySignedIntegrationFrame {
+    pub envelope: SignedSyncEnvelope,
+    pub expected_space_id: String,
+    pub expected_recipient_node_id: String,
+    pub authenticated_transport_public_key: Option<String>,
+    pub reserved_at_ms: u64,
 }
 
-pub(crate) trait SignedIntegrationFrameStore {
+pub trait SignedIntegrationFrameStore {
     fn load_authorized_node(&self, node_id: &str) -> Result<Option<AuthorizedNode>, String>;
     fn load_integration_grant(
         &self,
@@ -42,12 +42,12 @@ pub(crate) trait SignedIntegrationFrameStore {
     fn persist_version_vector(&self, vector: &VersionVector) -> Result<(), String>;
 }
 
-pub(crate) type ReplayApply<'a> =
+pub type ReplayApply<'a> =
     Box<dyn FnOnce(&mut dyn SignedIntegrationFrameStore) -> Result<(), String> + 'a>;
 
 /// A transaction-scoped capability for applying one authenticated integration frame.
 /// The callback may read and write typed records, but cannot recursively reserve replay.
-pub(crate) trait SignedIntegrationFrameSession {
+pub trait SignedIntegrationFrameSession {
     fn load_authorized_node(&self, node_id: &str) -> Result<Option<AuthorizedNode>, String>;
 
     fn with_replay_reservation(
@@ -61,7 +61,7 @@ pub(crate) trait SignedIntegrationFrameSession {
 /// Verifies and applies one addressed frame using only application-owned policy.
 /// The store session keeps trust reads, replay reservation, entity writes, and vector
 /// updates in the caller's existing immediate transaction.
-pub(crate) fn apply_signed_integration_frame(
+pub fn apply_signed_integration_frame(
     session: &mut dyn SignedIntegrationFrameSession,
     request: ApplySignedIntegrationFrame,
 ) -> Result<(), SignedSyncError> {
@@ -212,7 +212,7 @@ fn change_requires_apply(
 fn vector_requires_change(vector: &VersionVector, key: &str, remote_hlc: &str) -> bool {
     vector
         .get(key)
-        .is_none_or(|local_hlc| crate::hlc::HLC::is_newer(remote_hlc, local_hlc))
+        .is_none_or(|local_hlc| ark_domain::hlc::HLC::is_newer(remote_hlc, local_hlc))
 }
 
 fn set_integration_vector(
@@ -224,7 +224,7 @@ fn set_integration_vector(
     if preserve_newer
         && vector
             .get(&key)
-            .is_some_and(|current| !crate::hlc::HLC::is_newer(&hlc, current))
+            .is_some_and(|current| !ark_domain::hlc::HLC::is_newer(&hlc, current))
     {
         return false;
     }
@@ -252,7 +252,7 @@ fn envelope_version_is_newer(
     current_hlc: &str,
     current_issuer: &str,
 ) -> bool {
-    crate::hlc::HLC::is_newer(proposed_hlc, current_hlc)
+    ark_domain::hlc::HLC::is_newer(proposed_hlc, current_hlc)
         || (proposed_hlc == current_hlc && proposed_issuer > current_issuer)
 }
 
