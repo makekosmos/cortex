@@ -9,6 +9,7 @@ pub mod object_read;
 pub mod object_write;
 pub mod registry_admission;
 pub mod replication_storage;
+pub mod source_snapshot;
 pub mod sync_policy;
 pub mod sync_storage;
 pub mod task_merge;

@@ -19,6 +19,7 @@ pub mod operation_receipt;
 pub mod pending_objects;
 pub mod schema;
 pub mod snapshot;
+pub mod source_snapshot;
 pub mod sync_entities;
 pub mod sync_kv;
 pub mod sync_tombstones;

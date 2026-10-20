@@ -40,8 +40,9 @@ fn context(conn: &Connection) -> Result<MappingContext, String> {
 pub fn preflight_phase3(conn: &Connection) -> Result<MigrationPreflightReport, String> {
     let mut blocked = Vec::new();
     let mut records = Vec::new();
-    generic_inventory(conn, &mut records, &mut blocked)?;
-    native_inventory(conn, &mut records)?;
+    let snapshot = ark_store::source_snapshot::read_source_snapshot(conn)?;
+    generic_inventory(&snapshot, &mut records, &mut blocked)?;
+    native_inventory(&snapshot, &mut records)?;
     records.sort_by(|a, b| {
         (a.source_kind.name(), &a.source_id).cmp(&(b.source_kind.name(), &b.source_id))
     });
