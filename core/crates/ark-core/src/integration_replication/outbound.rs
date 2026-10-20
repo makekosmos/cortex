@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 
 use super::read_store::IntegrationReplicationReadStore;
+#[cfg(test)]
 use rusqlite::Connection;
 
 use super::{IntegrationReplicationEntity, NodeStatus, SignedSyncEnvelope, VerifiedSyncEnvelope};
@@ -79,6 +80,7 @@ pub fn validate_outbound_signed_sync_with_transport<S: IntegrationReplicationRea
 
 /// A node-level transport block may be removed only when every persisted
 /// integration grant for that node is active and bound to its current key.
+#[cfg(test)]
 pub fn node_may_receive_integration_frames(
     conn: &Connection,
     node_id: &str,

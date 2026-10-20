@@ -60,6 +60,14 @@ function testOnlyItemRanges(source, masked = maskRustTrivia(source)) {
   const usePattern = /#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]\s*use\b[^;]*;/g;
   for (const match of masked.matchAll(usePattern))
     ranges.push({ start: match.index, end: match.index + match[0].length });
+  const blockItemPattern =
+    /#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]\s*(?:(?:pub(?:\s*\([^)]*\))?)\s+)?(?:unsafe\s+)?(?:impl|trait)\b[^{}]*\{/g;
+  for (const match of masked.matchAll(blockItemPattern)) {
+    const open = match.index + match[0].lastIndexOf("{");
+    const close = pairs.get(open);
+    if (close === undefined) throw new Error(`unclosed cfg(test) item at byte ${open}`);
+    ranges.push({ start: match.index, end: close + 1 });
+  }
   return ranges;
 }
 

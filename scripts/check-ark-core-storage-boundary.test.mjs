@@ -128,6 +128,23 @@ test("the boundary checker scopes cfg(test) imports and functions as tests", asy
   );
 });
 
+test("the boundary checker scopes cfg(test) traits and impl blocks as tests", async (t) => {
+  const paths = await fixture(t, {
+    manifest: '[dependencies]\nserde = "1"\n',
+    source: [
+      "#[cfg(test)] trait Probe {",
+      "  fn read(connection: &rusqlite::Connection);",
+      "}",
+      "#[cfg(test)] impl Probe for Fixture {",
+      '  fn read(connection: &rusqlite::Connection) { connection.execute("SELECT 1", []).unwrap(); }',
+      "}",
+    ].join("\n"),
+  });
+  const violations = await collectStorageViolations(paths);
+  assert.ok(violations.length > 0);
+  assert.ok(violations.every(({ scope }) => scope === "inline_test"));
+});
+
 test("a clean Core source tree passes the ownership gate", async (t) => {
   const paths = await fixture(t, {
     manifest: '[dependencies]\nark-store = { path = "../ark-store" }\n',
