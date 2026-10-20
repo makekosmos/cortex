@@ -101,6 +101,8 @@ These operations return results to their Core callers; no direct network or othe
 
 **Core:** mutations use Core `SqliteTypeMutationSession`, so full Store ownership is not established. **Persistence:** type reads call Store `object_types` and `objects` APIs. Writes use the immediate transaction; reads use the deferred snapshot.
 
+`RegisterPackageTypesCommand` calls `Core::type_registry::register_type` through `SqliteTypeMutationSession`. Registration opens `ark_registry_registration`, writes the type and version, and calls `Core::canonical_types::pending::replay_pending_for_type`. Replay opens `ark_replay_pending`, applies each entity through `Core::canonical_types::facades::apply_canonical_object_entity`, and deletes the pending row. `UpsertObjectTypeCommand` also replays pending entities through the Core session. A Store cutover for these writes must include pending replay and canonical object application, preserve the nested savepoints, and return the same replay notices. Moving only the type-registry adapter would leave Core-owned SQL and break the accepted ownership boundary.
+
 | Kind | Operation | Implementation |
 |---|---|---|
 | DbCommand | `RegisterPackageTypesCommand` | `core/crates/ark-core/src/db/command/commands/type_mutation.rs:25` |
