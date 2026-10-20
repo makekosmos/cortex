@@ -1,5 +1,4 @@
 use super::*;
-use rusqlite::OptionalExtension;
 
 #[path = "device_registry/atomicity.rs"]
 mod atomicity;
@@ -68,43 +67,38 @@ async fn paired_device_enrollment_is_atomic_idempotent_and_survives_restart() {
         }
     );
 
-    handle.with_connection(|connection| {
-        let event_count: i64 = connection
-            .query_row("SELECT COUNT(*) FROM device_registry_events", [], |row| {
-                row.get(0)
-            })
-            .unwrap();
-        let target_key: Vec<u8> = connection
-            .query_row(
-                "SELECT signing_public_key
-                 FROM device_registry_projection
-                 WHERE device_id = 'paired-device'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        let pinned: String = connection
-            .query_row(
-                "SELECT value FROM sync_kv WHERE key = 'sync.peer_transport_keys'",
-                [],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(event_count, 1);
-        assert_eq!(
-            target_key,
-            endpoint
-                .parse::<ark_net::iroh::EndpointId>()
-                .unwrap()
-                .as_bytes()
-        );
-        assert_eq!(
-            serde_json::from_str::<std::collections::HashMap<String, String>>(&pinned)
-                .unwrap()
-                .get("paired-device"),
-            Some(&endpoint)
-        );
+    let (event_count, target_key, pinned) = handle.with_connection(|connection| {
+        let (_, event_count, _) = ark_store::device_registry::load_events_page(
+            connection,
+            0,
+            None,
+            ark_store::device_registry::MAX_REGISTRY_EVENTS_PAGE_SIZE,
+        )
+        .unwrap();
+        let identity =
+            ark_store::device_registry::load_identity(connection, "paired-device").unwrap();
+        let pinned = ark_store::sync_kv::get_sync_kv(
+            connection,
+            ark_store::device_registry::PEER_TRANSPORT_KEYS_KEY,
+        )
+        .unwrap()
+        .unwrap();
+        (event_count, identity, pinned)
     });
+    assert_eq!(event_count, 1);
+    assert_eq!(
+        target_key.unwrap().signing_public_key,
+        endpoint
+            .parse::<ark_net::iroh::EndpointId>()
+            .unwrap()
+            .as_bytes()
+    );
+    assert_eq!(
+        serde_json::from_str::<std::collections::HashMap<String, String>>(&pinned)
+            .unwrap()
+            .get("paired-device"),
+        Some(&endpoint)
+    );
     owner
         .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
         .await
@@ -124,14 +118,7 @@ async fn paired_device_enrollment_rolls_back_event_projection_and_pin_together()
         .await
         .unwrap();
     handle.with_connection(|connection| {
-        connection
-            .execute_batch(
-                "CREATE TRIGGER reject_device_registry_projection
-                 BEFORE INSERT ON device_registry_projection
-                 WHEN NEW.device_id = 'paired-device'
-                 BEGIN SELECT RAISE(ABORT, 'injected projection failure'); END;",
-            )
-            .unwrap();
+        ark_store::test_support::reject_paired_device_projection(connection).unwrap();
     });
 
     let result = handle
@@ -141,25 +128,26 @@ async fn paired_device_enrollment_rolls_back_event_projection_and_pin_together()
         )
         .await;
     assert!(matches!(result, Err(DbError::Storage(_))));
-    handle.with_connection(|connection| {
-        for table in ["device_registry_events", "device_registry_projection"] {
-            let count: i64 = connection
-                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
-                    row.get(0)
-                })
-                .unwrap();
-            assert_eq!(count, 0, "partial write remained in {table}");
-        }
-        let pin: Option<String> = connection
-            .query_row(
-                "SELECT value FROM sync_kv WHERE key = 'sync.peer_transport_keys'",
-                [],
-                |row| row.get(0),
-            )
-            .optional()
-            .unwrap();
-        assert_eq!(pin, None);
+    let (event_count, target, pin) = handle.with_connection(|connection| {
+        let (_, event_count, _) = ark_store::device_registry::load_events_page(
+            connection,
+            0,
+            None,
+            ark_store::device_registry::MAX_REGISTRY_EVENTS_PAGE_SIZE,
+        )
+        .unwrap();
+        let target =
+            ark_store::device_registry::load_identity(connection, "paired-device").unwrap();
+        let pin = ark_store::sync_kv::get_sync_kv(
+            connection,
+            ark_store::device_registry::PEER_TRANSPORT_KEYS_KEY,
+        )
+        .unwrap();
+        (event_count, target, pin)
     });
+    assert_eq!(event_count, 0, "partial registry event remained");
+    assert_eq!(target, None, "partial device projection remained");
+    assert_eq!(pin, None, "partial transport-key pin remained");
     owner
         .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
         .await

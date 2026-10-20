@@ -9,9 +9,11 @@ use tempfile::TempDir;
 
 mod actor_log;
 mod production_actor;
+mod registry_enrollment;
 
 pub use actor_log::{ActorLogEntry, ActorLogOrder, ActorTestLog};
 pub use production_actor::{ActorFailureProbeState, CompetingWriter, ProductionActorFailureProbe};
+pub use registry_enrollment::reject_paired_device_projection;
 
 /// Owns a temporary ARK database for the full lifetime of a test.
 ///
