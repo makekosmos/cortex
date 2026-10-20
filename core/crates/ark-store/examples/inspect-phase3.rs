@@ -34,7 +34,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Err("upgrade changed existing object rows".into());
         }
         for type_id in ["com.kosmos.task", "com.kosmos.project"] {
-            if ark_core::type_registry::get_type(&copy, type_id, Some("1.1.0"))?.is_none() {
+            if ark_store::type_registry::get_type(&copy, type_id, Some("1.1.0"))?.is_none() {
                 return Err("write contract still missing after upgrade".into());
             }
         }

@@ -170,7 +170,7 @@ function sourceViolations(source, relativePath, testOnly = false) {
 }
 
 export async function collectStorageViolations({
-  sourceRoot = path.join(CORE, "src"),
+  sourceRoot = CORE,
   manifestPath = path.join(CORE, "Cargo.toml"),
   root = ROOT,
 } = {}) {
