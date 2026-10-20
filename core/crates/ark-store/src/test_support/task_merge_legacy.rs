@@ -16,6 +16,7 @@ pub struct LegacyTaskMergeState {
     pub operation_count: i64,
     pub journal_count: i64,
     pub operation_journal_count: i64,
+    pub operation_journal: Vec<(i64, String)>,
     pub receipt_count: i64,
     pub link_count: i64,
     pub tombstone_count: i64,
@@ -59,6 +60,16 @@ impl LegacyTaskMergeFixture {
                  BEFORE INSERT ON task_merge_journal
                  WHEN NEW.record_kind = 'operation'
                  BEGIN SELECT RAISE(ABORT, 'injected task journal failure'); END;",
+            )
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn reject_all_journal_writes(&self) -> Result<(), String> {
+        self.connection
+            .execute_batch(
+                "CREATE TRIGGER reject_task_merge_journal
+                 BEFORE INSERT ON task_merge_journal
+                 BEGIN SELECT RAISE(ABORT, 'injected merge persistence failure'); END;",
             )
             .map_err(|error| error.to_string())
     }
@@ -133,6 +144,22 @@ impl LegacyTaskMergeFixture {
              )",
             object_id,
         )?;
+        let mut statement = self
+            .connection
+            .prepare(
+                "SELECT position, record_id FROM task_merge_journal
+                 WHERE record_kind = 'operation' AND record_id IN (
+                     SELECT operation_id FROM task_merge_operations WHERE object_id = ?1
+                 ) ORDER BY position",
+            )
+            .map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map([object_id], |row| Ok((row.get(0)?, row.get(1)?)))
+            .map_err(|error| error.to_string())?;
+        let operation_journal = rows
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())?;
+        drop(statement);
         let receipt_count = count(
             &self.connection,
             "SELECT COUNT(*) FROM entity_write_receipts WHERE entity_id = ?1",
@@ -175,6 +202,7 @@ impl LegacyTaskMergeFixture {
             operation_count,
             journal_count,
             operation_journal_count,
+            operation_journal,
             receipt_count,
             link_count,
             tombstone_count,

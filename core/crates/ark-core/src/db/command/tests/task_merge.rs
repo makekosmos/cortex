@@ -26,15 +26,26 @@ fn operation(operation_id: char, parents: &[char], title: &str) -> TaskMergeOper
 
 async fn open_merge_fixture() -> (tempfile::TempDir, String, DbHandle, DbOwner) {
     let directory = tempfile::tempdir().unwrap();
-    let path = directory
-        .path()
-        .join("task-merge.db")
-        .to_string_lossy()
-        .into_owned();
-    let (handle, owner) = DbHandle::open(path.clone(), "merge-test-device".into())
-        .await
-        .unwrap();
-    (directory, path, handle, owner)
+    let path = directory.path().join("task-merge.db");
+    let (handle, owner) = DbHandle::open(
+        path.to_string_lossy().into_owned(),
+        "merge-test-device".into(),
+    )
+    .await
+    .unwrap();
+    (
+        directory,
+        path.to_string_lossy().into_owned(),
+        handle,
+        owner,
+    )
+}
+
+fn inspect(path: &str) -> ark_store::test_support::LegacyTaskMergeState {
+    ark_store::test_support::LegacyTaskMergeFixture::open(std::path::Path::new(path))
+        .unwrap()
+        .inspect("task-1")
+        .unwrap()
 }
 
 async fn append(
@@ -61,14 +72,7 @@ async fn append_actor_requires_the_engine_principal() {
         .await;
     assert!(matches!(result, Err(DbError::Permission(_))));
 
-    let rows: i64 = handle.with_connection(|connection| {
-        connection
-            .query_row("SELECT COUNT(*) FROM task_merge_operations", [], |row| {
-                row.get(0)
-            })
-            .expect("operation count reads")
-    });
-    assert_eq!(rows, 0);
+    assert_eq!(inspect(_path.as_str()).operation_count, 0);
     shutdown(&mut owner).await;
 }
 
@@ -146,35 +150,10 @@ async fn operation_replay_conflict_guard_and_sqlite_reopen() {
         .await,
         Err(DbError::Conflict(_))
     ));
-    let rows: i64 = handle.with_connection(|connection| {
-        connection
-            .query_row("SELECT COUNT(*) FROM task_merge_operations", [], |row| {
-                row.get(0)
-            })
-            .unwrap()
-    });
-    assert_eq!(rows, 2);
-    let journal_rows: i64 = handle.with_connection(|connection| {
-        connection
-            .query_row("SELECT COUNT(*) FROM task_merge_journal", [], |row| {
-                row.get(0)
-            })
-            .unwrap()
-    });
-    assert_eq!(journal_rows, 2);
-    let journal: Vec<(i64, String)> = handle.with_connection(|connection| {
-        let mut statement = connection
-            .prepare(
-                "SELECT position, record_id FROM task_merge_journal
-                 WHERE record_kind = 'operation' ORDER BY position",
-            )
-            .unwrap();
-        statement
-            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
-            .unwrap()
-            .collect::<Result<_, _>>()
-            .unwrap()
-    });
+    let persisted = inspect(&path);
+    assert_eq!(persisted.operation_count, 2);
+    assert_eq!(persisted.operation_journal_count, 2);
+    let journal = persisted.operation_journal;
     assert_eq!(
         journal,
         vec![
@@ -185,7 +164,7 @@ async fn operation_replay_conflict_guard_and_sqlite_reopen() {
     shutdown(&mut owner).await;
     drop(handle);
 
-    let (reopened, mut reopened_owner) = DbHandle::open(path, "merge-test-device".into())
+    let (reopened, mut reopened_owner) = DbHandle::open(path.clone(), "merge-test-device".into())
         .await
         .unwrap();
     let after_reopen = read(&reopened).await;
@@ -196,14 +175,8 @@ async fn operation_replay_conflict_guard_and_sqlite_reopen() {
     );
     let replay_after_reopen = append(&reopened, child, None).await.unwrap();
     assert!(replay_after_reopen.replayed);
-    let journal_rows: i64 = reopened.with_connection(|connection| {
-        connection
-            .query_row("SELECT COUNT(*) FROM task_merge_journal", [], |row| {
-                row.get(0)
-            })
-            .unwrap()
-    });
-    assert_eq!(journal_rows, 2);
+    let persisted = inspect(&path);
+    assert_eq!(persisted.operation_journal_count, 2);
     shutdown(&mut reopened_owner).await;
 }
 
@@ -269,50 +242,23 @@ async fn invalid_parent_shape_is_rejected_before_persisting_pending_operation() 
     let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
     let result = append(&handle, operation('2', &['1', '1'], "invalid"), None).await;
     assert!(matches!(result, Err(DbError::Invalid(_))));
-    let rows: i64 = handle.with_connection(|connection| {
-        connection
-            .query_row("SELECT COUNT(*) FROM task_merge_operations", [], |row| {
-                row.get(0)
-            })
-            .unwrap()
-    });
-    assert_eq!(rows, 0);
+    assert_eq!(inspect(_path.as_str()).operation_count, 0);
     shutdown(&mut owner).await;
 }
 
 #[tokio::test]
 async fn failed_sqlite_insert_leaves_no_merge_operation() {
     let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
-    handle.with_connection(|connection| {
-        connection
-            .execute_batch(
-                "CREATE TRIGGER reject_task_merge_journal
-                 BEFORE INSERT ON task_merge_journal
-                 BEGIN
-                     SELECT RAISE(ABORT, 'injected merge persistence failure');
-                 END;",
-            )
-            .unwrap();
-    });
+    ark_store::test_support::LegacyTaskMergeFixture::open(std::path::Path::new(&_path))
+        .unwrap()
+        .reject_all_journal_writes()
+        .unwrap();
     assert!(matches!(
         append(&handle, operation('1', &[], "value"), None).await,
         Err(DbError::Invalid(_)) | Err(DbError::Storage(_))
     ));
-    let rows: i64 = handle.with_connection(|connection| {
-        connection
-            .query_row("SELECT COUNT(*) FROM task_merge_operations", [], |row| {
-                row.get(0)
-            })
-            .unwrap()
-    });
-    assert_eq!(rows, 0);
-    let journal_rows: i64 = handle.with_connection(|connection| {
-        connection
-            .query_row("SELECT COUNT(*) FROM task_merge_journal", [], |row| {
-                row.get(0)
-            })
-            .unwrap()
-    });
-    assert_eq!(journal_rows, 0);
+    let persisted = inspect(&_path);
+    assert_eq!(persisted.operation_count, 0);
+    assert_eq!(persisted.operation_journal_count, 0);
     shutdown(&mut owner).await;
 }
