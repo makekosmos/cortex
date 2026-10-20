@@ -79,7 +79,7 @@ pub(super) async fn task_merge_conflicts(
     unit: ark_domain::task_merge::TaskMergeUnit,
 ) -> Result<Value, String> {
     let result = get_db_handle(state)?
-        .query(
+        .query_with_store(
             db::CommandContext::engine(),
             db::TaskConflictSetQuery::new(object_id, unit),
         )

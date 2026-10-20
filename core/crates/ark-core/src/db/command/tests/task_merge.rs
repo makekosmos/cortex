@@ -50,9 +50,9 @@ async fn append(
         .await
 }
 
-async fn read(handle: &DbHandle) -> crate::db::task_merge::TaskMergeReadResult {
+async fn read(handle: &DbHandle) -> ark_application::task_merge::TaskMergeConflictRead {
     handle
-        .query(
+        .query_with_store(
             CommandContext::engine(),
             TaskConflictSetQuery::new("task-1".into(), TaskMergeUnit::Title),
         )

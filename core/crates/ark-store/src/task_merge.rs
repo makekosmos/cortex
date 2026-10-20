@@ -1,7 +1,8 @@
 use ark_application::sync_storage::{
     TaskMergeJournalEntry, TaskMergeJournalPage, TaskMergeJournalRecord,
 };
-use ark_domain::task_merge::{TaskConflictSet, TaskMergeBootstrap, TaskMergeOperation};
+use ark_application::task_merge::TaskMergeConflictRead;
+use ark_domain::task_merge::{TaskMergeBootstrap, TaskMergeOperation};
 use rusqlite::Connection;
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
@@ -70,12 +71,6 @@ pub enum TaskMergeStoreError {
     Invalid(String),
     Storage(String),
     OperationIdCollision,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct TaskMergeConflictRead {
-    pub conflict_set: Option<TaskConflictSet>,
-    pub dependencies_pending: bool,
 }
 
 impl std::fmt::Display for TaskMergeStoreError {

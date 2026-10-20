@@ -1,8 +1,5 @@
-use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError, DbQuery};
-use crate::db::task_merge::{
-    append_operation, read_conflict_set_result, TaskMergeAppendResult, TaskMergeError,
-    TaskMergeReadResult,
-};
+use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError, StoreReadQuery};
+use crate::db::task_merge::{append_operation, TaskMergeAppendResult, TaskMergeError};
 use ark_application::sync_storage::{PolicyIdentity, TaskMergeBatch, TaskMergeBatchAck};
 use ark_domain::task_merge::{TaskMergeOperation, TaskMergeUnit};
 use rusqlite::Transaction;
@@ -255,8 +252,8 @@ impl TaskConflictSetQuery {
 
 impl sealed::Sealed for TaskConflictSetQuery {}
 
-impl DbQuery for TaskConflictSetQuery {
-    type Output = TaskMergeReadResult;
+impl StoreReadQuery for TaskConflictSetQuery {
+    type Output = ark_application::task_merge::TaskMergeConflictRead;
 
     fn class(&self) -> CommandClass {
         CommandClass::Interactive
@@ -269,11 +266,13 @@ impl DbQuery for TaskConflictSetQuery {
     fn read(
         self,
         context: &CommandContext,
-        connection: &rusqlite::Connection,
+        capabilities: &ark_store::ReadCapabilities<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_engine()?;
-        read_conflict_set_result(connection, &self.object_id, self.unit)
-            .map_err(map_task_merge_error)
+        capabilities
+            .task_merge()
+            .conflict_set(&self.object_id, self.unit)
+            .map_err(|error| map_task_merge_error(error.into()))
     }
 }
 

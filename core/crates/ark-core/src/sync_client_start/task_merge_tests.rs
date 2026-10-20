@@ -195,7 +195,7 @@ async fn authenticated_direct_sync_delivers_task_merge_batches_over_the_wire() {
             server.broadcast_task_merge_batches().await;
             let result = receiver
                 .db
-                .query(
+                .query_with_store(
                     CommandContext::engine(),
                     TaskConflictSetQuery::new("wire-task".into(), TaskMergeUnit::Title),
                 )

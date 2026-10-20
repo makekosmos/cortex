@@ -2,6 +2,7 @@ mod canonical;
 mod objects;
 mod sync;
 mod system;
+mod task_merge;
 mod type_registry;
 mod usage;
 
@@ -28,6 +29,10 @@ pub struct TypeRegistryReadCapabilities<'snapshot> {
 }
 
 pub struct SystemReadCapabilities<'snapshot> {
+    connection: &'snapshot Connection,
+}
+
+pub struct TaskMergeReadCapabilities<'snapshot> {
     connection: &'snapshot Connection,
 }
 
@@ -72,6 +77,12 @@ impl<'snapshot> ReadCapabilities<'snapshot> {
 
     pub fn sync(&self) -> SyncReadCapabilities<'_> {
         SyncReadCapabilities {
+            connection: self.connection,
+        }
+    }
+
+    pub fn task_merge(&self) -> TaskMergeReadCapabilities<'_> {
+        TaskMergeReadCapabilities {
             connection: self.connection,
         }
     }

@@ -1,5 +1,12 @@
 use crate::sync_policy::PolicyIdentity;
-use ark_domain::task_merge::{TaskMergeBootstrap, TaskMergeOperation};
+use ark_domain::task_merge::{TaskConflictSet, TaskMergeBootstrap, TaskMergeOperation};
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskMergeConflictRead {
+    pub conflict_set: Option<TaskConflictSet>,
+    pub dependencies_pending: bool,
+}
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "kind", content = "record", rename_all = "camelCase")]

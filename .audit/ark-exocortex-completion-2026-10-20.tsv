@@ -1,0 +1,5 @@
+date	unit	decision	evidence	result
+2026-10-20	baseline	Treat the remaining plan's predicate as authoritative; measure storage-boundary findings by scope before sequencing migrations	scripts/check-ark-core-storage-boundary.mjs reported 846 findings: 162 production, 672 test-file, 10 inline-test, 2 debug-only	VERIFIED
+2026-10-20	vector-progress	Use an atomic monotonic merge in the existing Store writer transaction and preserve exact replacement for the explicit legacy path	commit d321caf5; 836 affected tests; 3 race and stale-policy regressions; Clippy and pre-commit passed	VERIFIED
+2026-10-20	policy-bound-reads	Move snapshot and feed policy-bound queries behind named Store read capabilities	commit e9e3a9d9; 716 Core and Store tests; Clippy; desktop and mobile graph checks; pre-commit passed	VERIFIED
+2026-10-20	task-conflict-read	Move task conflict reads behind Store read capabilities and keep the result DTO in Application	cargo nextest -p ark-core task_merge -p ark-store task_merge: 54 passed; Clippy and format passed; Engine service test asserts camelCase response	VERIFIED

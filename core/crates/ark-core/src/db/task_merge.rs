@@ -86,13 +86,6 @@ pub(crate) struct TaskMergeAppendResult {
     pub replayed: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct TaskMergeReadResult {
-    pub conflict_set: Option<TaskConflictSet>,
-    pub dependencies_pending: bool,
-}
-
 pub(crate) fn append_operation(
     transaction: &Transaction<'_>,
     operation: TaskMergeOperation,
@@ -196,16 +189,4 @@ pub(crate) fn task_causal_dependencies_pending(
 ) -> Result<bool, TaskMergeError> {
     ark_store::task_merge::task_causal_dependencies_pending(connection, object_id)
         .map_err(Into::into)
-}
-
-pub(crate) fn read_conflict_set_result(
-    connection: &Connection,
-    object_id: &str,
-    unit: TaskMergeUnit,
-) -> Result<TaskMergeReadResult, TaskMergeError> {
-    let (conflict_set, dependencies_pending) = read_conflict_set(connection, object_id, unit)?;
-    Ok(TaskMergeReadResult {
-        conflict_set,
-        dependencies_pending,
-    })
 }

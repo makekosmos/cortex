@@ -265,7 +265,7 @@ async fn hard_delete_is_causal_and_a_later_upsert_restores_the_projection() {
 
     let deletion_set = get_db_handle(&state)
         .unwrap()
-        .query(
+        .query_with_store(
             db::CommandContext::engine(),
             db::TaskConflictSetQuery::new(
                 id.into(),
@@ -302,7 +302,7 @@ async fn hard_delete_is_causal_and_a_later_upsert_restores_the_projection() {
     assert_eq!(restored.title, "restored");
     let existence_set = get_db_handle(&state)
         .unwrap()
-        .query(
+        .query_with_store(
             db::CommandContext::engine(),
             db::TaskConflictSetQuery::new(
                 id.into(),

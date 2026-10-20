@@ -137,7 +137,7 @@ async fn two_sqlite_peers_converge_on_the_same_conflict_set() {
         .unwrap();
 
     let conflict_set = right
-        .query(
+        .query_with_store(
             CommandContext::engine(),
             TaskConflictSetQuery::new(
                 "task-1".into(),
