@@ -39,6 +39,18 @@ async fn stale_restore_preserves_pending_usage_and_origin_sequence_before_peer_r
         "Pending before restore",
     )
     .await;
+    let watermarks =
+        ark_store::test_support::UsageEventRecoveryFixture::inspect_committed_feed_watermarks(
+            &fixture_a.db_path(),
+            &db::backups_dir(&db_path).join(backup_id),
+        )
+        .expect("read the snapshot and live committed-feed watermarks through Store");
+    assert!(
+        watermarks.snapshot < watermarks.live,
+        "restore fixture must create a stale snapshot (snapshot {}, live {})",
+        watermarks.snapshot,
+        watermarks.live
+    );
     let first = usage_event_state(&fixture_a.dir, "recovery-pending-usage-1");
     let first_sequence = first.sequence.expect("local usage has an origin sequence");
     assert!(first_sequence > 0);

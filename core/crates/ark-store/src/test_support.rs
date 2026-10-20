@@ -54,7 +54,9 @@ pub use task_merge_inbound::{TaskMergeInboundFixture, TaskMergeInboundState};
 pub use task_merge_legacy::{LegacyTaskMergeFixture, LegacyTaskMergeState};
 pub use trashed_todo::TrashedTodoFixture;
 pub use type_mutation::{TypeMutationFixture, TypeMutationState};
-pub use usage_event_recovery::{UsageEventRecoveryFixture, UsageEventRecoveryState};
+pub use usage_event_recovery::{
+    CommittedFeedWatermarks, UsageEventRecoveryFixture, UsageEventRecoveryState,
+};
 pub use usage_rollback::{UsageRollbackFixture, UsageRollbackState};
 
 /// Owns a temporary ARK database for the full lifetime of a test.

@@ -6,10 +6,34 @@ pub struct UsageEventRecoveryState {
     pub sequence: Option<i64>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CommittedFeedWatermarks {
+    pub snapshot: i64,
+    pub live: i64,
+}
+
 /// Reads the persisted event and origin sequence used by restore recovery tests.
 pub struct UsageEventRecoveryFixture;
 
 impl UsageEventRecoveryFixture {
+    pub fn inspect_committed_feed_watermarks(
+        live_path: &Path,
+        snapshot_path: &Path,
+    ) -> Result<CommittedFeedWatermarks, String> {
+        let live_path = live_path
+            .to_str()
+            .ok_or_else(|| "usage recovery database path is not UTF-8".to_string())?;
+        let snapshot_path = snapshot_path
+            .to_str()
+            .ok_or_else(|| "usage recovery snapshot path is not UTF-8".to_string())?;
+        let live = crate::open::open_db(live_path)?;
+        let snapshot = crate::open::open_db(snapshot_path)?;
+        Ok(CommittedFeedWatermarks {
+            snapshot: crate::committed_feed::watermark(&snapshot)?,
+            live: crate::committed_feed::watermark(&live)?,
+        })
+    }
+
     pub fn inspect(
         path: &Path,
         device_id: &str,
