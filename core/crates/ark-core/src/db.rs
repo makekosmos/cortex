@@ -40,8 +40,6 @@ pub(crate) use command::{
     UsageCompleteThroughQuery, UsageReadQuery, ValidateOutboundSignedFrameQuery,
     VerifyRegistryHandshakeQuery,
 };
-#[cfg(test)]
-pub use committed_feed::{receive_inbox_payload, set_inbox_state, MAX_INBOX_PAYLOAD_BYTES};
 pub use committed_feed::{InboxState, MAX_FEED_DELIVERY_BYTES};
 
 mod integration_replication_admission;

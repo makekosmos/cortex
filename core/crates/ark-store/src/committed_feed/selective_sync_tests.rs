@@ -1,16 +1,21 @@
+#![allow(clippy::unwrap_used)]
+
+use super::test_support::{
+    begin_outbound_policy_identity, complete_outbound_snapshot_identity,
+    record_outbound_scan_identity, MAX_FEED_DELIVERY_BYTES,
+};
 use super::*;
-use ark_application::sync_storage::CommittedFeedDeliveryPage;
-use ark_store::committed_feed::{
+use crate::committed_feed::{
     append_committed_change, read_committed_feed_delivery_page,
     read_committed_feed_delivery_page_for_peer,
 };
+use ark_application::sync_storage::CommittedFeedDeliveryPage;
 
 #[test]
 fn operation_mode_task_snapshots_are_skipped_with_cursor_advance() {
     let conn = Connection::open_in_memory().unwrap();
-    conn.execute_batch(ark_store::schema::CREATE_TABLES)
-        .unwrap();
-    ark_store::data_platform::ensure_schema(&conn).unwrap();
+    conn.execute_batch(crate::schema::CREATE_TABLES).unwrap();
+    crate::data_platform::ensure_schema(&conn).unwrap();
     append_committed_change(&conn, "object", "merged-task", "r1", false, None, None).unwrap();
     conn.execute(
         "INSERT INTO task_merge_bootstraps(
@@ -21,8 +26,7 @@ fn operation_mode_task_snapshots_are_skipped_with_cursor_advance() {
     .unwrap();
 
     assert_eq!(
-        read_committed_feed_delivery_page(&conn, 0, 1, 8, crate::db::MAX_FEED_DELIVERY_BYTES,)
-            .unwrap(),
+        read_committed_feed_delivery_page(&conn, 0, 1, 8, MAX_FEED_DELIVERY_BYTES,).unwrap(),
         CommittedFeedDeliveryPage::SkipTo {
             through_position: 1
         }
@@ -34,11 +38,11 @@ fn narrowing_preserves_local_copy_and_widening_replays_latest_state() {
     let directory = tempfile::tempdir().unwrap();
     let source_path = directory.path().join("policy-source.db");
     let receiver_path = directory.path().join("policy-receiver.db");
-    let mut source = ark_store::open::open_db(source_path.to_str().unwrap()).unwrap();
-    ark_store::open::init_schema(&source).unwrap();
-    let receiver = ark_store::open::open_db(receiver_path.to_str().unwrap()).unwrap();
-    ark_store::open::init_schema(&receiver).unwrap();
-    let book_type = crate::types::ObjectType {
+    let mut source = crate::open::open_db(source_path.to_str().unwrap()).unwrap();
+    crate::open::init_schema(&source).unwrap();
+    let receiver = crate::open::open_db(receiver_path.to_str().unwrap()).unwrap();
+    crate::open::init_schema(&receiver).unwrap();
+    let book_type = ark_domain::types::ObjectType {
         id: "book".into(),
         name: "Book".into(),
         schema_json: "{}".into(),
@@ -47,10 +51,10 @@ fn narrowing_preserves_local_copy_and_widening_replays_latest_state() {
         updated_at: "2026-10-16T00:00:00.000Z".into(),
         system_locked: false,
     };
-    ark_store::type_registry::upsert_object_type(&source, &book_type).unwrap();
-    ark_store::type_registry::upsert_object_type(&receiver, &book_type).unwrap();
+    crate::type_registry::upsert_object_type(&source, &book_type).unwrap();
+    crate::type_registry::upsert_object_type(&receiver, &book_type).unwrap();
 
-    let original = crate::types::ArkObject {
+    let original = ark_domain::types::ArkObject {
         id: "book-1".into(),
         type_id: "book".into(),
         type_version: "0.0.0-legacy".into(),
@@ -61,8 +65,8 @@ fn narrowing_preserves_local_copy_and_widening_replays_latest_state() {
         updated_at: "2026-10-16T00:00:00.000Z".into(),
         deleted_at: None,
     };
-    ark_store::objects::upsert_object_compat(&source, &original).unwrap();
-    ark_store::objects::upsert_object_compat(&receiver, &original).unwrap();
+    crate::objects::upsert_object_compat(&source, &original).unwrap();
+    crate::objects::upsert_object_compat(&receiver, &original).unwrap();
     append_committed_change(&source, "object", &original.id, "r1", false, None, None).unwrap();
 
     let rule = |mode| ark_application::sync_policy::SyncProfileRule {
@@ -74,7 +78,7 @@ fn narrowing_preserves_local_copy_and_widening_replays_latest_state() {
     let excluded_rule = rule(ark_domain::selective_sync::SyncMode::None);
     let excluded_digest =
         ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&excluded_rule));
-    let excluded = ark_store::data_platform::accept_peer_sync_policy(
+    let excluded = crate::data_platform::accept_peer_sync_policy(
         &source,
         "receiver-device",
         1,
@@ -93,7 +97,7 @@ fn narrowing_preserves_local_copy_and_widening_replays_latest_state() {
     changed.title = "Updated while excluded".into();
     changed.content_json = serde_json::json!({"text":"new version"});
     changed.updated_at = "2026-10-16T00:00:01.000Z".into();
-    ark_store::objects::upsert_object_compat(&source, &changed).unwrap();
+    crate::objects::upsert_object_compat(&source, &changed).unwrap();
     append_committed_change(&source, "object", &changed.id, "r2", false, None, None).unwrap();
     let narrowed = read_committed_feed_delivery_page_for_peer(
         &source,
@@ -102,7 +106,7 @@ fn narrowing_preserves_local_copy_and_widening_replays_latest_state() {
         1,
         2,
         8,
-        crate::db::MAX_FEED_DELIVERY_BYTES,
+        MAX_FEED_DELIVERY_BYTES,
     )
     .unwrap();
     assert_eq!(
@@ -113,7 +117,7 @@ fn narrowing_preserves_local_copy_and_widening_replays_latest_state() {
     );
     record_outbound_scan_identity(&mut source, "receiver-device", &excluded, 2).unwrap();
 
-    let retained = ark_store::objects::get_object(&receiver, "book-1")
+    let retained = crate::objects::get_object(&receiver, "book-1")
         .unwrap()
         .expect("narrowing never deletes an existing local row");
     assert_eq!(retained.title, "Original title");
@@ -122,7 +126,7 @@ fn narrowing_preserves_local_copy_and_widening_replays_latest_state() {
     let included_rule = rule(ark_domain::selective_sync::SyncMode::Full);
     let included_digest =
         ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&included_rule));
-    let included = ark_store::data_platform::accept_peer_sync_policy(
+    let included = crate::data_platform::accept_peer_sync_policy(
         &source,
         "receiver-device",
         2,
@@ -149,7 +153,7 @@ fn narrowing_preserves_local_copy_and_widening_replays_latest_state() {
         0,
         2,
         8,
-        crate::db::MAX_FEED_DELIVERY_BYTES,
+        MAX_FEED_DELIVERY_BYTES,
     )
     .unwrap();
     let CommittedFeedDeliveryPage::Deliveries(rows) = replay.page else {
@@ -165,7 +169,7 @@ fn narrowing_preserves_local_copy_and_widening_replays_latest_state() {
         rows[0].entity.data.get("title"),
         Some(&serde_json::json!("Updated while excluded"))
     );
-    let retained = ark_store::objects::get_object(&receiver, "book-1")
+    let retained = crate::objects::get_object(&receiver, "book-1")
         .unwrap()
         .expect("replay planning does not remove the existing local row");
     assert_eq!(retained.title, "Original title");

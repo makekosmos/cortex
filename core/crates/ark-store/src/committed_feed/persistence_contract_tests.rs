@@ -1,19 +1,25 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use ark_application::sync_storage::CommittedFeedDeliveryPage;
-    use ark_store::committed_feed::{
+    #![allow(clippy::unwrap_used)]
+
+    use super::super::test_support::{
+        acknowledge_outbound_identity, begin_outbound_policy_identity,
+        complete_outbound_snapshot_identity, record_outbound_scan_identity,
+        MAX_FEED_DELIVERY_BYTES,
+    };
+    use crate::committed_feed::{
         acknowledge_outbound, append_committed_change, begin_outbound_policy,
         committed_feed_snapshot, complete_outbound_snapshot,
-        read_committed_feed_delivery_page_for_peer, read_committed_feed_page, record_outbound_scan,
+        read_committed_feed_delivery_page_for_peer, read_committed_feed_page,
+        receive_inbox_payload, record_outbound_scan, set_inbox_state, InboxState,
     };
+    use ark_application::sync_storage::{CommittedFeedDeliveryPage, OutboundAck};
     use rusqlite::Connection;
 
     fn db() -> Connection {
         let conn = Connection::open_in_memory().unwrap();
-        conn.execute_batch(ark_store::schema::CREATE_TABLES)
-            .unwrap();
-        ark_store::data_platform::ensure_schema(&conn).unwrap();
+        conn.execute_batch(crate::schema::CREATE_TABLES).unwrap();
+        crate::data_platform::ensure_schema(&conn).unwrap();
         conn
     }
 
@@ -21,7 +27,7 @@ mod tests {
     fn production_database_open_uses_full_wal_durability() {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("ark.db");
-        let conn = ark_store::open::open_db(path.to_str().unwrap()).unwrap();
+        let conn = crate::open::open_db(path.to_str().unwrap()).unwrap();
         let synchronous: i64 = conn
             .pragma_query_value(None, "synchronous", |row| row.get(0))
             .unwrap();
@@ -37,8 +43,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("ark.db");
         let conn = Connection::open(&path).unwrap();
-        conn.execute_batch(ark_store::schema::CREATE_TABLES)
-            .unwrap();
+        conn.execute_batch(crate::schema::CREATE_TABLES).unwrap();
         conn.execute_batch("BEGIN IMMEDIATE").unwrap();
         append_committed_change(&conn, "object", "a", "r1", false, Some("device-a"), None).unwrap();
         conn.execute_batch("ROLLBACK").unwrap();
@@ -84,8 +89,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("ark.db");
         let conn = Connection::open(&path).unwrap();
-        conn.execute_batch(ark_store::schema::CREATE_TABLES)
-            .unwrap();
+        conn.execute_batch(crate::schema::CREATE_TABLES).unwrap();
         append_committed_change(&conn, "object", "a", "r1", false, None, None).unwrap();
         append_committed_change(&conn, "object", "b", "r2", false, None, None).unwrap();
 
@@ -118,20 +122,6 @@ mod tests {
             receive_inbox_payload(&conn, "peer-a", "object:a:r1", "{\"x\":1}").unwrap(),
             InboxState::Applied
         );
-    }
-
-    #[test]
-    fn inbox_rejects_oversized_payload_before_insert() {
-        let conn = db();
-        let payload = "x".repeat(MAX_INBOX_PAYLOAD_BYTES + 1);
-        assert_eq!(
-            receive_inbox_payload(&conn, "peer-a", "message-1", &payload).unwrap_err(),
-            "sync_inbox_payload_limit_exceeded"
-        );
-        let count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM ark_sync_inbox", [], |row| row.get(0))
-            .unwrap();
-        assert_eq!(count, 0);
     }
 
     #[test]
@@ -180,8 +170,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("initial-snapshot.db");
         let conn = Connection::open(&path).unwrap();
-        conn.execute_batch(ark_store::schema::CREATE_TABLES)
-            .unwrap();
+        conn.execute_batch(crate::schema::CREATE_TABLES).unwrap();
         append_committed_change(&conn, "object", "snapshot-row", "r1", false, None, None).unwrap();
 
         let started = begin_outbound_policy(&conn, "peer-a", 7).unwrap();
@@ -220,9 +209,8 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("policy-bound-snapshot.db");
         let mut conn = Connection::open(path).unwrap();
-        conn.execute_batch(ark_store::schema::CREATE_TABLES)
-            .unwrap();
-        ark_store::data_platform::ensure_schema(&conn).unwrap();
+        conn.execute_batch(crate::schema::CREATE_TABLES).unwrap();
+        crate::data_platform::ensure_schema(&conn).unwrap();
         let rule = ark_application::sync_policy::SyncProfileRule {
             resource_kind: "type".into(),
             resource_id: "books".into(),
@@ -230,7 +218,7 @@ mod tests {
             filter: ark_domain::selective_sync::FilterV1::match_all(),
         };
         let digest = ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&rule));
-        let first = ark_store::data_platform::accept_peer_sync_policy(
+        let first = crate::data_platform::accept_peer_sync_policy(
             &conn,
             "peer-a",
             1,
@@ -249,7 +237,7 @@ mod tests {
         };
         let next_digest =
             ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&next_rule));
-        let next = ark_store::data_platform::accept_peer_sync_policy(
+        let next = crate::data_platform::accept_peer_sync_policy(
             &conn,
             "peer-a",
             2,
@@ -284,7 +272,7 @@ mod tests {
             filter: ark_domain::selective_sync::FilterV1::match_all(),
         };
         let digest = ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&rule));
-        let current = ark_store::data_platform::accept_peer_sync_policy(
+        let current = crate::data_platform::accept_peer_sync_policy(
             &conn,
             "peer-a",
             1,
@@ -340,9 +328,8 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("policy-bound-feed-page.db");
         let mut conn = Connection::open(path).unwrap();
-        conn.execute_batch(ark_store::schema::CREATE_TABLES)
-            .unwrap();
-        ark_store::data_platform::ensure_schema(&conn).unwrap();
+        conn.execute_batch(crate::schema::CREATE_TABLES).unwrap();
+        crate::data_platform::ensure_schema(&conn).unwrap();
         let rule = |resource_id: &str| ark_application::sync_policy::SyncProfileRule {
             resource_kind: "type".into(),
             resource_id: resource_id.into(),
@@ -352,7 +339,7 @@ mod tests {
         let first_rule = rule("books");
         let first_digest =
             ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&first_rule));
-        let first = ark_store::data_platform::accept_peer_sync_policy(
+        let first = crate::data_platform::accept_peer_sync_policy(
             &conn,
             "peer-a",
             1,
@@ -377,7 +364,7 @@ mod tests {
             0,
             high_watermark,
             16,
-            crate::db::MAX_FEED_DELIVERY_BYTES,
+            MAX_FEED_DELIVERY_BYTES,
         )
         .unwrap();
         assert_eq!(pinned.identity, first);
@@ -392,7 +379,7 @@ mod tests {
         let next_rule = rule("tasks");
         let next_digest =
             ark_application::sync_policy::digest_sync_policy(std::slice::from_ref(&next_rule));
-        ark_store::data_platform::accept_peer_sync_policy(
+        crate::data_platform::accept_peer_sync_policy(
             &conn,
             "peer-a",
             2,

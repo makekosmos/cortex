@@ -3,7 +3,16 @@ use sha2::{Digest, Sha256};
 
 mod delivery;
 mod log;
+#[cfg(test)]
+#[path = "committed_feed/persistence_contract_tests.rs"]
+mod persistence_contract_tests;
 mod progress;
+#[cfg(test)]
+#[path = "committed_feed/selective_sync_tests.rs"]
+mod selective_sync_tests;
+#[cfg(test)]
+#[path = "committed_feed/test_support.rs"]
+mod test_support;
 
 pub use delivery::{read_committed_feed_delivery_page, read_committed_feed_delivery_page_for_peer};
 pub use log::{committed_feed_snapshot, read_committed_feed_page};
