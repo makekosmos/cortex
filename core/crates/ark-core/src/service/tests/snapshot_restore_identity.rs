@@ -1,43 +1,37 @@
 use super::*;
 
-type RegistryIdentity = (
-    Vec<(i64, i64, String, String, String)>,
-    Vec<(String, String)>,
-);
+#[derive(Debug, PartialEq, Eq)]
+struct RegistryIdentity {
+    events: Vec<ark_domain::device_registry::RegistryEvent>,
+    keys: Vec<(String, String)>,
+}
 
-fn registry_identity(state: &Arc<ServiceState>) -> Result<RegistryIdentity, String> {
-    with_conn(state, |connection| {
-        let events = connection
-            .prepare(
-                "SELECT registry_position, actor_sequence, event_id, event_hash, event_json
-                 FROM device_registry_events ORDER BY registry_position",
-            )
-            .map_err(|error| error.to_string())?
-            .query_map([], |row| {
-                Ok((
-                    row.get(0)?,
-                    row.get(1)?,
-                    row.get(2)?,
-                    row.get(3)?,
-                    row.get(4)?,
-                ))
-            })
-            .map_err(|error| error.to_string())?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|error| error.to_string())?;
-        let keys = connection
-            .prepare(
-                "SELECT key, value FROM sync_kv
-                 WHERE key IN ('iroh.secret_key', 'device_registry.local_device_id',
-                               'sync.peer_transport_keys') ORDER BY key",
-            )
-            .map_err(|error| error.to_string())?
-            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
-            .map_err(|error| error.to_string())?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|error| error.to_string())?;
-        Ok((events, keys))
-    })
+async fn registry_identity(
+    state: &Arc<ServiceState>,
+    db_path: &std::path::Path,
+) -> Result<RegistryIdentity, String> {
+    let events = ark_store::test_support::DeviceRegistryFixture::open(db_path)?
+        .inspect()?
+        .events;
+    let mut keys = Vec::new();
+    for key in [
+        "iroh.secret_key",
+        "device_registry.local_device_id",
+        "sync.peer_transport_keys",
+    ] {
+        let value = handle_request(
+            state,
+            Request::GetSyncKv {
+                key: key.to_string(),
+            },
+        )
+        .await?
+        .as_str()
+        .map(str::to_string)
+        .ok_or_else(|| format!("sync key {key} is missing or not a string"))?;
+        keys.push((key.to_string(), value));
+    }
+    Ok(RegistryIdentity { events, keys })
 }
 
 #[tokio::test]
@@ -84,7 +78,9 @@ async fn db_backup_restore_preserves_live_registry_chain_and_sequence() {
     )
     .await
     .expect("append a registry event newer than the selected backup");
-    let live_identity = registry_identity(&state).expect("capture live identity");
+    let live_identity = registry_identity(&state, &fixture.db_path())
+        .await
+        .expect("capture live identity");
 
     handle_request(
         &state,
@@ -95,7 +91,9 @@ async fn db_backup_restore_preserves_live_registry_chain_and_sequence() {
     .await
     .expect("restore backup");
     assert_eq!(
-        registry_identity(&state).expect("read restored identity"),
+        registry_identity(&state, &fixture.db_path())
+            .await
+            .expect("read restored identity"),
         live_identity
     );
     handle_request(
@@ -107,20 +105,19 @@ async fn db_backup_restore_preserves_live_registry_chain_and_sequence() {
     .await
     .expect("repeat restore without changing the registry chain");
     assert_eq!(
-        registry_identity(&state).expect("read identity after repeat restore"),
+        registry_identity(&state, &fixture.db_path())
+            .await
+            .expect("read identity after repeat restore"),
         live_identity
     );
-    let local_head = with_conn(&state, |connection| {
-        connection
-            .query_row(
-                "SELECT MAX(actor_sequence) FROM device_registry_events
-                 WHERE actor_device_id = 'restore-device'",
-                [],
-                |row| row.get::<_, Option<i64>>(0),
-            )
-            .map_err(|error| error.to_string())
-    })
-    .expect("read restored local registry head");
+    let local_head = registry_identity(&state, &fixture.db_path())
+        .await
+        .expect("read restored registry events")
+        .events
+        .iter()
+        .filter(|event| event.actor_device_id().as_str() == "restore-device")
+        .map(|event| event.actor_sequence() as i64)
+        .max();
     assert_eq!(local_head, Some(2));
 
     let after_restore = handle_request(
