@@ -1,0 +1,38 @@
+# Phase 3 canonical migration: source census
+
+Checkout: `codex/ark-stage2-boundaries` at `c671d63f248a58c7bbd6d5b63bf92db52cfa1914`. This is a source-based read/write and transaction census; it does not claim test coverage beyond the cases listed below.
+
+## Orchestration and transaction ownership
+
+- Startup calls `migration::migrate_phase3` then `retire_legacy_planning_tables` in `core/crates/ark-core/src/db/open.rs:38,61`. `plan_phase3` composes source preflight, registry preflight and object plan in `canonical_types/migration/plan.rs:82-85`, then merges blocked items at lines 87-136.
+- `migrate_phase3_with_options` computes the plan before opening `SAVEPOINT phase3_migration_outer` (`migration/execute.rs:196,213`). It then upgrades the pending schema, prepares canonical registry definitions, archives planned source/output, merges archived output on resume, applies objects, then applies registry aliases and legacy type cleanup (`232-256`). It releases or rolls back the outer savepoint at `274-286`.
+- Important correction: `migration_registry::preflight_registry` is not read-only. It creates archive schema and may insert, promote, or update type records (`migration_registry/preflight.rs:288-470`). Its validation/planning and preparation writes must be separated before porting the workflow; the existing order and rollback semantics must remain explicit.
+- Nested savepoints share the caller's Connection: registry apply (`migration_registry/apply.rs:168-197`), object apply (`migration_objects/execute.rs:18-110`), per-item ledger (`migration_ledger/runs.rs:205-259`), ledger schema (`migration_ledger/schema.rs:199-223`), registry registration (`type_registry/registration_migrations.rs:80-129`), pending replay (`canonical_types/pending/queue.rs:69-103`). These are nested savepoints, not independent transactions.
+- Retirement is a separate startup operation. It validates completed migration and source/archive/canonical identity, then drops areas/headings within `phase9_legacy_planning_retirement` (`migration/execute.rs:294-479`).
+
+## SQL read/write census
+
+- Native preflight reads tasks, projects, tags, optional areas/headings (`preflight/native_sources.rs:12-280`). It also constructs canonical envelopes and source hashes, so SQL row selection and pure projection are currently coupled. Existing optional-table presence lookup converts query failure to false; preserve or deliberately change and test this behavior.
+- Generic inventory selects supported legacy/canonical object types from `objects` (`preflight/inventory.rs:113-175`). Malformed JSON is retained as blocked raw evidence. `preflight/report.rs:10-50` reads existing object identities and links for the mapping context, then maps source rows at lines 52-90.
+- Object planning reads all identities, adds identities for all source records before mapping, and reads existing links (`migration_objects/plan.rs:91-140`). Compatibility mapping produces canonical objects, links, local state, quarantine, and hashes; this is application/domain policy rather than storage.
+- Registry planning reads schema/table presence, type summaries, versions, aliases, update timestamps, archive evidence, and object type existence (`migration_registry/plan.rs:109-291`; `migration_registry/preflight.rs:25-277`). Its current write operations (schema, type rows, status, aliases and version rows) must move to named Store persistence operations in their existing transaction scope.
+- Registry apply archives legacy definitions, counts objects, rewires base types/alias targets, deletes legacy versions/types, and inserts missing aliases (`migration_registry/apply.rs:6-141`).
+- Object persistence reads current rows and link conflicts, then inserts/updates objects, links, local state, quarantine and sync versions (`migration_objects/apply.rs:53-270`). Object-state DDL lives in `migration_objects/execute.rs:125-137`.
+- Ledger schema creates and validates run/item tables and exact schema shape (`migration_ledger/schema.rs:109-223`). Ledger operations read ordered items/runs, resume or insert run/items, validate completed reruns, transition item states, count items, and complete runs (`migration_ledger/runs.rs:6-359`).
+- Source archive DDL and `INSERT OR IGNORE` live in `migration/plan.rs:213-245`; archive replay reads/deserializes stored planned items at lines 247-277. Completed-run validation checks archive rows, current canonical objects/links and ledger hashes (`migration/execute.rs:8-158`).
+- Retirement reads completed status, optional table presence and columns, current rows/counts, archive bytes/hashes, current source inventory, canonical ledger hashes and materialized object identities before dropping tables (`migration/execute.rs:294-479`). `None` and `Some(empty)` optional tables and exact allowed-column checks are semantically distinct.
+- Pending queue application policy currently reads/compares HLC and validates entity tuples before delegating persistence (`canonical_types/pending/queue.rs:10-111`). Store persistence and phase2→v3 migration already exist in `ark-store/src/pending_objects.rs` and `pending_objects/migrations.rs`.
+
+## Existing tests and failure seams
+
+- `tests/it/phase3_migration_system.rs:1-247`: archive, retirement, reopen/idempotence, corruption, incomplete archive and blocked retirement.
+- `tests/it/phase3_migration_orchestrator/execution.rs:158-361`: completed/rerun, planning behavior and injected registry archive rollback. `recovery.rs:17-279`: injected object failure, rerun/reopen and drift/archive conflicts. `phase3_migration/schema_and_retry.rs:136-229`, `collisions.rs:69`, and `phase3_blocked_writes.rs:84-94` cover schema/retry, collision and blocked writes.
+- Registry rollback seam: `tests/it/phase3_migration_registry.rs:179-239`, including failure at first archive. Existing failure injection does not cover every Store DDL/archive/ledger write; add transaction-boundary failure tests during the cutover.
+
+## Ownership and transaction design
+
+- Domain owns reusable values and pure compatibility mapping/validation where it can depend only on Domain types. Application owns storage-facing migration DTOs, ordered kind catalog, preflight/report policy, workflow, legal ready/blocked states, resume and quarantine decisions, and retirement preconditions.
+- Store owns all SQL, row decoding, schema DDL/validation, archive/ledger/registry/object/pending persistence and SQLite transaction/savepoint boundaries. Keep the current single-DB atomic unit across archive, objects, registry and ledger. Store may call the Application workflow through a narrow transaction-scoped typed session; do not expose a `Connection`, generic SQL callback, or public two-call plan/apply API.
+- Split `preflight_registry` into a pure plan from a complete typed read model and explicit preparation/apply commands. The complete read set includes registry, aliases/versions, existing objects/links, run/ledger/archive state, pending migration state, optional table presence/schema, and all canonical sources.
+- Preserve `source_inventory_hash` exactly for ledger/report compatibility. It hashes canonical source records only and is not a validity token for registry/context/archive data. Avoid plan staleness by doing read, Application projection, and apply in one Store-owned transaction; if a transaction boundary is unavoidable, Store must mint and atomically validate an opaque complete-read-set token before writes.
+- Core retains startup ordering and Engine adaptation only; remove SQL reads, compatibility projection and migration orchestration from Core with their callers.
