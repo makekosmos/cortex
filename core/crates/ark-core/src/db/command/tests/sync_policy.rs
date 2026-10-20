@@ -88,7 +88,7 @@ async fn accepted_peer_policy_is_bound_to_authenticated_actor_peer() {
         .unwrap();
     assert_eq!(accepted.peer_device_id, "phone");
     let persisted = handle
-        .query(
+        .query_with_store(
             CommandContext::sync_peer("phone".into(), super::super::CommandClass::SyncLive),
             LoadAcceptedPeerSyncPolicyQuery::new("phone".into()),
         )
@@ -135,7 +135,7 @@ async fn active_sync_profiles_are_device_owned_revisioned_and_durable() {
     }
 
     let device_three = handle
-        .query(
+        .query_with_store(
             CommandContext::engine(),
             LoadActiveLocalSyncProfileQuery::new("device-3".into()),
         )
@@ -159,7 +159,7 @@ async fn active_sync_profiles_are_device_owned_revisioned_and_durable() {
     assert!(failed_activation.is_err());
     assert_eq!(
         handle
-            .query(
+            .query_with_store(
                 CommandContext::engine(),
                 LoadActiveLocalSyncProfileQuery::new("device-3".into()),
             )
@@ -172,7 +172,7 @@ async fn active_sync_profiles_are_device_owned_revisioned_and_durable() {
     );
     assert_eq!(
         handle
-            .query(
+            .query_with_store(
                 CommandContext::engine(),
                 LoadActiveLocalSyncProfileQuery::new("unconfigured-device".into()),
             )
@@ -224,7 +224,7 @@ async fn active_sync_profiles_are_device_owned_revisioned_and_durable() {
     .await
     .unwrap();
     let persisted = reopened
-        .query(
+        .query_with_store(
             CommandContext::engine(),
             LoadActiveLocalSyncProfileQuery::new("device-3".into()),
         )

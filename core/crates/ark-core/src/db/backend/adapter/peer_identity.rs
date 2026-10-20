@@ -26,7 +26,7 @@ impl PeerIdentityBackend for SqliteStorageBackend {
         local_device_id: &str,
     ) -> Result<Option<ark_application::sync_policy::SyncProfile>, String> {
         self.db
-            .query(
+            .query_with_store(
                 CommandContext::sync_system(CommandClass::SyncLive),
                 crate::db::LoadSyncProfileForSyncQuery::new(local_device_id.to_owned()),
             )
@@ -62,7 +62,7 @@ impl PeerIdentityBackend for SqliteStorageBackend {
         peer_device_id: &str,
     ) -> Result<Option<ark_application::sync_policy::AcceptedPeerSyncPolicy>, String> {
         self.db
-            .query(
+            .query_with_store(
                 CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
                 crate::db::LoadAcceptedPeerSyncPolicyQuery::new(peer_device_id.to_owned()),
             )

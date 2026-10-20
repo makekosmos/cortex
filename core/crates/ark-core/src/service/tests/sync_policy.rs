@@ -132,7 +132,7 @@ async fn engine_sync_policy_api_round_trips_active_device_policy() {
 
     let durable = get_db_handle(&fixture.state)
         .unwrap()
-        .query(
+        .query_with_store(
             CommandContext::engine(),
             LoadActiveLocalSyncProfileQuery::new("phone-device".into()),
         )

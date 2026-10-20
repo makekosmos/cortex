@@ -32,7 +32,7 @@ pub(super) async fn device_registry_snapshot(state: &Arc<ServiceState>) -> Resul
 pub(super) async fn sync_policy_get(state: &Arc<ServiceState>) -> Result<Value, String> {
     let device_id = local_registry_device_id(state).await?;
     let profile = get_db_handle(state)?
-        .query(
+        .query_with_store(
             db::CommandContext::engine(),
             db::LoadActiveLocalSyncProfileQuery::new(device_id),
         )

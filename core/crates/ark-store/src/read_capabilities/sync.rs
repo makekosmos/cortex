@@ -1,4 +1,5 @@
 use super::SyncReadCapabilities;
+use ark_application::sync_policy::{AcceptedPeerSyncPolicy, SyncProfile};
 use ark_application::sync_storage::{
     CommittedFeedDeliveryPage, CommittedFeedEntry, FeedSnapshot, PolicyBoundFeedPage,
     PolicyBoundFeedReadError, PolicyBoundSnapshotPage, PolicyBoundSnapshotReadError,
@@ -35,8 +36,19 @@ impl SyncReadCapabilities<'_> {
     pub fn accepted_peer_policy(
         &self,
         peer_device_id: &str,
-    ) -> Result<Option<crate::data_platform::AcceptedPeerSyncPolicy>, String> {
+    ) -> Result<Option<AcceptedPeerSyncPolicy>, String> {
         crate::data_platform::load_accepted_peer_sync_policy(self.connection, peer_device_id)
+    }
+
+    pub fn active_local_sync_profile(
+        &self,
+        device_id: &str,
+    ) -> Result<Option<SyncProfile>, String> {
+        crate::data_platform::load_active_sync_profile(self.connection, device_id)
+    }
+
+    pub fn sync_profile(&self, local_device_id: &str) -> Result<Option<SyncProfile>, String> {
+        crate::data_platform::load_sync_profile_for_sync(self.connection, local_device_id)
     }
 
     pub fn usage_complete_through(&self) -> HashMap<String, u64> {

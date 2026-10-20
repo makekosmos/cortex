@@ -1,6 +1,6 @@
-use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError, DbQuery};
+use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError, StoreReadQuery};
 use ark_application::sync_policy::{AcceptedPeerSyncPolicy, SyncProfile, SyncProfileRule};
-use rusqlite::{Connection, Transaction};
+use rusqlite::Transaction;
 
 pub(crate) struct SaveLocalSyncProfileCommand {
     device_id: String,
@@ -85,7 +85,7 @@ impl LoadActiveLocalSyncProfileQuery {
 
 impl sealed::Sealed for LoadActiveLocalSyncProfileQuery {}
 
-impl DbQuery for LoadActiveLocalSyncProfileQuery {
+impl StoreReadQuery for LoadActiveLocalSyncProfileQuery {
     type Output = Option<SyncProfile>;
 
     fn class(&self) -> CommandClass {
@@ -99,10 +99,12 @@ impl DbQuery for LoadActiveLocalSyncProfileQuery {
     fn read(
         self,
         context: &CommandContext,
-        connection: &Connection,
+        capabilities: &ark_store::ReadCapabilities<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_engine()?;
-        ark_store::data_platform::load_active_sync_profile(connection, &self.device_id)
+        capabilities
+            .sync()
+            .active_local_sync_profile(&self.device_id)
             .map_err(map_profile_error)
     }
 }
@@ -195,7 +197,7 @@ impl LoadAcceptedPeerSyncPolicyQuery {
 
 impl sealed::Sealed for LoadAcceptedPeerSyncPolicyQuery {}
 
-impl DbQuery for LoadAcceptedPeerSyncPolicyQuery {
+impl StoreReadQuery for LoadAcceptedPeerSyncPolicyQuery {
     type Output = Option<AcceptedPeerSyncPolicy>;
 
     fn class(&self) -> CommandClass {
@@ -209,10 +211,12 @@ impl DbQuery for LoadAcceptedPeerSyncPolicyQuery {
     fn read(
         self,
         context: &CommandContext,
-        connection: &Connection,
+        capabilities: &ark_store::ReadCapabilities<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_sync_peer_matches(&self.peer_device_id)?;
-        ark_store::data_platform::load_accepted_peer_sync_policy(connection, &self.peer_device_id)
+        capabilities
+            .sync()
+            .accepted_peer_policy(&self.peer_device_id)
             .map_err(map_profile_error)
     }
 }
@@ -229,7 +233,7 @@ impl LoadSyncProfileForSyncQuery {
 
 impl sealed::Sealed for LoadSyncProfileForSyncQuery {}
 
-impl DbQuery for LoadSyncProfileForSyncQuery {
+impl StoreReadQuery for LoadSyncProfileForSyncQuery {
     type Output = Option<SyncProfile>;
 
     fn class(&self) -> CommandClass {
@@ -243,10 +247,12 @@ impl DbQuery for LoadSyncProfileForSyncQuery {
     fn read(
         self,
         context: &CommandContext,
-        connection: &Connection,
+        capabilities: &ark_store::ReadCapabilities<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_system_sync()?;
-        ark_store::data_platform::load_sync_profile_for_sync(connection, &self.local_device_id)
+        capabilities
+            .sync()
+            .sync_profile(&self.local_device_id)
             .map_err(map_profile_error)
     }
 }
