@@ -2,6 +2,7 @@
 
 pub mod ledger;
 mod object_projection;
+pub mod registry;
 
 pub use object_projection::stable_link_id;
 

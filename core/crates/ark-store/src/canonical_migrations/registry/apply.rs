@@ -1,5 +1,5 @@
-use super::super::definitions::canonical_type_registrations;
 use super::*;
+use ark_domain::canonical_type::definitions::canonical_type_registrations;
 use ark_domain::canonical_type::TypeRegistration;
 use rusqlite::{params, Connection, OptionalExtension};
 

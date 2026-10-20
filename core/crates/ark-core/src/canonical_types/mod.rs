@@ -3,7 +3,6 @@ pub mod facades;
 pub mod game;
 pub mod migration;
 pub mod migration_objects;
-pub mod migration_registry;
 pub mod pending;
 pub mod preflight;
 pub mod validation;

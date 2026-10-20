@@ -1,9 +1,9 @@
 #![allow(clippy::unwrap_used)]
 use ark_core::canonical_types::definitions::canonical_type_registrations;
-use ark_core::canonical_types::migration_registry::{
+use ark_core::type_registry::legacy_compatibility_version;
+use ark_store::canonical_migrations::registry::{
     apply_registry, apply_registry_with_failure, preflight_registry, RegistryError,
 };
-use ark_core::type_registry::legacy_compatibility_version;
 use rusqlite::Connection;
 
 fn db() -> Connection {

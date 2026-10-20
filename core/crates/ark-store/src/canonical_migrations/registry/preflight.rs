@@ -1,6 +1,6 @@
-use super::super::definitions::canonical_type_registrations;
 use super::*;
-use crate::type_registry::legacy_compatibility_version;
+use ark_domain::canonical_type::definitions::canonical_type_registrations;
+use ark_domain::canonical_type::registry::legacy_compatibility_version;
 use ark_domain::canonical_type::TypeRegistration;
 use rusqlite::{params, Connection, OptionalExtension};
 use semver::Version;

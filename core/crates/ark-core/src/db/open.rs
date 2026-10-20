@@ -43,7 +43,7 @@ pub fn init_schema(conn: &Connection) -> Result<(), String> {
     // objects and planning tables untouched until their migration succeeds.
     conn.execute_batch("SAVEPOINT ark_canonical_contracts")
         .map_err(|error| error.to_string())?;
-    match crate::canonical_types::migration_registry::prepare_registry_for_objects(conn) {
+    match ark_store::canonical_migrations::registry::prepare_registry_for_objects(conn) {
         Ok(()) => conn
             .execute_batch("RELEASE SAVEPOINT ark_canonical_contracts")
             .map_err(|error| error.to_string())?,

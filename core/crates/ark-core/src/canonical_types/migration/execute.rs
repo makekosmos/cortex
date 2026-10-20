@@ -1,5 +1,6 @@
-use super::super::{migration_objects, migration_registry, preflight};
+use super::super::{migration_objects, preflight};
 use super::*;
+use ark_store::canonical_migrations::registry as migration_registry;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
