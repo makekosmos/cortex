@@ -5,6 +5,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import {
+  bracePairs,
   collectRustFiles,
   debugOnlyFunctionRanges,
   inlineTestRanges,
@@ -43,6 +44,23 @@ function testOnlyModuleDeclarations(source) {
   return [
     ...masked.matchAll(/#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]\s*mod\s+([A-Za-z_][A-Za-z0-9_]*)\s*;/g),
   ].map((match) => match[1]);
+}
+
+function testOnlyItemRanges(source, masked = maskRustTrivia(source)) {
+  const ranges = [];
+  const functionPattern =
+    /#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]\s*(?:(?:pub(?:\s*\([^)]*\))?|async|unsafe|extern(?:\s*"[^"]+")?)\s+)*fn\s+[A-Za-z_][A-Za-z0-9_]*(?:\s*<[^>]*>)?\s*\([^)]*\)[^{]*\{/g;
+  const pairs = bracePairs(masked);
+  for (const match of masked.matchAll(functionPattern)) {
+    const open = match.index + match[0].lastIndexOf("{");
+    const close = pairs.get(open);
+    if (close === undefined) throw new Error(`unclosed cfg(test) function at byte ${open}`);
+    ranges.push({ start: match.index, end: close + 1 });
+  }
+  const usePattern = /#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]\s*use\b[^;]*;/g;
+  for (const match of masked.matchAll(usePattern))
+    ranges.push({ start: match.index, end: match.index + match[0].length });
+  return ranges;
 }
 
 function moduleDeclarations(source) {
@@ -91,6 +109,7 @@ function sourceViolations(source, relativePath, testOnly = false) {
   const violations = [];
   const found = new Set();
   const testRanges = inlineTestRanges(source, masked);
+  const testOnlyRanges = testOnlyItemRanges(source, masked);
   const debugRanges = debugOnlyFunctionRanges(source, masked);
   for (const [category, pattern] of CODE_PATTERNS) {
     for (const match of masked.matchAll(new RegExp(pattern.source, "g")))
@@ -108,9 +127,11 @@ function sourceViolations(source, relativePath, testOnly = false) {
         ? "test_file"
         : testRanges.some(({ start, end }) => start <= offset && offset < end)
           ? "inline_test"
-          : debugRanges.some(({ start, end }) => start <= offset && offset < end)
-            ? "debug_only"
-            : "production";
+          : testOnlyRanges.some(({ start, end }) => start <= offset && offset < end)
+            ? "inline_test"
+            : debugRanges.some(({ start, end }) => start <= offset && offset < end)
+              ? "debug_only"
+              : "production";
     const key = `${line}\0${category}\0${scope}`;
     if (found.has(key)) return;
     found.add(key);

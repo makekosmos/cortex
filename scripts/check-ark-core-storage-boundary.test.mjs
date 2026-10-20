@@ -103,6 +103,31 @@ test("the boundary checker scopes externally declared cfg(test) modules as tests
   );
 });
 
+test("the boundary checker scopes cfg(test) imports and functions as tests", async (t) => {
+  const paths = await fixture(t, {
+    manifest: '[dependencies]\nserde = "1"\n',
+    source: [
+      "#[cfg(test)] use rusqlite::Connection;",
+      "#[cfg(test)] fn fixture(connection: &Connection) {",
+      '  connection.execute_batch("CREATE TABLE probe(value TEXT)").unwrap();',
+      "}",
+      'pub fn production(connection: &rusqlite::Connection) { connection.execute("SELECT 1", []).unwrap(); }',
+    ].join("\n"),
+  });
+  const violations = await collectStorageViolations(paths);
+  assert.deepEqual(
+    violations.map(({ line, category, scope }) => ({ line, category, scope })),
+    [
+      { line: 1, category: "SQLite type or import", scope: "inline_test" },
+      { line: 3, category: "SQL literal", scope: "inline_test" },
+      { line: 3, category: "SQLite operation", scope: "inline_test" },
+      { line: 5, category: "SQL literal", scope: "production" },
+      { line: 5, category: "SQLite operation", scope: "production" },
+      { line: 5, category: "SQLite type or import", scope: "production" },
+    ],
+  );
+});
+
 test("a clean Core source tree passes the ownership gate", async (t) => {
   const paths = await fixture(t, {
     manifest: '[dependencies]\nark-store = { path = "../ark-store" }\n',

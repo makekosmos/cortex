@@ -151,7 +151,7 @@ export function maskRustTrivia(source) {
   return masked;
 }
 
-function bracePairs(masked) {
+export function bracePairs(masked) {
   const stack = [];
   const pairs = new Map();
   for (let index = 0; index < masked.length; index++) {
