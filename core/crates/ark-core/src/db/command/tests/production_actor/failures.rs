@@ -1,5 +1,4 @@
 use super::*;
-use rusqlite::Connection;
 use std::time::Duration;
 
 fn actor_path(directory: &tempfile::TempDir) -> String {
@@ -57,56 +56,23 @@ async fn open_failure_actor() -> (tempfile::TempDir, DbHandle, DbOwner) {
     (directory, handle, owner)
 }
 
-async fn leave_partial_restore() -> (tempfile::TempDir, String) {
-    let directory = tempfile::tempdir().unwrap();
-    let path = actor_path(&directory);
-    let (handle, mut owner) = DbHandle::open(path.clone(), "actor-test-device".into())
-        .await
-        .unwrap();
-    handle.with_connection(|connection| {
-        connection
-            .execute_batch(
-                "CREATE TABLE restore_journal_test(value TEXT NOT NULL);
-                 INSERT INTO restore_journal_test VALUES ('before');",
-            )
-            .unwrap();
-        ark_store::snapshot::leave_restore_journal_for_test(connection, &path).unwrap();
-        connection
-            .execute("UPDATE restore_journal_test SET value = 'partial'", [])
-            .unwrap();
-    });
-    owner
-        .shutdown(std::time::Instant::now() + Duration::from_secs(2))
-        .await
-        .unwrap();
-    (directory, path)
-}
-
-fn restore_journal_value(path: &str) -> String {
-    Connection::open(path)
-        .unwrap()
-        .query_row("SELECT value FROM restore_journal_test", [], |row| {
-            row.get(0)
-        })
-        .unwrap()
-}
-
 #[tokio::test]
 async fn production_actor_recovers_interrupted_restore_before_ready() {
-    let (_directory, path) = leave_partial_restore().await;
+    let fixture = ark_store::test_support::InterruptedRestoreFixture::create().unwrap();
+    let path = fixture.database_path().to_string_lossy().into_owned();
 
-    let (handle, mut owner) = DbHandle::open(path.clone(), "actor-test-device".into())
+    let (handle, mut owner) = DbHandle::open(path, "actor-test-device".into())
         .await
         .unwrap();
-    let value = handle.with_connection(|connection| {
-        connection
-            .query_row("SELECT value FROM restore_journal_test", [], |row| {
-                row.get::<_, String>(0)
-            })
-            .unwrap()
-    });
+    let value = handle.with_connection(|connection| fixture.marker_on(connection).unwrap());
     assert_eq!(value, "before");
-    assert!(ark_store::snapshot::recover_interrupted_restore(&path).is_ok());
+    assert_eq!(
+        fixture.inspect().unwrap(),
+        ark_store::test_support::InterruptedRestoreState {
+            intent: ark_store::test_support::RestoreIntentState::Missing,
+            capsule_present: false,
+        }
+    );
     owner
         .shutdown(std::time::Instant::now() + Duration::from_secs(2))
         .await
@@ -115,35 +81,42 @@ async fn production_actor_recovers_interrupted_restore_before_ready() {
 
 #[tokio::test]
 async fn production_actor_refuses_ready_when_restore_intent_is_corrupt() {
-    let (directory, path) = leave_partial_restore().await;
-    let intent_path = directory.path().join(".actor.db.restore-intent.json");
-    std::fs::write(&intent_path, b"not-json").unwrap();
+    let fixture = ark_store::test_support::InterruptedRestoreFixture::create().unwrap();
+    fixture.corrupt_intent().unwrap();
 
-    let opened = DbHandle::open(path.clone(), "actor-test-device".into()).await;
+    let opened = DbHandle::open(
+        fixture.database_path().to_string_lossy().into_owned(),
+        "actor-test-device".into(),
+    )
+    .await;
 
     assert!(matches!(opened, Err(DbError::RecoveryRequired)));
-    assert_eq!(restore_journal_value(&path), "partial");
-    assert_eq!(std::fs::read(&intent_path).unwrap(), b"not-json");
+    assert_eq!(fixture.marker().unwrap(), "partial");
+    assert_eq!(
+        fixture.inspect().unwrap().intent,
+        ark_store::test_support::RestoreIntentState::Corrupt
+    );
 }
 
 #[tokio::test]
 async fn production_actor_refuses_ready_when_restore_capsule_is_missing() {
-    let (directory, path) = leave_partial_restore().await;
-    let intent_path = directory.path().join(".actor.db.restore-intent.json");
-    let intent: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(&intent_path).unwrap()).unwrap();
-    let operation_id = intent["operation_id"].as_str().unwrap();
-    let capsule_path = directory
-        .path()
-        .join(format!(".actor.db.restore-live-{operation_id}.db"));
-    std::fs::remove_file(&capsule_path).unwrap();
+    let fixture = ark_store::test_support::InterruptedRestoreFixture::create().unwrap();
+    fixture.remove_capsule().unwrap();
 
-    let opened = DbHandle::open(path.clone(), "actor-test-device".into()).await;
+    let opened = DbHandle::open(
+        fixture.database_path().to_string_lossy().into_owned(),
+        "actor-test-device".into(),
+    )
+    .await;
 
     assert!(matches!(opened, Err(DbError::RecoveryRequired)));
-    assert_eq!(restore_journal_value(&path), "partial");
-    assert!(intent_path.exists());
-    assert!(!capsule_path.exists());
+    assert_eq!(fixture.marker().unwrap(), "partial");
+    let state = fixture.inspect().unwrap();
+    assert_eq!(
+        state.intent,
+        ark_store::test_support::RestoreIntentState::Valid
+    );
+    assert!(!state.capsule_present);
 }
 
 fn failure_probe_state(handle: &DbHandle, operation_id: &str) -> (i64, i64) {

@@ -134,7 +134,7 @@ pub fn validate_snapshot_id_for_test(id: &str) -> Result<(), String> {
 
 #[cfg(any(test, feature = "test-support"))]
 #[doc(hidden)]
-pub fn leave_restore_journal_for_test(
+pub(crate) fn leave_restore_journal_for_test(
     connection: &Connection,
     db_path: &str,
 ) -> Result<(), String> {
