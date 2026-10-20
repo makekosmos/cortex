@@ -1,4 +1,4 @@
-use super::super::preflight::SourceRecord;
+use ark_application::migration_source_projection::SourceRecord;
 use rusqlite::{Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::json;

@@ -1,5 +1,5 @@
-use super::super::preflight::SourceRecord;
 use super::*;
+use ark_application::migration_source_projection::SourceRecord;
 use rusqlite::{params, Connection, OptionalExtension};
 use sha2::{Digest, Sha256};
 

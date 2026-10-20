@@ -2,7 +2,6 @@ pub mod definitions;
 pub mod facades;
 pub mod game;
 pub mod migration;
-pub mod migration_ledger;
 pub mod migration_objects;
 pub mod migration_registry;
 pub mod pending;

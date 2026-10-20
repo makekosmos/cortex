@@ -1,6 +1,8 @@
-use super::super::migration_ledger::{self, ItemCheckpoint, ItemStatus};
 use super::super::preflight::{SourceKind, SourceRecord};
 use super::*;
+use ark_store::canonical_migrations::ledger::{
+    self as migration_ledger, ItemCheckpoint, ItemStatus,
+};
 use rusqlite::Connection;
 
 pub fn apply_plan_with_failure(

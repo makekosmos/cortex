@@ -1,9 +1,9 @@
 #![allow(clippy::unwrap_used)]
-use ark_core::canonical_types::migration_ledger::{
+use ark_core::canonical_types::preflight::{SourceKind, SourceRecord};
+use ark_store::canonical_migrations::ledger::{
     begin_or_resume, ensure_ledger_schema, ChildSavepoint, ItemCheckpoint, ItemStatus, LedgerError,
     MigrationRunStatus,
 };
-use ark_core::canonical_types::preflight::{SourceKind, SourceRecord};
 use rusqlite::Connection;
 
 fn record(kind: &str, id: &str, hash: &str) -> SourceRecord {
@@ -92,7 +92,7 @@ fn explicit_retry_increments_attempt_once_and_terminal_transition_is_illegal() {
     )
     .unwrap();
     assert_eq!(
-        ark_core::canonical_types::migration_ledger::retry_item(
+        ark_store::canonical_migrations::ledger::retry_item(
             &conn,
             "phase3-canonical-v1",
             "note_obj",
@@ -102,9 +102,9 @@ fn explicit_retry_increments_attempt_once_and_terminal_transition_is_illegal() {
         .unwrap(),
         1
     );
-    ark_core::canonical_types::migration_ledger::transition_item(
+    ark_store::canonical_migrations::ledger::transition_item(
         &conn,
-        ark_core::canonical_types::migration_ledger::ItemTransition {
+        ark_store::canonical_migrations::ledger::ItemTransition {
             contract: "phase3-canonical-v1",
             kind: "note_obj",
             id: "n1",
@@ -117,7 +117,7 @@ fn explicit_retry_increments_attempt_once_and_terminal_transition_is_illegal() {
         },
     )
     .unwrap();
-    assert!(ark_core::canonical_types::migration_ledger::retry_item(
+    assert!(ark_store::canonical_migrations::ledger::retry_item(
         &conn,
         "phase3-canonical-v1",
         "note_obj",
@@ -125,23 +125,21 @@ fn explicit_retry_increments_attempt_once_and_terminal_transition_is_illegal() {
         "t4"
     )
     .is_err());
-    assert!(
-        ark_core::canonical_types::migration_ledger::transition_item(
-            &conn,
-            ark_core::canonical_types::migration_ledger::ItemTransition {
-                contract: "phase3-canonical-v1",
-                kind: "note_obj",
-                id: "n1",
-                status: ItemStatus::Pending,
-                checkpoint: ItemCheckpoint::Prepared,
-                canonical_hash: None,
-                result_json: "{}",
-                error_code: None,
-                now: "t5",
-            },
-        )
-        .is_err()
-    );
+    assert!(ark_store::canonical_migrations::ledger::transition_item(
+        &conn,
+        ark_store::canonical_migrations::ledger::ItemTransition {
+            contract: "phase3-canonical-v1",
+            kind: "note_obj",
+            id: "n1",
+            status: ItemStatus::Pending,
+            checkpoint: ItemCheckpoint::Prepared,
+            canonical_hash: None,
+            result_json: "{}",
+            error_code: None,
+            now: "t5",
+        },
+    )
+    .is_err());
 }
 
 #[test]
@@ -149,9 +147,9 @@ fn completed_rerun_requires_canonical_validation_and_changed_inventory_conflicts
     let conn = Connection::open_in_memory().unwrap();
     let records = vec![record("note_obj", "n1", "s1")];
     begin_or_resume(&conn, "phase3-canonical-v1", &records, "t1").unwrap();
-    ark_core::canonical_types::migration_ledger::transition_item(
+    ark_store::canonical_migrations::ledger::transition_item(
         &conn,
-        ark_core::canonical_types::migration_ledger::ItemTransition {
+        ark_store::canonical_migrations::ledger::ItemTransition {
             contract: "phase3-canonical-v1",
             kind: "note_obj",
             id: "n1",
@@ -164,15 +162,10 @@ fn completed_rerun_requires_canonical_validation_and_changed_inventory_conflicts
         },
     )
     .unwrap();
-    ark_core::canonical_types::migration_ledger::complete_run(
-        &conn,
-        "phase3-canonical-v1",
-        "{}",
-        "t3",
-    )
-    .unwrap();
+    ark_store::canonical_migrations::ledger::complete_run(&conn, "phase3-canonical-v1", "{}", "t3")
+        .unwrap();
     assert!(
-        ark_core::canonical_types::migration_ledger::begin_or_resume_with_validator(
+        ark_store::canonical_migrations::ledger::begin_or_resume_with_validator(
             &conn,
             "phase3-canonical-v1",
             &records,
@@ -182,7 +175,7 @@ fn completed_rerun_requires_canonical_validation_and_changed_inventory_conflicts
         .is_ok()
     );
     assert!(
-        ark_core::canonical_types::migration_ledger::begin_or_resume_with_validator(
+        ark_store::canonical_migrations::ledger::begin_or_resume_with_validator(
             &conn,
             "phase3-canonical-v1",
             &records,
