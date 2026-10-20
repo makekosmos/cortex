@@ -18,6 +18,9 @@ pub use crate::replication_storage::{
 };
 pub use ark_application::sync_storage::SyncReadClass;
 
+#[cfg(test)]
+#[path = "sync_server/sync_round_trip.rs"]
+mod sync_round_trip_tests;
 #[path = "sync_server_core.rs"]
 mod sync_server_core;
 #[path = "sync_server_peers.rs"]

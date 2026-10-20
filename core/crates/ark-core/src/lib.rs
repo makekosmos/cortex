@@ -4,6 +4,9 @@
 // for genuine invariants.
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 
+#[cfg(test)]
+extern crate self as ark_core;
+
 pub mod application;
 pub mod canonical_types;
 pub mod db;
