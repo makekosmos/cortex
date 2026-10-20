@@ -31,7 +31,7 @@ enum Input {
 
 fn apply_core_task_write(
     object_session: &dyn ObjectWriteSession,
-    local_task_session: Option<&dyn TaskMutationSession>,
+    task_session: &dyn TaskMutationSession,
     origin: ObjectWriteOrigin,
     input: Input,
 ) -> Result<ObjectWriteResult, String> {
@@ -115,9 +115,7 @@ fn apply_core_task_write(
     )
     .map_err(|error| error.to_string())?;
     if source_hlc.is_some() {
-        local_task_session
-            .ok_or_else(|| "object_write_origin_mismatch".to_string())?
-            .ensure_legacy_task_write_allowed(&object.id)?;
+        task_session.ensure_legacy_task_write_allowed(&object.id)?;
     }
     let (payload_json, payload_sha256) =
         ark_domain::object_write::canonical_payload_digest(&object, &links)?;
@@ -157,8 +155,6 @@ fn apply_core_task_write(
                 duplicate: false,
             });
         }
-        let task_session =
-            local_task_session.ok_or_else(|| "object_write_origin_mismatch".to_string())?;
         let _ = task_mutation::apply_inbound_task_mutation(
             task_session,
             task_mutation::InboundTaskMutation::CanonicalFullSnapshot {
@@ -186,10 +182,8 @@ fn apply_core_task_write(
     }
 
     let task_device_id = device_id.as_deref().unwrap_or("ark-core-rpc-local");
-    let local_task_session =
-        local_task_session.ok_or_else(|| "object_write_origin_mismatch".to_string())?;
     let task_entities = task_mutation::apply_task_upsert(
-        local_task_session,
+        task_session,
         &object,
         &links,
         task_device_id,
@@ -227,7 +221,7 @@ pub fn apply_local_core_task_write(
     let (object, expected_snapshot, device_id) = write.into_parts();
     apply_core_task_write(
         object_session,
-        Some(task_session),
+        task_session,
         ObjectWriteOrigin::Local {
             device_id,
             expected_snapshot,
@@ -250,10 +244,5 @@ pub fn apply_remote_core_task_write(
     } else {
         ObjectWriteOrigin::TrustedRemote
     };
-    apply_core_task_write(
-        object_session,
-        Some(task_session),
-        origin,
-        Input::Remote(remote),
-    )
+    apply_core_task_write(object_session, task_session, origin, Input::Remote(remote))
 }
