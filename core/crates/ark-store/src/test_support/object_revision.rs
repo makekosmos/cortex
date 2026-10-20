@@ -91,6 +91,27 @@ impl ObjectRevisionFixture {
         crate::sync_versions::set_object_sync_version_state(&self.connection, object_id, hlc, false)
     }
 
+    pub fn set_object_type_identity(
+        &self,
+        object_id: &str,
+        type_id: &str,
+        type_version: &str,
+    ) -> Result<(), String> {
+        let changed = self
+            .connection
+            .execute(
+                "UPDATE objects SET type_id = ?1, type_version = ?2 WHERE id = ?3",
+                (type_id, type_version, object_id),
+            )
+            .map_err(|error| error.to_string())?;
+        if changed != 1 {
+            return Err(format!(
+                "expected to update one object identity for {object_id}, updated {changed}"
+            ));
+        }
+        Ok(())
+    }
+
     pub fn inspect(&self, object_id: &str) -> Result<ObjectRevisionState, String> {
         let object = crate::objects::get_object(&self.connection, object_id)?;
         let tombstone = self

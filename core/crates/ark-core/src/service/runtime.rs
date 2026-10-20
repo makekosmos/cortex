@@ -13,24 +13,6 @@ where
     get_db_handle(state)?.with_connection(f)
 }
 
-/// Выполняет write-замыкание в одной SQLite-транзакции поверх shared conn.
-/// COMMIT при Ok, ROLLBACK при Err. Гарантирует атомарность entity + FTS + sync-meta:
-/// вложенные SAVEPOINT внутри db::* работают внутри этого BEGIN, при ошибке откатывается всё.
-#[cfg(test)]
-pub(super) fn with_write_tx<T, F>(state: &ServiceState, f: F) -> Result<T, String>
-where
-    F: FnOnce(&rusqlite::Connection) -> Result<T, String>,
-{
-    with_conn(state, |conn| {
-        let tx =
-            rusqlite::Transaction::new_unchecked(conn, rusqlite::TransactionBehavior::Immediate)
-                .map_err(|error| error.to_string())?;
-        let value = f(&tx)?;
-        tx.commit().map_err(|error| error.to_string())?;
-        Ok(value)
-    })
-}
-
 pub(super) fn get_db_handle(state: &ServiceState) -> Result<db::DbHandle, String> {
     state
         .db

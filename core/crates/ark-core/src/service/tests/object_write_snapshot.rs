@@ -82,6 +82,7 @@ async fn guarded_object_upsert_rejects_every_stale_identity_or_revision() {
     let fixture = service_fixture();
     let state = fixture.state.clone();
     let dir = &fixture.dir;
+    let storage = ark_store::test_support::ObjectRevisionFixture::open(&fixture.db_path()).unwrap();
     handle_request(
         &state,
         Request::Init {
@@ -174,15 +175,9 @@ async fn guarded_object_upsert_rejects_every_stale_identity_or_revision() {
     );
 
     let stale_identity = snapshot(&state, "guarded-task").await;
-    with_write_tx(&state, |conn| {
-        conn.execute(
-            "UPDATE objects SET type_id = 'com.kosmos.note', type_version = '1.0.0' WHERE id = ?1",
-            ["guarded-task"],
-        )
-        .map_err(|error| error.to_string())?;
-        Ok(())
-    })
-    .unwrap();
+    storage
+        .set_object_type_identity("guarded-task", "com.kosmos.note", "1.0.0")
+        .unwrap();
     assert_eq!(
         guarded_upsert(&state, task("guarded-task", "wrong-type"), stale_identity)
             .await
@@ -190,15 +185,9 @@ async fn guarded_object_upsert_rejects_every_stale_identity_or_revision() {
         "object_conflict:stale_snapshot"
     );
 
-    with_write_tx(&state, |conn| {
-        conn.execute(
-            "UPDATE objects SET type_id = 'core.task', type_version = '0.1.0' WHERE id = ?1",
-            ["guarded-task"],
-        )
-        .map_err(|error| error.to_string())?;
-        Ok(())
-    })
-    .unwrap();
+    storage
+        .set_object_type_identity("guarded-task", "core.task", "0.1.0")
+        .unwrap();
     let before_delete = snapshot(&state, "guarded-task").await;
     handle_request(
         &state,
