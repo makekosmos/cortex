@@ -458,43 +458,5 @@ impl SqliteWriter {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{SqliteWriter, TransactionFailure};
-    use rusqlite::Connection;
-
-    #[test]
-    fn immediate_transaction_commits_success_and_rolls_back_operation_error() {
-        let connection = Connection::open_in_memory().expect("database opens");
-        connection
-            .execute_batch("CREATE TABLE values_table(value INTEGER NOT NULL)")
-            .expect("test schema creates");
-        let mut writer = SqliteWriter::from_connection(connection);
-
-        writer
-            .immediate(|transaction| {
-                transaction.execute("INSERT INTO values_table VALUES (1)", [])?;
-                Ok::<_, rusqlite::Error>(())
-            })
-            .expect("successful transaction commits");
-
-        let failure = writer.immediate(|transaction| {
-            transaction
-                .execute("INSERT INTO values_table VALUES (2)", [])
-                .map_err(|_| "test write fails")?;
-            Err::<(), _>("injected operation failure")
-        });
-        assert!(matches!(
-            failure,
-            Err(TransactionFailure::Operation("injected operation failure"))
-        ));
-
-        let count = writer.with_connection_mut(|connection| {
-            connection
-                .query_row("SELECT COUNT(*) FROM values_table", [], |row| {
-                    row.get::<_, i64>(0)
-                })
-                .expect("committed row count reads")
-        });
-        assert_eq!(count, 1, "failed transaction leaves no partial write");
-    }
-}
+#[path = "writer/tests.rs"]
+mod tests;
