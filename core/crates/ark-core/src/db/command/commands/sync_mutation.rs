@@ -1,9 +1,8 @@
 use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError};
-use super::sync_policy_identity::require_sync_policy_identity;
 use crate::db::SqliteStorageBackend;
 use crate::types::SyncEntity;
 use ark_application::sync_storage::ReplayNotice;
-use ark_application::sync_storage::{OutboundProgress, OutboundProgressWrite, PolicyIdentity};
+use ark_application::sync_storage::{OutboundProgress, OutboundProgressWrite};
 use rusqlite::Transaction;
 use serde::Serialize;
 
@@ -151,114 +150,5 @@ impl DbCommand for ApplySyncEntityCommand {
         )
         .map_err(DbError::from_application_error)?;
         Ok(notices)
-    }
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub(crate) struct ApplyAuthenticatedSyncEntityCommand {
-    entity: SyncEntity,
-    message_id: String,
-    local_device_id: Option<String>,
-    policy_identity: Option<PolicyIdentity>,
-}
-
-impl ApplyAuthenticatedSyncEntityCommand {
-    pub(crate) fn with_message_id(entity: SyncEntity, message_id: String) -> Self {
-        Self {
-            entity,
-            message_id,
-            local_device_id: None,
-            policy_identity: None,
-        }
-    }
-
-    pub(crate) fn with_policy_identity(
-        entity: SyncEntity,
-        message_id: String,
-        local_device_id: String,
-        policy_identity: PolicyIdentity,
-    ) -> Self {
-        Self {
-            entity,
-            message_id,
-            local_device_id: Some(local_device_id),
-            policy_identity: Some(policy_identity),
-        }
-    }
-}
-
-impl sealed::Sealed for ApplyAuthenticatedSyncEntityCommand {}
-
-impl DbCommand for ApplyAuthenticatedSyncEntityCommand {
-    type Output = (
-        ark_application::sync_storage::InboundApplyOutcome,
-        Vec<ReplayNotice>,
-    );
-
-    const CLASS: CommandClass = CommandClass::SyncLive;
-
-    fn weight(&self) -> usize {
-        super::serialized_weight(self)
-    }
-
-    fn execute(
-        self,
-        context: &CommandContext,
-        transaction: &Transaction<'_>,
-    ) -> Result<Self::Output, DbError> {
-        let peer_id = context.authenticated_peer_id()?;
-        require_sync_policy_identity(
-            transaction,
-            self.local_device_id.as_deref(),
-            self.policy_identity.as_ref(),
-        )?;
-        let peer_is_admitted = ark_store::device_registry::is_device_admitted(transaction, peer_id)
-            .map_err(DbError::Storage)?
-            .unwrap_or(false);
-        if !peer_is_admitted {
-            return Err(DbError::Permission("sync_peer_not_admitted".into()));
-        }
-        let message_id = self.message_id;
-        let payload = serde_json::to_string(&self.entity)
-            .map_err(|error| DbError::from_application_error(error.to_string()))?;
-        let inbox_state =
-            crate::db::receive_inbox_payload(transaction, peer_id, &message_id, &payload)
-                .map_err(DbError::from_application_error)?;
-        if inbox_state == crate::db::InboxState::Applied {
-            return Ok((
-                ark_application::sync_storage::InboundApplyOutcome::Applied,
-                Vec::new(),
-            ));
-        }
-        if inbox_state == crate::db::InboxState::Pending {
-            return Ok((
-                ark_application::sync_storage::InboundApplyOutcome::Pending,
-                Vec::new(),
-            ));
-        }
-        if inbox_state != crate::db::InboxState::Received {
-            return Err(DbError::from_application_error(
-                "sync_inbox_payload_not_ready".into(),
-            ));
-        }
-        let mut session = SqliteInboundSyncEntitySession(transaction);
-        let (outcome, notices) = ark_application::sync_storage::apply_inbound_sync_entity(
-            &mut session,
-            &self.entity,
-            Some(peer_id),
-        )
-        .map_err(DbError::from_application_error)?;
-        let inbox_state = match outcome {
-            ark_application::sync_storage::InboundApplyOutcome::Applied
-            | ark_application::sync_storage::InboundApplyOutcome::Stale => {
-                crate::db::InboxState::Applied
-            }
-            ark_application::sync_storage::InboundApplyOutcome::Pending => {
-                crate::db::InboxState::Pending
-            }
-        };
-        crate::db::set_inbox_state(transaction, peer_id, &message_id, inbox_state)
-            .map_err(DbError::from_application_error)?;
-        Ok((outcome, notices))
     }
 }

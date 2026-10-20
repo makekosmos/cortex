@@ -350,21 +350,24 @@ async fn disabled_peer_cannot_commit_an_inbound_entity_after_session_admission()
         Err(DbError::Permission(reason)) if reason == "sync_peer_not_admitted"
     ));
 
+    let entity = crate::types::SyncEntity {
+        entity_type: "note".into(),
+        id: "remote-note".into(),
+        data: serde_json::Map::new(),
+        hlc: crate::hlc::HLC::now("paired-device").to_string(),
+        deleted: None,
+        origin_device_id: Some("paired-device".into()),
+        origin_seq: None,
+    };
     let apply = handle
-        .submit(
+        .submit_authenticated_inbound_entity(
             CommandContext::authenticated_peer("paired-device".into()),
-            ApplyAuthenticatedSyncEntityCommand::with_message_id(
-                crate::types::SyncEntity {
-                    entity_type: "note".into(),
-                    id: "remote-note".into(),
-                    data: serde_json::Map::new(),
-                    hlc: crate::hlc::HLC::now("paired-device").to_string(),
-                    deleted: None,
-                    origin_device_id: Some("paired-device".into()),
-                    origin_seq: None,
-                },
+            ark_application::sync_storage::InboxReceiptWrite::new(
+                "paired-device".into(),
                 "revoked-session-write".into(),
+                serde_json::to_string(&entity).unwrap(),
             ),
+            entity,
         )
         .await;
     assert!(matches!(

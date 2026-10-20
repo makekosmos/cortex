@@ -145,47 +145,6 @@ impl AuthenticatedEntityBackend for SqliteStorageBackend {
                 })
                 .map_err(|error| error.to_string());
         }
-        if matches!(entity.entity_type.as_str(), "todo" | "project" | "tag") {
-            let receipt = make_inbox_receipt_write(
-                authenticated_peer_id,
-                inbox_message_id,
-                inbox_payload_json,
-                local_device_id,
-                policy_identity.as_ref(),
-            );
-            let inbox_state = self
-                .db
-                .receive_inbox_receipt(context.clone(), receipt)
-                .await
-                .map_err(|error| error.to_string())?;
-            if inbox_state == crate::db::InboxState::Applied {
-                return Ok(ark_application::sync_storage::InboundApplyOutcome::Applied);
-            }
-            if inbox_state == crate::db::InboxState::Pending {
-                return Ok(ark_application::sync_storage::InboundApplyOutcome::Pending);
-            }
-            let command = match policy_identity {
-                Some(identity) => {
-                    crate::db::ApplyAuthenticatedSyncEntityCommand::with_policy_identity(
-                        entity.clone(),
-                        inbox_message_id.to_owned(),
-                        local_device_id.to_owned(),
-                        identity,
-                    )
-                }
-                None => crate::db::ApplyAuthenticatedSyncEntityCommand::with_message_id(
-                    entity.clone(),
-                    inbox_message_id.to_owned(),
-                ),
-            };
-            let (outcome, notices) = self
-                .db
-                .submit(context, command)
-                .await
-                .map_err(|error| error.to_string())?;
-            publish_replay_notices(notices);
-            return Ok(outcome);
-        }
         let write = make_inbox_receipt_write(
             authenticated_peer_id,
             inbox_message_id,

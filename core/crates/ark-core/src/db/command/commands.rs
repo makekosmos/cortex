@@ -10,7 +10,6 @@ mod legacy_mutation;
 mod object_read;
 mod sync_mutation;
 mod sync_policy;
-mod sync_policy_identity;
 mod sync_read;
 mod sync_read_policy;
 mod system_mutation;
@@ -44,8 +43,7 @@ pub(crate) use integration_replication::{
 pub(crate) use legacy_mutation::{LegacyDeleteCommand, LegacyGraphWriteCommand};
 pub(crate) use object_read::ObjectReadQuery;
 pub(crate) use sync_mutation::{
-    ApplyAuthenticatedSyncEntityCommand, ApplySyncEntityCommand, CommittedFeedProgress,
-    CommittedFeedProgressCommand,
+    ApplySyncEntityCommand, CommittedFeedProgress, CommittedFeedProgressCommand,
 };
 pub(crate) use sync_policy::{
     AcceptPeerSyncPolicyCommand, LoadAcceptedPeerSyncPolicyQuery, LoadActiveLocalSyncProfileQuery,
