@@ -1,4 +1,4 @@
-use ark_core::canonical_types::migration::{
+use ark_store::canonical_migrations::migration::{
     migrate_phase3, migrate_phase3_with_options, plan_phase3, MigrationOptions,
 };
 use rusqlite::{params, Connection};

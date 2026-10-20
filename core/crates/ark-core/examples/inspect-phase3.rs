@@ -11,7 +11,7 @@ fn objects(conn: &Connection) -> rusqlite::Result<Vec<Vec<rusqlite::types::Value
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let path = std::env::args().nth(1).ok_or("expected database path")?;
     let conn = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
-    let plan = ark_core::canonical_types::migration::plan_phase3(&conn)?;
+    let plan = ark_store::canonical_migrations::migration::plan_phase3(&conn)?;
     println!("status: {}", plan.status);
     for item in &plan.blocked {
         // No raw source values (task titles, notes, etc.) in diagnostics.

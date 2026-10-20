@@ -1,6 +1,6 @@
-use super::super::migration_objects;
+use super::super::objects as migration_objects;
+use super::super::registry as migration_registry;
 use super::*;
-use ark_store::canonical_migrations::registry as migration_registry;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -230,7 +230,7 @@ pub fn migrate_phase3_with_options(
             report.unchanged = unchanged;
             return Ok(report);
         }
-        ark_store::pending_objects::migrate_phase2_to_v3(conn)
+        crate::pending_objects::migrate_phase2_to_v3(conn)
             .map_err(|e| MigrationError::Pending(e.to_string()))?;
         migration_registry::prepare_registry_for_objects(conn)
             .map_err(|e| MigrationError::Registry(e.to_string()))?;
@@ -319,7 +319,7 @@ pub fn retire_legacy_planning_tables(conn: &Connection) -> Result<(usize, usize)
         .map_err(|e| MigrationError::Storage(e.to_string()))
     };
     let source_snapshot =
-        ark_store::source_snapshot::read_source_snapshot(conn).map_err(MigrationError::Storage)?;
+        crate::source_snapshot::read_source_snapshot(conn).map_err(MigrationError::Storage)?;
     let inventory =
         ark_application::migration_source_projection::inventory_snapshot(&source_snapshot)
             .map_err(MigrationError::Storage)?;
@@ -450,7 +450,7 @@ pub fn retire_legacy_planning_tables(conn: &Connection) -> Result<(usize, usize)
                 canonical.as_ref(),
                 Some((type_id, version))
                     if type_id == "com.kosmos.project"
-                        && crate::canonical_types::definitions::is_canonical_version(
+                        && ark_domain::canonical_type::definitions::is_canonical_version(
                             type_id, version,
                         )
             ) {

@@ -66,7 +66,7 @@ fn phase3_migration_collision_leaves_registry_and_ledger_unchanged() {
         .unwrap()
         .collect::<Result<_, _>>()
         .unwrap();
-    assert!(ark_core::canonical_types::migration::migrate_phase3(&conn).is_err());
+    assert!(ark_store::canonical_migrations::migration::migrate_phase3(&conn).is_err());
     let after = [
         (
             "object_types",

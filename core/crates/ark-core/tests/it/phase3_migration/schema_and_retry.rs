@@ -133,7 +133,7 @@ fn phase3_migration_creates_additive_state_and_promotes_registry_atomically() {
         .query_row("SELECT COUNT(*) FROM object_types", [], |row| row.get(0))
         .unwrap();
 
-    let report = ark_core::canonical_types::migration::migrate_phase3(&conn).unwrap();
+    let report = ark_store::canonical_migrations::migration::migrate_phase3(&conn).unwrap();
     assert_eq!(report.status, "completed");
     assert_eq!(
         conn.query_row(
@@ -170,7 +170,7 @@ fn phase3_migration_creates_additive_state_and_promotes_registry_atomically() {
             )
             .unwrap());
     }
-    let second = ark_core::canonical_types::migration::migrate_phase3(&conn).unwrap();
+    let second = ark_store::canonical_migrations::migration::migrate_phase3(&conn).unwrap();
     assert_eq!(report.source_inventory_hash, second.source_inventory_hash);
     assert_eq!(
         conn.query_row("SELECT COUNT(*) FROM canonical_migration_runs", [], |row| {
@@ -186,7 +186,7 @@ fn phase3_clear_all_removes_ephemeral_state_but_preserves_locked_registry_and_ar
     let conn = Connection::open_in_memory().unwrap();
     ark_store::open::init_schema_prerequisites_for_phase3(&conn).unwrap();
     phase3_legacy_fixtures::seed_historical_legacy_authorities(&conn);
-    ark_core::canonical_types::migration::migrate_phase3(&conn).unwrap();
+    ark_store::canonical_migrations::migration::migrate_phase3(&conn).unwrap();
     conn.execute(
         "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES ('x','h',0)",
         [],

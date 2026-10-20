@@ -81,7 +81,7 @@ fn blocked_migration_still_installs_new_write_contracts_without_rewriting_legacy
         assert_eq!(legacy.0, "note_obj");
         assert_eq!(legacy.1, "{\"relatedNotes\":[\"missing-target\"]}");
         assert_eq!(
-            ark_core::canonical_types::migration::plan_phase3(&conn)
+            ark_store::canonical_migrations::migration::plan_phase3(&conn)
                 .unwrap()
                 .status,
             "blocked"

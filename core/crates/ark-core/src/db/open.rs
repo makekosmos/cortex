@@ -1,6 +1,5 @@
 use rusqlite::Connection;
 
-use crate::canonical_types::migration;
 pub use crate::canonical_types::pending::{
     count_pending_for_type, insert_pending_object, replay_pending_for_type,
 };
@@ -32,10 +31,10 @@ pub(in crate::db) fn phase3_migration_completed(conn: &Connection) -> Result<boo
 
 pub fn init_schema(conn: &Connection) -> Result<(), String> {
     ark_store::open::init_schema_prerequisites_for_phase3(conn)?;
-    crate::canonical_types::migration_objects::ensure_object_state_schema(conn).map_err(
+    ark_store::canonical_migrations::objects::ensure_object_state_schema(conn).map_err(
         |error| format!("canonical runtime schema during init_schema failed: {error:?}"),
     )?;
-    migration::migrate_phase3(conn)
+    ark_store::canonical_migrations::migration::migrate_phase3(conn)
         .map(|_| ())
         .map_err(|error| format!("phase3 migration during init_schema failed: {error:?}"))?;
     // A blocked legacy-object migration must not prevent new canonical writes.
@@ -58,7 +57,7 @@ pub fn init_schema(conn: &Connection) -> Result<(), String> {
         }
     }
     if phase3_migration_completed(conn)? {
-        migration::retire_legacy_planning_tables(conn)
+        ark_store::canonical_migrations::migration::retire_legacy_planning_tables(conn)
             .map(|_| ())
             .map_err(|error| {
                 format!("legacy planning retirement during init_schema failed: {error:?}")

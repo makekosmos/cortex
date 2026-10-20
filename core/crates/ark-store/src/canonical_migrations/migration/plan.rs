@@ -1,6 +1,6 @@
-use super::super::migration_objects;
+use super::super::objects as migration_objects;
+use super::super::registry as migration_registry;
 use ark_application::migration_source_projection as preflight;
-use ark_store::canonical_migrations::registry as migration_registry;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -82,8 +82,8 @@ fn error_item(code: String, detail: String) -> preflight::BlockedItem {
 
 /// Compose every read-only checkpoint without creating migration tables or rows.
 pub fn plan_phase3(conn: &Connection) -> Result<MigrationPlan, MigrationError> {
-    let snapshot = ark_store::source_snapshot::read_source_snapshot(conn)
-        .map_err(MigrationError::Preflight)?;
+    let snapshot =
+        crate::source_snapshot::read_source_snapshot(conn).map_err(MigrationError::Preflight)?;
     let mapping_context = ark_application::migration_source_projection::mapping_context(&snapshot)
         .map_err(MigrationError::Preflight)?;
     let source = ark_application::migration_source_projection::preflight_from_snapshot(

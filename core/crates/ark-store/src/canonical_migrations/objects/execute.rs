@@ -1,8 +1,6 @@
+use super::super::ledger::{self as migration_ledger, ItemCheckpoint, ItemStatus};
 use super::*;
 use ark_application::migration_source_projection::{SourceKind, SourceRecord};
-use ark_store::canonical_migrations::ledger::{
-    self as migration_ledger, ItemCheckpoint, ItemStatus,
-};
 use rusqlite::Connection;
 
 pub fn apply_plan_with_failure(
@@ -57,8 +55,8 @@ pub fn apply_plan_with_failure(
             }
             let mut sp = migration_ledger::ChildSavepoint::begin(conn, ledger_item)
                 .map_err(|e| ObjectPlanError::Storage(e.to_string()))?;
-            let result = ark_store::canonical_migrations::apply_object_projection(conn, item)
-                .and_then(|canonical_hash| {
+            let result =
+                super::super::apply_object_projection(conn, item).and_then(|canonical_hash| {
                     migration_ledger::transition_item(
                         conn,
                         migration_ledger::ItemTransition {

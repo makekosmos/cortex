@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used)]
-use ark_core::canonical_types::migration::{migrate_phase3, retire_legacy_planning_tables};
 use ark_core::db::init_schema;
+use ark_store::canonical_migrations::migration::{migrate_phase3, retire_legacy_planning_tables};
 use ark_store::open::open_db;
 use rusqlite::{params, Connection};
 use serde_json::json;

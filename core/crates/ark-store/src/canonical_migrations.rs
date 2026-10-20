@@ -1,7 +1,9 @@
 //! Storage lifecycle for canonical data migrations.
 
 pub mod ledger;
+pub mod migration;
 mod object_projection;
+pub mod objects;
 pub mod registry;
 
 pub use object_projection::stable_link_id;

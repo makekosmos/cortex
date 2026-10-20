@@ -7,7 +7,7 @@ pub use ark_application::migration_source_projection::{
 /// Read source rows through Store and delegate deterministic planning to Application.
 pub fn plan_objects(conn: &Connection, now: &str) -> Result<ObjectPlan, ObjectPlanError> {
     let snapshot =
-        ark_store::source_snapshot::read_source_snapshot(conn).map_err(ObjectPlanError::Storage)?;
+        crate::source_snapshot::read_source_snapshot(conn).map_err(ObjectPlanError::Storage)?;
     ark_application::migration_source_projection::plan_objects_from_snapshot(&snapshot, now)
 }
 

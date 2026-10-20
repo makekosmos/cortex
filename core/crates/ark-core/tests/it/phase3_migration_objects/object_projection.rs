@@ -1,4 +1,4 @@
-use ark_core::canonical_types::migration_objects::{apply_plan, plan_objects};
+use ark_store::canonical_migrations::objects::{apply_plan, plan_objects};
 use rusqlite::{params, Connection};
 use serde_json::json;
 
