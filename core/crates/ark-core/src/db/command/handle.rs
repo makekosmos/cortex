@@ -4,6 +4,7 @@ use rusqlite::{OpenFlags, TransactionBehavior};
 use std::time::Instant;
 
 mod object_mutation;
+mod system_mutation;
 mod usage;
 
 #[derive(Clone)]

@@ -344,9 +344,15 @@ async fn usage_write_returns_typed_validation_error_and_rolls_back() {
 
 #[tokio::test]
 async fn clear_all_runs_inside_a_maintenance_database_command() {
-    let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
-    let handle = DbHandle::for_test(connection);
-    handle.with_connection(|connection| crate::db::init_schema(connection).unwrap());
+    let directory = tempfile::tempdir().unwrap();
+    let db_path = directory
+        .path()
+        .join("clear-all.db")
+        .to_string_lossy()
+        .into_owned();
+    let (handle, mut owner) = DbHandle::open(db_path, "clear-all-device".into())
+        .await
+        .unwrap();
     handle
         .submit(
             CommandContext::engine(),
@@ -356,7 +362,7 @@ async fn clear_all_runs_inside_a_maintenance_database_command() {
         .unwrap();
 
     handle
-        .submit(CommandContext::engine_maintenance(), ClearAllCommand)
+        .submit_clear_all(CommandContext::engine_maintenance())
         .await
         .unwrap();
 
@@ -364,6 +370,10 @@ async fn clear_all_runs_inside_a_maintenance_database_command() {
         ark_store::sync_kv::get_sync_kv(connection, "test-key").unwrap()
     });
     assert_eq!(value, None);
+    owner
+        .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -385,10 +395,16 @@ async fn usage_compaction_runs_as_a_bounded_maintenance_command() {
 
 #[tokio::test]
 async fn delete_trashed_runs_through_an_interactive_database_command() {
-    let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
-    let handle = DbHandle::for_test(connection);
+    let directory = tempfile::tempdir().unwrap();
+    let db_path = directory
+        .path()
+        .join("delete-trashed.db")
+        .to_string_lossy()
+        .into_owned();
+    let (handle, mut owner) = DbHandle::open(db_path, "delete-trashed-device".into())
+        .await
+        .unwrap();
     handle.with_connection(|connection| {
-        crate::db::init_schema(connection).unwrap();
         connection
             .execute(
                 "INSERT INTO todos (id, title, created_at, is_trashed) \
@@ -399,10 +415,7 @@ async fn delete_trashed_runs_through_an_interactive_database_command() {
     });
 
     let deleted = handle
-        .submit(
-            CommandContext::engine(),
-            DeleteTrashedCommand::new("device-under-test".into()),
-        )
+        .submit_delete_trashed(CommandContext::engine(), "device-under-test".into())
         .await
         .unwrap();
 
@@ -417,6 +430,10 @@ async fn delete_trashed_runs_through_an_interactive_database_command() {
     });
     assert_eq!(deleted, 1);
     assert!(!remains);
+    owner
+        .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]

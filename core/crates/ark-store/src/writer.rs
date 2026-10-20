@@ -29,8 +29,14 @@ impl SqliteWriter {
         &mut self,
         operation: impl FnOnce(&Transaction<'_>) -> Result<T, E>,
     ) -> Result<T, TransactionFailure<E>> {
-        let transaction = self
-            .connection
+        Self::immediate_on_connection(&mut self.connection, operation)
+    }
+
+    fn immediate_on_connection<T, E>(
+        connection: &mut Connection,
+        operation: impl FnOnce(&Transaction<'_>) -> Result<T, E>,
+    ) -> Result<T, TransactionFailure<E>> {
+        let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(TransactionFailure::Begin)?;
         let output = operation(&transaction).map_err(TransactionFailure::Operation)?;
@@ -110,6 +116,42 @@ impl SqliteWriter {
         self.immediate(|transaction| {
             let session = crate::usage_mutation::SqliteUsageWriteSession::new(transaction);
             ark_application::usage::apply_local_usage_write(&session, device_id, write)
+        })
+    }
+
+    pub fn apply_local_usage_write_on_connection(
+        connection: &mut Connection,
+        device_id: &str,
+        write: ark_application::usage::LocalUsageWrite,
+    ) -> Result<Vec<ark_application::usage::UsageMutation>, TransactionFailure<String>> {
+        Self::immediate_on_connection(connection, |transaction| {
+            let session = crate::usage_mutation::SqliteUsageWriteSession::new(transaction);
+            ark_application::usage::apply_local_usage_write(&session, device_id, write)
+        })
+    }
+
+    pub fn clear_all(&mut self) -> Result<(), TransactionFailure<String>> {
+        self.immediate(|transaction| crate::load_all::clear_all(transaction))
+    }
+
+    pub fn clear_all_on_connection(
+        connection: &mut Connection,
+    ) -> Result<(), TransactionFailure<String>> {
+        Self::immediate_on_connection(connection, |transaction| {
+            crate::load_all::clear_all(transaction)
+        })
+    }
+
+    pub fn delete_trashed(&mut self, device_id: &str) -> Result<usize, TransactionFailure<String>> {
+        self.immediate(|transaction| crate::load_all::delete_trashed(transaction, device_id))
+    }
+
+    pub fn delete_trashed_on_connection(
+        connection: &mut Connection,
+        device_id: &str,
+    ) -> Result<usize, TransactionFailure<String>> {
+        Self::immediate_on_connection(connection, |transaction| {
+            crate::load_all::delete_trashed(transaction, device_id)
         })
     }
 }

@@ -20,7 +20,6 @@ mod system_read;
 mod task_merge;
 mod type_mutation;
 mod type_read;
-mod usage;
 mod usage_read;
 
 pub(crate) use core_task::{AuthenticatedCoreTaskWrite, LocalCoreTaskWrite, RemoteCoreTaskOutcome};
@@ -68,8 +67,7 @@ pub(crate) use sync_read_policy::{
     LoadPolicyBoundEntitiesPageQuery, PolicyBoundFeedDeliveryPageQuery,
 };
 pub(crate) use system_mutation::{
-    ClearAllCommand, CompactUsageSyncLogCommand, DeleteTrashedCommand,
-    LoadOrGenerateIrohSecretKeyCommand, RestoreSnapshotCommand,
+    CompactUsageSyncLogCommand, LoadOrGenerateIrohSecretKeyCommand, RestoreSnapshotCommand,
 };
 pub(crate) use system_read::SystemReadQuery;
 pub(crate) use task_merge::{
@@ -81,7 +79,6 @@ pub(crate) use type_mutation::{
     ReplaceObjectLinkCommand, UpsertObjectLinkCommand, UpsertObjectTypeCommand,
 };
 pub(crate) use type_read::TypeReadQuery;
-pub(crate) use usage::LocalUsageWriteCommand;
 pub(crate) use usage_read::UsageReadQuery;
 
 fn serialized_weight(value: &impl serde::Serialize) -> usize {

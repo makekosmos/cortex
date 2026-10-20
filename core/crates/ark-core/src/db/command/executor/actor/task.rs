@@ -105,6 +105,65 @@ pub(in crate::db::command) struct LocalUsageWriteTask {
     pub reply: oneshot::Sender<Result<Vec<ark_application::usage::UsageMutation>, DbError>>,
 }
 
+pub(in crate::db::command) struct ClearAllTask {
+    pub reply: oneshot::Sender<Result<(), DbError>>,
+}
+
+pub(in crate::db::command) struct DeleteTrashedTask {
+    pub device_id: String,
+    pub reply: oneshot::Sender<Result<usize, DbError>>,
+}
+
+impl WriterTask for ClearAllTask {
+    fn run(
+        self: Box<Self>,
+        writer: &mut SqliteWriter,
+        on_error: &mut dyn FnMut(&DbError),
+    ) -> (Result<(), DbError>, Publish) {
+        let Self { reply } = *self;
+        let result = writer.clear_all().map_err(map_storage_transaction_failure);
+        settle(result, reply, on_error)
+    }
+
+    fn cancel_before_start(self: Box<Self>) {
+        let _ = self.reply.send(Err(DbError::CancelledBeforeStart));
+    }
+
+    fn receiver_closed(&self) -> bool {
+        self.reply.is_closed()
+    }
+}
+
+impl WriterTask for DeleteTrashedTask {
+    fn run(
+        self: Box<Self>,
+        writer: &mut SqliteWriter,
+        on_error: &mut dyn FnMut(&DbError),
+    ) -> (Result<(), DbError>, Publish) {
+        let Self { device_id, reply } = *self;
+        let result = writer
+            .delete_trashed(&device_id)
+            .map_err(map_storage_transaction_failure);
+        settle(result, reply, on_error)
+    }
+
+    fn cancel_before_start(self: Box<Self>) {
+        let _ = self.reply.send(Err(DbError::CancelledBeforeStart));
+    }
+
+    fn receiver_closed(&self) -> bool {
+        self.reply.is_closed()
+    }
+}
+
+fn map_storage_transaction_failure<E: ToString>(failure: TransactionFailure<E>) -> DbError {
+    match failure {
+        TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+        TransactionFailure::Operation(error) => DbError::Storage(error.to_string()),
+        TransactionFailure::Commit(error) => DbError::CommitFailed(error.to_string()),
+    }
+}
+
 impl WriterTask for LocalUsageWriteTask {
     fn run(
         self: Box<Self>,

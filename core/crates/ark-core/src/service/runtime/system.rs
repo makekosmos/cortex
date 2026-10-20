@@ -207,10 +207,7 @@ pub(super) async fn external_refs_upsert(
 
 pub(super) async fn clear_all(state: &Arc<ServiceState>) -> Result<Value, String> {
     get_db_handle(state)?
-        .submit(
-            db::CommandContext::engine_maintenance(),
-            db::ClearAllCommand,
-        )
+        .submit_clear_all(db::CommandContext::engine_maintenance())
         .await
         .map(|()| json!(null))
         .map_err(|error| error.to_string())
@@ -218,10 +215,7 @@ pub(super) async fn clear_all(state: &Arc<ServiceState>) -> Result<Value, String
 
 pub(super) async fn delete_trashed(state: &Arc<ServiceState>) -> Result<Value, String> {
     get_db_handle(state)?
-        .submit(
-            db::CommandContext::engine(),
-            db::DeleteTrashedCommand::new(local_write_device_id(None)),
-        )
+        .submit_delete_trashed(db::CommandContext::engine(), local_write_device_id(None))
         .await
         .map(|count| json!(count))
         .map_err(|error| error.to_string())

@@ -417,7 +417,7 @@ async fn clear_all_removes_registry_before_iroh_identity_is_cleared() {
         .unwrap();
 
     handle
-        .submit(CommandContext::engine_maintenance(), ClearAllCommand)
+        .submit_clear_all(CommandContext::engine_maintenance())
         .await
         .unwrap();
     handle.with_connection(|connection| {
