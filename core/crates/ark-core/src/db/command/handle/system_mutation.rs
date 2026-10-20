@@ -14,7 +14,7 @@ impl DbHandle {
                 actor.admit(context.class, &context.source, 1, task)?;
                 response.await.unwrap_or(Err(DbError::OutcomeUnknown))
             }
-            #[cfg(any(test, feature = "test-support"))]
+            #[cfg(test)]
             HandleBackend::Test(connection) => {
                 let admission = self
                     .admission
@@ -47,7 +47,7 @@ impl DbHandle {
                 actor.admit(context.class, &context.source, weight, task)?;
                 response.await.unwrap_or(Err(DbError::OutcomeUnknown))
             }
-            #[cfg(any(test, feature = "test-support"))]
+            #[cfg(test)]
             HandleBackend::Test(connection) => {
                 let admission = self
                     .admission
@@ -61,7 +61,7 @@ impl DbHandle {
     }
 }
 
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 fn spawn_test_clear_all(
     connection: Arc<Mutex<Connection>>,
     _admission: executor::AdmissionPermit,
@@ -74,7 +74,7 @@ fn spawn_test_clear_all(
     })
 }
 
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 fn spawn_test_delete_trashed(
     connection: Arc<Mutex<Connection>>,
     device_id: String,
@@ -88,7 +88,7 @@ fn spawn_test_delete_trashed(
     })
 }
 
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 fn map_storage_transaction_failure(
     failure: ark_store::writer::TransactionFailure<String>,
 ) -> DbError {

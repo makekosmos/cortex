@@ -1,5 +1,5 @@
 use super::*;
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 use ark_store::writer::SqliteWriter as StoreWriter;
 
 impl DbHandle {
@@ -27,7 +27,7 @@ impl DbHandle {
                 actor.admit(context.class, &context.source, weight, task)?;
                 response.await.unwrap_or(Err(DbError::OutcomeUnknown))
             }
-            #[cfg(any(test, feature = "test-support"))]
+            #[cfg(test)]
             HandleBackend::Test(connection) => {
                 let admission = self
                     .admission

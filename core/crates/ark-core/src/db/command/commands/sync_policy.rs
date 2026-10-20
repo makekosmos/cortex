@@ -109,7 +109,7 @@ impl SyncPolicyWrite {
         }
     }
 
-    #[cfg(any(test, feature = "test-support"))]
+    #[cfg(test)]
     pub(in crate::db::command) fn execute_on_connection(
         self,
         context: &CommandContext,

@@ -26,7 +26,7 @@ impl DbHandle {
                 actor.admit(context.class, &context.source, weight, task)?;
                 response.await.unwrap_or(Err(DbError::OutcomeUnknown))
             }
-            #[cfg(any(test, feature = "test-support"))]
+            #[cfg(test)]
             HandleBackend::Test(connection) => {
                 let admission = self
                     .admission
@@ -45,7 +45,7 @@ impl DbHandle {
     }
 }
 
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 fn spawn_test_authenticated_core_task_write(
     connection: Arc<Mutex<Connection>>,
     peer_id: String,
@@ -64,7 +64,7 @@ fn spawn_test_authenticated_core_task_write(
     })
 }
 
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 fn map_test_authenticated_core_task_failure(
     failure: ark_store::writer::TransactionFailure<AuthenticatedCoreTaskWriteError>,
 ) -> DbError {

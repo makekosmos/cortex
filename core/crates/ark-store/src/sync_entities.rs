@@ -7,6 +7,10 @@ mod apply;
 mod canonical_apply;
 #[cfg(test)]
 mod contract_tests;
+#[cfg(test)]
+mod data_platform_peer_policy_tests;
+#[cfg(test)]
+mod data_platform_tombstones_tests;
 mod inbound;
 mod policy_bound;
 pub use apply::{apply_inbound_object_snapshot, InboundObjectRevision};

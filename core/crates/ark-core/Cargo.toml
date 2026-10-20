@@ -21,7 +21,6 @@ ark-domain = { path = "../ark-domain" }
 ark-sync = { path = "../ark-sync" }
 ark-net = { path = "../ark-net", default-features = false }
 ark-store = { path = "../ark-store" }
-rusqlite = { workspace = true, optional = true }
 tokio = { version = "1", features = [
   "rt-multi-thread",
   "macros",
@@ -71,7 +70,6 @@ proptest = "1.5"
 default = ["desktop-net"]
 # Forward desktop networking features to ark-net; engine-mobile opts out.
 desktop-net = ["ark-net/desktop-net"]
-test-support = ["dep:rusqlite", "ark-store/test-support"]
 bench-fixtures = []
 
 [[bench]]
@@ -82,7 +80,6 @@ required-features = ["bench-fixtures"]
 [[test]]
 name = "it"
 path = "tests/it/main.rs"
-required-features = ["test-support"]
 
 [lints]
 workspace = true

@@ -25,7 +25,7 @@ impl DbHandle {
                 actor.admit(context.class, &context.source, weight, task)?;
                 response.await.unwrap_or(Err(DbError::OutcomeUnknown))
             }
-            #[cfg(any(test, feature = "test-support"))]
+            #[cfg(test)]
             HandleBackend::Test(connection) => {
                 let _admission = self
                     .admission
@@ -39,7 +39,7 @@ impl DbHandle {
     }
 }
 
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 fn spawn_test_sync_progress_write(
     connection: Arc<Mutex<Connection>>,
     context: CommandContext,
@@ -55,7 +55,7 @@ fn spawn_test_sync_progress_write(
     })
 }
 
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 fn map_sync_progress_failure(
     failure: ark_store::writer::TransactionFailure<
         ark_application::sync_storage::SyncProgressWriteError,

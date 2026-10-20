@@ -42,9 +42,15 @@ function isTestFile(relativePath) {
 
 function testOnlyModuleDeclarations(source) {
   const masked = maskRustTrivia(source);
-  return [
-    ...masked.matchAll(/#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]\s*mod\s+([A-Za-z_][A-Za-z0-9_]*)\s*;/g),
-  ].map((match) => match[1]);
+  const declarations = [];
+  const pattern = /((?:#\s*\[[^\]]+\]\s*)*)mod\s+([A-Za-z_][A-Za-z0-9_]*)\s*;/g;
+  for (const match of masked.matchAll(pattern)) {
+    if (!/#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]/.test(match[1])) continue;
+    const attributes = source.slice(match.index, match.index + match[0].length);
+    const explicitPath = /#\s*\[\s*path\s*=\s*"([^"]+)"\s*\]/.exec(attributes)?.[1];
+    declarations.push({ name: match[2], path: explicitPath });
+  }
+  return declarations;
 }
 
 function testOnlyItemRanges(source, masked = maskRustTrivia(source)) {
@@ -77,7 +83,11 @@ function moduleDeclarations(source) {
   return [...masked.matchAll(/\bmod\s+([A-Za-z_][A-Za-z0-9_]*)\s*;/g)].map((match) => match[1]);
 }
 
-function childModuleFile(file, name, files) {
+function childModuleFile(file, name, files, explicitPath) {
+  if (explicitPath) {
+    const candidate = path.resolve(path.dirname(file), explicitPath);
+    return files.has(candidate) ? candidate : undefined;
+  }
   const fileName = path.basename(file);
   const moduleDirectory = ["lib.rs", "main.rs", "mod.rs"].includes(fileName)
     ? path.dirname(file)
@@ -99,9 +109,20 @@ async function testOnlyModulePaths(sourceRoot) {
     changed = false;
     for (const parent of files) {
       const source = await readFile(parent, "utf8");
-      const gated = new Set(testOnlyModuleDeclarations(source));
+      const gated = new Map(
+        testOnlyModuleDeclarations(source).map(({ name, path: modulePath }) => [name, modulePath]),
+      );
+      if (testOnly.has(parent)) {
+        for (const match of source.matchAll(/\binclude!\s*\(\s*"([^"]+)"\s*\)/g)) {
+          const included = path.resolve(path.dirname(parent), match[1]);
+          if (files.has(included) && !testOnly.has(included)) {
+            testOnly.add(included);
+            changed = true;
+          }
+        }
+      }
       for (const name of moduleDeclarations(source)) {
-        const child = childModuleFile(parent, name, files);
+        const child = childModuleFile(parent, name, files, gated.get(name));
         if (!child) continue;
         if ((testOnly.has(parent) || gated.has(name)) && !testOnly.has(child)) {
           testOnly.add(child);
@@ -160,14 +181,25 @@ export async function collectStorageViolations({
       path.relative(root, file).split(path.sep).join("/"),
     ),
   );
-  const dependency = /^\s*rusqlite\b(?:\s*=|\s*\{|\s*\.)[^\n]*/m.exec(manifest);
-  if (dependency)
+  let dependencySection = "";
+  for (const [index, line] of manifest.split(/\r?\n/).entries()) {
+    const section = /^\s*\[([^\]]+)\]\s*(?:#.*)?$/.exec(line)?.[1];
+    if (section) dependencySection = section;
+    if (!/^\s*rusqlite\b(?:\s*=|\s*\{|\s*\.)/.test(line)) continue;
+    const scope =
+      dependencySection === "dependencies" || dependencySection.endsWith(".dependencies")
+        ? "production"
+        : dependencySection === "dev-dependencies" ||
+            dependencySection.endsWith(".dev-dependencies")
+          ? "test_file"
+          : "other_dependency";
     violations.push({
       path: path.relative(root, manifestPath).split(path.sep).join("/"),
-      line: lineAt(manifest, dependency.index),
+      line: index + 1,
       category: "rusqlite dependency",
-      scope: "production",
+      scope,
     });
+  }
 
   for (const file of (await collectRustFiles(sourceRoot)).sort()) {
     const source = await readFile(file, "utf8");
@@ -184,7 +216,9 @@ export async function collectStorageViolations({
 
 export async function runCheck(args = process.argv.slice(2)) {
   if (args.length) throw new Error(`unknown argument: ${args[0]}`);
-  const violations = await collectStorageViolations();
+  const violations = (await collectStorageViolations()).filter(
+    ({ scope }) => scope === "production",
+  );
   if (violations.length) {
     process.stderr.write(`ark-core storage boundary has ${violations.length} violations:\n`);
     for (const violation of violations)
@@ -194,7 +228,7 @@ export async function runCheck(args = process.argv.slice(2)) {
     return 1;
   }
   process.stdout.write(
-    "ark-core storage boundary passed: Core has no SQLite dependency or SQL source.\n",
+    "ark-core storage boundary passed: production Core has no SQLite dependency or SQL source.\n",
   );
   return 0;
 }

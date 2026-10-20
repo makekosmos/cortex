@@ -30,7 +30,7 @@ mod system_mutation;
 mod task_merge_append;
 mod task_merge_batch;
 mod task_merge_progress;
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 mod test_writer;
 mod tracked_app_mutation;
 mod type_mutation;
@@ -41,14 +41,14 @@ mod usage_sequence_migration;
 #[derive(Clone)]
 pub(crate) struct DbHandle {
     backend: HandleBackend,
-    #[cfg(any(test, feature = "test-support"))]
+    #[cfg(test)]
     admission: executor::AdmissionBudget,
 }
 
 #[derive(Clone)]
 enum HandleBackend {
     Actor(Arc<ActorShared>),
-    #[cfg(any(test, feature = "test-support"))]
+    #[cfg(test)]
     Test(Arc<Mutex<Connection>>),
 }
 
@@ -85,7 +85,7 @@ impl DbHandle {
             Ok(Ok(Ok(()))) => Ok((
                 Self {
                     backend: HandleBackend::Actor(shared),
-                    #[cfg(any(test, feature = "test-support"))]
+                    #[cfg(test)]
                     admission: executor::AdmissionBudget::new(limits),
                 },
                 DbOwner { actor: owner },
@@ -96,7 +96,7 @@ impl DbHandle {
         }
     }
 
-    #[cfg(any(test, feature = "test-support"))]
+    #[cfg(test)]
     pub(crate) fn for_test(connection: Arc<Mutex<Connection>>) -> Self {
         Self {
             backend: HandleBackend::Test(connection),
@@ -142,7 +142,7 @@ impl DbHandle {
                 actor.admit(context.class, &context.source, weight, task)?;
                 response.await.unwrap_or(Err(DbError::OutcomeUnknown))
             }
-            #[cfg(any(test, feature = "test-support"))]
+            #[cfg(test)]
             HandleBackend::Test(connection) => {
                 let _admission = self
                     .admission
@@ -177,7 +177,7 @@ impl DbHandle {
                 actor.admit(context.class, &context.source, weight, task)?;
                 response.await.unwrap_or(Err(DbError::OutcomeUnknown))
             }
-            #[cfg(any(test, feature = "test-support"))]
+            #[cfg(test)]
             HandleBackend::Test(connection) => {
                 let _admission = self
                     .admission
@@ -226,7 +226,7 @@ impl DbHandle {
                 .await
                 .map_err(|error| DbError::Storage(error.to_string()))?
             }
-            #[cfg(any(test, feature = "test-support"))]
+            #[cfg(test)]
             HandleBackend::Test(connection) => {
                 let _admission = self
                     .admission
@@ -272,7 +272,7 @@ impl DbHandle {
                 .await
                 .map_err(|error| DbError::Storage(error.to_string()))?
             }
-            #[cfg(any(test, feature = "test-support"))]
+            #[cfg(test)]
             HandleBackend::Test(connection) => {
                 let _admission = self
                     .admission
@@ -299,7 +299,7 @@ impl DbHandle {
     pub(crate) fn admitted_commands_for_test(&self) -> usize {
         match &self.backend {
             HandleBackend::Actor(actor) => actor.admitted_commands(),
-            #[cfg(any(test, feature = "test-support"))]
+            #[cfg(test)]
             HandleBackend::Test(_) => 0,
         }
     }
@@ -308,7 +308,7 @@ impl DbHandle {
     pub(crate) fn actor_ready_for_test(&self) -> bool {
         match &self.backend {
             HandleBackend::Actor(actor) => actor.is_ready(),
-            #[cfg(any(test, feature = "test-support"))]
+            #[cfg(test)]
             HandleBackend::Test(_) => false,
         }
     }
@@ -317,7 +317,7 @@ impl DbHandle {
     pub(crate) fn generation_for_test(&self) -> u64 {
         match &self.backend {
             HandleBackend::Actor(actor) => actor.generation(),
-            #[cfg(any(test, feature = "test-support"))]
+            #[cfg(test)]
             HandleBackend::Test(_) => 0,
         }
     }
@@ -326,7 +326,7 @@ impl DbHandle {
     pub(crate) fn maintenance_state_for_test(&self) -> (bool, bool) {
         match &self.backend {
             HandleBackend::Actor(actor) => actor.maintenance_state(),
-            #[cfg(any(test, feature = "test-support"))]
+            #[cfg(test)]
             HandleBackend::Test(_) => (false, false),
         }
     }
@@ -338,7 +338,7 @@ impl DbHandle {
                 .readers
                 .write()
                 .unwrap_or_else(|error| error.into_inner()),
-            #[cfg(any(test, feature = "test-support"))]
+            #[cfg(test)]
             HandleBackend::Test(_) => panic!("reader barrier requires a production actor"),
         }
     }
@@ -355,7 +355,7 @@ impl DbHandle {
     }
 }
 
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 fn map_admission_error(error: executor::AdmissionError) -> DbError {
     match error {
         executor::AdmissionError::TooLarge => DbError::TooLarge,
@@ -383,7 +383,7 @@ fn spawn_test_submit<C: DbCommand>(
     })
 }
 
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 fn spawn_test_maintenance<C: DbMaintenanceCommand>(
     connection: Arc<Mutex<Connection>>,
     command: C,
@@ -396,7 +396,7 @@ fn spawn_test_maintenance<C: DbMaintenanceCommand>(
     })
 }
 
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 #[cfg(test)]
 fn spawn_test_query<Q: DbQuery>(
     connection: Arc<Mutex<Connection>>,
@@ -411,7 +411,7 @@ fn spawn_test_query<Q: DbQuery>(
     })
 }
 
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 fn spawn_test_store_query<Q: StoreReadQuery>(
     connection: Arc<Mutex<Connection>>,
     context: CommandContext,

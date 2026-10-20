@@ -36,7 +36,7 @@ impl DbHandle {
                 actor.admit(context.class, &context.source, weight, task)?;
                 response.await.unwrap_or(Err(DbError::OutcomeUnknown))
             }
-            #[cfg(any(test, feature = "test-support"))]
+            #[cfg(test)]
             HandleBackend::Test(connection) => {
                 let _admission = self
                     .admission
@@ -56,7 +56,7 @@ impl DbHandle {
     }
 }
 
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 fn spawn_test_local_sync_key_value_write(
     connection: Arc<Mutex<Connection>>,
     context: CommandContext,

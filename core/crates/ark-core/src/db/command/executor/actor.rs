@@ -16,24 +16,24 @@ mod runtime;
 mod task;
 #[path = "actor/task/task_merge_progress.rs"]
 mod task_merge_progress;
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 pub(in crate::db::command) use legacy_mutation_task::map_legacy_transaction_failure;
 pub(in crate::db::command) use legacy_mutation_task::{LegacyDeleteTask, LegacyGraphWriteTask};
 use maintenance::has_maintenance_barrier;
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 pub(in crate::db::command) use registry_events_task::map_error as map_registry_event_error;
 pub(in crate::db::command) use registry_events_task::ApplyRegistryEventsTask;
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 pub(in crate::db::command) use registry_local::map_failure as map_registry_local_mutation_failure;
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 use registry_local_mutation_task as registry_local;
 pub(in crate::db::command) use registry_local_mutation_task::{
     AppendLocalRegistryEventTask, EnrollPairedDeviceTask, SignRegistryHandshakeTask,
 };
 use runtime::{actor_loop, panic_message};
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 pub(in crate::db::command) use task::map_inbox_receipt_error;
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 pub(in crate::db::command) use task_merge_progress::map_task_merge_progress_failure;
 pub(in crate::db::command) use task_merge_progress::{
     AcknowledgeTaskMergeBatchTask, PrepareTaskMergeBatchTask,
@@ -46,7 +46,7 @@ mod integration_admin_task;
 pub(in crate::db::command) use integration_admin_task::IntegrationAdminTask;
 #[path = "actor/task/task_merge_batch.rs"]
 mod task_merge_batch_task;
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 pub(in crate::db::command) use task::task_merge_append::map_append_operation_error;
 pub(in crate::db::command) use task::task_merge_append::AppendTaskMergeOperationTask;
 pub(in crate::db::command) use task::InboundEntityTask;
@@ -63,7 +63,7 @@ pub(in crate::db::command) use task::{
     TypedMaintenance, UpsertObjectLinkTask, UpsertObjectTypeTask, UsageCompactionTask,
     UsageSequenceMigrationTask, WriterTask,
 };
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 pub(in crate::db::command) use task_merge_batch_task::map_failure as map_task_merge_batch_failure;
 pub(in crate::db::command) use task_merge_batch_task::ApplyTaskMergeBatchTask;
 

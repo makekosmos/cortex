@@ -33,7 +33,7 @@ impl CommittedFeedProgressCommand {
             .map_err(map_outbound_progress_failure)
     }
 
-    #[cfg(any(test, feature = "test-support"))]
+    #[cfg(test)]
     pub(in crate::db::command) fn execute_on_connection(
         self,
         context: &CommandContext,
@@ -66,7 +66,7 @@ fn map_outbound_progress_failure(
     }
 }
 
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 fn map_outbound_progress_test_failure(
     failure: ark_store::writer::TransactionFailure<
         ark_application::sync_storage::OutboundProgressWriteError,

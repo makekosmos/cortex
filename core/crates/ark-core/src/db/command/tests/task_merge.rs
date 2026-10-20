@@ -76,7 +76,7 @@ async fn append_actor_requires_the_engine_principal() {
     shutdown(&mut owner).await;
 }
 
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(test)]
 #[tokio::test]
 async fn append_test_backend_uses_the_store_writer_transaction() {
     let connection = std::sync::Arc::new(std::sync::Mutex::new(
