@@ -18,8 +18,6 @@ pub use ark_store::snapshot::{
 pub(crate) use ark_store::sync_kv::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY;
 #[cfg(test)]
 pub(crate) use ark_store::VERSION_VECTOR_KEY;
-#[cfg(test)]
-pub(crate) use backend::SqliteSignedIntegrationFrameSession;
 pub use backend::SqliteStorageBackend;
 pub use command::CommandSource;
 pub(crate) use command::{
@@ -43,6 +41,7 @@ pub(crate) use command::{
 pub use committed_feed::{InboxState, MAX_FEED_DELIVERY_BYTES};
 
 mod integration_replication_admission;
+#[cfg(test)]
 mod integration_replication_apply;
 #[cfg(test)]
 mod integration_replication_common;

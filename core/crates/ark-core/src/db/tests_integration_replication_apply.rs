@@ -61,7 +61,7 @@ fn sign_replication_batch(
 #[test]
 fn signed_integration_batch_moves_opaque_envelope_between_independent_databases() {
     let source = integration_test_db();
-    let target = integration_test_db();
+    let mut target = integration_test_db();
     let origin_key = SigningKey::from_bytes(&[21; 32]);
     let recipient_key = SigningKey::from_bytes(&[22; 32]);
     let origin = replication_node("node-a", &origin_key, "enc-a", "node-a");
@@ -142,7 +142,7 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
     let vector_repair_changes = changes.clone();
     let frame = sign_replication_batch(&origin_key, 2, "message-two-db", changes);
     drop(source);
-    apply_signed_integration_changes(&target, &frame, "space-a", "node-b", None, 15).unwrap();
+    apply_signed_integration_changes(&mut target, &frame, "space-a", "node-b", None, 15).unwrap();
 
     let loaded = ark_store::integration_replication::load_integration_configuration(
         &target,
@@ -191,7 +191,7 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
         "message-vector-repair",
         vector_repair_changes,
     );
-    apply_signed_integration_changes(&target, &repair_frame, "space-a", "node-b", None, 16)
+    apply_signed_integration_changes(&mut target, &repair_frame, "space-a", "node-b", None, 16)
         .unwrap();
     let repaired_vector: VersionVector = serde_json::from_str(
         &ark_store::sync_kv::get_sync_kv(&target, VERSION_VECTOR_KEY)
@@ -276,7 +276,7 @@ fn signed_integration_batch_moves_opaque_envelope_between_independent_databases(
     )));
 
     assert!(matches!(
-        apply_signed_integration_changes(&target, &frame, "space-a", "node-b", None, 16),
+        apply_signed_integration_changes(&mut target, &frame, "space-a", "node-b", None, 16),
         Err(SignedSyncError::Replay)
     ));
 }

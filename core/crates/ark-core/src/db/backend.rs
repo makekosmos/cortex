@@ -6,11 +6,6 @@ mod adapter;
 #[cfg(test)]
 mod apply;
 mod core_task;
-#[cfg(test)]
-mod signed_integration;
-
-#[cfg(test)]
-pub(crate) use signed_integration::SqliteSignedIntegrationFrameSession;
 
 pub struct SqliteStorageBackend {
     pub(in crate::db) db: DbHandle,
