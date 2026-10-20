@@ -1,5 +1,5 @@
-use ark_store::canonical_migrations::{rewrite_legacy_tasks, CoreTaskRewriteReport};
-use ark_store::writer::SqliteWriter;
+use crate::canonical_migrations::{rewrite_legacy_tasks, CoreTaskRewriteReport};
+use crate::writer::SqliteWriter;
 use rusqlite::{params, Connection};
 use serde_json::{json, Value};
 
@@ -9,7 +9,7 @@ const CANCELLED_AT: &str = "2026-10-12T09:00:00.000000Z";
 
 fn fresh_db() -> Result<SqliteWriter, String> {
     let conn = Connection::open_in_memory().map_err(|e| e.to_string())?;
-    ark_store::open::init_schema(&conn)?;
+    crate::open::init_schema(&conn)?;
     Ok(SqliteWriter::from_connection(conn))
 }
 
@@ -29,7 +29,7 @@ fn stored_props_with_writer(
     writer.with_connection_mut(|connection| stored_props(connection, id))
 }
 
-fn backup_path(dir: &crate::test_support::TestTempDir) -> String {
+fn backup_path(dir: &tempfile::TempDir) -> String {
     dir.path()
         .join("ark-before-core-task.db")
         .display()
@@ -114,7 +114,7 @@ fn stored_props(conn: &Connection, id: &str) -> Result<(String, String, Value), 
 #[test]
 fn rewrite_does_nothing_without_legacy_tasks() -> Result<(), String> {
     let mut conn = fresh_db()?;
-    let dir = crate::test_support::temp_dir();
+    let dir = tempfile::tempdir().map_err(|error| error.to_string())?;
     let report = rewrite_legacy_tasks(&mut conn, &backup_path(&dir), "device-a")?;
     assert_eq!(report, CoreTaskRewriteReport::default());
     assert!(!std::path::Path::new(&backup_path(&dir)).exists());
@@ -176,7 +176,7 @@ fn rewrite_maps_every_legacy_state_and_keeps_trash_and_extensions() -> Result<()
     priced["extensions"]["fuel_cost"] = json!(12.5);
     insert_legacy_with_writer(&mut conn, "scheduled", &priced, false)?;
 
-    let dir = crate::test_support::temp_dir();
+    let dir = tempfile::tempdir().map_err(|error| error.to_string())?;
     let report = rewrite_legacy_tasks(&mut conn, &backup_path(&dir), "device-a")?;
     assert_eq!(
         report,
@@ -273,7 +273,7 @@ fn rewrite_writes_a_backup_of_the_legacy_rows_before_changing_them() -> Result<(
         &legacy_props("inbox", false, false, false, false, false, None),
         false,
     )?;
-    let dir = crate::test_support::temp_dir();
+    let dir = tempfile::tempdir().map_err(|error| error.to_string())?;
     let path = backup_path(&dir);
     rewrite_legacy_tasks(&mut conn, &path, "device-a")?;
 
@@ -296,7 +296,7 @@ fn rewrite_drops_fuel_cost_but_the_backup_keeps_it() -> Result<(), String> {
     let mut fueled = legacy_props("todo", false, false, false, false, false, None);
     fueled["extensions"]["fuel_cost"] = json!(12.5);
     insert_legacy_with_writer(&mut conn, "fueled", &fueled, false)?;
-    let dir = crate::test_support::temp_dir();
+    let dir = tempfile::tempdir().map_err(|error| error.to_string())?;
     let path = backup_path(&dir);
     let report = rewrite_legacy_tasks(&mut conn, &path, "device-a")?;
     assert_eq!(report.rewritten, 1);
@@ -331,7 +331,7 @@ fn rewrite_stops_before_backup_or_write_on_data_it_cannot_carry() -> Result<(), 
     let mut linked = legacy_props("todo", false, false, false, false, false, None);
     linked["extensions"]["project_id"] = json!("project-1");
     insert_legacy_with_writer(&mut conn, "linked", &linked, false)?;
-    let dir = crate::test_support::temp_dir();
+    let dir = tempfile::tempdir().map_err(|error| error.to_string())?;
     let path = backup_path(&dir);
 
     let error = rewrite_legacy_tasks(&mut conn, &path, "device-a")
@@ -356,7 +356,7 @@ fn rewrite_refuses_to_overwrite_an_existing_backup() -> Result<(), String> {
         &legacy_props("inbox", false, false, false, false, false, None),
         false,
     )?;
-    let dir = crate::test_support::temp_dir();
+    let dir = tempfile::tempdir().map_err(|error| error.to_string())?;
     let path = backup_path(&dir);
     std::fs::write(&path, b"existing").map_err(|e| e.to_string())?;
 
@@ -379,7 +379,7 @@ fn rewrite_refuses_scheduled_date_together_with_today() -> Result<(), String> {
         &legacy_props("todo", true, false, false, false, false, Some("2026-10-20")),
         false,
     )?;
-    let dir = crate::test_support::temp_dir();
+    let dir = tempfile::tempdir().map_err(|error| error.to_string())?;
     assert!(rewrite_legacy_tasks(&mut conn, &backup_path(&dir), "device-a").is_err());
     Ok(())
 }
@@ -393,7 +393,7 @@ fn second_rewrite_is_a_noop() -> Result<(), String> {
         &legacy_props("inbox", false, false, false, false, false, None),
         false,
     )?;
-    let dir = crate::test_support::temp_dir();
+    let dir = tempfile::tempdir().map_err(|error| error.to_string())?;
     rewrite_legacy_tasks(&mut conn, &backup_path(&dir), "device-a")?;
     let again = rewrite_legacy_tasks(
         &mut conn,

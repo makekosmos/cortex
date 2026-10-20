@@ -1,6 +1,5 @@
 //! KOS-397 cutover: legacy task props map to core.task, a legacy task write is
 //! refused, and a start moves the stored rows over once.
-use super::core_task_rewrite_tests::{insert_legacy, legacy_props};
 use crate::types::ArkObjectWrite;
 use ark_application::canonical_compatibility::{
     map_legacy_with_context, LegacyRecord, LegacySource, MappingContext,
@@ -138,11 +137,63 @@ async fn start_moves_stored_legacy_tasks_once_and_keeps_a_backup() {
     {
         let conn = Connection::open(&path).unwrap();
         ark_store::open::init_schema(&conn).unwrap();
-        insert_legacy(
-            &conn,
-            "legacy-task",
-            &legacy_props("todo", true, false, false, false, false, None),
-            false,
+        let content = json!({
+            "content": [{
+                "content": [{"text": "", "type": "text"}],
+                "type": "paragraph"
+            }],
+            "type": "doc"
+        });
+        let props = json!({
+            "canceledAt": null,
+            "checklist": [],
+            "completedAt": null,
+            "dueAt": null,
+            "priority": "none",
+            "recurrence": null,
+            "reminderAt": null,
+            "scheduledAt": null,
+            "status": "todo",
+            "extensions": {
+                "area_id": null,
+                "billable": false,
+                "cancelled_at": null,
+                "checklist_items": [],
+                "completed_at": null,
+                "created_at": "2026-10-04T22:01:08.744412+00:00",
+                "deadline": null,
+                "description": null,
+                "fuel_cost": null,
+                "heading_id": null,
+                "is_cancelled": false,
+                "is_completed": false,
+                "is_today": true,
+                "is_evening": false,
+                "is_someday": false,
+                "is_trashed": false,
+                "price": null,
+                "priority": 0,
+                "project_id": null,
+                "recurrence_rule": null,
+                "reminder_date": null,
+                "scheduled_date": null,
+                "significance": null,
+                "sort_order": 0,
+                "status": "todo",
+                "system_kind": null,
+                "tag_ids": []
+            }
+        });
+        conn.execute(
+            "INSERT INTO objects (
+                id, type_id, type_version, title, content_json, props_json, created_at, updated_at
+             ) VALUES (?1, 'com.kosmos.task', '1.1.0', ?1, ?2, ?3, ?4, ?4)",
+            rusqlite::params![
+                "legacy-task",
+                content.to_string(),
+                props.to_string(),
+                "2026-10-04T22:01:08.744412+00:00"
+            ],
         )
         .unwrap();
     }

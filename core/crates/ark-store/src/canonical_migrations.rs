@@ -6,6 +6,9 @@ mod object_projection;
 pub mod objects;
 pub mod registry;
 
+#[cfg(test)]
+mod core_task_rewrite_tests;
+
 pub use object_projection::stable_link_id;
 
 /// Persist a planned canonical object, its links and local migration state.
