@@ -65,30 +65,37 @@ fn bootstrap() -> ark_domain::task_merge::TaskMergeBootstrap {
     }
 }
 
-async fn seed_project_link_target(handle: &DbHandle) {
-    handle
-        .with_connection(|connection| {
-            ark_store::objects::upsert_object_compat(
-                connection,
-                &crate::types::ArkObject {
-                    id: "project-1".into(),
-                    type_id: "core.task".into(),
-                    type_version: "0.1.0".into(),
-                    title: "Project".into(),
-                    content_json: serde_json::json!({}),
-                    props_json: serde_json::json!({
-                        "state":{"kind":"open","at":null},
-                        "planning":{"kind":"inbox","period":"any","date":null},
-                        "deadline":null,"reminders":[],"recurrence":null,
-                        "priority":"none","checklist":[]
-                    }),
-                    created_at: "2026-10-17T00:00:00Z".into(),
-                    updated_at: "2026-10-17T00:00:00Z".into(),
-                    deleted_at: None,
-                },
-            )
+async fn seed_project_link_target(path: &str) {
+    ark_store::test_support::TaskMergeInboundFixture::open(std::path::Path::new(path))
+        .unwrap()
+        .seed_object(&crate::types::ArkObject {
+            id: "project-1".into(),
+            type_id: "core.task".into(),
+            type_version: "0.1.0".into(),
+            title: "Project".into(),
+            content_json: serde_json::json!({}),
+            props_json: serde_json::json!({
+                "state":{"kind":"open","at":null},
+                "planning":{"kind":"inbox","period":"any","date":null},
+                "deadline":null,"reminders":[],"recurrence":null,
+                "priority":"none","checklist":[]
+            }),
+            created_at: "2026-10-17T00:00:00Z".into(),
+            updated_at: "2026-10-17T00:00:00Z".into(),
+            deleted_at: None,
         })
         .unwrap();
+}
+
+fn inspect_inbound(
+    path: &str,
+    peer_id: &str,
+    operation_id: &str,
+) -> ark_store::test_support::TaskMergeInboundState {
+    ark_store::test_support::TaskMergeInboundFixture::open(std::path::Path::new(path))
+        .unwrap()
+        .inspect("task-1", peer_id, operation_id)
+        .unwrap()
 }
 
 #[tokio::test]
@@ -160,8 +167,8 @@ async fn two_sqlite_peers_converge_on_the_same_conflict_set() {
 
 #[tokio::test]
 async fn bootstrap_and_followup_operation_materialize_atomically_and_replay() {
-    let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
-    seed_project_link_target(&handle).await;
+    let (_directory, path, handle, mut owner) = open_merge_fixture().await;
+    seed_project_link_target(&path).await;
     let peer_id = "bootstrap-peer";
     let endpoint = ark_net::iroh::SecretKey::generate().public().to_string();
     handle
@@ -212,48 +219,39 @@ async fn bootstrap_and_followup_operation_materialize_atomically_and_replay() {
         .unwrap();
     assert!(replayed.replayed);
 
-    handle
-        .with_connection(|connection| {
-            let object = ark_store::objects::get_object(connection, "task-1")?.unwrap();
-            assert_eq!(object.title, "edited after bootstrap");
-            assert_eq!(
-                ark_store::objects::list_object_links(connection)?
-                    .into_iter()
-                    .filter(|link| link.source_object_id == "task-1")
-                    .map(|link| link.id)
-                    .collect::<Vec<_>>(),
-                vec!["task-project-link"]
-            );
-            let (bootstraps, operations, journal): (i64, i64, i64) = connection
-                .query_row(
-                    "SELECT (SELECT COUNT(*) FROM task_merge_bootstraps),
-                        (SELECT COUNT(*) FROM task_merge_operations),
-                        (SELECT COUNT(*) FROM task_merge_journal)",
-                    [],
-                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-                )
-                .map_err(|error| error.to_string())?;
-            assert_eq!((bootstraps, operations, journal), (1, 11, 2));
-            let page = ark_store::task_merge::read_journal_page(connection, 0, 2, 10)
-                .map_err(|error| error.to_string())?;
-            assert!(matches!(
-                page.entries[0].record,
-                ark_application::sync_storage::TaskMergeJournalRecord::Bootstrap(_)
-            ));
-            assert!(matches!(
-                page.entries[1].record,
-                ark_application::sync_storage::TaskMergeJournalRecord::Operation { .. }
-            ));
-            Ok::<(), String>(())
-        })
-        .unwrap();
+    let state = inspect_inbound(&path, peer_id, "");
+    assert_eq!(state.object.unwrap().title, "edited after bootstrap");
+    assert_eq!(
+        state
+            .links
+            .iter()
+            .map(|link| link.id.as_str())
+            .collect::<Vec<_>>(),
+        ["task-project-link"]
+    );
+    assert_eq!(
+        (
+            state.bootstrap_count,
+            state.operation_count,
+            state.journal.len()
+        ),
+        (1, 11, 2)
+    );
+    assert!(matches!(
+        state.journal[0].record,
+        ark_application::sync_storage::TaskMergeJournalRecord::Bootstrap(_)
+    ));
+    assert!(matches!(
+        state.journal[1].record,
+        ark_application::sync_storage::TaskMergeJournalRecord::Operation { .. }
+    ));
     shutdown(&mut owner).await;
 }
 
 #[tokio::test]
 async fn operation_before_bootstrap_stays_unpublished_until_bootstrap_arrives() {
-    let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
-    seed_project_link_target(&handle).await;
+    let (_directory, path, handle, mut owner) = open_merge_fixture().await;
+    seed_project_link_target(&path).await;
     let peer_id = "pending-bootstrap-peer";
     let endpoint = ark_net::iroh::SecretKey::generate().public().to_string();
     handle
@@ -288,18 +286,9 @@ async fn operation_before_bootstrap_stays_unpublished_until_bootstrap_arrives() 
     )
     .await
     .unwrap();
-    handle
-        .with_connection(|connection| {
-            assert!(ark_store::objects::get_object(connection, "task-1")?.is_none());
-            let journal_rows: i64 = connection
-                .query_row("SELECT COUNT(*) FROM task_merge_journal", [], |row| {
-                    row.get(0)
-                })
-                .map_err(|error| error.to_string())?;
-            assert_eq!(journal_rows, 0);
-            Ok::<(), String>(())
-        })
-        .unwrap();
+    let state = inspect_inbound(&path, peer_id, "");
+    assert!(state.object.is_none());
+    assert!(state.journal.is_empty());
 
     let bootstrap_record =
         ark_application::sync_storage::TaskMergeJournalRecord::Bootstrap(bootstrap());
@@ -322,33 +311,22 @@ async fn operation_before_bootstrap_stays_unpublished_until_bootstrap_arrives() 
     )
     .await
     .unwrap();
-    handle
-        .with_connection(|connection| {
-            assert_eq!(
-                ark_store::objects::get_object(connection, "task-1")?
-                    .unwrap()
-                    .title,
-                "edited after bootstrap"
-            );
-            let page = ark_store::task_merge::read_journal_page(connection, 0, 2, 10)
-                .map_err(|error| error.to_string())?;
-            assert!(matches!(
-                page.entries[0].record,
-                ark_application::sync_storage::TaskMergeJournalRecord::Bootstrap(_)
-            ));
-            assert!(matches!(
-                page.entries[1].record,
-                ark_application::sync_storage::TaskMergeJournalRecord::Operation { .. }
-            ));
-            Ok::<(), String>(())
-        })
-        .unwrap();
+    let state = inspect_inbound(&path, peer_id, "");
+    assert_eq!(state.object.unwrap().title, "edited after bootstrap");
+    assert!(matches!(
+        state.journal[0].record,
+        ark_application::sync_storage::TaskMergeJournalRecord::Bootstrap(_)
+    ));
+    assert!(matches!(
+        state.journal[1].record,
+        ark_application::sync_storage::TaskMergeJournalRecord::Operation { .. }
+    ));
     shutdown(&mut owner).await;
 }
 
 #[tokio::test]
 async fn inbound_batch_atomically_applies_remote_resolution_and_replays_idempotently() {
-    let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
+    let (_directory, path, handle, mut owner) = open_merge_fixture().await;
     let peer_id = "paired-peer";
     let endpoint = ark_net::iroh::SecretKey::generate().public().to_string();
     handle
@@ -415,30 +393,20 @@ async fn inbound_batch_atomically_applies_remote_resolution_and_replays_idempote
             .await
             .is_err()
     );
-    let (operation_count, journal_count, cursor, guard): (i64, i64, i64, String) = handle
-        .with_connection(|connection| {
-            connection
-                .query_row(
-                    "SELECT
-                        (SELECT COUNT(*) FROM task_merge_operations),
-                        (SELECT COUNT(*) FROM task_merge_journal),
-                        (SELECT received_through FROM task_merge_inbound_progress
-                            WHERE peer_device_id = ?1),
-                        (SELECT expected_conflict_digest FROM task_merge_resolution_guards
-                            WHERE operation_id = ?2)",
-                    rusqlite::params![peer_id, id('2').as_str()],
-                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
-                )
-                .unwrap()
-        });
-    assert_eq!((operation_count, journal_count, cursor), (2, 0, 2));
-    assert_eq!(guard, format!("sha256:{}", "ab".repeat(32)));
+    let state = inspect_inbound(&path, peer_id, id('2').as_str());
+    assert_eq!(state.operation_count, 2);
+    assert!(state.journal.is_empty());
+    assert_eq!(state.inbound_cursor, Some(2));
+    assert_eq!(
+        state.resolution_guard.as_deref(),
+        Some(format!("sha256:{}", "ab".repeat(32)).as_str())
+    );
     shutdown(&mut owner).await;
 }
 
 #[tokio::test]
 async fn excluded_local_task_category_rejects_incoming_batch_without_advancing_cursor() {
-    let (_directory, _path, handle, mut owner) = open_merge_fixture().await;
+    let (_directory, path, handle, mut owner) = open_merge_fixture().await;
     let peer_id = "paired-peer";
     let endpoint = ark_net::iroh::SecretKey::generate().public().to_string();
     handle
@@ -485,16 +453,8 @@ async fn excluded_local_task_category_rejects_incoming_batch_without_advancing_c
         apply_batch(&handle, peer_id, "merge-test-device", identity, batch).await,
         Err(DbError::Permission(_))
     ));
-    let (operation_count, cursor_count): (i64, i64) = handle.with_connection(|connection| {
-        connection
-            .query_row(
-                "SELECT (SELECT COUNT(*) FROM task_merge_operations),
-                        (SELECT COUNT(*) FROM task_merge_inbound_progress)",
-                [],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .unwrap()
-    });
-    assert_eq!((operation_count, cursor_count), (0, 0));
+    let state = inspect_inbound(&path, peer_id, "");
+    assert_eq!(state.operation_count, 0);
+    assert_eq!(state.inbound_progress_count, 0);
     shutdown(&mut owner).await;
 }
