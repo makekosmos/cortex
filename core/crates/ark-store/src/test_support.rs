@@ -22,6 +22,7 @@ mod registry_enrollment;
 mod replace_object_link;
 mod task_merge_inbound;
 mod task_merge_legacy;
+mod trashed_todo;
 mod type_mutation;
 mod usage_rollback;
 
@@ -46,6 +47,7 @@ pub use registry_enrollment::{reject_paired_device_projection, reject_remote_dev
 pub use replace_object_link::{SyncPersistenceFixture, SyncPersistenceSnapshot};
 pub use task_merge_inbound::{TaskMergeInboundFixture, TaskMergeInboundState};
 pub use task_merge_legacy::{LegacyTaskMergeFixture, LegacyTaskMergeState};
+pub use trashed_todo::TrashedTodoFixture;
 pub use type_mutation::{TypeMutationFixture, TypeMutationState};
 pub use usage_rollback::{UsageRollbackFixture, UsageRollbackState};
 

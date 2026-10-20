@@ -305,9 +305,13 @@ async fn clear_all_runs_inside_a_maintenance_database_command() {
         .await
         .unwrap();
 
-    let value = handle.with_connection(|connection| {
-        ark_store::sync_kv::get_sync_kv(connection, "test-key").unwrap()
-    });
+    let value = handle
+        .query_with_store(
+            CommandContext::sync_system(CommandClass::SyncLive),
+            GetSyncKeyValueQuery::new("test-key".into()),
+        )
+        .await
+        .unwrap();
     assert_eq!(value, None);
     owner
         .shutdown(std::time::Instant::now() + std::time::Duration::from_secs(2))
@@ -335,38 +339,21 @@ async fn usage_compaction_runs_as_a_bounded_maintenance_command() {
 #[tokio::test]
 async fn delete_trashed_runs_through_an_interactive_database_command() {
     let directory = tempfile::tempdir().unwrap();
-    let db_path = directory
-        .path()
-        .join("delete-trashed.db")
-        .to_string_lossy()
-        .into_owned();
-    let (handle, mut owner) = DbHandle::open(db_path, "delete-trashed-device".into())
-        .await
-        .unwrap();
-    handle.with_connection(|connection| {
-        connection
-            .execute(
-                "INSERT INTO todos (id, title, created_at, is_trashed) \
-                     VALUES ('trashed', 'Trashed', '2026-01-01T00:00:00Z', 1)",
-                [],
-            )
-            .unwrap();
-    });
+    let db_path = directory.path().join("delete-trashed.db");
+    let (handle, mut owner) = DbHandle::open(
+        db_path.to_string_lossy().into_owned(),
+        "delete-trashed-device".into(),
+    )
+    .await
+    .unwrap();
+    ark_store::test_support::TrashedTodoFixture::insert(&db_path, "trashed").unwrap();
 
     let deleted = handle
         .submit_delete_trashed(CommandContext::engine(), "device-under-test".into())
         .await
         .unwrap();
 
-    let remains = handle.with_connection(|connection| {
-        connection
-            .query_row(
-                "SELECT EXISTS(SELECT 1 FROM todos WHERE id = 'trashed')",
-                [],
-                |row| row.get::<_, bool>(0),
-            )
-            .unwrap()
-    });
+    let remains = ark_store::test_support::TrashedTodoFixture::exists(&db_path, "trashed").unwrap();
     assert_eq!(deleted, 1);
     assert!(!remains);
     owner
