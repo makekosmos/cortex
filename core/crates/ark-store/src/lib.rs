@@ -5,6 +5,7 @@ pub mod canonical_migrations;
 pub mod committed_feed;
 pub mod data_platform;
 pub mod data_volume;
+pub mod database;
 pub mod device_registry;
 pub mod integration_replication;
 pub mod legacy_entities;

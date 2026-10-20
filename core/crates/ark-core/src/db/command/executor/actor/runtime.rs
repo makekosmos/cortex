@@ -16,17 +16,17 @@ pub(super) fn actor_loop(
             .unwrap_or_else(|error| error.into_inner());
         ledger.lifecycle = Lifecycle::Migrating;
         drop(ledger);
-        let backup_path = format!("{}.pre-core-task.bak", shared.path);
-        SqliteWriter::open_initialized(&shared.path, &backup_path, &bootstrap_device_id).map_err(
-            |error| {
+        shared
+            .database
+            .open_writer(&bootstrap_device_id)
+            .map_err(|error| {
                 if error.stage == ark_store::writer::StoreBootstrapStage::Recovery {
                     eprintln!("database restore recovery failed before startup: {error}");
                     DbError::RecoveryRequired
                 } else {
                     DbError::Storage(error.to_string())
                 }
-            },
-        )
+            })
     };
     let mut writer = match connection {
         Ok(writer) => {

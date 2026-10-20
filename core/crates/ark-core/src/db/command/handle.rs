@@ -261,9 +261,10 @@ impl DbHandle {
                         .readers
                         .read()
                         .unwrap_or_else(|error| error.into_inner());
-                    let mut reader =
-                        ark_store::read_snapshot::SqliteReader::open_read_only(&shared.path)
-                            .map_err(|error| DbError::Storage(error.to_string()))?;
+                    let mut reader = shared
+                        .database
+                        .open_reader()
+                        .map_err(|error| DbError::Storage(error.to_string()))?;
                     reader
                         .with_read_snapshot(|capabilities| query.read(&context, &capabilities))
                         .map_err(map_store_read_failure)

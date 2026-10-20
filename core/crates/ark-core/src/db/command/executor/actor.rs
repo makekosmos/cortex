@@ -108,6 +108,8 @@ struct Ledger {
 }
 
 pub(in crate::db::command) struct ActorShared {
+    pub(in crate::db::command) database: ark_store::database::StoreDatabase,
+    #[cfg(test)]
     pub(in crate::db::command) path: String,
     limits: AdmissionLimits,
     ledger: Mutex<Ledger>,
@@ -146,6 +148,8 @@ impl ActorShared {
         let free = (0..limits.max_commands).rev().collect();
         let (closed_tx, closed_rx) = oneshot::channel();
         let shared = Arc::new(Self {
+            database: ark_store::database::StoreDatabase::new(path.clone()),
+            #[cfg(test)]
             path: path.clone(),
             limits,
             ledger: Mutex::new(Ledger {
