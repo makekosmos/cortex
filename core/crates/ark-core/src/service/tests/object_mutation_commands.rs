@@ -1,19 +1,4 @@
 use super::*;
-use crate::types::ArkObject;
-
-fn object(id: &str, type_id: &str, props: Value) -> ArkObject {
-    ArkObject {
-        id: id.into(),
-        type_id: type_id.into(),
-        type_version: "1.0.0".into(),
-        title: "test".into(),
-        content_json: json!({"type":"doc","content":[]}),
-        props_json: props,
-        created_at: "2026-01-01T00:00:00Z".into(),
-        updated_at: "2026-01-01T00:00:00Z".into(),
-        deleted_at: None,
-    }
-}
 
 #[tokio::test]
 async fn book_cover_command_rolls_back_facade_writes_when_revision_recording_fails() {
@@ -28,51 +13,8 @@ async fn book_cover_command_rolls_back_facade_writes_when_revision_recording_fai
     .await
     .unwrap();
 
-    with_write_tx(&state, |connection| {
-        ark_store::objects::upsert_object_compat(
-            connection,
-            &object(
-                "book",
-                "com.kosmos.book",
-                json!({
-                    "author": null,
-                    "isbn": null,
-                    "pageCount": null,
-                    "language": null,
-                    "publisher": null,
-                    "publishedDate": null,
-                    "sourceUrl": null,
-                    "extensions": {},
-                }),
-            ),
-        )?;
-        ark_store::objects::upsert_object_compat(
-            connection,
-            &object(
-                "image",
-                "com.kosmos.image",
-                json!({
-                    "fileName": null,
-                    "mimeType": null,
-                    "sizeBytes": null,
-                    "width": null,
-                    "height": null,
-                    "resolution": null,
-                    "altText": "",
-                    "extensions": {},
-                }),
-            ),
-        )?;
-        connection
-            .execute_batch(
-                "CREATE TRIGGER fail_book_sync_version BEFORE INSERT ON object_sync_versions
-                 WHEN NEW.object_id = 'book' BEGIN
-                   SELECT RAISE(ABORT, 'injected revision failure');
-                 END;",
-            )
-            .map_err(|error| error.to_string())
-    })
-    .unwrap();
+    ark_store::test_support::BookCoverRollbackFixture::prepare(&fixture.db_path())
+        .expect("book and image fixtures seed, then revision writes are rejected");
 
     assert!(handle_request(
         &state,
@@ -87,38 +29,22 @@ async fn book_cover_command_rolls_back_facade_writes_when_revision_recording_fai
     .await
     .is_err());
 
-    with_conn(&state, |connection| {
-        let props: String = connection
-            .query_row(
-                "SELECT props_json FROM objects WHERE id='book'",
-                [],
-                |row| row.get(0),
-            )
-            .map_err(|error| error.to_string())?;
-        let links: i64 = connection
-            .query_row("SELECT COUNT(*) FROM object_links", [], |row| row.get(0))
-            .map_err(|error| error.to_string())?;
-        let revisions: i64 = connection
-            .query_row(
-                "SELECT COUNT(*) FROM object_sync_versions WHERE object_id IN ('book', 'image')",
-                [],
-                |row| row.get(0),
-            )
-            .map_err(|error| error.to_string())?;
-        assert!(
-            !props.contains("cover_image"),
-            "failed command must restore book props"
-        );
-        assert_eq!(links, 0, "failed command must remove facade-created links");
-        assert_eq!(
-            revisions, 0,
-            "failed command must roll back object versions"
-        );
-        assert_eq!(
-            ark_store::sync_kv::get_sync_kv(connection, "lan_sync.version_vector")?,
-            None
-        );
-        Ok(())
-    })
-    .unwrap();
+    let state = ark_store::test_support::BookCoverRollbackFixture::inspect(&fixture.db_path())
+        .expect("persisted rollback state reads");
+    assert!(
+        !state.book_has_cover,
+        "failed command must restore book props"
+    );
+    assert_eq!(
+        state.link_count, 0,
+        "failed command must remove created links"
+    );
+    assert_eq!(
+        state.revision_count, 0,
+        "failed command must roll back versions"
+    );
+    assert_eq!(
+        state.version_vector, None,
+        "failed command must not advance sync state"
+    );
 }

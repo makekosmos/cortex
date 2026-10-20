@@ -8,6 +8,8 @@ use serde::Deserialize;
 use tempfile::TempDir;
 
 mod actor_log;
+mod book_cover_rollback;
+mod canonical_task_idempotency;
 mod device_registry;
 mod inbox;
 mod legacy_writes;
@@ -22,6 +24,10 @@ mod type_mutation;
 mod usage_rollback;
 
 pub use actor_log::{ActorLogEntry, ActorLogOrder, ActorTestLog};
+pub use book_cover_rollback::{BookCoverRollbackFixture, BookCoverRollbackState};
+pub use canonical_task_idempotency::{
+    CanonicalTaskIdempotencyFixture, CanonicalTaskIdempotencyState,
+};
 pub use device_registry::{DeviceRegistryFixture, DeviceRegistryState};
 pub use inbox::has_inbox_receipt;
 pub use legacy_writes::{
