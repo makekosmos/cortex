@@ -6,7 +6,7 @@ import test from "node:test";
 
 import { collectStorageViolations } from "./check-ark-core-storage-boundary.mjs";
 
-async function fixture(t, { manifest, source }) {
+async function fixture(t, { manifest, source, files = {} }) {
   const root = await mkdtemp(path.join(os.tmpdir(), "ark-core-storage-boundary-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const sourceRoot = path.join(root, "core", "crates", "ark-core", "src");
@@ -15,6 +15,11 @@ async function fixture(t, { manifest, source }) {
   await mkdir(sourceRoot, { recursive: true });
   await writeFile(manifestPath, manifest);
   await writeFile(sourcePath, source);
+  for (const [relativePath, contents] of Object.entries(files)) {
+    const file = path.join(sourceRoot, relativePath);
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, contents);
+  }
   return { root, sourceRoot, manifestPath };
 }
 
@@ -70,6 +75,31 @@ test("the baseline inventory distinguishes inline tests from production code", a
   assert.deepEqual(
     violations.map(({ category, line, scope }) => ({ category, line, scope })),
     [{ category: "SQL literal", line: 3, scope: "inline_test" }],
+  );
+});
+
+test("the boundary checker scopes externally declared cfg(test) modules as tests", async (t) => {
+  const paths = await fixture(t, {
+    manifest: '[dependencies]\nserde = "1"\n',
+    source: ["#[cfg(test)] mod fixtures;", "mod production;", "pub fn ready() {}"].join("\n"),
+    files: {
+      "fixtures.rs": "mod nested;\n",
+      "fixtures/nested.rs": 'const QUERY: &str = "SELECT id FROM objects";\n',
+      "production.rs": 'const QUERY: &str = "SELECT id FROM objects";\n',
+    },
+  });
+  const violations = await collectStorageViolations(paths);
+  assert.deepEqual(
+    violations.map(({ path: file, line, category, scope }) => ({
+      path: file.split("/").at(-1),
+      line,
+      category,
+      scope,
+    })),
+    [
+      { path: "nested.rs", line: 1, category: "SQL literal", scope: "test_file" },
+      { path: "production.rs", line: 1, category: "SQL literal", scope: "production" },
+    ],
   );
 });
 

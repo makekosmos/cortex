@@ -38,7 +38,55 @@ function isTestFile(relativePath) {
   return /(?:^|\/)tests?(?:_[^/]+)?(?:\.rs|\/)|(?:^|\/)[^/]+_tests?\.rs$/.test(relativePath);
 }
 
-function sourceViolations(source, relativePath) {
+function testOnlyModuleDeclarations(source) {
+  const masked = maskRustTrivia(source);
+  return [
+    ...masked.matchAll(/#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]\s*mod\s+([A-Za-z_][A-Za-z0-9_]*)\s*;/g),
+  ].map((match) => match[1]);
+}
+
+function moduleDeclarations(source) {
+  const masked = maskRustTrivia(source);
+  return [...masked.matchAll(/\bmod\s+([A-Za-z_][A-Za-z0-9_]*)\s*;/g)].map((match) => match[1]);
+}
+
+function childModuleFile(file, name, files) {
+  const fileName = path.basename(file);
+  const moduleDirectory = ["lib.rs", "main.rs", "mod.rs"].includes(fileName)
+    ? path.dirname(file)
+    : path.join(path.dirname(file), path.basename(file, ".rs"));
+  for (const candidate of [
+    path.join(moduleDirectory, `${name}.rs`),
+    path.join(moduleDirectory, name, "mod.rs"),
+  ]) {
+    if (files.has(candidate)) return candidate;
+  }
+  return undefined;
+}
+
+async function testOnlyModulePaths(sourceRoot) {
+  const files = new Set(await collectRustFiles(sourceRoot));
+  const testOnly = new Set();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const parent of files) {
+      const source = await readFile(parent, "utf8");
+      const gated = new Set(testOnlyModuleDeclarations(source));
+      for (const name of moduleDeclarations(source)) {
+        const child = childModuleFile(parent, name, files);
+        if (!child) continue;
+        if ((testOnly.has(parent) || gated.has(name)) && !testOnly.has(child)) {
+          testOnly.add(child);
+          changed = true;
+        }
+      }
+    }
+  }
+  return testOnly;
+}
+
+function sourceViolations(source, relativePath, testOnly = false) {
   const masked = maskRustTrivia(source);
   const violations = [];
   const found = new Set();
@@ -55,13 +103,14 @@ function sourceViolations(source, relativePath) {
   return violations;
 
   function addViolation(line, category, offset) {
-    const scope = isTestFile(relativePath)
-      ? "test_file"
-      : testRanges.some(({ start, end }) => start <= offset && offset < end)
-        ? "inline_test"
-        : debugRanges.some(({ start, end }) => start <= offset && offset < end)
-          ? "debug_only"
-          : "production";
+    const scope =
+      isTestFile(relativePath) || testOnly
+        ? "test_file"
+        : testRanges.some(({ start, end }) => start <= offset && offset < end)
+          ? "inline_test"
+          : debugRanges.some(({ start, end }) => start <= offset && offset < end)
+            ? "debug_only"
+            : "production";
     const key = `${line}\0${category}\0${scope}`;
     if (found.has(key)) return;
     found.add(key);
@@ -76,6 +125,11 @@ export async function collectStorageViolations({
 } = {}) {
   const violations = [];
   const manifest = await readFile(manifestPath, "utf8");
+  const testOnlyPaths = new Set(
+    [...(await testOnlyModulePaths(sourceRoot))].map((file) =>
+      path.relative(root, file).split(path.sep).join("/"),
+    ),
+  );
   const dependency = /^\s*rusqlite\b(?:\s*=|\s*\{|\s*\.)/m.exec(manifest);
   if (dependency)
     violations.push({
@@ -88,7 +142,7 @@ export async function collectStorageViolations({
   for (const file of (await collectRustFiles(sourceRoot)).sort()) {
     const source = await readFile(file, "utf8");
     const relativePath = path.relative(root, file).split(path.sep).join("/");
-    violations.push(...sourceViolations(source, relativePath));
+    violations.push(...sourceViolations(source, relativePath, testOnlyPaths.has(relativePath)));
   }
   return violations.sort(
     (left, right) =>
