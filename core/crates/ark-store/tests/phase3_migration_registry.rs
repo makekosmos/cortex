@@ -1,6 +1,5 @@
 #![allow(clippy::unwrap_used)]
-use ark_core::canonical_types::definitions::canonical_type_registrations;
-use ark_core::type_registry::legacy_compatibility_version;
+use ark_domain::canonical_type::registry::legacy_compatibility_version;
 use ark_store::canonical_migrations::registry::{
     apply_registry, apply_registry_with_failure, preflight_registry, RegistryError,
 };
@@ -254,12 +253,6 @@ fn legacy_archive_is_lossless_and_late_failure_rolls_back() {
         .unwrap(),
         "com.kosmos.note"
     );
-}
-
-#[test]
-fn definitions_are_the_registry_hash_authority() {
-    // Nine canonical types, task and project second versions, and core.task.
-    assert_eq!(canonical_type_registrations().unwrap().len(), 12);
 }
 
 #[test]

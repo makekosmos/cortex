@@ -62,3 +62,5 @@ mod schema_tests;
 mod sync_transaction_contract_tests;
 #[cfg(test)]
 mod transactions_and_usage_tests;
+#[cfg(test)]
+mod type_registry_slice1_tests;

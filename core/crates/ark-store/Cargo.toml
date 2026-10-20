@@ -3,6 +3,11 @@ name = "ark-store"
 version = "0.1.0"
 edition.workspace = true
 description = "SQLite adapters for ARK persistence contracts"
+autotests = false
+
+[[test]]
+name = "phase3_migration_tests"
+path = "tests/phase3_migration_tests.rs"
 
 [features]
 default = []

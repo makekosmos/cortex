@@ -16,25 +16,19 @@ mod iroh_round_trip;
 mod iroh_ticket_pairing;
 mod phase2_slice2_object_versions;
 mod phase3_agenda_contract;
+mod phase3_blocked_writes;
 mod phase3_canonical_facades;
 mod phase3_canonical_types;
 mod phase3_compatibility;
 mod phase3_delphi_projection;
 mod phase3_game_rpc;
-mod phase3_migration;
-mod phase3_migration_ledger;
-mod phase3_migration_objects;
-mod phase3_migration_orchestrator;
-mod phase3_migration_preflight;
-mod phase3_migration_registry;
-mod phase3_migration_system;
+mod phase3_registry_definition_authority;
 mod phase3_validation;
 mod proptest_invariants;
 mod relay_round_trip;
 mod support;
-mod type_registry_slice1;
 
-// Shared by the phase3_migration* tests.
+// Used by the remaining ArkService blocked-write integration test.
 #[allow(clippy::unwrap_used)]
 #[path = "support/phase3_legacy_fixtures.rs"]
 mod phase3_legacy_fixtures;

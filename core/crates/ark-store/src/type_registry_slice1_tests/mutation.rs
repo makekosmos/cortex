@@ -82,10 +82,10 @@ fn registry_contract_shapes_are_rejected_in_migration_and_insert() {
         "0); INSERT INTO object_types VALUES ('bad','Bad','[]','{}','c','u',0);"
     ))
     .unwrap();
-    assert!(ark_store::open::init_schema(&conn).is_err());
+    assert!(crate::open::init_schema(&conn).is_err());
 
     let conn = Connection::open_in_memory().unwrap();
-    ark_store::open::init_schema(&conn).unwrap();
+    crate::open::init_schema(&conn).unwrap();
     for (field, value) in [
         ("schema_json", "[]"),
         ("ui_schema_json", "[]"),
@@ -110,7 +110,7 @@ fn registry_contract_shapes_are_rejected_in_migration_and_insert() {
 #[test]
 fn production_registration_rolls_back_late_alias_failure_and_rejects_alias_collision() {
     let conn = Connection::open_in_memory().unwrap();
-    ark_store::open::init_schema(&conn).unwrap();
+    crate::open::init_schema(&conn).unwrap();
     register_alias(
         &conn,
         &AliasRecord {
@@ -199,7 +199,7 @@ fn production_registration_rolls_back_late_alias_failure_and_rejects_alias_colli
 #[test]
 fn corrupt_persisted_version_listing_fails_closed_without_panic() {
     let conn = Connection::open_in_memory().unwrap();
-    ark_store::open::init_schema(&conn).unwrap();
+    crate::open::init_schema(&conn).unwrap();
     conn.execute(
         concat!(
             "INSERT INTO object_type_versions(type_id,version,schema_json,ui_schema_json,",

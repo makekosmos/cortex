@@ -317,6 +317,10 @@ pub fn usage_log_complete_through(
     Ok(through)
 }
 
+#[cfg(test)]
+#[path = "usage_sync_log_cursor_tests.rs"]
+mod cursor_tests;
+
 pub fn next_usage_sequence(connection: &Connection, device_id: &str) -> Result<u64, String> {
     connection
         .query_row(

@@ -1,4 +1,4 @@
-use ark_core::types::SyncEntity;
+use ark_domain::types::SyncEntity;
 use ark_store::pending_objects::{insert_pending_object, replay_pending_for_type};
 use rusqlite::{params, Connection};
 use serde_json::json;
@@ -193,7 +193,7 @@ fn phase3_pending_replay_rejects_corrupted_tuple_atomically() {
     let conn = Connection::open_in_memory().unwrap();
     ark_store::open::init_schema(&conn).unwrap();
     ark_store::pending_objects::migrate_phase2_to_v3(&conn).unwrap();
-    let typ = ark_core::types::ObjectType {
+    let typ = ark_domain::types::ObjectType {
         id: "future".into(),
         name: "Future".into(),
         schema_json: "{}".into(),
@@ -249,7 +249,7 @@ fn phase3_pending_replay_and_delete_are_exact_tuple_isolated() {
     let conn = Connection::open_in_memory().unwrap();
     ark_store::open::init_schema(&conn).unwrap();
     ark_store::pending_objects::migrate_phase2_to_v3(&conn).unwrap();
-    let typ = ark_core::types::ObjectType {
+    let typ = ark_domain::types::ObjectType {
         id: "future".into(),
         name: "Future".into(),
         schema_json: "{}".into(),

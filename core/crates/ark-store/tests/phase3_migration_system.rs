@@ -5,8 +5,6 @@ use rusqlite::{params, Connection};
 use serde_json::json;
 
 use crate::phase3_legacy_fixtures;
-#[path = "phase3_blocked_writes.rs"]
-mod blocked_writes;
 #[path = "phase3_migration_system/clear_all_baseline.rs"]
 mod clear_all_baseline;
 
@@ -420,7 +418,8 @@ fn raw_backup_preserves_nonempty_internal_blobs_and_schema() {
             |r| Ok((r.get(0)?, r.get(1)?)),
         )
         .unwrap();
-    ark_store::snapshot::backup_connection_to_file(&conn, dest.to_str().unwrap()).unwrap();
+    conn.backup(rusqlite::DatabaseName::Main, dest.to_str().unwrap(), None)
+        .unwrap();
     let reopened = open_db(dest.to_str().unwrap()).unwrap();
     let backup_item: (Vec<u8>, String) = reopened
         .query_row(

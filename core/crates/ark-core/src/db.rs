@@ -94,7 +94,6 @@ mod tests {
     use super::*;
     use crate::hlc::HLC;
     use crate::integration_replication::*;
-    use crate::type_registry;
     use crate::types::*;
     use ark_application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
     use ark_store::legacy_entities::{
@@ -105,10 +104,8 @@ mod tests {
         list_objects_by_type, upsert_object_link,
     };
     use ark_store::open::open_db;
-    use ark_store::pending_objects::replay_pending_for_type;
     use ark_store::usage_queries::merge_top_apps;
-    use ark_store::usage_sync_log::{compact_usage_sync_log, usage_log_complete_through};
-    use rusqlite::{params, Connection, OptionalExtension};
+    use rusqlite::{params, Connection};
     use serde_json::{json, Value};
 
     include!("db/tests_core.rs");

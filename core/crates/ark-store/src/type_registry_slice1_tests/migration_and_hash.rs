@@ -1,8 +1,10 @@
-use ark_core::type_registry::{
-    canonical_schema_hash, list_type_versions, register_alias, resolve_alias, set_base_type,
-    set_current_version, set_status, AliasRecord, TypeRegistration, TypeVersion,
+use crate::type_registry::{
+    insert_type_version, list_type_versions, register_alias, register_type, resolve_alias,
+    set_base_type, set_current_version, set_status,
 };
-use ark_store::type_registry::{insert_type_version, register_type};
+use ark_domain::canonical_type::{
+    canonical_schema_hash, AliasRecord, TypeRegistration, TypeVersion,
+};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::json;
 
@@ -86,7 +88,7 @@ fn version(type_id: &str, version: &str, schema: &str) -> TypeVersion {
 #[test]
 fn migration_is_lossless_and_repeated_init_is_idempotent() {
     let conn = legacy_db();
-    ark_store::open::init_schema(&conn).unwrap();
+    crate::open::init_schema(&conn).unwrap();
     let snapshot: (i64, i64, i64, String, String) = conn
         .query_row(
             "SELECT (SELECT count(*) FROM objects), (SELECT count(*) FROM object_links),
@@ -104,7 +106,7 @@ fn migration_is_lossless_and_repeated_init_is_idempotent() {
             |r| r.get(0),
         )
         .unwrap();
-    ark_store::open::init_schema(&conn).unwrap();
+    crate::open::init_schema(&conn).unwrap();
     assert_eq!(
         snapshot,
         conn.query_row(
@@ -140,7 +142,7 @@ fn migration_is_lossless_and_repeated_init_is_idempotent() {
 #[test]
 fn builtin_startup_does_not_rewrite_existing_definition_or_timestamp() {
     let conn = Connection::open_in_memory().unwrap();
-    ark_store::open::init_schema(&conn).unwrap();
+    crate::open::init_schema(&conn).unwrap();
     conn.execute(
         concat!(
             "UPDATE object_types SET name='user-owned', schema_json='{\"custom\":true}', ",
@@ -158,7 +160,7 @@ fn builtin_startup_does_not_rewrite_existing_definition_or_timestamp() {
         [],
     )
     .unwrap();
-    ark_store::open::init_schema_prerequisites(&conn).unwrap();
+    crate::open::init_schema_prerequisites(&conn).unwrap();
     assert_eq!(
         conn.query_row(
             "SELECT name FROM object_types WHERE id='com.kosmos.note'",
@@ -209,7 +211,7 @@ fn malformed_schema_or_ui_rolls_back_all_phase2_state() {
             params![schema, ui],
         )
         .unwrap();
-        assert!(ark_store::open::init_schema(&conn).is_err());
+        assert!(crate::open::init_schema(&conn).is_err());
         assert!(!has_table(&conn, "object_type_versions"));
         let cols: Vec<String> = conn
             .prepare("PRAGMA table_info(object_types)")
