@@ -1,20 +1,13 @@
 use crate::hlc::HLC;
 use crate::types::SyncEntity;
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::Connection;
 use serde_json::{json, Value};
 
 pub fn apply_legacy_compat_entity(
     conn: &Connection,
     entity: &SyncEntity,
 ) -> Result<ark_application::sync_storage::InboundApplyOutcome, String> {
-    let current: Option<String> = conn
-        .query_row(
-            "SELECT hlc FROM object_sync_versions WHERE object_id=?1",
-            params![entity.id],
-            |row| row.get(0),
-        )
-        .optional()
-        .map_err(|e| e.to_string())?;
+    let current = ark_store::sync_versions::stored_object_revision(conn, &entity.id)?;
     if current
         .as_deref()
         .is_some_and(|hlc| HLC::compare_str(&entity.hlc, hlc) != std::cmp::Ordering::Greater)

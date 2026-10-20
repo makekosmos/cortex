@@ -1,7 +1,7 @@
 use crate::application::task_mutation::TaskMutationSession;
 use crate::hlc::HLC;
 use crate::types::SyncEntity;
-use rusqlite::{params, Connection};
+use rusqlite::Connection;
 
 /// Canonical ingress for compatibility Todo/Project/Tag writes.  Adapters may
 /// construct the legacy wire record, but persistence, HLC and link state stay
@@ -79,15 +79,7 @@ pub fn write_legacy_records(
             write_device,
             false,
         )?;
-        conn.execute(
-            concat!(
-                "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,0) ON ",
-                "CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=0 WHERE ",
-                "excluded.hlc > object_sync_versions.hlc"
-            ),
-            params![id, hlc],
-        )
-        .map_err(|e| e.to_string())?;
+        ark_store::sync_versions::write_object_sync_version(conn, &id, &hlc, false)?;
         entities.push(SyncEntity {
             entity_type: "object".into(),
             id: id.clone(),
@@ -158,15 +150,7 @@ pub fn delete_legacy_object(
     ark_store::objects::upsert_object_compat(conn, &object)?;
     let hlc =
         ark_store::sync_versions::bump_sync_version_vector(conn, "object", id, write_device, true)?;
-    conn.execute(
-        concat!(
-            "INSERT INTO object_sync_versions(object_id,hlc,deleted) VALUES(?1,?2,1) ON ",
-            "CONFLICT(object_id) DO UPDATE SET hlc=excluded.hlc,deleted=1 WHERE ",
-            "excluded.hlc > object_sync_versions.hlc"
-        ),
-        params![id, hlc],
-    )
-    .map_err(|e| e.to_string())?;
+    ark_store::sync_versions::write_object_sync_version(conn, id, &hlc, true)?;
     ark_store::sync_tombstones::record(conn, "object", id, Some(&object.type_id), &hlc)?;
     Ok(SyncEntity {
         entity_type: "object".into(),
