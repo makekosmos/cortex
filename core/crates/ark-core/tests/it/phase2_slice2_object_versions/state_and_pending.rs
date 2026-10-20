@@ -6,7 +6,7 @@ use ark_store::objects::{
 };
 use ark_store::pending_objects::insert_pending_object;
 use ark_store::type_registry::upsert_object_type;
-use rusqlite::{Connection, OptionalExtension};
+use rusqlite::Connection;
 use serde_json::json;
 
 fn setup() -> Connection {

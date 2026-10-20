@@ -1,3 +1,16 @@
+#![allow(clippy::unwrap_used)]
+
+use crate::type_registry::upsert_object_type;
+use ark_domain::types::{ArkObject, ObjectType};
+use rusqlite::{Connection, OptionalExtension};
+use serde_json::json;
+
+fn setup() -> Connection {
+    let conn = Connection::open_in_memory().unwrap();
+    crate::open::init_schema(&conn).unwrap();
+    conn
+}
+
 #[test]
 
 fn load_all_clear_and_raw_backup_preserve_phase2_registry_contract() {
@@ -22,16 +35,16 @@ fn load_all_clear_and_raw_backup_preserve_phase2_registry_contract() {
     };
     upsert_object_type(&conn, &user).unwrap();
     upsert_object_type(&conn, &builtin).unwrap();
-    ark_core::type_registry::register_alias(
+    crate::type_registry::register_alias(
         &conn,
-        &ark_core::type_registry::AliasRecord {
+        &ark_domain::canonical_type::AliasRecord {
             alias: "user.alias".into(),
             canonical_type_id: user.id.clone(),
             created_at: "a".into(),
         },
     )
     .unwrap();
-    ark_store::objects::upsert_object_compat(
+    crate::objects::upsert_object_compat(
         &conn,
         &ArkObject {
             id: "user-object".into(),
@@ -46,7 +59,7 @@ fn load_all_clear_and_raw_backup_preserve_phase2_registry_contract() {
         },
     )
     .unwrap();
-    let exported = ark_store::load_all::load_all(&conn).unwrap();
+    let exported = crate::load_all::load_all(&conn).unwrap();
     assert!(exported
         .object_type_summaries
         .iter()
@@ -69,7 +82,7 @@ fn load_all_clear_and_raw_backup_preserve_phase2_registry_contract() {
     );
     assert_eq!(exported.objects[0].type_version, "0.0.0-legacy");
     let path = std::env::temp_dir().join(format!("ark-phase2-backup-{}.db", std::process::id()));
-    ark_store::snapshot::backup_connection_to_file(&conn, path.to_str().unwrap()).unwrap();
+    crate::snapshot::backup_connection_to_file(&conn, path.to_str().unwrap()).unwrap();
     let reopened = rusqlite::Connection::open(&path).unwrap();
     assert_eq!(
         reopened
@@ -103,7 +116,7 @@ fn load_all_clear_and_raw_backup_preserve_phase2_registry_contract() {
     );
     drop(reopened);
     std::fs::remove_file(&path).expect("backup db must be released after close");
-    ark_store::load_all::clear_all(&conn).unwrap();
+    crate::load_all::clear_all(&conn).unwrap();
     assert_eq!(
         conn.query_row("SELECT COUNT(*) FROM objects", [], |r| r.get::<_, i64>(0))
             .unwrap(),
@@ -171,25 +184,25 @@ fn legacy_object_type_reads_hide_deprecated_but_registry_keeps_definition() {
     };
     upsert_object_type(&conn, &object_type).unwrap();
     assert_eq!(
-        ark_store::object_types::list(&conn)
+        crate::object_types::list(&conn)
             .unwrap()
             .iter()
             .filter(|x| x.id == object_type.id)
             .count(),
         1
     );
-    ark_store::type_registry::delete_object_type(&conn, &object_type.id).unwrap();
-    assert!(!ark_store::object_types::list(&conn)
+    crate::type_registry::delete_object_type(&conn, &object_type.id).unwrap();
+    assert!(!crate::object_types::list(&conn)
         .unwrap()
         .iter()
         .any(|x| x.id == object_type.id));
-    assert!(ark_core::type_registry::list_type_summaries(&conn)
+    assert!(crate::type_registry::list_type_summaries(&conn)
         .unwrap()
         .iter()
         .any(|x| x.type_id == object_type.id && x.status == "deprecated"));
     upsert_object_type(&conn, &object_type).unwrap();
     assert_eq!(
-        ark_store::object_types::list(&conn)
+        crate::object_types::list(&conn)
             .unwrap()
             .iter()
             .filter(|x| x.id == object_type.id)
@@ -204,7 +217,7 @@ fn legacy_object_type_reads_hide_deprecated_but_registry_keeps_definition() {
         )
         .unwrap();
     assert!(version.starts_with("0.0.0+legacy."));
-    let listed = ark_store::object_types::list(&conn).unwrap();
+    let listed = crate::object_types::list(&conn).unwrap();
     let listed_json = serde_json::to_value(&listed[0]).unwrap();
     assert_eq!(
         listed_json
@@ -227,15 +240,14 @@ fn legacy_object_type_reads_hide_deprecated_but_registry_keeps_definition() {
         .collect::<Vec<_>>()
     );
     assert_eq!(
-        serde_json::to_value(ark_store::object_types::get(&conn, &object_type.id).unwrap())
-            .unwrap(),
+        serde_json::to_value(crate::object_types::get(&conn, &object_type.id).unwrap()).unwrap(),
         serde_json::to_value(Some(object_type.clone())).unwrap()
     );
-    ark_store::type_registry::delete_object_type(&conn, &object_type.id).unwrap();
-    assert!(ark_store::object_types::get(&conn, &object_type.id)
+    crate::type_registry::delete_object_type(&conn, &object_type.id).unwrap();
+    assert!(crate::object_types::get(&conn, &object_type.id)
         .unwrap()
         .is_none());
-    assert!(ark_core::type_registry::list_type_summaries(&conn)
+    assert!(crate::type_registry::list_type_summaries(&conn)
         .unwrap()
         .iter()
         .any(|x| x.type_id == object_type.id && x.status == "deprecated"));
