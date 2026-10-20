@@ -81,6 +81,27 @@ impl SyncReadCapabilities<'_> {
         crate::sync_kv::get_sync_kv(self.connection, key)
     }
 
+    pub fn sync_peer_is_admitted(&self, peer_device_id: &str) -> Result<bool, String> {
+        let peer_admitted =
+            crate::device_registry::is_device_admitted(self.connection, peer_device_id)?
+                .unwrap_or(false);
+        let local_device_id = crate::sync_kv::get_sync_kv(
+            self.connection,
+            crate::sync_kv::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY,
+        )?;
+        let local_admitted = local_device_id
+            .as_deref()
+            .map(|device_id| crate::device_registry::is_device_admitted(self.connection, device_id))
+            .transpose()?
+            .flatten()
+            .unwrap_or(true);
+        Ok(peer_admitted && local_admitted)
+    }
+
+    pub fn device_is_admitted(&self, device_id: &str) -> Result<Option<bool>, String> {
+        crate::device_registry::is_device_admitted(self.connection, device_id)
+    }
+
     pub fn authorized_transport_key(&self, device_id: &str) -> Result<Option<String>, String> {
         Ok(
             crate::integration_replication::load_authorized_node(self.connection, device_id)?

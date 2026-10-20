@@ -138,7 +138,7 @@ async fn outbound_sync_admission_closes_after_device_disable() {
 
     let query = crate::db::RegistryPeerAdmissionQuery::new("remote-device".into());
     assert!(handle
-        .query(
+        .query_with_store(
             CommandContext::sync_peer("remote-device".into(), CommandClass::SyncLive),
             query.clone(),
         )
@@ -158,7 +158,7 @@ async fn outbound_sync_admission_closes_after_device_disable() {
         .await
         .unwrap();
     assert!(!handle
-        .query(
+        .query_with_store(
             CommandContext::sync_peer("remote-device".into(), CommandClass::SyncLive),
             query,
         )

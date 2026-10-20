@@ -72,7 +72,7 @@ impl PeerIdentityBackend for SqliteStorageBackend {
 
     async fn sync_session_is_admitted(&self, peer_device_id: &str) -> Result<bool, String> {
         self.db
-            .query(
+            .query_with_store(
                 CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
                 crate::db::RegistryPeerAdmissionQuery::new(peer_device_id.to_owned()),
             )
@@ -85,7 +85,7 @@ impl PeerIdentityBackend for SqliteStorageBackend {
         peer_device_id: &str,
     ) -> Result<Option<bool>, String> {
         self.db
-            .query(
+            .query_with_store(
                 CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
                 crate::db::RegistryDeviceEnabledQuery::new(peer_device_id.to_owned()),
             )

@@ -1,4 +1,4 @@
-use super::super::{sealed, CommandClass, CommandContext, DbError, DbQuery};
+use super::super::{sealed, CommandClass, CommandContext, DbError, StoreReadQuery};
 use rusqlite::{Connection, Transaction};
 use serde::Serialize;
 
@@ -15,7 +15,7 @@ impl RegistryPeerAdmissionQuery {
 
 impl sealed::Sealed for RegistryPeerAdmissionQuery {}
 
-impl DbQuery for RegistryPeerAdmissionQuery {
+impl StoreReadQuery for RegistryPeerAdmissionQuery {
     type Output = bool;
 
     fn class(&self) -> CommandClass {
@@ -29,23 +29,13 @@ impl DbQuery for RegistryPeerAdmissionQuery {
     fn read(
         self,
         context: &CommandContext,
-        connection: &Connection,
+        capabilities: &ark_store::ReadCapabilities<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_sync_peer_matches(&self.peer_device_id)?;
-        let peer_admitted =
-            registry_device_is_admitted(connection, &self.peer_device_id)?.unwrap_or(false);
-        let local_device_id = ark_store::sync_kv::get_sync_kv(
-            connection,
-            crate::db::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY,
-        )
-        .map_err(DbError::Storage)?;
-        let local_admitted = local_device_id
-            .as_deref()
-            .map(|device_id| registry_device_is_admitted(connection, device_id))
-            .transpose()?
-            .flatten()
-            .unwrap_or(true);
-        Ok(peer_admitted && local_admitted)
+        capabilities
+            .sync()
+            .sync_peer_is_admitted(&self.peer_device_id)
+            .map_err(DbError::Storage)
     }
 }
 
@@ -62,7 +52,7 @@ impl RegistryDeviceEnabledQuery {
 
 impl sealed::Sealed for RegistryDeviceEnabledQuery {}
 
-impl DbQuery for RegistryDeviceEnabledQuery {
+impl StoreReadQuery for RegistryDeviceEnabledQuery {
     type Output = Option<bool>;
 
     fn class(&self) -> CommandClass {
@@ -76,10 +66,13 @@ impl DbQuery for RegistryDeviceEnabledQuery {
     fn read(
         self,
         context: &CommandContext,
-        connection: &Connection,
+        capabilities: &ark_store::ReadCapabilities<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_sync_peer_matches(&self.peer_device_id)?;
-        registry_device_is_admitted(connection, &self.peer_device_id)
+        capabilities
+            .sync()
+            .device_is_admitted(&self.peer_device_id)
+            .map_err(DbError::Storage)
     }
 }
 
