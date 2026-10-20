@@ -1,5 +1,17 @@
 //! Storage lifecycle for canonical data migrations.
 
+mod object_projection;
+
+pub use object_projection::stable_link_id;
+
+/// Persist a planned canonical object, its links and local migration state.
+pub fn apply_object_projection(
+    connection: &rusqlite::Connection,
+    item: &ark_application::migration_source_projection::PlannedItem,
+) -> Result<String, ark_application::migration_source_projection::ObjectPlanError> {
+    object_projection::apply_one(connection, item)
+}
+
 use ark_domain::canonical_type::legacy_task::{
     map_legacy_task, LegacyTask, CORE_TASK_TYPE, CORE_TASK_VERSION, LEGACY_TASK_TYPE,
     LEGACY_TASK_VERSION,

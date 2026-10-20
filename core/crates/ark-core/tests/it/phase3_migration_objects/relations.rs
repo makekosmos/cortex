@@ -117,11 +117,8 @@ fn late_link_collision_rolls_back_objects_and_ledger_rows() {
         json!({"project_id":"project-1"}),
         None,
     );
-    let collision = ark_core::canonical_types::migration_objects::stable_link_id(
-        "task-1",
-        "project",
-        "project-1",
-    );
+    let collision =
+        ark_store::canonical_migrations::stable_link_id("task-1", "project", "project-1");
     conn.execute(
         concat!(
             "INSERT INTO object_types(id,name,schema_json,ui_schema_json,created_at,",

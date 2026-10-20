@@ -1,4 +1,4 @@
-use super::{ObjectPlanError, PlannedItem};
+use ark_application::migration_source_projection::{ObjectPlanError, PlannedItem};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -49,11 +49,7 @@ fn same_json(left: &str, right: &Value) -> Result<bool, ObjectPlanError> {
     Ok(canonical_json(&parsed) == canonical_json(right))
 }
 
-pub(crate) fn apply_one(
-    conn: &Connection,
-    item: &PlannedItem,
-    _now: &str,
-) -> Result<String, ObjectPlanError> {
+pub(crate) fn apply_one(conn: &Connection, item: &PlannedItem) -> Result<String, ObjectPlanError> {
     let mapped = &item.mapped;
     let canonical_hash = digest(item)?;
     let object = &mapped.object;

@@ -55,29 +55,30 @@ pub fn apply_plan_with_failure(
             }
             let mut sp = migration_ledger::ChildSavepoint::begin(conn, ledger_item)
                 .map_err(|e| ObjectPlanError::Storage(e.to_string()))?;
-            let result = apply::apply_one(conn, item, now).and_then(|canonical_hash| {
-                migration_ledger::transition_item(
-                    conn,
-                    migration_ledger::ItemTransition {
-                        contract: CONTRACT_VERSION,
-                        kind: &ledger_source_kind(&item.source_kind_variant),
-                        id: &item.source_id,
-                        status: if item.mapped.quarantine.is_empty() {
-                            ItemStatus::Migrated
-                        } else {
-                            ItemStatus::Quarantined
+            let result = ark_store::canonical_migrations::apply_object_projection(conn, item)
+                .and_then(|canonical_hash| {
+                    migration_ledger::transition_item(
+                        conn,
+                        migration_ledger::ItemTransition {
+                            contract: CONTRACT_VERSION,
+                            kind: &ledger_source_kind(&item.source_kind_variant),
+                            id: &item.source_id,
+                            status: if item.mapped.quarantine.is_empty() {
+                                ItemStatus::Migrated
+                            } else {
+                                ItemStatus::Quarantined
+                            },
+                            checkpoint: ItemCheckpoint::Committed,
+                            canonical_hash: Some(&canonical_hash),
+                            result_json: "{}",
+                            error_code: None,
+                            now,
                         },
-                        checkpoint: ItemCheckpoint::Committed,
-                        canonical_hash: Some(&canonical_hash),
-                        result_json: "{}",
-                        error_code: None,
-                        now,
-                    },
-                )
-                .map(|_| canonical_hash)
-                .map_err(|e| e.to_string())
-                .map_err(ObjectPlanError::Storage)
-            });
+                    )
+                    .map(|_| canonical_hash)
+                    .map_err(|e| e.to_string())
+                    .map_err(ObjectPlanError::Storage)
+                });
             match result {
                 Ok(_) => {
                     sp.commit()

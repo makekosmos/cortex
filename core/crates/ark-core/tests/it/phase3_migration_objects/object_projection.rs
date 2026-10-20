@@ -334,11 +334,8 @@ fn link_id_collision_is_a_canonical_conflict_without_partial_object() {
         json!({"project_id":"project-1"}),
         None,
     );
-    let collision = ark_core::canonical_types::migration_objects::stable_link_id(
-        "task-1",
-        "project",
-        "project-1",
-    );
+    let collision =
+        ark_store::canonical_migrations::stable_link_id("task-1", "project", "project-1");
     conn.execute(
         concat!(
             "INSERT INTO object_links(id,source_object_id,target_object_id,link_type,",
