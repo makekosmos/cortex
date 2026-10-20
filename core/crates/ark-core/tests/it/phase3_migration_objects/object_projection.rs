@@ -216,7 +216,7 @@ fn native_adapters_migrate_area_heading_identity_and_hierarchy() {
     assert_eq!(plan.items.len(), 5);
     assert!(plan.items.iter().any(|item| item.source_kind == "todos"
         && item.source_kind_variant
-            == ark_core::canonical_types::preflight::SourceKind::Native("todos".into())));
+            == ark_application::migration_source_projection::SourceKind::Native("todos".into())));
     apply_plan(&conn, &plan, "now").unwrap();
     let objects: i64 = conn
         .query_row("SELECT COUNT(*) FROM objects", [], |r| r.get(0))

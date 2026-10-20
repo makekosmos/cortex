@@ -1,4 +1,4 @@
-use super::super::{migration_objects, preflight};
+use super::super::migration_objects;
 use super::*;
 use ark_store::canonical_migrations::registry as migration_registry;
 use rusqlite::{params, Connection, OptionalExtension};
@@ -318,7 +318,11 @@ pub fn retire_legacy_planning_tables(conn: &Connection) -> Result<(usize, usize)
         )
         .map_err(|e| MigrationError::Storage(e.to_string()))
     };
-    let inventory = preflight::inventory_sources(conn).map_err(MigrationError::Storage)?;
+    let source_snapshot =
+        ark_store::source_snapshot::read_source_snapshot(conn).map_err(MigrationError::Storage)?;
+    let inventory =
+        ark_application::migration_source_projection::inventory_snapshot(&source_snapshot)
+            .map_err(MigrationError::Storage)?;
     let mut counts = Vec::new();
     for (table, source_kind) in [("areas", "native:areas"), ("headings", "native:headings")] {
         if !table_exists(table)? {

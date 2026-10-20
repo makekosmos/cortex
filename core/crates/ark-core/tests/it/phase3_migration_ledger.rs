@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used)]
-use ark_core::canonical_types::preflight::{SourceKind, SourceRecord};
+use ark_application::migration_source_projection::{SourceKind, SourceRecord};
 use ark_store::canonical_migrations::ledger::{
     begin_or_resume, ensure_ledger_schema, ChildSavepoint, ItemCheckpoint, ItemStatus, LedgerError,
     MigrationRunStatus,

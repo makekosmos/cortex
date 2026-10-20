@@ -1,4 +1,5 @@
-use super::super::{migration_objects, preflight};
+use super::super::migration_objects;
+use ark_application::migration_source_projection as preflight;
 use ark_store::canonical_migrations::registry as migration_registry;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};

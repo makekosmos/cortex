@@ -1,5 +1,5 @@
-use super::super::preflight::{SourceKind, SourceRecord};
 use super::*;
+use ark_application::migration_source_projection::{SourceKind, SourceRecord};
 use ark_store::canonical_migrations::ledger::{
     self as migration_ledger, ItemCheckpoint, ItemStatus,
 };

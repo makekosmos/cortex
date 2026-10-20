@@ -1,8 +1,25 @@
 #![allow(clippy::unwrap_used)]
-use ark_core::canonical_types::preflight::{inventory_sources, preflight_phase3, SourceKind};
+use ark_application::migration_source_projection::{
+    inventory_snapshot, mapping_context, preflight_from_snapshot, SourceKind,
+};
 use rusqlite::{params, Connection};
 
 use crate::phase3_legacy_fixtures;
+
+fn preflight_phase3(
+    conn: &Connection,
+) -> Result<ark_application::migration_source_projection::MigrationPreflightReport, String> {
+    let snapshot = ark_store::source_snapshot::read_source_snapshot(conn)?;
+    let context = mapping_context(&snapshot)?;
+    preflight_from_snapshot(&snapshot, &context)
+}
+
+fn inventory_sources(
+    conn: &Connection,
+) -> Result<Vec<ark_application::migration_source_projection::SourceRecord>, String> {
+    let snapshot = ark_store::source_snapshot::read_source_snapshot(conn)?;
+    inventory_snapshot(&snapshot)
+}
 
 #[test]
 fn preflight_inventories_native_rows_and_is_read_only() {

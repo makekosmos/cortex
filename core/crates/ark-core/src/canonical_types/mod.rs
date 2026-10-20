@@ -4,7 +4,6 @@ pub mod game;
 pub mod migration;
 pub mod migration_objects;
 pub mod pending;
-pub mod preflight;
 pub mod validation;
 
 #[cfg(test)]
