@@ -102,15 +102,13 @@ mod tests {
         batch_upsert_todos, delete_project, delete_todo, upsert_project, upsert_tag, upsert_todo,
     };
     use ark_store::objects::{
-        delete_object_link, get_object, get_objects_by_ids, list_object_links,
-        list_object_summaries, list_object_summaries_by_type, list_objects, list_objects_by_type,
-        list_running_time_entries, search_objects, upsert_object_link,
+        delete_object_link, get_object, get_objects_by_ids, list_object_links, list_objects,
+        list_objects_by_type, upsert_object_link,
     };
     use ark_store::open::open_db;
     use ark_store::pending_objects::{
         count_for_type as count_pending_for_type, insert_pending_object, replay_pending_for_type,
     };
-    use ark_store::schema::*;
     use ark_store::usage_queries::merge_top_apps;
     use ark_store::usage_sync_log::{compact_usage_sync_log, usage_log_complete_through};
     use rusqlite::{params, Connection, OptionalExtension};
