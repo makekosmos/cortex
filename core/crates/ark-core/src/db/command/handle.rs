@@ -6,6 +6,7 @@ use std::time::Instant;
 pub(in crate::db::command) mod authenticated_core_task_write;
 mod core_task_write;
 mod external_ref;
+mod local_sync_key_value_write;
 mod object_link_mutation;
 mod object_mutation;
 mod system_mutation;

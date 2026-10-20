@@ -182,10 +182,7 @@ pub(super) async fn set_sync_kv(
     value: String,
 ) -> Result<Value, String> {
     get_db_handle(state)?
-        .submit(
-            db::CommandContext::engine(),
-            db::SetLocalSyncKeyValueCommand::new(key, value),
-        )
+        .set_local_sync_key_value(db::CommandContext::engine(), key, value)
         .await
         .map(|()| json!(true))
         .map_err(|error| error.to_string())

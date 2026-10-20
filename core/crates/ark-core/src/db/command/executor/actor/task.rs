@@ -9,6 +9,8 @@ mod core_task_write;
 pub(in crate::db::command) use core_task_write::LocalCoreTaskWriteTask;
 mod authenticated_core_task_write;
 pub(in crate::db::command) use authenticated_core_task_write::AuthenticatedCoreTaskWriteTask;
+mod local_sync_key_value_write;
+pub(in crate::db::command) use local_sync_key_value_write::LocalSyncKeyValueWriteTask;
 
 /// Delivers a reply. The writer calls it only after the slot is released, so a
 /// caller that receives the reply can submit again without hitting the barrier.

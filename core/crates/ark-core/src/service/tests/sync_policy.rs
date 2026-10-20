@@ -1,5 +1,5 @@
 use super::*;
-use crate::db::{CommandContext, LoadActiveLocalSyncProfileQuery, SetLocalSyncKeyValueCommand};
+use crate::db::{CommandContext, LoadActiveLocalSyncProfileQuery};
 
 #[test]
 fn sync_policy_request_parses_canonical_filter_inputs() {
@@ -71,12 +71,10 @@ async fn engine_sync_policy_api_round_trips_active_device_policy() {
     .expect("initialize service database");
     get_db_handle(&fixture.state)
         .unwrap()
-        .submit(
+        .set_local_sync_key_value(
             CommandContext::engine(),
-            SetLocalSyncKeyValueCommand::new(
-                crate::db::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY.into(),
-                "phone-device".into(),
-            ),
+            crate::db::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY.into(),
+            "phone-device".into(),
         )
         .await
         .unwrap();
@@ -159,12 +157,10 @@ async fn sync_selection_does_not_revoke_an_application_grant() {
     .expect("initialize service database");
     get_db_handle(&state)
         .unwrap()
-        .submit(
+        .set_local_sync_key_value(
             CommandContext::engine(),
-            SetLocalSyncKeyValueCommand::new(
-                crate::db::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY.into(),
-                "phone-device".into(),
-            ),
+            crate::db::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY.into(),
+            "phone-device".into(),
         )
         .await
         .unwrap();

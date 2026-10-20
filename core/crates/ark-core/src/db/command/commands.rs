@@ -53,7 +53,7 @@ pub(crate) use object_read::ObjectReadQuery;
 pub(crate) use sync_mutation::{
     ApplyAuthenticatedSyncEntityCommand, ApplySyncEntityCommand, CommittedFeedProgress,
     CommittedFeedProgressCommand, CommittedFeedProgressOperation,
-    EnsureUsageSequenceMigratedCommand, SetLocalSyncKeyValueCommand, SetSyncKeyValueCommand,
+    EnsureUsageSequenceMigratedCommand, SetSyncKeyValueCommand,
 };
 pub(crate) use sync_policy::{
     AcceptPeerSyncPolicyCommand, LoadAcceptedPeerSyncPolicyQuery, LoadActiveLocalSyncProfileQuery,

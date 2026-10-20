@@ -54,12 +54,10 @@ async fn db_backup_restore_preserves_live_registry_chain_and_sequence() {
     .await
     .expect("initialize snapshot db");
     let db = get_db_handle(&state).expect("service database handle");
-    db.submit(
+    db.set_local_sync_key_value(
         db::CommandContext::engine(),
-        db::SetLocalSyncKeyValueCommand::new(
-            db::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY.into(),
-            "restore-device".into(),
-        ),
+        db::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY.into(),
+        "restore-device".into(),
     )
     .await
     .expect("persist local registry identity");

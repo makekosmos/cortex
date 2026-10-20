@@ -1,12 +1,12 @@
 # ARK Core storage census
 
-Generated from the current Core source. The scanner found 57 typed operations and 900 SQLite ownership references. It scans all Rust sources and labels standalone tests, inline tests, debug-only code, and production separately. It does not infer policy ownership or discover indirect SQL hidden behind helper calls.
+Generated from the current Core source. The scanner found 56 typed operations and 899 SQLite ownership references. It scans all Rust sources and labels standalone tests, inline tests, debug-only code, and production separately. It does not infer policy ownership or discover indirect SQL hidden behind helper calls.
 
 ## Transaction contracts
 
 | Command contract | Count | Execution boundary |
 | --- | ---: | --- |
-| `DbCommand` | 32 | immediate write transaction |
+| `DbCommand` | 31 | immediate write transaction |
 | `DbQuery` | 24 | deferred read transaction |
 | `DbMaintenanceCommand` | 1 | exclusive maintenance connection |
 
@@ -33,7 +33,6 @@ Generated from the current Core source. The scanner found 57 typed operations an
 | `DbCommand` | `ApplySyncEntityCommand` | [core/crates/ark-core/src/db/command/commands/sync_mutation.rs:263](../core/crates/ark-core/src/db/command/commands/sync_mutation.rs:263) |
 | `DbCommand` | `ApplyAuthenticatedSyncEntityCommand` | [core/crates/ark-core/src/db/command/commands/sync_mutation.rs:324](../core/crates/ark-core/src/db/command/commands/sync_mutation.rs:324) |
 | `DbCommand` | `SetSyncKeyValueCommand` | [core/crates/ark-core/src/db/command/commands/sync_mutation.rs:428](../core/crates/ark-core/src/db/command/commands/sync_mutation.rs:428) |
-| `DbCommand` | `SetLocalSyncKeyValueCommand` | [core/crates/ark-core/src/db/command/commands/sync_mutation.rs:467](../core/crates/ark-core/src/db/command/commands/sync_mutation.rs:467) |
 | `DbCommand` | `SaveLocalSyncProfileCommand` | [core/crates/ark-core/src/db/command/commands/sync_policy.rs:36](../core/crates/ark-core/src/db/command/commands/sync_policy.rs:36) |
 | `DbCommand` | `AcceptPeerSyncPolicyCommand` | [core/crates/ark-core/src/db/command/commands/sync_policy.rs:149](../core/crates/ark-core/src/db/command/commands/sync_policy.rs:149) |
 | `DbCommand` | `LoadOrGenerateIrohSecretKeyCommand` | [core/crates/ark-core/src/db/command/commands/system_mutation.rs:10](../core/crates/ark-core/src/db/command/commands/system_mutation.rs:10) |
@@ -85,7 +84,7 @@ Generated from the current Core source. The scanner found 57 typed operations an
 | production | SQL literal | 34 |
 | production | SQLite lifecycle | 9 |
 | production | SQLite operation | 36 |
-| production | SQLite type or import | 138 |
+| production | SQLite type or import | 137 |
 | test_file | SQL literal | 288 |
 | test_file | SQLite lifecycle | 80 |
 | test_file | SQLite operation | 247 |

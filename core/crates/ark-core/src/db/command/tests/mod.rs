@@ -356,9 +356,10 @@ async fn clear_all_runs_inside_a_maintenance_database_command() {
         .await
         .unwrap();
     handle
-        .submit(
+        .set_local_sync_key_value(
             CommandContext::engine(),
-            SetLocalSyncKeyValueCommand::new("test-key".into(), "test-value".into()),
+            "test-key".into(),
+            "test-value".into(),
         )
         .await
         .unwrap();

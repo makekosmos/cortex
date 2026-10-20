@@ -1,6 +1,7 @@
 use rusqlite::{Connection, Transaction, TransactionBehavior};
 
 mod authenticated_task;
+mod sync_key_value;
 mod task_objects;
 use task_objects::apply_local_core_task_write_in;
 pub use task_objects::{TaskObjectWriteError, TaskObjectWrites};

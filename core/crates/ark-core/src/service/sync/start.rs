@@ -1,5 +1,5 @@
 use super::*;
-use crate::db::{CommandContext, EnsureUsageSequenceMigratedCommand, SetLocalSyncKeyValueCommand};
+use crate::db::{CommandContext, EnsureUsageSequenceMigratedCommand};
 use crate::service::runtime::get_db_handle;
 
 pub(crate) async fn handle_start_sync(
@@ -44,12 +44,10 @@ pub(crate) async fn handle_start_sync(
         .await
         .map_err(|error| error.to_string())?;
     db_handle
-        .submit(
+        .set_local_sync_key_value(
             CommandContext::engine(),
-            SetLocalSyncKeyValueCommand::new(
-                crate::db::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY.into(),
-                device_id.clone(),
-            ),
+            crate::db::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY.into(),
+            device_id.clone(),
         )
         .await
         .map_err(|error| error.to_string())?;

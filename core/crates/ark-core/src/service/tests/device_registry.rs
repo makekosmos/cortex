@@ -1,5 +1,5 @@
 use super::*;
-use crate::db::{CommandContext, EnrollPairedDeviceCommand, SetLocalSyncKeyValueCommand};
+use crate::db::{CommandContext, EnrollPairedDeviceCommand};
 use ark_domain::device_registry::{DeviceId, DisplayName};
 
 #[test]
@@ -38,12 +38,10 @@ async fn engine_registry_operations_read_and_commit_signed_device_state() {
     .await
     .expect("initialize service database");
     let db = get_db_handle(&fixture.state).expect("service database handle");
-    db.submit(
+    db.set_local_sync_key_value(
         CommandContext::engine(),
-        SetLocalSyncKeyValueCommand::new(
-            crate::db::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY.into(),
-            "local-device".into(),
-        ),
+        crate::db::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY.into(),
+        "local-device".into(),
     )
     .await
     .expect("persist configured device identity");
