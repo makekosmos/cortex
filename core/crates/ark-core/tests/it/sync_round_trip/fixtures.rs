@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
 
-use ark_core::db::{init_schema, SqliteStorageBackend};
+use ark_core::db::SqliteStorageBackend;
 use ark_core::direct_client::{new_direct_client, DirectClient};
 use ark_core::replication_storage::PeerIdentityBackend;
 use ark_core::sync_server::{SyncRuntimeStorage, SyncServer};
@@ -30,7 +30,7 @@ fn make_storage(device_id: &str) -> Arc<SqliteStorageBackend> {
 
 pub(super) fn make_storage_with_identity(device_id: &str) -> (Arc<SqliteStorageBackend>, String) {
     let conn = Connection::open_in_memory().expect("in-memory db");
-    init_schema(&conn).expect("schema");
+    ark_store::open::init_schema(&conn).expect("schema");
     let endpoint = ark_core::iroh_transport::load_or_generate_secret_key(&conn)
         .expect("device signing key")
         .public()

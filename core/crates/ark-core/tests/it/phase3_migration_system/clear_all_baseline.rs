@@ -1,11 +1,10 @@
 use super::count;
-use ark_core::db::init_schema;
 use rusqlite::{params, Connection};
 
 #[test]
 fn clear_all_removes_ephemeral_rows_but_keeps_locked_registry_and_archive() {
     let conn = Connection::open_in_memory().unwrap();
-    init_schema(&conn).unwrap();
+    ark_store::open::init_schema(&conn).unwrap();
     conn.execute_batch(
         "INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,created_at,
          updated_at) VALUES('obj-marker','com.kosmos.note','1.0.0','marker','{}','{}','now',

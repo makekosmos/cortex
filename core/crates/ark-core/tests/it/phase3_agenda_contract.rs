@@ -10,7 +10,6 @@
 //! Agenda payload fails here; a write-path change in Agenda fails its own
 //! fixture drift test there.
 
-use ark_core::db::init_schema;
 use ark_core::types::ArkObjectWrite;
 use rusqlite::Connection;
 use std::path::PathBuf;
@@ -22,7 +21,7 @@ fn fixture_dir() -> PathBuf {
 #[test]
 fn agenda_write_payloads_pass_engine_validation() {
     let conn = Connection::open_in_memory().unwrap();
-    init_schema(&conn).unwrap();
+    ark_store::open::init_schema(&conn).unwrap();
 
     let mut names: Vec<String> = std::fs::read_dir(fixture_dir())
         .unwrap()

@@ -16,7 +16,7 @@ type ObjectTypeRow = (
 #[test]
 fn production_registration_rejects_mismatched_alias_target_before_mutation() {
     let conn = Connection::open_in_memory().unwrap();
-    init_schema(&conn).unwrap();
+    ark_store::open::init_schema(&conn).unwrap();
     register_type(
         &conn,
         &TypeRegistration {
@@ -126,7 +126,7 @@ fn production_registration_rejects_mismatched_alias_target_before_mutation() {
 #[test]
 fn production_registration_rejects_existing_canonical_without_any_changes() {
     let conn = Connection::open_in_memory().unwrap();
-    init_schema(&conn).unwrap();
+    ark_store::open::init_schema(&conn).unwrap();
     let before: Vec<ObjectTypeRow> = conn
         .prepare(concat!(
             "SELECT id, name, schema_json, ui_schema_json, created_at, updated_at, ",

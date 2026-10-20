@@ -1,7 +1,6 @@
 #![allow(clippy::unwrap_used)]
 use ark_application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
 
-use ark_core::db;
 use ark_core::db::SqliteStorageBackend;
 use rusqlite::Connection;
 use serde_json::json;
@@ -11,7 +10,7 @@ use std::sync::{Arc, Mutex};
 #[tokio::test]
 async fn deleted_object_tombstone_keeps_type_through_collection_filter_and_apply() {
     let source_conn = Connection::open_in_memory().unwrap();
-    db::init_schema(&source_conn).unwrap();
+    ark_store::open::init_schema(&source_conn).unwrap();
     source_conn
         .execute(
             concat!(
@@ -54,7 +53,7 @@ async fn deleted_object_tombstone_keeps_type_through_collection_filter_and_apply
     assert_eq!(tombstone.data["typeId"], json!("com.kosmos.note"));
 
     let destination_conn = Connection::open_in_memory().unwrap();
-    db::init_schema(&destination_conn).unwrap();
+    ark_store::open::init_schema(&destination_conn).unwrap();
     destination_conn
         .execute(
             concat!(

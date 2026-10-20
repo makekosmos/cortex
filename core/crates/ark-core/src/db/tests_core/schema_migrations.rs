@@ -99,7 +99,7 @@ fn test_init_schema_migrates_existing_db_without_destroying_data() {
     upsert_todo(&conn, &todo).unwrap();
     ark_store::sync_kv::set_sync_kv(&conn, "legacy-key", "legacy-value").unwrap();
 
-    init_schema(&conn).unwrap();
+    ark_store::open::init_schema(&conn).unwrap();
 
     let data = ark_store::load_all::load_all(&conn).unwrap();
     assert_eq!(data.todos.len(), 1);
@@ -214,7 +214,7 @@ fn test_init_schema_adds_usage_runtime_ms_to_existing_sessions() {
     )
     .unwrap();
 
-    init_schema(&conn).unwrap();
+    ark_store::open::init_schema(&conn).unwrap();
 
     let runtime_ms: i64 = conn
         .query_row(

@@ -1,5 +1,5 @@
 use super::*;
-use crate::db::{init_schema, SqliteStorageBackend};
+use crate::db::SqliteStorageBackend;
 use crate::replication_storage::{PeerIdentityBackend, SyncRuntimeStorage};
 use crate::sync_bind::SyncBind;
 use ark_domain::device_registry::{DeviceId, RegistryEvent, RegistryEventDraft, RegistryOperation};
@@ -10,7 +10,7 @@ use std::time::Duration;
 
 async fn storage(device_id: &str) -> (Arc<SqliteStorageBackend>, ark_net::iroh::SecretKey) {
     let connection = Connection::open_in_memory().unwrap();
-    init_schema(&connection).unwrap();
+    ark_store::open::init_schema(&connection).unwrap();
     connection
         .execute(
             "INSERT INTO sync_kv (key, value) VALUES ('device_registry.local_device_id', ?1)",

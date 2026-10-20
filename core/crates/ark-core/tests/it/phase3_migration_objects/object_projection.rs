@@ -4,7 +4,7 @@ use serde_json::json;
 
 fn db() -> Connection {
     let conn = Connection::open_in_memory().expect("sqlite");
-    ark_store::open::init_schema_prerequisites_for_phase3(&conn).expect("schema");
+    ark_store::open::init_schema_prerequisites(&conn).expect("schema");
     for id in [
         "com.kosmos.note",
         "com.kosmos.task",

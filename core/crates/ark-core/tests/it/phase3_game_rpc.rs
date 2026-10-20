@@ -2,7 +2,6 @@
 use ark_core::canonical_types::game::{
     get_game, list_games, GameLink, GameLocalState, GameQuarantine, GameUpsertCommand,
 };
-use ark_core::db;
 use ark_core::types::{ArkObject, ObjectLink, TrackedApp, UsageSession};
 use ark_store::canonical_game::apply_upsert;
 use rusqlite::Connection;
@@ -10,7 +9,7 @@ use serde_json::json;
 
 fn setup() -> Connection {
     let conn = Connection::open_in_memory().unwrap();
-    db::init_schema(&conn).unwrap();
+    ark_store::open::init_schema(&conn).unwrap();
     conn
 }
 

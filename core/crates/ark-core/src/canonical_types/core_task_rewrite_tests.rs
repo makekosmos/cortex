@@ -1,4 +1,3 @@
-use crate::db::init_schema;
 use ark_store::canonical_migrations::{rewrite_legacy_tasks, CoreTaskRewriteReport};
 use ark_store::writer::SqliteWriter;
 use rusqlite::{params, Connection};
@@ -10,7 +9,7 @@ const CANCELLED_AT: &str = "2026-10-12T09:00:00.000000Z";
 
 fn fresh_db() -> Result<SqliteWriter, String> {
     let conn = Connection::open_in_memory().map_err(|e| e.to_string())?;
-    init_schema(&conn)?;
+    ark_store::open::init_schema(&conn)?;
     Ok(SqliteWriter::from_connection(conn))
 }
 

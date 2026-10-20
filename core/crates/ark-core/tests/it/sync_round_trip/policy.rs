@@ -27,7 +27,7 @@ fn make_policy_storage(
     profile_rules: Option<Vec<SyncProfileRule>>,
 ) -> (Arc<SqliteStorageBackend>, String, Arc<Mutex<Connection>>) {
     let conn = Connection::open_in_memory().expect("in-memory SQLite");
-    db::init_schema(&conn).expect("initialize test schema");
+    ark_store::open::init_schema(&conn).expect("initialize test schema");
     db::upsert_object_type(
         &conn,
         &ObjectType {

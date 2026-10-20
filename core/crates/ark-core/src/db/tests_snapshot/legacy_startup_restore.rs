@@ -46,7 +46,7 @@ fn startup_migrates_legacy_database_before_verified_backup_and_restore() {
     drop(legacy);
 
     let mut conn = ark_store::open::open_db(&db_str).unwrap();
-    init_schema(&conn).unwrap();
+    ark_store::open::init_schema(&conn).unwrap();
     let migrated = ark_store::load_all::load_all(&conn).unwrap();
     assert_eq!(migrated.todos.len(), 1);
     assert_eq!(migrated.todos[0].id, "legacy-task");

@@ -1,5 +1,5 @@
 use super::*;
-use crate::db::{init_schema, SqliteStorageBackend};
+use crate::db::SqliteStorageBackend;
 use crate::replication_storage::{PeerIdentityBackend, SyncRuntimeStorage};
 use crate::sync_transport::{IrohSessionTransport, SyncTransport, TransportEvent};
 use ark_sync::relay_registry::{PeerControlSendOutcome, PeerSessionControl};
@@ -145,7 +145,7 @@ fn hello(device_id: &str) -> LanSyncMessage {
 #[tokio::test]
 async fn persisted_pairing_retries_acceptance_after_send_failure_without_duplicate_enrollment() {
     let connection = Connection::open_in_memory().unwrap();
-    init_schema(&connection).unwrap();
+    ark_store::open::init_schema(&connection).unwrap();
     let shared_connection = Arc::new(Mutex::new(connection));
     let storage = Arc::new(SqliteStorageBackend::for_test(shared_connection.clone()));
     storage.set_device_id("z-local-device").unwrap();
@@ -261,7 +261,7 @@ async fn persisted_pairing_retries_acceptance_after_send_failure_without_duplica
 #[tokio::test]
 async fn registry_ready_replay_is_idempotent_but_conflicting_digest_is_rejected() {
     let connection = Connection::open_in_memory().unwrap();
-    init_schema(&connection).unwrap();
+    ark_store::open::init_schema(&connection).unwrap();
     let storage = Arc::new(SqliteStorageBackend::for_test(Arc::new(Mutex::new(
         connection,
     ))));
@@ -331,7 +331,7 @@ async fn applied_registry_events_are_not_lost_when_core_reports_a_later_error() 
     };
 
     let connection = Connection::open_in_memory().unwrap();
-    init_schema(&connection).unwrap();
+    ark_store::open::init_schema(&connection).unwrap();
     let storage = Arc::new(SqliteStorageBackend::for_test(Arc::new(Mutex::new(
         connection,
     ))));

@@ -21,7 +21,7 @@ pub(super) fn actor_loop(
             DbError::RecoveryRequired
         })?;
         let connection = ark_store::open::open_db(&shared.path).map_err(DbError::Storage)?;
-        crate::db::init_schema(&connection).map_err(DbError::Storage)?;
+        ark_store::open::init_schema(&connection).map_err(DbError::Storage)?;
         let mut writer = SqliteWriter::from_connection(connection);
         let backup_path = format!("{}.pre-core-task.bak", shared.path);
         ark_store::canonical_migrations::rewrite_legacy_tasks(

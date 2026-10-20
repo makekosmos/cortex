@@ -1,5 +1,4 @@
 #![allow(clippy::unwrap_used)]
-use ark_core::db::init_schema;
 use ark_store::canonical_migrations::migration::{migrate_phase3, retire_legacy_planning_tables};
 use ark_store::open::open_db;
 use rusqlite::{params, Connection};
@@ -41,7 +40,7 @@ fn phase9_retires_planning_tables_after_lossless_canonical_migration() {
     let dir = crate::support::temp_dir();
     let path = dir.path().join("planning-retirement.sqlite");
     let conn = open_db(path.to_str().unwrap()).unwrap();
-    ark_store::open::init_schema_prerequisites_for_phase3(&conn).unwrap();
+    ark_store::open::init_schema_prerequisites(&conn).unwrap();
     conn.execute_batch(LEGACY_AREAS_HEADINGS_SCHEMA).unwrap();
     conn.execute_batch(
         "INSERT INTO projects(id,title,notes,status,sort_order,color_tag,area_id,created_at)
@@ -104,7 +103,7 @@ fn phase9_retires_planning_tables_after_lossless_canonical_migration() {
 
     drop(conn);
     let reopened = open_db(path.to_str().unwrap()).unwrap();
-    init_schema(&reopened).unwrap();
+    ark_store::open::init_schema(&reopened).unwrap();
     assert!(!table_exists(&reopened, "areas"));
     assert!(!table_exists(&reopened, "headings"));
     assert_eq!(
@@ -127,7 +126,7 @@ fn phase9_retires_planning_tables_after_lossless_canonical_migration() {
 #[test]
 fn phase9_retirement_refuses_archive_or_semantic_mismatch_and_rolls_back_drop_batch() {
     let conn = Connection::open_in_memory().unwrap();
-    ark_store::open::init_schema_prerequisites_for_phase3(&conn).unwrap();
+    ark_store::open::init_schema_prerequisites(&conn).unwrap();
     conn.execute_batch(LEGACY_AREAS_HEADINGS_SCHEMA).unwrap();
     conn.execute_batch(
         "INSERT INTO projects(id,title,status,area_id,created_at) VALUES('project-1','Project',
@@ -207,7 +206,7 @@ fn init_schema_tolerates_blocked_phase3_plan_and_keeps_legacy_tables() {
     // legacy tables stay readable via the compatibility view, and retirement
     // stays armed for the next successful migration.
     let conn = Connection::open_in_memory().unwrap();
-    ark_store::open::init_schema_prerequisites_for_phase3(&conn).unwrap();
+    ark_store::open::init_schema_prerequisites(&conn).unwrap();
     phase3_legacy_fixtures::seed_historical_legacy_authorities(&conn);
     conn.execute_batch(LEGACY_AREAS_HEADINGS_SCHEMA).unwrap();
     conn.execute_batch(
@@ -218,8 +217,8 @@ fn init_schema_tolerates_blocked_phase3_plan_and_keeps_legacy_tables() {
     )
     .unwrap();
 
-    init_schema(&conn).unwrap();
-    init_schema(&conn).unwrap();
+    ark_store::open::init_schema(&conn).unwrap();
+    ark_store::open::init_schema(&conn).unwrap();
     assert!(table_exists(&conn, "areas"));
     assert!(table_exists(&conn, "headings"));
     assert!(retire_legacy_planning_tables(&conn).is_err());
@@ -229,7 +228,7 @@ fn init_schema_tolerates_blocked_phase3_plan_and_keeps_legacy_tables() {
 #[test]
 fn production_init_runs_phase3_once_and_reopen_is_idempotent() {
     let conn = Connection::open_in_memory().unwrap();
-    init_schema(&conn).unwrap();
+    ark_store::open::init_schema(&conn).unwrap();
     for table in [
         "object_local_state",
         "object_sync_versions",
@@ -259,7 +258,7 @@ fn production_init_runs_phase3_once_and_reopen_is_idempotent() {
             |r| Ok((r.get(0)?, r.get(1)?)),
         )
         .unwrap();
-    init_schema(&conn).unwrap();
+    ark_store::open::init_schema(&conn).unwrap();
     let after: (i64, String) = conn
         .query_row(
             "SELECT COUNT(*), COALESCE(MAX(completed_at), '') FROM canonical_migration_runs",
@@ -298,7 +297,7 @@ fn historical_malformed_registry_fails_closed_before_phase3_state() {
             |r| Ok((r.get(0)?, r.get(1)?)),
         )
         .unwrap();
-    assert!(init_schema(&conn).is_err());
+    assert!(ark_store::open::init_schema(&conn).is_err());
     assert_eq!(
         conn.query_row(
             "SELECT name, canonical_type_id FROM object_types JOIN object_type_aliases ON 1=1",
@@ -325,7 +324,7 @@ fn historical_malformed_registry_fails_closed_before_phase3_state() {
 #[test]
 fn internal_markers_are_not_exposed_by_load_all() {
     let conn = Connection::open_in_memory().unwrap();
-    init_schema(&conn).unwrap();
+    ark_store::open::init_schema(&conn).unwrap();
     conn.execute(
         "INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,created_at,
          updated_at) VALUES('obj-public','com.kosmos.note','1.0.0','Public object','{}','{}','now',
@@ -377,11 +376,11 @@ fn internal_markers_are_not_exposed_by_load_all() {
 #[test]
 fn migration_init_emits_no_search_or_sync_events() {
     let conn = Connection::open_in_memory().unwrap();
-    init_schema(&conn).unwrap();
+    ark_store::open::init_schema(&conn).unwrap();
     assert_eq!(count(&conn, "object_sync_versions"), 0);
     assert_eq!(count(&conn, "canonical_migration_items"), 0);
     assert_eq!(count(&conn, "canonical_migration_runs"), 1);
-    init_schema(&conn).unwrap();
+    ark_store::open::init_schema(&conn).unwrap();
     assert_eq!(count(&conn, "canonical_migration_runs"), 1);
     assert_eq!(count(&conn, "object_sync_versions"), 0);
     if table_exists(&conn, "object_search_fts") {
@@ -395,7 +394,7 @@ fn raw_backup_preserves_nonempty_internal_blobs_and_schema() {
     let source = dir.path().join("source.sqlite");
     let dest = dir.path().join("backup.sqlite");
     let conn = open_db(source.to_str().unwrap()).unwrap();
-    init_schema(&conn).unwrap();
+    ark_store::open::init_schema(&conn).unwrap();
     conn.execute(
         "INSERT INTO canonical_migration_items(contract_version,source_kind,source_id,source_hash,
          raw_source,status,updated_at) VALUES(?1,?2,?3,?4,?5,'unchanged','now')",

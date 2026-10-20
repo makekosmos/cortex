@@ -23,9 +23,9 @@ pub fn check_integrity(connection: &Connection) -> Result<(), String> {
     Ok(())
 }
 
-/// Initializes the shared database schema and Store-owned prerequisites for
-/// canonical migrations. Canonical policy migrations remain in `ark-core`.
-pub fn init_schema_prerequisites_for_phase3(connection: &Connection) -> Result<(), String> {
+/// Initializes the shared database schema and Store-owned prerequisites needed
+/// before the canonical migration plan can read the database.
+pub fn init_schema_prerequisites(connection: &Connection) -> Result<(), String> {
     check_integrity(connection)?;
     connection
         .pragma_update(None, "auto_vacuum", "FULL")
@@ -58,6 +58,27 @@ pub fn init_schema_prerequisites_for_phase3(connection: &Connection) -> Result<(
     }
 }
 
+/// Initialize the complete ARK schema before the database actor becomes ready.
+pub fn init_schema(connection: &Connection) -> Result<(), String> {
+    init_schema_prerequisites(connection)?;
+    crate::canonical_migrations::objects::ensure_object_state_schema(connection).map_err(
+        |error| format!("canonical runtime schema during init_schema failed: {error:?}"),
+    )?;
+    let migration = crate::canonical_migrations::migration::migrate_phase3(connection)
+        .map_err(|error| format!("phase3 migration during init_schema failed: {error:?}"))?;
+    crate::canonical_migrations::registry::prepare_registry_for_objects(connection).map_err(
+        |error| format!("canonical version install during init_schema failed: {error:?}"),
+    )?;
+    if migration.status == "completed" {
+        crate::canonical_migrations::migration::retire_legacy_planning_tables(connection)
+            .map(|_| ())
+            .map_err(|error| {
+                format!("legacy planning retirement during init_schema failed: {error:?}")
+            })?;
+    }
+    Ok(())
+}
+
 pub fn backup_to_file_chunked_unpublished(
     source_path: &str,
     destination_path: &str,
@@ -80,7 +101,7 @@ pub fn backup_to_file_chunked_unpublished(
 
 #[cfg(test)]
 mod tests {
-    use super::{check_integrity, init_schema_prerequisites_for_phase3, open_db};
+    use super::{check_integrity, init_schema_prerequisites, open_db};
     use rusqlite::Connection;
 
     #[test]
@@ -121,8 +142,8 @@ mod tests {
     fn phase_two_schema_bootstrap_is_idempotent() {
         let connection = Connection::open_in_memory().expect("database opens");
 
-        init_schema_prerequisites_for_phase3(&connection).expect("initial schema bootstraps");
-        init_schema_prerequisites_for_phase3(&connection).expect("schema reopens idempotently");
+        init_schema_prerequisites(&connection).expect("initial schema bootstraps");
+        init_schema_prerequisites(&connection).expect("schema reopens idempotently");
 
         for table in [
             "object_types",

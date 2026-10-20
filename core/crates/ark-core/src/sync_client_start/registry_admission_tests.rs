@@ -15,7 +15,7 @@ fn registry_backend(
     ark_net::iroh::SecretKey,
 ) {
     let connection = rusqlite::Connection::open_in_memory().expect("open test database");
-    crate::db::init_schema(&connection).expect("initialize test schema");
+    ark_store::open::init_schema(&connection).expect("initialize test schema");
     let secret = crate::iroh_transport::load_or_generate_secret_key(&connection)
         .expect("persist local signing identity");
     let backend = Arc::new(crate::db::SqliteStorageBackend::for_test(Arc::new(

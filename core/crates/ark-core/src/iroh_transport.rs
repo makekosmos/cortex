@@ -30,7 +30,7 @@ mod tests {
 
     fn setup_db() -> Connection {
         let connection = Connection::open_in_memory().expect("database opens");
-        crate::db::init_schema(&connection).expect("schema initializes");
+        ark_store::open::init_schema(&connection).expect("schema initializes");
         connection
     }
 

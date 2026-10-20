@@ -1,7 +1,6 @@
 //! KOS-397 cutover: legacy task props map to core.task, a legacy task write is
 //! refused, and a start moves the stored rows over once.
 use super::core_task_rewrite_tests::{insert_legacy, legacy_props};
-use crate::db::init_schema;
 use crate::types::ArkObjectWrite;
 use ark_application::canonical_compatibility::{
     map_legacy_with_context, LegacyRecord, LegacySource, MappingContext,
@@ -114,7 +113,7 @@ fn completion_keeps_its_stamp_and_a_stray_stamp_is_refused() {
 #[test]
 fn engine_refuses_a_new_write_of_the_legacy_task_type() {
     let conn = Connection::open_in_memory().unwrap();
-    init_schema(&conn).unwrap();
+    ark_store::open::init_schema(&conn).unwrap();
     let write = ArkObjectWrite {
         id: "new-legacy-task".into(),
         type_id: "com.kosmos.task".into(),
@@ -138,7 +137,7 @@ async fn start_moves_stored_legacy_tasks_once_and_keeps_a_backup() {
     let path = dir.path().join("ark.db");
     {
         let conn = Connection::open(&path).unwrap();
-        init_schema(&conn).unwrap();
+        ark_store::open::init_schema(&conn).unwrap();
         insert_legacy(
             &conn,
             "legacy-task",

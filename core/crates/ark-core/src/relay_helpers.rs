@@ -36,7 +36,7 @@ async fn apply_relay_entity(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::{init_schema, SqliteStorageBackend};
+    use crate::db::SqliteStorageBackend;
     use crate::sync_server::sync_server_tests::tests::MemBackend;
     use crate::sync_transport::{SyncTransport, TransportEvent};
     use ark_application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort};
@@ -204,7 +204,7 @@ mod tests {
     }
     fn make_storage(device_id: &str) -> Arc<SqliteStorageBackend> {
         let conn = Connection::open_in_memory().expect("in-memory db");
-        init_schema(&conn).expect("schema");
+        ark_store::open::init_schema(&conn).expect("schema");
         let shared = Arc::new(StdMutex::new(conn));
         let backend = Arc::new(SqliteStorageBackend::for_test(shared));
         backend.set_device_id(device_id).unwrap();
@@ -375,7 +375,7 @@ mod tests {
     #[tokio::test]
     async fn relay_payload_sender_cannot_authorize_object_writes() {
         let conn = Connection::open_in_memory().unwrap();
-        init_schema(&conn).unwrap();
+        ark_store::open::init_schema(&conn).unwrap();
         ark_store::sync_kv::set_sync_kv(&conn, "sync.removed_peers", r#"["device-blocked"]"#)
             .unwrap();
         let shared = Arc::new(StdMutex::new(conn));

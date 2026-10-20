@@ -16,7 +16,7 @@ use std::time::Duration;
 use rusqlite::Connection;
 use tokio::sync::mpsc;
 
-use ark_core::db::{init_schema, SqliteStorageBackend};
+use ark_core::db::SqliteStorageBackend;
 use ark_core::iroh_transport::{IrohConfig, IrohTransport};
 use ark_core::sync_bind::SyncBind;
 use ark_core::sync_transport::{SyncTransport, TransportEvent};
@@ -41,7 +41,7 @@ fn open_conn(dir: &crate::support::TestTempDir) -> Arc<StdMutex<Connection>> {
     let conn = Arc::new(StdMutex::new(
         Connection::open(dir.path().join("ark.db")).unwrap(),
     ));
-    init_schema(&conn.lock().unwrap()).unwrap();
+    ark_store::open::init_schema(&conn.lock().unwrap()).unwrap();
     conn
 }
 

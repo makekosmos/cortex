@@ -1,4 +1,4 @@
-use ark_core::db::{init_schema, insert_pending_object, upsert_object_type};
+use ark_core::db::{insert_pending_object, upsert_object_type};
 use ark_core::type_registry::{register_alias, AliasRecord};
 use ark_core::types::{ArkObject, ObjectType, SyncEntity};
 use ark_store::objects::{
@@ -10,7 +10,7 @@ use serde_json::json;
 
 fn setup() -> Connection {
     let conn = Connection::open_in_memory().unwrap();
-    init_schema(&conn).unwrap();
+    ark_store::open::init_schema(&conn).unwrap();
     conn
 }
 

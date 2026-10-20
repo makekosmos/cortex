@@ -6,7 +6,7 @@ async fn blocked_database_accepts_agenda_write_through_service() {
     let path = dir.path().join("blocked.db");
     {
         let conn = Connection::open(&path).unwrap();
-        ark_store::open::init_schema_prerequisites_for_phase3(&conn).unwrap();
+        ark_store::open::init_schema_prerequisites(&conn).unwrap();
         phase3_legacy_fixtures::seed_historical_legacy_authorities(&conn);
         conn.execute_batch(
             "INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,
@@ -49,7 +49,7 @@ async fn blocked_database_accepts_agenda_write_through_service() {
 #[test]
 fn blocked_migration_still_installs_new_write_contracts_without_rewriting_legacy() {
     let conn = Connection::open_in_memory().unwrap();
-    ark_store::open::init_schema_prerequisites_for_phase3(&conn).unwrap();
+    ark_store::open::init_schema_prerequisites(&conn).unwrap();
     phase3_legacy_fixtures::seed_historical_legacy_authorities(&conn);
     conn.execute_batch(
         "INSERT INTO objects(id,type_id,type_version,title,content_json,props_json,created_at,
@@ -59,7 +59,7 @@ fn blocked_migration_still_installs_new_write_contracts_without_rewriting_legacy
     )
     .unwrap();
     for _ in 0..2 {
-        init_schema(&conn).unwrap();
+        ark_store::open::init_schema(&conn).unwrap();
         for type_id in ["com.kosmos.task", "com.kosmos.project"] {
             assert!(
                 ark_core::type_registry::get_type(&conn, type_id, Some("1.1.0"))

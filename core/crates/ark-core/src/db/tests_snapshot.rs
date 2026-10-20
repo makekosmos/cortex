@@ -13,7 +13,7 @@ fn setup_file_db() -> (crate::test_support::TestTempDir, String, Connection) {
     let db_path = dir.path().join("ark.db");
     let db_str = db_path.to_str().unwrap().to_string();
     let conn = open_db(&db_str).unwrap();
-    init_schema(&conn).unwrap();
+    ark_store::open::init_schema(&conn).unwrap();
     (dir, db_str, conn)
 }
 

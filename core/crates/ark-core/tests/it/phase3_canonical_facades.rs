@@ -1,13 +1,12 @@
 #![allow(clippy::unwrap_used)]
 use ark_core::canonical_types::facades::{asset_sources, AssetSourceError};
-use ark_core::db;
 use ark_core::types::ArkObject;
 use rusqlite::Connection;
 use serde_json::json;
 
 fn setup() -> Connection {
     let conn = Connection::open_in_memory().unwrap();
-    db::init_schema(&conn).unwrap();
+    ark_store::open::init_schema(&conn).unwrap();
     conn
 }
 fn image(id: &str) -> ArkObject {

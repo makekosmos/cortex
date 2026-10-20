@@ -11,7 +11,7 @@ fn registration() -> TypeRegistration {
 #[test]
 fn fatsecret_registration_is_idempotent_and_keeps_package_identity() {
     let conn = Connection::open_in_memory().expect("open fixture database");
-    ark_core::db::init_schema(&conn).expect("initialize schema");
+    ark_store::open::init_schema(&conn).expect("initialize schema");
     let registration = registration();
     register_type(&conn, &registration).expect("register package type");
     register_type(&conn, &registration).expect("repeat package registration");

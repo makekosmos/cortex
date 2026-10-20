@@ -35,9 +35,9 @@ fn narrowing_preserves_local_copy_and_widening_replays_latest_state() {
     let source_path = directory.path().join("policy-source.db");
     let receiver_path = directory.path().join("policy-receiver.db");
     let source = ark_store::open::open_db(source_path.to_str().unwrap()).unwrap();
-    crate::db::init_schema(&source).unwrap();
+    ark_store::open::init_schema(&source).unwrap();
     let receiver = ark_store::open::open_db(receiver_path.to_str().unwrap()).unwrap();
-    crate::db::init_schema(&receiver).unwrap();
+    ark_store::open::init_schema(&receiver).unwrap();
     let book_type = crate::types::ObjectType {
         id: "book".into(),
         name: "Book".into(),

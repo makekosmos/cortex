@@ -7,7 +7,7 @@
              PRAGMA busy_timeout = 5000;",
         )
         .unwrap();
-        init_schema(&conn).unwrap();
+        ark_store::open::init_schema(&conn).unwrap();
         conn
     }
 

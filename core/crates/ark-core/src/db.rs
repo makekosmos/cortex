@@ -59,7 +59,7 @@ pub(in crate::db) use integration_replication_publication::{
     try_acquire_integration_refresh_lease_in_transaction,
 };
 pub use objects::{delete_object_type, upsert_object_type};
-pub use open::{backup_to_file_chunked, init_schema};
+pub use open::backup_to_file_chunked;
 pub use open::{count_pending_for_type, insert_pending_object};
 
 mod integration_replication_admission;

@@ -267,7 +267,7 @@ fn init_schema_installs_added_canonical_versions() {
     // A DB that completed the phase3 migration before the 1.1.0 bump: the new
     // version rows are missing and current_version still names 1.0.0.
     let conn = Connection::open_in_memory().unwrap();
-    ark_core::db::init_schema(&conn).unwrap();
+    ark_store::open::init_schema(&conn).unwrap();
     conn.execute("DELETE FROM object_type_versions WHERE version='1.1.0'", [])
         .unwrap();
     conn.execute(
@@ -280,7 +280,7 @@ fn init_schema_installs_added_canonical_versions() {
     .unwrap();
     // The next boot must reinstall the version rows and bump current_version
     // without touching stored objects.
-    ark_core::db::init_schema(&conn).unwrap();
+    ark_store::open::init_schema(&conn).unwrap();
     assert_eq!(
         conn.query_row(
             "SELECT COUNT(*) FROM object_type_versions WHERE version='1.1.0'",

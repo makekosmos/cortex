@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used)]
 use ark_core::canonical_types::definitions::canonical_type_registrations;
-use ark_core::db::{delete_object_type, init_schema, upsert_object_type};
+use ark_core::db::{delete_object_type, upsert_object_type};
 use ark_core::type_registry::{canonical_schema_hash, resolve_alias};
 use ark_core::types::ObjectType;
 use rusqlite::Connection;
@@ -178,7 +178,7 @@ fn db_does_not_own_legacy_registry_or_compatibility_authority() {
 #[test]
 fn fresh_init_registers_exact_canonical_authority_and_routes_legacy_aliases() {
     let conn = Connection::open_in_memory().unwrap();
-    init_schema(&conn).unwrap();
+    ark_store::open::init_schema(&conn).unwrap();
 
     let rows: Vec<(String, String)> = conn
         .prepare("SELECT id, current_version FROM object_types ORDER BY id")
@@ -251,7 +251,7 @@ fn inbound_legacy_object_type_entity_cannot_mutate_canonical_row() {
     // either mutation fails the phase3 registry preflight at next open and
     // bricks the database.
     let conn = Connection::open_in_memory().unwrap();
-    init_schema(&conn).unwrap();
+    ark_store::open::init_schema(&conn).unwrap();
 
     let synced = ObjectType {
         id: "com.kosmos.task".into(),

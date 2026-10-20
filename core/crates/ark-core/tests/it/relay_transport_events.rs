@@ -13,7 +13,7 @@ use std::time::Duration;
 use rusqlite::Connection;
 use tokio::sync::mpsc;
 
-use ark_core::db::{init_schema, SqliteStorageBackend};
+use ark_core::db::SqliteStorageBackend;
 use ark_core::relay_sync::{RelaySync, RelaySyncConfig};
 use ark_core::replication_storage::PeerIdentityBackend;
 use ark_core::sync_server::SyncRuntimeStorage;
@@ -116,7 +116,7 @@ async fn relay_with_stub() -> (
     String,
 ) {
     let conn = Connection::open_in_memory().unwrap();
-    init_schema(&conn).unwrap();
+    ark_store::open::init_schema(&conn).unwrap();
     let backend = Arc::new(SqliteStorageBackend::for_test(Arc::new(StdMutex::new(
         conn,
     ))));

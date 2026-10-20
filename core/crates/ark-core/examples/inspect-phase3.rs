@@ -28,8 +28,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             std::time::Duration::from_millis(1),
             None,
         )?;
-        ark_core::db::init_schema(&copy)?;
-        ark_core::db::init_schema(&copy)?;
+        ark_store::open::init_schema(&copy)?;
+        ark_store::open::init_schema(&copy)?;
         if objects(&copy)? != before {
             return Err("upgrade changed existing object rows".into());
         }

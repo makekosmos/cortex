@@ -128,7 +128,7 @@ fn phase3_pending_rebuild_failures_restore_phase2_table_and_rows() {
 #[test]
 fn phase3_migration_creates_additive_state_and_promotes_registry_atomically() {
     let conn = Connection::open_in_memory().unwrap();
-    init_schema(&conn).unwrap();
+    ark_store::open::init_schema(&conn).unwrap();
     let before: i64 = conn
         .query_row("SELECT COUNT(*) FROM object_types", [], |row| row.get(0))
         .unwrap();
@@ -184,7 +184,7 @@ fn phase3_migration_creates_additive_state_and_promotes_registry_atomically() {
 #[test]
 fn phase3_clear_all_removes_ephemeral_state_but_preserves_locked_registry_and_archive() {
     let conn = Connection::open_in_memory().unwrap();
-    ark_store::open::init_schema_prerequisites_for_phase3(&conn).unwrap();
+    ark_store::open::init_schema_prerequisites(&conn).unwrap();
     phase3_legacy_fixtures::seed_historical_legacy_authorities(&conn);
     ark_store::canonical_migrations::migration::migrate_phase3(&conn).unwrap();
     conn.execute(

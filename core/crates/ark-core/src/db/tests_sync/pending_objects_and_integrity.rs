@@ -170,7 +170,7 @@
         // РїРѕРІСЂРµРґРёС‚СЊ РЅРµ header).
         {
             let conn = open_db(path.to_str().unwrap()).unwrap();
-            init_schema(&conn).unwrap();
+            ark_store::open::init_schema(&conn).unwrap();
             let object_type = make_object_type("corruption_fixture_type", "Note");
             upsert_object_type(&conn, &object_type).unwrap();
             for i in 0..100 {
@@ -199,7 +199,7 @@
         // integrity_check. Р›СЋР±РѕР№ РїСѓС‚СЊ вЂ” fail-loud.
         let open_result = open_db(path.to_str().unwrap());
         if let Ok(conn) = open_result {
-            let result = init_schema(&conn);
+            let result = ark_store::open::init_schema(&conn);
             assert!(
                 result.is_err(),
                 "init_schema РґРѕР»Р¶РµРЅ fail РїСЂРё corrupted DB; СЂРµР·СѓР»СЊС‚Р°С‚: {result:?}"
@@ -257,7 +257,7 @@
             // РѕС‚РґРµР»СЊРЅС‹Рј
             // РєРѕРЅРЅРµРєС€РЅРѕРј (Р° РЅРµ РёР· РїРµСЂРµРґР°РЅРЅРѕРіРѕ &Connection).
             let conn = open_db(src_str).unwrap();
-            init_schema(&conn).unwrap();
+            ark_store::open::init_schema(&conn).unwrap();
             upsert_object_type(
                 &conn,
                 &make_object_type("backup_chunk_fixture_type", "Note"),

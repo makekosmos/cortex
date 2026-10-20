@@ -1,4 +1,3 @@
-use ark_core::db;
 use ark_store::schema::CREATE_TABLES;
 use rusqlite::Connection;
 
@@ -19,7 +18,7 @@ fn legacy_integration_columns_upgrade_idempotently_without_losing_envelopes() {
     )
     .expect("legacy rows");
     for _ in 0..2 {
-        db::init_schema(&conn).expect("repeatable upgrade");
+        ark_store::open::init_schema(&conn).expect("repeatable upgrade");
     }
     let (ciphertext, fence): (String, i64) = conn
         .query_row(

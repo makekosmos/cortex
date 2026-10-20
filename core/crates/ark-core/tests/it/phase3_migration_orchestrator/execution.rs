@@ -6,7 +6,7 @@ use serde_json::json;
 
 fn db() -> Connection {
     let conn = Connection::open_in_memory().unwrap();
-    ark_store::open::init_schema_prerequisites_for_phase3(&conn).unwrap();
+    ark_store::open::init_schema_prerequisites(&conn).unwrap();
     conn
 }
 

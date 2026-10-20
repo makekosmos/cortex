@@ -315,7 +315,7 @@ fn authorized_storage() -> (
     ));
     {
         let guard = conn.lock().unwrap();
-        ark_core::db::init_schema(&guard).unwrap();
+        ark_store::open::init_schema(&guard).unwrap();
         let origin = AuthorizedNode {
             node_id: "device-B".into(),
             key_fingerprint: "fp-b".into(),

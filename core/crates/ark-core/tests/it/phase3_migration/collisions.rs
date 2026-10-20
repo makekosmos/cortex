@@ -2,7 +2,7 @@
 
 fn phase3_migration_collision_leaves_registry_and_ledger_unchanged() {
     let conn = Connection::open_in_memory().unwrap();
-    init_schema(&conn).unwrap();
+    ark_store::open::init_schema(&conn).unwrap();
     conn.execute(
         concat!(
             "INSERT INTO object_type_aliases(alias,canonical_type_id,created_at) VALUES (",

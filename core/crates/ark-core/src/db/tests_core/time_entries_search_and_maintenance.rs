@@ -162,7 +162,7 @@
             "legacy DB setup should not have the FTS table yet"
         );
 
-        init_schema(&conn).unwrap();
+        ark_store::open::init_schema(&conn).unwrap();
 
         let results = search_objects(&conn, "nebula").unwrap();
         assert_eq!(results.len(), 1);

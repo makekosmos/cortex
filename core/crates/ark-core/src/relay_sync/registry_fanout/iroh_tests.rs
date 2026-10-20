@@ -1,5 +1,5 @@
 use super::super::*;
-use crate::db::{init_schema, SqliteStorageBackend};
+use crate::db::SqliteStorageBackend;
 use crate::replication_storage::{PeerIdentityBackend, SyncRuntimeStorage};
 use crate::sync_bind::SyncBind;
 use ark_domain::device_registry::{
@@ -20,7 +20,7 @@ async fn storage_for_with_policy(
     rules: Vec<ark_application::sync_policy::SyncProfileRule>,
 ) -> (Arc<SqliteStorageBackend>, ark_net::iroh::SecretKey) {
     let connection = Connection::open_in_memory().unwrap();
-    init_schema(&connection).unwrap();
+    ark_store::open::init_schema(&connection).unwrap();
     connection
         .execute(
             "INSERT INTO sync_kv (key, value)

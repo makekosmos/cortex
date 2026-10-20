@@ -1,6 +1,5 @@
 #![allow(clippy::unwrap_used)]
 use ark_application::sync_storage::{SyncEntityMutationPort, SyncEntityReadPort, SyncReadClass};
-use ark_core::db;
 use rusqlite::Connection;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -9,7 +8,7 @@ use std::sync::{Arc, Mutex};
 async fn accepted_peer_policies_project_snapshot_pages_per_peer() {
     use ark_core::db::SqliteStorageBackend;
     let conn = Connection::open_in_memory().unwrap();
-    db::init_schema(&conn).unwrap();
+    ark_store::open::init_schema(&conn).unwrap();
     for (id, name) in [("com.example.note", "Note"), ("com.example.game", "Game")] {
         conn.execute(
             concat!(

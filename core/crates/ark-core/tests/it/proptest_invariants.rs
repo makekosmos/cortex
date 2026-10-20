@@ -18,7 +18,6 @@
 // Test config: 64 iterations (CI-friendly), max sequence length 30.
 // Если будет flaky или slow — можно увеличить до 256 при ручном запуске.
 
-use ark_core::db;
 use ark_core::types::{ArkObject, ObjectType, VersionVector};
 use ark_store::objects;
 use ark_store::objects::upsert_object_compat as upsert_object;
@@ -55,7 +54,7 @@ fn op_sequence() -> impl Strategy<Value = Vec<Op>> {
 
 fn setup_test_db() -> Connection {
     let conn = Connection::open_in_memory().expect("in-memory db");
-    db::init_schema(&conn).expect("init_schema");
+    ark_store::open::init_schema(&conn).expect("init_schema");
     let object_type = ObjectType {
         id: TEST_TYPE_ID.to_string(),
         name: "Test Object".to_string(),
@@ -233,3 +232,4 @@ proptest! {
         }
     }
 }
+use ark_core::db;

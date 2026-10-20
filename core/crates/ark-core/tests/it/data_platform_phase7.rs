@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 #[test]
 fn external_refs_are_additive_and_unique() {
     let conn = Connection::open_in_memory().unwrap();
-    db::init_schema(&conn).unwrap();
+    ark_store::open::init_schema(&conn).unwrap();
     conn.execute(
         concat!(
             "INSERT INTO objects(id,type_id,type_version,title,created_at,updated_at) ",

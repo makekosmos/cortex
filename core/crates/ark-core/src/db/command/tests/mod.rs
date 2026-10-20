@@ -211,7 +211,7 @@ async fn read_queries_share_bounded_source_admission() {
 async fn iroh_secret_key_command_keeps_the_persisted_identity() {
     let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
     let handle = DbHandle::for_test(connection);
-    handle.with_connection(|connection| crate::db::init_schema(connection).unwrap());
+    handle.with_connection(|connection| ark_store::open::init_schema(connection).unwrap());
 
     let first = handle
         .submit(CommandContext::engine(), LoadOrGenerateIrohSecretKeyCommand)
@@ -229,7 +229,7 @@ async fn iroh_secret_key_command_keeps_the_persisted_identity() {
 async fn usage_sequence_migration_runs_as_an_interactive_database_command() {
     let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
     let handle = DbHandle::for_test(connection);
-    handle.with_connection(|connection| crate::db::init_schema(connection).unwrap());
+    handle.with_connection(|connection| ark_store::open::init_schema(connection).unwrap());
 
     handle
         .submit(
@@ -380,7 +380,7 @@ async fn clear_all_runs_inside_a_maintenance_database_command() {
 async fn usage_compaction_runs_as_a_bounded_maintenance_command() {
     let connection = Arc::new(Mutex::new(Connection::open_in_memory().unwrap()));
     let handle = DbHandle::for_test(connection);
-    handle.with_connection(|connection| crate::db::init_schema(connection).unwrap());
+    handle.with_connection(|connection| ark_store::open::init_schema(connection).unwrap());
 
     let deleted = handle
         .submit(
