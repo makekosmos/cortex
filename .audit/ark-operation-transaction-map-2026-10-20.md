@@ -112,13 +112,13 @@ These operations return results to their Core callers; no direct network or othe
 
 ### System, object, and usage reads — 7 operations
 
-**Core:** checks Engine access, schedules identity persistence, and dispatches system/restore behavior. **Store:** atomically persists an ArkNet-generated Iroh-key candidate and returns the winning persisted value; ArkNet validates it after the transaction. Object and usage reads call Store APIs, while system key-value reads call Store `sync_kv`; snapshot validation and restore remain Core DB orchestration. `SystemReadQuery`, `ObjectReadQuery`, and `UsageReadQuery` use deferred read snapshots. `CompactUsageSyncLogCommand` uses an immediate transaction. `RestoreSnapshotCommand` is the sole maintenance operation and uses an exclusive maintenance connection. Device-registry commands still use the Core Iroh SQLite adapter inside their larger signed transactions.
+**Core:** checks Engine access, schedules identity persistence, and dispatches system/restore behavior. **Store:** atomically persists an ArkNet-generated Iroh-key candidate and returns the winning persisted value; ArkNet validates it after the transaction. Object and usage reads call Store APIs, while system key-value reads call Store `sync_kv`; snapshot validation and restore remain Core DB orchestration. `SystemReadQuery`, `ObjectReadQuery`, and `UsageReadQuery` use deferred read snapshots. `CompactUsageSyncLogCommand` is a Store writer task with one immediate transaction. `RestoreSnapshotCommand` uses the exclusive maintenance connection. Device-registry commands still use the Core Iroh SQLite adapter inside their larger signed transactions.
 
 | Kind | Operation | Implementation |
 |---|---|---|
 | StoreWriterTask | `UsageSequenceMigration` | `core/crates/ark-core/src/db/command/executor/actor/task/usage_sequence_migration.rs` → `ark_store::writer::SqliteWriter::ensure_usage_sequence_migrated` |
 | StoreWriterTask | `IrohIdentityKeyCandidate` | `core/crates/ark-core/src/db/command/executor/actor/task/iroh_identity.rs` → `ark_store::writer::SqliteWriter::persist_iroh_secret_key_candidate` |
-| DbCommand | `CompactUsageSyncLogCommand` | `core/crates/ark-core/src/db/command/commands/system_mutation.rs:52` |
+| StoreWriterTask | `CompactUsageSyncLogCommand` | `core/crates/ark-core/src/db/command/handle/usage_compaction.rs` → `core/crates/ark-core/src/db/command/executor/actor/task/usage_compaction.rs` → `ark_store::writer::SqliteWriter::compact_usage_sync_log` |
 | DbMaintenanceCommand | `RestoreSnapshotCommand` | `core/crates/ark-core/src/db/command/commands/system_mutation.rs:91` |
 | DbQuery | `SystemReadQuery` | `core/crates/ark-core/src/db/command/commands/system_read.rs:11` |
 | DbQuery | `ObjectReadQuery` | `core/crates/ark-core/src/db/command/commands/object_read.rs:28` |
@@ -143,8 +143,8 @@ These operations return results to their Core callers; no direct network or othe
 | Sync policy, transfer, KV, usage log | 4 | 3 | 12 | 0 | 19 |
 | Task merge | 0 | 4 | 1 | 0 | 5 |
 | Type registry | 3 | 0 | 1 | 0 | 4 |
-| System, object, and usage reads | 2 | 1 | 3 | 1 | 7 |
+| System, object, and usage reads | 3 | 0 | 3 | 1 | 7 |
 | Operation receipts | 0 | 1 | 0 | 0 | 1 |
-| **Total** | **13** | **21** | **24** | **1** | **59** |
+| **Total** | **14** | **20** | **24** | **1** | **59** |
 
 The census detects typed operation declarations and direct SQLite references, but does not resolve indirect helper calls or assign policy ownership. Ownership gaps above should be settled by tracing the named Core session/helper implementations and their Store calls before planning those areas as Store-only cutovers.

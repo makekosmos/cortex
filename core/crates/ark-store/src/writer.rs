@@ -9,6 +9,7 @@ mod task_objects;
 mod tracked_app_mutation;
 mod type_mutation;
 mod usage_sequence_migration;
+mod usage_sync_log;
 pub(crate) use error::store_error_from_sqlite;
 pub use error::{StoreError, StoreErrorKind};
 pub use iroh_identity::IrohIdentityWrites;

@@ -1,7 +1,4 @@
-use super::super::{
-    sealed, CommandClass, CommandContext, DbCommand, DbError, DbMaintenanceCommand,
-};
-use rusqlite::Transaction;
+use super::super::{sealed, CommandContext, DbError, DbMaintenanceCommand};
 
 #[derive(serde::Serialize)]
 pub(crate) struct CompactUsageSyncLogCommand {
@@ -24,30 +21,62 @@ impl CompactUsageSyncLogCommand {
     }
 }
 
-impl sealed::Sealed for CompactUsageSyncLogCommand {}
-
-impl DbCommand for CompactUsageSyncLogCommand {
-    type Output = usize;
-
-    const CLASS: CommandClass = CommandClass::Maintenance;
-
-    fn weight(&self) -> usize {
+impl CompactUsageSyncLogCommand {
+    pub(in crate::db::command) fn weight(&self) -> usize {
         super::serialized_weight(self)
     }
 
-    fn execute(
+    pub(in crate::db::command) fn execute(
         self,
         context: &CommandContext,
-        transaction: &Transaction<'_>,
-    ) -> Result<Self::Output, DbError> {
+        writer: &mut ark_store::writer::SqliteWriter,
+    ) -> Result<usize, DbError> {
         context.require_engine()?;
-        ark_store::usage_sync_log::compact_usage_sync_log(
-            transaction,
+        writer
+            .compact_usage_sync_log(
+                self.own_device_id.as_deref(),
+                &self.cutoff_wall_time,
+                self.batch_limit,
+            )
+            .map_err(map_usage_compaction_failure)
+    }
+
+    #[cfg(debug_assertions)]
+    pub(in crate::db::command) fn execute_on_connection(
+        self,
+        context: &CommandContext,
+        connection: &mut rusqlite::Connection,
+    ) -> Result<usize, DbError> {
+        context.require_engine()?;
+        ark_store::writer::SqliteWriter::compact_usage_sync_log_on_connection(
+            connection,
             self.own_device_id.as_deref(),
             &self.cutoff_wall_time,
             self.batch_limit,
         )
-        .map_err(DbError::Storage)
+        .map_err(|failure| match failure {
+            ark_store::writer::TransactionFailure::Begin(error) => DbError::from_sqlite(error),
+            ark_store::writer::TransactionFailure::Operation(error) => DbError::Storage(error),
+            ark_store::writer::TransactionFailure::Commit(error) => {
+                DbError::CommitFailed(error.to_string())
+            }
+        })
+    }
+}
+
+fn map_usage_compaction_failure(
+    failure: ark_store::writer::StoreTransactionFailure<String>,
+) -> DbError {
+    use ark_store::writer::{StoreErrorKind, StoreTransactionFailure};
+    match failure {
+        StoreTransactionFailure::Begin(error) => match error.kind {
+            StoreErrorKind::DiskFull | StoreErrorKind::Io | StoreErrorKind::Corrupt => {
+                DbError::StorageUnhealthy(error.to_string())
+            }
+            StoreErrorKind::Other => DbError::Storage(error.to_string()),
+        },
+        StoreTransactionFailure::Operation(error) => DbError::Storage(error),
+        StoreTransactionFailure::Commit(error) => DbError::CommitFailed(error.to_string()),
     }
 }
 

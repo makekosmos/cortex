@@ -17,6 +17,8 @@ mod sync_progress_write;
 pub(in crate::db::command) use sync_progress_write::SyncProgressWriteTask;
 mod sync_policy_write;
 pub(in crate::db::command) use sync_policy_write::SyncPolicyWriteTask;
+mod usage_compaction;
+pub(in crate::db::command) use usage_compaction::UsageCompactionTask;
 mod usage_sequence_migration;
 pub(in crate::db::command) use usage_sequence_migration::UsageSequenceMigrationTask;
 mod type_mutation;

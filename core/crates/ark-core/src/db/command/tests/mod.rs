@@ -379,7 +379,7 @@ async fn usage_compaction_runs_as_a_bounded_maintenance_command() {
     handle.with_connection(|connection| ark_store::open::init_schema(connection).unwrap());
 
     let deleted = handle
-        .submit(
+        .compact_usage_sync_log(
             CommandContext::engine_maintenance(),
             CompactUsageSyncLogCommand::new(None, "2026-09-01T00:00:00.000Z".into(), 10),
         )

@@ -18,6 +18,7 @@ mod test_writer;
 mod tracked_app_mutation;
 mod type_mutation;
 mod usage;
+mod usage_compaction;
 mod usage_sequence_migration;
 
 #[derive(Clone)]
