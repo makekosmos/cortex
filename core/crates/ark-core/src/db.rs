@@ -25,21 +25,19 @@ pub(crate) use backend::SqliteSignedIntegrationFrameSession;
 pub use backend::SqliteStorageBackend;
 pub use command::CommandSource;
 pub(crate) use command::{
-    AcceptPeerSyncPolicyCommand, AcknowledgeTaskMergeBatchCommand,
-    AcquireIntegrationRefreshLeaseCommand, AppendLocalRegistryEventCommand,
+    AcceptPeerSyncPolicyCommand, AcknowledgeTaskMergeBatchCommand, AppendLocalRegistryEventCommand,
     AppendTaskMergeOperationRequest, ApplyAuthenticatedSyncEntityCommand,
     ApplyRegistryEventsCommand, ApplySignedIntegrationFrameCommand, ApplySyncEntityCommand,
     ApplyTaskMergeBatchCommand, AuthenticatedCoreTaskWrite, AuthorizedTransportKeyQuery,
     CommandClass, CommandContext, CommittedFeedDeliveryPageQuery, CommittedFeedPageQuery,
     CommittedFeedProgress, CommittedFeedProgressCommand, CommittedFeedSnapshotQuery,
     CompactUsageSyncLogCommand, DbError, DbHandle, DbOwner, EnrollPairedDeviceCommand,
-    GetSyncKeyValueQuery, IdentityErrorStyle, IntegrationReadQuery, LegacyDeleteCommand,
-    LegacyGraphWriteCommand, LoadAcceptedPeerSyncPolicyQuery, LoadActiveLocalSyncProfileQuery,
-    LoadDeviceRegistryQuery, LoadEntitiesQuery, LoadPolicyBoundEntitiesPageQuery,
-    LoadRegistryEventsQuery, LoadSyncProfileForSyncQuery, LocalCoreTaskWrite, ObjectReadQuery,
-    PersistIntegrationGrantCommand, PersistNodeAuthorizationCommand,
-    PolicyBoundFeedDeliveryPageQuery, PrepareTaskMergeBatchCommand,
-    PublishIntegrationCredentialEnvelopeCommand, RegistryDeviceEnabledQuery,
+    GetSyncKeyValueQuery, IdentityErrorStyle, IntegrationAdminCommand, IntegrationAdminOutput,
+    IntegrationReadQuery, LegacyDeleteCommand, LegacyGraphWriteCommand,
+    LoadAcceptedPeerSyncPolicyQuery, LoadActiveLocalSyncProfileQuery, LoadDeviceRegistryQuery,
+    LoadEntitiesQuery, LoadPolicyBoundEntitiesPageQuery, LoadRegistryEventsQuery,
+    LoadSyncProfileForSyncQuery, LocalCoreTaskWrite, ObjectReadQuery,
+    PolicyBoundFeedDeliveryPageQuery, PrepareTaskMergeBatchCommand, RegistryDeviceEnabledQuery,
     RegistryPeerAdmissionQuery, RemoteCoreTaskOutcome, RestoreSnapshotCommand,
     SaveLocalSyncProfileCommand, SignRegistryHandshakeCommand, SystemReadQuery,
     TaskConflictSetQuery, TypeReadQuery, UsageCompleteThroughQuery, UsageReadQuery,
@@ -48,10 +46,6 @@ pub(crate) use command::{
 pub use committed_feed::{
     receive_inbox_payload, set_inbox_state, InboxState, MAX_FEED_DELIVERY_BYTES,
     MAX_INBOX_PAYLOAD_BYTES,
-};
-pub(in crate::db) use integration_replication_publication::{
-    publish_integration_credential_envelope_in_transaction,
-    try_acquire_integration_refresh_lease_in_transaction,
 };
 pub use open::backup_to_file_chunked;
 
@@ -62,17 +56,20 @@ mod integration_replication_credentials;
 mod integration_replication_export;
 mod integration_replication_grants;
 mod integration_replication_issuer_lookup;
+#[cfg(test)]
 mod integration_replication_lease;
 mod integration_replication_publication;
 mod integration_replication_records;
 
 pub use ark_store::integration_replication::load_integration_node_grant;
+#[cfg(test)]
 pub(in crate::db) use integration_credentials::upsert_integration_credential_envelope_record;
 pub use integration_replication_admission::integration_verification_status;
 #[cfg(test)]
 pub(in crate::db) use integration_replication_apply::{
     apply_signed_integration_changes, load_version_vector,
 };
+#[cfg(test)]
 use integration_replication_credentials as integration_credentials;
 pub use integration_replication_credentials::{
     load_integration_credential_envelope, load_latest_integration_credential_envelope,
@@ -83,10 +80,12 @@ pub use integration_replication_issuer_lookup::{
     check_integration_credential_fence, load_issuer_encryption_key,
     load_issuer_encryption_key_for_publish, CredentialFenceExpectation,
 };
+#[cfg(test)]
 pub(in crate::db) use integration_replication_lease::upsert_integration_refresh_lease_record;
+pub use integration_replication_publication::RefreshLeaseAcquireParams;
+#[cfg(test)]
 pub use integration_replication_publication::{
     publish_integration_credential_envelope, try_acquire_integration_refresh_lease,
-    RefreshLeaseAcquireParams,
 };
 pub use integration_replication_records::{
     upsert_authorized_node, upsert_integration_configuration,

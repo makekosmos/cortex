@@ -1,13 +1,14 @@
 use std::collections::BTreeSet;
 
+use super::read_store::IntegrationReplicationReadStore;
 use rusqlite::Connection;
 
 use super::{IntegrationReplicationEntity, NodeStatus, SignedSyncEnvelope, VerifiedSyncEnvelope};
 
 /// Revalidate a host-signed frame against current authorization immediately
 /// before transport routing. A frame prepared before revocation must not send.
-pub fn validate_outbound_signed_sync(
-    conn: &Connection,
+pub fn validate_outbound_signed_sync<S: IntegrationReplicationReadStore>(
+    conn: &S,
     expected_space_id: &str,
     expected_origin_node_id: &str,
     frame: &SignedSyncEnvelope,
@@ -15,15 +16,15 @@ pub fn validate_outbound_signed_sync(
     if frame.origin_node_id != expected_origin_node_id {
         return Err("signed integration frame origin is not this node".into());
     }
-    let origin =
-        ark_store::integration_replication::load_authorized_node(conn, expected_origin_node_id)?
-            .ok_or_else(|| "origin node is not authorized in this database".to_string())?;
+    let origin = conn
+        .authorized_node(expected_origin_node_id)?
+        .ok_or_else(|| "origin node is not authorized in this database".to_string())?;
     let verified = frame
         .verify(expected_space_id, &frame.recipient_node_id, &origin)
         .map_err(|error| error.to_string())?;
-    let recipient =
-        ark_store::integration_replication::load_authorized_node(conn, &frame.recipient_node_id)?
-            .ok_or_else(|| "recipient node is not authorized in this database".to_string())?;
+    let recipient = conn
+        .authorized_node(&frame.recipient_node_id)?
+        .ok_or_else(|| "recipient node is not authorized in this database".to_string())?;
     if recipient.status != NodeStatus::Active {
         return Err("recipient node is revoked".into());
     }
@@ -47,12 +48,9 @@ pub fn validate_outbound_signed_sync(
                 if envelope.issuer_node_id != verified.origin_node_id {
                     return Err("credential envelope issuer does not match signed origin".into());
                 }
-                let grant = crate::db::load_integration_node_grant(
-                    conn,
-                    &envelope.integration_id,
-                    &recipient.node_id,
-                )?
-                .ok_or_else(|| "recipient node has no integration grant".to_string())?;
+                let grant = conn
+                    .grant(&envelope.integration_id, &recipient.node_id)?
+                    .ok_or_else(|| "recipient node has no integration grant".to_string())?;
                 super::validate_envelope_recipient(envelope, &recipient, &grant)
                     .map_err(|error| error.to_string())?;
             }
@@ -62,17 +60,17 @@ pub fn validate_outbound_signed_sync(
     Ok(())
 }
 
-pub fn validate_outbound_signed_sync_with_transport(
-    conn: &Connection,
+pub fn validate_outbound_signed_sync_with_transport<S: IntegrationReplicationReadStore>(
+    conn: &S,
     expected_space_id: &str,
     expected_origin_node_id: &str,
     frame: &SignedSyncEnvelope,
     transport_public_key: &str,
 ) -> Result<(), String> {
     validate_outbound_signed_sync(conn, expected_space_id, expected_origin_node_id, frame)?;
-    let recipient =
-        ark_store::integration_replication::load_authorized_node(conn, &frame.recipient_node_id)?
-            .ok_or_else(|| "recipient node is not authorized in this database".to_string())?;
+    let recipient = conn
+        .authorized_node(&frame.recipient_node_id)?
+        .ok_or_else(|| "recipient node is not authorized in this database".to_string())?;
     if recipient.transport_public_key.as_deref() != Some(transport_public_key) {
         return Err("recipient transport identity is no longer authorized".into());
     }

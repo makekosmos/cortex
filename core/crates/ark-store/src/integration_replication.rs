@@ -1,3 +1,4 @@
+mod admin;
 mod configurations;
 mod credentials;
 mod grants;
@@ -5,6 +6,7 @@ mod leases;
 mod nodes;
 mod signed_frame;
 
+pub(crate) use admin::SqliteIntegrationAdminStore;
 pub use configurations::{load_integration_configuration, upsert_integration_configuration_record};
 pub use credentials::{
     list_integration_credential_generations_for_epoch, load_integration_credential_envelope_record,

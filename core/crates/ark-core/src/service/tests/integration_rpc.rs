@@ -102,6 +102,35 @@ async fn integration_rpc_rejects_stale_refresh_lease_fence() {
     assert_eq!(lease["fencing_token"], 1);
     let error = handle_request(&state, acquire(0)).await.unwrap_err();
     assert!(error.contains("expected_fencing_token"));
+
+    let published = handle_request(
+        &state,
+        Request::IntegrationPublishCredentialEnvelope {
+            envelope: IntegrationCredentialEnvelope {
+                integration_id: "refresh-integration".into(),
+                recipient_node_id: "refresh-node".into(),
+                grant_epoch: 1,
+                credential_generation: 1,
+                refresh_fencing_token: 1,
+                key_id: crate::integration_replication::encryption_key_id(
+                    "encryption-refresh-node",
+                ),
+                algorithm: "opaque-test".into(),
+                nonce: "nonce-refresh".into(),
+                ciphertext: "ciphertext-refresh".into(),
+                authenticated_metadata: None,
+                issuer_node_id: "refresh-node".into(),
+                issued_at: "2026-09-06T00:00:00Z".into(),
+                revision: 1,
+                hlc: "2026-09-06T00:00:00.000Z:000003:refresh-node".into(),
+            },
+            device_id: "refresh-node".into(),
+            now_ms: 1_000,
+        },
+    )
+    .await
+    .expect("production writer publishes under the acquired lease");
+    assert_eq!(published, json!(true));
 }
 
 #[tokio::test]

@@ -348,7 +348,7 @@ impl IntegrationReplicationBackend for SqliteStorageBackend {
         expected_origin_node_id: &str,
     ) -> Result<(), String> {
         self.db
-            .query(
+            .query_with_store(
                 CommandContext::sync_system(CommandClass::SyncLive),
                 ValidateOutboundSignedFrameQuery::Authorized {
                     frame: frame.clone(),
@@ -368,7 +368,7 @@ impl IntegrationReplicationBackend for SqliteStorageBackend {
         transport_public_key: &str,
     ) -> Result<(), String> {
         self.db
-            .query(
+            .query_with_store(
                 CommandContext::sync_system(CommandClass::SyncLive),
                 ValidateOutboundSignedFrameQuery::BoundTransport {
                     frame: frame.clone(),

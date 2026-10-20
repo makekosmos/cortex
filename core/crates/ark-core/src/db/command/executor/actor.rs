@@ -15,6 +15,9 @@ pub(in crate::db::command) use task::map_inbox_receipt_error;
 #[path = "actor/task/signed_integration_frame.rs"]
 mod signed_integration_frame_task;
 pub(in crate::db::command) use signed_integration_frame_task::SignedIntegrationFrameTask;
+#[path = "actor/task/integration_admin.rs"]
+mod integration_admin_task;
+pub(in crate::db::command) use integration_admin_task::IntegrationAdminTask;
 #[cfg(debug_assertions)]
 pub(in crate::db::command) use task::task_merge_append::map_append_operation_error;
 pub(in crate::db::command) use task::task_merge_append::AppendTaskMergeOperationTask;
@@ -168,7 +171,7 @@ impl ActorShared {
                         .failure
                         .clone()
                         .unwrap_or_else(|| "database actor failed".into()),
-                ))
+                ));
             }
             Lifecycle::Draining | Lifecycle::Closed => return Err(DbError::Unavailable),
         }
@@ -253,7 +256,7 @@ impl ActorShared {
         match ledger.lifecycle {
             Lifecycle::Ready => {}
             Lifecycle::Opening | Lifecycle::Migrating | Lifecycle::Draining | Lifecycle::Closed => {
-                return Err(DbError::Unavailable)
+                return Err(DbError::Unavailable);
             }
             Lifecycle::Failed => {
                 return Err(DbError::Storage(
@@ -261,7 +264,7 @@ impl ActorShared {
                         .failure
                         .clone()
                         .unwrap_or_else(|| "database actor failed".into()),
-                ))
+                ));
             }
         }
         if has_maintenance_barrier(&ledger) {

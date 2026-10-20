@@ -1,6 +1,9 @@
 use super::*;
 use executor::actor::{ActorOwner, ActorShared, TypedCommand, TypedMaintenance, WriterTask};
-use rusqlite::{OpenFlags, TransactionBehavior};
+#[cfg(test)]
+use rusqlite::OpenFlags;
+#[cfg(debug_assertions)]
+use rusqlite::TransactionBehavior;
 use std::time::Instant;
 
 pub(in crate::db::command) mod authenticated_core_task_write;
@@ -8,6 +11,7 @@ mod committed_feed_progress;
 mod core_task_write;
 mod external_ref;
 mod inbox_receipt;
+mod integration_admin;
 mod iroh_identity;
 mod local_sync_key_value_write;
 mod object_link_mutation;
@@ -176,6 +180,7 @@ impl DbHandle {
         }
     }
 
+    #[cfg(test)]
     pub(crate) async fn query<Q: DbQuery>(
         &self,
         context: CommandContext,
@@ -381,6 +386,7 @@ fn spawn_test_maintenance<C: DbMaintenanceCommand>(
 }
 
 #[cfg(debug_assertions)]
+#[cfg(test)]
 fn spawn_test_query<Q: DbQuery>(
     connection: Arc<Mutex<Connection>>,
     context: CommandContext,
@@ -435,6 +441,7 @@ impl DbOwner {
     }
 }
 
+#[cfg(test)]
 fn open_reader(path: &str) -> Result<Connection, DbError> {
     let connection = Connection::open_with_flags(
         path,

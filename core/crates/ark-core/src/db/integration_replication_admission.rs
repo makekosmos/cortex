@@ -1,10 +1,10 @@
-use super::{load_integration_node_grant, load_latest_integration_credential_envelope};
-use rusqlite::Connection;
+use super::load_latest_integration_credential_envelope;
+use crate::integration_replication::read_store::IntegrationReplicationReadStore;
 
 use crate::integration_replication::IntegrationVerificationStatus;
 
-pub fn integration_verification_status(
-    conn: &Connection,
+pub fn integration_verification_status<S: IntegrationReplicationReadStore>(
+    conn: &S,
     integration_id: &str,
     local_node_id: &str,
     now_ms: u64,
@@ -12,10 +12,9 @@ pub fn integration_verification_status(
     if integration_id.trim().is_empty() || local_node_id.trim().is_empty() {
         return Err("integration and local node ids must not be empty".into());
     }
-    let configuration =
-        ark_store::integration_replication::load_integration_configuration(conn, integration_id)?;
-    let node = ark_store::integration_replication::load_authorized_node(conn, local_node_id)?;
-    let grant = load_integration_node_grant(conn, integration_id, local_node_id)?;
+    let configuration = conn.configuration(integration_id)?;
+    let node = conn.authorized_node(local_node_id)?;
+    let grant = conn.grant(integration_id, local_node_id)?;
     let grant_key_matches_node = node
         .as_ref()
         .zip(grant.as_ref())
@@ -35,8 +34,7 @@ pub fn integration_verification_status(
     } else {
         None
     };
-    let refresh_lease =
-        ark_store::integration_replication::load_integration_refresh_lease(conn, integration_id)?;
+    let refresh_lease = conn.refresh_lease(integration_id)?;
     let next_generation = envelope
         .as_ref()
         .and_then(|envelope| envelope.credential_generation.checked_add(1));

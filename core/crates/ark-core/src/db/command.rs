@@ -9,28 +9,27 @@ mod handle;
 mod operation_receipt;
 pub(crate) use handle::{DbHandle, DbOwner};
 
+#[cfg(debug_assertions)]
+pub(crate) use commands::map_signed_frame_operation_error;
 #[cfg(test)]
 pub(crate) use commands::DeviceEnrollmentOutcome;
 pub(crate) use commands::{
-    map_signed_frame_operation_error, AcceptPeerSyncPolicyCommand,
-    AcknowledgeTaskMergeBatchCommand, AcquireIntegrationRefreshLeaseCommand,
-    AppendLocalRegistryEventCommand, AppendTaskMergeOperationRequest,
-    ApplyAuthenticatedSyncEntityCommand, ApplyRegistryEventsCommand,
-    ApplySignedIntegrationFrameCommand, ApplySyncEntityCommand, ApplyTaskMergeBatchCommand,
-    AuthenticatedCoreTaskWrite, AuthenticatedCoreTaskWriteError, AuthorizedTransportKeyQuery,
-    CommittedFeedDeliveryPageQuery, CommittedFeedPageQuery, CommittedFeedProgress,
-    CommittedFeedProgressCommand, CommittedFeedSnapshotQuery, CompactUsageSyncLogCommand,
-    EnrollPairedDeviceCommand, GetSyncKeyValueQuery, IdentityErrorStyle, IntegrationReadQuery,
+    AcceptPeerSyncPolicyCommand, AcknowledgeTaskMergeBatchCommand, AppendLocalRegistryEventCommand,
+    AppendTaskMergeOperationRequest, ApplyAuthenticatedSyncEntityCommand,
+    ApplyRegistryEventsCommand, ApplySignedIntegrationFrameCommand, ApplySyncEntityCommand,
+    ApplyTaskMergeBatchCommand, AuthenticatedCoreTaskWrite, AuthenticatedCoreTaskWriteError,
+    AuthorizedTransportKeyQuery, CommittedFeedDeliveryPageQuery, CommittedFeedPageQuery,
+    CommittedFeedProgress, CommittedFeedProgressCommand, CommittedFeedSnapshotQuery,
+    CompactUsageSyncLogCommand, EnrollPairedDeviceCommand, GetSyncKeyValueQuery,
+    IdentityErrorStyle, IntegrationAdminCommand, IntegrationAdminOutput, IntegrationReadQuery,
     LegacyDeleteCommand, LegacyGraphWriteCommand, LoadAcceptedPeerSyncPolicyQuery,
     LoadActiveLocalSyncProfileQuery, LoadDeviceRegistryQuery, LoadEntitiesQuery,
     LoadPolicyBoundEntitiesPageQuery, LoadRegistryEventsQuery, LoadSyncProfileForSyncQuery,
-    LocalCoreTaskWrite, ObjectReadQuery, PersistIntegrationGrantCommand,
-    PersistNodeAuthorizationCommand, PolicyBoundFeedDeliveryPageQuery,
-    PrepareTaskMergeBatchCommand, PublishIntegrationCredentialEnvelopeCommand,
-    RegistryDeviceEnabledQuery, RegistryPeerAdmissionQuery, RemoteCoreTaskOutcome,
-    RestoreSnapshotCommand, SaveLocalSyncProfileCommand, SignRegistryHandshakeCommand,
-    SystemReadQuery, TaskConflictSetQuery, TaskWriteOperationResult, TypeReadQuery,
-    UsageCompleteThroughQuery, UsageReadQuery, ValidateOutboundSignedFrameQuery,
+    LocalCoreTaskWrite, ObjectReadQuery, PolicyBoundFeedDeliveryPageQuery,
+    PrepareTaskMergeBatchCommand, RegistryDeviceEnabledQuery, RegistryPeerAdmissionQuery,
+    RemoteCoreTaskOutcome, RestoreSnapshotCommand, SaveLocalSyncProfileCommand,
+    SignRegistryHandshakeCommand, SystemReadQuery, TaskConflictSetQuery, TaskWriteOperationResult,
+    TypeReadQuery, UsageCompleteThroughQuery, UsageReadQuery, ValidateOutboundSignedFrameQuery,
     VerifyRegistryHandshakeQuery,
 };
 #[cfg(test)]
@@ -204,6 +203,7 @@ pub(crate) trait DbMaintenanceCommand: sealed::Sealed + Send + 'static {
 /// Sealed read-only application surface. Query implementations receive a
 /// connection without opening an IMMEDIATE transaction and inspect their
 /// typed principal through `CommandContext`.
+#[cfg(test)]
 pub(crate) trait DbQuery: sealed::Sealed + Send + 'static {
     type Output: Send + 'static;
 

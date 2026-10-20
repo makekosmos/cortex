@@ -36,14 +36,12 @@ pub(crate) use device_registry_handshake::{
 pub(crate) use device_registry_sync::{
     ApplyRegistryEventsCommand, LoadDeviceRegistryQuery, LoadRegistryEventsQuery,
 };
-pub(crate) use integration_admin::{
-    AcquireIntegrationRefreshLeaseCommand, PersistIntegrationGrantCommand,
-    PersistNodeAuthorizationCommand, PublishIntegrationCredentialEnvelopeCommand,
-};
+pub(crate) use integration_admin::{IntegrationAdminCommand, IntegrationAdminOutput};
 pub(crate) use integration_read::IntegrationReadQuery;
+#[cfg(debug_assertions)]
+pub(crate) use integration_replication::map_signed_frame_operation_error;
 pub(crate) use integration_replication::{
-    map_signed_frame_operation_error, ApplySignedIntegrationFrameCommand, IdentityErrorStyle,
-    ValidateOutboundSignedFrameQuery,
+    ApplySignedIntegrationFrameCommand, IdentityErrorStyle, ValidateOutboundSignedFrameQuery,
 };
 pub(crate) use legacy_mutation::{LegacyDeleteCommand, LegacyGraphWriteCommand};
 pub(crate) use object_read::ObjectReadQuery;

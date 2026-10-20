@@ -1,10 +1,15 @@
+#[cfg(test)]
 use super::integration_replication_common::storage;
+#[cfg(test)]
 use super::{
     upsert_integration_credential_envelope_record, upsert_integration_refresh_lease_record,
 };
+#[cfg(test)]
 use crate::integration_replication::{IntegrationContractError, IntegrationCredentialEnvelope};
+#[cfg(test)]
 use rusqlite::Connection;
 
+#[cfg(test)]
 use crate::integration_replication::IntegrationRefreshLease as ReplicatedRefreshLease;
 
 /// Params of `integration.acquire_refresh_lease` — the `Request` newtype
@@ -21,6 +26,7 @@ pub struct RefreshLeaseAcquireParams {
 }
 
 /// Acquire a refresh lease with an atomic expected-fence compare-and-swap.
+#[cfg(test)]
 pub fn try_acquire_integration_refresh_lease(
     conn: &Connection,
     params: &RefreshLeaseAcquireParams,
@@ -30,13 +36,7 @@ pub fn try_acquire_integration_refresh_lease(
     })
 }
 
-pub(crate) fn try_acquire_integration_refresh_lease_in_transaction(
-    transaction: &rusqlite::Transaction<'_>,
-    params: &RefreshLeaseAcquireParams,
-) -> Result<ReplicatedRefreshLease, String> {
-    try_acquire_integration_refresh_lease_inner(transaction, params)
-}
-
+#[cfg(test)]
 fn try_acquire_integration_refresh_lease_inner(
     conn: &Connection,
     params: &RefreshLeaseAcquireParams,
@@ -87,6 +87,7 @@ fn try_acquire_integration_refresh_lease_inner(
 }
 
 /// Publish opaque credentials only while the exact lease generation and fence are current.
+#[cfg(test)]
 pub fn publish_integration_credential_envelope(
     conn: &Connection,
     envelope: &IntegrationCredentialEnvelope,
@@ -101,18 +102,7 @@ pub fn publish_integration_credential_envelope(
     })
 }
 
-pub(crate) fn publish_integration_credential_envelope_in_transaction(
-    transaction: &rusqlite::Transaction<'_>,
-    envelope: &IntegrationCredentialEnvelope,
-    device_id: &str,
-    now_ms: u64,
-) -> Result<(), String> {
-    if envelope.issuer_node_id != device_id {
-        return Err("credential envelope issuer must be the local node".into());
-    }
-    publish_integration_credential_envelope_inner(transaction, envelope, device_id, now_ms)
-}
-
+#[cfg(test)]
 fn publish_integration_credential_envelope_inner(
     conn: &Connection,
     envelope: &IntegrationCredentialEnvelope,
@@ -122,6 +112,7 @@ fn publish_integration_credential_envelope_inner(
     upsert_integration_credential_envelope_record(conn, envelope, device_id, now_ms)
 }
 
+#[cfg(test)]
 fn with_immediate_integration_write<T>(
     conn: &Connection,
     operation: impl FnOnce() -> Result<T, String>,

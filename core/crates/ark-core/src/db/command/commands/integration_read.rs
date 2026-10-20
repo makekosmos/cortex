@@ -1,4 +1,4 @@
-use super::super::{sealed, CommandClass, CommandContext, DbError, DbQuery};
+use super::super::{sealed, CommandClass, CommandContext, DbError, StoreReadQuery};
 
 fn serialize<T: serde::Serialize>(value: Result<T, String>) -> Result<serde_json::Value, DbError> {
     let value = value.map_err(DbError::Storage)?;
@@ -56,7 +56,7 @@ pub(crate) enum IntegrationReadQuery {
 
 impl sealed::Sealed for IntegrationReadQuery {}
 
-impl DbQuery for IntegrationReadQuery {
+impl StoreReadQuery for IntegrationReadQuery {
     type Output = serde_json::Value;
 
     fn class(&self) -> CommandClass {
@@ -70,9 +70,10 @@ impl DbQuery for IntegrationReadQuery {
     fn read(
         self,
         context: &CommandContext,
-        connection: &rusqlite::Connection,
+        capabilities: &ark_store::ReadCapabilities<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_engine()?;
+        let integration = capabilities.integration_replication();
         match self {
             Self::PrepareSignedSync {
                 space_id,
@@ -81,7 +82,7 @@ impl DbQuery for IntegrationReadQuery {
                 recipient_node_id,
                 message_id,
             } => serialize(crate::integration_replication::prepare_signed_sync(
-                connection,
+                &integration,
                 &space_id,
                 &origin_node_id,
                 &integration_id,
@@ -93,7 +94,7 @@ impl DbQuery for IntegrationReadQuery {
                 origin_node_id,
                 frame,
             } => crate::integration_replication::validate_outbound_signed_sync(
-                connection,
+                &integration,
                 &space_id,
                 &origin_node_id,
                 &frame,
@@ -104,7 +105,7 @@ impl DbQuery for IntegrationReadQuery {
                 integration_id,
                 recipient_node_id,
             } => serialize(crate::db::load_latest_integration_credential_envelope(
-                connection,
+                &integration,
                 &integration_id,
                 &recipient_node_id,
             )),
@@ -116,7 +117,7 @@ impl DbQuery for IntegrationReadQuery {
                 credential_generation,
                 expected_issuer_key_id,
             } => serialize(crate::db::load_issuer_encryption_key(
-                connection,
+                &integration,
                 &space_id,
                 &integration_id,
                 &recipient_node_id,
@@ -133,7 +134,7 @@ impl DbQuery for IntegrationReadQuery {
                 refresh_fencing_token,
                 expected_issuer_key_id,
             } => crate::db::check_integration_credential_fence(
-                connection,
+                &integration,
                 &crate::db::CredentialFenceExpectation {
                     space_id: &space_id,
                     integration_id: &integration_id,
@@ -153,7 +154,7 @@ impl DbQuery for IntegrationReadQuery {
                 issuer_node_id,
                 expected_issuer_key_id,
             } => serialize(crate::db::load_issuer_encryption_key_for_publish(
-                connection,
+                &integration,
                 &space_id,
                 &integration_id,
                 &recipient_node_id,
@@ -165,7 +166,7 @@ impl DbQuery for IntegrationReadQuery {
                 local_node_id,
                 now_ms,
             } => serialize(crate::db::integration_verification_status(
-                connection,
+                &integration,
                 &integration_id,
                 &local_node_id,
                 now_ms,

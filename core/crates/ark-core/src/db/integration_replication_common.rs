@@ -17,6 +17,7 @@ pub(super) fn require_newer_hlc(proposed: &str, current: &str) -> Result<(), Str
     }
 }
 
+#[cfg(test)]
 pub(super) fn envelope_version_is_newer(
     proposed_hlc: &str,
     proposed_issuer: &str,
@@ -76,6 +77,7 @@ pub(super) fn persist_with_vector(
     })
 }
 
+#[cfg(test)]
 pub(super) fn lease_entity_id(integration_id: &str) -> &str {
     integration_id
 }

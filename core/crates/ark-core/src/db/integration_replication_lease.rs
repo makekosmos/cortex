@@ -1,10 +1,16 @@
+#[cfg(test)]
 use super::integration_replication_common::{lease_entity_id, persist_with_vector};
+#[cfg(test)]
 use super::load_integration_node_grant;
+#[cfg(test)]
 use crate::integration_replication::{GrantStatus, IntegrationContractError, NodeStatus};
+#[cfg(test)]
 use rusqlite::Connection;
 
+#[cfg(test)]
 use crate::integration_replication::IntegrationRefreshLease as ReplicatedRefreshLease;
 
+#[cfg(test)]
 pub(in crate::db) fn upsert_integration_refresh_lease_record(
     conn: &Connection,
     lease: &ReplicatedRefreshLease,

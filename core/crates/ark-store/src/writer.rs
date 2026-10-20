@@ -3,6 +3,10 @@ use rusqlite::{Connection, Transaction, TransactionBehavior};
 mod authenticated_task;
 mod committed_feed;
 mod error;
+mod integration_admin;
+#[cfg(debug_assertions)]
+pub use integration_admin::apply_integration_admin_on_connection;
+pub use integration_admin::IntegrationAdminWrites;
 mod iroh_identity;
 mod signed_integration_frame;
 mod sync_key_value;

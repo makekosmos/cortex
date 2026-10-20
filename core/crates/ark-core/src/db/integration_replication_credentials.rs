@@ -1,11 +1,17 @@
+#[cfg(test)]
 use super::integration_replication_common::{envelope_version_is_newer, persist_with_vector};
+#[cfg(test)]
 use super::load_integration_node_grant;
-use crate::integration_replication::{envelope_entity_id, IntegrationContractError, NodeStatus};
+use crate::integration_replication::read_store::IntegrationReplicationReadStore;
+#[cfg(test)]
+use crate::integration_replication::{envelope_entity_id, GrantStatus, NodeStatus};
 use crate::integration_replication::{
-    validate_envelope_recipient, GrantStatus, IntegrationCredentialEnvelope,
+    validate_envelope_recipient, IntegrationContractError, IntegrationCredentialEnvelope,
 };
+#[cfg(test)]
 use rusqlite::Connection;
 
+#[cfg(test)]
 pub(in crate::db) fn upsert_integration_credential_envelope_record(
     conn: &Connection,
     envelope: &IntegrationCredentialEnvelope,
@@ -141,19 +147,14 @@ pub(in crate::db) fn upsert_integration_credential_envelope_record(
     )
 }
 
-pub fn load_integration_credential_envelope(
-    conn: &Connection,
+pub fn load_integration_credential_envelope<S: IntegrationReplicationReadStore>(
+    conn: &S,
     integration_id: &str,
     recipient_node_id: &str,
     credential_generation: u64,
 ) -> Result<Option<IntegrationCredentialEnvelope>, String> {
     let Some(envelope) =
-        ark_store::integration_replication::load_integration_credential_envelope_record(
-            conn,
-            integration_id,
-            recipient_node_id,
-            credential_generation,
-        )?
+        conn.credential_envelope(integration_id, recipient_node_id, credential_generation)?
     else {
         return Ok(None);
     };
@@ -161,41 +162,33 @@ pub fn load_integration_credential_envelope(
     Ok(Some(envelope))
 }
 
-pub fn load_latest_integration_credential_envelope(
-    conn: &Connection,
+pub fn load_latest_integration_credential_envelope<S: IntegrationReplicationReadStore>(
+    conn: &S,
     integration_id: &str,
     recipient_node_id: &str,
 ) -> Result<Option<IntegrationCredentialEnvelope>, String> {
-    let Some(envelope) =
-        ark_store::integration_replication::load_latest_integration_credential_envelope_record(
-            conn,
-            integration_id,
-            recipient_node_id,
-        )?
-    else {
+    let Some(envelope) = conn.latest_credential_envelope(integration_id, recipient_node_id)? else {
         return Ok(None);
     };
     validate_loaded_envelope_recipient(conn, &envelope)?;
     Ok(Some(envelope))
 }
 
-fn validate_loaded_envelope_recipient(
-    conn: &Connection,
+fn validate_loaded_envelope_recipient<S: IntegrationReplicationReadStore>(
+    conn: &S,
     envelope: &IntegrationCredentialEnvelope,
 ) -> Result<(), String> {
-    let node = ark_store::integration_replication::load_authorized_node(
-        conn,
-        &envelope.recipient_node_id,
-    )?
-    .ok_or_else(|| {
-        IntegrationContractError::Mismatch {
-            field: "authorized_node",
-        }
-        .to_string()
-    })?;
-    let grant =
-        load_integration_node_grant(conn, &envelope.integration_id, &envelope.recipient_node_id)?
-            .ok_or_else(|| {
+    let node = conn
+        .authorized_node(&envelope.recipient_node_id)?
+        .ok_or_else(|| {
+            IntegrationContractError::Mismatch {
+                field: "authorized_node",
+            }
+            .to_string()
+        })?;
+    let grant = conn
+        .grant(&envelope.integration_id, &envelope.recipient_node_id)?
+        .ok_or_else(|| {
             IntegrationContractError::Mismatch {
                 field: "integration_node_grant",
             }

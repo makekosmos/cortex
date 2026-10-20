@@ -9,11 +9,17 @@ pub(super) async fn integration_persist_node_authorization(
 ) -> Result<Value, String> {
     let operation = parse_authorization_operation(&authorization_operation)?;
     get_db_handle(state)?
-        .submit(
+        .submit_integration_admin(
             db::CommandContext::engine(),
-            db::PersistNodeAuthorizationCommand::new(operation, node, grant, device_id),
+            db::IntegrationAdminCommand::PersistNodeAuthorization {
+                operation,
+                node,
+                grant,
+                device_id,
+            },
         )
         .await
+        .and_then(require_integration_admin_complete)
         .map(|()| json!(true))
         .map_err(|error| error.to_string())
 }
@@ -24,11 +30,12 @@ pub(super) async fn integration_persist_integration_grant(
     device_id: String,
 ) -> Result<Value, String> {
     get_db_handle(state)?
-        .submit(
+        .submit_integration_admin(
             db::CommandContext::engine(),
-            db::PersistIntegrationGrantCommand::new(grant, device_id),
+            db::IntegrationAdminCommand::PersistGrant { grant, device_id },
         )
         .await
+        .and_then(require_integration_admin_complete)
         .map(|()| json!(true))
         .map_err(|error| error.to_string())
 }
@@ -131,12 +138,15 @@ pub(super) async fn integration_acquire_refresh_lease(
     params: crate::db::RefreshLeaseAcquireParams,
 ) -> Result<Value, String> {
     let lease = get_db_handle(state)?
-        .submit(
+        .submit_integration_admin(
             db::CommandContext::engine(),
-            db::AcquireIntegrationRefreshLeaseCommand::new(params),
+            db::IntegrationAdminCommand::AcquireRefreshLease(params),
         )
         .await
         .map_err(|error| error.to_string())?;
+    let db::IntegrationAdminOutput::Lease(lease) = lease else {
+        return Err("integration refresh operation returned an invalid result".into());
+    };
     serde_json::to_value(lease).map_err(|error| error.to_string())
 }
 
@@ -147,13 +157,29 @@ pub(super) async fn integration_publish_credential_envelope(
     now_ms: u64,
 ) -> Result<Value, String> {
     get_db_handle(state)?
-        .submit(
+        .submit_integration_admin(
             db::CommandContext::engine(),
-            db::PublishIntegrationCredentialEnvelopeCommand::new(envelope, device_id, now_ms),
+            db::IntegrationAdminCommand::PublishCredentialEnvelope {
+                envelope,
+                device_id,
+                now_ms,
+            },
         )
         .await
+        .and_then(require_integration_admin_complete)
         .map(|()| json!(true))
         .map_err(|error| error.to_string())
+}
+
+fn require_integration_admin_complete(
+    output: db::IntegrationAdminOutput,
+) -> Result<(), crate::db::DbError> {
+    match output {
+        db::IntegrationAdminOutput::Complete => Ok(()),
+        db::IntegrationAdminOutput::Lease(_) => Err(crate::db::DbError::Invalid(
+            "integration administration returned an unexpected lease".into(),
+        )),
+    }
 }
 
 pub(super) async fn integration_load_latest_credential_envelope(
@@ -288,7 +314,7 @@ async fn integration_read(
     query: db::IntegrationReadQuery,
 ) -> Result<Value, String> {
     get_db_handle(state)?
-        .query(db::CommandContext::engine(), query)
+        .query_with_store(db::CommandContext::engine(), query)
         .await
         .map_err(|error| error.to_string())
 }

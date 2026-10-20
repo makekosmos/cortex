@@ -6,21 +6,21 @@
 mod api;
 mod contracts;
 mod outbound;
+pub(crate) mod read_store;
+pub use read_store::IntegrationReplicationReadStore;
 
-pub use api::{
-    persist_integration_grant, persist_node_authorization, prepare_signed_sync,
-    NodeAuthorizationOperation, SignedSyncPreparation,
-};
-pub(crate) use api::{
-    persist_integration_grant_in_transaction, persist_node_authorization_in_transaction,
-};
+#[cfg(test)]
+pub use api::{persist_integration_grant, persist_node_authorization};
+pub use api::{prepare_signed_sync, NodeAuthorizationOperation, SignedSyncPreparation};
 pub use ark_domain::integration_replication::encode_hex;
+#[cfg(test)]
+pub(crate) use ark_domain::integration_replication::envelope_entity_id;
+pub(crate) use ark_domain::integration_replication::integration_node_id;
 pub use ark_domain::integration_replication::{
     acquire_refresh_lease, encryption_key_id, next_credential_generation, require_newer,
     validate_envelope_recipient, validate_plaintext_free_payload, validate_public_settings,
     validate_refresh_publication,
 };
-pub(crate) use ark_domain::integration_replication::{envelope_entity_id, integration_node_id};
 pub use ark_domain::integration_replication::{
     IntegrationReplicationChange, IntegrationReplicationEntity,
 };

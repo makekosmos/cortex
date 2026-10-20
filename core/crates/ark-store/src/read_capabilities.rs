@@ -1,5 +1,6 @@
 mod canonical;
 mod device_registry;
+mod integration_replication;
 mod objects;
 mod sync;
 mod system;
@@ -42,6 +43,10 @@ pub struct TaskMergeReadCapabilities<'snapshot> {
 }
 
 pub struct SyncReadCapabilities<'snapshot> {
+    connection: &'snapshot Connection,
+}
+
+pub struct IntegrationReplicationReadCapabilities<'snapshot> {
     connection: &'snapshot Connection,
 }
 
@@ -88,6 +93,12 @@ impl<'snapshot> ReadCapabilities<'snapshot> {
 
     pub fn sync(&self) -> SyncReadCapabilities<'_> {
         SyncReadCapabilities {
+            connection: self.connection,
+        }
+    }
+
+    pub fn integration_replication(&self) -> IntegrationReplicationReadCapabilities<'_> {
+        IntegrationReplicationReadCapabilities {
             connection: self.connection,
         }
     }

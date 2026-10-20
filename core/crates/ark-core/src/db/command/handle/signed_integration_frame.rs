@@ -1,4 +1,5 @@
 use super::*;
+#[cfg(debug_assertions)]
 use ark_store::writer::SqliteWriter as StoreWriter;
 
 impl DbHandle {

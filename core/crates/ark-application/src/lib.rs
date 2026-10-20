@@ -3,6 +3,7 @@ pub mod canonical_compatibility;
 pub mod canonical_game;
 pub mod data_volume;
 pub mod external_ref;
+pub mod integration_admin;
 pub mod load_all_data;
 pub mod migration_source_projection;
 pub mod object_mutation;

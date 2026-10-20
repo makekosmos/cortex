@@ -1,6 +1,5 @@
-use super::super::{sealed, CommandClass, CommandContext, DbError, DbQuery};
+use super::super::{sealed, CommandClass, CommandContext, DbError, StoreReadQuery};
 use crate::integration_replication::SignedSyncEnvelope;
-use rusqlite::Connection;
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
@@ -20,7 +19,7 @@ pub(crate) enum ValidateOutboundSignedFrameQuery {
 
 impl sealed::Sealed for ValidateOutboundSignedFrameQuery {}
 
-impl DbQuery for ValidateOutboundSignedFrameQuery {
+impl StoreReadQuery for ValidateOutboundSignedFrameQuery {
     type Output = ();
 
     fn class(&self) -> CommandClass {
@@ -34,16 +33,17 @@ impl DbQuery for ValidateOutboundSignedFrameQuery {
     fn read(
         self,
         context: &CommandContext,
-        connection: &Connection,
+        capabilities: &ark_store::ReadCapabilities<'_>,
     ) -> Result<Self::Output, DbError> {
         context.require_system_sync()?;
+        let integration = capabilities.integration_replication();
         let result = match self {
             Self::Authorized {
                 frame,
                 expected_space_id,
                 expected_origin_node_id,
             } => crate::integration_replication::validate_outbound_signed_sync(
-                connection,
+                &integration,
                 &expected_space_id,
                 &expected_origin_node_id,
                 &frame,
@@ -54,7 +54,7 @@ impl DbQuery for ValidateOutboundSignedFrameQuery {
                 expected_origin_node_id,
                 transport_public_key,
             } => crate::integration_replication::validate_outbound_signed_sync_with_transport(
-                connection,
+                &integration,
                 &expected_space_id,
                 &expected_origin_node_id,
                 &frame,

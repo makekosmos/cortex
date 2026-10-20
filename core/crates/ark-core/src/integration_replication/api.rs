@@ -1,7 +1,11 @@
-use rusqlite::{Connection, Transaction};
+#[cfg(test)]
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 
-use super::{AuthorizedNode, GrantStatus, IntegrationNodeGrant, NodeStatus, SignedSyncEnvelope};
+use super::read_store::IntegrationReplicationReadStore;
+#[cfg(test)]
+use super::IntegrationNodeGrant;
+use super::{AuthorizedNode, GrantStatus, NodeStatus, SignedSyncEnvelope};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum NodeAuthorizationOperation {
@@ -18,8 +22,8 @@ pub struct SignedSyncPreparation {
     pub canonical_signing_bytes_hex: String,
 }
 
-pub fn prepare_signed_sync(
-    conn: &Connection,
+pub fn prepare_signed_sync<S: IntegrationReplicationReadStore>(
+    conn: &S,
     space_id: &str,
     origin_node_id: &str,
     integration_id: &str,
@@ -38,15 +42,16 @@ pub fn prepare_signed_sync(
         }
     }
 
-    let origin = ark_store::integration_replication::load_authorized_node(conn, origin_node_id)?
+    let origin = conn
+        .authorized_node(origin_node_id)?
         .ok_or_else(|| "origin node is not authorized in this database".to_string())?;
     if origin.status != NodeStatus::Active {
         return Err("origin node is revoked".into());
     }
     require_current_grant(conn, integration_id, &origin)?;
-    let recipient =
-        ark_store::integration_replication::load_authorized_node(conn, recipient_node_id)?
-            .ok_or_else(|| "recipient node is not authorized in this database".to_string())?;
+    let recipient = conn
+        .authorized_node(recipient_node_id)?
+        .ok_or_else(|| "recipient node is not authorized in this database".to_string())?;
     if recipient.status != NodeStatus::Active {
         return Err("recipient node is revoked".into());
     }
@@ -77,6 +82,7 @@ pub fn prepare_signed_sync(
     })
 }
 
+#[cfg(test)]
 pub fn persist_node_authorization(
     conn: &Connection,
     operation: NodeAuthorizationOperation,
@@ -89,16 +95,7 @@ pub fn persist_node_authorization(
     })
 }
 
-pub(crate) fn persist_node_authorization_in_transaction(
-    transaction: &Transaction<'_>,
-    operation: NodeAuthorizationOperation,
-    node: &AuthorizedNode,
-    grant: Option<&IntegrationNodeGrant>,
-    device_id: &str,
-) -> Result<(), String> {
-    persist_node_authorization_inner(transaction, operation, node, grant, device_id)
-}
-
+#[cfg(test)]
 fn persist_node_authorization_inner(
     conn: &Connection,
     operation: NodeAuthorizationOperation,
@@ -117,6 +114,7 @@ fn persist_node_authorization_inner(
     Ok(())
 }
 
+#[cfg(test)]
 pub fn persist_integration_grant(
     conn: &Connection,
     grant: &IntegrationNodeGrant,
@@ -127,14 +125,7 @@ pub fn persist_integration_grant(
     })
 }
 
-pub(crate) fn persist_integration_grant_in_transaction(
-    transaction: &Transaction<'_>,
-    grant: &IntegrationNodeGrant,
-    device_id: &str,
-) -> Result<(), String> {
-    persist_integration_grant_inner(transaction, grant, device_id)
-}
-
+#[cfg(test)]
 fn persist_integration_grant_inner(
     conn: &Connection,
     grant: &IntegrationNodeGrant,
@@ -150,6 +141,7 @@ fn persist_integration_grant_inner(
     crate::db::upsert_integration_node_grant(conn, grant, device_id)
 }
 
+#[cfg(test)]
 pub(crate) fn validate_node_transition(
     operation: NodeAuthorizationOperation,
     current: Option<&AuthorizedNode>,
@@ -210,6 +202,7 @@ pub(crate) fn validate_node_transition(
     Ok(())
 }
 
+#[cfg(test)]
 fn with_immediate_write<T>(
     conn: &Connection,
     operation: impl FnOnce() -> Result<T, String>,
@@ -234,12 +227,13 @@ fn with_immediate_write<T>(
     }
 }
 
-pub(crate) fn require_current_grant(
-    conn: &Connection,
+pub(crate) fn require_current_grant<S: IntegrationReplicationReadStore>(
+    conn: &S,
     integration_id: &str,
     node: &AuthorizedNode,
 ) -> Result<(), String> {
-    let grant = crate::db::load_integration_node_grant(conn, integration_id, &node.node_id)?
+    let grant = conn
+        .grant(integration_id, &node.node_id)?
         .ok_or_else(|| format!("node {} has no integration grant", node.node_id))?;
     if grant.status != GrantStatus::Active {
         return Err(format!(
