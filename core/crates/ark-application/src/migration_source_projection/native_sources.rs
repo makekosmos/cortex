@@ -1,5 +1,6 @@
-use super::*;
-use ark_application::source_snapshot::SourceSnapshot;
+use super::inventory::{compact, envelope, generic_inventory, hash_bytes, SourceEnvelope};
+use super::inventory::{SourceKind, SourceRecord};
+use crate::source_snapshot::SourceSnapshot;
 use serde_json::{json, Value};
 
 pub(crate) fn native_inventory(
@@ -145,12 +146,7 @@ fn push_native(out: &mut Vec<SourceRecord>, kind: &str, id: String, bytes: Vec<u
     });
 }
 
-pub fn inventory_sources(conn: &rusqlite::Connection) -> Result<Vec<SourceRecord>, String> {
-    let snapshot = ark_store::source_snapshot::read_source_snapshot(conn)?;
-    inventory_snapshot(&snapshot)
-}
-
-pub(crate) fn inventory_snapshot(snapshot: &SourceSnapshot) -> Result<Vec<SourceRecord>, String> {
+pub fn inventory_snapshot(snapshot: &SourceSnapshot) -> Result<Vec<SourceRecord>, String> {
     let mut out = Vec::new();
     let mut blocked = Vec::new();
     generic_inventory(snapshot, &mut out, &mut blocked)?;

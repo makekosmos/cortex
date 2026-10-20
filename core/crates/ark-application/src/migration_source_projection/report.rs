@@ -1,48 +1,18 @@
-use super::super::definitions::canonical_type_registrations;
+use super::inventory::{compact, generic_inventory, hash_bytes};
+use super::native_sources::native_inventory;
 use super::*;
-use ark_application::canonical_compatibility::{
-    map_legacy_with_context, CanonicalIdentity, LegacySource, MappingContext,
-};
-use rusqlite::Connection;
+use crate::canonical_compatibility::{map_legacy_with_context, LegacySource, MappingContext};
+use crate::source_snapshot::SourceSnapshot;
 use serde_json::{json, Value};
-use std::collections::BTreeMap;
 
-fn context(conn: &Connection) -> Result<MappingContext, String> {
-    let regs = canonical_type_registrations()?;
-    let aliases: BTreeMap<String, CanonicalIdentity> = regs
-        .iter()
-        .flat_map(|r| {
-            r.aliases.iter().map(move |a| {
-                (
-                    a.alias.clone(),
-                    CanonicalIdentity::new(r.type_id.clone(), r.version.clone()),
-                )
-            })
-        })
-        .collect();
-    let ids = ark_store::objects::list_object_type_identities(conn)?
-        .into_iter()
-        .map(|(id, identity)| {
-            (
-                id,
-                aliases.get(&identity.type_id).cloned().unwrap_or_else(|| {
-                    CanonicalIdentity::new(identity.type_id, identity.type_version)
-                }),
-            )
-        })
-        .collect::<BTreeMap<_, _>>();
-    Ok(MappingContext {
-        existing_object_ids: ids,
-        existing_links: ark_store::objects::list_object_links(conn)?,
-    })
-}
-
-pub fn preflight_phase3(conn: &Connection) -> Result<MigrationPreflightReport, String> {
+pub fn preflight_from_snapshot(
+    snapshot: &SourceSnapshot,
+    ctx: &MappingContext,
+) -> Result<MigrationPreflightReport, String> {
     let mut blocked = Vec::new();
     let mut records = Vec::new();
-    let snapshot = ark_store::source_snapshot::read_source_snapshot(conn)?;
-    generic_inventory(&snapshot, &mut records, &mut blocked)?;
-    native_inventory(&snapshot, &mut records)?;
+    generic_inventory(snapshot, &mut records, &mut blocked)?;
+    native_inventory(snapshot, &mut records)?;
     records.sort_by(|a, b| {
         (a.source_kind.name(), &a.source_id).cmp(&(b.source_kind.name(), &b.source_id))
     });
@@ -59,7 +29,6 @@ pub fn preflight_phase3(conn: &Connection) -> Result<MigrationPreflightReport, S
     ))?;
     let inventory_hash = hash_bytes(&inventory_bytes);
     let mut errors = blocked.clone();
-    let ctx = context(conn)?;
     for record in &records {
         if record.canonical_bytes.is_empty() || matches!(record.source_kind, SourceKind::Native(_))
         {
@@ -71,7 +40,7 @@ pub fn preflight_phase3(conn: &Connection) -> Result<MigrationPreflightReport, S
                 source_id: &record.source_id,
                 raw_json: &record.canonical_bytes,
             },
-            &ctx,
+            ctx,
         ) {
             errors.push(BlockedItem {
                 source_kind: error.source_kind().into(),

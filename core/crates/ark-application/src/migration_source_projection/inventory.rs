@@ -1,4 +1,4 @@
-use ark_application::source_snapshot::SourceSnapshot;
+use crate::source_snapshot::SourceSnapshot;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
