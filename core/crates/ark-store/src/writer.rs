@@ -1,5 +1,83 @@
 use rusqlite::{Connection, Transaction, TransactionBehavior};
 
+/// SQLite failure detail that can cross the Store boundary without exposing
+/// rusqlite types to callers.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StoreError {
+    pub kind: StoreErrorKind,
+    message: String,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StoreErrorKind {
+    DiskFull,
+    Io,
+    Corrupt,
+    Other,
+}
+
+impl StoreError {
+    fn from_sqlite(error: rusqlite::Error) -> Self {
+        let kind = match &error {
+            rusqlite::Error::SqliteFailure(code, _) => match code.code {
+                rusqlite::ErrorCode::DiskFull => StoreErrorKind::DiskFull,
+                rusqlite::ErrorCode::SystemIoFailure => StoreErrorKind::Io,
+                rusqlite::ErrorCode::DatabaseCorrupt | rusqlite::ErrorCode::NotADatabase => {
+                    StoreErrorKind::Corrupt
+                }
+                _ => StoreErrorKind::Other,
+            },
+            _ => StoreErrorKind::Other,
+        };
+        Self {
+            kind,
+            message: error.to_string(),
+        }
+    }
+}
+
+impl std::fmt::Display for StoreError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+#[derive(Debug)]
+pub enum StoreTransactionFailure<E> {
+    Begin(StoreError),
+    Operation(E),
+    Commit(StoreError),
+}
+
+/// Short-lived operations available inside one Store-owned write transaction.
+/// The transaction and all SQLite details remain private to ark-store.
+pub struct WriteCapabilities<'scope, 'connection> {
+    transaction: &'scope Transaction<'connection>,
+}
+
+pub struct UsageWrites<'scope, 'connection> {
+    transaction: &'scope Transaction<'connection>,
+}
+
+impl WriteCapabilities<'_, '_> {
+    pub fn usage(&mut self) -> UsageWrites<'_, '_> {
+        UsageWrites {
+            transaction: self.transaction,
+        }
+    }
+}
+
+impl UsageWrites<'_, '_> {
+    pub fn apply_local_usage_write(
+        &mut self,
+        device_id: &str,
+        write: ark_application::usage::LocalUsageWrite,
+    ) -> Result<Vec<ark_application::usage::UsageMutation>, String> {
+        let session = crate::usage_mutation::SqliteUsageWriteSession::new(self.transaction);
+        ark_application::usage::apply_local_usage_write(&session, device_id, write)
+    }
+}
+
 /// The single SQLite connection used by ARK's production writer.
 ///
 /// The caller owns scheduling and must ensure only one writer task runs at a
@@ -30,6 +108,28 @@ impl SqliteWriter {
         operation: impl FnOnce(&Transaction<'_>) -> Result<T, E>,
     ) -> Result<T, TransactionFailure<E>> {
         Self::immediate_on_connection(&mut self.connection, operation)
+    }
+
+    pub fn write_with_capabilities<T, E>(
+        &mut self,
+        operation: impl for<'scope, 'connection> FnOnce(
+            &mut WriteCapabilities<'scope, 'connection>,
+        ) -> Result<T, E>,
+    ) -> Result<T, StoreTransactionFailure<E>> {
+        let transaction = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(|error| StoreTransactionFailure::Begin(StoreError::from_sqlite(error)))?;
+        let output = {
+            let mut capabilities = WriteCapabilities {
+                transaction: &transaction,
+            };
+            operation(&mut capabilities).map_err(StoreTransactionFailure::Operation)?
+        };
+        transaction
+            .commit()
+            .map_err(|error| StoreTransactionFailure::Commit(StoreError::from_sqlite(error)))?;
+        Ok(output)
     }
 
     fn immediate_on_connection<T, E>(
@@ -105,17 +205,6 @@ impl SqliteWriter {
     > {
         self.with_connection_mut(|connection| {
             crate::canonical_game::apply_upsert(connection, command, fallback_device_id)
-        })
-    }
-
-    pub fn apply_local_usage_write(
-        &mut self,
-        device_id: &str,
-        write: ark_application::usage::LocalUsageWrite,
-    ) -> Result<Vec<ark_application::usage::UsageMutation>, TransactionFailure<String>> {
-        self.immediate(|transaction| {
-            let session = crate::usage_mutation::SqliteUsageWriteSession::new(transaction);
-            ark_application::usage::apply_local_usage_write(&session, device_id, write)
         })
     }
 

@@ -277,6 +277,24 @@ fn map_application_transaction_failure<E: ToString>(failure: TransactionFailure<
     }
 }
 
+fn map_store_application_transaction_failure<E: ToString>(
+    failure: ark_store::writer::StoreTransactionFailure<E>,
+) -> DbError {
+    use ark_store::writer::{StoreErrorKind, StoreTransactionFailure};
+    match failure {
+        StoreTransactionFailure::Begin(error) => match error.kind {
+            StoreErrorKind::DiskFull | StoreErrorKind::Io | StoreErrorKind::Corrupt => {
+                DbError::StorageUnhealthy(error.to_string())
+            }
+            StoreErrorKind::Other => DbError::Storage(error.to_string()),
+        },
+        StoreTransactionFailure::Operation(error) => {
+            DbError::from_application_error(error.to_string())
+        }
+        StoreTransactionFailure::Commit(error) => DbError::CommitFailed(error.to_string()),
+    }
+}
+
 impl WriterTask for LocalUsageWriteTask {
     fn run(
         self: Box<Self>,
@@ -289,12 +307,12 @@ impl WriterTask for LocalUsageWriteTask {
             reply,
         } = *self;
         let result = writer
-            .apply_local_usage_write(&device_id, write)
-            .map_err(|failure| match failure {
-                TransactionFailure::Begin(error) => DbError::from_sqlite(error),
-                TransactionFailure::Operation(error) => DbError::from_application_error(error),
-                TransactionFailure::Commit(error) => DbError::CommitFailed(error.to_string()),
-            });
+            .write_with_capabilities(|capabilities| {
+                capabilities
+                    .usage()
+                    .apply_local_usage_write(&device_id, write)
+            })
+            .map_err(map_store_application_transaction_failure);
         settle(result, reply, on_error)
     }
 

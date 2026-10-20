@@ -62,3 +62,39 @@ Production findings cluster in `canonical_types` (324), `db` (283), `integration
 ## Applied pstack decisions
 
 The **Model the Domain** principle keeps transaction-scoped operations grouped by persisted behavior instead of introducing one repository for every table. The **Sequence Work into Verifiable Units** principle requires each caller migration to finish with its behavior check and deletion of the old SQL path. **Migrate Callers Then Delete Legacy APIs** means no Core SQL facade stays as a compatibility fallback after its consumers move. **Prove It Works** makes the final source and Cargo graph gates necessary but insufficient without the Engine, wire, transaction, and recovery behavior checks.
+
+## Capability API sketch selected on 2026-10-20
+
+Two independent designs and a cross-judge selected the callback-based capability API. `ark-store` owns immediate writes, deferred reads, and exclusive maintenance scopes. Each callback receives short-lived, synchronous types with behavior-named methods. Core keeps actor scheduling, admission, fairness, cancellation, and reader-barrier ordering. No callback exposes a connection, transaction, statement, SQL, row type, or generic query closure.
+
+```rust
+pub struct WriteCaps<'tx> { /* private transaction-scoped capabilities */ }
+pub struct ReadCaps<'tx> { /* private read-transaction capabilities */ }
+pub struct MaintenanceCaps<'scope> { /* private lifecycle operations */ }
+
+impl Store {
+    pub fn write<T, E>(
+        &mut self,
+        operation: impl for<'tx> FnOnce(&mut WriteCaps<'tx>) -> Result<T, E>,
+    ) -> Result<T, StoreTransactionFailure<E>>;
+
+    pub fn read<T, E>(
+        &self,
+        operation: impl for<'tx> FnOnce(&ReadCaps<'tx>) -> Result<T, E>,
+    ) -> Result<T, StoreReadFailure<E>>;
+}
+
+impl WriteCaps<'_> {
+    pub fn usage(&mut self) -> UsageWrites<'_>;
+    pub fn objects(&mut self) -> ObjectWrites<'_>;
+    pub fn sync(&mut self) -> SyncWrites<'_>;
+}
+```
+
+The signatures are a target shape, not a frozen inventory. Group methods by persisted behavior, then add only groups supported by the operation and transaction census. Store error types preserve begin, operation, and commit stages without carrying `rusqlite::Error` into Core. Core continues to decide whether a returned error fails the actor closed.
+
+Nested savepoints stay private to Store behavior methods. On success Store releases the savepoint. On operation failure it rolls back to and releases the savepoint, preserving the operation error. If rollback or release fails, the returned typed failure records both the operation and cleanup errors. Store generates unique savepoint names for nested scopes. Signed replication returns a typed replay outcome so Core does not inspect SQLite constraint codes.
+
+The first capability slice uses the current specialized path: `DbHandle::submit_local_usage_write` queues `LocalUsageWriteTask`, and `SqliteWriter::apply_local_usage_write` already runs the Application use case in one immediate transaction. The migration must call that behavior through `WriteCaps::usage()` and keep sequence migration, revisions, and tombstones in the same transaction. The dated census has 59 typed operations on this checkout. It is a navigation index only; the operation-by-operation transaction and side-effect map is still required before the full API is frozen.
+
+The generated census at `.audit/ark-core-storage-census-2026-10-19.md` was refreshed on 2026-10-20. It now finds 897 SQLite references and 59 typed operations, down from 1,279 references and 69 operations in the earlier snapshot. The count change reflects committed extractions since that snapshot, not completion of the ownership boundary. In this checkout the counts are 34 writes, 24 reads, and one maintenance command. `commands/usage.rs` and `LocalUsageWriteCommand` from the old inventory do not exist; use `handle/usage.rs` and `LocalUsageWriteTask` as the source of truth.
