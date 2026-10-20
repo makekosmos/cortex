@@ -51,7 +51,10 @@ async fn stale_restore_preserves_pending_usage_and_origin_sequence_before_peer_r
     )
     .await
     .expect_err("restore must reject a snapshot older than a pending local commit");
-    assert!(error.contains("stale snapshot predates committed sync history"));
+    assert!(
+        error.contains("stale snapshot predates committed sync history"),
+        "restore refusal should identify the stale committed-feed snapshot; got: {error}"
+    );
     assert!(has_usage_event(&fixture_a.dir, "recovery-pending-usage-1"));
     assert_eq!(
         usage_event_sequence(&fixture_a.dir, "recovery-pending-usage-1"),
