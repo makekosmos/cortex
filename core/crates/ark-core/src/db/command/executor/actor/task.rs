@@ -365,14 +365,10 @@ impl WriterTask for LocalBookCoverTask {
     ) -> (Result<(), DbError>, Publish) {
         let Self { write, reply } = *self;
         let result = writer
-            .apply_local_book_cover(write)
-            .map_err(|failure| match failure {
-                TransactionFailure::Begin(error) => DbError::from_sqlite(error),
-                TransactionFailure::Operation(error) => {
-                    DbError::from_application_error(error.to_string())
-                }
-                TransactionFailure::Commit(error) => DbError::CommitFailed(error.to_string()),
-            });
+            .write_with_capabilities(|capabilities| {
+                capabilities.book_cover().apply_local_book_cover(write)
+            })
+            .map_err(map_store_application_transaction_failure);
         settle(result, reply, on_error)
     }
 

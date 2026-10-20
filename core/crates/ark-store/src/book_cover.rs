@@ -42,7 +42,7 @@ pub fn apply_local_book_cover(
     Ok(changed)
 }
 
-fn apply_local_book_cover_in(
+pub(crate) fn apply_local_book_cover_in(
     transaction: &Transaction<'_>,
     write: LocalBookCoverWrite,
 ) -> Result<bool, BookCoverOperationError> {

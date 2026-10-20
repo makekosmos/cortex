@@ -63,6 +63,10 @@ pub struct ObjectWrites<'scope, 'connection> {
     transaction: &'scope Transaction<'connection>,
 }
 
+pub struct BookCoverWrites<'scope, 'connection> {
+    transaction: &'scope Transaction<'connection>,
+}
+
 impl WriteCapabilities<'_, '_> {
     pub fn usage(&mut self) -> UsageWrites<'_, '_> {
         UsageWrites {
@@ -72,6 +76,12 @@ impl WriteCapabilities<'_, '_> {
 
     pub fn objects(&mut self) -> ObjectWrites<'_, '_> {
         ObjectWrites {
+            transaction: self.transaction,
+        }
+    }
+
+    pub fn book_cover(&mut self) -> BookCoverWrites<'_, '_> {
+        BookCoverWrites {
             transaction: self.transaction,
         }
     }
@@ -121,6 +131,15 @@ impl ObjectWrites<'_, '_> {
             principal,
             operation_id,
         )
+    }
+}
+
+impl BookCoverWrites<'_, '_> {
+    pub fn apply_local_book_cover(
+        &mut self,
+        write: ark_application::book_cover::LocalBookCoverWrite,
+    ) -> Result<bool, crate::book_cover::BookCoverOperationError> {
+        crate::book_cover::apply_local_book_cover_in(self.transaction, write)
     }
 }
 
@@ -192,15 +211,6 @@ impl SqliteWriter {
 
     pub fn with_connection_mut<T>(&mut self, operation: impl FnOnce(&mut Connection) -> T) -> T {
         operation(&mut self.connection)
-    }
-
-    pub fn apply_local_book_cover(
-        &mut self,
-        write: ark_application::book_cover::LocalBookCoverWrite,
-    ) -> Result<bool, TransactionFailure<crate::book_cover::BookCoverOperationError>> {
-        self.with_connection_mut(|connection| {
-            crate::book_cover::apply_local_book_cover(connection, write)
-        })
     }
 
     pub fn apply_canonical_game_upsert(
