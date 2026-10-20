@@ -32,6 +32,30 @@ impl CompetingWriter {
 }
 
 impl ProductionActorFailureProbe {
+    pub fn create_restore_snapshot_fixture(
+        path: &Path,
+        snapshot_path: &Path,
+    ) -> Result<(), String> {
+        let connection = Connection::open(path).map_err(|error| error.to_string())?;
+        connection
+            .execute_batch(
+                "CREATE TABLE restore_failure_probe(value TEXT NOT NULL);
+                 INSERT INTO restore_failure_probe(value) VALUES ('pre-restore');",
+            )
+            .map_err(|error| error.to_string())?;
+        let snapshot_path = snapshot_path
+            .to_str()
+            .ok_or_else(|| "snapshot fixture path is not valid UTF-8".to_string())?;
+        crate::snapshot::backup_connection_to_file(&connection, snapshot_path)
+    }
+
+    pub fn restore_probe_value(path: &Path) -> Result<String> {
+        let connection = Connection::open(path)?;
+        connection.query_row("SELECT value FROM restore_failure_probe", [], |row| {
+            row.get(0)
+        })
+    }
+
     pub fn prepare(connection: &Connection) -> Result<()> {
         connection.execute_batch(
             "CREATE TABLE production_actor_failure_probe(payload BLOB NOT NULL);

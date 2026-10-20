@@ -142,25 +142,17 @@ async fn production_actor_restore_failure_fails_closed_after_sqlite_rollback() {
     let backup_path = crate::db::backups_dir(&db_path);
     std::fs::create_dir_all(&backup_path).unwrap();
     let snapshot_path = backup_path.join(backup_id);
-    handle.with_connection(|connection| {
-        connection
-            .execute_batch(
-                "CREATE TABLE restore_failure_probe(value TEXT NOT NULL);
-                 INSERT INTO restore_failure_probe(value) VALUES ('pre-restore');",
-            )
-            .unwrap();
-        ark_store::snapshot::backup_connection_to_file(
-            connection,
-            snapshot_path.to_str().expect("snapshot path must be UTF-8"),
-        )
-        .unwrap();
-    });
+    ark_store::test_support::ProductionActorFailureProbe::create_restore_snapshot_fixture(
+        std::path::Path::new(&db_path),
+        &snapshot_path,
+    )
+    .unwrap();
 
     let failed = handle
         .submit_maintenance(
             CommandContext::engine_maintenance(),
             RestorePostVerifyFailure {
-                db_path,
+                db_path: db_path.clone(),
                 backup_id: backup_id.to_string(),
             },
         )
@@ -176,13 +168,10 @@ async fn production_actor_restore_failure_fails_closed_after_sqlite_rollback() {
             .is_err(),
         "actor accepted a write after a failed restore"
     );
-    let preserved = handle.with_connection(|connection| {
-        connection
-            .query_row("SELECT value FROM restore_failure_probe", [], |row| {
-                row.get::<_, String>(0)
-            })
-            .unwrap()
-    });
+    let preserved = ark_store::test_support::ProductionActorFailureProbe::restore_probe_value(
+        std::path::Path::new(&db_path),
+    )
+    .unwrap();
     assert_eq!(preserved, "pre-restore");
 
     owner
