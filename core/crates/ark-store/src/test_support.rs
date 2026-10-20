@@ -10,6 +10,7 @@ use tempfile::TempDir;
 mod actor_log;
 mod inbox;
 mod legacy_writes;
+mod object_mutation_replay;
 mod object_revision;
 mod object_write_rollback;
 mod production_actor;
@@ -22,6 +23,7 @@ pub use inbox::has_inbox_receipt;
 pub use legacy_writes::{
     LegacyBatchRollbackState, LegacyProjectDeleteState, LegacyWriteFixture, LegacyWriteSnapshot,
 };
+pub use object_mutation_replay::{ObjectMutationReplayFixture, ObjectMutationReplayState};
 pub use object_revision::{
     LegacyRevisionSeed, ObjectRevisionFixture, ObjectRevisionState, TombstoneState,
 };
