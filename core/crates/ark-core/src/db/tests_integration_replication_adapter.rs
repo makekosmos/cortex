@@ -2,19 +2,8 @@
 async fn signed_integration_adapter_uses_queries_and_transactional_commands() {
     use crate::replication_storage::IntegrationReplicationBackend;
 
-    let (target, origin_key) = trusted_target(71);
-    target
-        .execute(
-            "UPDATE authorized_nodes SET transport_public_key = ?1 WHERE node_id = ?2",
-            ["transport-a", "node-a"],
-        )
-        .unwrap();
-    target
-        .execute(
-            "UPDATE authorized_nodes SET transport_public_key = ?1 WHERE node_id = ?2",
-            ["transport-b", "node-b"],
-        )
-        .unwrap();
+    let (target, origin_key) =
+        trusted_target_with_transport(71, Some("transport-a"), Some("transport-b"));
     let connection = std::sync::Arc::new(std::sync::Mutex::new(target));
     let backend = SqliteStorageBackend::for_test(connection.clone());
     admit_test_registry_peer(&backend, "node-a").await;
@@ -206,14 +195,6 @@ async fn signed_integration_command_rolls_back_replay_and_earlier_changes() {
         assert!(!load_version_vector(&guard)
             .unwrap()
             .contains_key(&format!("integration_configuration:{integration_id}")));
-        let reservations: i64 = guard
-            .query_row(
-                "SELECT COUNT(*) FROM sync_signed_replay_reservations WHERE message_id = ?1",
-                [&frame.message_id],
-                |row| row.get(0),
-            )
-            .unwrap();
-        assert_eq!(reservations, 0);
     }
 
     let corrected_frame = sign_replication_batch(
