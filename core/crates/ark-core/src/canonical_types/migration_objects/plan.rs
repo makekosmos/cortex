@@ -90,29 +90,18 @@ fn aliases() -> Result<BTreeMap<String, CanonicalIdentity>, ObjectPlanError> {
 }
 fn context(conn: &Connection, records: &[SourceRecord]) -> Result<MappingContext, ObjectPlanError> {
     let alias = aliases()?;
-    let mut ids = BTreeMap::new();
-    let mut stmt = conn
-        .prepare("SELECT id,type_id,type_version FROM objects")
-        .map_err(|e| ObjectPlanError::Storage(e.to_string()))?;
-    for row in stmt
-        .query_map([], |r| {
-            Ok((
-                r.get::<_, String>(0)?,
-                r.get::<_, String>(1)?,
-                r.get::<_, String>(2)?,
-            ))
+    let mut ids = ark_store::objects::list_object_type_identities(conn)
+        .map_err(ObjectPlanError::Storage)?
+        .into_iter()
+        .map(|(id, identity)| {
+            (
+                id,
+                alias.get(&identity.type_id).cloned().unwrap_or_else(|| {
+                    CanonicalIdentity::new(identity.type_id, identity.type_version)
+                }),
+            )
         })
-        .map_err(|e| ObjectPlanError::Storage(e.to_string()))?
-    {
-        let (id, t, v) = row.map_err(|e| ObjectPlanError::Storage(e.to_string()))?;
-        ids.insert(
-            id,
-            alias
-                .get(&t)
-                .cloned()
-                .unwrap_or_else(|| CanonicalIdentity::new(t, v)),
-        );
-    }
+        .collect::<BTreeMap<_, _>>();
     // All source identities are known before mapping: this makes forward and back references
     // symmetric.
     for r in records {

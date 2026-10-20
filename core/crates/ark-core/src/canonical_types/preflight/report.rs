@@ -20,29 +20,17 @@ fn context(conn: &Connection) -> Result<MappingContext, String> {
             })
         })
         .collect();
-    let mut ids = BTreeMap::new();
-    let mut stmt = conn
-        .prepare("SELECT id,type_id,type_version FROM objects")
-        .map_err(|e| e.to_string())?;
-    for row in stmt
-        .query_map([], |r| {
-            Ok((
-                r.get::<_, String>(0)?,
-                r.get::<_, String>(1)?,
-                r.get::<_, String>(2)?,
-            ))
+    let ids = ark_store::objects::list_object_type_identities(conn)?
+        .into_iter()
+        .map(|(id, identity)| {
+            (
+                id,
+                aliases.get(&identity.type_id).cloned().unwrap_or_else(|| {
+                    CanonicalIdentity::new(identity.type_id, identity.type_version)
+                }),
+            )
         })
-        .map_err(|e| e.to_string())?
-    {
-        let (id, type_id, version) = row.map_err(|e| e.to_string())?;
-        ids.insert(
-            id,
-            aliases
-                .get(&type_id)
-                .cloned()
-                .unwrap_or_else(|| CanonicalIdentity::new(type_id, version)),
-        );
-    }
+        .collect::<BTreeMap<_, _>>();
     Ok(MappingContext {
         existing_object_ids: ids,
         existing_links: ark_store::objects::list_object_links(conn)?,

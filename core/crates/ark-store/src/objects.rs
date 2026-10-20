@@ -11,7 +11,7 @@ mod state;
 
 pub use ark_application::object_read::SearchResult;
 pub use compatibility::upsert_object_compat;
-pub use identity::{object_type_identity, ObjectTypeIdentity};
+pub use identity::{list_object_type_identities, object_type_identity, ObjectTypeIdentity};
 pub use links::list_other_object_link_ids;
 pub use links::{
     delete_object_link, list_object_links, list_object_links_for_source, upsert_object_link,
