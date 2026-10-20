@@ -1,6 +1,6 @@
-use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError, DbQuery};
-use crate::integration_replication::{SignedSyncEnvelope, SignedSyncError};
-use rusqlite::{Connection, Transaction};
+use super::super::{sealed, CommandClass, CommandContext, DbError, DbQuery};
+use crate::integration_replication::SignedSyncEnvelope;
+use rusqlite::Connection;
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
@@ -96,70 +96,100 @@ impl ApplySignedIntegrationFrameCommand {
             identity_error_style,
         }
     }
-}
 
-impl sealed::Sealed for ApplySignedIntegrationFrameCommand {}
-
-impl DbCommand for ApplySignedIntegrationFrameCommand {
-    type Output = ();
-
-    const CLASS: CommandClass = CommandClass::SyncLive;
-
-    fn weight(&self) -> usize {
+    pub(crate) fn weight(&self) -> usize {
         serde_json::to_vec(self).map_or(usize::MAX, |bytes| bytes.len())
     }
 
-    fn execute(
+    pub(crate) fn apply_in_store(
         self,
         context: &CommandContext,
-        transaction: &Transaction<'_>,
-    ) -> Result<Self::Output, DbError> {
-        let authenticated_peer_id = context.authenticated_peer_id()?;
-        super::device_registry_sync::require_registry_peer_admitted(
-            transaction,
-            authenticated_peer_id,
-        )?;
-        let mismatch = |message: &str| DbError::from_application_error(message.into());
+        writer: &mut ark_store::writer::SqliteWriter,
+    ) -> Result<(), DbError> {
+        let (peer_id, request) = self.into_store_request(context)?;
+        writer
+            .apply_signed_integration_frame(&peer_id, request)
+            .map_err(map_signed_frame_failure)
+    }
+
+    pub(crate) fn into_store_request(
+        self,
+        context: &CommandContext,
+    ) -> Result<
+        (
+            String,
+            ark_application::signed_integration::ApplySignedIntegrationFrame,
+        ),
+        DbError,
+    > {
+        let peer_id = context.authenticated_peer_id()?.to_owned();
         let identity_matches = self.frame.space_id == self.expected_space_id
-            && self.frame.origin_node_id == authenticated_peer_id
+            && self.frame.origin_node_id == peer_id
             && self.frame.recipient_node_id == self.expected_recipient_node_id;
         if !identity_matches {
-            return Err(match self.identity_error_style {
+            let detail = match self.identity_error_style {
                 IdentityErrorStyle::Detailed if self.frame.space_id != self.expected_space_id => {
-                    mismatch("signed integration frame has the wrong space")
+                    "signed integration frame has the wrong space"
                 }
-                IdentityErrorStyle::Detailed
-                    if self.frame.origin_node_id != authenticated_peer_id =>
-                {
-                    mismatch("signed integration frame origin is not the authenticated peer")
+                IdentityErrorStyle::Detailed if self.frame.origin_node_id != peer_id => {
+                    "signed integration frame origin is not the authenticated peer"
                 }
                 IdentityErrorStyle::Detailed => {
-                    mismatch("signed integration frame is addressed to another node")
+                    "signed integration frame is addressed to another node"
                 }
-                IdentityErrorStyle::Generic => {
-                    mismatch("signed integration frame identity mismatch")
-                }
-            });
+                IdentityErrorStyle::Generic => "signed integration frame identity mismatch",
+            };
+            return Err(DbError::from_application_error(detail.into()));
         }
-
         let reserved_at_ms = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis()
             .try_into()
             .unwrap_or(u64::MAX);
-        let mut session = crate::db::SqliteSignedIntegrationFrameSession::new(transaction);
-        ark_application::signed_integration::apply_signed_integration_frame(
-            &mut session,
-            ark_application::signed_integration::ApplySignedIntegrationFrame {
-                envelope: self.frame,
-                expected_space_id: self.expected_space_id,
-                expected_recipient_node_id: self.expected_recipient_node_id,
-                authenticated_transport_public_key: self.authenticated_transport_public_key,
-                reserved_at_ms,
-            },
-        )
-        .map_err(|error: SignedSyncError| DbError::from_application_error(error.to_string()))
+        let request = ark_application::signed_integration::ApplySignedIntegrationFrame {
+            envelope: self.frame,
+            expected_space_id: self.expected_space_id,
+            expected_recipient_node_id: self.expected_recipient_node_id,
+            authenticated_transport_public_key: self.authenticated_transport_public_key,
+            reserved_at_ms,
+        };
+        Ok((peer_id, request))
+    }
+}
+
+pub(crate) fn map_signed_frame_failure(
+    failure: ark_store::writer::StoreTransactionFailure<
+        ark_store::writer::SignedIntegrationFrameWriteError,
+    >,
+) -> DbError {
+    use ark_store::writer::StoreErrorKind;
+    match failure {
+        ark_store::writer::StoreTransactionFailure::Begin(error) => match error.kind {
+            StoreErrorKind::DiskFull | StoreErrorKind::Io | StoreErrorKind::Corrupt => {
+                DbError::StorageUnhealthy(error.to_string())
+            }
+            StoreErrorKind::Other => DbError::Storage(error.to_string()),
+        },
+        ark_store::writer::StoreTransactionFailure::Commit(error) => {
+            DbError::CommitFailed(error.to_string())
+        }
+        ark_store::writer::StoreTransactionFailure::Operation(error) => {
+            map_signed_frame_operation_error(error)
+        }
+    }
+}
+
+pub(crate) fn map_signed_frame_operation_error(
+    error: ark_store::writer::SignedIntegrationFrameWriteError,
+) -> DbError {
+    match error {
+        ark_store::writer::SignedIntegrationFrameWriteError::PeerNotAdmitted => {
+            DbError::Permission("sync_peer_not_admitted".into())
+        }
+        ark_store::writer::SignedIntegrationFrameWriteError::Apply(error) => {
+            DbError::from_application_error(error.to_string())
+        }
     }
 }
 

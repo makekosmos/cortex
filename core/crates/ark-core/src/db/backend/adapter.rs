@@ -399,7 +399,7 @@ impl IntegrationReplicationBackend for SqliteStorageBackend {
         }
 
         self.db
-            .submit(
+            .submit_signed_integration_frame(
                 CommandContext::authenticated_peer(authenticated_peer_id.to_owned()),
                 ApplySignedIntegrationFrameCommand::new(
                     frame.clone(),
@@ -428,7 +428,7 @@ impl IntegrationReplicationBackend for SqliteStorageBackend {
             return Err("signed integration frame identity mismatch".into());
         }
         self.db
-            .submit(
+            .submit_signed_integration_frame(
                 CommandContext::authenticated_peer(authenticated_peer_id.to_owned()),
                 ApplySignedIntegrationFrameCommand::new(
                     frame.clone(),

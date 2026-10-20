@@ -4,7 +4,11 @@ mod authenticated_task;
 mod committed_feed;
 mod error;
 mod iroh_identity;
+mod signed_integration_frame;
 mod sync_key_value;
+pub use signed_integration_frame::{
+    SignedIntegrationFrameWriteError, SignedIntegrationFrameWrites,
+};
 mod sync_policy;
 mod task_merge;
 mod task_objects;

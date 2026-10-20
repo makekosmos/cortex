@@ -46,7 +46,7 @@ pub(in crate::db::command) trait WriterTask: Send {
     fn receiver_closed(&self) -> bool;
 }
 
-fn settle<T: 'static>(
+pub(in crate::db::command) fn settle<T: 'static>(
     result: Result<T, DbError>,
     reply: oneshot::Sender<Result<T, DbError>>,
     on_error: &mut dyn FnMut(&DbError),

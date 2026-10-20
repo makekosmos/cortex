@@ -115,7 +115,7 @@ async fn signed_integration_command_binds_context_peer_inside_transaction() {
     let frame = sign_replication_batch(&signing_key, 1, "message-wrong-peer", Vec::new());
 
     let error = db
-        .submit(
+        .submit_signed_integration_frame(
             CommandContext::authenticated_peer("node-b".into()),
             ApplySignedIntegrationFrameCommand::new(
                 frame.clone(),
@@ -133,7 +133,7 @@ async fn signed_integration_command_binds_context_peer_inside_transaction() {
         "signed integration frame origin is not the authenticated peer"
     );
     let generic_error = db
-        .submit(
+        .submit_signed_integration_frame(
             CommandContext::authenticated_peer("node-b".into()),
             ApplySignedIntegrationFrameCommand::new(
                 frame,

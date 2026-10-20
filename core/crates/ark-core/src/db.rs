@@ -20,6 +20,7 @@ pub(crate) use ark_store::sync_kv::DEVICE_REGISTRY_LOCAL_DEVICE_ID_KEY;
 #[cfg(test)]
 pub(crate) use ark_store::VERSION_VECTOR_KEY;
 pub(crate) use backend::SqliteLegacyMutationSession;
+#[cfg(test)]
 pub(crate) use backend::SqliteSignedIntegrationFrameSession;
 pub use backend::SqliteStorageBackend;
 pub use command::CommandSource;

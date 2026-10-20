@@ -42,7 +42,8 @@ pub(crate) use integration_admin::{
 };
 pub(crate) use integration_read::IntegrationReadQuery;
 pub(crate) use integration_replication::{
-    ApplySignedIntegrationFrameCommand, IdentityErrorStyle, ValidateOutboundSignedFrameQuery,
+    map_signed_frame_operation_error, ApplySignedIntegrationFrameCommand, IdentityErrorStyle,
+    ValidateOutboundSignedFrameQuery,
 };
 pub(crate) use legacy_mutation::{LegacyDeleteCommand, LegacyGraphWriteCommand};
 pub(crate) use object_read::ObjectReadQuery;

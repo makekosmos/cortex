@@ -3,6 +3,7 @@ mod credentials;
 mod grants;
 mod leases;
 mod nodes;
+mod signed_frame;
 
 pub use configurations::{load_integration_configuration, upsert_integration_configuration_record};
 pub use credentials::{
@@ -16,3 +17,4 @@ pub use grants::{
 };
 pub use leases::{load_integration_refresh_lease, upsert_integration_refresh_lease_record};
 pub use nodes::{load_authorized_node, upsert_authorized_node_record};
+pub(crate) use signed_frame::SqliteSignedIntegrationFrameSession;

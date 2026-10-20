@@ -12,6 +12,9 @@ use maintenance::has_maintenance_barrier;
 use runtime::{actor_loop, panic_message};
 #[cfg(debug_assertions)]
 pub(in crate::db::command) use task::map_inbox_receipt_error;
+#[path = "actor/task/signed_integration_frame.rs"]
+mod signed_integration_frame_task;
+pub(in crate::db::command) use signed_integration_frame_task::SignedIntegrationFrameTask;
 #[cfg(debug_assertions)]
 pub(in crate::db::command) use task::task_merge_append::map_append_operation_error;
 pub(in crate::db::command) use task::task_merge_append::AppendTaskMergeOperationTask;
