@@ -224,8 +224,8 @@ fn legacy_record(
     props: Value,
     created_at: &str,
     deleted_at: Option<String>,
-) -> crate::canonical_types::compatibility::LegacyRecord {
-    crate::canonical_types::compatibility::LegacyRecord {
+) -> ark_application::canonical_compatibility::LegacyRecord {
+    ark_application::canonical_compatibility::LegacyRecord {
         id: id.into(),
         legacy_type_id: legacy_type_id.into(),
         title: title.into(),

@@ -1,7 +1,7 @@
 // Canonical fixture corpus for the Delphi filter parity contract.
 use super::super::types::{SmartList, TodoItem};
-use crate::canonical_types::compatibility::planning::project_task_to_delphi;
 use crate::types::{ArkObject, ObjectLink};
+use ark_application::canonical_compatibility::planning::project_task_to_delphi;
 use serde_json::json;
 
 pub const TODAY_ISO: &str = "2026-05-15";

@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used)]
-use ark_core::canonical_types::compatibility::planning::project_task_to_delphi;
+use ark_application::canonical_compatibility::planning::project_task_to_delphi;
 use ark_core::types::{ArkObject, ObjectLink};
 use serde_json::json;
 

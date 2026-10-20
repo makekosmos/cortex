@@ -9,7 +9,7 @@ pub(crate) fn task(
     m: &Map<String, Value>,
     o: &mut Map<String, Value>,
     u: &mut BTreeSet<String>,
-    l: &mut Vec<crate::types::ObjectLink>,
+    l: &mut Vec<ark_domain::types::ObjectLink>,
     id: &str,
     at: &str,
 ) -> Result<(), CompatFailure> {
@@ -225,7 +225,7 @@ fn day_value(
     if raw.is_null() {
         return Ok(Value::Null);
     }
-    crate::canonical_types::normalize::day_value(&raw)
+    crate::canonical_compatibility::normalize::day_value(&raw)
         .map(|day| json!(day))
         .ok_or_else(|| invalid(&format!("/props/{c}")))
 }
@@ -341,7 +341,7 @@ pub(crate) fn project(
     m: &Map<String, Value>,
     o: &mut Map<String, Value>,
     u: &mut BTreeSet<String>,
-    l: &mut Vec<crate::types::ObjectLink>,
+    l: &mut Vec<ark_domain::types::ObjectLink>,
     id: &str,
     at: &str,
 ) -> Result<(), CompatFailure> {
@@ -393,7 +393,7 @@ pub(crate) fn tag(
     m: &Map<String, Value>,
     o: &mut Map<String, Value>,
     u: &mut BTreeSet<String>,
-    l: &mut Vec<crate::types::ObjectLink>,
+    l: &mut Vec<ark_domain::types::ObjectLink>,
     id: &str,
     at: &str,
 ) -> Result<(), CompatFailure> {

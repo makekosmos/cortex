@@ -1,9 +1,11 @@
 //! KOS-397 cutover: legacy task props map to core.task, a legacy task write is
 //! refused, and a start moves the stored rows over once.
-use super::compatibility::{map_legacy_with_context, LegacyRecord, LegacySource, MappingContext};
 use super::core_task_rewrite_tests::{insert_legacy, legacy_props};
 use crate::db::init_schema;
 use crate::types::ArkObjectWrite;
+use ark_application::canonical_compatibility::{
+    map_legacy_with_context, LegacyRecord, LegacySource, MappingContext,
+};
 use rusqlite::Connection;
 use serde_json::{json, Value};
 

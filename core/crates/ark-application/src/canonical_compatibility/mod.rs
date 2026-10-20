@@ -6,5 +6,6 @@ pub use shared::{CompatibilityError, LegacyRecord, LocalState, MappedRecord, Qua
 
 mod enrichment;
 mod map;
+mod normalize;
 pub(crate) use enrichment::*;
 pub use map::*;

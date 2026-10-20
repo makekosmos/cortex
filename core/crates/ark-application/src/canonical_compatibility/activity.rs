@@ -5,7 +5,7 @@ pub fn time_entry(
     m: &Map<String, Value>,
     o: &mut Map<String, Value>,
     u: &mut BTreeSet<String>,
-    l: &mut Vec<crate::types::ObjectLink>,
+    l: &mut Vec<ark_domain::types::ObjectLink>,
     q: &mut Map<String, Value>,
     id: &str,
     at: &str,

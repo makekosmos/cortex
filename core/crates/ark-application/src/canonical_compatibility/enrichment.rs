@@ -168,13 +168,13 @@ pub(crate) fn map_value(
     shared::extensions(props, &mut out, &consumed, &mut local, &mut quarantine)?;
     // Mapped objects claim the newest registered version of their type; a
     // schema bump must not strand new writes on the superseded contract.
-    let version = crate::canonical_types::definitions::current_canonical_version(canonical)
+    let version = ark_domain::canonical_type::definitions::current_canonical_version(canonical)
         .ok()
         .flatten()
         .ok_or_else(|| shared::CompatFailure::DataLossRisk {
             pointer: "/type_id".into(),
         })?;
-    let registration = crate::canonical_types::definitions::canonical_type_registrations()
+    let registration = ark_domain::canonical_type::definitions::canonical_type_registrations()
         .map_err(|_| shared::CompatFailure::DataLossRisk {
             pointer: "/".into(),
         })?
@@ -191,8 +191,8 @@ pub(crate) fn map_value(
             pointer: "/schema".into(),
         }
     })?;
-    crate::canonical_types::normalize::day_props(&schema, &mut out);
-    let object = crate::types::ArkObject {
+    crate::canonical_compatibility::normalize::day_props(&schema, &mut out);
+    let object = ark_domain::types::ArkObject {
         id: record.id,
         type_id: canonical.into(),
         type_version: version,

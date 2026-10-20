@@ -1,5 +1,5 @@
-use crate::canonical_types::compatibility::LegacyRecord;
 use crate::types::{SyncEntity, TrackedApp};
+use ark_application::canonical_compatibility::LegacyRecord;
 use serde::Serialize;
 
 #[derive(Debug, Clone, Copy, Serialize)]

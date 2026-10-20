@@ -26,7 +26,7 @@ pub struct LegacySource<'a> {
 
 pub struct MappingContext {
     pub existing_object_ids: std::collections::BTreeMap<String, CanonicalIdentity>,
-    pub existing_links: Vec<crate::types::ObjectLink>,
+    pub existing_links: Vec<ark_domain::types::ObjectLink>,
 }
 
 /// Map a stored source while retaining its identity and exact bytes for retry/quarantine.
@@ -71,7 +71,7 @@ pub fn map_legacy_with_context(
                 .get(target)
                 .is_some_and(|identity| {
                     identity.type_id == "com.kosmos.image"
-                        && crate::canonical_types::definitions::is_canonical_version(
+                        && ark_domain::canonical_type::definitions::is_canonical_version(
                             &identity.type_id,
                             &identity.type_version,
                         )
@@ -109,7 +109,7 @@ pub fn map_legacy_with_context(
                 .get(target)
                 .is_some_and(|identity| {
                     identity.type_id == "com.kosmos.project"
-                        && crate::canonical_types::definitions::is_canonical_version(
+                        && ark_domain::canonical_type::definitions::is_canonical_version(
                             &identity.type_id,
                             &identity.type_version,
                         )
@@ -132,7 +132,7 @@ pub fn map_legacy_with_context(
             .get(&link.target_object_id)
             .is_some_and(|identity| {
                 expected_type == Some(identity.type_id.as_str())
-                    && crate::canonical_types::definitions::is_canonical_version(
+                    && ark_domain::canonical_type::definitions::is_canonical_version(
                         &identity.type_id,
                         &identity.type_version,
                     )
@@ -181,7 +181,7 @@ pub fn map_legacy_with_context(
 
 fn expected_target_type<'a>(
     record: &LegacyRecord,
-    link: &crate::types::ObjectLink,
+    link: &ark_domain::types::ObjectLink,
 ) -> Option<&'a str> {
     let source_type = shared::canonical_id(&record.legacy_type_id)?;
     Some(match link.link_type.as_str() {
@@ -196,7 +196,7 @@ fn expected_target_type<'a>(
     })
 }
 
-fn relation_pointer(record: &LegacyRecord, link: &crate::types::ObjectLink) -> String {
+fn relation_pointer(record: &LegacyRecord, link: &ark_domain::types::ObjectLink) -> String {
     let candidates: &[&str] = match link.link_type.as_str() {
         "project" => &["projectId", "project_id"],
         "tag" => &["tagIds", "tag_ids"],
@@ -233,7 +233,7 @@ fn relation_pointer(record: &LegacyRecord, link: &crate::types::ObjectLink) -> S
 }
 
 fn add_link(
-    links: &mut Vec<crate::types::ObjectLink>,
+    links: &mut Vec<ark_domain::types::ObjectLink>,
     source: &str,
     target: &str,
     link_type: &str,
@@ -242,7 +242,7 @@ fn add_link(
     use sha2::Digest;
     let mut h = sha2::Sha256::new();
     h.update(format!("kosmos-link-v1\0{source}\0{link_type}\0{target}").as_bytes());
-    links.push(crate::types::ObjectLink {
+    links.push(ark_domain::types::ObjectLink {
         id: format!("lnk*{:x}", h.finalize()),
         source_object_id: source.into(),
         target_object_id: target.into(),

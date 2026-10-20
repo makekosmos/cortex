@@ -1,9 +1,25 @@
 use super::super::shared::*;
-use crate::canonical_types::definitions::canonical_type_registrations;
-use crate::canonical_types::validation::validate_canonical;
-use crate::delphi::types::TodoItem;
-use crate::types::{ArkObject, ObjectLink};
+use ark_domain::canonical_type::definitions::canonical_type_registrations;
+use ark_domain::canonical_type::validation::validate_canonical;
+use ark_domain::types::{ArkObject, ObjectLink};
 use serde_json::{Map, Value};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DelphiTaskProjection {
+    pub id: String,
+    pub title: String,
+    pub scheduled_date: Option<String>,
+    pub is_today: bool,
+    pub is_someday: bool,
+    pub is_completed: bool,
+    pub completed_at: Option<String>,
+    pub is_cancelled: bool,
+    pub cancelled_at: Option<String>,
+    pub is_trashed: bool,
+    pub sort_order: i64,
+    pub created_at: String,
+    pub project_id: Option<String>,
+}
 
 /// Project one validated canonical task and its links into Delphi's read view.
 ///
@@ -12,7 +28,7 @@ use serde_json::{Map, Value};
 pub fn project_task_to_delphi(
     object: &ArkObject,
     links: &[ObjectLink],
-) -> Result<TodoItem, CompatibilityError> {
+) -> Result<DelphiTaskProjection, CompatibilityError> {
     let registration = canonical_type_registrations()
         .map_err(|_| projection_error(object, "", "CONFLICTING_FIELDS"))?
         .into_iter()
@@ -79,7 +95,7 @@ pub fn project_task_to_delphi(
         .get("status")
         .and_then(Value::as_str)
         .ok_or_else(|| projection_error(object, "/props/status", "INVALID_FIELD"))?;
-    Ok(TodoItem {
+    Ok(DelphiTaskProjection {
         id: object.id.clone(),
         title: object.title.clone(),
         // `scheduledAt` is a day field; objects written under schema 1.0.0 may
@@ -164,7 +180,7 @@ fn day_or_none(
 ) -> Result<Option<String>, CompatibilityError> {
     match props.get(key) {
         Some(Value::Null) | None => Ok(None),
-        Some(value) => crate::canonical_types::normalize::day_value(value)
+        Some(value) => crate::canonical_compatibility::normalize::day_value(value)
             .map(Some)
             .ok_or_else(|| projection_error(object, &format!("/props/{key}"), "INVALID_FIELD")),
     }

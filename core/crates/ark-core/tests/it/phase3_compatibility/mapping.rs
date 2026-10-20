@@ -1,4 +1,4 @@
-use ark_core::canonical_types::compatibility::{
+use ark_application::canonical_compatibility::{
     map_legacy_source, map_legacy_with_context as map_legacy_with_context_source,
     CanonicalIdentity, CompatibilityError, LegacyRecord, LegacySource, MappingContext,
 };
@@ -6,7 +6,7 @@ use serde_json::json;
 
 fn map_legacy(
     record: &LegacyRecord,
-) -> Result<ark_core::canonical_types::compatibility::MappedRecord, CompatibilityError> {
+) -> Result<ark_application::canonical_compatibility::MappedRecord, CompatibilityError> {
     let raw = serde_json::to_vec(record).unwrap();
     map_legacy_source(LegacySource {
         source_kind: &record.legacy_type_id,
@@ -18,7 +18,7 @@ fn map_legacy(
 fn map_legacy_with_context(
     record: &LegacyRecord,
     context: &MappingContext,
-) -> Result<ark_core::canonical_types::compatibility::MappedRecord, CompatibilityError> {
+) -> Result<ark_application::canonical_compatibility::MappedRecord, CompatibilityError> {
     let raw = serde_json::to_vec(record).unwrap();
     map_legacy_with_context_source(
         LegacySource {
@@ -225,7 +225,7 @@ fn raw_source_and_context_preserve_malformed_and_existing_link_semantics() {
     );
     let mapped = map_legacy_with_context(
         &book,
-        &ark_core::canonical_types::compatibility::MappingContext {
+        &ark_application::canonical_compatibility::MappingContext {
             existing_object_ids: std::collections::BTreeMap::new(),
             existing_links: vec![],
         },

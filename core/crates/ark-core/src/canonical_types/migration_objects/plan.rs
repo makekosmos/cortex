@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 
 // Checkpoint D: read-only all-source planning and narrow per-item application.
 
-use super::super::compatibility::{
+use ark_application::canonical_compatibility::{
     map_legacy_with_context, CanonicalIdentity, LegacySource, MappedRecord, MappingContext,
 };
 
@@ -139,7 +139,7 @@ fn context(conn: &Connection, records: &[SourceRecord]) -> Result<MappingContext
             .map_err(|e| ObjectPlanError::Storage(e.to_string()))?,
     })
 }
-fn blocked(e: &super::super::compatibility::CompatibilityError) -> BlockedItem {
+fn blocked(e: &ark_application::canonical_compatibility::CompatibilityError) -> BlockedItem {
     BlockedItem {
         source_kind: e.source_kind().into(),
         source_id: e.source_id().into(),

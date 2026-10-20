@@ -16,7 +16,7 @@ impl<'tx, 'connection> SqliteLegacyMutationSession<'tx, 'connection> {
 impl LegacyMutationSession for SqliteLegacyMutationSession<'_, '_> {
     fn write_records(
         &self,
-        records: &[crate::canonical_types::compatibility::LegacyRecord],
+        records: &[ark_application::canonical_compatibility::LegacyRecord],
         device_id: Option<&str>,
     ) -> Result<Vec<SyncEntity>, String> {
         crate::canonical_types::facades::write_legacy_records(

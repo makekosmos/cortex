@@ -5,7 +5,7 @@ pub fn note(
     m: &Map<String, Value>,
     o: &mut Map<String, Value>,
     u: &mut BTreeSet<String>,
-    l: &mut Vec<crate::types::ObjectLink>,
+    l: &mut Vec<ark_domain::types::ObjectLink>,
     id: &str,
     at: &str,
 ) -> Result<(), CompatFailure> {
@@ -43,7 +43,7 @@ pub fn person(
     m: &Map<String, Value>,
     o: &mut Map<String, Value>,
     u: &mut BTreeSet<String>,
-    l: &mut Vec<crate::types::ObjectLink>,
+    l: &mut Vec<ark_domain::types::ObjectLink>,
     id: &str,
     at: &str,
 ) -> Result<(), CompatFailure> {
@@ -131,7 +131,7 @@ pub fn book(
     m: &Map<String, Value>,
     o: &mut Map<String, Value>,
     u: &mut BTreeSet<String>,
-    l: &mut Vec<crate::types::ObjectLink>,
+    l: &mut Vec<ark_domain::types::ObjectLink>,
     q: &mut Map<String, Value>,
     id: &str,
     at: &str,

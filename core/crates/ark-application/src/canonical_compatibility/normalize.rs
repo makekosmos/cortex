@@ -20,7 +20,7 @@ use serde_json::{Map, Value};
 /// else, so callers can still fail on genuinely malformed data.
 pub fn day_value(value: &Value) -> Option<String> {
     let s = value.as_str()?;
-    if crate::canonical_types::validation::is_full_date(s) {
+    if ark_domain::canonical_type::validation::is_full_date(s) {
         return Some(s.to_owned());
     }
     stamp_day_at(s, *chrono::Local::now().offset())
@@ -73,7 +73,7 @@ mod tests {
             ("2026-05-16T00:30:00-05:00", 14 * 3600, "2026-05-16"),
         ];
         for (stamp, secs, expected) in cases {
-            let offset = chrono::FixedOffset::east_opt(*secs).unwrap();
+            let offset = chrono::FixedOffset::east_opt(*secs).expect("test offset is valid");
             assert_eq!(
                 stamp_day_at(stamp, offset).as_deref(),
                 Some(*expected),
@@ -82,7 +82,11 @@ mod tests {
         }
         for bad in ["soon", "2026-13-40", "2026-05-15T25:00:00Z"] {
             assert!(
-                stamp_day_at(bad, chrono::FixedOffset::east_opt(0).unwrap()).is_none(),
+                stamp_day_at(
+                    bad,
+                    chrono::FixedOffset::east_opt(0).expect("UTC offset is valid"),
+                )
+                .is_none(),
                 "{bad}"
             );
         }

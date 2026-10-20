@@ -8,11 +8,11 @@ use rusqlite::{params, Connection};
 /// owned by this facade.
 pub fn write_legacy_records(
     conn: &Connection,
-    records: &[crate::canonical_types::compatibility::LegacyRecord],
+    records: &[ark_application::canonical_compatibility::LegacyRecord],
     source_kind: &str,
     device_id: Option<String>,
 ) -> Result<Vec<SyncEntity>, String> {
-    use crate::canonical_types::compatibility::{
+    use ark_application::canonical_compatibility::{
         map_legacy_with_context, CanonicalIdentity, LegacySource, MappingContext,
     };
     use std::collections::BTreeMap;

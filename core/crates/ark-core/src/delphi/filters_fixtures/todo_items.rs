@@ -212,7 +212,23 @@ pub fn fixtures() -> Vec<TodoItem> {
     .into_iter()
     .map(|spec| {
         let (object, links) = canonical(&spec);
-        project_task_to_delphi(&object, &links).expect("canonical fixture must project")
+        let projection =
+            project_task_to_delphi(&object, &links).expect("canonical fixture must project");
+        TodoItem {
+            id: projection.id,
+            title: projection.title,
+            scheduled_date: projection.scheduled_date,
+            is_today: projection.is_today,
+            is_someday: projection.is_someday,
+            is_completed: projection.is_completed,
+            completed_at: projection.completed_at,
+            is_cancelled: projection.is_cancelled,
+            cancelled_at: projection.cancelled_at,
+            is_trashed: projection.is_trashed,
+            sort_order: projection.sort_order,
+            created_at: projection.created_at,
+            project_id: projection.project_id,
+        }
     })
     .collect()
 }

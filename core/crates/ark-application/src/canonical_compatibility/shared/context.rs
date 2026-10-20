@@ -8,7 +8,7 @@ use sha2::{Digest, Sha256};
 pub struct CompatCtx<'a> {
     pub out: &'a mut Map<String, Value>,
     pub consumed: &'a mut std::collections::BTreeSet<String>,
-    pub links: &'a mut Vec<crate::types::ObjectLink>,
+    pub links: &'a mut Vec<ark_domain::types::ObjectLink>,
     pub local: &'a mut Map<String, Value>,
     pub quarantine: &'a mut Map<String, Value>,
     pub id: &'a str,
@@ -18,7 +18,7 @@ pub struct CompatCtx<'a> {
 /// Write targets shared by the relation helpers: the link accumulator plus
 /// the record's identity pair and the unknown-field sink.
 pub struct LinkWrite<'a> {
-    pub links: &'a mut Vec<crate::types::ObjectLink>,
+    pub links: &'a mut Vec<ark_domain::types::ObjectLink>,
     pub id: &'a str,
     pub at: &'a str,
     pub unknown: &'a mut std::collections::BTreeSet<String>,
@@ -63,7 +63,7 @@ pub fn relation_with_aliases(
         for target in ids {
             let mut h = Sha256::new();
             h.update(format!("kosmos-link-v1\0{id}\0{kind}\0{target}").as_bytes());
-            links.push(crate::types::ObjectLink {
+            links.push(ark_domain::types::ObjectLink {
                 id: format!("lnk*{:x}", h.finalize()),
                 source_object_id: id.into(),
                 target_object_id: target,

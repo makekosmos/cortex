@@ -1,8 +1,8 @@
-use super::super::compatibility::{
-    map_legacy_with_context, CanonicalIdentity, LegacySource, MappingContext,
-};
 use super::super::definitions::canonical_type_registrations;
 use super::*;
+use ark_application::canonical_compatibility::{
+    map_legacy_with_context, CanonicalIdentity, LegacySource, MappingContext,
+};
 use rusqlite::Connection;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;

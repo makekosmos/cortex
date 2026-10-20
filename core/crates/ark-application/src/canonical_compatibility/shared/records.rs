@@ -22,8 +22,8 @@ pub struct Quarantine {
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MappedRecord {
-    pub object: crate::types::ArkObject,
-    pub links: Vec<crate::types::ObjectLink>,
+    pub object: ark_domain::types::ArkObject,
+    pub links: Vec<ark_domain::types::ObjectLink>,
     pub local_state: Vec<LocalState>,
     pub quarantine: Vec<Quarantine>,
     pub raw_source: Option<Vec<u8>>,

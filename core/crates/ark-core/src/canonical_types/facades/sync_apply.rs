@@ -76,8 +76,8 @@ pub fn apply_legacy_compat_entity(
         "created_at": created_at,
         "updated_at": updated_at,
         "deleted_at": null});
-    let mapped = crate::canonical_types::compatibility::map_legacy_source(
-        crate::canonical_types::compatibility::LegacySource {
+    let mapped = ark_application::canonical_compatibility::map_legacy_source(
+        ark_application::canonical_compatibility::LegacySource {
             source_kind: &entity.entity_type,
             source_id: &entity.id,
             raw_json: source.to_string().as_bytes(),
@@ -183,8 +183,8 @@ pub fn apply_canonical_object_entity(
                     "updated_at": input.updated_at,
                     "deleted_at": input.deleted_at,
                 });
-                let mapped = crate::canonical_types::compatibility::map_legacy_source(
-                    crate::canonical_types::compatibility::LegacySource {
+                let mapped = ark_application::canonical_compatibility::map_legacy_source(
+                    ark_application::canonical_compatibility::LegacySource {
                         source_kind: "object",
                         source_id: &entity.id,
                         raw_json: source.to_string().as_bytes(),
