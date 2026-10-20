@@ -1,3 +1,20 @@
+#![allow(clippy::unwrap_used)]
+
+use rusqlite::Connection;
+
+fn setup_db() -> Connection {
+    let conn = Connection::open_in_memory().unwrap();
+    conn.execute_batch(
+        "PRAGMA journal_mode = WAL;
+         PRAGMA synchronous = NORMAL;
+         PRAGMA foreign_keys = ON;
+         PRAGMA busy_timeout = 5000;",
+    )
+    .unwrap();
+    crate::open::init_schema(&conn).unwrap();
+    conn
+}
+
 #[test]
 fn test_schema_creation() {
     let conn = setup_db();
@@ -95,18 +112,24 @@ fn test_init_schema_migrates_existing_db_without_destroying_data() {
     )
     .unwrap();
 
-    let todo = make_todo("legacy-todo", "Keep me");
-    upsert_todo(&conn, &todo).unwrap();
-    ark_store::sync_kv::set_sync_kv(&conn, "legacy-key", "legacy-value").unwrap();
+    conn.execute(
+        concat!(
+            "INSERT INTO todos (id, title, created_at) ",
+            "VALUES ('legacy-todo', 'Keep me', '2026-01-01T00:00:00.000Z')"
+        ),
+        [],
+    )
+    .unwrap();
+    crate::sync_kv::set_sync_kv(&conn, "legacy-key", "legacy-value").unwrap();
 
-    ark_store::open::init_schema(&conn).unwrap();
+    crate::open::init_schema(&conn).unwrap();
 
-    let data = ark_store::load_all::load_all(&conn).unwrap();
+    let data = crate::load_all::load_all(&conn).unwrap();
     assert_eq!(data.todos.len(), 1);
     assert_eq!(data.todos[0].id, "legacy-todo");
     assert_eq!(data.todos[0].title, "Keep me");
     assert_eq!(
-        ark_store::sync_kv::get_sync_kv(&conn, "legacy-key").unwrap(),
+        crate::sync_kv::get_sync_kv(&conn, "legacy-key").unwrap(),
         Some("legacy-value".to_string())
     );
 
@@ -139,7 +162,7 @@ fn test_init_schema_migrates_existing_db_without_destroying_data() {
         )
         .unwrap();
     assert_eq!(tombstone_table_count, 1);
-    let object_types = ark_store::object_types::list(&conn).unwrap();
+    let object_types = crate::object_types::list(&conn).unwrap();
     assert!(object_types.iter().any(|item| item.id == "com.kosmos.note"));
     assert!(object_types.iter().any(|item| item.id == "com.kosmos.task"));
     let migrated: (String, String) = conn
@@ -214,7 +237,7 @@ fn test_init_schema_adds_usage_runtime_ms_to_existing_sessions() {
     )
     .unwrap();
 
-    ark_store::open::init_schema(&conn).unwrap();
+    crate::open::init_schema(&conn).unwrap();
 
     let runtime_ms: i64 = conn
         .query_row(
@@ -224,6 +247,6 @@ fn test_init_schema_adds_usage_runtime_ms_to_existing_sessions() {
         )
         .unwrap();
     assert_eq!(runtime_ms, 2_700_000);
-    let data = ark_store::load_all::load_all(&conn).unwrap();
+    let data = crate::load_all::load_all(&conn).unwrap();
     assert_eq!(data.usage_sessions[0].runtime_ms, 2_700_000);
 }
