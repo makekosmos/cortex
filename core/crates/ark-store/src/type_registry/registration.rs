@@ -1,18 +1,19 @@
 use ark_domain::canonical_type::registry::{
     canonicalize_type_version, validate_type_id, validate_version,
 };
-use ark_store::type_registry::{insert_type_record, type_name};
+use ark_domain::canonical_type::{TypeRegistration, TypeVersion};
 use rusqlite::Connection;
 
 use super::{
-    get_type, insert_type_version, register_alias, resolve_alias, set_base_type,
-    set_current_version, set_status, TypeRegistration, TypeVersion,
+    get_type, insert_type_record, register_alias, resolve_alias, set_base_type,
+    set_current_version, set_status, type_name,
 };
+use crate::pending_objects::{replay_pending_for_type, ReplayNotice};
 
 pub fn register_type(
-    conn: &Connection,
+    connection: &Connection,
     registration: &TypeRegistration,
-) -> Result<Vec<crate::canonical_types::pending::ReplayNotice>, String> {
+) -> Result<Vec<ReplayNotice>, String> {
     validate_type_id(&registration.type_id, "type id")?;
     if registration.owner_kind.trim().is_empty() {
         return Err("invalid owner kind".into());
@@ -27,20 +28,21 @@ pub fn register_type(
     ) {
         return Err("invalid status".into());
     }
-    if let Some(base) = &registration.base_type_id {
-        validate_type_id(base, "base type id")?;
+    if let Some(base_type_id) = &registration.base_type_id {
+        validate_type_id(base_type_id, "base type id")?;
     }
     for alias in &registration.aliases {
         if alias.canonical_type_id != registration.type_id {
             return Err("alias canonical type mismatch".into());
         }
     }
-    if let Some(existing_name) = type_name(conn, &registration.type_id)? {
-        // Package definitions are replayed on every runtime start. A replay
-        // is safe only when the canonical summary and requested version are
-        // identical; conflicting definitions remain errors.
-        let existing = get_type(conn, &registration.type_id, Some(&registration.version))?
-            .ok_or_else(|| "canonical type already exists".to_string())?;
+    if let Some(existing_name) = type_name(connection, &registration.type_id)? {
+        let existing = get_type(
+            connection,
+            &registration.type_id,
+            Some(&registration.version),
+        )?
+        .ok_or_else(|| "canonical type already exists".to_string())?;
         let definition = &existing.definition;
         let canonical = canonicalize_type_version(&TypeVersion {
             type_id: registration.type_id.clone(),
@@ -73,16 +75,17 @@ pub fn register_type(
         return Err("canonical type already exists".into());
     }
 
-    if resolve_alias(conn, &registration.type_id)?.is_some() {
+    if resolve_alias(connection, &registration.type_id)?.is_some() {
         return Err("canonical type id collides with alias".into());
     }
 
-    conn.execute_batch("SAVEPOINT ark_registry_registration")
-        .map_err(|e| e.to_string())?;
+    connection
+        .execute_batch("SAVEPOINT ark_registry_registration")
+        .map_err(|error| error.to_string())?;
     let result = (|| {
-        insert_type_record(conn, registration)?;
-        let mut notices = insert_type_version(
-            conn,
+        insert_type_record(connection, registration)?;
+        crate::type_registry::persist_type_version(
+            connection,
             &TypeVersion {
                 type_id: registration.type_id.clone(),
                 version: registration.version.clone(),
@@ -96,31 +99,34 @@ pub fn register_type(
             },
             &registration.created_at,
         )?;
+        let mut notices =
+            replay_pending_for_type(connection, &registration.type_id, &registration.version)?;
         for alias in &registration.aliases {
-            register_alias(conn, alias)?;
+            register_alias(connection, alias)?;
         }
-        set_current_version(conn, &registration.type_id, &registration.version)?;
-        set_status(conn, &registration.type_id, &registration.status)?;
+        set_current_version(connection, &registration.type_id, &registration.version)?;
+        set_status(connection, &registration.type_id, &registration.status)?;
         set_base_type(
-            conn,
+            connection,
             &registration.type_id,
             registration.base_type_id.as_deref(),
         )?;
-        notices.extend(crate::canonical_types::pending::replay_pending_for_type(
-            conn,
+        notices.extend(replay_pending_for_type(
+            connection,
             &registration.type_id,
             &registration.version,
         )?);
-        Ok::<_, String>(notices)
+        Ok(notices)
     })();
     match result {
         Ok(notices) => {
-            conn.execute_batch("RELEASE SAVEPOINT ark_registry_registration")
-                .map_err(|e| e.to_string())?;
+            connection
+                .execute_batch("RELEASE SAVEPOINT ark_registry_registration")
+                .map_err(|error| error.to_string())?;
             Ok(notices)
         }
         Err(error) => {
-            let _ = conn.execute_batch(concat!(
+            let _ = connection.execute_batch(concat!(
                 "ROLLBACK TO SAVEPOINT ark_registry_registration; RELEASE SAVEPOINT ",
                 "ark_registry_registration"
             ));

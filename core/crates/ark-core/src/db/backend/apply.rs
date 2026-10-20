@@ -4,7 +4,7 @@ use rusqlite::{Connection, Transaction};
 use serde_json::{json, Value};
 
 use super::SqliteStorageBackend;
-use crate::db::{delete_object_type, insert_pending_object, upsert_object_type};
+use crate::db::{delete_object_type, upsert_object_type};
 use crate::types::{
     ArkObject, ObjectLink, ObjectType, SyncEntity, TrackedApp, UsageDay, UsageEvent, UsageSession,
 };
@@ -36,7 +36,7 @@ impl SqliteStorageBackend {
     ) -> Result<
         (
             ark_application::sync_storage::InboundApplyOutcome,
-            Vec<crate::canonical_types::pending::ReplayNotice>,
+            Vec<ark_application::sync_storage::ReplayNotice>,
         ),
         String,
     > {
@@ -50,7 +50,7 @@ impl SqliteStorageBackend {
     ) -> Result<
         (
             ark_application::sync_storage::InboundApplyOutcome,
-            Vec<crate::canonical_types::pending::ReplayNotice>,
+            Vec<ark_application::sync_storage::ReplayNotice>,
         ),
         String,
     > {
@@ -71,7 +71,7 @@ impl SqliteStorageBackend {
     ) -> Result<
         (
             ark_application::sync_storage::InboundApplyOutcome,
-            Vec<crate::canonical_types::pending::ReplayNotice>,
+            Vec<ark_application::sync_storage::ReplayNotice>,
         ),
         String,
     > {
@@ -108,7 +108,7 @@ impl SqliteStorageBackend {
     ) -> Result<
         (
             ark_application::sync_storage::InboundApplyOutcome,
-            Vec<crate::canonical_types::pending::ReplayNotice>,
+            Vec<ark_application::sync_storage::ReplayNotice>,
         ),
         String,
     > {
@@ -225,7 +225,11 @@ impl SqliteStorageBackend {
                     &object.type_id,
                     &object.type_version,
                 )? {
-                    insert_pending_object(conn, entity, &object.type_id)?;
+                    ark_store::pending_objects::insert_pending_object(
+                        conn,
+                        entity,
+                        &object.type_id,
+                    )?;
                     crate::events::emit_event(json!({
                         "event": "sync_error",
                         "code": "unknown_type_version",

@@ -2,10 +2,10 @@ use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError};
 use crate::application::type_mutation::{
     delete_object_type, register_package_types, upsert_object_type, TypeMutationCommit,
 };
-use crate::canonical_types::pending::ReplayNotice;
 use crate::db::SqliteTypeMutationSession;
 use crate::type_registry::TypeRegistration;
 use crate::types::ObjectType;
+use ark_application::sync_storage::ReplayNotice;
 use rusqlite::Transaction;
 use serde::Serialize;
 

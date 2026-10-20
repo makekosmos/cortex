@@ -2,6 +2,7 @@ mod builtins;
 mod catalog;
 mod migrations;
 mod query_ids;
+mod registration;
 mod resolution;
 mod updates;
 mod version_storage;
@@ -14,6 +15,7 @@ pub use catalog::{
 };
 pub use migrations::migrate_schema;
 pub use query_ids::stored_type_ids_for_query;
+pub use registration::register_type;
 pub use resolution::{resolve_alias, resolve_type_id};
 pub use updates::{get_type, set_base_type, set_current_version, set_status};
 pub use version_storage::persist_type_version;

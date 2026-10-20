@@ -103,7 +103,7 @@ async fn replay_notice_is_published_only_after_the_local_type_write_commits() {
         origin_seq: None,
     };
     with_conn(&state, |connection| {
-        crate::canonical_types::pending::insert_pending_object(connection, &pending, TYPE_ID)
+        ark_store::pending_objects::insert_pending_object(connection, &pending, TYPE_ID)
     })
     .unwrap();
 
@@ -153,8 +153,7 @@ async fn replay_notice_is_published_only_after_the_local_type_write_commits() {
                 |row| row.get::<_, i64>(0),
             )
             .map_err(|error| error.to_string())?;
-        let pending_count =
-            crate::canonical_types::pending::count_pending_for_type(connection, TYPE_ID)?;
+        let pending_count = ark_store::pending_objects::count_for_type(connection, TYPE_ID)?;
         let object_count = connection
             .query_row(
                 "SELECT COUNT(*) FROM objects WHERE id = ?1",
@@ -198,8 +197,7 @@ async fn replay_notice_is_published_only_after_the_local_type_write_commits() {
         })
     );
     let final_counts = with_conn(&state, |connection| {
-        let pending_count =
-            crate::canonical_types::pending::count_pending_for_type(connection, TYPE_ID)?;
+        let pending_count = ark_store::pending_objects::count_for_type(connection, TYPE_ID)?;
         let object_count = connection
             .query_row(
                 "SELECT COUNT(*) FROM objects WHERE id = ?1",

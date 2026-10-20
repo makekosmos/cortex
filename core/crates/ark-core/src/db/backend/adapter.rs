@@ -20,7 +20,7 @@ mod peer_identity;
 #[path = "adapter/task_merge.rs"]
 mod task_merge;
 
-fn publish_replay_notices(notices: Vec<crate::canonical_types::pending::ReplayNotice>) {
+fn publish_replay_notices(notices: Vec<ark_application::sync_storage::ReplayNotice>) {
     for notice in notices {
         crate::events::emit_event(notice.event_payload());
     }

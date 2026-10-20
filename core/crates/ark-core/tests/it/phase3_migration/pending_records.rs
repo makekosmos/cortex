@@ -1,5 +1,5 @@
-use ark_core::canonical_types::pending::{insert_pending_object, replay_pending_for_type};
 use ark_core::types::SyncEntity;
+use ark_store::pending_objects::{insert_pending_object, replay_pending_for_type};
 use rusqlite::{params, Connection};
 use serde_json::json;
 

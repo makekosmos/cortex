@@ -1,8 +1,10 @@
 use rusqlite::{params, Connection, OptionalExtension};
 
 mod migrations;
+mod workflow;
 
 pub use migrations::{is_v3_schema, migrate_phase2_to_v3, validate_entity_tuple};
+pub use workflow::{insert_pending_object, replay_pending_for_type, ReplayNotice};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PendingObjectSchema {

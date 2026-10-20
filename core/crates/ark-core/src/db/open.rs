@@ -1,7 +1,3 @@
-pub use crate::canonical_types::pending::{
-    count_pending_for_type, insert_pending_object, replay_pending_for_type,
-};
-
 /// Online backup через ОТДЕЛЬНЫЙ read-коннекшн к `src_db_path` — НЕ держит
 /// глобальный DB mutex, поэтому обычные ARK ops продолжают работать во время
 /// копирования. Копирование идёт chunk'ами по `pages_per_step` страниц с паузой

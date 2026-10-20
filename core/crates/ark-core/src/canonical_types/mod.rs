@@ -1,7 +1,6 @@
 pub mod definitions;
 pub mod facades;
 pub mod game;
-pub mod pending;
 pub mod validation;
 
 #[cfg(test)]

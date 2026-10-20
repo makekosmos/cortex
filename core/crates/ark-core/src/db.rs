@@ -59,7 +59,6 @@ pub(in crate::db) use integration_replication_publication::{
 };
 pub use objects::{delete_object_type, upsert_object_type};
 pub use open::backup_to_file_chunked;
-pub use open::{count_pending_for_type, insert_pending_object};
 
 mod integration_replication_admission;
 mod integration_replication_apply;
@@ -109,7 +108,6 @@ mod tests {
     use std::path::Path;
     use std::sync::{Arc, Mutex};
 
-    use super::open::replay_pending_for_type;
     use super::*;
     use crate::hlc::HLC;
     use crate::integration_replication::*;
@@ -125,6 +123,9 @@ mod tests {
         list_running_time_entries, search_objects, upsert_object_link,
     };
     use ark_store::open::open_db;
+    use ark_store::pending_objects::{
+        count_for_type as count_pending_for_type, insert_pending_object, replay_pending_for_type,
+    };
     use ark_store::schema::*;
     use ark_store::snapshot::{
         default_rollback_restore_for_test, restore_snapshot_with_hooks,

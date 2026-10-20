@@ -1,8 +1,8 @@
 use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError};
 use super::inbound_policy::require_sync_policy_identity;
-use crate::canonical_types::pending::ReplayNotice;
 use crate::db::SqliteStorageBackend;
 use crate::types::SyncEntity;
+use ark_application::sync_storage::ReplayNotice;
 use ark_application::sync_storage::{OutboundAck, OutboundProgress, PolicyIdentity};
 use rusqlite::Transaction;
 use serde::Serialize;

@@ -10,7 +10,7 @@ pub fn insert_type_version(
     conn: &Connection,
     input: &TypeVersion,
     created_at: &str,
-) -> Result<Vec<crate::canonical_types::pending::ReplayNotice>, String> {
+) -> Result<Vec<ark_application::sync_storage::ReplayNotice>, String> {
     ark_store::type_registry::persist_type_version(conn, input, created_at)?;
-    crate::canonical_types::pending::replay_pending_for_type(conn, &input.type_id, &input.version)
+    ark_store::pending_objects::replay_pending_for_type(conn, &input.type_id, &input.version)
 }

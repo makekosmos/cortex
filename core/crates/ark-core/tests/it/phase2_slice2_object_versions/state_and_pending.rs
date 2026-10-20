@@ -1,10 +1,11 @@
-use ark_core::db::{insert_pending_object, upsert_object_type};
+use ark_core::db::upsert_object_type;
 use ark_core::type_registry::{register_alias, AliasRecord};
 use ark_core::types::{ArkObject, ObjectType, SyncEntity};
 use ark_store::objects::{
     get_object, get_objects_by_ids, list_object_summaries, list_object_summaries_by_type,
     list_objects, list_objects_by_type, list_running_time_entries, upsert_object_link,
 };
+use ark_store::pending_objects::insert_pending_object;
 use rusqlite::{Connection, OptionalExtension};
 use serde_json::json;
 

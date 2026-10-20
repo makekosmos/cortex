@@ -1,4 +1,5 @@
-use ark_core::type_registry::{get_type, register_type, TypeRegistration};
+use ark_core::type_registry::{get_type, TypeRegistration};
+use ark_store::type_registry::register_type;
 use rusqlite::Connection;
 
 fn registration() -> TypeRegistration {

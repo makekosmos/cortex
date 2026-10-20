@@ -1,8 +1,8 @@
 use crate::application::type_mutation::{TypeEntityKind, TypeMutationSession};
-use crate::canonical_types::pending::ReplayNotice;
 use crate::db;
 use crate::type_registry::TypeRegistration;
 use crate::types::ObjectType;
+use ark_application::sync_storage::ReplayNotice;
 use rusqlite::Transaction;
 
 pub(crate) struct SqliteTypeMutationSession<'tx, 'connection> {
@@ -17,7 +17,7 @@ impl<'tx, 'connection> SqliteTypeMutationSession<'tx, 'connection> {
 
 impl TypeMutationSession for SqliteTypeMutationSession<'_, '_> {
     fn register_type(&self, registration: &TypeRegistration) -> Result<Vec<ReplayNotice>, String> {
-        crate::type_registry::register_type(self.transaction, registration)
+        ark_store::type_registry::register_type(self.transaction, registration)
     }
 
     fn upsert_object_type(&self, object_type: &ObjectType) -> Result<Vec<ReplayNotice>, String> {

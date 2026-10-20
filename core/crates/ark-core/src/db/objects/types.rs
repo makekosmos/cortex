@@ -1,7 +1,7 @@
 pub fn upsert_object_type(
     conn: &Connection,
     object_type: &ObjectType,
-) -> Result<Vec<crate::canonical_types::pending::ReplayNotice>, String> {
+) -> Result<Vec<ark_application::sync_storage::ReplayNotice>, String> {
     if ark_store::object_types::legacy_alias_conflicts(conn, &object_type.id)? {
         return Err("alias collides with canonical type".into());
     }
@@ -22,9 +22,13 @@ pub fn upsert_object_type(
         },
     )?;
 
-    let mut replay_notices = replay_pending_for_type(conn, &object_type.id, &current_version)?;
+    let mut replay_notices = ark_store::pending_objects::replay_pending_for_type(
+        conn,
+        &object_type.id,
+        &current_version,
+    )?;
     if current_version != type_registry::LEGACY_VERSION {
-        replay_notices.extend(replay_pending_for_type(
+        replay_notices.extend(ark_store::pending_objects::replay_pending_for_type(
             conn,
             &object_type.id,
             type_registry::LEGACY_VERSION,

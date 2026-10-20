@@ -1,4 +1,3 @@
-mod registration_migrations;
 mod version_storage;
 
 pub use ark_store::type_registry::{
@@ -7,7 +6,6 @@ pub use ark_store::type_registry::{
     resolve_object_type_identity, resolve_object_type_version, resolve_type_id, set_base_type,
     set_current_version, set_status,
 };
-pub use registration_migrations::register_type;
 pub use version_storage::{
     canonical_schema_hash, insert_type_version, legacy_compatibility_version, AliasRecord,
     TypeGetResponse, TypeRegistration, TypeSummary, TypeVersion, LEGACY_VERSION,
