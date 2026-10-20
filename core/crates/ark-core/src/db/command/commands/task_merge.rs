@@ -1,6 +1,6 @@
 use super::super::{sealed, CommandClass, CommandContext, DbCommand, DbError, StoreReadQuery};
 use crate::db::task_merge::TaskMergeError;
-use ark_application::sync_storage::{PolicyIdentity, TaskMergeBatch, TaskMergeBatchAck};
+use ark_application::sync_storage::{PolicyIdentity, TaskMergeBatch};
 use ark_domain::task_merge::{TaskMergeOperation, TaskMergeUnit};
 use rusqlite::Transaction;
 use serde::Serialize;
@@ -125,10 +125,10 @@ impl DbCommand for AcknowledgeTaskMergeBatchCommand {
 
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct ApplyTaskMergeBatchCommand {
-    peer_id: String,
-    local_device_id: String,
-    expected_identity: PolicyIdentity,
-    batch: TaskMergeBatch,
+    pub(crate) peer_id: String,
+    pub(crate) local_device_id: String,
+    pub(crate) expected_identity: PolicyIdentity,
+    pub(crate) batch: TaskMergeBatch,
 }
 
 impl ApplyTaskMergeBatchCommand {
@@ -145,75 +145,10 @@ impl ApplyTaskMergeBatchCommand {
             batch,
         }
     }
-}
 
-impl sealed::Sealed for ApplyTaskMergeBatchCommand {}
-
-impl DbCommand for ApplyTaskMergeBatchCommand {
-    type Output = TaskMergeBatchAck;
-
-    const CLASS: CommandClass = CommandClass::SyncLive;
-
-    fn weight(&self) -> usize {
+    pub(crate) fn weight(&self) -> usize {
         super::serialized_weight(self)
     }
-
-    fn execute(
-        self,
-        context: &CommandContext,
-        transaction: &Transaction<'_>,
-    ) -> Result<Self::Output, DbError> {
-        context.require_sync_peer_matches(&self.peer_id)?;
-        super::sync_policy_identity::require_sync_policy_identity(
-            transaction,
-            Some(&self.local_device_id),
-            Some(&self.expected_identity),
-        )?;
-        require_task_merge_receive_policy(transaction, &self.local_device_id)?;
-        super::device_registry_sync::require_registry_peer_admitted(transaction, &self.peer_id)?;
-        let removed: Vec<String> =
-            ark_store::sync_kv::get_sync_kv(transaction, "sync.removed_peers")
-                .map_err(DbError::from_application_error)?
-                .map(|raw| serde_json::from_str(&raw).map_err(|error| error.to_string()))
-                .transpose()
-                .map_err(DbError::from_application_error)?
-                .unwrap_or_default();
-        if removed.iter().any(|removed_id| removed_id == &self.peer_id) {
-            return Err(DbError::Permission("sync_peer_removed".into()));
-        }
-        crate::db::task_merge::apply_inbound_batch(
-            transaction,
-            &self.peer_id,
-            &self.expected_identity,
-            &self.batch,
-        )
-        .map_err(map_task_merge_error)
-    }
-}
-
-fn require_task_merge_receive_policy(
-    transaction: &Transaction<'_>,
-    local_device_id: &str,
-) -> Result<(), DbError> {
-    let profile =
-        ark_store::data_platform::load_sync_profile_for_sync(transaction, local_device_id)
-            .map_err(DbError::from_application_error)?;
-    if let Some(profile) = profile.filter(|profile| profile.active) {
-        let selected = profile.selective_profile();
-        let Some(rule) = selected.rules.get(&("type".into(), "core.task".into())) else {
-            return Err(DbError::Permission(
-                "task_merge_policy_requires_full_type_sync".into(),
-            ));
-        };
-        if rule.mode != ark_domain::selective_sync::SyncMode::Full
-            || rule.filter.digest() != ark_domain::selective_sync::FilterV1::match_all().digest()
-        {
-            return Err(DbError::Permission(
-                "task_merge_policy_requires_full_type_sync".into(),
-            ));
-        }
-    }
-    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize)]

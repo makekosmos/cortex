@@ -31,6 +31,8 @@ pub use bootstrap::{
     PreparedTaskMergeBootstrap, TaskMergeBootstrapCheck,
 };
 pub use history::{read_conflict_set, task_causal_dependencies_pending};
+pub(crate) use inbound::apply_inbound_task_merge_batch;
+pub use inbound::TaskMergeInboundError;
 pub use inbound::{
     load_inbound_progress, record_inbound_batch, update_inbound_policy_identity,
     TaskMergeInboundBatchReceipt, TaskMergeInboundProgress,

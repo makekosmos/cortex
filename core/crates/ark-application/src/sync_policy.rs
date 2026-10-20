@@ -76,6 +76,30 @@ pub struct AcceptedPeerSyncPolicy {
     pub rules: Vec<SyncProfileRule>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TaskMergeSyncPolicyError {
+    FullTypeRequired,
+    FilterUnsupported,
+}
+
+pub fn validate_task_merge_sync_policy(
+    profile: &SelectiveSyncProfile,
+) -> Result<(), TaskMergeSyncPolicyError> {
+    let Some(rule) = profile
+        .rules
+        .get(&(String::from("type"), String::from("core.task")))
+    else {
+        return Err(TaskMergeSyncPolicyError::FullTypeRequired);
+    };
+    if rule.mode != SyncMode::Full {
+        return Err(TaskMergeSyncPolicyError::FullTypeRequired);
+    }
+    if rule.filter.digest() != FilterV1::match_all().digest() {
+        return Err(TaskMergeSyncPolicyError::FilterUnsupported);
+    }
+    Ok(())
+}
+
 impl AcceptedPeerSyncPolicy {
     pub fn identity(&self) -> PolicyIdentity {
         PolicyIdentity {
@@ -144,5 +168,41 @@ fn sync_mode_name(mode: SyncMode) -> &'static str {
         SyncMode::Full => "full",
         SyncMode::Metadata => "metadata",
         SyncMode::None => "none",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{validate_task_merge_sync_policy, TaskMergeSyncPolicyError};
+    use ark_domain::selective_sync::{FilterV1, SelectiveSyncProfile, SyncMode};
+
+    #[test]
+    fn task_merge_requires_full_unfiltered_task_sync() {
+        let mut profile = SelectiveSyncProfile::default();
+        assert_eq!(
+            validate_task_merge_sync_policy(&profile),
+            Err(TaskMergeSyncPolicyError::FullTypeRequired)
+        );
+
+        profile.set_rule("type", "core.task", SyncMode::Metadata);
+        assert_eq!(
+            validate_task_merge_sync_policy(&profile),
+            Err(TaskMergeSyncPolicyError::FullTypeRequired)
+        );
+
+        profile.set_rule_with_filter(
+            "type",
+            "core.task",
+            SyncMode::Full,
+            FilterV1::parse(r#"{"version":1,"where":{"eq":{"field":"status","value":"open"}}}"#)
+                .expect("valid test filter"),
+        );
+        assert_eq!(
+            validate_task_merge_sync_policy(&profile),
+            Err(TaskMergeSyncPolicyError::FilterUnsupported)
+        );
+
+        profile.set_rule("type", "core.task", SyncMode::Full);
+        assert_eq!(validate_task_merge_sync_policy(&profile), Ok(()));
     }
 }

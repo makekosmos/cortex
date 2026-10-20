@@ -64,7 +64,7 @@ impl TaskMergeDeliveryPort for SqliteStorageBackend {
         batch: &TaskMergeBatch,
     ) -> Result<TaskMergeBatchAck, String> {
         self.db
-            .submit(
+            .apply_task_merge_batch(
                 CommandContext::sync_peer(peer_device_id.to_owned(), CommandClass::SyncLive),
                 ApplyTaskMergeBatchCommand::new(
                     peer_device_id.to_owned(),

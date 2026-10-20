@@ -1,14 +1,7 @@
-use ark_domain::task_merge::{TaskConflictSet, TaskMergeOperation, TaskMergeUnit};
-use rusqlite::{Connection, Transaction};
+use rusqlite::Connection;
 
-#[path = "task_merge/bootstrap.rs"]
-mod bootstrap;
-#[path = "task_merge/inbound.rs"]
-mod inbound;
 #[path = "task_merge/progress.rs"]
 mod progress;
-use bootstrap::append_bootstrap;
-pub(crate) use inbound::apply_inbound_batch;
 pub(crate) use progress::{acknowledge_outbound_batch, prepare_outbound_batch};
 
 #[derive(Debug, thiserror::Error)]
@@ -54,71 +47,19 @@ pub(crate) fn require_delivery_policy(
     }
     if let Some(policy) = policy.filter(|policy| policy.active) {
         let profile = policy.selective_profile();
-        let Some(rule) = profile.rules.get(&("type".into(), "core.task".into())) else {
-            return Err(TaskMergeError::Permission(
-                "task_merge_policy_requires_full_type_sync".into(),
-            ));
-        };
-        if rule.mode != ark_domain::selective_sync::SyncMode::Full {
-            return Err(TaskMergeError::Permission(
-                "task_merge_policy_requires_full_type_sync".into(),
-            ));
-        }
-        if rule.filter.digest() != ark_domain::selective_sync::FilterV1::match_all().digest() {
-            return Err(TaskMergeError::Permission(
-                "task_merge_policy_filter_unsupported".into(),
-            ));
+        match ark_application::sync_policy::validate_task_merge_sync_policy(&profile) {
+            Ok(()) => {}
+            Err(ark_application::sync_policy::TaskMergeSyncPolicyError::FullTypeRequired) => {
+                return Err(TaskMergeError::Permission(
+                    "task_merge_policy_requires_full_type_sync".into(),
+                ));
+            }
+            Err(ark_application::sync_policy::TaskMergeSyncPolicyError::FilterUnsupported) => {
+                return Err(TaskMergeError::Permission(
+                    "task_merge_policy_filter_unsupported".into(),
+                ));
+            }
         }
     }
     Ok(())
-}
-
-pub(crate) fn append_remote_operation(
-    transaction: &Transaction<'_>,
-    operation: TaskMergeOperation,
-    expected_conflict_digest: Option<&str>,
-) -> Result<ark_application::task_merge::TaskMergeAppendResult, TaskMergeError> {
-    let prepared = match ark_store::task_merge::check_operation(
-        transaction,
-        &operation,
-        expected_conflict_digest,
-        ark_store::task_merge::TaskMergeOperationOrigin::Remote,
-    )? {
-        ark_store::task_merge::TaskMergeOperationCheck::Replay(read) => {
-            return Ok(ark_application::task_merge::TaskMergeAppendResult {
-                conflict_set: read.conflict_set,
-                dependencies_pending: read.dependencies_pending,
-                replayed: true,
-            });
-        }
-        ark_store::task_merge::TaskMergeOperationCheck::New(prepared) => prepared,
-    };
-    let operation = prepared.operation().clone();
-    ark_store::task_merge::persist_operation(transaction, prepared)?;
-    ark_store::task_merge::materialize_task_if_ready(transaction, &operation.object_id)?;
-    let (conflict_set, dependencies_pending) =
-        read_conflict_set(transaction, &operation.object_id, operation.unit)?;
-    Ok(ark_application::task_merge::TaskMergeAppendResult {
-        conflict_set,
-        dependencies_pending: dependencies_pending
-            || task_causal_dependencies_pending(transaction, &operation.object_id)?,
-        replayed: false,
-    })
-}
-
-pub(crate) fn read_conflict_set(
-    connection: &Connection,
-    object_id: &str,
-    unit: TaskMergeUnit,
-) -> Result<(Option<TaskConflictSet>, bool), TaskMergeError> {
-    let read = ark_store::task_merge::read_conflict_set(connection, object_id, unit)?;
-    Ok((read.conflict_set, read.dependencies_pending))
-}
-
-pub(crate) fn task_causal_dependencies_pending(
-    connection: &Connection,
-    object_id: &str,
-) -> Result<bool, TaskMergeError> {
-    ark_store::task_merge::task_causal_dependencies_pending(connection, object_id)
-        .map_err(Into::into)
 }

@@ -18,6 +18,8 @@ pub(in crate::db::command) use signed_integration_frame_task::SignedIntegrationF
 #[path = "actor/task/integration_admin.rs"]
 mod integration_admin_task;
 pub(in crate::db::command) use integration_admin_task::IntegrationAdminTask;
+#[path = "actor/task/task_merge_batch.rs"]
+mod task_merge_batch_task;
 #[cfg(debug_assertions)]
 pub(in crate::db::command) use task::task_merge_append::map_append_operation_error;
 pub(in crate::db::command) use task::task_merge_append::AppendTaskMergeOperationTask;
@@ -32,6 +34,9 @@ pub(in crate::db::command) use task::{
     UpsertObjectLinkTask, UpsertObjectTypeTask, UsageCompactionTask, UsageSequenceMigrationTask,
     WriterTask,
 };
+#[cfg(debug_assertions)]
+pub(in crate::db::command) use task_merge_batch_task::map_failure as map_task_merge_batch_failure;
+pub(in crate::db::command) use task_merge_batch_task::ApplyTaskMergeBatchTask;
 
 struct Slot {
     task: Box<dyn WriterTask>,

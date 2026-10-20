@@ -115,7 +115,7 @@ async fn authenticated_direct_sync_delivers_task_merge_batches_over_the_wire() {
     let bootstrap = bootstrap();
     sender
         .db
-        .submit(
+        .apply_task_merge_batch(
             CommandContext::authenticated_peer("merge-receiver".into()),
             ApplyTaskMergeBatchCommand::new(
                 "merge-receiver".into(),

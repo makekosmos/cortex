@@ -1,5 +1,8 @@
 use super::*;
 
+#[path = "inbound/rollback.rs"]
+mod rollback;
+
 async fn apply_batch(
     handle: &DbHandle,
     peer_id: &str,
@@ -8,7 +11,7 @@ async fn apply_batch(
     batch: ark_application::sync_storage::TaskMergeBatch,
 ) -> Result<ark_application::sync_storage::TaskMergeBatchAck, DbError> {
     handle
-        .submit(
+        .apply_task_merge_batch(
             CommandContext::authenticated_peer(peer_id.into()),
             ApplyTaskMergeBatchCommand::new(
                 peer_id.into(),
